@@ -1,0 +1,37 @@
+{
+  "$schema": "./node_modules/turbo/schema.json",
+  "ui": "stream",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.env"],
+      "env": ["VITE_*"],
+      "outputs": ["dist/**"]
+    },
+    "typecheck": {
+      "dependsOn": ["^typecheck"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "dev:worker": {
+      "cache": false,
+      "persistent": true
+    }
+  },
+  "boundaries": {
+    "tags": {
+      "client": {
+        "dependencies": {
+          "deny": ["server"]
+        }
+      },
+      "server": {
+        "dependencies": {
+          "deny": ["client"]
+        }
+      }
+    }
+  }
+}

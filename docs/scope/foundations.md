@@ -1,0 +1,60 @@
+# Foundations
+
+The ground every slice stands on. All ten are decided before Slice 1 starts. See [index.md](index.md) for the house rules and the full order.
+
+### 1. Stack & architecture · in-progress
+Decide the language, framework, database, hosting and sign in approach, then scaffold a runnable project so every slice builds on real structure.
+**Done when:** the stack is recorded in a spec; the empty app boots locally, builds, and deploys to a preview and a production environment, each with its own database; the code is split into modules with clear edges (data engine, client data layer, access, realtime, jobs, the component library, and one module per feature), and screens get their UI only from the component library.
+- [x] Decide the stack (spec): `/architect stack & architecture`
+- [ ] Scaffold from the decision: `/develop stack & architecture`
+   - [x] Boots locally end to end: typecheck, build, module edges, migrations, the status page, and the web app served through the edge (DW-2, DW-4)
+   - [ ] Local services and images: Docker Compose with the connection pooler, and both service images build (DW-2, DW-3)
+   - [ ] Deploys to a preview and to production, each with its own database (DW-3)
+Spec [0001](../specs/0001-stack-architecture/index.md) · code in `apps/`, `packages/`, `infra/`
+
+### 2. Coding standards & tooling
+Capture conventions from the real scaffold, including the house rules, then install linting, formatting, type checks, pre commit hooks, and CI that blocks a red build.
+**Done when:** root `AGENTS.md` reflects the real stack and the house rules, and points every session to the house rule skills (`crm-design-system`, `crm-frontend-state`, `crm-data-model-access`, `crm-api-backend`) and the four reviewer agents in `.claude/`; lint, format, typecheck and CI run clean on every push; a check fails the build on any raw colour, size or spacing value in app code, on new styles for an element the library already has, and on a screen that fetches data outside the client data layer.
+- [ ] Capture conventions + tooling choices: `/audit`
+- [ ] Install the tooling: `/develop tooling`
+- [ ] Check it runs clean: `/test`
+
+### 3. Design tokens · needs a decision
+Every visual value as a named token from the very first screen: colour (light and dark), type scale, spacing, radius, borders, shadow, motion, layers and breakpoints. The tokens come from the design system artifact. Nothing is carried over from Timefix.
+**Done when:** the full token set is in the design system and loaded by the app as CSS variables; the first scaffolded screen uses only tokens; light and dark switch with no change to any screen; the styling approach scales (component scoped styles, fixed cascade layers, variants declared once, container queries, no runtime cost, no `!important`); icons come only from Lucide through the Icon atom.
+- [ ] Design it (spec): `/architect design tokens`
+
+### 4. Component library · needs a decision · GA
+A large design system built up front for the whole plan, not piece by piece: atoms (button, input, checkbox, avatar, badge, icon, tooltip), molecules (one field editor and display per attribute type, menu, select, date picker, filter row) and modules (app shell and navigation, data grid, board, record panel, timeline, filter and sort builder, command palette, dialogs, presence bar, notification inbox, comment thread, import mapper, charts, schema map canvas).
+**Done when:** every component the 56 features need is in the library with its states (empty, loading, error, read only, disabled) and a preview; each attribute type has exactly one field design, used everywhere; every atom works by keyboard, shows a visible focus ring and meets contrast in light and dark; a grid of 100,000 rows scrolls smoothly; every component records why it exists, and variants are added to existing components rather than new CSS written for the same element.
+- [ ] Design it (spec): `/architect component library`
+
+### 5. Data model · needs a decision · GA
+The engine every feature stands on, modelled on how Attio works (not on Timefix): objects, both standard and custom; records; typed attributes, some of which hold many values (several emails, phones or domains); two way relationship attributes; lists whose entries carry their own attributes; status attributes with stages; and the full history of every value. Workspaces, members and teams sit around it, and notes, tasks, comments and files attach to any record. The attribute research in `docs/research/crm-attributes.md` feeds this spec.
+**Done when:** People, Companies and Deals run on the same engine as custom objects, just as in Attio; renaming a select option never rewrites records; a relationship is one definition that gives each of the two objects its own paired attribute, and each link is stored once and read from both ends; every value change is kept with who and when, so a value as of any date and time in stage can be answered; every row records its workspace, author and time, and deletes are soft with a restore window; no query can return another workspace's rows, even one that forgets to filter; filtering and sorting on any attribute stays inside the scale budget at a million records.
+- [ ] Design it (spec): `/architect data model`
+
+### 6. Client data and state · needs a decision · GA
+The backbone of the app and the top priority: one client data layer that holds every record a screen shows in one place, so a record shown in a table, a board, a record page and a search result is a single copy that updates everywhere at once.
+**Done when:** no screen fetches or stores records on its own; an edit appears instantly everywhere that record is shown, and rolls back with a message if the server refuses it; incoming changes patch every open view in place, with no reload; two people saving the same field get one clear winner (the last save) and the other sees a notice; the last change can be undone; memory stays flat while you scroll an object with a million records.
+- [ ] Design it (spec): `/architect client data and state`
+
+### 7. Change events and realtime · needs a decision
+Every write produces one change event that names the records it touched. Those events reach every open screen allowed to see them, feed the client data layer, and later feed search, notifications, webhooks, automations and sync.
+**Done when:** a change shows on every permitted open screen within one second (p95) with 100 people online; a screen that drops its connection catches up on reconnect with no gap and no refresh; an event never carries data the viewer may not see.
+- [ ] Design it (spec): `/architect change events and realtime`
+
+### 8. Background jobs · needs a decision
+A dependable way to run long work (imports, exports, recomputing, indexing, notifications, webhooks, sync) outside the request, so screens stay fast.
+**Done when:** a job survives a restart, retries on failure, reports progress and can be cancelled; one workspace's huge import never slows another workspace's work.
+- [ ] Design it (spec): `/architect background jobs`
+
+### 9. Access model · needs a decision · GA
+One permission model for the whole product: workspace roles as flat lists of permissions, teams, and rules per object, per field and per record, all checked at one door that every read and write passes through.
+**Done when:** screens, live events, search, notifications, export and the API all get their data through the same check; an unknown role or a missing rule means no access; an API key is an actor with its own scoped permissions; the last owner can never be removed.
+- [ ] Design it (spec): `/architect access model`
+
+### 57. Edge only API access · needs a decision · GA
+The API should accept traffic only through the edge in front of the web app, so the forwarded details it reads (like the client IP) can be trusted. Today its host address is public, so anyone can call it directly and fake those headers. This came up during the scaffold build.
+**Done when:** a request sent straight to the API's host address is refused in preview and production; the client IP and other forwarded details the API reads can only come from the edge; a missing or wrong edge credential means refused, never allowed; local development still works without the edge.
+- [ ] Design it (spec): `/architect edge only API access`

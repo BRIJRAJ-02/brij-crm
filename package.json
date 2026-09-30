@@ -1,0 +1,27 @@
+{
+  "name": "crm",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "scripts": {
+    "dev": "docker compose up -d --wait && turbo run dev dev:worker",
+    "dev:apps": "turbo run dev dev:worker",
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "services:up": "docker compose up -d --wait",
+    "services:down": "docker compose down",
+    "db:generate": "pnpm --filter @crm/db generate",
+    "db:migrate": "pnpm --filter @crm/db migrate",
+    "db:app-login": "pnpm --filter @crm/db app-login",
+    "db:setup": "pnpm db:migrate && pnpm db:app-login",
+    "boundaries": "turbo boundaries"
+  },
+  "devDependencies": {
+    "railway": "catalog:",
+    "turbo": "catalog:",
+    "typescript": "catalog:"
+  }
+}

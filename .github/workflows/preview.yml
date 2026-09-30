@@ -1,0 +1,140 @@
+# A full preview per pull request, each with its own database:
+#   Neon branch `preview/pr-N` from the seeded `preview-base` branch (never production)
+#   Railway environment `pr-N`, copied from `preview-base`, on the PR's branch
+#   Cloudflare preview `pr-N` of the web Worker, proxying /api to that Railway api
+# Closing the pull request removes the branch and the environment.
+#
+# Repository variables: NEON_PROJECT_ID, NEON_OWNER_ROLE, RAILWAY_PROJECT_ID,
+#   CLOUDFLARE_WORKERS_SUBDOMAIN (the <name> in <name>.workers.dev)
+# Repository secrets: NEON_API_KEY, RAILWAY_TOKEN (an account or workspace token),
+#   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID
+name: Preview
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize, closed]
+
+concurrency:
+  group: preview-${{ github.event.number }}
+  cancel-in-progress: false
+
+env:
+  PR_ENV: pr-${{ github.event.number }}
+  DB_BRANCH: preview/pr-${{ github.event.number }}
+  RAILWAY_CLI: "@railway/cli@5.63.1"
+
+jobs:
+  deploy:
+    # Forks get no secrets, so they get no preview.
+    if: github.event.action != 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Branch expiry (a backstop if teardown never runs)
+        id: expiry
+        run: echo "at=$(date -u -d '+14 days' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Database branch, app role
+        id: db
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          parent_branch: preview-base
+          branch_name: ${{ env.DB_BRANCH }}
+          database: crm
+          role: crm_app_user
+          expires_at: ${{ steps.expiry.outputs.at }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Database branch, owner role
+        id: db_owner
+        uses: neondatabase/create-branch-action@v6
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          parent_branch: preview-base
+          branch_name: ${{ env.DB_BRANCH }}
+          database: crm
+          role: ${{ vars.NEON_OWNER_ROLE }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+
+      - name: Railway environment
+        id: railway
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          PROJECT: ${{ vars.RAILWAY_PROJECT_ID }}
+          HEAD_REF: ${{ github.head_ref }}
+          DATABASE_URL: ${{ steps.db.outputs.db_url_pooled }}
+          DATABASE_URL_DIRECT: ${{ steps.db.outputs.db_url }}
+          DATABASE_URL_OWNER: ${{ steps.db_owner.outputs.db_url }}
+          APP_URL: https://${{ env.PR_ENV }}-crm-web.${{ vars.CLOUDFLARE_WORKERS_SUBDOMAIN }}.workers.dev
+        run: |
+          set -euo pipefail
+          echo "::add-mask::$DATABASE_URL"
+          echo "::add-mask::$DATABASE_URL_DIRECT"
+          echo "::add-mask::$DATABASE_URL_OWNER"
+          railway() { npx -y "$RAILWAY_CLI" "$@"; }
+
+          railway link --project "$PROJECT" --environment preview-base
+          railway environment new "$PR_ENV" --duplicate preview-base \
+            --service-config api source.branch "$HEAD_REF" \
+            --service-config worker source.branch "$HEAD_REF" \
+            --service-config centrifugo source.branch "$HEAD_REF" \
+            || echo "Environment $PR_ENV already exists."
+
+          # The api first: its deploy runs the migrations on this branch before it starts.
+          # The worker reads APP_ENV and DATABASE_URL from the api, then redeploys too.
+          railway variable set --environment "$PR_ENV" --service api \
+            "APP_ENV=preview" "APP_URL=$APP_URL" \
+            "DATABASE_URL=$DATABASE_URL" "DATABASE_URL_OWNER=$DATABASE_URL_OWNER"
+          railway variable set --environment "$PR_ENV" --service worker \
+            "DATABASE_URL_DIRECT=$DATABASE_URL_DIRECT"
+
+          domain() {
+            railway variable list --environment "$PR_ENV" --service api --json \
+              | jq -r '.RAILWAY_PUBLIC_DOMAIN // empty'
+          }
+          if [ -z "$(domain)" ]; then railway domain --environment "$PR_ENV" --service api --json; fi
+          echo "api_origin=https://$(domain)" >> "$GITHUB_OUTPUT"
+
+      - name: Web preview
+        working-directory: apps/web
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm build
+          pnpm exec wrangler versions upload \
+            --preview-alias "$PR_ENV" \
+            --var "API_ORIGIN_INTERNAL:${{ steps.railway.outputs.api_origin }}" \
+            --message "PR #${{ github.event.number }} ${{ github.event.pull_request.head.sha }}"
+
+  teardown:
+    if: github.event.action == 'closed' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      - name: Delete the database branch
+        uses: neondatabase/delete-branch-action@v3
+        with:
+          project_id: ${{ vars.NEON_PROJECT_ID }}
+          branch: ${{ env.DB_BRANCH }}
+          api_key: ${{ secrets.NEON_API_KEY }}
+      - name: Delete the Railway environment
+        env:
+          RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          npx -y "$RAILWAY_CLI" link --project "${{ vars.RAILWAY_PROJECT_ID }}" --environment preview-base
+          npx -y "$RAILWAY_CLI" environment delete "$PR_ENV" --yes

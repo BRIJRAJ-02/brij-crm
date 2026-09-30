@@ -1,0 +1,26 @@
+{
+  "name": "@crm/api",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=../../.env --watch src/server.ts",
+    "dev:worker": "node --env-file-if-exists=../../.env --watch src/worker.ts",
+    "start": "node src/server.ts",
+    "start:worker": "node src/worker.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@crm/contracts": "workspace:*",
+    "@crm/core": "workspace:*",
+    "@crm/db": "workspace:*",
+    "@hono/node-server": "catalog:",
+    "@orpc/server": "catalog:",
+    "hono": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@crm/config": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}

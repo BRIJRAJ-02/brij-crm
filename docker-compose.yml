@@ -1,0 +1,63 @@
+# Local services on a fixed port map. `pnpm dev` starts these, then the apps.
+#   postgres    5433  direct connection (DATABASE_URL_DIRECT, DATABASE_URL_OWNER)
+#   pgbouncer   6432  transaction pooling, like Neon's pooler (DATABASE_URL)
+#   centrifugo  8000  client connections · 9000 HTTP API, admin, /health
+# Mailpit (email) and S3 compatible storage (files) join when those features land.
+name: crm
+
+services:
+  postgres:
+    image: postgres:17.11-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d crm"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.25.2-p0
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: crm
+      # The app login role, created by `pnpm db:app-login`.
+      DB_USER: crm_app_user
+      DB_PASSWORD: crm_app_local
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      LISTEN_PORT: 6432
+    ports:
+      - "6432:6432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  centrifugo:
+    build:
+      context: .
+      dockerfile: infra/centrifugo/Dockerfile
+    environment:
+      CENTRIFUGO_HTTP_API_KEY: local-centrifugo-api-key
+      CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY: local-centrifugo-token-secret
+      CENTRIFUGO_ADMIN_PASSWORD: local-admin
+      CENTRIFUGO_ADMIN_SECRET: local-centrifugo-admin-secret
+      CENTRIFUGO_CLIENT_ALLOWED_ORIGINS: http://localhost:5173
+    ports:
+      - "8000:8000"
+      - "9000:9000"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:9000/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  postgres-data:

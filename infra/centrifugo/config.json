@@ -1,0 +1,18 @@
+{
+  "http_server": {
+    "port": 8000,
+    "internal_port": "9000"
+  },
+  "engine": {
+    "type": "memory"
+  },
+  "client": {
+    "allowed_origins": []
+  },
+  "admin": {
+    "enabled": true
+  },
+  "health": {
+    "enabled": true
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "extends": "@crm/config/tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["es2024"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "types": ["@cloudflare/workers-types"]
+  },
+  "include": ["."]
+}

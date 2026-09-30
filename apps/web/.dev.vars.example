@@ -1,0 +1,2 @@
+# Copy to .dev.vars for `pnpm --filter @crm/web preview` (wrangler dev on the built app).
+API_ORIGIN_INTERNAL=http://localhost:3000

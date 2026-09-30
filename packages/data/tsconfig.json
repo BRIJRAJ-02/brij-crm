@@ -1,0 +1,4 @@
+{
+  "extends": "@crm/config/tsconfig.react.json",
+  "include": ["src"]
+}

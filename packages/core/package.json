@@ -1,0 +1,20 @@
+{
+  "name": "@crm/core",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@crm/contracts": "workspace:*",
+    "@crm/db": "workspace:*"
+  },
+  "devDependencies": {
+    "@crm/config": "workspace:*",
+    "@types/node": "catalog:",
+    "typescript": "catalog:"
+  }
+}
