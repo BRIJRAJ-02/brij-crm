@@ -10,3 +10,4 @@ dist/
 .playwright-mcp/
 .claude/settings.local.json
 .vercel
+.env*

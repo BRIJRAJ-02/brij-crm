@@ -62,7 +62,7 @@ Build one modular API (a monolith split into clear internal modules, not microse
 | Dates | `@internationalized/date` + `Intl` | Already used by React Aria for calendar dates and time zones, so we don't need a second date library. |
 | Client data layer | TanStack DB behind our own `packages/data` interface | One normalised copy per record, live queries, and optimistic transactions, fed by server queries and patched by change events. It's young and built for in memory collections, so it must pass a windowed query prototype first (see Follow-up). |
 | API | Hono (on `@hono/node-server`) + oRPC + Zod 4 | One set of typed procedures for the app, which also generates the OpenAPI spec and REST routes for the public API (#34). |
-| Database | Postgres 17 (on Neon) | Relations, typed JSON, row level security, full text and trigram search, and LISTEN/NOTIFY in one proven engine. |
+| Database | Postgres 18 (on Neon, the version Vercel's Neon provisions; local Docker matches it) | Relations, typed JSON, row level security, full text and trigram search, and LISTEN/NOTIFY in one proven engine. |
 | Database access | Drizzle ORM with the `pg` driver, and SQL migrations from drizzle-kit | SQL first and typed, with SQL templates for dynamic attribute queries. Row level security and roles live in hand written SQL migrations. |
 | Tenancy | `workspace_id` on every row, forced Postgres row level security, and the access door in the app | The database refuses other workspaces' rows even if a query forgets to filter. The app does the fine grained checks. |
 | Auth | Better Auth (self hosted, on our Postgres), with its organization plugin as the workspace | Email with verification, Google, sessions, two factor, passkeys, organisations and API keys as plugins, with no per user fees. |
@@ -159,7 +159,7 @@ The outbox event shape, channel names, access filtering of events, and handling 
 
 **Environments:**
 - **Local:**
-  - Docker Compose runs Postgres 17 (with the same roles, `pg_trgm` and row level security), PgBouncer in transaction mode, Centrifugo, Mailpit for email, and MinIO for S3 compatible files.
+  - Docker Compose runs Postgres 18 (with the same roles, `pg_trgm` and row level security), PgBouncer in transaction mode, Centrifugo, Mailpit for email, and MinIO for S3 compatible files.
   - Locally, `DATABASE_URL` points at PgBouncer and `DATABASE_URL_DIRECT` at Postgres, so the pooled versus direct mistake shows up locally.
   - One `pnpm dev` starts everything on a fixed port map, and `.env.example` lists every variable.
 - **Preview per pull request:**
@@ -227,7 +227,7 @@ Secrets live in Railway variables per environment (and in Vercel environment var
 ## Follow-up
 
 - [x] Choose the product name: brij-crm (2026-10-01).
-- [ ] Choose the domain. Until then production runs on `brij-crm.vercel.app`, which works for host only cookies; email sending and Google sign in need the real domain.
+- [ ] Choose the domain. Until then production runs on `brij-crm-phi.vercel.app` (`brij-crm.vercel.app` was already taken), which works for host only cookies; email sending and Google sign in need the real domain.
 - [ ] Move Neon production to a paid plan with scale to zero off, before the realtime relay (#7) ships.
 - [ ] Confirm the Vercel managed Neon organization lets you create an API key for the preview workflow (`NEON_API_KEY`). If it doesn't, previews take their database branch from the Vercel integration instead, and `preview.yml` changes to match.
 - [ ] Prototype TanStack DB on a windowed, server filtered query over a million rows (live patches plus loading on scroll), as the first step of Client data and state (#6). If it struggles, the `packages/data` interface switches to a plain normalised store on TanStack Query, and the screens don't change.
