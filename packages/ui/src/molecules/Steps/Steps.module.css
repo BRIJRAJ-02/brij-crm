@@ -1,0 +1,91 @@
+/* Steps: a column of numbered 20px markers joined by a hairline. Done is an
+   accent tick, current an accent ring, failed a danger cross. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .step {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-8);
+  }
+
+  .step:not(:last-child)::after {
+    position: absolute;
+    inset-block: var(--size-chip) calc(-1 * var(--space-12));
+    inset-inline-start: calc(var(--size-chip) / 2);
+    inline-size: var(--border-width-hairline);
+    background: var(--border);
+    content: '';
+  }
+
+  .marker {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--size-chip);
+    block-size: var(--size-chip);
+    border: var(--border-width-hairline) solid var(--control-border);
+    border-radius: var(--radius-full);
+    background: var(--surface-raised);
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .step[data-state='done'] .marker {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
+  .step[data-state='current'] .marker {
+    border-color: var(--accent);
+    color: var(--accent);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .step[data-state='failed'] .marker {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
+  .text {
+    display: flex;
+    flex-direction: column;
+    padding-block-start: var(--space-2);
+  }
+
+  .label {
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .step[data-state='upcoming'] .label {
+    color: var(--text-secondary);
+  }
+
+  .description {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  @media (forced-colors: active) {
+    .marker {
+      border-color: CanvasText;
+    }
+
+    .step[data-state='current'] .marker {
+      border-color: Highlight;
+    }
+  }
+}

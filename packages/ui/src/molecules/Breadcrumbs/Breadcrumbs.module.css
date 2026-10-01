@@ -1,0 +1,57 @@
+/* Breadcrumbs: links in text-secondary joined by 12px chevrons; the current
+   page in text. */
+@layer components {
+  .root {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .crumb {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+    border-radius: var(--radius-xs);
+    color: var(--text-secondary);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-decoration: none;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .link[data-current] {
+    color: var(--text);
+    cursor: default;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .link[data-hovered]:not([data-current]) {
+      color: var(--text);
+      text-decoration: underline;
+    }
+  }
+
+  .link[data-focus-visible] {
+    box-shadow: var(--shadow-focus);
+  }
+
+  .separator {
+    display: inline-flex;
+    color: var(--text-tertiary);
+  }
+
+  .crumb:last-child .separator {
+    display: none;
+  }
+}

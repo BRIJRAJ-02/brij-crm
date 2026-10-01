@@ -1,0 +1,104 @@
+/* IconPicker: a search field over a grid of 28px icon cells; the focused cell
+   takes surface-hover and the chosen one the accent's soft tint and edge. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    inline-size: calc(var(--size-sidebar) - 2 * var(--space-8));
+  }
+
+  .search {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    block-size: var(--size-control);
+    padding-inline: var(--space-8);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+  }
+
+  .search:focus-within {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .input {
+    flex: 1;
+    min-inline-size: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    outline: none;
+  }
+
+  .input::placeholder {
+    color: var(--text-tertiary);
+  }
+
+  .input::-webkit-search-cancel-button {
+    display: none;
+  }
+
+  .scroller {
+    max-block-size: calc(6 * var(--size-nav-item) + 5 * var(--space-2));
+    overflow: auto;
+    border-radius: var(--radius-sm);
+    outline: none;
+  }
+
+  .scroller:focus-visible {
+    box-shadow: var(--shadow-focus);
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: var(--space-2);
+    outline: none;
+  }
+
+  .item {
+    display: grid;
+    place-items: center;
+    block-size: var(--size-nav-item);
+    border: var(--border-width-hairline) solid transparent;
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    cursor: pointer;
+    outline: none;
+  }
+
+  .item[data-focused] {
+    background: var(--surface-hover);
+    color: var(--text);
+  }
+
+  .item[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .item[data-selected] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--text);
+  }
+
+  .empty {
+    grid-column: 1 / -1;
+    padding: var(--space-8);
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  @media (forced-colors: active) {
+    .item[data-selected] {
+      border-color: Highlight;
+    }
+  }
+}

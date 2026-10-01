@@ -1,0 +1,113 @@
+/* HuePicker: nine 20px swatches in each hue's tag colours; the chosen one
+   carries a tick and an accent ring. */
+@layer components {
+  .root {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+  }
+
+  .field {
+    display: inline-flex;
+  }
+
+  .swatch {
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--size-tile);
+    block-size: var(--size-tile);
+    border: var(--border-width-hairline) solid;
+    border-radius: var(--radius-sm);
+    cursor: pointer;
+    outline: none;
+    transition: scale var(--duration-press) var(--ease-out);
+  }
+
+  .swatch[data-hue='gray'] {
+    border-color: var(--tag-gray-border);
+    background: var(--tag-gray-bg);
+    color: var(--tag-gray-text);
+  }
+
+  .swatch[data-hue='red'] {
+    border-color: var(--tag-red-border);
+    background: var(--tag-red-bg);
+    color: var(--tag-red-text);
+  }
+
+  .swatch[data-hue='orange'] {
+    border-color: var(--tag-orange-border);
+    background: var(--tag-orange-bg);
+    color: var(--tag-orange-text);
+  }
+
+  .swatch[data-hue='yellow'] {
+    border-color: var(--tag-yellow-border);
+    background: var(--tag-yellow-bg);
+    color: var(--tag-yellow-text);
+  }
+
+  .swatch[data-hue='lime'] {
+    border-color: var(--tag-lime-border);
+    background: var(--tag-lime-bg);
+    color: var(--tag-lime-text);
+  }
+
+  .swatch[data-hue='green'] {
+    border-color: var(--tag-green-border);
+    background: var(--tag-green-bg);
+    color: var(--tag-green-text);
+  }
+
+  .swatch[data-hue='sky'] {
+    border-color: var(--tag-sky-border);
+    background: var(--tag-sky-bg);
+    color: var(--tag-sky-text);
+  }
+
+  .swatch[data-hue='blue'] {
+    border-color: var(--tag-blue-border);
+    background: var(--tag-blue-bg);
+    color: var(--tag-blue-text);
+  }
+
+  .swatch[data-hue='purple'] {
+    border-color: var(--tag-purple-border);
+    background: var(--tag-purple-bg);
+    color: var(--tag-purple-text);
+  }
+
+  .swatch[data-selected] {
+    box-shadow: var(--shadow-focus);
+  }
+
+  .swatch[data-pressed] {
+    scale: var(--scale-press-sm);
+  }
+
+  .swatch[data-focus-visible] {
+    outline: var(--border-width-thick) solid var(--accent);
+    outline-offset: var(--border-width-thick);
+  }
+
+  .swatch[data-disabled] {
+    opacity: var(--opacity-disabled);
+    cursor: default;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .swatch[data-pressed] {
+      scale: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .swatch {
+      border-color: CanvasText;
+    }
+
+    .swatch[data-selected] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}

@@ -1,0 +1,100 @@
+/* FileDrop: a dashed box on surface-subtle that turns accent while a file is
+   dragged over it; an upload icon, the label, "browse" as a link, and what
+   it takes. */
+@layer components {
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .root {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-4);
+    padding-block: var(--space-24);
+    padding-inline: var(--space-16);
+    border: var(--border-width-hairline) dashed var(--control-border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-subtle);
+    color: var(--text);
+    text-align: center;
+    outline: none;
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      border-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .root[data-drop-target] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+
+  .root[data-focus-visible] {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .label {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .hint {
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .browse {
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-xs);
+    background: transparent;
+    color: var(--link);
+    font: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--accent-border);
+    cursor: pointer;
+    outline: none;
+  }
+
+  .browse[data-focus-visible] {
+    box-shadow: var(--shadow-focus);
+  }
+
+  .limits {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .error {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    color: var(--danger);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  /* Disabled text stays at text-tertiary (4.5:1), rather than fading below it. */
+  .root[data-disabled] {
+    border-style: solid;
+    border-color: var(--border-subtle);
+    color: var(--text-tertiary);
+  }
+
+  .root[data-disabled] .hint,
+  .root[data-disabled] .limits,
+  .root[data-disabled] .browse {
+    color: var(--text-tertiary);
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border-color: CanvasText;
+    }
+  }
+}

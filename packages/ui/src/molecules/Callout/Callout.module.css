@@ -1,0 +1,72 @@
+/* Callout: a bordered message in its tone's tag colours (info blue, success
+   green, warning yellow, danger red), with an icon, an optional bold title
+   and the next step. The tag colours hold 4.5:1 for the text in both themes. */
+@layer components {
+  .root {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-8);
+    padding-block: var(--space-8);
+    padding-inline: var(--space-12);
+    border: var(--border-width-hairline) solid;
+    border-radius: var(--radius-md);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .root[data-tone='info'] {
+    border-color: var(--tag-blue-border);
+    background: var(--tag-blue-bg);
+    color: var(--tag-blue-text);
+  }
+
+  .root[data-tone='success'] {
+    border-color: var(--tag-green-border);
+    background: var(--tag-green-bg);
+    color: var(--tag-green-text);
+  }
+
+  .root[data-tone='warning'] {
+    border-color: var(--tag-yellow-border);
+    background: var(--tag-yellow-bg);
+    color: var(--tag-yellow-text);
+  }
+
+  .root[data-tone='danger'] {
+    border-color: var(--tag-red-border);
+    background: var(--tag-red-bg);
+    color: var(--tag-red-text);
+  }
+
+  .icon {
+    display: inline-flex;
+    flex: none;
+    padding-block-start: var(--space-2);
+  }
+
+  .body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .title {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    margin-block-start: var(--space-4);
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border-color: CanvasText;
+    }
+  }
+}

@@ -1,0 +1,86 @@
+/* Disclosure: a 28px title row with a chevron that turns as the section
+   opens; the panel's height animates open over duration-move. */
+@layer components {
+  .group {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .root {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .heading {
+    margin: 0;
+  }
+
+  .trigger {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    inline-size: 100%;
+    block-size: var(--size-nav-item);
+    padding-inline: var(--space-4) var(--space-8);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-align: start;
+    cursor: pointer;
+    outline: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .trigger[data-hovered] {
+      background: var(--surface-hover);
+    }
+  }
+
+  .trigger[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .trigger[data-disabled] {
+    opacity: var(--opacity-disabled);
+    cursor: default;
+  }
+
+  .chevron {
+    display: inline-flex;
+    color: var(--text-secondary);
+    transition: rotate var(--duration-move) var(--ease-in-out);
+  }
+
+  .root[data-expanded] .chevron {
+    rotate: 90deg;
+  }
+
+  .title {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .panel {
+    /* React Aria sets this inline while the panel opens and closes. */
+    --disclosure-panel-height: auto;
+
+    overflow: clip;
+    block-size: var(--disclosure-panel-height);
+    transition: block-size var(--duration-move) var(--ease-in-out);
+  }
+
+  .root[data-expanded] .panel {
+    padding-block: var(--space-4) var(--space-8);
+    padding-inline: var(--space-4);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .chevron,
+    .panel {
+      transition: none;
+    }
+  }
+}

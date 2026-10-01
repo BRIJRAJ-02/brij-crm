@@ -1,0 +1,75 @@
+/* Card: a raised surface with a hairline and radius-lg; a header with the
+   title and its actions, the body, and a footer on surface-subtle. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    overflow: hidden;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-xs);
+    color: var(--text);
+  }
+
+  .root[data-tone='sunken'] {
+    background: var(--surface-subtle);
+    box-shadow: none;
+  }
+
+  .head {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-8);
+    padding-block: var(--space-12) 0;
+    padding-inline: var(--space-16);
+  }
+
+  .heading {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .title {
+    margin: 0;
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .description {
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .actions {
+    display: inline-flex;
+    gap: var(--space-4);
+  }
+
+  .body {
+    padding: var(--space-16);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .foot {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-8);
+    padding-block: var(--space-8);
+    padding-inline: var(--space-12);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-subtle);
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border-color: CanvasText;
+    }
+  }
+}

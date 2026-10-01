@@ -1,0 +1,43 @@
+/* DescriptionList: terms in text-secondary beside (or above) their values,
+   on a 34px rhythm. */
+@layer components {
+  .root {
+    display: grid;
+    grid-template-columns: minmax(auto, max-content) 1fr;
+    gap: var(--space-8) var(--space-16);
+    margin: 0;
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .root[data-layout='stacked'] {
+    grid-template-columns: 1fr;
+    gap: var(--space-12);
+  }
+
+  .row {
+    display: contents;
+  }
+
+  .root[data-layout='stacked'] .row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .term {
+    color: var(--text-secondary);
+  }
+
+  .root[data-layout='stacked'] .term {
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .description {
+    min-inline-size: 0;
+    margin: 0;
+    color: var(--text);
+    overflow-wrap: anywhere;
+  }
+}

@@ -52,6 +52,10 @@ export { HUES, type Hue } from './hue.ts';
 export { arraySource, type ListRange, type ListSource } from './lib/list-source.ts';
 export { safeHref } from './lib/safe-href.ts';
 export { safeImageSrc } from './lib/safe-image-src.ts';
+export { Breadcrumbs, type BreadcrumbsProps, type Crumb } from './molecules/Breadcrumbs/Breadcrumbs.tsx';
+export { Callout, type CalloutProps, type CalloutTone } from './molecules/Callout/Callout.tsx';
+export { Card, type CardProps } from './molecules/Card/Card.tsx';
+export { CodeInput, type CodeInputProps } from './molecules/CodeInput/CodeInput.tsx';
 export {
   DatePicker,
   DateRangePicker,
@@ -61,8 +65,24 @@ export {
   type DateRange,
   type DateRangePickerProps,
 } from './molecules/DatePicker/DatePicker.tsx';
+export {
+  DescriptionList,
+  type DescriptionItem,
+  type DescriptionListProps,
+} from './molecules/DescriptionList/DescriptionList.tsx';
+export {
+  Disclosure,
+  DisclosureGroup,
+  type DisclosureGroupProps,
+  type DisclosureProps,
+} from './molecules/Disclosure/Disclosure.tsx';
 export { EmptyState, type EmptyStateProps, type EmptyStateTone } from './molecules/EmptyState/EmptyState.tsx';
 export { Field, type FieldProps, type FieldSize } from './molecules/Field/Field.tsx';
+export { FileDrop, type FileDropProps } from './molecules/FileDrop/FileDrop.tsx';
+export { FileItem, formatFileSize, type FileItemProps } from './molecules/FileItem/FileItem.tsx';
+export { FilterChip, type FilterChipProps } from './molecules/FilterChip/FilterChip.tsx';
+export { HuePicker, type HuePickerProps } from './molecules/HuePicker/HuePicker.tsx';
+export { IconPicker, type IconPickerProps } from './molecules/IconPicker/IconPicker.tsx';
 export {
   ContextMenu,
   Menu,
@@ -97,7 +117,9 @@ export {
   type ThemeSwitchProps,
 } from './molecules/SegmentedControl/SegmentedControl.tsx';
 export { Select, type SelectItem, type SelectOptionStyle, type SelectProps } from './molecules/Select/Select.tsx';
+export { Steps, type Step, type StepsProps } from './molecules/Steps/Steps.tsx';
+export { Table, type TableColumn, type TableProps } from './molecules/Table/Table.tsx';
 export { TabPanel, Tabs, type TabItem, type TabPanelProps, type TabsProps } from './molecules/Tabs/Tabs.tsx';
 export { createToasts, type ToastAction, type ToastContent, type Toasts, type ToastTone } from './provider/toasts.tsx';
-export { useDelayedLoading } from './provider/useDelayedLoading.ts';
 export { UiProvider, type FormatSettings, type UiProviderProps } from './provider/UiProvider.tsx';
+export { useDelayedLoading } from './provider/useDelayedLoading.ts';
