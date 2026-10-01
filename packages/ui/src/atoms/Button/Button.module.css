@@ -42,6 +42,16 @@
   }
 
   /* Sizes */
+  .root[data-full-width] {
+    inline-size: 100%;
+    justify-content: flex-start;
+  }
+
+  .root[data-full-width] .label {
+    flex: 1;
+    text-align: start;
+  }
+
   .root[data-size='lg'] {
     block-size: var(--size-input);
   }

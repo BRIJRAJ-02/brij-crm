@@ -1,0 +1,199 @@
+/* Sidebar: a size-sidebar column on surface-sidebar with a hairline end
+   edge: the workspace row (size-bar tall), Quick actions, a scrolling body of
+   28px items and folding sections, and a footer. Collapsed, it is a
+   size-sidebar-collapsed rail of centred icons. The current item takes
+   surface-selected, hover surface-hover. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    inline-size: var(--size-sidebar);
+    max-inline-size: 100%;
+    block-size: 100%;
+    border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-sidebar);
+  }
+
+  .head {
+    display: flex;
+    flex: none;
+    gap: var(--space-8);
+    align-items: center;
+    block-size: var(--size-bar);
+    padding-inline: var(--space-8) var(--space-12);
+  }
+
+  .workspace,
+  .switcher {
+    display: flex;
+    flex: 1;
+    gap: var(--space-6);
+    align-items: center;
+    min-inline-size: 0;
+    block-size: var(--size-nav-item);
+    padding-inline: var(--space-4);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+    text-align: start;
+    outline: none;
+  }
+
+  .switcher {
+    cursor: pointer;
+  }
+
+  .name,
+  .label {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .search {
+    display: flex;
+    flex: none;
+    padding: 0 var(--space-8) var(--space-8);
+  }
+
+  .scroll {
+    flex: 1;
+    min-block-size: 0;
+    overflow-y: auto;
+  }
+
+  .body,
+  .foot,
+  .items,
+  .rail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--border-width-hairline);
+  }
+
+  .body {
+    padding: 0 var(--space-8) var(--space-8);
+  }
+
+  .foot {
+    flex: none;
+    padding: var(--space-8);
+  }
+
+  .section {
+    margin-block-start: var(--space-12);
+  }
+
+  .rail {
+    margin-block-start: var(--space-12);
+    padding-block-start: var(--space-12);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .item {
+    position: relative;
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    inline-size: 100%;
+    block-size: var(--size-nav-item);
+    padding-inline: var(--space-8);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-align: start;
+    text-decoration: none;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .item[aria-current='page'] {
+    background: var(--surface-selected);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .switcher[data-hovered],
+    .item[data-hovered] {
+      background: var(--surface-hover);
+    }
+  }
+
+  .switcher[data-focus-visible],
+  .item[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .meta {
+    flex: none;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .loading {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding: var(--space-8);
+  }
+
+  .empty {
+    margin: 0;
+    padding: var(--space-4) var(--space-8);
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  /* The rail: centred icons, the counts on their corners. */
+  .root[data-collapsed] {
+    inline-size: var(--size-sidebar-collapsed);
+  }
+
+  .root[data-collapsed] .head,
+  .root[data-collapsed] .search {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .root[data-collapsed] .workspace,
+  .root[data-collapsed] .switcher {
+    flex: none;
+  }
+
+  .root[data-collapsed] .foot {
+    align-items: center;
+  }
+
+  .root[data-collapsed] .item {
+    justify-content: center;
+    padding-inline: 0;
+  }
+
+  .root[data-collapsed] .badge {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+  }
+
+  @media (forced-colors: active) {
+    .item[aria-current='page'] {
+      outline: var(--border-width-hairline) solid Highlight;
+      outline-offset: calc(-1 * var(--border-width-hairline));
+    }
+
+    .switcher[data-focus-visible],
+    .item[data-focus-visible] {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: calc(-1 * var(--border-width-thick));
+    }
+  }
+}

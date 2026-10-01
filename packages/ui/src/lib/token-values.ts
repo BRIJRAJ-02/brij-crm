@@ -1,8 +1,8 @@
 // The few token numbers JavaScript needs (a virtual list's row height, a
-// keyboard resize step), read from tokens.json so they can never drift from
-// the CSS. Only the size and spacing families are imported, so the rest of the
-// file stays out of the bundle.
-import { size, spacing } from '@crm/tokens/tokens.json';
+// keyboard resize step, the compact page width), read from tokens.json so they
+// can never drift from the CSS. Only the size, spacing and breakpoint families
+// are imported, so the rest of the file stays out of the bundle.
+import { breakpoint, size, spacing } from '@crm/tokens/tokens.json';
 
 /** A size token's value in pixels, such as `size-nav-item` (28). Throws for a name tokens.json doesn't have. */
 export function sizeToken(name: string): number {
@@ -15,5 +15,12 @@ export function sizeToken(name: string): number {
 export function spaceToken(name: string): number {
   const token = spacing.tokens.find((candidate) => candidate.name === name);
   if (token === undefined) throw new Error(`No spacing token called ${name} in tokens.json.`);
+  return Number.parseFloat(token.value);
+}
+
+/** A breakpoint token's value in pixels, such as `bp-page-compact` (1024). Throws for a name tokens.json doesn't have. */
+export function breakpointToken(name: string): number {
+  const token = breakpoint.tokens.find((candidate) => candidate.name === name);
+  if (token === undefined) throw new Error(`No breakpoint token called ${name} in tokens.json.`);
   return Number.parseFloat(token.value);
 }

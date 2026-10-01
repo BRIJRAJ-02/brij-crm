@@ -77,6 +77,37 @@
     padding-inline: var(--space-4);
   }
 
+  /* The label variant: a sidebar section's quiet 11px title, chevron after it,
+     and the items flush under it. */
+  .root[data-variant='label'] .trigger {
+    gap: var(--space-4);
+    block-size: auto;
+    padding-block: var(--space-4);
+    padding-inline: var(--space-8);
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .root[data-variant='label'] .title {
+    flex: none;
+  }
+
+  .root[data-variant='label'] .chevron {
+    order: 1;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root[data-variant='label'] .trigger[data-hovered] {
+      background: transparent;
+      color: var(--text);
+    }
+  }
+
+  .root[data-variant='label'][data-expanded] .panel {
+    padding: 0;
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .chevron,
     .panel {

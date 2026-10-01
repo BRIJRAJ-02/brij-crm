@@ -27,6 +27,8 @@ interface ButtonLook {
   readonly iconRight?: IconName;
   /** Keycaps shown after the label: `ESC`, `⌘↵`, or several. */
   readonly kbd?: string | readonly string[];
+  /** Fills its row, label at the start and keycaps at the end: the sidebar's Quick actions. */
+  readonly isFullWidth?: boolean;
   readonly isDisabled?: boolean;
   /** A slot a parent fills, such as `close` inside a toast or a dialog. */
   readonly slot?: string;
@@ -73,6 +75,7 @@ function lookAttributes(look: ButtonLook, face: ButtonFace) {
     'data-variant': look.variant ?? 'secondary',
     'data-size': look.size ?? 'md',
     'data-icon-only': face.children === undefined || undefined,
+    'data-full-width': look.isFullWidth === true || undefined,
   };
 }
 

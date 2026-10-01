@@ -1,8 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn } from 'storybook/test';
-import type { ThemeChoice, ThemeController } from '../../theme/theme.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { fakeThemeController } from '../../workbench/theme.ts';
 import { SegmentedControl, ThemeSwitch } from './SegmentedControl.tsx';
 
 const meta = {
@@ -49,25 +49,8 @@ export const Default: Story = {
   },
 };
 
-function fakeController(): ThemeController {
-  let choice: ThemeChoice = 'system';
-  const listeners = new Set<(choice: ThemeChoice) => void>();
-  return {
-    get: () => choice,
-    set: (next) => {
-      choice = next;
-      for (const listener of listeners) listener(next);
-    },
-    subscribe: (listener) => {
-      listeners.add(listener);
-      return () => listeners.delete(listener);
-    },
-    dispose: () => undefined,
-  };
-}
-
 function Themes() {
-  const [controller] = useState(fakeController);
+  const [controller] = useState(fakeThemeController);
   return (
     <Stage direction="column">
       <ThemeSwitch controller={controller} />

@@ -20,6 +20,14 @@
     block-size: calc(var(--size-table-header) + 12 * var(--size-row));
   }
 
+  .root[data-height='page'] {
+    box-sizing: content-box;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    block-size: calc(20 * var(--size-row));
+    padding: 0;
+  }
+
   .root[data-direction='column'] {
     flex-direction: column;
     flex-wrap: nowrap;

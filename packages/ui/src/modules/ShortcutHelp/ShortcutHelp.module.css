@@ -1,0 +1,27 @@
+/* ShortcutHelp: groups stacked space-16 apart, each a label-strong title in
+   text-secondary over its rows; a row's keycaps sit together, space-2 apart. */
+@layer components {
+  .groups {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .title {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .keys {
+    display: inline-flex;
+    gap: var(--space-2);
+  }
+}

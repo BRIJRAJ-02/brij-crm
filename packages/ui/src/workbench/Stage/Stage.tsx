@@ -7,8 +7,8 @@ export interface StageProps {
   readonly direction?: 'row' | 'column';
   /** `narrow` holds the pieces to the sidebar's width, to show how they cut long text. */
   readonly width?: 'auto' | 'narrow';
-  /** `grid` gives a table a fixed height to scroll in: a header and twelve rows. */
-  readonly height?: 'auto' | 'grid';
+  /** `grid` gives a table a fixed height to scroll in: a header and twelve rows. `page` is an app window's height, for the shell, with no padding. */
+  readonly height?: 'auto' | 'grid' | 'page';
   readonly children: ReactNode;
 }
 

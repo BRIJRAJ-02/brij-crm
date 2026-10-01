@@ -141,6 +141,32 @@ export { Select, type SelectItem, type SelectOptionStyle, type SelectProps } fro
 export { Steps, type Step, type StepsProps } from './molecules/Steps/Steps.tsx';
 export { Table, type TableColumn, type TableProps } from './molecules/Table/Table.tsx';
 export { TabPanel, Tabs, type TabItem, type TabPanelProps, type TabsProps } from './molecules/Tabs/Tabs.tsx';
+export { AppShell, AppShellContext, type AppShellProps } from './modules/AppShell/AppShell.tsx';
+export {
+  ShortcutHelp,
+  type Shortcut,
+  type ShortcutGroup,
+  type ShortcutHelpProps,
+} from './modules/ShortcutHelp/ShortcutHelp.tsx';
+export {
+  NavItem,
+  NavSection,
+  Sidebar,
+  type NavItemProps,
+  type NavSectionProps,
+  type SidebarProps,
+} from './modules/Sidebar/Sidebar.tsx';
+export {
+  SortChip,
+  Toolbar,
+  TopBar,
+  ViewBar,
+  type SortChipProps,
+  type ToolbarProps,
+  type TopBarProps,
+  type ViewBarProps,
+  type ViewChoice,
+} from './modules/Toolbar/Toolbar.tsx';
 export { createToasts, type ToastAction, type ToastContent, type Toasts, type ToastTone } from './provider/toasts.tsx';
 export { UiProvider, type FormatSettings, type UiProviderProps } from './provider/UiProvider.tsx';
 export { LOADING_TIMING, useDelayedLoading, type LoadingTiming } from './provider/useDelayedLoading.ts';

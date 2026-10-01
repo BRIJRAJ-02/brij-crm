@@ -18,6 +18,7 @@ New. Attribute groups on the record panel (#18), advanced settings and import op
 
 - `count` shows a Badge after the title.
 - In a `DisclosureGroup`, opening one closes the others unless `allowsMultipleExpanded`.
+- `variant="label"` draws the title as a sidebar section label (11px, `text-secondary`, the chevron after it) with its items flush under it: the sidebar's Favorites, Records and Lists.
 
 ## States
 

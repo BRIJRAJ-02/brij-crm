@@ -47,3 +47,17 @@ export const Group: Story = {
     </Stage>
   ),
 };
+
+/** The label variant, as the sidebar's sections draw it: a quiet title with its chevron after it. */
+export const Label: Story = {
+  render: () => (
+    <Stage width="narrow">
+      <Disclosure title="Records" variant="label" defaultExpanded>
+        Companies, People and Deals.
+      </Disclosure>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Records' })).toHaveAttribute('aria-expanded', 'true');
+  },
+};

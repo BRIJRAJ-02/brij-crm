@@ -29,6 +29,8 @@ Ported from the design system artifact's Button card. Every pressable control in
 
 Props: `children` (the label, a string) or `icon` with `label` (icon only); `icon`, `iconRight`; `variant`; `size` (`md` 26px, `lg` 30px, to sit beside an input); `kbd` (one keycap or several); `onPress`; `isDisabled`; `isPending`; `type`; `slot`; `ref`.
 
+- `isFullWidth` fills the row, with the label at the start and the keycaps at the end, for the sidebar's Quick actions.
+
 ## States
 
 - **Hover**: `surface-hover` (the primary darkens to `accent-hover`), only on devices that can hover.
