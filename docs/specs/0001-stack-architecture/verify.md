@@ -12,7 +12,7 @@ _Steps derived from the feature's **Done when** in `docs/scope/foundations.md` (
 - [ ] Build the web app and run it with `vercel dev` in `apps/web` (project linked), open the URL it prints → the page renders with no console errors under the Content Security Policy from `vercel.json`, and `/api` reaches the local API through the middleware → DW-2 _(the Cloudflare version of this step passed 2026-10-01, before the move to Vercel)_
 - [ ] Open a pull request → the Vercel preview the workflow comments on the pull request shows environment `preview`, and Neon lists a branch `preview/pr-<n>` → DW-3
 - [ ] Close that pull request → the Neon branch and the Railway environment `pr-<n>` are gone → DW-3
-- [ ] Merge to `main` → the production URL shows environment `production`, served by the Neon production branch (not `preview-base`) → DW-3
+- [ ] Merge to `main` → the production URL shows environment `production`, served by the Neon production branch (not `preview-base`) → DW-3 _(production itself works as of 2026-10-01: https://brij-crm-phi.vercel.app shows `production` on Neon Postgres 18.6, and a write from a foreign origin gets 403. It was deployed from a local machine, so the merge path stays open until `VERCEL_TOKEN` and Railway's GitHub app are in place)_
 
 ## Commands
 - [x] `pnpm typecheck` → 6 of 6 tasks pass → DW-2 _(passed 2026-10-01)_
@@ -26,10 +26,10 @@ _Steps derived from the feature's **Done when** in `docs/scope/foundations.md` (
 - [x] Send SIGTERM to the api → it logs "Shutting down" and exits → DW-2 _(passed 2026-10-01)_
 - [x] `pnpm dev` with Docker installed → Postgres, PgBouncer and Centrifugo report healthy, and the status page works through PgBouncer (port 6432) → DW-2 _(passed 2026-10-01, Docker Desktop 29.8)_
 - [x] `docker build -f apps/api/Dockerfile .` and `docker build -f infra/centrifugo/Dockerfile .` → both images build → DW-3 _(passed 2026-10-01; the api image also answered `/api/health/ready` through PgBouncer)_
-- [ ] `railway config plan` (linked to `production`, then `preview-base`) → it plans the three services `api`, `worker` and `centrifugo` → DW-3
+- [x] `railway config plan` (linked to `production`, then `preview-base`) → it plans the three services `api`, `worker` and `centrifugo` → DW-3 _(passed 2026-10-01, then applied to both)_
 
 ## Acceptance-criteria coverage
 - DW-1: spec 0001 exists with its status line (`In Progress` now, `Accepted` once the feature is done).
 - DW-2: the local status page steps, typecheck, build, db:setup, the guard steps, `pnpm dev` with Docker.
-- DW-3: the pull request, close and merge steps, the Docker builds, `railway config plan`. Still open: they need your GitHub, Neon, Railway and Vercel setup.
+- DW-3: the pull request, close and merge steps, the Docker builds, `railway config plan`. Still open: the pull request steps (they need the `VERCEL_TOKEN`, `RAILWAY_TOKEN` and `NEON_API_KEY` secrets, and the `preview-base` branch) and the merge path.
 - DW-4: both boundaries steps. The "screens only from the component library" half lands with Design tokens (#3) and the Component library (#4). Until then the one boot page has no styles, so it has no raw values.
