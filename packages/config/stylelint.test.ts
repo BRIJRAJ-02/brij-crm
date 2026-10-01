@@ -23,19 +23,25 @@ describe('stylelint house rules', () => {
   it('passes a component styled only with tokens', async () => {
     const { rules } = await lintCss(`
       .root {
-        color: var(--color-text);
+        --tile-bg: var(--tag-blue-bg);
+        color: var(--text);
         background-color: transparent;
-        padding: var(--space-2) calc(var(--space-3) * 2);
+        padding: var(--space-2) calc(var(--space-4) * 2);
         margin: 0 auto;
         border-radius: var(--radius-md);
-        transition: opacity var(--duration-menu) var(--ease-out);
-        z-index: var(--layer-menu);
-        font-weight: var(--font-weight-medium);
+        transition: opacity var(--duration-popover) var(--ease-out);
+        z-index: var(--z-popover);
+        opacity: var(--opacity-disabled);
+        scale: var(--scale-press);
+        font: var(--text-body);
+        letter-spacing: var(--tracking-body);
         inline-size: 100%;
       }
-      .root .icon { color: currentColor; }
+      .root .icon { color: currentColor; opacity: 0; scale: 1; }
       .primary { composes: root; }
-      @container (inline-size > 40cqi) { .root { gap: var(--space-1); } }
+      .tile { background: var(--tile-bg); }
+      @container (width < 480px) { .root { gap: var(--space-4); } }
+      @media (hover: hover) and (pointer: fine) { .root { color: var(--text-secondary); } }
     `);
     expect(rules).toEqual([]);
   });
@@ -51,31 +57,49 @@ describe('stylelint house rules', () => {
     ['a raw z-index', '.root { z-index: 10; }', 'scale-unlimited/declaration-strict-value'],
     ['a raw font weight', '.root { font-weight: 600; }', 'scale-unlimited/declaration-strict-value'],
     ['a raw shadow', '.root { box-shadow: 0 1px 2px black; }', 'scale-unlimited/declaration-strict-value'],
+    ['a raw opacity', '.root { opacity: 0.5; }', 'scale-unlimited/declaration-strict-value'],
+    ['a raw scale', '.root { scale: 0.97; }', 'scale-unlimited/declaration-strict-value'],
+    ['a raw line height of 1', '.root { line-height: 1; }', 'scale-unlimited/declaration-strict-value'],
+    ['an unknown token', '.root { color: var(--colour-text); }', 'csstools/value-no-unknown-custom-properties'],
+    [
+      'a renamed token',
+      '.root { transition-duration: var(--duration-fast); }',
+      'csstools/value-no-unknown-custom-properties',
+    ],
+    [
+      'a container size that is not a token',
+      '.root { } @container (width < 400px) { .root { gap: 0; } }',
+      'crm/breakpoint-tokens',
+    ],
+    ['an off by one page breakpoint', '@media (max-width: 1023.98px) { .root { gap: 0; } }', 'crm/breakpoint-tokens'],
+    ['a breakpoint in rem', '@media (min-width: 64rem) { .root { gap: 0; } }', 'crm/breakpoint-tokens'],
+    ['calc() in a condition', '@media (width < calc(1024px - 1px)) { .root { gap: 0; } }', 'crm/breakpoint-tokens'],
+    [
+      'a page breakpoint in a container query',
+      '@container (width < 1024px) { .root { gap: 0; } }',
+      'crm/breakpoint-tokens',
+    ],
   ])('refuses %s', async (_name, code, rule) => {
     const { rules } = await lintCss(code);
     expect(rules).toContain(rule);
   });
 
   it('refuses !important', async () => {
-    const { rules } = await lintCss('.root { color: var(--color-text) !important; }');
+    const { rules } = await lintCss('.root { color: var(--text) !important; }');
     expect(rules).toContain('declaration-no-important');
   });
 
   it.each([
-    ['an id selector', '#main { color: var(--color-text); }', 'selector-max-id'],
-    ['a global selector', ':global(.app) { color: var(--color-text); }', 'selector-pseudo-class-disallowed-list'],
-    [
-      'a descendant chain two levels deep',
-      '.root .a .b { color: var(--color-text); }',
-      'selector-max-compound-selectors',
-    ],
+    ['an id selector', '#main { color: var(--text); }', 'selector-max-id'],
+    ['a global selector', ':global(.app) { color: var(--text); }', 'selector-pseudo-class-disallowed-list'],
+    ['a descendant chain two levels deep', '.root .a .b { color: var(--text); }', 'selector-max-compound-selectors'],
   ])('refuses %s, which reaches outside the component', async (_name, code, rule) => {
     const { rules } = await lintCss(code);
     expect(rules).toContain(rule);
   });
 
   it('refuses element selectors in a component module, but allows them in a reset', async () => {
-    const component = await lintCss('button { color: var(--color-text); }');
+    const component = await lintCss('button { color: var(--text); }');
     const reset = await lintCss('button { color: inherit; }', 'packages/ui/src/reset.css');
     expect(component.rules).toContain('selector-max-type');
     expect(reset.rules).not.toContain('selector-max-type');
@@ -84,5 +108,28 @@ describe('stylelint house rules', () => {
   it('leaves packages/tokens alone, since it defines the raw values', async () => {
     const { ignored } = await lintCss(':root { --color-text: #1a1a1a; }', 'packages/tokens/src/tokens.css');
     expect(ignored).toBe(true);
+  });
+
+  it.each([
+    ['the range form', '@media (width < 1024px) { .root { gap: 0; } }'],
+    ['min-width', '@media (min-width: 1024px) { .root { gap: 0; } }'],
+    ['a container token', '@container (width >= 320px) { .root { gap: 0; } }'],
+    ['a named container', '@container panel (width < 480px) { .root { gap: 0; } }'],
+    ['a condition with no length', '@media (prefers-reduced-motion: reduce) { .root { scale: none; } }'],
+  ])('allows %s', async (_name, code) => {
+    const { rules } = await lintCss(code);
+    expect(rules).toEqual([]);
+  });
+
+  it('gives the same answer from inside a workspace folder', async () => {
+    const { results } = await stylelint.lint({
+      code: '.root { color: var(--text); } .bad { color: var(--duration-fast); }',
+      codeFilename: path.join(REPO_ROOT, COMPONENT),
+      config: stylelintConfig,
+      cwd: path.join(REPO_ROOT, 'packages/ui'),
+    });
+    expect(results[0]?.warnings.map((warning) => warning.rule)).toEqual([
+      'csstools/value-no-unknown-custom-properties',
+    ]);
   });
 });

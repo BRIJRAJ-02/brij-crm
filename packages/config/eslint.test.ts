@@ -73,6 +73,7 @@ describe('screens preset (apps/web)', () => {
       'src/data-layer.ts': "import { createDataLayer } from '@crm/data';\nexport const make = createDataLayer;\n",
       'src/driver.ts': "import pg from 'pg';\nexport const pool = pg;\n",
       'src/vendor.ts': "import * as Sentry from '@sentry/react';\nexport const sentry = Sentry;\n",
+      'src/icon.ts': "import { Building } from 'lucide-react';\nexport const icon = Building;\n",
       'src/styles.ts': "import './screen.css';\nexport const loaded = true;\n",
       'src/Styled.tsx': 'export function Styled() {\n  return <p className="title">Hi</p>;\n}\n',
       'src/Inline.tsx': "export function Inline() {\n  return <p style={{ '--gap': '1' }}>Hi</p>;\n}\n",
@@ -132,6 +133,10 @@ describe('screens preset (apps/web)', () => {
 
   it('refuses a vendor SDK outside its wrapper module', () => {
     expect(rulesFor(messages, 'src/vendor.ts')).toContain('@typescript-eslint/no-restricted-imports');
+  });
+
+  it('refuses lucide-react outside the Icon registry', () => {
+    expect(rulesFor(messages, 'src/icon.ts')).toContain('@typescript-eslint/no-restricted-imports');
   });
 
   it('refuses a stylesheet of the screen’s own', () => {

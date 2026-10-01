@@ -1,9 +1,17 @@
 // The one Stylelint config for the repo, loaded by the root stylelint.config.js.
 // It enforces the CSS house rules: tokens only (no raw colour, size, spacing,
-// radius, shadow or motion values), no !important, and styles that stay inside
-// their own component. packages/tokens is exempt, since it defines the values.
+// radius, shadow, motion, opacity, scale or layer values), only known tokens,
+// breakpoints from tokens, no !important, and styles that stay inside their
+// own component. packages/tokens is exempt, since it defines the values.
+import path from 'node:path';
 import recommended from 'stylelint-config-recommended';
 import strictValue from 'stylelint-declaration-strict-value';
+import unknownCustomProperties from 'stylelint-value-no-unknown-custom-properties';
+import { breakpointTokens } from './stylelint/breakpoint-tokens.js';
+
+// Absolute, so Stylelint gives the same answer run from any folder. Read by
+// path, since @crm/tokens already depends on this package.
+const TOKENS_CSS = path.resolve(import.meta.dirname, '../tokens/tokens.css');
 
 const TOKEN_PROPERTIES = [
   '/color$/',
@@ -16,6 +24,8 @@ const TOKEN_PROPERTIES = [
   'line-height',
   'letter-spacing',
   'z-index',
+  'opacity',
+  'scale',
   'box-shadow',
   'text-shadow',
   '/radius$/',
@@ -40,8 +50,17 @@ const KEYWORDS = [
   'currentcolor',
 ];
 
+// opacity and scale also take 0 and 1 (hidden and shown, none and full size),
+// without loosening line-height: 1 or any other property.
+const IGNORED_VALUES = {
+  '': KEYWORDS,
+  opacity: [...KEYWORDS, '1'],
+  scale: [...KEYWORDS, '1'],
+};
+
+/** The repo's Stylelint config, re-exported by the root stylelint.config.js. */
 export const stylelintConfig = {
-  plugins: [strictValue],
+  plugins: [strictValue, unknownCustomProperties, breakpointTokens],
   ignoreFiles: ['**/node_modules/**', '**/dist/**', 'packages/tokens/**'],
   rules: {
     ...recommended.rules,
@@ -56,12 +75,18 @@ export const stylelintConfig = {
     ],
     'unit-disallowed-list': [
       ['px', 'rem', 'em', 'ex', 'ch', 'pt', 'pc', 'in', 'cm', 'mm', 'q', 'ms', 's'],
-      { message: 'Use a token (var(--name)) instead of a raw size or duration.' },
+      {
+        // In size conditions px passes here, and crm/breakpoint-tokens decides.
+        ignoreMediaFeatureNames: { px: ['width', 'min-width', 'max-width', 'height', 'min-height', 'max-height'] },
+        message: 'Use a token (var(--name)) instead of a raw size or duration.',
+      },
     ],
     'scale-unlimited/declaration-strict-value': [
       TOKEN_PROPERTIES,
-      { ignoreValues: KEYWORDS, message: 'Expected a token (var(--name)) for "${value}" of "${property}".' },
+      { ignoreValues: IGNORED_VALUES, message: 'Expected a token (var(--name)) for "${value}" of "${property}".' },
     ],
+    'csstools/value-no-unknown-custom-properties': [true, { importFrom: [TOKENS_CSS] }],
+    'crm/breakpoint-tokens': true,
     'declaration-no-important': true,
     'selector-max-id': 0,
     // One level of descendant at most, so no component styles another's insides.

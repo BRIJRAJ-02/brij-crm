@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    ".": "./src/index.ts",
     "./styles.css": "./src/styles/index.css",
     "./theme": "./src/theme/theme.ts"
   },
@@ -12,11 +13,16 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@crm/tokens": "workspace:*"
+    "@crm/tokens": "workspace:*",
+    "lucide-react": "catalog:",
+    "react": "catalog:"
   },
   "devDependencies": {
     "@crm/config": "workspace:*",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "eslint": "catalog:",
+    "react-dom": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"

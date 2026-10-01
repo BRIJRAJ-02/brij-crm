@@ -1,0 +1,96 @@
+/* The Icon atom: a Lucide glyph sized, stroked and toned from tokens. Its
+   variants are declared once, here, as data attributes. */
+@layer components {
+  .icon {
+    display: inline-block;
+    flex: none;
+    inline-size: var(--size-icon);
+    block-size: var(--size-icon);
+    stroke: currentColor;
+    stroke-width: var(--icon-stroke);
+    vertical-align: middle;
+  }
+
+  .icon[data-size='sm'] {
+    inline-size: var(--size-icon-sm);
+    block-size: var(--size-icon-sm);
+  }
+
+  .icon[data-size='xs'] {
+    inline-size: var(--size-icon-xs);
+    block-size: var(--size-icon-xs);
+  }
+
+  .icon[data-tone='muted'] {
+    color: var(--text-secondary);
+  }
+
+  .icon[data-tone='ai'] {
+    color: var(--ai);
+  }
+
+  /* An object's icon on its hue: Companies blue, People green, Deals orange. */
+  .tile {
+    --tile-bg: var(--tag-gray-bg);
+    --tile-fg: var(--tag-gray-text);
+    --tile-edge: var(--tag-gray-border);
+
+    display: inline-grid;
+    place-items: center;
+    flex: none;
+    inline-size: var(--size-tile);
+    block-size: var(--size-tile);
+    border: var(--border-width-hairline) solid var(--tile-edge);
+    border-radius: var(--radius-xs);
+    background: var(--tile-bg);
+    color: var(--tile-fg);
+  }
+
+  .tile[data-hue='red'] {
+    --tile-bg: var(--tag-red-bg);
+    --tile-fg: var(--tag-red-text);
+    --tile-edge: var(--tag-red-border);
+  }
+
+  .tile[data-hue='orange'] {
+    --tile-bg: var(--tag-orange-bg);
+    --tile-fg: var(--tag-orange-text);
+    --tile-edge: var(--tag-orange-border);
+  }
+
+  .tile[data-hue='yellow'] {
+    --tile-bg: var(--tag-yellow-bg);
+    --tile-fg: var(--tag-yellow-text);
+    --tile-edge: var(--tag-yellow-border);
+  }
+
+  .tile[data-hue='lime'] {
+    --tile-bg: var(--tag-lime-bg);
+    --tile-fg: var(--tag-lime-text);
+    --tile-edge: var(--tag-lime-border);
+  }
+
+  .tile[data-hue='green'] {
+    --tile-bg: var(--tag-green-bg);
+    --tile-fg: var(--tag-green-text);
+    --tile-edge: var(--tag-green-border);
+  }
+
+  .tile[data-hue='sky'] {
+    --tile-bg: var(--tag-sky-bg);
+    --tile-fg: var(--tag-sky-text);
+    --tile-edge: var(--tag-sky-border);
+  }
+
+  .tile[data-hue='blue'] {
+    --tile-bg: var(--tag-blue-bg);
+    --tile-fg: var(--tag-blue-text);
+    --tile-edge: var(--tag-blue-border);
+  }
+
+  .tile[data-hue='purple'] {
+    --tile-bg: var(--tag-purple-bg);
+    --tile-fg: var(--tag-purple-text);
+    --tile-edge: var(--tag-purple-border);
+  }
+}

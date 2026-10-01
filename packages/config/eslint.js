@@ -44,7 +44,18 @@ const screenDataImports = {
 const vendorSdks = {
   patterns: [
     {
-      group: ['@sentry/*', 'posthog-js', 'posthog-js/*', 'posthog-node', 'resend', '@aws-sdk/*', 'centrifuge'],
+      group: [
+        '@sentry/*',
+        'posthog-js',
+        'posthog-js/*',
+        'posthog-node',
+        'resend',
+        '@aws-sdk/*',
+        'centrifuge',
+        // Icons: only packages/ui's Icon registry (src/atoms/Icon/icons.ts).
+        'lucide-react',
+        'lucide-react/*',
+      ],
       message: 'Import this vendor only in its one wrapper module, and use the wrapper everywhere else.',
     },
   ],

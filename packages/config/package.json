@@ -21,6 +21,7 @@
     "globals": "catalog:",
     "stylelint-config-recommended": "catalog:",
     "stylelint-declaration-strict-value": "catalog:",
+    "stylelint-value-no-unknown-custom-properties": "catalog:",
     "typescript-eslint": "catalog:"
   },
   "devDependencies": {
