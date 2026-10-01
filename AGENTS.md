@@ -35,6 +35,10 @@ pnpm lint:css       # Stylelint
 pnpm house-rules    # CSS module ownership and component READMEs
 pnpm tokens:build   # regenerate packages/tokens/tokens.css after syncing tokens.json from the design system artifact
 pnpm tokens:check   # fail if the committed tokens.css is stale
+pnpm storybook      # the component library's Storybook on :6006, which also serves the Storybook MCP
+pnpm test:visual    # the library's screenshots, in the pinned Playwright Linux image (needs Docker)
+pnpm size           # build the web app, then check its first load budget
+pnpm ui:artifact    # build the component files for the design system artifact (--check in CI)
 ```
 
 Local ports: web 5173 (proxies `/api` to the api), api 3000, worker 3001, Postgres 5433, PgBouncer 6432, Centrifugo 8000 (clients) and 9000 (internal). One `.env` at the repo root, copied from `.env.example`.
@@ -75,8 +79,8 @@ The reviewer agents live in `.claude/agents/`.
 - **Format**: Prettier, matching the scaffold (single quotes, semicolons, two space indent).
 - **CSS**: Stylelint refuses raw colour, size, spacing, radius, shadow and motion values (tokens only), `!important`, and selectors that reach outside their component. A house rule check also fails on new CSS for an element the library already has.
 - **Git hooks** (lefthook, `lefthook.yml`): each commit runs Prettier, ESLint and Stylelint on the staged files. Each push runs typecheck, boundaries, full lint and the house rule checks.
-- **CI** (GitHub Actions, `ci.yml`): every push, on any branch, runs typecheck, lint, the format check, Stylelint, boundaries, the house rule checks and the tests. A red build blocks the merge. The preview and deploy workflows are already in `.github/workflows/`.
-- **Tests**: Vitest for unit and integration tests (against a real Postgres, never a mocked database), and Playwright for key flows, including two browsers to prove live updates. Two guard tests always exist: every tenant table forces row level security and has a policy, and a cross workspace read returns nothing. Each package runs its own suite (`vitest run`), with tests beside the source as `*.test.ts`. Playwright arrives with the first flow test.
+- **CI** (GitHub Actions, `ci.yml`): every push, on any branch, runs typecheck, lint, the format check, Stylelint, boundaries, the house rule checks, the tests, the first load size budget and the artifact build check, and a separate job compares the library's screenshots in the pinned Playwright image. A red build blocks the merge. The preview and deploy workflows are already in `.github/workflows/`.
+- **Tests**: Vitest for unit and integration tests (against a real Postgres, never a mocked database), and Playwright for key flows, including two browsers to prove live updates. Two guard tests always exist: every tenant table forces row level security and has a policy, and a cross workspace read returns nothing. Each package runs its own suite (`vitest run`), with tests beside the source as `*.test.ts`. Playwright already drives the component library's stories in Chromium, Firefox and WebKit (Vitest browser mode, see `packages/ui/AGENTS.md`); the flow tests arrive with the first flow.
 
 ## Git
 
@@ -108,7 +112,7 @@ These skills apply across the repo. Skills for one area are listed in that area'
 - [user-research](.claude/skills/user-research/): `anthropics/knowledge-work-plugins`, interviews, usability tests and surveys
 
 Declined: the community Centrifugo skill (low trust). The Hono skill (`yusukebe/hono-skill`) still has no valid `SKILL.md`, so retry it later.
-MCP servers: neon (connected), sentry (connected), playwright (connected), github (recommended, add it once the repo exists).
+MCP servers: neon (connected), sentry (connected), playwright (connected), storybook (project, live while `pnpm storybook` runs), github (recommended, add it once the repo exists).
 
 ## Context files
 
@@ -120,7 +124,7 @@ MCP servers: neon (connected), sentry (connected), playwright (connected), githu
 - [packages/db/AGENTS.md](packages/db/AGENTS.md): schema, migrations, roles, row level security and `withWorkspace()`
 - [packages/config/AGENTS.md](packages/config/AGENTS.md): shared TypeScript, ESLint and Stylelint config, and the house rule checks
 - [packages/tokens/AGENTS.md](packages/tokens/AGENTS.md): the design tokens, synced from the design system artifact, and the generated CSS
-- [packages/ui/AGENTS.md](packages/ui/AGENTS.md): the component library: root stylesheet, theme controller and the Icon atom
+- [packages/ui/AGENTS.md](packages/ui/AGENTS.md): the component library: React Aria based components, the provider, Storybook, screenshots and the artifact build
 - [infra/AGENTS.md](infra/AGENTS.md): Centrifugo and local Postgres setup
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._

@@ -13,7 +13,7 @@ _Steps derived from spec 0003's acceptance criteria and its Value sourcing table
 
 ### Commands
 - [ ] `pnpm --filter @crm/ui test` → unit, stories (Chromium, Firefox, WebKit) and browser projects pass, with axe clean in light and dark and no CSP violations → AC-6, AC-15
-- [ ] `pnpm test:visual` → 24 stories × 2 themes match their Linux baselines. Change `padding-inline` in `Button.module.css` and run it again → the Button stories fail, and the diffs land in `packages/ui/.vitest/attachments/Button/` → AC-16
+- [ ] `pnpm test:visual` → 23 stories × 2 themes (46 baselines) match their Linux baselines. Change `padding-inline` in `Button.module.css` and run it again → the Button stories fail, and the diffs land in `packages/ui/.vitest/attachments/Button/` → AC-16
 - [ ] `pnpm test:visual --update` → refuses any baseline over 200 KB → AC-16
 - [ ] Run `vitest run --project visual` in `packages/ui` outside Docker → refused with "Screenshots run only in the pinned Playwright Linux image" → AC-16
 - [ ] `pnpm ui:artifact --check` → the React scripts, bundle, stylesheet, types and four previews build within the type's caps, every preview renders in headless Chromium, and nothing calls `require()` → AC-17

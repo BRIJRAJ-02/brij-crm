@@ -127,6 +127,13 @@
       "skillPath": "skills/prototype-to-production/SKILL.md",
       "computedHash": "44d9e4235bead30bf2cde194830606637901190131b1e4939049f90c96c1e9be"
     },
+    "react-aria": {
+      "source": "react-aria.adobe.com",
+      "sourceUrl": "https://react-aria.adobe.com",
+      "sourceType": "well-known",
+      "computedHash": "69a333ca4abfc4c5fd674ef3d505bc74014ee8b1be6e89b44eaa855c81536661",
+      "wellKnownDigest": "sha256:ffc7cd806e4e648bf353d5a5538946bbc882560444a5fae24176e68f239337a3"
+    },
     "react-email": {
       "source": "resend/react-email",
       "sourceType": "github",
@@ -186,6 +193,12 @@
       "sourceType": "github",
       "skillPath": "skills-legacy/sentry-react-sdk/SKILL.md",
       "computedHash": "96861ec4739b27971da3fd9fda59654bbf09e72392bc875f627083ddbd19da3c"
+    },
+    "stories": {
+      "source": "storybookjs/storybook",
+      "sourceType": "github",
+      "skillPath": "code/lib/claude-plugin/skills/stories/SKILL.md",
+      "computedHash": "8d2c808fd833b641d4de6fdd59fd485472c0b58570438a65e36f170232b8c889"
     },
     "subtractive-design": {
       "source": "kemiljk/skills",
