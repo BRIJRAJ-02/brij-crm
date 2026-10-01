@@ -31,7 +31,7 @@ Every visual value as a named token from the very first screen: colour (light an
    - [x] The Icon atom and the lint guards: Lucide only through the registry, no raw opacity, scale or layer values, breakpoints from tokens, and no unknown tokens (AC-9, AC-10, AC-12)
    - [x] The production build checked in a browser under the CSP (AC-11)
 - [ ] Verify it: `/check verify design tokens`
-- [ ] Test it: `/test design tokens`
+- [x] Test it: `/test design tokens`
 Spec [0002](../specs/0002-design-tokens/index.md) · code in `packages/tokens/`, `packages/ui/`, `apps/web/public/theme-boot.js`
 
 ### 4. Component library · needs a decision · GA
