@@ -1,6 +1,7 @@
 /* The toast region and its toasts: a 36px confirmation at the bottom right,
-   an icon, one sentence and dismiss. Enter and exit animations arrive with the
-   overlay layer (milestone 2). */
+   an icon, one sentence and dismiss. Each toast is its own view transition
+   (named from --toast-name), so it rises in and the others slide; the
+   transition's animations are in the base layer. */
 @layer components {
   .region {
     position: fixed;
@@ -21,6 +22,10 @@
   }
 
   .toast {
+    --toast-name: none;
+
+    view-transition-name: var(--toast-name);
+    view-transition-class: toast;
     display: flex;
     align-items: center;
     gap: var(--space-8);

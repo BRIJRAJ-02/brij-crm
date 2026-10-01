@@ -19,10 +19,13 @@ describe('scopedClassName', () => {
 });
 
 describe('uiVite', () => {
-  it('hands the naming to Vite through css.modules', async () => {
+  it('hands the naming to Vite through css.modules, with the defines React Aria needs', async () => {
     const hook = uiVite().config;
     const config = typeof hook === 'function' ? hook : hook?.handler;
     const result: unknown = await config?.call(undefined as never, {}, { command: 'build', mode: 'production' });
-    expect(result).toEqual({ css: { modules: { generateScopedName: scopedClassName } } });
+    expect(result).toEqual({
+      css: { modules: { generateScopedName: scopedClassName } },
+      define: { 'process.env.VIRT_ON': 'undefined' },
+    });
   });
 });

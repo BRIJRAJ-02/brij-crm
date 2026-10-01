@@ -63,6 +63,13 @@
     color: var(--on-accent);
   }
 
+  /* Danger keeps the raised surface and turns its label and edge red: red text
+     holds 4.5:1 in both themes, where white on a red fill would not in dark. */
+  .root[data-variant='danger'] {
+    border-color: var(--danger);
+    color: var(--danger);
+  }
+
   .root[data-variant='ghost'] {
     border-color: transparent;
     background: transparent;
@@ -109,6 +116,10 @@
   .root[data-focus-visible] {
     border-color: var(--accent);
     box-shadow: var(--shadow-focus);
+  }
+
+  .root[data-variant='danger'][data-focus-visible] {
+    border-color: var(--danger);
   }
 
   .root[data-variant='primary'][data-focus-visible] {

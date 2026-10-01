@@ -499,6 +499,9 @@ importers:
       react-aria-components:
         specifier: 'catalog:'
         version: 1.21.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      react-dom:
+        specifier: 'catalog:'
+        version: 19.3.0(react@19.3.0)
     devDependencies:
       '@crm/config':
         specifier: workspace:*
@@ -545,9 +548,6 @@ importers:
       playwright:
         specifier: 'catalog:'
         version: 1.63.0
-      react-dom:
-        specifier: 'catalog:'
-        version: 19.3.0(react@19.3.0)
       rolldown:
         specifier: 'catalog:'
         version: 1.2.12

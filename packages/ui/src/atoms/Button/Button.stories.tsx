@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { Menu, MenuItem, Popover } from 'react-aria-components';
+import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import { expect, fn, waitFor } from 'storybook/test';
 import { hoverUntilHovered } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -30,6 +30,9 @@ export const Variants: Story = {
         Filter
       </Button>
       <Button variant="ghost">Discard changes</Button>
+      <Button variant="danger" icon="trash">
+        Delete record
+      </Button>
       <Button variant="primary" kbd="⌘↵">
         Add to list
       </Button>
@@ -206,19 +209,16 @@ export const ToggleHovered: Story = {
   },
 };
 
-// A plain React Aria menu, until the library's Menu arrives in milestone 2.
 function SaveOptions() {
   return (
-    <Popover>
-      <Menu aria-label="Save options">
-        <MenuItem>Save as new view</MenuItem>
-        <MenuItem>Save and share</MenuItem>
-      </Menu>
-    </Popover>
+    <Menu label="Save options">
+      <MenuItem icon="plus">Save as new view</MenuItem>
+      <MenuItem icon="send">Save and share</MenuItem>
+    </Menu>
   );
 }
 
-/** SplitButton: the main action, and a menu of its variants. Not in the artifact preview until the library's Menu (milestone 2). */
+/** SplitButton: the main action, and a menu of its variants from the chevron. */
 export const Split: Story = {
   render: (args) => (
     <Stage>

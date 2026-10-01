@@ -10,7 +10,9 @@
 
     box-sizing: border-box;
     max-inline-size: calc(100vw - 2 * var(--space-16));
-    overflow: auto;
+    /* The content scrolls, never the surface: a scrollbar here would change
+       the width a virtualised menu measures, and loop. */
+    overflow: hidden;
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-lg);
     background: var(--surface-raised);
@@ -48,7 +50,10 @@
   }
 
   .dialog {
+    box-sizing: border-box;
+    max-block-size: inherit;
     padding: var(--space-8);
+    overflow: auto;
     outline: none;
   }
 

@@ -26,7 +26,8 @@
     "lucide-react": "catalog:",
     "react": "catalog:",
     "react-aria": "catalog:",
-    "react-aria-components": "catalog:"
+    "react-aria-components": "catalog:",
+    "react-dom": "catalog:"
   },
   "devDependencies": {
     "@crm/config": "workspace:*",
@@ -44,7 +45,6 @@
     "axe-core": "catalog:",
     "eslint": "catalog:",
     "playwright": "catalog:",
-    "react-dom": "catalog:",
     "rolldown": "catalog:",
     "rolldown-plugin-dts": "catalog:",
     "storybook": "catalog:",

@@ -14,8 +14,8 @@ import { Spinner } from '../Spinner/Spinner.tsx';
 import styles from './Button.module.css';
 import { strings } from './strings.ts';
 
-/** `secondary` (the default) for view controls and Cancel, `primary` for the one action that commits, `ghost` for quiet and undo style actions, `dashed` for "add a condition". */
-export type ButtonVariant = 'secondary' | 'primary' | 'ghost' | 'dashed';
+/** `secondary` (the default) for view controls and Cancel, `primary` for the one action that commits, `danger` for one that destroys (Delete in a confirm), `ghost` for quiet and undo style actions, `dashed` for "add a condition". */
+export type ButtonVariant = 'secondary' | 'primary' | 'danger' | 'ghost' | 'dashed';
 
 /** `md` is the 26px control height; `lg` matches a 30px input beside it. */
 export type ButtonSize = 'md' | 'lg';

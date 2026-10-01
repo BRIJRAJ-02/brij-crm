@@ -33,6 +33,9 @@ function screenshotName(testFileName: string, testName: string, arg: string, pla
 export default mergeConfig(
   viteConfig,
   defineConfig({
+    // React Aria's Virtualizer draws every row when NODE_ENV is "test", unless
+    // VIRT_ON is set. Set it, so stories virtualise as the app does.
+    define: { 'process.env.VIRT_ON': JSON.stringify('1') },
     test: {
       projects: [
         {

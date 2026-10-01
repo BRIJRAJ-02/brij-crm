@@ -1,0 +1,128 @@
+/* Panel: a full height sheet at the end of the page, on surface-raised with a
+   hairline edge and shadow-lg. It slides in with ease-drawer over
+   duration-modal and out in duration-exit; reduced motion keeps a fade. */
+@layer components {
+  .root {
+    position: fixed;
+    inset-block: 0;
+    inset-inline-end: 0;
+    z-index: var(--z-drawer);
+    box-sizing: border-box;
+    inline-size: min(100vw, calc(1.5 * var(--size-sidebar)));
+    border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-lg);
+    color: var(--text);
+  }
+
+  .root[data-width='lg'] {
+    inline-size: min(100vw, calc(2 * var(--size-sidebar)));
+  }
+
+  .dialog {
+    display: flex;
+    flex-direction: column;
+    block-size: 100%;
+    outline: none;
+  }
+
+  .head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-8);
+    min-block-size: var(--size-bar);
+    padding-inline: var(--space-16) var(--space-8);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .title {
+    flex: 1;
+    min-inline-size: 0;
+    margin: 0;
+    overflow: hidden;
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .actions {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  .body {
+    flex: 1;
+    min-block-size: 0;
+    padding: var(--space-16);
+    overflow: auto;
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .foot {
+    display: flex;
+    flex: none;
+    justify-content: flex-end;
+    gap: var(--space-8);
+    padding-block: var(--space-8);
+    padding-inline: var(--space-12);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-subtle);
+  }
+
+  .root[data-entering] {
+    animation: slide-in var(--duration-modal) var(--ease-drawer);
+  }
+
+  .root[data-exiting] {
+    animation: slide-out var(--duration-exit) var(--ease-out) forwards;
+  }
+
+  .root[data-opened-by='keyboard'][data-entering] {
+    animation: none;
+  }
+
+  @keyframes slide-in {
+    from {
+      translate: 100% 0;
+    }
+  }
+
+  @keyframes slide-out {
+    to {
+      opacity: 0;
+      translate: 100% 0;
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root[data-entering] {
+      animation-name: fade-in;
+    }
+
+    .root[data-exiting] {
+      animation-name: fade-out;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border-inline-start-color: CanvasText;
+    }
+  }
+}

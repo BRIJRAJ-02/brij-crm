@@ -1,6 +1,6 @@
 # Button
 
-The one button: 26px tall with a 13px medium label, in four variants, built on React Aria so it works the same by mouse, touch and keyboard. This folder also holds `ToggleButton` (a button that stays pressed) and `SplitButton` (a main action with a menu of its variants).
+The one button: 26px tall with a 13px medium label, in five variants, built on React Aria so it works the same by mouse, touch and keyboard. This folder also holds `ToggleButton` (a button that stays pressed), `SplitButton` (a main action with a menu of its variants) and `CopyButton` (copies a value and says so in a toast).
 
 ## Why it exists
 
@@ -15,14 +15,16 @@ Ported from the design system artifact's Button card. Every pressable control in
 <Button variant="primary" isPending>Saving</Button>
 <Button icon="ellipsis" label="More actions" onPress={openMenu} />
 <ToggleButton isSelected={showArchived} onChange={setShowArchived}>Show archived</ToggleButton>
-<SplitButton onPress={save} menu={<Menu>…</Menu>}>Save</SplitButton>
+<SplitButton onPress={save} menu={<Menu label="Save options">…</Menu>}>Save</SplitButton>
+<CopyButton value={apiKey} label="Copy the key" />
 ```
 
 - **One primary per surface.** `primary` goes on the action that commits: Save, Add to list, Select record. Pair it with its shortcut (`kbd="⌘↵"`).
 - `secondary` (the default) for view controls (View settings, Import / Export) and Cancel (`kbd="ESC"`).
+- `danger` for the one action that destroys, such as Delete in a confirm dialog: red label and edge on the raised surface, so it holds 4.5:1 in both themes.
 - `ghost` for undo style actions that shouldn't compete, such as Discard changes, and for icon buttons inside dense rows.
 - `dashed` only for "add a condition" affordances: Filter, Add sort.
-- `SplitButton` when the primary action has variants (Save, Save as new view). Its `menu` is a `Menu`; the chevron is named "More options" unless `menuLabel` says otherwise. Screens can fill `menu` once the library's Menu ships in milestone 2 (React Aria itself stays inside `packages/ui`).
+- `SplitButton` when the primary action has variants (Save, Save as new view). Its `menu` is a `Menu`; the chevron is named "More options" unless `menuLabel` says otherwise.
 - Labels are verbs in sentence case: "Add to list", never "ADD" or "Submit".
 
 Props: `children` (the label, a string) or `icon` with `label` (icon only); `icon`, `iconRight`; `variant`; `size` (`md` 26px, `lg` 30px, to sit beside an input); `kbd` (one keycap or several); `onPress`; `isDisabled`; `isPending`; `type`; `slot`; `ref`.

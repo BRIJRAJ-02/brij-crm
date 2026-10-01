@@ -20,4 +20,34 @@
   pre {
     font-family: var(--font-mono);
   }
+
+  /* Toasts are view transitions (see provider/toasts.tsx): a new one rises
+     from below over duration-modal, a leaving one drops away faster, and the
+     rest slide to their new places. Reduced motion skips the transition. */
+  ::view-transition-new(.toast):only-child {
+    animation: toast-rise var(--duration-modal) var(--ease-out);
+  }
+
+  ::view-transition-old(.toast):only-child {
+    animation: toast-drop var(--duration-exit) var(--ease-out) forwards;
+  }
+
+  ::view-transition-group(.toast) {
+    animation-duration: var(--duration-move);
+    animation-timing-function: var(--ease-in-out);
+  }
+
+  @keyframes toast-rise {
+    from {
+      opacity: 0;
+      translate: 0 100%;
+    }
+  }
+
+  @keyframes toast-drop {
+    to {
+      opacity: 0;
+      translate: 0 100%;
+    }
+  }
 }

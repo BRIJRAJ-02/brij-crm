@@ -26,7 +26,7 @@ import { chromium } from 'playwright';
 import { rolldown } from 'rolldown';
 import { dts } from 'rolldown-plugin-dts';
 import { build, type Plugin, type Rolldown } from 'vite';
-import { uiVite } from '../../src/vite.ts';
+import { LIBRARY_DEFINES, uiVite } from '../../src/vite.ts';
 import { readStoryCard, type StoryCard } from './stories.ts';
 
 const UI = path.resolve(import.meta.dirname, '../..');
@@ -121,7 +121,7 @@ async function buildScript(
     logLevel: 'warn',
     mode: 'production',
     plugins: [reactGlobals(shimmed), ...(options.plugins ?? []), react(), uiVite(), reactBindings(bindings)],
-    define: { 'process.env.NODE_ENV': JSON.stringify('production') },
+    define: { 'process.env.NODE_ENV': JSON.stringify('production'), ...LIBRARY_DEFINES },
     build: {
       write: false,
       minify: true,

@@ -1,0 +1,168 @@
+/* Menu: 28px items (size-nav-item) with a 14px icon, inside the popover's
+   4px inset. The focused item (keyboard or pointer) takes surface-hover; a
+   destructive item is in the danger colour. A searchable menu puts its field
+   above the list, under a hairline. */
+@layer components {
+  .menu {
+    box-sizing: border-box;
+    display: block;
+    max-block-size: inherit;
+    padding: var(--space-4);
+    overflow: auto;
+    outline: none;
+  }
+
+  /* A virtualised list needs a bounded scroll box (ten rows) with no padding:
+     React Aria's layout places every row itself. */
+  .menu[data-virtualized] {
+    block-size: calc(var(--size-nav-item) * 10);
+    padding: 0;
+  }
+
+  .item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    box-sizing: border-box;
+    min-block-size: var(--size-nav-item);
+    padding-block: var(--space-4);
+    padding-inline: var(--space-8);
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-decoration: none;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .item[data-focused] {
+    background: var(--surface-hover);
+  }
+
+  .item[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .item[data-danger] {
+    color: var(--danger);
+  }
+
+  .item[data-disabled] {
+    opacity: var(--opacity-disabled);
+    cursor: default;
+  }
+
+  .item[data-open] {
+    background: var(--surface-hover);
+  }
+
+  .check {
+    display: inline-flex;
+    flex: none;
+    inline-size: var(--size-icon-sm);
+    color: var(--accent);
+  }
+
+  .text {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .description {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .meta {
+    flex: none;
+    color: var(--text-tertiary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .heading {
+    padding-block: var(--space-4) var(--space-2);
+    padding-inline: var(--space-8);
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .section + .section {
+    margin-block-start: var(--space-4);
+  }
+
+  .separator {
+    block-size: var(--border-width-hairline);
+    margin-block: var(--space-4);
+    margin-inline: calc(-1 * var(--space-4));
+    border: none;
+    background: var(--border-subtle);
+  }
+
+  .empty {
+    display: block;
+    padding-block: var(--space-8);
+    padding-inline: var(--space-8);
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .searchable {
+    display: flex;
+    flex-direction: column;
+    max-block-size: inherit;
+  }
+
+  .search {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-8);
+    block-size: var(--size-nav-item);
+    padding-inline: var(--space-12);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .input {
+    flex: 1;
+    min-inline-size: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    outline: none;
+  }
+
+  .input::placeholder {
+    color: var(--text-tertiary);
+  }
+
+  .input::-webkit-search-cancel-button {
+    display: none;
+  }
+
+  @media (forced-colors: active) {
+    .item[data-focused] {
+      background: Highlight;
+      color: HighlightText;
+    }
+
+    .separator {
+      background: CanvasText;
+    }
+  }
+}

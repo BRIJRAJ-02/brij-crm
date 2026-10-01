@@ -1,6 +1,7 @@
 // The one file that touches React Aria's toast, still UNSTABLE_ in 1.21, so its
 // rename changes this file only. The queue is made by createToasts() and handed
 // to UiProvider and the data layer; nothing here lives at module level.
+import { flushSync } from 'react-dom';
 import {
   UNSTABLE_Toast as AriaToast,
   UNSTABLE_ToastContent as AriaToastContent,
@@ -10,6 +11,7 @@ import {
 } from 'react-aria-components';
 import { Button } from '../atoms/Button/Button.tsx';
 import { Icon } from '../atoms/Icon/Icon.tsx';
+import '../lib/custom-properties.ts';
 import { strings } from './strings.ts';
 import styles from './Toast.module.css';
 
@@ -50,9 +52,25 @@ export function toastTimeout(content: ToastContent): number | undefined {
   return content.tone === 'danger' || content.action !== undefined ? undefined : TOAST_TIMEOUT_MS;
 }
 
+/**
+ * Runs a change to the toasts as a view transition, so a toast rises in and
+ * the others slide to make room (the CSS is in the base layer). Browsers
+ * without view transitions, and reduced motion, just change.
+ */
+function withViewTransition(update: () => void): void {
+  const canTransition = typeof document !== 'undefined' && 'startViewTransition' in document;
+  if (!canTransition || globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    update();
+    return;
+  }
+  document.startViewTransition(() => {
+    flushSync(update);
+  });
+}
+
 /** Makes the app's toast queue: at most three at once, each timed by `toastTimeout`. Timers pause while hovered or focused. */
 export function createToasts(): Toasts {
-  const queue = new ToastQueue<ToastContent>({ maxVisibleToasts: MAX_VISIBLE_TOASTS });
+  const queue = new ToastQueue<ToastContent>({ maxVisibleToasts: MAX_VISIBLE_TOASTS, wrapUpdate: withViewTransition });
   return {
     toast: (content) => {
       const timeout = toastTimeout(content);
@@ -70,7 +88,12 @@ export function ToastRegion({ toasts }: { readonly toasts: Toasts }) {
   return (
     <AriaToastRegion queue={toasts.queue} className={styles.region} aria-label={strings.notifications}>
       {({ toast }) => (
-        <AriaToast toast={toast} className={styles.toast} data-tone={toast.content.tone}>
+        <AriaToast
+          toast={toast}
+          className={styles.toast}
+          data-tone={toast.content.tone}
+          style={{ '--toast-name': `toast-${toast.key.replaceAll(/[^\w-]/g, '')}` }}
+        >
           <span className={styles.icon} data-tone={toast.content.tone}>
             <Icon name={toast.content.tone === 'danger' ? 'circle-alert' : 'circle-check'} size="sm" />
           </span>

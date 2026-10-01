@@ -24,10 +24,21 @@ export function scopedClassName(local: string, filename: string): string {
   return `ws-${kebab(component)}-${kebab(local)}`;
 }
 
-/** The library's Vite plugin: CSS module class names as `ws-<component>-<local>`. */
+/**
+ * Names in `process.env` React Aria reads besides NODE_ENV. The browser has no
+ * `process`, so each is replaced at build time (its Virtualizer checks
+ * `VIRT_ON` for debug logging).
+ */
+export const LIBRARY_DEFINES: Readonly<Record<string, string>> = { 'process.env.VIRT_ON': 'undefined' };
+
+/** The library's Vite plugin: CSS module class names as `ws-<component>-<local>`, and the defines React Aria needs. */
 export function uiVite(): Plugin {
   return {
     name: 'crm-ui',
-    config: () => ({ css: { modules: { generateScopedName: scopedClassName } } }),
+    // A define the config already sets wins (the tests turn VIRT_ON on).
+    config: (user) => ({
+      css: { modules: { generateScopedName: scopedClassName } },
+      define: { ...LIBRARY_DEFINES, ...user.define },
+    }),
   };
 }

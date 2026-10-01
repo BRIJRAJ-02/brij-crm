@@ -52,6 +52,31 @@ export { HUES, type Hue } from './hue.ts';
 export { arraySource, type ListRange, type ListSource } from './lib/list-source.ts';
 export { safeHref } from './lib/safe-href.ts';
 export { safeImageSrc } from './lib/safe-image-src.ts';
+export {
+  ContextMenu,
+  Menu,
+  MenuItem,
+  MenuSection,
+  MenuSeparator,
+  MenuTrigger,
+  SubmenuTrigger,
+  type ContextMenuProps,
+  type MenuItemProps,
+  type MenuKey,
+  type MenuProps,
+  type MenuSearch,
+  type MenuSectionProps,
+  type MenuTriggerProps,
+  type SubmenuTriggerProps,
+} from './molecules/Menu/Menu.tsx';
+export {
+  Modal,
+  ModalTrigger,
+  type ModalProps,
+  type ModalTriggerProps,
+  type ModalVariant,
+} from './molecules/Modal/Modal.tsx';
+export { Panel, type PanelProps, type PanelWidth } from './molecules/Panel/Panel.tsx';
 export { Popover, type PopoverPlacement, type PopoverProps, type PopoverWidth } from './molecules/Popover/Popover.tsx';
 export { createToasts, type ToastAction, type ToastContent, type Toasts, type ToastTone } from './provider/toasts.tsx';
 export { useDelayedLoading } from './provider/useDelayedLoading.ts';

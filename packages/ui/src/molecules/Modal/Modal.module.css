@@ -1,0 +1,169 @@
+/* Modal: a 480px dialog (a 780px window) on surface-raised with radius-xl
+   and shadow-lg, centred over the scrim. It grows from the centre over
+   duration-modal and leaves in duration-exit; opened from the keyboard it
+   appears at once. The footer sits on surface-subtle under a hairline. */
+@layer components {
+  .scrim {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-modal);
+    display: grid;
+    place-items: center;
+    padding: var(--space-16);
+    background: var(--scrim);
+  }
+
+  .root {
+    box-sizing: border-box;
+    inline-size: min(100%, calc(2 * var(--size-sidebar) - 2 * var(--space-20)));
+    max-block-size: calc(100dvh - 2 * var(--space-16));
+    overflow: hidden;
+    border-radius: var(--radius-xl);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-lg);
+    color: var(--text);
+    outline: none;
+  }
+
+  .root[data-variant='window'] {
+    inline-size: min(100%, calc(3 * var(--size-sidebar)));
+  }
+
+  .dialog {
+    display: flex;
+    flex-direction: column;
+    max-block-size: inherit;
+    outline: none;
+  }
+
+  .head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-8);
+    padding-block: var(--space-16) 0;
+    padding-inline: var(--space-16);
+  }
+
+  .root[data-variant='window'] .head {
+    min-block-size: var(--size-bar);
+    padding-block: 0;
+    padding-inline: var(--space-16) var(--space-8);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .title {
+    margin: 0;
+    color: var(--text);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .context {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+    min-inline-size: 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .close {
+    display: inline-flex;
+    margin-inline-start: auto;
+  }
+
+  .alert {
+    display: inline-flex;
+    color: var(--danger);
+  }
+
+  .body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-16);
+    min-block-size: 0;
+    padding: var(--space-16);
+    overflow: auto;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .foot {
+    display: flex;
+    flex: none;
+    justify-content: flex-end;
+    gap: var(--space-8);
+    padding-block: var(--space-8);
+    padding-inline: var(--space-12);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-subtle);
+  }
+
+  /* Motion: the scrim fades, the dialog grows from the centre. */
+  .scrim[data-entering] {
+    animation: fade-in var(--duration-modal) var(--ease-out);
+  }
+
+  .scrim[data-exiting] {
+    animation: fade-out var(--duration-exit) var(--ease-out) forwards;
+  }
+
+  .root[data-entering] {
+    animation: grow var(--duration-modal) var(--ease-out);
+  }
+
+  .root[data-exiting] {
+    animation: shrink var(--duration-exit) var(--ease-out) forwards;
+  }
+
+  .scrim[data-opened-by='keyboard'][data-entering],
+  .root[data-opened-by='keyboard'][data-entering] {
+    animation: none;
+  }
+
+  @keyframes grow {
+    from {
+      opacity: 0;
+      scale: var(--scale-enter);
+    }
+  }
+
+  @keyframes shrink {
+    to {
+      opacity: 0;
+      scale: var(--scale-enter);
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root[data-entering] {
+      animation-name: fade-in;
+    }
+
+    .root[data-exiting] {
+      animation-name: fade-out;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border: var(--border-width-hairline) solid CanvasText;
+    }
+  }
+}
