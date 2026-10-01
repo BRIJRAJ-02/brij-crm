@@ -20,7 +20,7 @@ Capture conventions from the real scaffold, including the house rules, then inst
 - [x] Check it runs clean: `/test`
 code in `packages/config/`, `lefthook.yml`, `.github/workflows/ci.yml`
 
-### 3. Design tokens · in-progress
+### 3. Design tokens · done
 Every visual value as a named token from the very first screen: colour (light and dark), type scale, spacing, radius, borders, shadow, motion, layers and breakpoints. The tokens come from the design system artifact. Nothing is carried over from Timefix.
 **Done when:** the full token set is in the design system and loaded by the app as CSS variables; the first scaffolded screen uses only tokens; light and dark switch with no change to any screen; the styling approach scales (component scoped styles, fixed cascade layers, variants declared once, container queries, no runtime cost, no `!important`); icons come only from Lucide through the Icon atom.
 - [x] Design it (spec): `/architect design tokens`
@@ -30,7 +30,7 @@ Every visual value as a named token from the very first screen: colour (light an
    - [x] A saved theme choice: applied before first paint, kept across reloads, followed in other tabs (AC-7)
    - [x] The Icon atom and the lint guards: Lucide only through the registry, no raw opacity, scale or layer values, breakpoints from tokens, and no unknown tokens (AC-9, AC-10, AC-12)
    - [x] The production build checked in a browser under the CSP (AC-11)
-- [ ] Verify it: `/check verify design tokens`
+- [x] Verify it: `/check verify design tokens`
 - [x] Test it: `/test design tokens`
 Spec [0002](../specs/0002-design-tokens/index.md) · code in `packages/tokens/`, `packages/ui/`, `apps/web/public/theme-boot.js`
 
