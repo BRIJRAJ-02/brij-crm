@@ -21,7 +21,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 
 ## Areas
 
-- [Foundations](foundations.md): stack, tooling, tokens, components, data model, client state, realtime, jobs, access, edge only API access · 2 in progress, 8 planned
+- [Foundations](foundations.md): stack, tooling, tokens, components, data model, client state, realtime, jobs, access, edge only API access · 1 done, 1 in progress, 8 planned
 - [Data engine](engine.md): the core loop, objects, attributes, relations, computed attributes, the schema map, layouts, lists · 8 planned
 - [Records and views](records-and-views.md): record page, notes and tasks, table and board views, bulk actions, reports · 6 planned
 - [Team and security](team-and-security.md): workspaces, members, teams, access rules, account security, audit and privacy · 4 planned
@@ -38,7 +38,7 @@ Build order is the order of the rows below (a feature added later takes the next
 | # | Feature | Phase | Area | Status |
 |---|---------|-------|------|--------|
 | 1 | Stack & architecture | Foundation | [Foundations](foundations.md) | in-progress |
-| 2 | Coding standards & tooling | Foundation | [Foundations](foundations.md) | in-progress |
+| 2 | Coding standards & tooling | Foundation | [Foundations](foundations.md) | done |
 | 3 | Design tokens | Foundation | [Foundations](foundations.md) | planned |
 | 4 | Component library | Foundation | [Foundations](foundations.md) | planned |
 | 5 | Data model | Foundation | [Foundations](foundations.md) | planned |
