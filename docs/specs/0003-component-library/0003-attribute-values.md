@@ -35,7 +35,7 @@ This page fixes the exact shape of every attribute value, as Zod schemas in `pac
 | `phone` | `PhoneValue` | `{ number: string, country: string }` | the schema checks the shape only: `number` is E.164 (`^\+[1-9]\d{6,14}$`) and `country` is ISO 3166 alpha 2. Full validity (the number exists for that country) is checked by libphonenumber-js (`/max`, loaded lazily) in the editor, and by imports if #30 adds it on the server |
 | `domain` | `DomainValue` | string | the input must equal `new URL('http://' + input).hostname` (lowercased, IDNs as `xn--`), with at least one dot and no trailing dot; the editor strips a scheme, `www.` is kept, and a path or query is dropped with a hint |
 | `url` | `UrlValue` | string | absolute `http` or `https` URL that `new URL()` parses, at most 2,048 characters; canonical form lowercases only the scheme and host |
-| `location` | `LocationValue` | `{ line1?, line2?, line3?, line4?, locality?, region?, postcode?, countryCode?, latitude?, longitude? }` | strings, each at most 200 characters; at least one part; `countryCode` is ISO 3166 alpha 2; `latitude` and `longitude` are decimal strings in range, both or neither |
+| `location` | `LocationValue` | `{ line1?, line2?, line3?, line4?, locality?, region?, postcode?, countryCode?, latitude?, longitude? }` | strings, each at most 200 characters; at least one part; `countryCode` is trimmed and upper cased, then must be one of `COUNTRY_CODES` (ISO 3166 alpha 2, below); `latitude` and `longitude` are decimal strings in range, both or neither |
 | `personal_name` | `PersonalNameValue` | `{ firstName?, lastName?, fullName }` | each at most 200 characters; `fullName` required, and defaults to first and last joined |
 | `actor_reference` | `ActorReferenceValue` | `{ type: 'member' \| 'api_key' \| 'automation' \| 'system', id: string \| null }` | people can only set `member`; `id` is `null` only for `system` |
 | `record_reference` | `RecordReferenceValue` | `{ objectId, recordId }` | the target must be an object the relation allows |
@@ -53,7 +53,9 @@ This page fixes the exact shape of every attribute value, as Zod schemas in `pac
 - `SelectOption` and `StatusOption`: `{ id, label, hue: Hue, archived: boolean }`. `label` is 1 to 100 characters, and order is the order on the attribute.
 - `ValueVersion`: `{ value, activeFrom: Timestamp, activeUntil: Timestamp | null, setBy: ActorReferenceValue }`. It versions the whole value of one attribute on one record. The current version has `activeUntil: null`, and an attribute's history is its versions ordered by `activeFrom`. The timeline (#17), version displays and "time in stage" (#52) read it. #5 decides how it's stored.
 - `RecordRefDisplay`: `{ objectId, recordId, name, kind: 'person' | 'company' | 'other', imageSrc?, hue? }`.
-- `ActorDisplay`: `{ type, id, name, imageSrc?, hue? }`. System shows as "System", and an automation or key under its own name.
+- `ActorDisplay`: `{ type, id, name, email?, imageSrc?, hue? }`. System shows as "System", and an automation or key under its own name. Only members carry `email` (workspace members already see each other's emails in member settings). It shows only as secondary text in the member picker, to tell two people with the same name apart, never in a chip or a cell.
+- Pasting a member: the trimmed, lower cased text matches a member's email first, then a member's exact name (ignoring case). A name two members share is refused: "Two members are called Ada Lovelace. Paste an email instead."
+- `COUNTRY_CODES`, in `packages/contracts/src/values/countries.ts`: the 249 officially assigned ISO 3166-1 alpha 2 codes plus `XK` (Kosovo), committed as a list with the date it was taken in a comment, and updated by hand when ISO changes one. A test checks that every code gets a name from `Intl.DisplayNames`. Imports map the common alias `UK` to `GB`; any other code outside the list is refused with a sentence. Nothing is stored yet, so no stored value needs migrating (#5 stores only valid codes).
 - `FileDisplay`: `FileValue` plus `thumbnailSrc?` and `href?`, both from #32.
 
 The data layer (#6) builds display shapes; fields never resolve ids themselves. `DisplayFor<T>` maps each type to its display shape (`record_reference` to `RecordRefDisplay`, `actor_reference` and `interaction` to `ActorDisplay`, `file` to `FileDisplay`, others to `undefined`), and a list value gets a list of displays in the same order.
@@ -77,8 +79,17 @@ interface AttributeTypeDef<V> {
   fromText(text: string, ctx: TextContext): V | TextRefusal;  // paste, the import preview
   align: 'start' | 'end';
   editIn: 'cell' | 'popover';  // how the grid edits it
+  width(attribute: FieldAttribute): 'narrow' | 'default' | 'wide';  // a new grid column's width tier
 }
 ```
+
+A new grid column's width tier, by type (an attribute that allows several values is always `wide`):
+
+| Tier | Token | Types |
+|---|---|---|
+| `narrow` | `size-column-narrow` | checkbox, rating, number, date, timestamp |
+| `default` | `size-column` | text, currency, select, status, email, phone, domain, URL, personal name, actor reference, record reference, interaction |
+| `wide` | `size-column-wide` | long text, location, file |
 
 The types the registry uses, exported from `packages/ui`:
 
@@ -130,7 +141,7 @@ interface CellChange  { rowId: string; columnId: string; value: AttributeValue |
 | Rating | `Rating`, read only | `Rating` | cell | at least, at most | `4` / 1 to 5 or stars |
 | Email, domain, URL | `LinkChip` (`mailto:`, `https://<domain>`, the URL) | Field input, checked on blur | cell | is, contains | value / parsed and canonical |
 | Phone | `LinkChip` (`tel:`), formatted international | Field with a country picker, parsed by libphonenumber-js | cell | is, contains, country is | E.164 / parsed with the attribute's or the viewer's country |
-| Location | "London, United Kingdom" (country names from `Intl.DisplayNames`) | Field inputs per part | popover | country is, locality is, region is | parts joined by ", " / refused (edit the parts) |
+| Location | "London, United Kingdom" (country names from `Intl.DisplayNames`) | Field inputs per part, and a searchable country picker (names in the provider's language) | popover | country is, locality is, region is | parts joined by ", " / refused (edit the parts) |
 | Personal name | full name, with the avatar when it's the record title | first and last name inputs | popover | contains, first name is, last name is | full name / "Last, First" or split at the first space |
 | Actor reference | `RecordChip` with avatar; key, automation and system chips with their icon | `Menu` of members, "Me" first | popover | is, is any of, is me | name / a member's email or exact name |
 | Record reference | `RecordChip`, or chips with "+N" when many | `CommandPalette` "Choose record" (async, virtualised) | popover | is, is any of, and through the relation (Company › Country) | names / refused (choose records) |

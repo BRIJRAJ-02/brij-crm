@@ -47,7 +47,7 @@ type GridSelection =
 ## Column state (ours)
 
 - **Order**: `columns` array order. The first `pinnedCount` columns are pinned as one run from the start, and the row header is always first and pinned. Pinning another column moves it to the end of the run, never to a separate island.
-- **Widths**: from each column's `width`, clamped to new tokens `size-column-min` and `size-column-max`. These are added to the artifact in milestone 3 through spec 0002's flow, and read as numbers from `@crm/tokens/tokens.json`. Defaults per type come from the field set (text wider, checkbox narrow).
+- **Widths**: from each column's `width`, clamped to `size-column-min` (80px) and `size-column-max` (640px). A new column starts at its type's width tier from the field set (`narrow`, `default` or `wide`, per the table in [0003-attribute-values.md](0003-attribute-values.md)), which maps to `size-column-narrow`, `size-column` or `size-column-wide`. The checkbox column is `size-column-check`. These are added to the artifact in milestone 3 through spec 0002's flow ([0003-conventions.md](0003-conventions.md), Tokens this spec adds), and read as numbers from `@crm/tokens/tokens.json`.
 - **Hiding**: `isHidden` columns aren't drawn. Show and hide happen in `ViewSettings`.
 - **Saving**: changes leave through `onColumnsChange` when a drag ends or on each key press of a keyboard resize. The view (#20) saves them.
 

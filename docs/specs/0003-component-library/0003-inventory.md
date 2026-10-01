@@ -39,7 +39,7 @@ This is the full list of what the library holds when #4 is done, worked out from
 | Meter | New | 38 | `Meter` | usage against a limit; warning and over states |
 | Link | New | all | `Link` | inline text link; protocol allowlist |
 | Separator | New | all | `Separator` | |
-| Tooltip | New | all | `Tooltip`, `TooltipTrigger` | delay, keyboard focus shows it, never the only label |
+| Tooltip | New | all | `Tooltip`, `TooltipTrigger` | opens after 500 ms, at once on keyboard focus, never the only label |
 | TruncatedText | New | 17, 20 | | ellipsis, full text in a tooltip only when cut |
 | RelativeTime | New | 17, 19, 28 | | ticks from the provider clock; exact time in a tooltip |
 | Code | New | 34, 39 | | mono `code` style, optional copy |
@@ -58,7 +58,7 @@ This is the full list of what the library holds when #4 is done, worked out from
 | Menu, MenuItem, MenuLabel, MenuSeparator | Port | all | `Menu`, `MenuTrigger`, `SubmenuTrigger` | variants: searchable (`Autocomplete`), async, virtualised, checks |
 | ContextMenu | Variant of Menu | 17, 20, 21 | `Menu` | opens on right click or Shift F10 |
 | Toast, ToastRegion | Port | all | `UNSTABLE_Toast` | the timing policy |
-| KanbanCard, KanbanColumn | Port | 21, 51 | `GridList` | read only card |
+| KanbanCard, KanbanColumn | Port | 21, 51 | `GridList` | read only card; built in milestone 3 with the board |
 | DatePicker | Port | 13, 19, 20 | `DatePicker`, `Calendar` | typed dates, quick picks; range variant (`DateRangePicker`) for filters and dashboards |
 | FilterChip | Port | 20 | | |
 | Modal | Port | all | `Modal`, `Dialog` | dialog and window variants; confirm with a danger tone; grows from the centre |
@@ -154,7 +154,7 @@ One display and one editor per attribute type: text, long text, number, currency
 | SecretReveal | New | 34 | Callout, Code, CopyButton | shown once |
 | UsagePanel | New | 38 | Meter, Card | |
 | PlanPicker | New | 42 | Card | |
-| AuthLayout, SignInForm, SignUpForm, VerifyEmail, AcceptInvite, WorkspacePicker | New | 10, 23 | Field, Button | |
+| AuthLayout, SignInForm, SignUpForm, VerifyEmail, AcceptInvite, WorkspacePicker | New | 10, 23 | Card (`placement="page"`), Field, Button | `AuthLayout` is the page card's frame, not a second centred frame |
 | TemplatePicker, OnboardingChecklist | New | 40 | Card, Steps | |
 
 **Builders** (looks now; logic with their features)

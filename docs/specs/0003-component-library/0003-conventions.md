@@ -78,6 +78,38 @@ packages/ui/src/
 - An inline style may only set a custom property, which the module then reads (`style={{ '--row-offset': ... }}`), per the existing lint rule.
 - Third party CSS (React Flow's base styles) is imported into `@layer components` inside our module, and its variables are mapped to tokens.
 
+## Tokens this spec adds
+
+Milestones 1 and 2 drew some sizes from tokens meant for other things (`size-sidebar` for dialogs, `size-check` for keycaps), and the toast's success tick borrowed a status dot colour. Milestone 3 adds these to the artifact through spec 0002's flow, then each component reads its own token. Values in light, then dark where they differ.
+
+| Token | Value | For | Replaces today |
+|---|---|---|---|
+| `size-menu` | 240px | menus and popovers (minimum width), the date picker's calendar, the icon picker, the workbench's `FieldSurfaces` | `size-sidebar` minus spacing (the icon picker was 244px, so it gets 4px narrower) |
+| `size-measure` | 280px | the widest a tooltip or an empty state's text runs | `size-sidebar` plus `space-20` |
+| `size-dialog` | 480px | a dialog | twice `size-sidebar` minus spacing |
+| `size-dialog-wide` | 780px | a window (`Modal` window) | three times `size-sidebar` |
+| `size-palette` | 640px | the command palette | new |
+| `size-board-column` | 280px | a board column | new |
+| `size-sidebar-collapsed` | 48px | the sidebar folded to its icons (with `ThemeSwitch` `isCompact`) | new |
+| `size-panel` | 400px | `Panel` `md`: the record panel | one and a half `size-sidebar` (390px, so it gets 10px wider) |
+| `size-panel-wide` | 520px | `Panel` `lg`: the note and email panels | twice `size-sidebar` |
+| `size-page-card` | 520px | a page card (`Card` `placement="page"`: status, not found, `AuthLayout`) | twice `size-sidebar` |
+| `size-kbd` | 16px | a keycap's height and minimum width | `size-check` |
+| `size-column-check` | 36px | the grid's checkbox column | new |
+| `size-column-min` | 80px | the narrowest a column resizes to | new |
+| `size-column-narrow` | 120px | checkbox, rating, number, date and timestamp columns | new |
+| `size-column` | 200px | a new column of any other type | new |
+| `size-column-wide` | 300px | long text, location, file, and any attribute that allows several values | new |
+| `size-column-max` | 640px | the widest a column resizes to | new |
+| `success` | #0e7a4a, dark #0fc27b | a success toast's icon and any success text. Light: 5.3:1 on `surface`, 5.4:1 on `surface-raised`, 4.8:1 on `surface-hover`. Dark: 7.6:1, 6.9:1 and 6.2:1 | `dot-green` (2.32:1 in light; the dark value is the same as the dot's) |
+
+- Each field type names a new column's width tier (`narrow`, `default` or `wide`) in the registry beside `align` and `editIn`; the per type table is in [0003-attribute-values.md](0003-attribute-values.md), and the grid maps the tier to its token.
+- Sizes the shell reuses: the view bar and the bulk action bar are `size-bar` tall, and the filter builder's popover is `size-dialog` wide.
+- `size-sidebar` belongs to the sidebar and the shell, and `size-check` to Checkbox and Radio. A house rule check (`pnpm house-rules`) refuses either anywhere else, so a size is never borrowed again.
+- Status dots, tags and chart series keep `dot-green`. `success` is for chrome that says something worked, as `danger` is for errors. It has one variant: `Callout` keeps its tag colours for tinted backgrounds. Its six pairs join the contrast test in `packages/tokens/src/contrast.ts`.
+- The virtualised menu's height stays `10 × size-nav-item`: ten rows, in the row token.
+- A soft keycap inside a hovered secondary button shares the button's `surface-hover`, so its outline fades. That matches the artifact's design, and its text keeps 6:1, so it stays as it is.
+
 ## Motion
 
 - Enter and exit use CSS animations on `[data-entering]` and `[data-exiting]`. React Aria keeps an exiting overlay mounted until its animation ends, which gives us the exit animations the artifact lacks.
@@ -86,6 +118,7 @@ packages/ui/src/
   - Curves: `ease-out`, `ease-in-out`, `ease-drawer`, `ease-hover`.
   - Scales: `scale-press` 0.97 and the popover start scale.
 - Origins: menus and popovers grow from their trigger (React Aria's `--trigger-anchor-point` variable gives the transform origin), dialogs from the centre, and toasts rise from below.
+- Tooltips open after 500 ms of resting (a constant in `packages/ui`, as the toast timing is). While one is showing, the next opens at once, and keyboard focus opens it at once.
 - Opened by keyboard means instant. Triggers record React Aria's interaction modality when an overlay opens (`getInteractionModality()`) as `data-opened-by="keyboard"`, and the module skips the animation for it. This includes ⌘K.
 - `@media (prefers-reduced-motion: reduce)` keeps opacity transitions and drops transforms. The spinner then pulses its opacity instead of turning, as the skeleton does.
 

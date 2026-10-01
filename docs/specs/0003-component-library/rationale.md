@@ -76,6 +76,20 @@
 
 **The full inventory first.** This was the engineer's call against the Tracer Bullet default, and this spec carries it out with the mitigations in the premise note. The alternative stays easy to switch to: the milestones already build the Core loop's pieces early (milestones 1 to 3), so stopping after milestone 3 to start #5 needs no rework.
 
+## Decisions after milestone 2 (1 October 2026)
+
+Building milestones 1 and 2 surfaced values the spec hadn't named. Each was settled with you on 1 October 2026.
+
+**Member email in `ActorDisplay`.** The field table already said a pasted member matches "a member's email or exact name", but the display shape had no email, so only names matched, and two members with the same name were ambiguous. Options: carry `email` for members and match it first (chosen); use email only for matching and never show it; keep names only. Chosen because workspace members already see each other's emails in member settings, so it exposes nothing new, and the email is the one thing that tells two Adas apart. Keys, automations and the system never carry one.
+
+**Size tokens.** Menus, dialogs, panels, the page card and keycaps worked out their sizes from `size-sidebar` and `size-check`, which ties them to the sidebar's width for no reason: widening the sidebar would widen every dialog. The grid also needs column limits and defaults. Options: name each size as its own token in the artifact (chosen); keep deriving from existing tokens; hard code in the library (refused by Stylelint and by spec 0002). The values keep what screens draw today, except two small moves: the record panel grows from 390px to 400px, and the icon picker narrows from 244px to 240px. Column widths are three tiers rather than one per type, so the registry stays small and the grid stays even.
+
+**Tooltip delay.** React Aria opens a tooltip after 1.5 s, which is slow on a dense table full of cut text. Options: 500 ms (chosen), 700 ms (Radix's default), keep 1.5 s. 500 ms is quick for truncated cells and icon buttons but doesn't flash tooltips as the pointer crosses a table, and React Aria's warm up shows the next one at once. It is a constant in `packages/ui`, as the toast timing is.
+
+**A success colour.** The toast's success tick used `dot-green`, 2.32:1 on its background in light, below the 3:1 an icon needs. Options: a new `success` token (chosen), darken `dot-green`, leave it. A new token keeps the data colours as they are (darkening `dot-green` would darken every status dot and chart series), and it pairs with `danger`, which errors already have. Its light value is 5.4:1, so it is safe for text too.
+
+**Kept as they are.** The soft keycap's outline fades on a hovered secondary button, since both use `surface-hover`; the artifact draws it the same way and the keycap's text keeps 6:1. `AuthLayout` builds on `Card` `placement="page"` rather than drawing its own centred frame, so pages outside the shell have one frame. The location country, a two letter input in milestone 2, becomes a searchable picker over `COUNTRY_CODES` in milestone 3, when the record panel's attribute list edits locations. AC-22 now reads "its words in its own `strings.ts`, never inline", because a screen's own labels ("Postgres") have to live somewhere, and every screen keeps them in its `strings.ts`.
+
 ## The Attio comparison (evidence)
 
 From Attio's attribute type pages (the overview and each type's page), read on 2026-10-01:

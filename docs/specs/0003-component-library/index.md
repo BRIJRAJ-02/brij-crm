@@ -55,7 +55,7 @@ Reasoning, options and the Attio comparison: see [rationale.md](rationale.md).
 - **AC-19**: React Aria, TanStack Virtual, Tiptap, visx, React Flow, ELK and libphonenumber-js are imported only inside `packages/ui`, and Yjs only inside `packages/ui` and `packages/data`. Screens import only `@crm/ui`, `packages/ui` makes no network calls, and lint enforces all three.
 - **AC-20**: Charts draw in token colours, change theme with no React render (a test counts renders across a theme switch), mark each series with a shape as well as a colour (at most 9 series; the rest fold into "Other"), and each offers its data as a table. The schema map lays out 50 objects with no overlapping nodes, labels each line with both attribute names and the cardinality, and creates a relationship by drawing a line, with a keyboard alternative.
 - **AC-21**: Board cards move between columns, and within a column when the screen allows reordering, by pointer and by keyboard. Dashboard tiles reorder by a drag handle or a Move menu. A read only card can't be dragged, a drop onto an archived option's column is refused, and empty columns can be shown or hidden.
-- **AC-22**: The status screen is rebuilt from library components, with no markup, styles or copy of its own.
+- **AC-22**: The status screen is rebuilt from library components, with no markup or styles of its own, and its words in its own `strings.ts`, never inline.
 
 ## Decision
 
@@ -120,11 +120,14 @@ The library's surface is its exports (above) and these commands:
 | Phone display | formatted number | the value's `number` and `country`, through libphonenumber-js `formatInternational` |
 | Select tag, status dot | label, hue, archived | the attribute's `SelectOption` or `StatusOption`, passed with the column or field |
 | Record chip, member chip | name, avatar, kind | `RecordRefDisplay` or `ActorDisplay`, built by the data layer (#6) |
+| A pasted member | which member | `ActorDisplay.email` first, then the exact name, over the members the data layer passes in `TextContext.members` (#6). Only members carry an email; keys, automations and the system never do |
 | An avatar with no picture | initials and hue | initials from the display name; hue = a stable hash of the id over `HUES`, unless the display shape names one |
 | Object tile | icon and hue | the object's settings (#13), as props |
 | Grid rows, long lists | each item | `getItem(index)` from the screen's `ListSource` (#6) |
 | Grid footer | calculations | passed in by the screen (computed by #6 and #20 across all matching rows, never in the grid) |
 | Grid columns | order, width, pinned | the view's settings (#20), as props; changes leave through `onColumnsChange` |
+| Grid column widths | lengths | the `size-column-*` tokens, by the type's width tier in the field set ([0003-data-grid.md](0003-data-grid.md), Column state) |
+| Location country | code and name | the code from `COUNTRY_CODES` in `packages/contracts` (ISO 3166 alpha 2); the name from `Intl.DisplayNames(locale, { type: 'region' })` |
 | Filter operators and operands | per type | the field set registry and `FilterCondition` ([0003-attribute-values.md](0003-attribute-values.md)); relative dates ("within the last 7 days") resolve against "today" in the provider's time zone |
 | Phone parsing without a country | the default country | the region in `locale` (`en-GB` gives GB), else the attribute's `defaultCountry` |
 | Number and money digits | fraction digits | the value's own digits, at most 4 (`maximumFractionDigits: 4`); never `Intl`'s default rounding |
@@ -136,6 +139,7 @@ The library's surface is its exports (above) and these commands:
 | Chart series colours | fill and stroke | series order mapped to the `dot-*` tokens: blue, green, orange, purple, sky, yellow, red, lime, gray |
 | Schema map positions | node layout | ELK, run in a same origin module worker on the objects and relations passed in; saved `positions` (#56) pin their nodes, and ELK lays out the rest |
 | Toast timing, skeleton delay | durations | constants in `packages/ui` (5 s; 200 ms delay, 300 ms minimum) |
+| Tooltip delay | duration | a constant in `packages/ui`: 500 ms of resting before a tooltip opens. While one is showing, the next opens at once (React Aria's warm up), and keyboard focus opens it at once |
 | Built in copy | words | each component's `strings.ts` (English) |
 | Email body | the document | a `src` URL on an isolated origin from #43; `srcDoc` in stories |
 | Artifact version | published id | the Artifact tool's publish result (or a `read` right after, if the result lacks it), written to `artifact.json` |
@@ -196,24 +200,25 @@ Tracer Bullet inside the library: milestone 1 threads one component through ever
 10. Build the overlay layer: `Popover`, `Tooltip`, `Menu` (searchable, async and virtualised), `ContextMenu`, `Modal` (dialog and window), `Panel`, and the toast API, with exit animations, satisfies **AC-6**, **AC-10**, **AC-13**.
 11. Add the value, option, display and history schemas to `packages/contracts`, with parse tests, satisfies **AC-3**.
 12. Build the field set: one display and one editor per type, registered once, with filter operators, text conversion for copy and paste, and lazy libphonenumber-js, satisfies **AC-4**, **AC-5**, **AC-11**, **AC-14**.
-13. Build the remaining molecules in the inventory, satisfies **AC-1**, **AC-2**, **AC-6**.
+13. Build the remaining molecules in the inventory, satisfies **AC-1**, **AC-2**, **AC-6**. (`KanbanCard` and `KanbanColumn` moved to milestone 3, where the board gives them their drag and drop.)
 14. Rebuild the status screen from library components (`AppShell` not needed yet: `EmptyState`, `StatusDot`, `Card`, `Button`), satisfies **AC-22**.
 
 **Milestone 3: the grid and the app shell**
-15. Build `DataGrid` on TanStack Virtual with our own column state: the row source, keyboard model, editing in place through the field set, columns, selection, clearing, copy and paste, the footer, satisfies **AC-4**, **AC-8**, **AC-9**.
-16. Add the 100,000 row performance test, satisfies **AC-7**.
-17. Build the shell and view modules: app shell, sidebar, top bar, view bar, toolbar, filter and sort builders, view settings, command palette, bulk action bar, record panel and header, attribute list, timeline, tasks, and the board with React Aria drag and drop, satisfies **AC-1**, **AC-2**, **AC-9**, **AC-21**.
+15. Add the new tokens to the artifact through spec 0002's flow, sync them into `packages/tokens`, and swap every borrowed size in the library for its own token ([0003-conventions.md](0003-conventions.md), Tokens this spec adds). Toasts and success text move to the new `success` colour, and its pairs join the contrast test. Add the house rule check against borrowed sizes, each type's width tier to the field set registry, `COUNTRY_CODES` with the stricter `countryCode`, `email` on `ActorDisplay` for members (pasted members match it first), and the 500 ms tooltip delay with a story that checks it, satisfies **AC-6**, **AC-8**, **AC-11**.
+16. Build `DataGrid` on TanStack Virtual with our own column state: the row source, keyboard model, editing in place through the field set, columns, selection, clearing, copy and paste, the footer, satisfies **AC-4**, **AC-8**, **AC-9**.
+17. Add the 100,000 row performance test, satisfies **AC-7**.
+18. Build the shell and view modules: app shell, sidebar, top bar, view bar, toolbar, filter and sort builders, view settings, command palette, bulk action bar, record panel and header, attribute list (with the country picker in the location editor), timeline, tasks, and the board (`KanbanColumn`, `KanbanCard`) with React Aria drag and drop, satisfies **AC-1**, **AC-2**, **AC-9**, **AC-21**.
 
 **Milestone 4: rich text, collaboration, data in and out, settings and builders**
-18. Build `RichTextEditor` on Tiptap 3 (note, comment and email modes, mentions, variables, the format toolbar, the collaboration hook), satisfies **AC-1**, **AC-14**.
-19. Build the note, comment, email, meeting, version history, presence and notification modules, satisfies **AC-1**, **AC-2**, **AC-14**.
-20. Build the import mapper, merge view, file preview, change preview and progress flows, satisfies **AC-1**, **AC-2**.
-21. Build the settings, admin, auth and builder modules in the inventory (looks now, feature logic later), satisfies **AC-1**, **AC-2**.
+19. Build `RichTextEditor` on Tiptap 3 (note, comment and email modes, mentions, variables, the format toolbar, the collaboration hook), satisfies **AC-1**, **AC-14**.
+20. Build the note, comment, email, meeting, version history, presence and notification modules, satisfies **AC-1**, **AC-2**, **AC-14**.
+21. Build the import mapper, merge view, file preview, change preview and progress flows, satisfies **AC-1**, **AC-2**.
+22. Build the settings, admin, auth and builder modules in the inventory (looks now, feature logic later), satisfies **AC-1**, **AC-2**.
 
 **Milestone 5: charts, schema map and the full publish**
-22. Build the charts on visx and the dashboard (cards with a Move menu, and drag by handle), satisfies **AC-20**, **AC-21**.
-23. Build `SchemaMap` on React Flow with ELK in a worker, satisfies **AC-20**.
-24. Publish the whole library to the artifact, in several calls with the index last. Run `design-system-guardian` and `ux-interaction-reviewer` over every module, and have the size budget green, satisfies **AC-1**, **AC-17**, **AC-18**.
+23. Build the charts on visx and the dashboard (cards with a Move menu, and drag by handle), satisfies **AC-20**, **AC-21**.
+24. Build `SchemaMap` on React Flow with ELK in a worker, satisfies **AC-20**.
+25. Publish the whole library to the artifact, in several calls with the index last. Run `design-system-guardian` and `ux-interaction-reviewer` over every module, and have the size budget green, satisfies **AC-1**, **AC-17**, **AC-18**.
 
 ## Consequences
 
@@ -241,7 +246,7 @@ Tracer Bullet inside the library: milestone 1 threads one component through ever
 ## Follow-up
 
 - [ ] #5 Data model: store the value shapes and `ValueVersion` exactly as defined here, and serve the display shapes.
-- [ ] #6 Client data: implement the row source (`rowCount`, `getRow`, range callback) and build `RecordRefDisplay`, `ActorDisplay` and `FileDisplay`.
+- [ ] #6 Client data: implement the row source (`rowCount`, `getRow`, range callback) and build `RecordRefDisplay`, `ActorDisplay` (with `email` for members) and `FileDisplay`.
 - [ ] #13: run `/scope` to update its list of types (personal name, actor reference, interaction, file; select with "allow multiple").
 - [ ] #43: email bodies need an isolated origin with its own CSP (an iframe `srcDoc` inherits our `style-src 'self'` and loses the email's styles), whose `frame-ancestors` allows only our app; our CSP adds that origin to `frame-src`; plus an image proxy behind "Show images".
 - [ ] #27: `@crm/data` creates the `CollabSession` (Yjs document, awareness and the Hocuspocus provider).
