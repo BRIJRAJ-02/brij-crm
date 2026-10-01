@@ -1,8 +1,9 @@
 // Brief
 // Purpose: prove the stack boots, from this screen through the API to Postgres.
 // Main task: show whether the API and the database answer.
-// Leaves out: styling, navigation and sign in. The app shell from the component
-// library (#4) replaces this page, so it carries no styles and no raw values.
+// Leaves out: navigation, sign in and components of its own. It takes only the
+// root stylesheet's tokens (type, colours, both themes); the app shell from the
+// component library (#4) replaces this page.
 import type { SystemStatus } from '@crm/data';
 import { useRouter } from '@tanstack/react-router';
 

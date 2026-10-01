@@ -24,7 +24,9 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "house-rules": "node packages/config/scripts/house-rules.ts",
-    "check": "turbo run typecheck lint lint:root && pnpm format:check && pnpm lint:css && pnpm boundaries && pnpm house-rules",
+    "tokens:build": "pnpm --filter @crm/tokens build:tokens",
+    "tokens:check": "pnpm --filter @crm/tokens check:tokens",
+    "check": "turbo run typecheck lint lint:root && pnpm format:check && pnpm lint:css && pnpm boundaries && pnpm house-rules && pnpm tokens:check",
     "test": "turbo run test"
   },
   "devDependencies": {

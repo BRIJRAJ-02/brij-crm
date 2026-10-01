@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@crm/data": "workspace:*",
+    "@crm/ui": "workspace:*",
     "@tanstack/react-router": "catalog:",
     "@vercel/functions": "catalog:",
     "react": "catalog:",

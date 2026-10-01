@@ -6,6 +6,9 @@ skills-lock.json
 **/dist/
 **/.turbo/
 **/.vercel/
+# The artifact's token file, copied byte for byte, and the CSS generated from it
+packages/tokens/tokens.json
+packages/tokens/tokens.css
 
 # Prose and vendored skills keep their own formatting
 **/*.md

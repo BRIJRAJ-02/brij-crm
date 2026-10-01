@@ -1,0 +1,23 @@
+/* The document's own type and colours, from the design system's base layer.
+   Components set everything else in their own modules. */
+@layer base {
+  html,
+  body {
+    background: var(--surface);
+  }
+
+  body {
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+    font-feature-settings: 'cv11', 'ss01';
+  }
+
+  /* Keycaps stay sans, so ⌘ and ↵ come from the system face. */
+  code,
+  samp,
+  pre {
+    font-family: var(--font-mono);
+  }
+}

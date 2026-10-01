@@ -1,0 +1,8 @@
+/* The one root stylesheet the app loads. The layer order is fixed here, first,
+   so where a rule lands in the cascade never depends on import order or on
+   specificity, and nothing ever needs !important. */
+@layer reset, tokens, base, components, utilities;
+
+@import '@crm/tokens/tokens.css';
+@import './reset.css';
+@import './base.css';

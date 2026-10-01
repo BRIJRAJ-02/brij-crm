@@ -1,0 +1,50 @@
+/* Removes the browser's default spacing and sizing, so every value on screen
+   comes from a token. It never removes focus outlines. */
+@layer reset {
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  body,
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6,
+  p,
+  dl,
+  dd,
+  figure,
+  blockquote,
+  ul,
+  ol {
+    margin: 0;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font: inherit;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+    color: inherit;
+  }
+
+  img,
+  video,
+  canvas {
+    display: block;
+    max-inline-size: 100%;
+  }
+}

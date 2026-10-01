@@ -1,0 +1,19 @@
+{
+  "name": "@crm/ui",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./styles.css": "./src/styles/index.css"
+  },
+  "scripts": {
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@crm/tokens": "workspace:*"
+  },
+  "devDependencies": {
+    "@crm/config": "workspace:*",
+    "eslint": "catalog:",
+    "typescript": "catalog:"
+  }
+}
