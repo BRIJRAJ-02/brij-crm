@@ -233,6 +233,9 @@ function workspaceImports(names: readonly string[], importers: ReadonlySet<strin
       const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
       if (resolved === null) return null;
       const file = cleanPath(resolved.id);
+      // Play helpers (src/workbench/*.ts) stay in the preview, where the dropped
+      // play functions leave them unused.
+      if (path.dirname(file) === path.join(SRC, 'workbench')) return null;
       return file.startsWith(SRC + path.sep) && !importers.has(file) ? VIRTUAL : null;
     },
     load(id) {
