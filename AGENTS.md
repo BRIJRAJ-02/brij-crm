@@ -104,7 +104,6 @@ These skills apply across the repo. Skills for one area are listed in that area'
 - [ai-output-judgement](.claude/skills/ai-output-judgement/): `kemiljk/skills`, critiquing generated UI, copy or code
 - [user-research](.claude/skills/user-research/): `anthropics/knowledge-work-plugins`, interviews, usability tests and surveys
 
-Not used by this product (they came with a bundle, safe to remove): `hiring-manager-bar`, `android-native-ui`, `apple-native-ui`.
 Declined: the community Centrifugo skill (low trust). The Hono skill (`yusukebe/hono-skill`) still has no valid `SKILL.md`, so retry it later.
 MCP servers: neon (connected), sentry (connected), playwright (connected), github (recommended, add it once the repo exists).
 

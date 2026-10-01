@@ -7,23 +7,11 @@
       "skillPath": "skills/ai-output-judgement/SKILL.md",
       "computedHash": "d8469f0751108be7ca5954347e95fa0739c5ae64bd136ff5a2c0737961a6b304"
     },
-    "android-native-ui": {
-      "source": "kemiljk/skills",
-      "sourceType": "github",
-      "skillPath": "skills/android-native-ui/SKILL.md",
-      "computedHash": "f2719f2cd5022ee5078742e95fbf0da3f39b71ec88e5085ab66375c825525785"
-    },
     "api-and-interface-design": {
       "source": "addyosmani/agent-skills",
       "sourceType": "github",
       "skillPath": "skills/api-and-interface-design/SKILL.md",
       "computedHash": "26f5a9e7abfd332d7a2e5887cf19bddd3393f47514c379b36bf227c1f15cdec4"
-    },
-    "apple-native-ui": {
-      "source": "kemiljk/skills",
-      "sourceType": "github",
-      "skillPath": "skills/apple-native-ui/SKILL.md",
-      "computedHash": "4d6383acaa56bbad214a676a0248e3c5ad371092a7f49e60f44635efa7df8fdb"
     },
     "better-auth-best-practices": {
       "source": "better-auth/skills",
@@ -84,12 +72,6 @@
       "sourceType": "github",
       "skillPath": "skills/fluid-design/SKILL.md",
       "computedHash": "7966fffbf85e094d31680e347b58918a8de35d6fcf2b2bc2c8bda4fe71d3e0bd"
-    },
-    "hiring-manager-bar": {
-      "source": "kemiljk/skills",
-      "sourceType": "github",
-      "skillPath": "skills/hiring-manager-bar/SKILL.md",
-      "computedHash": "777a83bd9093659dc6890492c00d5c82ba4c414138232a70877021065be8e58f"
     },
     "humane-functionalism": {
       "source": "kemiljk/skills",
