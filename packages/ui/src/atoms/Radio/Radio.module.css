@@ -69,8 +69,9 @@
       scale var(--duration-press) var(--ease-out);
   }
 
+  /* The edge is accent-line, as a checked box's is, so it reads on any surface. */
   .radio[data-selected] .circle {
-    border-color: var(--accent-hover);
+    border-color: var(--accent-line);
     background: var(--accent);
   }
 

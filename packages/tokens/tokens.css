@@ -1,4 +1,4 @@
-/* Generated from tokens.json (artifact version 1790876326-6994) by packages/tokens/scripts/generate.ts. Do not edit. */
+/* Generated from tokens.json (artifact version 1790886248-a588) by packages/tokens/scripts/generate.ts. Do not edit. */
 
 @layer tokens {
   :root,
@@ -15,7 +15,7 @@
     --border-subtle: #e5e7eb;
     --border: #d8dbe1;
     --border-strong: #c3c7cf;
-    --control-border: #7b808a;
+    --control-border: #757a84;
     --text: #18191d;
     --text-secondary: #575b62;
     --text-tertiary: #676b72;
@@ -23,6 +23,7 @@
     --accent-hover: #245bc2;
     --accent-soft: #e8f0ff;
     --accent-border: #c8dcff;
+    --accent-line: #266df0;
     --on-accent: #fcfdff;
     --link: #245bc2;
     --focus-ring: #266df04d;
@@ -92,7 +93,7 @@
     --border-subtle: #2a2b2f;
     --border: #37393f;
     --border-strong: #4c5057;
-    --control-border: #7b808a;
+    --control-border: #8a8f99;
     --text: #ebedef;
     --text-secondary: #a7abb3;
     --text-tertiary: #999da5;
@@ -100,6 +101,7 @@
     --accent-hover: #1d63e5;
     --accent-soft: #1a2233;
     --accent-border: #2c4270;
+    --accent-line: #5a8ff3;
     --on-accent: #fcfdff;
     --link: #709ff5;
     --focus-ring: #709ff599;
@@ -153,7 +155,7 @@
     --shadow-md: 0 0 0 1px #ffffff0f, 0 4px 16px #00000066;
     --shadow-lg: 0 0 0 1px #ffffff14, 0 16px 40px #0000008c;
     --shadow-focus: 0 0 0 3px #709ff599;
-    --shadow-focus-inset: inset 0 0 0 2px #266df0;
+    --shadow-focus-inset: inset 0 0 0 2px #5a8ff3;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -170,7 +172,7 @@
       --border-subtle: #2a2b2f;
       --border: #37393f;
       --border-strong: #4c5057;
-      --control-border: #7b808a;
+      --control-border: #8a8f99;
       --text: #ebedef;
       --text-secondary: #a7abb3;
       --text-tertiary: #999da5;
@@ -178,6 +180,7 @@
       --accent-hover: #1d63e5;
       --accent-soft: #1a2233;
       --accent-border: #2c4270;
+      --accent-line: #5a8ff3;
       --on-accent: #fcfdff;
       --link: #709ff5;
       --focus-ring: #709ff599;
@@ -231,7 +234,7 @@
       --shadow-md: 0 0 0 1px #ffffff0f, 0 4px 16px #00000066;
       --shadow-lg: 0 0 0 1px #ffffff14, 0 16px 40px #0000008c;
       --shadow-focus: 0 0 0 3px #709ff599;
-      --shadow-focus-inset: inset 0 0 0 2px #266df0;
+      --shadow-focus-inset: inset 0 0 0 2px #5a8ff3;
     }
   }
 

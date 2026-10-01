@@ -46,12 +46,11 @@ export function contrastRules(color: ColorFamily): ContrastRule[] {
       backgrounds: [`tag-${hue}-bg`],
       minimum: 4.5,
     })),
-    {
-      foregrounds: ['control-border'],
-      backgrounds: ['surface', 'surface-sidebar', 'surface-raised', 'surface-subtle', 'surface-hover'],
-      minimum: 3.5,
-    },
+    // Selected rows and cell ranges hold controls too.
+    { foregrounds: ['control-border'], backgrounds: [...SURFACES, 'accent-soft'], minimum: 3.5 },
     { foregrounds: ['accent'], backgrounds: ['surface', 'surface-raised'], minimum: 3 },
+    // The inset focus ring and a checked box's edge, wherever they sit.
+    { foregrounds: ['accent-line'], backgrounds: [...SURFACES, 'accent-soft'], minimum: 3 },
   ];
 }
 

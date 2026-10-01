@@ -1,6 +1,6 @@
 // AC-4: every pair the components draw meets its minimum in both themes, on
-// the synced tokens.json. The fixture puts back the version 8 values of the
-// five fixed tokens, proving the test catches the ten pairs that missed.
+// the synced tokens.json. The fixtures put back the values of artifact
+// versions 8 and 12, proving the test catches the pairs that missed then.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -16,6 +16,12 @@ const VERSION_8: Record<string, Partial<Record<'light' | 'dark', string>>> = {
   danger: { light: '#cf3432' },
   'control-border': { light: '#838892' },
   'accent-hover': { dark: '#538bf3' },
+};
+
+/** Version 12: the focus ring and checkbox edges on selected rows, before `accent-line` (spec 0003). */
+const VERSION_12: typeof VERSION_8 = {
+  'control-border': { light: '#7b808a', dark: '#7b808a' },
+  'accent-line': { dark: '#266df0' },
 };
 
 function withValues(color: ColorFamily, values: typeof VERSION_8): ColorFamily {
@@ -45,10 +51,10 @@ describe('contrast (AC-4)', () => {
   });
 
   it('measures every pair in the table, in both themes', () => {
-    expect(checkContrast(tokens.color)).toHaveLength(102);
+    expect(checkContrast(tokens.color)).toHaveLength(124);
   });
 
-  it('catches the ten pairs that missed in artifact version 8', () => {
+  it('catches the pairs that missed in artifact version 8', () => {
     const missed = failures(withValues(tokens.color, VERSION_8)).map((line) => line.replace(/ \d+\.\d+ </, ' <'));
     expect(missed).toEqual([
       'light: text-tertiary on surface-hover < 4.5',
@@ -58,9 +64,22 @@ describe('contrast (AC-4)', () => {
       'light: control-border on surface-sidebar < 3.5',
       'light: control-border on surface-subtle < 3.5',
       'light: control-border on surface-hover < 3.5',
+      'light: control-border on surface-selected < 3.5',
+      'light: control-border on surface-column < 3.5',
+      'light: control-border on accent-soft < 3.5',
       'dark: text-tertiary on surface-hover < 4.5',
       'dark: text-tertiary on surface-selected < 4.5',
       'dark: on-accent on accent-hover < 4.5',
+    ]);
+  });
+
+  it('catches the selected row pairs that missed in artifact version 12', () => {
+    const missed = failures(withValues(tokens.color, VERSION_12)).map((line) => line.replace(/ \d+\.\d+ </, ' <'));
+    expect(missed).toEqual([
+      'light: control-border on surface-selected < 3.5',
+      'light: control-border on accent-soft < 3.5',
+      'dark: control-border on surface-selected < 3.5',
+      'dark: accent-line on surface-selected < 3',
     ]);
   });
 
