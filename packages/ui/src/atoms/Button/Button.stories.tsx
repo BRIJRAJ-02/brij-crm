@@ -245,7 +245,8 @@ export const Split: Story = {
     await expect(document.activeElement).toHaveTextContent('Save and share');
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
-    await expect(chevron).toHaveFocus();
+    // Focus comes back once the menu has gone, a frame later in some engines.
+    await waitFor(() => expect(chevron).toHaveFocus());
   },
 };
 
