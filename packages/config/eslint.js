@@ -10,7 +10,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 /** Files whose tool requires a default export. */
-const DEFAULT_EXPORT_FILES = ['**/*.config.{js,ts}', '**/railway.ts', 'worker/index.ts'];
+const DEFAULT_EXPORT_FILES = ['**/*.config.{js,ts}', '**/railway.ts', 'middleware.ts'];
 
 // House rule: only packages/db opens a database connection. Everything else
 // reaches Postgres through withWorkspace() from @crm/db.
@@ -53,7 +53,7 @@ const vendorSdks = {
 const syntax = {
   defaultExport: {
     selector: 'ExportDefaultDeclaration',
-    message: 'Use a named export. Only config files and the Worker entry may default export.',
+    message: 'Use a named export. Only config files and the Vercel middleware may default export.',
   },
   classes: ['ClassDeclaration', 'ClassExpression'].map((node) => ({
     selector: `${node}:not([superClass.name=/Error$/])`,
@@ -94,7 +94,7 @@ function restrictSyntax(entries) {
 
 function base(root) {
   return [
-    globalIgnores(['**/dist/', '**/.turbo/', '**/.wrangler/', '**/*.gen.ts']),
+    globalIgnores(['**/dist/', '**/.turbo/', '**/.vercel/', '**/*.gen.ts']),
     js.configs.recommended,
     tseslint.configs.strictTypeChecked,
     {
@@ -151,7 +151,7 @@ export function client({ root }) {
   );
 }
 
-/** apps/web: screens and routes under src/, plus the edge Worker under worker/. */
+/** apps/web: screens and routes under src/, plus the Vercel middleware at the root. */
 export function screens({ root }) {
   return defineConfig(
     base(root),
@@ -181,7 +181,6 @@ export function screens({ root }) {
       },
     },
     restrictSyntax([syntax.defaultExport, ...syntax.classes, ...syntax.extensions, syntax.screenStyling]),
-    { files: ['worker/**/*.ts'], languageOptions: { globals: globals.serviceworker } },
   );
 }
 

@@ -1,12 +1,12 @@
 node_modules/
 dist/
 .turbo/
-.wrangler/
+.vercel/
 *.tsbuildinfo
 .env
 .env.*
 !.env.example
-apps/web/.dev.vars
 .DS_Store
 .playwright-mcp/
 .claude/settings.local.json
+.vercel

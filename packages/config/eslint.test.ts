@@ -81,12 +81,11 @@ describe('screens preset (apps/web)', () => {
       'src/with-extension.ts': "import { greet } from './clean.ts';\nexport const g = greet;\n",
       'src/Store.ts': 'class Store {\n  readonly count = 0;\n}\nexport const store = new Store();\n',
       'src/errors.ts': 'export class NotFoundError extends Error {}\n',
-      'worker/index.ts': [
-        'export default {',
-        '  async fetch(request: Request): Promise<Response> {',
-        "    return fetch(new URL('/api', request.url));",
-        '  },',
-        '};',
+      'middleware.ts': [
+        'export const config = { matcher: ["/api/:path*"] };',
+        'export default function middleware(request: Request): Promise<Response> {',
+        "  return fetch(new URL('/api', request.url));",
+        '}',
         '',
       ].join('\n'),
       'vite.config.ts': 'export default { plugins: [] };\n',
@@ -150,13 +149,13 @@ describe('screens preset (apps/web)', () => {
     expect(messagesFor(messages, 'src/DefaultExport.tsx').join()).toMatch(/Use a named export/);
   });
 
-  it('allows the default export a tool requires (config files and the Worker entry)', () => {
+  it('allows the default export a tool requires (config files and the Vercel middleware)', () => {
     expect(messagesFor(messages, 'vite.config.ts').join()).not.toMatch(/Use a named export/);
-    expect(messagesFor(messages, 'worker/index.ts').join()).not.toMatch(/Use a named export/);
+    expect(messagesFor(messages, 'middleware.ts').join()).not.toMatch(/Use a named export/);
   });
 
-  it('lets the edge Worker call fetch, since proxying is its job', () => {
-    expect(rulesFor(messages, 'worker/index.ts')).not.toContain('no-restricted-globals');
+  it('lets the middleware reach the network, since proxying is its job', () => {
+    expect(rulesFor(messages, 'middleware.ts')).not.toContain('no-restricted-globals');
   });
 
   it('refuses a relative import without its file extension', () => {

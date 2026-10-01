@@ -10,7 +10,7 @@ import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');
 const WORKSPACE_DIRS = ['apps', 'packages'];
-const SKIP = new Set(['node_modules', 'dist', '.turbo', '.wrangler']);
+const SKIP = new Set(['node_modules', 'dist', '.turbo', '.vercel']);
 const IMPORT_SPECIFIER = /(?:import|from)\s*['"]([^'"]+\.module\.css)['"]/g;
 // Tests own no styles, and their fixtures quote import lines as plain strings.
 const SOURCE_FILE = /(?<!\.test)\.tsx?$/;

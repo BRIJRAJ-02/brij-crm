@@ -5,7 +5,7 @@ skills-lock.json
 **/migrations/meta/
 **/dist/
 **/.turbo/
-**/.wrangler/
+**/.vercel/
 
 # Prose and vendored skills keep their own formatting
 **/*.md

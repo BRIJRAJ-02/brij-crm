@@ -1,10 +1,9 @@
 **/node_modules
 **/dist
 **/.turbo
-**/.wrangler
+**/.vercel
 .git
 .env
 .env.*
 !.env.example
-apps/web/.dev.vars
 docs
