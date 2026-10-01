@@ -6,4 +6,17 @@ import { uiVite } from './src/vite.ts';
 
 export default defineConfig({
   plugins: [react(), uiVite()],
+  // Bundled up front, so the dev server never finds one halfway through a
+  // test run and reloads the page under it.
+  optimizeDeps: {
+    include: [
+      'react-aria-components',
+      'react-aria',
+      '@internationalized/date',
+      'lucide-react',
+      'zod',
+      'libphonenumber-js/max',
+      'react-dom/client',
+    ],
+  },
 });

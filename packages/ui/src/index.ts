@@ -53,6 +53,17 @@ export { arraySource, type ListRange, type ListSource } from './lib/list-source.
 export { safeHref } from './lib/safe-href.ts';
 export { safeImageSrc } from './lib/safe-image-src.ts';
 export {
+  DatePicker,
+  DateRangePicker,
+  dayIn,
+  quickPicks,
+  type DatePickerProps,
+  type DateRange,
+  type DateRangePickerProps,
+} from './molecules/DatePicker/DatePicker.tsx';
+export { EmptyState, type EmptyStateProps, type EmptyStateTone } from './molecules/EmptyState/EmptyState.tsx';
+export { Field, type FieldProps, type FieldSize } from './molecules/Field/Field.tsx';
+export {
   ContextMenu,
   Menu,
   MenuItem,
@@ -78,6 +89,15 @@ export {
 } from './molecules/Modal/Modal.tsx';
 export { Panel, type PanelProps, type PanelWidth } from './molecules/Panel/Panel.tsx';
 export { Popover, type PopoverPlacement, type PopoverProps, type PopoverWidth } from './molecules/Popover/Popover.tsx';
+export {
+  SegmentedControl,
+  ThemeSwitch,
+  type Segment,
+  type SegmentedControlProps,
+  type ThemeSwitchProps,
+} from './molecules/SegmentedControl/SegmentedControl.tsx';
+export { Select, type SelectItem, type SelectOptionStyle, type SelectProps } from './molecules/Select/Select.tsx';
+export { TabPanel, Tabs, type TabItem, type TabPanelProps, type TabsProps } from './molecules/Tabs/Tabs.tsx';
 export { createToasts, type ToastAction, type ToastContent, type Toasts, type ToastTone } from './provider/toasts.tsx';
 export { useDelayedLoading } from './provider/useDelayedLoading.ts';
 export { UiProvider, type FormatSettings, type UiProviderProps } from './provider/UiProvider.tsx';

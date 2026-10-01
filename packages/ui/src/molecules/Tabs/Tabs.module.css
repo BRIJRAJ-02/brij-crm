@@ -1,0 +1,89 @@
+/* Tabs: 40px tabs in text-secondary on a hairline, the chosen one in text with
+   a 2px underline that slides between tabs over duration-move. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .list {
+    display: flex;
+    gap: var(--space-4);
+    padding-inline: var(--space-16);
+    overflow-x: auto;
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    scrollbar-width: none;
+  }
+
+  .tab {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
+    block-size: calc(var(--space-32) + var(--space-8));
+    padding-inline: var(--space-8);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    white-space: nowrap;
+    cursor: pointer;
+    outline: none;
+    transition: color var(--duration-hover) var(--ease-hover);
+  }
+
+  .tab[data-selected] {
+    color: var(--text);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .tab[data-hovered] {
+      color: var(--text);
+    }
+  }
+
+  .tab[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .tab[data-disabled] {
+    opacity: var(--opacity-disabled);
+    cursor: default;
+  }
+
+  .indicator {
+    position: absolute;
+    inset-block-end: calc(-1 * var(--border-width-hairline));
+    inset-inline: 0;
+    block-size: var(--border-width-thick);
+    background: var(--text);
+    transition-duration: var(--duration-move);
+    transition-property: translate, width;
+    transition-timing-function: var(--ease-in-out);
+  }
+
+  .list[data-instant] .indicator {
+    transition: none;
+  }
+
+  .panel {
+    outline: none;
+  }
+
+  .panel[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .indicator {
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .indicator {
+      background: Highlight;
+    }
+  }
+}

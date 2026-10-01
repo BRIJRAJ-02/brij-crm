@@ -1,0 +1,163 @@
+/* Field: an 11px text-secondary label over a 30px box with a border-subtle
+   hairline; focus adds the accent border and the focus ring, an error turns
+   the border danger. Read only fills the box with surface-subtle and shows a
+   lock; disabled fades it. The search variant is rounded with an icon. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  .label {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .box {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    box-sizing: border-box;
+    block-size: var(--size-input);
+    padding-inline: var(--space-8);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+    color: var(--text);
+    cursor: text;
+    transition:
+      border-color var(--duration-hover) var(--ease-hover),
+      background-color var(--duration-hover) var(--ease-hover);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .box:hover {
+      border-color: var(--border);
+    }
+  }
+
+  .box:focus-within {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .root[data-size='sm'] .box {
+    block-size: var(--size-control);
+  }
+
+  .root[data-variant='search'] .box {
+    border-radius: var(--radius-full);
+    background: var(--surface-sunken);
+  }
+
+  .box[data-multiline] {
+    align-items: flex-start;
+    block-size: auto;
+    padding-block: var(--space-6);
+  }
+
+  .input {
+    flex: 1;
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    outline: none;
+    resize: none;
+  }
+
+  .input::placeholder {
+    color: var(--text-tertiary);
+  }
+
+  .input::-webkit-search-cancel-button {
+    display: none;
+  }
+
+  .box[data-multiline] .input {
+    min-block-size: calc(3 * var(--space-20));
+    field-sizing: content;
+    white-space: pre-wrap;
+  }
+
+  .prefix,
+  .suffix {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .lock {
+    display: inline-flex;
+    color: var(--text-tertiary);
+  }
+
+  .foot {
+    display: flex;
+    gap: var(--space-8);
+  }
+
+  .hint {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .counter {
+    margin-inline-start: auto;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .error {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    color: var(--danger);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .root[data-invalid] .box {
+    border-color: var(--danger);
+  }
+
+  .root[data-disabled] .box,
+  .root[data-disabled] .label {
+    opacity: var(--opacity-disabled);
+    cursor: default;
+  }
+
+  .root[data-readonly] .box {
+    border-color: transparent;
+    background: var(--surface-subtle);
+    cursor: default;
+  }
+
+  .root[data-readonly] .box:focus-within {
+    border-color: var(--border);
+    box-shadow: none;
+  }
+
+  @media (forced-colors: active) {
+    .box {
+      border-color: CanvasText;
+    }
+
+    .box:focus-within {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}

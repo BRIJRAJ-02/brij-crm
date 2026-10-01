@@ -369,7 +369,9 @@ for (const { card, file } of stories) {
   checkFile(`components/${card.name}/preview.html`, html, CAPS.preview, [
     /<(iframe|frame|object|embed|portal|noscript)\b/i,
   ]);
-  if (/\bfetch\(|XMLHttpRequest|https?:\/\//.test(preview.code)) {
+  // Links in a preview (a LinkChip's https://…) are fine; code that fetches is
+  // not. What a preview actually loads is checked when it renders (step 5).
+  if (/\bfetch\(|XMLHttpRequest|\bWebSocket\(|\bEventSource\(|import\(\s*['"]https?:/.test(preview.code)) {
     problems.push(`components/${card.name}/preview.html reaches the network; previews fetch nothing.`);
   }
 
@@ -390,6 +392,9 @@ try {
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('console', (message) => {
       if (message.type() === 'error') errors.push(message.text());
+    });
+    page.on('request', (request) => {
+      if (/^(https?|wss?):/.test(request.url())) errors.push(`loads ${request.url()}; previews fetch nothing`);
     });
     const html = readFileSync(path.join(PROJECT, 'components', card.name, 'preview.html'), 'utf8');
     const body = /<body>([\s\S]*)<\/body>/.exec(html)?.[1] ?? '';

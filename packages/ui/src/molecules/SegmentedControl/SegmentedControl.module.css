@@ -1,0 +1,96 @@
+/* SegmentedControl: equal segments on a surface-sunken track with a hairline,
+   and a raised thumb with a keycap edge that slides to the chosen one over
+   duration-move (at once for the keyboard and under reduced motion). */
+@layer components {
+  .root {
+    position: relative;
+    display: inline-grid;
+    grid-auto-columns: 1fr;
+    grid-auto-flow: column;
+    padding: var(--space-2);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-sunken);
+  }
+
+  .field {
+    display: flex;
+  }
+
+  .segment {
+    position: relative;
+    display: inline-flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-6);
+    block-size: calc(var(--size-control) - 2 * var(--space-2));
+    padding-inline: var(--space-12);
+    border-radius: var(--radius-sm);
+    color: var(--text-secondary);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    white-space: nowrap;
+    cursor: pointer;
+    outline: none;
+    transition: color var(--duration-hover) var(--ease-hover);
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .label,
+  .icon {
+    position: relative;
+    z-index: var(--z-raised);
+    display: inline-flex;
+  }
+
+  .segment[data-selected] {
+    color: var(--text);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .segment[data-hovered] {
+      color: var(--text);
+    }
+  }
+
+  .segment[data-focus-visible] {
+    box-shadow: var(--shadow-focus);
+  }
+
+  .segment[data-disabled] {
+    opacity: var(--opacity-disabled);
+    cursor: default;
+  }
+
+  .thumb {
+    position: absolute;
+    inset: 0;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-sm);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-control);
+    transition-duration: var(--duration-move);
+    transition-timing-function: var(--ease-in-out);
+  }
+
+  .root[data-instant] .thumb {
+    transition: none;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .thumb {
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border-color: CanvasText;
+    }
+
+    .thumb {
+      border-color: Highlight;
+    }
+  }
+}
