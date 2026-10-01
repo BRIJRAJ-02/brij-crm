@@ -12,6 +12,8 @@ const ROOT = path.resolve(import.meta.dirname, '../../..');
 const WORKSPACE_DIRS = ['apps', 'packages'];
 const SKIP = new Set(['node_modules', 'dist', '.turbo', '.wrangler']);
 const IMPORT_SPECIFIER = /(?:import|from)\s*['"]([^'"]+\.module\.css)['"]/g;
+// Tests own no styles, and their fixtures quote import lines as plain strings.
+const SOURCE_FILE = /(?<!\.test)\.tsx?$/;
 
 /** Every file under the workspaces, as paths relative to the repo root. */
 function listFiles(): string[] {
@@ -33,7 +35,7 @@ function screensHaveNoCss(files: string[]): string[] {
 
 function cssModulesStayInTheirComponent(files: string[]): string[] {
   const importers = new Map<string, string[]>();
-  for (const file of files.filter((f) => /\.(ts|tsx)$/.test(f))) {
+  for (const file of files.filter((f) => SOURCE_FILE.test(f))) {
     for (const match of readFileSync(path.join(ROOT, file), 'utf8').matchAll(IMPORT_SPECIFIER)) {
       const specifier = match[1];
       if (specifier === undefined) continue;
