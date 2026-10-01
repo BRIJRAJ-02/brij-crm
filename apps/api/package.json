@@ -8,7 +8,8 @@
     "start": "node src/server.ts",
     "start:worker": "node src/worker.ts",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@crm/contracts": "workspace:*",
@@ -23,6 +24,8 @@
     "@crm/config": "workspace:*",
     "@types/node": "catalog:",
     "eslint": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

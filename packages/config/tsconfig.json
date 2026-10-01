@@ -1,4 +1,8 @@
 {
   "extends": "./tsconfig.node.json",
-  "include": ["scripts"]
+  "compilerOptions": {
+    // The tests import the shared lint configs, which are plain JavaScript.
+    "allowJs": true
+  },
+  "include": ["scripts", "*.test.ts"]
 }
