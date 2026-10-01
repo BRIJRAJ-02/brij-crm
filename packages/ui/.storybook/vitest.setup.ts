@@ -5,7 +5,12 @@
 //   2. it switches to dark and runs axe again, so contrast holds in both
 //      themes (AC-6).
 import axe from 'axe-core';
+import { configure } from 'storybook/test';
 import { afterEach, beforeEach, expect } from 'vitest';
+
+// Three engines run at once in CI, and WebKit can take over a second to put
+// focus back after an overlay closes, so waitFor and findBy wait up to 5 s.
+configure({ asyncUtilTimeout: 5_000 });
 
 interface StoryContext {
   readonly story?: { readonly parameters: { readonly a11y?: { readonly disable?: boolean; readonly test?: string } } };

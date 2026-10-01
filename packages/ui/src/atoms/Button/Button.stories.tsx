@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Menu, MenuItem, Popover } from 'react-aria-components';
 import { expect, fn, waitFor } from 'storybook/test';
+import { hoverUntilHovered } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Button, SplitButton, ToggleButton } from './Button.tsx';
 
@@ -116,10 +117,15 @@ export const Pending: Story = {
 
 /** Hovered, on devices that can hover. */
 export const Hovered: Story = {
+  render: (args) => (
+    <Stage>
+      <Button icon="settings" onPress={args.onPress}>
+        View settings
+      </Button>
+    </Stage>
+  ),
   play: async ({ canvas, userEvent }) => {
-    const button = canvas.getByRole('button', { name: 'View settings' });
-    await userEvent.hover(button);
-    await waitFor(() => expect(button).toHaveAttribute('data-hovered', 'true'));
+    await hoverUntilHovered(userEvent, canvas.getByRole('button', { name: 'View settings' }));
   },
 };
 
@@ -195,8 +201,7 @@ export const ToggleHovered: Story = {
   play: async ({ canvas, userEvent }) => {
     const toggle = canvas.getByRole('button', { name: 'Show archived' });
     const selected = getComputedStyle(toggle).backgroundColor;
-    await userEvent.hover(toggle);
-    await waitFor(() => expect(toggle).toHaveAttribute('data-hovered', 'true'));
+    await hoverUntilHovered(userEvent, toggle);
     await expect(getComputedStyle(toggle).backgroundColor).toBe(selected);
   },
 };

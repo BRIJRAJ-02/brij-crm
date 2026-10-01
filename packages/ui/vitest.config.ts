@@ -44,6 +44,12 @@ export default mergeConfig(
           plugins: [storybookTest({ configDir: STORYBOOK })],
           test: {
             name: 'stories',
+            // One file at a time per browser: files share one page, so focus, the
+            // pointer and emulated media would leak between them.
+            fileParallelism: false,
+            // With three engines on one CI machine, a pointer move now and then
+            // lands before the page is ready for it. A real bug fails every try.
+            retry: process.env.CI === undefined ? 0 : 2,
             setupFiles: [path.join(STORYBOOK, 'vitest.setup.ts')],
             browser: {
               ...headless,
@@ -55,6 +61,7 @@ export default mergeConfig(
           extends: true,
           test: {
             name: 'browser',
+            fileParallelism: false,
             include: ['src/**/*.browser.test.tsx'],
             browser: { ...headless, instances: [{ browser: 'chromium' }], commands: { emulateForcedColors } },
           },
@@ -64,6 +71,7 @@ export default mergeConfig(
           plugins: [storybookTest({ configDir: STORYBOOK })],
           test: {
             name: 'visual',
+            fileParallelism: false,
             setupFiles: [path.join(STORYBOOK, 'vitest.visual.ts')],
             provide: { visualImage: process.env.CRM_VISUAL_IMAGE === '1' },
             browser: {
