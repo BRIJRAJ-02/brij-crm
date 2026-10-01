@@ -81,6 +81,7 @@ The reviewer agents live in `.claude/agents/`.
 - integration: on
 - branch prefix: feat/
 - commit: per-milestone
+- identity: commit and push as BRIJRAJ-02 (set in this repo's git config). Vercel's Hobby plan blocks a deploy whose commit author isn't the account owner, so a commit by any other account never reaches production.
 
 ## Agent skills
 
