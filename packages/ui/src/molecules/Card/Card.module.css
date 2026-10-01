@@ -13,6 +13,13 @@
     color: var(--text);
   }
 
+  /* Two sidebar widths at most, with the page gutter kept on a phone. */
+  .root[data-placement='page'] {
+    inline-size: min(calc(2 * var(--size-sidebar)), calc(100% - 2 * var(--space-16)));
+    margin-block: var(--space-32);
+    margin-inline: auto;
+  }
+
   .root[data-tone='sunken'] {
     background: var(--surface-subtle);
     box-shadow: none;

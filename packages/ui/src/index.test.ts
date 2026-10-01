@@ -44,6 +44,7 @@ describe('@crm/ui', () => {
       'Icon',
       'IconPicker',
       'Kbd',
+      'LOADING_TIMING',
       'Link',
       'LinkChip',
       'Mention',

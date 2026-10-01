@@ -52,6 +52,8 @@ export const OnText: Story = {
     </Stage>
   ),
   play: async ({ canvas, userEvent }) => {
+    // Text adds no tab stop: its trigger focuses on purpose only.
+    await expect(canvas.getByText('Strategic partnership…').parentElement).toHaveAttribute('tabindex', '-1');
     await hoverFresh(userEvent, canvas.getByText('Strategic partnership…'));
     const tip = await tooltip();
     await expect(tip).toHaveTextContent('EMEA region');

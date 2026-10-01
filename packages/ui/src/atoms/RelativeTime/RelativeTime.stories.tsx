@@ -23,6 +23,8 @@ export const Default: Story = {
   play: async ({ canvas, userEvent }) => {
     const time = canvas.getByText('3 hours ago');
     await expect(time).toHaveAttribute('datetime', '2026-10-08T11:30:00.000Z');
+    // Screen readers get the exact time without a hover.
+    await expect(time.parentElement).toHaveTextContent(/3 hours ago, Oct 8, 2026.+12:30 PM GMT\+1/);
     await hoverFresh(userEvent, time);
     // Engines join the date and time differently ("," or "at"), so match the parts.
     await waitFor(() =>

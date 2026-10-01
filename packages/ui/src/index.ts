@@ -142,4 +142,4 @@ export { Table, type TableColumn, type TableProps } from './molecules/Table/Tabl
 export { TabPanel, Tabs, type TabItem, type TabPanelProps, type TabsProps } from './molecules/Tabs/Tabs.tsx';
 export { createToasts, type ToastAction, type ToastContent, type Toasts, type ToastTone } from './provider/toasts.tsx';
 export { UiProvider, type FormatSettings, type UiProviderProps } from './provider/UiProvider.tsx';
-export { useDelayedLoading } from './provider/useDelayedLoading.ts';
+export { LOADING_TIMING, useDelayedLoading, type LoadingTiming } from './provider/useDelayedLoading.ts';

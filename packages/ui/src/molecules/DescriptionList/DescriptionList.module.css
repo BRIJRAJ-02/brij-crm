@@ -1,5 +1,5 @@
 /* DescriptionList: terms in text-secondary beside (or above) their values,
-   on a 34px rhythm. */
+   on a 28px rhythm (a body line and space-8 between rows). */
 @layer components {
   .root {
     display: grid;

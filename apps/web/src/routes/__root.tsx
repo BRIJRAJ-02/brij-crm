@@ -1,6 +1,7 @@
 import type { DataLayer } from '@crm/data';
 import type { ThemeController } from '@crm/ui/theme';
 import { createRootRouteWithContext, Outlet } from '@tanstack/react-router';
+import { NotFound } from '../features/system/SystemStatusScreen.tsx';
 
 /** Routes reach data only through this context, never through their own fetches. */
 export interface RouterContext {
@@ -11,10 +12,5 @@ export interface RouterContext {
 
 export const Route = createRootRouteWithContext<RouterContext>()({
   component: Outlet,
-  notFoundComponent: () => (
-    <main>
-      <h1>Page not found</h1>
-      <p>There is nothing at this address.</p>
-    </main>
-  ),
+  notFoundComponent: NotFound,
 });

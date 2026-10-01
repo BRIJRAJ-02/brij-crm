@@ -1,7 +1,8 @@
 // CSS module classes come out as ws-<component>-<local>, the same in the app,
 // Storybook and the artifact (AC-17).
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { scopedClassName, uiVite } from './vite.ts';
+import { layerOrderStatement, linkLayerOrder, scopedClassName, uiVite } from './vite.ts';
 
 describe('scopedClassName', () => {
   it('names a class after its component and its local name', () => {
@@ -27,5 +28,32 @@ describe('uiVite', () => {
       css: { modules: { generateScopedName: scopedClassName } },
       define: { 'process.env.VIRT_ON': 'undefined' },
     });
+  });
+});
+
+describe('layerOrder', () => {
+  it('takes the order the root stylesheet declares', () => {
+    const css = readFileSync(new URL('./styles/index.css', import.meta.url), 'utf8');
+    expect(layerOrderStatement(css)).toBe('@layer reset, tokens, base, components, utilities;');
+    expect(() => layerOrderStatement('.a { color: red; }')).toThrow(/no @layer order/);
+  });
+
+  it('links it before the first stylesheet, after any script ahead of it', () => {
+    const html = [
+      '<head>',
+      '<script src="/theme-boot.js"></script>',
+      '<link rel="stylesheet" href="/assets/shared.css">',
+      '<link rel="stylesheet" href="/assets/index.css">',
+      '</head>',
+    ].join('\n');
+    const linked = linkLayerOrder(html, '/');
+    expect(linked.indexOf('/layers.css')).toBeGreaterThan(linked.indexOf('theme-boot.js'));
+    expect(linked.indexOf('/layers.css')).toBeLessThan(linked.indexOf('/assets/shared.css'));
+  });
+
+  it('links it at the end of the head when the page has no stylesheet yet (the dev server)', () => {
+    expect(linkLayerOrder('<head><title>CRM</title></head>', '/app/')).toContain(
+      '<link rel="stylesheet" href="/app/layers.css">\n  </head>',
+    );
   });
 });

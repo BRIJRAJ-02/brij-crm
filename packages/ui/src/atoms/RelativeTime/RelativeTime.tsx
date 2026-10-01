@@ -1,7 +1,9 @@
 import { formatExactTime, formatRelative } from '../../lib/format.ts';
 import { useFormatSettings, useNow } from '../../provider/context.ts';
 import { Tooltip } from '../Tooltip/Tooltip.tsx';
+import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import styles from './RelativeTime.module.css';
+import { strings } from './strings.ts';
 
 /** Props for RelativeTime. */
 export interface RelativeTimeProps {
@@ -12,16 +14,21 @@ export interface RelativeTimeProps {
 /**
  * A moment as "3 hours ago", in the provider's language, kept current by the
  * shared clock (every 30 seconds). Past a week it shows the date. The exact
- * time, with its time zone, is in a tooltip.
+ * time, with its time zone, is in a tooltip for a pointer, and read after the
+ * relative time by screen readers, so it never needs a hover.
  */
 export function RelativeTime({ value }: RelativeTimeProps) {
   const { locale, timeZone } = useFormatSettings();
   const now = useNow();
+  const exact = formatExactTime(value, locale, timeZone);
   return (
-    <Tooltip content={formatExactTime(value, locale, timeZone)} isTextTrigger>
-      <time className={styles.root} dateTime={value}>
-        {formatRelative(value, now, locale, timeZone)}
-      </time>
+    <Tooltip content={exact} isTextTrigger>
+      <>
+        <time className={styles.root} dateTime={value}>
+          {formatRelative(value, now, locale, timeZone)}
+        </time>
+        <VisuallyHidden>{strings.exact(exact)}</VisuallyHidden>
+      </>
     </Tooltip>
   );
 }

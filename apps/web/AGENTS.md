@@ -41,7 +41,8 @@ vercel build                      # from the repo root, after `vercel pull`: the
 ## Gotchas
 
 - In `vite.config.ts`, the router plugin must come before the React plugin, and `uiVite()` from `@crm/ui/vite` must stay, so the library's CSS module classes keep their `ws-` names. `build.manifest` must stay on for the first load budget.
-- `@crm/ui/styles.css` must be the first import in `main.tsx`. Cascade layers take their order from first appearance, and component CSS imported earlier would sink below the reset (`build.test.ts` checks).
+- Cascade layers take their order from first appearance, and Vite links a shared chunk's CSS (component modules) ahead of the entry's (the reset). So the order comes from `/layers.css`, which `layerOrder()` from `@crm/ui/vite` emits from the root stylesheet's own `@layer` statement and links ahead of every bundled stylesheet. Keep that plugin in `vite.config.ts`, and keep `@crm/ui/styles.css` the first import in `main.tsx` (`build.test.ts` checks both).
+- Keep `NODE_ENV` out of the root `.env`. Vite reads that file, and `NODE_ENV=development` there makes `pnpm build` ship React's development build (`pnpm size` refuses it).
 - The first load may only hold static imports. The grid, editor, charts and schema map are loaded lazily, and `build.test.ts` fails if one reaches the entry's static graph.
 - The CSP in `vercel.json` allows only `'self'`. Adding Centrifugo, Sentry or PostHog means adding their origins there, or the browser blocks them.
 - The same CSP blocks inline scripts, which is why the theme boot script is a file in `public/`. Keep it a classic script (not a module, not `async`) loaded before the stylesheet and the app, and keep its `crm.theme` key equal to `THEME_STORAGE_KEY` in `@crm/ui/theme` (`theme-boot.test.ts` checks it).

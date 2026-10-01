@@ -16,7 +16,7 @@ The component library every screen draws with. It holds the root stylesheet (cas
 | `src/atoms/Icon/` | The Icon atom, its CSS module, its README, and `icons.ts` (the icon registry) |
 | `src/atoms/<Name>/` | One component: `<Name>.tsx`, its CSS module, `strings.ts` for its built in copy, `README.md` and `<Name>.stories.tsx` |
 | `src/provider/` | `UiProvider` (language, time zone, router links, the toast queue, the clock, loading timing), `createToasts()`, `createClock()` and `useDelayedLoading()` |
-| `src/vite.ts` | `@crm/ui/vite`: `uiVite()`, which names CSS module classes `ws-<component>-<local>`. Every Vite build that renders the library uses it |
+| `src/vite.ts` | `@crm/ui/vite`: `uiVite()`, which names CSS module classes `ws-<component>-<local>` (every Vite build that renders the library uses it), and `layerOrder()`, which links the layer order ahead of an app's bundled stylesheets |
 | `src/workbench/` | `Stage` and `StoryRoot`, used only by stories. Never exported |
 | `.storybook/` | Storybook config. `preview.tsx` wraps every story in the provider with a frozen clock; `vitest.setup.ts` runs axe in light and dark and fails a story on any CSP violation |
 | `vitest.config.ts` | Four test projects: `unit` (Node), `stories` (Chromium, Firefox, WebKit), `browser` (`*.browser.test.tsx`, Chromium) and `visual` (screenshots) |
@@ -56,7 +56,7 @@ pnpm ui:artifact                   # build the artifact files into .artifact/; -
 ## Gotchas
 
 - `apps/web/public/theme-boot.js` repeats the storage key and the `light` or `dark` check, because it has to run before any module loads. Change `THEME_STORAGE_KEY` and that file together (`apps/web/theme-boot.test.ts` checks they match).
-- Vite's CSS minifier (Lightning CSS) removes the `@layer` order statement from the build. The order still holds, because each layer first appears in that order, and `apps/web/build.test.ts` checks it.
+- Vite's CSS minifier (Lightning CSS) removes the `@layer` order statement from the build, and a shared chunk's CSS can load before the reset. So `layerOrder()` in `src/vite.ts` publishes the root stylesheet's `@layer` statement as `/layers.css` and links it ahead of every bundled stylesheet; `apps/web/build.test.ts` checks it.
 - The `unit` project runs in Node with no DOM, so anything that renders belongs in a story or a `*.browser.test.tsx`, which run in real browsers.
 - React Aria's `Button` drops `aria-keyshortcuts`. Pass it through the `render` prop, as `Button.tsx` does.
 - Toast is still `UNSTABLE_` in React Aria. Only `src/provider/toasts.tsx` imports it, so an upgrade changes one file.

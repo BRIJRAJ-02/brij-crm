@@ -1,4 +1,4 @@
-import { uiVite } from '@crm/ui/vite';
+import { layerOrder, uiVite } from '@crm/ui/vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
@@ -14,6 +14,8 @@ export default defineConfig({
     react(),
     // CSS module classes as ws-<component>-<local>, as in Storybook and the artifact.
     uiVite(),
+    // The cascade layer order as /layers.css, linked ahead of every bundled stylesheet.
+    layerOrder(),
   ],
   server: {
     port: 5173,

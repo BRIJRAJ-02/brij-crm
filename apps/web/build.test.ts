@@ -15,6 +15,7 @@ const outDir = mkdtempSync(path.join(tmpdir(), 'crm-web-build-'));
 let assets: string[] = [];
 let css = '';
 let html = '';
+let linked: string[] = [];
 let manifest: Manifest = {};
 
 beforeAll(async () => {
@@ -25,12 +26,13 @@ beforeAll(async () => {
     build: { outDir, emptyOutDir: true, sourcemap: false },
   });
   assets = readdirSync(path.join(outDir, 'assets'));
-  css = assets
-    .filter((file) => file.endsWith('.css'))
-    .map((file) => readFileSync(path.join(outDir, 'assets', file), 'utf8'))
-    .join('\n');
   html = readFileSync(path.join(outDir, 'index.html'), 'utf8');
   manifest = JSON.parse(readFileSync(path.join(outDir, '.vite', 'manifest.json'), 'utf8')) as Manifest;
+  // In the order a browser meets them: the stylesheets index.html links, then
+  // the ones lazy chunks bring.
+  linked = [...html.matchAll(/<link[^>]+rel="stylesheet"[^>]+href="\/([^"]+\.css)"/g)].map((match) => match[1] ?? '');
+  const rest = assets.map((file) => `assets/${file}`).filter((file) => file.endsWith('.css') && !linked.includes(file));
+  css = [...linked, ...rest].map((file) => readFileSync(path.join(outDir, file), 'utf8')).join('\n');
 }, 120_000);
 
 afterAll(() => {
@@ -48,6 +50,13 @@ describe('the built stylesheet', () => {
       }
     }
     expect(order).toEqual(['reset', 'tokens', 'base', 'components', 'utilities']);
+  });
+
+  it('declares that order in the first stylesheet the page links, outside the bundle', () => {
+    expect(linked[0]).toBe('layers.css');
+    expect(readFileSync(path.join(outDir, 'layers.css'), 'utf8')).toContain(
+      '@layer reset, tokens, base, components, utilities;',
+    );
   });
 
   it('carries the tokens, the reset and the base layers', () => {

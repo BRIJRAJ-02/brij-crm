@@ -34,4 +34,39 @@ _Steps derived from spec 0003's acceptance criteria and its Value sourcing table
 
 ## Acceptance-criteria coverage (milestone 1)
 - AC-1: house rules check, Button, Kbd, Spinner, Icon READMEs and stories · AC-2: Button states storied (hover, focus, pressed, disabled, pending, selected) · AC-6: keyboard plays, axe light and dark, forced colours test · AC-10: press scale, reduced motion · AC-11: provider settings · AC-12: copy lint · AC-13: toast policy and skeleton timing · AC-15: three engines · AC-16: Linux baselines · AC-17: `pnpm ui:artifact` and the publish · AC-18: size budget and manifest test · AC-19: lint guards
+
+## Milestone 2: atoms, overlays, the value schemas, the field set, molecules and the status screen
+
+### UI / manual
+- [ ] `pnpm storybook` → the sidebar groups Atoms, Molecules, Fields and Provider. Every Fields story ("Text field", "Phone field", and the rest) shows its display and editor; Fields/Workbench lays every type out on the six surfaces (cell, panel, card, form, filter, preview) → AC-1, AC-4
+- [ ] Switch the toolbar's Language to Deutsch and open Molecules/DatePicker → the calendar starts on Monday, dates read in German, and the today dot sits on 8 October 2026 (the frozen clock), not the machine's date → AC-11
+- [ ] Switch the toolbar's Keyboard to "Windows and Linux (Ctrl)" → every ⌘ shortcut reads Ctrl instead → AC-6
+- [ ] Open Molecules/Menu with the mouse → it grows from its trigger. Open it with Enter → it appears at once. Esc → focus is back on the trigger. Turn on reduce motion → it fades only → AC-6, AC-10
+- [ ] In Fields/Email field, type `ada@example` and Tab away → the Field error says how to fix it and nothing is committed. Same for a number with five decimals and a phone that isn't a number → AC-5
+- [ ] Open Atoms/Link and Atoms/LinkChip, the `javascript:` stories → the URL renders as plain text, not a link → AC-14
+- [ ] Open the web app (`pnpm dev`; restart it if it was running before this milestone, so Vite loads `layerOrder()`) → the status card shows the Healthy dot, the environment, the Postgres version, the round trip and "Checked now" with the exact time on hover (a screen reader reads it after "now"); it comes from library components only, with no CSP violations or warnings in the console → AC-22, AC-11
+- [ ] Pick Dark in the card's theme switch and reload → it stays dark; pick System → it follows the OS. The switch is in the footer of every state (checking, healthy, failed, not found) → AC-22
+- [ ] Throttle the network in dev tools and reload → after 200 ms the card shows its four labels with skeleton values, marked busy, at the same height as the loaded card → AC-13, AC-22
+- [ ] Stop the api and reload → the card says "The API or the database didn't answer" with Try again; start the api and press it → the status comes back. Open `/nothing-here` → a "Page not found" card with a link that goes back to the status page through the router → AC-22, AC-2
+- [ ] At 375 px wide, the status card keeps a 16 px gutter on each side and the page doesn't scroll sideways → AC-22
+
+### Commands
+- [ ] `pnpm --filter @crm/contracts test` → every value schema parses its valid samples and refuses invalid ones with a sentence that says how to fix it; options, display and history shapes parse → AC-3
+- [ ] `pnpm --filter @crm/ui test` → unit, stories in three engines and the browser tests pass. `fields.browser.test.tsx` walks every attribute type through all six surfaces, checks the registry has one entry per type, and checks what editors emit parses → AC-2, AC-4, AC-5, AC-6, AC-15
+- [ ] `pnpm test:visual` → 178 stories match their Linux baselines in light and dark (356 baselines; the other stories opt out with `screenshot: false`) → AC-16
+- [ ] `pnpm ui:artifact --check` → the previews for every flagged story build and render, and none reaches the network → AC-17
+- [ ] `pnpm --filter @crm/web build && pnpm --filter @crm/web size` → about 162 kB of JavaScript and 5.6 kB of CSS gzipped. Put `NODE_ENV=development` in the root `.env`, build again, and run size → refused as React's development build → AC-18
+- [ ] `pnpm --filter @crm/web test` → `/layers.css` is the first stylesheet the page links, and the layer order holds with the status screen's CSS in a shared chunk → AC-18, AC-22
+- [ ] `pnpm check` → green
+
+### Value sourcing
+- [ ] Today: `dayIn(useNow(), timeZone)` from the provider, never React Aria's reading of the machine's date (DatePicker's today dot and quick picks) → "today"
+- [ ] Keyboard platform: `UiProvider` reads it once from `navigator` (`detectKeyboardPlatform`); Storybook pins `mac` unless the Keyboard toolbar says otherwise → shortcut text
+- [ ] Currency minor units: `Intl.NumberFormat(…).resolvedOptions().minimumFractionDigits` for the code, at most 4 → amount digits
+- [ ] Phone parsing: `libphonenumber-js/max`, loaded on first use by the phone editor, never in the first load → phone values
+- [ ] The status screen: environment, Postgres version, round trip and checked at from `context.data.system.status()` in the route loader; the pending skeleton uses `LOADING_TIMING` (200 ms, then at least 300 ms) through the router's pending defaults → AC-13, AC-22
+
+## Acceptance-criteria coverage (milestone 2)
+- AC-1: every milestone 2 component has its README and stories (`pnpm house-rules`) · AC-2: empty, loading, error, read only and disabled stories · AC-3: contracts value schemas and their tests · AC-4: the registry and the six surface walk · AC-5: editor refusals and the parse check · AC-6: keyboard plays, axe in light and dark · AC-10: overlay motion and keyboard instant opening · AC-11: language, time zone and today from the provider · AC-13: the router's pending timing · AC-14: safe links and image sources · AC-22: the status screen on the library
+- KanbanCard and KanbanColumn move to milestone 3 with the board.
 - Later milestones add their steps here.

@@ -3,6 +3,7 @@ import { expect } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { DescriptionList } from '../DescriptionList/DescriptionList.tsx';
 import { Card } from './Card.tsx';
 
 const meta = {
@@ -41,4 +42,23 @@ export const Sunken: Story = {
       <Card {...args} />
     </Stage>
   ),
+};
+
+/** A page of its own before the app shell, like the status page: the card is the page's main landmark, with an h1. */
+export const Page: Story = {
+  args: { placement: 'page', title: 'CRM', description: 'The API and the database are answering.' },
+  render: (args) => (
+    <Card {...args}>
+      <DescriptionList
+        items={[
+          { term: 'Environment', description: 'development' },
+          { term: 'Postgres', description: '18.1' },
+        ]}
+      />
+    </Card>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('main')).toBeInTheDocument();
+    await expect(canvas.getByRole('heading', { level: 1, name: 'CRM' })).toBeInTheDocument();
+  },
 };

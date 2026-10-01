@@ -1,9 +1,10 @@
-// The root stylesheet comes first: browsers order cascade layers by first
-// appearance, and the minifier drops the layer order statement, so component
-// CSS imported before it would sink below the reset (build.test.ts checks).
+// The root stylesheet comes first. The layer order itself comes from
+// /layers.css, which layerOrder() (vite.config.ts) links ahead of every bundled
+// stylesheet, since Vite links a shared chunk's CSS before this entry's
+// (build.test.ts checks).
 import '@crm/ui/styles.css';
 import { createDataLayer } from '@crm/data';
-import { createToasts, UiProvider } from '@crm/ui';
+import { createToasts, LOADING_TIMING, UiProvider } from '@crm/ui';
 import { createThemeController, safeLocalStorage } from '@crm/ui/theme';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
@@ -35,6 +36,9 @@ const router = createRouter({
   routeTree,
   context: { data, theme },
   defaultPreload: 'intent',
+  // A pending route shows its skeleton on the same timing as everything else (AC-13).
+  defaultPendingMs: LOADING_TIMING.delayMs,
+  defaultPendingMinMs: LOADING_TIMING.minimumMs,
 });
 
 declare module '@tanstack/react-router' {

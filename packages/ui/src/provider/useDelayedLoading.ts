@@ -8,7 +8,7 @@ export interface LoadingTiming {
   readonly minimumMs: number;
 }
 
-/** The product timing: a skeleton only after 200 ms of loading, then for at least 300 ms. */
+/** The product timing: a skeleton only after 200 ms of loading, then for at least 300 ms. The app's router uses it for pending routes too. */
 export const LOADING_TIMING: LoadingTiming = { delayMs: 200, minimumMs: 300 };
 
 /** Set by UiProvider. Storybook sets both to zero so loading stories render their skeleton at once. */
