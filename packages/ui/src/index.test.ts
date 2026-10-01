@@ -12,6 +12,8 @@ describe('@crm/ui', () => {
 
   it('exports exactly the components, the provider, the toast factory and the shared helpers', () => {
     expect(Object.keys(ui).sort()).toEqual([
+      'AttributeDisplay',
+      'AttributeEditor',
       'Avatar',
       'AvatarStack',
       'Badge',
@@ -31,6 +33,7 @@ describe('@crm/ui', () => {
       'Disclosure',
       'DisclosureGroup',
       'EmptyState',
+      'FIELD_TYPES',
       'Field',
       'FileDrop',
       'FileIcon',
@@ -85,10 +88,15 @@ describe('@crm/ui', () => {
       'Variable',
       'VisuallyHidden',
       'arraySource',
+      'createPhoneParser',
       'createToasts',
       'dayIn',
+      'fieldTypeOf',
       'fileIconName',
       'formatFileSize',
+      'isRefusal',
+      'isSystemOnly',
+      'loadPhoneLibrary',
       'quickPicks',
       'safeHref',
       'safeImageSrc',

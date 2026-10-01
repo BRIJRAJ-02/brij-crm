@@ -1,0 +1,23 @@
+/* The name editor: first and last name side by side, under the attribute's name. */
+@layer components {
+  .root {
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
+
+  .legend {
+    padding: 0;
+    margin-block-end: var(--space-4);
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-8);
+  }
+}

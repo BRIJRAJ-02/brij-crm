@@ -14,7 +14,7 @@ export default defineConfig({
       'react-aria',
       '@internationalized/date',
       'lucide-react',
-      'zod',
+      '@crm/contracts > zod',
       'libphonenumber-js/max',
       'react-dom/client',
     ],

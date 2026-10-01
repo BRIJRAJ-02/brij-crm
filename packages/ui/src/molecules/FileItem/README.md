@@ -15,6 +15,7 @@ New. File attributes (#32) and email attachments (#45) list files the same way, 
 
 - The size formats in the provider's language in the largest whole unit ("2.4 MB").
 - While `progress` is under 100 it shows a ProgressBar; `error` replaces it with what failed and what to do.
+- `variant="chip"` is a 20px chip with the icon and the name, for cells and cards (the file type's display).
 - `href` makes the name a link (#32 serves it); `onRemove` adds the remove button.
 
 ## States

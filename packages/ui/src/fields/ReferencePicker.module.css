@@ -1,0 +1,38 @@
+/* ReferencePicker: chosen chips with remove buttons, then the button that
+   opens the search menu. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-6);
+    min-inline-size: 0;
+  }
+
+  .root[data-compact] {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .chosen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .item {
+    display: inline-flex;
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .error {
+    color: var(--danger);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+}

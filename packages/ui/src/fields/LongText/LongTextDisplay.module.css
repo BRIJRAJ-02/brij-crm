@@ -1,0 +1,8 @@
+/* Long text in the record panel, a form or a preview: the whole text with its
+   line breaks. */
+@layer components {
+  .root {
+    overflow-wrap: anywhere;
+    white-space: pre-wrap;
+  }
+}

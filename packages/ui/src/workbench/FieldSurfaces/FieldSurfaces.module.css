@@ -1,0 +1,47 @@
+/* FieldSurfaces: each surface's label beside the value, the cell slot held to
+   a cell's width and height so cutting and "+N" show. */
+@layer components {
+  .root {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: var(--space-8) var(--space-16);
+    align-items: center;
+    margin: 0;
+    padding: var(--space-16);
+  }
+
+  .row {
+    display: contents;
+  }
+
+  .surface {
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .slot {
+    display: flex;
+    align-items: center;
+    min-inline-size: 0;
+    margin: 0;
+  }
+
+  .slot[data-surface='cell'] {
+    box-sizing: border-box;
+    inline-size: calc(var(--size-sidebar) - var(--space-20));
+    block-size: var(--size-row);
+    padding-inline: var(--space-8);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface);
+  }
+
+  .slot[data-surface='card'] {
+    box-sizing: border-box;
+    inline-size: calc(var(--size-sidebar) - var(--space-20));
+    padding: var(--space-8);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+  }
+}

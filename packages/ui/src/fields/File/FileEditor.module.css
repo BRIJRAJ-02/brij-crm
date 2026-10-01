@@ -1,0 +1,9 @@
+/* The file editor: the attached files stacked over the drop zone. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+}

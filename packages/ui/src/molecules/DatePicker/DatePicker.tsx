@@ -155,6 +155,10 @@ interface DateFieldLook {
   readonly size?: 'md' | 'sm';
   /** Opens the calendar on first render (stories and previews). */
   readonly defaultOpen?: boolean;
+  /** Called when focus enters or leaves the whole field (segments, button and calendar). */
+  readonly onFocusChange?: (isFocused: boolean) => void;
+  /** Called when the calendar opens or closes. */
+  readonly onOpenChange?: (isOpen: boolean) => void;
 }
 
 /** Props for DatePicker. */
@@ -194,6 +198,8 @@ function lookProps(look: DateFieldLook) {
     isInvalid: look.error !== undefined,
     ...(look.isLabelHidden === true ? { 'aria-label': look.label } : {}),
     ...(look.defaultOpen === undefined ? {} : { defaultOpen: look.defaultOpen }),
+    ...(look.onFocusChange === undefined ? {} : { onFocusChange: look.onFocusChange }),
+    ...(look.onOpenChange === undefined ? {} : { onOpenChange: look.onOpenChange }),
   };
 }
 

@@ -1,0 +1,14 @@
+/* An AI attribute's editor: its type's editor with Refresh beside it. */
+@layer components {
+  .ai {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  .ai > :first-child {
+    flex: 1;
+    min-inline-size: 0;
+  }
+}

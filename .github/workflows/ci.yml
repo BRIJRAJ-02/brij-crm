@@ -1,7 +1,9 @@
 # The check every push must pass: typecheck, lint, format, CSS, module edges,
-# house rules and tests, the first load budget and the artifact build. Make the
-# `check` and `visual` jobs required status checks on `main` (branch
-# protection), so a red build blocks the merge.
+# house rules and tests, the first load budget and the artifact build; the
+# library's stories in each engine; and its screenshots. Make `check`,
+# `stories (chromium)`, `stories (firefox)`, `stories (webkit)` and `visual`
+# required status checks on `main` (branch protection), so a red build blocks
+# the merge.
 name: CI
 
 on:
@@ -26,20 +28,52 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
-      # The library's stories run as tests in all three engines (spec 0003).
-      # Milestone 1 measured about a minute for them, so one runner is enough;
-      # shard them (`--shard`) once the job passes 10 minutes.
       - name: Read the Playwright version
         id: playwright
         run: echo "version=$(node -p "require('./packages/ui/node_modules/playwright/package.json').version")" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v6
         with:
           path: ~/.cache/ms-playwright
-          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
-      - run: pnpm --filter @crm/ui exec playwright install --with-deps chromium firefox webkit
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
+      - run: pnpm --filter @crm/ui exec playwright install --with-deps chromium
+      # Every package's tests; the library's stories run in their own jobs below.
       - run: pnpm test
+        env:
+          CRM_STORY_BROWSERS: none
       - run: pnpm size
       - run: pnpm ui:artifact --check
+
+  # The library's stories as tests, one engine per job so they run side by
+  # side (spec 0003, AC-15). With milestone 2 one engine took about 5 minutes;
+  # add `--shard` to a job once it passes 10.
+  stories:
+    name: stories (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Read the Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('./packages/ui/node_modules/playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-${{ matrix.browser }}
+      - run: pnpm --filter @crm/ui exec playwright install --with-deps ${{ matrix.browser }}
+      - run: pnpm --filter @crm/ui exec vitest run --project "stories (${{ matrix.browser }})"
+        env:
+          CRM_STORY_BROWSERS: ${{ matrix.browser }}
 
   # Screenshots of every story, light and dark, against the committed
   # baselines. They run in the pinned Playwright image, the same one

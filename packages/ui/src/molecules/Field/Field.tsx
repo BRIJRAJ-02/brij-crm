@@ -20,6 +20,8 @@ export interface FieldProps {
   readonly onBlur?: () => void;
   /** Enter in a single line field (a cell commits on it). */
   readonly onSubmit?: () => void;
+  /** Esc (a cell or a popover cancels on it). */
+  readonly onEscape?: () => void;
   /** Hint text in the empty field: "Set Domain…". Never the only place an instruction lives; use `hint`. */
   readonly placeholder?: string;
   /** A line under the field that helps: the expected format, what it's for. */
@@ -69,6 +71,7 @@ export function Field({
   onChange,
   onBlur,
   onSubmit,
+  onEscape,
   placeholder,
   hint,
   error,
@@ -115,11 +118,12 @@ export function Field({
       {...(defaultValue === undefined ? {} : { defaultValue })}
       {...(onChange === undefined ? {} : { onChange })}
       {...(onBlur === undefined ? {} : { onBlur })}
-      {...(onSubmit === undefined || isMultiline
+      {...(onSubmit === undefined && onEscape === undefined
         ? {}
         : {
             onKeyDown: (event) => {
-              if (event.key === 'Enter') onSubmit();
+              if (event.key === 'Enter' && !isMultiline && onSubmit !== undefined) onSubmit();
+              else if (event.key === 'Escape' && onEscape !== undefined) onEscape();
               else event.continuePropagation();
             },
           })}

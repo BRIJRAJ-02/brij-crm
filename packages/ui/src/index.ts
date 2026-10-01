@@ -48,6 +48,26 @@ export { Tooltip, type TooltipPlacement, type TooltipProps } from './atoms/Toolt
 export { TruncatedText, type TruncatedTextProps } from './atoms/TruncatedText/TruncatedText.tsx';
 export { Variable, type VariableProps } from './atoms/Variable/Variable.tsx';
 export { VisuallyHidden, type VisuallyHiddenProps } from './atoms/VisuallyHidden/VisuallyHidden.tsx';
+export { AttributeDisplay, type AttributeDisplayProps } from './fields/AttributeDisplay.tsx';
+export { AttributeEditor, type AttributeEditorProps } from './fields/AttributeEditor.tsx';
+export { createPhoneParser, loadPhoneLibrary } from './fields/Phone/phone-library.ts';
+export { FIELD_TYPES, fieldTypeOf, isSystemOnly } from './fields/registry.ts';
+export type {
+  AttributeTypeDef,
+  CellChange,
+  DisplayProps,
+  EditorProps,
+  FieldAttribute,
+  FieldDisplay,
+  FieldValue,
+  OperandKind,
+  OperatorDef,
+  PhoneParser,
+  Surface,
+  TextContext,
+  TextRefusal,
+} from './fields/types.ts';
+export { isRefusal } from './fields/values.ts';
 export { HUES, type Hue } from './hue.ts';
 export { arraySource, type ListRange, type ListSource } from './lib/list-source.ts';
 export { safeHref } from './lib/safe-href.ts';

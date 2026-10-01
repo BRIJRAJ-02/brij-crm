@@ -24,6 +24,16 @@ const emulateForcedColors: BrowserCommand<[active: boolean]> = async (context, a
 
 const headless = { enabled: true, headless: true, provider: playwright() } as const;
 
+/**
+ * The engines the stories run in: all three by default. CI runs each engine
+ * as its own job (CRM_STORY_BROWSERS=firefox), and `none` leaves the stories
+ * out of the main test job.
+ */
+const STORY_BROWSERS = (process.env.CRM_STORY_BROWSERS ?? 'chromium,firefox,webkit')
+  .split(',')
+  .map((name) => name.trim())
+  .filter((name): name is 'chromium' | 'firefox' | 'webkit' => ['chromium', 'firefox', 'webkit'].includes(name));
+
 /** `Button.stories.tsx`, `With Shortcut`, `light` → `Button/With-Shortcut-light-linux.png`. */
 function screenshotName(testFileName: string, testName: string, arg: string, platform: string, ext: string): string {
   const component = path.basename(testFileName).replace(/\.stories\.tsx$/, '');
@@ -42,24 +52,28 @@ export default mergeConfig(
           extends: true,
           test: { name: 'unit', environment: 'node', include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'] },
         },
-        {
-          extends: true,
-          plugins: [storybookTest({ configDir: STORYBOOK })],
-          test: {
-            name: 'stories',
-            // One file at a time per browser: files share one page, so focus, the
-            // pointer and emulated media would leak between them.
-            fileParallelism: false,
-            // With three engines on one CI machine, a pointer move now and then
-            // lands before the page is ready for it. A real bug fails every try.
-            retry: process.env.CI === undefined ? 0 : 2,
-            setupFiles: [path.join(STORYBOOK, 'vitest.setup.ts')],
-            browser: {
-              ...headless,
-              instances: [{ browser: 'chromium' }, { browser: 'firefox' }, { browser: 'webkit' }],
-            },
-          },
-        },
+        ...(STORY_BROWSERS.length === 0
+          ? []
+          : [
+              {
+                extends: true,
+                plugins: [storybookTest({ configDir: STORYBOOK })],
+                test: {
+                  name: 'stories',
+                  // One file at a time per browser: files share one page, so focus, the
+                  // pointer and emulated media would leak between them.
+                  fileParallelism: false,
+                  // With three engines on one CI machine, a pointer move now and then
+                  // lands before the page is ready for it. A real bug fails every try.
+                  retry: process.env.CI === undefined ? 0 : 2,
+                  setupFiles: [path.join(STORYBOOK, 'vitest.setup.ts')],
+                  browser: {
+                    ...headless,
+                    instances: STORY_BROWSERS.map((browser) => ({ browser })),
+                  },
+                },
+              },
+            ]),
         {
           extends: true,
           test: {

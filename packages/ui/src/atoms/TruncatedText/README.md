@@ -12,6 +12,7 @@ New. Names, titles and text values in cells, chips and headers must stay on one 
 <TruncatedText>{record.name}</TruncatedText>
 ```
 
+- `isNumeric` uses tabular figures, so numbers line up in a column.
 - It measures with a `ResizeObserver`, so it notices when the column or panel is resized.
 - Screen readers always get the full text: it is all in the page, only cut on screen.
 

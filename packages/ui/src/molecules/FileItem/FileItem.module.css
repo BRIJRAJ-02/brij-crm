@@ -13,6 +13,17 @@
     background: var(--surface-raised);
   }
 
+  .root[data-variant='chip'] {
+    display: inline-flex;
+    gap: var(--space-4);
+    max-inline-size: 100%;
+    block-size: var(--size-chip);
+    padding-block: 0;
+    padding-inline: var(--space-6);
+    border-color: var(--border);
+    border-radius: var(--radius-sm);
+  }
+
   .root[data-state='failed'] {
     border-color: var(--danger);
   }

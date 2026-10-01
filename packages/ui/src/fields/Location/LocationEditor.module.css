@@ -1,0 +1,26 @@
+/* The location editor: one Field per part, stacked, under the attribute's name. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
+
+  .legend {
+    padding: 0;
+    margin-block-end: var(--space-4);
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .error {
+    color: var(--danger);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+}

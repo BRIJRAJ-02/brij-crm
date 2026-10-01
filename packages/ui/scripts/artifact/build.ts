@@ -35,7 +35,7 @@ const HERE = import.meta.dirname;
 const RUNTIME = path.join(HERE, 'preview-runtime.tsx');
 const TEST_STUB = path.join(HERE, 'story-test-stub.ts');
 const NAMESPACE = 'Workspace';
-const GROUP_ORDER = ['Atoms', 'Molecules', 'Modules'];
+const GROUP_ORDER = ['Atoms', 'Molecules', 'Fields', 'Modules'];
 
 const KB = 1024;
 const MB = KB * KB;

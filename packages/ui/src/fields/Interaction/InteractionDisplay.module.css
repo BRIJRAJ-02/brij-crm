@@ -1,0 +1,16 @@
+/* An interaction: the icon, the relative time and who, on one line. */
+@layer components {
+  .root {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
+    min-inline-size: 0;
+    white-space: nowrap;
+  }
+
+  .by {
+    overflow: hidden;
+    color: var(--text-secondary);
+    text-overflow: ellipsis;
+  }
+}

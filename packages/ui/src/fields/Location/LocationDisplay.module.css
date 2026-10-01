@@ -1,0 +1,7 @@
+/* A whole address, one line per part. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+  }
+}

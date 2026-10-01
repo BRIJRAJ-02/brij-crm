@@ -20,6 +20,8 @@ export interface FileItemProps {
   readonly href?: string;
   /** Shows a remove button. */
   readonly onRemove?: () => void;
+  /** `row` (the default) with its size and progress; `chip`, a 20px chip with the icon and name, for cells and cards. */
+  readonly variant?: 'row' | 'chip';
 }
 
 const UNITS = ['byte', 'kilobyte', 'megabyte', 'gigabyte'] as const;
@@ -41,8 +43,16 @@ export function formatFileSize(bytes: number, locale: string): string {
 }
 
 /** One file in a list: its type icon, name and size, upload progress or its error, and remove. */
-export function FileItem({ name, size, contentType, progress, error, href, onRemove }: FileItemProps) {
+export function FileItem({ name, size, contentType, progress, error, href, onRemove, variant = 'row' }: FileItemProps) {
   const { locale } = useFormatSettings();
+  if (variant === 'chip') {
+    return (
+      <span className={styles.root} data-variant="chip">
+        <FileIcon contentType={contentType} size="xs" />
+        <span className={styles.name}>{href === undefined ? name : <Link href={href}>{name}</Link>}</span>
+      </span>
+    );
+  }
   const isUploading = progress !== undefined && progress < 100 && error === undefined;
   return (
     <div className={styles.root} data-state={error === undefined ? (isUploading ? 'uploading' : 'done') : 'failed'}>

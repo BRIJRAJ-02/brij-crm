@@ -1,0 +1,97 @@
+/* The field set's shared pieces: the empty mark in text-tertiary, and a row
+   of value chips with a "+N" chip that opens the rest. */
+@layer components {
+  .empty {
+    color: var(--text-tertiary);
+  }
+
+  .row {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    overflow: hidden;
+  }
+
+  .chip {
+    display: inline-flex;
+    min-inline-size: 0;
+  }
+
+  .more {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    block-size: var(--size-chip);
+    padding-inline: var(--space-6);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-raised);
+    color: var(--text-secondary);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    cursor: pointer;
+    outline: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .more[data-hovered] {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+  }
+
+  .more[data-focus-visible] {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .stack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+
+  .readOnly {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  .readOnlyBox {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    box-sizing: border-box;
+    min-block-size: var(--size-input);
+    padding-inline: var(--space-8);
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
+    color: var(--text);
+  }
+
+  .readOnly[data-surface='cell'] .readOnlyBox {
+    min-block-size: var(--size-control);
+  }
+
+  .readOnlyValue {
+    display: flex;
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .reason {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  @media (forced-colors: active) {
+    .more {
+      border-color: CanvasText;
+    }
+  }
+}

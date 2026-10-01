@@ -79,8 +79,10 @@ export function readStoryCard(fileName: string, code: string): StoryCard | undef
   if (previews.length === 0) return undefined;
 
   const segments = titleNode.text.split('/');
+  // A card's name is a folder on the artifact, so "Currency field" becomes "CurrencyField".
+  const last = segments.at(-1) ?? titleNode.text;
   return {
-    name: segments.at(-1) ?? titleNode.text,
+    name: last.replaceAll(/\s+(\w)/g, (_match, letter: string) => letter.toUpperCase()),
     group: segments[0] ?? titleNode.text,
     title: titleNode.text,
     previews,
