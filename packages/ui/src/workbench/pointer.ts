@@ -27,8 +27,17 @@ export async function hoverUntilHovered(userEvent: Pointer, element: Element): P
   });
 }
 
+/** Waits for fonts and a settled frame, so a font swap can't move the element out from under the pointer once it is there. */
+async function layoutSettled(): Promise<void> {
+  await document.fonts.ready;
+  await new Promise((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(resolve));
+  });
+}
+
 /** Moves the pointer off and then onto `element`, so it gets a fresh enter even if an earlier story left the pointer on that spot. */
 export async function hoverFresh(userEvent: Pointer, element: Element): Promise<void> {
+  await layoutSettled();
   setInteractionModality('pointer');
   await userEvent.unhover(element);
   await userEvent.hover(element);
