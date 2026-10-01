@@ -49,7 +49,10 @@ jobs:
         id: expiry
         run: echo "at=$(date -u -d '+14 days' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
 
-      - name: Database branch, app role
+      # Neon can only hand out passwords for roles it created, and the app login
+      # is created in SQL (so it gets no extra powers). So the branch is opened as
+      # the owner, and the next step gives this branch's app login a fresh password.
+      - name: Database branch
         id: db
         uses: neondatabase/create-branch-action@v6
         with:
@@ -57,19 +60,8 @@ jobs:
           parent_branch: preview-base
           branch_name: ${{ env.DB_BRANCH }}
           database: crm
-          role: crm_app_user
-          expires_at: ${{ steps.expiry.outputs.at }}
-          api_key: ${{ secrets.NEON_API_KEY }}
-
-      - name: Database branch, owner role
-        id: db_owner
-        uses: neondatabase/create-branch-action@v6
-        with:
-          project_id: ${{ vars.NEON_PROJECT_ID }}
-          parent_branch: preview-base
-          branch_name: ${{ env.DB_BRANCH }}
-          database: crm
           role: ${{ vars.NEON_OWNER_ROLE }}
+          expires_at: ${{ steps.expiry.outputs.at }}
           api_key: ${{ secrets.NEON_API_KEY }}
 
       - name: Railway environment
@@ -78,15 +70,21 @@ jobs:
           RAILWAY_API_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
           PROJECT: ${{ vars.RAILWAY_PROJECT_ID }}
           HEAD_REF: ${{ github.head_ref }}
-          DATABASE_URL: ${{ steps.db.outputs.db_url_pooled }}
-          DATABASE_URL_DIRECT: ${{ steps.db.outputs.db_url }}
-          DATABASE_URL_OWNER: ${{ steps.db_owner.outputs.db_url }}
+          OWNER_POOLED: ${{ steps.db.outputs.db_url_pooled }}
+          DATABASE_URL_OWNER: ${{ steps.db.outputs.db_url }}
           APP_URL: https://${{ env.WEB_HOST }}
         run: |
           set -euo pipefail
+          password=$(openssl rand -hex 24)
+          echo "::add-mask::$password"
+          as_app() { node -e 'const u = new URL(process.argv[1]); u.username = "crm_app_user"; u.password = process.argv[2]; console.log(u.href)' "$1" "$password"; }
+          DATABASE_URL=$(as_app "$OWNER_POOLED")
+          DATABASE_URL_DIRECT=$(as_app "$DATABASE_URL_OWNER")
           echo "::add-mask::$DATABASE_URL"
           echo "::add-mask::$DATABASE_URL_DIRECT"
           echo "::add-mask::$DATABASE_URL_OWNER"
+          # This branch's own app login password, never the one preview-base or production uses.
+          DATABASE_URL="$DATABASE_URL" DATABASE_URL_OWNER="$DATABASE_URL_OWNER" node packages/db/scripts/app-login.ts
           railway() { npx -y "$RAILWAY_CLI" "$@"; }
 
           railway link --project "$PROJECT" --environment preview-base
