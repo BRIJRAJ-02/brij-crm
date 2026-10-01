@@ -19,6 +19,7 @@
     "ui:artifact": "node scripts/artifact/build.ts"
   },
   "dependencies": {
+    "@crm/contracts": "workspace:*",
     "@crm/tokens": "workspace:*",
     "lucide-react": "catalog:",
     "react": "catalog:",
