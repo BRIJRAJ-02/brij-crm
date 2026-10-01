@@ -498,6 +498,6 @@ Tracer Bullet: the first two steps push one thin thread through every layer (art
 - [ ] Component library (#4): put the ThemeSwitch in the sidebar footer, reading the controller from router context (`context.theme`). Add component sizes to the artifact as each component is ported. Check focus rings in Windows forced colours mode, where box shadows disappear and the 1px accent border has to carry focus.
 - [ ] Workspaces, members and teams (#23): move the theme choice onto the user's profile through `@crm/data`, keeping `crm.theme` as the first paint cache.
 - [ ] Sign in emails (#23): React Email templates can't read CSS variables. When they arrive, generate a light theme value map in TypeScript from `tokens.json`.
-- [ ] The first feature that lets people pick an icon, stored as a name, loads it through Lucide's dynamic loader inside the Icon atom only.
+- [ ] The first feature that lets people pick an icon, stored as a name, loads it through Lucide's dynamic loader inside the Icon atom only. Replaced by [spec 0003](../0003-component-library/0003-attribute-values.md): object icons come from a curated `ObjectIcon` set in the registry, and the dynamic loader isn't used.
 - [ ] Monitoring (#11): measure the font swap on a first visit, and preload Inter if it shows.
 - [ ] The font files cover Latin only. Names in other scripts (Cyrillic, Greek, Vietnamese, CJK) fall back to the system font. Before the first customers outside Latin script markets, add the artifact's fuller Inter subsets with `unicode-range`.

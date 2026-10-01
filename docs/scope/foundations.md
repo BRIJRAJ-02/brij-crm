@@ -34,10 +34,21 @@ Every visual value as a named token from the very first screen: colour (light an
 - [x] Test it: `/test design tokens`
 Spec [0002](../specs/0002-design-tokens/index.md) · code in `packages/tokens/`, `packages/ui/`, `apps/web/public/theme-boot.js`
 
-### 4. Component library · needs a decision · GA
+### 4. Component library · in-progress · GA
 A large design system built up front for the whole plan, not piece by piece: atoms (button, input, checkbox, avatar, badge, icon, tooltip), molecules (one field editor and display per attribute type, menu, select, date picker, filter row) and modules (app shell and navigation, data grid, board, record panel, timeline, filter and sort builder, command palette, dialogs, presence bar, notification inbox, comment thread, import mapper, charts, schema map canvas).
 **Done when:** every component the 56 features need is in the library with its states (empty, loading, error, read only, disabled) and a preview; each attribute type has exactly one field design, used everywhere; every atom works by keyboard, shows a visible focus ring and meets contrast in light and dark; a grid of 100,000 rows scrolls smoothly; every component records why it exists, and variants are added to existing components rather than new CSS written for the same element.
-- [ ] Design it (spec): `/architect component library`
+- [x] Design it (spec): `/architect component library`
+- [ ] Build it: `/develop component library`
+   - [ ] One component through the whole pipeline: Storybook, tests in three browsers, screenshots, the artifact publish with React 19, lint guards and the size budget (AC-1, AC-2, AC-6, AC-10 to AC-13, AC-15 to AC-19)
+   - [ ] Atoms, overlays, the value schemas in contracts, the field set, molecules, and the status screen on the library (AC-1 to AC-6, AC-10, AC-11, AC-13, AC-14, AC-22)
+   - [ ] The data grid at 100,000 rows, the app shell and view modules, and the board (AC-4, AC-7, AC-8, AC-9, AC-21)
+   - [ ] Rich text, collaboration, mail, data in and out, settings, auth and builder modules (AC-1, AC-2, AC-14)
+   - [ ] Charts, the dashboard, the schema map, and the full publish with design and interaction reviews (AC-1, AC-17, AC-18, AC-20, AC-21)
+- [ ] Verify it: `/check verify component library`
+- [ ] Test it: `/test component library`
+- [ ] Review it (fresh model): `/check review component library`
+- [ ] Document it: `/document component library`
+Spec [0003](../specs/0003-component-library/index.md)
 
 ### 5. Data model · needs a decision · GA
 The engine every feature stands on, modelled on how Attio works (not on Timefix): objects, both standard and custom; records; typed attributes, some of which hold many values (several emails, phones or domains); two way relationship attributes; lists whose entries carry their own attributes; status attributes with stages; and the full history of every value. Workspaces, members and teams sit around it, and notes, tasks, comments and files attach to any record. The attribute research in `docs/research/crm-attributes.md` feeds this spec.

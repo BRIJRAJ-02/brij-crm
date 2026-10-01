@@ -57,7 +57,7 @@ Build one modular API (a monolith split into clear internal modules, not microse
 | UI components | The design system (CRM Workspace) ported into `packages/ui`, built on React Aria Components | The artifact is the visual source of truth. React Aria gives the widgets correct keyboard, focus and screen reader behaviour under our own look. |
 | Icons | Lucide (`lucide-react`) through the Icon atom | The design system's only icon library; size and stroke come from tokens. |
 | Styling | CSS Modules + CSS variables + cascade layers, with Stylelint enforcing tokens | Native CSS, scoped per component, zero runtime. The artifact's `ws-` styles port almost directly, and the build refuses raw values. |
-| Tables | TanStack Table + TanStack Virtual | Headless column, selection and resize logic, plus virtualisation. Every cell renders through the one field design. |
+| Tables | TanStack Table + TanStack Virtual | Headless column, selection and resize logic, plus virtualisation. Every cell renders through the one field design. Amended by [spec 0003](../0003-component-library/0003-data-grid.md): TanStack Virtual only, with column state of our own. |
 | Forms | React Hook Form + the Zod resolver | Mature and fast, with the same Zod schemas the server validates with. |
 | Dates | `@internationalized/date` + `Intl` | Already used by React Aria for calendar dates and time zones, so we don't need a second date library. |
 | Client data layer | TanStack DB behind our own `packages/data` interface | One normalised copy per record, live queries, and optimistic transactions, fed by server queries and patched by change events. It's young and built for in memory collections, so it must pass a windowed query prototype first (see Follow-up). |
@@ -174,6 +174,7 @@ The outbox event shape, channel names, access filtering of events, and handling 
 - `packages/tokens` is generated from its `tokens.json` by a script, so no token is ever hand copied.
 - `packages/ui` ports each component by hand into typed React with CSS Modules. It keeps the `ws-` class prefix through the CSS Modules naming pattern (`ws-[name]-[local]`), so styles stay scoped and readable in dev tools.
 - A new component or variant goes into the artifact and `packages/ui` in the same change, per the house rules.
+- Amended by [spec 0003](../0003-component-library/0003-artifact-publishing.md): components are now written once in `packages/ui` and published to the artifact from code. Tokens still flow from the artifact into code.
 - Because the artifact changes over time, every UI task starts by reading the live artifact (its `project/tokens.json` and component list) with the Artifact tool, and syncs any drift into `packages/tokens` and `packages/ui` first. The token script regenerates `packages/tokens` from a downloaded `tokens.json`. CI can't reach a private artifact, so this sync is part of the agent's UI workflow, not a CI step.
 
 **Deploys and reconnects:** every Railway deploy drops open WebSockets. Centrifugo clients reconnect with jittered backoff (the default, kept on), and the data layer refetches open views if recovery fails. That makes a deploy a short blip, not a storm.
