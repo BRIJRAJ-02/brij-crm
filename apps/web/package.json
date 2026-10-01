@@ -7,7 +7,8 @@
     "build": "vite build",
     "preview": "wrangler dev",
     "deploy": "wrangler deploy",
-    "typecheck": "tsc --noEmit && tsc --noEmit -p worker"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p worker",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@crm/data": "workspace:*",
@@ -23,6 +24,7 @@
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
+    "eslint": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "wrangler": "catalog:"

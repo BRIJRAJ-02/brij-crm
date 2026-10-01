@@ -11,6 +11,18 @@
     "typecheck": {
       "dependsOn": ["^typecheck"]
     },
+    "transit": {
+      "dependsOn": ["^transit"]
+    },
+    "lint": {
+      "dependsOn": ["transit"]
+    },
+    "//#lint:root": {
+      "inputs": [".railway/**", "eslint.config.js", "stylelint.config.js", "packages/config/eslint.js"]
+    },
+    "test": {
+      "dependsOn": ["transit"]
+    },
     "dev": {
       "cache": false,
       "persistent": true

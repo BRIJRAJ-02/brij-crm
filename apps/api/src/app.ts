@@ -30,7 +30,10 @@ export function createApp({ db, env }: { db: Database; env: ApiEnv }) {
     if (SAFE_METHODS.has(c.req.method)) return next();
     const origin = c.req.header('origin');
     if (!origin || !allowedOrigins.has(origin)) {
-      return c.json({ code: 'FORBIDDEN_ORIGIN', message: 'This request came from an origin the API does not accept.' }, 403);
+      return c.json(
+        { code: 'FORBIDDEN_ORIGIN', message: 'This request came from an origin the API does not accept.' },
+        403,
+      );
     }
     return next();
   });

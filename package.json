@@ -17,10 +17,22 @@
     "db:migrate": "pnpm --filter @crm/db migrate",
     "db:app-login": "pnpm --filter @crm/db app-login",
     "db:setup": "pnpm db:migrate && pnpm db:app-login",
-    "boundaries": "turbo boundaries"
+    "boundaries": "turbo boundaries",
+    "lint": "turbo run lint lint:root",
+    "lint:root": "eslint .railway eslint.config.js stylelint.config.js",
+    "lint:css": "stylelint \"**/*.css\" --allow-empty-input",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "house-rules": "node packages/config/scripts/house-rules.ts",
+    "check": "turbo run typecheck lint lint:root && pnpm format:check && pnpm lint:css && pnpm boundaries && pnpm house-rules",
+    "test": "turbo run test"
   },
   "devDependencies": {
+    "eslint": "catalog:",
+    "lefthook": "catalog:",
+    "prettier": "catalog:",
     "railway": "catalog:",
+    "stylelint": "catalog:",
     "turbo": "catalog:",
     "typescript": "catalog:"
   }

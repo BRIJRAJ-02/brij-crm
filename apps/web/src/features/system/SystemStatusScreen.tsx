@@ -42,7 +42,7 @@ export function SystemStatusError() {
     <main>
       <h1>CRM</h1>
       <p role="alert">The API or the database did not answer. Check that both are running.</p>
-      <button type="button" onClick={() => router.invalidate()}>
+      <button type="button" onClick={() => void router.invalidate()}>
         Try again
       </button>
     </main>

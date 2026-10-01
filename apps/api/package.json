@@ -7,7 +7,8 @@
     "dev:worker": "node --env-file-if-exists=../../.env --watch src/worker.ts",
     "start": "node src/server.ts",
     "start:worker": "node src/worker.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
   },
   "dependencies": {
     "@crm/contracts": "workspace:*",
@@ -21,6 +22,7 @@
   "devDependencies": {
     "@crm/config": "workspace:*",
     "@types/node": "catalog:",
+    "eslint": "catalog:",
     "typescript": "catalog:"
   }
 }

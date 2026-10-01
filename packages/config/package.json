@@ -5,6 +5,27 @@
   "exports": {
     "./tsconfig.base.json": "./tsconfig.base.json",
     "./tsconfig.node.json": "./tsconfig.node.json",
-    "./tsconfig.react.json": "./tsconfig.react.json"
+    "./tsconfig.react.json": "./tsconfig.react.json",
+    "./eslint": "./eslint.js",
+    "./stylelint": "./stylelint.js"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@eslint/js": "catalog:",
+    "eslint-plugin-jsx-a11y-x": "catalog:",
+    "eslint-plugin-react-hooks": "catalog:",
+    "globals": "catalog:",
+    "stylelint-config-recommended": "catalog:",
+    "stylelint-declaration-strict-value": "catalog:",
+    "typescript-eslint": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "eslint": "catalog:",
+    "stylelint": "catalog:",
+    "typescript": "catalog:"
   }
 }

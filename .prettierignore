@@ -1,0 +1,13 @@
+# Generated or tool managed
+pnpm-lock.yaml
+skills-lock.json
+**/routeTree.gen.ts
+**/migrations/meta/
+**/dist/
+**/.turbo/
+**/.wrangler/
+
+# Prose and vendored skills keep their own formatting
+**/*.md
+.claude/
+docs/

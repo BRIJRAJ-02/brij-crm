@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "generate": "drizzle-kit generate",
     "migrate": "node --env-file-if-exists=../../.env scripts/migrate.ts",
-    "app-login": "node --env-file-if-exists=../../.env scripts/app-login.ts"
+    "app-login": "node --env-file-if-exists=../../.env scripts/app-login.ts",
+    "lint": "eslint ."
   },
   "dependencies": {
     "drizzle-orm": "catalog:",
@@ -21,6 +22,7 @@
     "@types/node": "catalog:",
     "@types/pg": "catalog:",
     "drizzle-kit": "catalog:",
+    "eslint": "catalog:",
     "typescript": "catalog:"
   }
 }

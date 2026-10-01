@@ -3,7 +3,12 @@ import * as z from 'zod';
 
 const origins = z
   .string()
-  .transform((value) => value.split(',').map((origin) => origin.trim()).filter(Boolean))
+  .transform((value) =>
+    value
+      .split(',')
+      .map((origin) => origin.trim())
+      .filter(Boolean),
+  )
   .pipe(z.array(z.url()).min(1));
 
 const shared = {
