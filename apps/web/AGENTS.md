@@ -28,6 +28,7 @@ pnpm --filter @crm/web typecheck  # the app and the Worker (two tsconfigs)
 ## Conventions
 
 - Screens get data only from the data layer in router context (`context.data`), usually through a route loader. Never `fetch`, and never import `@orpc/*` or `@crm/contracts` here. Types come through `@crm/data`. See `crm-frontend-state`.
+- Lint refuses `className`, `style` and stylesheet imports anywhere in `src/`. If a screen needs a look the library doesn't have, add a variant in `packages/ui`.
 - Every screen file opens with a three line brief comment: Purpose, Main task, Leaves out. See `crm-design-system`.
 - UI comes only from the component library (`packages/ui`, arriving with #4), using tokens only. The current status page has no styles on purpose.
 - A route's error component offers a retry that calls `router.invalidate()`, so it recovers without a page reload.

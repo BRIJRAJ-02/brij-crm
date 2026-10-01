@@ -24,6 +24,7 @@ The one modular API (Hono + oRPC) that every read and write goes through, and th
 pnpm --filter @crm/api dev          # :3000, reads the root .env
 pnpm --filter @crm/api dev:worker   # :3001 (WORKER_PORT)
 pnpm --filter @crm/api typecheck
+pnpm --filter @crm/api test
 docker build -f apps/api/Dockerfile .   # from the repo root
 ```
 

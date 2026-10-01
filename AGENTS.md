@@ -27,7 +27,12 @@ pnpm typecheck
 pnpm boundaries     # module edges: client code may never import server code
 pnpm db:setup       # apply migrations, then create the app login role
 pnpm db:generate    # SQL from the Drizzle schema; review it and commit it
-# Lint, format and tests arrive with /develop tooling and /test
+pnpm check          # everything CI runs: typecheck, lint, format, CSS, boundaries, house rules
+pnpm test           # every package's Vitest suite
+pnpm lint           # ESLint in every workspace, plus the root files
+pnpm format         # Prettier, writing fixes
+pnpm lint:css       # Stylelint
+pnpm house-rules    # CSS module ownership and component READMEs
 ```
 
 Local ports: web 5173 (proxies `/api` to the api), api 3000, worker 3001, Postgres 5433, PgBouncer 6432, Centrifugo 8000 (clients) and 9000 (internal). One `.env` at the repo root, copied from `.env.example`.
@@ -62,14 +67,14 @@ The reviewer agents live in `.claude/agents/`.
 
 ## Tooling
 
-`/audit` chose this, and `/develop tooling` installs it.
+`/audit` chose this, and `/develop tooling` installed it. The shared ESLint and Stylelint configs live in `packages/config`.
 
 - **Lint**: ESLint (flat config) with type aware typescript-eslint rules. The house rules become lint rules: no raw `pg` pool outside `packages/db` (queries go through `withWorkspace()`), no network calls or API client in `apps/web` outside `packages/data`, no vendor SDK imports outside the one wrapper module for that vendor, and no inline styles with raw values.
 - **Format**: Prettier, matching the scaffold (single quotes, semicolons, two space indent).
 - **CSS**: Stylelint refuses raw colour, size, spacing, radius, shadow and motion values (tokens only), `!important`, and selectors that reach outside their component. A house rule check also fails on new CSS for an element the library already has.
-- **Git hooks**: each commit runs Prettier and ESLint on the staged files. Each push runs typecheck, boundaries, full lint and the house rule checks.
-- **CI** (GitHub Actions): every push and pull request runs typecheck, lint, the format check, Stylelint, boundaries, the house rule checks and the tests. A red build blocks the merge. The preview and deploy workflows are already in `.github/workflows/`.
-- **Tests**: Vitest for unit and integration tests (against a real Postgres, never a mocked database), and Playwright for key flows, including two browsers to prove live updates. Two guard tests always exist: every tenant table forces row level security and has a policy, and a cross workspace read returns nothing. `/test` sets up the runners.
+- **Git hooks** (lefthook, `lefthook.yml`): each commit runs Prettier, ESLint and Stylelint on the staged files. Each push runs typecheck, boundaries, full lint and the house rule checks.
+- **CI** (GitHub Actions, `ci.yml`): every push, on any branch, runs typecheck, lint, the format check, Stylelint, boundaries, the house rule checks and the tests. A red build blocks the merge. The preview and deploy workflows are already in `.github/workflows/`.
+- **Tests**: Vitest for unit and integration tests (against a real Postgres, never a mocked database), and Playwright for key flows, including two browsers to prove live updates. Two guard tests always exist: every tenant table forces row level security and has a policy, and a cross workspace read returns nothing. Each package runs its own suite (`vitest run`), with tests beside the source as `*.test.ts`. Playwright arrives with the first flow test.
 
 ## Git
 
