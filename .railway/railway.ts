@@ -3,8 +3,8 @@
 // Secrets stay in Railway variables: preserve() keeps what each environment has.
 import { type BuildConfig, defineRailway, github, preserve, project, service } from 'railway/iac';
 
-// The GitHub repository, as owner/name. Set it once the repo exists.
-const REPO = 'OWNER/crm';
+// The GitHub repository, as owner/name.
+const REPO = 'BRIJRAJ-02/brij-crm';
 
 export default defineRailway(() => {
   const source = github(REPO, { branch: 'main' });
@@ -60,5 +60,5 @@ export default defineRailway(() => {
     },
   });
 
-  return project('crm', { resources: [api, worker, centrifugo] });
+  return project('brij-crm', { resources: [api, worker, centrifugo] });
 });

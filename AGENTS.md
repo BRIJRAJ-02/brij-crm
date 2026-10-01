@@ -5,11 +5,11 @@ A multi tenant CRM sold as SaaS, as flexible as Attio. The plan is in [docs/scop
 ## Stack
 
 - **Language / Runtime**: TypeScript 6 (strict) on Node 24 LTS. The API and worker run their `.ts` files directly on Node, with no build step.
-- **Web**: React 19 single page app on Vite 8 and TanStack Router, served by a Cloudflare Worker that proxies `/api/*`, so the app and the API share one origin.
+- **Web**: React 19 single page app on Vite 8 and TanStack Router, hosted on Vercel, where Routing Middleware proxies `/api/*`, so the app and the API share one origin.
 - **API**: one modular Hono + oRPC + Zod 4 service. Its `worker` entrypoint runs jobs (Graphile Worker) and the outbox relay.
 - **Data**: Postgres 17 on Neon, Drizzle ORM with committed SQL migrations, and forced row level security per workspace. On the client, one data layer (TanStack DB behind `packages/data`).
 - **Realtime**: Centrifugo, one node. Arriving with their features: Better Auth, Hocuspocus + Yjs, Sentry, PostHog, Resend, R2.
-- **Hosts**: Cloudflare (web), Railway (api, worker, centrifugo), Neon (one database branch per preview).
+- **Hosts**: Vercel (web, project `brij-crm`), Railway (api, worker, centrifugo), Neon through Vercel (one database branch per preview), Cloudflare R2 later for files.
 - **Package manager**: pnpm 10 workspaces with one version catalog, and Turborepo 2 for tasks.
 
 ## Build approach
@@ -97,7 +97,7 @@ These skills apply across the repo. Skills for one area are listed in that area'
 - [security-and-hardening](.claude/skills/security-and-hardening/): `addyosmani/agent-skills`, untrusted input, sessions, secrets, dependency audits
 - [security-best-practices](.claude/skills/security-best-practices/): `openai/skills`, security reviews when one is asked for
 - [use-railway](.claude/skills/use-railway/): `railwayapp/railway-skills`, services, environments, variables and deploys
-- [cloudflare](.claude/skills/cloudflare/): `cloudflare/skills`, Workers, static assets, R2
+- [cloudflare](.claude/skills/cloudflare/): `cloudflare/skills`, R2 file storage (from #32)
 - [sentry-fix-issues](.claude/skills/sentry-fix-issues/): `getsentry/sentry-for-ai`, fixing production errors found in Sentry
 - [write-first-design](.claude/skills/write-first-design/): `kemiljk/skills`, a short written brief before an uncertain build
 - [prototype-to-production](.claude/skills/prototype-to-production/): `kemiljk/skills`, hardening failure states, security edges and upkeep

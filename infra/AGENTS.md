@@ -24,7 +24,7 @@ Configuration for the services that aren't our own code: Centrifugo (realtime) a
 - Centrifugo's real variable names differ from the list in spec 0001: `CENTRIFUGO_HTTP_API_KEY`, `CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY`, `CENTRIFUGO_ADMIN_PASSWORD`, `CENTRIFUGO_ADMIN_SECRET` and `CENTRIFUGO_CLIENT_ALLOWED_ORIGINS`.
 - History is lost when Centrifugo restarts, so a client that reconnects then falls back to refetching.
 - The passwords in `01-roles.sql` and `.env.example` are for local use only.
-- `REPO` in `.railway/railway.ts` is still `OWNER/crm`. Set it once the GitHub repo exists.
+- The Railway project is `brij-crm`, deploying from `BRIJRAJ-02/brij-crm` (`REPO` in `.railway/railway.ts`).
 
 ## Related specs
 
