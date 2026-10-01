@@ -3,10 +3,13 @@
   "private": true,
   "type": "module",
   "exports": {
-    "./styles.css": "./src/styles/index.css"
+    "./styles.css": "./src/styles/index.css",
+    "./theme": "./src/theme/theme.ts"
   },
   "scripts": {
-    "lint": "eslint ."
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@crm/tokens": "workspace:*"
@@ -14,6 +17,8 @@
   "devDependencies": {
     "@crm/config": "workspace:*",
     "eslint": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

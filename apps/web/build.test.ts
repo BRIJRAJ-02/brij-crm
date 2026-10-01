@@ -11,6 +11,7 @@ const ROOT = import.meta.dirname;
 const outDir = mkdtempSync(path.join(tmpdir(), 'crm-web-build-'));
 let assets: string[] = [];
 let css = '';
+let html = '';
 
 beforeAll(async () => {
   await build({
@@ -24,6 +25,7 @@ beforeAll(async () => {
     .filter((file) => file.endsWith('.css'))
     .map((file) => readFileSync(path.join(outDir, 'assets', file), 'utf8'))
     .join('\n');
+  html = readFileSync(path.join(outDir, 'index.html'), 'utf8');
 }, 120_000);
 
 afterAll(() => {
@@ -61,5 +63,18 @@ describe('the built stylesheet', () => {
     expect(assets.some((file) => file.startsWith('JetBrainsMono-Variable-latin') && file.endsWith('.woff2'))).toBe(
       true,
     );
+  });
+});
+
+describe('the built page', () => {
+  // AC-7: the saved theme applies before the stylesheet and the app load, so
+  // the other theme never paints first.
+  it('runs theme-boot.js before the stylesheet and the app script', () => {
+    const boot = html.indexOf('<script src="/theme-boot.js"></script>');
+    expect(boot).toBeGreaterThan(0);
+    expect(boot).toBeLessThan(html.search(/<link[^>]+rel="stylesheet"/));
+    expect(boot).toBeLessThan(html.search(/<script type="module"/));
+    expect(assets).not.toContain('theme-boot.js');
+    expect(readdirSync(outDir)).toContain('theme-boot.js');
   });
 });

@@ -1,5 +1,6 @@
 import { createDataLayer } from '@crm/data';
 import '@crm/ui/styles.css';
+import { createThemeController, safeLocalStorage } from '@crm/ui/theme';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
@@ -7,9 +8,25 @@ import { routeTree } from './routeTree.gen.ts';
 
 const data = createDataLayer({ origin: window.location.origin });
 
+// theme-boot.js already applied a saved choice before first paint; this keeps
+// it in step with changes here and in other tabs.
+const theme = createThemeController({
+  storage: safeLocalStorage(window),
+  root: document.documentElement,
+  onStorage: (handler) => {
+    const listener = (event: StorageEvent) => {
+      handler(event.key, event.newValue);
+    };
+    window.addEventListener('storage', listener);
+    return () => {
+      window.removeEventListener('storage', listener);
+    };
+  },
+});
+
 const router = createRouter({
   routeTree,
-  context: { data },
+  context: { data, theme },
   defaultPreload: 'intent',
 });
 

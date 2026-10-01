@@ -3,5 +3,5 @@
   "compilerOptions": {
     "types": ["vite/client", "node"]
   },
-  "include": ["src", "vite.config.ts", "middleware.ts", "middleware.test.ts", "build.test.ts"]
+  "include": ["src", "vite.config.ts", "middleware.ts", "middleware.test.ts", "build.test.ts", "theme-boot.test.ts"]
 }

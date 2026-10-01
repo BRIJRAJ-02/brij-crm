@@ -181,6 +181,8 @@ export function screens({ root }) {
       },
     },
     restrictSyntax([syntax.defaultExport, ...syntax.classes, ...syntax.extensions, syntax.screenStyling]),
+    // Files in public/ ship as is: plain browser scripts, outside any tsconfig.
+    { files: ['public/**/*.js'], languageOptions: { globals: globals.browser, sourceType: 'script' } },
   );
 }
 
