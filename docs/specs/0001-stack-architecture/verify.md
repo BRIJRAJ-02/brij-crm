@@ -1,4 +1,5 @@
 # Verify: Stack & architecture · spec 0001 · updated 2026-10-01
+_Preview check in progress (a throwaway pull request)._
 _Steps derived from the feature's **Done when** in `docs/scope/foundations.md` (spec 0001 is a decision spec with no numbered acceptance criteria, so each step names the Done when part it proves: DW-1 to DW-4). `/check verify` runs these; `/test` locks the durable ones._
 
 - **DW-1** The stack is recorded in a spec.
