@@ -6,6 +6,12 @@
   "engines": {
     "node": ">=24 <25"
   },
+  "browserslist": [
+    "last 2 Chrome versions",
+    "last 2 Edge versions",
+    "last 2 Firefox versions",
+    "last 2 Safari versions"
+  ],
   "scripts": {
     "dev": "docker compose up -d --wait && turbo run dev dev:worker",
     "dev:apps": "turbo run dev dev:worker",
@@ -27,7 +33,11 @@
     "tokens:build": "pnpm --filter @crm/tokens build:tokens",
     "tokens:check": "pnpm --filter @crm/tokens check:tokens",
     "check": "turbo run typecheck lint lint:root && pnpm format:check && pnpm lint:css && pnpm boundaries && pnpm house-rules && pnpm tokens:check",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "test:visual": "pnpm --filter @crm/ui test:visual",
+    "size": "turbo run build --filter=@crm/web && pnpm --filter @crm/web size",
+    "ui:artifact": "pnpm --filter @crm/ui ui:artifact",
+    "storybook": "pnpm --filter @crm/ui storybook"
   },
   "devDependencies": {
     "eslint": "catalog:",

@@ -1,17 +1,21 @@
 // Builds the app the way Vercel does and checks the CSS that ships: the cascade
 // layer order survives Vite's @import inlining (AC-5, AC-12), and the fonts are
 // same origin files under /assets/, never data: URIs the CSP would refuse (AC-11).
+// It also checks the first load (spec 0003, AC-18): the heavy library entries
+// (grid, editor, charts, schema map) never sit in index.html's static graph.
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { build } from 'vite';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { firstLoad, type Manifest } from './first-load.ts';
 
 const ROOT = import.meta.dirname;
 const outDir = mkdtempSync(path.join(tmpdir(), 'crm-web-build-'));
 let assets: string[] = [];
 let css = '';
 let html = '';
+let manifest: Manifest = {};
 
 beforeAll(async () => {
   await build({
@@ -26,6 +30,7 @@ beforeAll(async () => {
     .map((file) => readFileSync(path.join(outDir, 'assets', file), 'utf8'))
     .join('\n');
   html = readFileSync(path.join(outDir, 'index.html'), 'utf8');
+  manifest = JSON.parse(readFileSync(path.join(outDir, '.vite', 'manifest.json'), 'utf8')) as Manifest;
 }, 120_000);
 
 afterAll(() => {
@@ -76,5 +81,22 @@ describe('the built page', () => {
     expect(boot).toBeLessThan(html.search(/<script type="module"/));
     expect(assets).not.toContain('theme-boot.js');
     expect(readdirSync(outDir)).toContain('theme-boot.js');
+  });
+});
+
+describe('the first load', () => {
+  const HEAVY_ENTRY = /packages\/ui\/src\/(grid|editor|charts|schema-map)\.ts$/;
+
+  it('starts from index.html and follows only static imports', () => {
+    const { chunks, js } = firstLoad(manifest);
+    expect(chunks[0]).toBe('index.html');
+    expect(js.length).toBeGreaterThan(0);
+    for (const key of chunks) expect(manifest[key]?.isDynamicEntry ?? false).toBe(false);
+  });
+
+  it('never loads the grid, editor, charts or schema map chunk up front', () => {
+    const { chunks } = firstLoad(manifest);
+    const heavy = chunks.filter((key) => HEAVY_ENTRY.test(manifest[key]?.src ?? key));
+    expect(heavy).toEqual([]);
   });
 });

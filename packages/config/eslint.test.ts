@@ -74,6 +74,11 @@ describe('screens preset (apps/web)', () => {
       'src/driver.ts': "import pg from 'pg';\nexport const pool = pg;\n",
       'src/vendor.ts': "import * as Sentry from '@sentry/react';\nexport const sentry = Sentry;\n",
       'src/icon.ts': "import { Building } from 'lucide-react';\nexport const icon = Building;\n",
+      'src/aria.ts': "import { Button } from 'react-aria-components';\nexport const b = Button;\n",
+      'src/tiptap.ts': "import { Editor } from '@tiptap/react';\nexport const e = Editor;\n",
+      'src/yjs.ts': "import * as Y from 'yjs';\nexport const y = Y;\n",
+      'src/value-atom.ts': "import { Tag } from '@crm/ui';\nexport const t = Tag;\n",
+      'src/library.ts': "import { Button } from '@crm/ui';\nexport const b = Button;\n",
       'src/styles.ts': "import './screen.css';\nexport const loaded = true;\n",
       'src/Styled.tsx': 'export function Styled() {\n  return <p className="title">Hi</p>;\n}\n',
       'src/Inline.tsx': "export function Inline() {\n  return <p style={{ '--gap': '1' }}>Hi</p>;\n}\n",
@@ -137,6 +142,19 @@ describe('screens preset (apps/web)', () => {
 
   it('refuses lucide-react outside the Icon registry', () => {
     expect(rulesFor(messages, 'src/icon.ts')).toContain('@typescript-eslint/no-restricted-imports');
+  });
+
+  it.each([
+    ['React Aria', 'src/aria.ts'],
+    ['Tiptap', 'src/tiptap.ts'],
+    ['Yjs', 'src/yjs.ts'],
+  ])('refuses %s in a screen, since UI building blocks live in packages/ui', (_name, file) => {
+    expect(rulesFor(messages, file)).toContain('@typescript-eslint/no-restricted-imports');
+  });
+
+  it('refuses a value atom in a screen, which renders values through AttributeDisplay', () => {
+    expect(messagesFor(messages, 'src/value-atom.ts').join()).toMatch(/through AttributeDisplay/);
+    expect(messagesFor(messages, 'src/library.ts').join()).not.toMatch(/AttributeDisplay/);
   });
 
   it('refuses a stylesheet of the screen’s own', () => {
@@ -252,4 +270,63 @@ describe('client preset (packages/data, packages/ui)', () => {
   it('refuses a database driver in client code', () => {
     expect(rulesFor(messages, 'src/driver.ts')).toContain('no-restricted-imports');
   });
+});
+
+describe('client preset for the component library (packages/ui)', () => {
+  let messages: Messages;
+
+  beforeAll(async () => {
+    const root = createWorkspace({
+      'src/Aria.tsx':
+        "import { Button } from 'react-aria-components';\nimport * as Y from 'yjs';\nexport const doc = Y;\nexport function Aria() {\n  return <Button />;\n}\n",
+      'src/Copy.tsx': 'export function Copy() {\n  return <p>Save changes</p>;\n}\n',
+      'src/Label.tsx': 'export function Label() {\n  return <button aria-label="Close" />;\n}\n',
+      'src/Expression.tsx': "export function Expression() {\n  return <input placeholder={'Search'} />;\n}\n",
+      'src/Strings.tsx':
+        "const strings = { close: 'Close' } as const;\nexport function Strings({ n }: { n: number }) {\n  return <button aria-label={strings.close}>{n} ×</button>;\n}\n",
+      'src/Thing.stories.tsx': 'export default { title: "Thing" };\nexport const Plain = () => <p>Any copy here</p>;\n',
+      'src/fetches.ts': "export const load = (): Promise<Response> => fetch('/api/records');\n",
+      'src/data.ts': "import { createDataLayer } from '@crm/data';\nexport const make = createDataLayer;\n",
+      '.storybook/preview.tsx': 'export default { tags: [] };\n',
+    });
+    messages = await lintWorkspace(root, client({ root, library: true }));
+  }, 60_000);
+
+  it('lets the library use the UI building blocks and Yjs', () => {
+    expect(rulesFor(messages, 'src/Aria.tsx')).not.toContain('@typescript-eslint/no-restricted-imports');
+  });
+
+  it.each([
+    ['text in markup', 'src/Copy.tsx'],
+    ['a literal aria-label', 'src/Label.tsx'],
+    ['a literal placeholder in braces', 'src/Expression.tsx'],
+  ])('refuses %s, since copy lives in strings.ts', (_name, file) => {
+    expect(messagesFor(messages, file).join()).toMatch(/strings\.ts/);
+  });
+
+  it('allows copy read from strings.ts, and numbers and symbols in markup', () => {
+    expect(messagesFor(messages, 'src/Strings.tsx').join()).not.toMatch(/strings\.ts/);
+  });
+
+  it('lets stories carry copy and a default export', () => {
+    expect(messagesFor(messages, 'src/Thing.stories.tsx').join()).not.toMatch(/strings\.ts|Use a named export/);
+    expect(messagesFor(messages, '.storybook/preview.tsx').join()).not.toMatch(/Use a named export/);
+  });
+
+  it('refuses network calls and the data layer in the library', () => {
+    expect(rulesFor(messages, 'src/fetches.ts')).toContain('no-restricted-globals');
+    expect(messagesFor(messages, 'src/data.ts').join()).toMatch(/makes no network calls/);
+  });
+});
+
+describe('client preset for the data layer (packages/data)', () => {
+  it('lets the data layer use Yjs for live sessions, but not React Aria', async () => {
+    const root = createWorkspace({
+      'src/session.ts': "import * as Y from 'yjs';\nexport const doc = Y;\n",
+      'src/aria.ts': "import { useButton } from 'react-aria';\nexport const b = useButton;\n",
+    });
+    const messages = await lintWorkspace(root, client({ root, collaboration: true }));
+    expect(rulesFor(messages, 'src/session.ts')).not.toContain('@typescript-eslint/no-restricted-imports');
+    expect(rulesFor(messages, 'src/aria.ts')).toContain('@typescript-eslint/no-restricted-imports');
+  }, 60_000);
 });

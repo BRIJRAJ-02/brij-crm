@@ -1,13 +1,15 @@
 // The one Stylelint config for the repo, loaded by the root stylelint.config.js.
 // It enforces the CSS house rules: tokens only (no raw colour, size, spacing,
 // radius, shadow, motion, opacity, scale or layer values), only known tokens,
-// breakpoints from tokens, no !important, and styles that stay inside their
-// own component. packages/tokens is exempt, since it defines the values.
+// breakpoints from tokens, system colours only for forced colours, no
+// !important, and styles that stay inside their own component. packages/tokens
+// is exempt, since it defines the values.
 import path from 'node:path';
 import recommended from 'stylelint-config-recommended';
 import strictValue from 'stylelint-declaration-strict-value';
 import unknownCustomProperties from 'stylelint-value-no-unknown-custom-properties';
 import { breakpointTokens } from './stylelint/breakpoint-tokens.js';
+import { SYSTEM_COLORS, systemColors } from './stylelint/system-colors.js';
 
 // Absolute, so Stylelint gives the same answer run from any folder. Read by
 // path, since @crm/tokens already depends on this package.
@@ -51,16 +53,20 @@ const KEYWORDS = [
 ];
 
 // opacity and scale also take 0 and 1 (hidden and shown, none and full size),
-// without loosening line-height: 1 or any other property.
+// without loosening line-height: 1 or any other property. System colours pass
+// here, and crm/system-colors keeps them inside forced colours.
+// Shadows may stack tokens (a shadow plus the focus ring), which the rule sees
+// as `var(--shadow-md),` before the comma.
 const IGNORED_VALUES = {
-  '': KEYWORDS,
+  '': [...KEYWORDS, ...SYSTEM_COLORS],
   opacity: [...KEYWORDS, '1'],
   scale: [...KEYWORDS, '1'],
+  'box-shadow': [...KEYWORDS, '/^var\\(--[\\w-]+\\),$/'],
 };
 
 /** The repo's Stylelint config, re-exported by the root stylelint.config.js. */
 export const stylelintConfig = {
-  plugins: [strictValue, unknownCustomProperties, breakpointTokens],
+  plugins: [strictValue, unknownCustomProperties, breakpointTokens, systemColors],
   ignoreFiles: ['**/node_modules/**', '**/dist/**', 'packages/tokens/**'],
   rules: {
     ...recommended.rules,
@@ -87,6 +93,7 @@ export const stylelintConfig = {
     ],
     'csstools/value-no-unknown-custom-properties': [true, { importFrom: [TOKENS_CSS] }],
     'crm/breakpoint-tokens': true,
+    'crm/system-colors': true,
     'declaration-no-important': true,
     'selector-max-id': 0,
     // One level of descendant at most, so no component styles another's insides.

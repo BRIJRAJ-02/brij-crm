@@ -9,14 +9,11 @@ The CRM has one design system, built up front and large on purpose. Every screen
 
 ## Where it lives
 
-- **Source of truth:** the design system artifact at https://claude.ai/artifact/XYoLqU7b2SFfga9FWwqaPh?sk=NUiJdAv_8B9f6a2uJRrpBg. Read its README first with the Artifact tool (`action: "read"`, `path: "project/README.md"`). It covers copy style, layout, states and icons. Always use this exact link. The design system keeps updating as the product needs it, so read the live version at the start of every UI task, and never rely on a copy you read earlier or on the component list below. Before you use a component, read its card at `project/components/<Name>/README.md` to see what it expects, when to use it, and its do's and don'ts.
-- **In code:** the component library module that the stack spec defines (see `docs/specs/`). The code copy follows the artifact. If they disagree, the artifact wins and the code gets fixed.
-- **What exists today** (33 components, as of version 8):
-  - Atoms: Button, Tag, Badge, Avatar, RecordChip, LinkChip, StatusDot, Rating, Checkbox, Radio, Switch, Kbd, Icon, Skeleton.
-  - Molecules: Field, Select, SegmentedControl, EmptyState, Tabs, Toolbar, Menu, Toast, KanbanCard, DatePicker.
-  - Modules: Sidebar, DataTable, AttributeList, ActivityFeed, Modal, CommandPalette, FilterBuilder, EmailComposer, NoteEditor.
+The design system has two halves, and each flows one way (spec 0003):
 
-  Check the artifact for the current list, because it grows. Read its **Changelog** section at the start of each UI task, to see what changed since the code was last synced (renamed tokens, new components, changed behaviour), and bring `packages/tokens` and `packages/ui` up to date first.
+- **Tokens and the brand book live in the artifact** at https://claude.ai/artifact/XYoLqU7b2SFfga9FWwqaPh?sk=NUiJdAv_8B9f6a2uJRrpBg. Always use this exact link. Read its README first with the Artifact tool (`action: "read"`, `path: "project/README.md"`): copy style, layout, states and icons. Tokens come from its `project/tokens.json` into `packages/tokens` (`pnpm tokens:build`, spec 0002). Read its **Changelog** at the start of each UI task, and bring `packages/tokens` up to date first if the tokens changed.
+- **Components live in code**, in `packages/ui`, and are published to the artifact from there (`pnpm ui:artifact`, then the agent publishes after the engineer's OK). The code is the source of truth for every component: its look, its states, its README. The artifact shows what the code ships. Edits someone makes to a component's README on the artifact page are merged back into the code README before the next publish; everything else on the page (bundle, styles, previews) is overwritten by the next publish.
+- **Before you use a component**, read its README in `packages/ui/src/<kind>/<Name>/README.md` (what it is for, its states, its keys, how its API differs from the artifact's) and its stories in Storybook (`pnpm storybook`; the Storybook MCP server lets you read stories and props while it runs). The full list of what the library will hold is the inventory in `docs/specs/0003-component-library/0003-inventory.md`; what exists today is what `packages/ui/src/index.ts` exports.
 - **Use the right control:**
   - Checkbox is a real checkbox with indeterminate support, used for "select all" in tables.
   - Select shows its options as tags, status dots or people, depending on the attribute.
@@ -24,7 +21,7 @@ The CRM has one design system, built up front and large on purpose. Every screen
   - Field covers long text too: a textarea that grows, with a character count.
   - ThemeSwitch (Light / Dark / System) lives in the sidebar footer.
 - **States:** Field, Button and DataTable have their state props built in. Other components (the board, the feed, menus) get their loading, empty, error and no access states by combining Skeleton and EmptyState, so reach for those two before inventing a state.
-- **Which control per attribute type:** the Field card has the table of which display and which editor each attribute type uses. Follow it exactly.
+- **Which control per attribute type:** the field set (spec 0003, `0003-attribute-values.md`) decides which display and which editor each attribute type uses. Follow it exactly.
 
 ## The look, in one paragraph
 
@@ -46,7 +43,7 @@ Use those numbers through their tokens, never as literals.
 5. **Think before a new component.** Before creating anything:
    1. Search the library and reuse.
    2. If nothing fits, add a variant to the closest component.
-   3. Only then create a new one. Write down why in its README (what it's for, and why neither of the first two worked), add it to the design system artifact as well as the code, and give it every state.
+   3. Only then create a new one, in `packages/ui`. Write down why in its README (what it's for, and why neither of the first two worked), give it every state and a story for each, and publish it to the artifact with the next `pnpm ui:artifact`.
 6. **Every component has every state:** empty, loading, error, read only and disabled, plus hover, focus and selected where they apply. A CRM spends much of its life in these states (no records yet, still loading a million rows, no permission).
 7. **Accessible by default.** Everything works by keyboard, focus is visible, and contrast holds in both themes: every text colour, including placeholders, meets 4.5:1, and control outlines meet 3.5:1. If a token is ever flagged as failing, don't "fix" it quietly; raise it, because changing a token changes every screen.
 8. **Motion follows the design system's tokens and rules** (derived from `emil-design-eng`):
@@ -60,7 +57,7 @@ Use those numbers through their tokens, never as literals.
      - Hover styles apply only under `@media (hover: hover) and (pointer: fine)`.
      - Reduced motion keeps fades and drops movement.
    - **Exit animations live in `packages/ui`.** The artifact animates menus and dialogs in but not out, because exits need real open and close state. The code version must add them, using the exit duration token.
-9. **Icons are Lucide** (https://lucide.dev/icons/), the project's only icon library. All 1,857 icons from Lucide 1.49 ship in the design system, so any name on lucide.dev works through the Icon atom, with size and stroke from tokens. Use the current 1.x names (`building-2`, `circle-help`, `trash-2`); the old names only survive as aliases. Never draw or import icons from anywhere else. One library keeps the line weight consistent, and one atom means a size or stroke change touches one place.
+9. **Icons are Lucide** (https://lucide.dev/icons/), the project's only icon library, drawn through the Icon atom with size and stroke from tokens. In code, `packages/ui/src/atoms/Icon/icons.ts` is the registry: add one import and one line for an icon you need, under its current 1.x lucide.dev name (`building`, `circle-question-mark`, `trash`). People pick object icons from the curated `ObjectIcon` set only. Never draw or import icons from anywhere else. One library keeps the line weight consistent, and one atom means a size or stroke change touches one place.
 
 ## CSS that scales
 
@@ -96,7 +93,7 @@ Every screen gets a design engineering pass, not just a visual check. The instal
 - [ ] No raw colour, size, spacing or motion values; tokens only.
 - [ ] Only library components on the screen; no one off markup or styles.
 - [ ] Attribute values render through their one field design.
-- [ ] Any new component or variant is justified in writing and added to the artifact.
+- [ ] Any new component or variant is justified in writing, has a story per state, and goes to the artifact with the next publish.
 - [ ] Empty, loading, error, read only and disabled states exist.
 - [ ] Keyboard, focus and contrast checked in light and dark.
 - [ ] Styles are scoped, layered and variable driven, with no `!important` and no global selectors.

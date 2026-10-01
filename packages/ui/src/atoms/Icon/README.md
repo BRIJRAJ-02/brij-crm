@@ -23,9 +23,21 @@ Each attribute type has one icon, used everywhere that type appears: `globe` dom
 
 Add one import and one line to `icons.ts`, under its lucide.dev name. It is the only file allowed to import `lucide-react` (ESLint enforces it), so every icon the app ships is listed there, and nothing else ships.
 
+## Picking an icon for an object
+
+When people choose an icon for an object or a list (#13), `IconPicker` (milestone 2) offers only the curated `ObjectIcon` set: about 150 Lucide names, listed in `@crm/contracts/values` and imported in `icons.ts`. Lucide's dynamic loader isn't used, because it would emit about 1,500 chunks.
+
+## States
+
+None: it takes its colour and size from its props and its parent.
+
+## Keyboard
+
+It takes no focus. Put a labelled icon inside a Button when it must be pressed.
+
 ## Why it differs from the artifact's API
 
 - The artifact takes a pixel `size` and a `tileSize`. Code takes token names, because no component may hold a raw number.
 - `tone` replaces the artifact's `ws-icon-muted` and `ws-icon-ai` classes, because callers never pass a class name.
 - Nothing else passes through to the `svg`: one look, set here.
-- The artifact accepts any of the 1,857 Lucide names as a string. Here the registry lists the icons in use, so the bundle carries only those. A feature that lets people pick their own icon will load it through Lucide's dynamic loader, inside this atom only.
+- The artifact accepts any of the 1,857 Lucide names as a string. Here the registry lists the icons in use, so the bundle carries only those. The curated `ObjectIcon` set joins the registry with `IconPicker` in milestone 2.

@@ -5,12 +5,19 @@
 //      exactly one file, in the same folder.
 //   3. Every component with styles records why it exists, in a README.md
 //      beside it (the "think before a new component" rule).
+//   4. Every library component folder (atoms, molecules, modules, fields) has
+//      its README.md and a stories file, one story per state (spec 0003).
+//   5. Library names are unique: CSS module names, since class names are
+//      ws-<component>-<local> with no hash, and story titles, since story ids
+//      come from them.
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const ROOT = path.resolve(import.meta.dirname, '../../..');
 const WORKSPACE_DIRS = ['apps', 'packages'];
-const SKIP = new Set(['node_modules', 'dist', '.turbo', '.vercel']);
+const SKIP = new Set(['node_modules', 'dist', '.turbo', '.vercel', 'storybook-static', '.artifact']);
+const LIBRARY = path.join('packages', 'ui', 'src');
+const COMPONENT_KINDS = ['atoms', 'molecules', 'modules', 'fields'];
 const IMPORT_SPECIFIER = /(?:import|from)\s*['"]([^'"]+\.module\.css)['"]/g;
 // Tests own no styles, and their fixtures quote import lines as plain strings.
 const SOURCE_FILE = /(?<!\.test)\.tsx?$/;
@@ -70,11 +77,62 @@ function componentsExplainThemselves(files: string[]): string[] {
     .map((dir) => `${dir}: add a README.md saying what this component is for and why no existing one fit.`);
 }
 
+/** Folders like packages/ui/src/atoms/Button: one component (or one attribute type's field) each. */
+function libraryComponentDirs(files: string[]): string[] {
+  const dirs = files
+    .map((file) => path.dirname(file))
+    .filter((dir) => {
+      const parts = path.relative(LIBRARY, dir).split(path.sep);
+      return !dir.startsWith('..') && parts.length === 2 && COMPONENT_KINDS.includes(parts[0] ?? '');
+    })
+    .filter((dir) => dir.startsWith(LIBRARY + path.sep));
+  return [...new Set(dirs)];
+}
+
+function componentsHaveStoriesAndReadmes(files: string[]): string[] {
+  return libraryComponentDirs(files).flatMap((dir) => {
+    const own = files.filter((file) => path.dirname(file) === dir);
+    return [
+      ...(own.includes(path.join(dir, 'README.md'))
+        ? []
+        : [`${dir}: add a README.md: what it is for, why it exists, its states and keys.`]),
+      ...(own.some((file) => file.endsWith('.stories.tsx'))
+        ? []
+        : [`${dir}: add a stories file with a story for each of its states.`]),
+    ];
+  });
+}
+
+/** Problems for any name that appears more than once, with the files that share it. */
+function duplicates(named: [name: string, file: string][], what: string): string[] {
+  const byName = new Map<string, string[]>();
+  for (const [name, file] of named) byName.set(name, [...(byName.get(name) ?? []), file]);
+  return [...byName.entries()]
+    .filter(([, owners]) => owners.length > 1)
+    .map(([name, owners]) => `${owners.join(', ')}: ${what} "${name}" is used more than once. Rename one.`);
+}
+
+function libraryNamesAreUnique(files: string[]): string[] {
+  const inLibrary = files.filter((file) => file.startsWith(LIBRARY + path.sep));
+  const modules = inLibrary
+    .filter((file) => file.endsWith('.module.css'))
+    .map((file): [string, string] => [path.basename(file, '.module.css'), file]);
+  const titles = inLibrary
+    .filter((file) => file.endsWith('.stories.tsx'))
+    .flatMap((file): [string, string][] => {
+      const title = /\btitle:\s*['"]([^'"]+)['"]/.exec(readFileSync(path.join(ROOT, file), 'utf8'))?.[1];
+      return title === undefined ? [] : [[title, file]];
+    });
+  return [...duplicates(modules, 'the CSS module name'), ...duplicates(titles, 'the story title')];
+}
+
 const files = listFiles();
 const problems = [
   ...screensHaveNoCss(files),
   ...cssModulesStayInTheirComponent(files),
   ...componentsExplainThemselves(files),
+  ...componentsHaveStoriesAndReadmes(files),
+  ...libraryNamesAreUnique(files),
 ];
 
 if (problems.length > 0) {

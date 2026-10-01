@@ -1,0 +1,181 @@
+/* Button, ToggleButton and SplitButton: 26px controls with a 13px medium label.
+   Every look is a data attribute declared once, here. States read React Aria's
+   attributes (data-hovered, data-pressed, data-focus-visible, data-disabled,
+   data-pending, data-selected). */
+@layer components {
+  .root {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    gap: var(--space-6);
+    block-size: var(--size-control);
+    padding-block: 0;
+    padding-inline: var(--space-8);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-control);
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    white-space: nowrap;
+    cursor: pointer;
+    outline: none;
+    user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      border-color var(--duration-hover) var(--ease-hover),
+      color var(--duration-hover) var(--ease-hover),
+      scale var(--duration-press) var(--ease-out);
+  }
+
+  .label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .keys {
+    display: inline-flex;
+    gap: var(--space-2);
+  }
+
+  /* Sizes */
+  .root[data-size='lg'] {
+    block-size: var(--size-input);
+  }
+
+  .root[data-icon-only] {
+    inline-size: var(--size-control);
+    padding-inline: 0;
+  }
+
+  .root[data-icon-only][data-size='lg'] {
+    inline-size: var(--size-input);
+  }
+
+  /* Variants */
+  .root[data-variant='primary'] {
+    border-color: var(--accent-hover);
+    background: var(--accent);
+    box-shadow: var(--shadow-primary);
+    color: var(--on-accent);
+  }
+
+  .root[data-variant='ghost'] {
+    border-color: transparent;
+    background: transparent;
+    box-shadow: none;
+    color: var(--text-secondary);
+  }
+
+  .root[data-variant='dashed'] {
+    border-style: dashed;
+    border-color: var(--control-border);
+    background: transparent;
+    box-shadow: none;
+    color: var(--text-secondary);
+  }
+
+  /* States. Selected (a ToggleButton held down) carries an accent edge, which
+     holds 3:1 against the surface, the way the artifact marks a pressed day. */
+  .root[data-selected] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    box-shadow: none;
+    color: var(--text);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root:not([data-selected])[data-hovered] {
+      background: var(--surface-hover);
+    }
+
+    .root[data-variant='primary'][data-hovered] {
+      background: var(--accent-hover);
+    }
+
+    .root[data-variant='ghost'][data-hovered],
+    .root[data-variant='dashed'][data-hovered] {
+      color: var(--text);
+    }
+  }
+
+  .root[data-pressed] {
+    scale: var(--scale-press);
+  }
+
+  .root[data-focus-visible] {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .root[data-variant='primary'][data-focus-visible] {
+    box-shadow: var(--shadow-primary), var(--shadow-focus);
+  }
+
+  .root[data-disabled] {
+    opacity: var(--opacity-disabled);
+    cursor: default;
+  }
+
+  .root[data-pending] {
+    opacity: var(--opacity-busy);
+    cursor: progress;
+  }
+
+  /* SplitButton: two buttons sharing one edge */
+  .split {
+    display: inline-flex;
+    flex: none;
+  }
+
+  .root[data-split='start'] {
+    border-start-end-radius: 0;
+    border-end-end-radius: 0;
+  }
+
+  .root[data-split='end'] {
+    margin-inline-start: calc(var(--border-width-hairline) * -1);
+    padding-inline: var(--space-4);
+    border-start-start-radius: 0;
+    border-end-start-radius: 0;
+  }
+
+  .root[data-split='end'][data-variant='primary'] {
+    border-inline-start-color: var(--on-accent-kbd);
+  }
+
+  .root[data-split][data-focus-visible] {
+    position: relative;
+    z-index: var(--z-raised);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root[data-pressed] {
+      scale: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border-color: ButtonText;
+    }
+
+    .root[data-focus-visible] {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: var(--border-width-hairline);
+    }
+
+    .root[data-selected] {
+      background: Highlight;
+      color: HighlightText;
+    }
+
+    .root[data-disabled] {
+      border-color: GrayText;
+      color: GrayText;
+    }
+  }
+}

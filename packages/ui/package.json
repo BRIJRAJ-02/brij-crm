@@ -5,24 +5,45 @@
   "exports": {
     ".": "./src/index.ts",
     "./styles.css": "./src/styles/index.css",
-    "./theme": "./src/theme/theme.ts"
+    "./theme": "./src/theme/theme.ts",
+    "./vite": "./src/vite.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run --project stories --project unit --project browser",
+    "test:unit": "vitest run --project unit",
+    "test:visual": "node scripts/test-visual.ts",
+    "storybook": "storybook dev --port 6006 --no-open",
+    "build-storybook": "storybook build --output-dir storybook-static",
+    "ui:artifact": "node scripts/artifact/build.ts"
   },
   "dependencies": {
     "@crm/tokens": "workspace:*",
     "lucide-react": "catalog:",
-    "react": "catalog:"
+    "react": "catalog:",
+    "react-aria-components": "catalog:"
   },
   "devDependencies": {
     "@crm/config": "workspace:*",
+    "@storybook/addon-a11y": "catalog:",
+    "@storybook/addon-docs": "catalog:",
+    "@storybook/addon-mcp": "catalog:",
+    "@storybook/addon-vitest": "catalog:",
+    "@storybook/react-vite": "catalog:",
+    "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "@vitest/browser": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
+    "axe-core": "catalog:",
     "eslint": "catalog:",
+    "playwright": "catalog:",
     "react-dom": "catalog:",
+    "rolldown": "catalog:",
+    "rolldown-plugin-dts": "catalog:",
+    "storybook": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",
     "vitest": "catalog:"

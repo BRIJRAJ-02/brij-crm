@@ -1,4 +1,8 @@
 {
   "extends": "@crm/config/tsconfig.react.json",
-  "include": ["src"]
+  "compilerOptions": {
+    // Stories, the Storybook config and the artifact build run beside Node tools.
+    "types": ["vite/client", "node"]
+  },
+  "include": ["src", ".storybook/*.ts", ".storybook/*.tsx", "scripts", "vite.config.ts", "vitest.config.ts"]
 }

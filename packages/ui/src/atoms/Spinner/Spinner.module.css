@@ -1,0 +1,31 @@
+/* The Spinner atom: the loader icon, one turn per duration-spin. Reduced motion
+   keeps a slow pulse and drops the turning. */
+@layer components {
+  .root {
+    display: inline-flex;
+    flex: none;
+  }
+
+  .spin {
+    display: inline-flex;
+    animation: spin var(--duration-spin) linear infinite;
+  }
+
+  @keyframes spin {
+    to {
+      rotate: 1turn;
+    }
+  }
+
+  @keyframes pulse {
+    50% {
+      opacity: var(--opacity-pulse);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .spin {
+      animation: pulse var(--duration-pulse) var(--ease-in-out) infinite;
+    }
+  }
+}

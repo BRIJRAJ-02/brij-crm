@@ -1,0 +1,10 @@
+/* The frame every story renders in: the page surface, with room for focus rings
+   and shadows inside the screenshot. */
+@layer components {
+  .root {
+    display: flow-root;
+    padding: var(--space-16);
+    background: var(--surface);
+    color: var(--text);
+  }
+}

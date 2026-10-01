@@ -1,0 +1,16 @@
+/* The stage stories and previews sit on: padding and a wrapping row, or a column. */
+@layer components {
+  .root {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-12);
+    padding: var(--space-16);
+  }
+
+  .root[data-direction='column'] {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: flex-start;
+  }
+}

@@ -1,16 +1,26 @@
 // The component library's public surface: what screens import from '@crm/ui'.
 // The theme logic stays on its own subpath, '@crm/ui/theme', so the boot script
-// test and other tools can load it without React. AC-9.
+// test and other tools can load it without React. Workbench pieces (Stage,
+// StoryRoot) and the provider's hooks stay inside the library.
 import { describe, expect, it } from 'vitest';
 import * as ui from './index.ts';
 
 describe('@crm/ui', () => {
-  it('exports the Icon atom and the data hues', () => {
-    expect(typeof ui.Icon).toBe('function');
+  it('exports the data hues', () => {
     expect(ui.HUES).toEqual(['gray', 'red', 'orange', 'yellow', 'lime', 'green', 'sky', 'blue', 'purple']);
   });
 
-  it('keeps the theme logic and the icon registry off the main entry', () => {
-    expect(Object.keys(ui).sort()).toEqual(['HUES', 'Icon']);
+  it('exports exactly the components, the provider and the toast factory', () => {
+    expect(Object.keys(ui).sort()).toEqual([
+      'Button',
+      'HUES',
+      'Icon',
+      'Kbd',
+      'Spinner',
+      'SplitButton',
+      'ToggleButton',
+      'UiProvider',
+      'createToasts',
+    ]);
   });
 });

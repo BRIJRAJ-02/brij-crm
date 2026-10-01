@@ -1,0 +1,108 @@
+// The library's test projects:
+//   unit     pure helpers in Node (*.test.ts)
+//   stories  every story as a browser test in Chromium, Firefox and WebKit,
+//            with its play script, axe in light and dark, and the CSP check
+//   browser  browser tests that aren't one story (*.browser.test.tsx):
+//            forced colours, timing hooks; Chromium only
+//   visual   screenshots of every story in light and dark, Chromium only, run
+//            inside the pinned Playwright Linux image (`pnpm test:visual`)
+// `pnpm --filter @crm/ui test` runs unit, stories and browser.
+import { storybookTest } from '@storybook/addon-vitest/vitest-plugin';
+import { playwright } from '@vitest/browser-playwright';
+import path from 'node:path';
+import { defineConfig, mergeConfig } from 'vitest/config';
+import type { BrowserCommand } from 'vitest/node';
+import viteConfig from './vite.config.ts';
+
+const ROOT = import.meta.dirname;
+const STORYBOOK = path.join(ROOT, '.storybook');
+
+/** Switches forced colours (Windows high contrast) on or off for the page. Vitest's page can't, Playwright can. */
+const emulateForcedColors: BrowserCommand<[active: boolean]> = async (context, active) => {
+  await context.page.emulateMedia({ forcedColors: active ? 'active' : 'none' });
+};
+
+const headless = { enabled: true, headless: true, provider: playwright() } as const;
+
+/** `Button.stories.tsx`, `With Shortcut`, `light` → `Button/With-Shortcut-light-linux.png`. */
+function screenshotName(testFileName: string, testName: string, arg: string, platform: string, ext: string): string {
+  const component = path.basename(testFileName).replace(/\.stories\.tsx$/, '');
+  return path.join(component, `${testName.replaceAll(/[^\w-]+/g, '-')}-${arg}-${platform}${ext}`);
+}
+
+export default mergeConfig(
+  viteConfig,
+  defineConfig({
+    test: {
+      projects: [
+        {
+          extends: true,
+          test: { name: 'unit', environment: 'node', include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'] },
+        },
+        {
+          extends: true,
+          plugins: [storybookTest({ configDir: STORYBOOK })],
+          test: {
+            name: 'stories',
+            setupFiles: [path.join(STORYBOOK, 'vitest.setup.ts')],
+            browser: {
+              ...headless,
+              instances: [{ browser: 'chromium' }, { browser: 'firefox' }, { browser: 'webkit' }],
+            },
+          },
+        },
+        {
+          extends: true,
+          test: {
+            name: 'browser',
+            include: ['src/**/*.browser.test.tsx'],
+            browser: { ...headless, instances: [{ browser: 'chromium' }], commands: { emulateForcedColors } },
+          },
+        },
+        {
+          extends: true,
+          plugins: [storybookTest({ configDir: STORYBOOK })],
+          test: {
+            name: 'visual',
+            setupFiles: [path.join(STORYBOOK, 'vitest.visual.ts')],
+            provide: { visualImage: process.env.CRM_VISUAL_IMAGE === '1' },
+            browser: {
+              ...headless,
+              instances: [{ browser: 'chromium' }],
+              viewport: { width: 1200, height: 900 },
+              expect: {
+                toMatchScreenshot: {
+                  // packages/ui/__screenshots__/<Component>/<story>-<theme>-linux.png
+                  resolveScreenshotPath: ({ testFileName, testName, arg, platform, ext }) =>
+                    path.join(ROOT, '__screenshots__', screenshotName(testFileName, testName, arg, platform, ext)),
+                  // A failed run's actual and diff images, per story: .vitest/attachments/<Component>/…
+                  resolveDiffPath: ({ testFileName, testName, arg, platform, ext }) =>
+                    path.join(
+                      ROOT,
+                      '.vitest',
+                      'attachments',
+                      screenshotName(testFileName, testName, arg, platform, ext),
+                    ),
+                  screenshotOptions: { animations: 'disabled', caret: 'hide' },
+                },
+              },
+            },
+          },
+        },
+      ],
+    },
+  }),
+);
+
+declare module 'vitest' {
+  export interface ProvidedContext {
+    /** True only inside the pinned Playwright image, where screenshots are comparable. */
+    visualImage: boolean;
+  }
+}
+
+declare module 'vitest/browser' {
+  interface BrowserCommands {
+    emulateForcedColors: (active: boolean) => Promise<void>;
+  }
+}

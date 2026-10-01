@@ -34,6 +34,7 @@ describe('stylelint house rules', () => {
         opacity: var(--opacity-disabled);
         scale: var(--scale-press);
         font: var(--text-body);
+        box-shadow: var(--shadow-primary), var(--shadow-focus);
         letter-spacing: var(--tracking-body);
         inline-size: 100%;
       }
@@ -57,6 +58,11 @@ describe('stylelint house rules', () => {
     ['a raw z-index', '.root { z-index: 10; }', 'scale-unlimited/declaration-strict-value'],
     ['a raw font weight', '.root { font-weight: 600; }', 'scale-unlimited/declaration-strict-value'],
     ['a raw shadow', '.root { box-shadow: 0 1px 2px black; }', 'scale-unlimited/declaration-strict-value'],
+    [
+      'a raw shadow stacked on a token',
+      '.root { box-shadow: var(--shadow-md), 0 0 0 3px blue; }',
+      'scale-unlimited/declaration-strict-value',
+    ],
     ['a raw opacity', '.root { opacity: 0.5; }', 'scale-unlimited/declaration-strict-value'],
     ['a raw scale', '.root { scale: 0.97; }', 'scale-unlimited/declaration-strict-value'],
     ['a raw line height of 1', '.root { line-height: 1; }', 'scale-unlimited/declaration-strict-value'],
@@ -78,6 +84,12 @@ describe('stylelint house rules', () => {
       'a page breakpoint in a container query',
       '@container (width < 1024px) { .root { gap: 0; } }',
       'crm/breakpoint-tokens',
+    ],
+    ['a system colour outside forced colours', '.root { outline: 2px solid Highlight; }', 'crm/system-colors'],
+    [
+      'a system colour in another media query',
+      '@media (prefers-contrast: more) { .root { border-color: CanvasText; } }',
+      'crm/system-colors',
     ],
   ])('refuses %s', async (_name, code, rule) => {
     const { rules } = await lintCss(code);
@@ -116,6 +128,10 @@ describe('stylelint house rules', () => {
     ['a container token', '@container (width >= 320px) { .root { gap: 0; } }'],
     ['a named container', '@container panel (width < 480px) { .root { gap: 0; } }'],
     ['a condition with no length', '@media (prefers-reduced-motion: reduce) { .root { scale: none; } }'],
+    [
+      'system colours inside forced colours',
+      '@media (forced-colors: active) { .root { outline: var(--border-width-thick) solid Highlight; color: GrayText; } }',
+    ],
   ])('allows %s', async (_name, code) => {
     const { rules } = await lintCss(code);
     expect(rules).toEqual([]);

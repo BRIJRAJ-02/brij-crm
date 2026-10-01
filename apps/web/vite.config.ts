@@ -1,3 +1,4 @@
+import { uiVite } from '@crm/ui/vite';
 import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
@@ -11,6 +12,8 @@ export default defineConfig({
     // Must come before the React plugin.
     tanstackRouter({ target: 'react', autoCodeSplitting: true, addExtensions: true }),
     react(),
+    // CSS module classes as ws-<component>-<local>, as in Storybook and the artifact.
+    uiVite(),
   ],
   server: {
     port: 5173,
@@ -21,5 +24,7 @@ export default defineConfig({
   build: {
     outDir: 'dist',
     sourcemap: true,
+    // dist/.vite/manifest.json: the first load budget reads the index route's static graph from it.
+    manifest: true,
   },
 });

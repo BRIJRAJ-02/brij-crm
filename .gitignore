@@ -11,3 +11,8 @@ dist/
 .claude/settings.local.json
 .vercel
 .env*
+# Storybook and the component library's test output
+storybook-static/
+.vitest/
+packages/ui/.artifact/
+debug-storybook.log

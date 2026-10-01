@@ -1,5 +1,9 @@
-import { createDataLayer } from '@crm/data';
+// The root stylesheet comes first: browsers order cascade layers by first
+// appearance, and the minifier drops the layer order statement, so component
+// CSS imported before it would sink below the reset (build.test.ts checks).
 import '@crm/ui/styles.css';
+import { createDataLayer } from '@crm/data';
+import { createToasts, UiProvider } from '@crm/ui';
 import { createThemeController, safeLocalStorage } from '@crm/ui/theme';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
@@ -7,6 +11,9 @@ import { createRoot } from 'react-dom/client';
 import { routeTree } from './routeTree.gen.ts';
 
 const data = createDataLayer({ origin: window.location.origin });
+
+// One toast queue for the app. The data layer (#6) will raise its toasts on it too.
+const toasts = createToasts();
 
 // theme-boot.js already applied a saved choice before first paint; this keeps
 // it in step with changes here and in other tabs.
@@ -39,8 +46,19 @@ declare module '@tanstack/react-router' {
 const root = document.getElementById('root');
 if (!root) throw new Error('The page is missing its #root element.');
 
+// The browser's language and time zone until #23 adds them to the profile.
 createRoot(root).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    <UiProvider
+      locale={navigator.languages[0] ?? 'en-US'}
+      timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone}
+      navigate={(href) => {
+        router.history.push(href);
+      }}
+      useHref={(href) => router.history.createHref(href)}
+      toasts={toasts}
+    >
+      <RouterProvider router={router} />
+    </UiProvider>
   </StrictMode>,
 );

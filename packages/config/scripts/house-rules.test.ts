@@ -121,4 +121,40 @@ describe('house rules check', () => {
     });
     expect(status).toBe(0);
   });
+
+  it('asks a library component for its README and its stories', () => {
+    const { status, output } = runHouseRules({
+      'packages/ui/src/atoms/Badge/Badge.tsx': 'export const Badge = () => null;\n',
+    });
+    expect(status).toBe(1);
+    expect(output).toContain('packages/ui/src/atoms/Badge: add a README.md');
+    expect(output).toContain('packages/ui/src/atoms/Badge: add a stories file');
+  });
+
+  it('passes a library component with its README and stories', () => {
+    const { status } = runHouseRules({
+      'packages/ui/src/atoms/Badge/Badge.tsx': 'export const Badge = () => null;\n',
+      'packages/ui/src/atoms/Badge/Badge.stories.tsx': "export default { title: 'Atoms/Badge' };\n",
+      'packages/ui/src/atoms/Badge/README.md': '# Badge\n',
+    });
+    expect(status).toBe(0);
+  });
+
+  it('refuses two CSS modules with the same name, since class names carry no hash', () => {
+    const { output } = runHouseRules({
+      'packages/ui/src/atoms/Tag/Tag.tsx': "import styles from './Tag.module.css';\nexport const s = styles;\n",
+      'packages/ui/src/atoms/Tag/Tag.module.css': '.root {}\n',
+      'packages/ui/src/molecules/Tag/Tag.tsx': "import styles from './Tag.module.css';\nexport const s = styles;\n",
+      'packages/ui/src/molecules/Tag/Tag.module.css': '.root {}\n',
+    });
+    expect(output).toContain('the CSS module name "Tag" is used more than once');
+  });
+
+  it('refuses two stories files with the same title, since story ids come from it', () => {
+    const { output } = runHouseRules({
+      'packages/ui/src/atoms/One/One.stories.tsx': "export default { title: 'Atoms/Thing' };\n",
+      'packages/ui/src/atoms/Two/Two.stories.tsx': "export default { title: 'Atoms/Thing' };\n",
+    });
+    expect(output).toContain('the story title "Atoms/Thing" is used more than once');
+  });
 });

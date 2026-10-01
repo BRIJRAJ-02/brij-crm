@@ -1,7 +1,7 @@
 # 0003. The component library, built code first
 
 **Date**: 2026-10-01
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

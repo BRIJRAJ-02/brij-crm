@@ -1,6 +1,7 @@
 # The check every push must pass: typecheck, lint, format, CSS, module edges,
-# house rules and tests. Make the `check` job a required status check on `main`
-# (branch protection), so a red build blocks the merge.
+# house rules and tests, the first load budget and the artifact build. Make the
+# `check` and `visual` jobs required status checks on `main` (branch
+# protection), so a red build blocks the merge.
 name: CI
 
 on:
@@ -25,4 +26,46 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      # The library's stories run as tests in all three engines (spec 0003).
+      # Milestone 1 measured about a minute for them, so one runner is enough;
+      # shard them (`--shard`) once the job passes 10 minutes.
+      - name: Read the Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('./packages/ui/node_modules/playwright/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}
+      - run: pnpm --filter @crm/ui exec playwright install --with-deps chromium firefox webkit
       - run: pnpm test
+      - run: pnpm size
+      - run: pnpm ui:artifact --check
+
+  # Screenshots of every story, light and dark, against the committed
+  # baselines. They run in the pinned Playwright image, the same one
+  # `pnpm test:visual` uses locally, so fonts and rendering match exactly.
+  visual:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    container:
+      image: mcr.microsoft.com/playwright:v1.63.0-noble
+      options: --ipc=host
+    env:
+      CRM_VISUAL_IMAGE: "1"
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm test:visual
+      - name: Keep the screenshot diffs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: screenshot-diffs
+          path: packages/ui/.vitest/attachments/
+          if-no-files-found: ignore

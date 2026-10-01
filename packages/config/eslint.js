@@ -9,8 +9,15 @@ import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
-/** Files whose tool requires a default export. */
-const DEFAULT_EXPORT_FILES = ['**/*.config.{js,ts}', '**/railway.ts', 'middleware.ts'];
+/** Files whose tool requires a default export: config files, the Vercel middleware, stories and the Storybook config. */
+const DEFAULT_EXPORT_FILES = [
+  '**/*.config.{js,ts}',
+  '**/.size-limit.js',
+  '**/railway.ts',
+  'middleware.ts',
+  '**/*.stories.tsx',
+  '**/.storybook/*.{ts,tsx}',
+];
 
 // House rule: only packages/db opens a database connection. Everything else
 // reaches Postgres through withWorkspace() from @crm/db.
@@ -61,6 +68,63 @@ const vendorSdks = {
   ],
 };
 
+// House rule (spec 0003): third party UI building blocks are used only inside
+// packages/ui. They aren't vendor SDKs, so packages/ui imports them anywhere.
+const uiLibraries = {
+  group: [
+    'react-aria',
+    'react-aria/*',
+    'react-aria-components',
+    'react-aria-components/*',
+    '@react-aria/*',
+    'react-stately',
+    'react-stately/*',
+    '@react-stately/*',
+    '@internationalized/*',
+    '@tanstack/react-virtual',
+    '@tiptap/*',
+    '@visx/*',
+    '@xyflow/react',
+    'elkjs',
+    'elkjs/*',
+    'libphonenumber-js',
+    'libphonenumber-js/*',
+  ],
+  message: 'UI building blocks are used only inside packages/ui. Use the @crm/ui component, or add one there.',
+};
+
+// Live editing sessions (#27) live in packages/data, and the editor in packages/ui.
+const collaboration = {
+  group: ['yjs', 'y-protocols', 'y-protocols/*', '@hocuspocus/*'],
+  message: 'Yjs and Hocuspocus are used only inside packages/ui and packages/data.',
+};
+
+// House rule: the component library holds no data and makes no network calls.
+const libraryDataImports = [
+  { group: ['@orpc/*', '@crm/data'], message: 'The library makes no network calls. Data comes in through props.' },
+];
+
+const NETWORK_GLOBALS = ['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource'];
+
+/** Network globals, refused with `message`, and the same calls through window, globalThis or self. */
+function noNetwork(message) {
+  return {
+    'no-restricted-globals': ['error', ...NETWORK_GLOBALS.map((name) => ({ name, message }))],
+    'no-restricted-properties': [
+      'error',
+      ...['window', 'globalThis', 'self'].map((object) => ({ object, property: 'fetch', message })),
+    ],
+  };
+}
+
+// House rule: one field design. Screens render attribute values through
+// AttributeDisplay, never through the value atoms directly.
+const VALUE_ATOMS = ['Currency', 'Tag', 'TagList', 'StatusDot', 'Rating', 'LinkChip'];
+
+// Attributes that carry copy a person reads or hears.
+const COPY_ATTRIBUTES = 'aria-label|title|placeholder|alt|label';
+const COPY_MESSAGE = "Built in copy lives in the component's strings.ts. Read it from there, or take it as a prop.";
+
 const syntax = {
   defaultExport: {
     selector: 'ExportDefaultDeclaration',
@@ -92,6 +156,19 @@ const syntax = {
     selector: 'JSXAttribute[name.name=/^(style|className)$/]',
     message: 'Screens are built only from library components. Styling lives in packages/ui; add a variant there.',
   },
+  // AC-12: no literal copy in the library's markup, so every word is in one strings.ts.
+  literalCopy: [
+    { selector: 'JSXText[value=/[A-Za-z]/]', message: COPY_MESSAGE },
+    { selector: `JSXAttribute[name.name=/^(${COPY_ATTRIBUTES})$/] > Literal`, message: COPY_MESSAGE },
+    {
+      selector: `JSXAttribute[name.name=/^(${COPY_ATTRIBUTES})$/] > JSXExpressionContainer > Literal[value=/[A-Za-z]/]`,
+      message: COPY_MESSAGE,
+    },
+    {
+      selector: `JSXAttribute[name.name=/^(${COPY_ATTRIBUTES})$/] > JSXExpressionContainer > TemplateLiteral`,
+      message: COPY_MESSAGE,
+    },
+  ],
 };
 
 /** The syntax rule, plus the same rule without the default export ban for files that need one. */
@@ -103,9 +180,20 @@ function restrictSyntax(entries) {
   ];
 }
 
-function base(root) {
+/**
+ * The rules every preset shares. `uiLibraries` lets a workspace import the UI
+ * building blocks (packages/ui only); `collaboration` lets it import Yjs.
+ */
+function base(root, { uiLibraries: allowUi = false, collaboration: allowCollaboration = false } = {}) {
+  const restrictedImports = {
+    patterns: [
+      ...vendorSdks.patterns,
+      ...(allowUi ? [] : [uiLibraries]),
+      ...(allowCollaboration ? [] : [collaboration]),
+    ],
+  };
   return [
-    globalIgnores(['**/dist/', '**/.turbo/', '**/.vercel/', '**/*.gen.ts']),
+    globalIgnores(['**/dist/', '**/.turbo/', '**/.vercel/', '**/*.gen.ts', '**/.artifact/', '**/storybook-static/']),
     js.configs.recommended,
     tseslint.configs.strictTypeChecked,
     {
@@ -117,7 +205,7 @@ function base(root) {
         // Concise callbacks like `(error) => log.error(...)` read better than braces.
         '@typescript-eslint/no-confusing-void-expression': ['error', { ignoreArrowShorthand: true }],
         '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
-        '@typescript-eslint/no-restricted-imports': ['error', vendorSdks],
+        '@typescript-eslint/no-restricted-imports': ['error', restrictedImports],
         'no-console': ['error', { allow: ['warn', 'error'] }],
         eqeqeq: ['error', 'always'],
       },
@@ -152,13 +240,31 @@ export function server({ root, databaseDriver = false }) {
   );
 }
 
-/** Client code that isn't a screen: packages/data, and packages/ui once it exists. */
-export function client({ root }) {
+/**
+ * Client code that isn't a screen. packages/ui passes `library: true`: it may
+ * use the UI building blocks and Yjs, makes no network calls, and keeps its
+ * copy in strings.ts. packages/data passes `collaboration: true` for #27's
+ * Yjs sessions.
+ */
+export function client({ root, library = false, collaboration: allowCollaboration = false }) {
+  const entries = [syntax.defaultExport, ...syntax.classes, ...syntax.extensions, ...syntax.inlineStyle];
   return defineConfig(
-    base(root),
+    base(root, { uiLibraries: library, collaboration: library || allowCollaboration }),
     react,
-    { rules: { 'no-restricted-imports': ['error', { paths: databaseDrivers }] } },
-    restrictSyntax([syntax.defaultExport, ...syntax.classes, ...syntax.extensions, ...syntax.inlineStyle]),
+    {
+      rules: {
+        'no-restricted-imports': ['error', { paths: databaseDrivers, patterns: library ? libraryDataImports : [] }],
+        ...(library ? noNetwork('The library makes no network calls. Data comes in through props.') : {}),
+      },
+    },
+    restrictSyntax(entries),
+    library
+      ? {
+          files: ['src/**/*.tsx'],
+          ignores: ['src/**/*.stories.tsx', 'src/**/*.test.tsx'],
+          rules: { 'no-restricted-syntax': ['error', ...entries, ...syntax.literalCopy] },
+        }
+      : [],
   );
 }
 
@@ -172,23 +278,20 @@ export function screens({ root }) {
       rules: {
         'no-restricted-imports': [
           'error',
-          { paths: [...databaseDrivers, ...screenDataImports.paths], patterns: screenDataImports.patterns },
+          {
+            paths: [
+              ...databaseDrivers,
+              ...screenDataImports.paths,
+              {
+                name: '@crm/ui',
+                importNames: VALUE_ATOMS,
+                message: 'Screens render attribute values through AttributeDisplay, the one field design.',
+              },
+            ],
+            patterns: screenDataImports.patterns,
+          },
         ],
-        'no-restricted-globals': [
-          'error',
-          ...['fetch', 'XMLHttpRequest', 'WebSocket', 'EventSource'].map((name) => ({
-            name,
-            message: 'Screens never call the network. Read and write through @crm/data.',
-          })),
-        ],
-        'no-restricted-properties': [
-          'error',
-          ...['window', 'globalThis', 'self'].map((object) => ({
-            object,
-            property: 'fetch',
-            message: 'Screens never call the network. Read and write through @crm/data.',
-          })),
-        ],
+        ...noNetwork('Screens never call the network. Read and write through @crm/data.'),
       },
     },
     restrictSyntax([syntax.defaultExport, ...syntax.classes, ...syntax.extensions, syntax.screenStyling]),
