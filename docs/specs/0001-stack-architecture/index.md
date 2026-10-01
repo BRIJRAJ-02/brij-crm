@@ -2,10 +2,11 @@
 
 **Date**: 2026-10-01
 **Status**: In Progress
+**Amended**: 2026-10-01, the web app moved from Cloudflare to Vercel, Neon is provisioned through Vercel, and the product is named brij-crm (see [rationale.md](rationale.md#amendment-2026-10-01-web-hosting-on-vercel)).
 
 ## Summary
 
-The CRM is written in TypeScript throughout. It's a single page React app backed by a modular API service on Node, with Postgres as the only database. One client data layer (TanStack DB, behind our own wrapper) holds every record the screen shows. Centrifugo pushes live changes and presence, and Hocuspocus with Yjs handles shared notes later. Everything runs on managed but portable hosts: Neon for Postgres, Railway for the services, and Cloudflare for the web app and files. The web app and API share one address, so sign in stays simple and safe.
+The CRM (product name brij-crm) is written in TypeScript throughout. It's a single page React app backed by a modular API service on Node, with Postgres as the only database. One client data layer (TanStack DB, behind our own wrapper) holds every record the screen shows. Centrifugo pushes live changes and presence, and Hocuspocus with Yjs handles shared notes later. Everything runs on managed but portable hosts: Neon for Postgres (provisioned through Vercel), Railway for the services, Vercel for the web app, and Cloudflare R2 for files. The web app and API share one address, so sign in stays simple and safe.
 
 ## Rationale
 
@@ -35,7 +36,7 @@ Build one modular API (a monolith split into clear internal modules, not microse
   - `neon-postgres` (`neondatabase/agent-skills`)
   - `drizzle` (`lobehub/lobehub`, community)
   - `zod` (`pproenca/dot-skills`, community)
-  - `cloudflare` (`cloudflare/skills`)
+  - `cloudflare` (`cloudflare/skills`), for R2 files from #32
   - `use-railway` (`railwayapp/railway-skills`)
   - `turborepo` (`vercel/turborepo`)
   - `resend` (`resend/resend-skills`)
@@ -75,10 +76,10 @@ Build one modular API (a monolith split into clear internal modules, not microse
 | Errors + performance | Sentry (web, API, worker) | Errors come with the request and user, tracing crosses services, and custom metrics chart realtime delay and job backlog. |
 | Product analytics + flags | PostHog | Events for signups and activation, plus feature flags for staged rollouts, in one tool. |
 | Tests | Vitest + Playwright | Fast unit and integration tests, plus end to end tests with two browsers open to prove live updates. |
-| Code + CI | GitHub + GitHub Actions (CI that fails blocks the merge) | Runs typecheck, lint, tests and the house rule checks, creates preview databases, and triggers deploys. |
-| Database host | Neon (production compute never scales to zero) | Plain Postgres with instant branches, so each preview gets its own database. Scale to zero would drop LISTEN and the relay. |
+| Code + CI | GitHub (`BRIJRAJ-02/brij-crm`, private) + GitHub Actions (CI that fails blocks the merge) | Runs typecheck, lint, tests and the house rule checks, creates preview databases, and triggers deploys. |
+| Database host | Neon, provisioned through the Vercel Marketplace on your Vercel account (production compute never scales to zero) | Plain Postgres with instant branches, so each preview gets its own database. Scale to zero would drop LISTEN and the relay. |
 | Service host | Railway (Docker images) | Multi service deploys from the monorepo, private networking and preview environments, with the least upkeep. |
-| Web host | Cloudflare Workers static assets, with a Worker proxying `/api/*` to Railway | Global, fast, free at this scale, with preview URLs per branch. The proxy puts the app and API on one origin. |
+| Web host | Vercel: the static build on Vercel's CDN, with Routing Middleware (`apps/web/middleware.ts`) proxying `/api/*` to Railway | Your own Vercel account, global and fast, with a deployment per pull request. The middleware keeps the app and API on one origin, reads the API address per environment, and can add headers before a request leaves (which Edge only API access, #57, needs). |
 
 ## Architecture
 
@@ -86,7 +87,7 @@ Build one modular API (a monolith split into clear internal modules, not microse
 
 | App | What it is | Runs on | When |
 |---|---|---|---|
-| `apps/web` | The Vite single page app, plus the small Worker that serves it and proxies `/api/*` | Cloudflare | Scaffold |
+| `apps/web` | The Vite single page app, plus the Routing Middleware that proxies `/api/*` | Vercel | Scaffold |
 | `apps/api` | The Hono + oRPC API: every read and write, auth, the public API, and realtime (later collab) token issuing. The same image has a `worker` entrypoint that runs Graphile Worker and the outbox relay. | Railway (two services from one image: `api`, `worker`) | Scaffold |
 | `infra/centrifugo` | The Centrifugo config and image (memory engine, one node) | Railway | Scaffold |
 | `apps/collab` | The Hocuspocus server for shared notes | Railway | Slice 7 |
@@ -128,16 +129,26 @@ The outbox event shape, channel names, access filtering of events, and handling 
 - **Better Auth's tables sit outside row level security,** because they're global identity. Membership is always checked explicitly. Each request resolves its workspace from the URL (`/w/:slug`), checked against membership, and never from the session alone.
 
 **Sign in, cookies and origins:**
-- **One origin.** The web app and the API share one origin in every environment. The Cloudflare Worker serves the app and proxies `/api/*` to the Railway API over HTTPS.
+- **One origin.** The web app and the API share one origin in every environment. Vercel serves the static app, and its Routing Middleware proxies `/api/*` to the Railway API over HTTPS.
 - **Cookies.** Session cookies are host only, `SameSite=Lax`, `Secure` and `HttpOnly`. There's no CORS for the app, and the API checks the `Origin` header on writes.
 - **Realtime and collab tokens.** Centrifugo and (later) Hocuspocus are the only other origins, and they use short lived tokens the API issues after an access check, with no cookies. The Centrifugo connection token lasts 5 to 10 minutes and refreshes through the client's `getToken`. Subscription tokens are issued per channel.
 - **Per environment.** Better Auth's `BETTER_AUTH_URL` and `trustedOrigins` are set per environment.
 - **Google sign in in previews.** Google needs a fixed callback address, so previews offer email sign in only (or one stable preview auth domain, if that's added later).
 
 **Web hosting details:**
-- **Deep links.** The static assets use single page app fallback (`not_found_handling = "single-page-application"`), so deep links load the app.
-- **Caching.** Hashed assets are cached as immutable, and `index.html` is never cached.
-- **Security headers.** A Content Security Policy allows only our origin, the Centrifugo origin, Sentry and PostHog.
+- **Deep links.** Vercel checks real files first, then `vercel.json` rewrites everything else except `/api` (`/((?!api(?:/|$)).*)`) to `index.html`, so deep links load the app.
+- **Caching.** Hashed assets under `/assets/` are cached as immutable, and `index.html` keeps Vercel's default `max-age=0, must-revalidate` (headers in `vercel.json`).
+- **Security headers.** A Content Security Policy, set in `vercel.json` on every path except `/api`, allows only our origin today. Realtime (#7) adds the Centrifugo origin, and Monitoring (#11) adds Sentry and PostHog.
+- **The proxy.** `apps/web/middleware.ts` (Edge runtime, `rewrite()` and `ipAddress()` from `@vercel/functions`) matches `/api` and `/api/:path*` and runs before files and rewrites. It rewrites to `API_ORIGIN_INTERNAL` and replaces, never appends, `x-forwarded-for` (with the client IP Vercel saw), `x-forwarded-host` and `x-forwarded-proto`. It does nothing else: no auth, no database. The API trusts none of those headers until Edge only API access (#57) adds a credential only the middleware sends. Rewrites pass bodies, redirects and `Set-Cookie` through unchanged; a proxied request has about 120 seconds to answer, so long work stays in jobs.
+
+**Vercel setup:**
+- **The project.** `brij-crm` on your personal Vercel account. Root directory `apps/web`, framework Vite, output `dist`, Node 24, files outside the root directory included (the pnpm workspace installs from the repo root).
+- **Git integration off.** The repo is never connected in the dashboard, and `vercel.json` sets `git.deploymentEnabled` to `false`. Every deploy comes from an Action: `vercel pull`, then `vercel build` with the environment's variables in the step env, then `vercel deploy --prebuilt`.
+- **Variables.** `API_ORIGIN_INTERNAL` is set at build (step env) and at deploy (`--env`), so the middleware sees it either way. Production's values (`API_ORIGIN_INTERNAL` and the `VITE_*` URLs) live in the Vercel project's Production variables. A preview's come from the workflow, which reads them from that pull request's Railway environment.
+- **Preview address.** Each preview gets a fixed alias, `brij-crm-pr-<n>.vercel.app`, known before it deploys, so the workflow can set the Railway `APP_URL` first. The workflow posts the address as one comment on the pull request, and removes the alias when the pull request closes.
+- **Protection.** Previews stay behind Vercel's login (the default). When end to end tests run against previews, CI uses Vercel's protection bypass secret. Production is public.
+- **Neon integration.** The Neon resource isn't connected to the web project's variables, and its own preview branching stays off. The web app needs no database variables, and preview branches come only from the workflow.
+- **Rollback.** `vercel rollback` (or promoting an earlier deployment) undoes a bad production web deploy.
 - **Build time URLs.** Public URLs are baked in at build time through `VITE_*` variables, so each preview is built with its own Centrifugo URL.
 
 **Migrations:**
@@ -154,9 +165,10 @@ The outbox event shape, channel names, access filtering of events, and handling 
 - **Preview per pull request:**
   - A GitHub Action creates a Neon branch from a seeded parent (never from production data), and deletes it when the pull request closes.
   - Railway creates the preview environment for `api`, `worker` and `centrifugo`, and the Action overwrites the database variables.
-  - Cloudflare builds a preview with that environment's URLs.
+  - The Action deploys a Vercel preview with that environment's API address (at runtime) and public URLs (at build time). Vercel's own Git deploys stay off, so a preview never points at the wrong API.
   - Secrets are generated per environment, never shared with production.
-- **Production:** Neon production compute is pinned to never scale to zero.
+- **Production:** a push to `main` deploys the Vercel production build through an Action, and Railway deploys the services from `main`. Neon production compute is pinned to never scale to zero, which needs a paid Neon plan (see Follow-up).
+- **Regions:** Neon and Railway sit in the same region, so every query stays close: Singapore (AWS `ap-southeast-1` on Neon, `asia-southeast1` on Railway), the closest to you.
 
 **Design system to code:** the artifact (https://claude.ai/artifact/XYoLqU7b2SFfga9FWwqaPh?sk=NUiJdAv_8B9f6a2uJRrpBg, always this link) stays the source of truth, and it keeps updating as needed.
 - `packages/tokens` is generated from its `tokens.json` by a script, so no token is ever hand copied.
@@ -168,11 +180,11 @@ The outbox event shape, channel names, access filtering of events, and handling 
 
 ## Configuration required
 
-Secrets live in Railway variables per environment (and in Cloudflare variables for the Worker). GitHub Actions secrets hold only CI credentials. Every app validates its variables with a Zod schema at startup and refuses to boot if one is missing.
+Secrets live in Railway variables per environment (and in Vercel environment variables for the middleware). GitHub Actions secrets hold only CI credentials. Every app validates its variables with a Zod schema at startup and refuses to boot if one is missing.
 
 - `APP_ENV` (`local` | `preview` | `production`), `NODE_ENV` and `PORT`: runtime basics.
 - `APP_URL`: the one public origin for the app and API. `REALTIME_URL` is the public Centrifugo URL, and `COLLAB_URL` comes later.
-- `API_ORIGIN_INTERNAL`: the Railway API address the Cloudflare Worker proxies to.
+- `API_ORIGIN_INTERNAL`: the Railway API address the Vercel middleware proxies to.
 - `DATABASE_URL`: Neon pooled connection (PgBouncer locally), for API request queries.
 - `DATABASE_URL_DIRECT`: Neon direct connection, for LISTEN, the relay, jobs and migrations.
 - `DATABASE_URL_OWNER`: the owner role, for migrations only.
@@ -184,7 +196,7 @@ Secrets live in Railway variables per environment (and in Cloudflare variables f
 - `RESEND_API_KEY` and `MAIL_FROM`: email sending. The sending domain needs SPF and DKIM set up (Mailpit locally).
 - `SENTRY_DSN_WEB`, `SENTRY_DSN_SERVER`, `SENTRY_AUTH_TOKEN` and `SENTRY_RELEASE`: error tracking, source maps and release names.
 - `POSTHOG_KEY` and `POSTHOG_HOST`: product analytics and flags.
-- CI only: `NEON_API_KEY`, `NEON_PROJECT_ID`, `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` and `RAILWAY_TOKEN`.
+- CI only: `NEON_API_KEY`, `NEON_PROJECT_ID`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` and `RAILWAY_TOKEN` (plus `VERCEL_AUTOMATION_BYPASS_SECRET` once end to end tests run on previews).
 
 ## Consequences
 
@@ -203,6 +215,9 @@ Secrets live in Railway variables per environment (and in Cloudflare variables f
 - CSS Modules give less type safety than a typed styling system. Stylelint rules and typed variant props on components make up for it, but they must be kept strict.
 - Postgres carries everything (data, jobs, events, search, and later notes), so it's the scaling point, and the direct connection count is small on small Neon computes. The load harness (#12) must watch CPU, connections and lag from the first slice.
 - Preview environments multiply services per pull request, which costs money. Keep previews to web, api, worker and one small Centrifugo.
+- Vercel's Hobby plan is for personal, non commercial use, and caps deployments at 100 a day. Move the project to Pro before the first paying workspace.
+- Every `/api` request passes through the Routing Middleware, which counts toward Vercel's edge request and middleware usage. At 100 people online that's well inside what's included; the load harness (#12) should watch it.
+- Neon's billing and plan now live in Vercel. On the Free plan, scale to zero can't be turned off, so until production moves to a paid plan the worker's direct connection drops when the compute sleeps. The worker then exits, Railway restarts it, and the relay catches up from the outbox, so events arrive late but none are lost.
 
 **Neutral:**
 - The design system lives in two places (the artifact, and `packages/ui`). The token generation script and the house rules keep them in step.
@@ -211,7 +226,10 @@ Secrets live in Railway variables per environment (and in Cloudflare variables f
 
 ## Follow-up
 
-- [ ] Choose the product name and domain. Production cookies, email sending and OAuth callbacks need it (use `localhost` until then).
+- [x] Choose the product name: brij-crm (2026-10-01).
+- [ ] Choose the domain. Until then production runs on `brij-crm.vercel.app`, which works for host only cookies; email sending and Google sign in need the real domain.
+- [ ] Move Neon production to a paid plan with scale to zero off, before the realtime relay (#7) ships.
+- [ ] Confirm the Vercel managed Neon organization lets you create an API key for the preview workflow (`NEON_API_KEY`). If it doesn't, previews take their database branch from the Vercel integration instead, and `preview.yml` changes to match.
 - [ ] Prototype TanStack DB on a windowed, server filtered query over a million rows (live patches plus loading on scroll), as the first step of Client data and state (#6). If it struggles, the `packages/data` interface switches to a plain normalised store on TanStack Query, and the screens don't change.
 - [ ] Confirm current releases at scaffold time, and pin them: TanStack DB, oRPC, Centrifugo, Better Auth.
 - [ ] Prove oRPC's OpenAPI output with one procedure during the core loop (#10).

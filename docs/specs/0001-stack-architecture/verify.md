@@ -9,8 +9,8 @@ _Steps derived from the feature's **Done when** in `docs/scope/foundations.md` (
 ## UI / manual
 - [x] With Postgres up, migrations applied and `pnpm dev:apps` running, open `http://localhost:5173` → "The API and the database are answering." with environment `local` and a Postgres 17 version → DW-2 _(passed 2026-10-01, on a Homebrew Postgres 17 in place of Docker)_
 - [x] Stop the api, reload → an alert "The API or the database did not answer" and a Try again button; start the api, press Try again → the status shows again, no page reload → DW-2 _(passed 2026-10-01)_
-- [x] Build the web app, run `pnpm --filter @crm/web preview` (wrangler dev), open `http://localhost:8787` → the page renders with no console errors under the Content Security Policy → DW-2 _(passed 2026-10-01)_
-- [ ] Open a pull request → the Cloudflare preview `https://pr-<n>-crm-web.<subdomain>.workers.dev` shows environment `preview`, and Neon lists a branch `preview/pr-<n>` → DW-3
+- [ ] Build the web app and run it with `vercel dev` in `apps/web` (project linked), open the URL it prints → the page renders with no console errors under the Content Security Policy from `vercel.json`, and `/api` reaches the local API through the middleware → DW-2 _(the Cloudflare version of this step passed 2026-10-01, before the move to Vercel)_
+- [ ] Open a pull request → the Vercel preview the workflow comments on the pull request shows environment `preview`, and Neon lists a branch `preview/pr-<n>` → DW-3
 - [ ] Close that pull request → the Neon branch and the Railway environment `pr-<n>` are gone → DW-3
 - [ ] Merge to `main` → the production URL shows environment `production`, served by the Neon production branch (not `preview-base`) → DW-3
 
@@ -31,5 +31,5 @@ _Steps derived from the feature's **Done when** in `docs/scope/foundations.md` (
 ## Acceptance-criteria coverage
 - DW-1: spec 0001 exists with its status line (`In Progress` now, `Accepted` once the feature is done).
 - DW-2: the local status page steps, typecheck, build, db:setup, the guard steps, `pnpm dev` with Docker.
-- DW-3: the pull request, close and merge steps, the Docker builds, `railway config plan`. All still open: they need your GitHub, Neon, Railway and Cloudflare setup.
+- DW-3: the pull request, close and merge steps, the Docker builds, `railway config plan`. Still open: they need your GitHub, Neon, Railway and Vercel setup.
 - DW-4: both boundaries steps. The "screens only from the component library" half lands with Design tokens (#3) and the Component library (#4). Until then the one boot page has no styles, so it has no raw values.

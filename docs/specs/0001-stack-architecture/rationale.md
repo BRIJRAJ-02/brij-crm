@@ -126,3 +126,19 @@ Styling follows the same logic. CSS Modules with variables and layers are native
 - Better Auth: https://better-auth.com
 - Tiptap and Hocuspocus: https://tiptap.dev
 - Inngest, considered for jobs: https://www.inngest.com
+
+## Amendment, 2026-10-01: web hosting on Vercel
+
+**What changed.** The web app moves from Cloudflare Workers to Vercel, Neon is provisioned through the Vercel Marketplace on the same account, and the product is named brij-crm. Everything else in this decision stands, including R2 for files and the one origin design.
+
+**Why.** You already have a Vercel account and chose to consolidate the web app and the database on it, rather than open a Cloudflare account just for hosting. The decision that mattered in the original choice, one origin for the app and the API so cookies stay host only and there's no CORS, carries over unchanged.
+
+**How the proxy works, and the options weighed.**
+- **Routing Middleware (chosen).** `apps/web/middleware.ts` matches `/api/*` and rewrites it to the Railway API with `rewrite()` from `@vercel/functions`, which can also replace the upstream request headers. It runs before the static files, reads `API_ORIGIN_INTERNAL` per environment, and is the closest match to the Cloudflare Worker it replaces. It also gives #57 a place to add a credential only the edge knows.
+- **A Vercel Function proxy** (`api/[...path].ts` calling `fetch`). It works the same way, but every API call becomes a function run with its own billing and cold starts, and it buffers more than a rewrite does. It's the fallback if middleware ever can't do something.
+- **A static rewrite in `vercel.json`.** The cheapest, and since every deploy is built by the workflow, the file could even be generated per preview. But a rewrite can't set request headers, so it can't replace a forwarded header the client sent, and it can't add the credential #57 needs. Rejected for that reason only; it stays the fallback if middleware ever becomes a problem.
+
+**Previews.** Deploys run from GitHub Actions with the Vercel CLI, not Vercel's Git integration, because each preview must point at its own Railway environment (`pr-N`), which only the workflow knows when it deploys.
+
+**Tradeoffs taken on.** The Hobby plan is non commercial, so the project moves to Pro before paying customers. Neon's Free plan can't turn off scale to zero, so production needs a paid plan before the realtime relay ships.
+
