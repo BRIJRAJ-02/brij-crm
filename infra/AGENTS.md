@@ -24,7 +24,7 @@ Configuration for the services that aren't our own code: Centrifugo (realtime) a
 - Centrifugo's real variable names differ from the list in spec 0001: `CENTRIFUGO_HTTP_API_KEY`, `CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY`, `CENTRIFUGO_ADMIN_PASSWORD`, `CENTRIFUGO_ADMIN_SECRET` and `CENTRIFUGO_CLIENT_ALLOWED_ORIGINS`.
 - History is lost when Centrifugo restarts, so a client that reconnects then falls back to refetching.
 - The passwords in `01-roles.sql` and `.env.example` are for local use only.
-- The Railway project is `brij-crm`, deploying from `BRIJRAJ-02/brij-crm` (`REPO` in `.railway/railway.ts`), with services in Singapore. Production addresses: api `https://api-production-69e1.up.railway.app`, Centrifugo `https://centrifugo-production-68df.up.railway.app` (port 8000). `preview-base` has no database variables on purpose, so its services can't start until a pull request copies it.
+- The Railway project is `brij-crm`, deploying from `BRIJRAJ-02/brij-crm` (`REPO` in `.railway/railway.ts`), with services in Singapore. Production addresses: api `https://api-production-69e1.up.railway.app`, Centrifugo `https://centrifugo-production-68df.up.railway.app` (port 8000). `preview-base` has no database variables on purpose, so its services can't start until a pull request copies it. A push to `main` redeploys only the services whose watch patterns match the change.
 - Neon is project `long-silence-55194255` (Singapore, Postgres 18), provisioned through Vercel. Production uses database `crm`, the owner role `neondb_owner`, and the app login `crm_app_user`.
 
 ## Related specs
