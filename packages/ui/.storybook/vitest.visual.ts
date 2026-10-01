@@ -2,8 +2,12 @@
 // Playwright Linux image): one screenshot of the story frame in light and one
 // in dark, compared with the committed baselines (AC-16). A story opts out
 // with `parameters.crm.screenshot = false` when another story shows the same.
+import { configure } from 'storybook/test';
 import { afterEach, beforeAll, expect, inject } from 'vitest';
 import { page } from 'vitest/browser';
+
+// The same waits as the story tests: hover and focus can take a moment in CI.
+configure({ asyncUtilTimeout: 5_000 });
 
 interface StoryContext {
   readonly story?: { readonly parameters: { readonly crm?: { readonly screenshot?: boolean } } };

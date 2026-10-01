@@ -7,11 +7,14 @@ import { expect, waitFor } from 'storybook/test';
 /** The part of a story's `userEvent` this needs. */
 interface Pointer {
   hover(element: Element): Promise<void>;
+  unhover(element: Element): Promise<void>;
 }
 
-/** Moves the pointer onto `element`, again if needed, until it carries `data-hovered`. */
+/** Moves the pointer off and onto `element`, again if needed, until it carries `data-hovered`. */
 export async function hoverUntilHovered(userEvent: Pointer, element: Element): Promise<void> {
   await waitFor(async () => {
+    // Off, then on: a pointer already resting there sends no new enter event.
+    await userEvent.unhover(element);
     await userEvent.hover(element);
     await expect(element).toHaveAttribute('data-hovered', 'true');
   });

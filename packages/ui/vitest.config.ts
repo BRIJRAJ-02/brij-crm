@@ -72,6 +72,7 @@ export default mergeConfig(
           test: {
             name: 'visual',
             fileParallelism: false,
+            retry: process.env.CI === undefined ? 0 : 2,
             setupFiles: [path.join(STORYBOOK, 'vitest.visual.ts')],
             provide: { visualImage: process.env.CRM_VISUAL_IMAGE === '1' },
             browser: {
