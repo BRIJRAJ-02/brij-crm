@@ -1,4 +1,9 @@
 {
   "extends": ["//"],
-  "tags": ["client"]
+  "tags": ["client"],
+  "tasks": {
+    "test": {
+      "env": ["CRM_STORY_BROWSERS"]
+    }
+  }
 }
