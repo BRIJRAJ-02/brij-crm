@@ -2,10 +2,13 @@
 // draws only the rows (and, past 12 columns, the columns) on screen; rows come
 // from outside through a RowSource; every cell renders and edits through the
 // field set; the keyboard model is a spreadsheet's. AC-4, AC-7, AC-8, AC-9.
-import { defaultRangeExtractor, useVirtualizer } from '@tanstack/react-virtual';
+import { defaultRangeExtractor, useVirtualizer, type VirtualItem } from '@tanstack/react-virtual';
 import {
+  memo,
   useEffect,
+  useId,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
   type ClipboardEvent,
@@ -18,6 +21,8 @@ import { flushSync } from 'react-dom';
 import { useFocusVisible } from 'react-aria';
 import { CheckboxMark } from '../../atoms/Checkbox/Checkbox.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { AnchoredTooltip, TOOLTIP_DELAY_MS } from '../../atoms/Tooltip/Tooltip.tsx';
+import { SharedTooltipContext } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { clearedValueOf, fieldTypeOf, readOnlyReasonOf } from '../../fields/registry.ts';
 import type { CellChange, FieldAttribute, PhoneParser, TextContext } from '../../fields/types.ts';
@@ -31,7 +36,7 @@ import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import type { ActorDisplay } from '@crm/contracts/values';
 import styles from './DataGrid.module.css';
 import { editModeOf, GridCell, type CellPlace, type GridEditorProps } from './GridCell.tsx';
-import { GridHeaderCell } from './GridHeaderCell.tsx';
+import { GridHeaderCell, type ColumnActions } from './GridHeaderCell.tsx';
 import { fromTsv, planPaste, toTsv } from './grid-clipboard.ts';
 import {
   hideColumn,
@@ -109,6 +114,7 @@ const COLUMN_VIRTUALISE_AFTER = 12;
 const LOADING_ROWS = 8;
 const TABBABLE = 'a[href], button, input, select, textarea, [tabindex]';
 const NO_EDITOR_PROPS: GridEditorProps = {};
+const NO_ITEMS: readonly VirtualItem[] = [];
 
 /** The cell being edited: where it is drawn, and the record and column it writes to. */
 interface Editing {
@@ -119,7 +125,26 @@ interface Editing {
   readonly startText?: string;
 }
 
+/** What the grid's one tooltip shows: a cell's reason, or the full text of something cut in it. */
+interface Tip {
+  readonly key: string;
+  readonly text: string;
+  readonly via: 'hover' | 'focus';
+}
+
 const keyOf = (row: number, col: number) => `${String(row)}:${String(col)}`;
+
+/** A cell's tip: its reason (read only, or refused), else the full text of the first cut text in it. */
+function tipIn(cell: HTMLElement): { readonly anchor: HTMLElement; readonly text: string } | undefined {
+  const reason = cell.querySelector('[data-tip]')?.textContent ?? '';
+  if (reason !== '') return { anchor: cell, text: reason };
+  for (const text of cell.querySelectorAll<HTMLElement>('[data-truncated]')) {
+    if (text.scrollWidth > text.clientWidth && text.textContent !== '') {
+      return { anchor: text, text: text.textContent };
+    }
+  }
+  return undefined;
+}
 const cellAt = (key: string | undefined): CellPosition | undefined => {
   if (key === undefined) return undefined;
   const [row = 0, col = 0] = key.split(':').map(Number);
@@ -166,16 +191,18 @@ export function DataGrid<Row>({
   const { isFocusVisible } = useFocusVisible();
   const showSkeleton = useDelayedLoading(status === 'loading');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const gridId = useId();
   const number = (value: number) => memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(value);
 
   // Columns: the screen's layout, or a preview while a pointer resize runs.
+  // Kept stable through a scroll, so the header redraws only when its columns or state change.
   const [preview, setPreview] = useState<ColumnLayout | undefined>(undefined);
-  const layout: ColumnLayout = preview ?? { columns, pinnedCount };
-  const placed = placeColumns(layout, CHECK);
+  const layout = useMemo<ColumnLayout>(() => preview ?? { columns, pinnedCount }, [preview, columns, pinnedCount]);
+  const placed = useMemo(() => placeColumns(layout, CHECK), [layout]);
+  const unpinned = useMemo(() => placed.filter((each) => !each.isPinned), [placed]);
   const colCount = placed.length + 1;
   const pinnedEnd = placed.filter((each) => each.isPinned).reduce((end, each) => end + each.column.width, CHECK);
   const gridWidth = placed.reduce((end, each) => end + each.column.width, CHECK);
-  const unpinned = placed.filter((each) => !each.isPinned);
   const lastPinnedId = placed.filter((each) => each.isPinned).at(-1)?.column.id;
   const commitLayout = (next: ColumnLayout) => {
     setPreview(undefined);
@@ -199,6 +226,17 @@ export function DataGrid<Row>({
   const [isWithin, setWithin] = useState(false);
   const [isTipDismissed, setTipDismissed] = useState(false);
   const [announcement, setAnnouncement] = useState('');
+  // One tooltip for every cell, so a screen of cells mounts no tooltip each.
+  const [tip, setTip] = useState<Tip | undefined>(undefined);
+  const tipAnchor = useRef<HTMLElement | null>(null);
+  const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const hoveredCell = useRef<string | undefined>(undefined);
+  useEffect(
+    () => () => {
+      clearTimeout(hoverTimer.current);
+    },
+    [],
+  );
   const pendingFocus = useRef(false);
   const shiftPressed = useRef(false);
   const within = useRef(false);
@@ -251,14 +289,17 @@ export function DataGrid<Row>({
   }, [firstRow, endRow]);
 
   const isColumnVirtual = placed.length > COLUMN_VIRTUALISE_AFTER;
-  const columnItems = isColumnVirtual ? columnVirtualizer.getVirtualItems() : [];
-  const drawnUnpinned: readonly PlacedColumn[] = isColumnVirtual
-    ? columnItems.flatMap((item) => unpinned[item.index] ?? [])
-    : unpinned;
+  const columnItems = isColumnVirtual ? columnVirtualizer.getVirtualItems() : NO_ITEMS;
+  const drawn = useMemo(
+    () => [
+      ...placed.filter((each) => each.isPinned),
+      ...(isColumnVirtual ? columnItems.flatMap((item) => unpinned[item.index] ?? []) : unpinned),
+    ],
+    [placed, unpinned, isColumnVirtual, columnItems],
+  );
   const leadSpacer = isColumnVirtual ? Math.max(0, (columnItems[0]?.start ?? pinnedEnd) - pinnedEnd) : 0;
   const drawnEnd = isColumnVirtual ? (columnItems.at(-1)?.end ?? pinnedEnd) : gridWidth;
   const trailSpacer = Math.max(0, gridWidth - drawnEnd);
-  const drawn = [...placed.filter((each) => each.isPinned), ...drawnUnpinned];
 
   // Selection, controlled or not. The ref holds the latest, for answers that arrive later.
   const [ownSelection, setOwnSelection] = useState<GridSelection>(noRows);
@@ -351,6 +392,48 @@ export function DataGrid<Row>({
     bringIntoView(position);
   };
 
+  /** Shows `cell`'s tip, or closes the tooltip when it has none. */
+  const showTip = (cell: HTMLElement, via: Tip['via']) => {
+    const found = tipIn(cell);
+    if (found === undefined) {
+      setTip(undefined);
+      return;
+    }
+    tipAnchor.current = found.anchor;
+    setTip({ key: `${cell.dataset.cell ?? ''}:${via}`, text: found.text, via });
+  };
+  const closeTip = () => {
+    clearTimeout(hoverTimer.current);
+    setTip(undefined);
+  };
+  // A pointer resting on a cell shows its tip after the tooltip delay, or at
+  // once while another is showing; keyboard focus shows it at once.
+  const onPointerOver = (event: PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType === 'touch' || !(event.target instanceof Element)) return;
+    if (!event.currentTarget.contains(event.target)) return;
+    const cell = event.target.closest<HTMLElement>('[data-cell]');
+    const key = cell?.dataset.cell;
+    if (key === hoveredCell.current) return;
+    hoveredCell.current = key;
+    clearTimeout(hoverTimer.current);
+    if (cell === null) {
+      if (tip?.via === 'hover') setTip(undefined);
+      return;
+    }
+    if (tip?.via === 'hover') {
+      showTip(cell, 'hover');
+      return;
+    }
+    hoverTimer.current = setTimeout(() => {
+      if (hoveredCell.current === key) showTip(cell, 'hover');
+    }, TOOLTIP_DELAY_MS);
+  };
+  const onPointerLeave = () => {
+    hoveredCell.current = undefined;
+    clearTimeout(hoverTimer.current);
+    if (tip?.via === 'hover') setTip(undefined);
+  };
+
   // After every render: inner controls stay out of the tab order (Tab enters
   // and leaves at the one focused cell), and a moved focus lands once its cell
   // has rendered. An editor in a list or a popover places its own focus.
@@ -372,6 +455,8 @@ export function DataGrid<Row>({
     queueMicrotask(() => {
       if (mode === undefined) {
         cell.focus({ preventScroll: true });
+        if (isFocusVisible && !isTipDismissed) showTip(cell, 'focus');
+        else if (tip?.via === 'focus') setTip(undefined);
         return;
       }
       const input = cell.querySelector<HTMLElement>('input:checked, input, textarea');
@@ -389,6 +474,7 @@ export function DataGrid<Row>({
     const column = columnAt(position.col);
     const id = rowIdAt(position.row);
     if (column === undefined || id === undefined || editModeOf(column.attribute) === undefined) return;
+    closeTip();
     clearLocalErrors([`${id}:${column.id}`]);
     setEditing({
       row: position.row,
@@ -596,6 +682,7 @@ export function DataGrid<Row>({
     if (event.key === 'Escape') {
       setRange(undefined);
       setTipDismissed(true);
+      closeTip();
       return;
     }
     if (focus.row < 0) {
@@ -688,6 +775,7 @@ export function DataGrid<Row>({
         return;
       }
       setWithin(false);
+      if (tip?.via === 'focus') setTip(undefined);
     });
   };
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
@@ -785,13 +873,8 @@ export function DataGrid<Row>({
   };
 
   // Drawing.
-  const placeOf = (each: PlacedColumn): CellPlace => ({
-    col: placed.indexOf(each) + 1,
-    width: each.column.width,
-    ...(each.isPinned ? { stickyOffset: each.offset } : {}),
-    ...(each.column.id === lastPinnedId ? { isLastPinned: true } : {}),
-  });
-  const columnActions = (column: GridColumn) => ({
+  const placeOf = (each: PlacedColumn): CellPlace => cellPlace(placed, each, lastPinnedId);
+  const columnActions = (column: GridColumn): ColumnActions => ({
     onMove: (direction: -1 | 1) => {
       commitLayout(moveColumn(layout, column.id, direction));
     },
@@ -836,62 +919,84 @@ export function DataGrid<Row>({
       commitLayout(reorderColumn(layout, dragged, before));
     },
   });
-  const runOf = (id: string) => {
-    const index = layout.columns.findIndex((each) => each.id === id);
-    return index < layout.pinnedCount;
-  };
-  const canMove = (id: string, direction: -1 | 1) => moveColumn(layout, id, direction) !== layout;
-
-  const spacer = (width: number, key: string) =>
-    width > 0 ? (
-      <div key={key} className={styles.spacer} aria-hidden="true" style={{ '--spacer-width': `${String(width)}px` }} />
-    ) : null;
-  const isLeadAt = (index: number) => isColumnVirtual && index === drawn.findIndex((each) => !each.isPinned);
+  const leadIndex = isColumnVirtual ? drawn.findIndex((each) => !each.isPinned) : -1;
   const isFocusedAt = (row: number, col: number) => focus.row === row && focus.col === col;
 
+  // The header takes stable handlers that call the latest ones, so a scroll
+  // step never redraws it.
+  const latestHeader = useRef({ toggleScreen, columnActions });
+  useLayoutEffect(() => {
+    latestHeader.current = { toggleScreen, columnActions };
+  });
+  const hasSort = onSort !== undefined;
+  const hasFilter = onFilter !== undefined;
+  const headerHandlers = useMemo<HeaderHandlers>(
+    () => ({
+      toggleScreen: () => {
+        latestHeader.current.toggleScreen();
+      },
+      setMenuFor,
+      actionsFor: (column) => {
+        const now = () => latestHeader.current.columnActions(column);
+        return {
+          onMove: (direction) => {
+            now().onMove(direction);
+          },
+          onPin: () => {
+            now().onPin();
+          },
+          onUnpin: () => {
+            now().onUnpin();
+          },
+          onHide: () => {
+            now().onHide();
+          },
+          onStartResize: () => {
+            now().onStartResize();
+          },
+          onResize: (width, isDone) => {
+            now().onResize(width, isDone);
+          },
+          onDrop: (dragged, side) => {
+            now().onDrop(dragged, side);
+          },
+          ...(hasSort
+            ? {
+                onSort: (direction) => {
+                  now().onSort?.(direction);
+                },
+              }
+            : {}),
+          ...(hasFilter
+            ? {
+                onFilter: () => {
+                  now().onFilter?.();
+                },
+              }
+            : {}),
+        };
+      },
+    }),
+    [hasSort, hasFilter],
+  );
+
   const header = (
-    <div role="row" aria-rowindex={1} className={styles.header}>
-      {/* eslint-disable-next-line jsx-a11y-x/click-events-have-key-events -- the grid's one key handler toggles it with Space */}
-      <div
-        role="columnheader"
-        aria-colindex={1}
-        className={styles.check}
-        data-cell={keyOf(-1, 0)}
-        data-focused={isFocusedAt(-1, 0) || undefined}
-        tabIndex={isFocusedAt(-1, 0) ? 0 : -1}
-        onClick={toggleScreen}
-      >
-        <CheckboxMark
-          label={strings.selectOnScreen}
-          isSelected={isScreenSelected}
-          isIndeterminate={screenSelected > 0 && !isScreenSelected}
-          isReadOnly={count === 0}
-        />
-      </div>
-      {drawn.map((each, index) => {
-        const place = placeOf(each);
-        return [
-          isLeadAt(index) ? spacer(leadSpacer, 'lead') : null,
-          <GridHeaderCell
-            key={each.column.id}
-            column={each.column}
-            place={place}
-            isRowHeader={each.column.id === rowHeader}
-            isPinned={runOf(each.column.id)}
-            canMoveLeft={canMove(each.column.id, -1)}
-            canMoveRight={canMove(each.column.id, 1)}
-            isFocused={isFocusedAt(-1, place.col)}
-            isResizing={resizing === each.column.id}
-            isMenuOpen={menuFor === each.column.id}
-            onMenuOpenChange={(isOpen) => {
-              setMenuFor(isOpen ? each.column.id : undefined);
-            }}
-            actions={columnActions(each.column)}
-          />,
-        ];
-      })}
-      {spacer(trailSpacer, 'trail')}
-    </div>
+    <GridHeader
+      placed={placed}
+      drawn={drawn}
+      layout={layout}
+      lastPinnedId={lastPinnedId}
+      rowHeader={rowHeader}
+      leadIndex={leadIndex}
+      leadSpacer={leadSpacer}
+      trailSpacer={trailSpacer}
+      focusCol={focus.row === -1 ? focus.col : undefined}
+      resizing={resizing}
+      menuFor={menuFor}
+      screen={isScreenSelected ? 'all' : screenSelected > 0 ? 'some' : 'none'}
+      isEmpty={count === 0}
+      handlers={headerHandlers}
+    />
   );
 
   const headerColumn = placed.find((each) => each.column.id === rowHeader)?.column;
@@ -902,18 +1007,30 @@ export function DataGrid<Row>({
     const text = fieldTypeOf(headerColumn.attribute.type).toText(value, textContext(headerColumn.attribute, display));
     return text === '' ? strings.untitled : text;
   };
-  const isTipShown = isWithin && isFocusVisible && !isTipDismissed;
 
-  const bodyRows = items.map((item) => {
+  // Rows recycle by place on screen: the nth row drawn is always the same
+  // element, so a scroll step, however far, redraws rows in place, and the
+  // page keeps them in order for screen readers. The focused and edited rows
+  // keep elements of their own, so focus and a draft never move to another row.
+  const ownKey = (row: number) =>
+    row === editingAt?.row ? 'editing' : row === focus.row && row >= 0 && row < count ? 'focused' : undefined;
+  let place = 0;
+  const rowKeys = items.map((item) => {
+    const own = ownKey(item.index);
+    if (own !== undefined) return own;
+    place += 1;
+    return `p${String(place)}`;
+  });
+
+  const bodyRows = items.map((item, drawnAt) => {
     const row = item.index;
     const rowData = rows.getItem(row);
     const id = rowData === undefined ? undefined : rows.getKey(rowData);
     const isSelected = id !== undefined && isRowSelected(currentSelection, id);
     const name = rowData === undefined ? strings.loadingRow : nameOf(rowData);
     return (
-      // Keyed by place, so a row that loads, or a record that moves, keeps the focus it holds.
       <div
-        key={row}
+        key={rowKeys[drawnAt]}
         role="row"
         aria-rowindex={row + 2}
         aria-selected={isSelected}
@@ -943,7 +1060,7 @@ export function DataGrid<Row>({
           const error = id === undefined ? undefined : errorFor(id, each.column.id);
           const isEditing = editing !== undefined && editing.row === row && editing.col === place.col;
           return [
-            isLeadAt(index) ? spacer(leadSpacer, 'lead') : null,
+            index === leadIndex ? <Spacer key="lead" width={leadSpacer} /> : null,
             <GridCell
               key={each.column.id}
               row={row}
@@ -955,7 +1072,7 @@ export function DataGrid<Row>({
               isRowHeader={each.column.id === rowHeader}
               isFocused={isFocusedAt(row, place.col)}
               isInRange={isInRange(range, row, place.col)}
-              isTipShown={isTipShown}
+              tipId={`${gridId}-tip-${keyOf(row, place.col)}`}
               editorProps={editorProps?.(each.column) ?? NO_EDITOR_PROPS}
               onCommit={(next) => {
                 commitCell(row, place.col, next);
@@ -992,7 +1109,7 @@ export function DataGrid<Row>({
             />,
           ];
         })}
-        {spacer(trailSpacer, 'trail')}
+        <Spacer width={trailSpacer} />
       </div>
     );
   });
@@ -1010,7 +1127,7 @@ export function DataGrid<Row>({
       {drawn.map((each, index) => {
         const place = placeOf(each);
         return [
-          isLeadAt(index) ? spacer(leadSpacer, 'lead') : null,
+          index === leadIndex ? <Spacer key="lead" width={leadSpacer} /> : null,
           <div
             key={each.column.id}
             role="gridcell"
@@ -1031,7 +1148,7 @@ export function DataGrid<Row>({
           </div>,
         ];
       })}
-      {spacer(trailSpacer, 'trail')}
+      <Spacer width={trailSpacer} />
     </div>
   );
 
@@ -1066,59 +1183,181 @@ export function DataGrid<Row>({
   }
 
   return (
-    <div className={styles.frame}>
-      <div
-        ref={scrollRef}
-        role="grid"
-        aria-label={label}
-        aria-rowcount={rowCount + 1}
-        aria-colcount={colCount}
-        aria-multiselectable
-        aria-busy={status === 'loading' || undefined}
-        className={styles.root}
-        data-empty={isEmpty || undefined}
-        tabIndex={isCellFocusable && status === 'ready' ? -1 : 0}
-        onKeyDownCapture={onKeyDownCapture}
-        onKeyDown={onKeyDown}
-        onFocus={onFocus}
-        onBlur={onBlur}
-        onPointerDown={onPointerDown}
-        onCopy={onCopy}
-        onPaste={onPaste}
-        style={{ '--grid-width': `${String(gridWidth)}px` }}
-      >
-        {header}
-        {status === 'loading' ? (
-          <div role="rowgroup" aria-hidden="true">
-            {showSkeleton &&
-              Array.from({ length: LOADING_ROWS }, (_, index) => (
-                <div key={index} className={styles.skeletonRow}>
-                  <Skeleton width="full" />
-                </div>
-              ))}
-          </div>
-        ) : (
-          count > 0 && (
-            <div
-              role="rowgroup"
-              className={styles.body}
-              style={{ '--body-height': `${String(virtualizer.getTotalSize() - HEADER)}px` }}
-            >
-              {bodyRows}
+    <SharedTooltipContext value>
+      <div className={styles.frame}>
+        <div
+          ref={scrollRef}
+          role="grid"
+          aria-label={label}
+          aria-rowcount={rowCount + 1}
+          aria-colcount={colCount}
+          aria-multiselectable
+          aria-busy={status === 'loading' || undefined}
+          className={styles.root}
+          data-empty={isEmpty || undefined}
+          tabIndex={isCellFocusable && status === 'ready' ? -1 : 0}
+          onKeyDownCapture={onKeyDownCapture}
+          onKeyDown={onKeyDown}
+          onFocus={onFocus}
+          onBlur={onBlur}
+          onPointerDown={onPointerDown}
+          onPointerOver={onPointerOver}
+          onPointerLeave={onPointerLeave}
+          onScroll={tip === undefined ? undefined : closeTip}
+          onCopy={onCopy}
+          onPaste={onPaste}
+          style={{ '--grid-width': `${String(gridWidth)}px` }}
+        >
+          {header}
+          {status === 'loading' ? (
+            <div role="rowgroup" aria-hidden="true">
+              {showSkeleton &&
+                Array.from({ length: LOADING_ROWS }, (_, index) => (
+                  <div key={index} className={styles.skeletonRow}>
+                    <Skeleton width="full" />
+                  </div>
+                ))}
             </div>
-          )
-        )}
-        {footerRow}
-      </div>
-      {/* With no rows the header stays, so the columns and their menus do too. */}
-      {isEmpty && (
-        <div className={styles.state}>
-          {emptyState ?? <EmptyState title={strings.empty}>{strings.emptyText}</EmptyState>}
+          ) : (
+            count > 0 && (
+              <div
+                role="rowgroup"
+                className={styles.body}
+                style={{ '--body-height': `${String(virtualizer.getTotalSize() - HEADER)}px` }}
+              >
+                {bodyRows}
+              </div>
+            )
+          )}
+          {footerRow}
         </div>
-      )}
-      <VisuallyHidden>
-        <span role="status">{spoken}</span>
-      </VisuallyHidden>
-    </div>
+        {/* With no rows the header stays, so the columns and their menus do too. */}
+        {isEmpty && (
+          <div className={styles.state}>
+            {emptyState ?? <EmptyState title={strings.empty}>{strings.emptyText}</EmptyState>}
+          </div>
+        )}
+        {tip !== undefined && (isWithin || tip.via === 'hover') && (
+          <AnchoredTooltip
+            key={tip.key}
+            content={tip.text}
+            triggerRef={tipAnchor}
+            onOpenChange={(isOpen) => {
+              if (!isOpen) closeTip();
+            }}
+          />
+        )}
+        <VisuallyHidden>
+          <span role="status">{spoken}</span>
+        </VisuallyHidden>
+      </div>
+    </SharedTooltipContext>
   );
 }
+
+/** Where a column's cells sit: its drawn column, width, and offset when pinned. */
+function cellPlace(placed: readonly PlacedColumn[], each: PlacedColumn, lastPinnedId: string | undefined): CellPlace {
+  return {
+    col: placed.indexOf(each) + 1,
+    width: each.column.width,
+    ...(each.isPinned ? { stickyOffset: each.offset } : {}),
+    ...(each.column.id === lastPinnedId ? { isLastPinned: true } : {}),
+  };
+}
+
+/** Room for the columns not drawn, so the drawn ones sit where they belong. */
+function Spacer({ width }: { readonly width: number }) {
+  return width > 0 ? (
+    <div className={styles.spacer} aria-hidden="true" style={{ '--spacer-width': `${String(width)}px` }} />
+  ) : null;
+}
+
+/** What the header calls; stable, each reading the grid's latest. */
+interface HeaderHandlers {
+  readonly toggleScreen: () => void;
+  readonly setMenuFor: (columnId: string | undefined) => void;
+  readonly actionsFor: (column: GridColumn) => ColumnActions;
+}
+
+interface GridHeaderProps {
+  readonly placed: readonly PlacedColumn[];
+  readonly drawn: readonly PlacedColumn[];
+  readonly layout: ColumnLayout;
+  readonly lastPinnedId: string | undefined;
+  readonly rowHeader: string;
+  readonly leadIndex: number;
+  readonly leadSpacer: number;
+  readonly trailSpacer: number;
+  /** The focused column, while focus is in the header. */
+  readonly focusCol: number | undefined;
+  readonly resizing: string | undefined;
+  readonly menuFor: string | undefined;
+  readonly screen: 'none' | 'some' | 'all';
+  readonly isEmpty: boolean;
+  readonly handlers: HeaderHandlers;
+}
+
+/** The header row: the checkbox for the rows on screen, then a header per drawn column. Memoised, so a scroll step skips it. */
+const GridHeader = memo(function GridHeader({
+  placed,
+  drawn,
+  layout,
+  lastPinnedId,
+  rowHeader,
+  leadIndex,
+  leadSpacer,
+  trailSpacer,
+  focusCol,
+  resizing,
+  menuFor,
+  screen,
+  isEmpty,
+  handlers,
+}: GridHeaderProps) {
+  const runOf = (id: string) => layout.columns.findIndex((each) => each.id === id) < layout.pinnedCount;
+  const canMove = (id: string, direction: -1 | 1) => moveColumn(layout, id, direction) !== layout;
+  return (
+    <div role="row" aria-rowindex={1} className={styles.header}>
+      {/* eslint-disable-next-line jsx-a11y-x/click-events-have-key-events -- the grid's one key handler toggles it with Space */}
+      <div
+        role="columnheader"
+        aria-colindex={1}
+        className={styles.check}
+        data-cell={keyOf(-1, 0)}
+        data-focused={focusCol === 0 || undefined}
+        tabIndex={focusCol === 0 ? 0 : -1}
+        onClick={handlers.toggleScreen}
+      >
+        <CheckboxMark
+          label={strings.selectOnScreen}
+          isSelected={screen === 'all'}
+          isIndeterminate={screen === 'some'}
+          isReadOnly={isEmpty}
+        />
+      </div>
+      {drawn.map((each, index) => {
+        const place = cellPlace(placed, each, lastPinnedId);
+        return [
+          index === leadIndex ? <Spacer key="lead" width={leadSpacer} /> : null,
+          <GridHeaderCell
+            key={each.column.id}
+            column={each.column}
+            place={place}
+            isRowHeader={each.column.id === rowHeader}
+            isPinned={runOf(each.column.id)}
+            canMoveLeft={canMove(each.column.id, -1)}
+            canMoveRight={canMove(each.column.id, 1)}
+            isFocused={focusCol === place.col}
+            isResizing={resizing === each.column.id}
+            isMenuOpen={menuFor === each.column.id}
+            onMenuOpenChange={(isOpen) => {
+              handlers.setMenuFor(isOpen ? each.column.id : undefined);
+            }}
+            actions={handlers.actionsFor(each.column)}
+          />,
+        ];
+      })}
+      <Spacer width={trailSpacer} />
+    </div>
+  );
+});

@@ -3,6 +3,7 @@ import { useState, type ReactNode } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
 import type { CellChange } from '../../fields/types.ts';
 import { arraySource } from '../../lib/list-source.ts';
+import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
 import { sampleColumns, sampleRows, type SampleRow } from '../../workbench/grid-samples.ts';
 import { SAMPLE_COMPANIES, SAMPLE_MEMBERS } from '../../workbench/field-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -489,5 +490,28 @@ export const ScrollKeepsFocus: Story = {
     await expect(focused()).toBe('0:1');
     await press(['{ArrowDown}'], '1:1');
     await waitFor(() => expect(grid.scrollTop).toBeLessThan(3000));
+  },
+};
+
+/** One tooltip serves every cell: a refused cell's reason shows at once on keyboard focus, Esc hides it, and a pointer resting on the cell shows it after the delay. */
+export const CellTips: Story = {
+  args: { cellErrors: new Map([['company-0:domain', 'Another company already has this domain.']]) },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvasElement, userEvent }) => {
+    const press = presser((keys) => userEvent.keyboard(keys));
+    const reason = 'Another company already has this domain.';
+    await userEvent.tab();
+    await press(['{ArrowRight}'], '0:2');
+    await expect(await shownTooltip()).toHaveTextContent(reason);
+    await expect(cell(canvasElement, 0, 2)).toHaveAccessibleDescription(reason);
+    await press(['{Escape}']);
+    await waitFor(() => expect(document.querySelector('[role="tooltip"]')).toBeNull());
+    const refused = cell(canvasElement, 0, 2);
+    await expect(refused).not.toBeNull();
+    if (refused === null) return;
+    await hoverFresh(userEvent, refused);
+    await expect(await shownTooltip()).toHaveTextContent(reason);
+    await userEvent.unhover(refused);
+    await waitFor(() => expect(document.querySelector('[role="tooltip"]')).toBeNull());
   },
 };

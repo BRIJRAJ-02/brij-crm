@@ -52,6 +52,7 @@ pnpm ui:artifact                   # build the artifact files into .artifact/; -
 - `parameters.crm.screenshot = false` leaves a story out of the screenshots; do it when another story already shows the same thing. Baselines over 200 KB are refused.
 - After changing a component, run `pnpm ui:artifact`, publish `.artifact/project/` to the artifact from `artifact.json`, then write the new version id back into `artifact.json`.
 - Components read the language, time zone and current time from `UiProvider`, never from `navigator`, `Intl` defaults or `Date.now()`. Stories freeze the clock at 8 October 2026, 14:30 UTC, in Europe/London.
+- One exception to "no mutable state at module level": `lib/intl-memo.ts` caches `Intl` formatters (and the segmenter) by kind, language and options, through `memoIntl(key, make)`. It holds only immutable values, so nothing behaves differently for it; a grid scroll formats hundreds of values a step, and building each formatter again broke the long task budget (AC-7). Nothing else lives at module level.
 
 ## Gotchas
 

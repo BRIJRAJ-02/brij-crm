@@ -1,4 +1,5 @@
 import { HUES, type Hue } from '../hue.ts';
+import { memoIntl } from './intl-memo.ts';
 
 /** The hue for something with no hue of its own (an avatar with no picture): a stable hash of its id over the nine hues. */
 export function stableHue(id: string): Hue {
@@ -20,6 +21,8 @@ export function initialsOf(name: string): string {
   const first = words[0];
   if (first === undefined) return '';
   const last = words.length > 1 ? words.at(-1) : undefined;
-  const letter = (word: string) => [...new Intl.Segmenter().segment(word)][0]?.segment.toLocaleUpperCase() ?? '';
+  const segmenter = memoIntl('segmenter', () => new Intl.Segmenter());
+  const letter = (word: string) =>
+    segmenter.segment(word)[Symbol.iterator]().next().value?.segment.toLocaleUpperCase() ?? '';
   return `${letter(first)}${last === undefined ? '' : letter(last)}`;
 }

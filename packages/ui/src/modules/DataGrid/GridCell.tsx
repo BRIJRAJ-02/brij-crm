@@ -1,11 +1,11 @@
 // One body cell of the grid: the value through the field set, its editor when
 // open (in the cell, as an open list, or in a popover anchored to it), a
-// skeleton while its row loads, and the reason in a tooltip when it can't be
-// edited or was refused.
-import { useId, useRef, useState, type MouseEvent, type ReactNode } from 'react';
+// skeleton while its row loads, and the reason when it can't be edited or was
+// refused, which the grid's one shared tooltip shows.
+import { useRef, type MouseEvent, type ReactNode } from 'react';
 import { FocusScope } from 'react-aria';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
-import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
+import { SharedTooltipContext } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
 import { AttributeEditor } from '../../fields/AttributeEditor.tsx';
@@ -56,8 +56,8 @@ export interface GridCellProps {
   readonly isRowHeader: boolean;
   readonly isFocused: boolean;
   readonly isInRange: boolean;
-  /** Keyboard focus is on this cell and the reason wasn't dismissed with Esc, so its tooltip shows at once. */
-  readonly isTipShown: boolean;
+  /** The id of the cell's reason, its description; the grid's shared tooltip shows it too. */
+  readonly tipId: string;
   readonly editing?: { readonly startText?: string };
   readonly error?: string;
   /** What reference and file editors need from the screen. */
@@ -77,7 +77,8 @@ export interface GridCellProps {
  * A body cell. Its value draws through `AttributeDisplay`, a checkbox value
  * as its mark, which a click toggles; on the row header a click on the name
  * opens the record. A reason (read only, or refused) is the cell's
- * description, and shows in a tooltip on hover or keyboard focus.
+ * description, marked `data-tip` for the grid's shared tooltip, which shows it
+ * on hover or keyboard focus. The cell mounts no tooltip of its own.
  */
 export function GridCell({
   row,
@@ -89,7 +90,7 @@ export function GridCell({
   isRowHeader,
   isFocused,
   isInRange,
-  isTipShown,
+  tipId,
   editing,
   error,
   editorProps,
@@ -101,8 +102,6 @@ export function GridCell({
   onToggle,
 }: GridCellProps) {
   const ref = useRef<HTMLDivElement>(null);
-  const tipId = useId();
-  const [isHoverOpen, setHoverOpen] = useState(false);
   const definition = fieldTypeOf(attribute.type);
   const reason = readOnlyReasonOf(attribute);
   const mode = editing === undefined ? undefined : editModeOf(attribute);
@@ -149,19 +148,6 @@ export function GridCell({
   }
 
   const tip = isLoaded ? (error ?? reason) : undefined;
-  const wrapped =
-    tip === undefined || mode === 'cell' || mode === 'list' ? (
-      content
-    ) : (
-      <Tooltip
-        content={tip}
-        isTextTrigger
-        isOpen={isHoverOpen || (isFocused && isTipShown)}
-        onOpenChange={setHoverOpen}
-      >
-        <span className={styles.value}>{content}</span>
-      </Tooltip>
-    );
   const onClick = (event: MouseEvent<HTMLDivElement>) => {
     if (action !== undefined && (event.target as HTMLElement).closest('[data-hit]') !== null) action();
   };
@@ -188,9 +174,9 @@ export function GridCell({
       {...(action === undefined ? {} : { onClick })}
       style={{ '--col-width': `${String(place.width)}px`, '--col-offset': `${String(place.stickyOffset ?? 0)}px` }}
     >
-      {wrapped}
+      {content}
       {tip !== undefined && (
-        <span id={tipId} hidden>
+        <span id={tipId} hidden data-tip="">
           {tip}
         </span>
       )}
@@ -205,7 +191,10 @@ export function GridCell({
         >
           {/* The first control takes focus, so keys reach the editor at once. */}
           {/* eslint-disable-next-line jsx-a11y-x/no-autofocus -- the editor was opened on purpose, from the cell */}
-          <FocusScope autoFocus>{editor}</FocusScope>
+          <FocusScope autoFocus>
+            {/* The grid's shared tooltip doesn't reach a popover, so cut text here shows its own. */}
+            <SharedTooltipContext value={false}>{editor}</SharedTooltipContext>
+          </FocusScope>
         </Popover>
       )}
     </div>

@@ -1,7 +1,8 @@
 // Intl formatters are slow to build and never change once built, so each one
 // is built once per language and options, then reused: a grid screen formats
 // hundreds of values per scroll step. It memoises pure values, so nothing
-// behaves differently for what it holds.
+// behaves differently for what it holds. The one recorded exception to "no
+// mutable state at module level" (packages/ui/AGENTS.md).
 const built = new Map<string, unknown>();
 
 /** The formatter for `key` (its kind, language and options), built by `make` the first time. */

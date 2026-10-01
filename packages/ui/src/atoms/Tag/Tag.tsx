@@ -19,7 +19,9 @@ export interface TagProps {
 export function Tag({ children, hue = 'gray', isArchived = false }: TagProps) {
   return (
     <span className={styles.root} data-hue={isArchived ? 'gray' : hue} data-archived={isArchived || undefined}>
-      <span className={styles.label}>{children}</span>
+      <span className={styles.label} data-truncated="">
+        {children}
+      </span>
       {isArchived && <VisuallyHidden> {strings.archived}</VisuallyHidden>}
     </span>
   );

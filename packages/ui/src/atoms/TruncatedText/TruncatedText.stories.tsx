@@ -36,7 +36,6 @@ export const Cut: Story = {
   ),
   play: async ({ canvas, userEvent }) => {
     const text = canvas.getByText(/International Business/);
-    // The tooltip is on only once the text measures as cut.
     await waitFor(() => expect(text.scrollWidth).toBeGreaterThan(text.clientWidth));
     await hoverFresh(userEvent, text);
     await expect(await shownTooltip()).toHaveTextContent('Forwarding Limited');

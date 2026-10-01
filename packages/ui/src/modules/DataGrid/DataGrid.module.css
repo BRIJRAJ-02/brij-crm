@@ -3,6 +3,14 @@
    pinned run sticky at the start edge, and a sticky footer. A selected row
    takes surface-selected, and keeps it under the pointer; any other hovered
    row takes surface-hover. */
+/* A row's place changes on every scroll step; not inherited, so moving a row
+   restyles the row alone, not everything in it. */
+@property --row-offset {
+  syntax: '<length>';
+  inherits: false;
+  initial-value: 0;
+}
+
 @layer components {
   .frame {
     position: relative;
@@ -17,7 +25,6 @@
     /* Set inline per grid, row and column; these are the defaults. */
     --grid-width: 100%;
     --body-height: 0;
-    --row-offset: 0;
     --spacer-width: 0;
     --col-width: var(--size-column);
     --col-offset: 0;
@@ -59,17 +66,21 @@
     inset-inline-start: 0;
     display: flex;
     inline-size: var(--grid-width);
+    block-size: var(--size-row);
     background: var(--surface);
     transform: translateY(var(--row-offset));
+    /* Each row is its own box: a scroll step lays out and paints the rows that changed, and no more. */
+    contain: strict;
   }
 
   .row[data-selected] {
     background: var(--surface-selected);
   }
 
-  /* An open editor's error floats over the rows below. */
+  /* An open editor's error floats over the rows below, so this row doesn't clip it. */
   .row[data-editing] {
     z-index: var(--z-raised);
+    contain: none;
   }
 
   @media (hover: hover) and (pointer: fine) {

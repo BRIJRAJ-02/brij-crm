@@ -36,8 +36,9 @@ export function ChipRow({ chips, maxVisible, label }: ChipRowProps) {
   const rest = chips.length - shown.length;
   return (
     <span className={styles.row}>
-      {shown.map((chip) => (
-        <span key={chip.key} className={styles.chip}>
+      {/* Keyed by place: a grid cell that scrolls to another record redraws its chips in place. */}
+      {shown.map((chip, place) => (
+        <span key={place} className={styles.chip}>
           {chip.node}
         </span>
       ))}

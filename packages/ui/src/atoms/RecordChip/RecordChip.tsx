@@ -70,7 +70,9 @@ export function RecordChip({ display, href, isFlat = false }: RecordChipProps) {
   const content = (
     <>
       <Face display={display} />
-      <span className={styles.label}>{name}</span>
+      <span className={styles.label} data-truncated="">
+        {name}
+      </span>
     </>
   );
   const safe = safeHref(href);

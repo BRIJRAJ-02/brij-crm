@@ -18,7 +18,9 @@ export function StatusDot({ children, hue, isArchived = false }: StatusDotProps)
   return (
     <span className={styles.root} data-archived={isArchived || undefined}>
       <span className={styles.dot} data-hue={isArchived ? 'gray' : hue} aria-hidden="true" />
-      <span className={styles.label}>{children}</span>
+      <span className={styles.label} data-truncated="">
+        {children}
+      </span>
       {isArchived && <VisuallyHidden> {strings.archived}</VisuallyHidden>}
     </span>
   );

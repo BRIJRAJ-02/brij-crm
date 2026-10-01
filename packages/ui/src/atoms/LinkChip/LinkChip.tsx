@@ -17,7 +17,9 @@ export function LinkChip({ href, children }: LinkChipProps) {
   if (safe === undefined) {
     return (
       <span className={styles.root} data-plain="">
-        <span className={styles.label}>{children}</span>
+        <span className={styles.label} data-truncated="">
+          {children}
+        </span>
       </span>
     );
   }
@@ -26,13 +28,17 @@ export function LinkChip({ href, children }: LinkChipProps) {
   if (!isAppPath(safe)) {
     return (
       <a className={styles.root} href={safe} {...linkTarget(safe)}>
-        <span className={styles.label}>{children}</span>
+        <span className={styles.label} data-truncated="">
+          {children}
+        </span>
       </a>
     );
   }
   return (
     <AriaLink className={styles.root} href={safe}>
-      <span className={styles.label}>{children}</span>
+      <span className={styles.label} data-truncated="">
+        {children}
+      </span>
     </AriaLink>
   );
 }

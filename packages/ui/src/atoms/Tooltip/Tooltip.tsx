@@ -1,15 +1,20 @@
-import { useRef, type ReactElement } from 'react';
+import { useRef, type ReactElement, type RefObject } from 'react';
 import { useFocusable, useFocusVisible } from 'react-aria';
-import { Tooltip as AriaTooltip, TooltipTrigger } from 'react-aria-components';
+import {
+  Tooltip as AriaTooltip,
+  TooltipTrigger,
+  TooltipTriggerStateContext,
+  type TooltipTriggerState,
+} from 'react-aria-components';
 import styles from './Tooltip.module.css';
 
 /**
  * How long a pointer rests before a tooltip opens (spec 0003): quick for cut
  * text and icon buttons, slow enough that crossing a table flashes nothing.
  * While one is showing, the next opens at once, and keyboard focus opens it
- * at once.
+ * at once. A host that shows one tooltip for many elements waits the same.
  */
-const TOOLTIP_DELAY_MS = 500;
+export const TOOLTIP_DELAY_MS = 500;
 
 /** Where a tooltip sits against its trigger. */
 export type TooltipPlacement = 'top' | 'bottom' | 'start' | 'end';
@@ -80,5 +85,48 @@ export function Tooltip({
         {content}
       </AriaTooltip>
     </TooltipTrigger>
+  );
+}
+
+/** Props for AnchoredTooltip. */
+export interface AnchoredTooltipProps {
+  readonly content: string;
+  /** The element it points at; set it before opening. */
+  readonly triggerRef: RefObject<Element | null>;
+  readonly onOpenChange?: (isOpen: boolean) => void;
+  readonly placement?: TooltipPlacement;
+}
+
+/**
+ * Tooltip's look, opened from outside against an element that has no trigger
+ * of its own: one shared by a table's hundreds of cells, so each cell mounts
+ * none. The host decides when it opens (after `TOOLTIP_DELAY_MS` of resting,
+ * or at once on keyboard focus) and renders it only while it is open.
+ */
+export function AnchoredTooltip({ content, triggerRef, onOpenChange, placement = 'top' }: AnchoredTooltipProps) {
+  const { isFocusVisible } = useFocusVisible();
+  // React Aria's tooltip reads its state from a trigger; with none, this is it: open until the host closes it.
+  const state: TooltipTriggerState = {
+    isOpen: true,
+    shouldSkipAnimation: false,
+    open: () => undefined,
+    close: () => {
+      onOpenChange?.(false);
+    },
+  };
+  return (
+    <TooltipTriggerStateContext value={state}>
+      <AriaTooltip
+        className={styles.root}
+        triggerRef={triggerRef}
+        isOpen
+        placement={placement}
+        offset={0}
+        data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}
+        {...(onOpenChange === undefined ? {} : { onOpenChange })}
+      >
+        {content}
+      </AriaTooltip>
+    </TooltipTriggerStateContext>
   );
 }
