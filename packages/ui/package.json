@@ -6,12 +6,13 @@
     ".": "./src/index.ts",
     "./styles.css": "./src/styles/index.css",
     "./theme": "./src/theme/theme.ts",
-    "./vite": "./src/vite.ts"
+    "./vite": "./src/vite.ts",
+    "./grid": "./src/grid.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run --project stories --project unit --project browser",
+    "test": "vitest run --project stories --project unit --project browser --project perf",
     "test:unit": "vitest run --project unit",
     "test:visual": "node scripts/test-visual.ts",
     "storybook": "storybook dev --port 6006 --no-open",
@@ -22,6 +23,7 @@
     "@crm/contracts": "workspace:*",
     "@crm/tokens": "workspace:*",
     "@internationalized/date": "catalog:",
+    "@tanstack/react-virtual": "catalog:",
     "libphonenumber-js": "catalog:",
     "lucide-react": "catalog:",
     "react": "catalog:",

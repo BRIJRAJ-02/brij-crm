@@ -22,6 +22,8 @@ import { selectType } from './Select/type.ts';
 import { statusType } from './Status/type.ts';
 import { textType } from './Text/type.ts';
 import { timestampType } from './Timestamp/type.ts';
+import { sizeToken } from '../lib/token-values.ts';
+import { strings } from './strings.ts';
 import type { AttributeTypeDef, ColumnWidth, FieldAttribute } from './types.ts';
 import { urlType } from './Url/type.ts';
 
@@ -63,4 +65,29 @@ export function isSystemOnly(type: AttributeType): boolean {
 export function columnWidthOf(attribute: FieldAttribute): ColumnWidth {
   if (attribute.allowMultiple || attribute.cardinality === 'many') return 'wide';
   return fieldTypeOf(attribute.type).width;
+}
+
+const WIDTH_TOKENS: { readonly [W in ColumnWidth]: string } = {
+  narrow: 'size-column-narrow',
+  default: 'size-column',
+  wide: 'size-column-wide',
+};
+
+/** A new grid column's width in pixels: its tier (`columnWidthOf`) as that tier's size token. */
+export function columnWidthFor(attribute: FieldAttribute): number {
+  return sizeToken(WIDTH_TOKENS[columnWidthOf(attribute)]);
+}
+
+/** What clearing a value leaves: the type's `cleared` (`false` for a checkbox), else empty. */
+export function clearedValueOf(attribute: FieldAttribute): unknown {
+  return fieldTypeOf(attribute.type).cleared ?? null;
+}
+
+/** Why people can't edit this attribute's values, or `undefined` when they can: its own reason, else the field set's. */
+export function readOnlyReasonOf(attribute: FieldAttribute): string | undefined {
+  const isSystem = isSystemOnly(attribute.type);
+  if (!attribute.isReadOnly && attribute.computed === undefined && !isSystem) return undefined;
+  if (attribute.readOnlyReason !== undefined) return attribute.readOnlyReason;
+  if (attribute.computed !== undefined) return strings.computed;
+  return isSystem ? strings.system : strings.readOnly;
 }

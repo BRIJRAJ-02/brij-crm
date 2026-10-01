@@ -71,3 +71,19 @@ export const OnText: Story = {
     await expect(tip).toHaveTextContent('EMEA region');
   },
 };
+
+/** Opened from outside, as the grid opens its focused cell's reason: `isOpen` shows it with no hover or focus on the text. */
+export const Controlled: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage>
+      <Tooltip content="Calculated by a formula" isTextTrigger isOpen>
+        <span>12</span>
+      </Tooltip>
+    </Stage>
+  ),
+  play: async () => {
+    const tip = await tooltip();
+    await expect(tip).toHaveTextContent('Calculated by a formula');
+  },
+};

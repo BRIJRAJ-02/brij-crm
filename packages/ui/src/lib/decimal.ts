@@ -1,10 +1,11 @@
 // Typed numbers, read in the viewer's own format (AC-5, AC-11). Exact decimal
 // strings in and out: never through a JS number, which would lose digits.
+import { memoIntl } from './intl-memo.ts';
 import { toCanonicalDecimal } from '@crm/contracts/values';
 
 /** The group and decimal signs a language writes numbers with: `,` and `.` in en-US, `.` and `,` in de-DE. */
 export function decimalSigns(locale: string): { readonly group: string; readonly decimal: string } {
-  const parts = new Intl.NumberFormat(locale).formatToParts(12_345.6);
+  const parts = memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).formatToParts(12_345.6);
   return {
     group: parts.find((part) => part.type === 'group')?.value ?? ',',
     decimal: parts.find((part) => part.type === 'decimal')?.value ?? '.',

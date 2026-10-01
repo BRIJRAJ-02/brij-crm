@@ -35,5 +35,6 @@ export const actorReferenceType: AttributeTypeDef<'actor_reference'> = {
   },
   align: 'start',
   editIn: 'popover',
+  closesOnCommit: true,
   width: 'default',
 };

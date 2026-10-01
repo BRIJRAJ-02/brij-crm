@@ -48,6 +48,12 @@ export const SAMPLE_MEMBERS = MEMBERS;
 /** The companies the record reference stories pick from. */
 export const SAMPLE_COMPANIES = COMPANIES;
 
+/** The pipeline stages the status samples use. */
+export const SAMPLE_STAGES = STAGES;
+
+/** The segment tags the select samples use. */
+export const SAMPLE_TAGS = TAGS;
+
 /** A sample per attribute type. */
 export const FIELD_SAMPLES: { readonly [T in AttributeType]: FieldSample } = {
   text: { attribute: attributeOf('text', 'Name'), value: 'Northwind Traders' },

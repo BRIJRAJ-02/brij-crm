@@ -1,3 +1,4 @@
+import { memoIntl } from '../../lib/intl-memo.ts';
 import type { LocationValue } from '@crm/contracts/values';
 import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { useFormatSettings } from '../../provider/context.ts';
@@ -10,7 +11,7 @@ export function shortLocation(location: LocationValue, locale: string): string {
   const country =
     location.countryCode === undefined
       ? undefined
-      : new Intl.DisplayNames(locale, { type: 'region' }).of(location.countryCode);
+      : memoIntl(`region:${locale}`, () => new Intl.DisplayNames(locale, { type: 'region' })).of(location.countryCode);
   return [location.locality, location.region, country].filter((part) => part !== undefined && part !== '').join(', ');
 }
 
@@ -20,7 +21,7 @@ function fullLocation(location: LocationValue, locale: string): readonly string[
   const country =
     location.countryCode === undefined
       ? undefined
-      : new Intl.DisplayNames(locale, { type: 'region' }).of(location.countryCode);
+      : memoIntl(`region:${locale}`, () => new Intl.DisplayNames(locale, { type: 'region' })).of(location.countryCode);
   return [location.line1, location.line2, location.line3, location.line4, place, country].filter(
     (line): line is string => line !== undefined && line !== '',
   );

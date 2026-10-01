@@ -16,6 +16,8 @@ export interface TextDraftOptions<T extends AttributeType> {
   readonly onCancel?: () => void;
   /** A refusal from outside (the server), shown until the text changes. */
   readonly error?: string;
+  /** The text already differs from the value (the grid opened it by typing), so leaving commits it. */
+  readonly isChanged?: boolean;
 }
 
 /** A typed editor's draft: the Field's props, and commit and cancel. */
@@ -25,10 +27,11 @@ export function useTextDraft<T extends AttributeType>({
   onCommit,
   onCancel,
   error,
+  isChanged = false,
 }: TextDraftOptions<T>) {
   const [draft, setDraft] = useState(initial);
   const [message, setMessage] = useState<string | undefined>(undefined);
-  const [isDirty, setDirty] = useState(false);
+  const [isDirty, setDirty] = useState(isChanged);
 
   const commit = () => {
     if (!isDirty) return;

@@ -17,8 +17,10 @@ So a value looks and edits the same everywhere: a tag in a grid cell is the same
 - `surface` (`cell`, `panel`, `card`, `form`, `filter`, `preview`) changes behaviour only: a cell commits on Enter and hides labels; a form is always in edit mode. Looks adapt to the slot.
 - `display` carries the data layer's display shapes (names and pictures for references, members and files); fields never resolve ids.
 - Editors commit only values that parse with the type's schema from `@crm/contracts/values`, `null` to clear, or nothing while the input is invalid; the Field shows how to fix it (AC-5). A required attribute refuses empty with "<Name> is required." Uniqueness is the server's; pass its refusal back as `error`.
-- A read only, computed or system value (timestamp, interaction) shows read only with its reason. An AI value edits as its result type; a hand edit replaces it, and `onRefresh` adds Refresh.
-- `fieldTypeOf(type)` gives the grid and filters each type's `operators(attribute)`, `toText` and `fromText` (copy, paste, CSV, the import preview), `align` and `editIn`.
+- A read only, computed or system value (timestamp, interaction) shows read only with its reason, from `readOnlyReasonOf(attribute)`: its own, else "Worked out by the system", "Set by the system" or "Read only". An AI value edits as its result type; a hand edit replaces it, and `onRefresh` adds Refresh.
+- `fieldTypeOf(type)` gives the grid and filters each type's `operators(attribute)`, `toText` and `fromText` (copy, paste, CSV, the import preview), `align` and `editIn`, and for the grid `isListEditor` (a select or status edits as its open list), `closesOnCommit` (one choice finishes it), `togglesInPlace` and `cleared` (a checkbox toggles where it is, and clears to `false`).
+- `autoOpen` (the grid sets it when it starts an edit) opens a list, menu or search at once, so one key reaches the choices; closing a list ends the edit through `onCancel`. A search starts from `startText`.
+- In a cell, a typed field's error floats under the input, over the rows below; a rating's arrows and a typed digit choose a draft that Enter commits and Esc drops.
 
 Each type's folder has its display, its editor, its `type.ts` registry entry, its stories and a README with its pairing, its text conversion and its operators.
 

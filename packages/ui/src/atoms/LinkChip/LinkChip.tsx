@@ -1,5 +1,5 @@
 import { Link as AriaLink } from 'react-aria-components';
-import { safeHref } from '../../lib/safe-href.ts';
+import { isAppPath, safeHref } from '../../lib/safe-href.ts';
 import { linkTarget } from '../Link/Link.tsx';
 import styles from './LinkChip.module.css';
 
@@ -21,8 +21,17 @@ export function LinkChip({ href, children }: LinkChipProps) {
       </span>
     );
   }
+  // A link out is a plain anchor: no router to go through, and no React Aria
+  // hooks for each of the hundreds a table draws. App paths go through the router.
+  if (!isAppPath(safe)) {
+    return (
+      <a className={styles.root} href={safe} {...linkTarget(safe)}>
+        <span className={styles.label}>{children}</span>
+      </a>
+    );
+  }
   return (
-    <AriaLink className={styles.root} href={safe} {...linkTarget(safe)}>
+    <AriaLink className={styles.root} href={safe}>
       <span className={styles.label}>{children}</span>
     </AriaLink>
   );

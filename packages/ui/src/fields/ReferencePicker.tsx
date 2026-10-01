@@ -2,7 +2,7 @@
 // you can remove, and a searchable menu that adds or replaces one. Results
 // come from the screen through a ListSource, so long lists stay outside.
 import type { ActorDisplay, RecordRefDisplay } from '@crm/contracts/values';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
 import { RecordChip } from '../atoms/RecordChip/RecordChip.tsx';
 import { arraySource, type ListSource } from '../lib/list-source.ts';
@@ -28,6 +28,9 @@ export interface ReferencePickerProps<D extends Reference> {
   readonly onChange: (chosen: readonly D[]) => void;
   readonly isCompact: boolean;
   readonly error?: string;
+  /** Opens the search at once, starting from `startQuery`: how the grid starts an edit. */
+  readonly isOpenAtStart?: boolean;
+  readonly startQuery?: string;
 }
 
 /** Chosen references as removable chips, and a searchable menu to pick one. */
@@ -41,8 +44,21 @@ export function ReferencePicker<D extends Reference>({
   onChange,
   isCompact,
   error,
+  isOpenAtStart = false,
+  startQuery,
 }: ReferencePickerProps<D>) {
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(startQuery ?? '');
+  const [isOpen, setOpen] = useState(false);
+  useEffect(() => {
+    if (!isOpenAtStart) return;
+    // A frame later, once the popover the grid opened has placed its own focus.
+    const frame = requestAnimationFrame(() => {
+      setOpen(true);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [isOpenAtStart]);
   const results = onSearch?.(query);
   const offered: ListSource<D> =
     results === undefined
@@ -93,13 +109,17 @@ export function ReferencePicker<D extends Reference>({
           ))}
         </ul>
       )}
-      <MenuTrigger>
+      <MenuTrigger isOpen={isOpen} onOpenChange={setOpen}>
         <Button variant={chosen.length === 0 ? 'secondary' : 'ghost'} icon="plus">
           {chosen.length === 0 || !allowMultiple ? strings.choose(name) : strings.addAnother}
         </Button>
         <Menu<D>
           label={name}
-          search={{ label: strings.search(name), onSearch: setQuery }}
+          search={{
+            label: strings.search(name),
+            onSearch: setQuery,
+            ...(startQuery === undefined ? {} : { defaultQuery: startQuery }),
+          }}
           source={offered}
           renderItem={(display) => ({
             children: display.name === '' ? strings.unknown : display.name,

@@ -17,6 +17,8 @@ export function ActorReferenceEditor({
   onSearch,
   me,
   error,
+  autoOpen = false,
+  startText,
 }: EditorProps<'actor_reference'>) {
   const displays = asList<ActorDisplay>(display);
   const [chosen, setChosen] = useState<readonly (typeof displays)[number][]>(() =>
@@ -31,6 +33,8 @@ export function ActorReferenceEditor({
       allowMultiple={attribute.allowMultiple}
       keyOf={keyOf}
       isCompact={surface === 'cell' || surface === 'filter'}
+      isOpenAtStart={autoOpen}
+      {...(startText === undefined ? {} : { startQuery: startText })}
       {...(onSearch === undefined ? {} : { onSearch })}
       {...(me === undefined ? {} : { pinned: [me] })}
       {...(shown === undefined ? {} : { error: shown })}

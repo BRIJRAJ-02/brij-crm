@@ -4,10 +4,26 @@ import { toCommittable } from '../values.ts';
 import { strings } from './strings.ts';
 
 /** Status: a Select with dot options; archived statuses can't be chosen. Always one value. */
-export function StatusEditor({ attribute, value, surface, onCommit }: EditorProps<'status'>) {
+export function StatusEditor({
+  attribute,
+  value,
+  surface,
+  onCommit,
+  onCancel,
+  autoOpen = false,
+}: EditorProps<'status'>) {
   const isCompact = surface === 'cell' || surface === 'filter';
   return (
     <Select
+      // Opened by the grid: closing the list ends the edit.
+      {...(autoOpen
+        ? {
+            defaultOpen: true,
+            onOpenChange: (isOpen: boolean) => {
+              if (!isOpen) onCancel?.();
+            },
+          }
+        : {})}
       label={attribute.name}
       isLabelHidden={isCompact}
       size={isCompact ? 'sm' : 'md'}

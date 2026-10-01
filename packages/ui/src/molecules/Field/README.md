@@ -16,7 +16,7 @@ Ported from the artifact's Field card. Every text, number and link attribute is 
 ```
 
 - `placeholder` follows the Field card: "Set <Attribute>…" (`strings.setAttribute`). It is `text-tertiary`, so never put an instruction only there; use `hint`.
-- `error` is a sentence that says how to fix it ("Enter a domain like halcyonlabs.io, without spaces."). The outline turns `danger` and the message shows under the box with an icon.
+- `error` is a sentence that says how to fix it ("Enter a domain like halcyonlabs.io, without spaces."). The outline turns `danger` and the message shows under the box with an icon. With `isErrorFloating` (a grid cell, one line tall) the message floats under the box on a raised surface, over the rows below.
 - `isReadOnly` fills the box with `surface-subtle` and shows a lock; `readOnlyReason` says why, as the hint. `isDisabled` fades it; `disabledReason` says who can change it.
 - `prefix` holds a unit (`USD`, `%`) or a picker (the currency editor's code Select); `suffix` a clear button or a trigger.
 - `isMultiline` is a textarea that grows with its content (long text); `maxLength` with `showCounter` shows "12/500".

@@ -75,6 +75,20 @@ export default mergeConfig(
               },
             ]),
         {
+          // The 100,000 row test (AC-7) on React's production build, as people
+          // get it: the development build is several times slower.
+          extends: true,
+          mode: 'production',
+          define: { 'process.env.NODE_ENV': JSON.stringify('production'), 'process.env.VIRT_ON': 'undefined' },
+          resolve: { alias: { 'react/jsx-dev-runtime': path.join(ROOT, 'scripts/jsx-dev-runtime.ts') } },
+          test: {
+            name: 'perf',
+            include: ['src/**/*.perf.test.tsx'],
+            retry: 1,
+            browser: { ...headless, instances: [{ browser: 'chromium' }], viewport: { width: 1280, height: 800 } },
+          },
+        },
+        {
           extends: true,
           test: {
             name: 'browser',

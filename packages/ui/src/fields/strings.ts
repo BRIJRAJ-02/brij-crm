@@ -7,6 +7,7 @@ export const strings = {
   refused: (reason: string) => reason,
   readOnly: 'Read only',
   computed: 'Worked out by the system',
+  system: 'Set by the system',
   ai: 'Filled by AI',
   refresh: 'Refresh',
   whereFrom: 'Where this came from',

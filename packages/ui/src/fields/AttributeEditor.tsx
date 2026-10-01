@@ -6,7 +6,7 @@ import { Button } from '../atoms/Button/Button.tsx';
 import { AttributeDisplay } from './AttributeDisplay.tsx';
 import styles from './AttributeEditor.module.css';
 import { ReadOnlyValue } from './parts.tsx';
-import { fieldTypeOf, isSystemOnly } from './registry.ts';
+import { fieldTypeOf, readOnlyReasonOf } from './registry.ts';
 import { strings } from './strings.ts';
 import type { EditorProps } from './types.ts';
 
@@ -24,9 +24,10 @@ export type AttributeEditorProps = EditorProps<AttributeType> & {
  */
 export function AttributeEditor({ onRefresh, ...props }: AttributeEditorProps) {
   const { attribute } = props;
-  if (attribute.isReadOnly || attribute.computed !== undefined || isSystemOnly(attribute.type)) {
+  const reason = readOnlyReasonOf(attribute);
+  if (reason !== undefined) {
     return (
-      <ReadOnlyValue attribute={attribute} surface={props.surface}>
+      <ReadOnlyValue attribute={attribute} surface={props.surface} reason={reason}>
         <AttributeDisplay
           attribute={attribute}
           value={props.value}

@@ -38,9 +38,11 @@ export function TextLikeEditor<T extends AttributeType>({
   prefix,
   isMultiline = false,
   maxLength,
+  startText,
 }: TextLikeEditorProps<T>) {
   const { fieldProps, cancel } = useTextDraft<T>({
-    initial,
+    initial: startText ?? initial,
+    isChanged: startText !== undefined,
     check,
     onCommit,
     ...(onCancel === undefined ? {} : { onCancel }),
@@ -56,6 +58,7 @@ export function TextLikeEditor<T extends AttributeType>({
       isRequired={attribute.isRequired}
       isMultiline={isMultiline}
       showCounter={isMultiline && maxLength !== undefined}
+      isErrorFloating={surface === 'cell'}
       onEscape={cancel}
       {...fieldProps}
       {...(inputMode === undefined ? {} : { inputMode })}

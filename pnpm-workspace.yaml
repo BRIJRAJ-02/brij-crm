@@ -17,6 +17,7 @@ catalog:
   "@storybook/addon-vitest": 10.6.1
   "@storybook/react-vite": 10.6.1
   "@tanstack/react-router": 1.170.41
+  "@tanstack/react-virtual": 3.14.13
   "@tanstack/router-plugin": 1.168.42
   "@types/node": 24.19.0
   "@types/pg": 8.23.1

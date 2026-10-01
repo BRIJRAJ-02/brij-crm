@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { Checkbox } from './Checkbox.tsx';
+import { Checkbox, CheckboxMark } from './Checkbox.tsx';
 
 const meta = {
   title: 'Atoms/Checkbox',
@@ -51,5 +51,21 @@ export const HiddenLabel: Story = {
   args: { label: 'Select all', isLabelHidden: true, isIndeterminate: true },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('checkbox', { name: 'Select all' })).toBePartiallyChecked();
+  },
+};
+
+/** The mark alone, as grid cells draw it: the cell is the control, so hundreds of rows need no checkbox each. */
+export const Mark: Story = {
+  render: () => (
+    <Stage>
+      <CheckboxMark label="Is customer" isSelected={false} />
+      <CheckboxMark label="Is customer" isSelected />
+      <CheckboxMark label="Select the rows on screen" isSelected={false} isIndeterminate />
+      <CheckboxMark label="Has API" isSelected isReadOnly />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Is customer, checked')).toBeInTheDocument();
+    await expect(canvas.queryByRole('checkbox')).toBeNull();
   },
 };

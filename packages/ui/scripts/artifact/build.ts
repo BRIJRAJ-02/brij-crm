@@ -229,7 +229,11 @@ function workspaceImports(names: readonly string[], importers: ReadonlySet<strin
     enforce: 'pre',
     async resolveId(source, importer, options) {
       if (source === 'storybook/test') return TEST_STUB;
-      if (importer === undefined || !importers.has(cleanPath(importer))) return null;
+      if (importer === undefined) return null;
+      // Workbench files bundle into the preview, but what they take from the
+      // library comes from window.Workspace, as the stories' imports do.
+      const fromWorkbench = path.dirname(cleanPath(importer)) === path.join(SRC, 'workbench');
+      if (!importers.has(cleanPath(importer)) && !fromWorkbench) return null;
       const resolved = await this.resolve(source, importer, { ...options, skipSelf: true });
       if (resolved === null) return null;
       const file = cleanPath(resolved.id);

@@ -1,0 +1,99 @@
+/* GridCell: a size-row tall cell, as wide as its column, on the row's
+   background. Pinned cells stick to the start edge; the focused cell carries
+   the inset ring, a selected range takes surface-selected, a refused value an
+   inset danger edge. On the row header the name is a click target, and on a
+   checkbox value the mark. Cells take no text selection, so a shift click
+   draws a range, not a highlight; an editor in the cell takes it back. */
+@layer components {
+  .root {
+    /* Set inline per cell; these are the defaults. */
+    --col-width: var(--size-column);
+    --col-offset: 0;
+
+    display: flex;
+    flex: none;
+    align-items: center;
+    inline-size: var(--col-width);
+    block-size: var(--size-row);
+    min-inline-size: 0;
+    padding-inline: var(--space-8);
+    overflow: hidden;
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
+    background: inherit;
+    white-space: nowrap;
+    outline: none;
+    user-select: none;
+  }
+
+  .root[data-align='end'] {
+    justify-content: flex-end;
+  }
+
+  .root[data-sticky] {
+    position: sticky;
+    z-index: var(--z-raised);
+    inset-inline-start: var(--col-offset);
+  }
+
+  .root[data-last-pinned] {
+    border-inline-end-color: var(--border);
+  }
+
+  /* A range reads apart from selected rows, which take surface-selected. */
+  .root[data-in-range] {
+    background: var(--accent-soft);
+  }
+
+  .root[data-invalid] {
+    outline: var(--border-width-thick) solid var(--danger);
+    outline-offset: calc(-1 * var(--border-width-thick));
+  }
+
+  .root[data-focused]:focus-visible,
+  .root[data-focused]:focus-within {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  /* An editor in the cell fills it; a popover editor leaves the value where it was. */
+  .root[data-editing='cell'],
+  .root[data-editing='list'] {
+    overflow: visible;
+    padding-inline: 0;
+    user-select: text;
+  }
+
+  .value {
+    display: flex;
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .hit {
+    display: inline-flex;
+    align-items: center;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    cursor: pointer;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .hit[data-kind='open']:hover {
+      text-decoration: underline;
+      text-underline-offset: var(--space-2);
+    }
+  }
+
+  @media (forced-colors: active) {
+    .root[data-in-range] {
+      outline: var(--border-width-hairline) solid Highlight;
+      outline-offset: calc(-1 * var(--border-width-hairline));
+    }
+
+    .root[data-focused]:focus-visible,
+    .root[data-focused]:focus-within {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: calc(-1 * var(--border-width-thick));
+    }
+  }
+}

@@ -17,6 +17,7 @@ export default defineConfig({
       '@crm/contracts > zod',
       'libphonenumber-js/max',
       'react-dom/client',
+      '@tanstack/react-virtual',
     ],
   },
 });

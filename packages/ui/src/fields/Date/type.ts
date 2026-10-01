@@ -17,5 +17,6 @@ export const dateType: AttributeTypeDef<'date'> = {
     parseLocaleDate(text, context.locale) ?? refuse(`“${text.trim()}” isn’t a date. Use 2026-10-08.`),
   align: 'start',
   editIn: 'popover',
+  closesOnCommit: true,
   width: 'narrow',
 };

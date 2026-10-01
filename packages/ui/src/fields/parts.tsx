@@ -63,6 +63,8 @@ export function ChipRow({ chips, maxVisible, label }: ChipRowProps) {
 export interface ReadOnlyValueProps {
   readonly attribute: FieldAttribute;
   readonly surface: Surface;
+  /** Why, from `readOnlyReasonOf`. Defaults to the attribute's own reason, or the field set's. */
+  readonly reason?: string;
   /** The type's display. */
   readonly children: ReactNode;
 }
@@ -72,8 +74,9 @@ export interface ReadOnlyValueProps {
  * computed one, or a read only attribute. The display in a filled box with a
  * lock, and the reason under it outside cells.
  */
-export function ReadOnlyValue({ attribute, surface, children }: ReadOnlyValueProps) {
-  const reason = attribute.readOnlyReason ?? (attribute.computed === undefined ? strings.readOnly : strings.computed);
+export function ReadOnlyValue({ attribute, surface, reason: given, children }: ReadOnlyValueProps) {
+  const reason =
+    given ?? attribute.readOnlyReason ?? (attribute.computed === undefined ? strings.readOnly : strings.computed);
   return (
     <span className={styles.readOnly} data-surface={surface}>
       <span className={styles.readOnlyBox} role="group" aria-label={attribute.name}>

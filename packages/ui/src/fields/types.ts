@@ -74,6 +74,10 @@ export interface EditorProps<T extends AttributeType> {
   readonly onUpload?: (files: readonly File[]) => void;
   /** The signed in member, offered first as "Me" by the member picker. */
   readonly me?: ActorDisplay;
+  /** The grid opened the editor by typing this: typed editors start from it, replacing the value, and searches start with it. */
+  readonly startText?: string;
+  /** The grid started the edit: a list, menu or search opens at once, so one key reaches the choices. */
+  readonly autoOpen?: boolean;
 }
 
 /** A pasted or imported text the type can't take, and why ("No option called 'Hot'"). */
@@ -128,6 +132,14 @@ export interface AttributeTypeDef<T extends AttributeType> {
   readonly align: 'start' | 'end';
   /** How the grid edits it: in the cell, in a popover, or not at all. */
   readonly editIn: 'cell' | 'popover' | 'none';
+  /** A popover editor done after one choice (a date, a single select), so the grid closes it on commit. */
+  readonly closesOnCommit?: boolean;
+  /** Its editor is a list that opens itself (a select, a status), so the grid draws it in the cell, already open, not in a popover. */
+  readonly isListEditor?: boolean;
+  /** A click or Space toggles the value where it is (a checkbox); it never opens an editor. */
+  readonly togglesInPlace?: boolean;
+  /** What clearing the value leaves: `false` for a checkbox, which is never empty. Unset means empty. */
+  readonly cleared?: FieldValue<T>;
   /** A new grid column's width tier. An attribute that holds several values is always `wide` (`columnWidthOf`). */
   readonly width: ColumnWidth;
 }

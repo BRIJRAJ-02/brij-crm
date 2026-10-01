@@ -16,6 +16,8 @@ export function RecordReferenceEditor({
   onCommit,
   onSearch,
   error,
+  autoOpen = false,
+  startText,
 }: EditorProps<'record_reference'>) {
   const displays = asList<RecordRefDisplay>(display);
   const [chosen, setChosen] = useState<readonly (typeof displays)[number][]>(() =>
@@ -30,6 +32,8 @@ export function RecordReferenceEditor({
       allowMultiple={attribute.allowMultiple}
       keyOf={keyOf}
       isCompact={surface === 'cell' || surface === 'filter'}
+      isOpenAtStart={autoOpen}
+      {...(startText === undefined ? {} : { startQuery: startText })}
       {...(onSearch === undefined ? {} : { onSearch })}
       {...(shown === undefined ? {} : { error: shown })}
       onChange={(next) => {

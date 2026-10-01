@@ -32,14 +32,15 @@
   }
 
   @media (hover: hover) and (pointer: fine) {
-    .root[data-hovered] {
+    .root:any-link:hover {
       text-decoration: underline;
     }
   }
 
-  .root[data-focus-visible] {
+  .root:focus-visible {
     border-color: var(--accent);
     box-shadow: var(--shadow-focus);
+    outline: none;
   }
 
   @media (forced-colors: active) {
@@ -48,7 +49,7 @@
       color: LinkText;
     }
 
-    .root[data-focus-visible] {
+    .root:focus-visible {
       outline: var(--border-width-thick) solid Highlight;
     }
   }

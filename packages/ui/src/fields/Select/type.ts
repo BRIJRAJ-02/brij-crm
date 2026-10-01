@@ -34,5 +34,7 @@ export const selectType: AttributeTypeDef<'select'> = {
       : optionByLabel(context.attribute, text),
   align: 'start',
   editIn: 'popover',
+  closesOnCommit: true,
+  isListEditor: true,
   width: 'default',
 };

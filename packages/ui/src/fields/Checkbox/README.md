@@ -10,7 +10,7 @@ The field set gives every attribute type exactly one display and one editor (spe
 
 Screens never import it; they render values through `AttributeDisplay` and `AttributeEditor` with a `FieldAttribute` of this type.
 
-- **Display**: the Checkbox itself, read only. It is never empty: unchecked is `false`.
+- **Display**: the Checkbox's mark (`CheckboxMark`), with no control of its own, since a display never edits. It is never empty: unchecked is `false`. In the grid the cell is the control: Space or a click on the mark toggles it.
 - **Editor**: the same Checkbox, toggling in place; each toggle commits. Clearing it makes it `false`.
 - **Text out / in** (copy, paste, CSV, the import preview): `TRUE` or `FALSE` / true, false, yes, no, 1, 0 or x.
 - **Filter operators**: is checked, is not checked (it is never empty, so it has no empty operators).

@@ -130,6 +130,25 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* In a grid cell: under the input, over the rows below, as wide as it needs. */
+  .root[data-error-floats] {
+    position: relative;
+  }
+
+  .root[data-error-floats] .error {
+    position: absolute;
+    z-index: var(--z-popover);
+    inset-block-start: 100%;
+    inset-inline-start: 0;
+    min-inline-size: 100%;
+    max-inline-size: var(--size-measure);
+    padding: var(--space-4) var(--space-8);
+    border-radius: var(--radius-sm);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+    white-space: normal;
+  }
+
   .root[data-invalid] .box {
     border-color: var(--danger);
   }

@@ -98,6 +98,8 @@ export interface MenuSearch {
   readonly placeholder?: string;
   /** Searching outside (async): the menu shows what the caller sends back. Leave it out to filter the items here. */
   readonly onSearch?: (query: string) => void;
+  /** What the field starts with: the key that opened a grid cell's editor. */
+  readonly defaultQuery?: string;
 }
 
 interface MenuLook {
@@ -292,7 +294,10 @@ export function Menu<T extends object>(props: MenuProps<T>) {
       menu
     ) : (
       <div className={styles.searchable}>
-        <Autocomplete {...(search.onSearch === undefined ? { filter: contains } : { onInputChange: search.onSearch })}>
+        <Autocomplete
+          {...(search.onSearch === undefined ? { filter: contains } : { onInputChange: search.onSearch })}
+          {...(search.defaultQuery === undefined ? {} : { defaultInputValue: search.defaultQuery })}
+        >
           {/* A search menu opens with its field focused, the pattern React Aria expects. */}
           {/* eslint-disable-next-line jsx-a11y-x/no-autofocus */}
           <SearchField className={styles.search} aria-label={search.label} autoFocus>

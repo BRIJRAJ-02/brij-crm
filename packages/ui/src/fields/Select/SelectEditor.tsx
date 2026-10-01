@@ -15,7 +15,15 @@ export const SELECT_MENU_THRESHOLD = 15;
  * and a Menu with checks when the attribute holds several. Archived options
  * can't be chosen; "Clear" shows when the attribute isn't required.
  */
-export function SelectEditor({ attribute, value, surface, onCommit }: EditorProps<'select'>) {
+export function SelectEditor({
+  attribute,
+  value,
+  surface,
+  onCommit,
+  onCancel,
+  autoOpen = false,
+  startText,
+}: EditorProps<'select'>) {
   const options = attribute.options ?? [];
   const chosen = asList<string>(value);
   const isCompact = surface === 'cell' || surface === 'filter';
@@ -23,6 +31,15 @@ export function SelectEditor({ attribute, value, surface, onCommit }: EditorProp
     const result = toCommittable<'select'>(attribute, candidate);
     if (result.ok) onCommit(result.value);
   };
+  // Opened by the grid: closing the list ends the edit.
+  const opening = autoOpen
+    ? {
+        defaultOpen: true,
+        onOpenChange: (isOpen: boolean) => {
+          if (!isOpen) onCancel?.();
+        },
+      }
+    : {};
 
   if (!attribute.allowMultiple && options.length <= SELECT_MENU_THRESHOLD) {
     return (
@@ -34,6 +51,7 @@ export function SelectEditor({ attribute, value, surface, onCommit }: EditorProp
         placeholder={strings.choose(attribute.name)}
         isRequired={attribute.isRequired}
         isClearable={!attribute.isRequired}
+        {...opening}
         value={chosen[0] ?? null}
         items={options.map((option) => ({
           id: option.id,
@@ -50,13 +68,16 @@ export function SelectEditor({ attribute, value, surface, onCommit }: EditorProp
     .filter((option) => option.archived && !chosen.includes(option.id))
     .map((option) => option.id);
   return (
-    <MenuTrigger>
+    <MenuTrigger {...opening}>
       <Button variant="secondary" iconRight="chevron-down">
         {chosen.length === 0 ? strings.choose(attribute.name) : attribute.name}
       </Button>
       <Menu
         label={attribute.name}
-        search={{ label: strings.search(attribute.name) }}
+        search={{
+          label: strings.search(attribute.name),
+          ...(startText === undefined ? {} : { defaultQuery: startText }),
+        }}
         selectionMode={attribute.allowMultiple ? 'multiple' : 'single'}
         selectedKeys={chosen}
         disabledKeys={disabledKeys}

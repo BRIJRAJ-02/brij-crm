@@ -58,8 +58,9 @@ export interface SelectProps {
   readonly readOnlyReason?: string;
   readonly isDisabled?: boolean;
   readonly size?: 'md' | 'sm';
-  /** Opens it on first render (stories and previews). */
+  /** Opens it on first render: a grid cell's edit, stories and previews. */
   readonly defaultOpen?: boolean;
+  readonly onOpenChange?: (isOpen: boolean) => void;
 }
 
 const CLEAR = '\u0000clear';
@@ -111,6 +112,7 @@ export function Select({
   isDisabled = false,
   size = 'md',
   defaultOpen,
+  onOpenChange,
 }: SelectProps) {
   const current = value ?? defaultValue ?? null;
   const chosen = items.find((item) => item.id === current);
@@ -152,6 +154,7 @@ export function Select({
       {...(value === undefined ? {} : { value })}
       {...(defaultValue === undefined ? {} : { defaultValue })}
       {...(defaultOpen === undefined ? {} : { defaultOpen })}
+      {...(onOpenChange === undefined ? {} : { onOpenChange })}
       onChange={(next) => {
         onChange?.(next === CLEAR || next === null ? null : String(next));
       }}

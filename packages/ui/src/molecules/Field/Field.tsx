@@ -53,6 +53,8 @@ export interface FieldProps {
   readonly size?: FieldSize;
   /** `search` is the rounded field with a search icon, for filtering a list. */
   readonly variant?: 'default' | 'search';
+  /** The error floats under the input, over what follows: in a grid cell, which is one line tall. */
+  readonly isErrorFloating?: boolean;
   readonly ref?: Ref<HTMLInputElement & HTMLTextAreaElement>;
 }
 
@@ -92,6 +94,7 @@ export function Field({
   name,
   size = 'md',
   variant = 'default',
+  isErrorFloating = false,
   ref,
 }: FieldProps) {
   const { locale } = useFormatSettings();
@@ -108,6 +111,7 @@ export function Field({
       className={styles.root}
       data-size={size}
       data-variant={variant}
+      data-error-floats={isErrorFloating || undefined}
       isReadOnly={isReadOnly}
       isDisabled={isDisabled}
       isRequired={isRequired}

@@ -1,3 +1,4 @@
+import { memoIntl } from '../../lib/intl-memo.ts';
 import { useFormatSettings } from '../../provider/context.ts';
 import { VisuallyHidden } from '../VisuallyHidden/VisuallyHidden.tsx';
 import styles from './Badge.module.css';
@@ -19,7 +20,7 @@ export interface BadgeProps {
 /** A small count beside a tab, a nav item or a list: 3, or 99+ past the limit. */
 export function Badge({ count, max = 99, tone = 'neutral', label }: BadgeProps) {
   const { locale } = useFormatSettings();
-  const number = new Intl.NumberFormat(locale);
+  const number = memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale));
   const text = count > max ? strings.overMax(number.format(max)) : number.format(count);
   return (
     <span className={styles.root} data-tone={tone}>

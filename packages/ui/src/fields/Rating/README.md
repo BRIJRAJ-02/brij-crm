@@ -11,7 +11,7 @@ The field set gives every attribute type exactly one display and one editor (spe
 Screens never import it; they render values through `AttributeDisplay` and `AttributeEditor` with a `FieldAttribute` of this type.
 
 - **Display**: the Rating atom, read only, as one image named "Fit: 4 out of 5 stars".
-- **Editor**: the Rating atom. Choosing the chosen star again, or Delete, clears it to `null`, unless the attribute is required.
+- **Editor**: the Rating atom. Choosing the chosen star again, or Delete, clears it to `null`, unless the attribute is required. In a grid cell the arrows and a typed digit (1 to 5) choose a draft: Enter commits it, Esc drops it, and a click commits at once.
 - **Text out / in** (copy, paste, CSV, the import preview): `4` / 1 to 5, or stars (★★★).
 - **Filter operators**: at least, at most, then is empty and is not empty.
 

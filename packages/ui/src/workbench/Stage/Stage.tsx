@@ -7,6 +7,8 @@ export interface StageProps {
   readonly direction?: 'row' | 'column';
   /** `narrow` holds the pieces to the sidebar's width, to show how they cut long text. */
   readonly width?: 'auto' | 'narrow';
+  /** `grid` gives a table a fixed height to scroll in: a header and twelve rows. */
+  readonly height?: 'auto' | 'grid';
   readonly children: ReactNode;
 }
 
@@ -15,9 +17,9 @@ export interface StageProps {
  * artifact previews only: it is not exported from `@crm/ui`, and screens lay
  * out with real modules.
  */
-export function Stage({ direction = 'row', width = 'auto', children }: StageProps) {
+export function Stage({ direction = 'row', width = 'auto', height = 'auto', children }: StageProps) {
   return (
-    <div className={styles.root} data-direction={direction} data-width={width}>
+    <div className={styles.root} data-direction={direction} data-width={width} data-height={height}>
       {children}
     </div>
   );

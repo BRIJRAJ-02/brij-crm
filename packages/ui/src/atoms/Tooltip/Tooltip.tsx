@@ -27,6 +27,9 @@ export interface TooltipProps {
   /** The trigger is plain text, not a control: it shows on hover, and on focus when something focuses it on purpose (a grid cell). */
   readonly isTextTrigger?: boolean;
   readonly isDisabled?: boolean;
+  /** Opens it from outside, as a grid does for the focused cell; pair it with `onOpenChange` so hover still works. */
+  readonly isOpen?: boolean;
+  readonly onOpenChange?: (isOpen: boolean) => void;
 }
 
 /**
@@ -50,10 +53,23 @@ function TextTrigger({ children }: { readonly children: ReactElement }) {
  * focus. It adds to a control's name and never replaces it: an icon only
  * button still has its own `label`.
  */
-export function Tooltip({ content, children, placement = 'top', isTextTrigger = false, isDisabled }: TooltipProps) {
+export function Tooltip({
+  content,
+  children,
+  placement = 'top',
+  isTextTrigger = false,
+  isDisabled,
+  isOpen,
+  onOpenChange,
+}: TooltipProps) {
   const { isFocusVisible } = useFocusVisible();
   return (
-    <TooltipTrigger delay={TOOLTIP_DELAY_MS} {...(isDisabled === undefined ? {} : { isDisabled })}>
+    <TooltipTrigger
+      delay={TOOLTIP_DELAY_MS}
+      {...(isDisabled === undefined ? {} : { isDisabled })}
+      {...(isOpen === undefined ? {} : { isOpen })}
+      {...(onOpenChange === undefined ? {} : { onOpenChange })}
+    >
       {isTextTrigger ? <TextTrigger>{children}</TextTrigger> : children}
       <AriaTooltip
         className={styles.root}

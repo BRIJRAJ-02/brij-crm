@@ -23,5 +23,6 @@ export const recordReferenceType: AttributeTypeDef<'record_reference'> = {
   fromText: () => refuse('Linked records can’t be pasted as text. Choose the records.'),
   align: 'start',
   editIn: 'popover',
+  closesOnCommit: true,
   width: 'default',
 };

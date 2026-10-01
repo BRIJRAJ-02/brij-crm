@@ -27,3 +27,4 @@ Tab reaches it; Enter follows it.
 ## Differences from the artifact
 
 - `children` is the shown text only; the protocol allowlist is new.
+- A link out (`mailto:`, `tel:`, `http`, `https`) is a plain `<a>`, not React Aria's `Link`: it needs no router, and a table draws hundreds of them, so it skips the hooks each would set up. Hover and focus come from `:any-link:hover` and `:focus-visible`. App paths still go through React Aria's `Link` and the router.
