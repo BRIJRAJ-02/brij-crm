@@ -36,6 +36,10 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
           set -euo pipefail
+          if [ -z "$VERCEL_TOKEN" ]; then
+            echo "::notice::VERCEL_TOKEN isn't set yet, so there's nothing to deploy to."
+            exit 0
+          fi
           vercel() { npx -y "$VERCEL_CLI" "$@" --token "$VERCEL_TOKEN"; }
           vercel pull --yes --environment=production
           vercel build --prod
