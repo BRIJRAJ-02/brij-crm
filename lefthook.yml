@@ -1,0 +1,24 @@
+# Git hooks, installed by `pnpm install` (the root `prepare` script).
+# Each commit: format, then lint, only the staged files, and restage the fixes.
+# Each push: the full check that CI runs (typecheck, lint, format, CSS,
+# boundaries and house rules).
+pre-commit:
+  piped: true
+  jobs:
+    - name: format
+      glob: "*.{ts,tsx,js,json,jsonc,css,yml,yaml}"
+      run: pnpm exec prettier --write --ignore-unknown {staged_files}
+      stage_fixed: true
+    - name: lint
+      glob: "*.{ts,tsx,js}"
+      run: pnpm exec eslint --fix --no-warn-ignored {staged_files}
+      stage_fixed: true
+    - name: css
+      glob: "*.css"
+      run: pnpm exec stylelint --fix --allow-empty-input {staged_files}
+      stage_fixed: true
+
+pre-push:
+  jobs:
+    - name: check
+      run: pnpm check
