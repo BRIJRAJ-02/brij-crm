@@ -5,6 +5,8 @@ import { type BuildConfig, defineRailway, github, preserve, project, service } f
 
 // The GitHub repository, as owner/name.
 const REPO = 'BRIJRAJ-02/brij-crm';
+// Singapore, beside the Neon database (aws ap-southeast-1).
+const REGIONS = { 'asia-southeast1-eqsg3a': 1 };
 
 export default defineRailway(() => {
   const source = github(REPO, { branch: 'main' });
@@ -16,6 +18,7 @@ export default defineRailway(() => {
 
   const api = service('api', {
     source,
+    regions: REGIONS,
     build: apiImage,
     // Migrations run on the direct connection as the owner, before the new version starts.
     preDeploy: 'node packages/db/scripts/migrate.ts',
@@ -31,6 +34,7 @@ export default defineRailway(() => {
 
   const worker = service('worker', {
     source,
+    regions: REGIONS,
     build: apiImage,
     start: 'node apps/api/src/worker.ts',
     healthcheck: '/health',
@@ -43,6 +47,7 @@ export default defineRailway(() => {
 
   const centrifugo = service('centrifugo', {
     source,
+    regions: REGIONS,
     build: {
       builder: 'DOCKERFILE',
       dockerfilePath: 'infra/centrifugo/Dockerfile',
