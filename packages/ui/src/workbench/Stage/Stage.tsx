@@ -5,6 +5,8 @@ import styles from './Stage.module.css';
 export interface StageProps {
   /** `row` wraps pieces side by side (the default); `column` stacks them. */
   readonly direction?: 'row' | 'column';
+  /** `narrow` holds the pieces to the sidebar's width, to show how they cut long text. */
+  readonly width?: 'auto' | 'narrow';
   readonly children: ReactNode;
 }
 
@@ -13,9 +15,9 @@ export interface StageProps {
  * artifact previews only: it is not exported from `@crm/ui`, and screens lay
  * out with real modules.
  */
-export function Stage({ direction = 'row', children }: StageProps) {
+export function Stage({ direction = 'row', width = 'auto', children }: StageProps) {
   return (
-    <div className={styles.root} data-direction={direction}>
+    <div className={styles.root} data-direction={direction} data-width={width}>
       {children}
     </div>
   );

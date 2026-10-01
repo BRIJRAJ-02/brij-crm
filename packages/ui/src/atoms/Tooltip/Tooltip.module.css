@@ -1,0 +1,77 @@
+/* Tooltip: one line on the inverse surface, 11px, above its trigger by
+   default. It fades in after React Aria's delay; from the keyboard it appears
+   at once. */
+@layer components {
+  /* Shrinks in a flex row (a cell, a chip), so text inside can be cut. */
+  .trigger {
+    display: inline-flex;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    outline: none;
+  }
+
+  .trigger[data-focus-visible] {
+    border-radius: var(--radius-xs);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .root {
+    max-inline-size: calc(var(--size-sidebar) + var(--space-20));
+    padding-block: var(--space-2);
+    padding-inline: var(--space-6);
+    border-radius: var(--radius-sm);
+    background: var(--surface-inverse);
+    box-shadow: var(--shadow-md);
+    color: var(--on-inverse);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    overflow-wrap: anywhere;
+    pointer-events: none;
+  }
+
+  .root[data-placement='top'] {
+    margin-block-end: var(--space-4);
+  }
+
+  .root[data-placement='bottom'] {
+    margin-block-start: var(--space-4);
+  }
+
+  .root[data-placement='left'] {
+    margin-inline-end: var(--space-4);
+  }
+
+  .root[data-placement='right'] {
+    margin-inline-start: var(--space-4);
+  }
+
+  .root[data-entering] {
+    animation: fade-in var(--duration-popover) var(--ease-out);
+  }
+
+  .root[data-exiting] {
+    animation: fade-out var(--duration-exit) var(--ease-out) forwards;
+  }
+
+  .root[data-opened-by='keyboard'][data-entering] {
+    animation: none;
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border: var(--border-width-hairline) solid CanvasText;
+    }
+  }
+}

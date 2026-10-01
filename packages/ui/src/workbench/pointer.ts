@@ -19,3 +19,9 @@ export async function hoverUntilHovered(userEvent: Pointer, element: Element): P
     await expect(element).toHaveAttribute('data-hovered', 'true');
   });
 }
+
+/** Moves the pointer off and then onto `element`, so it gets a fresh enter even if an earlier story left the pointer on that spot. */
+export async function hoverFresh(userEvent: Pointer, element: Element): Promise<void> {
+  await userEvent.unhover(element);
+  await userEvent.hover(element);
+}

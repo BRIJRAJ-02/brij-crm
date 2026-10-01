@@ -1,20 +1,20 @@
-import { createContext, useContext, useMemo, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { I18nProvider, RouterProvider } from 'react-aria-components';
+import type { KeyboardPlatform } from '../atoms/Kbd/shortcuts.ts';
 import { createClock, type Clock } from './clock.ts';
+import { ClockContext, FormatContext, PlatformContext, ToastsContext, type FormatSettings } from './context.ts';
 import { ToastRegion, type Toasts } from './toasts.tsx';
 import { LOADING_TIMING, LoadingTimingContext, type LoadingTiming } from './useDelayedLoading.ts';
 
-/** The language and time zone every date, number and amount formats in. */
-export interface FormatSettings {
-  /** A BCP 47 tag, such as `en-GB`. */
-  readonly locale: string;
-  /** An IANA zone, such as `Europe/London`. "Today" is today here. */
-  readonly timeZone: string;
-}
+export { useFormatSettings, useKeyboardPlatform, useNow, useToasts, type FormatSettings } from './context.ts';
 
-const FormatContext = createContext<FormatSettings | undefined>(undefined);
-const ClockContext = createContext<Clock | undefined>(undefined);
-const ToastsContext = createContext<Toasts | undefined>(undefined);
+/** Reads the viewer's keyboard from the browser: a Mac, iPhone or iPad shows ⌘, anything else Ctrl. */
+export function detectKeyboardPlatform(navigator: {
+  readonly platform: string;
+  readonly userAgent: string;
+}): KeyboardPlatform {
+  return /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent) ? 'mac' : 'other';
+}
 
 /** Props for UiProvider. apps/web passes the browser's language and time zone until #23 adds them to the profile. */
 export interface UiProviderProps extends FormatSettings {
@@ -28,6 +28,8 @@ export interface UiProviderProps extends FormatSettings {
   readonly clock?: Clock;
   /** When skeletons appear. Defaults to the product timing; Storybook turns the delay off. */
   readonly loadingTiming?: LoadingTiming;
+  /** The keyboard shortcuts are shown for: ⌘ on a Mac, Ctrl elsewhere. Defaults to the browser's; stories pin one. */
+  readonly platform?: KeyboardPlatform;
   readonly children: ReactNode;
 }
 
@@ -44,9 +46,11 @@ export function UiProvider({
   toasts,
   clock,
   loadingTiming = LOADING_TIMING,
+  platform,
   children,
 }: UiProviderProps) {
   const [ownClock] = useState(() => clock ?? createClock({ visibility: document }));
+  const [ownPlatform] = useState(() => platform ?? detectKeyboardPlatform(navigator));
   const settings = useMemo<FormatSettings>(() => ({ locale, timeZone }), [locale, timeZone]);
 
   return (
@@ -56,8 +60,10 @@ export function UiProvider({
           <ClockContext value={clock ?? ownClock}>
             <ToastsContext value={toasts}>
               <LoadingTimingContext value={loadingTiming}>
-                {children}
-                <ToastRegion toasts={toasts} />
+                <PlatformContext value={platform ?? ownPlatform}>
+                  {children}
+                  <ToastRegion toasts={toasts} />
+                </PlatformContext>
               </LoadingTimingContext>
             </ToastsContext>
           </ClockContext>
@@ -65,25 +71,4 @@ export function UiProvider({
       </RouterProvider>
     </I18nProvider>
   );
-}
-
-/** The language and time zone from UiProvider. Throws outside it, so a missing provider fails loudly. */
-export function useFormatSettings(): FormatSettings {
-  const settings = useContext(FormatContext);
-  if (settings === undefined) throw new Error('Wrap the app in <UiProvider> to format dates and numbers.');
-  return settings;
-}
-
-/** The shared clock's time, in milliseconds. Re-renders on each tick (every 30 seconds). */
-export function useNow(): number {
-  const clock = useContext(ClockContext);
-  if (clock === undefined) throw new Error('Wrap the app in <UiProvider> to show relative times.');
-  return useSyncExternalStore(clock.subscribe, clock.now);
-}
-
-/** The app's toasts, for library components that report something themselves (a failed copy). Screens raise toasts through the data layer. */
-export function useToasts(): Toasts {
-  const toasts = useContext(ToastsContext);
-  if (toasts === undefined) throw new Error('Wrap the app in <UiProvider> to show toasts.');
-  return toasts;
 }

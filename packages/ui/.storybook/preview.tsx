@@ -4,6 +4,7 @@
 import type { Decorator, Preview } from '@storybook/react-vite';
 import { useLayoutEffect, useState, type ReactNode } from 'react';
 import '../src/styles/index.css';
+import type { KeyboardPlatform } from '../src/atoms/Kbd/shortcuts.ts';
 import { createFixedClock } from '../src/provider/clock.ts';
 import { createToasts } from '../src/provider/toasts.tsx';
 import { UiProvider } from '../src/provider/UiProvider.tsx';
@@ -17,7 +18,14 @@ const NO_DELAY = { delayMs: 0, minimumMs: 0 } as const;
 
 type ThemeGlobal = 'light' | 'dark' | 'system';
 
-function StoryProviders({ locale, theme, children }: { locale: string; theme: ThemeGlobal; children: ReactNode }) {
+interface StoryProvidersProps {
+  readonly locale: string;
+  readonly theme: ThemeGlobal;
+  readonly platform: KeyboardPlatform;
+  readonly children: ReactNode;
+}
+
+function StoryProviders({ locale, theme, platform, children }: StoryProvidersProps) {
   const [toasts] = useState(createToasts);
   const [clock] = useState(() => createFixedClock(STORY_NOW));
 
@@ -35,6 +43,7 @@ function StoryProviders({ locale, theme, children }: { locale: string; theme: Th
       toasts={toasts}
       clock={clock}
       loadingTiming={NO_DELAY}
+      platform={platform}
     >
       <StoryRoot>{children}</StoryRoot>
     </UiProvider>
@@ -46,9 +55,13 @@ function themeOf(value: unknown): ThemeGlobal {
 }
 
 const withProviders: Decorator = (Story, context) => {
-  const { locale, theme } = context.globals as { locale?: unknown; theme?: unknown };
+  const { locale, theme, platform } = context.globals as { locale?: unknown; theme?: unknown; platform?: unknown };
   return (
-    <StoryProviders locale={typeof locale === 'string' ? locale : 'en-US'} theme={themeOf(theme)}>
+    <StoryProviders
+      locale={typeof locale === 'string' ? locale : 'en-US'}
+      theme={themeOf(theme)}
+      platform={platform === 'other' ? 'other' : 'mac'}
+    >
       <Story />
     </StoryProviders>
   );
@@ -84,8 +97,20 @@ const preview: Preview = {
         dynamicTitle: true,
       },
     },
+    platform: {
+      description: 'Keyboard, for the shortcuts keycaps show',
+      toolbar: {
+        title: 'Keyboard',
+        icon: 'command',
+        items: [
+          { value: 'mac', title: 'Mac (⌘)' },
+          { value: 'other', title: 'Windows and Linux (Ctrl)' },
+        ],
+        dynamicTitle: true,
+      },
+    },
   },
-  initialGlobals: { theme: 'light', locale: 'en-US' },
+  initialGlobals: { theme: 'light', locale: 'en-US', platform: 'mac' },
   parameters: {
     layout: 'fullscreen',
     // Any axe violation fails the story's test (AC-6).

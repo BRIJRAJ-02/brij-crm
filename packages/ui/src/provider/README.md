@@ -18,7 +18,7 @@ const toasts = createToasts(); // once, in main.tsx; also handed to the data lay
   toasts={toasts}
 >
   <App />
-</UiProvider>
+</UiProvider>;
 ```
 
 - `locale` and `timeZone`: every date, number and amount formats in these (`useFormatSettings()` inside the library).

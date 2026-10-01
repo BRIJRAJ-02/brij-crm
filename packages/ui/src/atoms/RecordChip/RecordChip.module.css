@@ -1,0 +1,65 @@
+/* RecordChip: a 20px chip with a 16px avatar (or an actor's icon) and the
+   name. Flat chips drop the edge for dense places. */
+@layer components {
+  .root {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+    max-inline-size: 100%;
+    block-size: var(--size-chip);
+    padding-inline: var(--space-2) var(--space-6);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-raised);
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-decoration: none;
+    white-space: nowrap;
+    outline: none;
+    transition: background-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .root[data-flat] {
+    border-color: transparent;
+    background: var(--surface-hover);
+  }
+
+  .label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .icon {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--size-check);
+    block-size: var(--size-check);
+    border-radius: var(--radius-xs);
+    background: var(--surface-hover);
+    color: var(--text-secondary);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root[data-hovered] {
+      background: var(--surface-hover);
+    }
+  }
+
+  .root[data-focus-visible] {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-focus);
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border-color: CanvasText;
+    }
+
+    .root[data-focus-visible] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}

@@ -1,0 +1,73 @@
+/* StatusDot: an 8px dot in the status's dot-<hue>, then its label. The colour
+   is never the only cue: the label always shows. */
+@layer components {
+  .root {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-6);
+    min-inline-size: 0;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    white-space: nowrap;
+  }
+
+  .root[data-archived] {
+    color: var(--text-secondary);
+  }
+
+  .label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .dot {
+    flex: none;
+    inline-size: var(--space-8);
+    block-size: var(--space-8);
+    border-radius: var(--radius-full);
+    background: var(--dot-gray);
+  }
+
+  .dot[data-hue='gray'] {
+    background: var(--dot-gray);
+  }
+
+  .dot[data-hue='red'] {
+    background: var(--dot-red);
+  }
+
+  .dot[data-hue='orange'] {
+    background: var(--dot-orange);
+  }
+
+  .dot[data-hue='yellow'] {
+    background: var(--dot-yellow);
+  }
+
+  .dot[data-hue='lime'] {
+    background: var(--dot-lime);
+  }
+
+  .dot[data-hue='green'] {
+    background: var(--dot-green);
+  }
+
+  .dot[data-hue='sky'] {
+    background: var(--dot-sky);
+  }
+
+  .dot[data-hue='blue'] {
+    background: var(--dot-blue);
+  }
+
+  .dot[data-hue='purple'] {
+    background: var(--dot-purple);
+  }
+
+  @media (forced-colors: active) {
+    .dot {
+      border: var(--border-width-hairline) solid CanvasText;
+    }
+  }
+}

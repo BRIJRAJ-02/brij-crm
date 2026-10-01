@@ -1,0 +1,39 @@
+/* Link: link-coloured text, underlined on hover and while focused. */
+@layer components {
+  /* Underlined at rest, so a link in a sentence never relies on colour alone. */
+  .root {
+    border-radius: var(--radius-xs);
+    color: var(--link);
+    text-decoration: underline;
+    text-decoration-color: var(--accent-border);
+    text-underline-offset: var(--space-2);
+    cursor: pointer;
+    outline: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root[data-hovered] {
+      text-decoration-color: currentColor;
+    }
+  }
+
+  .root[data-focus-visible] {
+    text-decoration-color: currentColor;
+    box-shadow: var(--shadow-focus);
+  }
+
+  .text {
+    color: inherit;
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      color: LinkText;
+      text-decoration: underline;
+    }
+
+    .root[data-focus-visible] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}

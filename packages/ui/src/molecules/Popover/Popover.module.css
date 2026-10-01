@@ -1,0 +1,109 @@
+/* Popover: the raised surface every menu, select and picker opens in. It grows
+   from its trigger (React Aria's --trigger-anchor-point), exits faster, and
+   skips the animation when opened from the keyboard. Its gap to the trigger is
+   a margin on the placed side, so it comes from a token. */
+@layer components {
+  .root {
+    /* Fallbacks; React Aria sets both inline while the popover is open. */
+    --trigger-width: auto;
+    --trigger-anchor-point: top left;
+
+    box-sizing: border-box;
+    max-inline-size: calc(100vw - 2 * var(--space-16));
+    overflow: auto;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    outline: none;
+    transform-origin: var(--trigger-anchor-point);
+  }
+
+  .root[data-width='trigger'] {
+    inline-size: var(--trigger-width);
+  }
+
+  /* 240px, the artifact's menu width, or the trigger's when that is wider. */
+  .root[data-width='menu'] {
+    min-inline-size: max(var(--trigger-width), calc(var(--size-sidebar) - var(--space-20)));
+  }
+
+  .root[data-placement='bottom'] {
+    margin-block-start: var(--space-4);
+  }
+
+  .root[data-placement='top'] {
+    margin-block-end: var(--space-4);
+  }
+
+  .root[data-placement='right'] {
+    margin-inline-start: var(--space-4);
+  }
+
+  .root[data-placement='left'] {
+    margin-inline-end: var(--space-4);
+  }
+
+  .dialog {
+    padding: var(--space-8);
+    outline: none;
+  }
+
+  .root[data-entering] {
+    animation: grow var(--duration-popover) var(--ease-out);
+  }
+
+  .root[data-exiting] {
+    animation: shrink var(--duration-exit) var(--ease-out) forwards;
+  }
+
+  .root[data-opened-by='keyboard'][data-entering],
+  .root[data-opened-by='keyboard'][data-exiting] {
+    animation: none;
+  }
+
+  @keyframes grow {
+    from {
+      opacity: 0;
+      scale: var(--scale-enter);
+    }
+  }
+
+  @keyframes shrink {
+    to {
+      opacity: 0;
+      scale: var(--scale-enter);
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes fade-out {
+    to {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root[data-entering] {
+      animation-name: fade-in;
+    }
+
+    .root[data-exiting] {
+      animation-name: fade-out;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border-color: CanvasText;
+    }
+  }
+}

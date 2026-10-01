@@ -1,0 +1,123 @@
+/* Checkbox: a 16px box in control-border on the raised surface; checked and
+   indeterminate fill it with the accent and draw a tick or a dash. It scales
+   while pressed. States read React Aria's attributes. */
+@layer components {
+  .field {
+    display: inline-flex;
+    flex-direction: column;
+  }
+
+  .root {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: var(--space-8);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .box {
+    display: grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--size-check);
+    block-size: var(--size-check);
+    margin-block-start: var(--space-2);
+    border: var(--border-width-hairline) solid var(--control-border);
+    border-radius: var(--radius-xs);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-xs);
+    color: var(--on-accent);
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      border-color var(--duration-hover) var(--ease-hover),
+      scale var(--duration-press) var(--ease-out);
+  }
+
+  .root[data-selected] .box,
+  .root[data-indeterminate] .box {
+    border-color: var(--accent-hover);
+    background: var(--accent);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root[data-hovered]:not([data-selected], [data-indeterminate], [data-disabled]) .box {
+      border-color: var(--text-secondary);
+    }
+  }
+
+  .root[data-pressed] .box {
+    scale: var(--scale-press-sm);
+  }
+
+  .root[data-focus-visible] .box {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .root[data-invalid] .box {
+    border-color: var(--danger);
+  }
+
+  /* The control and its label fade; a description under it stays readable. */
+  .root[data-disabled] {
+    opacity: var(--opacity-disabled);
+    cursor: default;
+  }
+
+  .root[data-disabled] .box {
+    box-shadow: none;
+  }
+
+  .root[data-readonly] {
+    cursor: default;
+  }
+
+  .label[data-described] {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  /* Under the label, past the box. */
+  .description,
+  .error {
+    padding-inline-start: calc(var(--size-check) + var(--space-8));
+  }
+
+  .description {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .error {
+    color: var(--danger);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root[data-pressed] .box {
+      scale: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .box {
+      border-color: ButtonText;
+    }
+
+    .root[data-selected] .box,
+    .root[data-indeterminate] .box {
+      background: Highlight;
+      color: HighlightText;
+    }
+
+    .root[data-focus-visible] .box {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: var(--border-width-hairline);
+    }
+  }
+}

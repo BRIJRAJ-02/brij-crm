@@ -8,6 +8,11 @@
     padding: var(--space-16);
   }
 
+  .root[data-width='narrow'] {
+    box-sizing: content-box;
+    max-inline-size: var(--size-sidebar);
+  }
+
   .root[data-direction='column'] {
     flex-direction: column;
     flex-wrap: nowrap;

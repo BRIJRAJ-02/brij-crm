@@ -1,0 +1,102 @@
+/* Switch: a 28px by 16px track in control-border (3:1 when off), the accent
+   when on, and a 12px knob that slides with the move timing. */
+@layer components {
+  .field {
+    display: inline-flex;
+    flex-direction: column;
+  }
+
+  .root {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: var(--space-8);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .track {
+    position: relative;
+    display: block;
+    flex: none;
+    inline-size: var(--size-switch);
+    block-size: var(--size-check);
+    margin-block-start: var(--space-2);
+    border-radius: var(--radius-full);
+    background: var(--control-border);
+    transition: background-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .knob {
+    position: absolute;
+    inset-block-start: var(--space-2);
+    inset-inline-start: var(--space-2);
+    inline-size: var(--size-icon-xs);
+    block-size: var(--size-icon-xs);
+    border-radius: var(--radius-full);
+    background: var(--on-accent);
+    box-shadow: var(--shadow-xs);
+    transition: translate var(--duration-move) var(--ease-in-out);
+  }
+
+  .root[data-selected] .track {
+    background: var(--accent);
+  }
+
+  .root[data-selected] .knob {
+    translate: var(--size-icon-xs) 0;
+  }
+
+  .root[data-focus-visible] .track {
+    box-shadow: var(--shadow-focus);
+  }
+
+  /* The control and its label fade; a description under it stays readable. */
+  .root[data-disabled] {
+    opacity: var(--opacity-disabled);
+    cursor: default;
+  }
+
+  .root[data-readonly] {
+    cursor: default;
+  }
+
+  .label[data-described] {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .description {
+    padding-inline-start: calc(var(--size-switch) + var(--space-8));
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .knob {
+      transition: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .track {
+      border: var(--border-width-hairline) solid ButtonText;
+    }
+
+    .knob {
+      background: ButtonText;
+    }
+
+    .root[data-selected] .track {
+      background: Highlight;
+    }
+
+    .root[data-focus-visible] .track {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: var(--border-width-hairline);
+    }
+  }
+}

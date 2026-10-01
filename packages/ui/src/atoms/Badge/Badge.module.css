@@ -1,0 +1,30 @@
+/* Badge: a 16px count, tabular figures, grey or accent. */
+@layer components {
+  .root {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    min-inline-size: var(--size-check);
+    block-size: var(--size-check);
+    padding-inline: var(--space-4);
+    border-radius: var(--radius-xs);
+    background: var(--surface-hover);
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .root[data-tone='accent'] {
+    background: var(--accent);
+    color: var(--on-accent);
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border: var(--border-width-hairline) solid CanvasText;
+    }
+  }
+}

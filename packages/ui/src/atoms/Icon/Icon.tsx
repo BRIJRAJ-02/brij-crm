@@ -18,6 +18,8 @@ interface IconBase {
 interface PlainIcon extends IconBase {
   readonly size?: IconSize;
   readonly tone?: IconTone;
+  /** Fills the glyph's shape with its colour: a chosen star in a rating. */
+  readonly isFilled?: boolean;
   readonly tile?: undefined;
 }
 
@@ -26,6 +28,7 @@ interface TiledIcon extends IconBase {
   readonly tile: Hue;
   readonly size?: never;
   readonly tone?: never;
+  readonly isFilled?: never;
 }
 
 /** Props for the Icon atom: a plain icon, or one on a hue tile. */
@@ -57,6 +60,7 @@ export function Icon(props: IconProps) {
       className={styles.icon}
       data-size={props.size ?? 'md'}
       data-tone={props.tone ?? 'inherit'}
+      data-filled={props.isFilled === true || undefined}
       focusable="false"
       {...accessibleName(props.label)}
     />

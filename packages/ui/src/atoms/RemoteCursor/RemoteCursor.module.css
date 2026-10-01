@@ -1,0 +1,116 @@
+/* RemoteCursor: a 2px caret in dot-<hue>, with the person's name on a flag in
+   their tag colours, so the name holds its contrast. */
+@layer components {
+  .root {
+    position: relative;
+    display: inline-block;
+    inline-size: 0;
+    block-size: var(--size-chip);
+    margin-inline: calc(-1 * var(--border-width-hairline));
+    vertical-align: text-bottom;
+    border-inline-start: var(--border-width-thick) solid var(--dot-gray);
+  }
+
+  .flag {
+    position: absolute;
+    inset-block-end: 100%;
+    inset-inline-start: calc(-1 * var(--border-width-thick));
+    padding-inline: var(--space-4);
+    border: var(--border-width-hairline) solid var(--tag-gray-border);
+    border-radius: var(--radius-xs) var(--radius-xs) var(--radius-xs) 0;
+    background: var(--tag-gray-bg);
+    color: var(--tag-gray-text);
+    font: var(--text-kbd);
+    letter-spacing: var(--tracking-kbd);
+    white-space: nowrap;
+    user-select: none;
+  }
+
+  .root[data-hue='gray'] {
+    --flag-bg: var(--tag-gray-bg);
+    --flag-border: var(--tag-gray-border);
+    --flag-text: var(--tag-gray-text);
+
+    border-inline-start-color: var(--dot-gray);
+  }
+
+  .root[data-hue='red'] {
+    --flag-bg: var(--tag-red-bg);
+    --flag-border: var(--tag-red-border);
+    --flag-text: var(--tag-red-text);
+
+    border-inline-start-color: var(--dot-red);
+  }
+
+  .root[data-hue='orange'] {
+    --flag-bg: var(--tag-orange-bg);
+    --flag-border: var(--tag-orange-border);
+    --flag-text: var(--tag-orange-text);
+
+    border-inline-start-color: var(--dot-orange);
+  }
+
+  .root[data-hue='yellow'] {
+    --flag-bg: var(--tag-yellow-bg);
+    --flag-border: var(--tag-yellow-border);
+    --flag-text: var(--tag-yellow-text);
+
+    border-inline-start-color: var(--dot-yellow);
+  }
+
+  .root[data-hue='lime'] {
+    --flag-bg: var(--tag-lime-bg);
+    --flag-border: var(--tag-lime-border);
+    --flag-text: var(--tag-lime-text);
+
+    border-inline-start-color: var(--dot-lime);
+  }
+
+  .root[data-hue='green'] {
+    --flag-bg: var(--tag-green-bg);
+    --flag-border: var(--tag-green-border);
+    --flag-text: var(--tag-green-text);
+
+    border-inline-start-color: var(--dot-green);
+  }
+
+  .root[data-hue='sky'] {
+    --flag-bg: var(--tag-sky-bg);
+    --flag-border: var(--tag-sky-border);
+    --flag-text: var(--tag-sky-text);
+
+    border-inline-start-color: var(--dot-sky);
+  }
+
+  .root[data-hue='blue'] {
+    --flag-bg: var(--tag-blue-bg);
+    --flag-border: var(--tag-blue-border);
+    --flag-text: var(--tag-blue-text);
+
+    border-inline-start-color: var(--dot-blue);
+  }
+
+  .root[data-hue='purple'] {
+    --flag-bg: var(--tag-purple-bg);
+    --flag-border: var(--tag-purple-border);
+    --flag-text: var(--tag-purple-text);
+
+    border-inline-start-color: var(--dot-purple);
+  }
+
+  .root[data-hue] .flag {
+    border-color: var(--flag-border);
+    background: var(--flag-bg);
+    color: var(--flag-text);
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border-inline-start-color: Highlight;
+    }
+
+    .flag {
+      border-color: CanvasText;
+    }
+  }
+}

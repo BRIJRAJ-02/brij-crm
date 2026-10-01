@@ -1,0 +1,61 @@
+/* Skeleton: grey placeholders in the content's shape, pulsing once per
+   duration-pulse. Under reduced motion they hold still. */
+@layer components {
+  .root {
+    display: block;
+    flex: none;
+    inline-size: 100%;
+    block-size: var(--space-8);
+    border-radius: var(--radius-xs);
+    background: var(--surface-hover);
+    animation: pulse var(--duration-pulse) var(--ease-in-out) infinite;
+  }
+
+  .root[data-width='long'] {
+    inline-size: 80%;
+  }
+
+  .root[data-width='medium'] {
+    inline-size: 60%;
+  }
+
+  .root[data-width='short'] {
+    inline-size: 40%;
+  }
+
+  .root[data-shape='circle'] {
+    inline-size: var(--size-chip);
+    block-size: var(--size-chip);
+    border-radius: var(--radius-full);
+  }
+
+  .root[data-shape='block'] {
+    block-size: var(--size-toolbar);
+    border-radius: var(--radius-md);
+  }
+
+  .lines {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    inline-size: 100%;
+  }
+
+  @keyframes pulse {
+    50% {
+      opacity: var(--opacity-pulse);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .root {
+      animation: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border: var(--border-width-hairline) solid GrayText;
+    }
+  }
+}

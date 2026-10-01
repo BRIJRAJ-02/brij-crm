@@ -1,0 +1,23 @@
+/* Separator: a hairline in border-subtle, across or down. */
+@layer components {
+  .root {
+    flex: none;
+    align-self: stretch;
+    block-size: var(--border-width-hairline);
+    margin: 0;
+    border: none;
+    background: var(--border-subtle);
+  }
+
+  .root[aria-orientation='vertical'] {
+    inline-size: var(--border-width-hairline);
+    block-size: auto;
+    min-block-size: var(--size-icon);
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      background: CanvasText;
+    }
+  }
+}

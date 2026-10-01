@@ -21,8 +21,11 @@
   "dependencies": {
     "@crm/contracts": "workspace:*",
     "@crm/tokens": "workspace:*",
+    "@internationalized/date": "catalog:",
+    "libphonenumber-js": "catalog:",
     "lucide-react": "catalog:",
     "react": "catalog:",
+    "react-aria": "catalog:",
     "react-aria-components": "catalog:"
   },
   "devDependencies": {

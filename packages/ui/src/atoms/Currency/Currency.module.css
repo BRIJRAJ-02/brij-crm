@@ -1,0 +1,19 @@
+/* Currency: the code small and secondary, then the amount in tabular figures. */
+@layer components {
+  .root {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--space-2);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .code {
+    color: var(--text-secondary);
+    font: var(--text-kbd);
+    letter-spacing: var(--tracking-kbd);
+  }
+}

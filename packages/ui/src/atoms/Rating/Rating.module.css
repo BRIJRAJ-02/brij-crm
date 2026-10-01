@@ -1,0 +1,81 @@
+/* Rating: five 14px filled stars, border-strong when off and the accent when
+   on. A hovered star lights up (pointer only). */
+@layer components {
+  .wrap {
+    display: inline-flex;
+  }
+
+  .field {
+    display: inline-flex;
+  }
+
+  .root {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .star,
+  .choice {
+    display: inline-flex;
+    color: var(--border-strong);
+  }
+
+  .star[data-on],
+  .choice[data-on] {
+    color: var(--accent);
+  }
+
+  .choice {
+    border-radius: var(--radius-xs);
+    cursor: pointer;
+    outline: none;
+    transition:
+      color var(--duration-hover) var(--ease-hover),
+      scale var(--duration-press) var(--ease-out);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .choice[data-hovered] {
+      color: var(--accent);
+    }
+  }
+
+  .choice[data-pressed] {
+    scale: var(--scale-press-sm);
+  }
+
+  .choice[data-focus-visible] {
+    box-shadow: var(--shadow-focus);
+  }
+
+  .root[data-disabled] {
+    opacity: var(--opacity-disabled);
+  }
+
+  .root[data-disabled] .choice {
+    cursor: default;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .choice[data-pressed] {
+      scale: none;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .star,
+    .choice {
+      color: GrayText;
+    }
+
+    .star[data-on],
+    .choice[data-on] {
+      color: Highlight;
+    }
+
+    .choice[data-focus-visible] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}

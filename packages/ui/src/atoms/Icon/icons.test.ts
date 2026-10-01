@@ -1,5 +1,6 @@
 // The icon registry names every icon as Lucide does, and HUES matches the tag
 // tokens. The Icon atom's own behaviour is checked by its stories.
+import { OBJECT_ICONS } from '@crm/contracts/values';
 import tokens from '@crm/tokens/tokens.json' with { type: 'json' };
 import { describe, expect, it } from 'vitest';
 import { HUES } from '../../hue.ts';
@@ -11,6 +12,10 @@ describe('the icon registry', () => {
       const pascal = name.replace(/(^|-)([a-z0-9])/g, (_match, _dash: string, letter: string) => letter.toUpperCase());
       expect(glyph.displayName, name).toBe(pascal);
     }
+  });
+
+  it('holds every curated object icon, so IconPicker can draw each one', () => {
+    for (const name of OBJECT_ICONS) expect(Object.keys(icons)).toContain(name);
   });
 
   it('has an icon for every attribute type the artifact lists, plus AI', () => {

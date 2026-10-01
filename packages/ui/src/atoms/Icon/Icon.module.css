@@ -21,6 +21,10 @@
     block-size: var(--size-icon-xs);
   }
 
+  .icon[data-filled] {
+    fill: currentColor;
+  }
+
   .icon[data-tone='muted'] {
     color: var(--text-secondary);
   }

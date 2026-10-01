@@ -8,7 +8,8 @@ import {
 import { Icon } from '../Icon/Icon.tsx';
 import type { IconName } from '../Icon/icons.ts';
 import { Kbd } from '../Kbd/Kbd.tsx';
-import { keyShortcuts } from '../Kbd/shortcuts.ts';
+import { keyShortcuts, type KeyboardPlatform } from '../Kbd/shortcuts.ts';
+import { useKeyboardPlatform } from '../../provider/context.ts';
 import { Spinner } from '../Spinner/Spinner.tsx';
 import styles from './Button.module.css';
 import { strings } from './strings.ts';
@@ -84,10 +85,10 @@ function capsOf(kbd: ButtonLook['kbd']): readonly string[] {
  * not as part of the name. React Aria's Button doesn't pass the attribute
  * through, so it goes on the element through Button's `render`.
  */
-function shortcutAttribute(kbd: ButtonLook['kbd']) {
+function shortcutAttribute(kbd: ButtonLook['kbd'], platform: KeyboardPlatform) {
   const caps = capsOf(kbd);
   if (caps.length === 0) return {};
-  const shortcut = keyShortcuts(caps);
+  const shortcut = keyShortcuts(caps, platform);
   return {
     render: (element: JSX.IntrinsicElements['button']) => <button {...element} aria-keyshortcuts={shortcut} />,
   };
@@ -128,6 +129,7 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
 export function Button(props: ButtonProps) {
   const { onPress, isPending = false, type = 'button', isDisabled, slot, ref } = props;
   const face: ButtonFace = props;
+  const platform = useKeyboardPlatform();
   return (
     <AriaButton
       ref={ref}
@@ -138,7 +140,7 @@ export function Button(props: ButtonProps) {
       {...(slot === undefined ? {} : { slot })}
       {...(onPress === undefined ? {} : { onPress })}
       {...(face.label === undefined ? {} : { 'aria-label': face.label })}
-      {...shortcutAttribute(props.kbd)}
+      {...shortcutAttribute(props.kbd, platform)}
       {...lookAttributes(props, face)}
     >
       <Face face={face} look={props} isPending={isPending} />
@@ -194,6 +196,7 @@ export function SplitButton({
   isPending = false,
 }: SplitButtonProps) {
   const look = { variant, kbd } as const;
+  const platform = useKeyboardPlatform();
   return (
     <div className={styles.split}>
       <AriaButton
@@ -203,7 +206,7 @@ export function SplitButton({
         data-variant={variant}
         data-size="md"
         data-split="start"
-        {...shortcutAttribute(kbd)}
+        {...shortcutAttribute(kbd, platform)}
         {...(onPress === undefined ? {} : { onPress })}
       >
         <Face face={{ children }} look={look} isPending={isPending} />

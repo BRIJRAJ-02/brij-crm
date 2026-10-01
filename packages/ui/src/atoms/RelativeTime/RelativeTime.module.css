@@ -1,0 +1,8 @@
+/* RelativeTime: inherits its text style; tabular figures, so ticking numbers
+   don't shift the line. */
+@layer components {
+  .root {
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+}

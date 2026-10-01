@@ -1,0 +1,18 @@
+/* Mention: link-coloured, medium weight, on the accent's soft tint. */
+@layer components {
+  .root {
+    padding-inline: var(--space-2);
+    border-radius: var(--radius-xs);
+    background: var(--accent-soft);
+    color: var(--link);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    white-space: nowrap;
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border: var(--border-width-hairline) solid CanvasText;
+    }
+  }
+}

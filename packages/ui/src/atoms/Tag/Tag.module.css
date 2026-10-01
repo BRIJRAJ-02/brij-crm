@@ -1,0 +1,139 @@
+/* Tag and TagList: a 20px chip in its option's hue (tag-<hue>-bg, -border and
+   -text), the same everywhere a select value shows. An archived option is
+   gray with a dashed edge. The "+N" chip opens the rest. */
+@layer components {
+  .root {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    max-inline-size: 100%;
+    block-size: var(--size-chip);
+    padding-inline: var(--space-6);
+    border: var(--border-width-hairline) solid var(--tag-gray-border);
+    border-radius: var(--radius-sm);
+    background: var(--tag-gray-bg);
+    color: var(--tag-gray-text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    white-space: nowrap;
+  }
+
+  .label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .root[data-hue='gray'] {
+    border-color: var(--tag-gray-border);
+    background: var(--tag-gray-bg);
+    color: var(--tag-gray-text);
+  }
+
+  .root[data-hue='red'] {
+    border-color: var(--tag-red-border);
+    background: var(--tag-red-bg);
+    color: var(--tag-red-text);
+  }
+
+  .root[data-hue='orange'] {
+    border-color: var(--tag-orange-border);
+    background: var(--tag-orange-bg);
+    color: var(--tag-orange-text);
+  }
+
+  .root[data-hue='yellow'] {
+    border-color: var(--tag-yellow-border);
+    background: var(--tag-yellow-bg);
+    color: var(--tag-yellow-text);
+  }
+
+  .root[data-hue='lime'] {
+    border-color: var(--tag-lime-border);
+    background: var(--tag-lime-bg);
+    color: var(--tag-lime-text);
+  }
+
+  .root[data-hue='green'] {
+    border-color: var(--tag-green-border);
+    background: var(--tag-green-bg);
+    color: var(--tag-green-text);
+  }
+
+  .root[data-hue='sky'] {
+    border-color: var(--tag-sky-border);
+    background: var(--tag-sky-bg);
+    color: var(--tag-sky-text);
+  }
+
+  .root[data-hue='blue'] {
+    border-color: var(--tag-blue-border);
+    background: var(--tag-blue-bg);
+    color: var(--tag-blue-text);
+  }
+
+  .root[data-hue='purple'] {
+    border-color: var(--tag-purple-border);
+    background: var(--tag-purple-bg);
+    color: var(--tag-purple-text);
+  }
+
+  .root[data-archived] {
+    border-style: dashed;
+  }
+
+  .list {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-4);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    overflow: hidden;
+  }
+
+  .more {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    block-size: var(--size-chip);
+    padding-inline: var(--space-6);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface-raised);
+    color: var(--text-secondary);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    cursor: pointer;
+    outline: none;
+    transition: background-color var(--duration-hover) var(--ease-hover);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .more[data-hovered] {
+      background: var(--surface-hover);
+      color: var(--text);
+    }
+  }
+
+  .more[data-focus-visible] {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .stack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
+  }
+
+  @media (forced-colors: active) {
+    .root,
+    .more {
+      border-color: CanvasText;
+    }
+
+    .more[data-focus-visible] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}
