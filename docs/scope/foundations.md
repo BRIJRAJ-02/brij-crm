@@ -2,14 +2,14 @@
 
 The ground every slice stands on. All ten are decided before Slice 1 starts. See [index.md](index.md) for the house rules and the full order.
 
-### 1. Stack & architecture · in-progress
+### 1. Stack & architecture · done
 Decide the language, framework, database, hosting and sign in approach, then scaffold a runnable project so every slice builds on real structure.
 **Done when:** the stack is recorded in a spec; the empty app boots locally, builds, and deploys to a preview and a production environment, each with its own database; the code is split into modules with clear edges (data engine, client data layer, access, realtime, jobs, the component library, and one module per feature), and screens get their UI only from the component library.
 - [x] Decide the stack (spec): `/architect stack & architecture`
-- [ ] Scaffold from the decision: `/develop stack & architecture`
+- [x] Scaffold from the decision: `/develop stack & architecture`
    - [x] Boots locally end to end: typecheck, build, module edges, migrations, the status page, and the web app served through the edge (DW-2, DW-4)
    - [x] Local services and images: Docker Compose with the connection pooler, and both service images build (DW-2, DW-3)
-   - [ ] Deploys to a preview and to production, each with its own database (DW-3)
+   - [x] Deploys to a preview and to production, each with its own database (DW-3)
 Spec [0001](../specs/0001-stack-architecture/index.md) · code in `apps/`, `packages/`, `infra/`
 
 ### 2. Coding standards & tooling · done

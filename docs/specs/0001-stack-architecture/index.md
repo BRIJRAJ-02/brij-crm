@@ -1,7 +1,7 @@
 # 0001. Stack and architecture for the CRM
 
 **Date**: 2026-10-01
-**Status**: In Progress
+**Status**: Accepted
 **Amended**: 2026-10-01, the web app moved from Cloudflare to Vercel, Neon is provisioned through Vercel, and the product is named brij-crm (see [rationale.md](rationale.md#amendment-2026-10-01-web-hosting-on-vercel)).
 
 ## Summary

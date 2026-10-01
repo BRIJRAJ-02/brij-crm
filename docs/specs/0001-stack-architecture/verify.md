@@ -12,7 +12,7 @@ _Steps derived from the feature's **Done when** in `docs/scope/foundations.md` (
 - [x] Build the web app and run it with `vercel dev` in `apps/web` (project linked), open the URL it prints → the page renders with no console errors under the Content Security Policy from `vercel.json`, and `/api` reaches the local API through the middleware → DW-2 _(passed 2026-10-01 on the real deployment instead: a browser on https://brij-crm-phi.vercel.app showed 0 errors and 0 warnings with the CSP from `vercel.json`, and `/api` reached the API through the middleware)_
 - [x] Open a pull request → the Vercel preview the workflow comments on the pull request shows environment `preview`, and Neon lists a branch `preview/pr-<n>` → DW-3 _(passed 2026-10-01 with pull request #1: https://brij-crm-pr-1.vercel.app answered `preview` through its middleware, its Railway API read `preview/pr-1`, never the production endpoint)_
 - [x] Close that pull request → the Neon branch and the Railway environment `pr-<n>` are gone → DW-3 _(passed 2026-10-01: the branch, the `pr-1` environment and the preview alias were all removed)_
-- [ ] Merge to `main` → the production URL shows environment `production`, served by the Neon production branch (not `preview-base`) → DW-3 _(production itself works as of 2026-10-01: https://brij-crm-phi.vercel.app shows `production` on Neon Postgres 18.6, and a write from a foreign origin gets 403. It was deployed from a local machine, so the merge path stays open until `VERCEL_TOKEN` and Railway's GitHub app are in place)_
+- [x] Merge to `main` → the production URL shows environment `production`, served by the Neon production branch (not `preview-base`) → DW-3 _(passed 2026-10-01: a push to `main` authored by BRIJRAJ-02 passed CI, the Vercel deploy came up Ready on https://brij-crm-phi.vercel.app, and it answers `production` from the Neon production branch. Railway deploys production from `main` after CI passes. A commit by any other author is blocked by Vercel's Hobby plan)_
 
 ## Commands
 - [x] `pnpm typecheck` → 6 of 6 tasks pass → DW-2 _(passed 2026-10-01)_
@@ -31,5 +31,5 @@ _Steps derived from the feature's **Done when** in `docs/scope/foundations.md` (
 ## Acceptance-criteria coverage
 - DW-1: spec 0001 exists with its status line (`In Progress` now, `Accepted` once the feature is done).
 - DW-2: the local status page steps, typecheck, build, db:setup, the guard steps, `pnpm dev` with Docker.
-- DW-3: the pull request, close and merge steps, the Docker builds, `railway config plan`. Still open: the pull request steps (they need the `VERCEL_TOKEN`, `RAILWAY_TOKEN` and `NEON_API_KEY` secrets, and the `preview-base` branch) and the merge path.
+- DW-3: the pull request, close and merge steps, the Docker builds, `railway config plan`. All passed 2026-10-01.
 - DW-4: both boundaries steps. The "screens only from the component library" half lands with Design tokens (#3) and the Component library (#4). Until then the one boot page has no styles, so it has no raw values.
