@@ -24,8 +24,8 @@ _Steps derived from the feature's **Done when** in `docs/scope/foundations.md` (
 - [x] Start the worker with `DATABASE_URL_DIRECT` on a `-pooler` host → it refuses to start → DW-2 _(passed 2026-10-01)_
 - [x] `curl -X POST localhost:3000/api/rpc/system/status` with no `Origin`, or a foreign one → 403 `FORBIDDEN_ORIGIN`; with `Origin: http://localhost:5173` → 200 with the status → DW-2 _(passed 2026-10-01)_
 - [x] Send SIGTERM to the api → it logs "Shutting down" and exits → DW-2 _(passed 2026-10-01)_
-- [ ] `pnpm dev` with Docker installed → Postgres, PgBouncer and Centrifugo report healthy, and the status page works through PgBouncer (port 6432) → DW-2
-- [ ] `docker build -f apps/api/Dockerfile .` and `docker build -f infra/centrifugo/Dockerfile .` → both images build → DW-3
+- [x] `pnpm dev` with Docker installed → Postgres, PgBouncer and Centrifugo report healthy, and the status page works through PgBouncer (port 6432) → DW-2 _(passed 2026-10-01, Docker Desktop 29.8)_
+- [x] `docker build -f apps/api/Dockerfile .` and `docker build -f infra/centrifugo/Dockerfile .` → both images build → DW-3 _(passed 2026-10-01; the api image also answered `/api/health/ready` through PgBouncer)_
 - [ ] `railway config plan` (linked to `production`, then `preview-base`) → it plans the three services `api`, `worker` and `centrifugo` → DW-3
 
 ## Acceptance-criteria coverage

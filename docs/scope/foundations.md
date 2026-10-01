@@ -8,7 +8,7 @@ Decide the language, framework, database, hosting and sign in approach, then sca
 - [x] Decide the stack (spec): `/architect stack & architecture`
 - [ ] Scaffold from the decision: `/develop stack & architecture`
    - [x] Boots locally end to end: typecheck, build, module edges, migrations, the status page, and the web app served through the edge (DW-2, DW-4)
-   - [ ] Local services and images: Docker Compose with the connection pooler, and both service images build (DW-2, DW-3)
+   - [x] Local services and images: Docker Compose with the connection pooler, and both service images build (DW-2, DW-3)
    - [ ] Deploys to a preview and to production, each with its own database (DW-3)
 Spec [0001](../specs/0001-stack-architecture/index.md) · code in `apps/`, `packages/`, `infra/`
 
