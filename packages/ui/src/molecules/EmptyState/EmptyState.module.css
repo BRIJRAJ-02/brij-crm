@@ -34,7 +34,7 @@
   }
 
   .text {
-    max-inline-size: calc(var(--size-sidebar) + var(--space-20));
+    max-inline-size: var(--size-measure);
     color: var(--text-secondary);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);

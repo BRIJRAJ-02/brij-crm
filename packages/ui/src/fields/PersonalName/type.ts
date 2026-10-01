@@ -30,4 +30,5 @@ export const personalNameType: AttributeTypeDef<'personal_name'> = {
   fromText: (text) => nameFromText(text) ?? refuse('Type a name, such as Ada Lovelace.'),
   align: 'start',
   editIn: 'popover',
+  width: 'default',
 };

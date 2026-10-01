@@ -2,7 +2,7 @@
 // history, and the display shapes the data layer (#6) builds so fields never
 // resolve ids themselves.
 import * as z from 'zod';
-import { ActorReferenceValue, FileValue, Timestamp, type AttributeType } from './attribute-values.ts';
+import { ActorReferenceValue, EmailValue, FileValue, Timestamp, type AttributeType } from './attribute-values.ts';
 import { Hue } from './hues.ts';
 
 const option = z.object({
@@ -53,6 +53,8 @@ export const ActorDisplay = z.object({
   type: z.enum(['member', 'api_key', 'automation', 'system']),
   id: z.string().min(1).nullable(),
   name: z.string(),
+  /** Members only: shown in the member picker, and matched first when a member is pasted. */
+  email: EmailValue.optional(),
   imageSrc: z.string().optional(),
   hue: Hue.optional(),
 });

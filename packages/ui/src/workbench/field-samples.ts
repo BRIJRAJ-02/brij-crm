@@ -29,10 +29,10 @@ const TAGS = [
 ] as const;
 
 const MEMBERS: readonly ActorDisplay[] = [
-  { type: 'member', id: 'm1', name: 'Ada Lovelace', hue: 'orange' },
-  { type: 'member', id: 'm2', name: 'Grace Hopper', hue: 'sky' },
-  { type: 'member', id: 'm3', name: 'Alan Turing', hue: 'green' },
-  { type: 'member', id: 'm4', name: 'Katherine Johnson', hue: 'purple' },
+  { type: 'member', id: 'm1', name: 'Ada Lovelace', email: 'ada@northwind.com', hue: 'orange' },
+  { type: 'member', id: 'm2', name: 'Grace Hopper', email: 'grace@northwind.com', hue: 'sky' },
+  { type: 'member', id: 'm3', name: 'Alan Turing', email: 'alan@northwind.com', hue: 'green' },
+  { type: 'member', id: 'm4', name: 'Katherine Johnson', email: 'katherine@northwind.com', hue: 'purple' },
 ];
 
 const COMPANIES: readonly RecordRefDisplay[] = [

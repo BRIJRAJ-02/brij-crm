@@ -89,6 +89,7 @@ describe('@crm/ui', () => {
       'Variable',
       'VisuallyHidden',
       'arraySource',
+      'columnWidthOf',
       'createPhoneParser',
       'createToasts',
       'dayIn',

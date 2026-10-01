@@ -5,7 +5,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import styles from './Panel.module.css';
 import { strings } from './strings.ts';
 
-/** How wide a panel is: `md` (390px) for a record, `lg` (520px) for a larger task. */
+/** How wide a panel is: `md` (`size-panel`, 400px) for a record, `lg` (`size-panel-wide`, 520px) for notes, email and larger tasks. */
 export type PanelWidth = 'md' | 'lg';
 
 /** Props for Panel. */

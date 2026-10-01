@@ -42,3 +42,16 @@ export async function hoverFresh(userEvent: Pointer, element: Element): Promise<
   await userEvent.unhover(element);
   await userEvent.hover(element);
 }
+
+/**
+ * The open tooltip once it has finished fading in, so the accessibility check
+ * that runs after a story never measures it half transparent.
+ */
+export async function shownTooltip(): Promise<Element> {
+  return waitFor(() => {
+    const found = document.querySelector('[role="tooltip"]');
+    if (found === null) throw new Error('the tooltip did not show');
+    if (found.hasAttribute('data-entering')) throw new Error('the tooltip is still fading in');
+    return found;
+  });
+}

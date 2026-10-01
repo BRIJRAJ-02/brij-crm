@@ -18,7 +18,7 @@ New. Truncated text, exact times, icon only buttons and disabled reasons all nee
 - It adds to a name and never replaces it: an icon only button keeps its own `label`.
 - `isTextTrigger` wraps plain text, which shows the tooltip on hover and when something focuses it on purpose (a grid cell); it adds no tab stop.
 - `placement`: `top` (the default), `bottom`, `start` or `end`.
-- The delay is React Aria's (1.5 s to open, at once once one is showing).
+- It opens after 500 ms of resting (spec 0003), at once while another is showing, and at once on keyboard focus.
 
 ## States
 

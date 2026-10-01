@@ -30,4 +30,5 @@ export const currencyType: AttributeTypeDef<'currency'> = {
   },
   align: 'end',
   editIn: 'cell',
+  width: 'default',
 };

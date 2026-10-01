@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, waitFor } from 'storybook/test';
 import { Button } from '../Button/Button.tsx';
-import { hoverFresh } from '../../workbench/pointer.ts';
+import { hoverFresh, shownTooltip as tooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Tooltip } from './Tooltip.tsx';
 
@@ -14,13 +14,25 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-function tooltip() {
-  return waitFor(() => {
-    const found = document.querySelector('[role="tooltip"]');
-    if (found === null) throw new Error('the tooltip did not show');
-    return found;
-  });
-}
+/** For a pointer, it waits half a second before it opens, so moving across a table flashes nothing. First in the file, so no earlier tooltip has warmed it up. */
+export const OnHover: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage>
+      <Tooltip {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await hoverFresh(userEvent, canvas.getByRole('button', { name: 'Archive' }));
+    const hovered = performance.now();
+    await expect(document.querySelector('[role="tooltip"]')).toBeNull();
+    await tooltip();
+    const waited = performance.now() - hovered;
+    // About 500 ms: not at once, and well short of React Aria's 1.5 s default.
+    await expect(waited).toBeGreaterThanOrEqual(400);
+    await expect(waited).toBeLessThan(1400);
+  },
+};
 
 /** Keyboard focus shows it at once, and it describes the button. Esc hides it. */
 export const Default: Story = {

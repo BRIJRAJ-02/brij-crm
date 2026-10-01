@@ -5,8 +5,8 @@
     flex: none;
     align-items: center;
     justify-content: center;
-    min-inline-size: var(--size-check);
-    block-size: var(--size-check);
+    min-inline-size: var(--size-icon);
+    block-size: var(--size-icon);
     padding-inline: var(--space-4);
     border-radius: var(--radius-xs);
     background: var(--surface-hover);

@@ -19,4 +19,5 @@ export const interactionType: AttributeTypeDef<'interaction'> = {
   fromText: () => refuse('The system records interactions; they can’t be pasted.'),
   align: 'start',
   editIn: 'none',
+  width: 'default',
 };

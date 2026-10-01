@@ -19,4 +19,5 @@ export const longTextType: AttributeTypeDef<'long_text'> = {
   },
   align: 'start',
   editIn: 'popover',
+  width: 'wide',
 };

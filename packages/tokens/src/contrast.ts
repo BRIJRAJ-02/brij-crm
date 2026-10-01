@@ -40,6 +40,7 @@ export function contrastRules(color: ColorFamily): ContrastRule[] {
       backgrounds: ['surface', 'surface-subtle', 'surface-raised', 'surface-hover', 'surface-selected'],
       minimum: 4.5,
     },
+    { foregrounds: ['success'], backgrounds: ['surface', 'surface-raised', 'surface-hover'], minimum: 4.5 },
     ...tagHues(color).map((hue) => ({
       foregrounds: [`tag-${hue}-text`],
       backgrounds: [`tag-${hue}-bg`],

@@ -21,7 +21,7 @@ New. The record panel (#17), notifications (#28) and the assistant (#54) open be
 
 - `isOpen` and `onClose` are the caller's; the close button and Esc call `onClose`.
 - `actions` go at the end of the header, before the close button; `footer` holds a form's buttons.
-- `width`: `md` (390px) for a record, `lg` (520px) for a larger task, from `size-sidebar` until panel width tokens exist.
+- `width`: `md` (`size-panel`, 400px) for a record, `lg` (`size-panel-wide`, 520px) for notes, email and larger tasks.
 - It is not modal: the page beside it stays usable, so focus can leave it with Tab or a click.
 
 ## States

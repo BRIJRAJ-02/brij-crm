@@ -28,4 +28,5 @@ export const phoneType: AttributeTypeDef<'phone'> = {
     context.attribute.allowMultiple ? listFromText(text, (part) => one(part, context)) : one(text, context),
   align: 'start',
   editIn: 'cell',
+  width: 'default',
 };

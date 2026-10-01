@@ -19,4 +19,5 @@ export const textType: AttributeTypeDef<'text'> = {
   },
   align: 'start',
   editIn: 'cell',
+  width: 'default',
 };

@@ -15,4 +15,5 @@ export const timestampType: AttributeTypeDef<'timestamp'> = {
   fromText: () => refuse('The system sets this time; it can’t be pasted.'),
   align: 'start',
   editIn: 'none',
+  width: 'narrow',
 };

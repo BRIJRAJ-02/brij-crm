@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, waitFor } from 'storybook/test';
-import { hoverFresh } from '../../workbench/pointer.ts';
+import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { TruncatedText } from './TruncatedText.tsx';
 
@@ -39,6 +39,6 @@ export const Cut: Story = {
     // The tooltip is on only once the text measures as cut.
     await waitFor(() => expect(text.scrollWidth).toBeGreaterThan(text.clientWidth));
     await hoverFresh(userEvent, text);
-    await waitFor(() => expect(document.querySelector('[role="tooltip"]')).toHaveTextContent('Forwarding Limited'));
+    await expect(await shownTooltip()).toHaveTextContent('Forwarding Limited');
   },
 };

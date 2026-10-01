@@ -8,7 +8,7 @@
     inset-inline-end: 0;
     z-index: var(--z-drawer);
     box-sizing: border-box;
-    inline-size: min(100vw, calc(1.5 * var(--size-sidebar)));
+    inline-size: min(100vw, var(--size-panel));
     border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
     background: var(--surface-raised);
     box-shadow: var(--shadow-lg);
@@ -16,7 +16,7 @@
   }
 
   .root[data-width='lg'] {
-    inline-size: min(100vw, calc(2 * var(--size-sidebar)));
+    inline-size: min(100vw, var(--size-panel-wide));
   }
 
   .dialog {

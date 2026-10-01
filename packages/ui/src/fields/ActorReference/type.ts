@@ -18,16 +18,22 @@ export const actorReferenceType: AttributeTypeDef<'actor_reference'> = {
       .map((actor) => actorDisplayOf(actor, displays).name)
       .join(', ');
   },
+  // A member's email first, then their exact name; a name two members share is refused.
   fromText: (text, context) => {
-    const one = (name: string): ActorReferenceValue | ReturnType<typeof refuse> => {
-      const wanted = name.trim().toLocaleLowerCase();
-      const member = context.members?.find(
-        (candidate) => candidate.type === 'member' && candidate.name.toLocaleLowerCase() === wanted,
-      );
-      return member === undefined ? refuse(`No member called “${name.trim()}”.`) : { type: 'member', id: member.id };
+    const one = (written: string): ActorReferenceValue | ReturnType<typeof refuse> => {
+      const wanted = written.trim().toLocaleLowerCase();
+      const members = context.members?.filter((candidate) => candidate.type === 'member') ?? [];
+      const byEmail = members.find((candidate) => candidate.email === wanted);
+      if (byEmail !== undefined) return { type: 'member', id: byEmail.id };
+      const byName = members.filter((candidate) => candidate.name.toLocaleLowerCase() === wanted);
+      const [only] = byName;
+      if (byName.length > 1)
+        return refuse(`${String(byName.length)} members are called “${written.trim()}”. Paste their email instead.`);
+      return only === undefined ? refuse(`No member called “${written.trim()}”.`) : { type: 'member', id: only.id };
     };
     return context.attribute.allowMultiple ? listFromText(text, one) : one(text);
   },
   align: 'start',
   editIn: 'popover',
+  width: 'default',
 };

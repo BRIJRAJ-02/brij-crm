@@ -30,7 +30,7 @@ Ported from the artifact's Modal card. Confirms, invites, exports, imports and m
 </ModalTrigger>
 ```
 
-- `variant`: `dialog` (the default, 480px) for a question or a short form; `window` (780px) for a larger task, with a header that holds an `icon`, the `title`, a `context` (the record or list) and a close button.
+- `variant`: `dialog` (the default, `size-dialog`, 480px) for a question or a short form; `window` (`size-dialog-wide`, 780px) for a larger task, with a header that holds an `icon`, the `title`, a `context` (the record or list) and a close button.
 - `actions` is the footer: Cancel first (`slot="close"` closes the modal), the primary last. A destructive confirm uses `tone="danger"` with a `danger` Button.
 - `tone="danger"` makes it an alert dialog with a warning icon; a click outside won't close it, so a destructive answer is always deliberate.
 - Open it from a `ModalTrigger`, or control it with `isOpen` and `onOpenChange`.
@@ -45,5 +45,5 @@ Focus moves into it when it opens and stays inside; Tab cycles. Esc closes it (u
 
 ## Differences from the artifact
 
-- `variant`, `icon`, `actions` and `context` keep their meaning; `width` is gone (480px or 780px from tokens, until `size-dialog` tokens exist); `ariaLabel` is the `title`.
+- `variant`, `icon`, `actions` and `context` keep their meaning; `width` is gone (`size-dialog` 480px or `size-dialog-wide` 780px); `ariaLabel` is the `title`.
 - `tone="danger"` (an alert dialog that a click outside won't close) and the exit animation are new.

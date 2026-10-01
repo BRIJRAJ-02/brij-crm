@@ -1,4 +1,4 @@
-/* Generated from tokens.json (artifact version 1790848498-5204) by packages/tokens/scripts/generate.ts. Do not edit. */
+/* Generated from tokens.json (artifact version 1790876326-6994) by packages/tokens/scripts/generate.ts. Do not edit. */
 
 @layer tokens {
   :root,
@@ -28,6 +28,7 @@
     --focus-ring: #266df04d;
     --ai: #9765fd;
     --danger: #c92e2d;
+    --success: #0e7a4a;
     --dot-gray: #cad0d9;
     --dot-red: #ff5b59;
     --dot-orange: #fb8f3c;
@@ -104,6 +105,7 @@
     --focus-ring: #709ff599;
     --ai: #ab92f1;
     --danger: #ff7b79;
+    --success: #0fc27b;
     --dot-gray: #505967;
     --dot-red: #ff5b59;
     --dot-orange: #fb8f3c;
@@ -181,6 +183,7 @@
       --focus-ring: #709ff599;
       --ai: #ab92f1;
       --danger: #ff7b79;
+      --success: #0fc27b;
       --dot-gray: #505967;
       --dot-red: #ff5b59;
       --dot-orange: #fb8f3c;
@@ -263,6 +266,23 @@
     --size-icon-sm: 14px;
     --size-icon-xs: 12px;
     --size-tile: 20px;
+    --size-menu: 240px;
+    --size-measure: 280px;
+    --size-dialog: 480px;
+    --size-dialog-wide: 780px;
+    --size-palette: 640px;
+    --size-panel: 400px;
+    --size-panel-wide: 520px;
+    --size-page-card: 520px;
+    --size-kbd: 16px;
+    --size-board-column: 280px;
+    --size-sidebar-collapsed: 48px;
+    --size-column-check: 36px;
+    --size-column-min: 80px;
+    --size-column-narrow: 120px;
+    --size-column: 200px;
+    --size-column-wide: 300px;
+    --size-column-max: 640px;
     --icon-stroke: 1.5;
     --duration-hover: 120ms;
     --duration-press: 160ms;

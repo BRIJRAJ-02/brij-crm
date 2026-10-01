@@ -23,4 +23,5 @@ export const ratingType: AttributeTypeDef<'rating'> = {
   },
   align: 'start',
   editIn: 'cell',
+  width: 'narrow',
 };

@@ -104,6 +104,8 @@ export function ReferencePicker<D extends Reference>({
           renderItem={(display) => ({
             children: display.name === '' ? strings.unknown : display.name,
             ...(isMe(display) ? { meta: strings.me } : {}),
+            // A member's email tells two people with the same name apart.
+            ...('email' in display && display.email !== undefined ? { description: display.email } : {}),
           })}
           onAction={pick}
         />

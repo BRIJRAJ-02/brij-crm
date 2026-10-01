@@ -22,7 +22,7 @@ import { selectType } from './Select/type.ts';
 import { statusType } from './Status/type.ts';
 import { textType } from './Text/type.ts';
 import { timestampType } from './Timestamp/type.ts';
-import type { AttributeTypeDef } from './types.ts';
+import type { AttributeTypeDef, ColumnWidth, FieldAttribute } from './types.ts';
 import { urlType } from './Url/type.ts';
 
 /** Every attribute type's one display, one editor, operators and text conversion. */
@@ -57,4 +57,10 @@ export function fieldTypeOf<T extends AttributeType>(type: T): AttributeTypeDef<
 /** True for types people never edit: the system writes them. */
 export function isSystemOnly(type: AttributeType): boolean {
   return fieldTypeOf(type).editIn === 'none';
+}
+
+/** A new grid column's width tier: the type's own, except that an attribute holding several values is always `wide`. */
+export function columnWidthOf(attribute: FieldAttribute): ColumnWidth {
+  if (attribute.allowMultiple || attribute.cardinality === 'many') return 'wide';
+  return fieldTypeOf(attribute.type).width;
 }

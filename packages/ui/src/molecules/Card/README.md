@@ -20,7 +20,7 @@ New. Settings pages (#39, #42), dashboard tiles (#52) and the template and onboa
 
 - `actions` sit at the end of the header; `footer` holds a form's Save.
 - `tone="sunken"` for a quieter group inside a page.
-- `placement="page"` is the one frame for a page outside the app shell: the status page and the not found page now, and `AuthLayout` (sign in, sign up, verify email, accept invite) builds on it later rather than drawing a second centred frame. The card is then the page's `main` landmark, its title (required) an `h1`, centred, capped at two sidebar widths, and kept 16 px (`--space-16`) from each edge on a phone. Inline cards keep `section` and `h3`.
+- `placement="page"` is the one frame for a page outside the app shell: the status page and the not found page now, and `AuthLayout` (sign in, sign up, verify email, accept invite) builds on it later rather than drawing a second centred frame. The card is then the page's `main` landmark, its title (required) an `h1`, centred, capped at `size-page-card` (520px), and kept 16 px (`--space-16`) from each edge on a phone. Inline cards keep `section` and `h3`.
 - Use it to group, not to decorate: a single list or form on a page needs no card, except with `placement="page"`, where the card is the page.
 
 ## States

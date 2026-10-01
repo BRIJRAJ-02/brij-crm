@@ -21,8 +21,8 @@
   }
 
   .root[data-size='xs'] {
-    inline-size: var(--size-check);
-    block-size: var(--size-check);
+    inline-size: var(--size-icon);
+    block-size: var(--size-icon);
     font: var(--text-kbd);
   }
 

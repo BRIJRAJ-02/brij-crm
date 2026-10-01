@@ -30,7 +30,7 @@
 
   /* 240px, the artifact's menu width, or the trigger's when that is wider. */
   .root[data-width='menu'] {
-    min-inline-size: max(var(--trigger-width), calc(var(--size-sidebar) - var(--space-20)));
+    min-inline-size: max(var(--trigger-width), var(--size-menu));
   }
 
   .root[data-placement='bottom'] {

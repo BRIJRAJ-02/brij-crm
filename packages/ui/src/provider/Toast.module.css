@@ -48,7 +48,7 @@
 
   .icon {
     display: inline-flex;
-    color: var(--dot-green);
+    color: var(--success);
   }
 
   .icon[data-tone='danger'] {

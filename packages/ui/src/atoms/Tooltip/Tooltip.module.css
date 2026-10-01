@@ -16,7 +16,7 @@
   }
 
   .root {
-    max-inline-size: calc(var(--size-sidebar) + var(--space-20));
+    max-inline-size: var(--size-measure);
     padding-block: var(--space-2);
     padding-inline: var(--space-6);
     border-radius: var(--radius-sm);

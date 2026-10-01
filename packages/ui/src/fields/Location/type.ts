@@ -16,4 +16,5 @@ export const locationType: AttributeTypeDef<'location'> = {
   fromText: () => refuse('Addresses can’t be pasted as one line. Edit the parts.'),
   align: 'start',
   editIn: 'popover',
+  width: 'wide',
 };

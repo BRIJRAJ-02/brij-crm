@@ -20,4 +20,5 @@ export const urlType: AttributeTypeDef<'url'> = {
   fromText: (text, context) => (context.attribute.allowMultiple ? listFromText(text, one) : one(text)),
   align: 'start',
   editIn: 'cell',
+  width: 'default',
 };

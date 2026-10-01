@@ -35,8 +35,8 @@
     flex: none;
     align-items: center;
     justify-content: center;
-    inline-size: var(--size-check);
-    block-size: var(--size-check);
+    inline-size: var(--size-icon);
+    block-size: var(--size-icon);
     border-radius: var(--radius-xs);
     background: var(--surface-hover);
     color: var(--text-secondary);

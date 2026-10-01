@@ -5,8 +5,8 @@
     align-items: center;
     justify-content: center;
     gap: var(--space-2);
-    min-inline-size: var(--size-check);
-    block-size: var(--size-check);
+    min-inline-size: var(--size-kbd);
+    block-size: var(--size-kbd);
     padding-block: 0;
     padding-inline: var(--space-4);
     border: var(--border-width-hairline) solid var(--border);

@@ -29,7 +29,7 @@
 
   .slot[data-surface='cell'] {
     box-sizing: border-box;
-    inline-size: calc(var(--size-sidebar) - var(--space-20));
+    inline-size: var(--size-menu);
     block-size: var(--size-row);
     padding-inline: var(--space-8);
     border: var(--border-width-hairline) solid var(--border-subtle);
@@ -38,7 +38,7 @@
 
   .slot[data-surface='card'] {
     box-sizing: border-box;
-    inline-size: calc(var(--size-sidebar) - var(--space-20));
+    inline-size: var(--size-menu);
     padding: var(--space-8);
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);

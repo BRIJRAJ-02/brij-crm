@@ -20,7 +20,7 @@ import { checkEmail } from './Email/EmailEditor.tsx';
 import { nameFromText } from './PersonalName/type.ts';
 import { checkPhone } from './Phone/PhoneEditor.tsx';
 import { createPhoneParser, loadPhoneLibrary } from './Phone/phone-library.ts';
-import { FIELD_TYPES, fieldTypeOf } from './registry.ts';
+import { columnWidthOf, FIELD_TYPES, fieldTypeOf } from './registry.ts';
 import { optionByLabel } from './Select/type.ts';
 import type { Surface, TextContext } from './types.ts';
 import { isRefusal, toCommittable } from './values.ts';
@@ -76,6 +76,35 @@ describe('the registry (AC-4)', () => {
       if (type === 'checkbox') expect(operators).toEqual(['is_checked', 'is_not_checked']);
       else expect(operators.slice(-2), type).toEqual(['is_empty', 'is_not_empty']);
     }
+  });
+
+  it('gives every type its column width tier, and makes one that holds several wide', () => {
+    const tiers = Object.fromEntries(AttributeType.options.map((type) => [type, fieldTypeOf(type).width]));
+    expect(tiers).toEqual({
+      text: 'default',
+      long_text: 'wide',
+      number: 'narrow',
+      currency: 'default',
+      date: 'narrow',
+      timestamp: 'narrow',
+      checkbox: 'narrow',
+      select: 'default',
+      status: 'default',
+      rating: 'narrow',
+      email: 'default',
+      phone: 'default',
+      domain: 'default',
+      url: 'default',
+      location: 'wide',
+      personal_name: 'default',
+      actor_reference: 'default',
+      record_reference: 'default',
+      file: 'wide',
+      interaction: 'default',
+    });
+    expect(columnWidthOf(attributeOf('select', 'Segment'))).toBe('default');
+    expect(columnWidthOf(attributeOf('select', 'Tags', { allowMultiple: true }))).toBe('wide');
+    expect(columnWidthOf(attributeOf('record_reference', 'People', { cardinality: 'many' }))).toBe('wide');
   });
 
   it('offers a select different operators when it holds several', () => {
@@ -251,6 +280,22 @@ describe('text out and back in', () => {
     expect(optionByLabel(attribute, 'saas')).toBe('saas');
     expect(optionByLabel(attribute, 'Hot')).toEqual({ code: 'TEXT_REFUSED', reason: 'No option called “Hot”.' });
     expect(isRefusal(optionByLabel(attribute, 'Old segment'))).toBe(true);
+  });
+
+  it('pastes a member by email first, then by exact name, and refuses a shared name', () => {
+    const attribute = FIELD_SAMPLES.actor_reference.attribute;
+    const members = [
+      { type: 'member' as const, id: 'm1', name: 'Ada Lovelace', email: 'ada@northwind.com' },
+      { type: 'member' as const, id: 'm5', name: 'Ada Lovelace', email: 'ada.l@globex.com' },
+      { type: 'member' as const, id: 'm2', name: 'Grace Hopper', email: 'grace@northwind.com' },
+    ];
+    const context = { ...contextFor('actor_reference'), members };
+    const fromText = (text: string) => fieldTypeOf('actor_reference').fromText(text, { ...context, attribute });
+    expect(fromText(' ADA.L@globex.com ')).toEqual({ type: 'member', id: 'm5' });
+    expect(fromText('grace hopper')).toEqual({ type: 'member', id: 'm2' });
+    const shared = fromText('Ada Lovelace');
+    expect(isRefusal(shared) && shared.reason).toBe('2 members are called “Ada Lovelace”. Paste their email instead.');
+    expect(isRefusal(fromText('Nobody'))).toBe(true);
   });
 
   it('pastes phones only with the library loaded, through TextContext.phone', async () => {

@@ -13,6 +13,7 @@ import {
   PersonalNameValue,
   UrlValue,
 } from './attribute-values.ts';
+import { COUNTRY_CODES, countryCodeFromText } from './countries.ts';
 import { CURRENCY_CODES } from './currencies.ts';
 import { toCanonicalDecimal } from './decimal.ts';
 
@@ -175,6 +176,24 @@ describe('the edge cases the editors rely on', () => {
       'Rear Admiral Grace Hopper',
     );
     expect(fullNameOf(' Ada ', undefined)).toBe('Ada');
+  });
+
+  it('locations: the country is an ISO code from the list, upper cased', () => {
+    expect(parseAttributeValue('location', { countryCode: ' gb ' })).toEqual({
+      ok: true,
+      value: { countryCode: 'GB' },
+    });
+    expect(parseAttributeValue('location', { countryCode: 'ZZ' }).ok).toBe(false);
+    expect(parseAttributeValue('location', { countryCode: 'UK' }).ok).toBe(false);
+    expect(countryCodeFromText(' uk ')).toBe('GB');
+    expect(countryCodeFromText('XK')).toBe('XK');
+    expect(countryCodeFromText('Narnia')).toBeUndefined();
+  });
+
+  it('names every country code in the list', () => {
+    const names = new Intl.DisplayNames('en', { type: 'region', fallback: 'none' });
+    expect(COUNTRY_CODES).toHaveLength(250);
+    expect(COUNTRY_CODES.filter((code) => names.of(code) === undefined)).toEqual([]);
   });
 
   it('locations: a latitude needs its longitude, and both stay in range', () => {

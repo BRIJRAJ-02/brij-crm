@@ -4,6 +4,7 @@
 // into one canonical form, so equal values compare equal. Empty is `null` on
 // the wire, and a checkbox is never empty.
 import * as z from 'zod';
+import { isCountryCode } from './countries.ts';
 import { CURRENCY_CODES } from './currencies.ts';
 import { Decimal } from './decimal.ts';
 
@@ -225,7 +226,8 @@ export const LocationValue = z
     countryCode: z
       .string()
       .trim()
-      .regex(/^[A-Z]{2}$/, { error: 'Give the country as a two letter code, such as GB.' })
+      .toUpperCase()
+      .refine(isCountryCode, { error: 'Give the country as its two letter ISO code, such as GB.' })
       .optional(),
     latitude: Decimal.refine(inRange(90), { error: 'A latitude is between -90 and 90.' }).optional(),
     longitude: Decimal.refine(inRange(180), { error: 'A longitude is between -180 and 180.' }).optional(),

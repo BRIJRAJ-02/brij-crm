@@ -24,4 +24,5 @@ export const checkboxType: AttributeTypeDef<'checkbox'> = {
   },
   align: 'start',
   editIn: 'cell',
+  width: 'narrow',
 };

@@ -20,4 +20,5 @@ export const numberType: AttributeTypeDef<'number'> = {
   },
   align: 'end',
   editIn: 'cell',
+  width: 'narrow',
 };

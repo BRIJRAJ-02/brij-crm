@@ -128,7 +128,12 @@ export interface AttributeTypeDef<T extends AttributeType> {
   readonly align: 'start' | 'end';
   /** How the grid edits it: in the cell, in a popover, or not at all. */
   readonly editIn: 'cell' | 'popover' | 'none';
+  /** A new grid column's width tier. An attribute that holds several values is always `wide` (`columnWidthOf`). */
+  readonly width: ColumnWidth;
 }
+
+/** A grid column's width tier: `size-column-narrow`, `size-column` or `size-column-wide`. */
+export type ColumnWidth = 'narrow' | 'default' | 'wide';
 
 /** A change one grid cell asks for. */
 export interface CellChange {

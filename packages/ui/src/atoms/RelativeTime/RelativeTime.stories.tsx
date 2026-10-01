@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, waitFor } from 'storybook/test';
-import { hoverFresh } from '../../workbench/pointer.ts';
+import { expect } from 'storybook/test';
+import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { RelativeTime } from './RelativeTime.tsx';
 
@@ -27,9 +27,7 @@ export const Default: Story = {
     await expect(time.parentElement).toHaveTextContent(/3 hours ago, Oct 8, 2026.+12:30 PM GMT\+1/);
     await hoverFresh(userEvent, time);
     // Engines join the date and time differently ("," or "at"), so match the parts.
-    await waitFor(() =>
-      expect(document.querySelector('[role="tooltip"]')).toHaveTextContent(/Oct 8, 2026.+12:30 PM GMT\+1/),
-    );
+    await expect(await shownTooltip()).toHaveTextContent(/Oct 8, 2026.+12:30 PM GMT\+1/);
   },
 };
 

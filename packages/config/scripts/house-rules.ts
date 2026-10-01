@@ -10,6 +10,9 @@
 //   5. Library names are unique: CSS module names, since class names are
 //      ws-<component>-<local> with no hash, and story titles, since story ids
 //      come from them.
+//   6. Sizes stay with their owner: `size-sidebar` only in the sidebar, the
+//      app shell and the story workbench, and `size-check` only in Checkbox,
+//      Radio and Switch. Anything else uses its own size token (spec 0003).
 import { readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -126,6 +129,23 @@ function libraryNamesAreUnique(files: string[]): string[] {
   return [...duplicates(modules, 'the CSS module name'), ...duplicates(titles, 'the story title')];
 }
 
+/** Size tokens that belong to one part of the library, and the folders allowed to read them. */
+const OWNED_SIZES: readonly { readonly token: string; readonly owners: readonly string[] }[] = [
+  { token: '--size-sidebar', owners: ['modules/AppShell/', 'modules/Sidebar/', 'workbench/'] },
+  { token: '--size-check', owners: ['atoms/Checkbox/', 'atoms/Radio/', 'atoms/Switch/'] },
+];
+
+function sizesStayWithTheirOwner(files: string[]): string[] {
+  const css = files.filter((file) => file.startsWith(LIBRARY + path.sep) && file.endsWith('.css'));
+  return css.flatMap((file) => {
+    const inLibrary = path.relative(LIBRARY, file).split(path.sep).join('/');
+    const text = readFileSync(path.join(ROOT, file), 'utf8');
+    return OWNED_SIZES.filter(
+      ({ token, owners }) => text.includes(`var(${token})`) && !owners.some((owner) => inLibrary.startsWith(owner)),
+    ).map(({ token }) => `${file}: ${token} belongs to another component. Use the size token for this part instead.`);
+  });
+}
+
 const files = listFiles();
 const problems = [
   ...screensHaveNoCss(files),
@@ -133,6 +153,7 @@ const problems = [
   ...componentsExplainThemselves(files),
   ...componentsHaveStoriesAndReadmes(files),
   ...libraryNamesAreUnique(files),
+  ...sizesStayWithTheirOwner(files),
 ];
 
 if (problems.length > 0) {

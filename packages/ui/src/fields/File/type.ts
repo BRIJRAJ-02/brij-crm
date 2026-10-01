@@ -19,4 +19,5 @@ export const fileType: AttributeTypeDef<'file'> = {
   fromText: () => refuse('Files can’t be pasted as text. Upload them.'),
   align: 'start',
   editIn: 'popover',
+  width: 'wide',
 };

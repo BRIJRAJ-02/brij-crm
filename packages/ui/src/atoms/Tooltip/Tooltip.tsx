@@ -3,6 +3,14 @@ import { useFocusable, useFocusVisible } from 'react-aria';
 import { Tooltip as AriaTooltip, TooltipTrigger } from 'react-aria-components';
 import styles from './Tooltip.module.css';
 
+/**
+ * How long a pointer rests before a tooltip opens (spec 0003): quick for cut
+ * text and icon buttons, slow enough that crossing a table flashes nothing.
+ * While one is showing, the next opens at once, and keyboard focus opens it
+ * at once.
+ */
+const TOOLTIP_DELAY_MS = 500;
+
 /** Where a tooltip sits against its trigger. */
 export type TooltipPlacement = 'top' | 'bottom' | 'start' | 'end';
 
@@ -45,7 +53,7 @@ function TextTrigger({ children }: { readonly children: ReactElement }) {
 export function Tooltip({ content, children, placement = 'top', isTextTrigger = false, isDisabled }: TooltipProps) {
   const { isFocusVisible } = useFocusVisible();
   return (
-    <TooltipTrigger {...(isDisabled === undefined ? {} : { isDisabled })}>
+    <TooltipTrigger delay={TOOLTIP_DELAY_MS} {...(isDisabled === undefined ? {} : { isDisabled })}>
       {isTextTrigger ? <TextTrigger>{children}</TextTrigger> : children}
       <AriaTooltip
         className={styles.root}

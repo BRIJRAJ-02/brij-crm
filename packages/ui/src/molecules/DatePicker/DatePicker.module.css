@@ -127,7 +127,7 @@
   }
 
   .calendar {
-    inline-size: calc(var(--size-sidebar) - 2 * var(--space-8) - var(--space-4));
+    inline-size: var(--size-menu);
   }
 
   .nav {

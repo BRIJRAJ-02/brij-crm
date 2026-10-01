@@ -38,6 +38,7 @@ export {
   type AttributeValueOptions,
   type AttributeValueResult,
 } from './attribute-values.ts';
+export { COUNTRY_CODES, countryCodeFromText, isCountryCode, type CountryCode } from './countries.ts';
 export { CURRENCY_CODES, type CurrencyCode } from './currencies.ts';
 export { Decimal, DECIMAL_LIMITS, toCanonicalDecimal } from './decimal.ts';
 export {

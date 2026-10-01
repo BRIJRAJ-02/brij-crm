@@ -157,4 +157,24 @@ describe('house rules check', () => {
     });
     expect(output).toContain('the story title "Atoms/Thing" is used more than once');
   });
+  it('refuses a size token borrowed outside its owner, and allows the owner', () => {
+    const borrowed = runHouseRules({
+      'packages/ui/src/molecules/Modal/Modal.tsx':
+        "import styles from './Modal.module.css';\nexport const classes = styles;\n",
+      'packages/ui/src/molecules/Modal/Modal.module.css': '.root { inline-size: calc(2 * var(--size-sidebar)); }\n',
+      'packages/ui/src/molecules/Modal/README.md': '# Modal\n\nA dialog.\n',
+      'packages/ui/src/molecules/Modal/Modal.stories.tsx': "export default { title: 'Molecules/Modal' };\n",
+    });
+    expect(borrowed.status).toBe(1);
+    expect(borrowed.output).toContain('Modal.module.css: --size-sidebar belongs to another component');
+
+    const owned = runHouseRules({
+      'packages/ui/src/atoms/Checkbox/Checkbox.tsx':
+        "import styles from './Checkbox.module.css';\nexport const classes = styles;\n",
+      'packages/ui/src/atoms/Checkbox/Checkbox.module.css': '.box { inline-size: var(--size-check); }\n',
+      'packages/ui/src/atoms/Checkbox/README.md': '# Checkbox\n\nA checkbox.\n',
+      'packages/ui/src/atoms/Checkbox/Checkbox.stories.tsx': "export default { title: 'Atoms/Checkbox' };\n",
+    });
+    expect(owned.output).not.toContain('belongs to another component');
+  });
 });

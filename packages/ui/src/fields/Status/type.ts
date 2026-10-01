@@ -16,4 +16,5 @@ export const statusType: AttributeTypeDef<'status'> = {
   fromText: (text, context) => optionByLabel(context.attribute, text),
   align: 'start',
   editIn: 'popover',
+  width: 'default',
 };
