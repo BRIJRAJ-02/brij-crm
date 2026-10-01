@@ -12,12 +12,13 @@ Decide the language, framework, database, hosting and sign in approach, then sca
    - [ ] Deploys to a preview and to production, each with its own database (DW-3)
 Spec [0001](../specs/0001-stack-architecture/index.md) · code in `apps/`, `packages/`, `infra/`
 
-### 2. Coding standards & tooling
+### 2. Coding standards & tooling · in-progress
 Capture conventions from the real scaffold, including the house rules, then install linting, formatting, type checks, pre commit hooks, and CI that blocks a red build.
 **Done when:** root `AGENTS.md` reflects the real stack and the house rules, and points every session to the house rule skills (`crm-design-system`, `crm-frontend-state`, `crm-data-model-access`, `crm-api-backend`) and the four reviewer agents in `.claude/`; lint, format, typecheck and CI run clean on every push; a check fails the build on any raw colour, size or spacing value in app code, on new styles for an element the library already has, and on a screen that fetches data outside the client data layer.
 - [ ] Capture conventions + tooling choices: `/audit`
-- [ ] Install the tooling: `/develop tooling`
+- [x] Install the tooling: `/develop tooling`
 - [ ] Check it runs clean: `/test`
+code in `packages/config/`, `lefthook.yml`, `.github/workflows/ci.yml`
 
 ### 3. Design tokens · needs a decision
 Every visual value as a named token from the very first screen: colour (light and dark), type scale, spacing, radius, borders, shadow, motion, layers and breakpoints. The tokens come from the design system artifact. Nothing is carried over from Timefix.
