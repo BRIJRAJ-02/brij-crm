@@ -27,12 +27,14 @@ pnpm typecheck
 pnpm boundaries     # module edges: client code may never import server code
 pnpm db:setup       # apply migrations, then create the app login role
 pnpm db:generate    # SQL from the Drizzle schema; review it and commit it
-pnpm check          # everything CI runs: typecheck, lint, format, CSS, boundaries, house rules
+pnpm check          # everything CI runs: typecheck, lint, format, CSS, boundaries, house rules, tokens:check
 pnpm test           # every package's Vitest suite
 pnpm lint           # ESLint in every workspace, plus the root files
 pnpm format         # Prettier, writing fixes
 pnpm lint:css       # Stylelint
 pnpm house-rules    # CSS module ownership and component READMEs
+pnpm tokens:build   # regenerate packages/tokens/tokens.css after syncing tokens.json from the design system artifact
+pnpm tokens:check   # fail if the committed tokens.css is stale
 ```
 
 Local ports: web 5173 (proxies `/api` to the api), api 3000, worker 3001, Postgres 5433, PgBouncer 6432, Centrifugo 8000 (clients) and 9000 (internal). One `.env` at the repo root, copied from `.env.example`.
@@ -116,7 +118,9 @@ MCP servers: neon (connected), sentry (connected), playwright (connected), githu
 - [packages/core/AGENTS.md](packages/core/AGENTS.md): domain services and (later) the access door, with no HTTP
 - [packages/data/AGENTS.md](packages/data/AGENTS.md): the one client data layer every screen goes through
 - [packages/db/AGENTS.md](packages/db/AGENTS.md): schema, migrations, roles, row level security and `withWorkspace()`
-- [packages/config/AGENTS.md](packages/config/AGENTS.md): shared TypeScript config (lint config joins it)
+- [packages/config/AGENTS.md](packages/config/AGENTS.md): shared TypeScript, ESLint and Stylelint config, and the house rule checks
+- [packages/tokens/AGENTS.md](packages/tokens/AGENTS.md): the design tokens, synced from the design system artifact, and the generated CSS
+- [packages/ui/AGENTS.md](packages/ui/AGENTS.md): the component library: root stylesheet, theme controller and the Icon atom
 - [infra/AGENTS.md](infra/AGENTS.md): Centrifugo and local Postgres setup
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
