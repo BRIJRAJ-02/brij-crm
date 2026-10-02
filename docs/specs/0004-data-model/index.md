@@ -163,7 +163,7 @@ A batch takes a savepoint per record. A refused record rolls back to it, and its
 
 | Service | Kind | Key inputs | Key outputs | Auth | Key errors |
 |---|---|---|---|---|---|
-| `createWorkspace` | write, owner connection | name, slug, first member | workspace id, seeded object ids | system only (#10 calls it on sign up) | `SLUG_TAKEN` |
+| `createWorkspace` | write, inside `withWorkspace()` for the new id | name, slug, first member | workspace id, seeded object ids | system only (#10 calls it on sign up) | `SLUG_TAKEN` |
 | `defineObject`, `defineAttribute`, `defineOption`, `defineRelationship`, `defineList` | write | the definition (config parsed by Zod per type) | the new id | workspace scope (#9 adds the door) | `SLUG_TAKEN`, `CONFIG_INVALID`, `LIMIT_REACHED` |
 | `updateDefinition`, `archiveDefinition`, `restoreDefinition` | write | id, changed fields (title, description, required, unique, options' label, hue, position, outcome, target; type and multi are #14's) | the row | workspace scope | `NOT_FOUND`, `UNIQUE_HAS_DUPLICATES` |
 | `createRecord` | write | objectId, values map, optional client id (UUID v7) | record id, version ids | workspace scope | `ATTRIBUTE_VALUE_INVALID`, `VALUE_REQUIRED`, `UNIQUE_CONFLICT`, `LIMIT_REACHED`, `ID_TAKEN` |
@@ -220,7 +220,7 @@ A list's `queryPage` filters and sorts on entry attributes and on the record's o
 
 **Security model**:
 - **The database is the fence.** Every table forces row level security, `withWorkspace()` is the only query path, and primary and foreign keys are composite, so no row can point into another workspace and no client chosen id can probe one.
-- **Creating a workspace** uses the owner connection only to insert the workspace row, then continues inside `withWorkspace()`.
+- **Creating a workspace** runs entirely inside `withWorkspace()` for the new workspace's id, so even its first row passes the policy; no owner connection is needed.
 - **Who may call which service** is #9's access door. Until it exists, the services are reachable only from tests and the seed scripts, never from an endpoint.
 - **Privacy.** Values hold personal data (names, emails, phones), so erasure (AC-18) and the audit hook keep the design ready for #36's privacy tools under GDPR.
 

@@ -269,6 +269,14 @@ async function readEntries(tx: WorkspaceTx, where: ReturnType<typeof and>): Prom
   });
 }
 
+/** Reads live entries by id inside an open transaction, in the order of `ids`. */
+export async function readEntriesById(tx: WorkspaceTx, ids: readonly string[]): Promise<readonly EntryView[]> {
+  if (ids.length === 0) return [];
+  const order = new Map(ids.map((id, index) => [id, index]));
+  const entries = await readEntries(tx, inArray(listEntries.id, [...ids]));
+  return [...entries].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+}
+
 /** Reads live entries by id, up to 500 at once. */
 export async function getEntries(scope: EngineScope, input: { readonly ids: readonly string[] }) {
   if (input.ids.length > 500) throw refuse('CONFIG_INVALID', 'Read at most 500 entries at once.');

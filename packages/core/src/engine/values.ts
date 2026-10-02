@@ -67,6 +67,19 @@ export async function loadAttributes(tx: WorkspaceTx, objectId: string): Promise
   return new Map(rows.map((row) => [row.id, row]));
 }
 
+/** Some attributes by id, wherever they sit (a filter through a relationship names the far object's). */
+export async function loadAttributesById(
+  tx: WorkspaceTx,
+  ids: readonly string[],
+): Promise<ReadonlyMap<string, AttributeDef>> {
+  if (ids.length === 0) return new Map();
+  const rows = await tx
+    .select(DEF_COLUMNS)
+    .from(attributes)
+    .where(inArray(attributes.id, [...ids]));
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
 /** Every attribute of one list (an entry's own values), by id. */
 export async function loadListAttributes(tx: WorkspaceTx, listId: string): Promise<ReadonlyMap<string, AttributeDef>> {
   const rows = await tx.select(DEF_COLUMNS).from(attributes).where(eq(attributes.listId, listId));
