@@ -10,6 +10,7 @@ import { createDatabase, type Database, type WorkspaceTx } from '@crm/db';
 import type { FilterGroup } from '@crm/contracts/values';
 import { countMatches, queryPage, type EngineScope, type PageQuery } from '../src/index.ts';
 import { benchPage } from '../src/engine/query/page.ts';
+import { refuseRemote } from './local-only.ts';
 
 const env = z
   .object({
@@ -17,12 +18,18 @@ const env = z
     DATABASE_URL_OWNER: z.url(),
     SCALE_WORKSPACE_ID: z.uuid(),
     BENCH_RUNS: z.coerce.number().int().min(3).max(200).default(20),
+    SEED_SCALE_ALLOW_HOST: z.string().min(1).optional(),
   })
   .parse(process.env);
+
+refuseRemote(env.DATABASE_URL_DIRECT, env.SEED_SCALE_ALLOW_HOST, 'the benchmark');
+refuseRemote(env.DATABASE_URL_OWNER, env.SEED_SCALE_ALLOW_HOST, 'the benchmark');
 
 const app = createDatabase({ url: env.DATABASE_URL_DIRECT, applicationName: 'crm-bench-scale' });
 const owner = createDatabase({ url: env.DATABASE_URL_OWNER, applicationName: 'crm-bench-scale-owner' });
 const workspaceId = env.SCALE_WORKSPACE_ID;
+// The timings only mean "row level security on" when the app connection really is the app role.
+await app.assertAppRole();
 
 function percentile(samples: readonly number[], p: number): number {
   const sorted = [...samples].sort((a, b) => a - b);
@@ -188,53 +195,57 @@ const sizes = await owner.withWorkspace(workspaceId, async (tx) => {
   return result.rows;
 });
 
-// The split table variant: this workspace's current value rows alone, with the same indexes and policy.
-await owner.withWorkspace(workspaceId, async (tx) => {
-  await tx.execute(sql`create schema if not exists bench_split`);
-  await tx.execute(sql`drop table if exists bench_split."values"`);
-  await tx.execute(sql`create table bench_split."values" (like public."values" including all)`);
-  await tx.execute(sql`insert into bench_split."values" select * from public."values" where active_until is null`);
-  await tx.execute(sql`alter table bench_split."values" enable row level security`);
-  await tx.execute(sql`alter table bench_split."values" force row level security`);
-  await tx.execute(sql`
-    create policy values_tenant on bench_split."values"
-      using (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid)
-  `);
-  await tx.execute(sql`grant usage on schema bench_split to crm_app`);
-  await tx.execute(sql`grant select on bench_split."values" to crm_app`);
-  await tx.execute(sql`analyze bench_split."values"`);
-});
+try {
+  // The split table variant: this workspace's current value rows alone, with the same indexes and policy.
+  await owner.withWorkspace(workspaceId, async (tx) => {
+    await tx.execute(sql`create schema if not exists bench_split`);
+    await tx.execute(sql`drop table if exists bench_split."values"`);
+    await tx.execute(sql`create table bench_split."values" (like public."values" including all)`);
+    await tx.execute(
+      sql`insert into bench_split."values" select * from public."values" where workspace_id = ${workspaceId} and active_until is null`,
+    );
+    await tx.execute(sql`alter table bench_split."values" enable row level security`);
+    await tx.execute(sql`alter table bench_split."values" force row level security`);
+    await tx.execute(sql`
+      create policy values_tenant on bench_split."values"
+        using (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid)
+    `);
+    await tx.execute(sql`grant usage on schema bench_split to crm_app`);
+    await tx.execute(sql`grant select on bench_split."values" to crm_app`);
+    await tx.execute(sql`analyze bench_split."values"`);
+  });
 
-const lines: string[] = [];
-const plans: string[] = [];
-const version = await app.withWorkspace(workspaceId, async (tx) => {
-  const result = await tx.execute<{ v: string }>(sql`select version() as v`);
-  return result.rows[0]?.v ?? '';
-});
-lines.push(
-  `Run ${new Date().toISOString()} on ${new URL(env.DATABASE_URL_DIRECT).hostname}, ${version.split(',')[0] ?? ''}, ${String(env.BENCH_RUNS)} warm runs each, as the app role.`,
-);
-lines.push('');
-lines.push('| Query | p50 (ms) | p95 (ms) | whole call p95 (ms) | split table p95 (ms) | exact count |');
-lines.push('|---|---|---|---|---|---|');
-for (const { name, query } of grid) {
-  const main = await measure(query);
-  const split = await measure(query, 'bench_split, public');
-  const whole = await wholeCall(query);
-  const counted = await countTime(query);
+  const lines: string[] = [];
+  const plans: string[] = [];
+  const version = await app.withWorkspace(workspaceId, async (tx) => {
+    const result = await tx.execute<{ v: string }>(sql`select version() as v`);
+    return result.rows[0]?.v ?? '';
+  });
   lines.push(
-    `| ${name} | ${main.p50.toFixed(1)} | ${main.p95.toFixed(1)} | ${whole.toFixed(1)} | ${split.p95.toFixed(1)} | ${counted} |`,
+    `Run ${new Date().toISOString()} on ${new URL(env.DATABASE_URL_DIRECT).hostname}, ${version.split(',')[0] ?? ''}, ${String(env.BENCH_RUNS)} warm runs each, as the app role.`,
   );
-  plans.push(`#### ${name}\n\n\`\`\`\n${main.plan}\n\`\`\``);
-  console.error(`done: ${name}`);
+  lines.push('');
+  lines.push('| Query | p50 (ms) | p95 (ms) | whole call p95 (ms) | split table p95 (ms) | exact count |');
+  lines.push('|---|---|---|---|---|---|');
+  for (const { name, query } of grid) {
+    const main = await measure(query);
+    const split = await measure(query, 'bench_split, public');
+    const whole = await wholeCall(query);
+    const counted = await countTime(query);
+    lines.push(
+      `| ${name} | ${main.p50.toFixed(1)} | ${main.p95.toFixed(1)} | ${whole.toFixed(1)} | ${split.p95.toFixed(1)} | ${counted} |`,
+    );
+    plans.push(`#### ${name}\n\n\`\`\`\n${main.plan}\n\`\`\``);
+    console.error(`done: ${name}`);
+  }
+  lines.push('');
+  lines.push('| Table | Rows (estimate) | Table size | Index size |');
+  lines.push('|---|---|---|---|');
+  for (const row of sizes)
+    lines.push(`| ${row.name} | ${Number(row.rows).toLocaleString('en')} | ${row.table} | ${row.indexes} |`);
+  console.log([...lines, '', ...plans].join('\n'));
+} finally {
+  await owner.withWorkspace(workspaceId, (tx) => tx.execute(sql`drop schema if exists bench_split cascade`));
+  await app.close();
+  await owner.close();
 }
-lines.push('');
-lines.push('| Table | Rows (estimate) | Table size | Index size |');
-lines.push('|---|---|---|---|');
-for (const row of sizes)
-  lines.push(`| ${row.name} | ${Number(row.rows).toLocaleString('en')} | ${row.table} | ${row.indexes} |`);
-console.log([...lines, '', ...plans].join('\n'));
-
-await owner.withWorkspace(workspaceId, (tx) => tx.execute(sql`drop schema bench_split cascade`));
-await app.close();
-await owner.close();

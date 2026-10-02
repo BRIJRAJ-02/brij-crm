@@ -789,9 +789,21 @@ export function keyText(key: SortKey): SQL {
   return sql`${key.expression}::text`;
 }
 
-/** A cursor's text for a key, turned back into the key's type. */
+/** The shape of each key kind's text, as Postgres writes it, so a tampered cursor is refused before the cast. */
+const KEY_SHAPES: { readonly [K in Exclude<KeyKind, 'text' | 'uuid'>]: RegExp } = {
+  numeric: /^-?\d{1,40}(\.\d{1,40})?$/,
+  date: /^\d{4}-\d{2}-\d{2}$/,
+  timestamptz: /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?[+-]\d{2}(:\d{2})?$/,
+  boolean: /^(true|false)$/,
+  int: /^-?\d{1,9}$/,
+};
+
+/** A cursor's text for a key, turned back into the key's type. Refuses text that isn't that type's shape. */
 export function fromText(key: SortKey, value: string): SQL {
-  return key.kind === 'text' ? sql`${value}` : sql`${value}::${raw(key.kind)}`;
+  if (key.kind === 'text') return sql`${value}`;
+  const fits = key.kind === 'uuid' ? isUuid(value) : KEY_SHAPES[key.kind].test(value);
+  if (!fits) invalid('That page cursor is not valid. Start from the first page.');
+  return sql`${value}::${raw(key.kind)}`;
 }
 
 /** Where a page starts: the previous page's last sort keys (as text, null for empty) and row id. */

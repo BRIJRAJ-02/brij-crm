@@ -10,21 +10,18 @@ import { sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { createDatabase, type WorkspaceTx } from '@crm/db';
 import { createWorkspace, defineAttribute, defineList, defineOption, type EngineScope } from '../src/index.ts';
+import { refuseRemote } from './local-only.ts';
 
 const env = z
   .object({
     DATABASE_URL_OWNER: z.url(),
     SEED_SCALE_RECORDS: z.coerce.number().int().min(1000).max(1_000_000).default(1_000_000),
     SEED_SCALE_ENTRIES: z.coerce.number().int().min(0).max(1_000_000).default(200_000),
-    SEED_SCALE_ALLOW_HOST: z.string().optional(),
+    SEED_SCALE_ALLOW_HOST: z.string().min(1).optional(),
   })
   .parse(process.env);
 
-const host = new URL(env.DATABASE_URL_OWNER).hostname;
-if (!['localhost', '127.0.0.1'].includes(host) && host !== env.SEED_SCALE_ALLOW_HOST) {
-  console.error(`Refusing to seed ${host}. Name a Neon branch's host in SEED_SCALE_ALLOW_HOST to seed it.`);
-  process.exit(1);
-}
+refuseRemote(env.DATABASE_URL_OWNER, env.SEED_SCALE_ALLOW_HOST, 'the seed');
 
 const CHUNK = 50_000;
 const COMPANIES = 20_000;
@@ -255,7 +252,7 @@ try {
   await run(async (tx) => {
     await tx.execute(sql`update lists set entry_count = ${env.SEED_SCALE_ENTRIES} where id = ${listId}`);
     await tx.execute(
-      sql`update workspace_counters set live_records = (select count(*) from records) where workspace_id = ${workspaceId}`,
+      sql`update workspace_counters set live_records = (select count(*) from records where workspace_id = ${workspaceId} and deleted_at is null) where workspace_id = ${workspaceId}`,
     );
   });
   await run((tx) => tx.execute(sql`analyze records; analyze "values"; analyze record_links; analyze list_entries`));

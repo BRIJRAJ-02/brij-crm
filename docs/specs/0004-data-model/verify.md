@@ -35,7 +35,11 @@ _Steps derived from spec 0004's acceptance criteria and its Value sourcing table
 ## Milestone 4: the whole query engine at scale
 - [ ] Every operator each type offers, negatives matching empties, nesting 3 deep, filters through 1 and 2 relationships, relative dates in a time zone with a Sunday week start, every sort with empties last, list views over entry and record attributes, paging at every page size: the compiler returns exactly what the reference evaluator does (`query/query.test.ts`) → AC-6, AC-14
 - [ ] No user text reaches the SQL string: every operand is a bound parameter (`compile.ts`; the only `sql.raw` fragments are fixed column names, operators and aliases) → AC-14
-- [ ] `countMatches` returns the exact count, and a count blocked behind a held lock is cancelled by its abort signal with `QUERY_CANCELLED` → AC-15
+- [ ] `countMatches` returns the exact count, and a count blocked behind a held lock is cancelled by its abort signal with `QUERY_CANCELLED`. The cancel names the count's own transaction (a unique `application_name`), so it never lands on a pooled connection another request has since taken → AC-15
+- [ ] Every page and count statement has a 10 s `statement_timeout`; a page past it is refused `QUERY_CANCELLED` → AC-15
+- [ ] A filter holds at most 50 conditions per group and 100 in all, and follows at most 2 relationships (nested `through` counted); the contract refuses more before anything walks it. A cursor key that isn't its sort's type is refused `FILTER_INVALID`, never a database error → AC-14
+- [ ] A deleted record, a removed entry, an entry of a deleted record, and a deleted far record never come back from the index first pass, the empties or filter first, at any cap → AC-8, AC-14
+- [ ] Another workspace's object or list id is refused `NOT_FOUND`, the same as one that never existed, and its attribute ids are unknown here → AC-9
 - [ ] `pnpm db:seed:scale` then `SCALE_WORKSPACE_ID=<id> pnpm db:bench:scale` → every grid query's p95 is under 300 ms (results below) → AC-15
 
 ## Value sourcing
@@ -67,7 +71,7 @@ Run on 2 October 2026 against the local Docker Postgres 18.6 (8 CPUs, 8 GB for D
 
 ### What the first run showed, and what changed
 
-The first run missed on queries 3 (11.7 s), 4 (788 ms), 5 (342 ms) and 6 (322 ms). The cause is row level security. With a policy on every table, Postgres won't use an operator that isn't marked leakproof as an index condition, or trust its selectivity. Numeric comparisons, `like`, `lower` and `left` aren't leakproof. Only a superuser can change that, and Neon gives no superuser. So the planner guessed 1 row where 400,000 matched, filtered first and sorted everything. The engine now plans those pages itself when the first sort is an indexed value of the row:
+The first run missed on queries 3 (11.7 s), 4 (788 ms), 5 (342 ms) and 6 (322 ms). The cause is row level security. With a policy on every table, Postgres won't use an operator that isn't marked leakproof as an index condition, or trust its selectivity. Numeric comparisons, `like`, `lower` and `left` aren't leakproof (text comparisons are). Only a superuser can change that, and Neon gives no superuser. So the planner guessed 1 row where 400,000 matched, filtered first and sorted everything. The engine now plans those pages itself when the first sort is an indexed value of the row:
 
 - **Index first.** It reads the next rows in sort order straight from the value index, in rounds of about 2 pages, 16 pages, then 5,000 rows. It checks each row's filters one at a time (an `OFFSET 0` fence keeps each EXISTS a per row check), and stops at the limit.
 - **Options one at a time.** A select or status sort walks its options in order, one index range each.
@@ -76,7 +80,15 @@ The first run missed on queries 3 (11.7 s), 4 (788 ms), 5 (342 ms) and 6 (322 ms
 
 ### Open (back to /architect, as the Build plan says)
 
-- **Position jumps miss (1b).** The text sort key is an expression (`lower(left(text_value, 256))` in the ICU collation), so an index can't return it without reading the table. Skipping 600,000 rows reads 600,000 heap rows: 2.4 s even without the join to records, 9.2 s with it. Meeting 300 ms needs a stored key column (a generated `sort_key`), or the flat sort projection the Follow-up names. The split table is 5 times faster here (1.7 s), but still misses.
+- **Position jumps and deep text cursors miss (1b).** The text sort key is an expression (`lower(left(text_value, 256))` in the ICU collation). Text comparison itself is leakproof, but `lower` and `left` inside the expression are not, so an index can't return the key without reading the table, and a cursor bound on it is a filter, not a seek (a name sort's cursor at row 500,000 takes 2.05 s; numeric cursors stay index only, 68 ms). Skipping 600,000 rows reads 600,000 heap rows: 2.4 s even without the join to records, 9.2 s with it. Meeting 300 ms needs a stored key column (a generated `sort_key`), or the flat sort projection the Follow-up names. The split table is 5 times faster here (1.7 s), but still misses.
 - **Exact counts.** With the same planner blindness, query 3's count takes 9.7 s, just under `countMatches`' 10 s timeout. A stored key and numeric column with leakproof operators (`float8`, `text`) would let counts use indexes too.
 - **Split table variant: no clear win.** It matches within noise on the grid, and wins only on the position jump, which misses either way. Keep one table.
+- **More misses the performance review measured** (same seed, app role, page statements alone):
+  - *Sorts with no index to drive them:* by linked company name 8.1 s, by currency 1.2 s, by owner (an actor) 1.1 s, a list view sorted by a record attribute 0.6 s. Each computes a key for every row, then sorts a million.
+  - *Very selective filters:* "name contains" a rare string, sorted by name 3.9 s or by close date 4.2 s; a narrow probability range 0.6 s. Under about 1% of rows, the 5,000 row rounds can't fill the page, and the fallback runs the plan row level security makes slow. `contains` needs the trigram index, which only a workspace scoped search function can use under row level security.
+  - *A big first group with a second sort:* stage then name 2.2 to 2.5 s. Every row in one option shares the first key, so a capped round can never settle the order inside it.
+  - *The empties branch:* its NOT EXISTS plans as an anti join over every record, 1.7 s on the last page with values; 1.4 s for a cursor among the empties with a second sort.
+  - *Counts:* "contains" 4.3 s, query 3 9.7 s. On Neon these will reach the 10 s cancel; a capped count ("10,000+") or an estimate would not.
+  - *Round trips:* a page runs 10 to 25 statements, readRecords about 5 of them, which is why the whole call is 94 to 148 ms against 23 to 74 ms for the page.
+  - The stored, indexed sort key column (and a stored number for numeric sorts) answers the jump, deep cursors and most of the first two. The rest want the flat sort projection or a capped count. That choice is /architect's.
 - **Neon.** This run is local. The Neon account connected here only holds other projects, each capped at a 1 GB branch, so the million record seed (6 GB with indexes) can't run on the Free plan. AC-15's Neon run needs a paid branch, per the Follow-up.

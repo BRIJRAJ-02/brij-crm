@@ -8,8 +8,9 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import type { FilterCondition, FilterGroup, SortRule } from '@crm/contracts/values';
+import { deleteRecord } from '../deletion.ts';
 import { defineAttribute, defineObject } from '../definitions.ts';
-import { addEntry, defineList, getEntries } from '../lists.ts';
+import { addEntry, defineList, getEntries, removeEntry } from '../lists.ts';
 import { defineOption } from '../options.ts';
 import { createRecord, getRecords } from '../records.ts';
 import { isRefusal } from '../refusals.ts';
@@ -26,6 +27,7 @@ const ZONE = 'America/New_York';
 let db: Database;
 let scope: EngineScope;
 let missions: string;
+let companiesObject: string;
 let listId: string;
 let context: EvaluateContext;
 let rows: PlainRecord[];
@@ -92,6 +94,7 @@ beforeAll(async () => {
     members.push(inserted.rows[0]?.id ?? '');
   }
   const companies = created.objects.companies ?? '';
+  companiesObject = companies;
   ({ objectId: missions } = await defineObject(scope, {
     apiSlug: 'missions',
     singularName: 'Mission',
@@ -642,5 +645,209 @@ describe('refusals', () => {
       }
     }
     expect(codes).toEqual(attempts.map(() => 'FILTER_INVALID'));
+  });
+});
+
+describe('hidden rows', () => {
+  // Their own object, so deleting rows here leaves the sample above untouched.
+  let probes: string;
+  let probeList: string;
+  const live: string[] = [];
+  const liveEntries: string[] = [];
+
+  beforeAll(async () => {
+    ({ objectId: probes } = await defineObject(scope, {
+      apiSlug: 'probes',
+      singularName: 'Probe',
+      pluralName: 'Probes',
+      icon: 'rocket',
+      hue: 'blue',
+    }));
+    await attribute({ objectId: probes }, 'probe_score', 'number');
+    await attribute({ objectId: probes }, 'probe_kind', 'select');
+    await options('probe_kind', ['orbiter', 'lander']);
+    const firm = await defineRelationship(scope, {
+      cardinality: 'many_to_one',
+      from: { objectId: probes, apiSlug: 'firm', title: 'Firm' },
+      to: { objectId: companiesObject, apiSlug: 'probes', title: 'Probes' },
+    });
+    a.firm = firm.fromAttributeId;
+    const gone = await createRecord(scope, {
+      objectId: companiesObject,
+      values: { [id('company_name')]: 'Gone corp' },
+    });
+    ({ listId: probeList } = await defineList(scope, { objectId: probes, apiSlug: 'probe_list', name: 'Probes' }));
+    const deleted: string[] = [];
+    for (let index = 0; index < 12; index += 1) {
+      const { recordId } = await createRecord(scope, {
+        objectId: probes,
+        values: {
+          // Every fourth has no score, so the empties branch has rows to hide too.
+          ...(index % 4 === 3 ? {} : { [id('probe_score')]: String(index % 5) }),
+          [id('probe_kind')]: id(index % 2 === 0 ? 'orbiter' : 'lander'),
+          ...(index % 3 === 0 ? { [id('firm')]: { objectId: companiesObject, recordId: gone.recordId } } : {}),
+        },
+      });
+      const { entryId } = await addEntry(scope, { listId: probeList, recordId });
+      // Delete a third of them (scored and unscored), and remove another third's entries.
+      if (index % 3 === 1) deleted.push(recordId);
+      else live.push(recordId);
+      if (index % 3 === 2) await removeEntry(scope, { entryId });
+      else if (index % 3 !== 1) liveEntries.push(entryId);
+    }
+    for (const recordId of deleted) await deleteRecord(scope, { recordId });
+    await deleteRecord(scope, { recordId: gone.recordId });
+  });
+
+  const sorted = (ids: readonly string[]) => [...ids].sort();
+
+  it('never returns a deleted record from the index first pass, the empties or filter first', async () => {
+    for (const sorts of [
+      [by('probe_score')],
+      [by('probe_score', 'descending')],
+      [by('probe_kind')],
+      [by('probe_kind'), by('probe_score')],
+    ]) {
+      // The usual cap, a cap of 3 (rounds that cut groups), and a cap of 1 (always falls back to filter first).
+      for (const candidates of [undefined, 3, 1]) {
+        const ids = await allPages({ objectId: probes }, undefined, sorts, 2, candidates);
+        expect(sorted(ids)).toEqual(sorted(live));
+        const crewed = await allPages(
+          { objectId: probes },
+          and(is('probe_kind', 'is', id('orbiter'))),
+          sorts,
+          2,
+          candidates,
+        );
+        expect(crewed.every((recordId) => live.includes(recordId))).toBe(true);
+      }
+    }
+  });
+
+  it('never returns a removed entry, or the entry of a deleted record', async () => {
+    for (const candidates of [undefined, 3, 1]) {
+      const ids = await allPages({ listId: probeList }, undefined, [by('probe_score')], 2, candidates);
+      expect(sorted(ids)).toEqual(sorted(liveEntries));
+    }
+    expect(await countMatches(scope, { listId: probeList })).toBe(liveEntries.length);
+  });
+
+  it('never matches through a deleted far record', async () => {
+    const filter = and(through(['firm'], is('company_name', 'is', 'Gone corp')));
+    for (const candidates of [undefined, 3, 1]) {
+      expect(await allPages({ objectId: probes }, filter, [by('probe_score')], 2, candidates)).toEqual([]);
+    }
+    expect(await countMatches(scope, { objectId: probes, filter })).toBe(0);
+    // Its negative matches every live probe, linked or not.
+    const negative = and(through(['firm'], is('company_name', 'is_not', 'Gone corp')));
+    expect(sorted(await allPages({ objectId: probes }, negative, [by('probe_score')], 2))).toEqual(sorted(live));
+  });
+});
+
+describe('other workspaces', () => {
+  it("refuses another workspace's object and list as missing, and reads nothing of theirs", async () => {
+    const other = await createWorkspace(db, {
+      name: 'Other',
+      slug: `other-${String(Date.now())}`,
+      firstMember: { name: 'Olive', email: 'o@example.com' },
+    });
+    const otherScope: EngineScope = {
+      db,
+      workspaceId: other.workspaceId,
+      actor: { type: 'member', id: other.memberId },
+    };
+    const { listId: theirList } = await defineList(otherScope, {
+      objectId: other.objects.deals ?? '',
+      apiSlug: 'theirs',
+      name: 'Theirs',
+    });
+    const refusalOf = async (attempt: Promise<unknown>) => {
+      try {
+        await attempt;
+        return 'none';
+      } catch (error) {
+        return isRefusal(error) ? error.refusal.code : String(error);
+      }
+    };
+    // Their ids, asked from this workspace, get the same refusal as ids that never existed.
+    expect(await refusalOf(queryPage(scope, { objectId: other.objects.deals ?? '' }))).toBe('NOT_FOUND');
+    expect(await refusalOf(queryPage(scope, { listId: theirList }))).toBe('NOT_FOUND');
+    expect(await refusalOf(countMatches(scope, { objectId: other.objects.deals ?? '' }))).toBe('NOT_FOUND');
+    expect(await refusalOf(countMatches(scope, { listId: theirList }))).toBe('NOT_FOUND');
+    const theirName = await db.withWorkspace(other.workspaceId, (tx) =>
+      tx.execute<{ id: string }>(
+        sql`select id::text from attributes where object_id = ${other.objects.deals ?? ''} and api_slug = 'name'`,
+      ),
+    );
+    const theirAttribute = theirName.rows[0]?.id ?? '';
+    // Their attribute in this workspace's filter or sort is unknown here.
+    expect(
+      await refusalOf(
+        queryPage(scope, { objectId: missions, filter: and({ attributeId: theirAttribute, operator: 'is_empty' }) }),
+      ),
+    ).toBe('FILTER_INVALID');
+    expect(
+      await refusalOf(
+        queryPage(scope, { objectId: missions, sorts: [{ attributeId: theirAttribute, direction: 'ascending' }] }),
+      ),
+    ).toBe('FILTER_INVALID');
+  });
+});
+
+describe('caps and timeouts', () => {
+  it('refuses a filter too large, a path too long, and a tampered cursor key', async () => {
+    const many = and(...Array.from({ length: 51 }, () => is('crewed', 'is_checked')));
+    const wide = or(
+      ...Array.from({ length: 3 }, () => and(...Array.from({ length: 40 }, () => is('crewed', 'is_checked')))),
+    );
+    const nested: FilterCondition = through(
+      ['company'],
+      through(['company_parent_company', 'company_parent_company'], is('company_name', 'is', 'x')),
+    );
+    const first = await queryPage(scope, { objectId: missions, sorts: [by('launch')], limit: 5 });
+    const decoded = JSON.parse(Buffer.from(first.nextCursor ?? '', 'base64url').toString('utf8')) as {
+      id: string;
+      keys: string[];
+    };
+    const tampered = (key: string) => Buffer.from(JSON.stringify({ ...decoded, keys: [key] })).toString('base64url');
+    const attempts: (() => Promise<unknown>)[] = [
+      () => queryPage(scope, { objectId: missions, filter: many }),
+      () => queryPage(scope, { objectId: missions, filter: wide }),
+      () => queryPage(scope, { objectId: missions, filter: and(nested) }),
+      () => queryPage(scope, { objectId: missions, sorts: [by('launch')], cursor: tampered('abc') }),
+      () => queryPage(scope, { objectId: missions, sorts: [by('launch')], cursor: tampered('2026-02-30') }),
+      () => countMatches(scope, { objectId: missions, filter: many }),
+    ];
+    const codes: string[] = [];
+    for (const attempt of attempts) {
+      try {
+        await attempt();
+        codes.push('none');
+      } catch (error) {
+        codes.push(isRefusal(error) ? error.refusal.code : String(error));
+      }
+    }
+    expect(codes).toEqual(attempts.map(() => 'FILTER_INVALID'));
+  });
+
+  it('cancels a page that runs past its timeout with QUERY_CANCELLED', async () => {
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let locked: () => void = () => undefined;
+    const isLocked = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    const holder = scope.db.withWorkspace(scope.workspaceId, async (tx) => {
+      await tx.execute(sql`lock table records in access exclusive mode`);
+      locked();
+      await held;
+    });
+    await isLocked;
+    const reading = queryPage(scope, { objectId: missions }, { timeout: '200ms' });
+    await expect(reading).rejects.toMatchObject({ refusal: { code: 'QUERY_CANCELLED' } });
+    release();
+    await holder;
   });
 });

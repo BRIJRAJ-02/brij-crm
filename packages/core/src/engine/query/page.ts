@@ -2,9 +2,11 @@
 // sorts over an object's records or a list's entries, paged by keyset cursor
 // (or a jump to a position on an unfiltered view), then read back whole. And
 // the exact count, as its own cancellable statement.
+import { randomUUID } from 'node:crypto';
 import { asc, eq, sql, type SQL } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
-import type { FilterGroup, SortRules } from '@crm/contracts/values';
+import { FilterGroup, SortRules } from '@crm/contracts/values';
+import { LIMITS } from '../limits.ts';
 import { readEntriesById, type EntryView } from '../lists.ts';
 import { readRecords, type RecordView } from '../records.ts';
 import { postgresError, refuse } from '../refusals.ts';
@@ -30,12 +32,18 @@ import {
   type SortKey,
 } from './compile.ts';
 
-const { attributeOptions, lists } = schema;
+const { attributeOptions, lists, objects } = schema;
 
 /** The largest page a view may ask for. */
 export const MAX_PAGE = 200;
-/** The furthest a view may jump. */
-const MAX_POSITION = 10_000_000;
+/** The furthest a view may jump: the most rows an object or a list can hold. */
+const MAX_POSITION = Math.max(LIMITS.liveRecords, LIMITS.entriesPerList);
+
+/** How long one page or count statement may run before Postgres cancels it, so no request holds a connection for long. */
+const STATEMENT_TIMEOUT = '10s';
+
+/** How many options of a select or status sort a page walks one at a time before it filters first instead. */
+const MAX_OPTION_WALK = 12;
 
 /** Which rows a view reads: one object's records, or one list's entries. */
 export type ViewSource = { readonly objectId: string } | { readonly listId: string };
@@ -92,6 +100,16 @@ async function prepare(
   scope: EngineScope,
   query: ViewSource & QueryClock & { readonly filter?: FilterGroup; readonly sorts?: SortRules },
 ): Promise<{ context: CompileContext; level: Level }> {
+  // Checked against the contract first, so its caps on size and depth hold before anything walks the filter.
+  for (const [value, shape] of [
+    [query.filter, FilterGroup],
+    [query.sorts, SortRules],
+  ] as const) {
+    if (value === undefined) continue;
+    const checked = shape.safeParse(value);
+    if (!checked.success)
+      throw refuse('FILTER_INVALID', checked.error.issues[0]?.message ?? 'That filter is not valid.');
+  }
   let level: Level;
   let own: ReadonlyMap<string, AttributeDef>;
   if ('listId' in query) {
@@ -102,6 +120,8 @@ async function prepare(
     own = new Map([...(await loadListAttributes(tx, query.listId)), ...(await loadAttributes(tx, list.objectId))]);
   } else {
     if (!isUuid(query.objectId)) throw refuse('FILTER_INVALID', 'That object does not exist.');
+    const [object] = await tx.select({ id: objects.id }).from(objects).where(eq(objects.id, query.objectId));
+    if (object === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
     level = baseLevel({ objectId: query.objectId });
     own = await loadAttributes(tx, query.objectId);
   }
@@ -120,7 +140,8 @@ async function prepare(
     },
     actor: scope.actor,
   };
-  if (context.clock.timeZone !== undefined) {
+  // UTC, the default, is always known; any other zone is checked against the database's own list.
+  if (context.clock.timeZone !== undefined && context.clock.timeZone !== 'UTC') {
     const known = await tx.execute<{ ok: boolean }>(
       sql`select exists (select 1 from pg_timezone_names where name = ${context.clock.timeZone}) as ok`,
     );
@@ -345,10 +366,14 @@ async function buildPage(
     if (!ascending) order.reverse();
     const from = cursorKey === null || cursorKey === undefined ? undefined : Number(cursorKey);
     const found: PageRow[] = [];
+    let walked = 0;
     for (const index of order) {
       if (from !== undefined && (ascending ? index < from : index > from)) continue;
       const optionRows = options[index];
       if (optionRows === undefined) continue;
+      // Many options and a selective filter: one statement per option costs more than filtering first.
+      if (walked === MAX_OPTION_WALK) return run(filterFirst)(inner, take, skip);
+      walked += 1;
       const part = await pass(inner, take - found.length, optionRows, sql`${index}::int`);
       if (!part.complete) return run(filterFirst)(inner, take, skip);
       found.push(...part.rows);
@@ -414,49 +439,63 @@ export async function benchPage(
   return { rows: 0, plans };
 }
 
-/**
- * The first page of a view, the page after a cursor, or the page at a
- * position. `tuning.candidates` lowers the first pass's cap, for tests.
- */
-export async function queryPage(
-  scope: EngineScope,
-  query: PageQuery,
-  tuning: { readonly candidates?: number } = {},
-): Promise<Page> {
-  checkPage(query);
-  return scope.db.withWorkspace(scope.workspaceId, async (tx) => {
-    const built = await buildPage(tx, scope, query, tuning.candidates);
-    const all = await pageRows(tx, built, query.position);
-    const { limit, keyCount, isList } = built;
-    const rows = all.slice(0, limit);
-    const last = rows.at(-1);
-    const nextCursor =
-      all.length > limit && last !== undefined
-        ? encodeCursor({
-            id: last.id,
-            keys: Array.from({ length: keyCount }, (_, index) => {
-              const value = last[`key${String(index)}`];
-              return value === null || value === undefined ? null : String(value);
-            }),
-          })
-        : undefined;
-    const recordIds = [...new Set(rows.map((row) => row.record_id))];
-    const records = await readRecords(tx, recordIds);
-    const page: Page = !isList
-      ? { records }
-      : {
-          records,
-          entries: await readEntriesById(
-            tx,
-            rows.map((row) => row.id),
-          ),
-        };
-    return nextCursor === undefined ? page : { ...page, nextCursor };
-  });
+/** Knobs for tests: a lower first pass cap, and a short statement timeout (one fixed value, so no text reaches the raw SQL). */
+export interface PageTuning {
+  readonly candidates?: number;
+  readonly timeout?: '200ms';
 }
 
-/** How long a count may run before it is cancelled. */
-const COUNT_TIMEOUT = '10s';
+/**
+ * The first page of a view, the page after a cursor, or the page at a
+ * position. Each statement has a 10 second timeout; past it the refusal is
+ * `QUERY_CANCELLED`. `tuning` is for tests.
+ */
+export async function queryPage(scope: EngineScope, query: PageQuery, tuning: PageTuning = {}): Promise<Page> {
+  checkPage(query);
+  try {
+    return await scope.db.withWorkspace(scope.workspaceId, (tx) => readPage(tx, scope, query, tuning));
+  } catch (error) {
+    const code = postgresError(error)?.code;
+    if (code === '57014') throw refuse('QUERY_CANCELLED', 'That page took too long. Narrow the filter and try again.');
+    // A cursor key that has the right shape but no such value (a 30th of February).
+    if (query.cursor !== undefined && code !== undefined && ['22003', '22007', '22008', '22P02'].includes(code)) {
+      throw refuse('FILTER_INVALID', 'That page cursor is not valid. Start from the first page.');
+    }
+    throw error;
+  }
+}
+
+/** The body of `queryPage`, inside its workspace transaction. */
+async function readPage(tx: WorkspaceTx, scope: EngineScope, query: PageQuery, tuning: PageTuning): Promise<Page> {
+  await tx.execute(sql`set local statement_timeout = ${sql.raw(`'${tuning.timeout ?? STATEMENT_TIMEOUT}'`)}`);
+  const built = await buildPage(tx, scope, query, tuning.candidates);
+  const all = await pageRows(tx, built, query.position);
+  const { limit, keyCount, isList } = built;
+  const rows = all.slice(0, limit);
+  const last = rows.at(-1);
+  const nextCursor =
+    all.length > limit && last !== undefined
+      ? encodeCursor({
+          id: last.id,
+          keys: Array.from({ length: keyCount }, (_, index) => {
+            const value = last[`key${String(index)}`];
+            return value === null || value === undefined ? null : String(value);
+          }),
+        })
+      : undefined;
+  const recordIds = [...new Set(rows.map((row) => row.record_id))];
+  const records = await readRecords(tx, recordIds);
+  const page: Page = !isList
+    ? { records }
+    : {
+        records,
+        entries: await readEntriesById(
+          tx,
+          rows.map((row) => row.id),
+        ),
+      };
+  return nextCursor === undefined ? page : { ...page, nextCursor };
+}
 
 /**
  * The exact number of rows a view's filter matches, in its own statement
@@ -475,16 +514,27 @@ export async function countMatches(
       const { context, level } = await prepare(tx, scope, query);
       const filter = compileFilter(context, level, query.filter);
       const { tables, where } = fromParts(level);
-      await tx.execute(sql`set local statement_timeout = ${sql.raw(`'${COUNT_TIMEOUT}'`)}`);
+      await tx.execute(sql`set local statement_timeout = ${sql.raw(`'${STATEMENT_TIMEOUT}'`)}`);
+      // A name only this count's transaction carries: the cancel checks it, so a connection the pool has
+      // since handed to another request (another workspace's) is never the one cancelled.
+      const tag = `crm-count:${randomUUID()}`;
+      await tx.execute(sql`select set_config('application_name', ${tag}, true)`);
       const pid = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
       const backend = pid.rows[0]?.pid;
       const cancel = () => {
         if (backend === undefined) return;
         void scope.db
-          .withWorkspace(scope.workspaceId, (other) => other.execute(sql`select pg_cancel_backend(${backend})`))
+          .withWorkspace(scope.workspaceId, (other) =>
+            other.execute(sql`
+              select pg_cancel_backend(pid) from pg_stat_activity
+              where pid = ${backend} and application_name = ${tag} and state = 'active'
+            `),
+          )
           .catch(() => undefined);
       };
       signal?.addEventListener('abort', cancel, { once: true });
+      // An abort while the catalog loaded fired before the listener existed.
+      if (signal?.aborted === true) throw cancelled();
       try {
         const result = await tx.execute<{ n: string }>(
           sql`select count(*)::text as n from ${tables} where ${where} and ${filter}`,
