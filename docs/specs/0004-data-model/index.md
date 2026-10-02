@@ -1,7 +1,7 @@
 # 0004. The data model: one engine for every object
 
 **Date**: 2026-10-02
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

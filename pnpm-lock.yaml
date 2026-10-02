@@ -381,6 +381,9 @@ importers:
       '@crm/db':
         specifier: workspace:*
         version: link:../db
+      drizzle-orm:
+        specifier: 'catalog:'
+        version: 0.45.3(@cloudflare/workers-types@5.20260930.2)(@types/pg@8.23.1)(pg@8.23.1)
     devDependencies:
       '@crm/config':
         specifier: workspace:*
@@ -394,6 +397,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.3(@types/node@24.19.0)(@vitest/browser-playwright@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.1(@types/node@24.19.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
 
   packages/data:
     dependencies:
@@ -422,6 +428,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@crm/contracts':
+        specifier: workspace:*
+        version: link:../contracts
       drizzle-orm:
         specifier: 'catalog:'
         version: 0.45.3(@cloudflare/workers-types@5.20260930.2)(@types/pg@8.23.1)(pg@8.23.1)
@@ -450,6 +459,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 6.0.3
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.3(@types/node@24.19.0)(@vitest/browser-playwright@5.0.3)(@vitest/ui@5.0.3)(vite@8.3.1(@types/node@24.19.0)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15))
 
   packages/tokens:
     dependencies:

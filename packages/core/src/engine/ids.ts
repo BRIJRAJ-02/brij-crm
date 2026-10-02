@@ -1,0 +1,20 @@
+// UUID v7 (RFC 9562): a 48 bit millisecond time, then random bits, so ids
+// sort by creation and inserts stay local in every index (spec 0004).
+import { randomBytes } from 'node:crypto';
+
+const V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+/** A new UUID v7. Postgres 18's `uuidv7()` makes the same shape for rows the server inserts. */
+export function newId(now: number = Date.now()): string {
+  const bytes = randomBytes(16);
+  bytes.writeUIntBE(now, 0, 6);
+  bytes[6] = 0x70 | ((bytes[6] ?? 0) & 0x0f);
+  bytes[8] = 0x80 | ((bytes[8] ?? 0) & 0x3f);
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+/** True for a well formed UUID v7, the only id a client may mint for a new record. */
+export function isUuidV7(value: string): boolean {
+  return V7.test(value);
+}

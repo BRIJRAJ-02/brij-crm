@@ -1,4 +1,8 @@
 // Drizzle tables live here, one file per area, re-exported from this index.
-// Tenant tables arrive with the data model (#5). Each one carries workspace_id,
-// forces row level security, and has an index that leads with workspace_id.
-export {};
+// Every tenant table carries workspace_id, forces row level security (the
+// policies are hand written in migrations/), and has a primary key and indexes
+// that lead with workspace_id (spec 0004).
+export { actorType, attributeType, systemColumn } from './common.ts';
+export { memberStatus, members, workspaceCounters, workspaces } from './workspaces.ts';
+export { attributes, objects } from './definitions.ts';
+export { records, values } from './records.ts';

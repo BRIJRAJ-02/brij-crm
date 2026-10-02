@@ -8,6 +8,27 @@
       "when": 1790804973358,
       "tag": "0000_roles_and_extensions",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790939886500,
+      "tag": "0001_engine_extensions",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1790939887072,
+      "tag": "0002_engine_core",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790939903374,
+      "tag": "0003_engine_core_policies",
+      "breakpoints": true
     }
   ]
 }

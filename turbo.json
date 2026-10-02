@@ -21,7 +21,8 @@
       "inputs": [".railway/**", "eslint.config.js", "stylelint.config.js", "packages/config/eslint.js"]
     },
     "test": {
-      "dependsOn": ["transit"]
+      "dependsOn": ["transit"],
+      "passThroughEnv": ["TEST_DATABASE_ADMIN_URL"]
     },
     "dev": {
       "cache": false,
