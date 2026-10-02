@@ -15,11 +15,14 @@ The component library every screen draws with. It holds the root stylesheet (cas
 | `src/hue.ts` | `HUES` and `Hue`, the nine data hues used by tags and icon tiles |
 | `src/atoms/Icon/` | The Icon atom, its CSS module, its README, and `icons.ts` (the icon registry) |
 | `src/atoms/<Name>/` | One component: `<Name>.tsx`, its CSS module, `strings.ts` for its built in copy, `README.md` and `<Name>.stories.tsx` |
+| `src/grid.ts` | `@crm/ui/grid`: the DataGrid and its selection helpers, a heavy entry of its own that routes load lazily, so it never sits in the first load |
+| `src/fields/` | The field set: `registry.ts` gives each attribute type its one display and one editor, reached only through `AttributeDisplay` and `AttributeEditor` |
+| `src/lib/` | Shared helpers: `ListSource` (paged lists), `LoadStatus`, `keyedRows`, `focusLater`, `reorder`, `safeHref`, `safeImageSrc`, `memoIntl` |
 | `src/provider/` | `UiProvider` (language, time zone, router links, the toast queue, the clock, loading timing), `createToasts()`, `createClock()` and `useDelayedLoading()` |
 | `src/vite.ts` | `@crm/ui/vite`: `uiVite()`, which names CSS module classes `ws-<component>-<local>` (every Vite build that renders the library uses it), and `layerOrder()`, which links the layer order ahead of an app's bundled stylesheets |
 | `src/workbench/` | `Stage` and `StoryRoot`, used only by stories. Never exported |
 | `.storybook/` | Storybook config. `preview.tsx` wraps every story in the provider with a frozen clock; `vitest.setup.ts` runs axe in light and dark and fails a story on any CSP violation |
-| `vitest.config.ts` | Four test projects: `unit` (Node), `stories` (Chromium, Firefox, WebKit), `browser` (`*.browser.test.tsx`, Chromium) and `visual` (screenshots) |
+| `vitest.config.ts` | Five test projects: `unit` (Node), `stories` (Chromium, Firefox, WebKit), `browser` (`*.browser.test.tsx`, Chromium), `perf` (`*.perf.test.tsx`, React's production build) and `visual` (screenshots) |
 | `scripts/test-visual.ts` | `pnpm test:visual`: runs the `visual` project in the pinned Playwright Linux image, against `__screenshots__/` |
 | `scripts/artifact/` | `pnpm ui:artifact`: builds the React scripts, the bundle, its stylesheet, its types and one preview per flagged story for the design system artifact |
 | `artifact.json` | The artifact's URL and the version id of the last publish |
@@ -27,7 +30,7 @@ The component library every screen draws with. It holds the root stylesheet (cas
 ## Commands
 
 ```bash
-pnpm --filter @crm/ui test         # unit (Node), every story in Chromium, Firefox and WebKit, and the browser tests
+pnpm --filter @crm/ui test         # unit (Node), every story in Chromium, Firefox and WebKit, the browser tests and the perf test
 pnpm --filter @crm/ui test:unit    # the Node tests only
 pnpm --filter @crm/ui typecheck
 pnpm storybook                     # Storybook on :6006 (also serves the Storybook MCP at /mcp)
@@ -52,6 +55,9 @@ pnpm ui:artifact                   # build the artifact files into .artifact/; -
 - `parameters.crm.screenshot = false` leaves a story out of the screenshots; do it when another story already shows the same thing. Baselines over 200 KB are refused.
 - After changing a component, run `pnpm ui:artifact`, publish `.artifact/project/` to the artifact from `artifact.json`, then write the new version id back into `artifact.json`.
 - Components read the language, time zone and current time from `UiProvider`, never from `navigator`, `Intl` defaults or `Date.now()`. Stories freeze the clock at 8 October 2026, 14:30 UTC, in Europe/London.
+- A module that loads its data takes `status: LoadStatus` (`ready`, `loading`, `error`, `no-access`) and `onRetry`, and draws those states from Skeleton and EmptyState.
+- Lists whose rows change under the viewer (tasks, board cards) key their rows by item, not by place (`keyedRows`), so focus and a second key press stay on the same item.
+- When the control in use disappears with its change (a removed filter, Select all, a closed menu's trigger), move focus on with `focusLater`, which waits for any closing overlay to finish first.
 - One exception to "no mutable state at module level": `lib/intl-memo.ts` caches `Intl` formatters (and the segmenter) by kind, language and options, through `memoIntl(key, make)`. It holds only immutable values, so nothing behaves differently for it; a grid scroll formats hundreds of values a step, and building each formatter again broke the long task budget (AC-7). Nothing else lives at module level.
 
 ## Gotchas
@@ -63,7 +69,9 @@ pnpm ui:artifact                   # build the artifact files into .artifact/; -
 - Toast is still `UNSTABLE_` in React Aria. Only `src/provider/toasts.tsx` imports it, so an upgrade changes one file.
 - Storybook injects a few styles of its own while tests run. `vitest.setup.ts` allows exactly those sources through the CSP check; anything else that injects a style fails the story.
 - Screenshots never run outside the pinned image (the `visual` project refuses), since fonts render differently per machine. If Playwright's Firefox won't start on your machine, the Firefox stories run in that image too.
-- The artifact previews load React as browser globals, so a preview story may import only the library, React and `storybook/test` (stubbed). Anything else lands in the bundle.
+- React Aria starts a keyboard drag on the next frame, and headless WebKit on Linux can run that frame late. A story that picks something up with Enter waits until focus leaves the drag handle before its next key, or the open drag swallows later stories' clicks.
+- Menus, dialogs and tooltips open in a portal outside the story frame. While one is open, the screenshot step stretches the frame to the viewport so the shot takes it in.
+- The artifact previews load React as browser globals, so a preview story may import only the library, React and `storybook/test` (stubbed). A library file `src/index.ts` doesn't export (a `lib/` helper) fails the artifact build, and a package such as React Aria lands in the preview's own bundle.
 
 ## Agent skills
 

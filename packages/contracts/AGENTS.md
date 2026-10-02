@@ -10,6 +10,7 @@ The oRPC contract and the Zod schemas the web app, the API and the worker all sh
 |---|---|
 | `src/index.ts` | The one `contract` object, with one namespace per feature, and every schema and type |
 | `src/system.ts` | The pattern to copy: schemas, their types, and `systemContract` |
+| `src/values/` | `@crm/contracts/values`: the attribute value shapes, filters, sorts, options, hues, countries and currencies, as plain Zod with no oRPC and no I/O, so `packages/ui` can parse what its editors emit |
 
 ## Conventions
 
@@ -17,5 +18,6 @@ The oRPC contract and the Zod schemas the web app, the API and the worker all sh
 - Every procedure declares its output (`oc.output(...)`), and its input when it takes one.
 - A schema and its type share a name. Timestamps are ISO 8601 UTC strings (`z.iso.datetime()`).
 - No runtime dependencies beyond `@orpc/contract` and `zod`, and no imports from any other workspace.
+- `src/values/` imports only Zod and its own files, never `@orpc/contract`: the component library loads it on the client.
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._
