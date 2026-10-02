@@ -183,7 +183,7 @@ No new environment variables or credentials. CI gains Playwright's three browser
 
 ## Build plan
 
-Tracer Bullet inside the library: milestone 1 threads one component through every layer (React Aria, CSS module, story, three browser tests, axe, screenshot, artifact publish, use in the app). Then each milestone thickens one strand. The whole library lands before #5 starts, as chosen.
+Tracer Bullet inside the library: milestone 1 threads one component through every layer (React Aria, CSS module, story, three browser tests, axe, screenshot, artifact publish, use in the app). Then each milestone thickens one strand. Milestones 1 to 3 (the pipeline, the atoms and field set, the grid, the shell and the view modules) land before #5 starts. Milestones 4 and 5 wait until after #10, the core loop, so a working CRM comes first (agreed on 2 October 2026); each is built then, ahead of the first feature that needs its modules.
 
 **Milestone 1: one component through the whole pipeline**
 1. Add `uiVite()` in `@crm/ui/vite` (CSS module names `ws-<component>-<local>`) and use it in `apps/web`. Add the browser policy (`browserslist`: the last two versions of Chrome, Edge, Firefox and Safari) to the root `package.json`, satisfies **AC-15**, **AC-17**.
@@ -209,13 +209,13 @@ Tracer Bullet inside the library: milestone 1 threads one component through ever
 17. Add the 100,000 row performance test, satisfies **AC-7**.
 18. Build the shell and view modules: app shell, sidebar, top bar, view bar, toolbar, filter and sort builders, view settings, command palette, bulk action bar, record panel and header, attribute list (with the country picker in the location editor), timeline, tasks, and the board (`KanbanColumn`, `KanbanCard`) with React Aria drag and drop, satisfies **AC-1**, **AC-2**, **AC-9**, **AC-21**.
 
-**Milestone 4: rich text, collaboration, data in and out, settings and builders**
+**Milestone 4: rich text, collaboration, data in and out, settings and builders** (after #10)
 19. Build `RichTextEditor` on Tiptap 3 (note, comment and email modes, mentions, variables, the format toolbar, the collaboration hook), satisfies **AC-1**, **AC-14**.
 20. Build the note, comment, email, meeting, version history, presence and notification modules, satisfies **AC-1**, **AC-2**, **AC-14**.
 21. Build the import mapper, merge view, file preview, change preview and progress flows, satisfies **AC-1**, **AC-2**.
 22. Build the settings, admin, auth and builder modules in the inventory (looks now, feature logic later), satisfies **AC-1**, **AC-2**.
 
-**Milestone 5: charts, schema map and the full publish**
+**Milestone 5: charts, schema map and the full publish** (after #10)
 23. Build the charts on visx and the dashboard (cards with a Move menu, and drag by handle), satisfies **AC-20**, **AC-21**.
 24. Build `SchemaMap` on React Flow with ELK in a worker, satisfies **AC-20**.
 25. Publish the whole library to the artifact, in several calls with the index last. Run `design-system-guardian` and `ux-interaction-reviewer` over every module, and have the size budget green, satisfies **AC-1**, **AC-17**, **AC-18**.
@@ -229,7 +229,7 @@ Tracer Bullet inside the library: milestone 1 threads one component through ever
 - Accessibility, motion and theming are proven per component in three engines, not rediscovered per screen.
 
 **Negative / tradeoffs**:
-- The first real flow (#10) waits for the whole library, and then #5 to #57.
+- The first real flow (#10) waits for milestones 1 to 3, and then #5 to #57. Milestones 4 and 5 come after it, so the features that need their modules (notes, comments, email, imports, settings, charts, the schema map) wait for them instead.
 - About 100 components are built before the features that use them. When a later spec (#13, #16, #20, #46, #53, #54) settles its behaviour, some APIs will change. "Look now, logic later" limits that, but doesn't remove it.
 - Many new dependencies: Storybook, React Aria, Tiptap, Yjs, visx, React Flow, ELK, libphonenumber-js, size-limit. Each must be kept up to date.
 - Three browsers plus screenshots make CI slower, and baselines need upkeep (Docker locally to update them).

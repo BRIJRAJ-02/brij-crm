@@ -8,6 +8,8 @@
 >
 > **What was chosen anyway:** the engineer saw this trade and chose the full library first, so the order stands.
 >
+> **Revised on 2 October 2026:** with milestones 1 to 3 built, the engineer moved milestones 4 and 5 to after #10, so a working CRM comes first and those modules meet real use sooner. That narrows the risk above to the modules already built.
+>
 > **How this spec limits the risk:** every component is presentational ("look now, logic later"), so feature behaviour arrives with its own spec. Milestone 1 threads one component through the whole pipeline before breadth. And the inventory names the feature each component serves, so the first feature to use a component reviews its API.
 
 **The problem.** The scope's house rules say every screen is assembled only from a shared library, with one field design per attribute type, no new CSS for an element that exists, every state built in, keyboard use throughout, and tokens only. 56 features will be built by many sessions in parallel, and without a finished library each one invents its own markup, and the app drifts into fifty apps.
