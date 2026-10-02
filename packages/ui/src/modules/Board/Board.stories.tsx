@@ -101,8 +101,11 @@ export const MoveByKeyboard: Story = {
     await userEvent.tab();
     await expect(within(lead).getAllByRole('row')[0]).toHaveFocus();
     await userEvent.keyboard('{ArrowRight}');
-    await waitFor(() => expect(canvas.getByRole('button', { name: `Move ${name}` })).toHaveFocus());
+    const handle = canvas.getByRole('button', { name: `Move ${name}` });
+    await waitFor(() => expect(handle).toHaveFocus());
     await userEvent.keyboard('{Enter}');
+    // React Aria starts the drag on the next frame, moving focus to the first column that takes the card.
+    await waitFor(() => expect(handle).not.toHaveFocus());
     await userEvent.tab();
     await userEvent.keyboard('{Enter}');
     await waitFor(() =>
@@ -168,8 +171,11 @@ export const ArchivedRefuses: Story = {
     const name = String(sampleRowAt(0).values.name);
     await userEvent.tab();
     await userEvent.keyboard('{ArrowRight}');
-    await waitFor(() => expect(canvas.getByRole('button', { name: `Move ${name}` })).toHaveFocus());
+    const handle = canvas.getByRole('button', { name: `Move ${name}` });
+    await waitFor(() => expect(handle).toHaveFocus());
     await userEvent.keyboard('{Enter}');
+    // React Aria starts the drag on the next frame, moving focus to the first column that takes the card.
+    await waitFor(() => expect(handle).not.toHaveFocus());
     await waitFor(() => expect(canvas.getByText('Archived. Cards can’t move here.')).toBeInTheDocument());
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(canvas.queryByText('Archived. Cards can’t move here.')).not.toBeInTheDocument());
@@ -185,8 +191,11 @@ export const Reorder: Story = {
     const name = String(sampleRowAt(0).values.name);
     await userEvent.tab();
     await userEvent.keyboard('{ArrowRight}');
-    await waitFor(() => expect(canvas.getByRole('button', { name: `Move ${name}` })).toHaveFocus());
+    const handle = canvas.getByRole('button', { name: `Move ${name}` });
+    await waitFor(() => expect(handle).toHaveFocus());
     await userEvent.keyboard('{Enter}');
+    // React Aria starts the drag on the next frame, moving focus to the first column that takes the card.
+    await waitFor(() => expect(handle).not.toHaveFocus());
     await userEvent.keyboard('{ArrowDown}');
     await userEvent.keyboard('{ArrowDown}');
     await userEvent.keyboard('{Enter}');
@@ -250,8 +259,11 @@ export const DropOnHiddenColumn: Story = {
     await expect(canvas.queryByRole('grid', { name: /Lost/ })).not.toBeInTheDocument();
     await userEvent.tab();
     await userEvent.keyboard('{ArrowRight}');
-    await waitFor(() => expect(canvas.getByRole('button', { name: `Move ${name}` })).toHaveFocus());
+    const handle = canvas.getByRole('button', { name: `Move ${name}` });
+    await waitFor(() => expect(handle).toHaveFocus());
     await userEvent.keyboard('{Enter}');
+    // React Aria starts the drag on the next frame, moving focus to the first column that takes the card.
+    await waitFor(() => expect(handle).not.toHaveFocus());
     await waitFor(() => expect(canvas.getByRole('grid', { name: /Lost/ })).toBeInTheDocument());
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(canvas.queryByRole('grid', { name: /Lost/ })).not.toBeInTheDocument());

@@ -47,9 +47,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** A handle per row that can move; the locked row keeps a hidden one. */
+/**
+ * A handle per row that can move; the locked row keeps a hidden one. Not an
+ * artifact preview: a handle needs a React Aria drag list around it, which a
+ * preview can't bundle. The SortBuilder and Board previews show it in use.
+ */
 export const Default: Story = {
-  parameters: { crm: { preview: true } },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('button', { name: 'Move Stage' })).toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: 'Move Name' })).not.toBeInTheDocument();

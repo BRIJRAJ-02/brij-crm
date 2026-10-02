@@ -83,8 +83,11 @@ export const ReorderByKeyboard: Story = {
     await userEvent.keyboard('{ArrowDown}');
     await userEvent.keyboard('{ArrowDown}');
     await userEvent.keyboard('{ArrowRight}');
-    await waitFor(() => expect(canvas.getByRole('button', { name: 'Move Stage' })).toHaveFocus());
+    const handle = canvas.getByRole('button', { name: 'Move Stage' });
+    await waitFor(() => expect(handle).toHaveFocus());
     await userEvent.keyboard('{Enter}');
+    // React Aria starts the drag on the next frame, moving focus to the first place it can land.
+    await waitFor(() => expect(handle).not.toHaveFocus());
     await userEvent.keyboard('{ArrowUp}');
     await userEvent.keyboard('{ArrowUp}');
     await userEvent.keyboard('{Enter}');
@@ -119,8 +122,11 @@ export const NameStaysFirst: Story = {
     await userEvent.tab();
     await userEvent.keyboard('{ArrowDown}');
     await userEvent.keyboard('{ArrowRight}');
-    await waitFor(() => expect(canvas.getByRole('button', { name: 'Move Domain' })).toHaveFocus());
+    const handle = canvas.getByRole('button', { name: 'Move Domain' });
+    await waitFor(() => expect(handle).toHaveFocus());
     await userEvent.keyboard('{Enter}');
+    // React Aria starts the drag on the next frame, moving focus to the first place it can land.
+    await waitFor(() => expect(handle).not.toHaveFocus());
     await userEvent.keyboard('{ArrowUp}');
     await userEvent.keyboard('{ArrowUp}');
     await userEvent.keyboard('{ArrowUp}');
