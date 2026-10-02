@@ -4,6 +4,6 @@
 // that lead with workspace_id (spec 0004).
 export { actorType, attributeType, systemColumn } from './common.ts';
 export { memberStatus, members, workspaceCounters, workspaces } from './workspaces.ts';
-export { attributes, objects } from './definitions.ts';
+export { attributes, lists, objects, relationshipCardinality, relationships } from './definitions.ts';
 export { attributeOptions, optionOutcome } from './options.ts';
-export { records, values } from './records.ts';
+export { listEntries, recordLinks, records, values } from './records.ts';

@@ -9,14 +9,18 @@ import { decodeValue } from './columns.ts';
 import { isUuidV7 } from './ids.ts';
 import { isRefusal, postgresError, refuse, refuseAll } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
+import { linkValues, writeLinks } from './relationships.ts';
 import {
   currentItems,
   loadAttributes,
+  loadListAttributes,
+  lockEntry,
   lockRecord,
   parseFor,
-  touchRecord,
+  touchOwner,
   writeAttribute,
   type AttributeDef,
+  type AttributeWrite,
 } from './values.ts';
 import { runWrite, type AfterWrite, type ValueChange, type WriteContext } from './write.ts';
 
@@ -113,27 +117,37 @@ function parseAll(
   return parsed;
 }
 
-/** Writes parsed inputs to one owner, returning each attribute's result. */
-async function writeAll(
+/** Writes one attribute: links for a record reference, value rows for every other type. */
+async function writeOne(context: WriteContext, write: AttributeWrite): Promise<readonly ValueChange[]> {
+  if (write.attribute.type === 'record_reference') return writeLinks(context, write);
+  const change = await writeAttribute(context, write);
+  return change === undefined ? [] : [change];
+}
+
+/** Writes parsed inputs to one record or entry, returning each attribute's result. Record references write links. */
+export async function writeAll(
   context: WriteContext,
+  ownerKind: 'record' | 'entry',
   ownerId: string,
   parsed: readonly { attribute: AttributeDef; input: ValueInput }[],
 ): Promise<Record<string, AttributeResult>> {
   const results: Record<string, AttributeResult> = {};
   const changes: ValueChange[] = [];
   for (const { attribute, input } of parsed) {
-    const change = await writeAttribute(context, {
+    const write = {
       ownerId,
-      ownerKind: 'record',
+      ownerKind,
       attribute,
       value: input.value,
       ...(input.baseVersionId === undefined ? {} : { baseVersionId: input.baseVersionId }),
-    });
+    };
+    const landed = await writeOne(context, write);
+    const [change, ...far] = landed;
     if (change === undefined) {
       results[attribute.id] = {};
       continue;
     }
-    changes.push(change);
+    changes.push(change, ...far);
     results[attribute.id] =
       change.replaced === undefined
         ? { versionId: change.versionId }
@@ -158,18 +172,23 @@ export async function createRecord(scope: EngineScope, input: RecordInput, hooks
   return result;
 }
 
-/** Creates one record inside a write (shared by single creates and batches). */
-export async function insertRecord(context: WriteContext, input: RecordInput) {
-  const { tx, scope } = context;
-  await liveObject(tx, input.objectId);
-  const attributes = await loadAttributes(tx, input.objectId);
-  const given = input.values ?? {};
+/**
+ * A new record's or entry's first values: the given ones, each default filled
+ * in, and a refusal for every required one still missing, all parsed (AC-11).
+ */
+export async function initialValues(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  attributes: ReadonlyMap<string, AttributeDef>,
+  given: Readonly<Record<string, unknown>>,
+  timeZone: string,
+): Promise<readonly { attribute: AttributeDef; input: ValueInput }[]> {
   const inputs: Record<string, ValueInput> = Object.fromEntries(
     Object.entries(given).map(([id, value]) => [id, { value }]),
   );
   for (const attribute of attributes.values()) {
     if (attribute.isSystem || attribute.archivedAt !== null || attribute.id in given) continue;
-    const value = await defaultFor(tx, scope, attribute, input.timeZone ?? 'UTC');
+    const value = await defaultFor(tx, scope, attribute, timeZone);
     if (value !== undefined) inputs[attribute.id] = { value };
   }
   const missing: EngineRefusal[] = [...attributes.values()]
@@ -186,7 +205,15 @@ export async function insertRecord(context: WriteContext, input: RecordInput) {
       message: `${attribute.title} is required. Give it a value.`,
       attributeId: attribute.id,
     }));
-  const parsed = parseAll(attributes, inputs, missing);
+  return parseAll(attributes, inputs, missing);
+}
+
+/** Creates one record inside a write (shared by single creates and batches). */
+export async function insertRecord(context: WriteContext, input: RecordInput) {
+  const { tx, scope } = context;
+  await liveObject(tx, input.objectId);
+  const attributes = await loadAttributes(tx, input.objectId);
+  const parsed = await initialValues(tx, scope, attributes, input.values ?? {}, input.timeZone ?? 'UTC');
   await takeRecordSlots(tx, scope, 1);
   const by = actorRow(scope.actor);
   let recordId: string;
@@ -212,14 +239,14 @@ export async function insertRecord(context: WriteContext, input: RecordInput) {
     throw error;
   }
   context.record({ createdRecords: [recordId] });
-  const versions = await writeAll(context, recordId, parsed);
+  const versions = await writeAll(context, 'record', recordId, parsed);
   return { recordId, versions };
 }
 
-/** Sets values on a record, all or none (AC-3, AC-12, AC-13). */
+/** Sets values on a record, or on a list entry, all or none (AC-3, AC-6, AC-12, AC-13). */
 export async function setValues(
   scope: EngineScope,
-  input: RecordValues,
+  input: RecordValues | EntryValues,
   hooks: readonly AfterWrite[] = [],
 ): Promise<Record<string, AttributeResult>> {
   const { result } = await runWrite(scope, (context) => updateRecord(context, input), hooks);
@@ -232,14 +259,30 @@ export interface RecordValues {
   readonly values: Readonly<Record<string, ValueInput>>;
 }
 
-/** Sets values on one record inside a write: the record is locked, then every value is parsed, then written. */
-async function updateRecord(context: WriteContext, input: RecordValues): Promise<Record<string, AttributeResult>> {
-  const { objectId } = await lockRecord(context.tx, input.recordId);
-  const attributes = await loadAttributes(context.tx, objectId);
+/** One list entry's new values (its own, not its record's). */
+export interface EntryValues {
+  readonly entryId: string;
+  readonly values: Readonly<Record<string, ValueInput>>;
+}
+
+/** Sets values on one record or entry inside a write: the owner is locked, then every value is parsed, then written. */
+async function updateRecord(
+  context: WriteContext,
+  input: RecordValues | EntryValues,
+): Promise<Record<string, AttributeResult>> {
+  const { tx } = context;
+  const [ownerKind, ownerId, attributes] =
+    'entryId' in input
+      ? (['entry', input.entryId, await loadListAttributes(tx, (await lockEntry(tx, input.entryId)).listId)] as const)
+      : ([
+          'record',
+          input.recordId,
+          await loadAttributes(tx, (await lockRecord(tx, input.recordId)).objectId),
+        ] as const);
   const parsed = parseAll(attributes, input.values);
-  const results = await writeAll(context, input.recordId, parsed);
+  const results = await writeAll(context, ownerKind, ownerId, parsed);
   if (Object.values(results).some((each) => each.versionId !== undefined)) {
-    await touchRecord(context, input.recordId);
+    await touchOwner(context, ownerKind, ownerId);
   }
   return results;
 }
@@ -331,6 +374,18 @@ export async function readRecords(
     rows.map((row) => row.id),
     wanted,
   );
+  const references = [...attributesByObject.values()].flatMap((byId) =>
+    [...byId.values()].filter(
+      (attribute) =>
+        attribute.type === 'record_reference' &&
+        (input.attributeIds === undefined || input.attributeIds.includes(attribute.id)),
+    ),
+  );
+  const links = await linkValues(
+    tx,
+    rows.map((row) => row.id),
+    references,
+  );
   const order = new Map(input.ids.map((id, index) => [id, index]));
 
   return rows
@@ -351,6 +406,10 @@ export async function readRecords(
         if (input.attributeIds !== undefined && !input.attributeIds.includes(attribute.id)) continue;
         if (attribute.systemColumn !== null) {
           values[attribute.id] = system[attribute.systemColumn];
+          continue;
+        }
+        if (attribute.type === 'record_reference') {
+          values[attribute.id] = links.get(row.id)?.get(attribute.id) ?? (attribute.isMulti ? [] : null);
           continue;
         }
         const mine = items.filter((item) => item.ownerId === row.id && item.attributeId === attribute.id);

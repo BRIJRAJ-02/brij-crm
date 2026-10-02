@@ -10,7 +10,7 @@ import { uniqueKeyOf } from './unique.ts';
 import { actorRow, type Actor } from './scope.ts';
 import type { ValueChange, WriteContext } from './write.ts';
 
-const { attributeOptions, attributes, records, values } = schema;
+const { attributeOptions, attributes, listEntries, records, values } = schema;
 
 /** The parts of an attribute definition the write and read paths need. */
 export interface AttributeDef {
@@ -30,6 +30,8 @@ export interface AttributeDef {
   readonly config: unknown;
   /** The stored `AttributeDefault`, or null. */
   readonly defaultValue: unknown;
+  /** For a record reference: the relationship it is one end of. */
+  readonly relationshipId: string | null;
 }
 
 /** The columns `AttributeDef` reads. */
@@ -48,6 +50,7 @@ const DEF_COLUMNS = {
   archivedAt: attributes.archivedAt,
   config: attributes.config,
   defaultValue: attributes.defaultValue,
+  relationshipId: attributes.relationshipId,
 } as const;
 
 /** One attribute by id, or a `NOT_FOUND` refusal. */
@@ -64,6 +67,34 @@ export async function loadAttributes(tx: WorkspaceTx, objectId: string): Promise
   return new Map(rows.map((row) => [row.id, row]));
 }
 
+/** Every attribute of one list (an entry's own values), by id. */
+export async function loadListAttributes(tx: WorkspaceTx, listId: string): Promise<ReadonlyMap<string, AttributeDef>> {
+  const rows = await tx.select(DEF_COLUMNS).from(attributes).where(eq(attributes.listId, listId));
+  return new Map(rows.map((row) => [row.id, row]));
+}
+
+/**
+ * Locks a live entry's row for the rest of the transaction, like `lockRecord`.
+ * Refuses an entry that is missing or removed, or whose record is in the trash.
+ */
+export async function lockEntry(tx: WorkspaceTx, entryId: string): Promise<{ listId: string; recordId: string }> {
+  const [row] = await tx
+    .select({ listId: listEntries.listId, recordId: listEntries.recordId, deletedAt: listEntries.deletedAt })
+    .from(listEntries)
+    .where(eq(listEntries.id, entryId))
+    .for('no key update');
+  if (row === undefined) throw refuse('NOT_FOUND', 'That entry does not exist.');
+  if (row.deletedAt !== null) throw refuse('RECORD_DELETED', 'That entry was removed from its list. Restore it first.');
+  const [record] = await tx
+    .select({ deletedAt: records.deletedAt })
+    .from(records)
+    .where(eq(records.id, row.recordId))
+    .for('share');
+  if (record?.deletedAt !== null)
+    throw refuse('RECORD_DELETED', "That entry's record is in the trash. Restore it first.");
+  return { listId: row.listId, recordId: row.recordId };
+}
+
 /**
  * Locks a live record's row for the rest of the transaction, so a delete, a
  * restore and every value write on it take turns. Refuses a missing or
@@ -74,7 +105,8 @@ export async function lockRecord(tx: WorkspaceTx, recordId: string): Promise<{ o
     .select({ objectId: records.objectId, deletedAt: records.deletedAt })
     .from(records)
     .where(eq(records.id, recordId))
-    .for('update');
+    // Not FOR UPDATE: a link's foreign key check (FOR KEY SHARE) on this record must not wait for it.
+    .for('no key update');
   const [row] = rows;
   if (row === undefined) throw refuse('NOT_FOUND', 'That record does not exist.');
   if (row.deletedAt !== null) throw refuse('RECORD_DELETED', 'That record is in the trash. Restore it first.');
@@ -281,13 +313,12 @@ function itemInsert(item: ItemColumns) {
   };
 }
 
-/** Moves a record's `updated_at` and `updated_by` to now and the scope's actor (AC-7). */
-export async function touchRecord(context: WriteContext, recordId: string): Promise<void> {
+/** Moves a record's (or entry's) `updated_at` and `updated_by` to now and the scope's actor (AC-7). */
+export async function touchOwner(context: WriteContext, ownerKind: 'record' | 'entry', ownerId: string): Promise<void> {
   const by = actorRow(context.scope.actor);
-  await context.tx
-    .update(records)
-    .set({ updatedAt: sql`now()`, updatedByType: by.type, updatedById: by.id, updatedByMemberId: by.memberId })
-    .where(eq(records.id, recordId));
+  const set = { updatedAt: sql`now()`, updatedByType: by.type, updatedById: by.id, updatedByMemberId: by.memberId };
+  if (ownerKind === 'record') await context.tx.update(records).set(set).where(eq(records.id, ownerId));
+  else await context.tx.update(listEntries).set(set).where(eq(listEntries.id, ownerId));
 }
 
 /** The current, non cleared item rows of several owners, for reads. */

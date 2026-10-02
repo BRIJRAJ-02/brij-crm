@@ -5,7 +5,8 @@ import { sql } from 'drizzle-orm';
 import type { WorkspaceTx } from '@crm/db';
 import { toCanonicalDecimal, type AttributeType } from '@crm/contracts/values';
 import type { ItemColumns } from './columns.ts';
-import { refuse } from './refusals.ts';
+import { uuidArray } from './ids.ts';
+import { postgresError, refuse } from './refusals.ts';
 import type { AttributeDef } from './values.ts';
 
 /** Rows updated per statement when keys are filled in. */
@@ -58,12 +59,17 @@ const EMPTY_ITEM: ItemColumns = {
  * Gives every current value of an attribute its unique key, refusing first
  * with the duplicates if any live records share one (AC-10). A deleted
  * record's keys go to `held_unique_key`, so they don't block anyone until a
- * restore takes them back.
+ * restore takes them back. The same goes for list entries: a removed entry, or
+ * one whose record is in the trash, holds its keys.
  */
 export async function fillUniqueKeys(tx: WorkspaceTx, attribute: AttributeDef): Promise<void> {
   const rows = await tx.execute<{ id: string; text: string | null; number: string | null; deleted: boolean }>(sql`
-    select v.id::text as id, v.text_value as text, v.number_value::text as number, r.deleted_at is not null as deleted
-    from "values" v join records r on r.workspace_id = v.workspace_id and r.id = v.record_id
+    select v.id::text as id, v.text_value as text, v.number_value::text as number,
+      coalesce(r.deleted_at, e.deleted_at, er.deleted_at) is not null as deleted
+    from "values" v
+    left join records r on r.workspace_id = v.workspace_id and r.id = v.record_id
+    left join list_entries e on e.workspace_id = v.workspace_id and e.id = v.entry_id
+    left join records er on er.workspace_id = e.workspace_id and er.id = e.record_id
     where v.attribute_id = ${attribute.id} and v.active_until is null and not v.is_cleared
   `);
   const keyed = rows.rows.map((row) => ({
@@ -108,4 +114,52 @@ export async function clearUniqueKeys(tx: WorkspaceTx, attributeId: string): Pro
     update "values" set unique_key = null, held_unique_key = null
     where attribute_id = ${attributeId} and (unique_key is not null or held_unique_key is not null)
   `);
+}
+
+/**
+ * Moves the current unique keys of some owners (a record going to the trash,
+ * and its entries) into `held_unique_key`, so they block no one meanwhile.
+ */
+export async function holdUniqueKeys(tx: WorkspaceTx, ownerIds: readonly string[]): Promise<void> {
+  if (ownerIds.length === 0) return;
+  await tx.execute(sql`
+    update "values" set held_unique_key = unique_key, unique_key = null
+    where owner_id = any(${uuidArray(ownerIds)}) and active_until is null and unique_key is not null
+  `);
+}
+
+/**
+ * Moves held keys back on a restore. Refuses with `UNIQUE_CONFLICT`, listing
+ * the values, when another record took one of them meanwhile (AC-8).
+ */
+export async function releaseUniqueKeys(tx: WorkspaceTx, ownerIds: readonly string[]): Promise<void> {
+  if (ownerIds.length === 0) return;
+  const owners = uuidArray(ownerIds);
+  const taken = await tx.execute<{ title: string; key: string }>(sql`
+    select a.title, v.held_unique_key as key
+    from "values" v join attributes a on a.workspace_id = v.workspace_id and a.id = v.attribute_id
+    where v.owner_id = any(${owners}) and v.active_until is null and v.held_unique_key is not null
+      and exists (
+        select 1 from "values" o
+        where o.workspace_id = v.workspace_id and o.attribute_id = v.attribute_id
+          and o.unique_key = v.held_unique_key and o.active_until is null
+      )
+    order by a.title, v.held_unique_key
+  `);
+  const conflict = () =>
+    refuse(
+      'UNIQUE_CONFLICT',
+      `Another record now has ${taken.rows.map((row) => `${row.title} ${row.key}`).join(', ') || 'one of its unique values'}. Change that record first, then restore this one.`,
+    );
+  if (taken.rows.length > 0) throw conflict();
+  try {
+    await tx.execute(sql`
+      update "values" set unique_key = held_unique_key, held_unique_key = null
+      where owner_id = any(${owners}) and active_until is null and held_unique_key is not null
+    `);
+  } catch (error) {
+    const pg = postgresError(error);
+    if (pg?.code === '23505' && pg.constraint === 'values_unique') throw conflict();
+    throw error;
+  }
 }

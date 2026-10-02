@@ -34,3 +34,12 @@ export function postgresError(error: unknown): { code?: string; constraint?: str
   }
   return undefined;
 }
+
+/**
+ * An error that tells `runWrite` to start the transaction again, like a
+ * Postgres serialisation failure (`40001`): a concurrent write changed what
+ * this one read, and a fresh attempt will see it.
+ */
+export function writeConflict(message: string): Error {
+  return Object.assign(new Error(message), { code: '40001' });
+}

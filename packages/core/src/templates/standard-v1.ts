@@ -1,11 +1,12 @@
 // The standard objects every workspace starts with (spec 0004, AC-1), version
 // 1, from the attribute research (docs/research/crm-attributes.md, 5b), launch
 // types only. Creating a workspace copies this into ordinary object, attribute
-// and option rows marked standard. Relationships (a person's company, a deal's
-// people) join in milestone 3; derived and read only attributes (interactions,
-// won at, time in stage) arrive with the features that compute them.
+// and option rows marked standard, then links them with the standard
+// relationships. Derived and read only attributes (interactions, won at, time
+// in stage) arrive with the features that compute them.
 import type { AttributeInput, ObjectInput } from '../engine/definitions.ts';
 import type { OptionOutcome } from '../engine/options.ts';
+import type { Cardinality } from '../engine/relationships.ts';
 
 /** The template's version, stored on each object it makes. */
 export const STANDARD_TEMPLATE_VERSION = 1;
@@ -191,5 +192,43 @@ export const STANDARD_OBJECTS: readonly StandardObject[] = [
       },
       { apiSlug: 'description', title: 'Description', type: 'long_text' },
     ],
+  },
+];
+
+/** One end of a standard relationship: the standard object it sits on, by key, and its attribute. */
+export interface StandardEnd {
+  readonly object: string;
+  readonly apiSlug: string;
+  readonly title: string;
+}
+
+/** One standard relationship, read from its defining end. */
+export interface StandardRelationship {
+  readonly cardinality: Cardinality;
+  readonly from: StandardEnd;
+  readonly to: StandardEnd;
+}
+
+/** The standard relationships, from research 5b. */
+export const STANDARD_RELATIONSHIPS: readonly StandardRelationship[] = [
+  {
+    cardinality: 'many_to_one',
+    from: { object: 'people', apiSlug: 'company', title: 'Company' },
+    to: { object: 'companies', apiSlug: 'team', title: 'Team' },
+  },
+  {
+    cardinality: 'many_to_one',
+    from: { object: 'companies', apiSlug: 'parent_company', title: 'Parent company' },
+    to: { object: 'companies', apiSlug: 'subsidiaries', title: 'Subsidiaries' },
+  },
+  {
+    cardinality: 'many_to_one',
+    from: { object: 'deals', apiSlug: 'associated_company', title: 'Associated company' },
+    to: { object: 'companies', apiSlug: 'associated_deals', title: 'Associated deals' },
+  },
+  {
+    cardinality: 'many_to_many',
+    from: { object: 'deals', apiSlug: 'associated_people', title: 'Associated people' },
+    to: { object: 'people', apiSlug: 'associated_deals', title: 'Associated deals' },
   },
 ];

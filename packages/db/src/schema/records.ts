@@ -19,7 +19,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { actorColumns, auditColumns, id, timestamptz, workspaceId } from './common.ts';
-import { attributes, objects } from './definitions.ts';
+import { attributes, lists, objects, relationships } from './definitions.ts';
 import { attributeOptions } from './options.ts';
 import { actorConstraints } from './workspaces.ts';
 
@@ -73,15 +73,152 @@ export const records = pgTable(
   ],
 );
 
+const entryDeletedBy = actorColumns('deleted_by');
+
+/** One record's place in a list. A record can hold several entries in one list unless the list allows it once. */
+export const listEntries = pgTable(
+  'list_entries',
+  {
+    workspaceId: workspaceId(),
+    id: id(),
+    listId: uuid('list_id').notNull(),
+    recordId: uuid('record_id').notNull(),
+    /** Set when the entry is removed from its list; it can come back for 30 days. */
+    deletedAt: timestamptz('deleted_at'),
+    deletedByType: entryDeletedBy.type,
+    deletedById: entryDeletedBy.id,
+    deletedByMemberId: entryDeletedBy.memberId,
+    ...auditColumns(),
+  },
+  (t) => [
+    primaryKey({ name: 'list_entries_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({
+      name: 'list_entries_list',
+      columns: [t.workspaceId, t.listId],
+      foreignColumns: [lists.workspaceId, lists.id],
+    }),
+    foreignKey({
+      name: 'list_entries_record',
+      columns: [t.workspaceId, t.recordId],
+      foreignColumns: [records.workspaceId, records.id],
+    }),
+    index('list_entries_live')
+      .on(t.workspaceId, t.listId, t.id)
+      .where(sql`${t.deletedAt} is null`),
+    index('list_entries_record').on(t.workspaceId, t.recordId, t.listId),
+    check('list_entries_deleted', sql`(${t.deletedAt} is null) = (${t.deletedByType} is null)`),
+    ...actorConstraints('list_entries', 'created_by', t.workspaceId, {
+      type: t.createdByType,
+      id: t.createdById,
+      memberId: t.createdByMemberId,
+    }),
+    ...actorConstraints('list_entries', 'updated_by', t.workspaceId, {
+      type: t.updatedByType,
+      id: t.updatedById,
+      memberId: t.updatedByMemberId,
+    }),
+    ...actorConstraints('list_entries', 'deleted_by', t.workspaceId, {
+      type: t.deletedByType,
+      id: t.deletedById,
+      memberId: t.deletedByMemberId,
+    }),
+  ],
+);
+
 const setBy = actorColumns('set_by');
+const endedBy = actorColumns('ended_by');
 const actorValue = actorColumns('actor');
+
+/** Current links: what every link index but the history ones covers. */
+const CURRENT_LINK = 'active_until is null';
+
+/**
+ * One link between two records through a relationship, read from both ends.
+ * Like a value row it has history in place: a change ends the current link
+ * (`active_until`, `ended_by`) and starts a new one. `position` orders the
+ * defining end's items, `to_position` the other end's. The single flags copy
+ * the relationship's cardinality, so the partial unique indexes can hold each
+ * single end to one current link.
+ */
+export const recordLinks = pgTable(
+  'record_links',
+  {
+    workspaceId: workspaceId(),
+    id: id(),
+    versionId: uuid('version_id').notNull(),
+    relationshipId: uuid('relationship_id').notNull(),
+    fromRecordId: uuid('from_record_id').notNull(),
+    toRecordId: uuid('to_record_id').notNull(),
+    position: smallint('position').notNull().default(0),
+    toPosition: smallint('to_position').notNull().default(0),
+    fromSingle: boolean('from_single').notNull(),
+    toSingle: boolean('to_single').notNull(),
+    activeFrom: timestamptz('active_from').notNull(),
+    activeUntil: timestamptz('active_until'),
+    setByType: setBy.type.notNull(),
+    setById: setBy.id,
+    setByMemberId: setBy.memberId,
+    endedByType: endedBy.type,
+    endedById: endedBy.id,
+    endedByMemberId: endedBy.memberId,
+  },
+  (t) => [
+    primaryKey({ name: 'record_links_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({
+      name: 'record_links_relationship',
+      columns: [t.workspaceId, t.relationshipId],
+      foreignColumns: [relationships.workspaceId, relationships.id],
+    }),
+    foreignKey({
+      name: 'record_links_from_record',
+      columns: [t.workspaceId, t.fromRecordId],
+      foreignColumns: [records.workspaceId, records.id],
+    }),
+    foreignKey({
+      name: 'record_links_to_record',
+      columns: [t.workspaceId, t.toRecordId],
+      foreignColumns: [records.workspaceId, records.id],
+    }),
+    check('record_links_period', sql`${t.activeUntil} is null or ${t.activeUntil} > ${t.activeFrom}`),
+    check('record_links_ended', sql`(${t.activeUntil} is null) = (${t.endedByType} is null)`),
+    // Each end's current items, in order.
+    index('record_links_from')
+      .on(t.workspaceId, t.relationshipId, t.fromRecordId, t.position)
+      .where(sql.raw(CURRENT_LINK)),
+    index('record_links_to')
+      .on(t.workspaceId, t.relationshipId, t.toRecordId, t.toPosition)
+      .where(sql.raw(CURRENT_LINK)),
+    // Two records link once at a time, and a single end holds one current link.
+    uniqueIndex('record_links_current')
+      .on(t.workspaceId, t.relationshipId, t.fromRecordId, t.toRecordId)
+      .where(sql.raw(CURRENT_LINK)),
+    uniqueIndex('record_links_from_single')
+      .on(t.workspaceId, t.relationshipId, t.fromRecordId)
+      .where(sql.raw(`${CURRENT_LINK} and from_single`)),
+    uniqueIndex('record_links_to_single')
+      .on(t.workspaceId, t.relationshipId, t.toRecordId)
+      .where(sql.raw(`${CURRENT_LINK} and to_single`)),
+    // History, as of reads, and finding every link of a record (purge, erasure).
+    index('record_links_from_history').on(t.workspaceId, t.fromRecordId, t.relationshipId, t.activeFrom),
+    index('record_links_to_history').on(t.workspaceId, t.toRecordId, t.relationshipId, t.activeFrom),
+    ...actorConstraints('record_links', 'set_by', t.workspaceId, {
+      type: t.setByType,
+      id: t.setById,
+      memberId: t.setByMemberId,
+    }),
+    ...actorConstraints('record_links', 'ended_by', t.workspaceId, {
+      type: t.endedByType,
+      id: t.endedById,
+      memberId: t.endedByMemberId,
+    }),
+  ],
+);
 
 /** Current value rows that hold a value (not a cleared marker): what every value index covers. */
 const CURRENT = 'active_until is null and not is_cleared';
 
 /**
- * One item of one attribute's value on a record (or, from milestone 3, a list
- * entry). Each type uses its own columns (see the mapping in spec 0004). All
+ * One item of one attribute's value on a record or a list entry. Each type uses its own columns (see the mapping in spec 0004). All
  * the rows one write makes share a `version_id` and an `active_from`.
  */
 export const values = pgTable(
@@ -92,7 +229,6 @@ export const values = pgTable(
     versionId: uuid('version_id').notNull(),
     attributeId: uuid('attribute_id').notNull(),
     recordId: uuid('record_id'),
-    /** List entries arrive in milestone 3; its foreign key comes with them. */
     entryId: uuid('entry_id'),
     /** The record or entry this row belongs to (whichever is set): what the indexes use. */
     ownerId: uuid('owner_id').notNull(),
@@ -128,6 +264,11 @@ export const values = pgTable(
       name: 'values_record',
       columns: [t.workspaceId, t.recordId],
       foreignColumns: [records.workspaceId, records.id],
+    }),
+    foreignKey({
+      name: 'values_entry',
+      columns: [t.workspaceId, t.entryId],
+      foreignColumns: [listEntries.workspaceId, listEntries.id],
     }),
     // The option must be one of this attribute's own.
     foreignKey({

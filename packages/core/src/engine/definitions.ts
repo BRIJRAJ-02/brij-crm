@@ -12,7 +12,7 @@ import {
   parseAttributeValue,
   type AttributeType,
 } from '@crm/contracts/values';
-import { checkAttributeRoom, takeCustomObject } from './limits.ts';
+import { checkAttributeRoom, takeCustomObject, type AttributeParent } from './limits.ts';
 import { postgresError, refuse } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
 import { clearUniqueKeys, fillUniqueKeys, UNIQUE_TYPES } from './unique.ts';
@@ -41,9 +41,13 @@ export interface ObjectInput {
   readonly standard?: { readonly key: string; readonly templateVersion: number };
 }
 
-/** What a new attribute needs. `config` and `defaultValue` are parsed by the type's schemas. */
+/**
+ * What a new attribute needs: its object, or its list (for an entry's own
+ * values), exactly one. `config` and `defaultValue` are parsed by the type's schemas.
+ */
 export interface AttributeInput {
-  readonly objectId: string;
+  readonly objectId?: string;
+  readonly listId?: string;
   readonly apiSlug: string;
   readonly title: string;
   readonly type: AttributeType;
@@ -84,13 +88,15 @@ const SYSTEM_ATTRIBUTES = [
   { apiSlug: 'updated_by', title: 'Updated by', type: 'actor_reference', systemColumn: 'updated_by' },
 ] as const;
 
-function checkSlug(slug: string): void {
+/** Refuses an API name that isn't lowercase letters, digits and underscores, starting with a letter. */
+export function checkSlug(slug: string): void {
   if (!SLUG.test(slug)) {
     throw refuse('CONFIG_INVALID', 'Use lowercase letters, digits and underscores, starting with a letter.');
   }
 }
 
-function checkName(name: string, what: string): void {
+/** Refuses a name that is empty or longer than 100 characters. */
+export function checkName(name: string, what: string): void {
   if (name.trim() === '' || name.length > 100)
     throw refuse('CONFIG_INVALID', `Give the ${what} in 1 to 100 characters.`);
 }
@@ -124,7 +130,7 @@ export function touched(scope: EngineScope) {
 }
 
 /** Turns a slug clash into `SLUG_TAKEN`, and a setting the type can't take into `CONFIG_INVALID`. */
-async function definitionGuard<T>(work: () => Promise<T>): Promise<T> {
+export async function definitionGuard<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
   } catch (error) {
@@ -225,28 +231,48 @@ export async function insertObject(
   });
 }
 
-/** Inserts an attribute at the end of its object, inside a write. */
-export async function insertAttribute(context: WriteContext, input: AttributeInput): Promise<{ attributeId: string }> {
+/** The parent an attribute input names, refusing none or both. */
+function parentOf(input: AttributeInput): AttributeParent {
+  if (input.objectId !== undefined && input.listId === undefined) return { objectId: input.objectId };
+  if (input.listId !== undefined && input.objectId === undefined) return { listId: input.listId };
+  throw refuse('CONFIG_INVALID', 'Put the attribute on one object or one list.');
+}
+
+/**
+ * Inserts an attribute at the end of its object or list, inside a write.
+ * Record references are made only through a relationship, which passes `reference`.
+ */
+export async function insertAttribute(
+  context: WriteContext,
+  input: AttributeInput,
+  internal: { readonly reference?: boolean } = {},
+): Promise<{ attributeId: string }> {
   const { tx, scope } = context;
+  const parent = parentOf(input);
   checkSlug(input.apiSlug);
   checkName(input.title, 'title');
-  if (input.type === 'record_reference') {
+  if (input.type === 'record_reference' && (internal.reference !== true || 'listId' in parent)) {
     throw refuse('CONFIG_INVALID', 'Add a record reference by defining a relationship.');
   }
   const config = parseConfig(input.type, input.config);
   const defaultValue = parseDefault(input.type, input.isMulti ?? false, input.defaultValue);
-  await checkAttributeRoom(tx, scope, input.objectId);
+  await checkAttributeRoom(tx, scope, parent);
+  const parentColumn =
+    'objectId' in parent
+      ? sql`${attributes.objectId} = ${parent.objectId}`
+      : sql`${attributes.listId} = ${parent.listId}`;
   return definitionGuard(async () => {
     const [next] = await tx
       .execute<{ position: number }>(
-        sql`select coalesce(max(${attributes.position}) + 1, 0)::int as position from ${attributes} where ${attributes.objectId} = ${input.objectId}`,
+        sql`select coalesce(max(${attributes.position}) + 1, 0)::int as position from ${attributes} where ${parentColumn}`,
       )
       .then((result) => result.rows);
     const [row] = await tx
       .insert(attributes)
       .values({
         workspaceId: scope.workspaceId,
-        objectId: input.objectId,
+        objectId: 'objectId' in parent ? parent.objectId : null,
+        listId: 'listId' in parent ? parent.listId : null,
         apiSlug: input.apiSlug,
         title: input.title.trim(),
         type: input.type,
@@ -275,7 +301,7 @@ export async function defineObject(
   return result;
 }
 
-/** Defines an attribute on an object (AC-1, AC-2, AC-16). */
+/** Defines an attribute on an object, or on a list for its entries (AC-1, AC-2, AC-6, AC-16). */
 export async function defineAttribute(scope: EngineScope, input: AttributeInput, hooks: readonly AfterWrite[] = []) {
   const { result } = await runWrite(scope, (context) => insertAttribute(context, input), hooks);
   return result;

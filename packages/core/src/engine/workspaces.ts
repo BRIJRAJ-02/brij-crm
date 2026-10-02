@@ -1,14 +1,16 @@
 // Creating a workspace (spec 0004, AC-1): the tenant row, its counters, the
-// first member, and the standard objects from the template, in one write.
+// first member, and the standard objects and relationships from the template,
+// in one write.
 // It runs inside withWorkspace() for the new id, so even the first insert is
 // checked by row level security; no owner connection is needed.
 import { eq } from 'drizzle-orm';
 import { schema } from '@crm/db';
-import { STANDARD_OBJECTS, STANDARD_TEMPLATE_VERSION } from '../templates/standard-v1.ts';
+import { STANDARD_OBJECTS, STANDARD_RELATIONSHIPS, STANDARD_TEMPLATE_VERSION } from '../templates/standard-v1.ts';
 import { insertAttribute, insertObject } from './definitions.ts';
 import { newId } from './ids.ts';
 import { insertOption } from './options.ts';
 import { postgresError, refuse } from './refusals.ts';
+import { insertRelationship } from './relationships.ts';
 import { SYSTEM_ACTOR, type EngineScope } from './scope.ts';
 import { runWrite, type AfterWrite } from './write.ts';
 
@@ -75,6 +77,18 @@ export async function createWorkspace(
             }
           }
           objects[standardKey] = objectId;
+        }
+        const objectOf = (key: string): string => {
+          const id = objects[key];
+          if (id === undefined) throw new Error(`The template has no ${key} object.`);
+          return id;
+        };
+        for (const { cardinality, from, to } of STANDARD_RELATIONSHIPS) {
+          await insertRelationship(context, {
+            cardinality,
+            from: { objectId: objectOf(from.object), apiSlug: from.apiSlug, title: from.title },
+            to: { objectId: objectOf(to.object), apiSlug: to.apiSlug, title: to.title },
+          });
         }
         return { workspaceId, memberId, objects };
       },

@@ -1,6 +1,7 @@
 // UUID v7 (RFC 9562): a 48 bit millisecond time, then random bits, so ids
 // sort by creation and inserts stay local in every index (spec 0004).
 import { randomBytes } from 'node:crypto';
+import { sql, type SQL } from 'drizzle-orm';
 
 const V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -17,4 +18,13 @@ export function newId(now: number = Date.now()): string {
 /** True for a well formed UUID v7, the only id a client may mint for a new record. */
 export function isUuidV7(value: string): boolean {
   return V7.test(value);
+}
+
+/** Ids as one `uuid[]` parameter list, for `= any(...)` in raw SQL. */
+export function uuidArray(ids: readonly string[]): SQL {
+  if (ids.length === 0) return sql`'{}'::uuid[]`;
+  return sql`array[${sql.join(
+    ids.map((id) => sql`${id}::uuid`),
+    sql`, `,
+  )}]`;
 }
