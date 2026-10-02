@@ -1,7 +1,7 @@
 /* TaskList: size-row rows of a done checkbox, the title (filling the row, cut
    with an ellipsis, struck through in text-tertiary once done), the record
-   chip, the due day as a label in a size-column-min column (danger once overdue)
-   and the assignee in a size-chip column, so rows line up. Rows
+   chip, the due day as a label, on one line, in a column at least size-column-min
+   wide (danger, with an alert icon, once overdue) and the assignee in a size-chip column, so rows line up. Rows
    take surface-hover under a pointer and the inset ring on focus. */
 @layer components {
   .root {
@@ -65,9 +65,15 @@
   }
 
   .due {
+    display: inline-flex;
     flex: none;
-    inline-size: var(--size-column-min);
+    gap: var(--space-4);
+    align-items: center;
+    justify-content: flex-end;
+    /* At least a column wide, so rows line up; an overdue day grows by its icon rather than wrap. */
+    min-inline-size: var(--size-column-min);
     text-align: end;
+    white-space: nowrap;
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);

@@ -1,0 +1,29 @@
+/* Board: a row of columns space-12 apart, filling its slot and scrolling
+   sideways, then the hidden columns button at the top of its own slot. */
+@layer components {
+  .root {
+    display: flex;
+    gap: var(--space-12);
+    align-items: stretch;
+    inline-size: 100%;
+    block-size: 100%;
+    min-block-size: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  .column {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: var(--space-8);
+    inline-size: var(--size-board-column);
+  }
+
+  .hidden {
+    display: flex;
+    flex: none;
+    align-items: flex-start;
+    padding-block: var(--space-8);
+  }
+}

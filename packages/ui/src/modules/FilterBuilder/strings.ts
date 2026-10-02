@@ -31,6 +31,9 @@ export const strings = {
   amount: (name: string) => `${name}, how many`,
   unit: (name: string) => `${name}, days, weeks, months or years`,
   units: { day: 'days', week: 'weeks', month: 'months', year: 'years' },
+  /** "Within the last" as words: "7 days". */
+  lastAmount: (amount: string, unit: string) => `${amount} ${unit}`,
+  amountRange: 'Enter a whole number from 1 to 999.',
   noFilters: 'No filters yet',
   noFiltersText: 'Add a filter to narrow this view.',
 } as const;

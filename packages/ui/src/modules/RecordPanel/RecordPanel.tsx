@@ -2,9 +2,12 @@
 // table, in the floating Panel, with its avatar and name, a way to step to the
 // record before or after, one to open its full page, and its tabs.
 import type { RecordRefDisplay } from '@crm/contracts/values';
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import type { LoadStatus } from '../../lib/load-status.ts';
+import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Panel, type PanelWidth } from '../../molecules/Panel/Panel.tsx';
 import { TabPanel, Tabs, type TabItem } from '../../molecules/Tabs/Tabs.tsx';
 import styles from './RecordPanel.module.css';
@@ -17,8 +20,12 @@ export interface RecordPanelTab extends TabItem {
 
 /** Props for RecordPanel. */
 export interface RecordPanelProps {
-  /** The record: its name, kind, and picture or hue. */
-  readonly record: RecordRefDisplay;
+  /** The record: its name, kind, and picture or hue. Leave it out while it loads. */
+  readonly record?: RecordRefDisplay;
+  /** `loading` (skeletons in place of the tabs), `error`, or `no-access`, for the record as a whole. */
+  readonly status?: LoadStatus;
+  /** Try again, when `status` is `error`. */
+  readonly onRetry?: () => void;
   readonly isOpen: boolean;
   readonly onClose: () => void;
   readonly tabs: readonly RecordPanelTab[];
@@ -53,32 +60,65 @@ export function RecordPanel({
   onOpenPage,
   actions,
   width = 'md',
+  status = 'ready',
+  onRetry,
 }: RecordPanelProps) {
   const hasSteps = onPrevious !== undefined || onNext !== undefined;
+  const previousRef = useRef<HTMLButtonElement>(null);
+  const nextRef = useRef<HTMLButtonElement>(null);
+  const atStart = onPrevious === undefined;
+  const atEnd = onNext === undefined;
+  // Stepping onto the first or last record disables the button in use; focus moves to the other one.
+  useEffect(() => {
+    const active = document.activeElement;
+    const lost = active === null || active === document.body;
+    if (atEnd && (lost || active === nextRef.current)) previousRef.current?.focus();
+    else if (atStart && (lost || active === previousRef.current)) nextRef.current?.focus();
+  }, [atStart, atEnd]);
+  const isReady = status === 'ready' && record !== undefined;
+  let content: ReactNode;
+  if (status === 'error') {
+    content = <EmptyState tone="error" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />;
+  } else if (status === 'no-access') {
+    content = (
+      <EmptyState tone="locked" title={strings.noAccess}>
+        {strings.noAccessBody}
+      </EmptyState>
+    );
+  } else if (!isReady) {
+    content = (
+      <div className={styles.content} aria-busy="true">
+        <Skeleton lines={3} />
+      </div>
+    );
+  }
   return (
     <Panel
-      title={record.name}
+      title={record?.name ?? strings.loading}
       variant="floating"
       isFlush
       width={width}
       isOpen={isOpen}
       onClose={onClose}
       leading={
-        <Avatar
-          name={record.name}
-          id={record.recordId}
-          size="sm"
-          shape={record.kind === 'person' ? 'circle' : 'square'}
-          isDecorative
-          {...(record.imageSrc === undefined ? {} : { src: record.imageSrc })}
-          {...(record.hue === undefined ? {} : { hue: record.hue })}
-        />
+        record !== undefined && (
+          <Avatar
+            name={record.name}
+            id={record.recordId}
+            size="sm"
+            shape={record.kind === 'person' ? 'circle' : 'square'}
+            isDecorative
+            {...(record.imageSrc === undefined ? {} : { src: record.imageSrc })}
+            {...(record.hue === undefined ? {} : { hue: record.hue })}
+          />
+        )
       }
       actions={
         <>
           {hasSteps && (
             <>
               <Button
+                ref={previousRef}
                 variant="ghost"
                 icon="chevron-up"
                 label={strings.previous}
@@ -86,6 +126,7 @@ export function RecordPanel({
                 {...(onPrevious === undefined ? {} : { onPress: onPrevious })}
               />
               <Button
+                ref={nextRef}
                 variant="ghost"
                 icon="chevron-down"
                 label={strings.next}
@@ -101,18 +142,20 @@ export function RecordPanel({
         </>
       }
     >
-      <Tabs
-        label={record.name}
-        tabs={tabs}
-        {...(selectedTab === undefined ? {} : { selectedKey: selectedTab })}
-        {...(onTabChange === undefined ? {} : { onSelectionChange: onTabChange })}
-      >
-        {tabs.map((tab) => (
-          <TabPanel key={tab.id} id={tab.id}>
-            <div className={styles.content}>{tab.content}</div>
-          </TabPanel>
-        ))}
-      </Tabs>
+      {content ?? (
+        <Tabs
+          label={record?.name ?? strings.loading}
+          tabs={tabs}
+          {...(selectedTab === undefined ? {} : { selectedKey: selectedTab })}
+          {...(onTabChange === undefined ? {} : { onSelectionChange: onTabChange })}
+        >
+          {tabs.map((tab) => (
+            <TabPanel key={tab.id} id={tab.id}>
+              <div className={styles.content}>{tab.content}</div>
+            </TabPanel>
+          ))}
+        </Tabs>
+      )}
     </Panel>
   );
 }

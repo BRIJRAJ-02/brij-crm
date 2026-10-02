@@ -16,15 +16,17 @@ import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { ActivityFeed } from '../ActivityFeed/ActivityFeed.tsx';
 import { AttributeList } from '../AttributeList/AttributeList.tsx';
 import { TaskList } from '../TaskList/TaskList.tsx';
+import type { LoadStatus } from '../../lib/load-status.ts';
 import { RecordPanel } from './RecordPanel.tsx';
 
 interface SampleProps {
   readonly startOpen?: boolean;
   readonly onOpenPage?: () => void;
+  readonly status?: LoadStatus;
 }
 
 /** A company opened from the table: details, activity and tasks, stepping through three companies. */
-function SamplePanel({ startOpen = true, onOpenPage }: SampleProps) {
+function SamplePanel({ startOpen = true, onOpenPage, status = 'ready' }: SampleProps) {
   const [isOpen, setOpen] = useState(startOpen);
   const [index, setIndex] = useState(0);
   const [values, setValues] = useState(SAMPLE_RECORD.values);
@@ -41,7 +43,8 @@ function SamplePanel({ startOpen = true, onOpenPage }: SampleProps) {
         Open Northwind
       </Button>
       <RecordPanel
-        record={record}
+        status={status}
+        {...(status === 'loading' ? {} : { record })}
         isOpen={isOpen}
         onClose={() => {
           setOpen(false);
@@ -122,13 +125,17 @@ export const Default: Story = {
   },
 };
 
-/** Next steps to the record below without closing the panel; Open full page asks the app. */
+/** Next steps to the record below without closing the panel; at the last record focus moves to Previous. Open full page asks the app. */
 export const StepThrough: Story = {
   args: { onOpenPage: fn() },
   parameters: { crm: { screenshot: false } },
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Next record' }));
     await expect(canvas.getByRole('dialog', { name: 'Globex' })).toBeInTheDocument();
+    canvas.getByRole('button', { name: 'Next record' }).focus();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Next record' })).toBeDisabled());
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Previous record' })).toHaveFocus());
     await userEvent.click(canvas.getByRole('button', { name: 'Open full page' }));
     await expect(args.onOpenPage).toHaveBeenCalled();
   },
@@ -155,5 +162,21 @@ export const EscInAnEditor: Story = {
     await expect(canvas.getByRole('dialog', { name: 'Northwind Traders' })).toBeInTheDocument();
     await userEvent.keyboard('{Escape}');
     await waitFor(() => expect(canvas.queryByRole('dialog')).not.toBeInTheDocument());
+  },
+};
+
+/** The record is still coming: skeletons in place of the tabs. */
+export const Loading: Story = {
+  args: { status: 'loading' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('dialog', { name: 'Loading record' })).toBeInTheDocument();
+  },
+};
+
+/** The viewer may not see this record. */
+export const NoAccess: Story = {
+  args: { status: 'no-access' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('You can’t see this record')).toBeInTheDocument();
   },
 };

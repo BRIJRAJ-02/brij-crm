@@ -3,6 +3,7 @@ import { expect, waitFor } from 'storybook/test';
 import { Button } from '../Button/Button.tsx';
 import { hoverFresh, shownTooltip as tooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { LockReason } from './LockReason.tsx';
 import { Tooltip } from './Tooltip.tsx';
 
 const meta = {
@@ -85,5 +86,20 @@ export const Controlled: Story = {
   play: async () => {
     const tip = await tooltip();
     await expect(tip).toHaveTextContent('Calculated by a formula');
+  },
+};
+
+/** A lock that says why something can't change, on hover and on keyboard focus. */
+export const Lock: Story = {
+  render: () => (
+    <Stage>
+      <LockReason reason="The system sets this when the record is made." />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    const lock = canvas.getByRole('button', { name: 'The system sets this when the record is made.' });
+    await expect(lock).toHaveFocus();
+    await waitFor(() => expect(document.querySelector('[role="tooltip"]')).not.toBeNull());
   },
 };

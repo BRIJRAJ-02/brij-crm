@@ -17,6 +17,7 @@ import type { FieldAttribute } from '../../fields/types.ts';
 import { isEmptyValue } from '../../fields/values.ts';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import type { ListSource } from '../../lib/list-source.ts';
+import type { LoadStatus } from '../../lib/load-status.ts';
 import { sizeToken } from '../../lib/token-values.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { useFormatSettings, useNow } from '../../provider/context.ts';
@@ -60,9 +61,9 @@ export interface ActivityFeedProps {
   readonly label: string;
   /** The entries, newest first. */
   readonly entries: ListSource<ActivityEntry>;
-  /** The first page is still coming: skeleton entries after the loading delay. */
-  readonly isLoading?: boolean;
-  /** The entries failed to load; Try again calls this. */
+  /** `loading` (the first page: skeleton entries after the loading delay), `error`, or `no-access`. */
+  readonly status?: LoadStatus;
+  /** Try again, when `status` is `error`. */
   readonly onRetry?: () => void;
 }
 
@@ -122,11 +123,11 @@ function usePeriodLabel(): (period: Period) => string {
  * Page Down move between entries. Only the entries on screen draw, and those
  * not loaded yet draw as skeletons.
  */
-export function ActivityFeed({ label, entries, isLoading = false, onRetry }: ActivityFeedProps) {
+export function ActivityFeed({ label, entries, status = 'ready', onRetry }: ActivityFeedProps) {
   const { locale, timeZone } = useFormatSettings();
   const now = useNow();
   const labelOf = usePeriodLabel();
-  const showSkeleton = useDelayedLoading(isLoading);
+  const showSkeleton = useDelayedLoading(status === 'loading');
   const scrollRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   const pendingFocus = useRef(false);
@@ -158,10 +159,19 @@ export function ActivityFeed({ label, entries, isLoading = false, onRetry }: Act
     scrollRef.current?.querySelector<HTMLElement>(`[data-index="${String(active)}"]`)?.focus();
   });
 
-  if (onRetry !== undefined) {
-    return <EmptyState tone="error" icon="activity" title={strings.failed} onRetry={onRetry} />;
+  if (status === 'error') {
+    return (
+      <EmptyState tone="error" icon="activity" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />
+    );
   }
-  if (isLoading) {
+  if (status === 'no-access') {
+    return (
+      <EmptyState tone="locked" title={strings.noAccess}>
+        {strings.noAccessBody}
+      </EmptyState>
+    );
+  }
+  if (status === 'loading') {
     return (
       <div className={styles.root} aria-busy="true">
         {showSkeleton && [0, 1, 2].map((row) => <SkeletonEntry key={row} />)}
@@ -209,6 +219,15 @@ export function ActivityFeed({ label, entries, isLoading = false, onRetry }: Act
       aria-label={label}
       aria-busy={busy || undefined}
       onKeyDown={onKeyDown}
+      // An entry that loads while focused is drawn again under its own key; focus follows it.
+      onBlur={(event) => {
+        const lost = event.target;
+        queueMicrotask(() => {
+          const focused = document.activeElement;
+          if (lost.isConnected || (focused !== null && focused !== document.body)) return;
+          scrollRef.current?.querySelector<HTMLElement>(`[data-index="${String(active)}"]`)?.focus();
+        });
+      }}
     >
       <div className={styles.body} style={{ '--feed-height': `${String(virtualizer.getTotalSize())}px` }}>
         {items.map((item) => {
@@ -225,18 +244,17 @@ export function ActivityFeed({ label, entries, isLoading = false, onRetry }: Act
               data-index={item.index}
               className={styles.slot}
               style={{ '--entry-offset': `${String(item.start)}px` }}
+              // Every entry is an article that takes the tab stop, loaded or not, so focus never lands nowhere.
+              role="article"
+              aria-posinset={item.index + 1}
+              aria-setsize={entries.count}
+              tabIndex={item.index === active ? 0 : -1}
+              onFocus={(event: FocusEvent<HTMLDivElement>) => {
+                if (event.target === event.currentTarget) setActive(item.index);
+              }}
               {...(entry === undefined
-                ? {}
-                : {
-                    role: 'article',
-                    'aria-posinset': item.index + 1,
-                    'aria-setsize': entries.count,
-                    'aria-labelledby': `${idBase}-${String(item.index)}`,
-                    tabIndex: item.index === active ? 0 : -1,
-                    onFocus: (event: FocusEvent<HTMLDivElement>) => {
-                      if (event.target === event.currentTarget) setActive(item.index);
-                    },
-                  })}
+                ? { 'aria-busy': true, 'aria-label': strings.loadingEntry }
+                : { 'aria-labelledby': `${idBase}-${String(item.index)}` })}
             >
               {startsPeriod && <h3 className={styles.period}>{labelOf(period)}</h3>}
               {entry === undefined ? (

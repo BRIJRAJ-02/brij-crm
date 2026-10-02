@@ -41,9 +41,9 @@ A large design system built up front for the whole plan, not piece by piece: ato
 - [ ] Build it: `/develop component library`
    - [x] One component through the whole pipeline: Storybook, tests in three browsers, screenshots, the artifact publish with React 19, lint guards and the size budget (AC-1, AC-2, AC-6, AC-10 to AC-13, AC-15 to AC-19)
    - [x] Atoms, overlays, the value schemas in contracts, the field set, molecules, and the status screen on the library (AC-1 to AC-6, AC-10, AC-11, AC-13, AC-14, AC-22)
-   - [ ] The new size and success tokens, the data grid at 100,000 rows, the app shell and view modules, and the board (AC-4, AC-6 to AC-9, AC-11, AC-21)
-   - [ ] Rich text, collaboration, mail, data in and out, settings, auth and builder modules (AC-1, AC-2, AC-14)
-   - [ ] Charts, the dashboard, the schema map, and the full publish with design and interaction reviews (AC-1, AC-17, AC-18, AC-20, AC-21)
+   - [x] The new size and success tokens, the data grid at 100,000 rows, the app shell and view modules, and the board (AC-4, AC-6 to AC-9, AC-11, AC-21)
+   - [ ] Rich text, collaboration, mail, data in and out, settings, auth and builder modules (AC-1, AC-2, AC-14). Deferred until after #10 (the core loop), as agreed on 2026-10-02: build it then, so a working CRM comes first.
+   - [ ] Charts, the dashboard, the schema map, and the full publish with design and interaction reviews (AC-1, AC-17, AC-18, AC-20, AC-21). Deferred until after #10 too.
 - [ ] Verify it: `/check verify component library`
 - [ ] Test it: `/test component library`
 - [ ] Review it (fresh model): `/check review component library`

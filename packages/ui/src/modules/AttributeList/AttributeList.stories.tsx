@@ -121,7 +121,9 @@ export const ReadOnly: Story = {
   args: { isReadOnly: true },
   play: async ({ canvas }) => {
     await expect(canvas.queryByRole('button', { name: 'Edit Domain' })).not.toBeInTheDocument();
-    await expect(canvas.getByText('The system sets this when the record is made.')).toBeInTheDocument();
+    await expect(
+      canvas.getByRole('button', { name: 'The system sets this when the record is made.' }),
+    ).toBeInTheDocument();
   },
 };
 

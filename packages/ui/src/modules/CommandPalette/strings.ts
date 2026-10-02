@@ -3,6 +3,8 @@ export const strings = {
   title: 'Quick actions',
   search: 'Search records and actions',
   noResults: 'Nothing matches',
+  searching: 'Searching…',
+  failed: 'The search didn’t finish. Try again.',
   move: 'to move',
   choose: 'to choose',
   close: 'to close',

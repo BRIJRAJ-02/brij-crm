@@ -38,19 +38,8 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
-  .handle {
-    display: inline-flex;
-    padding: 0;
-    border: none;
-    border-radius: var(--radius-xs);
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: grab;
-    outline: none;
-  }
-
-  .handle[data-focus-visible] {
-    box-shadow: var(--shadow-focus);
+  .adder {
+    display: flex;
   }
 
   .lead {

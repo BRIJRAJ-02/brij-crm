@@ -4,6 +4,7 @@ import { arraySource, type ListSource } from '../../lib/list-source.ts';
 import { SAMPLE_STAGES } from '../../workbench/field-samples.ts';
 import { ADA, GRACE, SAMPLE_ACTIVITY, STAGE } from '../../workbench/record-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import type { LoadStatus } from '../../lib/load-status.ts';
 import { ActivityFeed, type ActivityEntry } from './ActivityFeed.tsx';
 
 /** 10,000 entries, each made from its index, with every tenth one still loading. */
@@ -30,25 +31,20 @@ function longSource(onRangeChange: (range: { start: number; end: number }) => vo
 
 interface SampleProps {
   readonly entries?: ListSource<ActivityEntry>;
-  readonly isLoading?: boolean;
+  readonly status?: LoadStatus;
   readonly onRetry?: () => void;
   readonly onRangeChange?: (range: { start: number; end: number }) => void;
   readonly isLong?: boolean;
 }
 
 /** The feed in a fixed height slot, as the record page's Activity tab gives it. */
-function SampleFeed({ entries, isLoading = false, onRetry, onRangeChange, isLong = false }: SampleProps) {
+function SampleFeed({ entries, status = 'ready', onRetry, onRangeChange, isLong = false }: SampleProps) {
   const source = isLong
     ? longSource(onRangeChange ?? (() => undefined))
     : (entries ?? arraySource(SAMPLE_ACTIVITY, (entry) => entry.id));
   return (
     <Stage height="grid">
-      <ActivityFeed
-        label="Activity"
-        entries={source}
-        isLoading={isLoading}
-        {...(onRetry === undefined ? {} : { onRetry })}
-      />
+      <ActivityFeed label="Activity" entries={source} status={status} {...(onRetry === undefined ? {} : { onRetry })} />
     </Stage>
   );
 }
@@ -117,7 +113,7 @@ export const Empty: Story = {
 
 /** The first page is still coming. */
 export const Loading: Story = {
-  args: { isLoading: true },
+  args: { status: 'loading' },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Loading activity')).toBeInTheDocument();
   },
@@ -125,9 +121,33 @@ export const Loading: Story = {
 
 /** The entries failed to load. */
 export const Failed: Story = {
-  args: { onRetry: fn() },
+  args: { status: 'error', onRetry: fn() },
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
     await expect(args.onRetry).toHaveBeenCalled();
+  },
+};
+
+/** The viewer may not see this record's activity. */
+export const NoAccess: Story = {
+  args: { status: 'no-access' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('You can’t see this activity')).toBeInTheDocument();
+  },
+};
+
+/** End lands on the oldest entry even while it is still loading, and the feed keeps its tab stop. */
+export const FocusOnLoading: Story = {
+  args: { isLong: true, onRangeChange: fn() },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    await userEvent.keyboard('{End}');
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('aria-posinset', '10000'));
+    await expect(document.activeElement).toHaveAttribute('aria-busy', 'true');
+    await userEvent.tab({ shift: true });
+    await userEvent.tab();
+    await expect(document.activeElement).toHaveAttribute('aria-posinset', '10000');
+    await expect(canvas.getByRole('feed')).toContainElement(document.activeElement as HTMLElement);
   },
 };

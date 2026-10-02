@@ -1,0 +1,40 @@
+/* DragHandle: a grip icon in text-tertiary with space-2 of padding around it,
+   text-secondary under a pointer, the focus ring on keyboard focus, and the
+   grab cursor. */
+@layer components {
+  .root {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-2);
+    border: none;
+    border-radius: var(--radius-xs);
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: grab;
+    outline: none;
+    transition: color var(--duration-hover) var(--ease-hover);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root[data-hovered] {
+      color: var(--text-secondary);
+    }
+  }
+
+  .root[data-focus-visible] {
+    color: var(--text-secondary);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .root[data-pressed] {
+    cursor: grabbing;
+  }
+
+  @media (forced-colors: active) {
+    .root[data-focus-visible] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+}

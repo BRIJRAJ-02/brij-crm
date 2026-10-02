@@ -1,0 +1,43 @@
+/* KanbanCard: the card's content, space-6 apart: a head of the record's
+   avatar, its name in body strong (cut with an ellipsis), and its handle or
+   lock at the end; then its card fields, space-4 apart. The card's surface,
+   border and states belong to its row in KanbanColumn. */
+@layer components {
+  .root {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-6);
+    min-inline-size: 0;
+  }
+
+  .head {
+    display: flex;
+    gap: var(--space-6);
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .name {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .fields {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    min-inline-size: 0;
+  }
+
+  .field {
+    display: flex;
+    min-inline-size: 0;
+  }
+}

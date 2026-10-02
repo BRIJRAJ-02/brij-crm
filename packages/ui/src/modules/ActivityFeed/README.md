@@ -16,11 +16,12 @@ New. The record page (#17), its Activity tab (#19), email (#43) and meetings (#4
 - An entry is a `change` (an attribute, its value before and after, and their display shapes), `created`, or a `note`, `task`, `comment`, `email` or `meeting` with a title, a line of text and an optional `href`. A task with `isDone` reads "completed a task".
 - A change reads "set" when there was no value before, and "cleared" when there is none after.
 - Headings: Today, Yesterday, Earlier this week (from the language's first day of the week), then the month, with its year when it isn't this year. "Today" is today in the provider's time zone.
+- `status`: `loading` (the first page: skeleton entries after the loading delay), `error` (with Try again from `onRetry`), or `no-access`.
 - Give it a slot with a height: it scrolls inside it.
 
 ## States
 
-Default, loading (skeleton entries after the loading delay), empty, failed (with Try again), entries still loading (skeletons, and the feed is `aria-busy`). Focus on an entry (the inset ring).
+Default, loading (skeleton entries after the loading delay), empty, failed (with Try again), no access, entries still loading (skeleton articles, busy, that still take focus). Focus on an entry (the inset ring).
 
 ## Keyboard
 

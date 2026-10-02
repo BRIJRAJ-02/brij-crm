@@ -3,6 +3,10 @@
    actions space-8 apart, and Clear at the end. A running action's progress
    takes the actions' place. */
 @layer components {
+  .frame {
+    display: contents;
+  }
+
   .root {
     display: inline-flex;
     gap: var(--space-8);

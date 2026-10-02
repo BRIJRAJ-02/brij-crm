@@ -5,4 +5,5 @@ export const strings = {
   selectAllMatching: (count: string) => `Select all ${count} matching`,
   allMatching: (count: string) => `All ${count} matching selected`,
   clear: 'Clear the selection',
+  cancel: 'Cancel',
 } as const;

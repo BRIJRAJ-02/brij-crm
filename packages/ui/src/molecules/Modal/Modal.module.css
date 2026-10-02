@@ -138,13 +138,9 @@
     animation: shrink var(--duration-exit) var(--ease-out) forwards;
   }
 
-  /* Opened from the keyboard, and the palette always, it appears at once. */
+  /* Opened from the keyboard (the palette's ⌘K), it appears at once. */
   .scrim[data-opened-by='keyboard'][data-entering],
-  .root[data-opened-by='keyboard'][data-entering],
-  .scrim[data-variant='palette'][data-entering],
-  .scrim[data-variant='palette'][data-exiting],
-  .root[data-variant='palette'][data-entering],
-  .root[data-variant='palette'][data-exiting] {
+  .root[data-opened-by='keyboard'][data-entering] {
     animation: none;
   }
 

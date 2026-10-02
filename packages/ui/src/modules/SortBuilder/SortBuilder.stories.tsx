@@ -97,6 +97,21 @@ export const Add: Story = {
     await expect(menu.querySelectorAll('[role="menuitem"]')).toHaveLength(2);
     await userEvent.keyboard('{ArrowDown}{Enter}');
     await expect(args.onChange).toHaveBeenLastCalledWith([...SORTS, { attributeId: 'stage', direction: 'ascending' }]);
+    // Focus moves to the new sort's attribute.
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Stage' })).toHaveFocus());
+  },
+};
+
+/** Removing a sort hands focus to the sort that takes its place; changing an attribute keeps it on that sort. */
+export const FocusStays: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove the sort by Funding raised' }));
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Name' })).toHaveFocus());
+    await userEvent.click(canvas.getByRole('button', { name: 'Name' }));
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).not.toBeNull());
+    await userEvent.keyboard('Close{ArrowDown}{Enter}');
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Close date' })).toHaveFocus());
   },
 };
 

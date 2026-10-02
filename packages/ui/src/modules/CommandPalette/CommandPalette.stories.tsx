@@ -13,10 +13,13 @@ const ITEMS: readonly PaletteItem[] = [
 
 interface SampleProps {
   readonly onAction?: (item: PaletteItem) => void;
+  /** Every row still loading. */
+  readonly isLoadingRows?: boolean;
+  readonly searchStatus?: 'ready' | 'searching' | 'failed';
 }
 
 /** The palette searching its own rows, as the app searches records and actions. */
-function SamplePalette({ onAction }: SampleProps) {
+function SamplePalette({ onAction, isLoadingRows = false, searchStatus = 'ready' }: SampleProps) {
   const [isOpen, setOpen] = useState(true);
   const [query, setQuery] = useState('');
   const matching = ITEMS.filter((item) => item.name.toLowerCase().includes(query.toLowerCase()));
@@ -24,7 +27,12 @@ function SamplePalette({ onAction }: SampleProps) {
     <CommandPalette
       isOpen={isOpen}
       onOpenChange={setOpen}
-      items={arraySource(matching, (item) => item.id)}
+      items={
+        isLoadingRows
+          ? { count: 5, getItem: () => undefined, getKey: (item) => item.id }
+          : arraySource(searchStatus === 'ready' ? matching : [], (item) => item.id)
+      }
+      searchStatus={searchStatus}
       onSearch={setQuery}
       onAction={(item) => onAction?.(item)}
     />
@@ -78,5 +86,33 @@ export const NoResults: Story = {
     await waitFor(() => expect(document.activeElement).toHaveAttribute('aria-label', 'Search records and actions'));
     await userEvent.keyboard('zzz');
     await waitFor(() => expect(document.querySelector('[role="dialog"]')).toHaveTextContent('Nothing matches'));
+  },
+};
+
+/** Rows still loading draw as skeletons. */
+export const LoadingRows: Story = {
+  args: { isLoadingRows: true },
+  play: async () => {
+    const found = await dialog();
+    await waitFor(() => expect(found.querySelectorAll('[role="menuitem"]')).toHaveLength(5));
+  },
+};
+
+/** A search under way says so, rather than "Nothing matches". */
+export const Searching: Story = {
+  args: { searchStatus: 'searching' },
+  parameters: { crm: { screenshot: false } },
+  play: async () => {
+    const found = await dialog();
+    await waitFor(() => expect(found).toHaveTextContent('Searching…'));
+  },
+};
+
+/** A search that failed says so. */
+export const SearchFailed: Story = {
+  args: { searchStatus: 'failed' },
+  play: async () => {
+    const found = await dialog();
+    await waitFor(() => expect(found).toHaveTextContent('The search didn’t finish. Try again.'));
   },
 };

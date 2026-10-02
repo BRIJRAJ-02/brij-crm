@@ -7,11 +7,15 @@ import { useMemo } from 'react';
 import { GridList, GridListItem, ListLayout, Virtualizer } from 'react-aria-components';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { LockReason } from '../../atoms/Tooltip/LockReason.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { formatDate } from '../../lib/format.ts';
+import { itemOfKey, keyedRows, type KeyedRow } from '../../lib/keyed-rows.ts';
 import type { ListSource } from '../../lib/list-source.ts';
+import type { LoadStatus } from '../../lib/load-status.ts';
 import { RowShown, useRangeReporter } from '../../lib/range-reporter.tsx';
 import { sizeToken } from '../../lib/token-values.ts';
 import { dayIn } from '../../molecules/DatePicker/DatePicker.tsx';
@@ -33,6 +37,8 @@ export interface TaskEntry {
   /** The record it is about, and that record's page. */
   readonly record?: RecordRefDisplay;
   readonly recordHref?: string;
+  /** Why this task can't be ticked by the viewer; its checkbox is read only and a lock says why. */
+  readonly readOnlyReason?: string;
 }
 
 /** Props for TaskList. */
@@ -46,13 +52,11 @@ export interface TaskListProps {
   readonly onAction?: (task: TaskEntry) => void;
   /** Hide the record chip, on the record's own page. */
   readonly hideRecord?: boolean;
-  readonly isLoading?: boolean;
-  /** The tasks failed to load; Try again calls this. */
+  /** Nobody here can tick tasks: every checkbox is read only. */
+  readonly isReadOnly?: boolean;
+  readonly status?: LoadStatus;
+  /** Try again, when `status` is `error`. */
   readonly onRetry?: () => void;
-}
-
-interface Row {
-  readonly id: number;
 }
 
 /** A due day as "Today", "Tomorrow", "Yesterday" or the date, and whether it has passed. */
@@ -86,19 +90,34 @@ export function TaskList({
   onToggle,
   onAction,
   hideRecord = false,
-  isLoading = false,
+  isReadOnly = false,
+  status = 'ready',
   onRetry,
 }: TaskListProps) {
-  const showSkeleton = useDelayedLoading(isLoading);
+  const showSkeleton = useDelayedLoading(status === 'loading');
   const onShown = useRangeReporter(tasks);
   const dueOf = useDueOf();
   const count = tasks.count;
-  const rows = useMemo<readonly Row[]>(() => Array.from({ length: count }, (_, index) => ({ id: index })), [count]);
+  const rows = useMemo(() => keyedRows(tasks), [tasks]);
 
-  if (onRetry !== undefined) {
-    return <EmptyState tone="error" icon="list-todo" title={strings.failed} onRetry={onRetry} />;
+  if (status === 'error') {
+    return (
+      <EmptyState
+        tone="error"
+        icon="list-todo"
+        title={strings.failed}
+        {...(onRetry === undefined ? {} : { onRetry })}
+      />
+    );
   }
-  if (isLoading) {
+  if (status === 'no-access') {
+    return (
+      <EmptyState tone="locked" title={strings.noAccess}>
+        {strings.noAccessBody}
+      </EmptyState>
+    );
+  }
+  if (status === 'loading') {
     return (
       <div className={styles.root} aria-busy="true">
         {showSkeleton &&
@@ -124,23 +143,23 @@ export function TaskList({
         className={styles.root}
         aria-label={label}
         items={rows}
-        // Rows are keyed by index, so the collection draws them again when the tasks behind them change.
-        dependencies={[tasks, hideRecord, dueOf]}
+        // Rows follow their task; the collection draws them again when the tasks behind them change.
+        dependencies={[tasks, hideRecord, isReadOnly, dueOf]}
         {...(onAction === undefined
           ? {}
           : {
               onAction: (key) => {
-                const task = tasks.getItem(Number(key));
+                const task = itemOfKey(tasks, rows, key);
                 if (task !== undefined) onAction(task);
               },
             })}
       >
-        {(row: Row) => {
-          const task = tasks.getItem(row.id);
+        {(row: KeyedRow) => {
+          const task = tasks.getItem(row.index);
           if (task === undefined) {
             return (
               <GridListItem className={styles.row} textValue="" isDisabled>
-                <RowShown index={row.id} onShown={onShown} />
+                <RowShown index={row.index} onShown={onShown} />
                 <Skeleton width="long" />
               </GridListItem>
             );
@@ -149,15 +168,17 @@ export function TaskList({
           const isOverdue = due?.isPast === true && !task.isDone;
           return (
             <GridListItem className={styles.row} textValue={task.title} data-done={task.isDone || undefined}>
-              <RowShown index={row.id} onShown={onShown} />
+              <RowShown index={row.index} onShown={onShown} />
               <Checkbox
                 label={strings.markDone(task.title)}
                 isLabelHidden
                 isSelected={task.isDone}
+                isReadOnly={isReadOnly || task.readOnlyReason !== undefined}
                 onChange={(isDone) => {
                   onToggle(task, isDone);
                 }}
               />
+              {task.readOnlyReason !== undefined && <LockReason reason={task.readOnlyReason} />}
               <span className={styles.title}>
                 {task.title}
                 {task.isDone && <VisuallyHidden>{`, ${strings.done}`}</VisuallyHidden>}
@@ -175,6 +196,7 @@ export function TaskList({
               <span className={styles.due} data-overdue={isOverdue || undefined}>
                 {due !== undefined && (
                   <>
+                    {isOverdue && <Icon name="circle-alert" size="xs" />}
                     <VisuallyHidden>{isOverdue ? `${strings.overdue}, ` : `${strings.due} `}</VisuallyHidden>
                     {due.text}
                   </>

@@ -45,7 +45,7 @@
     padding-inline: var(--space-4);
     color: var(--text-tertiary);
     font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label);
+    letter-spacing: var(--tracking-label-strong);
   }
 
   .entry {
@@ -151,5 +151,12 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     line-clamp: 2;
+  }
+
+  @media (forced-colors: active) {
+    .slot:focus-visible {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: calc(-1 * var(--border-width-thick));
+    }
   }
 }

@@ -12,14 +12,15 @@ New. The view bar's View settings (#20, #21) opens it. It is a React Aria `GridL
 <ViewSettings label="Columns" fields={columns} onChange={setColumns} />
 ```
 
-- `fields` is every attribute the view can show, in order, each `isShown` or not. A field with `isLocked` (the record's name) is always shown, can't move, and has no handle.
+- `fields` is every attribute the view can show, in order, each `isShown` or not. A field with `isLocked` (the record's name) reads "Always shown", has no handle, and nothing drops above it.
+- `isReadOnly` shows the view's fields with read only switches and no handles: a view you can't edit.
 - `onChange` hands back the whole list after a switch or a move.
 - Past eight attributes, a search field narrows the list; moving waits until the search is cleared, so you always see where things land.
 - The head counts what is shown: "4 of 5 shown".
 
 ## States
 
-Default, with a locked row, searching, no matches. Hover (pointer only), focus (the inset ring), a row being dragged (faded), the drop target (the inset ring).
+Default, with a locked row, read only, searching, no matches. Hover (pointer only), focus (the inset ring), a row being dragged (faded), the drop target (the inset ring).
 
 ## Keyboard
 

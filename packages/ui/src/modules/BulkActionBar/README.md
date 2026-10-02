@@ -26,7 +26,8 @@ New. Bulk actions and trash (#22) act on a selection that can be every record ma
 
 - The count is a live region, so a change in the selection is announced.
 - "Select all N matching" shows while only some are selected and more match.
-- `progress` (a label, and a value from 0 to 100 when known) takes the actions' place while one runs, and Clear waits until it ends.
+- `progress` (a label, and a value from 0 to 100 when known) takes the actions' place while one runs, with Cancel when you give `onCancel`; Clear waits until it ends.
+- When the button in use goes (Select all once pressed, an action once its progress shows), focus moves to the first action, or to Cancel, so it never falls to the page.
 
 ## States
 
@@ -34,7 +35,7 @@ Some selected, all matching selected, an action running (known or unknown progre
 
 ## Keyboard
 
-Tab enters the toolbar once; the left and right arrows move between its buttons.
+Tab enters the toolbar once; the left and right arrows move between its buttons. Esc clears the selection (not while an action runs).
 
 ## Differences from the artifact
 

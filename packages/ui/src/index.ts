@@ -22,6 +22,7 @@ export { CopyButton, type CopyButtonProps } from './atoms/Button/CopyButton.tsx'
 export { Checkbox, type CheckboxProps } from './atoms/Checkbox/Checkbox.tsx';
 export { Code, type CodeProps } from './atoms/Code/Code.tsx';
 export { Currency, type CurrencyProps } from './atoms/Currency/Currency.tsx';
+export { DragHandle, type DragHandleProps } from './atoms/DragHandle/DragHandle.tsx';
 export { FileIcon, fileIconName, type FileIconProps } from './atoms/FileIcon/FileIcon.tsx';
 export { Icon, type IconProps, type IconSize, type IconTone } from './atoms/Icon/Icon.tsx';
 export type { IconName } from './atoms/Icon/icons.ts';
@@ -44,6 +45,7 @@ export { Spinner, type SpinnerProps } from './atoms/Spinner/Spinner.tsx';
 export { StatusDot, type StatusDotProps } from './atoms/StatusDot/StatusDot.tsx';
 export { Switch, type SwitchProps } from './atoms/Switch/Switch.tsx';
 export { Tag, TagList, type TagItem, type TagListProps, type TagProps } from './atoms/Tag/Tag.tsx';
+export { LockReason, type LockReasonProps } from './atoms/Tooltip/LockReason.tsx';
 export { Tooltip, type TooltipPlacement, type TooltipProps } from './atoms/Tooltip/Tooltip.tsx';
 export { TruncatedText, type TruncatedTextProps } from './atoms/TruncatedText/TruncatedText.tsx';
 export { Variable, type VariableProps } from './atoms/Variable/Variable.tsx';
@@ -150,6 +152,8 @@ export {
   type AttributeListProps,
   type AttributeSection,
 } from './modules/AttributeList/AttributeList.tsx';
+export { Board, type BoardProps } from './modules/Board/Board.tsx';
+export type { BoardCard, BoardColumn, BoardMove } from './modules/Board/types.ts';
 export { BulkActionBar, type BulkActionBarProps } from './modules/BulkActionBar/BulkActionBar.tsx';
 export {
   CommandPalette,

@@ -22,11 +22,12 @@ Ported from the artifact's CommandPalette card. The core loop (#10), relations (
 - `items` is a `ListSource` of rows for the current search; rows still loading draw skeletons. `onSearch` gets each change to the search.
 - A row shows its `name`, then its `description` (a domain, an email) under it, its `kind` at the end, and an action's `kbd`. `icon` or `leading` (an Avatar) comes first.
 - Choosing a row (Enter or a click) calls `onAction` and closes the palette.
-- It never animates: it opens from the keyboard many times a day.
+- Opened from the keyboard (⌘K) it appears at once; opened by pointer it grows in like any modal, and closing uses the exit animation.
+- `searchStatus` says what an empty list means: `searching` ("Searching…"), `failed`, or (the default) nothing matches.
 
 ## States
 
-Open with results, loading rows (skeletons), nothing matches.
+Open with results, loading rows (skeletons), searching, the search failed, nothing matches.
 
 ## Keyboard
 

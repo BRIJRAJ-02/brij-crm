@@ -1,4 +1,4 @@
-# Verify: Component library · spec 0003 · updated 2026-10-01
+# Verify: Component library · spec 0003 · updated 2026-10-02
 _Steps derived from spec 0003's acceptance criteria and its Value sourcing table, milestone by milestone. `/check verify` runs these; `/test` locks the durable ones._
 
 ## Milestone 1: one component through the whole pipeline
@@ -69,4 +69,41 @@ _Steps derived from spec 0003's acceptance criteria and its Value sourcing table
 ## Acceptance-criteria coverage (milestone 2)
 - AC-1: every milestone 2 component has its README and stories (`pnpm house-rules`) · AC-2: empty, loading, error, read only and disabled stories · AC-3: contracts value schemas and their tests · AC-4: the registry and the six surface walk · AC-5: editor refusals and the parse check · AC-6: keyboard plays, axe in light and dark · AC-10: overlay motion and keyboard instant opening · AC-11: language, time zone and today from the provider · AC-13: the router's pending timing · AC-14: safe links and image sources · AC-22: the status screen on the library
 - KanbanCard and KanbanColumn move to milestone 3 with the board.
+
+## Milestone 3: the grid, the app shell, the view and record modules, and the board
+
+### UI / manual
+- [ ] `pnpm storybook` → Modules lists AppShell, Sidebar, Toolbar, ShortcutHelp, DataGrid, FilterBuilder, SortBuilder, ViewSettings, BulkActionBar, CommandPalette, AttributeList, RecordHeader, RecordPanel, ActivityFeed, TaskList and Board; Atoms adds DragHandle and the Tooltip's Lock story → AC-1
+- [ ] Modules/DataGrid, by keyboard only: arrows, Home, End, Page Up and Page Down move between cells; Enter or typing edits with the column's editor; Esc cancels; Tab and Enter commit and move on; Delete clears (a required column refuses, a checkbox becomes false). Shift with the arrows makes a range; ⌘C copies it as tab separated text; paste a few lines into another range and the refused cells are reported. Switch Keyboard to "Windows and Linux (Ctrl)" → the shortcuts read Ctrl → AC-8
+- [ ] Modules/DataGrid: resize a column by dragging its edge and from the header menu by keyboard; reorder one; scroll sideways → the name column stays pinned → AC-8
+- [ ] Modules/FilterBuilder: add a filter by keyboard → focus lands on the new row's operator. Remove the first row → focus moves to the row that took its place. Type 0 into "Created, how many" and Tab away → it says to enter 1 to 999, and nothing is saved → AC-5, AC-6
+- [ ] Modules/SortBuilder and Modules/ViewSettings: reorder by keyboard (right arrow to the handle, Enter, the arrows, Enter). In ViewSettings nothing drops above Name, which reads "Always shown" → AC-6
+- [ ] Modules/CommandPalette: open it with the mouse → it grows in; close it → it shrinks out in the exit duration. Opened from the keyboard it appears at once → AC-10
+- [ ] Modules/RecordPanel: step with Next to the last record → focus moves to Previous. In Details, edit City and press Esc → the edit is cancelled and the panel stays open; Esc again closes it and focus returns → AC-4, AC-6
+- [ ] Modules/AttributeList: Tab to the Created lock → its reason shows in a tooltip; in Narrow, names sit above their values → AC-2, AC-6
+- [ ] Modules/ActivityFeed: Tab in, then the arrows, Page Down, Home and End move between entries; headings read Today, Yesterday, Earlier this week, then the month; switch Language to Deutsch → the months and relative times read in German → AC-6, AC-11
+- [ ] Modules/TaskList: tick a task by keyboard (right arrow to its checkbox, Space); the overdue date is red with an alert icon → AC-2, AC-6
+- [ ] Modules/Board: pick a card up by its handle (Enter), Tab to another column, Enter → it moves, and focus follows it. While it moves, the hidden Lost column comes back and the archived Legacy column says it can't take cards. The locked card has a lock instead of a handle and can't be dragged. In Reorder, a card moves within its column → AC-21
+- [ ] Switch to dark, and turn on forced colours in dev tools → every focus ring above still shows → AC-6
+
+### Commands
+- [ ] `pnpm --filter @crm/ui test` → unit, every story in Chromium, Firefox and WebKit (axe clean in light and dark, no CSP violations), and the browser tests pass → AC-2, AC-6, AC-15
+- [ ] `pnpm --filter @crm/ui exec vitest run --project perf` (Chromium, 1280 by 800) → the grid with 100,000 rows and 20 columns draws its first screen in under 500 ms (median of 3), never holds 100 rows in the DOM, and a scripted scroll top to bottom has at most one long task, none over 120 ms. CI runs it with 5× CPU throttling → AC-7
+- [ ] The LongFeed, LongList and LongColumn stories → 10,000 entries, 5,000 tasks and 2,000 cards draw fewer than 40 rows each and tell their source the range on screen; rows not loaded yet are skeletons → AC-9
+- [ ] `pnpm --filter @crm/tokens test` → the contrast pairs, accent line and control border included, pass in both themes → AC-6
+- [ ] `pnpm test:visual` → every story with a screenshot matches its Linux baseline in light and dark → AC-16
+- [ ] `pnpm ui:artifact --check` → every module's preview builds and renders → AC-17
+- [ ] `pnpm size` → the first load stays under its budget, with no grid chunk in it → AC-18
+- [ ] `pnpm check` → green
+
+### Value sourcing
+- [ ] Today for task due days and feed headings: `dayIn(useNow(), timeZone)` from the provider; weeks start on the language's first day (`periods.test.ts`) → "today", period headings
+- [ ] Country names: `Intl.DisplayNames` in the provider's language, through `memoIntl` (the one module level cache) → the country picker
+- [ ] Column widths: each type's width tier from the field set registry (`columnWidthFor`) → grid columns
+- [ ] Row heights and the board's estimated card height: `sizeToken('size-row')` and `spaceToken` from tokens.json → virtual lists
+- [ ] Board columns' counts: `BoardColumn.count` from the screen, never the loaded cards → column counts
+
+## Acceptance-criteria coverage (milestone 3)
+- AC-1: every new module and DragHandle has its README and stories · AC-2: loading, empty, error, no access and read only states storied for the feed, tasks, board and record panel · AC-4: the panel surface walk, and the record panel, cards and filters all render through the field set · AC-6: keyboard plays for every module, focus handed on after adds and removals, axe in both themes · AC-7: the perf test · AC-8: the grid's keyboard stories · AC-9: ListSource in the grid, async menus, palette, feed, tasks and board columns · AC-11: periods, due days and country names from the provider · AC-21: the board's keyboard move, reorder, locked card, archived refusal and hidden columns stories
+- Not covered yet: J and K to step through records in the panel, and arrow keys between values in AttributeList, are left for the screens that use them (#17).
 - Later milestones add their steps here.

@@ -7,7 +7,7 @@ import { FocusScope } from 'react-aria';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
-import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
+import { LockReason } from '../../atoms/Tooltip/LockReason.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
 import { AttributeEditor } from '../../fields/AttributeEditor.tsx';
@@ -213,25 +213,12 @@ function Row({ item, onCommit, editorProps }: RowProps) {
       </span>
     );
   } else {
-    const readOnly = (
+    body = (
       <span className={styles.value} data-readonly="">
         {shown}
-        {reason !== undefined && (
-          <>
-            <Icon name="lock" size="xs" tone="muted" />
-            <VisuallyHidden>{reason}</VisuallyHidden>
-          </>
-        )}
+        {reason !== undefined && <LockReason reason={reason} />}
       </span>
     );
-    body =
-      reason === undefined ? (
-        readOnly
-      ) : (
-        <Tooltip content={reason} isTextTrigger>
-          {readOnly}
-        </Tooltip>
-      );
   }
   return (
     <div className={styles.row} data-editing={isEditing || undefined}>

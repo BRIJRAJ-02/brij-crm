@@ -3,7 +3,7 @@
 // relations (Company › Country), and each operand edited through the field
 // set. It holds a FilterGroup from contracts and hands back every change.
 import type { AttributeType, FilterGroup, FilterOperator, RelativeRange } from '@crm/contracts/values';
-import type { ReactElement, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
@@ -19,6 +19,9 @@ import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Menu, MenuItem, MenuTrigger, SubmenuTrigger, type MenuKey } from '../../molecules/Menu/Menu.tsx';
 import { Select } from '../../molecules/Select/Select.tsx';
+import { focusLater } from '../../lib/focus-later.ts';
+import { memoIntl } from '../../lib/intl-memo.ts';
+import { useFormatSettings } from '../../provider/context.ts';
 import styles from './FilterBuilder.module.css';
 import {
   addItem,
@@ -42,6 +45,31 @@ import { strings } from './strings.ts';
 const SEPARATOR = '\u0000';
 const NAMED = ['today', 'this_week', 'this_month', 'last_month'] as const;
 const DEFAULT_AMOUNT = { amount: 7, unit: 'day' } as const;
+const MIN_AMOUNT = 1;
+const MAX_AMOUNT = 999;
+
+/** Where focus goes after a row comes or goes: a row (its operator, or its attribute), or a group's Add filter. */
+type FocusTarget = { readonly row: ItemPath; readonly part: 'operator' | 'attribute' } | { readonly adder: ItemPath };
+
+/**
+ * Adding or removing rows: the change, and where focus goes once it lands.
+ * Rows are keyed by place, so each such change also starts a new generation of
+ * keys, and no row keeps the state of the row that was there before.
+ */
+interface Structure {
+  readonly generation: number;
+  readonly change: (next: FilterGroup, focus: FocusTarget) => void;
+}
+
+const StructureContext = createContext<Structure | undefined>(undefined);
+
+function useStructure(): Structure {
+  const structure = useContext(StructureContext);
+  if (structure === undefined) throw new Error('A filter row renders only inside FilterBuilder.');
+  return structure;
+}
+
+const pathKey = (path: ItemPath) => path.join('.');
 
 /** What an operand's editor needs from the screen: member and record search, and the signed in member. */
 export type FilterEditorProps = Pick<EditorProps<AttributeType>, 'onSearch' | 'me'>;
@@ -119,9 +147,45 @@ function listAttribute(attribute: FieldAttribute): FieldAttribute {
  */
 export function FilterBuilder(props: FilterBuilderProps) {
   const { value, onChange, isReadOnly = false } = props;
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [generation, setGeneration] = useState(0);
+  const focusNext = useRef<FocusTarget | undefined>(undefined);
+  useEffect(() => {
+    const target = focusNext.current;
+    const root = rootRef.current;
+    if (target === undefined || root === null) return;
+    focusNext.current = undefined;
+    focusLater(() => {
+      const triggers = (element: Element | null | undefined) =>
+        element === null || element === undefined
+          ? []
+          : [...element.querySelectorAll<HTMLElement>(':scope > [data-cells] button[aria-haspopup]')];
+      let button: HTMLElement | undefined;
+      if ('row' in target) {
+        const row = root.querySelector(`[data-filter-path="${pathKey(target.row)}"]`);
+        const found = triggers(row);
+        // A group in that place: its first control.
+        button =
+          (target.part === 'operator' ? (found[1] ?? found[0]) : found[0]) ??
+          row?.querySelector<HTMLElement>('button') ??
+          undefined;
+      } else {
+        button = root.querySelector<HTMLElement>(`[data-filter-adder="${pathKey(target.adder)}"] button`) ?? undefined;
+      }
+      return button ?? root.querySelector<HTMLElement>('button');
+    });
+  });
+  const structure: Structure = {
+    generation,
+    change: (next, focus) => {
+      focusNext.current = focus;
+      setGeneration((previous) => previous + 1);
+      onChange(next);
+    },
+  };
   if (value.conditions.length === 0) {
     return (
-      <div className={styles.root}>
+      <div ref={rootRef} className={styles.root} data-filter-adder="">
         <EmptyState
           title={strings.noFilters}
           icon="list-filter"
@@ -133,7 +197,10 @@ export function FilterBuilder(props: FilterBuilderProps) {
                     builder={props}
                     label={strings.addFilter}
                     onPick={(path, attribute) => {
-                      onChange(addItem(value, [], throughPath(path, conditionOn(attribute))));
+                      structure.change(addItem(value, [], throughPath(path, conditionOn(attribute))), {
+                        row: [0],
+                        part: 'operator',
+                      });
                     }}
                   />
                 ),
@@ -145,10 +212,36 @@ export function FilterBuilder(props: FilterBuilderProps) {
     );
   }
   return (
-    <div className={styles.root} role="group" aria-label={strings.label}>
-      <GroupRows builder={props} group={value} path={[]} />
-    </div>
+    <StructureContext.Provider value={structure}>
+      <div ref={rootRef} className={styles.root} role="group" aria-label={strings.label}>
+        <GroupRows builder={props} group={value} path={[]} />
+      </div>
+    </StructureContext.Provider>
   );
+}
+
+/** How many items the group at `path` holds. */
+function groupSize(root: FilterGroup, path: ItemPath): number {
+  let group: FilterGroup = root;
+  for (const index of path) {
+    const item = group.conditions[index];
+    if (item === undefined || !isGroup(item)) return 0;
+    group = item;
+  }
+  return group.conditions.length;
+}
+
+/**
+ * Where focus goes once the item at `path` is gone: the row that takes its
+ * place, else the one before, else its group's Add filter (or, once nothing
+ * is left, the empty state's).
+ */
+function afterRemoving(path: ItemPath, siblings: number): FocusTarget {
+  const parent = path.slice(0, -1);
+  const index = path.at(-1) ?? 0;
+  if (index < siblings - 1) return { row: [...parent, index], part: 'attribute' };
+  if (index > 0) return { row: [...parent, index - 1], part: 'attribute' };
+  return { adder: parent.length === 0 ? [] : parent };
 }
 
 interface GroupRowsProps {
@@ -160,6 +253,8 @@ interface GroupRowsProps {
 /** A group's rows, then its Add buttons. */
 function GroupRows({ builder, group, path }: GroupRowsProps) {
   const { value, onChange, isReadOnly = false } = builder;
+  const structure = useStructure();
+  const end = group.conditions.length;
   const lead = (index: number): ReactNode => {
     if (index === 0) return strings.where;
     if (index > 1 || isReadOnly) return strings.conjunctions[group.conjunction];
@@ -185,7 +280,11 @@ function GroupRows({ builder, group, path }: GroupRowsProps) {
         {group.conditions.map((item, index) => {
           const itemPath = [...path, index];
           return (
-            <div key={index} className={styles.row}>
+            <div
+              key={`${String(structure.generation)}:${String(index)}`}
+              className={styles.row}
+              data-filter-path={pathKey(itemPath)}
+            >
               <span className={styles.lead}>{lead(index)}</span>
               {isGroup(item) ? (
                 <div className={styles.group} role="group" aria-label={strings.group(index + 1)}>
@@ -199,12 +298,15 @@ function GroupRows({ builder, group, path }: GroupRowsProps) {
         })}
       </div>
       {!isReadOnly && (
-        <div className={styles.foot}>
+        <div className={styles.foot} data-filter-adder={pathKey(path)}>
           <AttributeTrigger
             builder={builder}
             label={strings.addFilter}
             onPick={(relationPath, attribute) => {
-              onChange(addItem(value, path, throughPath(relationPath, conditionOn(attribute))));
+              structure.change(addItem(value, path, throughPath(relationPath, conditionOn(attribute))), {
+                row: [...path, end],
+                part: 'operator',
+              });
             }}
           />
           {canNest(path) && (
@@ -212,11 +314,12 @@ function GroupRows({ builder, group, path }: GroupRowsProps) {
               builder={builder}
               label={strings.addGroup}
               onPick={(relationPath, attribute) => {
-                onChange(
+                structure.change(
                   addItem(value, path, {
                     conjunction: 'and',
                     conditions: [throughPath(relationPath, conditionOn(attribute))],
                   }),
+                  { row: [...path, end, 0], part: 'operator' },
                 );
               }}
             />
@@ -226,7 +329,7 @@ function GroupRows({ builder, group, path }: GroupRowsProps) {
               variant="ghost"
               icon="trash"
               onPress={() => {
-                onChange(removeItem(value, path));
+                structure.change(removeItem(value, path), afterRemoving(path, groupSize(value, path.slice(0, -1))));
               }}
             >
               {strings.removeGroup}
@@ -248,6 +351,7 @@ interface ConditionRowProps {
 /** One condition: its attribute (through relations), its operator, its operand, and Remove. */
 function ConditionRow({ builder, item, path, index }: ConditionRowProps) {
   const { value, onChange, isReadOnly = false } = builder;
+  const structure = useStructure();
   if (isGroup(item)) return null;
   const { path: relations, leaf } = leafOf(item);
   const resolved = resolve(builder, relations, leaf.attributeId);
@@ -270,7 +374,7 @@ function ConditionRow({ builder, item, path, index }: ConditionRowProps) {
     );
   }
   return (
-    <div className={styles.cells} role="group" aria-label={strings.condition(index + 1)}>
+    <div className={styles.cells} role="group" aria-label={strings.condition(index + 1)} data-cells="">
       <AttributeTrigger
         builder={builder}
         current={{ icon, names }}
@@ -307,7 +411,7 @@ function ConditionRow({ builder, item, path, index }: ConditionRowProps) {
         icon="x"
         label={strings.removeFilter}
         onPress={() => {
-          onChange(removeItem(value, path));
+          structure.change(removeItem(value, path), afterRemoving(path, groupSize(value, path.slice(0, -1))));
         }}
       />
     </div>
@@ -451,14 +555,62 @@ function OperandDisplay({ builder, attribute, leaf }: OperandProps) {
     );
   }
   if ('values' in leaf) return shown(leaf.values, listAttribute(attribute));
-  if ('range' in leaf) return <span className={styles.operator}>{rangeText(leaf.range)}</span>;
+  if ('range' in leaf) return <RangeText range={leaf.range} />;
   if ('value' in leaf) return shown(leaf.value, operandAttribute(attribute));
   return null;
 }
 
-/** A relative range as words: "This week", or "7 days". */
-function rangeText(range: RelativeRange): string {
-  return typeof range === 'string' ? strings.ranges[range] : `${String(range.amount)} ${strings.units[range.unit]}`;
+/** A relative range as words: "this week", or "7 days" with the number in the provider's language. */
+function RangeText({ range }: { readonly range: RelativeRange }) {
+  const { locale } = useFormatSettings();
+  const text =
+    typeof range === 'string'
+      ? strings.ranges[range]
+      : strings.lastAmount(
+          memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(range.amount),
+          strings.units[range.unit],
+        );
+  return <span className={styles.operator}>{text}</span>;
+}
+
+/** How many days, weeks, months or years: typed freely, checked and committed on leaving. */
+function AmountField({
+  label,
+  amount,
+  onCommit,
+}: {
+  readonly label: string;
+  readonly amount: number;
+  readonly onCommit: (amount: number) => void;
+}) {
+  const [draft, setDraft] = useState(String(amount));
+  const [error, setError] = useState<string | undefined>(undefined);
+  const commit = () => {
+    const next = Number(draft.trim());
+    if (!Number.isInteger(next) || next < MIN_AMOUNT || next > MAX_AMOUNT) {
+      setError(strings.amountRange);
+      return;
+    }
+    setError(undefined);
+    if (next !== amount) onCommit(next);
+  };
+  return (
+    <Field
+      label={label}
+      isLabelHidden
+      size="sm"
+      inputMode="numeric"
+      isErrorFloating
+      value={draft}
+      onChange={(text) => {
+        setDraft(text);
+        setError(undefined);
+      }}
+      onBlur={commit}
+      onSubmit={commit}
+      {...(error === undefined ? {} : { error })}
+    />
+  );
 }
 
 /** "Within" takes a named range (this week); "within the last" an amount of days, weeks, months or years. */
@@ -493,15 +645,11 @@ function RangeEditor({
   return (
     <span className={styles.range}>
       <span className={styles.amount}>
-        <Field
+        <AmountField
           label={strings.amount(name)}
-          isLabelHidden
-          size="sm"
-          inputMode="numeric"
-          value={String(amount.amount)}
-          onChange={(text) => {
-            const next = Number.parseInt(text, 10);
-            if (Number.isInteger(next) && next >= 1 && next <= 999) onChange({ ...amount, amount: next });
+          amount={amount.amount}
+          onCommit={(next) => {
+            onChange({ ...amount, amount: next });
           }}
         />
       </span>
@@ -547,7 +695,7 @@ function AttributeTrigger({ builder, current, label, onPick }: AttributeTriggerP
   };
   const trigger =
     current === undefined ? (
-      <Button variant="ghost" icon="plus">
+      <Button variant="dashed" icon="plus">
         {label ?? strings.addFilter}
       </Button>
     ) : (

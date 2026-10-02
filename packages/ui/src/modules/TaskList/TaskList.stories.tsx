@@ -4,6 +4,7 @@ import { expect, fn, waitFor } from 'storybook/test';
 import { arraySource, type ListSource } from '../../lib/list-source.ts';
 import { ADA, SAMPLE_TASKS } from '../../workbench/record-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import type { LoadStatus } from '../../lib/load-status.ts';
 import { TaskList, type TaskEntry } from './TaskList.tsx';
 
 /** 5,000 tasks made from their index, every seventh still loading. */
@@ -25,9 +26,11 @@ interface SampleProps {
   readonly onRangeChange?: (range: { start: number; end: number }) => void;
   readonly isLong?: boolean;
   readonly isEmpty?: boolean;
-  readonly isLoading?: boolean;
+  readonly status?: LoadStatus;
   readonly onRetry?: () => void;
   readonly hideRecord?: boolean;
+  readonly isReadOnly?: boolean;
+  readonly withLocked?: boolean;
 }
 
 /** The list holding its own tasks, as the data layer would, in a fixed height slot. */
@@ -37,11 +40,21 @@ function SampleTasks({
   onRangeChange,
   isLong = false,
   isEmpty = false,
-  isLoading,
+  status,
   onRetry,
   hideRecord,
+  isReadOnly,
+  withLocked = false,
 }: SampleProps) {
-  const [tasks, setTasks] = useState(isEmpty ? [] : SAMPLE_TASKS);
+  const [tasks, setTasks] = useState<readonly TaskEntry[]>(() =>
+    isEmpty
+      ? []
+      : withLocked
+        ? SAMPLE_TASKS.map((task, index) =>
+            index === 1 ? { ...task, readOnlyReason: 'Only Grace Hopper can tick this task.' } : task,
+          )
+        : SAMPLE_TASKS,
+  );
   const source = isLong ? longSource(onRangeChange ?? (() => undefined)) : arraySource(tasks, (task) => task.id);
   return (
     <Stage height="grid">
@@ -53,9 +66,10 @@ function SampleTasks({
           onToggle?.(task, isDone);
         }}
         {...(onAction === undefined ? {} : { onAction })}
-        {...(isLoading === undefined ? {} : { isLoading })}
+        {...(status === undefined ? {} : { status })}
         {...(onRetry === undefined ? {} : { onRetry })}
         {...(hideRecord === undefined ? {} : { hideRecord })}
+        {...(isReadOnly === undefined ? {} : { isReadOnly })}
       />
     </Stage>
   );
@@ -140,7 +154,7 @@ export const Empty: Story = {
 
 /** The tasks are still coming. */
 export const Loading: Story = {
-  args: { isLoading: true },
+  args: { status: 'loading' },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Loading tasks')).toBeInTheDocument();
   },
@@ -148,9 +162,56 @@ export const Loading: Story = {
 
 /** The tasks failed to load. */
 export const Failed: Story = {
-  args: { onRetry: fn() },
+  args: { status: 'error', onRetry: fn() },
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
     await expect(args.onRetry).toHaveBeenCalled();
+  },
+};
+
+/** The viewer may not see these tasks. */
+export const NoAccess: Story = {
+  args: { status: 'no-access' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('You can’t see these tasks')).toBeInTheDocument();
+  },
+};
+
+/** Nobody here can tick tasks; one task alone says why it is locked. */
+export const ReadOnly: Story = {
+  args: { isReadOnly: true, withLocked: true, onToggle: fn() },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('checkbox', { name: 'Mark “Send the order form” as done' }));
+    await expect(args.onToggle).not.toHaveBeenCalled();
+    await expect(canvas.getByRole('button', { name: 'Only Grace Hopper can tick this task.' })).toBeInTheDocument();
+  },
+};
+
+/** Ticking a task on a list that drops done tasks: focus stays with the row now in that place, never on a stale one. */
+export const TickKeepsTheRightRow: Story = {
+  args: { onToggle: fn() },
+  parameters: { crm: { screenshot: false } },
+  render: function Render(args) {
+    const [tasks, setTasks] = useState(SAMPLE_TASKS.filter((task) => !task.isDone));
+    return (
+      <Stage height="grid">
+        <TaskList
+          label="Open tasks"
+          tasks={arraySource(tasks, (task) => task.id)}
+          onToggle={(task, isDone) => {
+            setTasks((previous) => previous.filter((each) => each.id !== task.id));
+            args.onToggle?.(task, isDone);
+          }}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    const rows = () => canvas.getAllByRole('row');
+    await expect(rows()).toHaveLength(4);
+    canvas.getByRole('checkbox', { name: 'Mark “Send the order form” as done' }).click();
+    await waitFor(() => expect(rows()).toHaveLength(3));
+    await expect(rows()[0]).toHaveTextContent('Book the security review');
+    await expect(canvas.getByRole('checkbox', { name: /Book the security review/ })).not.toBeChecked();
   },
 };

@@ -28,10 +28,12 @@ New. Clicking a record in a view (#17) opens it beside the table instead of leav
 - Leave out `onPrevious` or `onNext` at either end of the view; the button stays, disabled, so the header doesn't shift. Leave out both to hide them.
 - `selectedTab` with `onTabChange` keeps the tab when the person steps to another record.
 - `actions` go before the close button, such as the record's menu.
+- `status`: `loading` (leave out `record`; skeletons show in place of the tabs), `error` (with Try again from `onRetry`), or `no-access`.
+- Stepping onto the first or last record disables the button you pressed; focus moves to the other one.
 
 ## States
 
-Open, closed (with the panel's exit animation). Each tab's content brings its own loading, empty and error states.
+Open, closed (with the panel's exit animation), loading, failed, no access. Each tab's content brings its own loading, empty and error states.
 
 ## Keyboard
 

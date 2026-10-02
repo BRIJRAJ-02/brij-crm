@@ -14,6 +14,10 @@ export interface CountryPickerProps {
   readonly isLabelHidden?: boolean;
   readonly size?: 'md' | 'sm';
   readonly error?: string;
+  readonly isReadOnly?: boolean;
+  /** Why it can't change, shown under it while read only. */
+  readonly readOnlyReason?: string;
+  readonly isDisabled?: boolean;
 }
 
 /**
@@ -28,6 +32,9 @@ export function CountryPicker({
   isLabelHidden = false,
   size = 'md',
   error,
+  isReadOnly = false,
+  readOnlyReason,
+  isDisabled = false,
 }: CountryPickerProps) {
   const { locale } = useFormatSettings();
   const countries = useMemo(() => {
@@ -48,6 +55,9 @@ export function CountryPicker({
       items={countries}
       value={value}
       onChange={onChange}
+      isReadOnly={isReadOnly}
+      isDisabled={isDisabled}
+      {...(readOnlyReason === undefined ? {} : { readOnlyReason })}
       {...(error === undefined ? {} : { error })}
     />
   );

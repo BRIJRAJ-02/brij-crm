@@ -215,7 +215,7 @@ export function Menu<T extends object>(props: MenuProps<T>) {
             const item = source.getItem(row.id);
             if (item === undefined) {
               return (
-                <AriaMenuItem className={styles.item} isDisabled textValue="">
+                <AriaMenuItem className={styles.item} isDisabled textValue="" aria-label={strings.loadingItem}>
                   <RowShown index={row.id} onShown={onShown} />
                   <Skeleton width="medium" />
                 </AriaMenuItem>

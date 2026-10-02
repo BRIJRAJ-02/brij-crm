@@ -115,7 +115,8 @@ export const AddAndChoose: Story = {
     await waitFor(() => expect(document.querySelector('[role="menu"]')).not.toBeNull());
     await userEvent.keyboard('Stage');
     await userEvent.keyboard('{ArrowDown}{Enter}');
-    await waitFor(() => expect(canvas.getByRole('button', { name: /^is$/ })).toBeInTheDocument());
+    // Focus moves on to the new row's operator, since Add filter left with the empty state.
+    await waitFor(() => expect(canvas.getByRole('button', { name: /^is$/ })).toHaveFocus());
     await expect(args.onChange).toHaveBeenLastCalledWith({
       conjunction: 'and',
       conditions: [{ attributeId: 'stage', operator: 'is', value: undefined }],
@@ -147,4 +148,34 @@ export const ReadOnly: Story = {
 /** In a narrow slot, each row's lead sits above its controls. */
 export const Narrow: Story = {
   args: { isNarrow: true },
+};
+
+/** Removing a row hands focus to the row that takes its place, then to Add filter once the group is empty. */
+export const RemoveKeepsFocus: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getAllByRole('button', { name: 'Remove filter' })[0] as HTMLElement);
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Value' })).toHaveFocus());
+    await expect(canvas.queryByRole('button', { name: 'Stage' })).not.toBeInTheDocument();
+  },
+};
+
+/** "Within the last" takes a typed amount, checked when you leave it. */
+export const RetypeAmount: Story = {
+  args: { onChange: fn() },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
+    const amount = canvas.getByRole('textbox', { name: 'Created, how many' });
+    await userEvent.clear(amount);
+    await userEvent.type(amount, '0');
+    await userEvent.tab();
+    await expect(canvas.getByText('Enter a whole number from 1 to 999.')).toBeInTheDocument();
+    await userEvent.clear(amount);
+    await userEvent.type(amount, '30');
+    await userEvent.tab();
+    await waitFor(() => {
+      const last: unknown = (args.onChange as ReturnType<typeof fn>).mock.lastCall?.[0];
+      return expect(JSON.stringify(last)).toContain('"range":{"amount":30,"unit":"day"}');
+    });
+  },
 };

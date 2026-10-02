@@ -4,6 +4,10 @@ export const strings = {
   empty: 'No activity yet',
   emptyBody: 'Changes, notes, tasks and emails show here as they happen.',
   failed: 'Activity didn’t load',
+  noAccess: 'You can’t see this activity',
+  noAccessBody: 'Ask a workspace admin for access.',
+  /** An entry still loading, for screen readers. */
+  loadingEntry: 'Loading',
   today: 'Today',
   yesterday: 'Yesterday',
   week: 'Earlier this week',

@@ -2,7 +2,8 @@
 // card's fields, each shown or hidden by a switch and reordered by drag and
 // drop, by pointer or keyboard.
 import { useState } from 'react';
-import { Button as AriaButton, GridList, GridListItem, useDragAndDrop } from 'react-aria-components';
+import { GridList, GridListItem, useDragAndDrop } from 'react-aria-components';
+import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
 import { fieldTypeOf } from '../../fields/registry.ts';
@@ -29,6 +30,8 @@ export interface ViewSettingsProps {
   /** Every attribute the view can show, in its order. */
   readonly fields: readonly ViewField[];
   readonly onChange: (next: readonly ViewField[]) => void;
+  /** Shows what the view shows, with nothing to change: a view you can't edit. */
+  readonly isReadOnly?: boolean;
 }
 
 /** Past this many attributes, a search field narrows the list. */
@@ -39,14 +42,21 @@ const SEARCH_AFTER = 8;
  * shows or hides it, and its handle reorders it. A locked row (the record's
  * name) is always shown and stays first. Long lists get a search field.
  */
-export function ViewSettings({ label, fields, onChange }: ViewSettingsProps) {
+export function ViewSettings({ label, fields, onChange, isReadOnly = false }: ViewSettingsProps) {
   const { locale } = useFormatSettings();
   const [query, setQuery] = useState('');
   const needle = query.trim().toLocaleLowerCase(locale);
   const { dragAndDropHooks } = useDragAndDrop({
     // Reordering a filtered list would hide where things land, so it waits for the search to clear.
-    isDisabled: needle !== '',
+    isDisabled: needle !== '' || isReadOnly,
     getItems: (keys) => [...keys].map((key) => ({ 'text/plain': String(key) })),
+    // The locked row stays first: nothing drops above it.
+    getDropOperation: (target) =>
+      target.type === 'item' &&
+      target.dropPosition !== 'after' &&
+      fields.some((field) => field.isLocked === true && field.attribute.id === String(target.key))
+        ? 'cancel'
+        : 'move',
     onReorder: (event) => {
       onChange(
         reorder(
@@ -90,24 +100,29 @@ export function ViewSettings({ label, fields, onChange }: ViewSettingsProps) {
           const { attribute } = field;
           return (
             <GridListItem id={attribute.id} textValue={attribute.name} className={styles.row}>
-              {field.isLocked === true || needle !== '' ? (
-                <span className={styles.spacer} aria-hidden="true" />
+              {field.isLocked === true || needle !== '' || isReadOnly ? (
+                <>
+                  <span className={styles.spacer} aria-hidden="true" />
+                  <DragHandle label={strings.move(attribute.name)} isDisabled />
+                </>
               ) : (
-                <AriaButton slot="drag" className={styles.handle} aria-label={strings.move(attribute.name)}>
-                  <Icon name="grip-vertical" size="sm" />
-                </AriaButton>
+                <DragHandle label={strings.move(attribute.name)} />
               )}
               <Icon name={fieldTypeOf(attribute.type).icon} size="sm" tone="muted" />
               <span className={styles.name}>{attribute.name}</span>
-              <Switch
-                label={strings.show(attribute.name)}
-                isLabelHidden
-                isSelected={field.isShown || field.isLocked === true}
-                isDisabled={field.isLocked === true}
-                onChange={(isShown) => {
-                  onChange(fields.map((each) => (each.attribute.id === attribute.id ? { ...each, isShown } : each)));
-                }}
-              />
+              {field.isLocked === true ? (
+                <span className={styles.locked}>{strings.locked}</span>
+              ) : (
+                <Switch
+                  label={strings.show(attribute.name)}
+                  isLabelHidden
+                  isSelected={field.isShown}
+                  isReadOnly={isReadOnly}
+                  onChange={(isShown) => {
+                    onChange(fields.map((each) => (each.attribute.id === attribute.id ? { ...each, isShown } : each)));
+                  }}
+                />
+              )}
             </GridListItem>
           );
         }}

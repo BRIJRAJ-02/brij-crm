@@ -37,6 +37,8 @@ export interface CommandPaletteProps {
   readonly items: ListSource<PaletteItem>;
   /** The search as it is typed; send back the rows that match through `items`. */
   readonly onSearch: (query: string) => void;
+  /** Where the search stands while no rows show: still `searching`, or it `failed`. Otherwise no rows means nothing matches. */
+  readonly searchStatus?: 'ready' | 'searching' | 'failed';
   /** The row chosen, by Enter or a click; the palette then closes. */
   readonly onAction: (item: PaletteItem) => void;
 }
@@ -55,6 +57,7 @@ export function CommandPalette({
   items,
   onSearch,
   onAction,
+  searchStatus = 'ready',
 }: CommandPaletteProps) {
   const choose = (key: string | number) => {
     for (let index = 0; index < items.count; index += 1) {
@@ -85,7 +88,13 @@ export function CommandPalette({
           label={title}
           isInline
           search={{ label: searchLabel, onSearch }}
-          emptyLabel={strings.noResults}
+          emptyLabel={
+            searchStatus === 'searching'
+              ? strings.searching
+              : searchStatus === 'failed'
+                ? strings.failed
+                : strings.noResults
+          }
           source={items}
           renderItem={(item) => ({
             children: item.name,

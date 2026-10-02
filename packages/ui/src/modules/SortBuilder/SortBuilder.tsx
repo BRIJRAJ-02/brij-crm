@@ -2,11 +2,13 @@
 // deciding first, each an attribute and a direction. It holds contracts'
 // SortRule list and hands back every change.
 import { MAX_SORTS, type SortRule } from '@crm/contracts/values';
-import { Button as AriaButton, GridList, GridListItem, useDragAndDrop } from 'react-aria-components';
+import { useEffect, useRef } from 'react';
+import { GridList, GridListItem, useDragAndDrop } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { fieldTypeOf } from '../../fields/registry.ts';
 import type { FieldAttribute } from '../../fields/types.ts';
+import { focusLater } from '../../lib/focus-later.ts';
 import { reorder } from '../../lib/reorder.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Menu, MenuItem, MenuTrigger, type MenuKey } from '../../molecules/Menu/Menu.tsx';
@@ -31,6 +33,28 @@ export interface SortBuilderProps {
  * five, each attribute once.
  */
 export function SortBuilder({ attributes, value, onChange, isReadOnly = false }: SortBuilderProps) {
+  // A control that leaves with its change (a row's old attribute, a removed row,
+  // Add sort at the limit) hands focus on: to the row now in its place, or to Add sort.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const focusNext = useRef<{ readonly row: string } | 'add' | undefined>(undefined);
+  useEffect(() => {
+    const target = focusNext.current;
+    const root = rootRef.current;
+    if (target === undefined || root === null) return;
+    focusNext.current = undefined;
+    focusLater(() => {
+      const row = target === 'add' ? undefined : root.querySelector(`[data-key="${CSS.escape(target.row)}"]`);
+      return (
+        row?.querySelector<HTMLElement>('button[aria-haspopup]') ??
+        root.querySelector<HTMLElement>('[data-adder] button') ??
+        root.querySelector<HTMLElement>('button[aria-haspopup]')
+      );
+    });
+  });
+  const change = (next: readonly SortRule[], focus: { readonly row: string } | 'add') => {
+    focusNext.current = focus;
+    onChange(next);
+  };
   const { dragAndDropHooks } = useDragAndDrop({
     getItems: (keys) => [...keys].map((key) => ({ 'text/plain': String(key) })),
     onReorder: (event) => {
@@ -48,20 +72,22 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
   const nameOf = (id: string) => attributes.find((each) => each.id === id)?.name ?? id;
   const unused = attributes.filter((attribute) => !value.some((rule) => rule.attributeId === attribute.id));
   const add = (key: MenuKey) => {
-    onChange([...value, { attributeId: String(key), direction: 'ascending' }]);
+    change([...value, { attributeId: String(key), direction: 'ascending' }], { row: String(key) });
   };
   const adder =
     isReadOnly || value.length >= MAX_SORTS || unused.length === 0 ? null : (
-      <MenuTrigger>
-        <Button variant="ghost" icon="plus">
-          {strings.addSort}
-        </Button>
-        <AttributeMenu attributes={unused} onAction={add} />
-      </MenuTrigger>
+      <span className={styles.adder} data-adder="">
+        <MenuTrigger>
+          <Button variant="dashed" icon="plus">
+            {strings.addSort}
+          </Button>
+          <AttributeMenu attributes={unused} onAction={add} />
+        </MenuTrigger>
+      </span>
     );
   if (value.length === 0) {
     return (
-      <div className={styles.root}>
+      <div ref={rootRef} className={styles.root}>
         <EmptyState
           title={strings.noSorts}
           icon="arrow-down-wide-narrow"
@@ -74,7 +100,7 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
   }
   const rows = value.map((rule, index) => ({ id: rule.attributeId, rule, index }));
   return (
-    <div className={styles.root}>
+    <div ref={rootRef} className={styles.root}>
       <GridList
         aria-label={strings.label}
         items={rows}
@@ -89,11 +115,7 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
           };
           return (
             <GridListItem id={rule.attributeId} textValue={name} className={styles.row}>
-              {!isReadOnly && (
-                <AriaButton slot="drag" className={styles.handle} aria-label={strings.move(name)}>
-                  <Icon name="grip-vertical" size="sm" />
-                </AriaButton>
-              )}
+              {!isReadOnly && <DragHandle label={strings.move(name)} />}
               <span className={styles.lead}>{index === 0 ? strings.sortBy : strings.thenBy}</span>
               {isReadOnly ? (
                 <span className={styles.text}>
@@ -112,7 +134,12 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
                     <AttributeMenu
                       attributes={[...(attribute === undefined ? [] : [attribute]), ...unused]}
                       onAction={(key) => {
-                        replace({ ...rule, attributeId: String(key) });
+                        change(
+                          value.map((each) =>
+                            each.attributeId === rule.attributeId ? { ...rule, attributeId: String(key) } : each,
+                          ),
+                          { row: String(key) },
+                        );
                       }}
                     />
                   </MenuTrigger>
@@ -134,7 +161,11 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
                     icon="x"
                     label={strings.remove(name)}
                     onPress={() => {
-                      onChange(value.filter((each) => each.attributeId !== rule.attributeId));
+                      const after = value[index + 1] ?? value[index - 1];
+                      change(
+                        value.filter((each) => each.attributeId !== rule.attributeId),
+                        after === undefined ? 'add' : { row: after.attributeId },
+                      );
                     }}
                   />
                 </>
