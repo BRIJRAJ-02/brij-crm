@@ -55,6 +55,8 @@ export interface FieldProps {
   readonly variant?: 'default' | 'search';
   /** The error floats under the input, over what follows: in a grid cell, which is one line tall. */
   readonly isErrorFloating?: boolean;
+  /** Takes focus as it mounts: a search field at the top of a list that just opened. */
+  readonly autoFocus?: boolean;
   readonly ref?: Ref<HTMLInputElement & HTMLTextAreaElement>;
 }
 
@@ -95,6 +97,7 @@ export function Field({
   size = 'md',
   variant = 'default',
   isErrorFloating = false,
+  autoFocus = false,
   ref,
 }: FieldProps) {
   const { locale } = useFormatSettings();
@@ -105,6 +108,8 @@ export function Field({
     className: styles.input,
     ...(placeholder === undefined ? {} : { placeholder }),
     ...(ref === undefined ? {} : { ref }),
+    // A list's search field takes focus as the list opens, the pattern React Aria expects.
+    ...(autoFocus ? { autoFocus: true } : {}),
   };
   return (
     <TextField

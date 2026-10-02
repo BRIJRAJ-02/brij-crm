@@ -1,0 +1,37 @@
+/* BulkActionBar: a floating size-toolbar tall bar on surface-raised, with
+   shadow-md and radius-lg: the count in body-strong, then the offer, the
+   actions space-8 apart, and Clear at the end. A running action's progress
+   takes the actions' place. */
+@layer components {
+  .root {
+    display: inline-flex;
+    gap: var(--space-8);
+    align-items: center;
+    min-block-size: var(--size-toolbar);
+    padding-inline: var(--space-12) var(--space-8);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+  }
+
+  .count {
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .actions {
+    display: inline-flex;
+    gap: var(--space-8);
+    align-items: center;
+    padding-inline-start: var(--space-8);
+    border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .progress {
+    inline-size: var(--size-measure);
+  }
+}

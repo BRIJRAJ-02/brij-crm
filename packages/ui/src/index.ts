@@ -128,7 +128,7 @@ export {
   type ModalTriggerProps,
   type ModalVariant,
 } from './molecules/Modal/Modal.tsx';
-export { Panel, type PanelProps, type PanelWidth } from './molecules/Panel/Panel.tsx';
+export { Panel, type PanelProps, type PanelVariant, type PanelWidth } from './molecules/Panel/Panel.tsx';
 export { Popover, type PopoverPlacement, type PopoverProps, type PopoverWidth } from './molecules/Popover/Popover.tsx';
 export {
   SegmentedControl,
@@ -141,7 +141,27 @@ export { Select, type SelectItem, type SelectOptionStyle, type SelectProps } fro
 export { Steps, type Step, type StepsProps } from './molecules/Steps/Steps.tsx';
 export { Table, type TableColumn, type TableProps } from './molecules/Table/Table.tsx';
 export { TabPanel, Tabs, type TabItem, type TabPanelProps, type TabsProps } from './molecules/Tabs/Tabs.tsx';
+export { ActivityFeed, type ActivityEntry, type ActivityFeedProps } from './modules/ActivityFeed/ActivityFeed.tsx';
 export { AppShell, AppShellContext, type AppShellProps } from './modules/AppShell/AppShell.tsx';
+export {
+  AttributeList,
+  type AttributeEditorExtras,
+  type AttributeItem,
+  type AttributeListProps,
+  type AttributeSection,
+} from './modules/AttributeList/AttributeList.tsx';
+export { BulkActionBar, type BulkActionBarProps } from './modules/BulkActionBar/BulkActionBar.tsx';
+export {
+  CommandPalette,
+  type CommandPaletteProps,
+  type PaletteItem,
+} from './modules/CommandPalette/CommandPalette.tsx';
+export {
+  FilterBuilder,
+  type FilterBuilderProps,
+  type FilterEditorProps,
+} from './modules/FilterBuilder/FilterBuilder.tsx';
+export { completeFilters, countFilters } from './modules/FilterBuilder/filter-model.ts';
 export {
   ShortcutHelp,
   type Shortcut,
@@ -156,6 +176,11 @@ export {
   type NavSectionProps,
   type SidebarProps,
 } from './modules/Sidebar/Sidebar.tsx';
+export { RecordHeader, type RecordHeaderProps } from './modules/RecordHeader/RecordHeader.tsx';
+export { RecordPanel, type RecordPanelProps, type RecordPanelTab } from './modules/RecordPanel/RecordPanel.tsx';
+export { SortBuilder, type SortBuilderProps } from './modules/SortBuilder/SortBuilder.tsx';
+export { TaskList, type TaskEntry, type TaskListProps } from './modules/TaskList/TaskList.tsx';
+export { ViewSettings, type ViewField, type ViewSettingsProps } from './modules/ViewSettings/ViewSettings.tsx';
 export {
   SortChip,
   Toolbar,

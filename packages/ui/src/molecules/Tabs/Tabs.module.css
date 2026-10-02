@@ -3,8 +3,10 @@
 @layer components {
   .root {
     display: flex;
+    flex: 1;
     flex-direction: column;
     min-inline-size: 0;
+    min-block-size: 0;
   }
 
   .list {
@@ -67,7 +69,10 @@
     transition: none;
   }
 
+  /* In a slot with a height (the record panel), the chosen panel fills what the tabs leave. */
   .panel {
+    flex: 1;
+    min-block-size: 0;
     outline: none;
   }
 

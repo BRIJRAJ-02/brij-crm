@@ -2,7 +2,7 @@ import type { ActorDisplay, ActorReferenceValue } from '@crm/contracts/values';
 import { useState } from 'react';
 import { ReferencePicker } from '../ReferencePicker.tsx';
 import type { EditorProps } from '../types.ts';
-import { asList, toCommittable } from '../values.ts';
+import { asList, isCompactSurface, toCommittable } from '../values.ts';
 import { actorDisplayOf } from './ActorReferenceDisplay.tsx';
 
 const keyOf = (display: ActorDisplay) => `${display.type}:${display.id ?? ''}`;
@@ -32,7 +32,7 @@ export function ActorReferenceEditor({
       chosen={chosen}
       allowMultiple={attribute.allowMultiple}
       keyOf={keyOf}
-      isCompact={surface === 'cell' || surface === 'filter'}
+      isCompact={isCompactSurface(surface)}
       isOpenAtStart={autoOpen}
       {...(startText === undefined ? {} : { startQuery: startText })}
       {...(onSearch === undefined ? {} : { onSearch })}

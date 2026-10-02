@@ -103,6 +103,24 @@
     background: var(--surface-subtle);
   }
 
+  /* The palette: near the top, flush, its title for screen readers only. */
+  .scrim[data-variant='palette'] {
+    place-items: start center;
+    padding-block-start: calc(2 * var(--size-bar));
+  }
+
+  .root[data-variant='palette'] {
+    inline-size: min(100%, var(--size-palette));
+  }
+
+  .root[data-variant='palette'] .head {
+    padding: 0;
+  }
+
+  .root[data-variant='palette'] .body {
+    padding: 0;
+  }
+
   /* Motion: the scrim fades, the dialog grows from the centre. */
   .scrim[data-entering] {
     animation: fade-in var(--duration-modal) var(--ease-out);
@@ -120,8 +138,13 @@
     animation: shrink var(--duration-exit) var(--ease-out) forwards;
   }
 
+  /* Opened from the keyboard, and the palette always, it appears at once. */
   .scrim[data-opened-by='keyboard'][data-entering],
-  .root[data-opened-by='keyboard'][data-entering] {
+  .root[data-opened-by='keyboard'][data-entering],
+  .scrim[data-variant='palette'][data-entering],
+  .scrim[data-variant='palette'][data-exiting],
+  .root[data-variant='palette'][data-entering],
+  .root[data-variant='palette'][data-exiting] {
     animation: none;
   }
 

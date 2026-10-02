@@ -105,3 +105,24 @@ export const Styles: Story = {
     await expect(canvas.getByText('Choose a stage to save the deal.')).toBeInTheDocument();
   },
 };
+
+/** Searchable, for a long list: the search field takes focus as it opens, and typing narrows the options. */
+export const Searchable: Story = {
+  args: { label: 'Stage', isSearchable: true, optionStyle: 'plain' },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow">
+      <Select {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Stage/ }));
+    const list = await listbox();
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('aria-label', 'Search'));
+    await userEvent.keyboard('pro');
+    await waitFor(() => expect(list.querySelectorAll('[role="option"]')).toHaveLength(1));
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+    await expect(args.onChange).toHaveBeenCalledWith('proposal');
+    await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
+  },
+};

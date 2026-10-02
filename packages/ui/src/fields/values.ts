@@ -2,7 +2,7 @@
 // value with its schema before it may leave (AC-5), and text refusals.
 import { parseAttributeValue, type AttributeType } from '@crm/contracts/values';
 import { strings } from './strings.ts';
-import type { FieldAttribute, FieldValue, TextRefusal } from './types.ts';
+import type { FieldAttribute, FieldValue, Surface, TextRefusal } from './types.ts';
 
 /** A value or a list of them as a list; `null` as an empty list. */
 export function asList<V>(value: V | readonly V[] | null | undefined): readonly V[] {
@@ -61,4 +61,13 @@ export function listFromText<V>(text: string, one: (part: string) => V | TextRef
     values.push(value);
   }
   return values;
+}
+
+/**
+ * Whether an editor on `surface` is compact: small, its label hidden. A cell,
+ * a filter value and a record panel row each show the attribute's name beside
+ * the value already.
+ */
+export function isCompactSurface(surface: Surface): boolean {
+  return surface === 'cell' || surface === 'filter' || surface === 'panel';
 }

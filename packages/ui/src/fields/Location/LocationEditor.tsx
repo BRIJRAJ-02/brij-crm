@@ -3,14 +3,19 @@ import { useState } from 'react';
 import { useFocusWithin } from 'react-aria';
 import { Field } from '../../molecules/Field/Field.tsx';
 import type { EditorProps } from '../types.ts';
+import { CountryPicker } from './CountryPicker.tsx';
 import { toCommittable } from '../values.ts';
 import styles from './LocationEditor.module.css';
 import { strings } from './strings.ts';
 
 type Part = 'line1' | 'line2' | 'locality' | 'region' | 'postcode' | 'countryCode';
 const PARTS: readonly Part[] = ['line1', 'line2', 'locality', 'region', 'postcode', 'countryCode'];
+const TYPED_PARTS = PARTS.filter((part) => part !== 'countryCode');
 
-/** Location: a Field per part (address lines, city, region, postcode, country code); leaving the parts commits the address once. */
+/**
+ * Location: a Field per typed part (address lines, city, region, postcode)
+ * and the country picker; leaving the parts commits the address once.
+ */
 export function LocationEditor({ attribute, value, onCommit, error }: EditorProps<'location'>) {
   const current = value === null || Array.isArray(value) ? {} : (value as LocationValue);
   const [draft, setDraft] = useState<Partial<Record<Part, string>>>(() => {
@@ -38,7 +43,7 @@ export function LocationEditor({ attribute, value, onCommit, error }: EditorProp
   return (
     <fieldset className={styles.root} {...focusWithinProps}>
       <legend className={styles.legend}>{attribute.name}</legend>
-      {PARTS.map((part) => (
+      {TYPED_PARTS.map((part) => (
         <Field
           key={part}
           label={strings[part]}
@@ -46,9 +51,15 @@ export function LocationEditor({ attribute, value, onCommit, error }: EditorProp
           onChange={(next) => {
             setDraft((previous) => ({ ...previous, [part]: next }));
           }}
-          {...(part === 'countryCode' ? { hint: strings.countryHint, maxLength: 2 } : {})}
         />
       ))}
+      <CountryPicker
+        label={strings.countryCode}
+        value={draft.countryCode === undefined || draft.countryCode === '' ? null : draft.countryCode}
+        onChange={(code) => {
+          setDraft((previous) => ({ ...previous, countryCode: code ?? '' }));
+        }}
+      />
       {(message ?? error) !== undefined && (
         <span className={styles.error} role="alert">
           {message ?? error}

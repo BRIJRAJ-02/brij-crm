@@ -1,0 +1,93 @@
+/* TaskList: size-row rows of a done checkbox, the title (filling the row, cut
+   with an ellipsis, struck through in text-tertiary once done), the record
+   chip, the due day as a label in a size-column-min column (danger once overdue)
+   and the assignee in a size-chip column, so rows line up. Rows
+   take surface-hover under a pointer and the inset ring on focus. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    inline-size: 100%;
+    block-size: 100%;
+    min-block-size: 0;
+    overflow: auto;
+    outline: none;
+  }
+
+  .row {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    box-sizing: border-box;
+    block-size: var(--size-row);
+    padding-inline: var(--space-8);
+    border-radius: var(--radius-md);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    cursor: default;
+    outline: none;
+  }
+
+  .row[data-href],
+  .row[data-pressable] {
+    cursor: pointer;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .row[data-hovered] {
+      background: var(--surface-hover);
+    }
+  }
+
+  .row[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .title {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .row[data-done] .title {
+    color: var(--text-tertiary);
+    text-decoration: line-through;
+  }
+
+  .record {
+    display: flex;
+    flex: none;
+    max-inline-size: var(--size-column);
+    min-inline-size: 0;
+  }
+
+  .due {
+    flex: none;
+    inline-size: var(--size-column-min);
+    text-align: end;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .due[data-overdue] {
+    color: var(--danger);
+  }
+
+  .assignee {
+    display: flex;
+    flex: none;
+    justify-content: center;
+    inline-size: var(--size-chip);
+  }
+
+  @media (forced-colors: active) {
+    .row[data-focus-visible] {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: calc(-1 * var(--border-width-thick));
+    }
+  }
+}

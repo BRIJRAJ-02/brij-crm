@@ -2,7 +2,7 @@ import type { RecordRefDisplay, RecordReferenceValue } from '@crm/contracts/valu
 import { useState } from 'react';
 import { ReferencePicker } from '../ReferencePicker.tsx';
 import type { EditorProps } from '../types.ts';
-import { asList, toCommittable } from '../values.ts';
+import { asList, isCompactSurface, toCommittable } from '../values.ts';
 import { recordDisplayOf } from './RecordReferenceDisplay.tsx';
 
 const keyOf = (display: RecordRefDisplay) => `${display.objectId}:${display.recordId}`;
@@ -31,7 +31,7 @@ export function RecordReferenceEditor({
       chosen={chosen}
       allowMultiple={attribute.allowMultiple}
       keyOf={keyOf}
-      isCompact={surface === 'cell' || surface === 'filter'}
+      isCompact={isCompactSurface(surface)}
       isOpenAtStart={autoOpen}
       {...(startText === undefined ? {} : { startQuery: startText })}
       {...(onSearch === undefined ? {} : { onSearch })}

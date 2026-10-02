@@ -1,0 +1,76 @@
+/* SortBuilder: a list of size-input tall rows, space-4 apart: the drag
+   handle, "Sort by" or "then by", the attribute, the direction and Remove.
+   A row being dragged fades; the drop line is the accent. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    outline: none;
+  }
+
+  .row {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    min-block-size: var(--size-input);
+    padding-inline: var(--space-4);
+    border-radius: var(--radius-sm);
+    outline: none;
+  }
+
+  .row[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .row[data-dragging] {
+    opacity: var(--opacity-busy);
+  }
+
+  .row[data-drop-target] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .handle {
+    display: inline-flex;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-xs);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: grab;
+    outline: none;
+  }
+
+  .handle[data-focus-visible] {
+    box-shadow: var(--shadow-focus);
+  }
+
+  .lead {
+    inline-size: calc(3 * var(--size-chip));
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .text {
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  @media (forced-colors: active) {
+    .row[data-focus-visible],
+    .row[data-drop-target] {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: calc(-1 * var(--border-width-thick));
+    }
+  }
+}

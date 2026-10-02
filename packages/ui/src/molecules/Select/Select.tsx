@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import {
+  Autocomplete,
   Button as AriaButton,
   FieldError,
   Label,
@@ -9,11 +10,13 @@ import {
   SelectValue,
   Text,
 } from 'react-aria-components';
+import { useFilter } from 'react-aria';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { StatusDot } from '../../atoms/StatusDot/StatusDot.tsx';
 import { Tag } from '../../atoms/Tag/Tag.tsx';
 import type { Hue } from '../../hue.ts';
+import { Field } from '../Field/Field.tsx';
 import { Popover } from '../Popover/Popover.tsx';
 import styles from './Select.module.css';
 import { strings } from './strings.ts';
@@ -58,6 +61,10 @@ export interface SelectProps {
   readonly readOnlyReason?: string;
   readonly isDisabled?: boolean;
   readonly size?: 'md' | 'sm';
+  /** A search field over the options, for long lists such as countries. */
+  readonly isSearchable?: boolean;
+  /** The search field's name. Defaults to "Search". */
+  readonly searchLabel?: string;
   /** Opens it on first render: a grid cell's edit, stories and previews. */
   readonly defaultOpen?: boolean;
   readonly onOpenChange?: (isOpen: boolean) => void;
@@ -113,7 +120,10 @@ export function Select({
   size = 'md',
   defaultOpen,
   onOpenChange,
+  isSearchable = false,
+  searchLabel = strings.search,
 }: SelectProps) {
+  const { contains } = useFilter({ sensitivity: 'base' });
   const current = value ?? defaultValue ?? null;
   const chosen = items.find((item) => item.id === current);
   const description = (isReadOnly ? readOnlyReason : undefined) ?? hint;
@@ -140,6 +150,35 @@ export function Select({
   const disabledKeys = items.filter((item) => item.isArchived === true && item.id !== current).map((item) => item.id);
   const options: readonly SelectItem[] =
     isClearable && !isRequired && current !== null ? [...items, { id: CLEAR, label: strings.clear, icon: 'x' }] : items;
+
+  const list = (
+    <ListBox
+      className={styles.list}
+      items={options}
+      renderEmptyState={() => <span className={styles.empty}>{strings.noMatches}</span>}
+    >
+      {(item) => (
+        <ListBoxItem
+          id={item.id}
+          textValue={item.label}
+          className={styles.option}
+          data-clear={item.id === CLEAR || undefined}
+        >
+          {({ isSelected }) => (
+            <>
+              <Face item={item} optionStyle={item.id === CLEAR ? 'plain' : optionStyle} />
+              {item.description !== undefined && <span className={styles.description}>{item.description}</span>}
+              {isSelected && (
+                <span className={styles.check}>
+                  <Icon name="check" size="sm" />
+                </span>
+              )}
+            </>
+          )}
+        </ListBoxItem>
+      )}
+    </ListBox>
+  );
 
   return (
     <AriaSelect
@@ -183,28 +222,20 @@ export function Select({
         {error}
       </FieldError>
       <Popover width="trigger">
-        <ListBox className={styles.list} items={options}>
-          {(item) => (
-            <ListBoxItem
-              id={item.id}
-              textValue={item.label}
-              className={styles.option}
-              data-clear={item.id === CLEAR || undefined}
-            >
-              {({ isSelected }) => (
-                <>
-                  <Face item={item} optionStyle={item.id === CLEAR ? 'plain' : optionStyle} />
-                  {item.description !== undefined && <span className={styles.description}>{item.description}</span>}
-                  {isSelected && (
-                    <span className={styles.check}>
-                      <Icon name="check" size="sm" />
-                    </span>
-                  )}
-                </>
-              )}
-            </ListBoxItem>
-          )}
-        </ListBox>
+        {isSearchable ? (
+          <div className={styles.searchable}>
+            <Autocomplete filter={contains}>
+              <div className={styles.search}>
+                {/* A search over a list opens with its field focused, the pattern React Aria expects. */}
+                {/* eslint-disable-next-line jsx-a11y-x/no-autofocus */}
+                <Field label={searchLabel} isLabelHidden variant="search" size="sm" autoFocus />
+              </div>
+              {list}
+            </Autocomplete>
+          </div>
+        ) : (
+          list
+        )}
       </Popover>
     </AriaSelect>
   );

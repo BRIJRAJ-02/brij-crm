@@ -1,0 +1,128 @@
+/* AttributeList: rows of a name column (an 11px label with its type's icon)
+   and a value column, each at least size-row tall. A value that can change
+   takes surface-hover under a pointer, with its pencil button showing on hover
+   or focus; an empty one reads "Set Name…" in text-tertiary. Below 320px the
+   name sits above the value. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    inline-size: 100%;
+    min-inline-size: 0;
+    container-type: inline-size;
+  }
+
+  .rows {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: calc(6 * var(--size-chip)) minmax(0, 1fr);
+    column-gap: var(--space-12);
+    align-items: center;
+    min-block-size: var(--size-row);
+  }
+
+  .label {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    min-inline-size: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .name {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .cell {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    margin: 0;
+  }
+
+  .editable {
+    display: flex;
+    gap: var(--space-4);
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .action {
+    display: flex;
+    opacity: 0;
+  }
+
+  .action:focus-within {
+    opacity: 1;
+  }
+
+  .value {
+    display: flex;
+    flex: 1;
+    gap: var(--space-4);
+    align-items: center;
+    min-inline-size: 0;
+    min-block-size: var(--size-control);
+    padding-inline: var(--space-6);
+    margin-inline: calc(-1 * var(--space-6));
+    overflow: hidden;
+    border-radius: var(--radius-sm);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .value[data-editable] {
+    cursor: pointer;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .value[data-editable]:hover {
+      background: var(--surface-hover);
+    }
+
+    .editable:hover > .action {
+      opacity: 1;
+    }
+  }
+
+  .placeholder {
+    color: var(--text-tertiary);
+  }
+
+  .toggle {
+    display: flex;
+    align-items: center;
+    min-block-size: var(--size-control);
+  }
+
+  .editor {
+    min-inline-size: 0;
+    padding-block: var(--space-4);
+  }
+
+  .error {
+    color: var(--danger);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  @container (width < 320px) {
+    .row {
+      grid-template-columns: minmax(0, 1fr);
+      row-gap: var(--space-2);
+      padding-block: var(--space-4);
+    }
+  }
+}

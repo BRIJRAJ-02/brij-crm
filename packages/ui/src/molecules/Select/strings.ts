@@ -4,4 +4,6 @@ export const strings = {
   none: 'None',
   clear: 'Clear',
   readOnly: 'Read only',
+  search: 'Search',
+  noMatches: 'No matches',
 } as const;

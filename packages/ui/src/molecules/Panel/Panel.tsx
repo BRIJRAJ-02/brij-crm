@@ -8,10 +8,15 @@ import { strings } from './strings.ts';
 /** How wide a panel is: `md` (`size-panel`, 400px) for a record, `lg` (`size-panel-wide`, 520px) for notes, email and larger tasks. */
 export type PanelWidth = 'md' | 'lg';
 
+/** `sheet` runs the page's full height against its end; `floating` sits inset from the edges on `radius-xl`, for the record panel. */
+export type PanelVariant = 'sheet' | 'floating';
+
 /** Props for Panel. */
 export interface PanelProps {
   /** Its heading, which also names it ("Northwind Traders", "Notifications"). */
   readonly title: string;
+  /** Before the title: the record's avatar. */
+  readonly leading?: ReactNode;
   readonly children: ReactNode;
   readonly isOpen: boolean;
   /** Called when the close button or Esc asks it to close. */
@@ -21,6 +26,9 @@ export interface PanelProps {
   /** A footer under the content, for a form's buttons. */
   readonly footer?: ReactNode;
   readonly width?: PanelWidth;
+  readonly variant?: PanelVariant;
+  /** The content runs to the edges and fills the height, for Tabs and lists that scroll themselves. */
+  readonly isFlush?: boolean;
 }
 
 type Phase = 'open' | 'exiting' | 'closed';
@@ -54,7 +62,18 @@ function usePresence(isOpen: boolean, element: { readonly current: HTMLElement |
  * moves into it when it opens and returns to where it came from when it
  * closes; Esc closes it.
  */
-export function Panel({ title, children, isOpen, onClose, actions, footer, width = 'md' }: PanelProps) {
+export function Panel({
+  title,
+  leading,
+  children,
+  isOpen,
+  onClose,
+  actions,
+  footer,
+  width = 'md',
+  variant = 'sheet',
+  isFlush = false,
+}: PanelProps) {
   const ref = useRef<HTMLElement>(null);
   const phase = usePresence(isOpen, ref);
   const { isFocusVisible } = useFocusVisible();
@@ -74,6 +93,7 @@ export function Panel({ title, children, isOpen, onClose, actions, footer, width
         ref={ref}
         className={styles.root}
         data-width={width}
+        data-variant={variant}
         data-entering={phase === 'open' || undefined}
         data-exiting={phase === 'exiting' || undefined}
         data-opened-by={openedBy}
@@ -81,6 +101,7 @@ export function Panel({ title, children, isOpen, onClose, actions, footer, width
       >
         <Dialog className={styles.dialog}>
           <header className={styles.head}>
+            {leading}
             <Heading slot="title" className={styles.title}>
               {title}
             </Heading>
@@ -89,7 +110,9 @@ export function Panel({ title, children, isOpen, onClose, actions, footer, width
               <Button variant="ghost" icon="x" label={strings.close} onPress={onClose} />
             </span>
           </header>
-          <div className={styles.body}>{children}</div>
+          <div className={styles.body} data-flush={isFlush || undefined}>
+            {children}
+          </div>
           {footer !== undefined && <footer className={styles.foot}>{footer}</footer>}
         </Dialog>
       </section>

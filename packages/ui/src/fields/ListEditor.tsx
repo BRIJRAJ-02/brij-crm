@@ -9,7 +9,7 @@ import { Field, type FieldProps } from '../molecules/Field/Field.tsx';
 import styles from './ListEditor.module.css';
 import { strings } from './strings.ts';
 import type { EditorProps } from './types.ts';
-import { toCommittable } from './values.ts';
+import { isCompactSurface, toCommittable } from './values.ts';
 
 /** One checked value, or why the typed text isn't one. */
 export type CheckedOne<V> = { readonly ok: true; readonly value: V } | { readonly ok: false; readonly message: string };
@@ -63,7 +63,7 @@ export function ListEditor<T extends AttributeType, V>({
     }
     if (commitList([...values, one.value])) setDraft('');
   };
-  const isCompact = surface === 'cell' || surface === 'filter';
+  const isCompact = isCompactSurface(surface);
   return (
     <div className={styles.root}>
       {values.length > 0 && (

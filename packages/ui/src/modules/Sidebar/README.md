@@ -15,11 +15,22 @@ Ported from the artifact's Sidebar card. Every screen inside the app shell (#10 
   onQuickActions={openPalette}
   isCollapsed={isCollapsed}
   onCollapsedChange={setCollapsed}
-  footer={<><NavItem icon="user-plus" onPress={invite}>Invite teammates</NavItem><ThemeSwitch controller={context.theme} isCompact /></>}
+  footer={
+    <>
+      <NavItem icon="user-plus" onPress={invite}>
+        Invite teammates
+      </NavItem>
+      <ThemeSwitch controller={context.theme} isCompact />
+    </>
+  }
 >
-  <NavItem icon="square-check" href="/tasks" badge={3}>Tasks</NavItem>
+  <NavItem icon="square-check" href="/tasks" badge={3}>
+    Tasks
+  </NavItem>
   <NavSection title="Records">
-    <NavItem icon="building" hue="blue" href="/companies" isCurrent>Companies</NavItem>
+    <NavItem icon="building" hue="blue" href="/companies" isCurrent>
+      Companies
+    </NavItem>
   </NavSection>
 </Sidebar>
 ```

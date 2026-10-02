@@ -14,7 +14,7 @@ So a value looks and edits the same everywhere: a tag in a grid cell is the same
 ```
 
 - `AttributeDisplay` and `AttributeEditor` are the only way anything draws or edits a value. Screens never import the value atoms (Tag, StatusDot, Currency, Rating, LinkChip, TagList); lint refuses it.
-- `surface` (`cell`, `panel`, `card`, `form`, `filter`, `preview`) changes behaviour only: a cell commits on Enter and hides labels; a form is always in edit mode. Looks adapt to the slot.
+- `surface` (`cell`, `panel`, `card`, `form`, `filter`, `preview`) changes behaviour only: a cell commits on Enter; a form is always in edit mode. Looks adapt to the slot: on a cell, a filter and a record panel row (`isCompactSurface`) editors are small and hide their label, since the name sits beside them already.
 - `display` carries the data layer's display shapes (names and pictures for references, members and files); fields never resolve ids.
 - Editors commit only values that parse with the type's schema from `@crm/contracts/values`, `null` to clear, or nothing while the input is invalid; the Field shows how to fix it (AC-5). A required attribute refuses empty with "<Name> is required." Uniqueness is the server's; pass its refusal back as `error`.
 - A read only, computed or system value (timestamp, interaction) shows read only with its reason, from `readOnlyReasonOf(attribute)`: its own, else "Worked out by the system", "Set by the system" or "Read only". An AI value edits as its result type; a hand edit replaces it, and `onRefresh` adds Refresh.

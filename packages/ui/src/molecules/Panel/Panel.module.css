@@ -1,5 +1,6 @@
 /* Panel: a full height sheet at the end of the page, on surface-raised with a
-   hairline edge and shadow-lg. It slides in with ease-drawer over
+   hairline edge and shadow-lg; the floating variant sits space-8 in from the
+   edges with a hairline border all round and radius-xl. It slides in with ease-drawer over
    duration-modal and out in duration-exit; reduced motion keeps a fade. */
 @layer components {
   .root {
@@ -17,6 +18,19 @@
 
   .root[data-width='lg'] {
     inline-size: min(100vw, var(--size-panel-wide));
+  }
+
+  .root[data-variant='floating'] {
+    inset-block: var(--space-8);
+    inset-inline-end: var(--space-8);
+    inline-size: min(100vw - 2 * var(--space-8), var(--size-panel));
+    overflow: hidden;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-xl);
+  }
+
+  .root[data-variant='floating'][data-width='lg'] {
+    inline-size: min(100vw - 2 * var(--space-8), var(--size-panel-wide));
   }
 
   .dialog {
@@ -60,6 +74,13 @@
     overflow: auto;
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
+  }
+
+  .body[data-flush] {
+    display: flex;
+    flex-direction: column;
+    padding: 0;
+    overflow: hidden;
   }
 
   .foot {
@@ -123,6 +144,10 @@
   @media (forced-colors: active) {
     .root {
       border-inline-start-color: CanvasText;
+    }
+
+    .root[data-variant='floating'] {
+      border-color: CanvasText;
     }
   }
 }

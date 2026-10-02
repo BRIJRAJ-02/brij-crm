@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
 import { DatePicker } from '../../molecules/DatePicker/DatePicker.tsx';
 import type { EditorProps } from '../types.ts';
-import { toCommittable } from '../values.ts';
+import { isCompactSurface, toCommittable } from '../values.ts';
 
 /**
  * Date: the DatePicker, typed in the language's order or picked, with quick
@@ -12,7 +12,7 @@ export function DateEditor({ attribute, value, surface, onCommit, error }: Edito
   const [draft, setDraft] = useState<string | null>(typeof value === 'string' ? value : null);
   const committed = useRef(draft);
   const [message, setMessage] = useState<string | undefined>(undefined);
-  const isCompact = surface === 'cell' || surface === 'filter';
+  const isCompact = isCompactSurface(surface);
   const commit = (next: string | null) => {
     if (next === committed.current) return;
     const result = toCommittable<'date'>(attribute, next);

@@ -3,6 +3,7 @@ import { useFocusVisible } from 'react-aria';
 import { Dialog, DialogTrigger, Heading, Modal as AriaModal, ModalOverlay } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import styles from './Modal.module.css';
 import { strings } from './strings.ts';
@@ -29,8 +30,13 @@ export function ModalTrigger({ children, isOpen, defaultOpen, onOpenChange }: Mo
   );
 }
 
-/** `dialog` (the default) for a question or a short form; `window` for a larger task with a header (import, merge, settings). */
-export type ModalVariant = 'dialog' | 'window';
+/**
+ * `dialog` (the default) for a question or a short form; `window` for a larger
+ * task with a header (import, merge, settings); `palette` for the command
+ * palette: near the top, its title for screen readers only, its body flush,
+ * and it never animates.
+ */
+export type ModalVariant = 'dialog' | 'window' | 'palette';
 
 /** Props for Modal. */
 export interface ModalProps {
@@ -74,6 +80,7 @@ export function Modal({
   return (
     <ModalOverlay
       className={styles.scrim}
+      data-variant={variant}
       isDismissable={!isAlert}
       data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}
       {...(isOpen === undefined ? {} : { isOpen })}
@@ -93,9 +100,15 @@ export function Modal({
             ) : (
               icon !== undefined && <Icon name={icon} size="sm" tone="muted" />
             )}
-            <Heading slot="title" className={styles.title}>
-              {title}
-            </Heading>
+            {variant === 'palette' ? (
+              <VisuallyHidden>
+                <Heading slot="title">{title}</Heading>
+              </VisuallyHidden>
+            ) : (
+              <Heading slot="title" className={styles.title}>
+                {title}
+              </Heading>
+            )}
             {context !== undefined && <span className={styles.context}>{context}</span>}
             {variant === 'window' && (
               <span className={styles.close}>

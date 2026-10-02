@@ -1,0 +1,87 @@
+/* FilterBuilder: rows space-8 apart, each a lead column (Where, the and or or
+   switch, or the conjunction as text) and its controls wrapping at
+   space-8. A nested group sits in a surface-subtle box with a hairline. In a
+   slot narrower than bp-container-md, each row's lead sits above its
+   controls. */
+@layer components {
+  /* A size container needs a width of its own: it fills its slot. */
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    inline-size: 100%;
+    min-inline-size: 0;
+    container-type: inline-size;
+  }
+
+  .rows {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: calc(4 * var(--size-chip)) minmax(0, 1fr);
+    gap: var(--space-8);
+    align-items: center;
+  }
+
+  .lead {
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .cells,
+  .range,
+  .foot {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .group {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    padding: var(--space-8);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    background: var(--surface-subtle);
+  }
+
+  /* A range's amount: room for three digits. */
+  .amount {
+    inline-size: calc(3 * var(--size-control));
+  }
+
+  .operand {
+    display: inline-flex;
+    min-inline-size: 0;
+  }
+
+  .attribute {
+    display: inline-flex;
+    gap: var(--space-4);
+    align-items: center;
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .operator {
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  @container (width < 480px) {
+    .row {
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--space-4);
+    }
+  }
+}

@@ -1,0 +1,13 @@
+/* RecordPanel: each tab's content fills the floating panel's height under the
+   tabs, padded space-16 on the sides and space-12 above, and scrolls itself, so
+   a feed or task list inside scrolls in its own slot. */
+@layer components {
+  .content {
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    block-size: 100%;
+    padding: var(--space-12) var(--space-16);
+    overflow: auto;
+  }
+}

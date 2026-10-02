@@ -105,12 +105,37 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* Searchable: the search field over the list, which scrolls under it. */
+  .searchable {
+    display: flex;
+    flex-direction: column;
+    max-block-size: inherit;
+  }
+
+  .search {
+    flex: none;
+    padding: var(--space-4) var(--space-4) 0;
+  }
+
+  .empty {
+    display: block;
+    padding: var(--space-4) var(--space-8);
+    color: var(--text-tertiary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
   .list {
     box-sizing: border-box;
     max-block-size: inherit;
     padding: var(--space-4);
     overflow: auto;
     outline: none;
+  }
+
+  .searchable .list {
+    flex: 1;
+    min-block-size: 0;
   }
 
   .option {

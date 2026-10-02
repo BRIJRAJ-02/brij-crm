@@ -3,7 +3,7 @@ import { FieldSurfaces } from '../../workbench/FieldSurfaces/FieldSurfaces.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
 import { AttributeEditor } from '../AttributeEditor.tsx';
-import { expect, fn } from 'storybook/test';
+import { expect, fn, waitFor } from 'storybook/test';
 
 const sample = FIELD_SAMPLES.location;
 
@@ -39,9 +39,15 @@ export const Editor: Story = {
   play: async ({ canvas, args, userEvent }) => {
     await userEvent.click(canvas.getByRole('textbox', { name: 'City' }));
     await userEvent.keyboard('London');
-    await userEvent.click(canvas.getByRole('textbox', { name: /Country/ }));
-    await userEvent.keyboard('gb');
-    await userEvent.tab();
+    // The country is picked by name, in the provider's language, from a searchable list.
+    await userEvent.click(canvas.getByRole('button', { name: /Country/ }));
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('aria-label', 'Search countries'));
+    await userEvent.keyboard('United Kingdom');
+    await userEvent.keyboard('{ArrowDown}{Enter}');
+    await waitFor(() => expect(canvas.getByRole('button', { name: /United Kingdom/ })).toBeInTheDocument());
+    await userEvent.click(canvas.getByRole('textbox', { name: 'City' }));
+    await userEvent.tab({ shift: true });
+    await userEvent.click(document.body);
     await expect(args.onCommit).toHaveBeenLastCalledWith({ locality: 'London', countryCode: 'GB' });
   },
 };

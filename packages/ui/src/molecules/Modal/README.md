@@ -30,7 +30,7 @@ Ported from the artifact's Modal card. Confirms, invites, exports, imports and m
 </ModalTrigger>
 ```
 
-- `variant`: `dialog` (the default, `size-dialog`, 480px) for a question or a short form; `window` (`size-dialog-wide`, 780px) for a larger task, with a header that holds an `icon`, the `title`, a `context` (the record or list) and a close button.
+- `variant`: `dialog` (the default, `size-dialog`, 480px) for a question or a short form; `window` (`size-dialog-wide`, 780px) for a larger task, with a header that holds an `icon`, the `title`, a `context` (the record or list) and a close button. `palette` (`size-palette`, 640px) is the command palette's: near the top, its `title` for screen readers only, its body flush, and it never animates, since it opens from the keyboard many times a day.
 - `actions` is the footer: Cancel first (`slot="close"` closes the modal), the primary last. A destructive confirm uses `tone="danger"` with a `danger` Button.
 - `tone="danger"` makes it an alert dialog with a warning icon; a click outside won't close it, so a destructive answer is always deliberate.
 - Open it from a `ModalTrigger`, or control it with `isOpen` and `onOpenChange`.

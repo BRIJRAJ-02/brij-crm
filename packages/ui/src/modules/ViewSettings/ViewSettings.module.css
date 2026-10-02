@@ -1,0 +1,104 @@
+/* ViewSettings: a label-strong title with the shown count, an optional
+   search, then size-nav-item rows: the drag handle, the type's icon, the
+   name and the switch at the end. A dragged row fades; the drop target takes
+   the inset ring. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+
+  .head {
+    display: flex;
+    gap: var(--space-8);
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .label {
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .count,
+  .empty {
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--border-width-hairline);
+    outline: none;
+  }
+
+  .row {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    block-size: var(--size-nav-item);
+    padding-inline: var(--space-4);
+    border-radius: var(--radius-sm);
+    outline: none;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .row[data-hovered] {
+      background: var(--surface-hover);
+    }
+  }
+
+  .row[data-focus-visible],
+  .row[data-drop-target] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .row[data-dragging] {
+    opacity: var(--opacity-busy);
+  }
+
+  .handle {
+    display: inline-flex;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-xs);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: grab;
+    outline: none;
+  }
+
+  .handle[data-focus-visible] {
+    box-shadow: var(--shadow-focus);
+  }
+
+  /* Where a locked row's handle would be, so names line up. */
+  .spacer {
+    flex: none;
+    inline-size: var(--size-icon-sm);
+  }
+
+  .name {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  @media (forced-colors: active) {
+    .row[data-focus-visible],
+    .row[data-drop-target] {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: calc(-1 * var(--border-width-thick));
+    }
+  }
+}

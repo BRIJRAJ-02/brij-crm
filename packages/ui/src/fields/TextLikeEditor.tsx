@@ -8,6 +8,7 @@ import { strings as fieldStrings } from '../molecules/Field/strings.ts';
 import { useTextDraft } from './useTextDraft.ts';
 import type { EditorProps } from './types.ts';
 import type { Committable } from './values.ts';
+import { isCompactSurface } from './values.ts';
 
 /** Props for TextLikeEditor. */
 export interface TextLikeEditorProps<T extends AttributeType> extends EditorProps<T> {
@@ -48,7 +49,7 @@ export function TextLikeEditor<T extends AttributeType>({
     ...(onCancel === undefined ? {} : { onCancel }),
     ...(error === undefined ? {} : { error }),
   });
-  const isCompact = surface === 'cell' || surface === 'filter';
+  const isCompact = isCompactSurface(surface);
   return (
     <Field
       label={attribute.name}

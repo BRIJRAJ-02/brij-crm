@@ -24,6 +24,8 @@ Ported from the artifact's Field card. Every text, number and link attribute is 
 - Typed numbers are parsed by the field set, never here (the input stays text, so nothing is lost to a JS number).
 - Stack fields with `space-16` between them in modals and panels.
 
+- `autoFocus` takes focus as it mounts, for the search field at the top of a list that just opened.
+
 ## States
 
 Empty (placeholder), filled, hover (pointer only), focus (accent border and ring), invalid (danger border and message), read only (filled, lock, reason), disabled (faded, reason).

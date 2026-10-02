@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, type ReactElement, type ReactNode } from 'react';
+import { useMemo, type ReactElement, type ReactNode } from 'react';
 import {
   Autocomplete,
   Header,
@@ -22,6 +22,7 @@ import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Kbd } from '../../atoms/Kbd/Kbd.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import type { ListSource } from '../../lib/list-source.ts';
+import { RowShown, useRangeReporter } from '../../lib/range-reporter.tsx';
 import { safeHref } from '../../lib/safe-href.ts';
 import { sizeToken } from '../../lib/token-values.ts';
 import { Popover, type PopoverPlacement, type PopoverWidth } from '../Popover/Popover.tsx';
@@ -170,41 +171,6 @@ function sourceKey<T>(source: ListSource<T> | undefined, key: MenuKey): MenuKey 
   return item === undefined ? key : source.getKey(item);
 }
 
-/** Tells the source which rows are drawn, once per batch of mounts and unmounts. */
-function useRangeReporter<T>(source: ListSource<T> | undefined) {
-  const shown = useRef(new Set<number>());
-  const pending = useRef(false);
-  const latest = useRef(source);
-  useEffect(() => {
-    latest.current = source;
-  });
-  // Stable, so each row's effect runs once per mount, not on every render.
-  return useCallback((index: number) => {
-    const report = () => {
-      if (pending.current) return;
-      pending.current = true;
-      queueMicrotask(() => {
-        pending.current = false;
-        const onRangeChange = latest.current?.onRangeChange;
-        if (onRangeChange === undefined || shown.current.size === 0) return;
-        const indexes = [...shown.current];
-        onRangeChange({ start: Math.min(...indexes), end: Math.max(...indexes) + 1 });
-      });
-    };
-    shown.current.add(index);
-    report();
-    return () => {
-      shown.current.delete(index);
-      report();
-    };
-  }, []);
-}
-
-function RowShown({ index, onShown }: { readonly index: number; readonly onShown: (index: number) => () => void }) {
-  useEffect(() => onShown(index), [index, onShown]);
-  return null;
-}
-
 /**
  * A list of actions or choices in a popover: column options, "Add to list",
  * a select with search. Built on React Aria's Menu, so arrow keys move, typing
@@ -243,7 +209,8 @@ export function Menu<T extends object>(props: MenuProps<T>) {
     const { source, renderItem } = props;
     menu = (
       <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: sizeToken('size-nav-item') }}>
-        <AriaMenu {...menuProps} items={rows} data-virtualized="">
+        {/* Rows are keyed by index, so the collection draws them again when the items behind them load. */}
+        <AriaMenu {...menuProps} items={rows} dependencies={[source, renderItem]} data-virtualized="">
           {(row: Row) => {
             const item = source.getItem(row.id);
             if (item === undefined) {

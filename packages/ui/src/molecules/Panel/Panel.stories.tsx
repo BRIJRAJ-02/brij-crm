@@ -65,3 +65,17 @@ export const Keyboard: Story = {
     await waitFor(() => expect(trigger).toHaveFocus());
   },
 };
+
+/** Floating, inset from the edges on the larger radius, as the record panel shows. */
+export const Floating: Story = {
+  render: () => (
+    <Stage>
+      <Panel title="Northwind Traders" isOpen onClose={() => undefined} variant="floating">
+        A wholesale distributor in Portland. 48 people, 6 open deals.
+      </Panel>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('dialog', { name: 'Northwind Traders' })).toBeInTheDocument();
+  },
+};

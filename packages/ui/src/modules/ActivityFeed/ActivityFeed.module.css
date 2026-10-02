@@ -1,0 +1,155 @@
+/* ActivityFeed: a scrolling feed of entries placed by the virtualiser. Each
+   entry has a size-chip marker on a hairline rail (the rail stops at the last
+   entry), the actor chip and verb in text-secondary with the time at the end,
+   and under it the change (old value, an arrow, new value) or a card with the
+   title and a two line excerpt. Period headings are 11px labels. */
+@layer components {
+  .root {
+    --feed-height: 0;
+    --entry-offset: 0;
+
+    display: flex;
+    flex-direction: column;
+    inline-size: 100%;
+    block-size: 100%;
+    min-block-size: 0;
+    overflow: auto;
+    overscroll-behavior: contain;
+    outline: none;
+  }
+
+  .body {
+    position: relative;
+    flex: none;
+    block-size: var(--feed-height);
+  }
+
+  .slot {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+    display: flex;
+    flex-direction: column;
+    border-radius: var(--radius-md);
+    transform: translateY(var(--entry-offset));
+    outline: none;
+  }
+
+  .slot:focus-visible {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .period {
+    margin: 0;
+    padding-block: var(--space-12) var(--space-6);
+    padding-inline: var(--space-4);
+    color: var(--text-tertiary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .entry {
+    position: relative;
+    display: grid;
+    grid-template-columns: var(--size-chip) minmax(0, 1fr);
+    column-gap: var(--space-8);
+    padding: var(--space-4);
+    padding-block-end: var(--space-12);
+  }
+
+  /* The rail: from under this entry's marker to the next entry's. */
+  .entry::before {
+    position: absolute;
+    inset-block: calc(var(--space-4) + var(--size-chip)) 0;
+    inset-inline-start: calc(var(--space-4) + var(--size-chip) / 2);
+    border-inline-start: var(--border-width-hairline) solid var(--border);
+    content: '';
+  }
+
+  .entry[data-last]::before {
+    content: none;
+  }
+
+  .marker {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--size-chip);
+    block-size: var(--size-chip);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-full);
+    background: var(--surface-raised);
+  }
+
+  .main {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    min-inline-size: 0;
+  }
+
+  .line {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    min-block-size: var(--size-chip);
+  }
+
+  .what {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    align-items: center;
+    min-inline-size: 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .attribute {
+    color: var(--text);
+    font: var(--text-body-strong);
+  }
+
+  .time {
+    flex: none;
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .change {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    padding: var(--space-8) var(--space-12);
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+  }
+
+  .title {
+    color: var(--text);
+    font: var(--text-body-strong);
+  }
+
+  .excerpt {
+    display: -webkit-box;
+    overflow: hidden;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+}

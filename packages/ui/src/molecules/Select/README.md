@@ -19,6 +19,7 @@ Ported from the artifact's Select card (version 8). It is the editor for select 
 - `isClearable` adds a "Clear" option while something is chosen; leave it off for a required attribute.
 - `isReadOnly` shows the value in a filled box with a lock, and `readOnlyReason` says why.
 - `onChange` gets the chosen id, or `null` when cleared.
+- `isSearchable` puts a search field over the options (it takes focus as the list opens, and typing narrows them), for long lists such as countries; `searchLabel` names it.
 
 ## States
 

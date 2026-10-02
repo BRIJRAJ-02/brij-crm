@@ -6,5 +6,6 @@ export const strings = {
   region: 'Region',
   postcode: 'Postcode',
   countryCode: 'Country',
-  countryHint: 'Two letters, such as GB or US.',
+  chooseCountry: 'Choose a country',
+  searchCountries: 'Search countries',
 } as const;

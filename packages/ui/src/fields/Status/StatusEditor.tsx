@@ -1,6 +1,6 @@
 import { Select } from '../../molecules/Select/Select.tsx';
 import type { EditorProps } from '../types.ts';
-import { toCommittable } from '../values.ts';
+import { isCompactSurface, toCommittable } from '../values.ts';
 import { strings } from './strings.ts';
 
 /** Status: a Select with dot options; archived statuses can't be chosen. Always one value. */
@@ -12,7 +12,7 @@ export function StatusEditor({
   onCancel,
   autoOpen = false,
 }: EditorProps<'status'>) {
-  const isCompact = surface === 'cell' || surface === 'filter';
+  const isCompact = isCompactSurface(surface);
   return (
     <Select
       // Opened by the grid: closing the list ends the edit.

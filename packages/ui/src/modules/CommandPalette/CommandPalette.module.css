@@ -1,0 +1,22 @@
+/* CommandPalette: the Menu's search over its rows, inside the palette
+   variant of Modal, with room for a screen of rows; the foot names the keys
+   in text-secondary. */
+@layer components {
+  .list {
+    display: flex;
+    flex-direction: column;
+    block-size: calc(12 * var(--size-nav-item));
+    min-block-size: 0;
+    padding: var(--space-8);
+  }
+
+  .hint {
+    display: inline-flex;
+    gap: var(--space-4);
+    align-items: center;
+    margin-inline-end: auto;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+}

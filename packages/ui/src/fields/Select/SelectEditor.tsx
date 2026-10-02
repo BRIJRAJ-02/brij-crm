@@ -4,7 +4,7 @@ import { Tag } from '../../atoms/Tag/Tag.tsx';
 import { Menu, MenuItem, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import { Select } from '../../molecules/Select/Select.tsx';
 import type { EditorProps } from '../types.ts';
-import { asList, toCommittable } from '../values.ts';
+import { asList, isCompactSurface, toCommittable } from '../values.ts';
 import { strings } from './strings.ts';
 
 /** Up to this many options, a single select is a Select; past it, a Menu with search. */
@@ -26,7 +26,7 @@ export function SelectEditor({
 }: EditorProps<'select'>) {
   const options = attribute.options ?? [];
   const chosen = asList<string>(value);
-  const isCompact = surface === 'cell' || surface === 'filter';
+  const isCompact = isCompactSurface(surface);
   const commit = (candidate: unknown) => {
     const result = toCommittable<'select'>(attribute, candidate);
     if (result.ok) onCommit(result.value);
@@ -70,7 +70,12 @@ export function SelectEditor({
   return (
     <MenuTrigger {...opening}>
       <Button variant="secondary" iconRight="chevron-down">
-        {chosen.length === 0 ? strings.choose(attribute.name) : attribute.name}
+        {chosen.length === 0
+          ? strings.choose(attribute.name)
+          : options
+              .filter((option) => chosen.includes(option.id))
+              .map((option) => option.label)
+              .join(strings.listJoin)}
       </Button>
       <Menu
         label={attribute.name}

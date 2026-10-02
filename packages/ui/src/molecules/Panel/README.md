@@ -22,6 +22,9 @@ New. The record panel (#17), notifications (#28) and the assistant (#54) open be
 - `isOpen` and `onClose` are the caller's; the close button and Esc call `onClose`.
 - `actions` go at the end of the header, before the close button; `footer` holds a form's buttons.
 - `width`: `md` (`size-panel`, 400px) for a record, `lg` (`size-panel-wide`, 520px) for notes, email and larger tasks.
+- `variant`: `sheet` (the default) runs the full height against the end of the page; `floating` sits `space-8` in from the edges on `radius-xl`, for the record panel (`RecordPanel`).
+- `leading` goes before the title, such as the record's avatar.
+- `isFlush` runs the content to the edges and gives it the panel's height, for Tabs and lists that scroll themselves.
 - It is not modal: the page beside it stays usable, so focus can leave it with Tab or a click.
 
 ## States
