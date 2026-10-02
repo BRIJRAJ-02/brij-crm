@@ -3,8 +3,10 @@
 // with no `active_until`.
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   boolean,
   check,
+  customType,
   date,
   foreignKey,
   index,
@@ -15,6 +17,7 @@ import {
   smallint,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from 'drizzle-orm/pg-core';
@@ -92,6 +95,8 @@ export const listEntries = pgTable(
   },
   (t) => [
     primaryKey({ name: 'list_entries_pkey', columns: [t.workspaceId, t.id] }),
+    // So a stored sort key can name an entry and its record together, and never a mismatched pair.
+    unique('list_entries_record_key').on(t.workspaceId, t.id, t.recordId),
     foreignKey({
       name: 'list_entries_list',
       columns: [t.workspaceId, t.listId],
@@ -338,5 +343,78 @@ export const values = pgTable(
       id: t.actorId,
       memberId: t.actorMemberId,
     }),
+  ],
+);
+
+/** Text in a pinned collation, so its order never depends on the database default. */
+const collatedText = (collation: 'und-x-icu' | 'C') =>
+  customType<{ data: string }>({ dataType: () => `text collate "${collation}"` });
+const icuText = collatedText('und-x-icu');
+const byteText = collatedText('C');
+
+/** The live key rows of one kind: what every key index covers. */
+const LIVE = 'live';
+
+/**
+ * The sort key of one current, set, position 0 value of a sortable attribute
+ * (spec 0004, stored sort keys): a copy in a form Postgres can seek on under
+ * row level security, with `live` false while the record is in the trash or
+ * the entry removed. Written in the same transaction as the value; `values`
+ * stays the truth, and this table can always be rebuilt from it.
+ */
+export const sortKeys = pgTable(
+  'sort_keys',
+  {
+    workspaceId: workspaceId(),
+    /** The record or entry, as on `values`. */
+    ownerId: uuid('owner_id').notNull(),
+    attributeId: uuid('attribute_id').notNull(),
+    /** The record itself, or the entry's record. */
+    recordId: uuid('record_id').notNull(),
+    entryId: uuid('entry_id'),
+    live: boolean('live').notNull(),
+    /** `lower(left(text_value, 256))`, the text indexes' own expression; a location's locality. */
+    textKey: icuText('text_key'),
+    /** A number, rating or currency amount times 10,000, exact for 14 integer digits. */
+    numberKey: bigint('number_key', { mode: 'bigint' }),
+    /** A currency code, or a location's country code. */
+    codeKey: byteText('code_key'),
+    dateKey: date('date_key'),
+    timeKey: timestamp('time_key', { withTimezone: true, precision: 3 }),
+    optionId: uuid('option_id'),
+    boolKey: boolean('bool_key'),
+  },
+  (t) => [
+    primaryKey({ name: 'sort_keys_pkey', columns: [t.workspaceId, t.ownerId, t.attributeId] }),
+    foreignKey({
+      name: 'sort_keys_attribute',
+      columns: [t.workspaceId, t.attributeId],
+      foreignColumns: [attributes.workspaceId, attributes.id],
+    }),
+    foreignKey({
+      name: 'sort_keys_record',
+      columns: [t.workspaceId, t.recordId],
+      foreignColumns: [records.workspaceId, records.id],
+    }),
+    foreignKey({
+      name: 'sort_keys_entry',
+      columns: [t.workspaceId, t.entryId, t.recordId],
+      foreignColumns: [listEntries.workspaceId, listEntries.id, listEntries.recordId],
+    }),
+    foreignKey({
+      name: 'sort_keys_option',
+      columns: [t.workspaceId, t.attributeId, t.optionId],
+      foreignColumns: [attributeOptions.workspaceId, attributeOptions.attributeId, attributeOptions.id],
+    }),
+    check('sort_keys_owner', sql`${t.ownerId} = coalesce(${t.entryId}, ${t.recordId})`),
+    // Sorts, cursors and jumps on text kinds, index only.
+    index('sort_keys_text')
+      .on(t.workspaceId, t.attributeId, t.textKey, t.ownerId)
+      .where(sql.raw(`${LIVE} and text_key is not null`)),
+    // Delete, restore, purge and erasure by record or entry.
+    index('sort_keys_by_record').on(t.workspaceId, t.recordId),
+    index('sort_keys_by_entry')
+      .on(t.workspaceId, t.entryId)
+      .where(sql`${t.entryId} is not null`),
   ],
 );

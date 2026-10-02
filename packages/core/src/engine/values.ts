@@ -6,6 +6,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import { parseAttributeValue, type AttributeType } from '@crm/contracts/values';
 import { encodeValue, sameItems, type ItemColumns, type StoredItem } from './columns.ts';
 import { postgresError, refuse } from './refusals.ts';
+import { syncSortKey } from './sort-keys.ts';
 import { uniqueKeyOf } from './unique.ts';
 import { actorRow, type Actor } from './scope.ts';
 import type { ValueChange, WriteContext } from './write.ts';
@@ -295,6 +296,7 @@ export async function writeAttribute(context: WriteContext, write: AttributeWrit
     }
     throw error;
   }
+  await syncSortKey(tx, ownerId, attribute);
 
   const before = current[0];
   const replaced =

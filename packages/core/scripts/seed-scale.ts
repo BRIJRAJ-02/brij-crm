@@ -3,7 +3,9 @@
 // through the engine's services; the rows themselves are written in bulk SQL,
 // 50,000 at a time, inside withWorkspace() so row level security still holds.
 // Deals get the template's attributes filled realistically, a past stage
-// version each, a company link (90%), and a list of 200,000 entries.
+// version each, a company link (90%), and a list of 200,000 entries; about
+// 1% of deals then go to the trash and 1% of entries are removed, and the
+// stored sort keys are rebuilt from the values.
 // Runs as the owner role, and refuses any host but localhost unless you name
 // the branch's host in SEED_SCALE_ALLOW_HOST (never the production branch).
 import { sql } from 'drizzle-orm';
@@ -34,6 +36,33 @@ const log = (message: string) => {
 /** A Postgres array literal as one parameter. */
 const uuids = (ids: readonly string[]) => sql`${`{${ids.join(',')}}`}::uuid[]`;
 const texts = (items: readonly string[]) => sql`${`{${items.map((item) => `"${item}"`).join(',')}}`}::text[]`;
+
+const KEY_COLUMNS = sql.raw(
+  'workspace_id, owner_id, attribute_id, record_id, entry_id, live, text_key, number_key, code_key, date_key, time_key, option_id, bool_key',
+);
+
+/**
+ * Puts about 1% of the deals in the trash and removes about 1% of the other
+ * entries, so jumps and counts have hidden rows to leave out (AC-21). The
+ * picks come from a hash of the id, so a rerun picks the same rows.
+ */
+async function trashSome(tx: WorkspaceTx, workspaceId: string, deals: string, listId: string): Promise<void> {
+  await tx.execute(sql`
+    update records set deleted_at = now(), deleted_by_type = 'system'
+    where workspace_id = ${workspaceId} and object_id = ${deals} and deleted_at is null
+      and abs(hashtext(id::text)) % 100 = 0
+  `);
+  await tx.execute(sql`
+    update list_entries set deleted_at = now(), deleted_by_type = 'system'
+    where workspace_id = ${workspaceId} and list_id = ${listId} and deleted_at is null
+      and abs(hashtext(id::text)) % 100 = 1
+  `);
+  await tx.execute(sql`
+    update lists set entry_count = (
+      select count(*) from list_entries where workspace_id = ${workspaceId} and list_id = ${listId} and deleted_at is null
+    ) where workspace_id = ${workspaceId} and id = ${listId}
+  `);
+}
 
 const db = createDatabase({ url: env.DATABASE_URL_OWNER, applicationName: 'crm-seed-scale' });
 try {
@@ -250,12 +279,20 @@ try {
   }
 
   await run(async (tx) => {
-    await tx.execute(sql`update lists set entry_count = ${env.SEED_SCALE_ENTRIES} where id = ${listId}`);
+    await trashSome(tx, workspaceId, deals, listId);
     await tx.execute(
       sql`update workspace_counters set live_records = (select count(*) from records where workspace_id = ${workspaceId} and deleted_at is null) where workspace_id = ${workspaceId}`,
     );
   });
-  await run((tx) => tx.execute(sql`analyze records; analyze "values"; analyze record_links; analyze list_entries`));
+  // The bulk rows skipped the save path, so their stored sort keys come from the view that defines them.
+  await run(async (tx) => {
+    await tx.execute(sql`delete from sort_keys where workspace_id = ${workspaceId}`);
+    await tx.execute(
+      sql`insert into sort_keys select ${KEY_COLUMNS} from sort_key_sources where workspace_id = ${workspaceId}`,
+    );
+  });
+  log('sort keys');
+  await db.vacuumAnalyze(['records', 'values', 'record_links', 'list_entries', 'sort_keys']);
   log(`done: workspace ${workspaceId}, deals ${deals}, list ${listId}`);
 } finally {
   await db.close();

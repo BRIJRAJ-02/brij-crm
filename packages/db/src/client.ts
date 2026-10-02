@@ -14,6 +14,10 @@ export interface DatabaseOptions {
   onPoolError?: (error: Error) => void;
 }
 
+/** The tables `vacuumAnalyze` may tidy: the big tenant tables bulk loads fill. */
+export const VACUUM_TABLES = ['records', 'values', 'record_links', 'list_entries', 'sort_keys'] as const;
+export type VacuumTable = (typeof VACUUM_TABLES)[number];
+
 export interface DatabaseHealth {
   serverVersion: string;
   latencyMs: number;
@@ -30,6 +34,14 @@ export interface Database {
   checkHealth(): Promise<DatabaseHealth>;
   /** Refuses to continue if this connection could bypass row level security. */
   assertAppRole(): Promise<void>;
+  /**
+   * Vacuums and analyzes whole tables after a bulk load, outside any
+   * transaction (vacuum can't run in one), so index only scans have a current
+   * visibility map. Reads no tenant data; only the fixed `VACUUM_TABLES`.
+   * Needs the owner connection: Postgres skips tables it doesn't own, so this
+   * refuses rather than silently doing nothing.
+   */
+  vacuumAnalyze(tables: readonly VacuumTable[]): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -64,6 +76,22 @@ export function createDatabase(options: DatabaseOptions): Database {
         serverVersion: result.rows[0]?.server_version ?? 'unknown',
         latencyMs: Math.round(performance.now() - started),
       };
+    },
+
+    async vacuumAnalyze(tables) {
+      const unknown = tables.filter((table) => !(VACUUM_TABLES as readonly string[]).includes(table));
+      if (unknown.length > 0) throw new TypeError(`Can't vacuum ${unknown.join(', ')}.`);
+      const notOwned = await pool.query<{ name: string }>(
+        `select c.relname as name from pg_class c join pg_namespace n on n.oid = c.relnamespace
+         where n.nspname = 'public' and c.relname = any($1) and not pg_has_role(c.relowner, 'USAGE')`,
+        [tables],
+      );
+      if (notOwned.rows.length > 0) {
+        throw new Error(
+          `vacuumAnalyze needs the owner connection (not owner of ${notOwned.rows.map((row) => row.name).join(', ')}).`,
+        );
+      }
+      for (const table of tables) await pool.query(`vacuum (analyze) "${table}"`);
     },
 
     async assertAppRole() {

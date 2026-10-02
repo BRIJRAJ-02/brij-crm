@@ -19,6 +19,13 @@ const env = z
     SCALE_WORKSPACE_ID: z.uuid(),
     BENCH_RUNS: z.coerce.number().int().min(3).max(200).default(20),
     SEED_SCALE_ALLOW_HOST: z.string().min(1).optional(),
+    /** Grid numbers to run (`1,1b,7`), all when absent. */
+    BENCH_ONLY: z
+      .string()
+      .optional()
+      .transform((value) => (value === undefined ? undefined : new Set(value.split(',').map((item) => item.trim())))),
+    /** `off` skips the split table variant (it copies every current value row first). */
+    BENCH_SPLIT: z.enum(['on', 'off']).default('on'),
   })
   .parse(process.env);
 
@@ -86,8 +93,16 @@ const memberId = await app.withWorkspace(workspaceId, async (tx) => {
 });
 const scope: EngineScope = { db: app, workspaceId, actor: { type: 'member', id: memberId } };
 const and = (...conditions: FilterGroup['conditions']): FilterGroup => ({ conjunction: 'and', conditions });
+const byName = [{ attributeId: ids.name, direction: 'ascending' as const }];
+/** The cursor after the row before `position`, so the page that follows starts at `position`. */
+async function cursorAt(position: number): Promise<string> {
+  const page = await queryPage(scope, { objectId: ids.deals, sorts: byName, position: position - 1, limit: 1 });
+  if (page.nextCursor === undefined) throw new Error(`No row at ${String(position)}.`);
+  return page.nextCursor;
+}
+const [at100k, at500k] = [await cursorAt(100_000), await cursorAt(500_000)];
 
-const grid: { name: string; query: PageQuery }[] = [
+const fullGrid: { name: string; query: PageQuery }[] = [
   {
     name: '1. No filter, sort by name',
     query: { objectId: ids.deals, sorts: [{ attributeId: ids.name, direction: 'ascending' }] },
@@ -147,7 +162,16 @@ const grid: { name: string; query: PageQuery }[] = [
       sorts: [{ attributeId: ids.due, direction: 'ascending' }],
     },
   },
+  {
+    name: '7. Sort by name, the page after a cursor at row 100,000',
+    query: { objectId: ids.deals, sorts: byName, cursor: at100k },
+  },
+  {
+    name: '8. Sort by name, the page after a cursor at row 500,000',
+    query: { objectId: ids.deals, sorts: byName, cursor: at500k },
+  },
 ];
+const grid = fullGrid.filter((item) => env.BENCH_ONLY?.has(item.name.split('.')[0] ?? '') ?? true);
 
 async function timeStatement(tx: WorkspaceTx, query: PageQuery): Promise<number> {
   const start = performance.now();
@@ -158,11 +182,18 @@ async function timeStatement(tx: WorkspaceTx, query: PageQuery): Promise<number>
 async function measure(query: PageQuery, searchPath?: string) {
   return app.withWorkspace(workspaceId, async (tx) => {
     if (searchPath !== undefined) await tx.execute(sql.raw(`set local search_path = ${searchPath}`));
-    for (let warm = 0; warm < 3; warm += 1) await timeStatement(tx, query);
+    // The first run is the cold one (nothing cached yet on a fresh connection's plan); the rest warm up.
+    const cold = await timeStatement(tx, query);
+    for (let warm = 0; warm < 2; warm += 1) await timeStatement(tx, query);
     const samples: number[] = [];
     for (let run = 0; run < env.BENCH_RUNS; run += 1) samples.push(await timeStatement(tx, query));
     const { plans } = await benchPage(tx, scope, query, true);
-    return { p50: percentile(samples, 50), p95: percentile(samples, 95), plan: plans.join('\n\n-- then --\n\n') };
+    return {
+      cold,
+      p50: percentile(samples, 50),
+      p95: percentile(samples, 95),
+      plan: plans.join('\n\n-- then --\n\n'),
+    };
   });
 }
 
@@ -197,23 +228,24 @@ const sizes = await owner.withWorkspace(workspaceId, async (tx) => {
 
 try {
   // The split table variant: this workspace's current value rows alone, with the same indexes and policy.
-  await owner.withWorkspace(workspaceId, async (tx) => {
-    await tx.execute(sql`create schema if not exists bench_split`);
-    await tx.execute(sql`drop table if exists bench_split."values"`);
-    await tx.execute(sql`create table bench_split."values" (like public."values" including all)`);
-    await tx.execute(
-      sql`insert into bench_split."values" select * from public."values" where workspace_id = ${workspaceId} and active_until is null`,
-    );
-    await tx.execute(sql`alter table bench_split."values" enable row level security`);
-    await tx.execute(sql`alter table bench_split."values" force row level security`);
-    await tx.execute(sql`
+  if (env.BENCH_SPLIT === 'on')
+    await owner.withWorkspace(workspaceId, async (tx) => {
+      await tx.execute(sql`create schema if not exists bench_split`);
+      await tx.execute(sql`drop table if exists bench_split."values"`);
+      await tx.execute(sql`create table bench_split."values" (like public."values" including all)`);
+      await tx.execute(
+        sql`insert into bench_split."values" select * from public."values" where workspace_id = ${workspaceId} and active_until is null`,
+      );
+      await tx.execute(sql`alter table bench_split."values" enable row level security`);
+      await tx.execute(sql`alter table bench_split."values" force row level security`);
+      await tx.execute(sql`
       create policy values_tenant on bench_split."values"
         using (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid)
     `);
-    await tx.execute(sql`grant usage on schema bench_split to crm_app`);
-    await tx.execute(sql`grant select on bench_split."values" to crm_app`);
-    await tx.execute(sql`analyze bench_split."values"`);
-  });
+      await tx.execute(sql`grant usage on schema bench_split to crm_app`);
+      await tx.execute(sql`grant select on bench_split."values" to crm_app`);
+      await tx.execute(sql`analyze bench_split."values"`);
+    });
 
   const lines: string[] = [];
   const plans: string[] = [];
@@ -225,15 +257,17 @@ try {
     `Run ${new Date().toISOString()} on ${new URL(env.DATABASE_URL_DIRECT).hostname}, ${version.split(',')[0] ?? ''}, ${String(env.BENCH_RUNS)} warm runs each, as the app role.`,
   );
   lines.push('');
-  lines.push('| Query | p50 (ms) | p95 (ms) | whole call p95 (ms) | split table p95 (ms) | exact count |');
-  lines.push('|---|---|---|---|---|---|');
+  lines.push(
+    '| Query | first run (ms) | p50 (ms) | p95 (ms) | whole call p95 (ms) | split table p95 (ms) | exact count |',
+  );
+  lines.push('|---|---|---|---|---|---|---|');
   for (const { name, query } of grid) {
     const main = await measure(query);
-    const split = await measure(query, 'bench_split, public');
+    const split = env.BENCH_SPLIT === 'on' ? await measure(query, 'bench_split, public') : undefined;
     const whole = await wholeCall(query);
     const counted = await countTime(query);
     lines.push(
-      `| ${name} | ${main.p50.toFixed(1)} | ${main.p95.toFixed(1)} | ${whole.toFixed(1)} | ${split.p95.toFixed(1)} | ${counted} |`,
+      `| ${name} | ${main.cold.toFixed(1)} | ${main.p50.toFixed(1)} | ${main.p95.toFixed(1)} | ${whole.toFixed(1)} | ${split?.p95.toFixed(1) ?? 'skipped'} | ${counted} |`,
     );
     plans.push(`#### ${name}\n\n\`\`\`\n${main.plan}\n\`\`\``);
     console.error(`done: ${name}`);

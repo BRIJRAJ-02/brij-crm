@@ -21,6 +21,7 @@ import {
   type SortRule,
 } from '@crm/contracts/values';
 import { refuse } from '../refusals.ts';
+import { hasSortKey } from '../sort-keys.ts';
 import type { RelationshipDef } from '../relationships.ts';
 import type { Actor } from '../scope.ts';
 import type { AttributeDef } from '../values.ts';
@@ -873,6 +874,13 @@ export interface DrivingSort {
   readonly options?: readonly SQL[];
   /** True on rows that have no value for the first sort. */
   readonly empty: SQL;
+  /** The same, kept a per row check (an OFFSET 0 fence), for reading rows in id order and stopping at the limit. */
+  readonly emptyFenced: SQL;
+  /**
+   * For a sort driven from `sort_keys`: how many live rows have a value (exact,
+   * index only), so a position can jump straight to its row by offset.
+   */
+  readonly count?: SQL;
 }
 
 const DRIVEN_COLUMNS: Partial<Record<AttributeDef['type'], { column: string; kind: KeyKind }>> = {
@@ -905,7 +913,10 @@ export function drivingSort(
   const own = level.listId === null ? attribute.objectId === level.objectId : attribute.listId === level.listId;
   if (!own) return undefined;
   const current = sql`v.attribute_id = ${attribute.id} and v.position = 0 and v.active_until is null and not v.is_cleared`;
-  const empty = sql`not exists (select 1 from "values" v where v.workspace_id = r.workspace_id and v.owner_id = r.id and ${current})`;
+  const emptyOf = (fence: SQL) =>
+    sql`not exists (select 1 from "values" v where v.workspace_id = r.workspace_id and v.owner_id = r.id and ${current}${fence})`;
+  const empty = emptyOf(sql``);
+  const emptyFenced = emptyOf(sql` offset 0`);
   const { direction } = rule;
   if (attribute.type === 'select' || attribute.type === 'status') {
     if (optionIds.length === 0) return undefined;
@@ -922,6 +933,21 @@ export function drivingSort(
       rows: sql`from ${union} where true`,
       key: { direction, expression: sql`d.k`, kind: 'int', nullable: false },
       empty,
+      emptyFenced,
+    };
+  }
+  if (hasSortKey(attribute)) {
+    // Stored keys: index only, and `live` already leaves out trashed records and removed entries.
+    const held = sql`d.attribute_id = ${attribute.id} and d.live and d.text_key is not null`;
+    const noKey = (fence: SQL) =>
+      sql`not exists (select 1 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = r.id and k.attribute_id = ${attribute.id}${fence})`;
+    return {
+      source: sql`join sort_keys d on d.workspace_id = r.workspace_id and d.owner_id = r.id and ${held}`,
+      rows: sql`from sort_keys d where ${held}`,
+      key: { direction, expression: sql`d.text_key`, kind: 'text', nullable: false },
+      empty: noKey(sql``),
+      emptyFenced: noKey(sql` offset 0`),
+      count: sql`select count(*)::int as n from sort_keys d where ${held}`,
     };
   }
   const driven = DRIVEN_COLUMNS[attribute.type];
@@ -934,5 +960,6 @@ export function drivingSort(
     rows: sql`from "values" d where ${held}`,
     key: { direction, expression, kind: driven.kind, nullable: false },
     empty,
+    emptyFenced,
   };
 }

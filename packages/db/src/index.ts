@@ -3,6 +3,8 @@ export {
   type Database,
   type DatabaseHealth,
   type DatabaseOptions,
+  VACUUM_TABLES,
+  type VacuumTable,
   type WorkspaceTx,
 } from './client.ts';
 export { assertDirectUrl, openDirectConnection } from './direct.ts';

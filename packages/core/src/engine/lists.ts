@@ -9,6 +9,7 @@ import { RESTORE_WINDOW, takeEntrySlots, takeList } from './limits.ts';
 import { initialValues, writeAll, type AttributeResult } from './records.ts';
 import { refuse } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
+import { setEntryKeysLive } from './sort-keys.ts';
 import { holdUniqueKeys, releaseUniqueKeys } from './unique.ts';
 import { currentItems, loadListAttributes, lockRecord } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
@@ -166,6 +167,9 @@ export async function removeEntry(
       const { tx } = context;
       const entry = await lockAnyEntry(tx, input.entryId);
       if (entry.deletedAt !== null) return;
+      // The entry, then its record (share), as lockEntry takes them: a restore of the record waits for this
+      // removal or this one for it, so neither leaves the entry's keys or unique values showing.
+      await tx.execute(sql`select 1 from records where id = ${entry.recordId} for share`);
       const by = actorRow(scope.actor);
       await tx
         .update(listEntries)
@@ -177,6 +181,7 @@ export async function removeEntry(
         })
         .where(eq(listEntries.id, input.entryId));
       await holdUniqueKeys(tx, [input.entryId]);
+      await setEntryKeysLive(tx, input.entryId, false);
       await takeEntrySlots(tx, scope, entry.listId, -1);
       context.record({ removedEntries: [input.entryId] });
     },
@@ -211,6 +216,7 @@ export async function restoreEntry(
         .update(listEntries)
         .set({ deletedAt: null, deletedByType: null, deletedById: null, deletedByMemberId: null, ...touched(scope) })
         .where(eq(listEntries.id, input.entryId));
+      await setEntryKeysLive(tx, input.entryId, true);
       context.record({ restoredEntries: [input.entryId] });
     },
     hooks,

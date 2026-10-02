@@ -1,0 +1,294 @@
+// Stored sort keys (spec 0004, stored sort keys): the keys follow the values
+// through every write (AC-20), a jump lands on exactly the row cursor paging
+// puts there, trashed records and removed entries left out (AC-21), and the
+// comparisons the keys seek on are leakproof, so the index seeks under row
+// level security.
+import { sql } from 'drizzle-orm';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { createDatabase, type Database } from '@crm/db';
+import type { SortRule } from '@crm/contracts/values';
+import { defineAttribute, defineObject } from './definitions.ts';
+import { deleteRecord, eraseRecord, purgeDeleted, restoreRecord } from './deletion.ts';
+import { addEntry, defineList, removeEntry, restoreEntry } from './lists.ts';
+import { queryPage, type ViewSource } from './query/page.ts';
+import { createRecord, setValues } from './records.ts';
+import type { EngineScope } from './scope.ts';
+import type { AttributeDef } from './values.ts';
+import { createWorkspace } from './workspaces.ts';
+
+const { appUrl } = inject('testDatabase');
+let db: Database;
+let scope: EngineScope;
+let craft: string;
+let fleet: string;
+const a: Record<string, string> = {};
+const recordIds: string[] = [];
+const entryIds: string[] = [];
+
+/** A small, repeatable sequence (high bits of an LCG), so a failure reproduces. */
+function* sequence(seed: number) {
+  let state = seed;
+  for (;;) {
+    state = (state * 1_103_515_245 + 12_345) % 2_147_483_648;
+    yield Math.floor(state / 65_536);
+  }
+}
+const random = sequence(5);
+const next = (n: number) => (random.next().value ?? 0) % n;
+const WORDS = ['Vega', 'vega', 'Altair', 'Deneb', 'rigel', 'Ünal', 'zeta', 'Ångström', 'a_b%c', 'Polaris'];
+const word = () => `${WORDS[next(WORDS.length)] ?? 'x'} ${String(next(5))}`;
+
+beforeAll(async () => {
+  db = createDatabase({ url: appUrl, applicationName: 'crm-sort-keys-tests' });
+  const created = await createWorkspace(db, {
+    name: 'Keys',
+    slug: `keys-${String(Date.now())}`,
+    firstMember: { name: 'Kit', email: 'kit@example.com' },
+  });
+  scope = { db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } };
+  ({ objectId: craft } = await defineObject(scope, {
+    apiSlug: 'craft',
+    singularName: 'Craft',
+    pluralName: 'Craft',
+    icon: 'rocket',
+    hue: 'blue',
+  }));
+  const attribute = async (
+    on: { objectId: string } | { listId: string },
+    slug: string,
+    type: AttributeDef['type'],
+    extra: { isMulti?: boolean } = {},
+  ) => {
+    a[slug] = (await defineAttribute(scope, { ...on, apiSlug: slug, title: slug, type, ...extra })).attributeId;
+  };
+  await attribute({ objectId: craft }, 'title', 'text');
+  await attribute({ objectId: craft }, 'contacts', 'email', { isMulti: true });
+  await attribute({ objectId: craft }, 'log', 'long_text');
+  ({ listId: fleet } = await defineList(scope, { objectId: craft, apiSlug: 'fleet', name: 'Fleet' }));
+  await attribute({ listId: fleet }, 'callsign', 'text');
+});
+
+afterAll(async () => {
+  await db.close();
+});
+
+const id = (slug: string): string => {
+  const value = a[slug];
+  if (value === undefined) throw new Error(`No ${slug}.`);
+  return value;
+};
+const pick = <T>(items: readonly T[]): T => {
+  const item = items[next(items.length)];
+  if (item === undefined) throw new Error('Nothing to pick.');
+  return item;
+};
+
+/** Rows of sort_keys that the current values don't explain, and the other way round. */
+async function drift(): Promise<{ extra: number; missing: number }> {
+  return db.withWorkspace(scope.workspaceId, async (tx) => {
+    const columns = sql.raw(
+      'workspace_id, owner_id, attribute_id, record_id, entry_id, live, text_key, number_key, code_key, date_key, time_key, option_id, bool_key',
+    );
+    const extra = await tx.execute<{ n: number }>(
+      sql`select count(*)::int as n from (select ${columns} from sort_keys except select ${columns} from sort_key_sources) x`,
+    );
+    const missing = await tx.execute<{ n: number }>(
+      sql`select count(*)::int as n from (select ${columns} from sort_key_sources except select ${columns} from sort_keys) x`,
+    );
+    return { extra: extra.rows[0]?.n ?? -1, missing: missing.rows[0]?.n ?? -1 };
+  });
+}
+
+describe('keys follow values (AC-20)', () => {
+  it('stays equal to what the current values say through every kind of write', async () => {
+    for (let index = 0; index < 30; index += 1) {
+      const { recordId } = await createRecord(scope, {
+        objectId: craft,
+        values: {
+          ...(index % 5 === 4 ? {} : { [id('title')]: word() }),
+          ...(index % 3 === 0
+            ? {}
+            : { [id('contacts')]: [`c${String(index)}@example.com`, `d${String(index)}@example.com`] }),
+          [id('log')]: 'long text has no key',
+        },
+      });
+      recordIds.push(recordId);
+      if (index % 2 === 0) {
+        const { entryId } = await addEntry(scope, {
+          listId: fleet,
+          recordId,
+          values: index % 4 === 0 ? { [id('callsign')]: word() } : {},
+        });
+        entryIds.push(entryId);
+      }
+    }
+    expect(await drift()).toEqual({ extra: 0, missing: 0 });
+
+    for (let step = 0; step < 80; step += 1) {
+      const recordId = pick(recordIds);
+      const entryId = pick(entryIds);
+      const action = next(8);
+      try {
+        if (action === 0) await setValues(scope, { recordId, values: { [id('title')]: { value: word() } } });
+        if (action === 1) await setValues(scope, { recordId, values: { [id('title')]: { value: null } } });
+        // A reorder moves a different item to position 0, so the key changes.
+        if (action === 2) {
+          await setValues(scope, {
+            recordId,
+            values: { [id('contacts')]: { value: [`z${String(step)}@example.com`, 'a@example.com'] } },
+          });
+        }
+        if (action === 3) await deleteRecord(scope, { recordId });
+        if (action === 4) await restoreRecord(scope, { recordId });
+        if (action === 5) await removeEntry(scope, { entryId });
+        if (action === 6) await restoreEntry(scope, { entryId });
+        if (action === 7) await setValues(scope, { entryId, values: { [id('callsign')]: { value: word() } } });
+      } catch {
+        // A write on a trashed record or a removed entry is refused; the keys must still match.
+      }
+    }
+    expect(await drift()).toEqual({ extra: 0, missing: 0 });
+
+    // Hard deletes: erasure, and the purge of records and entries past the window.
+    await eraseRecord(scope, { recordId: recordIds[1] ?? '' });
+    const old = recordIds.slice(2, 5);
+    for (const recordId of old) await deleteRecord(scope, { recordId });
+    await removeEntry(scope, { entryId: entryIds[6] ?? '' }).catch(() => undefined);
+    await db.withWorkspace(scope.workspaceId, async (tx) => {
+      await tx.execute(
+        sql`update records set deleted_at = now() - interval '40 days' where id = any(${`{${old.join(',')}}`}::uuid[])`,
+      );
+      await tx.execute(
+        sql`update list_entries set deleted_at = now() - interval '40 days' where deleted_at is not null`,
+      );
+    });
+    await purgeDeleted(scope);
+    expect(await drift()).toEqual({ extra: 0, missing: 0 });
+  });
+});
+
+/** Every row of a view in cursor order. */
+async function ordered(source: ViewSource, sorts: SortRule[]): Promise<string[]> {
+  const ids: string[] = [];
+  let cursor: string | undefined;
+  for (let page = 0; page < 100; page += 1) {
+    const result = await queryPage(scope, { ...source, sorts, limit: 7, ...(cursor === undefined ? {} : { cursor }) });
+    ids.push(...(result.entries ?? result.records).map((row) => row.id));
+    if (result.nextCursor === undefined) return ids;
+    cursor = result.nextCursor;
+  }
+  throw new Error('Paging never ended.');
+}
+
+describe('races and other workspaces', () => {
+  it('an entry removal waits for a restore holding its record, so the entry stays hidden', async () => {
+    const { recordId } = await createRecord(scope, { objectId: craft, values: { [id('title')]: word() } });
+    const { entryId } = await addEntry(scope, { listId: fleet, recordId, values: { [id('callsign')]: word() } });
+    await deleteRecord(scope, { recordId });
+    // Hold the record's row lock as restoreRecord does, then start the removal.
+    let release: () => void = () => undefined;
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let locked: () => void = () => undefined;
+    const isLocked = new Promise<void>((resolve) => {
+      locked = resolve;
+    });
+    const restoring = db.withWorkspace(scope.workspaceId, async (tx) => {
+      await tx.execute(sql`select 1 from records where id = ${recordId} for no key update`);
+      locked();
+      await held;
+    });
+    await isLocked;
+    let removed = false;
+    const removing = removeEntry(scope, { entryId }).then(() => {
+      removed = true;
+    });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(removed).toBe(false);
+    release();
+    await restoring;
+    await removing;
+    await restoreRecord(scope, { recordId });
+    expect(await drift()).toEqual({ extra: 0, missing: 0 });
+  });
+
+  it('shows another workspace none of these keys', async () => {
+    const other = await createWorkspace(db, {
+      name: 'Other keys',
+      slug: `other-keys-${String(Date.now())}`,
+      firstMember: { name: 'Oz', email: 'oz@example.com' },
+    });
+    const seen = await db.withWorkspace(other.workspaceId, (tx) =>
+      tx.execute<{ keys: number; sources: number }>(sql`
+        select (select count(*)::int from sort_keys where workspace_id = ${scope.workspaceId}) as keys,
+          (select count(*)::int from sort_key_sources where workspace_id = ${scope.workspaceId}) as sources
+      `),
+    );
+    expect(seen.rows[0]).toEqual({ keys: 0, sources: 0 });
+  });
+});
+
+describe('exact jumps (AC-21)', () => {
+  it('lands on the row cursor paging puts at every position, for records and entries, both ways', async () => {
+    const views: [ViewSource, string][] = [
+      [{ objectId: craft }, 'title'],
+      [{ objectId: craft }, 'contacts'],
+      [{ listId: fleet }, 'callsign'],
+    ];
+    for (const [source, slug] of views) {
+      for (const direction of ['ascending', 'descending'] as const) {
+        const sorts = [{ attributeId: id(slug), direction }];
+        const order = await ordered(source, sorts);
+        expect(order.length).toBeGreaterThan(5);
+        for (let position = 0; position <= order.length + 2; position += 3) {
+          const page = await queryPage(scope, { ...source, sorts, position, limit: 4 });
+          expect((page.entries ?? page.records).map((row) => row.id)).toEqual(order.slice(position, position + 4));
+        }
+      }
+    }
+  });
+});
+
+describe('seeks under row level security', () => {
+  it('uses only leakproof comparisons for the stored keys', async () => {
+    const rows = await db.withWorkspace(scope.workspaceId, (tx) =>
+      tx.execute<{ name: string; leakproof: boolean }>(sql`
+        select p.proname as name, bool_and(p.proleakproof) as leakproof from pg_proc p
+        where p.proname in ('text_lt', 'text_le', 'text_gt', 'text_ge', 'texteq', 'bttextcmp', 'int8lt', 'int8gt',
+          'int8eq', 'date_lt', 'date_gt', 'timestamptz_lt', 'timestamptz_gt', 'uuid_lt', 'uuid_gt', 'uuid_eq', 'booleq')
+        group by p.proname
+      `),
+    );
+    expect(rows.rows.filter((row) => !row.leakproof)).toEqual([]);
+    expect(rows.rows.length).toBe(17);
+  });
+
+  it("finds one owner's key by index, never a scan of every record, as the app role", async () => {
+    const plan = await db.withWorkspace(scope.workspaceId, async (tx) => {
+      // With scans off, a join condition row level security can't use as an index condition still shows as a scan.
+      await tx.execute(sql`set local enable_seqscan = off`);
+      const result = await tx.execute<{ 'QUERY PLAN': unknown }>(sql`
+        explain (format json) select * from sort_key_sources
+        where owner_id = ${recordIds[0] ?? ''} and attribute_id = ${id('title')}
+      `);
+      return JSON.stringify(result.rows[0]?.['QUERY PLAN']);
+    });
+    expect(plan).not.toContain('Seq Scan');
+  });
+
+  it('seeks a text cursor in the index, as the app role', async () => {
+    const plan = await db.withWorkspace(scope.workspaceId, async (tx) => {
+      await tx.execute(sql`set local enable_seqscan = off`);
+      const result = await tx.execute<{ 'QUERY PLAN': unknown }>(sql`
+        explain (format json) select d.owner_id from sort_keys d
+        where d.attribute_id = ${id('title')} and d.live and d.text_key is not null and d.text_key >= ${'m'}
+        order by d.text_key, d.owner_id limit 5
+      `);
+      return JSON.stringify(result.rows[0]?.['QUERY PLAN']);
+    });
+    expect(plan).toContain('Index Only Scan');
+    expect(plan).toContain('sort_keys_text');
+    expect(plan).toMatch(/"Index Cond":"[^"]*text_key >=/);
+  });
+});

@@ -211,6 +211,13 @@ interface BuiltPage {
 const CANDIDATES = 5000;
 
 /**
+ * How many rows the empties read in id order, each checked on its own, before
+ * the page filters them first instead (correct, but it may be slow). Sparse
+ * empties end up filtered first either way, so the scan stays short.
+ */
+const EMPTIES_SCAN = 5000;
+
+/**
  * Builds a page. Usually one statement; when the first sort can drive from
  * its index (`drivingSort`), two parts: the rows with a value in key order,
  * then the rows without one. The first part reads up to 5,000 rows in key
@@ -294,33 +301,54 @@ async function buildPage(
     cursor === undefined ? sql`true` : afterCursor(driven, cursor),
     false,
   );
-  const empties = plain(
-    rest,
-    sql``,
-    drive.empty,
-    inEmpties ? afterCursor(rest, { id: cursor.id, keys: cursor.keys.slice(1) }, tie) : sql`true`,
-    true,
-  );
+  const emptiesAfter = inEmpties ? afterCursor(rest, { id: cursor.id, keys: cursor.keys.slice(1) }, tie) : sql`true`;
+  const empties = plain(rest, sql``, drive.empty, emptiesAfter, true);
 
   // The capped first pass: the next rows in key order, read straight from the index, then each one's filters.
   const fenced = compileFilter({ ...context, fence: true }, level, query.filter);
+
+  // With no later sort, the empties come in id order: read up to EMPTIES_SCAN rows that way, checking each
+  // one's filters on its own, and stop at the limit; past the scan, filter first instead.
+  const tieDir = sql.raw(tie === 'ascending' ? 'asc' : 'desc');
+  const scanEmpties = (take: number, skip: number) => sql`
+    with c0 as materialized (
+      select r.id as id_, r.workspace_id as ws_ from ${tables} where ${where} and ${emptiesAfter}
+      order by r.id ${tieDir} limit ${EMPTIES_SCAN}
+    ), edge as (select count(*)::int as n from c0)
+    select edge.n as scanned_, p.* from edge left join lateral (
+      select r.id::text as id, ${recordColumn}::text as record_id, null::text as key0
+      from c0, ${tables}
+      where r.workspace_id = c0.ws_ and r.id = c0.id_ and ${fenced} and ${drive.emptyFenced}
+      order by c0.id_ ${tieDir}
+      ${page(skip, take)}
+    ) p on true
+  `;
+  const emptiesBranch: Branch = async (inner, take, skip) => {
+    // A later sort orders the empties by it, and an offset past the scan can't be served from it.
+    if (rest.length > 0 || skip >= EMPTIES_SCAN) return run(empties)(inner, take, skip);
+    const result = (await inner.execute<Omit<PageRow, 'id'> & { id: string | null }>(scanEmpties(take, skip))).rows;
+    const found = result.filter((row): row is PageRow => row.id !== null);
+    const scanned = Number(result[0]?.scanned_ ?? 0);
+    return found.length >= take || scanned < EMPTIES_SCAN ? found : run(empties)(inner, take, skip);
+  };
   const ascending = drive.key.direction === 'ascending';
   const cursorKey = cursor?.keys[0];
-  const tieOp = sql.raw(tie === 'ascending' ? '>' : '<');
   const keyOp = sql.raw(ascending ? '>' : '<');
+  // The bound on the key alone comes first, so the index seeks to the cursor instead of filtering up to it.
   const innerAfter = (key: SQL) =>
     cursor === undefined || cursorKey === null || cursorKey === undefined
       ? sql`true`
       : rest.length === 0
-        ? sql`(${key} ${keyOp} ${fromText(drive.key, cursorKey)} or (${key} = ${fromText(drive.key, cursorKey)} and d.owner_id ${tieOp} ${cursor.id}::uuid))`
+        ? // One key, its tie in the same direction: a row comparison seeks straight to (key, id).
+          sql`(${key}, d.owner_id) ${keyOp} (${fromText(drive.key, cursorKey)}, ${cursor.id}::uuid)`
         : sql`${key} ${sql.raw(ascending ? '>=' : '<=')} ${fromText(drive.key, cursorKey)}`;
   const outerKeys: readonly SortKey[] = [{ ...drive.key, expression: sql`c0.dkey_` }, ...rest];
-  const capped = (take: number, cap: number, rows: SQL, key: SQL) => sql`
+  const capped = (take: number, cap: number, rows: SQL, key: SQL, skip = 0) => sql`
     with c0 as materialized (
       select d.owner_id as id_, d.workspace_id as ws_, ${key} as dkey_
       ${rows} and ${innerAfter(key)}
       order by 3 ${sql.raw(ascending ? 'asc' : 'desc')}, 1 ${sql.raw(tie === 'ascending' ? 'asc' : 'desc')}
-      limit ${cap}
+      ${skip > 0 ? sql`offset ${skip}` : sql``} limit ${cap}
     ), edge as (
       select count(*)::int as n, (array_agg(dkey_::text order by dkey_ ${sql.raw(ascending ? 'desc' : 'asc')}))[1] as last from c0
     )
@@ -355,8 +383,15 @@ async function buildPage(
     return { rows: [], complete: false };
   };
   const options = drive.options;
+  /** A jump on stored keys: an index only offset straight to the row (the view is unfiltered, `checkPage` says so). */
+  const jump = async (inner: WorkspaceTx, take: number, skip: number): Promise<readonly PageRow[]> => {
+    const result = await inner.execute<Omit<PageRow, 'id'> & { id: string | null }>(
+      capped(take, take, drive.rows, drive.key.expression, skip),
+    );
+    return result.rows.filter((row): row is PageRow => row.id !== null);
+  };
   const valued: Branch = async (inner, take, skip) => {
-    if (skip > 0) return run(filterFirst)(inner, take, skip);
+    if (skip > 0) return drive.count === undefined ? run(filterFirst)(inner, take, skip) : jump(inner, take, skip);
     if (options === undefined) {
       const single = await pass(inner, take, drive.rows, drive.key.expression);
       return single.complete ? single.rows : run(filterFirst)(inner, take, skip);
@@ -382,17 +417,26 @@ async function buildPage(
     return found.slice(0, take);
   };
   return {
-    branches: inEmpties ? [run(empties)] : [valued, run(empties)],
+    branches: inEmpties ? [emptiesBranch] : [valued, emptiesBranch],
     keyCount: keys.length,
     limit,
     isList,
     ...(inEmpties
       ? {}
-      : { countFirst: sql`select count(*)::int as n from ${tables} ${drive.source} where ${where} and ${filter}` }),
+      : {
+          countFirst:
+            drive.count ?? sql`select count(*)::int as n from ${tables} ${drive.source} where ${where} and ${filter}`,
+        }),
     explain: (take, skip) =>
       inEmpties
-        ? [empties(take, skip)]
-        : [capped(take, take * 2, drive.rows, drive.key.expression), filterFirst(take, skip), empties(take, skip)],
+        ? [rest.length > 0 ? empties(take, skip) : scanEmpties(take, skip)]
+        : skip > 0 && drive.count !== undefined
+          ? [capped(take, take, drive.rows, drive.key.expression, skip)]
+          : [
+              capped(take, take * 2, drive.rows, drive.key.expression),
+              filterFirst(take, skip),
+              rest.length > 0 ? empties(take, skip) : scanEmpties(take, skip),
+            ],
   };
 }
 

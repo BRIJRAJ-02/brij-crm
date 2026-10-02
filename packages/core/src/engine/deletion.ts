@@ -2,13 +2,15 @@
 // A delete hides the record, and with it its links and entries (every read
 // joins records and skips deleted ones), without touching the records on the
 // other side. A restore within 30 days brings all three back. The purge and
-// erasure are the only hard deletes, each counted.
+// erasure are the only hard deletes, each counted. Stored sort keys follow:
+// hidden on delete, shown on restore, removed before their values.
 import { eq, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { uuidArray } from './ids.ts';
 import { RESTORE_WINDOW, takeRecordSlots } from './limits.ts';
 import { refuse } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
+import { deleteSortKeys, setRecordKeysLive } from './sort-keys.ts';
 import { holdUniqueKeys, releaseUniqueKeys } from './unique.ts';
 import { runWrite, type AfterWrite } from './write.ts';
 
@@ -67,6 +69,7 @@ export async function deleteRecord(
         })
         .where(eq(records.id, input.recordId));
       await holdUniqueKeys(tx, [input.recordId, ...(await liveEntryIds(tx, input.recordId))]);
+      await setRecordKeysLive(tx, input.recordId, false);
       await takeRecordSlots(tx, scope, -1);
       context.record({ deletedRecords: [input.recordId] });
       return { recordId: input.recordId, state: 'deleted' as const };
@@ -99,6 +102,7 @@ export async function restoreRecord(
         .update(records)
         .set({ deletedAt: null, deletedByType: null, deletedById: null, deletedByMemberId: null })
         .where(eq(records.id, input.recordId));
+      await setRecordKeysLive(tx, input.recordId, true);
       context.record({ restoredRecords: [input.recordId] });
       return { recordId: input.recordId, state: 'live' as const };
     },
@@ -142,6 +146,7 @@ async function removeRecords(tx: WorkspaceTx, recordIds: readonly string[]): Pro
     ) gone
     where l.id = gone.list_id
   `);
+  await deleteSortKeys(tx, { recordIds });
   const values = await tx.execute(sql`
     delete from "values" where record_id = any(${ids})
       or entry_id in (select id from list_entries where record_id = any(${ids}))
@@ -198,6 +203,7 @@ export async function purgeDeleted(
           order by deleted_at, id limit ${batchSize} for update skip locked
         `);
         const entryIds = uuidArray(removedEntries.rows.map((row) => row.id));
+        await deleteSortKeys(tx, { entryIds: removedEntries.rows.map((row) => row.id) });
         const entryValues = await tx.execute(sql`delete from "values" where entry_id = any(${entryIds})`);
         const entries = await tx.execute(sql`delete from list_entries where id = any(${entryIds})`);
         const full = doomed.rows.length === batchSize || removedEntries.rows.length === batchSize;

@@ -21,7 +21,7 @@ import { createWorkspace } from '../workspaces.ts';
 import { evaluate, type EvaluateContext, type PlainRecord } from './evaluate.ts';
 import { countMatches, queryPage, type PageQuery, type ViewSource } from './page.ts';
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, ownerUrl } = inject('testDatabase');
 const NOW = '2026-10-15T14:00:00.000Z';
 const ZONE = 'America/New_York';
 let db: Database;
@@ -271,6 +271,11 @@ beforeAll(async () => {
       sql`select id::text, primary_attribute_id::text as primary from objects`,
     ),
   );
+  // Fresh stats for the sample. The other suites fill the same tables at once, and stats taken while the
+  // tables were nearly empty make every estimate 1 row, so a two hop filter loops over whole tables.
+  const maintenance = createDatabase({ url: ownerUrl, applicationName: 'crm-query-tests-analyze' });
+  await maintenance.vacuumAnalyze(['records', 'values', 'record_links', 'list_entries', 'sort_keys']);
+  await maintenance.close();
   context = {
     attributes,
     records: byId,

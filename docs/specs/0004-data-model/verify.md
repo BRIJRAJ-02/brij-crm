@@ -3,8 +3,9 @@ _Steps derived from spec 0004's acceptance criteria and its Value sourcing table
 
 ## Commands
 - [ ] `pnpm --filter @crm/db test` → the guard tests pass: every table forces row level security with a policy, every index leads with `workspace_id`, a read without the workspace returns nothing, and a write into another workspace is refused by the database → AC-7, AC-9
-- [ ] `pnpm --filter @crm/core test` → the engine suites pass (`engine.test.ts`, `rules.test.ts`, `links.test.ts`, `query/query.test.ts`) → AC-1 to AC-19
-- [ ] `pnpm db:migrate` on an empty database → migrations 0001 to 0007 apply in order; `pnpm db:generate` afterwards reports no schema changes → AC-9
+- [ ] `pnpm --filter @crm/core test` → the engine suites pass (`engine.test.ts`, `rules.test.ts`, `links.test.ts`, `query/query.test.ts`, `sort-keys.test.ts`) → AC-1 to AC-21
+- [ ] `pnpm db:migrate` on an empty database → migrations 0001 to 0009 apply in order; `pnpm db:generate` afterwards reports no schema changes → AC-9
+- [ ] `pnpm db:migrate` on a database that already has data → 0009 fills `sort_keys` for every workspace, and afterwards every table still forces row level security → AC-9, AC-20
 - [ ] `pnpm check` → green
 
 ## Milestone 1: one value through every layer
@@ -42,6 +43,14 @@ _Steps derived from spec 0004's acceptance criteria and its Value sourcing table
 - [ ] Another workspace's object or list id is refused `NOT_FOUND`, the same as one that never existed, and its attribute ids are unknown here → AC-9
 - [ ] `pnpm db:seed:scale` then `SCALE_WORKSPACE_ID=<id> pnpm db:bench:scale` → every grid query's p95 is under 300 ms (results below) → AC-15
 
+## Milestone 5: one stored sort key through every layer ([0004-stored-sort-keys](0004-stored-sort-keys.md))
+- [ ] A random mix of saves, clears, multi value reorders, deletes, restores, entry removals and restores, an erasure and a purge leaves `sort_keys` exactly equal to `sort_key_sources` (no extra and no missing rows) → AC-20
+- [ ] An unchanged value writes no key; long text gets no key → AC-20
+- [ ] A jump to every position on a text sort (records, a multi valued email, and a list's entry attribute; both directions; into the empties) returns what cursor paging puts there, with trashed records and removed entries left out → AC-21
+- [ ] The text, int8, date, timestamptz, uuid and bool comparisons are leakproof, and a text cursor on `sort_keys` is an `Index Cond` of an index only scan as the app role → AC-21, AC-22
+- [ ] Every view in `public` is `security_invoker`, so a reader's own row level security applies (`guards.test.ts`) → AC-9
+- [ ] On the scale seed (1% of deals trashed, 1% of entries removed), grid 1, 1b, 7 and 8 are under 300 ms at p95 (results below) → AC-21, AC-22
+
 ## Value sourcing
 - [ ] `t` for a version is `clock_timestamp()` after the owner's row lock, never before the version it replaces; a delete's `deleted_at` is taken the same way, so no save looks later than the delete it lost to → write protocol
 - [ ] Relative dates resolve against the `now`, `timeZone` and `weekStart` passed to `queryPage` and `countMatches` (the database's `now()`, UTC and Monday when absent) → queryPage, countMatches
@@ -68,6 +77,25 @@ Run on 2 October 2026 against the local Docker Postgres 18.6 (8 CPUs, 8 GB for D
 | record_links | 901,710 | 207 MB | 634 MB |
 | records | 1,082,000 | 183 MB | 326 MB |
 | values | 9,564,226 | 2,322 MB | 3,654 MB |
+
+### Milestone 5: stored text keys (local Docker, 2 October 2026)
+
+The same seed with 10,007 deals trashed and 1,987 entries removed (15,100 hidden keys), `sort_keys` backfilled by migration 0009 (1.58 million keys, about a minute), then `vacuum (analyze)`. `BENCH_ONLY=1,1b,5,7,8 BENCH_SPLIT=off pnpm db:bench:scale`, 20 warm runs each, as the app role. "First run" is the cold one, before the warm ups.
+
+| Query | first run (ms) | p50 (ms) | p95 (ms) | whole call p95 (ms) | before (p95) |
+|---|---|---|---|---|---|
+| 1. No filter, sort by name | 4.2 | 4.2 | 6.9 | 36.4 | 23.7 |
+| 1b. The same at position 600,000 | 86.7 | 39.6 | 42.1 | 85.4 | 9,159.8 |
+| 5. Next step is empty, sort by stage | 22.2 | 11.0 | 11.7 | 38.3 | 25.4 |
+| 7. Sort by name, the page after a cursor at row 100,000 | 5.8 | 2.7 | 3.0 | 38.2 | not run |
+| 8. Sort by name, the page after a cursor at row 500,000 | 3.2 | 2.6 | 2.8 | 45.1 | 2,050 (review probe) |
+
+Every key read is an index only scan with no heap fetches; `sort_keys` is 191 MB with a 186 MB text index. The jump has headroom (the stop rule in milestone 5 doesn't fire), so milestone 6 goes ahead. A save's key sync is index lookups only (0.3 ms for one owner and attribute, as the app role); the first version joined the record through a `coalesce`, which row level security can't use as an index condition, and scanned every record (about 200 ms), so a test now pins that plan.
+
+Still open from the review, for milestone 6 and 7:
+- A jump into the empties counts the live keys first, a scan of the whole `sort_keys` heap (200 to 290 ms), and is best effort, as the spec says.
+- A last page with few or no empties reads up to 5,000 rows one by one before it filters first (about 12 ms more than before).
+- The cold first jump (87 ms locally) will be slower on the smallest Neon compute, where the text index may not stay cached: AC-26 records the first run there too.
 
 ### What the first run showed, and what changed
 

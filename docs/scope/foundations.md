@@ -59,7 +59,7 @@ The engine every feature stands on, modelled on how Attio works (not on Timefix)
    - [x] Every type and the rules: options, every type's columns, defaults, required, unique, limits, versions and history reads, and the standard template (AC-1 to AC-4, AC-10 to AC-13, AC-16)
    - [x] Relationships, lists and deletion: links with cardinality on both sides, lists and entries, delete, restore, purge and erasure (AC-3, AC-5, AC-6, AC-8, AC-18)
    - [x] The whole query engine at scale: every operator and sort, filters through relationships, counts, and the million record benchmark grid against the split table variant (AC-6, AC-14, AC-15)
-   - [ ] One stored sort key through every layer: the `sort_keys` table, text keys written in every save and delete, and exact text jumps and cursors measured at scale ([0004-stored-sort-keys](../specs/0004-data-model/0004-stored-sort-keys.md); AC-20, AC-21, AC-22)
+   - [x] One stored sort key through every layer: the `sort_keys` table, text keys written in every save and delete, and exact text jumps and cursors measured at scale ([0004-stored-sort-keys](../specs/0004-data-model/0004-stored-sort-keys.md); AC-20, AC-21, AC-22)
    - [ ] Every key kind: number, currency, date, time, option and checkbox keys, stored key filters, big first groups, list views by record attributes, the empties, and capped counts (AC-20 to AC-23)
    - [ ] Fast contains and the proof: the workspace scoped search function (or the narrowed fallback), the extended grid, and the run on a paid Neon branch (AC-22, AC-24, AC-25, AC-26)
 - [ ] Verify it: `/check verify data model`

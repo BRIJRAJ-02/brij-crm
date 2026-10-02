@@ -78,6 +78,16 @@ describe('every tenant table', () => {
       .map((row) => row.index);
     expect(stray).toEqual([]);
   });
+
+  it("reads every view with the reader's own row level security", async () => {
+    const views = await owner.query<{ view: string; invoker: boolean }>(`
+      select c.relname as view, coalesce('security_invoker=true' = any(c.reloptions), false) as invoker
+      from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'public' and c.relkind = 'v'
+    `);
+    expect(views.rows.length).toBeGreaterThan(0);
+    expect(views.rows.filter((row) => !row.invoker).map((row) => row.view)).toEqual([]);
+  });
 });
 
 describe('isolation', () => {
