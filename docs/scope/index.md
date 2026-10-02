@@ -41,7 +41,7 @@ Build order is the order of the rows below (a feature added later takes the next
 | 2 | Coding standards & tooling | Foundation | [Foundations](foundations.md) | done |
 | 3 | Design tokens | Foundation | [Foundations](foundations.md) | done |
 | 4 | Component library | Foundation | [Foundations](foundations.md) | in-progress |
-| 5 | Data model | Foundation | [Foundations](foundations.md) | planned |
+| 5 | Data model | Foundation | [Foundations](foundations.md) | in-progress |
 | 6 | Client data and state | Foundation | [Foundations](foundations.md) | planned |
 | 7 | Change events and realtime | Foundation | [Foundations](foundations.md) | planned |
 | 8 | Background jobs | Foundation | [Foundations](foundations.md) | planned |

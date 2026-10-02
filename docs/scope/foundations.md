@@ -50,10 +50,20 @@ A large design system built up front for the whole plan, not piece by piece: ato
 - [ ] Document it: `/document component library`
 Spec [0003](../specs/0003-component-library/index.md) · code in `packages/ui/`
 
-### 5. Data model · needs a decision · GA
+### 5. Data model · in-progress · GA
 The engine every feature stands on, modelled on how Attio works (not on Timefix): objects, both standard and custom; records; typed attributes, some of which hold many values (several emails, phones or domains); two way relationship attributes; lists whose entries carry their own attributes; status attributes with stages; and the full history of every value. Workspaces, members and teams sit around it, and notes, tasks, comments and files attach to any record. The attribute research in `docs/research/crm-attributes.md` feeds this spec.
 **Done when:** People, Companies and Deals run on the same engine as custom objects, just as in Attio; renaming a select option never rewrites records; a relationship is one definition that gives each of the two objects its own paired attribute, and each link is stored once and read from both ends; every value change is kept with who and when, so a value as of any date and time in stage can be answered; every row records its workspace, author and time, and deletes are soft with a restore window; no query can return another workspace's rows, even one that forgets to filter; filtering and sorting on any attribute stays inside the scale budget at a million records.
-- [ ] Design it (spec): `/architect data model`
+- [x] Design it (spec): `/architect data model`
+- [ ] Build it: `/develop data model`
+   - [ ] One value through every layer: the first tables with forced row level security and composite keys, the write protocol and hooks, a text attribute end to end, and the query compiler's first slice (AC-1, AC-3, AC-7, AC-9, AC-13, AC-14, AC-17, AC-19)
+   - [ ] Every type and the rules: options, every type's columns, defaults, required, unique, limits, versions and history reads, and the standard template (AC-1 to AC-4, AC-10 to AC-13, AC-16)
+   - [ ] Relationships, lists and deletion: links with cardinality on both sides, lists and entries, delete, restore, purge and erasure (AC-3, AC-5, AC-6, AC-8, AC-18)
+   - [ ] The whole query engine at scale: every operator and sort, filters through relationships, counts, and the million record benchmark grid against the split table variant (AC-6, AC-14, AC-15)
+- [ ] Verify it: `/check verify data model`
+- [ ] Test it: `/test data model`
+- [ ] Review it (fresh model): `/check review data model`
+- [ ] Document it: `/document data model`
+Spec [0004](../specs/0004-data-model/index.md) · code in `packages/db/`, `packages/core/`, `packages/contracts/`
 
 ### 6. Client data and state · needs a decision · GA
 The backbone of the app and the top priority: one client data layer that holds every record a screen shows in one place, so a record shown in a table, a board, a record page and a search result is a single copy that updates everywhere at once.
