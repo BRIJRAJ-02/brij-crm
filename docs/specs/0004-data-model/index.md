@@ -7,6 +7,10 @@
 
 Every record in the CRM, whether a person, a company, a deal or something a customer invents, lives in the same few tables. Values are typed rows that keep their whole history, so you can ask what a field said on any date and how long a deal sat in each stage. Relationships are stored once and read from both ends, lists hold entries with values of their own, and the database itself keeps each workspace's data apart. This spec also builds the query engine that turns a saved filter and sort into SQL, and proves it on a million records before any screen depends on it.
 
+## Structure
+
+- [0004-stored-sort-keys.md](0004-stored-sort-keys.md): stored sort keys with a live flag, capped counts and a workspace scoped contains search, the answer to the AC-15 misses milestone 4 measured (AC-20 to AC-26).
+
 ## Requirements
 
 **User stories**:
@@ -203,7 +207,7 @@ A list's `queryPage` filters and sorts on entry attributes and on the record's o
 | `getRecords`, `queryPage` | `RecordRefDisplay.kind` and hue | `objects.standard_key` (`people` is a person, otherwise a company or record tile) and `objects.hue`; pictures wait for #32 |
 | `getHistory` | option labels | the option row as it is now |
 | `getTimeInStages` | visits per stage | the status attribute's versions, each `[active_from, active_until or now)` |
-| `countMatches` | count | `count(*)` over the same compiled filter, in its own statement with a 10 s `statement_timeout`; the caller cancels with an abort signal |
+| `countMatches` | count | `count(*)` over the same compiled filter, in its own statement with a 10 s `statement_timeout`; the caller cancels with an abort signal. Capped at 10,000 by [0004-stored-sort-keys.md](0004-stored-sort-keys.md) (AC-23) |
 | `purgeDeleted` | cutoff | now minus 30 days (`RESTORE_WINDOW` in the limits module) |
 | limits module | each limit and current count | `packages/core/src/limits.ts` constants, and `workspace_counters` or `lists.entry_count` read under `FOR UPDATE` |
 | reads | numbers | `number_value` returned through `toCanonicalDecimal` from contracts; ratings as integers |
@@ -294,7 +298,7 @@ Tracer Bullet: the first milestone threads one text attribute from the migration
 
 - [ ] **The scale proof's compute:** production is on Neon's Free plan today. Run AC-15 on a branch with the smallest paid compute, or record the Free plan result beside it and say which one the budget means.
 - [ ] **#12's load harness** reuses `pnpm db:seed:scale` and the benchmark grid, and decides on hash partitioning of `values` by workspace.
-- [ ] **If the grid misses:** the next step is one flat sort and filter projection per object (a table of current sort keys, refreshed in the write transaction), weighed against the split table variant.
+- [x] **If the grid misses:** it did (the position jump, and more the performance review measured). Decided in [0004-stored-sort-keys.md](0004-stored-sort-keys.md): one `sort_keys` table refreshed in the write transaction, chosen over the split table variant.
 - [ ] **#6's windowed client query** is designed against `queryPage`'s cursor, and against position jumps only for unfiltered views.
 - [ ] **#14 (type changes)** designs how a type or multi change converts existing value rows in a background job.
 - [ ] **Formula, rollup and lookup types (#16)** need their own storage decision; nothing here stores derived values.
