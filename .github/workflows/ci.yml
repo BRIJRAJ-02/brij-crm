@@ -51,7 +51,10 @@ jobs:
           key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium
       - run: pnpm --filter @crm/ui exec playwright install --with-deps chromium
       # Every package's tests; the library's stories run in their own jobs below.
-      - run: pnpm test
+      # The library runs after the rest, on its own: its scroll perf test counts
+      # long tasks, and the database suites beside it on a small runner make them.
+      - run: pnpm exec turbo run test --filter='!@crm/ui'
+      - run: pnpm exec turbo run test --filter=@crm/ui
         env:
           CRM_STORY_BROWSERS: none
       - run: pnpm size
