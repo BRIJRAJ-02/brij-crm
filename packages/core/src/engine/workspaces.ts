@@ -2,15 +2,17 @@
 // first member, and the standard objects from the template, in one write.
 // It runs inside withWorkspace() for the new id, so even the first insert is
 // checked by row level security; no owner connection is needed.
+import { eq } from 'drizzle-orm';
 import { schema } from '@crm/db';
 import { STANDARD_OBJECTS, STANDARD_TEMPLATE_VERSION } from '../templates/standard-v1.ts';
 import { insertAttribute, insertObject } from './definitions.ts';
 import { newId } from './ids.ts';
+import { insertOption } from './options.ts';
 import { postgresError, refuse } from './refusals.ts';
 import { SYSTEM_ACTOR, type EngineScope } from './scope.ts';
 import { runWrite, type AfterWrite } from './write.ts';
 
-const { members, workspaceCounters, workspaces } = schema;
+const { attributes, members, workspaceCounters, workspaces } = schema;
 
 /** What a new workspace needs. */
 export interface WorkspaceInput {
@@ -58,7 +60,20 @@ export async function createWorkspace(
             ...object,
             standard: { key: standardKey, templateVersion: STANDARD_TEMPLATE_VERSION },
           });
-          for (const attribute of standard.attributes) await insertAttribute(context, { ...attribute, objectId });
+          for (const { options, defaultFirstOption, ...attribute } of standard.attributes) {
+            const { attributeId } = await insertAttribute(context, { ...attribute, objectId });
+            const optionIds: string[] = [];
+            for (const option of options ?? []) {
+              optionIds.push((await insertOption(context, { attributeId, ...option })).optionId);
+            }
+            const [first] = optionIds;
+            if (defaultFirstOption === true && first !== undefined) {
+              await tx
+                .update(attributes)
+                .set({ defaultValue: { kind: 'static', value: first } })
+                .where(eq(attributes.id, attributeId));
+            }
+          }
           objects[standardKey] = objectId;
         }
         return { workspaceId, memberId, objects };

@@ -53,20 +53,31 @@ async function refusalOf(promise: Promise<unknown>) {
 }
 
 describe('a new workspace', () => {
-  it('seeds People as an ordinary object with system and primary attributes (AC-1)', async () => {
+  it('seeds People, Companies and Deals as ordinary objects with system and primary attributes (AC-1)', async () => {
     const { scope, objects } = await workspace();
-    const peopleId = objects.people;
-    expect(peopleId).toBeDefined();
-    const slugsOf = await attributeIds(scope, peopleId ?? '');
-    expect(Object.keys(slugsOf).sort()).toEqual(
-      ['created_at', 'created_by', 'email_addresses', 'name', 'record_id', 'updated_at', 'updated_by'].sort(),
-    );
+    expect(Object.keys(objects).sort()).toEqual(['companies', 'deals', 'people']);
+    const people = await attributeIds(scope, objects.people ?? '');
+    for (const slug of [
+      'record_id',
+      'created_at',
+      'created_by',
+      'updated_at',
+      'updated_by',
+      'name',
+      'email_addresses',
+    ]) {
+      expect(people[slug], slug).toBeDefined();
+    }
     const rows = await db.withWorkspace(scope.workspaceId, (tx) =>
-      tx.execute<{ is_standard: boolean; standard_key: string; primary_attribute_id: string }>(
-        sql`select is_standard, standard_key, primary_attribute_id from objects`,
+      tx.execute<{ standard_key: string; primary: string; is_standard: boolean }>(
+        sql`select o.standard_key, a.api_slug as primary, o.is_standard from objects o join attributes a on a.id = o.primary_attribute_id order by o.standard_key`,
       ),
     );
-    expect(rows.rows).toEqual([{ is_standard: true, standard_key: 'people', primary_attribute_id: slugsOf.name }]);
+    expect(rows.rows).toEqual([
+      { standard_key: 'companies', primary: 'name', is_standard: true },
+      { standard_key: 'deals', primary: 'name', is_standard: true },
+      { standard_key: 'people', primary: 'name', is_standard: true },
+    ]);
   });
 
   it('refuses a workspace address that is taken', async () => {

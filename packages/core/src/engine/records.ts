@@ -1,9 +1,10 @@
 // Creating records, setting their values and reading them back (spec 0004).
 // Every write goes through runWrite and the value write protocol; every read
 // runs inside withWorkspace().
-import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { HUES, type EngineRefusal, type Hue, type RecordRefDisplay } from '@crm/contracts/values';
+import { AttributeDefault, HUES, type EngineRefusal, type Hue, type RecordRefDisplay } from '@crm/contracts/values';
+import { takeRecordSlots } from './limits.ts';
 import { decodeValue } from './columns.ts';
 import { isUuidV7 } from './ids.ts';
 import { isRefusal, postgresError, refuse, refuseAll } from './refusals.ts';
@@ -26,6 +27,38 @@ export interface RecordInput {
   readonly objectId: string;
   readonly values?: Readonly<Record<string, unknown>>;
   readonly id?: string;
+  /** The creator's time zone, for date defaults such as "a month from today" (UTC when absent). */
+  readonly timeZone?: string;
+}
+
+/** The value a default gives a new record, or undefined when it gives none (a current user default for a non member). */
+async function defaultFor(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  attribute: AttributeDef,
+  timeZone: string,
+): Promise<unknown> {
+  const parsed = AttributeDefault.safeParse(attribute.defaultValue);
+  if (!parsed.success) return undefined;
+  const rule = parsed.data;
+  if (rule.kind === 'static') return rule.value;
+  if (rule.kind === 'current_user')
+    return scope.actor.type === 'member' ? { type: 'member', id: scope.actor.id } : undefined;
+  const offset = sql`${rule.duration}::interval`;
+  try {
+    const result =
+      attribute.type === 'date'
+        ? await tx.execute<{ value: string }>(
+            sql`select ((now() at time zone ${timeZone}) + ${offset})::date::text as value`,
+          )
+        : await tx.execute<{ value: string }>(
+            sql`select to_char((now() + ${offset}) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as value`,
+          );
+    return result.rows[0]?.value;
+  } catch (error) {
+    if (postgresError(error)?.code === '22023') throw refuse('CONFIG_INVALID', 'That time zone is not known.');
+    throw error;
+  }
 }
 
 /** One attribute's new value, and the version the edit started from. */
@@ -57,8 +90,9 @@ export interface RecordView {
 function parseAll(
   attributes: ReadonlyMap<string, AttributeDef>,
   inputs: Readonly<Record<string, ValueInput>>,
+  earlier: readonly EngineRefusal[] = [],
 ): readonly { attribute: AttributeDef; input: ValueInput }[] {
-  const refusals: EngineRefusal[] = [];
+  const refusals: EngineRefusal[] = [...earlier];
   const parsed: { attribute: AttributeDef; input: ValueInput }[] = [];
   for (const [attributeId, input] of Object.entries(inputs)) {
     const attribute = attributes.get(attributeId);
@@ -115,68 +149,133 @@ async function liveObject(tx: WorkspaceTx, objectId: string): Promise<void> {
   if (row.archivedAt !== null) throw refuse('NOT_FOUND', 'That object is archived. Restore it first.');
 }
 
-/** Creates a record with its first values (AC-1, AC-2, AC-13). */
+/** Creates a record with its first values, defaults filled in and required ones checked (AC-1, AC-2, AC-11, AC-13, AC-16). */
 export async function createRecord(scope: EngineScope, input: RecordInput, hooks: readonly AfterWrite[] = []) {
   if (input.id !== undefined && !isUuidV7(input.id)) {
     throw refuse('CONFIG_INVALID', 'A record id the client chooses must be a UUID v7.');
   }
-  const { result } = await runWrite(
-    scope,
-    async (context) => {
-      const { tx } = context;
-      await liveObject(tx, input.objectId);
-      const attributes = await loadAttributes(tx, input.objectId);
-      const inputs = Object.fromEntries(Object.entries(input.values ?? {}).map(([id, value]) => [id, { value }]));
-      const parsed = parseAll(attributes, inputs);
-      const by = actorRow(scope.actor);
-      let recordId: string;
-      try {
-        const [row] = await tx
-          .insert(records)
-          .values({
-            workspaceId: scope.workspaceId,
-            ...(input.id === undefined ? {} : { id: input.id }),
-            objectId: input.objectId,
-            createdByType: by.type,
-            createdById: by.id,
-            createdByMemberId: by.memberId,
-            updatedByType: by.type,
-            updatedById: by.id,
-            updatedByMemberId: by.memberId,
-          })
-          .returning({ id: records.id });
-        if (row === undefined) throw new Error('The record was not created.');
-        recordId = row.id;
-      } catch (error) {
-        if (postgresError(error)?.code === '23505') throw refuse('ID_TAKEN', 'A record with that id already exists.');
-        throw error;
-      }
-      context.record({ createdRecords: [recordId] });
-      const versions = await writeAll(context, recordId, parsed);
-      return { recordId, versions };
-    },
-    hooks,
-  );
+  const { result } = await runWrite(scope, (context) => insertRecord(context, input), hooks);
   return result;
+}
+
+/** Creates one record inside a write (shared by single creates and batches). */
+export async function insertRecord(context: WriteContext, input: RecordInput) {
+  const { tx, scope } = context;
+  await liveObject(tx, input.objectId);
+  const attributes = await loadAttributes(tx, input.objectId);
+  const given = input.values ?? {};
+  const inputs: Record<string, ValueInput> = Object.fromEntries(
+    Object.entries(given).map(([id, value]) => [id, { value }]),
+  );
+  for (const attribute of attributes.values()) {
+    if (attribute.isSystem || attribute.archivedAt !== null || attribute.id in given) continue;
+    const value = await defaultFor(tx, scope, attribute, input.timeZone ?? 'UTC');
+    if (value !== undefined) inputs[attribute.id] = { value };
+  }
+  const missing: EngineRefusal[] = [...attributes.values()]
+    .filter(
+      (attribute) =>
+        attribute.isRequired &&
+        !attribute.isSystem &&
+        attribute.archivedAt === null &&
+        attribute.type !== 'checkbox' &&
+        !(attribute.id in inputs),
+    )
+    .map((attribute) => ({
+      code: 'VALUE_REQUIRED',
+      message: `${attribute.title} is required. Give it a value.`,
+      attributeId: attribute.id,
+    }));
+  const parsed = parseAll(attributes, inputs, missing);
+  await takeRecordSlots(tx, scope, 1);
+  const by = actorRow(scope.actor);
+  let recordId: string;
+  try {
+    const [row] = await tx
+      .insert(records)
+      .values({
+        workspaceId: scope.workspaceId,
+        ...(input.id === undefined ? {} : { id: input.id }),
+        objectId: input.objectId,
+        createdByType: by.type,
+        createdById: by.id,
+        createdByMemberId: by.memberId,
+        updatedByType: by.type,
+        updatedById: by.id,
+        updatedByMemberId: by.memberId,
+      })
+      .returning({ id: records.id });
+    if (row === undefined) throw new Error('The record was not created.');
+    recordId = row.id;
+  } catch (error) {
+    if (postgresError(error)?.code === '23505') throw refuse('ID_TAKEN', 'A record with that id already exists.');
+    throw error;
+  }
+  context.record({ createdRecords: [recordId] });
+  const versions = await writeAll(context, recordId, parsed);
+  return { recordId, versions };
 }
 
 /** Sets values on a record, all or none (AC-3, AC-12, AC-13). */
 export async function setValues(
   scope: EngineScope,
-  input: { readonly recordId: string; readonly values: Readonly<Record<string, ValueInput>> },
+  input: RecordValues,
   hooks: readonly AfterWrite[] = [],
 ): Promise<Record<string, AttributeResult>> {
+  const { result } = await runWrite(scope, (context) => updateRecord(context, input), hooks);
+  return result;
+}
+
+/** One record's new values. */
+export interface RecordValues {
+  readonly recordId: string;
+  readonly values: Readonly<Record<string, ValueInput>>;
+}
+
+/** Sets values on one record inside a write: the record is locked, then every value is parsed, then written. */
+async function updateRecord(context: WriteContext, input: RecordValues): Promise<Record<string, AttributeResult>> {
+  const { objectId } = await lockRecord(context.tx, input.recordId);
+  const attributes = await loadAttributes(context.tx, objectId);
+  const parsed = parseAll(attributes, input.values);
+  const results = await writeAll(context, input.recordId, parsed);
+  if (Object.values(results).some((each) => each.versionId !== undefined)) {
+    await touchRecord(context, input.recordId);
+  }
+  return results;
+}
+
+/** One record's outcome in a batch. */
+export type BatchResult =
+  | { readonly recordId: string; readonly ok: true; readonly results: Record<string, AttributeResult> }
+  | { readonly recordId: string; readonly ok: false; readonly refusals: readonly EngineRefusal[] };
+
+/** The most records one batch may change. */
+export const MAX_BATCH = 500;
+
+/**
+ * Sets values on up to 500 records in one transaction. Each record lands all
+ * or nothing under its own savepoint; the hooks see only those that landed (AC-13).
+ */
+export async function setValuesBatch(
+  scope: EngineScope,
+  input: { readonly items: readonly RecordValues[] },
+  hooks: readonly AfterWrite[] = [],
+): Promise<readonly BatchResult[]> {
+  if (input.items.length > MAX_BATCH)
+    throw refuse('CONFIG_INVALID', `Change at most ${String(MAX_BATCH)} records at once.`);
   const { result } = await runWrite(
     scope,
     async (context) => {
-      const { objectId } = await lockRecord(context.tx, input.recordId);
-      const attributes = await loadAttributes(context.tx, objectId);
-      const parsed = parseAll(attributes, input.values);
-      const results = await writeAll(context, input.recordId, parsed);
-      if (Object.values(results).some((each) => each.versionId !== undefined)) {
-        await touchRecord(context, input.recordId);
+      const outcomes: BatchResult[] = [];
+      for (const item of input.items) {
+        const outcome = await context.perRecord(() => updateRecord(context, item));
+        outcomes.push(
+          outcome.ok
+            ? { recordId: item.recordId, ok: true, results: outcome.value }
+            : { recordId: item.recordId, ok: false, refusals: outcome.refusals },
+        );
       }
-      return results;
+      return outcomes;
     },
     hooks,
   );

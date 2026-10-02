@@ -2,6 +2,7 @@
 // scope. From #9 the access door produces it; until then tests and the seed
 // scripts build it directly, and no endpoint exists yet.
 import type { Database } from '@crm/db';
+import type { Limits } from './limits.ts';
 
 /** Who did something: a member, an API key, an automation, or the system (whose id is null). */
 export interface Actor {
@@ -14,6 +15,8 @@ export interface EngineScope {
   readonly db: Database;
   readonly workspaceId: string;
   readonly actor: Actor;
+  /** Lower limits than the defaults, for tests (and, from #38, the workspace's plan). */
+  readonly limits?: Partial<Limits>;
 }
 
 /** The system itself: seeding, jobs, migrations of data. */

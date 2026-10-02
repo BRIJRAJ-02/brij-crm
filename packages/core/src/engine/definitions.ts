@@ -1,10 +1,22 @@
 // Defining objects and attributes (spec 0004). Standard objects come from the
-// template through these same functions, so they are ordinary rows.
-import { eq, sql } from 'drizzle-orm';
-import { schema } from '@crm/db';
-import type { AttributeType } from '@crm/contracts/values';
+// template through these same functions, so they are ordinary rows. Renames,
+// archives and setting changes touch definition rows only, never records.
+import { and, eq, isNull, sql } from 'drizzle-orm';
+import { schema, type WorkspaceTx } from '@crm/db';
+import {
+  AttributeConfig,
+  AttributeDefault,
+  defaultKindsFor,
+  HUES,
+  OBJECT_ICONS,
+  parseAttributeValue,
+  type AttributeType,
+} from '@crm/contracts/values';
+import { checkAttributeRoom, takeCustomObject } from './limits.ts';
 import { postgresError, refuse } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
+import { clearUniqueKeys, fillUniqueKeys, UNIQUE_TYPES } from './unique.ts';
+import { loadAttribute, type AttributeDef } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 
 const { attributes, objects } = schema;
@@ -23,12 +35,13 @@ export interface ObjectInput {
     readonly apiSlug: string;
     readonly title: string;
     readonly type: 'text' | 'personal_name';
+    readonly isRequired?: boolean;
   };
   /** Set only by the standard template. */
   readonly standard?: { readonly key: string; readonly templateVersion: number };
 }
 
-/** What a new attribute needs. */
+/** What a new attribute needs. `config` and `defaultValue` are parsed by the type's schemas. */
 export interface AttributeInput {
   readonly objectId: string;
   readonly apiSlug: string;
@@ -38,6 +51,28 @@ export interface AttributeInput {
   readonly isRequired?: boolean;
   readonly isUnique?: boolean;
   readonly description?: string;
+  readonly config?: unknown;
+  readonly defaultValue?: unknown;
+}
+
+/** What an attribute's settings may change to. Its type and multi setting change through #14. */
+export interface AttributeUpdate {
+  readonly attributeId: string;
+  readonly title?: string;
+  readonly description?: string | null;
+  readonly isRequired?: boolean;
+  readonly isUnique?: boolean;
+  readonly config?: unknown;
+  readonly defaultValue?: unknown;
+}
+
+/** What an object's names and look may change to. */
+export interface ObjectUpdate {
+  readonly objectId: string;
+  readonly singularName?: string;
+  readonly pluralName?: string;
+  readonly icon?: string;
+  readonly hue?: string;
 }
 
 /** The read only attributes every object has, each reading a `records` column. */
@@ -60,8 +95,17 @@ function checkName(name: string, what: string): void {
     throw refuse('CONFIG_INVALID', `Give the ${what} in 1 to 100 characters.`);
 }
 
-/** Inserts the audit columns for a new row, from the scope's actor. */
-function audit(scope: EngineScope) {
+function checkLook(icon: string | undefined, hue: string | undefined): void {
+  if (icon !== undefined && !(OBJECT_ICONS as readonly string[]).includes(icon)) {
+    throw refuse('CONFIG_INVALID', 'Pick an icon from the object icon set.');
+  }
+  if (hue !== undefined && !(HUES as readonly string[]).includes(hue)) {
+    throw refuse('CONFIG_INVALID', `Pick one of the hues: ${HUES.join(', ')}.`);
+  }
+}
+
+/** The audit columns for a new row, from the scope's actor. */
+export function audit(scope: EngineScope) {
   const by = actorRow(scope.actor);
   return {
     createdByType: by.type,
@@ -73,8 +117,14 @@ function audit(scope: EngineScope) {
   };
 }
 
+/** The audit columns for an update. */
+export function touched(scope: EngineScope) {
+  const by = actorRow(scope.actor);
+  return { updatedAt: sql`now()`, updatedByType: by.type, updatedById: by.id, updatedByMemberId: by.memberId };
+}
+
 /** Turns a slug clash into `SLUG_TAKEN`, and a setting the type can't take into `CONFIG_INVALID`. */
-async function slugGuard<T>(work: () => Promise<T>): Promise<T> {
+async function definitionGuard<T>(work: () => Promise<T>): Promise<T> {
   try {
     return await work();
   } catch (error) {
@@ -92,6 +142,30 @@ async function slugGuard<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 
+/** A type's settings, parsed, or `CONFIG_INVALID`. */
+function parseConfig(type: AttributeType, input: unknown): unknown {
+  const result = AttributeConfig[type].safeParse(input ?? {});
+  if (!result.success)
+    throw refuse('CONFIG_INVALID', result.error.issues[0]?.message ?? 'Those settings do not fit this type.');
+  return result.data;
+}
+
+/** A default, parsed and checked against the type, or `CONFIG_INVALID`. Null clears it. */
+function parseDefault(type: AttributeType, isMulti: boolean, input: unknown): AttributeDefault | null {
+  if (input === null || input === undefined) return null;
+  const result = AttributeDefault.safeParse(input);
+  if (!result.success) throw refuse('CONFIG_INVALID', result.error.issues[0]?.message ?? 'That default is not valid.');
+  if (!defaultKindsFor(type).includes(result.data.kind)) {
+    throw refuse('CONFIG_INVALID', `A ${type.replaceAll('_', ' ')} attribute can't have that kind of default.`);
+  }
+  if (result.data.kind === 'static') {
+    const value = parseAttributeValue(type, result.data.value, { allowMultiple: isMulti });
+    if (!value.ok) throw refuse('CONFIG_INVALID', value.error.message);
+    return { kind: 'static', value: value.value };
+  }
+  return result.data;
+}
+
 /** Inserts an object, its system attributes and its primary attribute, inside a write. */
 export async function insertObject(
   context: WriteContext,
@@ -101,9 +175,11 @@ export async function insertObject(
   checkSlug(input.apiSlug);
   checkName(input.singularName, 'singular name');
   checkName(input.pluralName, 'plural name');
+  checkLook(input.icon, input.hue);
   const primary = input.primaryAttribute ?? { apiSlug: 'name', title: 'Name', type: 'text' };
   checkSlug(primary.apiSlug);
-  return slugGuard(async () => {
+  if (input.standard === undefined) await takeCustomObject(tx, scope);
+  return definitionGuard(async () => {
     const [object] = await tx
       .insert(objects)
       .values({
@@ -138,6 +214,7 @@ export async function insertObject(
         apiSlug: primary.apiSlug,
         title: primary.title,
         type: primary.type,
+        isRequired: primary.isRequired ?? false,
         position: SYSTEM_ATTRIBUTES.length,
         ...audit(scope),
       })
@@ -156,7 +233,10 @@ export async function insertAttribute(context: WriteContext, input: AttributeInp
   if (input.type === 'record_reference') {
     throw refuse('CONFIG_INVALID', 'Add a record reference by defining a relationship.');
   }
-  return slugGuard(async () => {
+  const config = parseConfig(input.type, input.config);
+  const defaultValue = parseDefault(input.type, input.isMulti ?? false, input.defaultValue);
+  await checkAttributeRoom(tx, scope, input.objectId);
+  return definitionGuard(async () => {
     const [next] = await tx
       .execute<{ position: number }>(
         sql`select coalesce(max(${attributes.position}) + 1, 0)::int as position from ${attributes} where ${attributes.objectId} = ${input.objectId}`,
@@ -174,6 +254,8 @@ export async function insertAttribute(context: WriteContext, input: AttributeInp
         isRequired: input.isRequired ?? false,
         isUnique: input.isUnique ?? false,
         description: input.description ?? null,
+        config,
+        defaultValue,
         position: next?.position ?? 0,
         ...audit(scope),
       })
@@ -183,7 +265,7 @@ export async function insertAttribute(context: WriteContext, input: AttributeInp
   });
 }
 
-/** Defines a custom object (AC-1). */
+/** Defines a custom object (AC-1, AC-16). */
 export async function defineObject(
   scope: EngineScope,
   input: Omit<ObjectInput, 'standard'>,
@@ -193,8 +275,145 @@ export async function defineObject(
   return result;
 }
 
-/** Defines an attribute on an object (AC-1, AC-2). */
+/** Defines an attribute on an object (AC-1, AC-2, AC-16). */
 export async function defineAttribute(scope: EngineScope, input: AttributeInput, hooks: readonly AfterWrite[] = []) {
   const { result } = await runWrite(scope, (context) => insertAttribute(context, input), hooks);
   return result;
+}
+
+async function editable(tx: WorkspaceTx, attributeId: string): Promise<AttributeDef> {
+  const attribute = await loadAttribute(tx, attributeId, true);
+  if (attribute.isSystem) throw refuse('ATTRIBUTE_READ_ONLY', `${attribute.title} is a system attribute.`, attributeId);
+  return attribute;
+}
+
+/** Changes an attribute's title, description, required, unique, settings or default (AC-10, AC-11). */
+export async function updateAttribute(scope: EngineScope, input: AttributeUpdate, hooks: readonly AfterWrite[] = []) {
+  const { result } = await runWrite(
+    scope,
+    async ({ tx }) => {
+      const attribute = await editable(tx, input.attributeId);
+      if (input.title !== undefined) checkName(input.title, 'title');
+      if (input.isUnique === true && !UNIQUE_TYPES.includes(attribute.type)) {
+        throw refuse('CONFIG_INVALID', 'Only text, email, domain, URL, phone and number attributes can be unique.');
+      }
+      const turningOn = input.isUnique === true && !attribute.isUnique && attribute.archivedAt === null;
+      const turningOff = input.isUnique === false && attribute.isUnique;
+      if (turningOn) await fillUniqueKeys(tx, attribute);
+      if (turningOff) await clearUniqueKeys(tx, attribute.id);
+      await tx
+        .update(attributes)
+        .set({
+          ...(input.title === undefined ? {} : { title: input.title.trim() }),
+          ...(input.description === undefined ? {} : { description: input.description }),
+          ...(input.isRequired === undefined ? {} : { isRequired: input.isRequired }),
+          ...(input.isUnique === undefined ? {} : { isUnique: input.isUnique }),
+          ...(input.config === undefined ? {} : { config: parseConfig(attribute.type, input.config) }),
+          ...(input.defaultValue === undefined
+            ? {}
+            : { defaultValue: parseDefault(attribute.type, attribute.isMulti, input.defaultValue) }),
+          ...touched(scope),
+        })
+        .where(eq(attributes.id, attribute.id));
+      return { attributeId: attribute.id };
+    },
+    hooks,
+  );
+  return result;
+}
+
+/** Archives an attribute: its values stay, it stops taking writes, and a unique one frees its keys. */
+export async function archiveAttribute(scope: EngineScope, attributeId: string, hooks: readonly AfterWrite[] = []) {
+  await runWrite(
+    scope,
+    async ({ tx }) => {
+      const attribute = await editable(tx, attributeId);
+      const [primary] = await tx
+        .select({ id: objects.id })
+        .from(objects)
+        .where(eq(objects.primaryAttributeId, attributeId));
+      if (primary !== undefined)
+        throw refuse('CONFIG_INVALID', "A record's name attribute can't be archived.", attributeId);
+      if (attribute.archivedAt !== null) return;
+      if (attribute.isUnique) await clearUniqueKeys(tx, attributeId);
+      await tx
+        .update(attributes)
+        .set({ archivedAt: sql`now()`, ...touched(scope) })
+        .where(eq(attributes.id, attributeId));
+    },
+    hooks,
+  );
+}
+
+/** Restores an archived attribute; a unique one takes its keys back, refusing if duplicates appeared meanwhile. */
+export async function restoreAttribute(scope: EngineScope, attributeId: string, hooks: readonly AfterWrite[] = []) {
+  await runWrite(
+    scope,
+    async ({ tx }) => {
+      const attribute = await editable(tx, attributeId);
+      if (attribute.archivedAt === null) return;
+      if (attribute.isUnique) await fillUniqueKeys(tx, attribute);
+      await tx
+        .update(attributes)
+        .set({ archivedAt: null, ...touched(scope) })
+        .where(eq(attributes.id, attributeId));
+    },
+    hooks,
+  );
+}
+
+/** Changes an object's names, icon or hue. */
+export async function updateObject(scope: EngineScope, input: ObjectUpdate, hooks: readonly AfterWrite[] = []) {
+  await runWrite(
+    scope,
+    async ({ tx }) => {
+      if (input.singularName !== undefined) checkName(input.singularName, 'singular name');
+      if (input.pluralName !== undefined) checkName(input.pluralName, 'plural name');
+      checkLook(input.icon, input.hue);
+      const updated = await tx
+        .update(objects)
+        .set({
+          ...(input.singularName === undefined ? {} : { singularName: input.singularName.trim() }),
+          ...(input.pluralName === undefined ? {} : { pluralName: input.pluralName.trim() }),
+          ...(input.icon === undefined ? {} : { icon: input.icon }),
+          ...(input.hue === undefined ? {} : { hue: input.hue }),
+          ...touched(scope),
+        })
+        .where(eq(objects.id, input.objectId))
+        .returning({ id: objects.id });
+      if (updated.length === 0) throw refuse('NOT_FOUND', 'That object does not exist.');
+    },
+    hooks,
+  );
+}
+
+/** Archives or restores an object. Its records stay; an archived object takes no new records. */
+export async function setObjectArchived(
+  scope: EngineScope,
+  input: { readonly objectId: string; readonly archived: boolean },
+  hooks: readonly AfterWrite[] = [],
+) {
+  await runWrite(
+    scope,
+    async ({ tx }) => {
+      const updated = await tx
+        .update(objects)
+        .set({ archivedAt: input.archived ? sql`coalesce(${objects.archivedAt}, now())` : null, ...touched(scope) })
+        .where(eq(objects.id, input.objectId))
+        .returning({ id: objects.id });
+      if (updated.length === 0) throw refuse('NOT_FOUND', 'That object does not exist.');
+    },
+    hooks,
+  );
+}
+
+/** The live attributes of an object, as definitions, in position order. */
+export async function listAttributes(scope: EngineScope, objectId: string) {
+  return scope.db.withWorkspace(scope.workspaceId, (tx) =>
+    tx
+      .select()
+      .from(attributes)
+      .where(and(eq(attributes.objectId, objectId), isNull(attributes.archivedAt)))
+      .orderBy(attributes.position),
+  );
 }

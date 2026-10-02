@@ -56,7 +56,7 @@ The engine every feature stands on, modelled on how Attio works (not on Timefix)
 - [x] Design it (spec): `/architect data model`
 - [ ] Build it: `/develop data model`
    - [x] One value through every layer: the first tables with forced row level security and composite keys, the write protocol and hooks, a text attribute end to end, and the query compiler's first slice (AC-1, AC-3, AC-7, AC-9, AC-13, AC-14, AC-17, AC-19)
-   - [ ] Every type and the rules: options, every type's columns, defaults, required, unique, limits, versions and history reads, and the standard template (AC-1 to AC-4, AC-10 to AC-13, AC-16)
+   - [x] Every type and the rules: options, every type's columns, defaults, required, unique, limits, versions and history reads, and the standard template (AC-1 to AC-4, AC-10 to AC-13, AC-16)
    - [ ] Relationships, lists and deletion: links with cardinality on both sides, lists and entries, delete, restore, purge and erasure (AC-3, AC-5, AC-6, AC-8, AC-18)
    - [ ] The whole query engine at scale: every operator and sort, filters through relationships, counts, and the million record benchmark grid against the split table variant (AC-6, AC-14, AC-15)
 - [ ] Verify it: `/check verify data model`

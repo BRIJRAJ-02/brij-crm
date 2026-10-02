@@ -5,4 +5,5 @@
 export { actorType, attributeType, systemColumn } from './common.ts';
 export { memberStatus, members, workspaceCounters, workspaces } from './workspaces.ts';
 export { attributes, objects } from './definitions.ts';
+export { attributeOptions, optionOutcome } from './options.ts';
 export { records, values } from './records.ts';

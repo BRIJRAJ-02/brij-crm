@@ -54,6 +54,7 @@ export {
 } from './filters.ts';
 export { MAX_SORTS, SortRule, SortRules } from './sorts.ts';
 export { ENGINE_REFUSAL_CODES, type EngineRefusal, type EngineRefusalCode } from './engine.ts';
+export { AttributeConfig, AttributeDefault, defaultKindsFor, type AttributeConfigOf } from './attribute-config.ts';
 export { HUES } from './hue-list.ts';
 export { Hue } from './hues.ts';
 export { OBJECT_ICONS, ObjectIcon } from './object-icons.ts';

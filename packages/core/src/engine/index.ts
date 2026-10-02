@@ -1,15 +1,42 @@
 // The data engine (spec 0004): one storage path for every object, typed
 // values with history, and the query engine. Services take an EngineScope;
 // the access door (#9) puts itself in front of them.
-export { defineAttribute, defineObject, type AttributeInput, type ObjectInput } from './definitions.ts';
+export {
+  archiveAttribute,
+  defineAttribute,
+  defineObject,
+  listAttributes,
+  restoreAttribute,
+  setObjectArchived,
+  updateAttribute,
+  updateObject,
+  type AttributeInput,
+  type AttributeUpdate,
+  type ObjectInput,
+  type ObjectUpdate,
+} from './definitions.ts';
+export { getHistory, getTimeInStages, getValuesAsOf, type StageVisit } from './history.ts';
 export { isUuidV7, newId } from './ids.ts';
+export { LIMITS, RESTORE_WINDOW, type Limits } from './limits.ts';
+export {
+  defineOption,
+  listOptions,
+  updateOption,
+  type OptionInput,
+  type OptionOutcome,
+  type OptionUpdate,
+} from './options.ts';
 export { decodeCursor, encodeCursor, MAX_PAGE, queryPage, type Page, type PageQuery } from './query/page.ts';
 export {
   createRecord,
   getRecords,
+  MAX_BATCH,
   setValues,
+  setValuesBatch,
   type AttributeResult,
+  type BatchResult,
   type RecordInput,
+  type RecordValues,
   type RecordView,
   type ValueInput,
 } from './records.ts';

@@ -5,11 +5,12 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { parseAttributeValue, type AttributeType } from '@crm/contracts/values';
 import { encodeValue, sameItems, type ItemColumns, type StoredItem } from './columns.ts';
-import { refuse } from './refusals.ts';
+import { postgresError, refuse } from './refusals.ts';
+import { uniqueKeyOf } from './unique.ts';
 import { actorRow, type Actor } from './scope.ts';
 import type { ValueChange, WriteContext } from './write.ts';
 
-const { attributes, records, values } = schema;
+const { attributeOptions, attributes, records, values } = schema;
 
 /** The parts of an attribute definition the write and read paths need. */
 export interface AttributeDef {
@@ -25,27 +26,41 @@ export interface AttributeDef {
   readonly isSystem: boolean;
   readonly systemColumn: 'id' | 'created_at' | 'created_by' | 'updated_at' | 'updated_by' | null;
   readonly archivedAt: Date | null;
+  /** Type specific settings, already parsed by `AttributeConfig[type]` when stored. */
+  readonly config: unknown;
+  /** The stored `AttributeDefault`, or null. */
+  readonly defaultValue: unknown;
+}
+
+/** The columns `AttributeDef` reads. */
+const DEF_COLUMNS = {
+  id: attributes.id,
+  objectId: attributes.objectId,
+  listId: attributes.listId,
+  apiSlug: attributes.apiSlug,
+  title: attributes.title,
+  type: attributes.type,
+  isMulti: attributes.isMulti,
+  isRequired: attributes.isRequired,
+  isUnique: attributes.isUnique,
+  isSystem: attributes.isSystem,
+  systemColumn: attributes.systemColumn,
+  archivedAt: attributes.archivedAt,
+  config: attributes.config,
+  defaultValue: attributes.defaultValue,
+} as const;
+
+/** One attribute by id, or a `NOT_FOUND` refusal. */
+export async function loadAttribute(tx: WorkspaceTx, attributeId: string, lock = false): Promise<AttributeDef> {
+  const query = tx.select(DEF_COLUMNS).from(attributes).where(eq(attributes.id, attributeId));
+  const [row] = lock ? await query.for('update') : await query;
+  if (row === undefined) throw refuse('NOT_FOUND', 'That attribute does not exist.', attributeId);
+  return row;
 }
 
 /** Every attribute of one object, by id. */
 export async function loadAttributes(tx: WorkspaceTx, objectId: string): Promise<ReadonlyMap<string, AttributeDef>> {
-  const rows = await tx
-    .select({
-      id: attributes.id,
-      objectId: attributes.objectId,
-      listId: attributes.listId,
-      apiSlug: attributes.apiSlug,
-      title: attributes.title,
-      type: attributes.type,
-      isMulti: attributes.isMulti,
-      isRequired: attributes.isRequired,
-      isUnique: attributes.isUnique,
-      isSystem: attributes.isSystem,
-      systemColumn: attributes.systemColumn,
-      archivedAt: attributes.archivedAt,
-    })
-    .from(attributes)
-    .where(eq(attributes.objectId, objectId));
+  const rows = await tx.select(DEF_COLUMNS).from(attributes).where(eq(attributes.objectId, objectId));
   return new Map(rows.map((row) => [row.id, row]));
 }
 
@@ -118,7 +133,38 @@ export function parseFor(attribute: AttributeDef, input: unknown): unknown {
   }
   const parsed = parseAttributeValue(attribute.type, input, { allowMultiple: attribute.isMulti });
   if (!parsed.ok) throw refuse(parsed.error.code, parsed.error.message, attribute.id);
+  if (attribute.isRequired && parsed.value === null) {
+    throw refuse('VALUE_REQUIRED', `${attribute.title} is required. Give it a value.`, attribute.id);
+  }
   return parsed.value;
+}
+
+/** Refuses option ids that aren't this attribute's live options. Options already held may stay, archived or not. */
+async function checkOptions(
+  tx: WorkspaceTx,
+  attribute: AttributeDef,
+  next: readonly ItemColumns[],
+  held: readonly ItemColumns[],
+): Promise<void> {
+  const kept = new Set(held.map((item) => item.optionId));
+  const added = [
+    ...new Set(next.flatMap((item) => (item.optionId === null || kept.has(item.optionId) ? [] : [item.optionId]))),
+  ];
+  if (added.length === 0) return;
+  const rows = await tx
+    .select({ id: attributeOptions.id, archivedAt: attributeOptions.archivedAt })
+    .from(attributeOptions)
+    .where(and(eq(attributeOptions.attributeId, attribute.id), inArray(attributeOptions.id, added)));
+  const found = new Map(rows.map((row) => [row.id, row]));
+  for (const id of added) {
+    const option = found.get(id);
+    if (option === undefined) {
+      throw refuse('ATTRIBUTE_VALUE_INVALID', `Pick one of ${attribute.title}'s options.`, attribute.id);
+    }
+    if (option.archivedAt !== null) {
+      throw refuse('OPTION_ARCHIVED', `That ${attribute.title} option is archived. Pick another.`, attribute.id);
+    }
+  }
 }
 
 /**
@@ -148,6 +194,7 @@ export async function writeAttribute(context: WriteContext, write: AttributeWrit
       jsonValue: row.jsonValue,
     }));
   if (sameItems(held, next)) return undefined;
+  if (attribute.type === 'select' || attribute.type === 'status') await checkOptions(tx, attribute, next, held);
 
   const stamp = await tx.execute<{ t: string; version: string }>(sql`
     select greatest(
@@ -184,8 +231,25 @@ export async function writeAttribute(context: WriteContext, write: AttributeWrit
   const rows =
     next.length === 0
       ? [{ ...base, position: 0, isCleared: true }]
-      : next.map((item, position) => ({ ...base, ...itemInsert(item), position }));
-  await tx.insert(values).values(rows);
+      : next.map((item, position) => ({
+          ...base,
+          ...itemInsert(item),
+          position,
+          uniqueKey: attribute.isUnique ? uniqueKeyOf(attribute.type, item) : null,
+        }));
+  try {
+    await tx.insert(values).values(rows);
+  } catch (error) {
+    const pg = postgresError(error);
+    if (pg?.code === '23505' && pg.constraint === 'values_unique') {
+      throw refuse(
+        'UNIQUE_CONFLICT',
+        `Another record already has this ${attribute.title}. It must be unique.`,
+        attribute.id,
+      );
+    }
+    throw error;
+  }
 
   const before = current[0];
   const replaced =

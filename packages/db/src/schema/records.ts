@@ -20,6 +20,7 @@ import {
 } from 'drizzle-orm/pg-core';
 import { actorColumns, auditColumns, id, timestamptz, workspaceId } from './common.ts';
 import { attributes, objects } from './definitions.ts';
+import { attributeOptions } from './options.ts';
 import { actorConstraints } from './workspaces.ts';
 
 const deletedBy = actorColumns('deleted_by');
@@ -103,7 +104,6 @@ export const values = pgTable(
     dateValue: date('date_value'),
     timestampValue: timestamp('timestamp_value', { withTimezone: true, precision: 3 }),
     boolValue: boolean('bool_value'),
-    /** Options arrive in milestone 2; its foreign key comes with them. */
     optionId: uuid('option_id'),
     actorType: actorValue.type,
     actorId: actorValue.id,
@@ -128,6 +128,12 @@ export const values = pgTable(
       name: 'values_record',
       columns: [t.workspaceId, t.recordId],
       foreignColumns: [records.workspaceId, records.id],
+    }),
+    // The option must be one of this attribute's own.
+    foreignKey({
+      name: 'values_option',
+      columns: [t.workspaceId, t.attributeId, t.optionId],
+      foreignColumns: [attributeOptions.workspaceId, attributeOptions.attributeId, attributeOptions.id],
     }),
     check(
       'values_owner',
@@ -156,6 +162,29 @@ export const values = pgTable(
     index('values_text_trigram')
       .using('gin', t.workspaceId, t.attributeId, sql`lower(left(${t.textValue}, 2048)) gin_trgm_ops`)
       .where(sql.raw(`${CURRENT} and text_value is not null`)),
+    // Filters and sorts on every other kind of value.
+    index('values_number')
+      .on(t.workspaceId, t.attributeId, t.numberValue, t.position, t.ownerId)
+      .where(sql.raw(`${CURRENT} and number_value is not null`)),
+    index('values_date')
+      .on(t.workspaceId, t.attributeId, t.dateValue, t.position, t.ownerId)
+      .where(sql.raw(`${CURRENT} and date_value is not null`)),
+    index('values_timestamp')
+      .on(t.workspaceId, t.attributeId, t.timestampValue, t.position, t.ownerId)
+      .where(sql.raw(`${CURRENT} and timestamp_value is not null`)),
+    index('values_option')
+      .on(t.workspaceId, t.attributeId, t.optionId, t.position, t.ownerId)
+      .where(sql.raw(`${CURRENT} and option_id is not null`)),
+    index('values_bool')
+      .on(t.workspaceId, t.attributeId, t.boolValue, t.position, t.ownerId)
+      .where(sql.raw(`${CURRENT} and bool_value is not null`)),
+    index('values_actor')
+      .on(t.workspaceId, t.attributeId, t.actorId, t.position, t.ownerId)
+      .where(sql.raw(`${CURRENT} and actor_id is not null`)),
+    // A unique attribute's current values (AC-10). Deleted records hold theirs in held_unique_key.
+    uniqueIndex('values_unique')
+      .on(t.workspaceId, t.attributeId, t.uniqueKey)
+      .where(sql`${t.activeUntil} is null and ${t.uniqueKey} is not null`),
     // As of reads and history.
     index('values_history').on(t.workspaceId, t.ownerId, t.attributeId, t.activeFrom),
     ...actorConstraints('values', 'set_by', t.workspaceId, {
