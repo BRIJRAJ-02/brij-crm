@@ -293,6 +293,7 @@ async function allPages(
   filter: FilterGroup | undefined,
   sorts: SortRule[],
   limit = 9,
+  candidates?: number,
 ): Promise<string[]> {
   const ids: string[] = [];
   let cursor: string | undefined;
@@ -305,7 +306,7 @@ async function allPages(
       limit,
       ...(cursor === undefined ? {} : { cursor }),
     };
-    const result = await queryPage(scope, query);
+    const result = await queryPage(scope, query, candidates === undefined ? {} : { candidates });
     ids.push(...(result.entries ?? result.records).map((row) => row.id));
     if (result.nextCursor === undefined) return ids;
     cursor = result.nextCursor;
@@ -494,6 +495,14 @@ describe('the compiler matches the reference evaluator', () => {
     );
   });
 
+  it.each(filters)('with a first pass capped at 3 rows: %s', async (_, filter) => {
+    // A tiny cap makes every page fall back, or cut a group of equal keys, so those paths are proved too.
+    const sorts = [by('launch'), by('name', 'descending')];
+    expect(await allPages({ objectId: missions }, filter(), sorts, 4, 3)).toEqual(
+      evaluate(context, rows, filter(), sorts),
+    );
+  });
+
   it('pages the same at any page size', async () => {
     const sort = [by('budget', 'descending'), by('name')];
     expect(await allPages({ objectId: missions }, undefined, sort, 1)).toEqual(
@@ -521,6 +530,7 @@ describe('list views', () => {
     const expected = evaluate(context, entryRows, filter(), sorts());
     expect(expected.length).toBeGreaterThan(0);
     expect(await allPages({ listId }, filter(), sorts())).toEqual(expected);
+    expect(await allPages({ listId }, filter(), sorts(), 4, 3)).toEqual(expected);
   });
 });
 
@@ -536,6 +546,16 @@ describe('positions and counts', () => {
       ...(page.nextCursor === undefined ? {} : { cursor: page.nextCursor }),
     });
     expect(after.records.map((record) => record.id)).toEqual(order.slice(40, 50));
+    // A position past every row with a value lands among the empties, in id order.
+    const late = await queryPage(scope, {
+      objectId: missions,
+      sorts: [by('budget', 'descending')],
+      position: 64,
+      limit: 10,
+    });
+    expect(late.records.map((record) => record.id)).toEqual(
+      evaluate(context, rows, undefined, [by('budget', 'descending')]).slice(64, 74),
+    );
   });
 
   it('refuses a jump on a filtered view', async () => {

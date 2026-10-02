@@ -23,6 +23,8 @@
     "db:migrate": "pnpm --filter @crm/db migrate",
     "db:app-login": "pnpm --filter @crm/db app-login",
     "db:setup": "pnpm db:migrate && pnpm db:app-login",
+    "db:seed:scale": "pnpm --filter @crm/core seed:scale",
+    "db:bench:scale": "pnpm --filter @crm/core bench:scale",
     "boundaries": "turbo boundaries",
     "lint": "turbo run lint lint:root",
     "lint:root": "eslint .railway eslint.config.js stylelint.config.js",

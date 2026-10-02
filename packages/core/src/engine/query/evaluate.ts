@@ -438,7 +438,7 @@ function compareKeys(x: Key, y: Key): number {
   return String(x.value) < String(y.value) ? -1 : String(x.value) > String(y.value) ? 1 : 0;
 }
 
-/** The ids of the rows that match, in the view's order: empties last in both directions, then by id. */
+/** The ids of the rows that match, in the view's order: empties last in both directions, then by id in the first sort's direction. */
 export function evaluate(
   context: EvaluateContext,
   rows: readonly PlainRecord[],
@@ -459,7 +459,8 @@ export function evaluate(
       const order = compareKeys(x, y);
       if (order !== 0) return rule.direction === 'ascending' ? order : -order;
     }
-    return a.row.id < b.row.id ? -1 : a.row.id > b.row.id ? 1 : 0;
+    const tie = a.row.id < b.row.id ? -1 : a.row.id > b.row.id ? 1 : 0;
+    return sorts[0]?.direction === 'descending' ? -tie : tie;
   });
   return keyed.map(({ row }) => row.id);
 }

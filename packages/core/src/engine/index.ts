@@ -45,7 +45,17 @@ export {
   type OptionOutcome,
   type OptionUpdate,
 } from './options.ts';
-export { decodeCursor, encodeCursor, MAX_PAGE, queryPage, type Page, type PageQuery } from './query/page.ts';
+export { type QueryClock, type WeekStart } from './query/compile.ts';
+export {
+  countMatches,
+  decodeCursor,
+  encodeCursor,
+  MAX_PAGE,
+  queryPage,
+  type Page,
+  type PageQuery,
+  type ViewSource,
+} from './query/page.ts';
 export {
   createRecord,
   getRecords,

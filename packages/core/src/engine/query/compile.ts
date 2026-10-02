@@ -41,6 +41,12 @@ export interface CompileContext {
   readonly relationships: ReadonlyMap<string, RelationshipDef>;
   readonly clock: QueryClock;
   readonly actor: Actor;
+  /**
+   * Keep each condition a per row check (an OFFSET 0 fence stops Postgres
+   * turning EXISTS into a join), for pages that scan rows in sort order and
+   * stop at the limit.
+   */
+  readonly fence?: boolean;
 }
 
 /** Where a condition stands: the row alias, the record alias that holds system columns, and what's in reach. */
@@ -286,11 +292,13 @@ export function splitNegation(condition: FilterCondition): { positive: FilterCon
   return { positive: { ...condition, operator: positive } as FilterCondition, negated: true };
 }
 
+const fenceOf = (context: CompileContext) => (context.fence === true ? sql` offset 0` : sql``);
+
 /** EXISTS over the attribute's current, non cleared value rows, with an extra condition on `v`. */
-function valueExists(level: Level, attribute: AttributeDef, condition?: SQL): SQL {
+function valueExists(context: CompileContext, level: Level, attribute: AttributeDef, condition?: SQL): SQL {
   return sql`exists (select 1 from "values" v where v.workspace_id = ${raw(level.record)}.workspace_id and v.owner_id = ${ownerOf(level, attribute)} and v.attribute_id = ${attribute.id} and v.active_until is null and not v.is_cleared${
     condition === undefined ? sql`` : sql` and ${condition}`
-  })`;
+  }${fenceOf(context)})`;
 }
 
 function relationshipOf(context: CompileContext, attribute: AttributeDef): RelationshipDef {
@@ -330,7 +338,7 @@ function hopExists(
   const far = `f${String(hop)}`;
   const narrow =
     farObjectId !== undefined && columns.allowed.length > 1 ? sql` and ${raw(far)}.object_id = ${farObjectId}` : sql``;
-  return sql`exists (select 1 from record_links ${link} join records ${raw(far)} on ${raw(far)}.workspace_id = ${link}.workspace_id and ${raw(far)}.id = ${link}.${columns.far} and ${raw(far)}.deleted_at is null where ${link}.workspace_id = ${raw(level.record)}.workspace_id and ${link}.relationship_id = ${relationship.id} and ${link}.${columns.mine} = ${ownerOf(level, attribute)} and ${link}.active_until is null${narrow} and ${inner(far)})`;
+  return sql`exists (select 1 from record_links ${link} join records ${raw(far)} on ${raw(far)}.workspace_id = ${link}.workspace_id and ${raw(far)}.id = ${link}.${columns.far} and ${raw(far)}.deleted_at is null where ${link}.workspace_id = ${raw(level.record)}.workspace_id and ${link}.relationship_id = ${relationship.id} and ${link}.${columns.mine} = ${ownerOf(level, attribute)} and ${link}.active_until is null${narrow} and ${inner(far)}${fenceOf(context)})`;
 }
 
 /** A `through` condition flattened: every hop's attribute, then the far condition. */
@@ -554,18 +562,18 @@ function compilePositive(context: CompileContext, level: Level, condition: Filte
   }
   if (condition.operator === 'is_not_empty') {
     if (attribute.type === 'checkbox') return unsupported();
-    return valueExists(level, attribute);
+    return valueExists(context, level, attribute);
   }
   // Contains all of: one EXISTS per option, all of them.
   if (condition.operator === 'contains_all_of' && attribute.type === 'select' && attribute.isMulti) {
     const ids = listOperand(condition, (value) => idOperand(value, 'an option'));
     return sql`(${sql.join(
-      ids.map((id) => valueExists(level, attribute, sql`v.option_id = ${id}::uuid`)),
+      ids.map((id) => valueExists(context, level, attribute, sql`v.option_id = ${id}::uuid`)),
       sql` and `,
     )})`;
   }
   const predicate = valuePredicate(context, attribute, condition);
-  return predicate === undefined ? unsupported() : valueExists(level, attribute, predicate);
+  return predicate === undefined ? unsupported() : valueExists(context, level, attribute, predicate);
 }
 
 function compileCondition(context: CompileContext, level: Level, condition: FilterCondition): SQL {
@@ -628,6 +636,8 @@ export interface SortKey {
   readonly expression: SQL;
   /** The key's type, for the cursor. */
   readonly kind: KeyKind;
+  /** False for a column that is never empty (the system times and id), so ORDER BY can match its index. */
+  readonly nullable?: boolean;
 }
 
 /** A lateral join over the attribute's position 0 value row, selecting `columns` (each aliased `key0`, `key1`). */
@@ -666,9 +676,16 @@ export function compileSorts(context: CompileContext, level: Level, sorts: reado
     switch (attribute.systemColumn) {
       case 'created_at':
       case 'updated_at':
-        return [{ direction, expression: sql`${record}.${raw(attribute.systemColumn)}`, kind: 'timestamptz' }];
+        return [
+          {
+            direction,
+            expression: sql`${record}.${raw(attribute.systemColumn)}`,
+            kind: 'timestamptz',
+            nullable: false,
+          },
+        ];
       case 'id':
-        return [{ direction, expression: sql`${record}.id`, kind: 'uuid' }];
+        return [{ direction, expression: sql`${record}.id`, kind: 'uuid', nullable: false }];
       case 'created_by':
       case 'updated_by':
         return one(
@@ -753,12 +770,18 @@ export function compileSorts(context: CompileContext, level: Level, sorts: reado
   });
 }
 
-/** The ORDER BY for the keys: empties last in both directions, then the row id. */
-export function orderBy(keys: readonly SortKey[]): SQL {
+/** The direction the row id breaks ties in: the first sort's, so one index scan can serve both. */
+export function tieDirection(keys: readonly SortKey[]): SortRule['direction'] {
+  return keys[0]?.direction ?? 'ascending';
+}
+
+/** The ORDER BY for the keys: empties last in both directions, then the row id in the first sort's direction. */
+export function orderBy(keys: readonly SortKey[], tie: SortRule['direction'] = tieDirection(keys)): SQL {
   const parts = keys.map(
-    (key) => sql`${key.expression} ${raw(key.direction === 'ascending' ? 'asc' : 'desc')} nulls last`,
+    (key) =>
+      sql`${key.expression} ${raw(key.direction === 'ascending' ? 'asc' : 'desc')}${raw(key.nullable === false ? '' : ' nulls last')}`,
   );
-  return sql.join([...parts, sql`r.id asc`], sql`, `);
+  return sql.join([...parts, sql`r.id ${raw(tie === 'ascending' ? 'asc' : 'desc')}`], sql`, `);
 }
 
 /** A key as text, for the cursor. */
@@ -766,7 +789,8 @@ export function keyText(key: SortKey): SQL {
   return sql`${key.expression}::text`;
 }
 
-function fromText(key: SortKey, value: string): SQL {
+/** A cursor's text for a key, turned back into the key's type. */
+export function fromText(key: SortKey, value: string): SQL {
   return key.kind === 'text' ? sql`${value}` : sql`${value}::${raw(key.kind)}`;
 }
 
@@ -779,10 +803,14 @@ export interface Cursor {
 /**
  * The rows after a cursor, as an expanded OR chain so mixed directions and
  * empty keys page correctly: for each key, every earlier key equal and this
- * one past the cursor, or every key equal and a later id. Empties sort last,
+ * one past the cursor, or every key equal and a later id (in the tie's direction). Empties sort last,
  * so nothing is "past" an empty key except later empties by id.
  */
-export function afterCursor(keys: readonly SortKey[], cursor: Cursor): SQL {
+export function afterCursor(
+  keys: readonly SortKey[],
+  cursor: Cursor,
+  tieOrder: SortRule['direction'] = tieDirection(keys),
+): SQL {
   if (cursor.keys.length !== keys.length) invalid('That page cursor belongs to a different sort.');
   if (!isUuid(cursor.id)) invalid('That page cursor is not valid. Start from the first page.');
   const equal = (index: number): SQL => {
@@ -808,6 +836,91 @@ export function afterCursor(keys: readonly SortKey[], cursor: Cursor): SQL {
     branches.push(sql`(${sql.join([...before, step], sql` and `)})`);
   }
   const allEqual = keys.map((_, index) => equal(index));
-  branches.push(sql`(${sql.join([...allEqual, sql`r.id > ${cursor.id}::uuid`], sql` and `)})`);
+  const tie = raw(tieOrder === 'ascending' ? '>' : '<');
+  branches.push(sql`(${sql.join([...allEqual, sql`r.id ${tie} ${cursor.id}::uuid`], sql` and `)})`);
   return sql`(${sql.join(branches, sql` or `)})`;
+}
+
+/**
+ * When a view's first sort is an indexed value of the row itself, the page
+ * starts from that attribute's index instead of computing the key for every
+ * row: `source` joins the attribute's position 0 rows (aliased `d`), `key` is
+ * the key on `d`, and the rows with no value come after, as their own branch
+ * (`empty`). Selects and statuses walk their options in order, one index
+ * range each, merged. Undefined when the first sort can't drive.
+ */
+export interface DrivingSort {
+  readonly source: SQL;
+  /** The same rows on their own, as `from … where …` over `d` (with `d.owner_id`), for reading them in key order first. */
+  readonly rows: SQL;
+  readonly key: SortKey;
+  /**
+   * For a select or status: each option's own rows (`from … where …` over `d`),
+   * in option order, so a page can walk them one index range at a time.
+   */
+  readonly options?: readonly SQL[];
+  /** True on rows that have no value for the first sort. */
+  readonly empty: SQL;
+}
+
+const DRIVEN_COLUMNS: Partial<Record<AttributeDef['type'], { column: string; kind: KeyKind }>> = {
+  text: { column: 'text_value', kind: 'text' },
+  email: { column: 'text_value', kind: 'text' },
+  domain: { column: 'text_value', kind: 'text' },
+  url: { column: 'text_value', kind: 'text' },
+  personal_name: { column: 'text_value', kind: 'text' },
+  phone: { column: 'text_value', kind: 'text' },
+  file: { column: 'text_value', kind: 'text' },
+  number: { column: 'number_value', kind: 'numeric' },
+  rating: { column: 'number_value', kind: 'numeric' },
+  date: { column: 'date_value', kind: 'date' },
+  timestamp: { column: 'timestamp_value', kind: 'timestamptz' },
+  interaction: { column: 'timestamp_value', kind: 'timestamptz' },
+  checkbox: { column: 'bool_value', kind: 'boolean' },
+};
+
+/** The driving form of a view's first sort, or undefined. `optionIds` are a select's or status's options in order. */
+export function drivingSort(
+  context: CompileContext,
+  level: Level,
+  rule: SortRule | undefined,
+  optionIds: readonly string[],
+): DrivingSort | undefined {
+  if (rule === undefined) return undefined;
+  const attribute = context.attributes.get(rule.attributeId);
+  if (attribute === undefined || attribute.systemColumn !== null) return undefined;
+  // Only an attribute of the row itself: its owner is r.id, so the index order is the tie order too.
+  const own = level.listId === null ? attribute.objectId === level.objectId : attribute.listId === level.listId;
+  if (!own) return undefined;
+  const current = sql`v.attribute_id = ${attribute.id} and v.position = 0 and v.active_until is null and not v.is_cleared`;
+  const empty = sql`not exists (select 1 from "values" v where v.workspace_id = r.workspace_id and v.owner_id = r.id and ${current})`;
+  const { direction } = rule;
+  if (attribute.type === 'select' || attribute.type === 'status') {
+    if (optionIds.length === 0) return undefined;
+    const branches = optionIds.map(
+      (optionId, index) =>
+        sql`select ${index}::int as k, v.owner_id, v.workspace_id from "values" v where ${current} and v.option_id = ${optionId}::uuid`,
+    );
+    const union = sql`(${sql.join(branches, sql` union all `)}) d`;
+    const own = (optionId: string) =>
+      sql`from "values" d where d.attribute_id = ${attribute.id} and d.position = 0 and d.active_until is null and not d.is_cleared and d.option_id = ${optionId}::uuid`;
+    return {
+      options: optionIds.map(own),
+      source: sql`join ${union} on d.workspace_id = r.workspace_id and d.owner_id = r.id`,
+      rows: sql`from ${union} where true`,
+      key: { direction, expression: sql`d.k`, kind: 'int', nullable: false },
+      empty,
+    };
+  }
+  const driven = DRIVEN_COLUMNS[attribute.type];
+  if (driven === undefined) return undefined;
+  const column = raw(`d.${driven.column}`);
+  const expression = driven.kind === 'text' ? textKey(sql`${column}`) : sql`${column}`;
+  const held = sql`d.attribute_id = ${attribute.id} and d.position = 0 and d.active_until is null and not d.is_cleared and ${column} is not null`;
+  return {
+    source: sql`join "values" d on d.workspace_id = r.workspace_id and d.owner_id = r.id and ${held}`,
+    rows: sql`from "values" d where ${held}`,
+    key: { direction, expression, kind: driven.kind, nullable: false },
+    empty,
+  };
 }
