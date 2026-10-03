@@ -3,6 +3,7 @@
 // calls `prepareTestDatabase` once per run; tests then connect as an app login
 // role inside `crm_app`, so row level security applies exactly as in
 // production.
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
@@ -24,17 +25,28 @@ export interface TestDatabase {
 }
 
 /**
- * Drops and creates the database `name`, applies every migration as the owner
- * role, and makes sure the test app login exists in `crm_app`. Each package
- * uses its own name, so packages can run their suites at the same time.
+ * A short tag for this checkout, from its path: each git worktree gets its own
+ * test databases, so suites in several worktrees can run at the same time.
+ */
+const CHECKOUT = createHash('sha256')
+  .update(fileURLToPath(new URL('../../..', import.meta.url)))
+  .digest('hex')
+  .slice(0, 8);
+
+/**
+ * Drops and creates this checkout's copy of the database `base` (suffixed with the
+ * checkout's tag), applies every migration as the owner role, and makes sure
+ * the test app login exists in `crm_app`. Each package uses its own name, and
+ * each worktree its own tag, so suites can run at the same time.
  */
 export async function prepareTestDatabase(
-  name: string,
+  base: string,
   adminUrl = process.env.TEST_DATABASE_ADMIN_URL ?? DEFAULT_ADMIN_URL,
 ): Promise<TestDatabase> {
-  if (!/^crm_test_[a-z0-9_]+$/.test(name)) {
-    throw new Error(`A test database name starts with crm_test_ (got "${name}").`);
+  if (!/^crm_test_[a-z0-9_]+$/.test(base)) {
+    throw new Error(`A test database name starts with crm_test_ (got "${base}").`);
   }
+  const name = `${base}_${CHECKOUT}`;
   const admin = new pg.Client({ connectionString: adminUrl, application_name: 'crm-test-setup' });
   try {
     await admin.connect();
