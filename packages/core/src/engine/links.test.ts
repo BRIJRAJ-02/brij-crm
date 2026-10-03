@@ -481,6 +481,108 @@ describe('relationships', () => {
     );
     expect(self?.code).toBe('ATTRIBUTE_VALUE_INVALID');
   });
+
+  it('numbers a far end past 32,767 links, and refuses a link past the largest position (AC-5, AC-16)', async () => {
+    const world = await workspace();
+    const acme = await newCompany(world, 'Acme');
+    const team = world.company('team');
+    const link = (recordId: string) =>
+      setValues(world.scope, {
+        recordId,
+        values: { [world.person('company')]: { value: { objectId: world.companies, recordId: acme } } },
+      });
+    const ada = await newPerson(world, 'Ada');
+    await link(ada);
+    // Acme's end as if it already held 32,768 links, without making them.
+    const setLast = (position: number) =>
+      owner.withWorkspace(world.scope.workspaceId, (tx) =>
+        tx.execute(sql`
+          update record_links set to_position = ${position}
+          where to_record_id = ${acme} and active_until is null
+            and to_position = (select max(to_position) from record_links where to_record_id = ${acme} and active_until is null)
+        `),
+      );
+    await setLast(32_767);
+    const grace = await newPerson(world, 'Grace');
+    await link(grace);
+    const positions = await db.withWorkspace(world.scope.workspaceId, (tx) =>
+      tx.execute<{ from_record_id: string; to_position: number }>(sql`
+        select from_record_id, to_position from record_links
+        where to_record_id = ${acme} and active_until is null order by to_position
+      `),
+    );
+    expect(positions.rows.map((row) => [row.from_record_id, row.to_position])).toEqual([
+      [ada, 32_767],
+      [grace, 32_768],
+    ]);
+    expect(await valueOf(world.scope, acme, team)).toEqual([
+      { objectId: world.people, recordId: ada },
+      { objectId: world.people, recordId: grace },
+    ]);
+
+    // At the largest integer there is no next position: a clean refusal, not an out of range error.
+    await setLast(2_147_483_647);
+    const hopper = await newPerson(world, 'Hopper');
+    const refused = await refusals(link(hopper));
+    expect(refused.map((refusal) => [refusal.code, refusal.attributeId])).toEqual([
+      ['LIMIT_REACHED', world.person('company')],
+    ]);
+    expect(await valueOf(world.scope, hopper, world.person('company'))).toBeNull();
+  });
+
+  it('clears a multi end holding 70,000 links with one statement (AC-5)', { timeout: 120_000 }, async () => {
+    const world = await workspace();
+    const acme = await newCompany(world, 'Acme');
+    const ada = await newPerson(world, 'Ada');
+    await setValues(world.scope, {
+      recordId: ada,
+      values: { [world.person('company')]: { value: { objectId: world.companies, recordId: acme } } },
+    });
+    // 70,000 more people at Acme, in bulk as the owner: past Postgres's 65,535 bind parameters if each link
+    // were its own parameter. Each copies the real link's relationship and cardinality flags.
+    const people = 70_000;
+    await owner.withWorkspace(world.scope.workspaceId, (tx) =>
+      tx.execute(sql`
+        with first as (
+          select relationship_id, from_single, to_single from record_links
+          where from_record_id = ${ada} and active_until is null
+        ), added as (
+          insert into records (workspace_id, object_id, created_by_type, updated_by_type)
+          select ${world.scope.workspaceId}::uuid, ${world.people}::uuid, 'system', 'system'
+          from generate_series(1, ${people}::int)
+          returning id
+        )
+        insert into record_links (workspace_id, version_id, relationship_id, from_record_id, to_record_id,
+          position, to_position, from_single, to_single, active_from, set_by_type)
+        select ${world.scope.workspaceId}::uuid, uuidv7(), first.relationship_id, added.id, ${acme}::uuid,
+          0, row_number() over (), first.from_single, first.to_single, now() - interval '1 minute', 'system'
+        from added, first
+      `),
+    );
+    let seen: Change | undefined;
+    const hook: AfterWrite = (change) => {
+      seen = change;
+      return Promise.resolve();
+    };
+    const started = performance.now();
+    const results = await setValues(
+      world.scope,
+      { recordId: acme, values: { [world.company('team')]: { value: null } } },
+      [hook],
+    );
+    const took = performance.now() - started;
+    expect(results[world.company('team')]?.versionId).toBeTruthy();
+    expect(
+      await rowCount(
+        world.scope,
+        sql`select count(*)::int as n from record_links where to_record_id = ${acme} and active_until is null`,
+      ),
+    ).toBe(0);
+    expect(await valueOf(world.scope, acme, world.company('team'))).toEqual([]);
+    // Acme's own change, then one for every person whose Company it was.
+    expect(seen?.values).toHaveLength(people + 2);
+    expect(took).toBeLessThan(30_000);
+  });
 });
 
 async function deskName(world: World, desks: string): Promise<string> {
@@ -1113,7 +1215,7 @@ describe('deletion', () => {
     }
   });
 
-  it("finds a record's far references by index, never a scan of record_links (AC-8, AC-17, AC-18)", async () => {
+  it("finds a record's far references by index, never a scan of records or record_links (AC-8, AC-17, AC-18)", async () => {
     const world = await workspace();
     const holding = await newCompany(world, 'Holding');
     // Links on both of its ends: people at the company (it is the to end), and its own parent (the from end).
@@ -1127,11 +1229,33 @@ describe('deletion', () => {
         [world.person('company')]: { objectId: world.companies, recordId: index % 3 === 0 ? holding : parent },
       });
     }
-    // Fresh statistics, then scans off, as the sort key plan tests do: a link lookup row level security or the
-    // query's shape kept from the indexes would still show as a Seq Scan of record_links.
+    // Bulk, as the owner: 2,000 more people at Holding (a record with many links, where a plain join became a
+    // hash join over a scan of all of records), and 20,000 at Parent, so Holding's links are a few of many.
+    const bulk = (count: number, company: string) =>
+      owner.withWorkspace(world.scope.workspaceId, (tx) =>
+        tx.execute(sql`
+          with first as (
+            select l.relationship_id, l.from_single, l.to_single from record_links l
+            join attributes a on a.workspace_id = l.workspace_id and a.relationship_id = l.relationship_id
+            where a.id = ${world.person('company')} and l.active_until is null limit 1
+          ), added as (
+            insert into records (workspace_id, object_id, created_by_type, updated_by_type)
+            select ${world.scope.workspaceId}::uuid, ${world.people}::uuid, 'system', 'system'
+            from generate_series(1, ${count}::int)
+            returning id
+          )
+          insert into record_links (workspace_id, version_id, relationship_id, from_record_id, to_record_id,
+            position, to_position, from_single, to_single, active_from, set_by_type)
+          select ${world.scope.workspaceId}::uuid, uuidv7(), first.relationship_id, added.id, ${company}::uuid,
+            0, 100 + row_number() over (), first.from_single, first.to_single, now(), 'system'
+          from added, first
+        `),
+      );
+    await bulk(2_000, holding);
+    await bulk(20_000, parent);
+    // Fresh statistics and every scan allowed: the plan the server would really pick.
     await owner.vacuumAnalyze(['record_links', 'records']);
     const nodes = await db.withWorkspace(world.scope.workspaceId, async (tx) => {
-      await tx.execute(sql`set local enable_seqscan = off`);
       const result = await tx.execute<{ 'QUERY PLAN': readonly { Plan: PlanNode }[] }>(
         sql`explain (format json) ${farReferencesQuery(holding, world.companies)}`,
       );
@@ -1146,8 +1270,17 @@ describe('deletion', () => {
       return found;
     });
     expect(
-      nodes.filter((node) => node['Node Type'] === 'Seq Scan' && node['Relation Name'] === 'record_links'),
+      nodes.filter(
+        (node) =>
+          node['Node Type'] === 'Seq Scan' &&
+          (node['Relation Name'] === 'record_links' || node['Relation Name'] === 'records'),
+      ),
     ).toEqual([]);
+    // No hash join and no sort: each far record is a primary key probe, and the rows are sorted in JS.
+    expect(nodes.filter((node) => node['Node Type'] === 'Hash Join' || node['Node Type'] === 'Sort')).toEqual([]);
+    expect(nodes.some((node) => node['Relation Name'] === 'records' && node['Index Name'] === 'records_pkey')).toBe(
+      true,
+    );
     // Each end's branch seeks its links by the record (whichever record_links index the planner picks).
     const seeks = nodes.flatMap((node) =>
       node['Index Name']?.startsWith('record_links_') === true ? [node['Index Cond'] ?? ''] : [],
@@ -1155,14 +1288,14 @@ describe('deletion', () => {
     expect(seeks.some((condition) => condition.includes('from_record_id ='))).toBe(true);
     expect(seeks.some((condition) => condition.includes('to_record_id ='))).toBe(true);
 
-    // And the read itself: the ten people (through their Company) and the parent (through its Subsidiaries).
+    // And the read itself: the 2,010 people (through their Company) and the parent (through its Subsidiaries).
     const rows = await db.withWorkspace(world.scope.workspaceId, (tx) =>
       tx.execute<{ record_id: string; attribute_id: string }>(farReferencesQuery(holding, world.companies)),
     );
     expect(
       rows.rows.filter((row) => row.attribute_id === world.company('subsidiaries')).map((row) => row.record_id),
     ).toEqual([parent]);
-    expect(rows.rows.filter((row) => row.attribute_id === world.person('company'))).toHaveLength(10);
+    expect(rows.rows.filter((row) => row.attribute_id === world.person('company'))).toHaveLength(2_010);
   });
 });
 

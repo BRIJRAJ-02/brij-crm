@@ -15,6 +15,7 @@ export {
   FileValue,
   fullNameOf,
   InteractionValue,
+  IsoInstant,
   LocationValue,
   LongTextValue,
   MULTIPLE_VALUE_TYPES,

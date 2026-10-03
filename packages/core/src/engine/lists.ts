@@ -113,8 +113,8 @@ export async function addEntry(
   input: EntryInput,
   hooks: readonly AfterWrite[] = [],
 ): Promise<{ entryId: string; versions: Record<string, AttributeResult> }> {
-  checkId(input.listId, 'That list does not exist.');
-  checkId(input.recordId, 'That record does not exist.');
+  const listId = checkId(input.listId, 'That list does not exist.');
+  const recordId = checkId(input.recordId, 'That record does not exist.');
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -122,21 +122,21 @@ export async function addEntry(
       const [list] = await tx
         .select({ objectId: lists.objectId, allowsDuplicates: lists.allowsDuplicates, archivedAt: lists.archivedAt })
         .from(lists)
-        .where(eq(lists.id, input.listId))
+        .where(eq(lists.id, listId))
         .for('update');
       if (list === undefined) throw refuse('NOT_FOUND', 'That list does not exist.');
       if (list.archivedAt !== null) throw refuse('NOT_FOUND', 'That list is archived. Restore it first.');
-      const record = await lockRecord(tx, input.recordId);
+      const record = await lockRecord(tx, recordId);
       if (record.objectId !== list.objectId) {
         throw refuse('CONFIG_INVALID', "That record can't go in this list; it holds another object's records.");
       }
-      if (!list.allowsDuplicates) await checkOnce(tx, input.listId, input.recordId);
-      const attributes = await loadListAttributes(tx, input.listId);
+      if (!list.allowsDuplicates) await checkOnce(tx, listId, recordId);
+      const attributes = await loadListAttributes(tx, listId);
       const parsed = await initialValues(tx, scope, attributes, input.values ?? {}, input.timeZone ?? 'UTC');
-      await takeEntrySlots(tx, scope, input.listId, 1);
+      await takeEntrySlots(tx, scope, listId, 1);
       const [row] = await tx
         .insert(listEntries)
-        .values({ workspaceId: scope.workspaceId, listId: input.listId, recordId: input.recordId, ...audit(scope) })
+        .values({ workspaceId: scope.workspaceId, listId, recordId, ...audit(scope) })
         .returning({ id: listEntries.id });
       if (row === undefined) throw new Error('The entry was not created.');
       context.record({ createdEntries: [row.id] });
@@ -190,16 +190,17 @@ export async function removeEntry(
   input: { readonly entryId: string },
   hooks: readonly AfterWrite[] = [],
 ) {
+  const entryId = checkId(input.entryId, 'That entry does not exist.');
   await runWrite(
     scope,
     async (context) => {
       const { tx } = context;
-      const { listId, recordId } = await entryParents(tx, input.entryId);
+      const { listId, recordId } = await entryParents(tx, entryId);
       // The list, then the record (share, as lockEntry takes it), then the entry: a restore of the record
       // waits for this removal or this one for it, so neither leaves the entry's keys or unique values showing.
       await lockList(tx, listId);
       await tx.execute(sql`select 1 from records where id = ${recordId} for share`);
-      const entry = await lockAnyEntry(tx, input.entryId);
+      const entry = await lockAnyEntry(tx, entryId);
       if (entry.deletedAt !== null) return;
       const by = actorRow(scope.actor);
       await tx
@@ -210,11 +211,11 @@ export async function removeEntry(
           deletedById: by.id,
           deletedByMemberId: by.memberId,
         })
-        .where(eq(listEntries.id, input.entryId));
-      await holdUniqueKeys(tx, [input.entryId]);
-      await setEntryKeysLive(tx, input.entryId, false);
+        .where(eq(listEntries.id, entryId));
+      await holdUniqueKeys(tx, [entryId]);
+      await setEntryKeysLive(tx, entryId, false);
       await takeEntrySlots(tx, scope, listId, -1);
-      context.record({ removedEntries: [input.entryId] });
+      context.record({ removedEntries: [entryId] });
     },
     hooks,
   );
@@ -226,11 +227,12 @@ export async function restoreEntry(
   input: { readonly entryId: string },
   hooks: readonly AfterWrite[] = [],
 ) {
+  const entryId = checkId(input.entryId, 'That entry does not exist.');
   await runWrite(
     scope,
     async (context) => {
       const { tx } = context;
-      const { listId, recordId } = await entryParents(tx, input.entryId);
+      const { listId, recordId } = await entryParents(tx, entryId);
       // The same lock order as addEntry: the list, then the record, then the entry.
       const list = await lockList(tx, listId);
       const [record] = await tx
@@ -238,20 +240,20 @@ export async function restoreEntry(
         .from(records)
         .where(eq(records.id, recordId))
         .for('no key update');
-      const entry = await lockAnyEntry(tx, input.entryId);
+      const entry = await lockAnyEntry(tx, entryId);
       if (entry.deletedAt === null) return;
       if (entry.expired) throw refuse('NOT_FOUND', 'That entry was removed more than 30 days ago.');
       if (record === undefined) throw refuse('NOT_FOUND', 'That record does not exist.');
       if (record.deletedAt !== null) throw refuse('RECORD_DELETED', 'That record is in the trash. Restore it first.');
-      if (!list.allowsDuplicates) await checkOnce(tx, listId, recordId, input.entryId);
+      if (!list.allowsDuplicates) await checkOnce(tx, listId, recordId, entryId);
       await takeEntrySlots(tx, scope, listId, 1);
-      await releaseUniqueKeys(tx, [input.entryId]);
+      await releaseUniqueKeys(tx, [entryId]);
       await tx
         .update(listEntries)
         .set({ deletedAt: null, deletedByType: null, deletedById: null, deletedByMemberId: null, ...touched(scope) })
-        .where(eq(listEntries.id, input.entryId));
-      await setEntryKeysLive(tx, input.entryId, true);
-      context.record({ restoredEntries: [input.entryId] });
+        .where(eq(listEntries.id, entryId));
+      await setEntryKeysLive(tx, entryId, true);
+      context.record({ restoredEntries: [entryId] });
     },
     hooks,
   );
@@ -328,6 +330,6 @@ export async function getEntries(scope: EngineScope, input: { readonly ids: read
 
 /** Every live entry of one record, across its lists (a record page's "Lists" panel). */
 export async function getRecordEntries(scope: EngineScope, input: { readonly recordId: string }) {
-  checkId(input.recordId, 'That record does not exist.');
-  return scope.db.withWorkspace(scope.workspaceId, (tx) => readEntries(tx, eq(listEntries.recordId, input.recordId)));
+  const recordId = checkId(input.recordId, 'That record does not exist.');
+  return scope.db.withWorkspace(scope.workspaceId, (tx) => readEntries(tx, eq(listEntries.recordId, recordId)));
 }

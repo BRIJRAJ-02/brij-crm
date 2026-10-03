@@ -313,7 +313,8 @@ export async function defineAttribute(scope: EngineScope, input: AttributeInput,
 
 async function editable(tx: WorkspaceTx, attributeId: string): Promise<AttributeDef> {
   const attribute = await loadAttribute(tx, attributeId, true);
-  if (attribute.isSystem) throw refuse('ATTRIBUTE_READ_ONLY', `${attribute.title} is a system attribute.`, attributeId);
+  if (attribute.isSystem)
+    throw refuse('ATTRIBUTE_READ_ONLY', `${attribute.title} is a system attribute.`, attribute.id);
   return attribute;
 }
 
@@ -361,15 +362,15 @@ export async function archiveAttribute(scope: EngineScope, attributeId: string, 
       const [primary] = await tx
         .select({ id: objects.id })
         .from(objects)
-        .where(eq(objects.primaryAttributeId, attributeId));
+        .where(eq(objects.primaryAttributeId, attribute.id));
       if (primary !== undefined)
-        throw refuse('CONFIG_INVALID', "A record's name attribute can't be archived.", attributeId);
+        throw refuse('CONFIG_INVALID', "A record's name attribute can't be archived.", attribute.id);
       if (attribute.archivedAt !== null) return;
-      if (attribute.isUnique) await clearUniqueKeys(tx, attributeId);
+      if (attribute.isUnique) await clearUniqueKeys(tx, attribute.id);
       await tx
         .update(attributes)
         .set({ archivedAt: sql`now()`, ...touched(scope) })
-        .where(eq(attributes.id, attributeId));
+        .where(eq(attributes.id, attribute.id));
     },
     hooks,
   );
@@ -386,7 +387,7 @@ export async function restoreAttribute(scope: EngineScope, attributeId: string, 
       await tx
         .update(attributes)
         .set({ archivedAt: null, ...touched(scope) })
-        .where(eq(attributes.id, attributeId));
+        .where(eq(attributes.id, attribute.id));
     },
     hooks,
   );

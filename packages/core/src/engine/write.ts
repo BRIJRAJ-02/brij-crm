@@ -197,9 +197,10 @@ export interface WriteContext {
  * Adds `items` to the end of `target` one at a time. `target.push(...items)`
  * passes every item as an argument, and past about 125,000 items that
  * overflows the call stack (`RangeError`), so a record with that many links
- * could never be deleted, restored or erased.
+ * could never be deleted, restored or erased. Use it wherever the items have
+ * no fixed bound (a link write's far records).
  */
-function append<T>(target: T[], items: readonly T[] | undefined): void {
+export function append<T>(target: T[], items: readonly T[] | undefined): void {
   if (items === undefined) return;
   for (const item of items) target.push(item);
 }

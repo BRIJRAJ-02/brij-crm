@@ -8,7 +8,7 @@ import { and, asc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { RecordReferenceValue, ValueVersion } from '@crm/contracts/values';
 import { insertAttribute } from './definitions.ts';
-import { checkId, isUuid } from './ids.ts';
+import { canonicalId, checkId, isUuid, uuidList } from './ids.ts';
 import { postgresError, refuse, writeConflict } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
 import { parseFor, type AttributeDef, type AttributeWrite } from './values.ts';
@@ -66,8 +66,9 @@ const micro = (column: unknown) => sql<string>`to_char(${column} at time zone 'U
 /** The most objects a one way reference may point to. */
 const MAX_TARGETS = 20;
 
-async function liveObjects(tx: WorkspaceTx, ids: readonly string[]): Promise<void> {
-  for (const id of ids) checkId(id, 'That object does not exist.');
+/** Refuses objects that are missing or archived; returns their canonical ids, in order. */
+async function liveObjects(tx: WorkspaceTx, given: readonly string[]): Promise<readonly string[]> {
+  const ids = given.map((id) => checkId(id, 'That object does not exist.'));
   const rows = await tx
     .select({ id: objects.id, archivedAt: objects.archivedAt })
     .from(objects)
@@ -77,6 +78,7 @@ async function liveObjects(tx: WorkspaceTx, ids: readonly string[]): Promise<voi
     if (row === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
     if (row.archivedAt !== null) throw refuse('NOT_FOUND', 'That object is archived. Restore it first.');
   }
+  return ids;
 }
 
 /** Inserts a relationship and its end attributes, inside a write. */
@@ -85,7 +87,8 @@ export async function insertRelationship(
   input: RelationshipInput,
 ): Promise<{ relationshipId: string; fromAttributeId: string; toAttributeId?: string }> {
   const { tx, scope } = context;
-  const targets = [...new Set(input.targetObjectIds ?? [])];
+  // Canonical first, so two spellings of one object are one target.
+  const targets = [...new Set((input.targetObjectIds ?? []).map(canonicalId))];
   if ((input.to === undefined) === (targets.length === 0)) {
     throw refuse(
       'CONFIG_INVALID',
@@ -216,10 +219,15 @@ function endOf(relationship: RelationshipDef, attributeId: string) {
   };
 }
 
-/** A parsed record reference value as its list of references, in order, each record once. */
+/**
+ * A parsed record reference value as its list of references, in order, each
+ * record once, with canonical ids: an upper case id is the same record, so it
+ * must compare equal to the owner (no link to itself) and to the stored links.
+ */
 function referencesOf(value: unknown): readonly RecordReferenceValue[] {
-  const items =
+  const given =
     value === null ? [] : Array.isArray(value) ? (value as RecordReferenceValue[]) : [value as RecordReferenceValue];
+  const items = given.map((item) => ({ objectId: canonicalId(item.objectId), recordId: canonicalId(item.recordId) }));
   const seen = new Set<string>();
   return items.filter((item) => {
     if (seen.has(item.recordId)) return false;
@@ -331,7 +339,8 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
 
   // A far end that holds one link: a live record's link refuses, one in the trash gives way.
   const freed: { id: string; activeFrom: string }[] = [];
-  const added = wantedIds.filter((id) => !visible.some((link) => link.far === id));
+  const shown = new Set(visible.map((link) => link.far));
+  const added = wantedIds.filter((id) => !shown.has(id));
   if (end.farSingle && added.length > 0) {
     const held = await tx
       .select({
@@ -365,11 +374,15 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
     }
   }
 
-  const ending = [...(end.mySingle ? current : visible), ...freed];
-  const latest = ending.reduce<string | undefined>(
-    (max, link) => (max === undefined || link.activeFrom > max ? link.activeFrom : max),
-    undefined,
-  );
+  // What this write ends on its own end: a single end's one link whatever the far record's state, and on a
+  // multi end every link it shows. A multi end's links to records in the trash stay, so a restore brings
+  // them back: their far records are `kept`.
+  const ending = end.mySingle ? current : visible;
+  const kept = end.mySingle ? [] : current.flatMap((link) => (link.farDeleted ? [link.far] : []));
+  let latest: string | undefined;
+  for (const link of [ending, freed].flat()) {
+    if (latest === undefined || link.activeFrom > latest) latest = link.activeFrom;
+  }
   const stamp = await tx.execute<{ t: string; version: string }>(sql`
     select greatest(clock_timestamp(), coalesce(${latest ?? null}::timestamptz + interval '1 microsecond', clock_timestamp()))::text as t,
       uuidv7()::text as version
@@ -379,23 +392,40 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
   const at = sql`${first.t}::timestamptz`;
   const by = actorRow(scope.actor);
 
+  const ended = { activeUntil: at, endedByType: by.type, endedById: by.id, endedByMemberId: by.memberId };
   if (ending.length > 0) {
-    // Only links still current: a past version never changes. When the far end
-    // ended one meanwhile, start again so this write sees it.
-    const ended = await tx
+    // One set based statement however many links the end holds (a company with 70,000 people): the far
+    // records to keep go as one array parameter, never one parameter per link, so neither drizzle's stack nor
+    // Postgres's 65,535 parameters bound it. Only links still current: a past version never changes. When
+    // the far end ended or added a link meanwhile, the count differs: start again so this write sees it.
+    const result = await tx
       .update(recordLinks)
-      .set({ activeUntil: at, endedByType: by.type, endedById: by.id, endedByMemberId: by.memberId })
+      .set(ended)
+      .where(
+        and(
+          eq(recordLinks.relationshipId, relationship.id),
+          eq(end.mine, ownerId),
+          isNull(recordLinks.activeUntil),
+          sql`${end.far} <> all(${uuidList(kept)})`,
+        ),
+      );
+    if (result.rowCount !== ending.length) throw writeConflict('A link changed under this write.');
+  }
+  if (freed.length > 0) {
+    // The trashed holders' links on a single far end (at most one per added record).
+    const result = await tx
+      .update(recordLinks)
+      .set(ended)
       .where(
         and(
           inArray(
             recordLinks.id,
-            ending.map((link) => link.id),
+            freed.map((link) => link.id),
           ),
           isNull(recordLinks.activeUntil),
         ),
-      )
-      .returning({ id: recordLinks.id });
-    if (ended.length < ending.length) throw writeConflict('A link changed under this write.');
+      );
+    if (result.rowCount !== freed.length) throw writeConflict('A link changed under this write.');
   }
   if (wanted.length > 0) {
     const carried = new Map(current.map((link) => [link.far, link.farPosition]));
@@ -423,6 +453,15 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
       await tx.insert(recordLinks).values(rows);
     } catch (error) {
       const pg = postgresError(error);
+      // A far end numbers each new link after its last: one whose last position is the largest an integer
+      // holds has no next one. A clean refusal, never a raw out of range error.
+      if (pg?.code === '22003') {
+        throw refuse(
+          'LIMIT_REACHED',
+          `A record picked for ${attribute.title} holds as many links as it can. Unlink some of its links first.`,
+          attribute.id,
+        );
+      }
       // The far end linked this same pair meanwhile: start again, and the write will find it already there.
       if (pg?.code === '23505' && pg.constraint === 'record_links_current') {
         throw writeConflict('The far end linked these records meanwhile.');

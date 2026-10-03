@@ -14,6 +14,7 @@
 // holding the row only while its transaction finishes.
 import { eq, sql, type SQL } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
+import { checkInstant } from './history.ts';
 import { checkId, uuidArray } from './ids.ts';
 import { RESTORE_WINDOW, takeRecordSlots } from './limits.ts';
 import { refuse } from './refusals.ts';
@@ -85,8 +86,12 @@ export function farReferencesQuery(recordId: string, objectId: string): SQL {
     )
     select far.id::text as record_id, far.object_id::text as object_id, hits.attribute_id::text as attribute_id
     from hits
-    join records far on far.workspace_id = hits.workspace_id and far.id = hits.far_id and far.deleted_at is null
-    order by far.object_id, far.id, hits.attribute_id
+    cross join lateral (
+      select r.id, r.object_id from records r
+      where r.workspace_id = hits.workspace_id and r.id = hits.far_id and r.deleted_at is null
+      -- Keeps the lookup its own subquery: one primary key probe per link, never a hash join over all of records.
+      offset 0
+    ) far
   `;
 }
 
@@ -101,8 +106,13 @@ export function farReferencesQuery(recordId: string, objectId: string): SQL {
  * and record (`record_links_from` and `record_links_to` lead with both), so a
  * record's links cost index lookups, never a scan of `record_links`: stale
  * statistics can't fold the ends into a plan that scans the links once per
- * relationship. A test pins the plan. Every caller runs it before it takes
- * the workspace counter row, so this read never holds that lock.
+ * relationship. Each far record is then one primary key probe: with fresh
+ * statistics and a record linked from a great many others, a plain join
+ * became a hash join over a scan of all of `records`, and the sort spilled to
+ * disk. So the probe is a lateral subquery the planner can't fold into a
+ * join, and the rows are sorted here instead of in SQL. A test pins the plan,
+ * with sequential scans allowed. Every caller runs it before it takes the
+ * workspace counter row, so this read never holds that lock.
  */
 async function farReferences(
   tx: WorkspaceTx,
@@ -112,11 +122,15 @@ async function farReferences(
   const result = await tx.execute<{ record_id: string; object_id: string; attribute_id: string }>(
     farReferencesQuery(recordId, objectId),
   );
-  return result.rows.map((row) => ({
-    recordId: row.record_id,
-    objectId: row.object_id,
-    attributeId: row.attribute_id,
-  }));
+  // By object, record, then attribute, as the hooks have always seen them. Ids are lower case uuids, so
+  // comparing the text compares them as Postgres would.
+  const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+  return result.rows
+    .map((row) => ({ recordId: row.record_id, objectId: row.object_id, attributeId: row.attribute_id }))
+    .sort(
+      (a, b) =>
+        compare(a.objectId, b.objectId) || compare(a.recordId, b.recordId) || compare(a.attributeId, b.attributeId),
+    );
 }
 
 /**
@@ -129,13 +143,13 @@ export async function deleteRecord(
   input: { readonly recordId: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<{ recordId: string; state: RecordState }> {
-  checkId(input.recordId, 'That record does not exist.');
+  const recordId = checkId(input.recordId, 'That record does not exist.');
   const { result } = await runWrite(
     scope,
     async (context) => {
       const { tx } = context;
-      const record = await lockAnyRecord(tx, input.recordId);
-      if (record.deletedAt !== null) return { recordId: input.recordId, state: 'deleted' as const };
+      const record = await lockAnyRecord(tx, recordId);
+      if (record.deletedAt !== null) return { recordId, state: 'deleted' as const };
       const by = actorRow(scope.actor);
       await tx
         .update(records)
@@ -146,19 +160,19 @@ export async function deleteRecord(
           deletedById: by.id,
           deletedByMemberId: by.memberId,
         })
-        .where(eq(records.id, input.recordId));
-      const entryIds = await liveEntryIds(tx, input.recordId);
-      const references = await farReferences(tx, { recordId: input.recordId, objectId: record.objectId });
-      await holdUniqueKeys(tx, [input.recordId, ...entryIds]);
-      await setRecordKeysLive(tx, input.recordId, false);
+        .where(eq(records.id, recordId));
+      const entryIds = await liveEntryIds(tx, recordId);
+      const references = await farReferences(tx, { recordId, objectId: record.objectId });
+      await holdUniqueKeys(tx, [recordId, ...entryIds]);
+      await setRecordKeysLive(tx, recordId, false);
       // Last, as every write takes the counter row.
       await takeRecordSlots(tx, scope, -1);
       context.record({
-        deletedRecords: [{ recordId: input.recordId, objectId: record.objectId }],
+        deletedRecords: [{ recordId, objectId: record.objectId }],
         hiddenEntries: entryIds,
         references,
       });
-      return { recordId: input.recordId, state: 'deleted' as const };
+      return { recordId, state: 'deleted' as const };
     },
     hooks,
   );
@@ -175,31 +189,31 @@ export async function restoreRecord(
   input: { readonly recordId: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<{ recordId: string; state: RecordState }> {
-  checkId(input.recordId, 'That record does not exist.');
+  const recordId = checkId(input.recordId, 'That record does not exist.');
   const { result } = await runWrite(
     scope,
     async (context) => {
       const { tx } = context;
-      const record = await lockAnyRecord(tx, input.recordId);
-      if (record.deletedAt === null) return { recordId: input.recordId, state: 'live' as const };
+      const record = await lockAnyRecord(tx, recordId);
+      if (record.deletedAt === null) return { recordId, state: 'live' as const };
       if (record.expired) throw refuse('NOT_FOUND', 'That record was deleted more than 30 days ago.');
-      const entryIds = await liveEntryIds(tx, input.recordId);
-      const references = await farReferences(tx, { recordId: input.recordId, objectId: record.objectId });
-      await releaseUniqueKeys(tx, [input.recordId, ...entryIds]);
+      const entryIds = await liveEntryIds(tx, recordId);
+      const references = await farReferences(tx, { recordId, objectId: record.objectId });
+      await releaseUniqueKeys(tx, [recordId, ...entryIds]);
       await tx
         .update(records)
         .set({ deletedAt: null, deletedByType: null, deletedById: null, deletedByMemberId: null })
-        .where(eq(records.id, input.recordId));
-      await setRecordKeysLive(tx, input.recordId, true);
+        .where(eq(records.id, recordId));
+      await setRecordKeysLive(tx, recordId, true);
       // Last, as every write takes the counter row (a create checks its slot after its values too). A full
       // workspace refuses here, and the refusal rolls back everything above.
       await takeRecordSlots(tx, scope, 1);
       context.record({
-        restoredRecords: [{ recordId: input.recordId, objectId: record.objectId }],
+        restoredRecords: [{ recordId, objectId: record.objectId }],
         shownEntries: entryIds,
         references,
       });
-      return { recordId: input.recordId, state: 'live' as const };
+      return { recordId, state: 'live' as const };
     },
     hooks,
   );
@@ -315,12 +329,14 @@ export async function purgeDeleted(
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 10_000) {
     throw refuse('CONFIG_INVALID', 'Purge 1 to 10,000 rows at a time.');
   }
-  if (input.cutoff !== undefined && Number.isNaN(Date.parse(input.cutoff))) {
-    throw refuse('CONFIG_INVALID', 'Give the cutoff as an ISO timestamp.');
-  }
+  // Checked and rewritten as UTC text, so only a full instant with its zone reaches the cast.
+  const given =
+    input.cutoff === undefined
+      ? undefined
+      : checkInstant(input.cutoff, 'Give the cutoff as an ISO timestamp with its zone, such as 2026-10-01T00:00:00Z.');
   // Never inside the restore window, whatever cutoff is given.
   const window = sql`now() - ${RESTORE_WINDOW}::interval`;
-  const cutoff = input.cutoff === undefined ? window : sql`least(${input.cutoff}::timestamptz, ${window})`;
+  const cutoff = given === undefined ? window : sql`least(${given}::timestamptz, ${window})`;
   let total = NONE;
   for (;;) {
     const { result } = await runWrite(
@@ -378,7 +394,7 @@ export async function eraseRecord(
   input: { readonly recordId: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<RemovedCounts> {
-  checkId(input.recordId, 'That record does not exist.');
+  const recordId = checkId(input.recordId, 'That record does not exist.');
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -387,19 +403,19 @@ export async function eraseRecord(
       // the record: the order entry writes lock in.
       await tx.execute(sql`
         select 1 from lists
-        where id in (select list_id from list_entries where record_id = ${input.recordId} and deleted_at is null)
+        where id in (select list_id from list_entries where record_id = ${recordId} and deleted_at is null)
         order by id for no key update
       `);
-      const record = await lockAnyRecord(tx, input.recordId);
-      const ref = { recordId: input.recordId, objectId: record.objectId };
+      const record = await lockAnyRecord(tx, recordId);
+      const ref = { recordId, objectId: record.objectId };
       const live = record.deletedAt === null;
       // A live record disappears from every read here, like a delete; a trashed one already had.
       if (live) {
-        const hiddenEntries = await liveEntryIds(tx, input.recordId);
+        const hiddenEntries = await liveEntryIds(tx, recordId);
         const references = await farReferences(tx, ref);
         context.record({ deletedRecords: [ref], hiddenEntries, references });
       }
-      const gone = await removeRecords(tx, [input.recordId]);
+      const gone = await removeRecords(tx, [recordId]);
       // Last, after the heavy deletes, as every write takes the counter row.
       if (live) await takeRecordSlots(tx, scope, -1);
       context.record({ purgedRecords: gone.records, purgedEntries: gone.entryIds });

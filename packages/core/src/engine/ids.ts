@@ -28,12 +28,43 @@ export function isUuid(value: unknown): value is string {
 }
 
 /**
+ * A uuid in its one spelling, lower case, as Postgres prints it. Ids match
+ * case insensitively, but the engine compares, keys and publishes them as
+ * strings, so every id a caller gives goes on in this form. Anything that
+ * isn't a uuid comes back unchanged: it names nothing, and is refused or
+ * left out where it is used.
+ */
+export function canonicalId<T>(value: T): T {
+  return isUuid(value) ? (value.toLowerCase() as T) : value;
+}
+
+/**
  * Refuses `NOT_FOUND` with `message` when an id a caller gave isn't a uuid:
  * nothing can have that id, and casting it would fail the query (or a whole
- * batch) instead of refusing. Call it before any query that casts the id.
+ * batch) instead of refusing. Call it before any query that casts the id, and
+ * use the id it returns from then on: the canonical, lower case spelling, so
+ * an upper case id never becomes a second spelling of the same row.
  */
-export function checkId(value: string, message: string): void {
+export function checkId(value: string, message: string): string {
   if (!isUuid(value)) throw refuse('NOT_FOUND', message);
+  return value.toLowerCase();
+}
+
+/**
+ * A map keyed by ids (values by attribute id) with every key canonical. Two
+ * spellings of one id would be one key, so they are refused `CONFIG_INVALID`
+ * rather than letting one of them win unseen.
+ */
+export function canonicalKeys<T>(map: Readonly<Record<string, T>>): Record<string, T> {
+  const result: Record<string, T> = {};
+  for (const [key, value] of Object.entries(map)) {
+    const canonical = canonicalId(key);
+    if (Object.hasOwn(result, canonical)) {
+      throw refuse('CONFIG_INVALID', 'That attribute is given twice. Give each attribute once.', canonical);
+    }
+    result[canonical] = value;
+  }
+  return result;
 }
 
 /** Ids as one `uuid[]` parameter list, for `= any(...)` in raw SQL. */

@@ -10,6 +10,7 @@ import {
   date,
   foreignKey,
   index,
+  integer,
   jsonb,
   numeric,
   pgTable,
@@ -147,7 +148,9 @@ const CURRENT_LINK = 'active_until is null';
  * (`active_until`, `ended_by`) and starts a new one. `position` orders the
  * defining end's items, `to_position` the other end's. The single flags copy
  * the relationship's cardinality, so the partial unique indexes can hold each
- * single end to one current link.
+ * single end to one current link. Both positions are `integer`: a far end
+ * numbers each new link after its last, so a popular record (one company with
+ * every person) runs well past a `smallint`'s 32,767.
  */
 export const recordLinks = pgTable(
   'record_links',
@@ -158,8 +161,8 @@ export const recordLinks = pgTable(
     relationshipId: uuid('relationship_id').notNull(),
     fromRecordId: uuid('from_record_id').notNull(),
     toRecordId: uuid('to_record_id').notNull(),
-    position: smallint('position').notNull().default(0),
-    toPosition: smallint('to_position').notNull().default(0),
+    position: integer('position').notNull().default(0),
+    toPosition: integer('to_position').notNull().default(0),
     fromSingle: boolean('from_single').notNull(),
     toSingle: boolean('to_single').notNull(),
     activeFrom: timestamptz('active_from').notNull(),

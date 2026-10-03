@@ -72,7 +72,7 @@ export async function insertOption(context: WriteContext, input: OptionInput): P
   const { tx, scope } = context;
   const attribute = await loadAttribute(tx, input.attributeId);
   if (attribute.type !== 'select' && attribute.type !== 'status') {
-    throw refuse('CONFIG_INVALID', 'Only select and status attributes have options.', input.attributeId);
+    throw refuse('CONFIG_INVALID', 'Only select and status attributes have options.', attribute.id);
   }
   checkLabel(input.label);
   checkHue(input.hue);
@@ -82,18 +82,18 @@ export async function insertOption(context: WriteContext, input: OptionInput): P
     !isStatus &&
     (input.outcome !== undefined || (input.targetTimeInStage !== undefined && input.targetTimeInStage !== null))
   ) {
-    throw refuse('CONFIG_INVALID', 'Only status stages have an outcome and a target time.', input.attributeId);
+    throw refuse('CONFIG_INVALID', 'Only status stages have an outcome and a target time.', attribute.id);
   }
-  await checkOptionRoom(tx, scope, input.attributeId);
+  await checkOptionRoom(tx, scope, attribute.id);
   return labelGuard(async () => {
     const [row] = await tx
       .insert(attributeOptions)
       .values({
         workspaceId: scope.workspaceId,
-        attributeId: input.attributeId,
+        attributeId: attribute.id,
         label: input.label.trim(),
         hue: input.hue,
-        position: sql`(select coalesce(max(position) + 1, 0) from attribute_options where attribute_id = ${input.attributeId})`,
+        position: sql`(select coalesce(max(position) + 1, 0) from attribute_options where attribute_id = ${attribute.id})`,
         outcome: isStatus ? (input.outcome ?? 'open') : null,
         targetTimeInStage: input.targetTimeInStage ?? null,
         ...audit(scope),

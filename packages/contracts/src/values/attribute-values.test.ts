@@ -9,10 +9,13 @@ import {
   DomainValue,
   emailDomain,
   fullNameOf,
+  IsoInstant,
   parseAttributeValue,
   PersonalNameValue,
+  SYSTEM_ONLY_TYPES,
   UrlValue,
 } from './attribute-values.ts';
+import { defaultKindsFor } from './attribute-config.ts';
 import { COUNTRY_CODES, countryCodeFromText } from './countries.ts';
 import { CURRENCY_CODES } from './currencies.ts';
 import { toCanonicalDecimal } from './decimal.ts';
@@ -210,5 +213,23 @@ describe('the edge cases the editors rely on', () => {
     expect(CURRENCY_CODES.every((code) => /^[A-Z]{3}$/.test(code))).toBe(true);
     expect(new Set(CURRENCY_CODES).size).toBe(CURRENCY_CODES.length);
     for (const withdrawn of ['BGN', 'HRK', 'ZWL', 'SLL', 'CUC']) expect(CURRENCY_CODES).not.toContain(withdrawn);
+  });
+});
+
+describe('instants and defaults for the system only types', () => {
+  it('takes only a full ISO instant with its zone as a moment', () => {
+    for (const valid of ['2026-10-01T09:30:00Z', '2026-10-01T09:30:00.123456Z', '2026-10-01T09:30:00+02:00']) {
+      expect(IsoInstant.safeParse(valid).success).toBe(true);
+    }
+    for (const invalid of ['2026', '2026-10', '2026-10-01', '+002026-10-01T00:00:00Z', '2026-10-01T09:30:00']) {
+      expect(IsoInstant.safeParse(invalid).success).toBe(false);
+    }
+  });
+
+  it('gives the system only types no static default: a timestamp takes an offset, an interaction nothing', () => {
+    for (const type of SYSTEM_ONLY_TYPES) expect(defaultKindsFor(type)).not.toContain('static');
+    expect(defaultKindsFor('timestamp')).toEqual(['offset']);
+    expect(defaultKindsFor('interaction')).toEqual([]);
+    expect(defaultKindsFor('date')).toEqual(['static', 'offset']);
   });
 });

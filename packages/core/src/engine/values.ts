@@ -5,7 +5,7 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { parseAttributeValue, SYSTEM_ONLY_TYPES, type AttributeType } from '@crm/contracts/values';
 import { encodeValue, sameItems, type ItemColumns, type StoredItem } from './columns.ts';
-import { checkId, isUuid, uuidArray } from './ids.ts';
+import { canonicalId, checkId, isUuid, uuidArray } from './ids.ts';
 import { postgresError, refuse, writeConflict } from './refusals.ts';
 import { syncSortKey } from './sort-keys.ts';
 import { UNIQUE_TYPES, uniqueKeyOf } from './unique.ts';
@@ -58,9 +58,10 @@ const DEF_COLUMNS = {
 /** One attribute by id, or a `NOT_FOUND` refusal (a malformed id too, before any query). */
 export async function loadAttribute(tx: WorkspaceTx, attributeId: string, lock = false): Promise<AttributeDef> {
   if (!isUuid(attributeId)) throw refuse('NOT_FOUND', 'That attribute does not exist.');
-  const query = tx.select(DEF_COLUMNS).from(attributes).where(eq(attributes.id, attributeId));
+  const id = canonicalId(attributeId);
+  const query = tx.select(DEF_COLUMNS).from(attributes).where(eq(attributes.id, id));
   const [row] = lock ? await query.for('update') : await query;
-  if (row === undefined) throw refuse('NOT_FOUND', 'That attribute does not exist.', attributeId);
+  if (row === undefined) throw refuse('NOT_FOUND', 'That attribute does not exist.', id);
   return row;
 }
 

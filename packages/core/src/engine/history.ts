@@ -3,7 +3,7 @@
 // A version covers `active_from` up to but not including `active_until`.
 import { and, asc, eq, lte, or, gt, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
-import type { ValueVersion } from '@crm/contracts/values';
+import { IsoInstant, type ValueVersion } from '@crm/contracts/values';
 import { decodeValue, type StoredItem } from './columns.ts';
 import { checkId } from './ids.ts';
 import { refuse } from './refusals.ts';
@@ -30,20 +30,22 @@ async function ownerExists(tx: WorkspaceTx, recordId: string): Promise<{ objectI
 /** A record's id, or a list entry's id: the owner a history read is about. */
 export type HistoryOwner = { readonly recordId: string } | { readonly entryId: string };
 
+/** The owner's canonical id, once it is known to be live. */
 async function ownerOf(tx: WorkspaceTx, owner: HistoryOwner): Promise<string> {
   if ('recordId' in owner) {
-    await ownerExists(tx, owner.recordId);
-    return owner.recordId;
+    const recordId = checkId(owner.recordId, 'That record does not exist.');
+    await ownerExists(tx, recordId);
+    return recordId;
   }
-  checkId(owner.entryId, 'That entry does not exist.');
+  const entryId = checkId(owner.entryId, 'That entry does not exist.');
   const [row] = await tx
     .select({ recordId: listEntries.recordId, deletedAt: listEntries.deletedAt })
     .from(listEntries)
-    .where(eq(listEntries.id, owner.entryId));
+    .where(eq(listEntries.id, entryId));
   if (row === undefined) throw refuse('NOT_FOUND', 'That entry does not exist.');
   if (row.deletedAt !== null) throw refuse('RECORD_DELETED', 'That entry was removed from its list. Restore it first.');
   await ownerExists(tx, row.recordId);
-  return owner.entryId;
+  return entryId;
 }
 
 /**
@@ -72,7 +74,7 @@ export async function getHistory(
         setById: values.setById,
       })
       .from(values)
-      .where(and(eq(values.ownerId, ownerId), eq(values.attributeId, input.attributeId)))
+      .where(and(eq(values.ownerId, ownerId), eq(values.attributeId, attribute.id)))
       .orderBy(asc(values.activeFrom), asc(values.position));
     const versions = new Map<string, typeof rows>();
     for (const row of rows) versions.set(row.versionId, [...(versions.get(row.versionId) ?? []), row]);
@@ -93,29 +95,50 @@ export async function getHistory(
   });
 }
 
-/** A record's values as they stood at `at` (an ISO timestamp), by attribute id. Empty before the record existed. */
+/**
+ * A moment a caller gave, as the UTC text a `timestamptz` cast always takes
+ * (`2026-10-01T09:30:00.000Z`), or `CONFIG_INVALID`. Only a full ISO instant
+ * with its zone passes (`IsoInstant`): `Date.parse` alone lets through a bare
+ * year, a time with no zone (read in the server's zone) and expanded years,
+ * and the raw text would then reach the cast. Years outside 1 to 9999, which
+ * Postgres or the text form can't hold, are refused too.
+ */
+export function checkInstant(value: string, message: string): string {
+  const instant = IsoInstant.safeParse(value);
+  const date = instant.success ? new Date(instant.data) : undefined;
+  if (date === undefined || Number.isNaN(date.getTime())) throw refuse('CONFIG_INVALID', message);
+  const year = date.getUTCFullYear();
+  if (year < 1 || year > 9999) throw refuse('CONFIG_INVALID', message);
+  return date.toISOString();
+}
+
+/** A record's values as they stood at `at` (an ISO timestamp with its zone), by attribute id. Empty before the record existed. */
 export async function getValuesAsOf(
   scope: EngineScope,
   input: { readonly recordId: string; readonly at: string },
 ): Promise<Readonly<Record<string, unknown>>> {
-  if (Number.isNaN(Date.parse(input.at))) throw refuse('CONFIG_INVALID', 'Give the moment as an ISO timestamp.');
+  const moment = checkInstant(
+    input.at,
+    'Give the moment as an ISO timestamp with its zone, such as 2026-10-01T09:30:00Z.',
+  );
+  const recordId = checkId(input.recordId, 'That record does not exist.');
   return scope.db.withWorkspace(scope.workspaceId, async (tx) => {
-    const record = await ownerExists(tx, input.recordId);
-    if (record.createdAt.getTime() > Date.parse(input.at)) return {};
+    const record = await ownerExists(tx, recordId);
+    if (record.createdAt.getTime() > Date.parse(moment)) return {};
     const attributes = await loadAttributes(tx, record.objectId);
-    const at = sql`${input.at}::timestamptz`;
+    const at = sql`${moment}::timestamptz`;
     const rows = await tx
       .select({ ...ITEM_COLUMNS, attributeId: values.attributeId, isCleared: values.isCleared })
       .from(values)
       .where(
         and(
-          eq(values.ownerId, input.recordId),
+          eq(values.ownerId, recordId),
           lte(values.activeFrom, at),
           or(isNull(values.activeUntil), gt(values.activeUntil, at)),
         ),
       );
     const references = [...attributes.values()].filter((attribute) => attribute.type === 'record_reference');
-    const links = (await linkValues(tx, [input.recordId], references, input.at)).get(input.recordId);
+    const links = (await linkValues(tx, [recordId], references, moment)).get(recordId);
     const result: Record<string, unknown> = {};
     for (const attribute of attributes.values()) {
       if (attribute.isSystem) continue;
@@ -148,14 +171,14 @@ export async function getTimeInStages(
     const ownerId = await ownerOf(tx, input);
     const attribute = await loadAttribute(tx, input.attributeId);
     if (attribute.type !== 'status')
-      throw refuse('CONFIG_INVALID', 'Time in stage is for status attributes.', input.attributeId);
+      throw refuse('CONFIG_INVALID', 'Time in stage is for status attributes.', attribute.id);
     const rows = await tx.execute<{ option_id: string; entered: string; left: string | null; ms: string }>(sql`
       select option_id::text,
         to_char(active_from at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as entered,
         to_char(active_until at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as left,
         (extract(epoch from (coalesce(active_until, clock_timestamp()) - active_from)) * 1000)::bigint::text as ms
       from "values"
-      where owner_id = ${ownerId} and attribute_id = ${input.attributeId} and option_id is not null
+      where owner_id = ${ownerId} and attribute_id = ${attribute.id} and option_id is not null
       order by active_from
     `);
     const byOption = new Map<string, { visits: StageVisit[]; totalMs: number }>();

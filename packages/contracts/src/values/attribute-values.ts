@@ -64,6 +64,18 @@ export const Timestamp = z.iso.datetime({
 });
 export type Timestamp = z.infer<typeof Timestamp>;
 
+/**
+ * A moment a caller asks about (values as of a time, a purge cutoff): a full
+ * ISO 8601 date and time, seconds and fractions optional, with its zone (`Z`
+ * or an offset). A bare year, a month or a time with no zone names no one
+ * instant, so it is refused rather than read in some default zone.
+ */
+export const IsoInstant = z.iso.datetime({
+  offset: true,
+  error: 'Give the moment as an ISO timestamp with its zone, such as 2026-10-01T09:30:00Z.',
+});
+export type IsoInstant = z.infer<typeof IsoInstant>;
+
 /** One line of text: trimmed, line breaks turned into spaces, 1 to 500 characters. */
 export const TextValue = z
   .string()

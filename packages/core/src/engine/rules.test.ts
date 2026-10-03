@@ -14,6 +14,7 @@ import {
   updateAttribute,
   updateObject,
 } from './definitions.ts';
+import { purgeDeleted } from './deletion.ts';
 import { defineList, getEntries } from './lists.ts';
 import { defineRelationship } from './relationships.ts';
 import { newId } from './ids.ts';
@@ -813,5 +814,157 @@ describe('malformed ids', () => {
       null,
       { objectId: companiesObject, recordId: holding },
     ]);
+  });
+});
+
+describe('upper case ids', () => {
+  it('refuses a record as its own parent however its id is spelt', async () => {
+    const { scope, objects } = await workspace();
+    const companiesObject = id(objects.companies);
+    const companies = await slugs(scope, companiesObject);
+    const parent = id(companies.parent_company);
+    const { recordId: acme } = await createRecord(scope, {
+      objectId: companiesObject,
+      values: { [id(companies.name)]: 'Acme' },
+    });
+    for (const [owner, target] of [
+      [acme.toUpperCase(), acme],
+      [acme, acme.toUpperCase()],
+      [acme.toUpperCase(), acme.toUpperCase()],
+    ] as const) {
+      const refused = await refusals(
+        setValues(scope, {
+          recordId: owner,
+          values: { [parent]: { value: { objectId: companiesObject.toUpperCase(), recordId: target } } },
+        }),
+      );
+      expect(refused.map((refusal) => [refusal.code, refusal.attributeId])).toEqual([
+        ['ATTRIBUTE_VALUE_INVALID', parent],
+      ]);
+    }
+    const [read] = await getRecords(scope, { ids: [acme], attributeIds: [parent] });
+    expect(read?.values[parent]).toBeNull();
+  });
+
+  it('writes an upper case id as the lower case one: in the change, the batch result and unchanged values', async () => {
+    const { scope, objects } = await workspace();
+    const companiesObject = id(objects.companies);
+    const companies = await slugs(scope, companiesObject);
+    const deals = await slugs(scope, id(objects.deals));
+    const stages = await optionIds(scope, id(deals.stage));
+    const lead = id(stages.Lead);
+    const { recordId: acme } = await createRecord(scope, {
+      objectId: companiesObject,
+      values: { [id(companies.name)]: 'Acme' },
+    });
+    const { recordId: holding } = await createRecord(scope, {
+      objectId: companiesObject,
+      values: { [id(companies.name)]: 'Holding' },
+    });
+    const seen: Change[] = [];
+    const watch: AfterWrite = (change) => {
+      seen.push(change);
+      return Promise.resolve();
+    };
+    await setValues(
+      scope,
+      {
+        recordId: acme.toUpperCase(),
+        values: {
+          [id(companies.name).toUpperCase()]: { value: 'Acme Ltd' },
+          [id(companies.parent_company).toUpperCase()]: {
+            value: { objectId: companiesObject.toUpperCase(), recordId: holding.toUpperCase() },
+          },
+        },
+      },
+      [watch],
+    );
+    const values = seen[0]?.values.map((value) => [value.ownerId, value.attributeId]);
+    expect(values).toEqual([
+      [acme, id(companies.name)],
+      [acme, id(companies.parent_company)],
+      [holding, id(companies.subsidiaries)],
+    ]);
+    expect(seen[0]?.values.every((value) => value.ownerKind === 'record' && value.objectId === companiesObject)).toBe(
+      true,
+    );
+
+    // Reads by upper case ids come back in the order asked, with the canonical ids.
+    const read = await getRecords(scope, { ids: [holding.toUpperCase(), acme.toUpperCase()] });
+    expect(read.map((record) => record.id)).toEqual([holding, acme]);
+    expect(read[1]?.values[id(companies.parent_company)]).toEqual({ objectId: companiesObject, recordId: holding });
+
+    // Two spellings of one attribute in one write are refused, not silently merged.
+    const twice = await refusals(
+      setValues(scope, {
+        recordId: acme,
+        values: { [id(companies.name)]: { value: 'A' }, [id(companies.name).toUpperCase()]: { value: 'B' } },
+      }),
+    );
+    expect(twice.map((refusal) => refusal.code)).toEqual(['CONFIG_INVALID']);
+
+    // An option id in upper case is the stored option: writing it again in lower case changes nothing.
+    const { recordId: deal } = await createRecord(scope, {
+      objectId: id(objects.deals),
+      values: { [id(deals.name)]: 'Deal' },
+    });
+    const [batch] = await setValuesBatch(scope, {
+      items: [{ recordId: deal.toUpperCase(), values: { [id(deals.stage)]: { value: lead.toUpperCase() } } }],
+    });
+    expect(batch?.recordId).toBe(deal);
+    const again = await setValues(scope, { recordId: deal, values: { [id(deals.stage)]: { value: lead } } });
+    expect(again[id(deals.stage)]).toEqual({});
+  });
+});
+
+describe('moments and timestamp defaults', () => {
+  it('reads values as of a full ISO instant with its zone, and refuses anything less', async () => {
+    const { scope, objects } = await workspace();
+    const deals = await slugs(scope, id(objects.deals));
+    const { recordId } = await createRecord(scope, {
+      objectId: id(objects.deals),
+      values: { [id(deals.name)]: 'Alpha' },
+    });
+    for (const at of ['2026', '2026-10', '+002026-10-01T00:00:00Z', '2026-10-01T00:00:00', '0000-01-01T00:00:00Z']) {
+      expect((await refusals(getValuesAsOf(scope, { recordId, at })))[0]?.code, at).toBe('CONFIG_INVALID');
+      expect((await refusals(purgeDeleted(scope, { cutoff: at })))[0]?.code, at).toBe('CONFIG_INVALID');
+    }
+    // An offset names the same instant as its UTC form.
+    const later = new Date(Date.now() + 60 * 60 * 1000);
+    const local = `${later.toISOString().slice(0, 19)}+00:00`;
+    expect((await getValuesAsOf(scope, { recordId, at: local }))[id(deals.name)]).toBe('Alpha');
+    expect((await getValuesAsOf(scope, { recordId, at: '2000-01-01T01:00:00+01:00' }))[id(deals.name)]).toBe(undefined);
+  });
+
+  it('refuses a static default for a timestamp, a type only the system writes', async () => {
+    const { scope, objects } = await workspace();
+    const companiesObject = id(objects.companies);
+    const refused = await refusals(
+      defineAttribute(scope, {
+        objectId: companiesObject,
+        apiSlug: 'checked_at',
+        title: 'Checked at',
+        type: 'timestamp',
+        defaultValue: { kind: 'static', value: '2026-10-01T09:30:00.000Z' },
+      }),
+    );
+    expect(refused.map((refusal) => refusal.code)).toEqual(['CONFIG_INVALID']);
+    const { attributeId } = await defineAttribute(scope, {
+      objectId: companiesObject,
+      apiSlug: 'checked_at',
+      title: 'Checked at',
+      type: 'timestamp',
+    });
+    expect(
+      (
+        await refusals(
+          updateAttribute(scope, {
+            attributeId,
+            defaultValue: { kind: 'static', value: '2026-10-01T09:30:00.000Z' },
+          }),
+        )
+      ).map((refusal) => refusal.code),
+    ).toEqual(['CONFIG_INVALID']);
+    await updateAttribute(scope, { attributeId, defaultValue: { kind: 'offset', duration: 'P1D' } });
   });
 });

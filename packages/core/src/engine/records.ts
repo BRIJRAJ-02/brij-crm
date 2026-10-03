@@ -3,10 +3,17 @@
 // runs inside withWorkspace().
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { AttributeDefault, HUES, type EngineRefusal, type Hue, type RecordRefDisplay } from '@crm/contracts/values';
+import {
+  AttributeDefault,
+  defaultKindsFor,
+  HUES,
+  type EngineRefusal,
+  type Hue,
+  type RecordRefDisplay,
+} from '@crm/contracts/values';
 import { takeRecordSlots } from './limits.ts';
 import { decodeValue } from './columns.ts';
-import { checkId, isUuid, isUuidV7 } from './ids.ts';
+import { canonicalId, canonicalKeys, checkId, isUuid, isUuidV7 } from './ids.ts';
 import { isRefusal, postgresError, refuse, refuseAll } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
 import { linkValues, writeLinks } from './relationships.ts';
@@ -24,7 +31,7 @@ import {
   type AttributeDef,
   type AttributeWrite,
 } from './values.ts';
-import { runWrite, type AfterWrite, type ValueChange, type WriteContext } from './write.ts';
+import { append, runWrite, type AfterWrite, type ValueChange, type WriteContext } from './write.ts';
 
 const { attributeOptions, objects, records } = schema;
 
@@ -71,6 +78,8 @@ async function defaultFor(
   const parsed = AttributeDefault.safeParse(attribute.defaultValue);
   if (!parsed.success) return undefined;
   const rule = parsed.data;
+  // A kind the type no longer allows (a static default stored on a timestamp before it was refused) gives nothing.
+  if (!defaultKindsFor(attribute.type).includes(rule.kind)) return undefined;
   if (rule.kind === 'static') {
     return attribute.type === 'select' || attribute.type === 'status'
       ? liveOptionDefault(tx, attribute, rule.value)
@@ -194,7 +203,10 @@ export async function writeAll(
       results[attribute.id] = {};
       continue;
     }
-    changes.push(change, ...far);
+    // A loop, never `push(...far)`: clearing a multi end lists every far record, and spreading a list that
+    // long as call arguments overflows the stack.
+    changes.push(change);
+    append(changes, far);
     results[attribute.id] =
       change.replaced === undefined
         ? { versionId: change.versionId }
@@ -207,11 +219,13 @@ export async function writeAll(
   return results;
 }
 
-async function liveObject(tx: WorkspaceTx, objectId: string): Promise<void> {
-  checkId(objectId, 'That object does not exist.');
+/** Refuses an object that is missing or archived; returns its canonical id. */
+async function liveObject(tx: WorkspaceTx, objectIdAsGiven: string): Promise<string> {
+  const objectId = checkId(objectIdAsGiven, 'That object does not exist.');
   const [row] = await tx.select({ archivedAt: objects.archivedAt }).from(objects).where(eq(objects.id, objectId));
   if (row === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
   if (row.archivedAt !== null) throw refuse('NOT_FOUND', 'That object is archived. Restore it first.');
+  return objectId;
 }
 
 /** Creates a record with its first values, defaults filled in and required ones checked (AC-1, AC-2, AC-11, AC-13, AC-16). */
@@ -231,9 +245,10 @@ export async function initialValues(
   tx: WorkspaceTx,
   scope: EngineScope,
   attributes: ReadonlyMap<string, AttributeDef>,
-  given: Readonly<Record<string, unknown>>,
+  givenAsIs: Readonly<Record<string, unknown>>,
   timeZone: string,
 ): Promise<readonly { attribute: AttributeDef; input: ValueInput }[]> {
+  const given = canonicalKeys(givenAsIs);
   const inputs: Record<string, ValueInput> = Object.fromEntries(
     Object.entries(given).map(([id, value]) => [id, { value }]),
   );
@@ -272,8 +287,8 @@ export async function initialValues(
  */
 export async function insertRecord(context: WriteContext, input: RecordInput) {
   const { tx, scope } = context;
-  await liveObject(tx, input.objectId);
-  const attributes = await loadAttributes(tx, input.objectId);
+  const objectId = await liveObject(tx, input.objectId);
+  const attributes = await loadAttributes(tx, objectId);
   const parsed = await initialValues(tx, scope, attributes, input.values ?? {}, input.timeZone ?? 'UTC');
   const by = actorRow(scope.actor);
   let recordId: string;
@@ -282,8 +297,8 @@ export async function insertRecord(context: WriteContext, input: RecordInput) {
       .insert(records)
       .values({
         workspaceId: scope.workspaceId,
-        ...(input.id === undefined ? {} : { id: input.id }),
-        objectId: input.objectId,
+        ...(input.id === undefined ? {} : { id: canonicalId(input.id) }),
+        objectId,
         createdByType: by.type,
         createdById: by.id,
         createdByMemberId: by.memberId,
@@ -298,7 +313,7 @@ export async function insertRecord(context: WriteContext, input: RecordInput) {
     if (postgresError(error)?.code === '23505') throw refuse('ID_TAKEN', 'A record with that id already exists.');
     throw error;
   }
-  context.record({ createdRecords: [{ recordId, objectId: input.objectId }] });
+  context.record({ createdRecords: [{ recordId, objectId }] });
   const versions = await writeAll(context, 'record', recordId, parsed);
   await takeRecordSlots(tx, scope, 1);
   return { recordId, versions };
@@ -326,21 +341,38 @@ export interface EntryValues {
   readonly values: Readonly<Record<string, ValueInput>>;
 }
 
+/**
+ * Locks the record or entry a write names and loads its attributes. The owner
+ * id comes back canonical, and is the one used from then on: an upper case
+ * spelling would compare unequal to the ids the database returns (a record
+ * could link to itself) and reach the hooks as a second spelling.
+ */
+async function lockOwner(
+  tx: WorkspaceTx,
+  input: RecordValues | EntryValues,
+): Promise<{
+  ownerKind: 'record' | 'entry';
+  ownerId: string;
+  attributes: ReadonlyMap<string, AttributeDef>;
+}> {
+  if ('entryId' in input) {
+    const entryId = checkId(input.entryId, 'That entry does not exist.');
+    const { listId } = await lockEntry(tx, entryId);
+    return { ownerKind: 'entry', ownerId: entryId, attributes: await loadListAttributes(tx, listId) };
+  }
+  const recordId = checkId(input.recordId, 'That record does not exist.');
+  const { objectId } = await lockRecord(tx, recordId);
+  return { ownerKind: 'record', ownerId: recordId, attributes: await loadAttributes(tx, objectId) };
+}
+
 /** Sets values on one record or entry inside a write: the owner is locked, then every value is parsed, then written. */
 async function updateRecord(
   context: WriteContext,
   input: RecordValues | EntryValues,
 ): Promise<Record<string, AttributeResult>> {
   const { tx } = context;
-  const [ownerKind, ownerId, attributes] =
-    'entryId' in input
-      ? (['entry', input.entryId, await loadListAttributes(tx, (await lockEntry(tx, input.entryId)).listId)] as const)
-      : ([
-          'record',
-          input.recordId,
-          await loadAttributes(tx, (await lockRecord(tx, input.recordId)).objectId),
-        ] as const);
-  const parsed = parseAll(attributes, input.values, context.scope.actor);
+  const { ownerKind, ownerId, attributes } = await lockOwner(tx, input);
+  const parsed = parseAll(attributes, canonicalKeys(input.values), context.scope.actor);
   const results = await writeAll(context, ownerKind, ownerId, parsed);
   if (Object.values(results).some((each) => each.versionId !== undefined)) {
     await touchOwner(context, ownerKind, ownerId);
@@ -373,10 +405,11 @@ export async function setValuesBatch(
       const outcomes: BatchResult[] = [];
       for (const item of input.items) {
         const outcome = await context.perRecord((child) => updateRecord(child, item));
+        const recordId = canonicalId(item.recordId);
         outcomes.push(
           outcome.ok
-            ? { recordId: item.recordId, ok: true, results: outcome.value }
-            : { recordId: item.recordId, ok: false, refusals: outcome.refusals },
+            ? { recordId, ok: true, results: outcome.value }
+            : { recordId, ok: false, refusals: outcome.refusals },
         );
       }
       return outcomes;
@@ -426,8 +459,9 @@ export async function getRecords(
   input: { readonly ids: readonly string[]; readonly attributeIds?: readonly string[] },
 ): Promise<readonly RecordView[]> {
   if (input.ids.length > 500) throw refuse('CONFIG_INVALID', 'Read at most 500 records at once.');
-  const ids = input.ids.filter(isUuid);
-  const attributeIds = input.attributeIds?.filter(isUuid);
+  // Canonical ids, so the rows (which come back lower case) find their place in the order asked for.
+  const ids = input.ids.filter(isUuid).map(canonicalId);
+  const attributeIds = input.attributeIds?.filter(isUuid).map(canonicalId);
   if (ids.length === 0) return [];
   return scope.db.withWorkspace(scope.workspaceId, (tx) => readRecords(tx, ids, attributeIds));
 }
@@ -471,7 +505,7 @@ export async function readRecords(
     rows.map((row) => row.id),
     references,
   );
-  const order = new Map(input.ids.map((id, index) => [id, index]));
+  const order = new Map(input.ids.map((id, index) => [canonicalId(id), index]));
   const itemsOf = bucketItems(items);
 
   return rows

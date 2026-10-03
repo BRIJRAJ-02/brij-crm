@@ -2,6 +2,7 @@
 // mapping table): one row per item, each type in its own columns. Record
 // references are the exception; they live in record_links (milestone 3).
 import { toCanonicalDecimal, type AttributeType } from '@crm/contracts/values';
+import { canonicalId } from './ids.ts';
 import type { Actor } from './scope.ts';
 
 /** The value columns of one item row. Columns a type doesn't use stay null. */
@@ -63,7 +64,8 @@ function encodeItem(type: AttributeType, item: unknown): ItemColumns {
       return { ...EMPTY, boolValue: item === true };
     case 'select':
     case 'status':
-      return { ...EMPTY, optionId: text(item) };
+      // Ids in their canonical spelling, so an upper case id compares equal to the stored one.
+      return { ...EMPTY, optionId: canonicalId(text(item)) };
     case 'phone':
       return { ...EMPTY, textValue: text(parts.number), jsonValue: { country: parts.country } };
     case 'location':
@@ -75,7 +77,7 @@ function encodeItem(type: AttributeType, item: unknown): ItemColumns {
         jsonValue: { firstName: parts.firstName, lastName: parts.lastName },
       };
     case 'actor_reference':
-      return { ...EMPTY, actorType: text(parts.type) as Actor['type'], actorId: text(parts.id) };
+      return { ...EMPTY, actorType: text(parts.type) as Actor['type'], actorId: canonicalId(text(parts.id)) };
     case 'file':
       return { ...EMPTY, textValue: text(parts.name), jsonValue: item };
     case 'interaction':
