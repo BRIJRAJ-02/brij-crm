@@ -18,7 +18,7 @@ describe('options and displays', () => {
       value: 'Hot',
       activeFrom: '2026-10-01T09:30:00.000Z',
       activeUntil: null,
-      setBy: { type: 'member', id: 'mem_1' },
+      setBy: { type: 'member', id: '0199a3c0-0000-7000-8000-000000000005' },
     };
     expect(ValueVersion.parse(version)).toEqual(version);
     expect(ValueVersion.safeParse({ ...version, setBy: { type: 'system', id: 'x' } }).success).toBe(false);

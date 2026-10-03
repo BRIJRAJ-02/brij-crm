@@ -7,6 +7,7 @@ import type { FieldAttribute } from '../fields/types.ts';
 import type { GridColumn } from '../modules/DataGrid/grid-columns.ts';
 import { attributeOf } from './attributes.ts';
 import { SAMPLE_COMPANIES, SAMPLE_MEMBERS, SAMPLE_STAGES, SAMPLE_TAGS } from './field-samples.ts';
+import { SAMPLE_IDS } from './sample-ids.ts';
 
 /** One sample company: its id, and its values and display shapes by column id. */
 export interface SampleRow {
@@ -72,8 +73,11 @@ export function sampleRowAt(index: number): SampleRow {
     domain: `${name.toLowerCase().replaceAll(/[^a-z0-9]+/g, '')}.com`,
     employees: String(((index * 37) % 4990) + 10),
     arr: { amount: String(((index * 7919) % 900_000) + 12_000), currency: 'USD' },
-    segment: pick(SAMPLE_TAGS, index).id === 'old' ? 'saas' : pick(SAMPLE_TAGS, index).id,
-    stage: pick(SAMPLE_STAGES, index * 3).id === 'legacy' ? 'lead' : pick(SAMPLE_STAGES, index * 3).id,
+    segment: pick(SAMPLE_TAGS, index).id === SAMPLE_IDS.tag.old ? SAMPLE_IDS.tag.saas : pick(SAMPLE_TAGS, index).id,
+    stage:
+      pick(SAMPLE_STAGES, index * 3).id === SAMPLE_IDS.stage.legacy
+        ? SAMPLE_IDS.stage.lead
+        : pick(SAMPLE_STAGES, index * 3).id,
     next_step: `2026-${month}-${day}`,
     owner: { type: 'member', id: owner.id },
     is_customer: index % 3 === 0,
@@ -82,9 +86,11 @@ export function sampleRowAt(index: number): SampleRow {
     open_deals: String(index % 9),
     pipeline: { amount: String(((index * 104_729) % 400_000) + 5_000), currency: 'USD' },
     city: pick(CITIES, index),
-    health: pick(SAMPLE_STAGES, index).id === 'legacy' ? 'won' : pick(SAMPLE_STAGES, index).id,
+    health:
+      pick(SAMPLE_STAGES, index).id === SAMPLE_IDS.stage.legacy ? SAMPLE_IDS.stage.won : pick(SAMPLE_STAGES, index).id,
     renewal: `2027-${month}-${day}`,
-    region: pick(SAMPLE_TAGS, index + 3).id === 'old' ? 'emea' : pick(SAMPLE_TAGS, index + 3).id,
+    region:
+      pick(SAMPLE_TAGS, index + 3).id === SAMPLE_IDS.tag.old ? SAMPLE_IDS.tag.emea : pick(SAMPLE_TAGS, index + 3).id,
     partner: { objectId: partner.objectId, recordId: partner.recordId },
     has_api: index % 4 === 0,
     created: '2026-10-01T09:00:00.000Z',

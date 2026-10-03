@@ -5,6 +5,7 @@ import { expect, fn, waitFor } from 'storybook/test';
 import type { FieldAttribute } from '../../fields/types.ts';
 import { attributeOf } from '../../workbench/attributes.ts';
 import { SAMPLE_MEMBERS, SAMPLE_STAGES, SAMPLE_TAGS } from '../../workbench/field-samples.ts';
+import { SAMPLE_IDS } from '../../workbench/sample-ids.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { arraySource } from '../../lib/list-source.ts';
 import { FilterBuilder } from './FilterBuilder.tsx';
@@ -27,7 +28,7 @@ const COMPANY_ATTRIBUTES: readonly FieldAttribute[] = [
 const FILTERS: FilterGroup = {
   conjunction: 'and',
   conditions: [
-    { attributeId: 'stage', operator: 'is_any_of', values: ['proposal', 'won'] },
+    { attributeId: 'stage', operator: 'is_any_of', values: [SAMPLE_IDS.stage.proposal, SAMPLE_IDS.stage.won] },
     { attributeId: 'value', operator: 'gt', value: { amount: '10000', currency: 'USD' } },
     {
       conjunction: 'or',

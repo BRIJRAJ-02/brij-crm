@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { expect, fn, waitFor, within } from 'storybook/test';
 import { arraySource } from '../../lib/list-source.ts';
 import { SAMPLE_STAGES } from '../../workbench/field-samples.ts';
+import { SAMPLE_IDS } from '../../workbench/sample-ids.ts';
 import { sampleColumns, sampleRowAt } from '../../workbench/grid-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Board } from './Board.tsx';
@@ -13,7 +14,18 @@ const CARD_FIELDS = sampleColumns(9)
   .map((column) => column.attribute)
   .filter((attribute) => ['ARR', 'Owner', 'Next step'].includes(attribute.name));
 
-const STAGE_OF = ['lead', 'qualified', 'proposal', 'won', 'lead', 'qualified', 'lead', 'proposal', 'legacy'];
+const STAGE_IDS = SAMPLE_IDS.stage;
+const STAGE_OF = [
+  STAGE_IDS.lead,
+  STAGE_IDS.qualified,
+  STAGE_IDS.proposal,
+  STAGE_IDS.won,
+  STAGE_IDS.lead,
+  STAGE_IDS.qualified,
+  STAGE_IDS.lead,
+  STAGE_IDS.proposal,
+  STAGE_IDS.legacy,
+];
 
 /** Nine sample companies, each in a stage; the fifth is locked. */
 const CARDS: readonly (BoardCard & { readonly stage: string })[] = STAGE_OF.map((stage, index) => {
@@ -21,7 +33,7 @@ const CARDS: readonly (BoardCard & { readonly stage: string })[] = STAGE_OF.map(
   return {
     id: row.id,
     stage,
-    record: { objectId: 'companies', recordId: row.id, name: String(row.values.name), kind: 'company' },
+    record: { objectId: SAMPLE_IDS.companies, recordId: row.id, name: String(row.values.name), kind: 'company' },
     values: row.values,
     displays: row.displays,
     ...(index === 4 ? { readOnlyReason: 'You can view this deal but not change it.' } : {}),
@@ -110,7 +122,7 @@ export const MoveByKeyboard: Story = {
     await userEvent.keyboard('{Enter}');
     await waitFor(() =>
       expect(args.onMove).toHaveBeenCalledWith(
-        expect.objectContaining({ cardId: 'company-0', fromColumnId: 'lead', toColumnId: 'proposal' }),
+        expect.objectContaining({ cardId: 'company-0', fromColumnId: STAGE_IDS.lead, toColumnId: STAGE_IDS.proposal }),
       ),
     );
     await waitFor(() =>
@@ -201,7 +213,7 @@ export const Reorder: Story = {
     await userEvent.keyboard('{Enter}');
     await waitFor(() =>
       expect(args.onMove).toHaveBeenCalledWith(
-        expect.objectContaining({ cardId: 'company-0', fromColumnId: 'lead', toColumnId: 'lead' }),
+        expect.objectContaining({ cardId: 'company-0', fromColumnId: STAGE_IDS.lead, toColumnId: STAGE_IDS.lead }),
       ),
     );
   },
@@ -213,7 +225,7 @@ export const LongColumn: Story = {
   render: () => {
     const onRangeChange = fn();
     const many: BoardColumn = {
-      id: 'lead',
+      id: STAGE_IDS.lead,
       title: 'Lead',
       hue: 'gray',
       count: 2000,
@@ -223,7 +235,12 @@ export const LongColumn: Story = {
           const row = sampleRowAt(index);
           return {
             id: row.id,
-            record: { objectId: 'companies', recordId: row.id, name: String(row.values.name), kind: 'company' },
+            record: {
+              objectId: SAMPLE_IDS.companies,
+              recordId: row.id,
+              name: String(row.values.name),
+              kind: 'company',
+            },
             values: row.values,
             displays: row.displays,
           };

@@ -3,6 +3,7 @@ import { arraySource } from '../../lib/list-source.ts';
 import { FieldSurfaces } from '../../workbench/FieldSurfaces/FieldSurfaces.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES, SAMPLE_COMPANIES } from '../../workbench/field-samples.ts';
+import { SAMPLE_IDS } from '../../workbench/sample-ids.ts';
 import { AttributeEditor } from '../AttributeEditor.tsx';
 import { expect, fn, waitFor } from 'storybook/test';
 
@@ -69,7 +70,10 @@ export const Editor: Story = {
       return item;
     });
     await userEvent.click(globex);
-    await expect(args.onCommit).toHaveBeenCalledWith({ objectId: 'companies', recordId: 'c2' });
+    await expect(args.onCommit).toHaveBeenCalledWith({
+      objectId: SAMPLE_IDS.companies,
+      recordId: SAMPLE_IDS.company.globex,
+    });
     // The menu fades out; let it finish before the accessibility check reads colours.
     await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
   },

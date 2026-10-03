@@ -12,7 +12,7 @@ New. The record page and the record panel (#18) list a record's attributes. `Des
 <AttributeList
   label="Details"
   sections={[
-    { id: 'details', items: [{ attribute: stage, value: 'lead' }] },
+    { id: 'details', items: [{ attribute: stage, value: leadStatusId }] }, // a status value is its option's uuid
     { id: 'more', title: 'More', items: moreItems },
   ]}
   onCommit={(attributeId, value) => update(record, attributeId, value)}

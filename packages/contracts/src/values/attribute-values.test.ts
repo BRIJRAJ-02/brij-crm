@@ -20,6 +20,13 @@ import { COUNTRY_CODES, countryCodeFromText } from './countries.ts';
 import { CURRENCY_CODES } from './currencies.ts';
 import { toCanonicalDecimal } from './decimal.ts';
 
+// Ids are uuids (spec 0005): options, records and their objects, and actors other than the system.
+const OPTION = '0199a3c0-0000-7000-8000-000000000001';
+const STATUS = '0199a3c0-0000-7000-8000-000000000002';
+const OBJECT = '0199a3c0-0000-7000-8000-000000000003';
+const RECORD = '0199a3c0-0000-7000-8000-000000000004';
+const MEMBER = '0199a3c0-0000-7000-8000-000000000005';
+
 /** One valid input per type, and the canonical value it parses to. */
 const VALID: Record<AttributeType, readonly [input: unknown, canonical: unknown]> = {
   text: ['  Ada\nLovelace ', 'Ada Lovelace'],
@@ -32,8 +39,8 @@ const VALID: Record<AttributeType, readonly [input: unknown, canonical: unknown]
   date: ['2026-10-08', '2026-10-08'],
   timestamp: ['2026-10-01T09:30:00.000Z', '2026-10-01T09:30:00.000Z'],
   checkbox: [false, false],
-  select: ['opt_1', 'opt_1'],
-  status: ['st_2', 'st_2'],
+  select: [OPTION, OPTION],
+  status: [` ${STATUS.toUpperCase()} `, STATUS],
   rating: [4, 4],
   email: [' Ada@Example.COM ', 'ada@example.com'],
   phone: [
@@ -55,16 +62,16 @@ const VALID: Record<AttributeType, readonly [input: unknown, canonical: unknown]
     { type: 'system', id: null },
   ],
   record_reference: [
-    { objectId: 'companies', recordId: 'rec_1' },
-    { objectId: 'companies', recordId: 'rec_1' },
+    { objectId: OBJECT, recordId: RECORD.toUpperCase() },
+    { objectId: OBJECT, recordId: RECORD },
   ],
   file: [
     { fileId: 'f_1', name: 'Deck.pdf', size: 2048, contentType: 'Application/PDF' },
     { fileId: 'f_1', name: 'Deck.pdf', size: 2048, contentType: 'application/pdf' },
   ],
   interaction: [
-    { kind: 'email', at: '2026-10-01T09:30:00.000Z', by: { type: 'member', id: 'mem_1' } },
-    { kind: 'email', at: '2026-10-01T09:30:00.000Z', by: { type: 'member', id: 'mem_1' } },
+    { kind: 'email', at: '2026-10-01T09:30:00.000Z', by: { type: 'member', id: MEMBER } },
+    { kind: 'email', at: '2026-10-01T09:30:00.000Z', by: { type: 'member', id: MEMBER } },
   ],
 };
 
@@ -87,7 +94,7 @@ const INVALID: Record<AttributeType, unknown> = {
   location: {},
   personal_name: { fullName: '' },
   actor_reference: { type: 'member', id: null },
-  record_reference: { objectId: 'companies' },
+  record_reference: { objectId: OBJECT },
   file: { fileId: 'f_1', name: 'a', size: -1, contentType: 'pdf' },
   interaction: { kind: 'call', at: '2026-10-01T09:30:00.000Z', by: { type: 'system', id: null } },
 };
@@ -130,14 +137,31 @@ describe('attribute values', () => {
     const schema = attributeValueSchema('record_reference', { allowMultiple: true });
     expect(
       schema.safeParse([
-        { objectId: 'people', recordId: 'r1' },
-        { recordId: 'r1', objectId: 'people' },
+        { objectId: OBJECT, recordId: RECORD },
+        { recordId: RECORD, objectId: OBJECT },
       ]).success,
     ).toBe(false);
   });
 
   it('keeps types that are always single single, even when allowMultiple is set', () => {
-    expect(attributeValueSchema('status', { allowMultiple: true }).safeParse(['a', 'b']).success).toBe(false);
+    expect(attributeValueSchema('status', { allowMultiple: true }).safeParse([STATUS, OPTION]).success).toBe(false);
+  });
+
+  it('refuses an id that is not a uuid, and says how to fix it', () => {
+    expect(parseAttributeValue('select', 'saas')).toEqual({
+      ok: false,
+      error: { code: ATTRIBUTE_VALUE_INVALID, message: 'Pick one of the options.' },
+    });
+    expect(parseAttributeValue('record_reference', { objectId: 'companies', recordId: RECORD }).ok).toBe(false);
+    expect(parseAttributeValue('record_reference', { objectId: OBJECT, recordId: 'c1' })).toEqual({
+      ok: false,
+      error: { code: ATTRIBUTE_VALUE_INVALID, message: 'Choose a record.' },
+    });
+    expect(parseAttributeValue('actor_reference', { type: 'member', id: 'm1' }).ok).toBe(false);
+    expect(parseAttributeValue('actor_reference', { type: 'member', id: MEMBER })).toEqual({
+      ok: true,
+      value: { type: 'member', id: MEMBER },
+    });
   });
 });
 

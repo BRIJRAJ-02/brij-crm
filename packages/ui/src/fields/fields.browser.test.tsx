@@ -12,6 +12,8 @@ import { createToasts } from '../provider/toasts.tsx';
 import { UiProvider } from '../provider/UiProvider.tsx';
 import { attributeOf } from '../workbench/attributes.ts';
 import { FIELD_SAMPLES } from '../workbench/field-samples.ts';
+import { sampleColumns, sampleRowAt } from '../workbench/grid-samples.ts';
+import { SAMPLE_IDS, sampleId } from '../workbench/sample-ids.ts';
 import { AttributeDisplay } from './AttributeDisplay.tsx';
 import { AttributeEditor } from './AttributeEditor.tsx';
 import { checkDomain } from './Domain/DomainEditor.tsx';
@@ -226,6 +228,23 @@ describe('editors emit only what parses (AC-5)', () => {
       expect(parseAttributeValue(type, sample.value, { allowMultiple: sample.attribute.allowMultiple }).ok, type).toBe(
         true,
       );
+      if (sample.several !== undefined) {
+        const { attribute, value } = sample.several;
+        expect(parseAttributeValue(type, value, { allowMultiple: attribute.allowMultiple }).ok, type).toBe(true);
+      }
+    }
+  });
+
+  it('gives the sample grid rows values that parse with their column’s schema', () => {
+    const columns = sampleColumns(20);
+    for (let index = 0; index < 80; index += 1) {
+      const row = sampleRowAt(index);
+      for (const { attribute } of columns) {
+        const parsed = parseAttributeValue(attribute.type, row.values[attribute.id], {
+          allowMultiple: attribute.allowMultiple,
+        });
+        expect(parsed.ok, `${row.id} ${attribute.id}`).toBe(true);
+      }
     }
   });
 });
@@ -277,7 +296,7 @@ describe('text out and back in', () => {
 
   it('refuses an unknown or archived select option by label', () => {
     const attribute = FIELD_SAMPLES.select.attribute;
-    expect(optionByLabel(attribute, 'saas')).toBe('saas');
+    expect(optionByLabel(attribute, 'saas')).toBe(SAMPLE_IDS.tag.saas);
     expect(optionByLabel(attribute, 'Hot')).toEqual({ code: 'TEXT_REFUSED', reason: 'No option called “Hot”.' });
     expect(isRefusal(optionByLabel(attribute, 'Old segment'))).toBe(true);
   });
@@ -285,14 +304,14 @@ describe('text out and back in', () => {
   it('pastes a member by email first, then by exact name, and refuses a shared name', () => {
     const attribute = FIELD_SAMPLES.actor_reference.attribute;
     const members = [
-      { type: 'member' as const, id: 'm1', name: 'Ada Lovelace', email: 'ada@northwind.com' },
-      { type: 'member' as const, id: 'm5', name: 'Ada Lovelace', email: 'ada.l@globex.com' },
-      { type: 'member' as const, id: 'm2', name: 'Grace Hopper', email: 'grace@northwind.com' },
+      { type: 'member' as const, id: SAMPLE_IDS.member.ada, name: 'Ada Lovelace', email: 'ada@northwind.com' },
+      { type: 'member' as const, id: sampleId('member', 5), name: 'Ada Lovelace', email: 'ada.l@globex.com' },
+      { type: 'member' as const, id: SAMPLE_IDS.member.grace, name: 'Grace Hopper', email: 'grace@northwind.com' },
     ];
     const context = { ...contextFor('actor_reference'), members };
     const fromText = (text: string) => fieldTypeOf('actor_reference').fromText(text, { ...context, attribute });
-    expect(fromText(' ADA.L@globex.com ')).toEqual({ type: 'member', id: 'm5' });
-    expect(fromText('grace hopper')).toEqual({ type: 'member', id: 'm2' });
+    expect(fromText(' ADA.L@globex.com ')).toEqual({ type: 'member', id: sampleId('member', 5) });
+    expect(fromText('grace hopper')).toEqual({ type: 'member', id: SAMPLE_IDS.member.grace });
     const shared = fromText('Ada Lovelace');
     expect(isRefusal(shared) && shared.reason).toBe('2 members are called “Ada Lovelace”. Paste their email instead.');
     expect(isRefusal(fromText('Nobody'))).toBe(true);

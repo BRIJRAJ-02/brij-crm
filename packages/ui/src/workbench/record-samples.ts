@@ -8,11 +8,12 @@ import type { TaskEntry } from '../modules/TaskList/TaskList.tsx';
 import { attributeOf } from './attributes.ts';
 import { SAMPLE_COMPANIES, SAMPLE_MEMBERS, SAMPLE_STAGES } from './field-samples.ts';
 import { sampleColumns, sampleRowAt } from './grid-samples.ts';
+import { SAMPLE_IDS } from './sample-ids.ts';
 
 /** The sample members the entries and tasks name. */
 export const ADA = SAMPLE_MEMBERS[0] as ActorDisplay;
 export const GRACE = SAMPLE_MEMBERS[1] as ActorDisplay;
-const AUTOMATION: ActorDisplay = { type: 'automation', id: 'w1', name: 'Lead routing' };
+const AUTOMATION: ActorDisplay = { type: 'automation', id: SAMPLE_IDS.automation.leadRouting, name: 'Lead routing' };
 /** The Stage attribute the changes use. */
 export const STAGE = attributeOf('status', 'Stage', { options: SAMPLE_STAGES });
 const ARR = attributeOf('currency', 'ARR', { defaultCurrency: 'USD' });
@@ -27,8 +28,8 @@ export const SAMPLE_ACTIVITY: readonly ActivityEntry[] = [
     at: '2026-10-08T13:10:00.000Z',
     actor: ADA,
     attribute: STAGE,
-    from: 'qualified',
-    to: 'proposal',
+    from: SAMPLE_IDS.stage.qualified,
+    to: SAMPLE_IDS.stage.proposal,
   },
   {
     id: 'e2',
@@ -55,7 +56,7 @@ export const SAMPLE_ACTIVITY: readonly ActivityEntry[] = [
     actor: AUTOMATION,
     attribute: OWNER,
     from: null,
-    to: { type: 'member', id: 'm2' },
+    to: { type: 'member', id: SAMPLE_IDS.member.grace },
     toDisplay: GRACE,
   },
   {
@@ -93,7 +94,7 @@ export const SAMPLE_TASKS: readonly TaskEntry[] = [
     dueOn: '2026-10-06',
     assignee: ADA,
     record: NORTHWIND,
-    recordHref: '/companies/c1',
+    recordHref: `/companies/${NORTHWIND.recordId}`,
   },
   {
     id: 't2',

@@ -3,6 +3,7 @@
 import type { ActorDisplay, AttributeType, RecordRefDisplay } from '@crm/contracts/values';
 import type { FieldAttribute } from '../fields/types.ts';
 import { attributeOf } from './attributes.ts';
+import { SAMPLE_IDS } from './sample-ids.ts';
 
 /** One type's sample: its attribute, a value, display shapes, and a list for types that hold several. */
 export interface FieldSample {
@@ -12,34 +13,42 @@ export interface FieldSample {
   readonly several?: { readonly attribute: FieldAttribute; readonly value: unknown; readonly display?: unknown };
 }
 
+const ID = SAMPLE_IDS;
+
 const STAGES = [
-  { id: 'lead', label: 'Lead', hue: 'gray', archived: false },
-  { id: 'qualified', label: 'Qualified', hue: 'sky', archived: false },
-  { id: 'proposal', label: 'Proposal', hue: 'purple', archived: false },
-  { id: 'won', label: 'Won', hue: 'green', archived: false },
-  { id: 'legacy', label: 'Legacy', hue: 'orange', archived: true },
+  { id: ID.stage.lead, label: 'Lead', hue: 'gray', archived: false },
+  { id: ID.stage.qualified, label: 'Qualified', hue: 'sky', archived: false },
+  { id: ID.stage.proposal, label: 'Proposal', hue: 'purple', archived: false },
+  { id: ID.stage.won, label: 'Won', hue: 'green', archived: false },
+  { id: ID.stage.legacy, label: 'Legacy', hue: 'orange', archived: true },
 ] as const;
 
 const TAGS = [
-  { id: 'saas', label: 'SaaS', hue: 'blue', archived: false },
-  { id: 'fintech', label: 'Fintech', hue: 'green', archived: false },
-  { id: 'b2b', label: 'B2B', hue: 'purple', archived: false },
-  { id: 'emea', label: 'EMEA', hue: 'orange', archived: false },
-  { id: 'old', label: 'Old segment', hue: 'gray', archived: true },
+  { id: ID.tag.saas, label: 'SaaS', hue: 'blue', archived: false },
+  { id: ID.tag.fintech, label: 'Fintech', hue: 'green', archived: false },
+  { id: ID.tag.b2b, label: 'B2B', hue: 'purple', archived: false },
+  { id: ID.tag.emea, label: 'EMEA', hue: 'orange', archived: false },
+  { id: ID.tag.old, label: 'Old segment', hue: 'gray', archived: true },
 ] as const;
 
 const MEMBERS: readonly ActorDisplay[] = [
-  { type: 'member', id: 'm1', name: 'Ada Lovelace', email: 'ada@northwind.com', hue: 'orange' },
-  { type: 'member', id: 'm2', name: 'Grace Hopper', email: 'grace@northwind.com', hue: 'sky' },
-  { type: 'member', id: 'm3', name: 'Alan Turing', email: 'alan@northwind.com', hue: 'green' },
-  { type: 'member', id: 'm4', name: 'Katherine Johnson', email: 'katherine@northwind.com', hue: 'purple' },
+  { type: 'member', id: ID.member.ada, name: 'Ada Lovelace', email: 'ada@northwind.com', hue: 'orange' },
+  { type: 'member', id: ID.member.grace, name: 'Grace Hopper', email: 'grace@northwind.com', hue: 'sky' },
+  { type: 'member', id: ID.member.alan, name: 'Alan Turing', email: 'alan@northwind.com', hue: 'green' },
+  {
+    type: 'member',
+    id: ID.member.katherine,
+    name: 'Katherine Johnson',
+    email: 'katherine@northwind.com',
+    hue: 'purple',
+  },
 ];
 
 const COMPANIES: readonly RecordRefDisplay[] = [
-  { objectId: 'companies', recordId: 'c1', name: 'Northwind Traders', kind: 'company', hue: 'blue' },
-  { objectId: 'companies', recordId: 'c2', name: 'Globex', kind: 'company', hue: 'red' },
-  { objectId: 'companies', recordId: 'c3', name: 'Initech', kind: 'company', hue: 'lime' },
-  { objectId: 'companies', recordId: 'c4', name: 'Umbrella', kind: 'company', hue: 'purple' },
+  { objectId: ID.companies, recordId: ID.company.northwind, name: 'Northwind Traders', kind: 'company', hue: 'blue' },
+  { objectId: ID.companies, recordId: ID.company.globex, name: 'Globex', kind: 'company', hue: 'red' },
+  { objectId: ID.companies, recordId: ID.company.initech, name: 'Initech', kind: 'company', hue: 'lime' },
+  { objectId: ID.companies, recordId: ID.company.umbrella, name: 'Umbrella', kind: 'company', hue: 'purple' },
 ];
 
 /** The members the actor stories pick from. */
@@ -74,13 +83,13 @@ export const FIELD_SAMPLES: { readonly [T in AttributeType]: FieldSample } = {
   checkbox: { attribute: attributeOf('checkbox', 'Is customer'), value: true },
   select: {
     attribute: attributeOf('select', 'Segment', { options: TAGS }),
-    value: 'saas',
+    value: ID.tag.saas,
     several: {
       attribute: attributeOf('select', 'Tags', { options: TAGS, allowMultiple: true }),
-      value: ['saas', 'fintech', 'b2b', 'emea', 'old'],
+      value: [ID.tag.saas, ID.tag.fintech, ID.tag.b2b, ID.tag.emea, ID.tag.old],
     },
   },
-  status: { attribute: attributeOf('status', 'Stage', { options: STAGES }), value: 'proposal' },
+  status: { attribute: attributeOf('status', 'Stage', { options: STAGES }), value: ID.stage.proposal },
   rating: { attribute: attributeOf('rating', 'Fit'), value: 4 },
   email: {
     attribute: attributeOf('email', 'Email'),
@@ -121,7 +130,7 @@ export const FIELD_SAMPLES: { readonly [T in AttributeType]: FieldSample } = {
   },
   actor_reference: {
     attribute: attributeOf('actor_reference', 'Owner'),
-    value: { type: 'member', id: 'm1' },
+    value: { type: 'member', id: ID.member.ada },
     display: MEMBERS[0],
     several: {
       attribute: attributeOf('actor_reference', 'Team', { allowMultiple: true }),
@@ -131,7 +140,7 @@ export const FIELD_SAMPLES: { readonly [T in AttributeType]: FieldSample } = {
   },
   record_reference: {
     attribute: attributeOf('record_reference', 'Company', { cardinality: 'one' }),
-    value: { objectId: 'companies', recordId: 'c1' },
+    value: { objectId: ID.companies, recordId: ID.company.northwind },
     display: COMPANIES[0],
     several: {
       attribute: attributeOf('record_reference', 'Partners', { cardinality: 'many', allowMultiple: true }),
@@ -154,7 +163,7 @@ export const FIELD_SAMPLES: { readonly [T in AttributeType]: FieldSample } = {
   },
   interaction: {
     attribute: attributeOf('interaction', 'Last email'),
-    value: { kind: 'email', at: '2026-10-08T11:30:00.000Z', by: { type: 'member', id: 'm2' } },
+    value: { kind: 'email', at: '2026-10-08T11:30:00.000Z', by: { type: 'member', id: ID.member.grace } },
     display: MEMBERS[1],
   },
 };

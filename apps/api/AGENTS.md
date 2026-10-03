@@ -17,6 +17,7 @@ The one modular API (Hono + oRPC) that every read and write goes through, and th
 | `src/router.ts` | Joins the module routers into the one router the contract describes |
 | `src/modules/<feature>/router.ts` | Thin handlers for one feature, each calling a service in `packages/core` |
 | `src/orpc.ts` | `RequestContext` and the three procedure bases: `pub`, `authed` (a session) and `member` (a session plus the access door, `context.scope`) |
+| `src/hooks.ts` | `writeHooks(context, { mutationId })`: the one composer of the hooks every write procedure hands the engine (the outbox hook joins it in milestone 3) |
 | `src/auth/` | Better Auth's one wrapper: email codes, Google, sessions, the sign up allowlist, rate limits, and its refusals in the shared error shape. Mounted on `/api/auth/*` |
 | `src/mail/` | The `Mailer` interface, Resend (deployed) and Mailpit (local), and the one React Email template |
 | `src/env.ts` | Zod schemas for the api and worker environments, and `loadEnv()` |
@@ -46,7 +47,7 @@ docker build -f apps/api/Dockerfile .   # from the repo root
 
 - The image installs production dependencies only, and runs from source. Anything imported at runtime must be in `dependencies`, not `devDependencies`.
 - The api refuses to start as the owner or a superuser. `DATABASE_URL` must be the app login that `pnpm db:app-login` creates, and `IDENTITY_DATABASE_URL` the identity login `pnpm db:identity-login` creates (the only role that reads schema `auth`).
-- A new procedure is built on `member` and takes `WorkspaceScoped` input, unless it belongs on the bootstrap list in `src/door.test.ts` (`system.*`, `me.get`, `workspaces.create`, `realtime.connectionToken`). Never build an `EngineScope` here; `context.scope` comes from the door.
+- A new procedure is built on `member` and takes `WorkspaceScoped` input, unless it belongs on the bootstrap list in `src/door.test.ts` (`system.*`, `me.get`, `workspaces.create`, `realtime.connectionToken`). Never build an `EngineScope` here; `context.scope` comes from the door. A write procedure takes a `mutationId` and hands the engine `writeHooks(context, { mutationId })`, never hooks of its own.
 - The tests need Postgres on 5433 and Mailpit on 8025 (`docker compose up -d postgres mailpit`): the sign in tests read the codes back from Mailpit.
 - The worker refuses a Neon `-pooler` host for `DATABASE_URL_DIRECT`, and proves a NOTIFY arrives before it starts. If its direct connection drops, it exits so Railway restarts it.
 - Locally the api owns `PORT` and the worker uses `WORKER_PORT` (default 3001). On Railway, each service gets its own `PORT`.

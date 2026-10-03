@@ -3,6 +3,7 @@
 import type { FilterGroup } from '@crm/contracts/values';
 import { describe, expect, it } from 'vitest';
 import { attributeOf } from '../../workbench/attributes.ts';
+import { SAMPLE_IDS } from '../../workbench/sample-ids.ts';
 import {
   addItem,
   canNest,
@@ -59,7 +60,7 @@ describe('new conditions', () => {
 describe('completeness', () => {
   it('needs the operand, all of it', () => {
     expect(isComplete({ attributeId: 'stage', operator: 'is', value: undefined })).toBe(false);
-    expect(isComplete({ attributeId: 'stage', operator: 'is', value: 'won' })).toBe(true);
+    expect(isComplete({ attributeId: 'stage', operator: 'is', value: SAMPLE_IDS.stage.won })).toBe(true);
     expect(isComplete({ attributeId: 'value', operator: 'between', from: '1', to: undefined })).toBe(false);
     expect(isComplete({ attributeId: 'stage', operator: 'is_any_of', values: [] })).toBe(false);
     expect(isComplete({ attributeId: 'owner', operator: 'is_me' })).toBe(true);
@@ -70,14 +71,14 @@ describe('completeness', () => {
     const group: FilterGroup = {
       conjunction: 'and',
       conditions: [
-        { attributeId: 'stage', operator: 'is', value: 'won' },
+        { attributeId: 'stage', operator: 'is', value: SAMPLE_IDS.stage.won },
         { attributeId: 'stage', operator: 'is', value: undefined },
         { conjunction: 'or', conditions: [{ attributeId: 'owner', operator: 'is', value: undefined }] },
       ],
     };
     expect(completeFilters(group)).toEqual({
       conjunction: 'and',
-      conditions: [{ attributeId: 'stage', operator: 'is', value: 'won' }],
+      conditions: [{ attributeId: 'stage', operator: 'is', value: SAMPLE_IDS.stage.won }],
     });
     expect(countFilters(group)).toBe(1);
   });
@@ -87,7 +88,7 @@ describe('edits by path', () => {
   const top: FilterGroup = {
     conjunction: 'and',
     conditions: [
-      { attributeId: 'stage', operator: 'is', value: 'won' },
+      { attributeId: 'stage', operator: 'is', value: SAMPLE_IDS.stage.won },
       { conjunction: 'or', conditions: [{ attributeId: 'owner', operator: 'is_me' }] },
     ],
   };
@@ -103,7 +104,9 @@ describe('edits by path', () => {
 
   it('removes a condition, and a nested group with its last one', () => {
     expect(removeItem(top, [0]).conditions).toHaveLength(1);
-    expect(removeItem(top, [1, 0]).conditions).toEqual([{ attributeId: 'stage', operator: 'is', value: 'won' }]);
+    expect(removeItem(top, [1, 0]).conditions).toEqual([
+      { attributeId: 'stage', operator: 'is', value: SAMPLE_IDS.stage.won },
+    ]);
   });
 
   it('nests groups at most three deep', () => {

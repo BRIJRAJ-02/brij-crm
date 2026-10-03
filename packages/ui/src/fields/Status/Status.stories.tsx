@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FieldSurfaces } from '../../workbench/FieldSurfaces/FieldSurfaces.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
+import { SAMPLE_IDS } from '../../workbench/sample-ids.ts';
 import { AttributeEditor } from '../AttributeEditor.tsx';
 import { expect, fn, waitFor } from 'storybook/test';
 
@@ -41,6 +42,6 @@ export const Editor: Story = {
     await userEvent.keyboard('{ArrowDown}');
     await waitFor(() => expect(document.querySelector('[role="listbox"]')).not.toBeNull());
     await userEvent.keyboard('{ArrowDown}{Enter}');
-    await expect(args.onCommit).toHaveBeenCalledWith('qualified');
+    await expect(args.onCommit).toHaveBeenCalledWith(SAMPLE_IDS.stage.qualified);
   },
 };

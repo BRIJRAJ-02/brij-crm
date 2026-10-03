@@ -5,3 +5,14 @@ export * from './engine/index.ts';
 export { enterWorkspace, type DoorDeps, type DoorInput } from './access/door.ts';
 export { getMe, startWorkspace, type AccountUser, type StartWorkspaceDeps } from './account/account.ts';
 export { listObjects } from './objects/objects.ts';
+export { addAttribute, listObjectAttributes, type AddAttributeInput } from './attributes/attributes.ts';
+export {
+  addRecord,
+  editRecord,
+  queryRecords,
+  readRecordsById,
+  type AddRecordInput,
+  type EditRecordInput,
+  type RecordWindow,
+} from './records/records.ts';
+export { listMembers } from './members/members.ts';

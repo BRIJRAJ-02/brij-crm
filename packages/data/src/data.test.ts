@@ -36,6 +36,11 @@ interface Behaviour {
 
 const unauthenticated = () => new ORPCError('UNAUTHENTICATED', { status: 401, message: 'Sign in to continue.' });
 
+/** A stand in for a procedure these tests never call. */
+const notServed = (): never => {
+  throw new ORPCError('NOT_FOUND', { status: 404, message: 'Not served by this fake.' });
+};
+
 /** A fake API behind `fetch`: oRPC on `/api/rpc`, Better Auth's routes on `/api/auth`, and a log of what was called. */
 function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: unknown) => Response = okAuth) {
   const behaviour: Behaviour = {
@@ -58,6 +63,16 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     me: { get: os.me.get.handler(() => behaviour.me()) },
     workspaces: { create: os.workspaces.create.handler(() => behaviour.create()) },
     objects: { list: os.objects.list.handler(({ input }) => behaviour.objects(input.workspace)) },
+    // Not used by these tests yet (the table's data layer, spec 0005 task 11, brings its own).
+    attributes: { list: os.attributes.list.handler(() => []), create: os.attributes.create.handler(notServed) },
+    records: {
+      query: os.records.query.handler(() => ({ records: [] })),
+      count: os.records.count.handler(() => ({ count: 0, atLeast: false })),
+      get: os.records.get.handler(() => []),
+      create: os.records.create.handler(notServed),
+      setValues: os.records.setValues.handler(notServed),
+    },
+    members: { list: os.members.list.handler(() => []) },
   });
   const handler = new RPCHandler(router);
   const fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {

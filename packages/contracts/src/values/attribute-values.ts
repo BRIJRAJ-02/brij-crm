@@ -51,11 +51,17 @@ export const SYSTEM_ONLY_TYPES = ['timestamp', 'interaction'] as const satisfies
 /** The stable code on every refused attribute value. */
 export const ATTRIBUTE_VALUE_INVALID = 'ATTRIBUTE_VALUE_INVALID';
 
-const id = (what: string) =>
+/**
+ * An id: a uuid, trimmed and lowercased (the one spelling Postgres prints), so
+ * a malformed id is refused at the boundary rather than naming nothing deeper
+ * in. `message` says how to fix it.
+ */
+const id = (message: string) =>
   z
     .string()
     .trim()
-    .min(1, { error: `Give the ${what}.` });
+    .toLowerCase()
+    .pipe(z.uuid({ error: message }));
 
 /** An instant in UTC, ISO 8601 with milliseconds and a `Z`: `2026-10-01T09:30:00.000Z`. */
 export const Timestamp = z.iso.datetime({
@@ -126,12 +132,12 @@ export type TimestampValue = z.infer<typeof TimestampValue>;
 export const CheckboxValue = z.boolean({ error: 'Give true or false.' });
 export type CheckboxValue = z.infer<typeof CheckboxValue>;
 
-/** The id of one of the attribute's options. An archived option stays valid on existing values but can't be chosen. */
-export const SelectValue = id('option');
+/** The id (a uuid) of one of the attribute's options. An archived option stays valid on existing values but can't be chosen. */
+export const SelectValue = id('Pick one of the options.');
 export type SelectValue = z.infer<typeof SelectValue>;
 
-/** The id of one of the attribute's statuses. Always single. */
-export const StatusValue = id('status');
+/** The id (a uuid) of one of the attribute's statuses. Always single. */
+export const StatusValue = id('Pick one of the statuses.');
 export type StatusValue = z.infer<typeof StatusValue>;
 
 /** A rating from 1 to 5. No rating is `null`, so zero and empty can't be confused. */
@@ -280,24 +286,30 @@ export const PersonalNameValue = z
   .refine((name) => name.fullName !== '', { error: 'Type a name.' });
 export type PersonalNameValue = z.infer<typeof PersonalNameValue>;
 
-/** Who did something: a member, an API key, an automation, or the system (whose id is `null`). People can only set members. */
+/**
+ * Who did something: a member, an API key, an automation (each by its uuid),
+ * or the system (whose id is `null`). People can only set members.
+ */
 export const ActorReferenceValue = z
   .object({
     type: z.enum(['member', 'api_key', 'automation', 'system'], { error: 'Pick who it was.' }),
-    id: z.string().trim().min(1).nullable(),
+    id: id('Pick who it was.').nullable(),
   })
   .refine((actor) => (actor.type === 'system') === (actor.id === null), {
     error: 'Only the system has no id; every other actor needs one.',
   });
 export type ActorReferenceValue = z.infer<typeof ActorReferenceValue>;
 
-/** A link to another record. The relation decides which objects it may point to. */
-export const RecordReferenceValue = z.object({ objectId: id('object'), recordId: id('record') });
+/** A link to another record, by the object's and the record's uuids. The relation decides which objects it may point to. */
+export const RecordReferenceValue = z.object({
+  objectId: id('Give the object the record belongs to.'),
+  recordId: id('Choose a record.'),
+});
 export type RecordReferenceValue = z.infer<typeof RecordReferenceValue>;
 
 /** An uploaded file: its id, name, size in bytes and MIME type. */
 export const FileValue = z.object({
-  fileId: id('file'),
+  fileId: z.string().trim().min(1, { error: 'Give the file.' }),
   name: z.string().trim().min(1).max(255, { error: 'A file name has at most 255 characters.' }),
   size: z.number().int().nonnegative({ error: 'Give the size in bytes.' }),
   contentType: z
