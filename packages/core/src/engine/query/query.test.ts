@@ -12,10 +12,10 @@ import { deleteRecord } from '../deletion.ts';
 import { defineAttribute, defineObject } from '../definitions.ts';
 import { addEntry, defineList, getEntries, removeEntry } from '../lists.ts';
 import { defineOption } from '../options.ts';
-import { createRecord, getRecords } from '../records.ts';
+import { createRecord, getRecords, setValues } from '../records.ts';
 import { isRefusal } from '../refusals.ts';
 import { defineRelationship } from '../relationships.ts';
-import type { EngineScope } from '../scope.ts';
+import { SYSTEM_ACTOR, type EngineScope } from '../scope.ts';
 import { loadAttributesById, type AttributeDef } from '../values.ts';
 import { createWorkspace } from '../workspaces.ts';
 import { evaluate, type EvaluateContext, type PlainRecord } from './evaluate.ts';
@@ -212,10 +212,20 @@ beforeAll(async () => {
       }),
       [id('company')]: maybe({ objectId: companies, recordId: pick(companyIds) }),
     };
+    // The member creates the record; the system writes what only it may (the landing time, the last contact).
+    const systemOnly = new Set([id('landed'), id('contact')]);
+    const given = Object.entries(values).filter(([, value]) => value !== undefined);
     const { recordId } = await createRecord(scope, {
       objectId: missions,
-      values: Object.fromEntries(Object.entries(values).filter(([, value]) => value !== undefined)),
+      values: Object.fromEntries(given.filter(([attributeId]) => !systemOnly.has(attributeId))),
     });
+    const bySystem = given.filter(([attributeId]) => systemOnly.has(attributeId));
+    if (bySystem.length > 0) {
+      await setValues(
+        { ...scope, actor: SYSTEM_ACTOR },
+        { recordId, values: Object.fromEntries(bySystem.map(([attributeId, value]) => [attributeId, { value }])) },
+      );
+    }
     missionIds.push(recordId);
   }
   const entryIds: string[] = [];

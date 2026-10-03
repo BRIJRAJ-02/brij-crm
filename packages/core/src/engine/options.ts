@@ -5,6 +5,7 @@ import { asc, eq, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { HUES } from '@crm/contracts/values';
 import { audit, touched } from './definitions.ts';
+import { checkId, isUuid } from './ids.ts';
 import { checkOptionRoom } from './limits.ts';
 import { postgresError, refuse } from './refusals.ts';
 import type { EngineScope } from './scope.ts';
@@ -132,6 +133,7 @@ async function renumber(tx: WorkspaceTx, attributeId: string, optionId: string, 
 
 /** Renames, recolours, reorders, archives or restores an option. No value row changes (AC-4). */
 export async function updateOption(scope: EngineScope, input: OptionUpdate, hooks: readonly AfterWrite[] = []) {
+  checkId(input.optionId, 'That option does not exist.');
   await runWrite(
     scope,
     async ({ tx }) => {
@@ -171,8 +173,12 @@ export async function updateOption(scope: EngineScope, input: OptionUpdate, hook
   );
 }
 
-/** An attribute's options, in order, archived ones included (they still show on the values that hold them). */
+/**
+ * An attribute's options, in order, archived ones included (they still show
+ * on the values that hold them). None for a malformed id.
+ */
 export async function listOptions(scope: EngineScope, attributeId: string) {
+  if (!isUuid(attributeId)) return [];
   return scope.db.withWorkspace(scope.workspaceId, (tx) =>
     tx
       .select({

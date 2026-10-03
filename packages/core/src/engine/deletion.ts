@@ -51,46 +51,67 @@ async function liveEntryIds(tx: WorkspaceTx, recordId: string): Promise<readonly
 }
 
 /**
+ * The statement behind `farReferences`, exported for the plan test. `ends`
+ * holds, per relationship with an end on the object, the attribute the far
+ * record shows this one through when it is the from end (`via_to`, if the
+ * to end has an attribute) and when it is the to end (`via_from`, a two way
+ * end on its object or a one way reference naming it).
+ */
+export function farReferencesQuery(recordId: string, objectId: string): SQL {
+  return sql`
+    with ends as materialized (
+      select rel.workspace_id, rel.id as relationship_id,
+        case when fa.object_id = ${objectId}::uuid then rel.to_attribute_id end as via_to,
+        case when ta.object_id = ${objectId}::uuid or ${objectId}::uuid = any(rel.target_object_ids)
+          then rel.from_attribute_id end as via_from
+      from relationships rel
+      join attributes fa on fa.workspace_id = rel.workspace_id and fa.id = rel.from_attribute_id
+      left join attributes ta on ta.workspace_id = rel.workspace_id and ta.id = rel.to_attribute_id
+      where fa.object_id = ${objectId}::uuid or ta.object_id = ${objectId}::uuid
+        or ${objectId}::uuid = any(rel.target_object_ids)
+    ),
+    hits as (
+      select l.workspace_id, l.to_record_id as far_id, e.via_to as attribute_id
+      from ends e
+      join record_links l on l.workspace_id = e.workspace_id and l.relationship_id = e.relationship_id
+        and l.from_record_id = ${recordId}::uuid and l.active_until is null
+      where e.via_to is not null
+      union all
+      select l.workspace_id, l.from_record_id, e.via_from
+      from ends e
+      join record_links l on l.workspace_id = e.workspace_id and l.relationship_id = e.relationship_id
+        and l.to_record_id = ${recordId}::uuid and l.active_until is null
+      where e.via_from is not null
+    )
+    select far.id::text as record_id, far.object_id::text as object_id, hits.attribute_id::text as attribute_id
+    from hits
+    join records far on far.workspace_id = hits.workspace_id and far.id = hits.far_id and far.deleted_at is null
+    order by far.object_id, far.id, hits.attribute_id
+  `;
+}
+
+/**
  * The reference values on live records that show this record: the far end of
  * each of its current links, where that end has an attribute. A delete, a
  * restore or an erasure of the record changes them with no new version, and
  * the hooks get every one (the audit log names them all; the outbox hook caps
- * its own copy). The read goes per object: only the relationships with an end
- * on the record's object, each end looked up by relationship and record
- * (`record_links_from` and `record_links_to`, or the history indexes, all
- * lead with both), so a record's links cost index lookups, never a scan of
- * `record_links`. Every caller runs it before it takes the workspace
- * counter row, so this read never holds that lock.
+ * its own copy). The read goes per object: first the ends of the
+ * relationships on the record's object, worked out once and materialised (a
+ * handful of rows), then each end's current links looked up by relationship
+ * and record (`record_links_from` and `record_links_to` lead with both), so a
+ * record's links cost index lookups, never a scan of `record_links`: stale
+ * statistics can't fold the ends into a plan that scans the links once per
+ * relationship. A test pins the plan. Every caller runs it before it takes
+ * the workspace counter row, so this read never holds that lock.
  */
 async function farReferences(
   tx: WorkspaceTx,
   record: { readonly recordId: string; readonly objectId: string },
 ): Promise<readonly ReferenceChange[]> {
   const { recordId, objectId } = record;
-  const result = await tx.execute<{ record_id: string; object_id: string; attribute_id: string }>(sql`
-    select far.id::text as record_id, far.object_id::text as object_id, ends.attribute_id::text as attribute_id
-    from relationships rel
-    join attributes fa on fa.workspace_id = rel.workspace_id and fa.id = rel.from_attribute_id
-    left join attributes ta on ta.workspace_id = rel.workspace_id and ta.id = rel.to_attribute_id
-    cross join lateral (
-      -- The record is the from end: the far record shows it through the to end's attribute, if it has one.
-      select l.to_record_id as far_id, rel.to_attribute_id as attribute_id
-      from record_links l
-      where fa.object_id = ${objectId} and rel.to_attribute_id is not null
-        and l.workspace_id = rel.workspace_id and l.relationship_id = rel.id
-        and l.from_record_id = ${recordId} and l.active_until is null
-      union all
-      -- The record is the to end (a two way end on its object, or a one way reference naming it).
-      select l.from_record_id, rel.from_attribute_id
-      from record_links l
-      where (ta.object_id = ${objectId} or ${objectId}::uuid = any(rel.target_object_ids))
-        and l.workspace_id = rel.workspace_id and l.relationship_id = rel.id
-        and l.to_record_id = ${recordId} and l.active_until is null
-    ) ends
-    join records far on far.workspace_id = rel.workspace_id and far.id = ends.far_id and far.deleted_at is null
-    where fa.object_id = ${objectId} or ta.object_id = ${objectId} or ${objectId}::uuid = any(rel.target_object_ids)
-    order by far.object_id, far.id, ends.attribute_id
-  `);
+  const result = await tx.execute<{ record_id: string; object_id: string; attribute_id: string }>(
+    farReferencesQuery(recordId, objectId),
+  );
   return result.rows.map((row) => ({
     recordId: row.record_id,
     objectId: row.object_id,

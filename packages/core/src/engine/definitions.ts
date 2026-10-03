@@ -12,6 +12,7 @@ import {
   parseAttributeValue,
   type AttributeType,
 } from '@crm/contracts/values';
+import { checkId, isUuid } from './ids.ts';
 import { checkAttributeRoom, takeCustomObject, type AttributeParent } from './limits.ts';
 import { postgresError, refuse } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
@@ -184,8 +185,7 @@ export async function insertObject(
   checkLook(input.icon, input.hue);
   const primary = input.primaryAttribute ?? { apiSlug: 'name', title: 'Name', type: 'text' };
   checkSlug(primary.apiSlug);
-  if (input.standard === undefined) await takeCustomObject(tx, scope);
-  return definitionGuard(async () => {
+  const created = await definitionGuard(async () => {
     const [object] = await tx
       .insert(objects)
       .values({
@@ -229,6 +229,10 @@ export async function insertObject(
     await tx.update(objects).set({ primaryAttributeId: name.id }).where(eq(objects.id, object.id));
     return { objectId: object.id, primaryAttributeId: name.id };
   });
+  // The custom object slot last, as every write takes the workspace counter row: a full workspace refuses
+  // here and the refusal rolls the object back, and the row is never held while the slug's index waits.
+  if (input.standard === undefined) await takeCustomObject(tx, scope);
+  return created;
 }
 
 /** The parent an attribute input names, refusing none or both. */
@@ -390,6 +394,7 @@ export async function restoreAttribute(scope: EngineScope, attributeId: string, 
 
 /** Changes an object's names, icon or hue. */
 export async function updateObject(scope: EngineScope, input: ObjectUpdate, hooks: readonly AfterWrite[] = []) {
+  checkId(input.objectId, 'That object does not exist.');
   await runWrite(
     scope,
     async ({ tx }) => {
@@ -419,6 +424,7 @@ export async function setObjectArchived(
   input: { readonly objectId: string; readonly archived: boolean },
   hooks: readonly AfterWrite[] = [],
 ) {
+  checkId(input.objectId, 'That object does not exist.');
   await runWrite(
     scope,
     async ({ tx }) => {
@@ -433,8 +439,9 @@ export async function setObjectArchived(
   );
 }
 
-/** The live attributes of an object, as definitions, in position order. */
+/** The live attributes of an object, as definitions, in position order. None for a malformed id. */
 export async function listAttributes(scope: EngineScope, objectId: string) {
+  if (!isUuid(objectId)) return [];
   return scope.db.withWorkspace(scope.workspaceId, (tx) =>
     tx
       .select()

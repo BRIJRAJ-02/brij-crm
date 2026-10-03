@@ -4,6 +4,7 @@
 // #38 later reads the numbers from the workspace's plan.
 import { and, count, eq, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
+import { checkId } from './ids.ts';
 import { refuse } from './refusals.ts';
 import type { EngineScope } from './scope.ts';
 
@@ -74,6 +75,7 @@ export type AttributeParent = { readonly objectId: string } | { readonly listId:
  */
 export async function checkAttributeRoom(tx: WorkspaceTx, scope: EngineScope, parent: AttributeParent): Promise<void> {
   const isObject = 'objectId' in parent;
+  checkId(isObject ? parent.objectId : parent.listId, `That ${isObject ? 'object' : 'list'} does not exist.`);
   const locked = isObject
     ? await tx.select({ id: objects.id }).from(objects).where(eq(objects.id, parent.objectId)).for('update')
     : await tx.select({ id: lists.id }).from(lists).where(eq(lists.id, parent.listId)).for('update');

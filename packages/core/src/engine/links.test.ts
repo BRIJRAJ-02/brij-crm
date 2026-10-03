@@ -11,6 +11,7 @@ import {
   deleteRecord,
   deleteRecordValues,
   eraseRecord,
+  farReferencesQuery,
   purgeDeleted,
   restoreRecord,
   type RemovedCounts,
@@ -1111,6 +1112,58 @@ describe('deletion', () => {
       expect(plan.valueIndexes).toContain('values_history');
     }
   });
+
+  it("finds a record's far references by index, never a scan of record_links (AC-8, AC-17, AC-18)", async () => {
+    const world = await workspace();
+    const holding = await newCompany(world, 'Holding');
+    // Links on both of its ends: people at the company (it is the to end), and its own parent (the from end).
+    const parent = await newCompany(world, 'Parent');
+    await setValues(world.scope, {
+      recordId: holding,
+      values: { [world.company('parent_company')]: { value: { objectId: world.companies, recordId: parent } } },
+    });
+    for (let index = 0; index < 30; index += 1) {
+      await newPerson(world, `P${String(index)}`, {
+        [world.person('company')]: { objectId: world.companies, recordId: index % 3 === 0 ? holding : parent },
+      });
+    }
+    // Fresh statistics, then scans off, as the sort key plan tests do: a link lookup row level security or the
+    // query's shape kept from the indexes would still show as a Seq Scan of record_links.
+    await owner.vacuumAnalyze(['record_links', 'records']);
+    const nodes = await db.withWorkspace(world.scope.workspaceId, async (tx) => {
+      await tx.execute(sql`set local enable_seqscan = off`);
+      const result = await tx.execute<{ 'QUERY PLAN': readonly { Plan: PlanNode }[] }>(
+        sql`explain (format json) ${farReferencesQuery(holding, world.companies)}`,
+      );
+      const found: PlanNode[] = [];
+      const walk = (node: PlanNode) => {
+        found.push(node);
+        for (const child of node.Plans ?? []) walk(child);
+      };
+      const plan = result.rows[0]?.['QUERY PLAN'][0]?.Plan;
+      if (plan === undefined) throw new Error('No plan.');
+      walk(plan);
+      return found;
+    });
+    expect(
+      nodes.filter((node) => node['Node Type'] === 'Seq Scan' && node['Relation Name'] === 'record_links'),
+    ).toEqual([]);
+    // Each end's branch seeks its links by the record (whichever record_links index the planner picks).
+    const seeks = nodes.flatMap((node) =>
+      node['Index Name']?.startsWith('record_links_') === true ? [node['Index Cond'] ?? ''] : [],
+    );
+    expect(seeks.some((condition) => condition.includes('from_record_id ='))).toBe(true);
+    expect(seeks.some((condition) => condition.includes('to_record_id ='))).toBe(true);
+
+    // And the read itself: the ten people (through their Company) and the parent (through its Subsidiaries).
+    const rows = await db.withWorkspace(world.scope.workspaceId, (tx) =>
+      tx.execute<{ record_id: string; attribute_id: string }>(farReferencesQuery(holding, world.companies)),
+    );
+    expect(
+      rows.rows.filter((row) => row.attribute_id === world.company('subsidiaries')).map((row) => row.record_id),
+    ).toEqual([parent]);
+    expect(rows.rows.filter((row) => row.attribute_id === world.person('company'))).toHaveLength(10);
+  });
 });
 
 /** The parts of an `explain (format json)` node the plan tests read. */
@@ -1118,5 +1171,6 @@ interface PlanNode {
   readonly 'Node Type': string;
   readonly 'Relation Name'?: string;
   readonly 'Index Name'?: string;
+  readonly 'Index Cond'?: string;
   readonly Plans?: readonly PlanNode[];
 }

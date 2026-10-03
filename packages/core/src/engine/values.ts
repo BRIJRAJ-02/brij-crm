@@ -3,7 +3,7 @@
 // version's time never runs before the one it replaces.
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { parseAttributeValue, type AttributeType } from '@crm/contracts/values';
+import { parseAttributeValue, SYSTEM_ONLY_TYPES, type AttributeType } from '@crm/contracts/values';
 import { encodeValue, sameItems, type ItemColumns, type StoredItem } from './columns.ts';
 import { checkId, isUuid, uuidArray } from './ids.ts';
 import { postgresError, refuse, writeConflict } from './refusals.ts';
@@ -55,8 +55,9 @@ const DEF_COLUMNS = {
   relationshipId: attributes.relationshipId,
 } as const;
 
-/** One attribute by id, or a `NOT_FOUND` refusal. */
+/** One attribute by id, or a `NOT_FOUND` refusal (a malformed id too, before any query). */
 export async function loadAttribute(tx: WorkspaceTx, attributeId: string, lock = false): Promise<AttributeDef> {
+  if (!isUuid(attributeId)) throw refuse('NOT_FOUND', 'That attribute does not exist.');
   const query = tx.select(DEF_COLUMNS).from(attributes).where(eq(attributes.id, attributeId));
   const [row] = lock ? await query.for('update') : await query;
   if (row === undefined) throw refuse('NOT_FOUND', 'That attribute does not exist.', attributeId);
@@ -178,6 +179,19 @@ export interface AttributeWrite {
   readonly baseVersionId?: string;
 }
 
+/**
+ * Refuses `ATTRIBUTE_READ_ONLY`, naming the attribute, when `writer` gives a
+ * value to a type only the system writes (`SYSTEM_ONLY_TYPES`: timestamps and
+ * interactions) and isn't the system. Every write that takes values from a
+ * caller checks it before parsing (`parseAll`); a default is the system's.
+ */
+export function checkWriter(attribute: AttributeDef, writer: Actor): void {
+  if (writer.type === 'system') return;
+  if ((SYSTEM_ONLY_TYPES as readonly AttributeType[]).includes(attribute.type)) {
+    throw refuse('ATTRIBUTE_READ_ONLY', `${attribute.title} is set by the system.`, attribute.id);
+  }
+}
+
 /** Parses a value for an attribute, or refuses it naming the attribute. */
 export function parseFor(attribute: AttributeDef, input: unknown): unknown {
   if (attribute.isSystem) {
@@ -206,6 +220,10 @@ async function checkOptions(
     ...new Set(next.flatMap((item) => (item.optionId === null || kept.has(item.optionId) ? [] : [item.optionId]))),
   ];
   if (added.length === 0) return;
+  // A malformed id is no option: refused here, so a batch refuses that record alone instead of failing the cast.
+  if (!added.every(isUuid)) {
+    throw refuse('ATTRIBUTE_VALUE_INVALID', `Pick one of ${attribute.title}'s options.`, attribute.id);
+  }
   const rows = await tx
     .select({ id: attributeOptions.id, archivedAt: attributeOptions.archivedAt })
     .from(attributeOptions)

@@ -86,9 +86,11 @@ export {
 export {
   CHANGE_CAP,
   capChange,
+  cappedHook,
   runWrite,
   type AfterWrite,
   type CappedChange,
+  type CappedStep,
   type Change,
   type RecordRef,
   type ReferenceChange,

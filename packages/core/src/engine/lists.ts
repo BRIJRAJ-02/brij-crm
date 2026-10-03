@@ -9,7 +9,7 @@ import { decodeValue } from './columns.ts';
 import { checkName, checkSlug, definitionGuard, audit, touched } from './definitions.ts';
 import { RESTORE_WINDOW, takeEntrySlots, takeList } from './limits.ts';
 import { bucketItems, initialValues, writeAll, type AttributeResult } from './records.ts';
-import { checkId } from './ids.ts';
+import { checkId, isUuid } from './ids.ts';
 import { refuse } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
 import { setEntryKeysLive } from './sort-keys.ts';
@@ -53,14 +53,14 @@ export async function insertList(context: WriteContext, input: ListInput): Promi
   const { tx, scope } = context;
   checkSlug(input.apiSlug);
   checkName(input.name, 'list name');
+  checkId(input.objectId, 'That object does not exist.');
   const [object] = await tx
     .select({ archivedAt: objects.archivedAt })
     .from(objects)
     .where(eq(objects.id, input.objectId));
   if (object === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
   if (object.archivedAt !== null) throw refuse('NOT_FOUND', 'That object is archived. Restore it first.');
-  await takeList(tx, scope);
-  return definitionGuard(async () => {
+  const created = await definitionGuard(async () => {
     const [row] = await tx
       .insert(lists)
       .values({
@@ -75,6 +75,9 @@ export async function insertList(context: WriteContext, input: ListInput): Promi
     if (row === undefined) throw new Error('The list was not created.');
     return { listId: row.id };
   });
+  // The list slot last, as every write takes the workspace counter row; a full workspace rolls the list back.
+  await takeList(tx, scope);
+  return created;
 }
 
 /** Defines a list of one object's records (AC-6, AC-16). */
@@ -315,11 +318,12 @@ export async function readEntriesById(tx: WorkspaceTx, ids: readonly string[]): 
   return [...entries].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
 }
 
-/** Reads live entries by id, up to 500 at once. */
+/** Reads live entries by id, up to 500 at once. A malformed id names nothing, so it is left out like a missing one. */
 export async function getEntries(scope: EngineScope, input: { readonly ids: readonly string[] }) {
   if (input.ids.length > 500) throw refuse('CONFIG_INVALID', 'Read at most 500 entries at once.');
-  if (input.ids.length === 0) return [];
-  return scope.db.withWorkspace(scope.workspaceId, (tx) => readEntries(tx, inArray(listEntries.id, [...input.ids])));
+  const ids = input.ids.filter(isUuid);
+  if (ids.length === 0) return [];
+  return scope.db.withWorkspace(scope.workspaceId, (tx) => readEntries(tx, inArray(listEntries.id, ids)));
 }
 
 /** Every live entry of one record, across its lists (a record page's "Lists" panel). */

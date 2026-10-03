@@ -8,6 +8,7 @@ import { and, asc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { RecordReferenceValue, ValueVersion } from '@crm/contracts/values';
 import { insertAttribute } from './definitions.ts';
+import { checkId, isUuid } from './ids.ts';
 import { postgresError, refuse, writeConflict } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
 import { parseFor, type AttributeDef, type AttributeWrite } from './values.ts';
@@ -66,6 +67,7 @@ const micro = (column: unknown) => sql<string>`to_char(${column} at time zone 'U
 const MAX_TARGETS = 20;
 
 async function liveObjects(tx: WorkspaceTx, ids: readonly string[]): Promise<void> {
+  for (const id of ids) checkId(id, 'That object does not exist.');
   const rows = await tx
     .select({ id: objects.id, archivedAt: objects.archivedAt })
     .from(objects)
@@ -250,6 +252,10 @@ async function checkTargets(
   wanted: readonly RecordReferenceValue[],
 ): Promise<void> {
   if (wanted.length === 0) return;
+  // A malformed id names no record: refused here, so a batch refuses this record alone instead of failing the cast.
+  if (!wanted.every((item) => isUuid(item.recordId) && isUuid(item.objectId))) {
+    throw refuse('ATTRIBUTE_VALUE_INVALID', `That ${attribute.title} record does not exist.`, attribute.id);
+  }
   const rows = await tx
     .select({ id: records.id, objectId: records.objectId, deletedAt: records.deletedAt })
     .from(records)

@@ -5,13 +5,23 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import type { EngineRefusal } from '@crm/contracts/values';
-import { archiveAttribute, defineAttribute, defineObject, updateAttribute } from './definitions.ts';
+import {
+  archiveAttribute,
+  defineAttribute,
+  defineObject,
+  listAttributes,
+  setObjectArchived,
+  updateAttribute,
+  updateObject,
+} from './definitions.ts';
+import { defineList, getEntries } from './lists.ts';
+import { defineRelationship } from './relationships.ts';
 import { newId } from './ids.ts';
 import { getHistory, getTimeInStages, getValuesAsOf } from './history.ts';
 import { defineOption, listOptions, updateOption } from './options.ts';
 import { createRecord, getRecords, setValues, setValuesBatch } from './records.ts';
 import { isRefusal } from './refusals.ts';
-import type { EngineScope } from './scope.ts';
+import { SYSTEM_ACTOR, type EngineScope } from './scope.ts';
 import { createWorkspace } from './workspaces.ts';
 import type { AfterWrite, Change } from './write.ts';
 
@@ -521,9 +531,10 @@ describe('actor values', () => {
     expect(other.map((refusal) => refusal.code)).toEqual(['ATTRIBUTE_VALUE_INVALID']);
   });
 
-  it("checks an interaction's by as an actor value: an active member, or the scope's own actor (AC-13)", async () => {
+  it('lets only the system write an interaction or a timestamp, checking its by like an actor value (AC-13)', async () => {
     const { scope, objects, memberId } = await workspace();
     const elsewhere = await workspace();
+    const asSystem: EngineScope = { ...scope, actor: SYSTEM_ACTOR };
     const companiesObject = id(objects.companies);
     const companies = await slugs(scope, companiesObject);
     const { attributeId: touch } = await defineAttribute(scope, {
@@ -532,6 +543,12 @@ describe('actor values', () => {
       title: 'Last touch',
       type: 'interaction',
     });
+    const { attributeId: seen } = await defineAttribute(scope, {
+      objectId: companiesObject,
+      apiSlug: 'last_seen',
+      title: 'Last seen',
+      type: 'timestamp',
+    });
     const { recordId } = await createRecord(scope, {
       objectId: companiesObject,
       values: { [id(companies.name)]: 'A' },
@@ -539,28 +556,66 @@ describe('actor values', () => {
     const by = (actor: unknown) => ({
       [touch]: { value: { kind: 'email', at: '2026-10-01T09:30:00.000Z', by: actor } },
     });
+
+    // A member never writes either type, whoever the interaction names, on a create or a save.
+    for (const actor of [
+      { type: 'member', id: memberId },
+      { type: 'system', id: null },
+    ]) {
+      const refused = await refusals(setValues(scope, { recordId, values: by(actor) }));
+      expect(refused.map((refusal) => [refusal.code, refusal.attributeId])).toEqual([['ATTRIBUTE_READ_ONLY', touch]]);
+    }
+    const stamp = { [seen]: { value: '2026-10-01T09:30:00.000Z' } };
+    expect((await refusals(setValues(scope, { recordId, values: stamp }))).map((refusal) => refusal.code)).toEqual([
+      'ATTRIBUTE_READ_ONLY',
+    ]);
+    const created = await refusals(
+      createRecord(scope, {
+        objectId: companiesObject,
+        values: { [id(companies.name)]: 'B', [seen]: '2026-10-01T09:30:00.000Z' },
+      }),
+    );
+    expect(created.map((refusal) => [refusal.code, refusal.attributeId])).toEqual([['ATTRIBUTE_READ_ONLY', seen]]);
+
+    // The system does, and its by is checked: an active member of this workspace, or the system itself.
     for (const actor of [
       { type: 'member', id: elsewhere.memberId },
       { type: 'member', id: newId() },
       { type: 'member', id: 'not-a-uuid' },
-      { type: 'system', id: null },
       { type: 'api_key', id: newId() },
     ]) {
-      const refused = await refusals(setValues(scope, { recordId, values: by(actor) }));
+      const refused = await refusals(setValues(asSystem, { recordId, values: by(actor) }));
       expect(refused.map((refusal) => [refusal.code, refusal.attributeId])).toEqual([
         ['ATTRIBUTE_VALUE_INVALID', touch],
       ]);
     }
-    await setValues(scope, { recordId, values: by({ type: 'member', id: memberId }) });
+    await setValues(asSystem, { recordId, values: by({ type: 'member', id: memberId }) });
     expect((await getRecords(scope, { ids: [recordId] }))[0]?.values[touch]).toMatchObject({
       by: { type: 'member', id: memberId },
     });
-    // The system records its own interactions.
-    const asSystem: EngineScope = { ...scope, actor: { type: 'system', id: null } };
-    await setValues(asSystem, { recordId, values: by({ type: 'system', id: null }) });
-    expect((await getRecords(scope, { ids: [recordId] }))[0]?.values[touch]).toMatchObject({
-      by: { type: 'system', id: null },
+    await setValues(asSystem, { recordId, values: { ...by({ type: 'system', id: null }), ...stamp } });
+    const [record] = await getRecords(scope, { ids: [recordId] });
+    expect(record?.values[touch]).toMatchObject({ by: { type: 'system', id: null } });
+    expect(record?.values[seen]).toBe('2026-10-01T09:30:00.000Z');
+  });
+
+  it("fills a timestamp's default for a member's create: a default is the system's", async () => {
+    const { scope, objects } = await workspace();
+    const companiesObject = id(objects.companies);
+    const companies = await slugs(scope, companiesObject);
+    const { attributeId: due } = await defineAttribute(scope, {
+      objectId: companiesObject,
+      apiSlug: 'follow_up',
+      title: 'Follow up',
+      type: 'timestamp',
+      defaultValue: { kind: 'offset', duration: 'P7D' },
     });
+    const { recordId } = await createRecord(scope, {
+      objectId: companiesObject,
+      values: { [id(companies.name)]: 'A' },
+    });
+    const [record] = await getRecords(scope, { ids: [recordId] });
+    expect(typeof record?.values[due]).toBe('string');
   });
 });
 
@@ -670,5 +725,93 @@ describe('batches', () => {
       tx.execute<{ n: number }>(sql`select count(*)::int as n from "values" where attribute_id = ${email}`),
     );
     expect(written.rows[0]?.n).toBe(3);
+  });
+});
+
+describe('malformed ids', () => {
+  it('refuses a malformed id at every write and history read as not found, before it reaches Postgres', async () => {
+    const { scope, objects } = await workspace();
+    const deals = await slugs(scope, id(objects.deals));
+    const { recordId } = await createRecord(scope, { objectId: id(objects.deals), values: { [id(deals.name)]: 'D' } });
+    for (const attempt of [
+      () => createRecord(scope, { objectId: 'x' }),
+      () => defineList(scope, { objectId: 'x', apiSlug: 'pipeline', name: 'Pipeline' }),
+      () => defineAttribute(scope, { objectId: 'x', apiSlug: 'notes', title: 'Notes', type: 'text' }),
+      () => defineAttribute(scope, { listId: 'x', apiSlug: 'notes', title: 'Notes', type: 'text' }),
+      () => defineOption(scope, { attributeId: 'x', label: 'One', hue: 'red' }),
+      () => updateAttribute(scope, { attributeId: 'x', title: 'Renamed' }),
+      () => archiveAttribute(scope, 'x'),
+      () => updateObject(scope, { objectId: 'x', singularName: 'Thing' }),
+      () => setObjectArchived(scope, { objectId: 'x', archived: true }),
+      () => updateOption(scope, { optionId: 'x', label: 'Renamed' }),
+      () =>
+        defineRelationship(scope, {
+          cardinality: 'many_to_many',
+          from: { objectId: id(objects.deals), apiSlug: 'refs', title: 'Refs' },
+          targetObjectIds: ['x'],
+        }),
+      () => getHistory(scope, { recordId, attributeId: 'x' }),
+      () => getTimeInStages(scope, { recordId, attributeId: 'x' }),
+    ]) {
+      expect((await refusals(attempt())).map((refusal) => refusal.code)).toEqual(['NOT_FOUND']);
+    }
+  });
+
+  it('leaves malformed ids out of reads by id, as it leaves out missing ones', async () => {
+    const { scope, objects } = await workspace();
+    const deals = await slugs(scope, id(objects.deals));
+    const { recordId } = await createRecord(scope, { objectId: id(objects.deals), values: { [id(deals.name)]: 'D' } });
+    const read = await getRecords(scope, { ids: ['x', recordId], attributeIds: ['x', id(deals.name)] });
+    expect(read.map((record) => [record.id, Object.keys(record.values)])).toEqual([[recordId, [id(deals.name)]]]);
+    expect(await getRecords(scope, { ids: ['x'] })).toEqual([]);
+    expect(await getEntries(scope, { ids: ['x'] })).toEqual([]);
+    expect(await listAttributes(scope, 'x')).toEqual([]);
+    expect(await listOptions(scope, 'x')).toEqual([]);
+  });
+
+  it('refuses malformed option and record ids inside a value, naming the attribute, one record at a time', async () => {
+    const { scope, objects } = await workspace();
+    const deals = await slugs(scope, id(objects.deals));
+    const companiesObject = id(objects.companies);
+    const companies = await slugs(scope, companiesObject);
+    const parent = id(companies.parent_company);
+    const { recordId: deal } = await createRecord(scope, {
+      objectId: id(objects.deals),
+      values: { [id(deals.name)]: 'D' },
+    });
+    for (const [attributeId, value] of [
+      [id(deals.stage), 'x'],
+      [id(deals.source), 'x'],
+      [id(deals.associated_company), { objectId: companiesObject, recordId: 'x' }],
+      [id(deals.associated_company), { objectId: 'x', recordId: newId() }],
+    ] as const) {
+      const refused = await refusals(setValues(scope, { recordId: deal, values: { [attributeId]: { value } } }));
+      expect(refused.map((refusal) => [refusal.code, refusal.attributeId])).toEqual([
+        ['ATTRIBUTE_VALUE_INVALID', attributeId],
+      ]);
+    }
+
+    // In a batch, the record with the malformed link is refused and the others land.
+    const company = async (name: string) =>
+      (await createRecord(scope, { objectId: companiesObject, values: { [id(companies.name)]: name } })).recordId;
+    const holding = await company('Holding');
+    const children = [await company('A'), await company('B'), await company('C')];
+    const results = await setValuesBatch(scope, {
+      items: children.map((recordId, index) => ({
+        recordId,
+        values: { [parent]: { value: { objectId: companiesObject, recordId: index === 1 ? 'not-a-uuid' : holding } } },
+      })),
+    });
+    expect(results.map((result) => (result.ok ? 'ok' : result.refusals[0]?.code))).toEqual([
+      'ok',
+      'ATTRIBUTE_VALUE_INVALID',
+      'ok',
+    ]);
+    const read = await getRecords(scope, { ids: children, attributeIds: [parent] });
+    expect(read.map((record) => record.values[parent])).toEqual([
+      { objectId: companiesObject, recordId: holding },
+      null,
+      { objectId: companiesObject, recordId: holding },
+    ]);
   });
 });

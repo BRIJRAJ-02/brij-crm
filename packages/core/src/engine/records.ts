@@ -6,11 +6,12 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import { AttributeDefault, HUES, type EngineRefusal, type Hue, type RecordRefDisplay } from '@crm/contracts/values';
 import { takeRecordSlots } from './limits.ts';
 import { decodeValue } from './columns.ts';
-import { isUuidV7 } from './ids.ts';
+import { checkId, isUuid, isUuidV7 } from './ids.ts';
 import { isRefusal, postgresError, refuse, refuseAll } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
 import { linkValues, writeLinks } from './relationships.ts';
 import {
+  checkWriter,
   currentItems,
   holdDefinitions,
   loadAttributes,
@@ -119,11 +120,19 @@ export interface RecordView {
   readonly values: Readonly<Record<string, unknown>>;
 }
 
-/** Parses every input against its attribute, collecting every refusal before anything is written (AC-13). */
+/**
+ * Parses every input against its attribute, collecting every refusal before
+ * anything is written (AC-13). Only the system writes a system only type
+ * (`SYSTEM_ONLY_TYPES`: timestamps and interactions); anyone else is refused
+ * `ATTRIBUTE_READ_ONLY`. The attributes in `defaulted` got their value from
+ * their default, which the system sets, so they pass whoever creates.
+ */
 function parseAll(
   attributes: ReadonlyMap<string, AttributeDef>,
   inputs: Readonly<Record<string, ValueInput>>,
+  actor: Actor,
   earlier: readonly EngineRefusal[] = [],
+  defaulted: ReadonlySet<string> = new Set(),
 ): readonly { attribute: AttributeDef; input: ValueInput }[] {
   const refusals: EngineRefusal[] = [...earlier];
   const parsed: { attribute: AttributeDef; input: ValueInput }[] = [];
@@ -134,6 +143,7 @@ function parseAll(
       continue;
     }
     try {
+      if (!defaulted.has(attributeId)) checkWriter(attribute, actor);
       parseFor(attribute, input.value);
       parsed.push({ attribute, input });
     } catch (error) {
@@ -198,6 +208,7 @@ export async function writeAll(
 }
 
 async function liveObject(tx: WorkspaceTx, objectId: string): Promise<void> {
+  checkId(objectId, 'That object does not exist.');
   const [row] = await tx.select({ archivedAt: objects.archivedAt }).from(objects).where(eq(objects.id, objectId));
   if (row === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
   if (row.archivedAt !== null) throw refuse('NOT_FOUND', 'That object is archived. Restore it first.');
@@ -226,10 +237,13 @@ export async function initialValues(
   const inputs: Record<string, ValueInput> = Object.fromEntries(
     Object.entries(given).map(([id, value]) => [id, { value }]),
   );
+  const defaulted = new Set<string>();
   for (const attribute of attributes.values()) {
     if (attribute.isSystem || attribute.archivedAt !== null || attribute.id in given) continue;
     const value = await defaultFor(tx, scope, attribute, timeZone);
-    if (value !== undefined) inputs[attribute.id] = { value };
+    if (value === undefined) continue;
+    inputs[attribute.id] = { value };
+    defaulted.add(attribute.id);
   }
   const missing: EngineRefusal[] = [...attributes.values()]
     .filter(
@@ -245,7 +259,7 @@ export async function initialValues(
       message: `${attribute.title} is required. Give it a value.`,
       attributeId: attribute.id,
     }));
-  return parseAll(attributes, inputs, missing);
+  return parseAll(attributes, inputs, scope.actor, missing, defaulted);
 }
 
 /**
@@ -326,7 +340,7 @@ async function updateRecord(
           input.recordId,
           await loadAttributes(tx, (await lockRecord(tx, input.recordId)).objectId),
         ] as const);
-  const parsed = parseAll(attributes, input.values);
+  const parsed = parseAll(attributes, input.values, context.scope.actor);
   const results = await writeAll(context, ownerKind, ownerId, parsed);
   if (Object.values(results).some((each) => each.versionId !== undefined)) {
     await touchOwner(context, ownerKind, ownerId);
@@ -402,14 +416,20 @@ export function bucketItems<T extends { readonly ownerId: string; readonly attri
   return (ownerId, attributeId) => byOwner.get(ownerId)?.get(attributeId) ?? [];
 }
 
-/** Reads live records with their current values and display (AC-19). Up to 500 at once. */
+/**
+ * Reads live records with their current values and display (AC-19). Up to 500
+ * at once. A malformed id (or attribute id) names nothing, so it is left out
+ * like a missing one rather than failing the whole read.
+ */
 export async function getRecords(
   scope: EngineScope,
   input: { readonly ids: readonly string[]; readonly attributeIds?: readonly string[] },
 ): Promise<readonly RecordView[]> {
   if (input.ids.length > 500) throw refuse('CONFIG_INVALID', 'Read at most 500 records at once.');
-  if (input.ids.length === 0) return [];
-  return scope.db.withWorkspace(scope.workspaceId, (tx) => readRecords(tx, input.ids, input.attributeIds));
+  const ids = input.ids.filter(isUuid);
+  const attributeIds = input.attributeIds?.filter(isUuid);
+  if (ids.length === 0) return [];
+  return scope.db.withWorkspace(scope.workspaceId, (tx) => readRecords(tx, ids, attributeIds));
 }
 
 /** Reads live records inside an open transaction, in the order of `ids`. */

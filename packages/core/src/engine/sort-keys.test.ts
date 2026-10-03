@@ -13,7 +13,7 @@ import { addEntry, defineList, removeEntry, restoreEntry } from './lists.ts';
 import { queryPage, type ViewSource } from './query/page.ts';
 import { defineOption } from './options.ts';
 import { createRecord, setValues } from './records.ts';
-import type { EngineScope } from './scope.ts';
+import { SYSTEM_ACTOR, type EngineScope } from './scope.ts';
 import type { AttributeDef } from './values.ts';
 import { createWorkspace } from './workspaces.ts';
 
@@ -156,8 +156,10 @@ async function drift(): Promise<{ extra: number; missing: number }> {
 
 describe('keys follow values (AC-20)', () => {
   it('stays equal to what the current values say through every kind of write', async () => {
+    // Only the system writes the timestamp and the interaction, so it makes the records and their random values.
+    const system: EngineScope = { ...scope, actor: SYSTEM_ACTOR };
     for (let index = 0; index < 30; index += 1) {
-      const { recordId } = await createRecord(scope, {
+      const { recordId } = await createRecord(system, {
         objectId: craft,
         values: {
           ...(index % 5 === 4 ? {} : { [id('title')]: word() }),
@@ -206,7 +208,7 @@ describe('keys follow values (AC-20)', () => {
         if (action === 7) await setValues(scope, { entryId, values: { [id('callsign')]: { value: word() } } });
         if (action >= 8) {
           const slug = pick(KINDS);
-          await setValues(scope, { recordId, values: { [id(slug)]: { value: valueFor(slug) } } });
+          await setValues(system, { recordId, values: { [id(slug)]: { value: valueFor(slug) } } });
         }
       } catch {
         // A write on a trashed record or a removed entry is refused; the keys must still match.
