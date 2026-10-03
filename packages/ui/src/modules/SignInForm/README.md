@@ -25,7 +25,7 @@ New (spec 0005, pulled forward from spec 0003's milestone 4). Sign in (#10) is b
 - `onGoogle` shows "Continue with Google" (text only: the icon set has no brand marks). Leave it out when Google isn't set up.
 - `status`: `sending` spins Continue as "Sending code" and turns Google off; `google` spins the Google button as "Opening Google" and turns Continue off.
 - `isDisabled` turns the field and both buttons off; `disabledReason` says why, under the field.
-- `isSignUpClosed` adds a quiet line saying sign up is invite only. An address the server refuses for it (`SIGNUP_CLOSED`) still comes back as `error`.
+- `isSignUpClosed` adds a quiet line saying sign up isn't open yet. An address the server refuses for it (`SIGNUP_CLOSED`) still comes back as `error`.
 - `defaultEmail` starts the field with an address, coming back from "Use another email".
 
 ## States

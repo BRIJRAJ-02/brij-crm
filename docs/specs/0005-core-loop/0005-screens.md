@@ -10,7 +10,7 @@ Five screens, met in this order: sign in, verify the code, name your workspace, 
 |---|---|---|
 | `/` | redirects: signed in with a workspace → the first one's People table (by directory `created_at`); signed in without → `/welcome`; signed out → `/sign-in` | none |
 | `/sign-in` | AuthLayout + SignInForm: email, "Continue" (sends the code), "Continue with Google" (text only, shown when `system.status` says Google is on), the closed sign up message. `?redirect=` is honoured only when it starts with a single `/` | signed out |
-| `/verify` | AuthLayout + VerifyEmail: "We sent a code to x", CodeInput (verifies on complete), "Send a new code" (60 second wait), "Use another email" | a pending email in `sessionStorage` (survives a reload, cleared on verify) |
+| `/verify` | AuthLayout + VerifyEmail: "Enter the code sent to x", CodeInput (verifies on complete), "Send a new code" (60 second wait), "Use another email" | a pending email in `sessionStorage` (survives a reload, cleared on verify) |
 | `/welcome` | AuthLayout + Form: "Your name" (prefilled when known), workspace name (prefilled from it), web address (derived, editable), "Create workspace" | signed in |
 | `/w/$slug` | AppShell + Sidebar: workspace name with a menu holding "Sign out", Records section with People (its icon and colour tile), ThemeSwitch in the footer | signed in and a member (the door behind `objects.list` answers 404 otherwise), else `/sign-in?redirect=…` or NotFound inside the frame |
 | `/w/$slug/objects/$object` | TopBar (object name, icon, "New person"), ViewBar ("All people", "Add attribute"), the lazy DataGrid | as above |

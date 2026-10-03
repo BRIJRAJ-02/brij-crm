@@ -31,7 +31,7 @@ export interface VerifyEmailProps {
 const CODE_LENGTH = 6;
 
 /**
- * The step after sign in: "We sent a code to …", the six digit code (checked
+ * The step after sign in: "Enter the code sent to …", the six digit code (checked
  * as soon as the sixth digit is in), "Send a new code" with its wait, and "Use
  * another email". Presentational: the screen owns the countdown and the
  * checks, and passes their state in. A refusal clears the boxes for the next

@@ -1,7 +1,7 @@
 /** VerifyEmail's built in copy. */
 export const strings = {
   /** Before the address, which follows in bold, then a full stop. */
-  sentTo: 'We sent a code to',
+  sentTo: 'Enter the code sent to',
   code: 'Code',
   verifying: 'Checking the code',
   resend: 'Send a new code',

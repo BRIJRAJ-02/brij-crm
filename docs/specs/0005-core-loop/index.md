@@ -241,7 +241,7 @@ Tracer Bullet: each milestone ends with something you can click in production.
 - [ ] **#6**: version ids in reads and the "your value was replaced" notice; filtered and sorted windows (cursor paging); reading only visible attributes.
 - [ ] **#7**: channel split per object if the load harness (#12) shows fan out cost; Centrifugo history beyond memory.
 - [ ] **#8**: code emails and outbox pruning as jobs.
-- [ ] **#9**: roles, field and record rules in the door; check field access before a contains reaches `crm_search_text`.
+- [ ] **#9**: roles, field and record rules in the door; check field access before a contains reaches `crm_search_text`. Events on the shared `workspace:<id>` channel then leak associations (two rows of one `mutationId` show that two records are linked, and `attribute_ids` name hidden fields): filter events per subscriber through the door, or split channels by what a member may read, and leave out ids of fields that can be hidden. A link write also moves the far record's `updated_at` and `updated_by`, which the door must allow or authorise.
 - [ ] **#13**: select, status, currency and relation attributes in "Add attribute"; the grid's "+" column header.
 - [ ] **#23**: rename a workspace, invite members, the workspace picker.
 - [ ] **#57**: replace the shared secret with Vercel's signed OIDC token behind the same check.

@@ -99,11 +99,11 @@ export const WithoutGoogle: Story = {
   },
 };
 
-/** Sign up is invite only: a quiet line under the buttons. */
+/** Sign up is closed: a quiet line under the buttons. */
 export const SignUpClosed: Story = {
   args: { isSignUpClosed: true },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText(/Sign up is invite only/)).toBeInTheDocument();
+    await expect(canvas.getByText(/Sign up isn.t open yet/)).toBeInTheDocument();
   },
 };
 

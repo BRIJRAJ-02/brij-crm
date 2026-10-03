@@ -7,5 +7,5 @@ export const strings = {
   googlePending: 'Opening Google',
   emailMissing: 'Enter your email address.',
   emailInvalid: 'Enter an email address like name@company.com.',
-  signUpClosed: 'Sign up is invite only for now. Ask someone in your workspace to invite you.',
+  signUpClosed: "Sign up isn't open yet.",
 } as const;

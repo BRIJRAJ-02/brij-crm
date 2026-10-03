@@ -23,7 +23,7 @@ export interface SignInFormProps {
   readonly isDisabled?: boolean;
   /** Why it is off, under the field. */
   readonly disabledReason?: string;
-  /** Sign up is by invite only: a quiet line under the buttons says so. */
+  /** Sign up is closed: a quiet line under the buttons says so. */
   readonly isSignUpClosed?: boolean;
 }
 
