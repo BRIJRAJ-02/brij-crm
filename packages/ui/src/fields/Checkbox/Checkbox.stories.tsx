@@ -37,7 +37,11 @@ export const Editor: Story = {
     </Stage>
   ),
   play: async ({ canvas, args, userEvent }) => {
-    await userEvent.click(canvas.getByRole('checkbox', { name: 'Is customer' }));
+    const checkbox = canvas.getByRole('checkbox', { name: 'Is customer' });
+    await userEvent.click(checkbox);
     await expect(args.onCommit).toHaveBeenCalledWith(true);
+    // The value is controlled and stays false; move focus away so the screenshot never catches a fading ring.
+    checkbox.blur();
+    await expect(checkbox).not.toHaveFocus();
   },
 };
