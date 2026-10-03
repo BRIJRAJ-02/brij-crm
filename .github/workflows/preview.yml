@@ -91,9 +91,9 @@ jobs:
           # identity login's group (crm_identity) comes from a migration, so the branch is migrated first;
           # the api's pre deploy step runs the same migrations again and finds nothing to do.
           DATABASE_URL_OWNER="$DATABASE_URL_OWNER" node packages/db/scripts/migrate.ts
-          DATABASE_URL="$DATABASE_URL" DATABASE_URL_OWNER="$DATABASE_URL_OWNER" node packages/db/scripts/app-login.ts
+          DATABASE_URL="$DATABASE_URL" DATABASE_URL_OWNER="$DATABASE_URL_OWNER" node packages/db/scripts/app-login.ts --plain-password
           DATABASE_URL="$DATABASE_URL" IDENTITY_DATABASE_URL="$IDENTITY_DATABASE_URL" \
-            DATABASE_URL_OWNER="$DATABASE_URL_OWNER" node packages/db/scripts/identity-login.ts
+            DATABASE_URL_OWNER="$DATABASE_URL_OWNER" node packages/db/scripts/identity-login.ts --plain-password
           railway() { npx -y "$RAILWAY_CLI" "$@"; }
 
           railway link --project "$PROJECT" --environment preview-base

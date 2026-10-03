@@ -43,7 +43,8 @@ const sender = z
     'MAIL_FROM must be an address, or a name and an address like "CRM <sign-in@example.com>".',
   );
 
-// Emails allowed to sign up: comma separated, compared lowercased.
+// Emails allowed to sign up: comma separated, compared lowercased. `*` alone opens sign up to every email
+// (the owner's call, 3 October 2026), shown as the one entry '*'.
 const allowlist = z
   .string()
   .transform((value) =>
@@ -52,7 +53,12 @@ const allowlist = z
       .map((email) => email.trim().toLowerCase())
       .filter(Boolean),
   )
-  .pipe(z.array(z.email('SIGNUP_ALLOWLIST holds emails, comma separated.')));
+  .pipe(
+    z.union([
+      z.tuple([z.literal('*')]),
+      z.array(z.email('SIGNUP_ALLOWLIST holds emails, comma separated, or * alone for everyone.')),
+    ]),
+  );
 
 /** Locally, codes land in Mailpit unless a Resend key is set. */
 const DEFAULT_LOCAL_SENDER = 'CRM <sign-in@crm.localhost>';

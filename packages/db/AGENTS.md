@@ -35,6 +35,7 @@ pnpm db:setup       # all three, in order
 - The app never owns a table. Grants reach `crm_app` through default privileges, so a new table needs no grant of its own.
 - Migrations expand first and contract later: a destructive step ships only once no running code needs the old shape. Hand written SQL separates statements with `--> statement-breakpoint`.
 - Seeds stay separate from migrations, and never run in production.
+- On Neon, run `app-login` and `identity-login` with `--plain-password`: Neon's control plane refuses a precomputed SCRAM verifier (seen on production, 3 October 2026). Postgres still stores only its own hash.
 
 ## Gotchas
 
