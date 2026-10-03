@@ -25,8 +25,12 @@ export const MAILPIT_URL = process.env.TEST_MAILPIT_URL ?? 'http://localhost:802
 /** A fresh address nobody has used. */
 export const newEmail = (): string => `${randomUUID().slice(0, 12)}@example.com`;
 
-/** A fresh client IP from the documentation range, so per IP limits never collide between tests. */
-export const newIp = (): string => `198.51.${randomInt(0, 256)}.${randomInt(1, 255)}`;
+/**
+ * A fresh client IP, random over 10.0.0.0/8 (16 million addresses), so per IP limits never collide between
+ * tests. (A /16 gave CI a collision across a few hundred tests; IPv6 is stored compressed, so tests compare
+ * addresses as IPv4.)
+ */
+export const newIp = (): string => `10.${randomInt(0, 256)}.${randomInt(0, 256)}.${randomInt(1, 255)}`;
 
 /** The test database as the app sees it: the tenant pool (app login) and the identity store (identity login). */
 export function testConnections(): { db: Database; identity: IdentityStore } {
