@@ -4,7 +4,7 @@ _Steps derived from spec 0004's acceptance criteria and its Value sourcing table
 ## Commands
 - [ ] `pnpm --filter @crm/db test` → the guard tests pass: every table forces row level security with a policy, every index leads with `workspace_id`, a read without the workspace returns nothing, and a write into another workspace is refused by the database → AC-7, AC-9
 - [ ] `pnpm --filter @crm/core test` → the engine suites pass (`engine.test.ts`, `rules.test.ts`, `links.test.ts`, `query/query.test.ts`, `sort-keys.test.ts`) → AC-1 to AC-21
-- [ ] `pnpm db:migrate` on an empty database → migrations 0001 to 0009 apply in order; `pnpm db:generate` afterwards reports no schema changes → AC-9
+- [ ] `pnpm db:migrate` on an empty database → migrations 0001 to 0011 apply in order; `pnpm db:generate` afterwards reports no schema changes → AC-9
 - [ ] `pnpm db:migrate` on a database that already has data → 0009 fills `sort_keys` for every workspace, and afterwards every table still forces row level security → AC-9, AC-20
 - [ ] `pnpm check` → green
 
@@ -51,6 +51,17 @@ _Steps derived from spec 0004's acceptance criteria and its Value sourcing table
 - [ ] Every view in `public` is `security_invoker`, so a reader's own row level security applies (`guards.test.ts`) → AC-9
 - [ ] On the scale seed (1% of deals trashed, 1% of entries removed), grid 1, 1b, 7 and 8 are under 300 ms at p95 (results below) → AC-21, AC-22
 
+## Milestone 6: every key kind, and the paths around them
+- [ ] The drift test (`sort-keys.test.ts`) holds with every kind: text, multi valued email, number, rating, currency, date, timestamp, multi select, status, checkbox, location and interaction, through random saves, clears, deletes, restores, removals, an erasure and a purge → AC-20
+- [ ] A number with 15 digits before the point is refused by the contract; 14 digits and 4 decimals round trip, and its key is the value times 10,000 → AC-20
+- [ ] Sorts on a status then a name, a status descending then a number, a multi select's first item, currency both ways, rating, checkbox, timestamp, and number and currency filters match the reference evaluator at the usual cap and a cap of 3 (group reads), in pages of 2 and 4 → AC-22
+- [ ] A jump on currency, status (both ways), checkbox, timestamp and number lands where the evaluator puts the row → AC-21
+- [ ] A list paged by an entry status then its record's name, and by its record's name alone, matches the evaluator → AC-22
+- [ ] `countMatches` returns `{ count, atLeast }`: exact at and under the cap, the cap with `atLeast` true over it, and an unfiltered object or list's exact total whatever the cap → AC-23
+- [ ] On the scale seed, every grid row is under 300 ms at p95 (results below) → AC-22
+- [ ] A cursor key out of its type's range (a number past int8, a 30th of February, hour 25) is refused `FILTER_INVALID`, never a database error → AC-14
+- [ ] After a deploy whose migration adds key kinds, `pnpm db:reconcile:sort-keys` (owner, direct connection) repairs any key the old version's saves missed during the deploy; run again, it reports 0 written and 0 removed (locally: 0 and 0 across 7.8 million keys) → AC-20
+
 ## Value sourcing
 - [ ] `t` for a version is `clock_timestamp()` after the owner's row lock, never before the version it replaces; a delete's `deleted_at` is taken the same way, so no save looks later than the delete it lost to → write protocol
 - [ ] Relative dates resolve against the `now`, `timeZone` and `weekStart` passed to `queryPage` and `countMatches` (the database's `now()`, UTC and Monday when absent) → queryPage, countMatches
@@ -96,6 +107,40 @@ Still open from the review, for milestone 6 and 7:
 - A jump into the empties counts the live keys first, a scan of the whole `sort_keys` heap (200 to 290 ms), and is best effort, as the spec says.
 - A last page with few or no empties reads up to 5,000 rows one by one before it filters first (about 12 ms more than before).
 - The cold first jump (87 ms locally) will be slower on the smallest Neon compute, where the text index may not stay cached: AC-26 records the first run there too.
+
+### Milestone 6: every key kind (local Docker, 2 October 2026)
+
+Migrations 0010 and 0011 added the other kinds' keys (7.8 million keys in all) and indexes; then `vacuum (analyze)`. `BENCH_SPLIT=off pnpm db:bench:scale`, 20 warm runs each, as the app role:
+
+| Query | first run (ms) | p50 (ms) | p95 (ms) | whole call p95 (ms) | count |
+|---|---|---|---|---|---|
+| 1. No filter, sort by name | 4.2 | 3.3 | 4.6 | 52.9 | none |
+| 1b. The same at position 600,000 | 286.1 | 39.7 | 43.3 | 84.7 | none |
+| 2. Source is any of (about 20%), sort by created at | 82.1 | 13.1 | 21.4 | 103.1 | 10,000+ in 511 ms |
+| 3. Name contains, probability between, deal type is; sort by close date, then name | 753.8 | 34.2 | 40.4 | 178.9 | 10,000+ in 1,530 ms |
+| 4. Through the company: its category is Industry 3 (5%), sort by name | 139.4 | 31.7 | 34.5 | 101.1 | 10,000+ in 278 ms |
+| 5. Next step is empty, sort by stage | 21.2 | 10.7 | 13.2 | 61.8 | 10,000+ in 39 ms |
+| 6. List of 200,000 entries: entry stage is Qualified, sort by entry due date | 85.0 | 10.1 | 11.0 | 131.8 | 10,000+ in 66 ms |
+| 7. Sort by name, the page after a cursor at row 100,000 | 11.7 | 4.7 | 5.0 | 31.4 | none |
+| 8. Sort by name, the page after a cursor at row 500,000 | 3.3 | 2.6 | 2.9 | 46.2 | none |
+| 9. Sort by probability, the page after a cursor at row 500,000 | 3.9 | 2.7 | 2.8 | 48.6 | none |
+| 10. Sort by stage, then by name | 66.2 | 47.0 | 53.5 | 130.0 | none |
+| 13. Probability between 41 and 42, sort by name | 117.5 | 30.5 | 43.9 | 139.8 | 10,000+ in 42 ms |
+| 14. Sort by value (currency) | 4.5 | 3.5 | 5.1 | 81.6 | none |
+| 15. The pipeline list sorted by the deal close date (a record attribute) | 28.3 | 4.2 | 5.3 | 86.3 | none |
+| 16. Sort by next step, the page that runs from the last values into the empties | 3.0 | 2.5 | 3.0 | 27.6 | none |
+| B1. Best effort: sort by associated company (a linked name) | 8,249.0 | 7,569.2 | 7,669.2 | 7,800.0 | none |
+| B2. Best effort: sort by owner (a member) | 2,431.8 | 993.5 | 1,034.8 | 1,044.0 | none |
+
+After the performance review, a group of equal first keys with a later sort is read two ways: a group of up to 20,000 rows straight from its key index, sorted; a bigger one driven by the second sort's keys, then its rows with no second value from the first key's index in id order. A select or status with a later sort reads each option as one group, and its jump counts options one at a time. Rerun of the rows this touches (`BENCH_ONLY=1b,5,10,14,15,R1`), p95: 1b 44.7, 5 12.6, 10 (stage then name) 10.0 (was 53.5), 14 4.0, 15 5.0, and R1 (stage then next step, half the deals with none, the review's 2.2 to 3.7 s case) 9.0.
+
+Every held query is under 300 ms at p95 locally (grid 11 and 12, the rare contains, come with milestone 7).
+
+Still open, for /architect (measured by the performance review, outside the grid):
+- A select or status first sort, a second sort and a filter matching 0.5 to 4% of rows: the group reads can't fill a page, so the page filters first, 0.4 to 1.7 s. It needs a design call (a smaller fallback scope, a covering key lookup, or a stated bound).
+- Capped counts with a rare filter that has no index (a rare OR, or "name contains") still read every row: 1.5 to 2.5 s locally, under the 10 s timeout but with little headroom on a small Neon compute. The AC-26 run should time one.
+- The key view finds one owner's value through the history index, so a save's key sync slows with a very long edit history (an attribute an automation rewrites every minute). Not measured yet; the seed has at most one past version per owner.
+- A list sorted by its records' values refuses a jump (`FILTER_INVALID`) and pages by cursor, as AC-21 says. The best effort pair stays outside the budget, as spec 0004 says. The capped count makes every count but query 3's (name contains, no index yet) finish well inside the timeout. Location keys are stored, but a location sort (country, then locality) still sorts without driving, so its jumps stay best effort: the locality can be empty inside a country, and one index can't put empties last in both directions.
 
 ### What the first run showed, and what changed
 

@@ -45,6 +45,12 @@ const STATEMENT_TIMEOUT = '10s';
 /** How many options of a select or status sort a page walks one at a time before it filters first instead. */
 const MAX_OPTION_WALK = 12;
 
+/** How many cut groups one page reads on their own (each a few statements) before it filters first instead. */
+const MAX_GROUPS = 8;
+
+/** A group of equal first keys this small is read whole from its key index and sorted, instead of driven. */
+const GROUP_SORT = 20_000;
+
 /** Which rows a view reads: one object's records, or one list's entries. */
 export type ViewSource = { readonly objectId: string } | { readonly listId: string };
 
@@ -247,10 +253,22 @@ async function buildPage(
       sql` `,
     );
   const page = (skip: number, take: number) => sql`limit ${take}${skip > 0 ? sql` offset ${skip}` : sql``}`;
+  /** `nulls` leading key columns that are all null (the empties' first sort), then `used`'s keys. */
+  const nullKeys = (nulls: number) =>
+    sql.join(
+      Array.from({ length: nulls }, (_, index) => sql`, null::text as ${sql.raw(`key${String(index)}`)}`),
+      sql``,
+    );
+  /** `count` null key columns, numbered from `from`. */
+  const nullKeysFrom = (from: number, count: number) =>
+    sql.join(
+      Array.from({ length: count }, (_, index) => sql`, null::text as ${sql.raw(`key${String(index + from)}`)}`),
+      sql``,
+    );
   const plain =
-    (used: readonly SortKey[], source: SQL, extra: SQL, after: SQL, nullFirstKey: boolean) =>
+    (used: readonly SortKey[], source: SQL, extra: SQL, after: SQL, nulls: number) =>
     (take: number, skip: number) => sql`
-      select r.id::text as id, ${recordColumn}::text as record_id${nullFirstKey ? sql`, null::text as key0` : sql``}${sql.join(keyColumns(used, nullFirstKey ? 1 : 0), sql``)}
+      select r.id::text as id, ${recordColumn}::text as record_id${nullKeys(nulls)}${sql.join(keyColumns(used, nulls), sql``)}
       from ${tables} ${source} ${joinsOf(used)}
       where ${where} and ${filter} and ${extra} and ${after}
       order by ${orderBy(used, tie)}
@@ -273,15 +291,12 @@ async function buildPage(
             .orderBy(asc(attributeOptions.position), asc(attributeOptions.id))
         ).map((row) => row.id)
       : [];
-  const drive = keys.length === sorts.length ? drivingSort(context, level, first, optionIds) : undefined;
+  // The first sort drives when its stored keys are exactly the keys it compiles to (one, or two for currency).
+  const firstKeyCount = first === undefined ? 0 : compileSorts(context, level, [first]).length;
+  const candidate = drivingSort(context, level, first, optionIds);
+  const drive = candidate !== undefined && candidate.keys.length === firstKeyCount ? candidate : undefined;
   if (drive === undefined) {
-    const statement = plain(
-      keys,
-      sql``,
-      sql`true`,
-      cursor === undefined ? sql`true` : afterCursor(keys, cursor),
-      false,
-    );
+    const statement = plain(keys, sql``, sql`true`, cursor === undefined ? sql`true` : afterCursor(keys, cursor), 0);
     return {
       branches: [run(statement)],
       keyCount: keys.length,
@@ -291,34 +306,57 @@ async function buildPage(
     };
   }
 
-  const driven = [drive.key, ...keys.slice(1)];
-  const rest = keys.slice(1);
+  if ((query.position ?? 0) > 0 && drive.count === undefined) {
+    throw refuse(
+      'FILTER_INVALID',
+      'A list sorted by its records’ values pages by cursor; jump on an entry value instead.',
+    );
+  }
+  const n = drive.keys.length;
+  const driven = [...drive.keys, ...keys.slice(n)];
+  const rest = keys.slice(n);
   const inEmpties = cursor !== undefined && cursor.keys[0] === null;
   const filterFirst = plain(
     driven,
     drive.source,
     sql`true`,
     cursor === undefined ? sql`true` : afterCursor(driven, cursor),
-    false,
+    0,
   );
-  const emptiesAfter = inEmpties ? afterCursor(rest, { id: cursor.id, keys: cursor.keys.slice(1) }, tie) : sql`true`;
-  const empties = plain(rest, sql``, drive.empty, emptiesAfter, true);
+  const restCursor = cursor === undefined ? undefined : { id: cursor.id, keys: cursor.keys.slice(n) };
+  const emptiesAfter = inEmpties && restCursor !== undefined ? afterCursor(rest, restCursor, tie) : sql`true`;
+  const empties = plain(rest, sql``, drive.empty, emptiesAfter, n);
 
-  // The capped first pass: the next rows in key order, read straight from the index, then each one's filters.
+  // Each row's filters, kept a per row check, for the passes that read rows in key or id order first.
   const fenced = compileFilter({ ...context, fence: true }, level, query.filter);
+  const tieDir = sql.raw(tie === 'ascending' ? 'asc' : 'desc');
 
   // With no later sort, the empties come in id order: read up to EMPTIES_SCAN rows that way, checking each
   // one's filters on its own, and stop at the limit; past the scan, filter first instead.
-  const tieDir = sql.raw(tie === 'ascending' ? 'asc' : 'desc');
-  const scanEmpties = (take: number, skip: number) => sql`
+  const scanEmpties = (
+    take: number,
+    skip: number,
+    extra: SQL = drive.emptyFenced,
+    after: SQL = emptiesAfter,
+    keyTexts: readonly string[] = [],
+  ) => sql`
     with c0 as materialized (
-      select r.id as id_, r.workspace_id as ws_ from ${tables} where ${where} and ${emptiesAfter}
+      select r.id as id_, r.workspace_id as ws_ from ${tables} where ${where} and ${after}
       order by r.id ${tieDir} limit ${EMPTIES_SCAN}
     ), edge as (select count(*)::int as n from c0)
     select edge.n as scanned_, p.* from edge left join lateral (
-      select r.id::text as id, ${recordColumn}::text as record_id, null::text as key0
+      select r.id::text as id, ${recordColumn}::text as record_id${sql.join(
+        keyTexts.map((text, index) => sql`, ${text}::text as ${sql.raw(`key${String(index)}`)}`),
+        sql``,
+      )}${nullKeys(0)}${sql.join(
+        Array.from(
+          { length: n + rest.length - keyTexts.length },
+          (_, index) => sql`, null::text as ${sql.raw(`key${String(index + keyTexts.length)}`)}`,
+        ),
+        sql``,
+      )}
       from c0, ${tables}
-      where r.workspace_id = c0.ws_ and r.id = c0.id_ and ${fenced} and ${drive.emptyFenced}
+      where r.workspace_id = c0.ws_ and r.id = c0.id_ and ${fenced} and ${extra}
       order by c0.id_ ${tieDir}
       ${page(skip, take)}
     ) p on true
@@ -331,28 +369,66 @@ async function buildPage(
     const scanned = Number(result[0]?.scanned_ ?? 0);
     return found.length >= take || scanned < EMPTIES_SCAN ? found : run(empties)(inner, take, skip);
   };
-  const ascending = drive.key.direction === 'ascending';
-  const cursorKey = cursor?.keys[0];
+
+  const ascending = drive.keys[0]?.direction !== 'descending';
   const keyOp = sql.raw(ascending ? '>' : '<');
-  // The bound on the key alone comes first, so the index seeks to the cursor instead of filtering up to it.
-  const innerAfter = (key: SQL) =>
-    cursor === undefined || cursorKey === null || cursorKey === undefined
-      ? sql`true`
-      : rest.length === 0
-        ? // One key, its tie in the same direction: a row comparison seeks straight to (key, id).
-          sql`(${key}, d.owner_id) ${keyOp} (${fromText(drive.key, cursorKey)}, ${cursor.id}::uuid)`
-        : sql`${key} ${sql.raw(ascending ? '>=' : '<=')} ${fromText(drive.key, cursorKey)}`;
-  const outerKeys: readonly SortKey[] = [{ ...drive.key, expression: sql`c0.dkey_` }, ...rest];
-  const capped = (take: number, cap: number, rows: SQL, key: SQL, skip = 0) => sql`
+  const keyOpOrEqual = sql.raw(ascending ? '>=' : '<=');
+  const keyDir = sql.raw(ascending ? 'asc' : 'desc');
+  const keyDirBack = sql.raw(ascending ? 'desc' : 'asc');
+  const row = (items: readonly SQL[]) => sql`(${sql.join([...items], sql`, `)})`;
+  const typed = (texts: readonly string[]) =>
+    texts.map((text, index) => {
+      const key = drive.keys[index];
+      if (key === undefined) throw new Error('A drive key is missing.');
+      return fromText(key, text);
+    });
+  const cursorDrive = cursor === undefined || inEmpties ? undefined : cursor.keys.slice(0, n);
+  /**
+   * Where a pass over the keys starts. After the cursor: with no later sort, a row comparison seeks
+   * straight to (keys, id); with one, to the cursor's keys (the outer check settles the rest). After a
+   * group (`after`), strictly past its keys.
+   */
+  const startOf = (exprs: readonly SQL[], rowId: SQL, after?: readonly string[]): SQL => {
+    if (after !== undefined) return sql`${row(exprs)} ${keyOp} ${row(typed(after))}`;
+    if (cursor === undefined || cursorDrive === undefined || cursorDrive.some((key) => key === null)) return sql`true`;
+    const values = typed(cursorDrive as string[]);
+    const seek = sql`${row(exprs)} ${keyOpOrEqual} ${row(values)}`;
+    return rest.length === 0
+      ? sql`${seek} and ${row([...exprs, rowId])} ${keyOp} ${row([...values, sql`${cursor.id}::uuid`])}`
+      : seek;
+  };
+  const dkey = (index: number) => sql.raw(`dkey${String(index)}_`);
+  const outerKeys: readonly SortKey[] = [
+    ...drive.keys.map((key, index) => ({ ...key, expression: sql`c0.${dkey(index)}` })),
+    ...rest,
+  ];
+  /** Up to `cap` key rows in key order from `start`, then each one's filters, stopping at `take`; with the last keys read. */
+  const capped = (take: number, cap: number, rows: SQL, exprs: readonly SQL[], start: SQL, skip = 0) => sql`
     with c0 as materialized (
-      select d.owner_id as id_, d.workspace_id as ws_, ${key} as dkey_
-      ${rows} and ${innerAfter(key)}
-      order by 3 ${sql.raw(ascending ? 'asc' : 'desc')}, 1 ${sql.raw(tie === 'ascending' ? 'asc' : 'desc')}
+      select ${drive.rowId} as id_, d.workspace_id as ws_, ${sql.join(
+        exprs.map((expr, index) => sql`${expr} as ${dkey(index)}`),
+        sql`, `,
+      )}
+      ${rows} and ${start}
+      order by ${sql.join(
+        exprs.map((_, index) => sql`${dkey(index)} ${keyDir}`),
+        sql`, `,
+      )}, id_ ${tieDir}
       ${skip > 0 ? sql`offset ${skip}` : sql``} limit ${cap}
     ), edge as (
-      select count(*)::int as n, (array_agg(dkey_::text order by dkey_ ${sql.raw(ascending ? 'desc' : 'asc')}))[1] as last from c0
+      -- Each last key as text, aliased apart from its column: ORDER BY would otherwise sort the text.
+      select (select count(*)::int from c0) as n${sql.join(
+        exprs.map(
+          (_, index) =>
+            sql`, (select ${dkey(index)}::text as last_ from c0 order by ${sql.join(
+              exprs.map((__, inner) => sql`${dkey(inner)} ${keyDirBack}`),
+              sql`, `,
+            )} limit 1) as ${sql.raw(`last${String(index)}_`)}`,
+        ),
+        sql``,
+      )}
     )
-    select edge.n as scanned_, edge.last as edge_, p.* from edge left join lateral (
+    select edge.*, p.* from edge left join lateral (
       select r.id::text as id, ${recordColumn}::text as record_id${sql.join(keyColumns(outerKeys, 0), sql``)}
       from c0, ${tables} ${joinsOf(rest)}
       where r.workspace_id = c0.ws_ and r.id = c0.id_ and ${where} and ${fenced}
@@ -361,56 +437,243 @@ async function buildPage(
       limit ${take}
     ) p on true
   `;
-  const rounds = (take: number) => [...new Set([take * 2, take * 16, candidates].map((n) => Math.min(n, candidates)))];
-  /** Reads rows in key order in growing rounds; `complete` is false when even the largest round couldn't settle the page. */
+  type CappedRow = Omit<PageRow, 'id'> & { id: string | null; n: number } & Record<string, string | number | null>;
+  const rounds = (take: number) => [
+    ...new Set([take * 2, take * 16, candidates].map((size) => Math.min(size, candidates))),
+  ];
+  /**
+   * Reads rows in key order in growing rounds. `complete` means the page is settled up to here; when
+   * the cap cut a group of equal keys and a later sort may still move rows inside it, that group is
+   * left out and named as `edge`, for `group` to read on its own.
+   */
   const pass = async (
     inner: WorkspaceTx,
     take: number,
     rows: SQL,
-    key: SQL,
-  ): Promise<{ rows: readonly PageRow[]; complete: boolean }> => {
+    exprs: readonly SQL[],
+    after?: readonly string[],
+  ): Promise<{ rows: readonly PageRow[]; complete: boolean; edge?: readonly string[] }> => {
     for (const cap of rounds(take)) {
       // One row always comes back (the counts), with the page's fields null when nothing matched.
-      const result = (await inner.execute<Omit<PageRow, 'id'> & { id: string | null }>(capped(take, cap, rows, key)))
-        .rows;
-      const scanned = Number(result[0]?.scanned_ ?? 0);
-      const edge = result[0]?.edge_ ?? null;
-      const found = result.filter((row): row is PageRow => row.id !== null);
-      // When the cap cut a group of equal first keys, a later sort may still move rows inside it: drop that group.
-      const safe = scanned >= cap && rest.length > 0 ? found.filter((row) => String(row.key0) !== edge) : found;
+      const result = (
+        await inner.execute<CappedRow>(capped(take, cap, rows, exprs, startOf(exprs, drive.rowId, after)))
+      ).rows;
+      const head = result[0];
+      const scanned = head?.n ?? 0;
+      const edge = exprs.map((_, index) => {
+        const value = head?.[`last${String(index)}_`];
+        return value === null || value === undefined ? '' : String(value);
+      });
+      const found = result.filter((item): item is CappedRow & PageRow => item.id !== null);
+      const inEdge = (item: PageRow) => edge.every((value, index) => String(item[`key${String(index)}`]) === value);
+      const cut = scanned >= cap && rest.length > 0;
+      const safe = cut ? found.filter((item) => !inEdge(item)) : found;
       if (safe.length >= take || scanned < cap) return { rows: safe.slice(0, take), complete: true };
+      if (cut && cap === candidates) return { rows: safe, complete: false, edge };
     }
     return { rows: [], complete: false };
   };
+
+  // A group of equal first keys with later sorts, read on its own. A small group (up to GROUP_SORT rows) comes
+  // from the first sort's own key index and is sorted by the rest. A big one is driven by the second sort's
+  // stored keys, with "first keys equal the group's" checked per row like any other filter; then its rows with
+  // no second value, from the first sort's key index in id order.
+  const second = sorts[1];
+  const secondDrive = sorts.length === 2 ? drivingSort(context, level, second, []) : undefined;
+  const byGroup =
+    secondDrive !== undefined && secondDrive.options === undefined && secondDrive.keys.length === rest.length
+      ? secondDrive
+      : undefined;
+  const edgeKeys = (edge: readonly string[]) =>
+    sql.join(
+      edge.map((text, index) => sql`, ${text}::text as ${sql.raw(`key${String(index)}`)}`),
+      sql``,
+    );
+  const group = async (
+    inner: WorkspaceTx,
+    take: number,
+    edge: readonly string[],
+  ): Promise<{ rows: readonly PageRow[]; complete: boolean } | undefined> => {
+    const inThisGroup = cursorDrive !== undefined && cursorDrive.every((key, index) => key === edge[index]);
+    const groupCursor = inThisGroup && cursor !== undefined ? { id: cursor.id, keys: cursor.keys.slice(n) } : undefined;
+    const groupRows = sql`${drive.rows} and ${drive.within(edge)}`;
+    const size = await inner.execute<{ n: number }>(
+      sql`select count(*)::int as n from (select 1 ${groupRows} limit ${GROUP_SORT + 1}) s`,
+    );
+    if ((size.rows[0]?.n ?? 0) <= GROUP_SORT) {
+      const result = await inner.execute<PageRow>(sql`
+        select r.id::text as id, ${recordColumn}::text as record_id${edgeKeys(edge)}${sql.join(keyColumns(rest, n), sql``)}
+        from (select ${drive.rowId} as id_, d.workspace_id as ws_ ${groupRows}) g, ${tables} ${joinsOf(rest)}
+        where r.workspace_id = g.ws_ and r.id = g.id_ and ${where} and ${filter}
+          and ${groupCursor === undefined ? sql`true` : afterCursor(rest, groupCursor, tie)}
+        order by ${orderBy(rest, tie)}
+        limit ${take}
+      `);
+      return { rows: result.rows, complete: true };
+    }
+    if (byGroup === undefined) return undefined;
+    const equals = drive.equals(edge);
+    const secondAscending = byGroup.keys[0]?.direction !== 'descending';
+    const groupDir = sql.raw(secondAscending ? 'asc' : 'desc');
+    const groupKeys: readonly SortKey[] = byGroup.keys.map((key, index) => ({
+      ...key,
+      expression: sql`c0.${dkey(index)}`,
+    }));
+    const found: PageRow[] = [];
+    // The group's rows with a value for the second sort, in its key order.
+    if (groupCursor === undefined || groupCursor.keys.every((key) => key !== null)) {
+      const seek =
+        groupCursor === undefined
+          ? sql`true`
+          : sql`${row(byGroup.keys.map((key) => key.expression))} ${sql.raw(secondAscending ? '>=' : '<=')} ${row(
+              byGroup.keys.map((key, index) => fromText(key, groupCursor.keys[index] ?? '')),
+            )}`;
+      let settled = false;
+      for (const cap of rounds(take)) {
+        const statement = sql`
+          with c0 as materialized (
+            select ${byGroup.rowId} as id_, d.workspace_id as ws_, ${sql.join(
+              byGroup.keys.map((key, index) => sql`${key.expression} as ${dkey(index)}`),
+              sql`, `,
+            )}
+            ${byGroup.rows} and ${seek}
+            order by ${sql.join(
+              byGroup.keys.map((_, index) => sql`${dkey(index)} ${groupDir}`),
+              sql`, `,
+            )}, id_ ${tieDir}
+            limit ${cap}
+          ), edge as (select count(*)::int as n from c0)
+          select edge.*, p.* from edge left join lateral (
+            select r.id::text as id, ${recordColumn}::text as record_id${edgeKeys(edge)}${sql.join(keyColumns(groupKeys, n), sql``)}
+            from c0, ${tables}
+            where r.workspace_id = c0.ws_ and r.id = c0.id_ and ${where} and ${fenced} and ${equals}
+              and ${groupCursor === undefined ? sql`true` : afterCursor(groupKeys, groupCursor, tie)}
+            order by ${orderBy(groupKeys, tie)}
+            limit ${take}
+          ) p on true
+        `;
+        const result = (await inner.execute<CappedRow>(statement)).rows;
+        const scanned = result[0]?.n ?? 0;
+        const rows = result.filter((item): item is CappedRow & PageRow => item.id !== null);
+        if (rows.length >= take) return { rows: rows.slice(0, take), complete: true };
+        if (scanned < cap) {
+          found.push(...rows);
+          settled = true;
+          break;
+        }
+      }
+      if (!settled) return { rows: [], complete: false };
+    }
+    // Then the group's rows with no value for the second sort: the group's own key rows, in id order.
+    const idAfter =
+      groupCursor !== undefined && groupCursor.keys.some((key) => key === null)
+        ? sql`${drive.rowId} ${sql.raw(tie === 'ascending' ? '>' : '<')} ${groupCursor.id}::uuid`
+        : sql`true`;
+    for (const cap of rounds(take - found.length)) {
+      const result = (
+        await inner.execute<CappedRow>(sql`
+          with c0 as materialized (
+            select ${drive.rowId} as id_, d.workspace_id as ws_ ${groupRows} and ${idAfter}
+            order by id_ ${tieDir} limit ${cap}
+          ), edge as (select count(*)::int as n from c0)
+          select edge.*, p.* from edge left join lateral (
+            select r.id::text as id, ${recordColumn}::text as record_id${edgeKeys(edge)}${nullKeysFrom(n, rest.length)}
+            from c0, ${tables}
+            where r.workspace_id = c0.ws_ and r.id = c0.id_ and ${where} and ${fenced} and ${byGroup.emptyFenced}
+            order by c0.id_ ${tieDir}
+            limit ${take - found.length}
+          ) p on true
+        `)
+      ).rows;
+      const rows = result.filter((item): item is CappedRow & PageRow => item.id !== null);
+      if (found.length + rows.length >= take || (result[0]?.n ?? 0) < cap) {
+        return { rows: [...found, ...rows].slice(0, take), complete: true };
+      }
+    }
+    return { rows: [], complete: false };
+  };
+
+  /** Rows in key order from `rows`: passes, and a group read whenever a pass leaves a cut group out. */
+  const walk = async (
+    inner: WorkspaceTx,
+    take: number,
+    rows: SQL,
+    exprs: readonly SQL[],
+  ): Promise<{ rows: readonly PageRow[]; complete: boolean }> => {
+    const found: PageRow[] = [];
+    let after: readonly string[] | undefined;
+    for (let groups = 0; groups <= MAX_GROUPS; groups += 1) {
+      const part = await pass(inner, take - found.length, rows, exprs, after);
+      found.push(...part.rows);
+      if (found.length >= take || part.complete) return { rows: found.slice(0, take), complete: true };
+      if (part.edge === undefined) return { rows: [], complete: false };
+      const read = await group(inner, take - found.length, part.edge);
+      if (read === undefined || !read.complete) return { rows: [], complete: false };
+      found.push(...read.rows);
+      if (found.length >= take) return { rows: found.slice(0, take), complete: true };
+      after = part.edge;
+    }
+    return { rows: [], complete: false };
+  };
+
   const options = drive.options;
+  const exprs = drive.keys.map((key) => key.expression);
   /** A jump on stored keys: an index only offset straight to the row (the view is unfiltered, `checkPage` says so). */
   const jump = async (inner: WorkspaceTx, take: number, skip: number): Promise<readonly PageRow[]> => {
-    const result = await inner.execute<Omit<PageRow, 'id'> & { id: string | null }>(
-      capped(take, take, drive.rows, drive.key.expression, skip),
-    );
-    return result.rows.filter((row): row is PageRow => row.id !== null);
+    const at = async (rows: SQL, keyExprs: readonly SQL[], offset: number, count: number) =>
+      (await inner.execute<CappedRow>(capped(count, count, rows, keyExprs, sql`true`, offset))).rows.filter(
+        (item): item is CappedRow & PageRow => item.id !== null,
+      );
+    if (options === undefined) return at(drive.rows, exprs, skip, take);
+    // A select or status: count the options in walk order until the position falls inside one, then offset there.
+    const order = options.map((_, index) => index);
+    if (!ascending) order.reverse();
+    const found: PageRow[] = [];
+    let remaining = skip;
+    for (const index of order) {
+      const optionRows = options[index];
+      const optionId = optionIds[index];
+      if (optionRows === undefined || optionId === undefined || drive.optionCount === undefined) continue;
+      const size =
+        found.length > 0
+          ? Infinity
+          : ((await inner.execute<{ n: number }>(drive.optionCount(optionId))).rows[0]?.n ?? 0);
+      if (size === 0) continue;
+      if (remaining >= size) {
+        remaining -= size;
+        continue;
+      }
+      found.push(...(await at(optionRows, [sql`${index}::int`], remaining, take - found.length)));
+      remaining = 0;
+      if (found.length >= take) break;
+    }
+    return found;
   };
   const valued: Branch = async (inner, take, skip) => {
     if (skip > 0) return drive.count === undefined ? run(filterFirst)(inner, take, skip) : jump(inner, take, skip);
     if (options === undefined) {
-      const single = await pass(inner, take, drive.rows, drive.key.expression);
-      return single.complete ? single.rows : run(filterFirst)(inner, take, skip);
+      const read = await walk(inner, take, drive.rows, exprs);
+      return read.complete ? read.rows : run(filterFirst)(inner, take, skip);
     }
     // A select or status: one option's index range at a time, in option order, from the cursor's option on.
     const order = options.map((_, index) => index);
     if (!ascending) order.reverse();
-    const from = cursorKey === null || cursorKey === undefined ? undefined : Number(cursorKey);
+    const fromOption = cursorDrive?.[0] === undefined || cursorDrive[0] === null ? undefined : Number(cursorDrive[0]);
     const found: PageRow[] = [];
     let walked = 0;
     for (const index of order) {
-      if (from !== undefined && (ascending ? index < from : index > from)) continue;
+      if (fromOption !== undefined && (ascending ? index < fromOption : index > fromOption)) continue;
       const optionRows = options[index];
       if (optionRows === undefined) continue;
       // Many options and a selective filter: one statement per option costs more than filtering first.
       if (walked === MAX_OPTION_WALK) return run(filterFirst)(inner, take, skip);
       walked += 1;
-      const part = await pass(inner, take - found.length, optionRows, sql`${index}::int`);
-      if (!part.complete) return run(filterFirst)(inner, take, skip);
+      // With a later sort the whole option is one group of equal keys: read it on its own.
+      const part =
+        rest.length > 0
+          ? await group(inner, take - found.length, [String(index)])
+          : await walk(inner, take - found.length, optionRows, [sql`${index}::int`]);
+      if (part === undefined || !part.complete) return run(filterFirst)(inner, take, skip);
       found.push(...part.rows);
       if (found.length >= take) break;
     }
@@ -430,10 +693,16 @@ async function buildPage(
     explain: (take, skip) =>
       inEmpties
         ? [rest.length > 0 ? empties(take, skip) : scanEmpties(take, skip)]
-        : skip > 0 && drive.count !== undefined
-          ? [capped(take, take, drive.rows, drive.key.expression, skip)]
+        : skip > 0 && drive.count !== undefined && options === undefined
+          ? [capped(take, take, drive.rows, exprs, sql`true`, skip)]
           : [
-              capped(take, take * 2, drive.rows, drive.key.expression),
+              capped(
+                take,
+                take * 2,
+                options?.[0] ?? drive.rows,
+                options === undefined ? exprs : [sql`0::int`],
+                startOf(exprs, drive.rowId),
+              ),
               filterFirst(take, skip),
               rest.length > 0 ? empties(take, skip) : scanEmpties(take, skip),
             ],
@@ -541,16 +810,29 @@ async function readPage(tx: WorkspaceTx, scope: EngineScope, query: PageQuery, t
   return nextCursor === undefined ? page : { ...page, nextCursor };
 }
 
+/** Where a filtered count stops: past it, the view says "10,000+". */
+export const COUNT_CAP = 10_000;
+
+/** A view's row count: exact up to the cap (`atLeast` false), otherwise the cap with `atLeast` true. */
+export interface MatchCount {
+  readonly count: number;
+  readonly atLeast: boolean;
+}
+
 /**
- * The exact number of rows a view's filter matches, in its own statement
- * with a 10 second timeout. Aborting `signal` cancels it; either way the
- * refusal is `QUERY_CANCELLED`.
+ * How many rows a view's filter matches (spec 0004, stored sort keys, AC-23),
+ * in its own statement with a 10 second timeout: exact up to 10,000, then
+ * "at least 10,000". An unfiltered object or list always gets its exact
+ * total. Aborting `signal` cancels it; either way the refusal is
+ * `QUERY_CANCELLED`. `tuning.cap` lowers the cap, for tests.
  */
 export async function countMatches(
   scope: EngineScope,
   query: ViewSource & QueryClock & { readonly filter?: FilterGroup },
   signal?: AbortSignal,
-): Promise<number> {
+  tuning: { readonly cap?: number } = {},
+): Promise<MatchCount> {
+  const cap = tuning.cap ?? COUNT_CAP;
   const cancelled = () => refuse('QUERY_CANCELLED', 'The count took too long or was cancelled.');
   if (signal?.aborted === true) throw cancelled();
   try {
@@ -580,10 +862,28 @@ export async function countMatches(
       // An abort while the catalog loaded fired before the listener existed.
       if (signal?.aborted === true) throw cancelled();
       try {
-        const result = await tx.execute<{ n: string }>(
-          sql`select count(*)::text as n from ${tables} where ${where} and ${filter}`,
+        const filtered = query.filter !== undefined && query.filter.conditions.length > 0;
+        if (!filtered) {
+          // The whole object: its live records, index only. The whole list: its entry count, less the live
+          // entries of records in the trash (which keep their slots until the purge).
+          const total =
+            level.listId === null
+              ? sql`select count(*)::int as n from records r where r.object_id = ${level.objectId} and r.deleted_at is null`
+              : sql`
+                select l.entry_count - (
+                  select count(*)::int from records t
+                  join list_entries e on e.workspace_id = t.workspace_id and e.record_id = t.id
+                  where t.deleted_at is not null and e.list_id = ${level.listId} and e.deleted_at is null
+                ) as n from lists l where l.id = ${level.listId}
+              `;
+          const result = await tx.execute<{ n: number }>(total);
+          return { count: result.rows[0]?.n ?? 0, atLeast: false };
+        }
+        const result = await tx.execute<{ n: number }>(
+          sql`select count(*)::int as n from (select 1 from ${tables} where ${where} and ${filter} limit ${cap + 1}) s`,
         );
-        return Number(result.rows[0]?.n ?? 0);
+        const n = result.rows[0]?.n ?? 0;
+        return n > cap ? { count: cap, atLeast: true } : { count: n, atLeast: false };
       } finally {
         signal?.removeEventListener('abort', cancel);
       }

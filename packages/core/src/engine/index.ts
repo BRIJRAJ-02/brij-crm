@@ -47,11 +47,13 @@ export {
 } from './options.ts';
 export { type QueryClock, type WeekStart } from './query/compile.ts';
 export {
+  COUNT_CAP,
   countMatches,
   decodeCursor,
   encodeCursor,
   MAX_PAGE,
   queryPage,
+  type MatchCount,
   type Page,
   type PageQuery,
   type ViewSource,

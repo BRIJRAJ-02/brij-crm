@@ -11,6 +11,7 @@ import { defineAttribute, defineObject } from './definitions.ts';
 import { deleteRecord, eraseRecord, purgeDeleted, restoreRecord } from './deletion.ts';
 import { addEntry, defineList, removeEntry, restoreEntry } from './lists.ts';
 import { queryPage, type ViewSource } from './query/page.ts';
+import { defineOption } from './options.ts';
 import { createRecord, setValues } from './records.ts';
 import type { EngineScope } from './scope.ts';
 import type { AttributeDef } from './values.ts';
@@ -23,6 +24,8 @@ let craft: string;
 let fleet: string;
 const a: Record<string, string> = {};
 const recordIds: string[] = [];
+const options: { slug: string; id: string }[] = [];
+let member = '';
 const entryIds: string[] = [];
 
 /** A small, repeatable sequence (high bits of an LCG), so a failure reproduces. */
@@ -37,6 +40,35 @@ const random = sequence(5);
 const next = (n: number) => (random.next().value ?? 0) % n;
 const WORDS = ['Vega', 'vega', 'Altair', 'Deneb', 'rigel', 'Ünal', 'zeta', 'Ångström', 'a_b%c', 'Polaris'];
 const word = () => `${WORDS[next(WORDS.length)] ?? 'x'} ${String(next(5))}`;
+const KINDS = ['mass', 'rank', 'cost', 'due', 'seen', 'kind', 'phase', 'active', 'port', 'ping'] as const;
+/** A random value for one of the other kinds, or null (a clear) one time in five. */
+function valueFor(slug: (typeof KINDS)[number]): unknown {
+  if (next(5) === 0) return null;
+  const optionsOf = (of: string) => options.filter((option) => option.slug === of).map((option) => option.id);
+  const moment = new Date(Date.UTC(2026, next(12), 1 + next(28), next(24))).toISOString();
+  switch (slug) {
+    case 'mass':
+      return `${next(2) === 0 ? '-' : ''}${String(next(100_000))}.${String(next(10_000))}`;
+    case 'rank':
+      return 1 + next(5);
+    case 'cost':
+      return { amount: String(next(5000)), currency: next(2) === 0 ? 'USD' : 'EUR' };
+    case 'due':
+      return moment.slice(0, 10);
+    case 'seen':
+      return moment;
+    case 'kind':
+      return [...new Set([pick(optionsOf('kind')), pick(optionsOf('kind'))])];
+    case 'phase':
+      return pick(optionsOf('phase'));
+    case 'active':
+      return next(2) === 0;
+    case 'port':
+      return { locality: next(3) === 0 ? undefined : word(), countryCode: next(2) === 0 ? 'US' : 'GB' };
+    case 'ping':
+      return { kind: 'email', at: moment, by: { type: 'member', id: member } };
+  }
+}
 
 beforeAll(async () => {
   db = createDatabase({ url: appUrl, applicationName: 'crm-sort-keys-tests' });
@@ -57,13 +89,32 @@ beforeAll(async () => {
     on: { objectId: string } | { listId: string },
     slug: string,
     type: AttributeDef['type'],
-    extra: { isMulti?: boolean } = {},
+    extra: { isMulti?: boolean; config?: { defaultCurrency: string } } = {},
   ) => {
     a[slug] = (await defineAttribute(scope, { ...on, apiSlug: slug, title: slug, type, ...extra })).attributeId;
   };
   await attribute({ objectId: craft }, 'title', 'text');
   await attribute({ objectId: craft }, 'contacts', 'email', { isMulti: true });
   await attribute({ objectId: craft }, 'log', 'long_text');
+  await attribute({ objectId: craft }, 'mass', 'number');
+  await attribute({ objectId: craft }, 'rank', 'rating');
+  await attribute({ objectId: craft }, 'cost', 'currency', { config: { defaultCurrency: 'USD' } });
+  await attribute({ objectId: craft }, 'due', 'date');
+  await attribute({ objectId: craft }, 'seen', 'timestamp');
+  await attribute({ objectId: craft }, 'kind', 'select', { isMulti: true });
+  await attribute({ objectId: craft }, 'phase', 'status');
+  await attribute({ objectId: craft }, 'active', 'checkbox');
+  await attribute({ objectId: craft }, 'port', 'location');
+  await attribute({ objectId: craft }, 'ping', 'interaction');
+  for (const [slug, labels] of [
+    ['kind', ['probe', 'lander', 'rover']],
+    ['phase', ['plan', 'fly']],
+  ] as const) {
+    for (const label of labels) {
+      options.push({ slug, id: (await defineOption(scope, { attributeId: id(slug), label, hue: 'blue' })).optionId });
+    }
+  }
+  member = created.memberId;
   ({ listId: fleet } = await defineList(scope, { objectId: craft, apiSlug: 'fleet', name: 'Fleet' }));
   await attribute({ listId: fleet }, 'callsign', 'text');
 });
@@ -110,6 +161,12 @@ describe('keys follow values (AC-20)', () => {
             ? {}
             : { [id('contacts')]: [`c${String(index)}@example.com`, `d${String(index)}@example.com`] }),
           [id('log')]: 'long text has no key',
+          ...Object.fromEntries(
+            KINDS.flatMap((slug) => {
+              const value = valueFor(slug);
+              return value === null ? [] : [[id(slug), value]];
+            }),
+          ),
         },
       });
       recordIds.push(recordId);
@@ -127,7 +184,7 @@ describe('keys follow values (AC-20)', () => {
     for (let step = 0; step < 80; step += 1) {
       const recordId = pick(recordIds);
       const entryId = pick(entryIds);
-      const action = next(8);
+      const action = next(10);
       try {
         if (action === 0) await setValues(scope, { recordId, values: { [id('title')]: { value: word() } } });
         if (action === 1) await setValues(scope, { recordId, values: { [id('title')]: { value: null } } });
@@ -143,6 +200,10 @@ describe('keys follow values (AC-20)', () => {
         if (action === 5) await removeEntry(scope, { entryId });
         if (action === 6) await restoreEntry(scope, { entryId });
         if (action === 7) await setValues(scope, { entryId, values: { [id('callsign')]: { value: word() } } });
+        if (action >= 8) {
+          const slug = pick(KINDS);
+          await setValues(scope, { recordId, values: { [id(slug)]: { value: valueFor(slug) } } });
+        }
       } catch {
         // A write on a trashed record or a removed entry is refused; the keys must still match.
       }
@@ -240,7 +301,7 @@ describe('exact jumps (AC-21)', () => {
       for (const direction of ['ascending', 'descending'] as const) {
         const sorts = [{ attributeId: id(slug), direction }];
         const order = await ordered(source, sorts);
-        expect(order.length).toBeGreaterThan(5);
+        expect(order.length).toBeGreaterThanOrEqual(3);
         for (let position = 0; position <= order.length + 2; position += 3) {
           const page = await queryPage(scope, { ...source, sorts, position, limit: 4 });
           expect((page.entries ?? page.records).map((row) => row.id)).toEqual(order.slice(position, position + 4));

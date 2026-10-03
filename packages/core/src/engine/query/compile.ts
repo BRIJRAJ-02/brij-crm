@@ -20,6 +20,7 @@ import {
   type RelativeRange,
   type SortRule,
 } from '@crm/contracts/values';
+import { uuidArray } from '../ids.ts';
 import { refuse } from '../refusals.ts';
 import { hasSortKey } from '../sort-keys.ts';
 import type { RelationshipDef } from '../relationships.ts';
@@ -126,6 +127,14 @@ function numberOperand(value: unknown): string {
   const canonical = typeof text === 'string' ? toCanonicalDecimal(text) : undefined;
   if (canonical === undefined) invalid('Give a number to compare, such as 12.5.');
   return canonical;
+}
+
+/** A canonical decimal times 10,000, as the stored number key holds it (exact: 4 decimals at most). */
+function scaled(decimal: string): string {
+  const negative = decimal.startsWith('-');
+  const [whole = '0', fraction = ''] = (negative ? decimal.slice(1) : decimal).split('.');
+  const digits = `${whole}${fraction.padEnd(4, '0')}`.replace(/^0+(?=\d)/, '');
+  return negative && digits !== '0' ? `-${digits}` : digits;
 }
 
 function currencyOperand(value: unknown): { amount: string; currency: string } {
@@ -426,6 +435,45 @@ const TEXT_IS = new Set(['text', 'email', 'domain', 'url']);
 const CONTAINS = new Set(['text', 'long_text', 'email', 'domain', 'url', 'personal_name', 'phone']);
 const NUMBER_OPS = { eq: '=', gt: '>', gte: '>=', lt: '<', lte: '<=', at_least: '>=', at_most: '<=' } as const;
 
+/**
+ * For a number, rating or currency: the predicate on stored key row `k`
+ * (int8 and C text comparisons, which are leakproof, so the key index serves
+ * the filter under row level security). Undefined for anything else.
+ */
+function keyPredicate(attribute: AttributeDef, condition: FilterCondition): SQL | undefined {
+  const { type } = attribute;
+  const op = condition.operator;
+  const number = (value: unknown) => sql`${scaled(numberOperand(value))}::bigint`;
+  if (type === 'number' || type === 'rating') {
+    const allowed = type === 'rating' ? ['at_least', 'at_most'] : ['eq', 'gt', 'gte', 'lt', 'lte'];
+    if (allowed.includes(op) && op in NUMBER_OPS) {
+      return sql`k.number_key ${raw(NUMBER_OPS[op as keyof typeof NUMBER_OPS])} ${number(valueOf(condition))}`;
+    }
+    if (op === 'between' && type === 'number' && 'from' in condition) {
+      return sql`k.number_key between ${number(condition.from)} and ${number(condition.to)}`;
+    }
+    return undefined;
+  }
+  if (type === 'currency') {
+    if (op === 'between' && 'from' in condition) {
+      const from = currencyOperand(condition.from);
+      const to = currencyOperand(condition.to);
+      if (from.currency !== to.currency) invalid('Compare amounts within one currency.');
+      return sql`k.code_key = ${from.currency} and k.number_key between ${number(from.amount)} and ${number(to.amount)}`;
+    }
+    if (['eq', 'gt', 'gte', 'lt', 'lte'].includes(op)) {
+      const operand = currencyOperand(valueOf(condition));
+      return sql`k.code_key = ${operand.currency} and k.number_key ${raw(NUMBER_OPS[op as keyof typeof NUMBER_OPS])} ${number(operand.amount)}`;
+    }
+  }
+  return undefined;
+}
+
+/** EXISTS over the attribute's live stored key row, with a condition on `k`. */
+function keyExists(context: CompileContext, level: Level, attribute: AttributeDef, condition: SQL): SQL {
+  return sql`exists (select 1 from sort_keys k where k.workspace_id = ${raw(level.record)}.workspace_id and k.owner_id = ${ownerOf(level, attribute)} and k.attribute_id = ${attribute.id} and k.live and ${condition}${fenceOf(context)})`;
+}
+
 /** The predicate on value row `v` for one positive operator, or undefined when the type doesn't offer it. */
 function valuePredicate(context: CompileContext, attribute: AttributeDef, condition: FilterCondition): SQL | undefined {
   const { type } = attribute;
@@ -443,30 +491,6 @@ function valuePredicate(context: CompileContext, attribute: AttributeDef, condit
         return sql`${TEXT_KEY} = (lower(left(${operandText(valueOf(condition))}, 256)) collate "und-x-icu")`;
       }
       return undefined;
-    case 'number':
-    case 'rating': {
-      const allowed = type === 'rating' ? ['at_least', 'at_most'] : ['eq', 'gt', 'gte', 'lt', 'lte'];
-      if (allowed.includes(op) && op in NUMBER_OPS) {
-        return sql`v.number_value ${raw(NUMBER_OPS[op as keyof typeof NUMBER_OPS])} ${numberOperand(valueOf(condition))}::numeric`;
-      }
-      if (op === 'between' && type === 'number' && 'from' in condition) {
-        return sql`v.number_value between ${numberOperand(condition.from)}::numeric and ${numberOperand(condition.to)}::numeric`;
-      }
-      return undefined;
-    }
-    case 'currency': {
-      if (op === 'between' && 'from' in condition) {
-        const from = currencyOperand(condition.from);
-        const to = currencyOperand(condition.to);
-        if (from.currency !== to.currency) invalid('Compare amounts within one currency.');
-        return sql`v.text_value = ${from.currency} and v.number_value between ${from.amount}::numeric and ${to.amount}::numeric`;
-      }
-      if (['eq', 'gt', 'gte', 'lt', 'lte'].includes(op)) {
-        const operand = currencyOperand(valueOf(condition));
-        return sql`v.text_value = ${operand.currency} and v.number_value ${raw(NUMBER_OPS[op as keyof typeof NUMBER_OPS])} ${operand.amount}::numeric`;
-      }
-      return undefined;
-    }
     case 'date':
       switch (op) {
         case 'is':
@@ -573,6 +597,8 @@ function compilePositive(context: CompileContext, level: Level, condition: Filte
       sql` and `,
     )})`;
   }
+  const onKey = keyPredicate(attribute, condition);
+  if (onKey !== undefined) return keyExists(context, level, attribute, onKey);
   const predicate = valuePredicate(context, attribute, condition);
   return predicate === undefined ? unsupported() : valueExists(context, level, attribute, predicate);
 }
@@ -626,7 +652,7 @@ export function attributeIdsOf(group: FilterGroup | undefined, sorts: readonly S
 // ---- sorts ----------------------------------------------------------------
 
 /** How a sort key's text (in a cursor) turns back into its type. */
-type KeyKind = 'text' | 'numeric' | 'date' | 'timestamptz' | 'boolean' | 'int' | 'uuid';
+type KeyKind = 'text' | 'numeric' | 'date' | 'timestamptz' | 'boolean' | 'int' | 'bigint' | 'uuid';
 
 /** One compiled sort key: how to select it, order by it, and compare a cursor value with it. */
 export interface SortKey {
@@ -648,6 +674,15 @@ function valueJoin(level: Level, attribute: AttributeDef, alias: string, columns
     sql`, `,
   );
   return sql`left join lateral (select ${selected} from "values" v${extra ?? sql``} where v.workspace_id = ${raw(level.record)}.workspace_id and v.owner_id = ${ownerOf(level, attribute)} and v.attribute_id = ${attribute.id} and v.position = 0 and v.active_until is null and not v.is_cleared) ${raw(alias)} on true`;
+}
+
+/** A lateral join over the attribute's live stored key row, selecting `columns` of `k` (each aliased `key0`, `key1`). */
+function keyJoin(level: Level, attribute: AttributeDef, alias: string, columns: readonly SQL[]): SQL {
+  const selected = sql.join(
+    columns.map((column, index) => sql`${column} as ${raw(`key${String(index)}`)}`),
+    sql`, `,
+  );
+  return sql`left join lateral (select ${selected} from sort_keys k where k.workspace_id = ${raw(level.record)}.workspace_id and k.owner_id = ${ownerOf(level, attribute)} and k.attribute_id = ${attribute.id} and k.live) ${raw(alias)} on true`;
 }
 
 function keysFrom(alias: string, direction: SortRule['direction'], kinds: readonly KeyKind[]): readonly SortKey[] {
@@ -705,16 +740,17 @@ export function compileSorts(context: CompileContext, level: Level, sorts: reado
       case 'phone':
       case 'file':
         return one(valueJoin(level, attribute, alias, [TEXT_KEY]), 'text');
+      // Numbers sort by their stored key (the value times 10,000), so every path's cursor holds the same text.
       case 'number':
       case 'rating':
-        return one(valueJoin(level, attribute, alias, [sql`v.number_value`]), 'numeric');
+        return one(keyJoin(level, attribute, alias, [sql`k.number_key`]), 'bigint');
       case 'currency':
         return [
           {
-            ...keysFrom(alias, direction, ['text', 'numeric'])[0],
-            join: valueJoin(level, attribute, alias, [sql`(v.text_value collate "C")`, sql`v.number_value`]),
+            ...keysFrom(alias, direction, ['text', 'bigint'])[0],
+            join: keyJoin(level, attribute, alias, [sql`k.code_key`, sql`k.number_key`]),
           } as SortKey,
-          ...keysFrom(alias, direction, ['text', 'numeric']).slice(1),
+          ...keysFrom(alias, direction, ['text', 'bigint']).slice(1),
         ];
       case 'location':
         return [
@@ -797,12 +833,38 @@ const KEY_SHAPES: { readonly [K in Exclude<KeyKind, 'text' | 'uuid'>]: RegExp } 
   timestamptz: /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}(\.\d{1,6})?[+-]\d{2}(:\d{2})?$/,
   boolean: /^(true|false)$/,
   int: /^-?\d{1,9}$/,
+  bigint: /^-?\d{1,19}$/,
 };
 
-/** A cursor's text for a key, turned back into the key's type. Refuses text that isn't that type's shape. */
+const INT8_MAX = 9_223_372_036_854_775_807n;
+
+/** True for a real calendar day (no 30th of February), from text already in the date shape. */
+function isCalendarDay(text: string): boolean {
+  const [year = 0, month = 0, day = 0] = text.slice(0, 10).split('-').map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+}
+
+/** True when text in a key's shape is also in its range, so the cast can't fail. */
+function inRange(kind: KeyKind, value: string): boolean {
+  switch (kind) {
+    case 'bigint':
+      return BigInt(value) <= INT8_MAX && BigInt(value) >= -INT8_MAX - 1n;
+    case 'date':
+      return isCalendarDay(value);
+    case 'timestamptz': {
+      const [hours = 99, minutes = 99, seconds = 99] = value.slice(11, 19).split(':').map(Number);
+      return isCalendarDay(value) && hours < 24 && minutes < 60 && seconds < 60;
+    }
+    default:
+      return true;
+  }
+}
+
+/** A cursor's text for a key, turned back into the key's type. Refuses text that isn't that type's shape or range. */
 export function fromText(key: SortKey, value: string): SQL {
   if (key.kind === 'text') return sql`${value}`;
-  const fits = key.kind === 'uuid' ? isUuid(value) : KEY_SHAPES[key.kind].test(value);
+  const fits = key.kind === 'uuid' ? isUuid(value) : KEY_SHAPES[key.kind].test(value) && inRange(key.kind, value);
   if (!fits) invalid('That page cursor is not valid. Start from the first page.');
   return sql`${value}::${raw(key.kind)}`;
 }
@@ -855,48 +917,65 @@ export function afterCursor(
 }
 
 /**
- * When a view's first sort is an indexed value of the row itself, the page
- * starts from that attribute's index instead of computing the key for every
- * row: `source` joins the attribute's position 0 rows (aliased `d`), `key` is
- * the key on `d`, and the rows with no value come after, as their own branch
- * (`empty`). Selects and statuses walk their options in order, one index
- * range each, merged. Undefined when the first sort can't drive.
+ * When a view's first sort has stored keys (`sort_keys`), the page starts from
+ * that attribute's key index instead of computing the key for every row:
+ * `rows` reads the keys (aliased `d`, the row's id as `rowId`) in key order,
+ * `source` joins them to the view's rows, and the rows with no value come
+ * after, as their own branch (`empty`). Selects and statuses walk their
+ * options in order, one index range each. Undefined when the first sort can't
+ * drive (a linked record's or member's name, a location, a system column).
  */
 export interface DrivingSort {
+  /** Joins the keys to the view's rows `r` (aliased `d`). */
   readonly source: SQL;
-  /** The same rows on their own, as `from … where …` over `d` (with `d.owner_id`), for reading them in key order first. */
+  /** The keys on their own, as `from … where …` over `d`, for reading them in key order first. */
   readonly rows: SQL;
-  readonly key: SortKey;
+  /** The view's row id for a key row: `d.owner_id`, or the list entry `le.id` when the key is its record's. */
+  readonly rowId: SQL;
+  /** The sort's keys on `d`, one or two (currency sorts by code, then amount). */
+  readonly keys: readonly SortKey[];
   /**
-   * For a select or status: each option's own rows (`from … where …` over `d`),
-   * in option order, so a page can walk them one index range at a time.
+   * For a select or status: each option's own key rows (`from … where …` over
+   * `d`), in option order, so a page can walk them one index range at a time.
    */
   readonly options?: readonly SQL[];
+  /** For a select or status jump: each option's live key count, as `(id, n)` rows. */
+  readonly optionCount?: (optionId: string) => SQL;
   /** True on rows that have no value for the first sort. */
   readonly empty: SQL;
   /** The same, kept a per row check (an OFFSET 0 fence), for reading rows in id order and stopping at the limit. */
   readonly emptyFenced: SQL;
+  /** A per row check (fenced) that row `r`'s keys equal these key texts (an option's index, for a select). */
+  readonly equals: (values: readonly string[]) => SQL;
+  /** The same as a condition on the key row `d`, to read one group of equal keys from the key index. */
+  readonly within: (values: readonly string[]) => SQL;
   /**
-   * For a sort driven from `sort_keys`: how many live rows have a value (exact,
-   * index only), so a position can jump straight to its row by offset.
+   * How many live rows have a value (exact, index only), so a position can
+   * jump straight to its row by offset. Absent for a list sorted by its
+   * record's attribute, whose rows aren't one per key.
    */
   readonly count?: SQL;
 }
 
-const DRIVEN_COLUMNS: Partial<Record<AttributeDef['type'], { column: string; kind: KeyKind }>> = {
-  text: { column: 'text_value', kind: 'text' },
-  email: { column: 'text_value', kind: 'text' },
-  domain: { column: 'text_value', kind: 'text' },
-  url: { column: 'text_value', kind: 'text' },
-  personal_name: { column: 'text_value', kind: 'text' },
-  phone: { column: 'text_value', kind: 'text' },
-  file: { column: 'text_value', kind: 'text' },
-  number: { column: 'number_value', kind: 'numeric' },
-  rating: { column: 'number_value', kind: 'numeric' },
-  date: { column: 'date_value', kind: 'date' },
-  timestamp: { column: 'timestamp_value', kind: 'timestamptz' },
-  interaction: { column: 'timestamp_value', kind: 'timestamptz' },
-  checkbox: { column: 'bool_value', kind: 'boolean' },
+/** Each kind's stored key columns, in sort order. */
+const STORED_KEYS: Partial<Record<AttributeDef['type'], readonly { column: string; kind: KeyKind }[]>> = {
+  text: [{ column: 'text_key', kind: 'text' }],
+  email: [{ column: 'text_key', kind: 'text' }],
+  domain: [{ column: 'text_key', kind: 'text' }],
+  url: [{ column: 'text_key', kind: 'text' }],
+  personal_name: [{ column: 'text_key', kind: 'text' }],
+  phone: [{ column: 'text_key', kind: 'text' }],
+  file: [{ column: 'text_key', kind: 'text' }],
+  number: [{ column: 'number_key', kind: 'bigint' }],
+  rating: [{ column: 'number_key', kind: 'bigint' }],
+  currency: [
+    { column: 'code_key', kind: 'text' },
+    { column: 'number_key', kind: 'bigint' },
+  ],
+  date: [{ column: 'date_key', kind: 'date' }],
+  timestamp: [{ column: 'time_key', kind: 'timestamptz' }],
+  interaction: [{ column: 'time_key', kind: 'timestamptz' }],
+  checkbox: [{ column: 'bool_key', kind: 'boolean' }],
 };
 
 /** The driving form of a view's first sort, or undefined. `optionIds` are a select's or status's options in order. */
@@ -908,58 +987,84 @@ export function drivingSort(
 ): DrivingSort | undefined {
   if (rule === undefined) return undefined;
   const attribute = context.attributes.get(rule.attributeId);
-  if (attribute === undefined || attribute.systemColumn !== null) return undefined;
-  // Only an attribute of the row itself: its owner is r.id, so the index order is the tie order too.
+  if (attribute === undefined || !hasSortKey(attribute)) return undefined;
+  const isOption = attribute.type === 'select' || attribute.type === 'status';
+  const stored = isOption ? [{ column: 'option_id', kind: 'uuid' as const }] : STORED_KEYS[attribute.type];
+  if (stored === undefined || (isOption && optionIds.length === 0)) return undefined;
+  // The row's own attribute (its owner is r.id), or, on a list, its record's (the owner is r.record_id).
   const own = level.listId === null ? attribute.objectId === level.objectId : attribute.listId === level.listId;
-  if (!own) return undefined;
-  const current = sql`v.attribute_id = ${attribute.id} and v.position = 0 and v.active_until is null and not v.is_cleared`;
-  const emptyOf = (fence: SQL) =>
-    sql`not exists (select 1 from "values" v where v.workspace_id = r.workspace_id and v.owner_id = r.id and ${current}${fence})`;
-  const empty = emptyOf(sql``);
-  const emptyFenced = emptyOf(sql` offset 0`);
+  const ofRecord = !own && level.listId !== null && attribute.objectId === level.objectId;
+  if (!own && !ofRecord) return undefined;
+  const owner = ofRecord ? sql`r.record_id` : sql`r.id`;
   const { direction } = rule;
-  if (attribute.type === 'select' || attribute.type === 'status') {
-    if (optionIds.length === 0) return undefined;
-    const branches = optionIds.map(
-      (optionId, index) =>
-        sql`select ${index}::int as k, v.owner_id, v.workspace_id from "values" v where ${current} and v.option_id = ${optionId}::uuid`,
+  const held = (alias: string) =>
+    sql`${raw(alias)}.attribute_id = ${attribute.id} and ${raw(alias)}.live and ${sql.join(
+      stored.map((key) => sql`${raw(`${alias}.${key.column}`)} is not null`),
+      sql` and `,
+    )}`;
+  const fromKeys = (condition: SQL) =>
+    ofRecord
+      ? sql`from sort_keys d join list_entries le on le.workspace_id = d.workspace_id and le.record_id = d.owner_id and le.list_id = ${level.listId} and le.deleted_at is null where ${condition}`
+      : sql`from sort_keys d where ${condition}`;
+  const noKey = (fence: SQL) =>
+    sql`not exists (select 1 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = ${owner} and k.attribute_id = ${attribute.id}${fence})`;
+  const keyRow = (condition: SQL) =>
+    sql`exists (select 1 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = ${owner} and ${held('k')} and ${condition} offset 0)`;
+  const base = {
+    source: sql`join sort_keys d on d.workspace_id = r.workspace_id and d.owner_id = ${owner} and ${held('d')}`,
+    rows: fromKeys(held('d')),
+    rowId: ofRecord ? sql`le.id` : sql`d.owner_id`,
+    empty: noKey(sql``),
+    emptyFenced: noKey(sql` offset 0`),
+    ...(ofRecord ? {} : { count: sql`select count(*)::int as n from sort_keys d where ${held('d')}` }),
+  };
+  const optionAt = (index: string | undefined) => {
+    const optionId = optionIds[Number(index)];
+    if (optionId === undefined) invalid('That page cursor is not valid. Start from the first page.');
+    return optionId;
+  };
+  if (isOption) {
+    return {
+      ...base,
+      // The walk compares option positions (0, 1, 2), so the key is the option's index in the walk.
+      keys: [
+        {
+          direction,
+          expression: sql`(array_position(${uuidArray(optionIds)}, d.option_id) - 1)`,
+          kind: 'int',
+          nullable: false,
+        },
+      ],
+      options: optionIds.map((optionId) => fromKeys(sql`${held('d')} and d.option_id = ${optionId}::uuid`)),
+      ...(ofRecord
+        ? {}
+        : {
+            optionCount: (optionId: string) =>
+              sql`select count(*)::int as n from sort_keys d where ${held('d')} and d.option_id = ${optionId}::uuid`,
+          }),
+      equals: (values) => keyRow(sql`k.option_id = ${optionAt(values[0])}::uuid`),
+      within: (values) => sql`d.option_id = ${optionAt(values[0])}::uuid`,
+    };
+  }
+  const keys = stored.map((key) => ({
+    direction,
+    expression: sql`${raw(`d.${key.column}`)}`,
+    kind: key.kind,
+    nullable: false,
+  }));
+  const equalTo = (alias: string, values: readonly string[]) =>
+    sql.join(
+      stored.map((key, index) => {
+        const value = values[index];
+        if (value === undefined) invalid('That page cursor is not valid. Start from the first page.');
+        return sql`${raw(`${alias}.${key.column}`)} = ${fromText({ direction, expression: sql``, kind: key.kind }, value)}`;
+      }),
+      sql` and `,
     );
-    const union = sql`(${sql.join(branches, sql` union all `)}) d`;
-    const own = (optionId: string) =>
-      sql`from "values" d where d.attribute_id = ${attribute.id} and d.position = 0 and d.active_until is null and not d.is_cleared and d.option_id = ${optionId}::uuid`;
-    return {
-      options: optionIds.map(own),
-      source: sql`join ${union} on d.workspace_id = r.workspace_id and d.owner_id = r.id`,
-      rows: sql`from ${union} where true`,
-      key: { direction, expression: sql`d.k`, kind: 'int', nullable: false },
-      empty,
-      emptyFenced,
-    };
-  }
-  if (hasSortKey(attribute)) {
-    // Stored keys: index only, and `live` already leaves out trashed records and removed entries.
-    const held = sql`d.attribute_id = ${attribute.id} and d.live and d.text_key is not null`;
-    const noKey = (fence: SQL) =>
-      sql`not exists (select 1 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = r.id and k.attribute_id = ${attribute.id}${fence})`;
-    return {
-      source: sql`join sort_keys d on d.workspace_id = r.workspace_id and d.owner_id = r.id and ${held}`,
-      rows: sql`from sort_keys d where ${held}`,
-      key: { direction, expression: sql`d.text_key`, kind: 'text', nullable: false },
-      empty: noKey(sql``),
-      emptyFenced: noKey(sql` offset 0`),
-      count: sql`select count(*)::int as n from sort_keys d where ${held}`,
-    };
-  }
-  const driven = DRIVEN_COLUMNS[attribute.type];
-  if (driven === undefined) return undefined;
-  const column = raw(`d.${driven.column}`);
-  const expression = driven.kind === 'text' ? textKey(sql`${column}`) : sql`${column}`;
-  const held = sql`d.attribute_id = ${attribute.id} and d.position = 0 and d.active_until is null and not d.is_cleared and ${column} is not null`;
   return {
-    source: sql`join "values" d on d.workspace_id = r.workspace_id and d.owner_id = r.id and ${held}`,
-    rows: sql`from "values" d where ${held}`,
-    key: { direction, expression, kind: driven.kind, nullable: false },
-    empty,
-    emptyFenced,
+    ...base,
+    keys,
+    equals: (values) => keyRow(equalTo('k', values)),
+    within: (values) => equalTo('d', values),
   };
 }

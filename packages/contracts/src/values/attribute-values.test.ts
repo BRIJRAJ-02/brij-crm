@@ -145,12 +145,12 @@ describe('Decimal', () => {
     ['-0.000', '0'],
     ['+7', '7'],
     ['-12.3400', '-12.34'],
-    ['999999999999999.9999', '999999999999999.9999'],
+    ['99999999999999.9999', '99999999999999.9999'],
   ])('%s becomes %s', (input, canonical) => {
     expect(toCanonicalDecimal(input)).toBe(canonical);
   });
 
-  it.each(['1e5', '1,5', '1.23456', '1234567890123456', '', '.5', '5.'])('refuses %s', (input) => {
+  it.each(['1e5', '1,5', '1.23456', '123456789012345', '', '.5', '5.'])('refuses %s', (input) => {
     expect(toCanonicalDecimal(input)).toBeUndefined();
   });
 });

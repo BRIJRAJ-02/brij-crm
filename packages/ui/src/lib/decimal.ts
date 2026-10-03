@@ -22,7 +22,7 @@ function escape(sign: string): string {
  * Reads a typed number in the language's format (`1.234,5` in de-DE is
  * `1234.5`), falling back to the canonical form (`1234.5`) when the text isn't
  * grouped the language's way. Returns the canonical decimal string, or
- * `undefined` when it isn't a number within 15 digits before the point and 4
+ * `undefined` when it isn't a number within 14 digits before the point and 4
  * after.
  */
 export function parseLocaleDecimal(text: string, locale: string): string | undefined {

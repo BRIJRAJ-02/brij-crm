@@ -22,6 +22,7 @@
     "db:generate": "pnpm --filter @crm/db generate",
     "db:migrate": "pnpm --filter @crm/db migrate",
     "db:app-login": "pnpm --filter @crm/db app-login",
+    "db:reconcile:sort-keys": "pnpm --filter @crm/db reconcile:sort-keys",
     "db:setup": "pnpm db:migrate && pnpm db:app-login",
     "db:seed:scale": "pnpm --filter @crm/core seed:scale",
     "db:bench:scale": "pnpm --filter @crm/core bench:scale",

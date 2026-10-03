@@ -8,7 +8,7 @@ import type { WorkspaceTx } from '@crm/db';
 import { uuidArray } from './ids.ts';
 import type { AttributeDef } from './values.ts';
 
-/** The attribute types that have a stored key today. */
+/** The attribute types that have a stored key: every scalar sortable kind (the `sort_key_sources` view says how). */
 const KEYED_TYPES: ReadonlySet<AttributeDef['type']> = new Set([
   'text',
   'email',
@@ -17,6 +17,16 @@ const KEYED_TYPES: ReadonlySet<AttributeDef['type']> = new Set([
   'phone',
   'personal_name',
   'file',
+  'number',
+  'rating',
+  'currency',
+  'location',
+  'date',
+  'timestamp',
+  'interaction',
+  'select',
+  'status',
+  'checkbox',
 ]);
 
 /** True when an attribute's values have a stored sort key. */

@@ -72,6 +72,8 @@ async function lookups(db: Database) {
       probability: await attribute(deals, 'probability'),
       nextStep: await attribute(deals, 'next_step'),
       stage: await attribute(deals, 'stage'),
+      value: await attribute(deals, 'value'),
+      owner: await attribute(deals, 'owner'),
       company: await attribute(deals, 'associated_company'),
       categories,
       source,
@@ -93,14 +95,25 @@ const memberId = await app.withWorkspace(workspaceId, async (tx) => {
 });
 const scope: EngineScope = { db: app, workspaceId, actor: { type: 'member', id: memberId } };
 const and = (...conditions: FilterGroup['conditions']): FilterGroup => ({ conjunction: 'and', conditions });
-const byName = [{ attributeId: ids.name, direction: 'ascending' as const }];
+const ascendingBy = (attributeId: string) => [{ attributeId, direction: 'ascending' as const }];
+const byName = ascendingBy(ids.name);
 /** The cursor after the row before `position`, so the page that follows starts at `position`. */
-async function cursorAt(position: number): Promise<string> {
-  const page = await queryPage(scope, { objectId: ids.deals, sorts: byName, position: position - 1, limit: 1 });
+async function cursorAt(position: number, sorts = byName): Promise<string> {
+  const page = await queryPage(scope, { objectId: ids.deals, sorts, position: position - 1, limit: 1 });
   if (page.nextCursor === undefined) throw new Error(`No row at ${String(position)}.`);
   return page.nextCursor;
 }
-const [at100k, at500k] = [await cursorAt(100_000), await cursorAt(500_000)];
+const [at100k, at500k, probabilityAt500k] = [
+  await cursorAt(100_000),
+  await cursorAt(500_000),
+  await cursorAt(500_000, ascendingBy(ids.probability)),
+];
+// The page that runs from the last next steps into the deals with none: 20 rows before the last value.
+const withNextStep = await countMatches(scope, {
+  objectId: ids.deals,
+  filter: and({ attributeId: ids.nextStep, operator: 'is_not_empty' }),
+});
+const intoEmpties = await cursorAt(withNextStep.count - 20, ascendingBy(ids.nextStep));
 
 const fullGrid: { name: string; query: PageQuery }[] = [
   {
@@ -170,6 +183,52 @@ const fullGrid: { name: string; query: PageQuery }[] = [
     name: '8. Sort by name, the page after a cursor at row 500,000',
     query: { objectId: ids.deals, sorts: byName, cursor: at500k },
   },
+  {
+    name: '9. Sort by probability, the page after a cursor at row 500,000',
+    query: { objectId: ids.deals, sorts: ascendingBy(ids.probability), cursor: probabilityAt500k },
+  },
+  {
+    name: '10. Sort by stage, then by name',
+    query: {
+      objectId: ids.deals,
+      sorts: [
+        { attributeId: ids.stage, direction: 'ascending' },
+        { attributeId: ids.name, direction: 'ascending' },
+      ],
+    },
+  },
+  {
+    name: '13. Probability between 41 and 42, sort by name',
+    query: {
+      objectId: ids.deals,
+      filter: and({ attributeId: ids.probability, operator: 'between', from: 41, to: 42 }),
+      sorts: byName,
+    },
+  },
+  { name: '14. Sort by value (currency)', query: { objectId: ids.deals, sorts: ascendingBy(ids.value) } },
+  {
+    name: '15. The pipeline list sorted by the deal close date (a record attribute)',
+    query: { listId: ids.listId, sorts: ascendingBy(ids.closeDate) },
+  },
+  {
+    name: '16. Sort by next step, the page that runs from the last values into the empties',
+    query: { objectId: ids.deals, sorts: ascendingBy(ids.nextStep), cursor: intoEmpties },
+  },
+  {
+    name: 'R1. Sort by stage, then by next step (half the deals have none)',
+    query: {
+      objectId: ids.deals,
+      sorts: [
+        { attributeId: ids.stage, direction: 'ascending' },
+        { attributeId: ids.nextStep, direction: 'ascending' },
+      ],
+    },
+  },
+  {
+    name: 'B1. Best effort: sort by associated company (a linked name)',
+    query: { objectId: ids.deals, sorts: ascendingBy(ids.company) },
+  },
+  { name: 'B2. Best effort: sort by owner (a member)', query: { objectId: ids.deals, sorts: ascendingBy(ids.owner) } },
 ];
 const grid = fullGrid.filter((item) => env.BENCH_ONLY?.has(item.name.split('.')[0] ?? '') ?? true);
 
@@ -211,8 +270,8 @@ async function countTime(query: PageQuery): Promise<string> {
   if (query.filter === undefined) return 'none';
   const source = 'listId' in query ? { listId: query.listId } : { objectId: query.objectId };
   const start = performance.now();
-  const n = await countMatches(scope, { ...source, filter: query.filter });
-  return `${n.toLocaleString('en')} in ${(performance.now() - start).toFixed(0)} ms`;
+  const { count, atLeast } = await countMatches(scope, { ...source, filter: query.filter });
+  return `${count.toLocaleString('en')}${atLeast ? '+' : ''} in ${(performance.now() - start).toFixed(0)} ms`;
 }
 
 const sizes = await owner.withWorkspace(workspaceId, async (tx) => {
@@ -220,7 +279,7 @@ const sizes = await owner.withWorkspace(workspaceId, async (tx) => {
     select c.relname as name, pg_size_pretty(pg_table_size(c.oid)) as table,
       pg_size_pretty(pg_indexes_size(c.oid)) as indexes, c.reltuples::bigint::text as rows
     from pg_class c join pg_namespace n on n.oid = c.relnamespace
-    where n.nspname = 'public' and c.relname in ('records', 'values', 'record_links', 'list_entries')
+    where n.nspname = 'public' and c.relname in ('records', 'values', 'record_links', 'list_entries', 'sort_keys')
     order by c.relname
   `);
   return result.rows;

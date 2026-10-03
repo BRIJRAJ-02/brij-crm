@@ -11,6 +11,7 @@
     "generate": "drizzle-kit generate",
     "migrate": "node --env-file-if-exists=../../.env scripts/migrate.ts",
     "app-login": "node --env-file-if-exists=../../.env scripts/app-login.ts",
+    "reconcile:sort-keys": "node --env-file-if-exists=../../.env scripts/reconcile-sort-keys.ts",
     "lint": "eslint .",
     "test": "vitest run"
   },

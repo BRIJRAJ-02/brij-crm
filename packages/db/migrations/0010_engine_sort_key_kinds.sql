@@ -1,0 +1,8 @@
+CREATE INDEX "records_trashed" ON "records" USING btree ("workspace_id","id") WHERE "records"."deleted_at" is not null;--> statement-breakpoint
+CREATE INDEX "sort_keys_number" ON "sort_keys" USING btree ("workspace_id","attribute_id","number_key","owner_id") WHERE live and number_key is not null;--> statement-breakpoint
+CREATE INDEX "sort_keys_currency" ON "sort_keys" USING btree ("workspace_id","attribute_id","code_key","number_key","owner_id") WHERE live and code_key is not null and number_key is not null;--> statement-breakpoint
+CREATE INDEX "sort_keys_location" ON "sort_keys" USING btree ("workspace_id","attribute_id","code_key","text_key","owner_id") WHERE live and code_key is not null and number_key is null;--> statement-breakpoint
+CREATE INDEX "sort_keys_date" ON "sort_keys" USING btree ("workspace_id","attribute_id","date_key","owner_id") WHERE live and date_key is not null;--> statement-breakpoint
+CREATE INDEX "sort_keys_time" ON "sort_keys" USING btree ("workspace_id","attribute_id","time_key","owner_id") WHERE live and time_key is not null;--> statement-breakpoint
+CREATE INDEX "sort_keys_option" ON "sort_keys" USING btree ("workspace_id","attribute_id","option_id","owner_id") WHERE live and option_id is not null;--> statement-breakpoint
+CREATE INDEX "sort_keys_bool" ON "sort_keys" USING btree ("workspace_id","attribute_id","bool_key","owner_id") WHERE live and bool_key is not null;

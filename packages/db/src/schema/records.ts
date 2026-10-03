@@ -57,6 +57,10 @@ export const records = pgTable(
     index('records_updated')
       .on(t.workspaceId, t.objectId, t.updatedAt, t.id)
       .where(sql`${t.deletedAt} is null`),
+    // The few records in the trash: an unfiltered list's exact count takes their live entries away.
+    index('records_trashed')
+      .on(t.workspaceId, t.id)
+      .where(sql`${t.deletedAt} is not null`),
     check('records_deleted', sql`(${t.deletedAt} is null) = (${t.deletedByType} is null)`),
     ...actorConstraints('records', 'created_by', t.workspaceId, {
       type: t.createdByType,
@@ -411,6 +415,29 @@ export const sortKeys = pgTable(
     index('sort_keys_text')
       .on(t.workspaceId, t.attributeId, t.textKey, t.ownerId)
       .where(sql.raw(`${LIVE} and text_key is not null`)),
+    // The same for every other kind: numbers and ratings, currency (code, then amount), location
+    // (country, then locality), dates, times, options and checkboxes.
+    index('sort_keys_number')
+      .on(t.workspaceId, t.attributeId, t.numberKey, t.ownerId)
+      .where(sql.raw(`${LIVE} and number_key is not null`)),
+    index('sort_keys_currency')
+      .on(t.workspaceId, t.attributeId, t.codeKey, t.numberKey, t.ownerId)
+      .where(sql.raw(`${LIVE} and code_key is not null and number_key is not null`)),
+    index('sort_keys_location')
+      .on(t.workspaceId, t.attributeId, t.codeKey, t.textKey, t.ownerId)
+      .where(sql.raw(`${LIVE} and code_key is not null and number_key is null`)),
+    index('sort_keys_date')
+      .on(t.workspaceId, t.attributeId, t.dateKey, t.ownerId)
+      .where(sql.raw(`${LIVE} and date_key is not null`)),
+    index('sort_keys_time')
+      .on(t.workspaceId, t.attributeId, t.timeKey, t.ownerId)
+      .where(sql.raw(`${LIVE} and time_key is not null`)),
+    index('sort_keys_option')
+      .on(t.workspaceId, t.attributeId, t.optionId, t.ownerId)
+      .where(sql.raw(`${LIVE} and option_id is not null`)),
+    index('sort_keys_bool')
+      .on(t.workspaceId, t.attributeId, t.boolKey, t.ownerId)
+      .where(sql.raw(`${LIVE} and bool_key is not null`)),
     // Delete, restore, purge and erasure by record or entry.
     index('sort_keys_by_record').on(t.workspaceId, t.recordId),
     index('sort_keys_by_entry')

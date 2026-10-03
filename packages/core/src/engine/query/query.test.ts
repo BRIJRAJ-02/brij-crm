@@ -519,6 +519,68 @@ describe('the compiler matches the reference evaluator', () => {
   });
 });
 
+describe('sorts driven from stored keys', () => {
+  // Each at the usual cap and a cap of 3, which cuts groups of equal first keys so a later sort is read
+  // group by group, and pages of 2 and 4 rows.
+  const cases: [string, () => SortRule[], () => FilterGroup | undefined][] = [
+    ['status, then name (a group read per stage)', () => [by('phase'), by('name')], () => undefined],
+    ['status descending, then budget', () => [by('phase', 'descending'), by('budget')], () => undefined],
+    ['multi select by its first item, then name', () => [by('tags'), by('name', 'descending')], () => undefined],
+    ['currency (code, then amount)', () => [by('price')], () => undefined],
+    ['currency descending, then name', () => [by('price', 'descending'), by('name')], () => undefined],
+    ['rating descending, then name', () => [by('score', 'descending'), by('name')], () => undefined],
+    ['checkbox, then launch', () => [by('crewed'), by('launch', 'descending')], () => undefined],
+    ['timestamp descending', () => [by('landed', 'descending')], () => undefined],
+    ['number between, by name', () => [by('name')], () => and(between('budget', '100', '900.5'))],
+    [
+      'currency at least, by price',
+      () => [by('price')],
+      () => and(is('price', 'gte', { amount: '500', currency: 'USD' })),
+    ],
+    [
+      'number not equal (matches empties), by budget',
+      () => [by('budget', 'descending')],
+      () => and(is('budget', 'neq', '7')),
+    ],
+  ];
+  it.each(cases)('%s', async (_, sorts, filter) => {
+    const expected = evaluate(context, rows, filter(), sorts());
+    expect(expected.length).toBeGreaterThan(0);
+    for (const [limit, candidates] of [
+      [4, undefined],
+      [2, 3],
+      [4, 3],
+    ] as const) {
+      expect(await allPages({ objectId: missions }, filter(), sorts(), limit, candidates)).toEqual(expected);
+    }
+  });
+
+  it('jumps exactly on every stored kind', async () => {
+    for (const sort of [
+      by('price'),
+      by('phase'),
+      by('phase', 'descending'),
+      by('crewed'),
+      by('landed'),
+      by('budget', 'descending'),
+    ]) {
+      const order = evaluate(context, rows, undefined, [sort]);
+      for (const position of [0, 5, 23, 41, 60, 69, 72]) {
+        const page = await queryPage(scope, { objectId: missions, sorts: [sort], position, limit: 6 });
+        expect(page.records.map((record) => record.id)).toEqual(order.slice(position, position + 6));
+      }
+    }
+  });
+
+  it('pages a list by an entry status, then its record name, and by its record name alone', async () => {
+    for (const sorts of [[by('stage'), by('name')], [by('name', 'descending')]]) {
+      const expected = evaluate(context, entryRows, undefined, sorts);
+      expect(await allPages({ listId }, undefined, sorts, 3, 3)).toEqual(expected);
+      expect(await allPages({ listId }, undefined, sorts, 5)).toEqual(expected);
+    }
+  });
+});
+
 describe('list views', () => {
   const cases: [string, () => FilterGroup | undefined, () => SortRule[]][] = [
     ['entry status, by entry date', () => and(is('stage', 'is', id('signed'))), () => [by('due')]],
@@ -577,13 +639,34 @@ describe('positions and counts', () => {
 
   it('counts exactly what the filter matches, for objects and lists', async () => {
     const filter = or(is('name', 'contains', 'o'), list('tags', 'contains_any_of', [id('blue')]));
-    expect(await countMatches(scope, { objectId: missions, filter, ...clock })).toBe(
-      evaluate(context, rows, filter, []).length,
-    );
+    expect(await countMatches(scope, { objectId: missions, filter, ...clock })).toEqual({
+      count: evaluate(context, rows, filter, []).length,
+      atLeast: false,
+    });
     const entries = and(is('stage', 'is_empty'));
-    expect(await countMatches(scope, { listId, filter: entries, ...clock })).toBe(
-      evaluate(context, entryRows, entries, []).length,
-    );
+    expect(await countMatches(scope, { listId, filter: entries, ...clock })).toEqual({
+      count: evaluate(context, entryRows, entries, []).length,
+      atLeast: false,
+    });
+  });
+
+  it('caps a filtered count, and counts a whole object or list exactly (AC-23)', async () => {
+    const filter = and(is('crewed', 'is_checked'));
+    const matching = evaluate(context, rows, filter, []).length;
+    expect(matching).toBeGreaterThan(3);
+    const capped = (cap: number) => countMatches(scope, { objectId: missions, filter, ...clock }, undefined, { cap });
+    expect(await capped(matching + 1)).toEqual({ count: matching, atLeast: false });
+    expect(await capped(matching)).toEqual({ count: matching, atLeast: false });
+    expect(await capped(matching - 1)).toEqual({ count: matching - 1, atLeast: true });
+    // Unfiltered: exact whatever the cap.
+    expect(await countMatches(scope, { objectId: missions }, undefined, { cap: 2 })).toEqual({
+      count: rows.length,
+      atLeast: false,
+    });
+    expect(await countMatches(scope, { listId }, undefined, { cap: 2 })).toEqual({
+      count: entryRows.length,
+      atLeast: false,
+    });
   });
 
   it('refuses a count already cancelled', async () => {
@@ -682,6 +765,7 @@ describe('hidden rows', () => {
       values: { [id('company_name')]: 'Gone corp' },
     });
     ({ listId: probeList } = await defineList(scope, { objectId: probes, apiSlug: 'probe_list', name: 'Probes' }));
+    await attribute({ listId: probeList }, 'probe_rank', 'number');
     const deleted: string[] = [];
     for (let index = 0; index < 12; index += 1) {
       const { recordId } = await createRecord(scope, {
@@ -693,7 +777,11 @@ describe('hidden rows', () => {
           ...(index % 3 === 0 ? { [id('firm')]: { objectId: companiesObject, recordId: gone.recordId } } : {}),
         },
       });
-      const { entryId } = await addEntry(scope, { listId: probeList, recordId });
+      const { entryId } = await addEntry(scope, {
+        listId: probeList,
+        recordId,
+        values: index % 5 === 4 ? {} : { [id('probe_rank')]: String(12 - index) },
+      });
       // Delete a third of them (scored and unscored), and remove another third's entries.
       if (index % 3 === 1) deleted.push(recordId);
       else live.push(recordId);
@@ -705,6 +793,35 @@ describe('hidden rows', () => {
   });
 
   const sorted = (ids: readonly string[]) => [...ids].sort();
+
+  it('jumps past trashed records and removed entries, on numbers and options, records and entries', async () => {
+    const views: [ViewSource, SortRule][] = [
+      [{ objectId: probes }, by('probe_score')],
+      [{ objectId: probes }, by('probe_score', 'descending')],
+      [{ objectId: probes }, by('probe_kind')],
+      [{ objectId: probes }, by('probe_kind', 'descending')],
+      [{ listId: probeList }, by('probe_rank')],
+      [{ listId: probeList }, by('probe_rank', 'descending')],
+    ];
+    for (const [source, sort] of views) {
+      const order = await allPages(source, undefined, [sort], 3);
+      expect(sorted(order)).toEqual(sorted('listId' in source ? liveEntries : live));
+      for (let position = 0; position <= order.length + 1; position += 1) {
+        const page = await queryPage(scope, { ...source, sorts: [sort], position, limit: 2 });
+        expect((page.entries ?? page.records).map((row) => row.id)).toEqual(order.slice(position, position + 2));
+      }
+    }
+  });
+
+  it('never returns a removed entry or a trashed record on a list sorted by a record select or an entry number', async () => {
+    for (const sorts of [[by('probe_kind')], [by('probe_kind', 'descending'), by('probe_rank')], [by('probe_rank')]]) {
+      for (const candidates of [undefined, 3, 1]) {
+        expect(sorted(await allPages({ listId: probeList }, undefined, sorts, 2, candidates))).toEqual(
+          sorted(liveEntries),
+        );
+      }
+    }
+  });
 
   it('never returns a deleted record from the index first pass, the empties or filter first', async () => {
     for (const sorts of [
@@ -734,7 +851,7 @@ describe('hidden rows', () => {
       const ids = await allPages({ listId: probeList }, undefined, [by('probe_score')], 2, candidates);
       expect(sorted(ids)).toEqual(sorted(liveEntries));
     }
-    expect(await countMatches(scope, { listId: probeList })).toBe(liveEntries.length);
+    expect(await countMatches(scope, { listId: probeList })).toEqual({ count: liveEntries.length, atLeast: false });
   });
 
   it('never matches through a deleted far record', async () => {
@@ -742,7 +859,7 @@ describe('hidden rows', () => {
     for (const candidates of [undefined, 3, 1]) {
       expect(await allPages({ objectId: probes }, filter, [by('probe_score')], 2, candidates)).toEqual([]);
     }
-    expect(await countMatches(scope, { objectId: probes, filter })).toBe(0);
+    expect(await countMatches(scope, { objectId: probes, filter })).toEqual({ count: 0, atLeast: false });
     // Its negative matches every live probe, linked or not.
     const negative = and(through(['firm'], is('company_name', 'is_not', 'Gone corp')));
     expect(sorted(await allPages({ objectId: probes }, negative, [by('probe_score')], 2))).toEqual(sorted(live));
@@ -821,6 +938,8 @@ describe('caps and timeouts', () => {
       () => queryPage(scope, { objectId: missions, filter: and(nested) }),
       () => queryPage(scope, { objectId: missions, sorts: [by('launch')], cursor: tampered('abc') }),
       () => queryPage(scope, { objectId: missions, sorts: [by('launch')], cursor: tampered('2026-02-30') }),
+      () => queryPage(scope, { objectId: missions, sorts: [by('budget')], cursor: tampered('9999999999999999999') }),
+      () => queryPage(scope, { objectId: missions, sorts: [by('landed')], cursor: tampered('2026-10-02 25:00:00+00') }),
       () => countMatches(scope, { objectId: missions, filter: many }),
     ];
     const codes: string[] = [];
