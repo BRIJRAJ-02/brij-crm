@@ -87,6 +87,14 @@ describe('screens preset (apps/web)', () => {
       'src/with-extension.ts': "import { greet } from './clean.ts';\nexport const g = greet;\n",
       'src/Store.ts': 'class Store {\n  readonly count = 0;\n}\nexport const store = new Store();\n',
       'src/errors.ts': 'export class NotFoundError extends Error {}\n',
+      // The router's redirect, as its package declares it.
+      'node_modules/@tanstack/router-core/package.json':
+        '{ "name": "@tanstack/router-core", "version": "1.0.0", "types": "index.d.ts" }',
+      'node_modules/@tanstack/router-core/index.d.ts':
+        'export type Redirect = Response & { options: unknown };\nexport declare function redirect(options: unknown): Redirect;\n',
+      'src/guard.ts':
+        "import { redirect } from '@tanstack/router-core';\nexport function guard(signedIn: boolean): void {\n  if (!signedIn) throw redirect({ to: '/sign-in' });\n}\n",
+      'src/throws-object.ts': "export function fail(): never {\n  throw { message: 'no' };\n}\n",
       'middleware.ts': [
         'export const config = { matcher: ["/api/:path*"] };',
         'export default function middleware(request: Request): Promise<Response> {',
@@ -101,6 +109,11 @@ describe('screens preset (apps/web)', () => {
 
   it('passes clean screen code with no problems at all', () => {
     expect(rulesFor(messages, 'src/clean.ts')).toEqual([]);
+  });
+
+  it("lets a route guard throw the router's redirect, and still refuses throwing a plain object", () => {
+    expect(messagesFor(messages, 'src/guard.ts')).toEqual([]);
+    expect(rulesFor(messages, 'src/throws-object.ts')).toContain('@typescript-eslint/only-throw-error');
   });
 
   it('refuses a direct fetch from a screen', () => {
@@ -370,5 +383,31 @@ describe('client preset for the data layer (packages/data)', () => {
     const messages = await lintWorkspace(root, client({ root, collaboration: true }));
     expect(rulesFor(messages, 'src/session.ts')).not.toContain('@typescript-eslint/no-restricted-imports');
     expect(rulesFor(messages, 'src/aria.ts')).toContain('@typescript-eslint/no-restricted-imports');
+  }, 60_000);
+
+  it("lets the sign in wrapper import Better Auth's browser client, and nothing else of it or any vendor", async () => {
+    const root = createWorkspace({
+      'src/auth/client.ts':
+        "import { createAuthClient } from 'better-auth/client';\nimport { emailOTPClient } from 'better-auth/client/plugins';\nexport const c = [createAuthClient, emailOTPClient];\n",
+      'src/auth/server.ts': "import { betterAuth } from 'better-auth';\nexport const s = betterAuth;\n",
+      'src/auth/api.ts': "import { APIError } from 'better-auth/api';\nexport const e = APIError;\n",
+      'src/auth/live.ts': "import { Centrifuge } from 'centrifuge';\nexport const l = Centrifuge;\n",
+      'src/auth/aria.ts': "import { useButton } from 'react-aria';\nexport const b = useButton;\n",
+      'src/elsewhere.ts':
+        "import { createAuthClient } from 'better-auth/client';\nexport const c = createAuthClient;\n",
+    });
+    const messages = await lintWorkspace(
+      root,
+      client({
+        root,
+        collaboration: true,
+        vendorWrappers: [{ files: ['src/auth/**'], allow: ['better-auth/client', 'better-auth/client/*'] }],
+      }),
+    );
+    expect(rulesFor(messages, 'src/auth/client.ts')).not.toContain('@typescript-eslint/no-restricted-imports');
+    for (const file of ['src/auth/server.ts', 'src/auth/api.ts', 'src/auth/live.ts', 'src/auth/aria.ts']) {
+      expect(rulesFor(messages, file)).toContain('@typescript-eslint/no-restricted-imports');
+    }
+    expect(rulesFor(messages, 'src/elsewhere.ts')).toContain('@typescript-eslint/no-restricted-imports');
   }, 60_000);
 });

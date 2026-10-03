@@ -16,25 +16,29 @@ const meta = {
     description: 'You can change both later.',
     children: null,
   },
+  // A page frame fills its container, so each story gives it an app window's height.
   render: (args) => (
-    <AuthLayout {...args}>
-      <Form submitLabel="Create workspace" onSubmit={fn()}>
-        <Field label="Workspace name" name="name" defaultValue="Halcyon Labs" />
-        <Field label="Web address" name="slug" defaultValue="halcyon-labs" />
-      </Form>
-    </AuthLayout>
+    <Stage height="page">
+      <AuthLayout {...args}>
+        <Form submitLabel="Create workspace" onSubmit={fn()}>
+          <Field label="Workspace name" name="name" defaultValue="Halcyon Labs" />
+          <Field label="Web address" name="slug" defaultValue="halcyon-labs" />
+        </Form>
+      </AuthLayout>
+    </Stage>
   ),
 } satisfies Meta<typeof AuthLayout>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
-/** The product's mark and name over the page card, centred in the window. The card is the page's main landmark. */
+/** The product's mark and name over the page card, centred in the window. The card is the page's main landmark, and its title takes focus by script, outside the tab order. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('main')).toBeInTheDocument();
-    await expect(canvas.getByRole('heading', { level: 1, name: 'Name your workspace' })).toBeInTheDocument();
+    const title = canvas.getByRole('heading', { level: 1, name: 'Name your workspace' });
+    await expect(title).toHaveAttribute('tabindex', '-1');
     await expect(canvas.getByText('CRM')).toBeVisible();
   },
 };
@@ -43,9 +47,11 @@ export const Default: Story = {
 export const Loading: Story = {
   args: { isBusy: true },
   render: (args) => (
-    <AuthLayout {...args}>
-      <Skeleton lines={3} />
-    </AuthLayout>
+    <Stage height="page">
+      <AuthLayout {...args}>
+        <Skeleton lines={3} />
+      </AuthLayout>
+    </Stage>
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('main')).toHaveAttribute('aria-busy', 'true');
@@ -61,7 +67,7 @@ export const WithFooter: Story = {
 /** Narrower than a phone: the card keeps space-16 from each edge. */
 export const Narrow: Story = {
   render: (args) => (
-    <Stage width="narrow">
+    <Stage width="narrow" height="page">
       <AuthLayout {...args}>
         <Form submitLabel="Create workspace" onSubmit={fn()}>
           <Field label="Workspace name" name="name" defaultValue="Halcyon Labs" />

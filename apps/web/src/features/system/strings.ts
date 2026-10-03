@@ -14,5 +14,5 @@ export const strings = {
   notFoundTitle: 'Page not found',
   notFoundText: 'There is nothing at this address',
   notFoundHint: 'Check the address for a typo.',
-  home: 'Go to the status page',
+  home: 'Go home',
 } as const;

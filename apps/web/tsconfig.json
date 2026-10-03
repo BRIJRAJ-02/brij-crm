@@ -11,6 +11,8 @@
     "build.test.ts",
     "theme-boot.test.ts",
     "first-load.ts",
-    "first-load.test.ts"
+    "first-load.test.ts",
+    "playwright.config.ts",
+    "e2e"
   ]
 }

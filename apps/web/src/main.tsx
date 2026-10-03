@@ -3,18 +3,41 @@
 // stylesheet, since Vite links a shared chunk's CSS before this entry's
 // (build.test.ts checks).
 import '@crm/ui/styles.css';
-import { createDataLayer } from '@crm/data';
+import { createDataLayer, createIdMinter } from '@crm/data';
 import { createToasts, LOADING_TIMING, UiProvider } from '@crm/ui';
 import { createThemeController, safeLocalStorage } from '@crm/ui/theme';
 import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { signInHref } from './features/auth/redirect.ts';
+import { focusPageTitle } from './features/navigation/focus.ts';
 import { routeTree } from './routeTree.gen.ts';
 
-const data = createDataLayer({ origin: window.location.origin });
-
-// One toast queue for the app. The data layer (#6) will raise its toasts on it too.
+// One toast queue for the app, shared by the screens and the data layer.
 const toasts = createToasts();
+
+// `router` is made after the data layer (it carries the layer in its
+// context); the layer reaches it only once a session ends, long after both exist.
+const goTo = (href: string) => {
+  void router.navigate({ href, replace: true });
+};
+
+const data = createDataLayer({
+  origin: window.location.origin,
+  notify: (notice) => {
+    toasts.toast(notice);
+  },
+  mintId: createIdMinter({
+    now: () => Date.now(),
+    fill: (bytes) => {
+      crypto.getRandomValues(bytes);
+    },
+  }),
+  onSignedOut: (redirectTo) => {
+    goTo(signInHref(redirectTo));
+  },
+  currentPath: () => `${window.location.pathname}${window.location.search}`,
+});
 
 // theme-boot.js already applied a saved choice before first paint; this keeps
 // it in step with changes here and in other tabs.
@@ -34,11 +57,20 @@ const theme = createThemeController({
 
 const router = createRouter({
   routeTree,
-  context: { data, theme },
+  context: { data, theme, toasts },
   defaultPreload: 'intent',
   // A pending route shows its skeleton on the same timing as everything else (AC-13).
   defaultPendingMs: LOADING_TIMING.delayMs,
   defaultPendingMinMs: LOADING_TIMING.minimumMs,
+});
+
+// After moving to another page, focus goes to its title (the page's h1), so
+// a screen reader starts there and Tab continues from the top of the page.
+router.subscribe('onRendered', (event) => {
+  if (event.fromLocation === undefined || !event.pathChanged) return;
+  requestAnimationFrame(() => {
+    focusPageTitle(document);
+  });
 });
 
 declare module '@tanstack/react-router' {

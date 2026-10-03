@@ -16,3 +16,6 @@ storybook-static/
 .vitest/
 packages/ui/.artifact/
 debug-storybook.log
+# The app flow tests (Playwright) output
+test-results/
+playwright-report/

@@ -2,6 +2,8 @@
 // codes line). These tests pin each family, so a code can't drift.
 import { describe, expect, it } from 'vitest';
 import { ApiError, ERROR_MAP, ErrorCode, errorStatus, retryAfterSeconds } from './errors.ts';
+import { ERROR_CODES } from './codes.ts';
+import { ATTRIBUTE_VALUE_INVALID } from './values/attribute-values.ts';
 import { ENGINE_REFUSAL_CODES } from './values/engine.ts';
 
 describe('the error map', () => {
@@ -11,6 +13,11 @@ describe('the error map', () => {
 
   it('covers every engine refusal code', () => {
     for (const code of ENGINE_REFUSAL_CODES) expect(ErrorCode.options).toContain(code);
+  });
+
+  it('lists the same codes in the Zod free list the browser reads, including the value refusal', () => {
+    expect([...ERROR_CODES].sort()).toEqual([...ErrorCode.options].sort());
+    expect(ENGINE_REFUSAL_CODES).toContain(ATTRIBUTE_VALUE_INVALID);
   });
 
   it.each([

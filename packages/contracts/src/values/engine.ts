@@ -1,10 +1,10 @@
 // The refusals the data engine (spec 0004) answers with: a stable code and a
 // plain sentence. Services, endpoints and screens all branch on the code.
-import { ATTRIBUTE_VALUE_INVALID } from './attribute-values.ts';
+// No imports, so the browser can read the codes without Zod (`../codes.ts`).
 
-/** Every code a data engine refusal can carry. */
+/** Every code a data engine refusal can carry. `ATTRIBUTE_VALUE_INVALID` equals the constant in `attribute-values.ts` (a test checks). */
 export const ENGINE_REFUSAL_CODES = [
-  ATTRIBUTE_VALUE_INVALID,
+  'ATTRIBUTE_VALUE_INVALID',
   'VALUE_REQUIRED',
   'UNIQUE_CONFLICT',
   'UNIQUE_HAS_DUPLICATES',

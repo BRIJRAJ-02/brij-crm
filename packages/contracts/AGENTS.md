@@ -10,6 +10,7 @@ The oRPC contract and the Zod schemas the web app, the API and the worker all sh
 |---|---|
 | `src/index.ts` | The one `contract` object, with one namespace per feature, and every schema and type |
 | `src/system.ts` | The pattern to copy: schemas, their types, and `systemContract` |
+| `src/codes.ts` | `@crm/contracts/codes`: every stable error code as plain lists with no Zod, so the browser's data layer recognises a code without loading the schema library. `errors.ts` builds `ErrorCode` from it |
 | `src/values/` | `@crm/contracts/values`: the attribute value shapes, filters, sorts, options, hues, countries and currencies, as plain Zod with no oRPC and no I/O, so `packages/ui` can parse what its editors emit |
 
 ## Conventions

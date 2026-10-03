@@ -10,33 +10,124 @@
 
 import { Route as rootRouteImport } from './routes/__root.tsx'
 import { Route as IndexRouteImport } from './routes/index.tsx'
+import { Route as SignInRouteImport } from './routes/sign-in.tsx'
+import { Route as StatusRouteImport } from './routes/status.tsx'
+import { Route as VerifyRouteImport } from './routes/verify.tsx'
+import { Route as WelcomeRouteImport } from './routes/welcome.tsx'
+import { Route as WSlugRouteImport } from './routes/w.$slug.tsx'
+import { Route as WSlugIndexRouteImport } from './routes/w.$slug.index.tsx'
+import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects.$object.tsx'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SignInRoute = SignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StatusRoute = StatusRouteImport.update({
+  id: '/status',
+  path: '/status',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const VerifyRoute = VerifyRouteImport.update({
+  id: '/verify',
+  path: '/verify',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WelcomeRoute = WelcomeRouteImport.update({
+  id: '/welcome',
+  path: '/welcome',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WSlugRoute = WSlugRouteImport.update({
+  id: '/w/$slug',
+  path: '/w/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WSlugIndexRoute = WSlugIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => WSlugRoute,
+} as any)
+const WSlugObjectsObjectRoute = WSlugObjectsObjectRouteImport.update({
+  id: '/objects/$object',
+  path: '/objects/$object',
+  getParentRoute: () => WSlugRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/sign-in': typeof SignInRoute
+  '/status': typeof StatusRoute
+  '/verify': typeof VerifyRoute
+  '/welcome': typeof WelcomeRoute
+  '/w/$slug': typeof WSlugRouteWithChildren
+  '/w/$slug/': typeof WSlugIndexRoute
+  '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/sign-in': typeof SignInRoute
+  '/status': typeof StatusRoute
+  '/verify': typeof VerifyRoute
+  '/welcome': typeof WelcomeRoute
+  '/w/$slug': typeof WSlugIndexRoute
+  '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/sign-in': typeof SignInRoute
+  '/status': typeof StatusRoute
+  '/verify': typeof VerifyRoute
+  '/welcome': typeof WelcomeRoute
+  '/w/$slug': typeof WSlugRouteWithChildren
+  '/w/$slug/': typeof WSlugIndexRoute
+  '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/sign-in'
+    | '/status'
+    | '/verify'
+    | '/welcome'
+    | '/w/$slug'
+    | '/w/$slug/'
+    | '/w/$slug/objects/$object'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/sign-in'
+    | '/status'
+    | '/verify'
+    | '/welcome'
+    | '/w/$slug'
+    | '/w/$slug/objects/$object'
+  id:
+    | '__root__'
+    | '/'
+    | '/sign-in'
+    | '/status'
+    | '/verify'
+    | '/welcome'
+    | '/w/$slug'
+    | '/w/$slug/'
+    | '/w/$slug/objects/$object'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SignInRoute: typeof SignInRoute
+  StatusRoute: typeof StatusRoute
+  VerifyRoute: typeof VerifyRoute
+  WelcomeRoute: typeof WelcomeRoute
+  WSlugRoute: typeof WSlugRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +139,77 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sign-in': {
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/status': {
+      id: '/status'
+      path: '/status'
+      fullPath: '/status'
+      preLoaderRoute: typeof StatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/verify': {
+      id: '/verify'
+      path: '/verify'
+      fullPath: '/verify'
+      preLoaderRoute: typeof VerifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/welcome': {
+      id: '/welcome'
+      path: '/welcome'
+      fullPath: '/welcome'
+      preLoaderRoute: typeof WelcomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/w/$slug': {
+      id: '/w/$slug'
+      path: '/w/$slug'
+      fullPath: '/w/$slug'
+      preLoaderRoute: typeof WSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/w/$slug/': {
+      id: '/w/$slug/'
+      path: '/'
+      fullPath: '/w/$slug/'
+      preLoaderRoute: typeof WSlugIndexRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/objects/$object': {
+      id: '/w/$slug/objects/$object'
+      path: '/objects/$object'
+      fullPath: '/w/$slug/objects/$object'
+      preLoaderRoute: typeof WSlugObjectsObjectRouteImport
+      parentRoute: typeof WSlugRoute
+    }
   }
 }
 
+interface WSlugRouteChildren {
+  WSlugIndexRoute: typeof WSlugIndexRoute
+  WSlugObjectsObjectRoute: typeof WSlugObjectsObjectRoute
+}
+
+const WSlugRouteChildren: WSlugRouteChildren = {
+  WSlugIndexRoute: WSlugIndexRoute,
+  WSlugObjectsObjectRoute: WSlugObjectsObjectRoute,
+}
+
+const WSlugRouteWithChildren = WSlugRoute._addFileChildren(WSlugRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SignInRoute: SignInRoute,
+  StatusRoute: StatusRoute,
+  VerifyRoute: VerifyRoute,
+  WelcomeRoute: WelcomeRoute,
+  WSlugRoute: WSlugRouteWithChildren,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

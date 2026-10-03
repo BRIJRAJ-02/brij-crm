@@ -191,18 +191,48 @@ function restrictSyntax(entries) {
   ];
 }
 
+const escapeRegex = (text) => text.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** A gitignore style import name (`x`, or `x/*` for everything under x) as a regex source. */
+function importRegex(name) {
+  return name.endsWith('/*') ? `${escapeRegex(name.slice(0, -2))}/.+` : escapeRegex(name);
+}
+
+/**
+ * The vendor pattern as one regex, with the `allow` names carved out. A group
+ * can't re-include `better-auth/client` once `better-auth` excludes the whole
+ * package (gitignore never re-includes inside an excluded folder), so a
+ * wrapper's exception is a lookahead instead.
+ */
+function vendorsExcept(pattern, allow) {
+  const names = pattern.group.map((name) => (name.endsWith('/*') ? importRegex(name) : `${importRegex(name)}(?:/.*)?`));
+  const carved = `(?!(?:${allow.map(importRegex).join('|')})$)`;
+  return { regex: `^${carved}(?:${names.join('|')})$`, message: pattern.message };
+}
+
+/**
+ * The restricted import patterns: every vendor SDK (less the `allowVendors`
+ * entries, which a wrapper module may import), plus the UI building blocks
+ * and Yjs unless allowed.
+ *
+ * @param {{ allowUi?: boolean, allowCollaboration?: boolean, allowVendors?: string[] }} [options]
+ */
+function restrictedImportsFor({ allowUi = false, allowCollaboration = false, allowVendors = [] } = {}) {
+  const vendors =
+    allowVendors.length === 0
+      ? vendorSdks.patterns
+      : vendorSdks.patterns.map((pattern) => vendorsExcept(pattern, allowVendors));
+  return {
+    patterns: [...vendors, ...(allowUi ? [] : [uiLibraries]), ...(allowCollaboration ? [] : [collaboration])],
+  };
+}
+
 /**
  * The rules every preset shares. `uiLibraries` lets a workspace import the UI
  * building blocks (packages/ui only); `collaboration` lets it import Yjs.
  */
 function base(root, { uiLibraries: allowUi = false, collaboration: allowCollaboration = false } = {}) {
-  const restrictedImports = {
-    patterns: [
-      ...vendorSdks.patterns,
-      ...(allowUi ? [] : [uiLibraries]),
-      ...(allowCollaboration ? [] : [collaboration]),
-    ],
-  };
+  const restrictedImports = restrictedImportsFor({ allowUi, allowCollaboration });
   return [
     globalIgnores(['**/dist/', '**/.turbo/', '**/.vercel/', '**/*.gen.ts', '**/.artifact/', '**/storybook-static/']),
     js.configs.recommended,
@@ -255,9 +285,19 @@ export function server({ root, databaseDriver = false }) {
  * Client code that isn't a screen. packages/ui passes `library: true`: it may
  * use the UI building blocks and Yjs, makes no network calls, and keeps its
  * copy in strings.ts. packages/data passes `collaboration: true` for #27's
- * Yjs sessions.
+ * Yjs sessions. `vendorWrappers` lets a vendor's one wrapper folder import
+ * exactly the entries it names (`{ files: ['src/auth/**'], allow:
+ * ['better-auth/client'] }`), while every other vendor import, and the rest of
+ * that vendor's entries, stay refused there.
+ *
+ * @param {{
+ *   root: string,
+ *   library?: boolean,
+ *   collaboration?: boolean,
+ *   vendorWrappers?: { files: string[], allow: string[] }[],
+ * }} options
  */
-export function client({ root, library = false, collaboration: allowCollaboration = false }) {
+export function client({ root, library = false, collaboration: allowCollaboration = false, vendorWrappers = [] }) {
   const entries = [syntax.defaultExport, ...syntax.classes, ...syntax.extensions, ...syntax.inlineStyle];
   return defineConfig(
     base(root, { uiLibraries: library, collaboration: library || allowCollaboration }),
@@ -269,6 +309,19 @@ export function client({ root, library = false, collaboration: allowCollaboratio
       },
     },
     restrictSyntax(entries),
+    vendorWrappers.map(({ files, allow }) => ({
+      files,
+      rules: {
+        '@typescript-eslint/no-restricted-imports': [
+          'error',
+          restrictedImportsFor({
+            allowUi: library,
+            allowCollaboration: library || allowCollaboration,
+            allowVendors: allow,
+          }),
+        ],
+      },
+    })),
     library
       ? {
           files: ['src/**/*.tsx'],
@@ -303,6 +356,11 @@ export function screens({ root }) {
           },
         ],
         ...noNetwork('Screens never call the network. Read and write through @crm/data.'),
+        // Route guards redirect by throwing the router's `redirect()`, its documented way.
+        '@typescript-eslint/only-throw-error': [
+          'error',
+          { allow: [{ from: 'package', package: '@tanstack/router-core', name: 'Redirect' }] },
+        ],
       },
     },
     restrictSyntax([syntax.defaultExport, ...syntax.classes, ...syntax.extensions, syntax.screenStyling]),

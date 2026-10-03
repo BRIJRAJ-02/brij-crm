@@ -2,22 +2,11 @@
 // HTTP status it travels with, and the shape of an error body. The API sets
 // statuses from it, and the client data layer branches on the same codes.
 import * as z from 'zod';
+import { ERROR_CODES } from './codes.ts';
 import { ENGINE_REFUSAL_CODES } from './values/engine.ts';
 
-/** Every stable code an API error can carry: the engine's refusals plus the request level codes. */
-export const ErrorCode = z.enum([
-  ...ENGINE_REFUSAL_CODES,
-  'INPUT_INVALID',
-  'UNAUTHENTICATED',
-  'EMAIL_UNVERIFIED',
-  'SIGNUP_CLOSED',
-  'EDGE_REQUIRED',
-  'FORBIDDEN_ORIGIN',
-  'PAYLOAD_TOO_LARGE',
-  'RATE_LIMITED',
-  'API_UNAVAILABLE',
-  'INTERNAL',
-]);
+/** Every stable code an API error can carry: the engine's refusals plus the request level codes (`codes.ts`). */
+export const ErrorCode = z.enum(ERROR_CODES);
 /** One of the API's stable error codes. */
 export type ErrorCode = z.infer<typeof ErrorCode>;
 

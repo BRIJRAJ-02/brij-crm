@@ -8,7 +8,11 @@ The one client data layer. Every screen reads and writes CRM data through it and
 
 | File | Owns |
 |---|---|
-| `src/index.ts` | `createDataLayer({ origin })`, the `DataLayer` type, and the contract types screens may use |
+| `src/index.ts` | `createDataLayer({ origin, notify, mintId, onSignedOut, currentPath })`, the `DataLayer` type, and the contract types screens may use. `me.get()` and `objects.list()` are cached per app load; a 401 from any call but `me.get` runs `onSignedOut` once |
+| `src/errors.ts` | `DataError`: every failure as `{ code, message, data? }`, from oRPC, Better Auth or the network. No Zod here (first load): codes come from `@crm/contracts/codes` |
+| `src/auth/` | Sign in. `client.ts` is Better Auth's browser client, its one wrapper (lint lets only `src/auth/` import `better-auth/client`), loaded with a dynamic import by `auth.ts` |
+| `src/ids.ts` | `createIdMinter()`: UUID v7 from the clock and browser crypto |
+| `src/data.test.ts` | The layer against a fake API: the real oRPC handler over the contract, and Better Auth's routes by hand |
 
 ## Conventions
 
@@ -16,6 +20,7 @@ The one client data layer. Every screen reads and writes CRM data through it and
 - `apps/web` imports types from here, never from `@crm/contracts`. Export the types a screen needs from here.
 - The API sits at `/api/rpc` on the app's own origin, in every environment.
 - This package is the backbone of the app: follow `crm-frontend-state` for every change.
+- It is in the first load: keep Zod, the Better Auth client and anything heavy out of its static imports (load them with `import()`).
 
 ## Gotchas
 

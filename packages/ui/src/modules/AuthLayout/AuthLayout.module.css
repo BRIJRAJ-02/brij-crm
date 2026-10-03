@@ -1,8 +1,10 @@
-/* AuthLayout: a column centred in the window, at least its full height: the
-   product's mark and name in body-strong, then the page card, which keeps
-   its own width, space-16 gutter and space-32 above and below. The column
-   adds space-32 above the mark only, so the card's own margin is the space
-   below. The page's background and text colour come from the base layer. */
+/* AuthLayout: a column centred in its container, at least its full height
+   (like AppShell, it fills what the app gives it, and grows past it on a
+   short screen): the product's mark and name in body-strong, then the page
+   card, which keeps its own width, space-16 gutter and space-32 above and
+   below. The column adds space-32 above the mark only, so the card's own
+   margin is the space below. The page's background and text colour come
+   from the base layer. */
 @layer components {
   .root {
     display: flex;
@@ -10,7 +12,8 @@
     align-items: center;
     justify-content: center;
     box-sizing: border-box;
-    min-block-size: 100dvh;
+    inline-size: 100%;
+    min-block-size: 100%;
     padding-block-start: var(--space-32);
   }
 

@@ -45,7 +45,16 @@ export function Card({
       {(title !== undefined || actions !== undefined) && (
         <header className={styles.head}>
           <span className={styles.heading}>
-            {title !== undefined && <Title className={styles.title}>{title}</Title>}
+            {title !== undefined &&
+              (placement === 'page' ? (
+                // The page's heading: the app moves focus here after a route
+                // change, so it takes focus by script but never joins the tab order.
+                <Title className={styles.title} tabIndex={-1}>
+                  {title}
+                </Title>
+              ) : (
+                <Title className={styles.title}>{title}</Title>
+              ))}
             {description !== undefined && <span className={styles.description}>{description}</span>}
           </span>
           {actions !== undefined && <span className={styles.actions}>{actions}</span>}

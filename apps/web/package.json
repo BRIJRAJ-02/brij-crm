@@ -8,7 +8,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run",
-    "size": "size-limit"
+    "size": "size-limit",
+    "test:flow": "playwright test"
   },
   "dependencies": {
     "@crm/data": "workspace:*",
@@ -20,12 +21,14 @@
   },
   "devDependencies": {
     "@crm/config": "workspace:*",
+    "@playwright/test": "catalog:",
     "@size-limit/preset-app": "catalog:",
     "@tanstack/router-plugin": "catalog:",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "@vitejs/plugin-react": "catalog:",
+    "axe-core": "catalog:",
     "eslint": "catalog:",
     "size-limit": "catalog:",
     "typescript": "catalog:",

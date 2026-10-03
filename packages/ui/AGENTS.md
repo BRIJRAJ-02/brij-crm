@@ -62,6 +62,8 @@ pnpm ui:artifact                   # build the artifact files into .artifact/; -
 
 ## Gotchas
 
+- `package.json` lists only the root stylesheets in `sideEffects`, so every other module (components and their CSS modules) is side effect free: a screen that imports one component from `@crm/ui` gets that component, not the whole library, and the app's first load holds only what `main.tsx` uses. A module that must run for its side effect alone has to be listed there.
+- The base layer sizes `[data-app-root]` (the web app's mount point) to the window, so AppShell and AuthLayout, which fill their container, fill the window. Their stories give them a window's height with `Stage height="page"`.
 - `apps/web/public/theme-boot.js` repeats the storage key and the `light` or `dark` check, because it has to run before any module loads. Change `THEME_STORAGE_KEY` and that file together (`apps/web/theme-boot.test.ts` checks they match).
 - Vite's CSS minifier (Lightning CSS) removes the `@layer` order statement from the build, and a shared chunk's CSS can load before the reset. So `layerOrder()` in `src/vite.ts` publishes the root stylesheet's `@layer` statement as `/layers.css` and links it ahead of every bundled stylesheet; `apps/web/build.test.ts` checks it.
 - The `unit` project runs in Node with no DOM, so anything that renders belongs in a story or a `*.browser.test.tsx`, which run in real browsers.

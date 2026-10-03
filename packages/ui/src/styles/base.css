@@ -6,6 +6,12 @@
     background: var(--surface);
   }
 
+  /* The app's mount point (apps/web's index.html) is the window's height,
+     so a page frame (AppShell, AuthLayout) can fill it. */
+  [data-app-root] {
+    block-size: 100dvb;
+  }
+
   body {
     font: var(--text-body);
     letter-spacing: var(--tracking-body);

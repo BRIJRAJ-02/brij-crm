@@ -10,7 +10,16 @@ export default defineConfig({
   envDir: '../..',
   plugins: [
     // Must come before the React plugin.
-    tanstackRouter({ target: 'react', autoCodeSplitting: true, addExtensions: true }),
+    tanstackRouter({
+      target: 'react',
+      autoCodeSplitting: true,
+      addExtensions: true,
+      // Pending components split too (the default keeps them in the first
+      // load), so the frames they draw load with the route, not up front.
+      codeSplittingOptions: {
+        defaultBehavior: [['component'], ['pendingComponent'], ['errorComponent'], ['notFoundComponent']],
+      },
+    }),
     react(),
     // CSS module classes as ws-<component>-<local>, as in Storybook and the artifact.
     uiVite(),

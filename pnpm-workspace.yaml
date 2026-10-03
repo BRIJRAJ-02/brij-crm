@@ -10,6 +10,7 @@ catalog:
   "@orpc/client": 1.15.4
   "@orpc/contract": 1.15.4
   "@orpc/server": 1.15.4
+  "@playwright/test": 1.63.0
   "@react-aria/live-announcer": 3.5.1
   "@size-limit/preset-app": 14.1.0
   "@storybook/addon-a11y": 10.6.1

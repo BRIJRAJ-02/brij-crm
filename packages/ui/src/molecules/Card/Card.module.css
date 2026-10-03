@@ -41,10 +41,12 @@
     min-inline-size: 0;
   }
 
+  /* A page card's title takes focus by script after a route change, so it draws no ring. */
   .title {
     margin: 0;
     font: var(--text-title);
     letter-spacing: var(--tracking-title);
+    outline: none;
   }
 
   .description {
