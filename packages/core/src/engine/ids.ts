@@ -21,6 +21,11 @@ export function isUuidV7(value: string): boolean {
   return V7.test(value);
 }
 
+/** True for a well formed uuid, so a malformed id is refused before it reaches Postgres. */
+export function isUuid(value: unknown): value is string {
+  return typeof value === 'string' && UUID.test(value);
+}
+
 /** Ids as one `uuid[]` parameter list, for `= any(...)` in raw SQL. */
 export function uuidArray(ids: readonly string[]): SQL {
   if (ids.length === 0) return sql`'{}'::uuid[]`;
@@ -36,6 +41,6 @@ export function uuidArray(ids: readonly string[]): SQL {
  * database returned belong here: each is checked to be a uuid first.
  */
 export function uuidList(ids: readonly string[]): SQL {
-  if (!ids.every((id) => UUID.test(id))) throw new TypeError('uuidList takes uuids only.');
+  if (!ids.every(isUuid)) throw new TypeError('uuidList takes uuids only.');
   return sql`${`{${ids.join(',')}}`}::uuid[]`;
 }

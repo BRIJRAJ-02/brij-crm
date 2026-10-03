@@ -79,6 +79,24 @@ describe('every tenant table', () => {
     expect(stray).toEqual([]);
   });
 
+  it('indexes every foreign key into records and entries, so a purge or an erasure never scans for them', async () => {
+    // Deleting a record or an entry checks each referencing table for rows that still point at it.
+    const keys = await owner.query<{ key: string; indexed: boolean }>(`
+      select c.conname as key, exists (
+        select 1 from pg_index x
+        where x.indrelid = c.conrelid and x.indnatts >= 2
+          and x.indkey[0] = any(c.conkey) and x.indkey[1] = any(c.conkey)
+      ) as indexed
+      from pg_constraint c
+      join pg_namespace n on n.oid = c.connamespace
+      where n.nspname = 'public' and c.contype = 'f'
+        and c.confrelid in ('public.records'::regclass, 'public.list_entries'::regclass)
+      order by 1
+    `);
+    expect(keys.rows.map((row) => row.key)).toContain('values_record');
+    expect(keys.rows.filter((row) => !row.indexed).map((row) => row.key)).toEqual([]);
+  });
+
   it("reads every view with the reader's own row level security", async () => {
     const views = await owner.query<{ view: string; invoker: boolean }>(`
       select c.relname as view, coalesce('security_invoker=true' = any(c.reloptions), false) as invoker

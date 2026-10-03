@@ -214,8 +214,10 @@ describe('records and values', () => {
       { objectId: peopleId, values: { [ids.name ?? '']: { fullName: 'Grace Hopper' } } },
       [watch],
     );
-    expect(seen[0]?.createdRecords).toEqual([recordId]);
-    expect(seen[0]?.values.map((value) => value.attributeId)).toEqual([ids.name]);
+    expect(seen[0]?.createdRecords).toEqual([{ recordId, objectId: peopleId }]);
+    expect(
+      seen[0]?.values.map((value) => [value.attributeId, value.ownerKind, 'objectId' in value && value.objectId]),
+    ).toEqual([[ids.name, 'record', peopleId]]);
 
     const failing: AfterWrite = () => Promise.reject(new Error('the outbox is down'));
     await expect(

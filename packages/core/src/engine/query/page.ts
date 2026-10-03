@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { asc, eq, sql, type SQL } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { FilterGroup, SortRules } from '@crm/contracts/values';
+import { isUuid } from '../ids.ts';
 import { LIMITS } from '../limits.ts';
 import { readEntriesById, type EntryView } from '../lists.ts';
 import { readRecords, type RecordView } from '../records.ts';
@@ -21,7 +22,6 @@ import {
   compileSorts,
   drivingSort,
   fromText,
-  isUuid,
   keyText,
   narrowedBySearch,
   SEARCH_CAP,
@@ -155,15 +155,26 @@ async function prepare(
     },
     actor: scope.actor,
   };
-  // UTC, the default, is always known; any other zone is checked against the database's own list.
-  if (context.clock.timeZone !== undefined && context.clock.timeZone !== 'UTC') {
-    const known = await tx.execute<{ ok: boolean }>(
-      sql`select exists (select 1 from pg_timezone_names where name = ${context.clock.timeZone}) as ok`,
-    );
-    if (known.rows[0]?.ok !== true) throw refuse('FILTER_INVALID', 'That time zone is not known.');
-  }
+  if (context.clock.timeZone !== undefined) await checkTimeZone(tx, context.clock.timeZone);
   const searches = search ? await runSearches(tx, context, query.filter) : new Map<string, readonly string[]>();
   return { context: searches.size === 0 ? context : { ...context, searches }, level };
+}
+
+/**
+ * Refuses a time zone Postgres does not know with `FILTER_INVALID`. UTC, the
+ * default, is always known; any other zone is tried once with `at time zone`,
+ * a lookup in the zone cache, rather than read from `pg_timezone_names`, which
+ * parses every zone file on each call. Like every refusal, it leaves the
+ * transaction to roll back.
+ */
+export async function checkTimeZone(tx: WorkspaceTx, timeZone: string): Promise<void> {
+  if (timeZone === 'UTC') return;
+  try {
+    await tx.execute(sql`select now() at time zone ${timeZone}`);
+  } catch (error) {
+    if (postgresError(error)?.code === '22023') throw refuse('FILTER_INVALID', 'That time zone is not known.');
+    throw error;
+  }
 }
 
 /**

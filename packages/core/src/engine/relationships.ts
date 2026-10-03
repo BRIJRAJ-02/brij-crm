@@ -288,6 +288,7 @@ async function endLinks(
       id: recordLinks.id,
       versionId: recordLinks.versionId,
       far: end.far,
+      farObjectId: records.objectId,
       farPosition: end.farPosition,
       setByType: recordLinks.setByType,
       setById: recordLinks.setById,
@@ -442,10 +443,12 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
     write.baseVersionId !== undefined && before !== undefined && before.versionId !== write.baseVersionId
       ? { versionId: before.versionId, setBy: { type: before.setByType, id: before.setById } satisfies Actor }
       : undefined;
+  if (attribute.objectId === null) throw new Error(`${attribute.title} is not on an object.`);
   const changes: ValueChange[] = [
     {
       ownerId,
       ownerKind: 'record',
+      objectId: attribute.objectId,
       attributeId: attribute.id,
       versionId: first.version,
       ...(replaced === undefined ? {} : { replaced }),
@@ -455,9 +458,21 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
   if (farAttributeId !== null) {
     const before = new Set(visible.map((link) => link.far));
     const after = new Set(wantedIds);
+    const objectOf = new Map([
+      ...visible.map((link) => [link.far, link.farObjectId] as const),
+      ...wanted.map((item) => [item.recordId, item.objectId] as const),
+    ]);
     const touched = [...before, ...after].filter((id) => before.has(id) !== after.has(id));
     for (const farId of touched) {
-      changes.push({ ownerId: farId, ownerKind: 'record', attributeId: farAttributeId, versionId: first.version });
+      const objectId = objectOf.get(farId);
+      if (objectId === undefined) throw new Error('A far record has no object.');
+      changes.push({
+        ownerId: farId,
+        ownerKind: 'record',
+        objectId,
+        attributeId: farAttributeId,
+        versionId: first.version,
+      });
     }
   }
   return changes;

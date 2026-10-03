@@ -19,7 +19,7 @@ import type { EngineScope } from '../scope.ts';
 import { loadAttributesById, type AttributeDef } from '../values.ts';
 import { createWorkspace } from '../workspaces.ts';
 import { evaluate, type EvaluateContext, type PlainRecord } from './evaluate.ts';
-import { countMatches, queryPage, type PageQuery, type ViewSource } from './page.ts';
+import { checkTimeZone, countMatches, queryPage, type PageQuery, type ViewSource } from './page.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 const NOW = '2026-10-15T14:00:00.000Z';
@@ -758,6 +758,21 @@ describe('refusals', () => {
       }
     }
     expect(codes).toEqual(attempts.map(() => 'FILTER_INVALID'));
+  });
+
+  it('checks a time zone in well under a millisecond of server time, not by reading every zone file (AC-15)', async () => {
+    // pg_timezone_names parses every zone file on each call (tens of milliseconds); the check must not.
+    await db.withWorkspace(scope.workspaceId, async (tx) => {
+      await tx.execute(sql`set local statement_timeout = '5ms'`);
+      for (const zone of ['Europe/London', ZONE, 'Asia/Kolkata', 'Pacific/Kiritimati']) await checkTimeZone(tx, zone);
+    });
+    const refused = await db
+      .withWorkspace(scope.workspaceId, (tx) => checkTimeZone(tx, 'Mars/Olympus'))
+      .then(
+        () => 'none',
+        (error: unknown) => (isRefusal(error) ? error.refusal.code : String(error)),
+      );
+    expect(refused).toBe('FILTER_INVALID');
   });
 });
 

@@ -1,12 +1,14 @@
 // Milestone 2 of spec 0004: every type, options, defaults, required, unique,
 // limits, history reads and batches, against a real Postgres.
+import { setTimeout as delay } from 'node:timers/promises';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import type { EngineRefusal } from '@crm/contracts/values';
 import { archiveAttribute, defineAttribute, defineObject, updateAttribute } from './definitions.ts';
+import { newId } from './ids.ts';
 import { getHistory, getTimeInStages, getValuesAsOf } from './history.ts';
-import { defineOption, updateOption } from './options.ts';
+import { defineOption, listOptions, updateOption } from './options.ts';
 import { createRecord, getRecords, setValues, setValuesBatch } from './records.ts';
 import { isRefusal } from './refusals.ts';
 import type { EngineScope } from './scope.ts';
@@ -237,6 +239,39 @@ describe('defaults and required', () => {
     expect(cleared[0]?.code).toBe('VALUE_REQUIRED');
   });
 
+  it('keeps creating deals when the default stage is archived, from the next live stage (AC-4, AC-11)', async () => {
+    const { scope, objects } = await workspace();
+    const dealsObject = id(objects.deals);
+    const deals = await slugs(scope, dealsObject);
+    const stage = id(deals.stage);
+    const stages = await optionIds(scope, stage);
+    const newDeal = async () => {
+      const { recordId } = await createRecord(scope, { objectId: dealsObject, values: { [id(deals.name)]: 'Deal' } });
+      const [record] = await getRecords(scope, { ids: [recordId] });
+      return record?.values[stage];
+    };
+    await updateOption(scope, { optionId: id(stages.Lead), archived: true });
+    expect(await newDeal()).toBe(stages['In progress']);
+    await updateOption(scope, { optionId: id(stages.Lead), archived: false });
+    expect(await newDeal()).toBe(stages.Lead);
+
+    // An optional select whose default option is archived just starts empty.
+    const { attributeId: tier } = await defineAttribute(scope, {
+      objectId: dealsObject,
+      apiSlug: 'tier',
+      title: 'Tier',
+      type: 'select',
+    });
+    const gold = (await defineOption(scope, { attributeId: tier, label: 'Gold', hue: 'yellow' })).optionId;
+    await defineOption(scope, { attributeId: tier, label: 'Silver', hue: 'gray' });
+    await updateAttribute(scope, { attributeId: tier, defaultValue: { kind: 'static', value: gold } });
+    await updateOption(scope, { optionId: gold, archived: true });
+    const { recordId } = await createRecord(scope, { objectId: dealsObject, values: { [id(deals.name)]: 'Deal' } });
+    const [record] = await getRecords(scope, { ids: [recordId] });
+    expect(record?.values[tier]).toBeNull();
+    expect((await listOptions(scope, tier)).find((option) => option.id === gold)?.archived).toBe(true);
+  });
+
   it("applies a date offset in the creator's time zone, and leaves old empty records alone when made required", async () => {
     const { scope, objects } = await workspace();
     const objectId = id(objects.companies);
@@ -323,6 +358,114 @@ describe('unique', () => {
       ),
     );
     expect(held.rows[0]?.n).toBe(0);
+  });
+});
+
+describe('unique against definition changes', () => {
+  /** Runs a definition change that waits inside its transaction, holding its locks, until released. */
+  async function paused(start: (hook: AfterWrite) => Promise<unknown>) {
+    const entered = Promise.withResolvers<undefined>();
+    const release = Promise.withResolvers<undefined>();
+    const done = start(async () => {
+      entered.resolve(undefined);
+      await release.promise;
+    });
+    await entered.promise;
+    return {
+      release: () => {
+        release.resolve(undefined);
+      },
+      done,
+    };
+  }
+
+  /** Whether a save is still waiting after a moment. */
+  async function waiting(save: Promise<unknown>): Promise<boolean> {
+    const state = await Promise.race([
+      save.then(
+        () => 'settled',
+        () => 'settled',
+      ),
+      delay(300).then(() => 'waiting'),
+    ]);
+    return state === 'waiting';
+  }
+
+  it('makes a save wait while Unique is turned on, then checks it against the new keys (AC-10)', async () => {
+    const { scope, objects } = await workspace();
+    const objectId = id(objects.companies);
+    const { attributeId } = await defineAttribute(scope, { objectId, apiSlug: 'code', title: 'Code', type: 'text' });
+    await createRecord(scope, { objectId, values: { [attributeId]: 'A1' } });
+    const { recordId } = await createRecord(scope, { objectId });
+
+    const change = await paused((hook) => updateAttribute(scope, { attributeId, isUnique: true }, [hook]));
+    const save = setValues(scope, { recordId, values: { [attributeId]: { value: 'a1' } } });
+    expect(await waiting(save)).toBe(true);
+    change.release();
+    await change.done;
+    expect((await refusals(save))[0]?.code).toBe('UNIQUE_CONFLICT');
+    const unkeyed = await db.withWorkspace(scope.workspaceId, (tx) =>
+      tx.execute<{ n: number }>(
+        sql`select count(*)::int as n from "values" where attribute_id = ${attributeId} and active_until is null and not is_cleared and unique_key is null`,
+      ),
+    );
+    expect(unkeyed.rows[0]?.n).toBe(0);
+  });
+
+  it('makes a save wait while a unique attribute is archived, then refuses it (AC-10)', async () => {
+    const { scope, objects } = await workspace();
+    const objectId = id(objects.companies);
+    const { attributeId } = await defineAttribute(scope, {
+      objectId,
+      apiSlug: 'ref',
+      title: 'Ref',
+      type: 'text',
+      isUnique: true,
+    });
+    const { recordId } = await createRecord(scope, { objectId });
+
+    const change = await paused((hook) => archiveAttribute(scope, attributeId, [hook]));
+    const save = setValues(scope, { recordId, values: { [attributeId]: { value: 'R1' } } });
+    expect(await waiting(save)).toBe(true);
+    change.release();
+    await change.done;
+    expect((await refusals(save))[0]?.code).toBe('ATTRIBUTE_READ_ONLY');
+    const keyed = await db.withWorkspace(scope.workspaceId, (tx) =>
+      tx.execute<{ n: number }>(
+        sql`select count(*)::int as n from "values" where attribute_id = ${attributeId} and unique_key is not null`,
+      ),
+    );
+    expect(keyed.rows[0]?.n).toBe(0);
+  });
+});
+
+describe('actor values', () => {
+  it("refuses a member who isn't in this workspace, one record at a time in a batch (AC-13)", async () => {
+    const { scope, objects, memberId } = await workspace();
+    const elsewhere = await workspace();
+    const dealsObject = id(objects.deals);
+    const deals = await slugs(scope, dealsObject);
+    const owner = id(deals.owner);
+    const [first, second] = await Promise.all(
+      ['A', 'B'].map((name) => createRecord(scope, { objectId: dealsObject, values: { [id(deals.name)]: name } })),
+    );
+    const firstId = id(first?.recordId);
+    const secondId = id(second?.recordId);
+    for (const stranger of [elsewhere.memberId, newId(), 'not-a-member']) {
+      const refused = await refusals(
+        setValues(scope, { recordId: firstId, values: { [owner]: { value: { type: 'member', id: stranger } } } }),
+      );
+      expect(refused.map((refusal) => [refusal.code, refusal.attributeId])).toEqual([
+        ['ATTRIBUTE_VALUE_INVALID', owner],
+      ]);
+    }
+    const results = await setValuesBatch(scope, {
+      items: [
+        { recordId: firstId, values: { [owner]: { value: { type: 'member', id: elsewhere.memberId } } } },
+        { recordId: secondId, values: { [owner]: { value: { type: 'member', id: memberId } } } },
+      ],
+    });
+    expect(results.map((result) => result.ok)).toEqual([false, true]);
   });
 });
 

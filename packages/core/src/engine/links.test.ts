@@ -220,6 +220,41 @@ describe('relationships', () => {
     expect(again[world.person('company')]).toEqual({});
   });
 
+  it("moves the far record too when a link changes, and names each record's object (AC-7, AC-17)", async () => {
+    const world = await workspace();
+    const acme = await newCompany(world, 'Acme');
+    const ada = await newPerson(world, 'Ada');
+    const before = await rowCount(
+      world.scope,
+      sql`select extract(epoch from updated_at)::float8 * 1000000 as n from records where id = ${acme}`,
+    );
+    const seen: Change[] = [];
+    await setValues(
+      world.scope,
+      {
+        recordId: ada,
+        values: { [world.person('company')]: { value: { objectId: world.companies, recordId: acme } } },
+      },
+      [
+        (change) => {
+          seen.push(change);
+          return Promise.resolve();
+        },
+      ],
+    );
+    const after = await rowCount(
+      world.scope,
+      sql`select extract(epoch from updated_at)::float8 * 1000000 as n from records where id = ${acme}`,
+    );
+    expect(after).toBeGreaterThan(before);
+    const [acmeView] = await getRecords(world.scope, { ids: [acme] });
+    expect(acmeView?.updatedBy).toEqual(world.scope.actor);
+    expect(seen[0]?.values.map((change) => [change.ownerId, 'objectId' in change && change.objectId])).toEqual([
+      [ada, world.people],
+      [acme, world.companies],
+    ]);
+  });
+
   it('refuses a taken single end, naming the record, and lets one of two racing links win (AC-5)', async () => {
     const world = await workspace();
     const acme = await newCompany(world, 'Acme');
@@ -669,6 +704,49 @@ describe('deletion', () => {
     expect(counts.records).toBe(1);
     expect(counts.values).toBeGreaterThanOrEqual(3);
     expect(await rowCount(world.scope, sql`select count(*)::int as n from "values" where owner_id = ${ada}`)).toBe(0);
-    expect(seen[0]).toMatchObject({ kind: 'erasure', deletedRecords: [ada] });
+    const ref = { recordId: ada, objectId: world.people };
+    expect(seen[0]).toMatchObject({ kind: 'erasure', deletedRecords: [ref], purgedRecords: [ref] });
+  });
+
+  it('tells the hooks every record, entry and reference a delete, restore, purge or erasure shows or hides (AC-17)', async () => {
+    const world = await workspace();
+    const ada = await newPerson(world, 'Ada');
+    const deal = await newDeal(world, 'Big deal');
+    await setValues(world.scope, {
+      recordId: deal,
+      values: { [world.deal('associated_people')]: { value: [{ objectId: world.people, recordId: ada }] } },
+    });
+    const { listId } = await pipeline(world);
+    const { entryId } = await addEntry(world.scope, { listId, recordId: deal });
+    const seen: Change[] = [];
+    const hook: AfterWrite = (change) => {
+      seen.push(change);
+      return Promise.resolve();
+    };
+    const dealRef = { recordId: deal, objectId: world.deals };
+    const adaSees = [{ recordId: ada, objectId: world.people, attributeId: world.person('associated_deals') }];
+
+    await deleteRecord(world.scope, { recordId: deal }, [hook]);
+    expect(seen[0]).toMatchObject({ deletedRecords: [dealRef], hiddenEntries: [entryId], references: adaSees });
+    await restoreRecord(world.scope, { recordId: deal }, [hook]);
+    expect(seen[1]).toMatchObject({ restoredRecords: [dealRef], shownEntries: [entryId], references: adaSees });
+
+    await deleteRecord(world.scope, { recordId: deal });
+    await db.withWorkspace(world.scope.workspaceId, (tx) =>
+      tx.execute(sql`update records set deleted_at = now() - interval '31 days' where id = ${deal}`),
+    );
+    await purgeDeleted(world.scope, {}, [hook]);
+    // Hidden since the delete: the purge removes them for good, and nothing on screen changes.
+    expect(seen[2]).toMatchObject({ purgedRecords: [dealRef], purgedEntries: [entryId], references: [] });
+
+    const other = await newDeal(world, 'Other deal');
+    await setValues(world.scope, {
+      recordId: other,
+      values: { [world.deal('associated_people')]: { value: [{ objectId: world.people, recordId: ada }] } },
+    });
+    await eraseRecord(world.scope, { recordId: ada }, [hook]);
+    expect(seen.at(-1)?.references).toEqual([
+      { recordId: other, objectId: world.deals, attributeId: world.deal('associated_people') },
+    ]);
   });
 });

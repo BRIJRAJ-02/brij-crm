@@ -1,12 +1,14 @@
 // Lists and their entries (spec 0004, AC-6). A list collects records of one
 // object; each entry has its own id, values and history, separate from the
 // record's. Removing an entry hides it for 30 days, like a deleted record.
+// Every entry write locks in one order: the list, then the record, then the
+// entry (lockEntry skips the list), so two of them never wait on each other.
 import { and, asc, eq, inArray, isNull, ne, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { decodeValue } from './columns.ts';
 import { checkName, checkSlug, definitionGuard, audit, touched } from './definitions.ts';
 import { RESTORE_WINDOW, takeEntrySlots, takeList } from './limits.ts';
-import { initialValues, writeAll, type AttributeResult } from './records.ts';
+import { bucketItems, initialValues, writeAll, type AttributeResult } from './records.ts';
 import { refuse } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
 import { setEntryKeysLive } from './sort-keys.ts';
@@ -140,11 +142,20 @@ export async function addEntry(
   return result;
 }
 
+/** An entry's list and record, unlocked: neither ever changes, so a write can lock them first. */
+async function entryParents(tx: WorkspaceTx, entryId: string): Promise<{ listId: string; recordId: string }> {
+  const [entry] = await tx
+    .select({ listId: listEntries.listId, recordId: listEntries.recordId })
+    .from(listEntries)
+    .where(eq(listEntries.id, entryId));
+  if (entry === undefined) throw refuse('NOT_FOUND', 'That entry does not exist.');
+  return entry;
+}
+
+/** Locks an entry's row whatever its state, after its list and record (the one lock order). */
 async function lockAnyEntry(tx: WorkspaceTx, entryId: string) {
   const [entry] = await tx
     .select({
-      listId: listEntries.listId,
-      recordId: listEntries.recordId,
       deletedAt: listEntries.deletedAt,
       expired: sql<boolean>`${listEntries.deletedAt} < now() - ${RESTORE_WINDOW}::interval`,
     })
@@ -153,6 +164,17 @@ async function lockAnyEntry(tx: WorkspaceTx, entryId: string) {
     .for('update');
   if (entry === undefined) throw refuse('NOT_FOUND', 'That entry does not exist.');
   return entry;
+}
+
+/** Locks a list's row for the rest of the transaction, returning whether it lets each record in once. */
+async function lockList(tx: WorkspaceTx, listId: string): Promise<{ allowsDuplicates: boolean }> {
+  const [list] = await tx
+    .select({ allowsDuplicates: lists.allowsDuplicates })
+    .from(lists)
+    .where(eq(lists.id, listId))
+    .for('update');
+  if (list === undefined) throw refuse('NOT_FOUND', 'That list does not exist.');
+  return list;
 }
 
 /** Removes an entry from its list. Its values stay, and it can come back for 30 days (AC-6). */
@@ -165,11 +187,13 @@ export async function removeEntry(
     scope,
     async (context) => {
       const { tx } = context;
+      const { listId, recordId } = await entryParents(tx, input.entryId);
+      // The list, then the record (share, as lockEntry takes it), then the entry: a restore of the record
+      // waits for this removal or this one for it, so neither leaves the entry's keys or unique values showing.
+      await lockList(tx, listId);
+      await tx.execute(sql`select 1 from records where id = ${recordId} for share`);
       const entry = await lockAnyEntry(tx, input.entryId);
       if (entry.deletedAt !== null) return;
-      // The entry, then its record (share), as lockEntry takes them: a restore of the record waits for this
-      // removal or this one for it, so neither leaves the entry's keys or unique values showing.
-      await tx.execute(sql`select 1 from records where id = ${entry.recordId} for share`);
       const by = actorRow(scope.actor);
       await tx
         .update(listEntries)
@@ -182,7 +206,7 @@ export async function removeEntry(
         .where(eq(listEntries.id, input.entryId));
       await holdUniqueKeys(tx, [input.entryId]);
       await setEntryKeysLive(tx, input.entryId, false);
-      await takeEntrySlots(tx, scope, entry.listId, -1);
+      await takeEntrySlots(tx, scope, listId, -1);
       context.record({ removedEntries: [input.entryId] });
     },
     hooks,
@@ -199,18 +223,21 @@ export async function restoreEntry(
     scope,
     async (context) => {
       const { tx } = context;
+      const { listId, recordId } = await entryParents(tx, input.entryId);
+      // The same lock order as addEntry: the list, then the record, then the entry.
+      const list = await lockList(tx, listId);
+      const [record] = await tx
+        .select({ deletedAt: records.deletedAt })
+        .from(records)
+        .where(eq(records.id, recordId))
+        .for('no key update');
       const entry = await lockAnyEntry(tx, input.entryId);
       if (entry.deletedAt === null) return;
       if (entry.expired) throw refuse('NOT_FOUND', 'That entry was removed more than 30 days ago.');
-      // The same lock order as addEntry: the list, then the record.
-      const [list] = await tx
-        .select({ allowsDuplicates: lists.allowsDuplicates })
-        .from(lists)
-        .where(eq(lists.id, entry.listId))
-        .for('update');
-      await lockRecord(tx, entry.recordId);
-      if (list?.allowsDuplicates === false) await checkOnce(tx, entry.listId, entry.recordId, input.entryId);
-      await takeEntrySlots(tx, scope, entry.listId, 1);
+      if (record === undefined) throw refuse('NOT_FOUND', 'That record does not exist.');
+      if (record.deletedAt !== null) throw refuse('RECORD_DELETED', 'That record is in the trash. Restore it first.');
+      if (!list.allowsDuplicates) await checkOnce(tx, listId, recordId, input.entryId);
+      await takeEntrySlots(tx, scope, listId, 1);
       await releaseUniqueKeys(tx, [input.entryId]);
       await tx
         .update(listEntries)
@@ -252,15 +279,16 @@ async function readEntries(tx: WorkspaceTx, where: ReturnType<typeof and>): Prom
   const attributesByList = new Map(
     await Promise.all(listIds.map(async (id) => [id, await loadListAttributes(tx, id)] as const)),
   );
-  const items = await currentItems(
-    tx,
-    rows.map((row) => row.id),
+  const itemsOf = bucketItems(
+    await currentItems(
+      tx,
+      rows.map((row) => row.id),
+    ),
   );
   return rows.map((row): EntryView => {
     const values: Record<string, unknown> = {};
     for (const attribute of attributesByList.get(row.listId)?.values() ?? []) {
-      const mine = items.filter((item) => item.ownerId === row.id && item.attributeId === attribute.id);
-      values[attribute.id] = decodeValue(attribute.type, attribute.isMulti, mine);
+      values[attribute.id] = decodeValue(attribute.type, attribute.isMulti, itemsOf(row.id, attribute.id));
     }
     return {
       id: row.id,

@@ -7,29 +7,62 @@ import type { EngineRefusal } from '@crm/contracts/values';
 import { isRefusal, postgresError } from './refusals.ts';
 import type { Actor, EngineScope } from './scope.ts';
 
-/** One attribute's value that changed on a record or a list entry. */
-export interface ValueChange {
+/** A record a write touched, with its object: the outbox groups a change by object. */
+export interface RecordRef {
+  readonly recordId: string;
+  readonly objectId: string;
+}
+
+/** One attribute's value that changed on a record (with its object) or a list entry (with its list). */
+export type ValueChange = {
   readonly ownerId: string;
-  readonly ownerKind: 'record' | 'entry';
   readonly attributeId: string;
   /** The new version, shared by every item row this write made for the attribute. */
   readonly versionId: string;
   /** When the edit started from an older version: the version and actor it replaced (AC-12). */
   readonly replaced?: { readonly versionId: string; readonly setBy: Actor };
+} & (
+  { readonly ownerKind: 'record'; readonly objectId: string } | { readonly ownerKind: 'entry'; readonly listId: string }
+);
+
+/**
+ * A record's reference value that changed on screen with no new version: a
+ * record it links to went to the trash, came back, or was erased.
+ */
+export interface ReferenceChange {
+  readonly recordId: string;
+  readonly objectId: string;
+  readonly attributeId: string;
 }
 
-/** Everything one write landed, as the hooks see it. */
+/**
+ * Everything one write landed or made visible or invisible, as the hooks see
+ * it. Records and entries that only appear or disappear (a record's entries
+ * on its delete, the reference values pointing at it) are listed too, so a
+ * screen showing them knows to read them again.
+ */
 export interface Change {
   readonly kind: 'write' | 'erasure';
   readonly workspaceId: string;
   readonly actor: Actor;
-  readonly createdRecords: readonly string[];
-  readonly deletedRecords: readonly string[];
-  readonly restoredRecords: readonly string[];
+  readonly createdRecords: readonly RecordRef[];
+  /** Records moved to the trash (or erased while live): they leave every read. */
+  readonly deletedRecords: readonly RecordRef[];
+  readonly restoredRecords: readonly RecordRef[];
+  /** Records removed for good, by the purge or an erasure. */
+  readonly purgedRecords: readonly RecordRef[];
   readonly createdEntries: readonly string[];
   readonly removedEntries: readonly string[];
   readonly restoredEntries: readonly string[];
+  /** Entries still in their lists whose record went to the trash (or was erased): they leave every read. */
+  readonly hiddenEntries: readonly string[];
+  /** Entries in their lists whose record came back from the trash. */
+  readonly shownEntries: readonly string[];
+  /** Entries removed for good, by the purge or an erasure. */
+  readonly purgedEntries: readonly string[];
   readonly values: readonly ValueChange[];
+  /** Reference values on other records that a delete, restore or erasure changed without a new version. */
+  readonly references: readonly ReferenceChange[];
 }
 
 /** The lists of a change that a write step adds to. */
@@ -38,10 +71,15 @@ const LIST_KEYS = [
   'createdRecords',
   'deletedRecords',
   'restoredRecords',
+  'purgedRecords',
   'createdEntries',
   'removedEntries',
   'restoredEntries',
+  'hiddenEntries',
+  'shownEntries',
+  'purgedEntries',
   'values',
+  'references',
 ] as const satisfies readonly (keyof ChangeLists)[];
 
 /** A step that runs after the write, inside its transaction (the outbox, the audit log). */
@@ -54,11 +92,12 @@ export interface WriteContext {
   /** Notes a change, for the hooks. */
   record(part: Partial<ChangeLists>): void;
   /**
-   * Runs one record's part of a batch under its own savepoint. A refusal rolls
-   * back only that part, and its changes are left out of what the hooks see.
+   * Runs one record's part of a batch under its own savepoint, handing `work`
+   * a context whose `tx` is that savepoint. A refusal rolls back only that
+   * part, and its changes are left out of what the hooks see.
    */
   perRecord<T>(
-    work: (tx: WorkspaceTx) => Promise<T>,
+    work: (context: WriteContext) => Promise<T>,
   ): Promise<{ ok: true; value: T } | { ok: false; refusals: readonly EngineRefusal[] }>;
 }
 
@@ -82,13 +121,18 @@ export async function runWrite<T>(
       return await scope.db.withWorkspace(scope.workspaceId, async (tx) => {
         // Collected as the write goes; local to this attempt, so nothing outlives it.
         const collected = {
-          createdRecords: [] as string[],
-          deletedRecords: [] as string[],
-          restoredRecords: [] as string[],
+          createdRecords: [] as RecordRef[],
+          deletedRecords: [] as RecordRef[],
+          restoredRecords: [] as RecordRef[],
+          purgedRecords: [] as RecordRef[],
           createdEntries: [] as string[],
           removedEntries: [] as string[],
           restoredEntries: [] as string[],
+          hiddenEntries: [] as string[],
+          shownEntries: [] as string[],
+          purgedEntries: [] as string[],
           values: [] as ValueChange[],
+          references: [] as ReferenceChange[],
         };
         const context: WriteContext = {
           tx,
@@ -97,15 +141,20 @@ export async function runWrite<T>(
             collected.createdRecords.push(...(part.createdRecords ?? []));
             collected.deletedRecords.push(...(part.deletedRecords ?? []));
             collected.restoredRecords.push(...(part.restoredRecords ?? []));
+            collected.purgedRecords.push(...(part.purgedRecords ?? []));
             collected.createdEntries.push(...(part.createdEntries ?? []));
             collected.removedEntries.push(...(part.removedEntries ?? []));
             collected.restoredEntries.push(...(part.restoredEntries ?? []));
+            collected.hiddenEntries.push(...(part.hiddenEntries ?? []));
+            collected.shownEntries.push(...(part.shownEntries ?? []));
+            collected.purgedEntries.push(...(part.purgedEntries ?? []));
             collected.values.push(...(part.values ?? []));
+            collected.references.push(...(part.references ?? []));
           },
           async perRecord(step) {
             const marks = LIST_KEYS.map((key) => collected[key].length);
             try {
-              const value = await tx.transaction((savepoint) => step(savepoint));
+              const value = await tx.transaction((savepoint) => step({ ...context, tx: savepoint }));
               return { ok: true, value };
             } catch (error) {
               if (!isRefusal(error)) throw error;
@@ -124,10 +173,15 @@ export async function runWrite<T>(
           createdRecords: [...collected.createdRecords],
           deletedRecords: [...collected.deletedRecords],
           restoredRecords: [...collected.restoredRecords],
+          purgedRecords: [...collected.purgedRecords],
           createdEntries: [...collected.createdEntries],
           removedEntries: [...collected.removedEntries],
           restoredEntries: [...collected.restoredEntries],
+          hiddenEntries: [...collected.hiddenEntries],
+          shownEntries: [...collected.shownEntries],
+          purgedEntries: [...collected.purgedEntries],
           values: [...collected.values],
+          references: [...collected.references],
         };
         for (const hook of hooks) await hook(change, tx);
         return { result, change };

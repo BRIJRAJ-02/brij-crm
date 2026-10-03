@@ -20,7 +20,7 @@ import {
   type RelativeRange,
   type SortRule,
 } from '@crm/contracts/values';
-import { uuidArray, uuidList } from '../ids.ts';
+import { isUuid, uuidArray, uuidList } from '../ids.ts';
 import { refuse } from '../refusals.ts';
 import { hasSortKey } from '../sort-keys.ts';
 import type { RelationshipDef } from '../relationships.ts';
@@ -77,7 +77,6 @@ export function baseLevel(base: { readonly objectId: string; readonly listId?: s
 const MAX_HOPS = 2;
 /** The longest text a condition may search for. */
 const MAX_OPERAND = 500;
-const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** The sort and filter key of a text column: its first 256 characters, lowercased, in the pinned collation. */
 const textKey = (column: SQL) => sql`(lower(left(${column}, 256)) collate "und-x-icu")`;
@@ -87,11 +86,6 @@ const raw = (alias: string) => sql.raw(alias);
 
 function invalid(message: string): never {
   throw refuse('FILTER_INVALID', message);
-}
-
-/** True for a well formed uuid, so a malformed id is refused before it reaches Postgres. */
-export function isUuid(value: unknown): value is string {
-  return typeof value === 'string' && UUID.test(value);
 }
 
 function attributeFor(context: CompileContext, attributeId: string): AttributeDef {

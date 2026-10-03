@@ -1,0 +1,2 @@
+CREATE INDEX "values_by_record" ON "values" USING btree ("workspace_id","record_id") WHERE "values"."record_id" is not null;--> statement-breakpoint
+CREATE INDEX "values_by_entry" ON "values" USING btree ("workspace_id","entry_id") WHERE "values"."entry_id" is not null;

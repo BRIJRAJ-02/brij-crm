@@ -337,6 +337,13 @@ export const values = pgTable(
       .where(sql`${t.activeUntil} is null and ${t.uniqueKey} is not null`),
     // As of reads and history.
     index('values_history').on(t.workspaceId, t.ownerId, t.attributeId, t.activeFrom),
+    // The foreign key checks when a purge or an erasure deletes records and entries: one lookup each, not a scan.
+    index('values_by_record')
+      .on(t.workspaceId, t.recordId)
+      .where(sql`${t.recordId} is not null`),
+    index('values_by_entry')
+      .on(t.workspaceId, t.entryId)
+      .where(sql`${t.entryId} is not null`),
     ...actorConstraints('values', 'set_by', t.workspaceId, {
       type: t.setByType,
       id: t.setById,

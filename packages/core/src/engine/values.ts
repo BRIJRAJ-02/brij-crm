@@ -5,13 +5,14 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { parseAttributeValue, type AttributeType } from '@crm/contracts/values';
 import { encodeValue, sameItems, type ItemColumns, type StoredItem } from './columns.ts';
-import { postgresError, refuse } from './refusals.ts';
+import { isUuid, uuidArray } from './ids.ts';
+import { postgresError, refuse, writeConflict } from './refusals.ts';
 import { syncSortKey } from './sort-keys.ts';
-import { uniqueKeyOf } from './unique.ts';
+import { UNIQUE_TYPES, uniqueKeyOf } from './unique.ts';
 import { actorRow, type Actor } from './scope.ts';
 import type { ValueChange, WriteContext } from './write.ts';
 
-const { attributeOptions, attributes, listEntries, records, values } = schema;
+const { attributeOptions, attributes, listEntries, members, records, values } = schema;
 
 /** The parts of an attribute definition the write and read paths need. */
 export interface AttributeDef {
@@ -88,10 +89,21 @@ export async function loadListAttributes(tx: WorkspaceTx, listId: string): Promi
 }
 
 /**
- * Locks a live entry's row for the rest of the transaction, like `lockRecord`.
+ * Locks a live entry's row for the rest of the transaction, like `lockRecord`:
+ * its record first (share), then the entry, the order every entry write takes.
  * Refuses an entry that is missing or removed, or whose record is in the trash.
  */
 export async function lockEntry(tx: WorkspaceTx, entryId: string): Promise<{ listId: string; recordId: string }> {
+  const [parents] = await tx
+    .select({ recordId: listEntries.recordId })
+    .from(listEntries)
+    .where(eq(listEntries.id, entryId));
+  if (parents === undefined) throw refuse('NOT_FOUND', 'That entry does not exist.');
+  const [record] = await tx
+    .select({ deletedAt: records.deletedAt })
+    .from(records)
+    .where(eq(records.id, parents.recordId))
+    .for('share');
   const [row] = await tx
     .select({ listId: listEntries.listId, recordId: listEntries.recordId, deletedAt: listEntries.deletedAt })
     .from(listEntries)
@@ -99,11 +111,6 @@ export async function lockEntry(tx: WorkspaceTx, entryId: string): Promise<{ lis
     .for('no key update');
   if (row === undefined) throw refuse('NOT_FOUND', 'That entry does not exist.');
   if (row.deletedAt !== null) throw refuse('RECORD_DELETED', 'That entry was removed from its list. Restore it first.');
-  const [record] = await tx
-    .select({ deletedAt: records.deletedAt })
-    .from(records)
-    .where(eq(records.id, row.recordId))
-    .for('share');
   if (record?.deletedAt !== null)
     throw refuse('RECORD_DELETED', "That entry's record is in the trash. Restore it first.");
   return { listId: row.listId, recordId: row.recordId };
@@ -213,6 +220,63 @@ async function checkOptions(
   }
 }
 
+/** Refuses member ids that aren't active members of this workspace. Members already held may stay. */
+async function checkMembers(
+  tx: WorkspaceTx,
+  attribute: AttributeDef,
+  next: readonly ItemColumns[],
+  held: readonly ItemColumns[],
+): Promise<void> {
+  const memberIds = (items: readonly ItemColumns[]) =>
+    items.flatMap((item) => (item.actorType === 'member' && item.actorId !== null ? [item.actorId] : []));
+  const kept = new Set(memberIds(held));
+  const added = [...new Set(memberIds(next).filter((id) => !kept.has(id)))];
+  if (added.length === 0) return;
+  const invalid = () =>
+    refuse('ATTRIBUTE_VALUE_INVALID', `Pick a member of this workspace for ${attribute.title}.`, attribute.id);
+  if (!added.every(isUuid)) throw invalid();
+  const rows = await tx
+    .select({ id: members.id })
+    .from(members)
+    .where(and(inArray(members.id, added), eq(members.status, 'active')));
+  if (rows.length < added.length) throw invalid();
+}
+
+/**
+ * Takes a key share lock on the attribute's row, then starts the write again
+ * if its unique or archived flag changed since it was read. Turning Unique on
+ * or off, and archiving or restoring, lock that row for update before they
+ * fill or clear keys, so a value write either lands before they scan the
+ * values, or waits for them and writes with the new definition (AC-10).
+ */
+async function holdDefinition(tx: WorkspaceTx, attribute: AttributeDef): Promise<void> {
+  const [row] = await tx
+    .select({ isUnique: attributes.isUnique, archivedAt: attributes.archivedAt })
+    .from(attributes)
+    .where(eq(attributes.id, attribute.id))
+    .for('key share');
+  if (row === undefined) throw refuse('NOT_FOUND', 'That attribute does not exist.', attribute.id);
+  if (row.isUnique !== attribute.isUnique || (row.archivedAt === null) !== (attribute.archivedAt === null)) {
+    throw writeConflict(`${attribute.title} changed under this write.`);
+  }
+}
+
+/** The object a record's value belongs to, or the list an entry's does, as a change reports it. */
+type OwnerPart =
+  | { readonly ownerKind: 'record'; readonly objectId: string }
+  | { readonly ownerKind: 'entry'; readonly listId: string };
+
+/** A write's owner part, from the attribute it writes: a record's attributes sit on its object, an entry's on its list. */
+function ownerPart(write: AttributeWrite): OwnerPart {
+  const { attribute } = write;
+  if (write.ownerKind === 'record') {
+    if (attribute.objectId === null) throw new Error(`${attribute.title} is not on an object.`);
+    return { ownerKind: 'record', objectId: attribute.objectId };
+  }
+  if (attribute.listId === null) throw new Error(`${attribute.title} is not on a list.`);
+  return { ownerKind: 'entry', listId: attribute.listId };
+}
+
 /**
  * Writes one attribute's value by the protocol: the owner is already locked by
  * the caller. An unchanged value writes nothing and returns undefined.
@@ -224,6 +288,7 @@ export async function writeAttribute(context: WriteContext, write: AttributeWrit
   const { attribute, ownerId } = write;
   const parsed = parseFor(attribute, write.value);
   const next = encodeValue(attribute.type, parsed);
+  if (UNIQUE_TYPES.includes(attribute.type)) await holdDefinition(tx, attribute);
 
   const current = await currentRows(tx, ownerId, attribute.id);
   const held: readonly ItemColumns[] = current
@@ -241,6 +306,7 @@ export async function writeAttribute(context: WriteContext, write: AttributeWrit
     }));
   if (sameItems(held, next)) return undefined;
   if (attribute.type === 'select' || attribute.type === 'status') await checkOptions(tx, attribute, next, held);
+  if (attribute.type === 'actor_reference') await checkMembers(tx, attribute, next, held);
 
   const stamp = await tx.execute<{ t: string; version: string }>(sql`
     select greatest(
@@ -294,6 +360,10 @@ export async function writeAttribute(context: WriteContext, write: AttributeWrit
         attribute.id,
       );
     }
+    // A member or option that went away (or never was) after the checks above: refuse it as they would.
+    if (pg?.code === '23503' && (pg.constraint === 'values_actor' || pg.constraint === 'values_option')) {
+      throw refuse('ATTRIBUTE_VALUE_INVALID', `That ${attribute.title} value is not available any more.`, attribute.id);
+    }
     throw error;
   }
   await syncSortKey(tx, ownerId, attribute);
@@ -305,7 +375,7 @@ export async function writeAttribute(context: WriteContext, write: AttributeWrit
       : undefined;
   return {
     ownerId,
-    ownerKind: write.ownerKind,
+    ...ownerPart(write),
     attributeId: attribute.id,
     versionId: first.version,
     ...(replaced === undefined ? {} : { replaced }),
@@ -326,6 +396,22 @@ function itemInsert(item: ItemColumns) {
     actorMemberId: item.actorType === 'member' ? item.actorId : null,
     jsonValue: item.jsonValue,
   };
+}
+
+/**
+ * Moves the `updated_at` and `updated_by` of the records on the far side of a
+ * link write to now and the scope's actor, locking them in id order (AC-7): a
+ * company that gains a person changed too.
+ */
+export async function touchRecords(context: WriteContext, recordIds: readonly string[]): Promise<void> {
+  if (recordIds.length === 0) return;
+  const by = actorRow(context.scope.actor);
+  const ids = uuidArray([...new Set(recordIds)].sort());
+  await context.tx.execute(sql`
+    update records set updated_at = now(), updated_by_type = ${by.type}, updated_by_id = ${by.id},
+      updated_by_member_id = ${by.memberId}
+    where id in (select id from records where id = any(${ids}) order by id for no key update)
+  `);
 }
 
 /** Moves a record's (or entry's) `updated_at` and `updated_by` to now and the scope's actor (AC-7). */

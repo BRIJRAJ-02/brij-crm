@@ -1,7 +1,7 @@
 // Creating records, setting their values and reading them back (spec 0004).
 // Every write goes through runWrite and the value write protocol; every read
 // runs inside withWorkspace().
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { AttributeDefault, HUES, type EngineRefusal, type Hue, type RecordRefDisplay } from '@crm/contracts/values';
 import { takeRecordSlots } from './limits.ts';
@@ -18,13 +18,14 @@ import {
   lockRecord,
   parseFor,
   touchOwner,
+  touchRecords,
   writeAttribute,
   type AttributeDef,
   type AttributeWrite,
 } from './values.ts';
 import { runWrite, type AfterWrite, type ValueChange, type WriteContext } from './write.ts';
 
-const { objects, records } = schema;
+const { attributeOptions, objects, records } = schema;
 
 /** What a new record needs: its object, its values by attribute id, and optionally a client minted UUID v7. */
 export interface RecordInput {
@@ -33,6 +34,30 @@ export interface RecordInput {
   readonly id?: string;
   /** The creator's time zone, for date defaults such as "a month from today" (UTC when absent). */
   readonly timeZone?: string;
+}
+
+/**
+ * A select or status default with its archived options left out, so archiving
+ * the option a default names never stops records being created (AC-4, AC-11).
+ * A multi default keeps its live options. A single default whose option is
+ * archived gives no value, unless the attribute is required: then the first
+ * live option in order stands in (a pipeline's next stage). The stored default
+ * is left alone, so restoring the option brings it back.
+ */
+async function liveOptionDefault(tx: WorkspaceTx, attribute: AttributeDef, value: unknown): Promise<unknown> {
+  const options = await tx
+    .select({ id: attributeOptions.id, archivedAt: attributeOptions.archivedAt })
+    .from(attributeOptions)
+    .where(eq(attributeOptions.attributeId, attribute.id))
+    .orderBy(asc(attributeOptions.position), asc(attributeOptions.id));
+  const live = new Set(options.flatMap((option) => (option.archivedAt === null ? [option.id] : [])));
+  const isLive = (id: unknown) => typeof id === 'string' && live.has(id);
+  if (Array.isArray(value)) {
+    const kept = value.filter(isLive);
+    return value.length > 0 && kept.length === 0 ? undefined : kept;
+  }
+  if (typeof value !== 'string' || isLive(value)) return value;
+  return attribute.isRequired ? [...live][0] : undefined;
 }
 
 /** The value a default gives a new record, or undefined when it gives none (a current user default for a non member). */
@@ -45,7 +70,11 @@ async function defaultFor(
   const parsed = AttributeDefault.safeParse(attribute.defaultValue);
   if (!parsed.success) return undefined;
   const rule = parsed.data;
-  if (rule.kind === 'static') return rule.value;
+  if (rule.kind === 'static') {
+    return attribute.type === 'select' || attribute.type === 'status'
+      ? liveOptionDefault(tx, attribute, rule.value)
+      : rule.value;
+  }
   if (rule.kind === 'current_user')
     return scope.actor.type === 'member' ? { type: 'member', id: scope.actor.id } : undefined;
   const offset = sql`${rule.duration}::interval`;
@@ -154,6 +183,11 @@ export async function writeAll(
         : { versionId: change.versionId, replaced: change.replaced };
   }
   context.record({ values: changes });
+  // A link write changes the far records' values too, so they move like the owner does (AC-7).
+  await touchRecords(
+    context,
+    changes.flatMap((change) => (change.ownerKind === 'record' && change.ownerId !== ownerId ? [change.ownerId] : [])),
+  );
   return results;
 }
 
@@ -238,7 +272,7 @@ export async function insertRecord(context: WriteContext, input: RecordInput) {
     if (postgresError(error)?.code === '23505') throw refuse('ID_TAKEN', 'A record with that id already exists.');
     throw error;
   }
-  context.record({ createdRecords: [recordId] });
+  context.record({ createdRecords: [{ recordId, objectId: input.objectId }] });
   const versions = await writeAll(context, 'record', recordId, parsed);
   return { recordId, versions };
 }
@@ -311,7 +345,7 @@ export async function setValuesBatch(
     async (context) => {
       const outcomes: BatchResult[] = [];
       for (const item of input.items) {
-        const outcome = await context.perRecord(() => updateRecord(context, item));
+        const outcome = await context.perRecord((child) => updateRecord(child, item));
         outcomes.push(
           outcome.ok
             ? { recordId: item.recordId, ok: true, results: outcome.value }
@@ -335,6 +369,24 @@ function nameOf(value: unknown): string {
     return value.fullName;
   }
   return '';
+}
+
+/**
+ * Groups item rows by owner and attribute once, so a read looks each pair up
+ * instead of scanning every item for every row and attribute.
+ */
+export function bucketItems<T extends { readonly ownerId: string; readonly attributeId: string }>(
+  items: readonly T[],
+): (ownerId: string, attributeId: string) => readonly T[] {
+  const byOwner = new Map<string, Map<string, T[]>>();
+  for (const item of items) {
+    const byAttribute = byOwner.get(item.ownerId) ?? new Map<string, T[]>();
+    byOwner.set(item.ownerId, byAttribute);
+    const list = byAttribute.get(item.attributeId) ?? [];
+    byAttribute.set(item.attributeId, list);
+    list.push(item);
+  }
+  return (ownerId, attributeId) => byOwner.get(ownerId)?.get(attributeId) ?? [];
 }
 
 /** Reads live records with their current values and display (AC-19). Up to 500 at once. */
@@ -387,6 +439,7 @@ export async function readRecords(
     references,
   );
   const order = new Map(input.ids.map((id, index) => [id, index]));
+  const itemsOf = bucketItems(items);
 
   return rows
     .map((row): RecordView => {
@@ -412,11 +465,10 @@ export async function readRecords(
           values[attribute.id] = links.get(row.id)?.get(attribute.id) ?? (attribute.isMulti ? [] : null);
           continue;
         }
-        const mine = items.filter((item) => item.ownerId === row.id && item.attributeId === attribute.id);
-        values[attribute.id] = decodeValue(attribute.type, attribute.isMulti, mine);
+        values[attribute.id] = decodeValue(attribute.type, attribute.isMulti, itemsOf(row.id, attribute.id));
       }
       const primaryId = object?.primaryAttributeId ?? null;
-      const primaryItems = items.filter((item) => item.ownerId === row.id && item.attributeId === primaryId);
+      const primaryItems = primaryId === null ? [] : itemsOf(row.id, primaryId);
       const primary = primaryId === null ? undefined : attributes.get(primaryId);
       const name = primary === undefined ? '' : nameOf(decodeValue(primary.type, false, primaryItems));
       const hue = object === undefined ? undefined : hueOf(object.hue);

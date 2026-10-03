@@ -76,4 +76,12 @@ export { isRefusal, type RefusalError } from './refusals.ts';
 export { defineRelationship, type Cardinality, type RelationshipEnd, type RelationshipInput } from './relationships.ts';
 export { SYSTEM_ACTOR, type Actor, type EngineScope } from './scope.ts';
 export { createWorkspace, type CreatedWorkspace, type WorkspaceInput } from './workspaces.ts';
-export { runWrite, type AfterWrite, type Change, type ValueChange, type WriteContext } from './write.ts';
+export {
+  runWrite,
+  type AfterWrite,
+  type Change,
+  type RecordRef,
+  type ReferenceChange,
+  type ValueChange,
+  type WriteContext,
+} from './write.ts';
