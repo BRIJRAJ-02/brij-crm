@@ -32,7 +32,11 @@ export interface Database {
   withWorkspace<T>(workspaceId: string, work: (tx: WorkspaceTx) => Promise<T>): Promise<T>;
   /** A fixed readiness probe. It reads no tenant data. */
   checkHealth(): Promise<DatabaseHealth>;
-  /** Refuses to continue if this connection could bypass row level security. */
+  /**
+   * Refuses to continue if this connection could bypass row level security
+   * (itself, or through a role it can use), or is in `pg_read_all_data` or
+   * `pg_write_all_data`, which skip every grant.
+   */
   assertAppRole(): Promise<void>;
   /**
    * Vacuums and analyzes whole tables after a bulk load, outside any
@@ -101,6 +105,7 @@ export function createDatabase(options: DatabaseOptions): Database {
         rolbypassrls: boolean;
         owns_database: boolean;
         reaches_bypass: boolean;
+        reaches_all_data: string | null;
         is_app_member: boolean;
       }>(`
         select
@@ -113,6 +118,14 @@ export function createDatabase(options: DatabaseOptions): Database {
             where b.oid <> r.oid and (b.rolbypassrls or b.rolsuper)
               and (pg_has_role(r.oid, b.oid, 'USAGE') or pg_has_role(r.oid, b.oid, 'SET'))
           ) as reaches_bypass,
+          (
+            select string_agg(b.rolname, ', ' order by b.rolname) from pg_roles b
+            where b.rolname in ('pg_read_all_data', 'pg_write_all_data')
+              and (
+                pg_has_role(r.oid, b.oid, 'MEMBER') or pg_has_role(r.oid, b.oid, 'USAGE')
+                or pg_has_role(r.oid, b.oid, 'SET')
+              )
+          ) as reaches_all_data,
           exists (
             select 1
             from pg_auth_members m
@@ -129,6 +142,13 @@ export function createDatabase(options: DatabaseOptions): Database {
       if (row.rolsuper || row.rolbypassrls || row.owns_database || row.reaches_bypass) {
         throw new Error(
           `The app is connected as "${row.role}", which can bypass row level security. ` +
+            'Point DATABASE_URL at the app login role (see `pnpm db:app-login`).',
+        );
+      }
+      // pg_read_all_data and pg_write_all_data skip every grant, the `auth` schema's included.
+      if (row.reaches_all_data !== null) {
+        throw new Error(
+          `The app is connected as "${row.role}", a member of ${row.reaches_all_data}, which reads or writes every table. ` +
             'Point DATABASE_URL at the app login role (see `pnpm db:app-login`).',
         );
       }

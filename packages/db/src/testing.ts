@@ -28,6 +28,11 @@ export interface TestDatabase {
   readonly identityUrl: string;
   /** The owner role, for checks that read the catalog or set up data across workspaces. */
   readonly ownerUrl: string;
+  /**
+   * A superuser on this database, for the few checks the owner can't make:
+   * reading `pg_authid`, or granting a built in role like `pg_read_all_data`.
+   */
+  readonly adminUrl: string;
 }
 
 /**
@@ -96,6 +101,7 @@ export async function prepareTestDatabase(
     appUrl: withCredentials(adminUrl, APP.role, APP.password, name),
     identityUrl: withCredentials(adminUrl, IDENTITY.role, IDENTITY.password, name),
     ownerUrl,
+    adminUrl: onDatabase(adminUrl, name),
   };
 }
 
@@ -142,6 +148,26 @@ export async function testQuery<Row extends Record<string, unknown>>(
   }
 }
 
+/**
+ * Runs `work` holding the lock every suite's `prepareTestDatabase` takes, so
+ * no suite migrates while it runs. For a test that briefly commits a role
+ * the migrations' closing checks would refuse (a member of
+ * `pg_read_all_data`, say): roles belong to the whole server.
+ */
+export async function withSetupLock<T>(
+  work: () => Promise<T>,
+  adminUrl = process.env.TEST_DATABASE_ADMIN_URL ?? DEFAULT_ADMIN_URL,
+): Promise<T> {
+  const admin = new pg.Client({ connectionString: adminUrl, application_name: 'crm-test-lock' });
+  await admin.connect();
+  try {
+    await admin.query('select pg_advisory_lock($1)', [SETUP_LOCK]);
+    return await work();
+  } finally {
+    await admin.end();
+  }
+}
+
 async function ensureRole(client: pg.Client, role: string, password: string, options: string): Promise<void> {
   const exists = await client.query('select 1 from pg_roles where rolname = $1', [role]);
   if (exists.rowCount === 0) {
@@ -149,6 +175,12 @@ async function ensureRole(client: pg.Client, role: string, password: string, opt
       `create role ${client.escapeIdentifier(role)} login password ${client.escapeLiteral(password)} ${options}`,
     );
   }
+}
+
+function onDatabase(url: string, database: string): string {
+  const next = new URL(url);
+  next.pathname = `/${database}`;
+  return next.toString();
 }
 
 function withCredentials(url: string, user: string, password: string, database: string): string {

@@ -1,7 +1,8 @@
 // The Hono app's own refusals: the edge guard (spec 0005, AC-33), the body
-// limit on /api/rpc, and the shared error shape on each.
+// limits on /api/rpc and /api/auth, the Better Auth routes it serves, and
+// the shared error shape on each.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { RPC_BODY_LIMIT_BYTES } from './app.ts';
+import { AUTH_BODY_LIMIT_BYTES, RPC_BODY_LIMIT_BYTES } from './app.ts';
 import { EDGE_HEADER } from './edge.ts';
 import { APP_URL, captureLogs, createTestApp } from './testing.ts';
 
@@ -131,18 +132,81 @@ describe('the body limit on /api/rpc', () => {
     const response = await app.fetch(rpcRequest('echo', { body }));
     expect(response.status).toBe(200);
   });
+});
 
-  it('leaves /api/auth to Better Auth’s own limit', async () => {
+describe('the body limit on /api/auth', () => {
+  const app = createTestApp();
+  const authRequest = (body: string | ReadableStream<Uint8Array>) =>
+    new Request(`${APP_URL}/api/auth/sign-in/email-otp`, {
+      method: 'POST',
+      headers: { origin: APP_URL, 'content-type': 'application/json' },
+      body,
+      duplex: 'half',
+    });
+  const oversized = JSON.stringify({ email: 'ada@example.com', otp: 'x'.repeat(AUTH_BODY_LIMIT_BYTES) });
+
+  it('answers a body over 64 KB with 413 PAYLOAD_TOO_LARGE, before Better Auth reads it', async () => {
+    const response = await app.fetch(authRequest(oversized));
+    expect(response.status).toBe(413);
+    expect(await response.json()).toEqual({
+      code: 'PAYLOAD_TOO_LARGE',
+      message: 'This request is larger than the 64 KB sign in accepts.',
+    });
+  });
+
+  it('counts a streamed body without a length too', async () => {
+    const bytes = new TextEncoder().encode(oversized);
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (let at = 0; at < bytes.length; at += 16 * 1024) controller.enqueue(bytes.slice(at, at + 16 * 1024));
+        controller.close();
+      },
+    });
+    const response = await app.fetch(authRequest(stream));
+    expect(response.status).toBe(413);
+  });
+
+  it('passes a body under the limit on to Better Auth', async () => {
+    const response = await app.fetch(authRequest(JSON.stringify({ email: 'ada@example.com', otp: '123456' })));
+    // Better Auth answers it (here with no database behind it), never the limit's 413.
+    expect(response.status).not.toBe(413);
+  });
+});
+
+describe('the Better Auth routes the API serves', () => {
+  const app = createTestApp();
+
+  it.each([
+    ['POST', '/update-user'],
+    ['GET', '/list-sessions'],
+    ['POST', '/link-social'],
+    ['POST', '/revoke-sessions'],
+    ['POST', '/revoke-other-sessions'],
+    ['POST', '/change-email'],
+    ['POST', '/delete-user'],
+    ['GET', '/ok'],
+    ['POST', '/sign-up/email'],
+    ['POST', '/sign-in/email'],
+    ['POST', '/email-otp/check-verification-otp'],
+    // A listed route, padded or encoded, is a different address.
+    ['POST', '/sign-out/'],
+    ['POST', '/sign%2Dout'],
+    ['GET', '/GET-SESSION'],
+  ])('answers %s %s with 404 NOT_FOUND', async (method, path) => {
     const response = await app.fetch(
-      new Request(`${APP_URL}/api/auth/sign-in/email-otp`, {
-        method: 'POST',
-        headers: { origin: APP_URL },
-        body: oversized,
+      new Request(`${APP_URL}/api/auth${path}`, {
+        method,
+        headers: { origin: APP_URL, 'content-type': 'application/json' },
+        ...(method === 'POST' ? { body: '{}' } : {}),
       }),
     );
-    // Better Auth answers it (here with no database behind it), never the RPC limit's 413.
-    expect(response.status).not.toBe(413);
-    expect(await response.json()).not.toMatchObject({ code: 'PAYLOAD_TOO_LARGE' });
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ code: 'NOT_FOUND', message: 'There is nothing at this address.' });
+  });
+
+  it('serves the session read, which answers no session without a cookie', async () => {
+    const response = await app.fetch(new Request(`${APP_URL}/api/auth/get-session`));
+    expect(response.status).not.toBe(404);
   });
 });
 

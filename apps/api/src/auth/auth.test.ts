@@ -18,7 +18,13 @@ import {
   verifyCode,
 } from '../../test/sign-in.ts';
 import { captureLogs } from '../testing.ts';
-import { CODE_SENDS_PER_EMAIL, CODE_SENDS_PER_IP } from './auth.ts';
+import {
+  CODE_CHECKS_PER_EMAIL_DAY,
+  CODE_CHECKS_PER_EMAIL_HOUR,
+  CODE_SENDS_PER_EMAIL,
+  CODE_SENDS_PER_IP,
+  SIGN_INS_PER_IP,
+} from './auth.ts';
 
 const { identityUrl } = inject('testDatabase');
 let db: Database;
@@ -108,10 +114,11 @@ describe('signing in by email code', () => {
     await sendCode(app, email, ip);
     const code = await codeFor(email);
     const wrong = code === '000000' ? '111111' : '000000';
+    // From several IPs, so the per IP limit on sign ins stays out of it.
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      expect((await verifyCode(app, email, wrong, ip)).status).toBe(400);
+      expect((await verifyCode(app, email, wrong, newIp())).status).toBe(400);
     }
-    const locked = await verifyCode(app, email, code, ip);
+    const locked = await verifyCode(app, email, code, newIp());
     expect(locked.status).toBe(403);
     expect(await locked.json()).toMatchObject({ code: 'TOO_MANY_ATTEMPTS' });
     expect(await userCount(email)).toBe(0);
@@ -207,6 +214,91 @@ describe('rate limits', () => {
     expect(await mailTo(email)).toEqual([]);
     // Another IP is unaffected.
     expect((await sendCode(app, newEmail(), newIp())).status).toBe(200);
+  });
+
+  it(`allows ${SIGN_INS_PER_IP.max} sign in tries per client IP in a minute, then answers 429`, async () => {
+    const { app } = signInApp({ db, identity });
+    const ip = newIp();
+    for (let attempt = 0; attempt < SIGN_INS_PER_IP.max; attempt += 1) {
+      expect((await verifyCode(app, newEmail(), '000000', ip)).status).toBe(400);
+    }
+    const over = await verifyCode(app, newEmail(), '000000', ip);
+    expect(over.status).toBe(429);
+    expect(await over.json()).toMatchObject({ code: 'RATE_LIMITED' });
+    expect(Number(over.headers.get('retry-after'))).toBeGreaterThan(0);
+  });
+
+  it(`allows ${CODE_CHECKS_PER_EMAIL_HOUR.max} code checks per email in an hour, whatever the IP or the code`, async () => {
+    const { app } = signInApp({ db, identity });
+    const email = newEmail();
+    // New codes keep coming (each allows 5 tries), from new IPs, and still the email's tries run out.
+    let tries = 0;
+    for (let round = 0; tries < CODE_CHECKS_PER_EMAIL_HOUR.max; round += 1) {
+      expect((await sendCode(app, email, newIp())).status).toBe(200);
+      const code = await codeFor(email);
+      const wrong = code === '000000' ? '111111' : '000000';
+      for (let attempt = 0; attempt < 5 && tries < CODE_CHECKS_PER_EMAIL_HOUR.max; attempt += 1, tries += 1) {
+        expect((await verifyCode(app, email, wrong, newIp())).status).toBe(400);
+      }
+      // A send limit of 5 per 10 minutes per email leaves room for the 3 rounds this takes.
+      expect(round).toBeLessThan(CODE_SENDS_PER_EMAIL.max);
+    }
+    await sendCode(app, email, newIp());
+    const right = await verifyCode(app, email, await codeFor(email), newIp());
+    expect(right.status).toBe(429);
+    expect(await right.json()).toEqual({
+      code: 'RATE_LIMITED',
+      message: 'Too many sign in tries for this email. Wait a while, then send a new code.',
+    });
+    expect(Number(right.headers.get('retry-after'))).toBeGreaterThan(CODE_CHECKS_PER_EMAIL_HOUR.window - 120);
+    expect(await userCount(email)).toBe(0);
+    // Another email is untouched.
+    await signIn(app);
+  });
+
+  it(`allows ${CODE_CHECKS_PER_EMAIL_DAY.max} code checks per email in a day`, async () => {
+    const { app } = signInApp({ db, identity });
+    const email = newEmail();
+    // The day's tries already used up, in an hour window that has room.
+    await authSql('insert into auth.rate_limit (key, count, last_request) values ($1, $2, $3)', [
+      `email:${email}|/sign-in/email-otp|day`,
+      CODE_CHECKS_PER_EMAIL_DAY.max,
+      Date.now() + 20 * 60 * 60 * 1000,
+    ]);
+    await sendCode(app, email.toUpperCase(), newIp());
+    const refused = await verifyCode(app, ` ${email.toUpperCase()}`, await codeFor(email), newIp());
+    expect(refused.status).toBe(429);
+    expect(await refused.json()).toMatchObject({ code: 'RATE_LIMITED' });
+    expect(Number(refused.headers.get('retry-after'))).toBeGreaterThan(19 * 60 * 60);
+    expect(await userCount(email)).toBe(0);
+  });
+});
+
+describe('limits with no trusted client IP (the edge guard off outside local)', () => {
+  it('keeps no shared bucket: many callers send codes and sign in, and only the per email limit holds', async () => {
+    const emails = Array.from({ length: CODE_SENDS_PER_IP.max + 5 }, () => newEmail());
+    const { app } = signInApp({ db, identity }, { APP_ENV: 'preview', SIGNUP_ALLOWLIST: emails });
+    // Each caller sends whatever x-forwarded-for it likes; none of it is trusted.
+    for (const email of emails) {
+      expect((await sendCode(app, email, newIp())).status).toBe(200);
+    }
+    for (const email of emails.slice(0, SIGN_INS_PER_IP.max + 3)) {
+      expect((await verifyCode(app, email, '000000', newIp())).status).toBe(400);
+    }
+    // No per IP row at all: not one shared `no-trusted-ip` bucket, nor the test runtime's 127.0.0.1 stand in.
+    const shared = await authSql(
+      `select key from auth.rate_limit where key like 'no-trusted-ip|%' or key like '127.0.0.1|%'`,
+    );
+    expect(shared).toEqual([]);
+    // One email still gets only its 5 codes.
+    const [first] = emails;
+    if (first === undefined) throw new Error('No email.');
+    for (let send = 1; send < CODE_SENDS_PER_EMAIL.max; send += 1) {
+      expect((await sendCode(app, first, newIp())).status).toBe(200);
+    }
+    const over = await sendCode(app, first, newIp());
+    expect(over.status).toBe(429);
+    expect(await over.json()).toMatchObject({ code: 'RATE_LIMITED' });
   });
 });
 

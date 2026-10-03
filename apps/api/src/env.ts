@@ -24,6 +24,8 @@ const shared = {
 
 // The edge guard's shared secret (spec 0005). Optional while it rolls out; an
 // empty value counts as unset, so `.env.example`'s `EDGE_SECRET=` boots.
+// TODO(#57): required outside local once the rollout in docs/specs/0005-core-loop/index.md (build plan, step 2:
+// the API, then Vercel, then Railway) has set it everywhere.
 const edgeSecret = optional(
   z
     .string()
@@ -81,6 +83,11 @@ export const ApiEnv = z
     if ((env.GOOGLE_CLIENT_ID === undefined) !== (env.GOOGLE_CLIENT_SECRET === undefined)) {
       missing('GOOGLE_CLIENT_SECRET', 'Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET together, or neither.');
     }
+    // `local` turns off the edge guard, the Secure cookie, the allowlist and the placeholder secret checks, and
+    // trusts the laptop origins. A production build never runs with all of that off.
+    if (env.APP_ENV === 'local' && env.NODE_ENV === 'production') {
+      missing('APP_ENV', 'APP_ENV=local is refused when NODE_ENV=production. Set APP_ENV to preview or production.');
+    }
     if (env.APP_ENV === 'local') {
       if (env.RESEND_API_KEY === undefined && env.MAILPIT_URL === undefined) {
         missing('MAILPIT_URL', 'Set MAILPIT_URL (Mailpit, http://localhost:8025) or RESEND_API_KEY to send codes.');
@@ -91,6 +98,10 @@ export const ApiEnv = z
     if (env.MAIL_FROM === undefined) missing('MAIL_FROM', `MAIL_FROM is required in ${env.APP_ENV}.`);
     if (env.BETTER_AUTH_SECRET.includes(LOCAL_SECRET_MARKER)) {
       missing('BETTER_AUTH_SECRET', 'That is the local placeholder. Generate one: `openssl rand -base64 32`.');
+    }
+    // The app and the API share one origin (Vercel proxies /api), so sign in links and cookies name that origin.
+    if (new URL(env.BETTER_AUTH_URL).origin !== new URL(env.APP_URL).origin) {
+      missing('BETTER_AUTH_URL', `BETTER_AUTH_URL must have the same origin as APP_URL in ${env.APP_ENV}.`);
     }
   })
   .transform((env) => ({

@@ -6,8 +6,9 @@
 //   (`context.scope`), else the same NOT_FOUND for a non member, a removed
 //   member and an unknown address.
 // Only `enterWorkspace` in packages/core builds a member's scope; nothing in
-// this app builds one. The contract walking test fails if a procedure outside
-// the bootstrap list isn't built on `member`.
+// this app builds one. A `member` handler sees `context.scope` and no
+// `context.db`, so the door is its only way to the data. The contract walking
+// test fails if a procedure outside the bootstrap list isn't built on `member`.
 import { type AppEnvironment, contract, WorkspaceScoped } from '@crm/contracts';
 import { enterWorkspace } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
@@ -51,10 +52,18 @@ export const requireSession = os.$context<RequestContext>().middleware(async ({ 
 });
 
 /**
+ * What a `member` handler holds for `context.db`: nothing at run time, and
+ * `never` in the type (oRPC lets a middleware narrow a context field, never
+ * widen it), so reading anything off it doesn't compile.
+ */
+const NO_DATABASE = undefined as never;
+
+/**
  * The access door for a workspace procedure: reads `workspace` (its address)
  * from the input and puts the scope `enterWorkspace` returns in
  * `context.scope`. A non member, a removed member and an unknown address all
- * get the same NOT_FOUND.
+ * get the same NOT_FOUND. It takes `context.db` away (see `NO_DATABASE`), so
+ * a handler behind it reaches data only through its scope.
  */
 export const requireMember = os
   .$context<RequestContext & SessionContext>()
@@ -69,7 +78,7 @@ export const requireMember = os
       { db: context.db, identity: context.identity },
       { userId: context.user.id, slug: scoped.data.workspace },
     );
-    return next({ context: { scope } });
+    return next({ context: { scope, db: NO_DATABASE } });
   });
 
 /** Procedures for a signed in person, before any workspace (the bootstrap list). */

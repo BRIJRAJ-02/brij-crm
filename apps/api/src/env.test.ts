@@ -80,4 +80,23 @@ describe('the sign in environment', () => {
     expect(ApiEnv.parse({ ...production, SIGNUP_ALLOWLIST: '' }).SIGNUP_ALLOWLIST).toBeUndefined();
     expect(problems({ ...production, SIGNUP_ALLOWLIST: 'ada@example.com, nope' })).toEqual(['SIGNUP_ALLOWLIST.1']);
   });
+
+  it('refuses APP_ENV=local in a production build', () => {
+    expect(problems({ ...local, NODE_ENV: 'production' })).toEqual(['APP_ENV']);
+    expect(problems({ ...local, NODE_ENV: 'development' })).toEqual([]);
+    expect(problems({ ...production, NODE_ENV: 'production' })).toEqual([]);
+  });
+
+  it('refuses a BETTER_AUTH_URL on another origin than APP_URL outside local', () => {
+    expect(problems({ ...production, BETTER_AUTH_URL: 'https://api.railway.test' })).toEqual(['BETTER_AUTH_URL']);
+    expect(problems({ ...production, BETTER_AUTH_URL: 'http://app.test' })).toEqual(['BETTER_AUTH_URL']);
+    expect(problems({ ...production, BETTER_AUTH_URL: 'https://app.test:8443' })).toEqual(['BETTER_AUTH_URL']);
+    // A path or a trailing slash is the same origin.
+    expect(problems({ ...production, BETTER_AUTH_URL: 'https://app.test/' })).toEqual([]);
+    expect(problems({ ...production, APP_ENV: 'preview', BETTER_AUTH_URL: 'https://elsewhere.test' })).toEqual([
+      'BETTER_AUTH_URL',
+    ]);
+    // Locally the API may sit on its own port.
+    expect(problems({ ...local, BETTER_AUTH_URL: 'http://localhost:3000' })).toEqual([]);
+  });
 });

@@ -19,17 +19,71 @@ import { authErrorResponse } from './errors.ts';
 /** Where Better Auth's own routes live, beside `/api/rpc`. */
 export const AUTH_BASE_PATH = '/api/auth';
 
-/** The route that sends a code, and the one that signs in with it. */
+/** The route that sends a code. */
 export const SEND_CODE_PATH = '/email-otp/send-verification-otp';
+/** The route that signs in with a code. */
+export const SIGN_IN_CODE_PATH = '/sign-in/email-otp';
 
 /** Code sends per email (a mistyped email and the 60 second resend wait can't lock anyone out for long). */
 export const CODE_SENDS_PER_EMAIL = { window: 600, max: 5 } as const;
 /** Code sends per client IP. */
 export const CODE_SENDS_PER_IP = { window: 600, max: 10 } as const;
 /** Sign in attempts (code checks, Google) per client IP. Each code also allows only 5 wrong tries. */
-export const SIGN_INS_PER_IP = { window: 60, max: 20 } as const;
+export const SIGN_INS_PER_IP = { window: 60, max: 5 } as const;
+/**
+ * Code checks per email in an hour, and in a day, whatever the IP: each new
+ * code gets 5 tries, so without these, sending codes again and again would
+ * give a guesser unlimited tries at one account.
+ */
+export const CODE_CHECKS_PER_EMAIL_HOUR = { window: 60 * 60, max: 15 } as const;
+/** Code checks per email in a day (see `CODE_CHECKS_PER_EMAIL_HOUR`). */
+export const CODE_CHECKS_PER_EMAIL_DAY = { window: 24 * 60 * 60, max: 40 } as const;
+/**
+ * Every other Better Auth route per client IP (the session read, Google's
+ * callback, sign out). Its window is also the longest one Better Auth knows
+ * of, which is how long it keeps its rate limit rows, so it must be at least
+ * the longest per IP window above.
+ */
+export const OTHER_AUTH_ROUTES_PER_IP = { window: 600, max: 600 } as const;
+
+/** A fixed window limit, as Better Auth's limiter takes it. */
+interface Rule {
+  readonly window: number;
+  readonly max: number;
+}
+
+/**
+ * A per IP rule that applies only to a request carrying a trusted client IP
+ * (see `forwardedHeaders`). Without one, Better Auth would key every caller
+ * on one shared `no-trusted-ip|<path>` bucket, and one caller could use up
+ * everyone's sign ins; so there is no per IP limit then, and the per email
+ * limits still hold. `rule` undefined keeps the rule Better Auth resolved.
+ */
+function perTrustedIp(rule?: Rule) {
+  return (request: Request, current: Rule): false | Rule => {
+    if (!request.headers.has('x-forwarded-for')) return false;
+    return rule === undefined ? { window: current.window, max: current.max } : { window: rule.window, max: rule.max };
+  };
+}
 
 const DAY_SECONDS = 24 * 60 * 60;
+
+/**
+ * The only Better Auth routes the API serves (after `AUTH_BASE_PATH`): send a
+ * code, sign in by code, Google's sign in and its callback, sign out, and the
+ * session read. Sign out deletes its own session, so the revoke routes stay
+ * shut. Everything else Better Auth offers (changing the user, listing or
+ * revoking sessions, linking accounts) answers 404, so a route we never
+ * reviewed can't be reached.
+ */
+export const AUTH_ROUTES: ReadonlySet<string> = new Set([
+  SEND_CODE_PATH,
+  SIGN_IN_CODE_PATH,
+  '/sign-in/social',
+  '/callback/google',
+  '/sign-out',
+  '/get-session',
+]);
 
 /** The web app's address on a laptop (Vite), trusted only when the API runs locally. */
 const LOCAL_ORIGINS = ['http://localhost:5173', 'http://127.0.0.1:5173'];
@@ -96,6 +150,15 @@ export function forwardedHeaders(headers: Headers, clientIp: string | undefined)
 }
 
 const SendCodeBody = z.object({ email: z.string(), type: z.string() });
+const SignInCodeBody = z.object({ email: z.string() });
+
+function rateLimited(message: string, retryAfterSeconds: number): APIError {
+  return new APIError(
+    'TOO_MANY_REQUESTS',
+    { code: 'RATE_LIMITED', message },
+    { 'retry-after': String(retryAfterSeconds) },
+  );
+}
 
 function signupClosed(): APIError {
   return new APIError('FORBIDDEN', { code: 'SIGNUP_CLOSED', message: "Sign up isn't open yet." });
@@ -148,9 +211,13 @@ export function createAuth({ env, identity, mailer }: AuthDeps): Auth {
     rateLimit: {
       enabled: true,
       storage: 'database',
+      window: OTHER_AUTH_ROUTES_PER_IP.window,
+      max: OTHER_AUTH_ROUTES_PER_IP.max,
+      // The first matching key wins, so the catch all comes last.
       customRules: {
-        [SEND_CODE_PATH]: CODE_SENDS_PER_IP,
-        '/sign-in/*': SIGN_INS_PER_IP,
+        [SEND_CODE_PATH]: perTrustedIp(CODE_SENDS_PER_IP),
+        '/sign-in/*': perTrustedIp(SIGN_INS_PER_IP),
+        '/**': perTrustedIp(),
       },
     },
     advanced: {
@@ -180,6 +247,26 @@ export function createAuth({ env, identity, mailer }: AuthDeps): Auth {
     },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        if (ctx.path === SIGN_IN_CODE_PATH) {
+          const body = SignInCodeBody.safeParse(ctx.body);
+          // The route refuses a malformed body itself.
+          if (!body.success) return;
+          const email = body.data.email.trim().toLowerCase();
+          const key = `email:${email}|${SIGN_IN_CODE_PATH}`;
+          // Both windows count every try, so neither runs ahead of the other.
+          const limits = await Promise.all([
+            identity.consumeRateLimit(key, CODE_CHECKS_PER_EMAIL_HOUR),
+            identity.consumeRateLimit(`${key}|day`, CODE_CHECKS_PER_EMAIL_DAY),
+          ]);
+          const refused = limits.filter((limit) => !limit.allowed);
+          if (refused.length > 0) {
+            const wait = Math.max(
+              ...refused.map((limit) => limit.retryAfterSeconds ?? CODE_CHECKS_PER_EMAIL_HOUR.window),
+            );
+            throw rateLimited('Too many sign in tries for this email. Wait a while, then send a new code.', wait);
+          }
+          return;
+        }
         if (ctx.path !== SEND_CODE_PATH) return;
         const body = SendCodeBody.safeParse(ctx.body);
         // The route refuses a malformed body itself.
@@ -190,10 +277,9 @@ export function createAuth({ env, identity, mailer }: AuthDeps): Auth {
         const email = body.data.email.trim().toLowerCase();
         const limit = await identity.consumeRateLimit(`email:${email}|${SEND_CODE_PATH}`, CODE_SENDS_PER_EMAIL);
         if (!limit.allowed) {
-          throw new APIError(
-            'TOO_MANY_REQUESTS',
-            { code: 'RATE_LIMITED', message: 'Too many codes were sent to this email. Wait a few minutes.' },
-            { 'retry-after': String(limit.retryAfterSeconds ?? CODE_SENDS_PER_EMAIL.window) },
+          throw rateLimited(
+            'Too many codes were sent to this email. Wait a few minutes.',
+            limit.retryAfterSeconds ?? CODE_SENDS_PER_EMAIL.window,
           );
         }
         // Before any email goes out: a new email off the list gets no code. An existing user always does.

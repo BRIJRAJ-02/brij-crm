@@ -72,12 +72,17 @@ export interface IdentityStore {
    * table, in one atomic statement, so the limit holds across instances. For
    * limits Better Auth can't key itself (per email: it keys by IP and path).
    * A key here must not look like Better Auth's `<ip>|<path>`; prefix it.
+   * Its rows hold when their window closes, so Better Auth's pruning (rows
+   * older than the longest window it knows of) never drops a window still
+   * open, however long.
    */
   consumeRateLimit(key: string, rule: RateLimitRule): Promise<RateLimitDecision>;
   /**
    * Refuses (throws) unless this store is connected as an identity login: a
-   * member of `crm_identity`, outside `crm_app`, and unable to bypass row
-   * level security or own the database. The api calls it before serving.
+   * member of `crm_identity`, outside `crm_app`, unable to bypass row level
+   * security, own the database, create roles or databases, and in no role
+   * (directly or through another) that can, nor in `pg_read_all_data` or
+   * `pg_write_all_data`. The api calls it before serving.
    */
   assertIdentityRole(): Promise<void>;
   /**
@@ -154,33 +159,47 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
 
     async consumeRateLimit(key, rule) {
       const now = Date.now();
-      const windowMs = rule.window * 1000;
-      // A fixed window: `last_request` holds when the window opened, so the row
-      // outlives it only as long as Better Auth's own pruning allows.
-      const result = await db.execute<{ count: number; window_start: string }>(sql`
-        insert into ${rateLimit} as r (key, count, last_request) values (${key}, 1, ${now})
+      const closes = now + rule.window * 1000;
+      // A fixed window: `last_request` holds when the window closes (not when it
+      // opened, as Better Auth's own rows do). Better Auth prunes rows whose
+      // `last_request` is older than its longest window, so a row here goes
+      // only once its window is long over, whatever its length.
+      const result = await db.execute<{ count: number; window_end: string }>(sql`
+        insert into ${rateLimit} as r (key, count, last_request) values (${key}, 1, ${closes})
         on conflict (key) do update set
-          count = case when r.last_request <= ${now - windowMs} then 1 else r.count + 1 end,
-          last_request = case when r.last_request <= ${now - windowMs} then ${now} else r.last_request end
-        returning r.count, r.last_request as window_start
+          count = case when r.last_request <= ${now} then 1 else r.count + 1 end,
+          last_request = case when r.last_request <= ${now} then ${closes} else r.last_request end
+        returning r.count, r.last_request as window_end
       `);
       const row = result.rows[0];
       if (row === undefined) throw new Error('The rate limit row was not written.');
       if (row.count <= rule.max) return { allowed: true, retryAfterSeconds: undefined };
-      const opened = Number(row.window_start);
-      return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((opened + windowMs - now) / 1000)) };
+      return { allowed: false, retryAfterSeconds: Math.max(1, Math.ceil((Number(row.window_end) - now) / 1000)) };
     },
 
     async assertIdentityRole() {
       const result = await pool.query<{
         role: string;
         unsafe: boolean;
+        reaches_power: string | null;
         is_identity_member: boolean;
         is_app_member: boolean;
       }>(`
         select
           r.rolname as role,
-          r.rolsuper or r.rolbypassrls or d.datdba = r.oid as unsafe,
+          r.rolsuper or r.rolbypassrls or r.rolcreaterole or r.rolcreatedb or d.datdba = r.oid as unsafe,
+          (
+            select string_agg(b.rolname, ', ' order by b.rolname) from pg_roles b
+            where b.oid <> r.oid
+              and (
+                b.rolsuper or b.rolbypassrls or b.rolcreaterole or b.rolcreatedb
+                or b.rolname in ('pg_read_all_data', 'pg_write_all_data')
+              )
+              and (
+                pg_has_role(r.oid, b.oid, 'MEMBER') or pg_has_role(r.oid, b.oid, 'USAGE')
+                or pg_has_role(r.oid, b.oid, 'SET')
+              )
+          ) as reaches_power,
           pg_has_role(r.oid, 'crm_identity', 'USAGE') as is_identity_member,
           pg_has_role(r.oid, 'crm_app', 'USAGE') or pg_has_role(r.oid, 'crm_app', 'SET') as is_app_member
         from pg_roles r
@@ -191,8 +210,15 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
       if (!row) throw new Error('Could not read the connected identity role.');
       if (row.unsafe) {
         throw new Error(
-          `The identity store is connected as "${row.role}", which owns the database or bypasses row level security. ` +
-            'Point IDENTITY_DATABASE_URL at the identity login role (see `pnpm db:identity-login`).',
+          `The identity store is connected as "${row.role}", which owns the database, bypasses row level security, ` +
+            'or creates roles or databases. Point IDENTITY_DATABASE_URL at the identity login role (see `pnpm db:identity-login`).',
+        );
+      }
+      // Through a role it is in, directly or not (a Neon console role is in neon_superuser, say), counts too.
+      if (row.reaches_power !== null) {
+        throw new Error(
+          `The identity store is connected as "${row.role}", a member of ${row.reaches_power}, which reads or writes ` +
+            'every table or holds powers the identity login must not. Use a login made by `pnpm db:identity-login`.',
         );
       }
       if (row.is_app_member) {

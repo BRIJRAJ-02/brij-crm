@@ -120,6 +120,13 @@
       "when": 1791015953661,
       "tag": "0016_identity_login",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1791018795087,
+      "tag": "0017_auth_effective_privileges",
+      "breakpoints": true
     }
   ]
 }

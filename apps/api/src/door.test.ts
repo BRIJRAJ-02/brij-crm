@@ -1,8 +1,9 @@
 // The access door in the API (spec 0005, AC-32): every procedure outside the
-// bootstrap list is built on `member`, the door refuses everyone but an
-// active member the same way, and nothing in this app builds an engine scope.
+// bootstrap list is built on `member`, a member handler sees its scope and no
+// raw database, the door refuses everyone but an active member the same way,
+// and nothing in this app builds an engine scope.
 import { readdir, readFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { contract } from '@crm/contracts';
 import { newId } from '@crm/core';
@@ -18,11 +19,29 @@ import { authed, member, pub, type RequestContext, requireMember, requireSession
 import { router } from './router.ts';
 import { APP_URL } from './testing.ts';
 
-/** The procedures that run before a workspace is chosen (spec 0005); every other one passes the door. */
-const BOOTSTRAP = ['system.*', 'me.get', 'workspaces.create', 'realtime.connectionToken'];
+/** The procedures that run before a workspace is chosen (spec 0005), by name; every other one passes the door. */
+const BOOTSTRAP: ReadonlySet<string> = new Set(['system.status', 'me.get', 'workspaces.create']);
 
 function isBootstrap(path: string): boolean {
-  return BOOTSTRAP.some((entry) => (entry.endsWith('.*') ? path.startsWith(entry.slice(0, -1)) : path === entry));
+  return BOOTSTRAP.has(path);
+}
+
+/**
+ * The module files holding the bootstrap handlers that read the database
+ * without a member scope: `system.status` (a health read) and
+ * `workspaces.create` (the engine's bootstrap). No other module file may.
+ */
+const RAW_DATABASE_FILES: ReadonlySet<string> = new Set(['system/router.ts', 'workspaces/router.ts']);
+
+/** Reaching the database around the door: the raw pool from the context, or a workspace transaction of its own. */
+const AROUND_THE_DOOR =
+  /\bcontext\s*\.\s*db\b|\bcontext\s*:\s*\{[^}]*\bdb\b|\{[^}]*\bdb\b[^}]*\}\s*=\s*context\b|\bwithWorkspace\b/;
+
+/** The module files (relative to src/modules) that reach the database around the door. */
+function aroundTheDoor(files: readonly { readonly path: string; readonly source: string }[]): string[] {
+  return files
+    .filter(({ path, source }) => !RAW_DATABASE_FILES.has(path) && AROUND_THE_DOOR.test(source))
+    .map(({ path }) => path);
 }
 
 /** Every procedure in a router (or a contract), by its dotted path. */
@@ -82,6 +101,48 @@ describe('the contract walk', () => {
   });
 });
 
+describe('the door is the only way in', () => {
+  it('types a member handler with no database: it reads through `context.scope`', () => {
+    const t = os.$context<RequestContext>();
+    const procedure = t
+      .use(requireSession)
+      .use(requireMember)
+      .handler(({ context }) => {
+        const scoped: string = context.scope.workspaceId;
+        // @ts-expect-error A member handler has no `db` to query around the door.
+        const raw: unknown = context.db.withWorkspace;
+        return { scoped, raw };
+      });
+    expect(middlewaresOf(procedure)).toEqual([requireSession, requireMember]);
+  });
+
+  it('finds no module reaching the database around the door, outside the named bootstrap handlers', async () => {
+    const root = fileURLToPath(new URL('./modules/', import.meta.url));
+    const files = await Promise.all(
+      (await readdir(root, { recursive: true }))
+        .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+        .map(async (path) => ({ path: path.split(sep).join('/'), source: await readFile(join(root, path), 'utf8') })),
+    );
+    expect(files.map((file) => file.path)).toEqual(expect.arrayContaining([...RAW_DATABASE_FILES]));
+    expect(aroundTheDoor(files)).toEqual([]);
+  });
+
+  it('catches a module that does (the check works)', () => {
+    const handler = (body: string) =>
+      `export const r = member.records.router({ list: member.records.list.handler(${body}) });`;
+    expect(
+      aroundTheDoor([
+        { path: 'records/router.ts', source: handler('({ context }) => context.db.withWorkspace(id, read)') },
+        { path: 'lists/router.ts', source: handler('({ context: { db } }) => list(db)') },
+        { path: 'notes/router.ts', source: handler('({ context }) => { const { db, identity } = context; }') },
+        { path: 'tasks/router.ts', source: handler('({ context }) => withWorkspace(context.scope.workspaceId)') },
+        { path: 'deals/router.ts', source: handler('({ context }) => readDeals(context.scope)') },
+        { path: 'system/router.ts', source: handler('({ context }) => status({ db: context.db })') },
+      ]),
+    ).toEqual(['records/router.ts', 'lists/router.ts', 'notes/router.ts', 'tasks/router.ts']);
+  });
+});
+
 describe('no scope is built in this app', () => {
   it('names no EngineScope, system actor or actor literal in any source file', async () => {
     const root = fileURLToPath(new URL('.', import.meta.url));
@@ -110,7 +171,12 @@ describe('the member door', () => {
       .use(requireSession)
       .use(requireMember)
       .input(z.object({ workspace: z.string() }))
-      .handler(({ context }) => ({ workspaceId: context.scope.workspaceId, memberId: context.scope.actor.id })),
+      .handler(({ context }) => ({
+        workspaceId: context.scope.workspaceId,
+        memberId: context.scope.actor.id,
+        // What the handler holds besides its scope: the raw pool must not be among it.
+        raw: (context as Record<string, unknown>).db ?? null,
+      })),
   };
   let app: ReturnType<typeof signInApp>['app'];
   let probe: (cookie: string | undefined, workspace: unknown) => Promise<unknown>;
@@ -167,7 +233,11 @@ describe('the member door', () => {
     const members = await testQuery<{ id: string }>(ownerUrl, 'select id from members where workspace_id = $1', [
       a.workspace.id,
     ]);
-    expect(await probe(a.cookie, a.workspace.slug)).toEqual({ workspaceId: a.workspace.id, memberId: members[0]?.id });
+    expect(await probe(a.cookie, a.workspace.slug)).toEqual({
+      workspaceId: a.workspace.id,
+      memberId: members[0]?.id,
+      raw: null,
+    });
   });
 
   it("refuses another workspace's member, a removed member and an unknown address the same way", async () => {

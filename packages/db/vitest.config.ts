@@ -4,7 +4,7 @@ import { defineConfig } from 'vitest/config';
 // setup creates and migrates `crm_test_db`, then each test connects as the app.
 export default defineConfig({
   test: {
-    include: ['src/**/*.test.ts'],
+    include: ['src/**/*.test.ts', 'scripts/**/*.test.ts'],
     globalSetup: ['./test/global-setup.ts'],
     fileParallelism: false,
     testTimeout: 20_000,

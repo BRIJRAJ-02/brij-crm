@@ -237,6 +237,18 @@ describe('limits the auth library cannot key', () => {
     expect(await identity.consumeRateLimit(key, rule)).toEqual({ allowed: true, retryAfterSeconds: undefined });
   });
 
+  it("keeps a window longer than Better Auth's through its pruning", async () => {
+    const key = `email:${unique()}@example.com|sign-in`;
+    const rule = { window: 24 * 60 * 60, max: 1 };
+    expect((await identity.consumeRateLimit(key, rule)).allowed).toBe(true);
+    // Twenty minutes on, Better Auth prunes every row older than its longest window (ten minutes here).
+    await identitySql.query('update auth.rate_limit set last_request = last_request - 1200000 where key = $1', [key]);
+    await identitySql.query('delete from auth.rate_limit where last_request < $1', [Date.now() - 600_000]);
+    const refused = await identity.consumeRateLimit(key, rule);
+    expect(refused.allowed).toBe(false);
+    expect(refused.retryAfterSeconds).toBeGreaterThan(24 * 60 * 60 - 1300);
+  });
+
   it('holds the limit when uses arrive at once', async () => {
     const key = `email:${unique()}@example.com|send-code`;
     const decisions = await Promise.all(

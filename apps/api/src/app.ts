@@ -4,7 +4,7 @@ import type { Database, IdentityStore } from '@crm/db';
 import type { AnyRouter } from '@orpc/server';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import type { Auth } from './auth/auth.ts';
+import { AUTH_BASE_PATH, AUTH_ROUTES, type Auth } from './auth/auth.ts';
 import { createEdgeGuard } from './edge.ts';
 import type { ApiEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
@@ -13,8 +13,11 @@ import { createRpcHandler } from './rpc.ts';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
-/** The largest RPC request body the API reads. Better Auth keeps its own default on /api/auth. */
+/** The largest RPC request body the API reads. */
 export const RPC_BODY_LIMIT_BYTES = 1024 * 1024;
+
+/** The largest body a sign in route reads: an email, a code, a provider name. */
+export const AUTH_BODY_LIMIT_BYTES = 64 * 1024;
 
 interface AppVariables {
   requestId: string;
@@ -114,7 +117,22 @@ export function createApp({
     return matched ? c.newResponse(response.body, response) : c.notFound();
   });
 
-  // Better Auth's own routes (sign in by code, Google, sessions, sign out), with its own body limits.
+  // Better Auth's own routes: only the ones sign in uses (`AUTH_ROUTES`), matched on the path as sent, so
+  // an encoded or padded path never reaches a route we didn't list.
+  app.use('/auth/*', async (c, next) => {
+    const route = new URL(c.req.url).pathname.slice(AUTH_BASE_PATH.length);
+    if (!AUTH_ROUTES.has(route)) return errorResponse('NOT_FOUND', 'There is nothing at this address.');
+    return next();
+  });
+
+  app.use(
+    '/auth/*',
+    bodyLimit({
+      maxSize: AUTH_BODY_LIMIT_BYTES,
+      onError: () => errorResponse('PAYLOAD_TOO_LARGE', 'This request is larger than the 64 KB sign in accepts.'),
+    }),
+  );
+
   // It sees only the client IP the edge guard trusted.
   app.on(['GET', 'POST'], '/auth/*', (c) => auth.handle(c.req.raw, c.get('clientIp')));
 

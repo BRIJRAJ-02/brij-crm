@@ -27,6 +27,10 @@ export default defineRailway(() => {
     env: {
       APP_ENV: preserve(),
       APP_URL: preserve(),
+      // Extra origins allowed to write (comma separated), if any.
+      TRUSTED_ORIGINS: preserve(),
+      // The edge guard's shared secret (spec 0005): declared before it is set, so a config apply keeps it.
+      EDGE_SECRET: preserve(),
       DATABASE_URL: preserve(),
       DATABASE_URL_OWNER: preserve(),
       // Sign in (spec 0005): the identity login, Better Auth, the allowlist and mail.
