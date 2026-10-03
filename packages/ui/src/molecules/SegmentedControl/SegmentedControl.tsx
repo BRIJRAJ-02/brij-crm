@@ -27,7 +27,16 @@ export interface SegmentedControlProps {
   readonly defaultValue?: string;
   readonly onChange?: (value: string) => void;
   readonly isDisabled?: boolean;
+  /**
+   * `horizontal` (the default) puts the segments in a row; `vertical` stacks
+   * them, for a column too narrow for the row: icon only segments in the
+   * folded sidebar's rail. The arrow keys move either way.
+   */
+  readonly orientation?: SegmentOrientation;
 }
+
+/** Which way the segments run. */
+export type SegmentOrientation = 'horizontal' | 'vertical';
 
 /**
  * Two to four equal segments that switch how you see something: Table or
@@ -41,13 +50,15 @@ export function SegmentedControl({
   defaultValue,
   onChange,
   isDisabled = false,
+  orientation = 'horizontal',
 }: SegmentedControlProps) {
   const { isFocusVisible } = useFocusVisible();
   return (
     <RadioGroup
       className={styles.root}
       aria-label={label}
-      orientation="horizontal"
+      orientation={orientation}
+      data-orientation={orientation}
       isDisabled={isDisabled}
       data-instant={isFocusVisible || undefined}
       {...(value === undefined ? {} : { value })}
@@ -79,12 +90,17 @@ export function SegmentedControl({
 export interface ThemeSwitchProps {
   /** The app's theme controller (`context.theme` in the router). */
   readonly controller: ThemeController;
-  /** Icons only, for the collapsed sidebar footer. */
+  /** Icons only, for the sidebar footer. */
   readonly isCompact?: boolean;
+  /**
+   * `vertical` stacks the three segments, for the folded sidebar's rail,
+   * where the row doesn't fit. Pair it with `isCompact`.
+   */
+  readonly orientation?: SegmentOrientation;
 }
 
 /** Light, Dark or System, in the sidebar footer. It reads and sets the app's theme controller, so every tab stays in step. */
-export function ThemeSwitch({ controller, isCompact = false }: ThemeSwitchProps) {
+export function ThemeSwitch({ controller, isCompact = false, orientation = 'horizontal' }: ThemeSwitchProps) {
   const choice = useSyncExternalStore(
     (listener) => controller.subscribe(listener),
     () => controller.get(),
@@ -99,6 +115,7 @@ export function ThemeSwitch({ controller, isCompact = false }: ThemeSwitchProps)
       label={strings.theme}
       segments={segments}
       value={choice}
+      orientation={orientation}
       onChange={(next) => {
         controller.set(next as ThemeChoice);
       }}

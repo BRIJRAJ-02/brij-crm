@@ -60,7 +60,7 @@ describe('authErrorResponse', () => {
   it('answers a fault as INTERNAL with no detail, and logs it', async () => {
     const fault = await authErrorResponse(answer(500, { message: 'relation auth.session does not exist' }));
     expect(fault.status).toBe(500);
-    expect(await fault.json()).toEqual({ code: 'INTERNAL', message: 'Something went wrong on our side.' });
+    expect(await fault.json()).toEqual({ code: 'INTERNAL', message: 'Something went wrong. Try again.' });
     expect(logs.lines()).toContainEqual(expect.objectContaining({ level: 'error', message: 'Sign in route failed' }));
   });
 });

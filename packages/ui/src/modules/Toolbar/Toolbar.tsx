@@ -35,6 +35,13 @@ export interface TopBarProps {
   readonly children?: ReactNode;
   /** The title's heading, for the app to focus after navigating. */
   readonly titleRef?: Ref<HTMLHeadingElement>;
+  /**
+   * The page is still loading: after the loading delay a skeleton line stands
+   * in for the icon and title, and the bar keeps its height, so the page
+   * doesn't jump when it arrives. The h1 keeps `title` ("Loading") for
+   * screen readers and focus.
+   */
+  readonly isLoading?: boolean;
 }
 
 /**
@@ -42,7 +49,8 @@ export interface TopBarProps {
  * the page's h1, and the page's actions. With `crumbs`, the trail shows the
  * title as its current place and the h1 stays for screen readers.
  */
-export function TopBar({ title, icon, hue, crumbs, meta, children, titleRef }: TopBarProps) {
+export function TopBar({ title, icon, hue, crumbs, meta, children, titleRef, isLoading = false }: TopBarProps) {
+  const showSkeleton = useDelayedLoading(isLoading);
   const hasTrail = crumbs !== undefined && crumbs.length > 0;
   // Focused only by the app after a route change, so it never joins the tab order.
   const heading = (
@@ -50,6 +58,18 @@ export function TopBar({ title, icon, hue, crumbs, meta, children, titleRef }: T
       {title}
     </h1>
   );
+  if (isLoading) {
+    return (
+      <header className={styles.top} aria-busy="true">
+        {showSkeleton && (
+          <span className={styles.loading}>
+            <Skeleton width="long" />
+          </span>
+        )}
+        <VisuallyHidden>{heading}</VisuallyHidden>
+      </header>
+    );
+  }
   return (
     <header className={styles.top}>
       {icon !== undefined && (hue === undefined ? <Icon name={icon} /> : <Icon name={icon} tile={hue} />)}

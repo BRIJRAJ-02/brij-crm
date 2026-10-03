@@ -1,6 +1,8 @@
 /* SegmentedControl: equal segments on a surface-sunken track with a hairline,
    and a raised thumb with a keycap edge that slides to the chosen one over
-   duration-move (at once for the keyboard and under reduced motion). */
+   duration-move (at once for the keyboard and under reduced motion).
+   Vertical, the segments stack and keep only space-4 at their sides, so icon
+   only ones fit the folded sidebar's rail. */
 @layer components {
   .root {
     position: relative;
@@ -11,6 +13,10 @@
     border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-md);
     background: var(--surface-sunken);
+  }
+
+  .root[data-orientation='vertical'] {
+    grid-auto-flow: row;
   }
 
   .field {
@@ -35,6 +41,10 @@
     outline: none;
     transition: color var(--duration-hover) var(--ease-hover);
     -webkit-tap-highlight-color: transparent;
+  }
+
+  .root[data-orientation='vertical'] .segment {
+    padding-inline: var(--space-4);
   }
 
   .label,

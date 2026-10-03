@@ -1,11 +1,13 @@
 // The sign in waiting for its code (spec 0005, Value sourcing): the address
 // the code went to and when, in sessionStorage, so `/verify` survives a
 // reload in this tab and nowhere else. Cleared on verify or "Use another
-// email". Storage can be missing or throw (a private window, blocked site
-// data), so every read and write is guarded; without it, `/verify` sends the
-// person back to `/sign-in`.
+// email", which keeps the address alone, so `/sign-in` starts with it.
+// Storage can be missing or throw (a private window, blocked site data), so
+// every read and write is guarded; without it, `/verify` sends the person
+// back to `/sign-in`, and `/sign-in` starts empty.
 
 const KEY = 'crm.signIn.pending';
+const EMAIL_KEY = 'crm.signIn.email';
 
 /** The address a code went to, and when (Unix milliseconds). */
 export interface PendingSignIn {
@@ -45,11 +47,31 @@ export function savePending(storage: Storage | undefined, pending: PendingSignIn
   }
 }
 
-/** Forgets the waiting sign in. */
+/** Forgets the waiting sign in, and the address kept for `/sign-in`. */
 export function clearPending(storage: Storage | undefined): void {
   try {
     storage?.removeItem(KEY);
+    storage?.removeItem(EMAIL_KEY);
   } catch {
     // Nothing to forget.
+  }
+}
+
+/** Keeps the address for `/sign-in` to start with ("Use another email"), until a sign in succeeds. */
+export function saveLastEmail(storage: Storage | undefined, email: string): void {
+  try {
+    storage?.setItem(EMAIL_KEY, email);
+  } catch {
+    // Without storage, /sign-in starts empty.
+  }
+}
+
+/** The address `/sign-in` starts with, or undefined. */
+export function readLastEmail(storage: Storage | undefined): string | undefined {
+  try {
+    const email = storage?.getItem(EMAIL_KEY);
+    return typeof email === 'string' && email !== '' ? email : undefined;
+  } catch {
+    return undefined;
   }
 }

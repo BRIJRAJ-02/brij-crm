@@ -1,7 +1,7 @@
 // The welcome page's suggestions (spec 0005, Value sourcing): the workspace
 // name from your first name, and the web address from the workspace name.
 import { describe, expect, it } from 'vitest';
-import { firstWord, SLUG_RULE, slugFrom, suggestedWorkspaceName } from './names.ts';
+import { addressAsTyped, firstWord, SLUG_RULE, slugFrom, suggestedWorkspaceName } from './names.ts';
 import { strings } from './strings.ts';
 
 describe('the suggested workspace name', () => {
@@ -43,5 +43,13 @@ describe('the web address', () => {
     expect(SLUG_RULE.test('')).toBe(false);
     expect(SLUG_RULE.test('two--dashes')).toBe(false);
     expect(SLUG_RULE.test('Upper')).toBe(false);
+  });
+});
+
+describe('the web address as it is typed', () => {
+  it('is lowercase, with spaces as dashes', () => {
+    expect(addressAsTyped('Halcyon Labs')).toBe('halcyon-labs');
+    expect(addressAsTyped('acme  hq')).toBe('acme-hq');
+    expect(addressAsTyped('acme-')).toBe('acme-');
   });
 });

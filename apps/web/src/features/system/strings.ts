@@ -12,7 +12,7 @@ export const strings = {
   failedTitle: 'The API or the database didn’t answer',
   failedText: 'Check that both are running, then try again.',
   notFoundTitle: 'Page not found',
-  notFoundText: 'There is nothing at this address',
+  notFoundText: 'There’s nothing at this address.',
   notFoundHint: 'Check the address for a typo.',
-  home: 'Go home',
+  home: 'Open your workspace',
 } as const;

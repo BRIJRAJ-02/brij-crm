@@ -34,15 +34,48 @@ export interface DataError extends Error {
   readonly name: 'DataError';
   readonly code: DataErrorCode;
   readonly data?: DataErrorDetails;
+  /**
+   * How long to wait before trying again, in whole seconds, from the answer's
+   * `Retry-After` (a `RATE_LIMITED` refusal, a cancelled query). Absent when
+   * the answer didn't say.
+   */
+  readonly retryAfterSeconds?: number;
 }
 
 /** Builds a DataError from its parts. */
-export function dataError(code: DataErrorCode, message: string, data?: DataErrorDetails): DataError {
+export function dataError(
+  code: DataErrorCode,
+  message: string,
+  data?: DataErrorDetails,
+  retryAfterSeconds?: number,
+): DataError {
   return Object.assign(new Error(message), {
     name: 'DataError' as const,
     code,
     ...(data === undefined ? {} : { data }),
+    ...(retryAfterSeconds === undefined ? {} : { retryAfterSeconds }),
   });
+}
+
+/** The same failure, carrying the answer's wait (when it had one and the failure doesn't already). */
+export function withRetryAfter(error: DataError, retryAfterSeconds: number | undefined): DataError {
+  if (retryAfterSeconds === undefined || error.retryAfterSeconds !== undefined) return error;
+  return dataError(error.code, error.message, error.data, retryAfterSeconds);
+}
+
+/**
+ * A `Retry-After` header as whole seconds from `now` (Unix milliseconds):
+ * either form the header allows, delay seconds or an HTTP date. Undefined
+ * when it is missing or unreadable; never below zero.
+ */
+export function parseRetryAfter(value: string | null | undefined, now: number): number | undefined {
+  if (value === null || value === undefined) return undefined;
+  const text = value.trim();
+  if (/^\d+$/.test(text)) return Number(text);
+  // An HTTP date names its day and month; anything else (a negative number, a bare year) is unreadable.
+  if (!/[a-z]/i.test(text)) return undefined;
+  const at = Date.parse(text);
+  return Number.isNaN(at) ? undefined : Math.max(0, Math.ceil((at - now) / 1000));
 }
 
 /** Whether a thrown value is a DataError, so a screen can read its code. */

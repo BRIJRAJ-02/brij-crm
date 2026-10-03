@@ -40,6 +40,13 @@
     letter-spacing: var(--tracking-body);
   }
 
+  /* Loading: two skeleton lines where the title and text go, a line's measure wide. */
+  .lines {
+    display: flex;
+    inline-size: min(var(--size-measure), 100%);
+    padding-block: var(--space-4);
+  }
+
   .actions {
     display: flex;
     flex-wrap: wrap;

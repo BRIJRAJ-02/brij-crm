@@ -272,3 +272,94 @@ export const BannerAnnouncedAgain: Story = {
     await expect(canvas.getByRole('alert')).toHaveTextContent(RATE_LIMITED.message);
   },
 };
+
+/** Refuses the address `halcyon-labs` only, as a server would: any other goes through. */
+function TakenAddress({ onSubmit }: { readonly onSubmit: (values: FormValues) => void }) {
+  const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
+  return (
+    <Stage width="narrow">
+      <Form
+        submitLabel="Create workspace"
+        refusals={refusals}
+        fieldFor={byAttribute}
+        onSubmit={(values) => {
+          onSubmit(values);
+          setRefusals(values.slug === 'halcyon-labs' ? [{ ...SLUG_TAKEN }] : []);
+        }}
+      >
+        <Field label="Workspace name" name="name" defaultValue="Halcyon Labs" />
+        <Field label="Web address" name="slug" defaultValue="halcyon-labs" />
+      </Form>
+    </Stage>
+  );
+}
+
+/**
+ * The refusal goes as soon as the field's value changes, while focus is still
+ * in it, not on blur: the form doesn't shift under the pointer, so one press
+ * of the submit sends the fixed value.
+ */
+export const RefusalClearsAsTyped: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <TakenAddress onSubmit={args.onSubmit} />,
+  play: async ({ args, canvas, userEvent }) => {
+    const submit = canvas.getByRole('button', { name: 'Create workspace' });
+    await userEvent.click(submit);
+    const slug = canvas.getByRole('textbox', { name: 'Web address' });
+    await waitFor(() => expect(slug).toHaveAttribute('aria-invalid', 'true'));
+    await waitFor(() => expect(slug).toHaveFocus());
+    await userEvent.keyboard('-hq');
+    await expect(slug).not.toHaveAttribute('aria-invalid');
+    await expect(slug).toHaveFocus();
+    await expect(canvas.queryByText('That address is taken. Try another.')).toBeNull();
+    const top = submit.getBoundingClientRect().top;
+    await userEvent.click(submit);
+    await expect(submit.getBoundingClientRect().top).toBe(top);
+    await expect(args.onSubmit).toHaveBeenCalledTimes(2);
+    await expect(args.onSubmit).toHaveBeenLastCalledWith({ name: 'Halcyon Labs', slug: 'halcyon-labs-hq' });
+    await expect(slug).not.toHaveAttribute('aria-invalid');
+  },
+};
+
+/** The web address follows the workspace name: the screen fills it in. */
+function FollowingAddress({ onSubmit }: { readonly onSubmit: (values: FormValues) => void }) {
+  const [name, setName] = useState('Halcyon Labs');
+  const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
+  return (
+    <Stage width="narrow">
+      <Form
+        submitLabel="Create workspace"
+        refusals={refusals}
+        fieldFor={byAttribute}
+        onSubmit={(values) => {
+          onSubmit(values);
+          setRefusals([{ ...SLUG_TAKEN }]);
+        }}
+      >
+        <Field label="Workspace name" name="name" value={name} onChange={setName} />
+        <Field label="Web address" name="slug" value={name.toLowerCase().replaceAll(' ', '-')} isReadOnly />
+      </Form>
+    </Stage>
+  );
+}
+
+/** A field the screen fills in loses its refusal too, once its value changes, though nobody typed in it; focus stays where the person types. */
+export const RefusalClearsWhenFilled: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <FollowingAddress onSubmit={args.onSubmit} />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Create workspace' }));
+    const slug = canvas.getByRole('textbox', { name: 'Web address' });
+    await waitFor(() => expect(slug).toHaveAttribute('aria-invalid', 'true'));
+    const name = canvas.getByRole('textbox', { name: 'Workspace name' });
+    await userEvent.click(name);
+    await userEvent.keyboard(' HQ');
+    await expect(slug).toHaveValue('halcyon-labs-hq');
+    await expect(slug).not.toHaveAttribute('aria-invalid');
+    await expect(name).toHaveFocus();
+    // A paste, one input event with the whole text, keeps the screen's value (the flow tests cover real, trusted events).
+    await userEvent.paste(' West');
+    await expect(name).toHaveValue('Halcyon Labs HQ West');
+    await expect(slug).toHaveValue('halcyon-labs-hq-west');
+  },
+};

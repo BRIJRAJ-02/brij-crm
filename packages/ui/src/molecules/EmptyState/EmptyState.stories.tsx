@@ -46,3 +46,14 @@ export const Failed: Story = {
 export const Locked: Story = {
   args: { tone: 'locked', title: 'You can’t see this list', children: 'Ask a workspace admin for access.' },
 };
+
+/** Still loading: the tile, and skeleton lines where the title and text go, so what follows lands in place. The title is read as the busy status. */
+export const Loading: Story = {
+  args: { isLoading: true, title: 'Loading' },
+  play: async ({ canvas }) => {
+    const status = canvas.getByRole('status');
+    await expect(status).toHaveAttribute('aria-busy', 'true');
+    await expect(status).toHaveTextContent('Loading');
+    await expect(canvas.queryByText('Deals you add or import show here.')).toBeNull();
+  },
+};

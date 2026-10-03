@@ -151,3 +151,15 @@ export const RecordPage: Story = {
     await expect(canvas.getByRole('heading', { level: 1, name: 'Northwind Traders' })).toBeInTheDocument();
   },
 };
+
+/** A page still loading: the top bar keeps its height with a skeleton line for its title; the h1 says it is loading. */
+export const TopBarLoading: Story = {
+  render: () => <TopBar title="Loading" isLoading />,
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Loading' })).toBeInTheDocument();
+    await expect(canvas.getByRole('banner')).toHaveAttribute('aria-busy', 'true');
+    // The skeleton shows after the loading delay; the bar is its full height before and after.
+    await waitFor(() => expect(canvas.getByRole('banner').querySelector('[aria-hidden="true"]')).not.toBeNull());
+    await expect(canvas.getByRole('banner').getBoundingClientRect().height).toBe(46);
+  },
+};

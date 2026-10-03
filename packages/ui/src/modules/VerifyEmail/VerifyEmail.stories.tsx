@@ -164,6 +164,83 @@ export const Resent: Story = {
   },
 };
 
+const LIMITED = 'Too many codes sent to this email. Try again in 10 minutes.';
+
+/** The resend was refused: why shows under "Send a new code" and is announced; the boxes keep their own state, and the wait counts to the server's. */
+export const ResendRefused: Story = {
+  args: { resendError: LIMITED, resendWait: 600 },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('alert')).toHaveTextContent(LIMITED);
+    await expect(canvas.getByRole('textbox', { name: 'Code' })).not.toHaveAttribute('aria-invalid');
+    await expect(canvas.getByText('You can send another in 10 minutes.')).toBeInTheDocument();
+    await expect(canvas.getByRole('status')).not.toHaveTextContent('New code sent');
+  },
+};
+
+function ResendWith({ refusal, onResend }: { readonly refusal?: string; readonly onResend: () => void }) {
+  const [isResending, setResending] = useState(false);
+  const [resendError, setResendError] = useState<string | undefined>(undefined);
+  const [wait, setWait] = useState(0);
+  return (
+    <AuthLayout productName="CRM" title="Check your email">
+      <VerifyEmail
+        email="maya@halcyonlabs.io"
+        onVerify={() => undefined}
+        isResending={isResending}
+        resendWait={wait}
+        {...(resendError === undefined ? {} : { resendError })}
+        onResend={() => {
+          onResend();
+          setResendError(undefined);
+          setResending(true);
+          // The answer arrives after a render, as a server's would.
+          setTimeout(() => {
+            setResending(false);
+            setResendError(refusal);
+            setWait(refusal === undefined ? 60 : 600);
+          }, 0);
+        }}
+        onUseAnotherEmail={() => undefined}
+      />
+    </AuthLayout>
+  );
+}
+
+/** A new code went out: "New code sent" is announced, and shown in the wait line too. */
+export const ResentWaiting: Story = {
+  render: (args) => <ResendWith onResend={args.onResend} />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Send a new code' }));
+    await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('New code sent'));
+    await expect(canvas.getByText('New code sent. You can send another in 60 seconds.')).toBeInTheDocument();
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Code' })).toHaveFocus());
+  },
+};
+
+/** A refused resend never says "New code sent", and leaves focus and the boxes alone. */
+export const ResendRefusedAfterPress: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <ResendWith refusal={LIMITED} onResend={args.onResend} />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Send a new code' }));
+    await waitFor(() => expect(canvas.getByRole('alert')).toHaveTextContent(LIMITED));
+    await expect(canvas.getByRole('status')).toBeEmptyDOMElement();
+    await expect(canvas.getByText('You can send another in 10 minutes.')).toBeInTheDocument();
+    await expect(canvas.getByRole('textbox', { name: 'Code' })).not.toHaveFocus();
+  },
+};
+
+/** Too many wrong tries: the code can't be used, so the boxes are off and focus goes to "Send a new code". */
+export const CodeSpent: Story = {
+  args: { isCodeSpent: true, error: 'Too many wrong tries for this code. Send a new one.' },
+  play: async ({ canvas }) => {
+    const code = canvas.getByRole('textbox', { name: 'Code' });
+    await expect(code).toBeDisabled();
+    await expect(code).toHaveAccessibleDescription(/Too many wrong tries for this code/);
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Send a new code' })).toHaveFocus());
+  },
+};
+
 const PAUSED = 'Signing in is paused for a few minutes. Try again soon.';
 
 function Pausable({ onResend }: { readonly onResend: () => void }) {

@@ -2,6 +2,8 @@ import type { ReactNode } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
+import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import styles from './EmptyState.module.css';
 import { strings } from './strings.ts';
 
@@ -21,6 +23,12 @@ export interface EmptyStateProps {
   readonly actions?: ReactNode;
   /** For `error`: shows "Try again", which calls it. */
   readonly onRetry?: () => void;
+  /**
+   * What will show here is still loading: the tile, then skeleton lines where
+   * the title and text go, so the empty, failed or loaded page that follows
+   * lands in the same place. `title` ("Loading") is read by screen readers.
+   */
+  readonly isLoading?: boolean;
 }
 
 const TONE_ICONS: Readonly<Record<EmptyStateTone, IconName>> = {
@@ -34,7 +42,26 @@ const TONE_ICONS: Readonly<Record<EmptyStateTone, IconName>> = {
  * load that failed (with a retry), or no access. Every component's empty,
  * error and locked states are made from it, with Skeleton for loading.
  */
-export function EmptyState({ title, children, tone = 'empty', icon, actions, onRetry }: EmptyStateProps) {
+export function EmptyState({
+  title,
+  children,
+  tone = 'empty',
+  icon,
+  actions,
+  onRetry,
+  isLoading = false,
+}: EmptyStateProps) {
+  if (isLoading) {
+    return (
+      <div className={styles.root} data-loading="" role="status" aria-busy="true">
+        <span className={styles.icon} />
+        <span className={styles.lines}>
+          <Skeleton lines={2} />
+        </span>
+        <VisuallyHidden>{title}</VisuallyHidden>
+      </div>
+    );
+  }
   return (
     <div className={styles.root} data-tone={tone} role={tone === 'error' ? 'alert' : 'status'}>
       <span className={styles.icon}>

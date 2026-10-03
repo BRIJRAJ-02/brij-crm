@@ -9,6 +9,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { Spinner } from '../../atoms/Spinner/Spinner.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
@@ -22,18 +23,36 @@ import { strings } from './strings.ts';
 
 const SidebarContext = createContext({ isCollapsed: false });
 
+/** What a render function for the sidebar's footer is told. */
+export interface SidebarState {
+  /** Folded to its rail: icons only, `size-sidebar-collapsed` wide. */
+  readonly isCollapsed: boolean;
+}
+
 /** Props for Sidebar. */
 export interface SidebarProps {
   /** The workspace's name, at the top. */
   readonly workspace: string;
   /** The workspace switcher: a `Menu` the name opens. Without it the name is plain. */
   readonly workspaceMenu?: ReactElement;
+  /**
+   * Something chosen from the workspace menu is under way (signing out): the
+   * button shows a spinner in place of its chevron (of the mark, on the rail),
+   * ignores presses and says it is busy. Name what is under way in `workspaceBusyLabel`.
+   */
+  readonly isWorkspaceBusy?: boolean;
+  /** What is under way, read by screen readers ("Signing out"). */
+  readonly workspaceBusyLabel?: string;
   /** Opens the command palette; the screen also answers ⌘K. */
   readonly onQuickActions?: () => void;
   /** `NavItem`s for the fixed destinations, then `NavSection`s. */
   readonly children: ReactNode;
-  /** Invite, help and the theme switch, at the bottom. */
-  readonly footer?: ReactNode;
+  /**
+   * Invite, help and the theme switch, at the bottom. A function gets whether
+   * the sidebar is folded to its rail (by `isCollapsed`, or by the app shell
+   * below `bp-page-compact`), so the footer can fit it: a vertical ThemeSwitch.
+   */
+  readonly footer?: ReactNode | ((state: SidebarState) => ReactNode);
   /** The narrow rail: icons only, each named in a tooltip. Inside the app shell it folds below `bp-page-compact` and stays folded there. */
   readonly isCollapsed?: boolean;
   /** Shows the collapse and expand buttons, and says when they are pressed. */
@@ -50,6 +69,8 @@ export interface SidebarProps {
 export function Sidebar({
   workspace,
   workspaceMenu,
+  isWorkspaceBusy = false,
+  workspaceBusyLabel,
   onQuickActions,
   children,
   footer,
@@ -61,7 +82,14 @@ export function Sidebar({
   const { isCompact } = useContext(AppShellContext);
   const isCollapsed = isCollapsedProp || isCompact;
   const onCollapsedChange = isCompact ? undefined : onCollapsedChangeProp;
-  const mark = <Avatar name={workspace} hue="ink" shape="square" size="sm" isDecorative />;
+  const spinner = <Spinner {...(workspaceBusyLabel === undefined ? {} : { label: workspaceBusyLabel })} />;
+  const mark =
+    isWorkspaceBusy && isCollapsed ? (
+      spinner
+    ) : (
+      <Avatar name={workspace} hue="ink" shape="square" size="sm" isDecorative />
+    );
+  const foot = typeof footer === 'function' ? footer({ isCollapsed }) : footer;
   const name = isCollapsed ? (
     <VisuallyHidden>{workspace}</VisuallyHidden>
   ) : (
@@ -78,10 +106,14 @@ export function Sidebar({
             </span>
           ) : (
             <MenuTrigger>
-              <AriaButton className={styles.switcher} aria-label={strings.switchWorkspace(workspace)}>
+              <AriaButton
+                className={styles.switcher}
+                aria-label={strings.workspaceMenu(workspace)}
+                isPending={isWorkspaceBusy}
+              >
                 {mark}
                 {name}
-                {!isCollapsed && <Icon name="chevron-down" size="sm" tone="muted" />}
+                {!isCollapsed && (isWorkspaceBusy ? spinner : <Icon name="chevron-down" size="sm" tone="muted" />)}
               </AriaButton>
               {workspaceMenu}
             </MenuTrigger>
@@ -119,9 +151,9 @@ export function Sidebar({
         <div className={styles.scroll}>
           <div className={styles.body}>{children}</div>
         </div>
-        {(footer !== undefined || (isCollapsed && onCollapsedChange !== undefined)) && (
+        {(foot !== undefined || (isCollapsed && onCollapsedChange !== undefined)) && (
           <div className={styles.foot}>
-            {footer}
+            {foot}
             {isCollapsed && onCollapsedChange !== undefined && (
               <Tooltip content={strings.expand} placement="end">
                 <Button

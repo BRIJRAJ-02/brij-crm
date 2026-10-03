@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type SyntheticEvent } from 'react';
 import { Form as AriaForm } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -30,7 +30,8 @@ interface FormBase<R extends FormRefusal> {
   readonly isDisabled?: boolean;
   /**
    * The last answer's refusals. Each one `fieldFor` maps to a field in the
-   * form shows on that field until the person changes it; the rest (about no
+   * form shows on that field until its value changes (as it is typed, or
+   * when the screen fills it); the rest (about no
    * field, or about a name no field in the form has) show above the fields.
    * They are hidden while busy, and each submit is a new answer, so the same
    * refusal again shows again.
@@ -120,10 +121,26 @@ function valuesOf(form: HTMLFormElement): FormValues {
   );
 }
 
+/** The names whose value now differs from the value that was refused, sorted, as one key. */
+function changedSince(refused: FormValues, now: FormValues): string {
+  return Object.keys(refused)
+    .filter((name) => now[name] !== refused[name])
+    .sort()
+    .join('\n');
+}
+
+/** The refusals left once the changed fields' are dropped; the same object when nothing changed. */
+function withoutChanged(errors: FieldRefusals, changed: string): FieldRefusals {
+  if (changed === '') return errors;
+  const dropped = new Set(changed.split('\n'));
+  return Object.fromEntries(Object.entries(errors).filter(([name]) => !dropped.has(name)));
+}
+
 /**
  * A form that maps the server's refusals to its fields. Built on React Aria's
  * Form: Enter in a field submits, a refusal `fieldFor` maps shows on the Field
- * with that `name` (and clears once the person changes it), and any other,
+ * with that `name` (and clears as soon as its value changes, on input, so the
+ * form never shifts under a press of its submit), and any other,
  * including one mapped to a name no field has, shows above the fields as a
  * danger Callout, which is announced. When field refusals arrive, focus moves
  * to the first refused field; if it is there already, the refusal is
@@ -165,13 +182,67 @@ export function Form<R extends FormRefusal = FormRefusal>({
   const errorsKey = JSON.stringify([attempt, byField]);
   const [kept, setKept] = useState({ key: errorsKey, errors: byField });
   if (kept.key !== errorsKey) setKept({ key: errorsKey, errors: byField });
-  const errors = kept.errors;
 
+  // A refusal is about the value that was sent. As soon as a field's value
+  // differs from it (typed, or filled in by the screen), its refusal goes, at
+  // once rather than on blur: a refusal leaving on blur shifted the form
+  // under the pointer, so a press of the submit that blurred the field missed.
+  const submitted = useRef<FormValues | undefined>(undefined);
+  const [refused, setRefused] = useState<{ readonly key: string; readonly values: FormValues } | undefined>(undefined);
+  const [current, setCurrent] = useState<FormValues>({});
+  const readCurrent = () => {
+    const form = formRef.current;
+    if (form === null) return;
+    const now = valuesOf(form);
+    setCurrent((known) => (JSON.stringify(known) === JSON.stringify(now) ? known : now));
+  };
+  useLayoutEffect(() => {
+    const form = formRef.current;
+    if (form === null || refused?.key === kept.key) return;
+    // The values these refusals are about: the ones sent, or (refusals given
+    // without a submit) the ones on show now.
+    const values = submitted.current ?? valuesOf(form);
+    setRefused({ key: kept.key, values });
+    setCurrent(values);
+  }, [kept.key, refused?.key]);
+  // Every keystroke (the input event, which bubbles to the form) and every
+  // committed change; a screen that fills a field itself (one name following
+  // another) re-renders the form, which reads the values again.
+  useLayoutEffect(readCurrent);
+  useEffect(() => {
+    const form = formRef.current;
+    if (form === null) return;
+    // On the document, so React has handled the event first: a re-render
+    // flushed before React reads a controlled field's new value (a listener
+    // on the form runs earlier) would put the old value back.
+    const doc = form.ownerDocument;
+    const onEdit = (event: Event) => {
+      if (event.target instanceof Node && form.contains(event.target)) readCurrent();
+    };
+    doc.addEventListener('input', onEdit);
+    doc.addEventListener('change', onEdit);
+    return () => {
+      doc.removeEventListener('input', onEdit);
+      doc.removeEventListener('change', onEdit);
+    };
+  });
+  const changed = refused?.key === kept.key ? changedSince(refused.values, current) : '';
+  const errors = useMemo(() => withoutChanged(kept.errors, changed), [kept.errors, changed]);
+
+  // A new answer (another submit, or a refusal on a field that had none)
+  // moves focus or speaks; a refusal leaving, or the screen dropping one,
+  // never pulls focus away from the field being typed in.
+  const answered = useRef<{ attempt: number; names: ReadonlySet<string> }>({ attempt: -1, names: new Set() });
   useEffect(() => {
     const form = formRef.current;
     const spoken = spokenRef.current;
     if (form === null || spoken === null) return;
-    const messages = Object.values(errors).flat();
+    const names = new Set(Object.keys(kept.errors));
+    const last = answered.current;
+    const isNew = attempt !== last.attempt || [...names].some((name) => !last.names.has(name));
+    answered.current = { attempt, names };
+    if (!isNew) return;
+    const messages = Object.values(kept.errors).flat();
     spoken.textContent = '';
     if (messages.length === 0) return;
     // Focus goes to the first refused field, whose description reads the
@@ -179,13 +250,15 @@ export function Form<R extends FormRefusal = FormRefusal>({
     const first = form.querySelector<HTMLElement>('[aria-invalid="true"]');
     if (first !== null && first !== document.activeElement) first.focus();
     else spoken.textContent = messages.join(' ');
-  }, [errors]);
+  }, [kept.errors, attempt]);
 
   const submit = (event: SyntheticEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isBusy || isDisabled) return;
+    const values = valuesOf(event.currentTarget);
+    submitted.current = values;
     setAttempt((count) => count + 1);
-    onSubmit(valuesOf(event.currentTarget));
+    onSubmit(values);
   };
 
   return (

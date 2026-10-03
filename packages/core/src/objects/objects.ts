@@ -1,7 +1,7 @@
 // A workspace's objects for the app's navigation (spec 0005): the sidebar's
 // Records section and the object pages read this list. Read only, through the
 // scope the access door made.
-import { asc, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 import type { ObjectSummary } from '@crm/contracts';
 import { HUES, OBJECT_ICONS, type Hue, type ObjectIcon } from '@crm/contracts/values';
 import { schema } from '@crm/db';
@@ -32,7 +32,8 @@ export async function listObjects(scope: EngineScope): Promise<ObjectSummary[]> 
         primaryAttributeId: objects.primaryAttributeId,
       })
       .from(objects)
-      .where(isNull(objects.archivedAt))
+      // Row level security keeps the read to this workspace; the filter says so too (house style).
+      .where(and(eq(objects.workspaceId, scope.workspaceId), isNull(objects.archivedAt)))
       .orderBy(asc(objects.createdAt), asc(objects.id)),
   );
   return rows.map(({ icon, hue, standardKey, primaryAttributeId, ...row }) => {

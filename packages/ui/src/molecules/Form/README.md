@@ -23,7 +23,7 @@ New (spec 0005, pulled forward from spec 0003's milestone 4). Sign in, verify, t
 ```
 
 - Give every field a `name`. `onSubmit` gets each named field's text.
-- `refusals` are the last answer's refusals, in any shape with `code`, `message` and an optional `attributeId` (`FormRefusal`). `fieldFor` turns one into the `name` of the field it is about (often straight from `attributeId`, or through a map from attribute ids to field names). That field shows the message until the person changes it.
+- `refusals` are the last answer's refusals, in any shape with `code`, `message` and an optional `attributeId` (`FormRefusal`). `fieldFor` turns one into the `name` of the field it is about (often straight from `attributeId`, or through a map from attribute ids to field names). That field shows the message until its value differs from the one refused: as soon as a key is typed (not on blur, so the form never shifts under a press of the submit), or when the screen fills the field in itself (a web address following a name). Clearing never moves focus.
 - A refusal `fieldFor` doesn't map (no attribute, a rate limit, a lost connection) shows above the fields as a danger Callout, which is announced. Without `fieldFor`, every refusal shows there. So does one mapped to a name no field in the form has (an attribute this form doesn't show), so no message ever vanishes; give the field that `name` to show it in place.
 - Each submit is a new answer: the same refusal again shows again, even on a field the person had changed. Refusals are hidden while `isBusy`.
 - `isBusy` while the server answers: the submit spins and reads `busyLabel`, and Enter or a second press does nothing. `isDisabled` turns the submit off (disable the fields too). `submitDescribedBy` takes the ids of lines that describe the submit, such as why it is off (SignInForm points it at its email field's reason, through Field's `descriptionId`).
@@ -59,11 +59,11 @@ New (spec 0005, pulled forward from spec 0003's milestone 4). Sign in, verify, t
 
 ## States
 
-Idle, field refused (on the field, which reads as invalid), form refused (Callout above the fields, also for a refusal mapped to a field the form lacks), busy (the submit spins, refusals hidden), disabled (the submit is off), another way to go on (under the submit), in a Modal (the submit in its footer).
+Idle, field refused (on the field, which reads as invalid, until its value changes), form refused (Callout above the fields, also for a refusal mapped to a field the form lacks), busy (the submit spins, refusals hidden), disabled (the submit is off), another way to go on (under the submit), in a Modal (the submit in its footer).
 
 ## Keyboard
 
-Enter in a single line field submits, in a Modal too (the footer's submit names the form). Tab goes through the fields, then the submit, then any `actions`. When refusals arrive, focus moves to the first refused field, whose description reads the refusal; if focus is already there (the person pressed Enter in it), the refusal is announced instead.
+Enter in a single line field submits, in a Modal too (the footer's submit names the form). Tab goes through the fields, then the submit, then any `actions`. When a new answer brings refusals, focus moves to the first refused field, whose description reads the refusal; if focus is already there (the person pressed Enter in it), the refusal is announced instead.
 
 ## Differences from the artifact
 

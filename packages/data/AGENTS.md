@@ -8,8 +8,8 @@ The one client data layer. Every screen reads and writes CRM data through it and
 
 | File | Owns |
 |---|---|
-| `src/index.ts` | `createDataLayer({ origin, notify, mintId, onSignedOut, currentPath })`, the `DataLayer` type, and the contract types screens may use. `me.get()` and `objects.list()` are cached per app load; a 401 from any call but `me.get` runs `onSignedOut` once |
-| `src/errors.ts` | `DataError`: every failure as `{ code, message, data? }`, from oRPC, Better Auth or the network. No Zod here (first load): codes come from `@crm/contracts/codes` |
+| `src/index.ts` | `createDataLayer({ origin, notify, mintId, onSignedOut, currentPath, onSessionChange })`, the `DataLayer` type, and the contract types screens may use. `me.get()` and `objects.list()` are cached per app load (an objects `NOT_FOUND` drops the cached `me`); a 401 from any call but `me.get` runs `onSignedOut` once (until `me.get` answers a person again), then `onSessionChange`, which sign in and sign out run too |
+| `src/errors.ts` | `DataError`: every failure as `{ code, message, data?, retryAfterSeconds? }`, from oRPC, Better Auth or the network; `retryAfterSeconds` comes from the answer's `Retry-After` (`parseRetryAfter`). No Zod here (first load): codes come from `@crm/contracts/codes` |
 | `src/auth/` | Sign in. `client.ts` is Better Auth's browser client, its one wrapper (lint lets only `src/auth/` import `better-auth/client`), loaded with a dynamic import by `auth.ts` |
 | `src/ids.ts` | `createIdMinter()`: UUID v7 from the clock and browser crypto |
 | `src/data.test.ts` | The layer against a fake API: the real oRPC handler over the contract, and Better Auth's routes by hand |

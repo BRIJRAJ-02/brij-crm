@@ -3,7 +3,7 @@
 // Main task: see the object's records; in milestone 1 there are none yet, and the page says so plainly.
 // Leaves out: the table, "New person" and "Add attribute", which arrive with records in milestone 2.
 import type { ObjectSummary } from '@crm/data';
-import { EmptyState, Link, Skeleton, TopBar } from '@crm/ui';
+import { EmptyState, Link, TopBar } from '@crm/ui';
 import { strings } from './strings.ts';
 
 /** The object's page: its TopBar and, until records exist, the empty state. Goes inside WorkspaceFrame as `topBar` and children. */
@@ -18,23 +18,42 @@ export function objectPage(object: ObjectSummary) {
   };
 }
 
-/** An address inside the workspace that names no object. */
-export function missingPage(title: string, text: string) {
+/** A workspace with no objects to list: its name, and a plain empty state (no way out to loop through). */
+export function noObjectsPage(workspaceName: string) {
   return {
-    topBar: <TopBar title={title} />,
-    body: <EmptyState icon="search" title={text} actions={<Link href="/">{strings.goHome}</Link>} />,
+    topBar: <TopBar title={workspaceName} />,
+    body: <EmptyState title={strings.noObjects}>{strings.noObjectsText}</EmptyState>,
   };
 }
 
-/** The workspace's page while it loads: no title yet, a Skeleton for the view. */
-export function pendingPage() {
-  return { topBar: undefined, body: <Skeleton lines={4} /> };
-}
-
-/** The workspace's page when loading failed: the failure as its title, and a retry. */
-export function failedPage(title: string, onRetry: () => void) {
+/** An address inside the workspace that names nothing: what happened as the title, what to do under it, and the way to the person's workspace. */
+export function missingPage(title: string, text: string) {
   return {
     topBar: <TopBar title={title} />,
-    body: <EmptyState tone="error" title={strings.failedText} onRetry={onRetry} />,
+    body: (
+      <EmptyState icon="search" title={text} actions={<Link href="/">{strings.openWorkspace}</Link>}>
+        {strings.checkAddress}
+      </EmptyState>
+    ),
+  };
+}
+
+/** The workspace's page while it loads: a top bar and a body that hold their places, so nothing jumps when it arrives. */
+export function pendingPage() {
+  return {
+    topBar: <TopBar title={strings.loadingTitle} isLoading />,
+    body: <EmptyState title={strings.loadingTitle} isLoading />,
+  };
+}
+
+/** The workspace's page when loading failed: under the workspace's name (when known), what happened, what to do, and a retry. */
+export function failedPage(workspaceName: string | undefined, onRetry: () => void) {
+  return {
+    topBar: <TopBar title={workspaceName ?? strings.failedTitle} />,
+    body: (
+      <EmptyState tone="error" title={strings.failedTitle} onRetry={onRetry}>
+        {strings.failedText}
+      </EmptyState>
+    ),
   };
 }

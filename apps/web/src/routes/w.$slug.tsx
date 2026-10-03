@@ -3,7 +3,7 @@ import { createFileRoute, Outlet, redirect, useRouter } from '@tanstack/react-ro
 import { signInHref } from '../features/auth/redirect.ts';
 import { failedPage, missingPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { strings } from '../features/workspace/strings.ts';
-import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
+import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
 // The workspace frame (spec 0005): signed in and a member. Signed out goes to
 // /sign-in and comes back; a workspace that doesn't exist, or that the person
@@ -40,5 +40,6 @@ function WorkspaceRoute() {
 
 function WorkspaceError() {
   const router = useRouter();
-  return <WorkspacePage page={failedPage(strings.failedTitle, () => void router.invalidate())} />;
+  const workspaceName = useWorkspaceName();
+  return <WorkspacePage page={failedPage(workspaceName, () => void router.invalidate())} isFailed />;
 }

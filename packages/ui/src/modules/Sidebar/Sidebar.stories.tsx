@@ -10,6 +10,7 @@ import { NavItem, NavSection, Sidebar } from './Sidebar.tsx';
 
 interface SampleSidebarProps {
   readonly isCollapsed?: boolean;
+  readonly isWorkspaceBusy?: boolean;
   readonly isLoading?: boolean;
   readonly hasLists?: boolean;
   readonly onQuickActions?: () => void;
@@ -18,6 +19,7 @@ interface SampleSidebarProps {
 /** The sidebar as the app draws it: the fixed destinations, then Favorites, Records and Lists. */
 function SampleSidebar({
   isCollapsed = false,
+  isWorkspaceBusy = false,
   isLoading = false,
   hasLists = true,
   onQuickActions,
@@ -28,6 +30,8 @@ function SampleSidebar({
     <Stage height="page">
       <Sidebar
         workspace="Brightline"
+        isWorkspaceBusy={isWorkspaceBusy}
+        workspaceBusyLabel="Signing out"
         workspaceMenu={
           <Menu label="Workspaces">
             <MenuItem id="brightline">Brightline</MenuItem>
@@ -37,14 +41,14 @@ function SampleSidebar({
         onQuickActions={onQuickActions ?? (() => undefined)}
         isCollapsed={collapsed}
         onCollapsedChange={setCollapsed}
-        footer={
+        footer={({ isCollapsed: isRail }) => (
           <>
             <NavItem icon="user-plus" onPress={() => undefined}>
               Invite teammates
             </NavItem>
-            {!collapsed && <ThemeSwitch controller={theme} isCompact />}
+            <ThemeSwitch controller={theme} isCompact orientation={isRail ? 'vertical' : 'horizontal'} />
           </>
-        }
+        )}
       >
         <NavItem icon="bell" href="/notifications">
           Notifications
@@ -108,7 +112,7 @@ export const Keyboard: Story = {
   parameters: { crm: { screenshot: false } },
   play: async ({ args, canvas, userEvent }) => {
     await userEvent.tab();
-    await expect(canvas.getByRole('button', { name: 'Brightline, switch workspace' })).toHaveFocus();
+    await expect(canvas.getByRole('button', { name: 'Brightline, workspace menu' })).toHaveFocus();
     await userEvent.tab();
     await userEvent.tab();
     await expect(canvas.getByRole('button', { name: /Quick actions/ })).toHaveFocus();
@@ -121,10 +125,18 @@ export const Keyboard: Story = {
   },
 };
 
-/** Collapsed: a rail of icons, each named in a tooltip, with the expand button at the bottom. */
+/**
+ * Collapsed: a rail of icons, each named in a tooltip, with the expand button
+ * at the bottom. The footer is told the sidebar is folded, so the theme
+ * switch stacks and stays inside the rail.
+ */
 export const Collapsed: Story = {
   args: { isCollapsed: true },
   play: async ({ canvas, userEvent }) => {
+    const nav = canvas.getByRole('navigation', { name: 'Main navigation' });
+    const theme = canvas.getByRole('radiogroup', { name: 'Theme' });
+    await expect(theme).toHaveAttribute('aria-orientation', 'vertical');
+    await expect(theme.getBoundingClientRect().right).toBeLessThanOrEqual(nav.getBoundingClientRect().right);
     const people = canvas.getByRole('link', { name: 'People' });
     await hoverFresh(userEvent, people);
     await expect(await shownTooltip()).toHaveTextContent('People');
@@ -146,5 +158,18 @@ export const Empty: Story = {
   args: { hasLists: false },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Lists you make show here.')).toBeInTheDocument();
+  },
+};
+
+/** Signing out from the workspace menu: the button spins in place of its chevron, says it is busy, and ignores presses. */
+export const WorkspaceBusy: Story = {
+  args: { isWorkspaceBusy: true },
+  play: async ({ canvas, userEvent }) => {
+    // React Aria adds what is under way to the button's name while it is pending.
+    const button = canvas.getByRole('button', { name: 'Brightline, workspace menu Signing out' });
+    await expect(button).toHaveAttribute('aria-disabled', 'true');
+    await expect(canvas.getByRole('progressbar', { name: 'Signing out' })).toBeInTheDocument();
+    await userEvent.click(button);
+    await expect(document.querySelector('[role="menu"]')).toBeNull();
   },
 };

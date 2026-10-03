@@ -13,7 +13,7 @@ export const Route = createFileRoute('/')({
     if (first === undefined) throw redirect({ to: '/welcome', replace: true });
     throw redirect({ to: '/w/$slug', params: { slug: first.slug }, replace: true });
   },
-  pendingComponent: () => <AuthPending title={strings.product} />,
-  errorComponent: () => <AuthError title={strings.product} />,
+  pendingComponent: () => <AuthPending title={strings.openingTitle} />,
+  errorComponent: () => <AuthError title={strings.openingTitle} />,
   component: () => null,
 });

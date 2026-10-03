@@ -1,6 +1,6 @@
 # AuthLayout
 
-The frame for the pages before the app: the product's mark and name, then the page card holding the page's task, centred in the window.
+The frame for the pages before the app: the product's mark and name, then the page card holding the page's task, centred across the window at a fixed offset from the top.
 
 ## Why it exists
 
@@ -17,7 +17,7 @@ New (spec 0005, pulled forward from spec 0003's milestone 4). Sign in, verify an
 - `title` is the page's heading; screens move focus to it on a route change.
 - `description` is a line under it; `footer` a way back or terms, under a hairline.
 - `isBusy` marks the card busy while a `Skeleton` stands in for its task (the screen is still checking the session), so assistive tech waits for it. Show the Skeleton through `useDelayedLoading`, so a fast check never flashes it.
-- It fills its container, like AppShell: give it the window's height (the web app mounts in `data-app-root`, which the base layer sizes to the window). The column is at least that tall, so the card sits in the middle on a desktop, and grows past it so the page scrolls on a short phone screen. The page's background and text colour come from the base layer; the column adds only `space-32` above the mark, and the card's own margin keeps `space-32` below it.
+- It fills its container, like AppShell: give it the window's height (the web app mounts in `data-app-root`, which the base layer sizes to the window). The column is at least that tall, and grows past it so the page scrolls on a short phone screen. The mark sits twice `space-32` from the top, never centred down the window: centred, the card jumped between sign in, verify and welcome (each a different height) and moved when a refusal made it taller, so the field under the pointer moved too. The page's background and text colour come from the base layer; the card's own margin keeps `space-32` below it.
 
 ## States
 

@@ -10,6 +10,6 @@ Spec 0005, milestone 1 (AC-30).
 
 ## Notes
 
-- "Your name" starts from the account's name. The workspace name follows it ("Ada’s workspace") until edited, and the web address follows the workspace name (`slugFrom`: lowercase letters and digits in single dash runs, 3 to 40 characters) until edited.
+- "Your name" starts from the account's name. The workspace name follows it ("Ada’s workspace") until edited, and the web address follows the workspace name (`slugFrom`: lowercase letters and digits in single dash runs, 3 to 40 characters) until edited. Typed, the address turns lowercase and spaces become dashes (`addressAsTyped`).
 - The workspace id is a UUID v7 minted once per visit (`data.workspaces.newId()`) and sent again on every try, so a retry after a lost answer makes nothing twice.
-- Refusals land on their fields through Form's `fieldFor`: `SLUG_TAKEN` on the web address (the API names the field), input problems by their path, anything else above the fields.
+- Refusals land on their fields through Form's `fieldFor`: `SLUG_TAKEN` on the web address (the API names the field), input problems by their path, anything else above the fields. A refusal goes as soon as its field changes (Form drops it on input), and changing "Your name" drops those on the fields still following it. The address hint steps aside while the address shows a refusal.

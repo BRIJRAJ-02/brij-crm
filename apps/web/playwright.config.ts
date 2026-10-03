@@ -18,5 +18,9 @@ export default defineConfig({
     baseURL: process.env.FLOW_BASE_URL ?? 'http://localhost:5173',
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // The flows at a desktop width and at a phone's, where the sidebar folds to its rail.
+  projects: [
+    { name: '1280', use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 800 } } },
+    { name: '375', use: { ...devices['Desktop Chrome'], viewport: { width: 375, height: 812 }, hasTouch: true } },
+  ],
 });

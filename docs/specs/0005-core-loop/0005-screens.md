@@ -36,7 +36,7 @@ Object URLs are generic (`objects/$object`, with `people` as the API slug), so c
 ## Every screen
 
 - A three line brief (purpose, main task, what it leaves out) in its feature folder's README.
-- Focus moves to the page title on route change; full keyboard use; contrast in light and dark.
+- Focus moves to the page title on route change, except on the one field steps: `/sign-in` puts it in the email field and `/verify` in the first code box, so a phone's keyboard and code suggestion come up at once. The tab's title is the page title, then "CRM" ("People · CRM"). Full keyboard use; contrast in light and dark.
 - `dxe quick`, `ux-interaction-reviewer` and `design-system-guardian` before each milestone lands.
 - The grid stays lazy; the first load stays under 250 kB.
 

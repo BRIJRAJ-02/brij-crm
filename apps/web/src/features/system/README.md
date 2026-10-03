@@ -9,5 +9,5 @@
 ## Not found (NotFound)
 
 - **Purpose**: an address the app has no page for.
-- **Main task**: say so, and offer the way home.
+- **Main task**: say so, and offer the way to your workspace.
 - **Leaves out**: guessing what was meant.

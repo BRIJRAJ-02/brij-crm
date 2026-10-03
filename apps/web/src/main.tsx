@@ -10,16 +10,23 @@ import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { signInHref } from './features/auth/redirect.ts';
-import { focusPageTitle } from './features/navigation/focus.ts';
+import { focusPage } from './features/navigation/focus.ts';
+import { followPageTitle } from './features/navigation/title.ts';
 import { routeTree } from './routeTree.gen.ts';
 
 // One toast queue for the app, shared by the screens and the data layer.
 const toasts = createToasts();
 
 // `router` is made after the data layer (it carries the layer in its
-// context); the layer reaches it only once a session ends, long after both exist.
+// context); the layer reaches it only once a session starts or ends, long
+// after both exist.
 const goTo = (href: string) => {
   void router.navigate({ href, replace: true });
+};
+// Who is signed in changed: the router's loaded pages belong to the last
+// person, so none of them may show again (Back after someone else signs in).
+const forgetPages = () => {
+  router.clearCache();
 };
 
 const data = createDataLayer({
@@ -36,6 +43,7 @@ const data = createDataLayer({
   onSignedOut: (redirectTo) => {
     goTo(signInHref(redirectTo));
   },
+  onSessionChange: forgetPages,
   currentPath: () => `${window.location.pathname}${window.location.search}`,
 });
 
@@ -65,11 +73,13 @@ const router = createRouter({
 });
 
 // After moving to another page, focus goes to its title (the page's h1), so
-// a screen reader starts there and Tab continues from the top of the page.
+// a screen reader starts there and Tab continues from the top of the page;
+// on /sign-in and /verify, to their one field (focus.ts).
 router.subscribe('onRendered', (event) => {
   if (event.fromLocation === undefined || !event.pathChanged) return;
+  const { pathname } = event.toLocation;
   requestAnimationFrame(() => {
-    focusPageTitle(document);
+    focusPage(document, pathname);
   });
 });
 
@@ -81,6 +91,21 @@ declare module '@tanstack/react-router' {
 
 const root = document.getElementById('root');
 if (!root) throw new Error('The page is missing its #root element.');
+
+// The tab's title follows the page's h1 from the first load on (WCAG 2.4.2).
+followPageTitle({
+  doc: document,
+  observe: (onChange) => {
+    const observer = new MutationObserver(onChange);
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    return () => {
+      observer.disconnect();
+    };
+  },
+  nextFrame: (run) => {
+    requestAnimationFrame(run);
+  },
+});
 
 // The browser's language and time zone until #23 adds them to the profile.
 createRoot(root).render(

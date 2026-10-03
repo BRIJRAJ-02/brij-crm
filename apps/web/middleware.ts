@@ -15,6 +15,9 @@ export const EDGE_HEADER = 'x-crm-edge';
 /** What an edge secret must look like: 32 or more printable ASCII characters, no spaces. */
 const EDGE_SECRET_FORMAT = /^[\x21-\x7e]{32,}$/;
 
+/** Vercel's environments outside development, where the API requires the edge secret. */
+const DEPLOYED: ReadonlySet<string> = new Set(['preview', 'production']);
+
 export default function middleware(request: Request): Response {
   const origin = process.env.API_ORIGIN_INTERNAL;
   if (origin === undefined || origin === '') {
@@ -28,6 +31,15 @@ export default function middleware(request: Request): Response {
   // value a header keeps intact (the API's EDGE_SECRET has the same rule).
   const edgeSecret = process.env.EDGE_SECRET;
   const vouching = edgeSecret !== undefined && edgeSecret !== '';
+  // Outside development the API refuses a request without the secret, so a
+  // deployment missing it answers here, plainly, instead of forwarding a
+  // request bound to fail.
+  if (!vouching && DEPLOYED.has(process.env.VERCEL_ENV ?? '')) {
+    return Response.json(
+      { code: 'API_UNAVAILABLE', message: 'This deployment has no edge secret set.' },
+      { status: 503 },
+    );
+  }
   if (vouching && (!EDGE_SECRET_FORMAT.test(edgeSecret) || new URL(origin).protocol !== 'https:')) {
     return Response.json(
       { code: 'API_UNAVAILABLE', message: 'This deployment’s API settings are invalid.' },

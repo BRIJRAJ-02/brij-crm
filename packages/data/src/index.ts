@@ -8,7 +8,7 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import { createAuth } from './auth/auth.ts';
-import { ERROR_MESSAGES, toDataError } from './errors.ts';
+import { ERROR_MESSAGES, parseRetryAfter, toDataError, withRetryAfter } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
 
 export type {
@@ -35,7 +35,12 @@ export {
 export type { FetchLike } from './fetch.ts';
 export { createIdMinter, type IdSources } from './ids.ts';
 
-type ApiClient = ContractRouterClient<typeof contract>;
+/** What each API call carries to the link: where to report the answer's `Retry-After`. */
+interface CallContext {
+  readonly onRetryAfter?: (seconds: number) => void;
+}
+
+type ApiClient = ContractRouterClient<typeof contract, CallContext>;
 
 /** A message for the person, raised on the app's toast queue. The same shape as the library's `ToastContent`. */
 export interface Notice {
@@ -60,6 +65,12 @@ export interface DataLayerOptions {
   readonly onSignedOut: (redirectTo: string) => void;
   /** The path and query the person is on now, for `onSignedOut`. */
   readonly currentPath: () => string;
+  /**
+   * Who is signed in changed: a sign in, a sign out, or a session that ended
+   * (a 401, after `onSignedOut`). The app drops whatever it cached for the
+   * last person outside the layer, such as the router's loaded pages.
+   */
+  readonly onSessionChange?: () => void;
   /** The network. The browser's `fetch` by default; tests pass a fake API. */
   readonly fetch?: FetchLike;
 }
@@ -67,8 +78,9 @@ export interface DataLayerOptions {
 /**
  * The one client data layer. Screens read and write through it and never
  * call the network themselves. Every failure rejects with a DataError
- * (`{ code, message, data? }`); a 401 from any call but `me.get` also runs
- * `onSignedOut` once and forgets what was cached for the person.
+ * (`{ code, message, data?, retryAfterSeconds? }`); a 401 from any call but
+ * `me.get` also runs `onSignedOut` once, forgets what was cached for the
+ * person and runs `onSessionChange`.
  */
 export function createDataLayer({
   origin,
@@ -76,10 +88,19 @@ export function createDataLayer({
   mintId,
   onSignedOut,
   currentPath,
+  onSessionChange = () => undefined,
   fetch = (input, init) => globalThis.fetch(input, init),
 }: DataLayerOptions) {
   const api: ApiClient = createORPCClient(
-    new RPCLink({ url: new URL('/api/rpc', origin).href, fetch: (request, init) => fetch(request, init) }),
+    new RPCLink<CallContext>({
+      url: new URL('/api/rpc', origin).href,
+      fetch: async (request, init, { context }) => {
+        const response = await fetch(request, init);
+        const wait = response.ok ? undefined : parseRetryAfter(response.headers.get('retry-after'), Date.now());
+        if (wait !== undefined) context.onRetryAfter?.(wait);
+        return response;
+      },
+    }),
   );
 
   // Cached per app load: who is signed in, and each workspace's objects. A
@@ -95,19 +116,41 @@ export function createDataLayer({
   const reset = () => {
     forget();
     ended = false;
+    onSessionChange();
   };
 
-  /** Runs a call, mapping its failure to a DataError; a 401 ends the session here. */
-  async function call<T>(run: () => Promise<T>): Promise<T> {
+  /**
+   * Runs one API call with a fresh context, mapping its failure to a
+   * DataError that carries the answer's `Retry-After`.
+   */
+  async function attempt<T>(run: (options: { readonly context: CallContext }) => Promise<T>): Promise<T> {
+    let wait: number | undefined;
     try {
-      return await run();
+      return await run({
+        context: {
+          onRetryAfter: (seconds) => {
+            wait = seconds;
+          },
+        },
+      });
+    } catch (error) {
+      throw withRetryAfter(toDataError(error), wait);
+    }
+  }
+
+  /** Runs a call, mapping its failure to a DataError; a 401 ends the session here. */
+  async function call<T>(run: (options: { readonly context: CallContext }) => Promise<T>): Promise<T> {
+    try {
+      return await attempt(run);
     } catch (error) {
       const failure = toDataError(error);
       if (failure.code === 'UNAUTHENTICATED' && !ended) {
         ended = true;
         forget();
         notify({ tone: 'danger', message: ERROR_MESSAGES.signedOut });
+        // Off to sign in first, then the app drops the last person's pages.
         onSignedOut(currentPath());
+        onSessionChange();
       }
       throw failure;
     }
@@ -124,8 +167,12 @@ export function createDataLayer({
        * ("nobody"), so it never runs `onSignedOut`.
        */
       get(): Promise<Me | undefined> {
-        me ??= api.me.get().then(
-          (answer) => answer,
+        me ??= attempt((options) => api.me.get(undefined, options)).then(
+          (answer) => {
+            // Someone is signed in again (in another tab, say): the next 401 ends their session too.
+            ended = false;
+            return answer;
+          },
           (error: unknown) => {
             const failure = toDataError(error);
             if (failure.code === 'UNAUTHENTICATED') return undefined;
@@ -141,27 +188,32 @@ export function createDataLayer({
       newId: () => mintId(),
       /** Creates the signed in person's workspace. Refusals: `SLUG_TAKEN` (field `slug`), `ID_TAKEN`, `INPUT_INVALID` (with issues). */
       async create(input: CreateWorkspaceInput) {
-        const created = await call(() => api.workspaces.create(input));
+        const created = await call((options) => api.workspaces.create(input, options));
         me = undefined;
         return created;
       },
     },
     objects: {
-      /** The workspace's live objects, cached for the app load. A non member gets the same `NOT_FOUND` as an unknown address. */
+      /**
+       * The workspace's live objects, cached for the app load. A non member
+       * gets the same `NOT_FOUND` as an unknown address, which also drops the
+       * cached `me`: the person may have just left it, so `/` asks again.
+       */
       list(workspace: string): Promise<ObjectSummary[]> {
         const cached = objects.get(workspace);
         if (cached !== undefined) return cached;
-        const loading = call(() => api.objects.list({ workspace }));
+        const loading = call((options) => api.objects.list({ workspace }, options));
         objects.set(workspace, loading);
-        loading.catch(() => {
+        loading.catch((error: unknown) => {
           if (objects.get(workspace) === loading) objects.delete(workspace);
+          if (toDataError(error).code === 'NOT_FOUND') me = undefined;
         });
         return loading;
       },
     },
     system: {
       /** Whether the API and the database answer, and which sign in methods are on. Never cached. */
-      status: () => call(() => api.system.status()),
+      status: () => call((options) => api.system.status(undefined, options)),
     },
     auth,
   };

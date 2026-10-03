@@ -11,7 +11,7 @@ import * as z from 'zod';
 export type ApiORPCError = ORPCError<ErrorCode, ApiError['data']>;
 
 /** The sentence every unexpected failure answers with. The detail goes to the log only. */
-export const INTERNAL_MESSAGE = 'Something went wrong on our side.';
+export const INTERNAL_MESSAGE = 'Something went wrong. Try again.';
 
 /** Input issues sent back at most, so a huge bad payload can't produce a huger answer. */
 export const MAX_INPUT_ISSUES = 50;

@@ -34,3 +34,8 @@ export function slugFrom(text: string): string {
     .replaceAll(/^-+|-+$/g, '');
   return plain.slice(0, SLUG_MAX).replace(/-+$/, '');
 }
+
+/** A web address as it is typed: lowercase, each run of spaces a dash, so a space never has to be refused. */
+export function addressAsTyped(text: string): string {
+  return text.toLowerCase().replaceAll(/\s+/g, '-');
+}

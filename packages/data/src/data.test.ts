@@ -6,6 +6,7 @@ import { contract, type Me, type ObjectSummary } from '@crm/contracts';
 import { implement, ORPCError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
 import { describe, expect, it } from 'vitest';
+import { parseRetryAfter } from './errors.ts';
 import { createDataLayer, createIdMinter, isDataError, type DataError, type Notice } from './index.ts';
 
 const ORIGIN = 'https://crm.test';
@@ -86,18 +87,24 @@ function okAuth(path: string): Response {
 }
 
 /** A data layer on a fake API, with its notices and sign outs recorded. */
-function layer(api: ReturnType<typeof fakeApi>, path = '/w/acme/objects/people?view=all') {
+function layer(api: Pick<ReturnType<typeof fakeApi>, 'fetch'>, path = '/w/acme/objects/people?view=all') {
   const notices: Notice[] = [];
   const signedOut: string[] = [];
+  // Sign outs and session changes, in the order they ran.
+  const events: string[] = [];
   const data = createDataLayer({
     origin: ORIGIN,
     notify: (notice) => notices.push(notice),
     mintId: createIdMinter({ now: () => 1_759_482_000_000, fill: (bytes) => bytes.fill(171) }),
-    onSignedOut: (redirectTo) => signedOut.push(redirectTo),
+    onSignedOut: (redirectTo) => {
+      signedOut.push(redirectTo);
+      events.push('signed out');
+    },
+    onSessionChange: () => events.push('session changed'),
     currentPath: () => path,
     fetch: api.fetch,
   });
-  return { data, notices, signedOut };
+  return { data, notices, signedOut, events };
 }
 
 async function failure(promise: Promise<unknown>): Promise<DataError> {
@@ -207,6 +214,67 @@ describe('objects.list', () => {
     expect(notices).toEqual([{ tone: 'danger', message: 'You were signed out. Sign in again to carry on.' }]);
     expect(await data.me.get()).toBeUndefined();
   });
+
+  it('goes to sign in first, then says the session changed, so the app drops the last person’s pages', async () => {
+    const api = fakeApi({
+      objects: () => {
+        throw unauthenticated();
+      },
+    });
+    const { data, events } = layer(api);
+    await failure(data.objects.list('acme'));
+    expect(events).toEqual(['signed out', 'session changed']);
+  });
+
+  it('signs out again on a later 401 once someone is signed in again', async () => {
+    let session = true;
+    const api = fakeApi({
+      me: () => {
+        if (!session) throw unauthenticated();
+        return ME;
+      },
+      objects: () => {
+        throw unauthenticated();
+      },
+    });
+    const { data, signedOut } = layer(api);
+    await failure(data.objects.list('acme'));
+    // Signed in again (another tab): me.get answers a person, so the next 401 is a new ending.
+    session = true;
+    expect(await data.me.get()).toEqual(ME);
+    await failure(data.objects.list('acme'));
+    expect(signedOut).toHaveLength(2);
+  });
+
+  it('asks who is signed in again after a NOT_FOUND, since the person may have left the workspace', async () => {
+    const api = fakeApi({
+      objects: () => {
+        throw new ORPCError('NOT_FOUND', { status: 404, message: 'Not here.' });
+      },
+    });
+    const { data } = layer(api);
+    await data.me.get();
+    await failure(data.objects.list('gone'));
+    await data.me.get();
+    expect(count(api.calls, '/api/rpc/me/get')).toBe(2);
+  });
+
+  it('carries the answer’s Retry-After on a refusal', async () => {
+    const api = fakeApi({
+      objects: () => {
+        throw new ORPCError('RATE_LIMITED', { status: 429, message: 'Too many tries.' });
+      },
+    });
+    const { data } = layer({
+      fetch: async (input, init) => {
+        const response = await api.fetch(input, init);
+        const headers = new Headers(response.headers);
+        if (response.status === 429) headers.set('retry-after', '90');
+        return new Response(response.body, { status: response.status, headers });
+      },
+    });
+    expect(await failure(data.objects.list('acme'))).toMatchObject({ code: 'RATE_LIMITED', retryAfterSeconds: 90 });
+  });
 });
 
 describe('workspaces.create', () => {
@@ -254,7 +322,6 @@ describe('workspaces.create', () => {
 describe('failures that never reached the API', () => {
   it('answers API_UNAVAILABLE when the network fails', async () => {
     const { data } = layer({
-      calls: [],
       fetch: () => Promise.reject(new TypeError('Failed to fetch')),
     });
     expect(await failure(data.system.status())).toMatchObject({
@@ -265,7 +332,6 @@ describe('failures that never reached the API', () => {
 
   it("answers API_UNAVAILABLE for a proxy's 503 page, in the layer's own words", async () => {
     const { data } = layer({
-      calls: [],
       fetch: () => Promise.resolve(new Response('<html>Bad gateway</html>', { status: 503 })),
     });
     expect(await failure(data.system.status())).toMatchObject({ code: 'API_UNAVAILABLE' });
@@ -318,6 +384,23 @@ describe('auth', () => {
     expect(api.calls).toContain('/api/auth/sign-out');
   });
 
+  it('says the session changed after signing in and after signing out, never on a refused code', async () => {
+    let refuse = true;
+    const api = fakeApi({}, (path) => {
+      if (path !== '/sign-in/email-otp') return json({ success: true });
+      return refuse
+        ? json({ code: 'INVALID_OTP', message: "That code isn't right." }, 400)
+        : json({ token: 't', user: ME.user });
+    });
+    const { data, events } = layer(api);
+    await failure(data.auth.verify('ada@example.com', '000000'));
+    expect(events).toEqual([]);
+    refuse = false;
+    await data.auth.verify('ada@example.com', '123456');
+    await data.auth.signOut();
+    expect(events).toEqual(['session changed', 'session changed']);
+  });
+
   it('answers the session, or undefined when there is none', async () => {
     const signedIn = layer(
       fakeApi({}, () =>
@@ -333,7 +416,40 @@ describe('auth', () => {
 
   it('turns a rate limit without a body into RATE_LIMITED', async () => {
     const { data } = layer(fakeApi({}, () => new Response('', { status: 429 })));
-    expect(await failure(data.auth.sendCode('ada@example.com'))).toMatchObject({ code: 'RATE_LIMITED' });
+    const error = await failure(data.auth.sendCode('ada@example.com'));
+    expect(error).toMatchObject({ code: 'RATE_LIMITED' });
+    expect(error.retryAfterSeconds).toBeUndefined();
+  });
+
+  it('carries the wait from Retry-After on a rate limited code send', async () => {
+    const { data } = layer(
+      fakeApi(
+        {},
+        () =>
+          new Response(JSON.stringify({ code: 'RATE_LIMITED', message: 'Too many codes were sent to this email.' }), {
+            status: 429,
+            headers: { 'content-type': 'application/json', 'retry-after': '600' },
+          }),
+      ),
+    );
+    expect(await failure(data.auth.sendCode('ada@example.com'))).toMatchObject({
+      code: 'RATE_LIMITED',
+      message: 'Too many codes were sent to this email.',
+      retryAfterSeconds: 600,
+    });
+  });
+});
+
+describe('parseRetryAfter', () => {
+  it('reads delay seconds and HTTP dates, and nothing else', () => {
+    const now = Date.parse('2026-10-03T09:00:00.000Z');
+    expect(parseRetryAfter('120', now)).toBe(120);
+    expect(parseRetryAfter(' 0 ', now)).toBe(0);
+    expect(parseRetryAfter('Sat, 03 Oct 2026 09:10:00 GMT', now)).toBe(600);
+    expect(parseRetryAfter('Sat, 03 Oct 2026 08:00:00 GMT', now)).toBe(0);
+    expect(parseRetryAfter('soon', now)).toBeUndefined();
+    expect(parseRetryAfter('-5', now)).toBeUndefined();
+    expect(parseRetryAfter(null, now)).toBeUndefined();
   });
 });
 

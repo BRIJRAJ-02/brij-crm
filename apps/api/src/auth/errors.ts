@@ -57,7 +57,7 @@ export async function authErrorResponse(response: Response): Promise<Response> {
   }
   if (response.status >= 500) {
     log.error('Sign in route failed', { status: response.status, code });
-    return json({ code: 'INTERNAL', message: 'Something went wrong on our side.' }, 500, response.headers);
+    return json({ code: 'INTERNAL', message: 'Something went wrong. Try again.' }, 500, response.headers);
   }
   const answered = code ?? BY_STATUS[response.status] ?? 'INPUT_INVALID';
   return json(

@@ -16,6 +16,8 @@ Spec 0005, milestone 1. Every page inside a workspace sits in `WorkspaceFrame` (
 
 ## Notes
 
-- Signed out goes to `/sign-in?redirect=<this page>`. An unknown workspace and one the person isn't in both answer `NOT_FOUND`, shown as "Workspace not found" inside the frame.
+- Signed out goes to `/sign-in?redirect=<this page>`. An unknown workspace and one the person isn't in both answer `NOT_FOUND`, shown as "Workspace not found" inside the frame, with "Open your workspace".
+- While a page loads, the sidebar already shows the workspace's name (from `me`), and the page keeps a loading TopBar and EmptyState in their places. A workspace that failed to load hides Records and offers Try again; one with no objects says "No objects yet".
+- Sign out from the workspace menu spins the workspace button until it is done. The theme switch stacks when the sidebar is folded to its rail (below `bp-page-compact`).
 - `/w/$slug` opens on People: the object with the `people` template key, by its `apiSlug`.
 - The sidebar lists People only in this loop (`navObjects`); the other standard objects join it when their tables exist.

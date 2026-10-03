@@ -70,6 +70,36 @@ export const Theme: Story = {
   },
 };
 
+function VerticalTheme() {
+  const [controller] = useState(fakeThemeController);
+  return (
+    <Stage>
+      <ThemeSwitch controller={controller} isCompact orientation="vertical" />
+    </Stage>
+  );
+}
+
+/**
+ * Vertical, icons only: the theme switch in the folded sidebar's rail, where
+ * the row doesn't fit. The up and down arrows move the choice.
+ */
+export const ThemeVertical: Story = {
+  render: () => <VerticalTheme />,
+  play: async ({ canvas, userEvent }) => {
+    const group = canvas.getByRole('radiogroup', { name: 'Theme' });
+    await expect(group).toHaveAttribute('aria-orientation', 'vertical');
+    const [light, dark, system] = ['Light', 'Dark', 'System'].map((name) => canvas.getByRole('radio', { name }));
+    if (light === undefined || dark === undefined || system === undefined) throw new Error('a theme is missing');
+    // Stacked, and as narrow as the rail allows.
+    await expect(dark.getBoundingClientRect().top).toBeGreaterThan(light.getBoundingClientRect().top);
+    await expect(group.getBoundingClientRect().width).toBeLessThanOrEqual(32);
+    await userEvent.click(system);
+    await expect(system).toBeChecked();
+    await userEvent.keyboard('{ArrowUp}');
+    await expect(dark).toBeChecked();
+  },
+};
+
 /** Disabled. */
 export const Disabled: Story = {
   args: { isDisabled: true },

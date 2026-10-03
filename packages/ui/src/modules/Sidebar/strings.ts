@@ -6,6 +6,7 @@ export const strings = {
   quickActionsKey: '⌘K',
   collapse: 'Collapse the sidebar',
   expand: 'Expand the sidebar',
-  switchWorkspace: (name: string) => `${name}, switch workspace`,
+  /** The workspace button's name: it opens the workspace's menu (switching, settings, sign out). */
+  workspaceMenu: (name: string) => `${name}, workspace menu`,
   loading: 'Loading',
 } as const;

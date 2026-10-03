@@ -22,14 +22,14 @@ Ported from the artifact's Toolbar card (ViewBar is new: the artifact drew it as
 </Toolbar>
 ```
 
-- **TopBar**: `title` is the page's one `h1`. It takes `tabIndex -1`, so the app can move focus to it after a route change (`titleRef`) without adding a tab stop. `icon` with `hue` draws the object's tile. With `crumbs`, the trail ends with the title as its current place, and the `h1` stays for screen readers. `meta` sits beside the title; `children` at the end.
+- **TopBar**: `title` is the page's one `h1`. It takes `tabIndex -1`, so the app can move focus to it after a route change (`titleRef`) without adding a tab stop. `icon` with `hue` draws the object's tile. With `crumbs`, the trail ends with the title as its current place, and the `h1` stays for screen readers. `meta` sits beside the title; `children` at the end. `isLoading` is the page still loading: after the loading delay a skeleton line (ViewBar's loading line) stands in for the icon and title, the bar keeps its `size-bar` height and is marked busy, and the `h1` keeps `title` ("Loading") for screen readers and focus. Why a variant: a page's pending state had no bar at all, so the page jumped down by a bar's height when it arrived; leaving `title` empty would have left an empty heading.
 - **ViewBar**: the switcher is a ghost button naming the current view; its menu marks the current one and ends with Create view when `onCreateView` is given. `isLoading` shows a skeleton until the views arrive. `children` sit at the end: View settings, Import / Export, the Table and Board switch.
 - **Toolbar**: a React Aria toolbar named by `label`. The start states the view's condition (SortChips, FilterChips, the dashed Filter); `end` shows only while the view has unsaved changes: Discard changes (ghost) and Save (split primary), the one blue action.
 - **SortChip**: "Sorted by Funding raised", with the direction's arrow and "+N" for further sorts. It is a button named for screen readers in full ("Sorted by Funding raised, descending, and 1 more") that opens the sort builder.
 
 ## States
 
-Bars: with and without actions; the views loading. Toolbar: with unsaved changes (Save shows) and without. SortChip: hover (pointer only), focus (accent edge and ring), pressed (scales to `scale-press`).
+Bars: with and without actions; the views loading; the page loading (TopBar). Toolbar: with unsaved changes (Save shows) and without. SortChip: hover (pointer only), focus (accent edge and ring), pressed (scales to `scale-press`).
 
 ## Keyboard
 
@@ -37,7 +37,7 @@ Tab reaches the switcher and each action in the bars. Tab enters the toolbar onc
 
 ## Differences from the artifact
 
-- `TopBar` names its title `title`, and its end slot is `children`; `crumbs` and `titleRef` are new.
+- `TopBar` names its title `title`, and its end slot is `children`; `crumbs`, `titleRef` and `isLoading` are new.
 - `ViewBar` is new, replacing the second TopBar the artifact drew for the view bar.
 - `Toolbar`'s end slot is `end`, so the unsaved changes sit apart from the view's condition.
 - `SortChip` takes `attribute`, `direction` and `more` rather than its text as children.

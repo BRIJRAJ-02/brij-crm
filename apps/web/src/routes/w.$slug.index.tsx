@@ -1,13 +1,14 @@
 import { isDataError } from '@crm/data';
 import { createFileRoute, redirect, useRouter } from '@tanstack/react-router';
-import { failedPage, missingPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
-import { strings } from '../features/workspace/strings.ts';
+import { failedPage, noObjectsPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { navObjects } from '../features/workspace/objects.ts';
-import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
+import { strings } from '../features/workspace/strings.ts';
+import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
 // A workspace opens on People (spec 0005): the object with the `people`
 // template key, by its address. The frame above says "not found" when the
-// workspace is missing, so this route only waits for it then.
+// workspace is missing, so this route only waits for it then. A workspace
+// with no objects to list says so plainly, with nowhere to loop back to.
 export const Route = createFileRoute('/w/$slug/')({
   loader: async ({ context, params }) => {
     const objects = await context.data.objects.list(params.slug).catch((error: unknown) => {
@@ -25,10 +26,15 @@ export const Route = createFileRoute('/w/$slug/')({
   },
   pendingComponent: () => <WorkspacePage page={pendingPage()} />,
   errorComponent: IndexError,
-  component: () => <WorkspacePage page={missingPage(strings.noObjects, strings.pageMissingText)} />,
+  component: NoObjects,
 });
+
+function NoObjects() {
+  return <WorkspacePage page={noObjectsPage(useWorkspaceName() ?? strings.product)} />;
+}
 
 function IndexError() {
   const router = useRouter();
-  return <WorkspacePage page={failedPage(strings.failedTitle, () => void router.invalidate())} />;
+  const workspaceName = useWorkspaceName();
+  return <WorkspacePage page={failedPage(workspaceName, () => void router.invalidate())} />;
 }

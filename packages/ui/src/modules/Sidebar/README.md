@@ -15,14 +15,14 @@ Ported from the artifact's Sidebar card. Every screen inside the app shell (#10 
   onQuickActions={openPalette}
   isCollapsed={isCollapsed}
   onCollapsedChange={setCollapsed}
-  footer={
+  footer={({ isCollapsed }) => (
     <>
       <NavItem icon="user-plus" onPress={invite}>
         Invite teammates
       </NavItem>
-      <ThemeSwitch controller={context.theme} isCompact />
+      <ThemeSwitch controller={context.theme} isCompact orientation={isCollapsed ? 'vertical' : 'horizontal'} />
     </>
-  }
+  )}
 >
   <NavItem icon="square-check" href="/tasks" badge={3}>
     Tasks
@@ -38,13 +38,14 @@ Ported from the artifact's Sidebar card. Every screen inside the app shell (#10 
 - It is the navigation landmark (`<nav>`, "Main navigation", or `label`).
 - `NavItem` is a routed link with `href` (`isCurrent` adds `aria-current="page"`), or a button with `onPress` (Invite teammates). Record objects and lists pass `hue` for their tile; a list may pass its emoji as `leading`. `meta` names a favourite's object; `badge` is for counts that need action, never totals.
 - `NavSection` folds under its label. `isLoading` draws skeleton rows after the loading delay; `emptyLabel` says what goes there when it has no items.
+- The workspace button is named "<workspace>, workspace menu". `isWorkspaceBusy` says something chosen from that menu is under way (signing out, once the menu has closed): a `Spinner` named by `workspaceBusyLabel` replaces the chevron (the mark, on the rail), and the button ignores presses while staying focusable. Why: the menu closes on the choice, so without it nothing on screen said the sign out was happening.
 - `onQuickActions` shows Quick actions with its ⌘K keycap. The screen answers the shortcut itself.
 - `isCollapsed` makes it a `size-sidebar-collapsed` rail: icons only, each named in a tooltip, sections drawn as groups under a hairline, and the expand button at the bottom. `onCollapsedChange` shows the collapse and expand buttons. The app shell folds it below `bp-page-compact`.
-- The footer carries `ThemeSwitch` (compact), as the artifact's card does.
+- The footer carries `ThemeSwitch` (compact), as the artifact's card does. `footer` may be a function of `{ isCollapsed }`, true whenever the sidebar is a rail (by `isCollapsed`, or folded by the app shell below `bp-page-compact`, which the screen can't see), so the footer fits the rail: the ThemeSwitch stacks (`orientation="vertical"`).
 
 ## States
 
-The current item takes `surface-selected`; hover (pointer only) `surface-hover`; focus the inset ring. Sections: open, folded, loading (skeletons) and empty. Collapsed. In forced colours, the current item is outlined in `Highlight`.
+The current item takes `surface-selected`; hover (pointer only) `surface-hover`; focus the inset ring. Sections: open, folded, loading (skeletons) and empty. Collapsed. Workspace busy (a spinner on the workspace button). In forced colours, the current item is outlined in `Highlight`.
 
 ## Keyboard
 
@@ -55,4 +56,4 @@ Tab moves through the workspace switcher, the collapse button, Quick actions, ea
 - `workspace` is the name; the switcher is the `Menu` you pass as `workspaceMenu`, which the name opens.
 - `search` became `onQuickActions`: the row shows only when the screen opens a palette.
 - `current` became `isCurrent`, and `NavItem` takes `href` or `onPress`.
-- New: the collapsed rail, section loading and empty states.
+- New: the collapsed rail, section loading and empty states, and `footer` as a function of the folded state.

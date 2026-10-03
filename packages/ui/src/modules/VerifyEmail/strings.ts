@@ -12,7 +12,9 @@ export const strings = {
   resending: 'Sending a new code',
   /** Announced once a new code has gone out, as focus moves back to the boxes. */
   resent: 'New code sent',
-  /** Under a resend that is still waiting: `time` is "42 seconds". */
+  /** Under a resend that is still waiting: `time` is "42 seconds" or "10 minutes". */
   resendWait: (time: string) => `You can send another in ${time}.`,
+  /** The same line just after a new code went out. */
+  resentWait: (time: string) => `New code sent. You can send another in ${time}.`,
   useAnotherEmail: 'Use another email',
 } as const;

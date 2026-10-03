@@ -6,7 +6,8 @@ import { isDataError, type DataLayer } from '@crm/data';
 import { AuthLayout, VerifyEmail } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
-import { clearPending, savePending, sessionStore, type PendingSignIn } from './pending.ts';
+import { sendRefusal, verifyRefusal } from './messages.ts';
+import { clearPending, saveLastEmail, savePending, sessionStore, type PendingSignIn } from './pending.ts';
 import { safeRedirect } from './redirect.ts';
 import { strings } from './strings.ts';
 import { useSecondsLeft } from './useSecondsLeft.ts';
@@ -23,16 +24,28 @@ export interface VerifyScreenProps {
   readonly redirect: string | undefined;
 }
 
-const messageOf = (error: unknown): string => (isDataError(error) ? error.message : String(error));
+/** When the next code may be sent: 60 seconds after the last one, never later than 60 seconds from now (a clock that moved). */
+export function firstResendAt(sentAt: number, now: number): number {
+  return Math.min(sentAt, now) + RESEND_WAIT_SECONDS * 1000;
+}
 
 /** The verify page: AuthLayout and VerifyEmail, with the resend wait counted here. */
 export function VerifyScreen({ data, pending, redirect }: VerifyScreenProps) {
   const navigate = useNavigate();
-  const [sentAt, setSentAt] = useState(pending.sentAt);
+  // When "Send a new code" is ready again: a minute after each send, or the server's wait after a refused one.
+  const [resendAt, setResendAt] = useState(() => firstResendAt(pending.sentAt, Date.now()));
   const [isVerifying, setVerifying] = useState(false);
   const [isResending, setResending] = useState(false);
   const [error, setError] = useState<string | undefined>(undefined);
-  const wait = Math.min(RESEND_WAIT_SECONDS, useSecondsLeft(sentAt + RESEND_WAIT_SECONDS * 1000));
+  const [isCodeSpent, setCodeSpent] = useState(false);
+  const [resendError, setResendError] = useState<string | undefined>(undefined);
+  const wait = useSecondsLeft(resendAt);
+
+  const waitFrom = (failure: unknown) => {
+    if (isDataError(failure) && failure.retryAfterSeconds !== undefined) {
+      setResendAt(Date.now() + failure.retryAfterSeconds * 1000);
+    }
+  };
 
   const verify = (code: string) => {
     setVerifying(true);
@@ -42,32 +55,42 @@ export function VerifyScreen({ data, pending, redirect }: VerifyScreenProps) {
         void navigate({ href: safeRedirect(redirect), replace: true });
       },
       (failure: unknown) => {
+        const refusal = verifyRefusal(failure, wait > 0);
         setVerifying(false);
-        setError(messageOf(failure));
+        setError(refusal.message);
+        setCodeSpent(refusal.isSpent);
+        waitFrom(failure);
       },
     );
   };
 
   const resend = () => {
+    // The code's refusal and the last resend's are about older answers.
+    setError(undefined);
+    setResendError(undefined);
     setResending(true);
     data.auth.sendCode(pending.email).then(
       () => {
         const now = Date.now();
         savePending(sessionStore(window), { email: pending.email, sentAt: now });
-        setSentAt(now);
-        setError(undefined);
+        setResendAt(now + RESEND_WAIT_SECONDS * 1000);
+        setCodeSpent(false);
         setResending(false);
       },
       (failure: unknown) => {
-        // The refusal comes in the same answer that ends the resend, so it shows instead of "New code sent".
-        setError(messageOf(failure));
+        // The refusal comes in the same answer that ends the resend, so "New code sent" is never said.
+        setResendError(sendRefusal(failure));
+        waitFrom(failure);
         setResending(false);
       },
     );
   };
 
   const useAnotherEmail = () => {
-    clearPending(sessionStore(window));
+    const storage = sessionStore(window);
+    clearPending(storage);
+    // /sign-in starts with this address, to fix a typo in it.
+    saveLastEmail(storage, pending.email);
     void navigate({ to: '/sign-in', search: redirect === undefined ? {} : { redirect } });
   };
 
@@ -77,11 +100,13 @@ export function VerifyScreen({ data, pending, redirect }: VerifyScreenProps) {
         email={pending.email}
         onVerify={verify}
         isVerifying={isVerifying}
+        isCodeSpent={isCodeSpent}
         onResend={resend}
         resendWait={wait}
         isResending={isResending}
         onUseAnotherEmail={useAnotherEmail}
         {...(error === undefined ? {} : { error })}
+        {...(resendError === undefined ? {} : { resendError })}
       />
     </AuthLayout>
   );

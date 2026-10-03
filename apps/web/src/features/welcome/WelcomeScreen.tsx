@@ -6,7 +6,7 @@ import { isDataError, type DataLayer, type SignedInUser } from '@crm/data';
 import { AuthLayout, Button, Field, Form, type Toasts } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
-import { SLUG_MAX, SLUG_RULE, slugFrom, suggestedWorkspaceName } from './names.ts';
+import { addressAsTyped, SLUG_MAX, SLUG_RULE, slugFrom, suggestedWorkspaceName } from './names.ts';
 import { strings } from './strings.ts';
 
 /** A refusal for this form: the field it is about by `name`, or none (shown above the fields). */
@@ -32,6 +32,12 @@ function refusalsOf(error: unknown): WelcomeRefusal[] {
   });
   const all = [...refusals, ...issues];
   return all.length > 0 ? all : [{ code: error.code, message: error.message }];
+}
+
+/** The refusals left once those about `fields` are dropped. */
+function without(refusals: readonly WelcomeRefusal[], fields: readonly string[]): readonly WelcomeRefusal[] {
+  const next = refusals.filter((refusal) => refusal.field === undefined || !fields.includes(refusal.field));
+  return next.length === refusals.length ? refusals : next;
 }
 
 /** What is wrong with the typed values before they are sent, in the server's words. */
@@ -64,6 +70,13 @@ export function WelcomeScreen({ data, toasts, user }: WelcomeScreenProps) {
   const [isBusy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly WelcomeRefusal[]>([]);
   const [isSigningOut, setSigningOut] = useState(false);
+  // A refusal goes once its field changes, including a field that follows
+  // another: the Form drops it as the value changes, and this drops it from
+  // the state too, so it can't come back, and the address hint returns.
+  const drop = (...fields: readonly string[]) => {
+    setRefusals((current) => without(current, fields));
+  };
+  const isSlugRefused = refusals.some((refusal) => refusal.field === FIELDS.slug);
 
   const create = () => {
     const problems = problemsWith(memberName, name, slug);
@@ -122,7 +135,13 @@ export function WelcomeScreen({ data, toasts, user }: WelcomeScreenProps) {
           isRequired
           maxLength={80}
           value={memberName}
-          onChange={setMemberName}
+          onChange={(next) => {
+            setMemberName(next);
+            // The workspace name, and the address after it, follow "Your name" until edited.
+            const following =
+              typedName === undefined ? [FIELDS.name, ...(typedSlug === undefined ? [FIELDS.slug] : [])] : [];
+            drop(FIELDS.memberName, ...following);
+          }}
         />
         <Field
           label={strings.workspaceName}
@@ -131,7 +150,10 @@ export function WelcomeScreen({ data, toasts, user }: WelcomeScreenProps) {
           isRequired
           maxLength={80}
           value={name}
-          onChange={setTypedName}
+          onChange={(next) => {
+            setTypedName(next);
+            drop(FIELDS.name, ...(typedSlug === undefined ? [FIELDS.slug] : []));
+          }}
         />
         <Field
           label={strings.webAddress}
@@ -141,9 +163,11 @@ export function WelcomeScreen({ data, toasts, user }: WelcomeScreenProps) {
           maxLength={SLUG_MAX}
           value={slug}
           onChange={(next) => {
-            setTypedSlug(next.toLowerCase());
+            setTypedSlug(addressAsTyped(next));
+            drop(FIELDS.slug);
           }}
-          hint={strings.webAddressHint(SLUG_RULE.test(slug) ? slug : '')}
+          // The hint steps aside while the field shows its refusal.
+          {...(isSlugRefused ? {} : { hint: strings.webAddressHint(SLUG_RULE.test(slug) ? slug : '') })}
         />
       </Form>
     </AuthLayout>

@@ -138,6 +138,7 @@ export {
   ThemeSwitch,
   type Segment,
   type SegmentedControlProps,
+  type SegmentOrientation,
   type ThemeSwitchProps,
 } from './molecules/SegmentedControl/SegmentedControl.tsx';
 export { Select, type SelectItem, type SelectOptionStyle, type SelectProps } from './molecules/Select/Select.tsx';
@@ -181,6 +182,7 @@ export {
   type NavItemProps,
   type NavSectionProps,
   type SidebarProps,
+  type SidebarState,
 } from './modules/Sidebar/Sidebar.tsx';
 export { RecordHeader, type RecordHeaderProps } from './modules/RecordHeader/RecordHeader.tsx';
 export { RecordPanel, type RecordPanelProps, type RecordPanelTab } from './modules/RecordPanel/RecordPanel.tsx';

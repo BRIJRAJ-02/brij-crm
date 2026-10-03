@@ -2,7 +2,7 @@ import { isDataError } from '@crm/data';
 import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { failedPage, missingPage, objectPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { strings } from '../features/workspace/strings.ts';
-import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
+import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
 // One object's page, by its address (`people`). Object URLs are generic, so
 // custom objects (#13) reuse this route. Milestone 1 shows the empty state;
@@ -32,5 +32,6 @@ function ObjectRoute() {
 
 function ObjectError() {
   const router = useRouter();
-  return <WorkspacePage page={failedPage(strings.failedTitle, () => void router.invalidate())} />;
+  const workspaceName = useWorkspaceName();
+  return <WorkspacePage page={failedPage(workspaceName, () => void router.invalidate())} />;
 }

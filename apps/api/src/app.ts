@@ -139,7 +139,7 @@ export function createApp({
   app.notFound(() => errorResponse('NOT_FOUND', 'There is nothing at this address.'));
   app.onError((error, c) => {
     log.error('Unhandled error', { requestId: c.get('requestId'), path: c.req.path, ...errorFields(error) });
-    return errorResponse('INTERNAL', 'Something went wrong on our side.');
+    return errorResponse('INTERNAL', 'Something went wrong. Try again.');
   });
 
   return app;

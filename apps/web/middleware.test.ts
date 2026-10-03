@@ -1,7 +1,7 @@
 // The middleware is the one origin's edge: it decides where /api goes and what
 // the API is told about the caller. Vercel reads the rewrite and the upstream
 // request headers from the response's x-middleware-* headers.
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import middleware, { config, EDGE_HEADER } from './middleware.ts';
 
 const API = 'https://api-production.up.railway.app';
@@ -13,6 +13,11 @@ function call(path: string, headers: Record<string, string> = {}): Response {
 function upstreamHeader(response: Response, name: string): string | null {
   return response.headers.get(`x-middleware-request-${name}`);
 }
+
+// Local by default, whatever the machine running the tests has set.
+beforeEach(() => {
+  vi.stubEnv('VERCEL_ENV', '');
+});
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -69,9 +74,10 @@ describe('api proxy middleware', () => {
   it.each([
     ['unset', undefined],
     ['empty', ''],
-  ])('strips a client’s edge header and sends none while EDGE_SECRET is %s', (_name, secret) => {
+  ])('strips a client’s edge header and sends none while EDGE_SECRET is %s in development', (_name, secret) => {
     vi.stubEnv('API_ORIGIN_INTERNAL', API);
     vi.stubEnv('EDGE_SECRET', secret);
+    vi.stubEnv('VERCEL_ENV', 'development');
     const response = call('/api/rpc/system/status', { [EDGE_HEADER]: 'forged-by-the-client' });
     expect(upstreamHeader(response, EDGE_HEADER)).toBeNull();
     expect(response.headers.get('x-middleware-override-headers')?.split(',')).not.toContain(EDGE_HEADER);
@@ -87,6 +93,33 @@ describe('api proxy middleware', () => {
     expect(response.status).toBe(503);
     expect(response.headers.get('x-middleware-rewrite')).toBeNull();
     expect(((await response.json()) as { code: string }).code).toBe('API_UNAVAILABLE');
+  });
+
+  it.each([
+    ['preview', undefined],
+    ['production', undefined],
+    ['preview', ''],
+    ['production', ''],
+  ])('answers 503 in %s while EDGE_SECRET is unset or empty (%j), since the API would refuse', async (env, secret) => {
+    vi.stubEnv('API_ORIGIN_INTERNAL', API);
+    vi.stubEnv('EDGE_SECRET', secret);
+    vi.stubEnv('VERCEL_ENV', env);
+    const response = call('/api/health', { [EDGE_HEADER]: 'forged-by-the-client' });
+    expect(response.status).toBe(503);
+    expect(response.headers.get('x-middleware-rewrite')).toBeNull();
+    expect(await response.json()).toEqual({
+      code: 'API_UNAVAILABLE',
+      message: 'This deployment has no edge secret set.',
+    });
+  });
+
+  it('forwards in production with the secret set', () => {
+    vi.stubEnv('API_ORIGIN_INTERNAL', API);
+    vi.stubEnv('EDGE_SECRET', 'the-real-edge-secret-of-32-characters');
+    vi.stubEnv('VERCEL_ENV', 'production');
+    const response = call('/api/health');
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-middleware-rewrite')).toBe(`${API}/api/health`);
   });
 
   it('never sends the secret to an API address that isn’t https', () => {
