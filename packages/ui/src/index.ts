@@ -104,6 +104,7 @@ export { Field, type FieldProps, type FieldSize } from './molecules/Field/Field.
 export { FileDrop, type FileDropProps } from './molecules/FileDrop/FileDrop.tsx';
 export { FileItem, formatFileSize, type FileItemProps } from './molecules/FileItem/FileItem.tsx';
 export { FilterChip, type FilterChipProps } from './molecules/FilterChip/FilterChip.tsx';
+export { Form, type FormProps, type FormRefusal, type FormValues } from './molecules/Form/Form.tsx';
 export { HuePicker, type HuePickerProps } from './molecules/HuePicker/HuePicker.tsx';
 export { IconPicker, type IconPickerProps } from './molecules/IconPicker/IconPicker.tsx';
 export {
@@ -145,6 +146,7 @@ export { Table, type TableColumn, type TableProps } from './molecules/Table/Tabl
 export { TabPanel, Tabs, type TabItem, type TabPanelProps, type TabsProps } from './molecules/Tabs/Tabs.tsx';
 export { ActivityFeed, type ActivityEntry, type ActivityFeedProps } from './modules/ActivityFeed/ActivityFeed.tsx';
 export { AppShell, AppShellContext, type AppShellProps } from './modules/AppShell/AppShell.tsx';
+export { AuthLayout, type AuthLayoutProps } from './modules/AuthLayout/AuthLayout.tsx';
 export {
   AttributeList,
   type AttributeEditorExtras,
@@ -182,8 +184,10 @@ export {
 } from './modules/Sidebar/Sidebar.tsx';
 export { RecordHeader, type RecordHeaderProps } from './modules/RecordHeader/RecordHeader.tsx';
 export { RecordPanel, type RecordPanelProps, type RecordPanelTab } from './modules/RecordPanel/RecordPanel.tsx';
+export { SignInForm, type SignInFormProps, type SignInStatus } from './modules/SignInForm/SignInForm.tsx';
 export { SortBuilder, type SortBuilderProps } from './modules/SortBuilder/SortBuilder.tsx';
 export { TaskList, type TaskEntry, type TaskListProps } from './modules/TaskList/TaskList.tsx';
+export { VerifyEmail, type VerifyEmailProps } from './modules/VerifyEmail/VerifyEmail.tsx';
 export { ViewSettings, type ViewField, type ViewSettingsProps } from './modules/ViewSettings/ViewSettings.tsx';
 export {
   SortChip,

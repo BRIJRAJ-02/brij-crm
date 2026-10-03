@@ -1,0 +1,27 @@
+/* AuthLayout: a column centred in the window, at least its full height: the
+   product's mark and name in body-strong, then the page card, which keeps
+   its own width and space-16 gutter. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    min-block-size: 100dvh;
+    padding-block: var(--space-32);
+    background: var(--surface);
+    color: var(--text);
+  }
+
+  .brand {
+    display: inline-flex;
+    gap: var(--space-8);
+    align-items: center;
+  }
+
+  .name {
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+}

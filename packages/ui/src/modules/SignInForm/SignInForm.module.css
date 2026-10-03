@@ -1,0 +1,16 @@
+/* SignInForm: the form, then the closed sign up line in text-secondary,
+   space-16 below it. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+  }
+
+  .note {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+}

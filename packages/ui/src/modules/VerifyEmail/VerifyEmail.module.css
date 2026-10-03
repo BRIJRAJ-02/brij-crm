@@ -1,0 +1,51 @@
+/* VerifyEmail: where the code went (the address in body-strong), the code
+   boxes, "Checking the code" with a spinner while it is checked, then the
+   resend and back buttons in a row with the resend wait space-8 under them
+   in text-secondary; the parts space-16 apart. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+  }
+
+  .sent,
+  .wait {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .wait {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .foot {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .email {
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    overflow-wrap: anywhere;
+  }
+
+  .checking {
+    display: inline-flex;
+    gap: var(--space-6);
+    align-items: center;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+  }
+}

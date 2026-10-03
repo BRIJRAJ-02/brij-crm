@@ -1,0 +1,22 @@
+/* Form: the fields stacked space-16 apart, a form level refusal above them,
+   and the buttons last: in a row at the end (a dialog), or filling the width
+   space-8 apart (a sign in page). */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    min-inline-size: 0;
+  }
+
+  .actions {
+    display: flex;
+    gap: var(--space-8);
+    justify-content: flex-end;
+  }
+
+  .actions[data-layout='stack'] {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

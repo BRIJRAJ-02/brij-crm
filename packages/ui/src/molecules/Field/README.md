@@ -25,6 +25,7 @@ Ported from the artifact's Field card. Every text, number and link attribute is 
 - Stack fields with `space-16` between them in modals and panels.
 
 - `autoFocus` takes focus as it mounts, for the search field at the top of a list that just opened.
+- Inside a `Form`, a refusal the form holds under the field's `name` shows here like `error`, until the person changes the field. A given `error` wins. The browser's own checks (`required`, `type="email"`) never show their messages: a required field is marked `aria-required`, and the screen or module says what is wrong in the library's words.
 
 ## States
 

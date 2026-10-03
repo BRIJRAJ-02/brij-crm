@@ -120,7 +120,11 @@ export function Field({
       isReadOnly={isReadOnly}
       isDisabled={isDisabled}
       isRequired={isRequired}
-      isInvalid={error !== undefined}
+      // The library shows its own copy, never the browser's: `error` here, or
+      // a refusal a Form maps to this field's `name`. Only a given `error`
+      // sets invalid, so a Form's refusal can still show.
+      validationBehavior="aria"
+      {...(error === undefined ? {} : { isInvalid: true })}
       type={type}
       {...(isLabelHidden ? { 'aria-label': label } : {})}
       {...(value === undefined ? {} : { value })}
@@ -171,8 +175,12 @@ export function Field({
         </span>
       )}
       <FieldError className={styles.error}>
-        <Icon name="circle-alert" size="xs" />
-        {error}
+        {({ validationErrors }) => (
+          <>
+            <Icon name="circle-alert" size="xs" />
+            {error ?? validationErrors.join(' ')}
+          </>
+        )}
       </FieldError>
     </TextField>
   );
