@@ -241,6 +241,8 @@ Tracer Bullet: each milestone ends with something you can click in production.
 - [ ] **Google OAuth client** (yours to create): a Web client with redirect URIs for local and the production domain.
 - [ ] **Spec 0003 and the scope**: record that SignInForm, VerifyEmail, AuthLayout and the Form molecule moved forward from milestone 4 (`/sync`).
 - [ ] **#6**: version ids in reads and the "your value was replaced" notice; filtered and sorted windows (cursor paging); reading only visible attributes.
+- [ ] **#7**: a delete of a record with ~200,000 links builds a `Change` with every far reference in memory, once per hook; the audit hook should stream or page it.
+- [ ] **#8**: the purge locks doomed records before their lists while entry writes lock list then record; restructure how the purge picks its batch (today a rare deadlock that `runWrite` retries).
 - [ ] **#7**: channel split per object if the load harness (#12) shows fan out cost; Centrifugo history beyond memory.
 - [ ] **#8**: code emails and outbox pruning as jobs.
 - [ ] **#9**: roles, field and record rules in the door; check field access before a contains reaches `crm_search_text`; make refusal messages that quote other records' values (`UNIQUE_HAS_DUPLICATES`, `UNIQUE_CONFLICT` on restore) safe for what the actor may read. Events on the shared `workspace:<id>` channel then leak associations (two rows of one `mutationId` show that two records are linked, and `attribute_ids` name hidden fields): filter events per subscriber through the door, or split channels by what a member may read, and leave out ids of fields that can be hidden. A link write also moves the far record's `updated_at` and `updated_by`, which the door must allow or authorise.
