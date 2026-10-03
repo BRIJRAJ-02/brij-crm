@@ -6,15 +6,16 @@ People sign in with a 6 digit code sent to their email, or with Google, through 
 
 ## Decisions
 
-- **Sign in methods**: email one time code (Better Auth `emailOTP` plugin, 6 digits, 10 minutes, `sendVerificationOnSignUp`, sign up by code allowed) plus Google (`socialProviders.google`). No passwords, so no reset flow and no unverified accounts. Runner up: email and password with a verification link (two more screens and the pre registration hijack risk).
-- **Account linking**: `accountLinking.enabled` with `trustedProviders: ['google']`: Google attaches to an existing account only when Google says the email is verified, and email codes prove ownership of the address, so both paths reach the same user.
-- **Allowlist**: a `databaseHooks.user.create.before` hook and the OTP send path both refuse an email not in `SIGNUP_ALLOWLIST` with `SIGNUP_CLOSED` ("Sign up isn't open yet"). The send path checks before any email goes out; an existing user is never blocked. Unset locally means open.
+- **Sign in methods**: email one time code (Better Auth `emailOTP({ otpLength: 6, expiresIn: 600, allowedAttempts: 5, storeOTP: 'hashed' })`, sign up by code allowed, routes under the default `basePath` `/api/auth`) plus Google (`socialProviders.google`). No passwords, so no reset flow and no unverified accounts. Runner up: email and password with a verification link (two more screens and the pre registration hijack risk).
+- **Account linking**: `accountLinking.enabled: true` with no `trustedProviders` and `updateUserInfoOnLink` off. Better Auth's default then links Google to an existing account only when Google reports the email verified; email codes prove ownership of the address, so both paths reach the same user. (Listing Google in `trustedProviders` would link even an unverified Google email, so it stays out.)
+- **Allowlist**: a `databaseHooks.user.create.before` hook and the OTP send path both refuse an email not in `SIGNUP_ALLOWLIST` with `SIGNUP_CLOSED` ("Sign up isn't open yet"). The send path checks before any email goes out; an existing user is never blocked. Unset locally means open. This tells an unlisted new email that it isn't listed; for any other email the answer is the same whether or not an account exists.
 - **Sessions**: `session.expiresIn` 30 days, `updateAge` 1 day, no cookie cache (revocation stays immediate). Cookies host only, `HttpOnly`, `Secure` outside local, `SameSite=Lax`. `trustedOrigins` = `APP_URL` plus local origins. `baseURL` = `BETTER_AUTH_URL` (the public origin).
 - **Ids**: `advanced.database.generateId: 'uuid'` so `auth.user.id` fits `members.user_id`.
+- **Names**: email code sign ups start with an empty `auth.user.name`. `/welcome` asks "Your name"; `workspaces.create` saves it as the member's name and fills `auth.user.name` when empty.
 - **Where it lives**: schema `auth`, written as a Drizzle `pgSchema('auth')` in `packages/db/src/schema/auth.ts` with a hand written migration; Better Auth's Drizzle adapter is built inside `packages/db` (an identity store export), so no pool exists outside `packages/db`. The organization plugin stays off until #23.
 - **Directory**: `auth.workspace_directory` (workspace id, slug unique, name) and `auth.workspace_membership` (user, workspace, member). Read for slug lookup and "my workspaces" only. The access door never reads it for permission.
-- **Rate limits**: Better Auth's limiter with database storage (safe across instances): code sends 3 per 10 minutes per email and 10 per 10 minutes per IP; code checks 5 tries per code; sign in endpoints 20 per minute per IP. The IP comes from `x-forwarded-for` only after the edge check.
-- **Mail**: a `Mailer` interface (`send({ to, subject, html, text })`) passed in. `apps/api/src/mail/resend.ts` is the only `resend` importer; `apps/api/src/mail/mailpit.ts` posts to Mailpit locally. One React Email template ("Your sign in code"). Sent inside the request for now; a send failure answers the same as success to the caller and is logged without the address or code.
+- **Rate limits**: Better Auth's limiter with `storage: 'database'` (its `auth.rate_limit` table, safe across instances) and `enabled: true` set explicitly (it is otherwise on only when `NODE_ENV` is `production`, and the local tests need it): code sends 5 per 10 minutes per email (a mistyped email plus the 60 second resend wait can't lock someone out for long) and 10 per 10 minutes per IP; code checks 5 tries per code; sign in endpoints 20 per minute per IP. The IP comes from `x-forwarded-for` (`advanced.ipAddress.ipAddressHeaders: ['x-forwarded-for']`) only after the edge check. Locally Vite's proxy sets no forwarded header, so per IP limits key on an empty value there; accepted.
+- **Mail**: a `Mailer` interface (`send({ to, subject, html, text })`) passed in. `apps/api/src/mail/resend.ts` is the only `resend` importer; `apps/api/src/mail/mailpit.ts` posts to Mailpit's `POST /api/v1/send` locally. `MAIL_FROM` is `onboarding@resend.dev` in production until a domain is verified. One React Email template ("Your sign in code"). Sent inside the request for now; a send failure answers the same as success to the caller and is logged without the address or code.
 
 ## The access door
 
@@ -35,23 +36,25 @@ oRPC middlewares in `apps/api`: `authed` (a session, else 401 `UNAUTHENTICATED`)
 
 `workspaces.create({ id, name, slug })` (session, verified email):
 1. One transaction through a new engine entry that accepts the workspace id and `firstMember.userId`: the workspace, its counters, the standard template, the member row, and an `AfterWrite` that inserts the directory and membership rows.
-2. A repeat with the same id and the same user returns the existing workspace (idempotent); a different user with that id gets `ID_TAKEN`.
-3. A taken slug → 409 `SLUG_TAKEN` on the `slug` field.
+2. Replay: on a unique violation of `workspaces_pkey`, read the workspace and the active member with `user_id` = this user inside `withWorkspace(id)`. Found → return the workspace (200). Not found → 409 `ID_TAKEN`.
+3. A taken slug → 409 `SLUG_TAKEN` on the `slug` field, from either `workspaces_slug` (partial, live workspaces) or `auth.workspace_directory`'s unconditional slug index, so a slug once used is never reused.
+4. `workspaces.create` builds no scope in `apps/api`; the engine's bootstrap builds its system scope inside `packages/core`. It stores no outbox row (nobody can be subscribed yet).
 
 ## The edge guard (thin #57)
 
 - `apps/web` middleware sets `x-crm-edge: <EDGE_SECRET>` on every proxied `/api/*` request, replacing any copy the client sent.
-- `apps/api` refuses `/api/*` except `/api/health*` without a matching header (constant time compare) with 403 `EDGE_REQUIRED` when `APP_ENV` is `preview` or `production`. `ApiEnv` requires `EDGE_SECRET` outside `local`.
+- `apps/api` refuses `/api/*` except `/api/health*` without a matching header (constant time compare) with 403 `EDGE_REQUIRED` whenever `EDGE_SECRET` is set and `APP_ENV` isn't `local`. `EDGE_SECRET` stays optional in `ApiEnv` for the rollout (API first, then Vercel, then Railway, as the build plan says); a startup log line says whether the guard is on. #57 makes it required.
 - The client IP is read from `x-forwarded-for` only after the check; Better Auth's `advanced.ipAddress.ipAddressHeaders` is set accordingly.
 
 ## Tests
 
 - Code sign in end to end against Mailpit; wrong, expired and reused codes; the 60 second resend wait; rate limit 429.
+- Production can't be tested by reading codes (Resend has no inbox API, and only the owner's mailbox receives mail). AC-27 is proven locally; production tests start from signed in browser states saved after one manual sign in, and `verify.md` says so.
 - Allowlist: no code and no user for an unlisted email; an existing user still signs in.
 - The door: workspace B's member on workspace A, a removed member, an unknown slug, no session, all refused the same way; the contract walking test.
 - `workspaces.create`: one transaction (a forced failure leaves no workspace and no directory rows), idempotent repeat, `SLUG_TAKEN`.
 - The edge guard: 403 without the header in preview mode, health checks open, local open.
-- Guard tests: schema `auth` holds no table with `workspace_id` leading a tenant shape; the app role still reads no `public` tenant row outside `withWorkspace`.
+- Guard tests: no table in schema `auth` has a `workspace_id` column except `workspace_directory` and `workspace_membership`; only the identity store module imports the `auth` tables (lint); the app role still reads no `public` tenant row outside `withWorkspace`.
 
 ## Rationale (short)
 

@@ -4,10 +4,20 @@ The core loop and everything that makes the data model flexible: objects, attrib
 
 ## Slice 1: Core loop (the walking skeleton)
 
-### 10. Core loop · needs a decision
+### 10. Core loop · in-progress · GA
 The thinnest real thread through every layer: sign up, get a workspace, open People, add one attribute, create and edit records in a table, and watch each change arrive on a second screen. Nothing else yet, and already built only from tokens, library components and the client data layer.
 **Done when:** a new user signs up with a verified email or Google, lands in their own workspace, creates and edits People records, and a second browser sees every change within a second; every write records who and when; it runs in production.
-- [ ] Design it (spec): `/architect core loop`
+- [x] Design it (spec): `/architect core loop`
+- [ ] Build it: `/develop core loop`
+   - [ ] Signed in, in production, on an empty People page: errors, the edge guard, Better Auth by email code, the access door, the workspace bootstrap, the sign in library modules and the first routes (AC-27, AC-29 to AC-33, AC-41)
+   - [ ] The People table: the store prototype gate, the record and attribute procedures, the data layer's windows and optimistic writes, and the screen with its two dialogs (AC-34 to AC-37, AC-40, AC-41)
+   - [ ] Live: the outbox, the relay, Centrifugo channels and tokens, and the browser subscription, proven with two browsers in production (AC-38, AC-39, AC-41)
+   - [ ] Finish and harden: Google sign in, session expiry, the keyboard, focus and contrast passes, and the full Playwright flow (AC-28, AC-31, AC-41)
+- [ ] Verify it: `/check verify core loop`
+- [ ] Test it: `/test core loop`
+- [ ] Review it (fresh model): `/check review core loop`
+- [ ] Document it: `/document core loop`
+Spec [0005](../specs/0005-core-loop/index.md) · code in `apps/web/`, `apps/api/`, `packages/core/`, `packages/data/`, `packages/db/`, `packages/ui/`
 
 ## Slice 2: Objects and attributes
 

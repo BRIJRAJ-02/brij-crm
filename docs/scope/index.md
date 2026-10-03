@@ -47,7 +47,7 @@ Build order is the order of the rows below (a feature added later takes the next
 | 8 | Background jobs | Foundation | [Foundations](foundations.md) | planned |
 | 9 | Access model | Foundation | [Foundations](foundations.md) | planned |
 | 57 | Edge only API access | Foundation | [Foundations](foundations.md) | planned |
-| 10 | Core loop | Slice 1 | [Data engine](engine.md) | planned |
+| 10 | Core loop | Slice 1 | [Data engine](engine.md) | in-progress |
 | 11 | Monitoring and product analytics | Slice 1 | [Business and operations](business-and-ops.md) | planned |
 | 12 | Scale budget and load harness | Slice 1 | [Business and operations](business-and-ops.md) | planned |
 | 13 | Objects and attributes | Slice 2 | [Data engine](engine.md) | planned |

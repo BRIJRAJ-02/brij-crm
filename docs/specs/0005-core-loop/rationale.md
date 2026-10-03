@@ -48,6 +48,16 @@ Per decision (each asked of the owner, with the recommendation taken):
 - 30 day sessions: usual for work tools.
 - No delete and no edit clash notice in the loop: they belong to #22 and #6.
 
+After the cross check (a read only pass on another model, 36 points), these were settled with the owner's agreement:
+- An unlisted new email is told sign up isn't open (helpful on a tiny list); every other email gets the same answer whether or not an account exists.
+- The Owner column shows real member names (a `members.list` call), and `/welcome` asks "Your name", because email code sign ups have no name.
+- One relay definer function that returns workspace ids only, instead of two that read and mark rows: the rows are then read under row level security, so the bypass is as small as it can be.
+- The relay reconnects with backoff instead of exiting the worker, since Neon's free compute sleeps.
+- Account linking uses Better Auth's default (verified emails only), not `trustedProviders`, which would link unverified Google emails.
+- The edge guard turns on only when its secret is set, so the rollout can't lock production out.
+- Confirmations replace a record's base while optimistic layers stay on top, so a second edit never flickers.
+- Replays are defined for every create (workspace, record, attribute), so a retried request after a lost answer succeeds.
+
 ## Evidence
 
 The wave 1 maps (5 read only readers, 3 October 2026) found: `packages/data` is only an oRPC client; the contract has only `system`; the API's RPC handler swallows errors unlogged; `DataGrid` reads a `RowSource`; `Change` has no object or mutation ids and nothing for definitions; Centrifugo runs on Railway with its secrets but no namespace; the CSP has no realtime origin; the first load is at 166 of 250 kB.
