@@ -12,13 +12,13 @@ import { isRefusal } from '../engine/refusals.ts';
 import { createUserWorkspace } from '../engine/workspaces.ts';
 import { enterWorkspace } from './door.ts';
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, identityUrl } = inject('testDatabase');
 let db: Database;
 let identity: IdentityStore;
 
 beforeAll(() => {
   db = createDatabase({ url: appUrl, applicationName: 'crm-door-tests' });
-  identity = createIdentityStore({ url: appUrl, applicationName: 'crm-door-tests' });
+  identity = createIdentityStore({ url: identityUrl, applicationName: 'crm-door-tests' });
 });
 afterAll(async () => {
   await identity.close();
@@ -30,7 +30,7 @@ const tag = () => randomUUID().slice(0, 8);
 /** A signed up user with their own workspace. */
 async function userWithWorkspace() {
   const email = `${tag()}@example.com`;
-  const userId = await createTestUser(appUrl, { email });
+  const userId = await createTestUser(identityUrl, { email });
   const created = await createUserWorkspace(db, {
     id: newId(),
     name: 'Acme',
@@ -83,7 +83,7 @@ describe('the access door', () => {
     );
     const deleted = await userWithWorkspace();
     await db.withWorkspace(deleted.workspace.id, (tx) => tx.execute(sql`update workspaces set deleted_at = now()`));
-    const nobody = await createTestUser(appUrl, { email: `${tag()}@example.com` });
+    const nobody = await createTestUser(identityUrl, { email: `${tag()}@example.com` });
 
     const attempts = [
       // Workspace B's member asking for workspace A.

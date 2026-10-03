@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from './client.ts';
 import * as tenantSchema from './schema/index.ts';
 
-const { appUrl, ownerUrl } = inject('testDatabase');
+const { appUrl, identityUrl, ownerUrl } = inject('testDatabase');
 
 /** Tables that are not tenant data: drizzle's own bookkeeping lives in its own schema. */
 const NOT_TENANT = new Set<string>();
@@ -247,18 +247,90 @@ describe('the auth schema: global identity, outside row level security (spec 000
     expect(tables.rows.filter((row) => row.enabled).map((row) => row.table)).toEqual([]);
   });
 
-  it('lets the app select, insert, update and delete there, and nothing more', async () => {
-    const grants = await owner.query<{ table: string; privileges: string }>(`
+  /** A role's privileges on each `auth` table, from the catalog. */
+  async function authGrants(role: string) {
+    const grants = await owner.query<{ table: string; privileges: string }>(
+      `
       select table_name as table, string_agg(privilege_type, ',' order by privilege_type) as privileges
       from information_schema.role_table_grants
-      where table_schema = 'auth' and grantee = 'crm_app'
+      where table_schema = 'auth' and grantee = $1
       group by table_name order by 1
-    `);
-    expect(grants.rows).toEqual(AUTH_TABLES.map((table) => ({ table, privileges: 'DELETE,INSERT,SELECT,UPDATE' })));
-    const schema = await owner.query<{ usage: boolean; create: boolean }>(
-      `select has_schema_privilege('crm_app', 'auth', 'USAGE') as usage, has_schema_privilege('crm_app', 'auth', 'CREATE') as create`,
+    `,
+      [role],
     );
-    expect(schema.rows).toEqual([{ usage: true, create: false }]);
+    return grants.rows;
+  }
+
+  async function schemaPrivileges(role: string) {
+    const schema = await owner.query<{ usage: boolean; create: boolean }>(
+      `select has_schema_privilege($1, 'auth', 'USAGE') as usage, has_schema_privilege($1, 'auth', 'CREATE') as create`,
+      [role],
+    );
+    return schema.rows;
+  }
+
+  it('lets only the identity login select, insert, update and delete there', async () => {
+    expect(await authGrants('crm_identity')).toEqual(
+      AUTH_TABLES.map((table) => ({ table, privileges: 'DELETE,INSERT,SELECT,UPDATE' })),
+    );
+    expect(await schemaPrivileges('crm_identity')).toEqual([{ usage: true, create: false }]);
+  });
+
+  it('leaves the app only insert on the two directory tables, written inside the workspace transaction', async () => {
+    expect(await authGrants('crm_app')).toEqual([
+      { table: 'workspace_directory', privileges: 'INSERT' },
+      { table: 'workspace_membership', privileges: 'INSERT' },
+    ]);
+    expect(await schemaPrivileges('crm_app')).toEqual([{ usage: true, create: false }]);
+  });
+
+  it('gives a table added later to the identity login only', async () => {
+    await owner.query('begin');
+    try {
+      await owner.query('create table auth.later_probe (id int)');
+      const later = await owner.query<{ grantee: string; privileges: string }>(`
+        select grantee, string_agg(privilege_type, ',' order by privilege_type) as privileges
+        from information_schema.role_table_grants
+        where table_schema = 'auth' and table_name = 'later_probe'
+          and grantee <> (select pg_get_userbyid(nspowner) from pg_namespace where nspname = 'auth')
+        group by grantee order by 1
+      `);
+      expect(later.rows).toEqual([{ grantee: 'crm_identity', privileges: 'DELETE,INSERT,SELECT,UPDATE' }]);
+    } finally {
+      await owner.query('rollback');
+    }
+  });
+
+  it('keeps the two logins apart: the app reads no identity, and the identity login no tenant data', async () => {
+    const roles = await owner.query<{ app_in_identity: boolean; identity_in_app: boolean; powers: boolean }>(`
+      select pg_has_role('crm_app', 'crm_identity', 'MEMBER') as app_in_identity,
+        pg_has_role('crm_identity', 'crm_app', 'MEMBER') as identity_in_app,
+        (select rolcanlogin or rolsuper or rolbypassrls from pg_roles where rolname = 'crm_identity') as powers
+    `);
+    expect(roles.rows).toEqual([{ app_in_identity: false, identity_in_app: false, powers: false }]);
+    const tenant = await owner.query<{ table: string }>(`
+      select distinct table_name as table from information_schema.role_table_grants
+      where grantee = 'crm_identity' and table_schema <> 'auth'
+    `);
+    expect(tenant.rows).toEqual([]);
+
+    // And for real, through each login.
+    const app = new pg.Client({ connectionString: appUrl });
+    const identity = new pg.Client({ connectionString: identityUrl });
+    await app.connect();
+    await identity.connect();
+    try {
+      for (const table of AUTH_TABLES) {
+        await expect(app.query(`select 1 from auth."${table}" limit 1`)).rejects.toMatchObject({ code: '42501' });
+      }
+      for (const table of ['members', 'workspaces', 'records', 'values']) {
+        await expect(identity.query(`select 1 from "${table}" limit 1`)).rejects.toMatchObject({ code: '42501' });
+      }
+      for (const table of AUTH_TABLES) await identity.query(`select 1 from auth."${table}" limit 1`);
+    } finally {
+      await app.end();
+      await identity.end();
+    }
   });
 
   it('stays out of the schema `@crm/db` exports, so only the identity store reaches it', () => {
@@ -272,13 +344,17 @@ describe('the auth schema: global identity, outside row level security (spec 000
     const schema = await owner.query<{ grantee: string }>(`
       select coalesce(pg_get_userbyid(nullif(a.grantee, 0)), 'PUBLIC') as grantee
       from aclexplode((select nspacl from pg_namespace where nspname = 'auth')) a
-      where a.grantee not in ('crm_app'::regrole, (select nspowner from pg_namespace where nspname = 'auth'))
+      where a.grantee not in (
+        'crm_app'::regrole, 'crm_identity'::regrole, (select nspowner from pg_namespace where nspname = 'auth')
+      )
     `);
     expect(schema.rows).toEqual([]);
     const tables = await owner.query<{ grantee: string }>(`
       select distinct grantee from information_schema.role_table_grants
       where table_schema = 'auth'
-        and grantee not in ('crm_app', (select pg_get_userbyid(nspowner) from pg_namespace where nspname = 'auth'))
+        and grantee not in (
+          'crm_app', 'crm_identity', (select pg_get_userbyid(nspowner) from pg_namespace where nspname = 'auth')
+        )
     `);
     expect(tables.rows).toEqual([]);
     const search = await owner.query<{ usage: boolean }>(

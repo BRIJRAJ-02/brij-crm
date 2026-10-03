@@ -1,24 +1,30 @@
 // The api entrypoint: every read and write the app makes.
-import { createDatabase } from '@crm/db';
+import { createDatabase, createIdentityStore } from '@crm/db';
 import { serve } from '@hono/node-server';
 import { createApp } from './app.ts';
+import { createAuth } from './auth/auth.ts';
 import { isEdgeGuardEnforced } from './edge.ts';
 import { ApiEnv, loadEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
+import { createMailer } from './mail/mailer.ts';
 import { onShutdown } from './shutdown.ts';
 
 const env = loadEnv(ApiEnv);
 
-const db = createDatabase({
-  url: env.DATABASE_URL,
-  applicationName: 'crm-api',
-  onPoolError: (error) => log.error('Idle database client failed', errorFields(error)),
+const onPoolError = (error: Error) => log.error('Idle database client failed', errorFields(error));
+const db = createDatabase({ url: env.DATABASE_URL, applicationName: 'crm-api', onPoolError });
+// Global identity on its own login (spec 0005): the only role that reads and writes schema `auth`.
+const identity = createIdentityStore({
+  url: env.IDENTITY_DATABASE_URL,
+  applicationName: 'crm-api-identity',
+  onPoolError,
 });
 try {
   await db.assertAppRole();
+  await identity.assertIdentityRole();
 } catch (error) {
   log.error('Refusing to start', errorFields(error));
-  await db.close();
+  await Promise.all([db.close(), identity.close()]);
   process.exit(1);
 }
 
@@ -35,11 +41,21 @@ if (isEdgeGuardEnforced({ secret: env.EDGE_SECRET, environment: env.APP_ENV })) 
   });
 }
 
-const server = serve({ fetch: createApp({ db, env }).fetch, port: env.PORT, hostname: '::' }, (info) =>
-  log.info('API listening', { port: info.port, environment: env.APP_ENV }),
+const mailer = createMailer(env);
+const auth = createAuth({ env, identity, mailer });
+// What sign in offers and where codes go, never a key or an address.
+log.info('Sign in ready', {
+  mail: mailer.transport,
+  google: auth.providers.google,
+  signup: env.SIGNUP_ALLOWLIST === undefined ? (env.APP_ENV === 'local' ? 'open' : 'closed') : 'allowlist',
+});
+
+const server = serve(
+  { fetch: createApp({ services: { db, identity, auth }, env }).fetch, port: env.PORT, hostname: '::' },
+  (info) => log.info('API listening', { port: info.port, environment: env.APP_ENV }),
 );
 
 onShutdown(async () => {
   await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
-  await db.close();
+  await Promise.all([db.close(), identity.close()]);
 });

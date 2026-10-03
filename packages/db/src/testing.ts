@@ -2,7 +2,8 @@
 // tests, never a mocked one (the house rules). A package's Vitest global setup
 // calls `prepareTestDatabase` once per run; tests then connect as an app login
 // role inside `crm_app`, so row level security applies exactly as in
-// production.
+// production, and reach the `auth` schema as an identity login inside
+// `crm_identity`, as the identity store does.
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { drizzle } from 'drizzle-orm/node-postgres';
@@ -13,13 +14,18 @@ import pg from 'pg';
 const DEFAULT_ADMIN_URL = 'postgres://postgres:postgres@localhost:5433/postgres';
 const OWNER = { role: 'crm_owner', password: 'crm_owner_local' } as const;
 const APP = { role: 'crm_test_app', password: 'crm_test_app_local' } as const;
+const IDENTITY = { role: 'crm_test_identity', password: 'crm_test_identity_local' } as const;
+/** A login role's options: no way around row level security, and nothing else either. */
+const LOGIN_OPTIONS = 'nosuperuser nobypassrls nocreatedb nocreaterole';
 /** The advisory lock that takes turns between packages setting up at once. */
 const SETUP_LOCK = 4_004_004;
 
-/** Where a test database lives, and how to reach it as the app and as the owner. */
+/** Where a test database lives, and how to reach it as the app, as the identity store and as the owner. */
 export interface TestDatabase {
   /** The app login role (a member of `crm_app`, bound by row level security). */
   readonly appUrl: string;
+  /** The identity login role (a member of `crm_identity`): the only one that reads and writes schema `auth`. */
+  readonly identityUrl: string;
   /** The owner role, for checks that read the catalog or set up data across workspaces. */
   readonly ownerUrl: string;
 }
@@ -36,7 +42,8 @@ const CHECKOUT = createHash('sha256')
 /**
  * Drops and creates this checkout's copy of the database `base` (suffixed with the
  * checkout's tag), applies every migration as the owner role, and makes sure
- * the test app login exists in `crm_app`. Each package uses its own name, and
+ * the test app login exists in `crm_app` and the test identity login in
+ * `crm_identity`. Each package uses its own name, and
  * each worktree its own tag, so suites can run at the same time.
  */
 export async function prepareTestDatabase(
@@ -74,8 +81,10 @@ export async function prepareTestDatabase(
       await migrate(drizzle({ client: owner }), {
         migrationsFolder: fileURLToPath(new URL('../migrations', import.meta.url)),
       });
-      await ensureRole(owner, APP.role, APP.password, 'nosuperuser nobypassrls nocreatedb nocreaterole');
+      await ensureRole(owner, APP.role, APP.password, LOGIN_OPTIONS);
       await owner.query(`grant crm_app to ${owner.escapeIdentifier(APP.role)}`);
+      await ensureRole(owner, IDENTITY.role, IDENTITY.password, LOGIN_OPTIONS);
+      await owner.query(`grant crm_identity to ${owner.escapeIdentifier(IDENTITY.role)}`);
     } finally {
       await owner.end();
     }
@@ -83,12 +92,17 @@ export async function prepareTestDatabase(
     await admin.end();
   }
 
-  return { appUrl: withCredentials(adminUrl, APP.role, APP.password, name), ownerUrl };
+  return {
+    appUrl: withCredentials(adminUrl, APP.role, APP.password, name),
+    identityUrl: withCredentials(adminUrl, IDENTITY.role, IDENTITY.password, name),
+    ownerUrl,
+  };
 }
 
 /**
  * Adds a signed up user (an `auth.user` row, as Better Auth would make one) for
- * tests that need a real identity, connecting through `url` (the app login).
+ * tests that need a real identity, connecting through `url`: the test
+ * database's `identityUrl`, since only the identity login may write there.
  * Returns the user's id.
  */
 export async function createTestUser(url: string, input: { email: string; name?: string }): Promise<string> {
@@ -102,6 +116,27 @@ export async function createTestUser(url: string, input: { email: string; name?:
     const id = result.rows[0]?.id;
     if (id === undefined) throw new Error('The test user was not created.');
     return id;
+  } finally {
+    await client.end();
+  }
+}
+
+/**
+ * Runs one statement through `url` (a login of a test database) and returns
+ * its rows, for a test's setup or checks outside packages/db, which may not
+ * open connections of its own. As the identity login it reaches `auth`; as
+ * the app login, row level security applies with no workspace set.
+ */
+export async function testQuery<Row extends Record<string, unknown>>(
+  url: string,
+  text: string,
+  params: readonly unknown[] = [],
+): Promise<Row[]> {
+  const client = new pg.Client({ connectionString: url, application_name: 'crm-test-query' });
+  await client.connect();
+  try {
+    const result = await client.query<Row>(text, [...params]);
+    return result.rows;
   } finally {
     await client.end();
   }

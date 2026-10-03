@@ -29,6 +29,15 @@ export default defineRailway(() => {
       APP_URL: preserve(),
       DATABASE_URL: preserve(),
       DATABASE_URL_OWNER: preserve(),
+      // Sign in (spec 0005): the identity login, Better Auth, the allowlist and mail.
+      IDENTITY_DATABASE_URL: preserve(),
+      BETTER_AUTH_SECRET: preserve(),
+      BETTER_AUTH_URL: preserve(),
+      SIGNUP_ALLOWLIST: preserve(),
+      RESEND_API_KEY: preserve(),
+      MAIL_FROM: preserve(),
+      GOOGLE_CLIENT_ID: preserve(),
+      GOOGLE_CLIENT_SECRET: preserve(),
     },
   });
 

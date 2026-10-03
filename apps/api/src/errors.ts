@@ -37,6 +37,21 @@ function issuePath(path: ValidationError['issues'][number]['path']): InputIssue[
 // What a refusal may carry onto the wire: code, message and attribute, nothing else.
 const Refusals = z.array(ApiRefusal).min(1);
 
+/**
+ * Ties engine refusals to the input field they are about (`SLUG_TAKEN` to
+ * `slug`), so a form can show the message on that field. Anything else is
+ * returned as it was, to be thrown again.
+ */
+export function withInputFields(error: unknown, fields: Readonly<Partial<Record<ErrorCode, string>>>): unknown {
+  if (!isRefusal(error)) return error;
+  const refusals = error.refusals.map((refusal) => {
+    const field = fields[refusal.code];
+    return field === undefined ? refusal : { ...refusal, field };
+  });
+  const [first] = refusals;
+  return first === undefined ? error : apiError(first.code, first.message, { refusals });
+}
+
 /** Turns anything thrown into the API's error shape. It never throws itself. */
 export function toApiError(error: unknown): MappedError {
   if (isRefusal(error)) {

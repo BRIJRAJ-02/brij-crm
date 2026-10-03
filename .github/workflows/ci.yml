@@ -33,6 +33,11 @@ jobs:
           --health-interval 2s
           --health-timeout 3s
           --health-retries 30
+      # Catches the sign in code emails the api's tests read back (spec 0005).
+      mailpit:
+        image: axllent/mailpit:v1.31.4
+        ports:
+          - 8025:8025
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6

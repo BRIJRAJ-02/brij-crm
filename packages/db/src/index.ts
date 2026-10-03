@@ -15,5 +15,7 @@ export {
   type DirectoryWorkspace,
   type IdentityStore,
   type IdentityUser,
+  type RateLimitDecision,
+  type RateLimitRule,
 } from './identity/store.ts';
 export * as schema from './schema/index.ts';

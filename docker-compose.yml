@@ -30,7 +30,8 @@ services:
       DB_HOST: postgres
       DB_PORT: 5432
       DB_NAME: crm
-      # The app login role, created by `pnpm db:app-login`.
+      # The app login role, created by `pnpm db:app-login`. The identity login (IDENTITY_DATABASE_URL)
+      # connects to postgres directly on a laptop; only the app login goes through this pooler.
       DB_USER: crm_app_user
       DB_PASSWORD: crm_app_local
       AUTH_TYPE: scram-sha-256

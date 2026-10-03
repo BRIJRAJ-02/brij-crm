@@ -10,13 +10,13 @@ import { newId } from './ids.ts';
 import { isRefusal } from './refusals.ts';
 import { createUserWorkspace, createWorkspace, type UserWorkspaceInput } from './workspaces.ts';
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, identityUrl } = inject('testDatabase');
 let db: Database;
 let identity: IdentityStore;
 
 beforeAll(() => {
   db = createDatabase({ url: appUrl, applicationName: 'crm-user-workspace-tests' });
-  identity = createIdentityStore({ url: appUrl, applicationName: 'crm-user-workspace-tests' });
+  identity = createIdentityStore({ url: identityUrl, applicationName: 'crm-user-workspace-tests' });
 });
 afterAll(async () => {
   await identity.close();
@@ -27,7 +27,7 @@ const tag = () => randomUUID().slice(0, 8);
 
 async function user(name = 'Ada Lovelace') {
   const email = `${tag()}@example.com`;
-  const userId = await createTestUser(appUrl, { email });
+  const userId = await createTestUser(identityUrl, { email });
   return { userId, name, email };
 }
 

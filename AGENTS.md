@@ -25,7 +25,7 @@ pnpm dev:apps       # api, worker and web only, against a Postgres you run yours
 pnpm build
 pnpm typecheck
 pnpm boundaries     # module edges: client code may never import server code
-pnpm db:setup       # apply migrations, then create the app login role
+pnpm db:setup       # apply migrations, then create the app and identity login roles
 pnpm db:generate    # SQL from the Drizzle schema; review it and commit it
 pnpm check          # everything CI runs: typecheck, lint, format, CSS, boundaries, house rules, tokens:check
 pnpm test           # every package's Vitest suite

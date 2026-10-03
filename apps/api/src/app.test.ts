@@ -140,7 +140,9 @@ describe('the body limit on /api/rpc', () => {
         body: oversized,
       }),
     );
-    expect(response.status).toBe(404);
+    // Better Auth answers it (here with no database behind it), never the RPC limit's 413.
+    expect(response.status).not.toBe(413);
+    expect(await response.json()).not.toMatchObject({ code: 'PAYLOAD_TOO_LARGE' });
   });
 });
 

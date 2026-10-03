@@ -9,6 +9,8 @@ export const ErrorCode = z.enum([
   ...ENGINE_REFUSAL_CODES,
   'INPUT_INVALID',
   'UNAUTHENTICATED',
+  'EMAIL_UNVERIFIED',
+  'SIGNUP_CLOSED',
   'EDGE_REQUIRED',
   'FORBIDDEN_ORIGIN',
   'PAYLOAD_TOO_LARGE',
@@ -37,6 +39,10 @@ const UNPROCESSABLE = { status: 422 } as const;
 export const ERROR_MAP = {
   INPUT_INVALID: { status: 400 },
   UNAUTHENTICATED: { status: 401 },
+  // Signed in, but the email isn't proven yet (a Google account that says so): no workspace until it is.
+  EMAIL_UNVERIFIED: { status: 403 },
+  // A new email that isn't on SIGNUP_ALLOWLIST: no code is sent and no user is made.
+  SIGNUP_CLOSED: { status: 403 },
   EDGE_REQUIRED: { status: 403 },
   FORBIDDEN_ORIGIN: { status: 403 },
   NOT_FOUND: { status: 404 },
@@ -63,11 +69,17 @@ export const ERROR_MAP = {
   INTERNAL: { status: 500 },
 } as const satisfies Record<ErrorCode, ErrorMapEntry>;
 
-/** One engine refusal inside an error's data: the code, how to fix it, and the attribute it's about. */
+/**
+ * One engine refusal inside an error's data: the code, how to fix it, and
+ * what it's about: an attribute (a value refused), or a field of the
+ * procedure's input (`slug` for a taken workspace address), so a form can
+ * show the message on that field.
+ */
 export const ApiRefusal = z.object({
   code: z.enum(ENGINE_REFUSAL_CODES),
   message: z.string(),
   attributeId: z.string().optional(),
+  field: z.string().optional(),
 });
 /** One engine refusal inside an error's data. */
 export type ApiRefusal = z.infer<typeof ApiRefusal>;

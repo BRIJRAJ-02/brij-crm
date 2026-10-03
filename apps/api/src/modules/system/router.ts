@@ -1,8 +1,8 @@
 import { getSystemStatus } from '@crm/core';
-import { base } from '../../orpc.ts';
+import { pub } from '../../orpc.ts';
 
-export const systemRouter = base.system.router({
-  status: base.system.status.handler(({ context }) =>
-    getSystemStatus({ db: context.db, environment: context.environment }),
+export const systemRouter = pub.system.router({
+  status: pub.system.status.handler(({ context }) =>
+    getSystemStatus({ db: context.db, environment: context.environment, providers: context.auth.providers }),
   ),
 });

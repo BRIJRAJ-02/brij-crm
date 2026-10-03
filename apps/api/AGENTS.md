@@ -16,8 +16,11 @@ The one modular API (Hono + oRPC) that every read and write goes through, and th
 | `src/errors.ts` | `toApiError()`: refusals keep their code and list every refusal, bad input is `INPUT_INVALID`, anything else `INTERNAL` |
 | `src/router.ts` | Joins the module routers into the one router the contract describes |
 | `src/modules/<feature>/router.ts` | Thin handlers for one feature, each calling a service in `packages/core` |
-| `src/orpc.ts` | The `base` implementer and `RequestContext` (actor and workspace join with sign in) |
+| `src/orpc.ts` | `RequestContext` and the three procedure bases: `pub`, `authed` (a session) and `member` (a session plus the access door, `context.scope`) |
+| `src/auth/` | Better Auth's one wrapper: email codes, Google, sessions, the sign up allowlist, rate limits, and its refusals in the shared error shape. Mounted on `/api/auth/*` |
+| `src/mail/` | The `Mailer` interface, Resend (deployed) and Mailpit (local), and the one React Email template |
 | `src/env.ts` | Zod schemas for the api and worker environments, and `loadEnv()` |
+| `src/door.test.ts` | The contract walk: every procedure outside the bootstrap list must be built on `member`, and no file here builds an engine scope |
 | `src/log.ts` | The logger: one JSON line per event |
 | `Dockerfile` | `turbo prune`, a production install, Node 24 alpine |
 
@@ -42,7 +45,9 @@ docker build -f apps/api/Dockerfile .   # from the repo root
 ## Gotchas
 
 - The image installs production dependencies only, and runs from source. Anything imported at runtime must be in `dependencies`, not `devDependencies`.
-- The api refuses to start as the owner or a superuser. `DATABASE_URL` must be the app login that `pnpm db:app-login` creates.
+- The api refuses to start as the owner or a superuser. `DATABASE_URL` must be the app login that `pnpm db:app-login` creates, and `IDENTITY_DATABASE_URL` the identity login `pnpm db:identity-login` creates (the only role that reads schema `auth`).
+- A new procedure is built on `member` and takes `WorkspaceScoped` input, unless it belongs on the bootstrap list in `src/door.test.ts` (`system.*`, `me.get`, `workspaces.create`, `realtime.connectionToken`). Never build an `EngineScope` here; `context.scope` comes from the door.
+- The tests need Postgres on 5433 and Mailpit on 8025 (`docker compose up -d postgres mailpit`): the sign in tests read the codes back from Mailpit.
 - The worker refuses a Neon `-pooler` host for `DATABASE_URL_DIRECT`, and proves a NOTIFY arrives before it starts. If its direct connection drops, it exits so Railway restarts it.
 - Locally the api owns `PORT` and the worker uses `WORKER_PORT` (default 3001). On Railway, each service gets its own `PORT`.
 - Turbo runs tasks in strict env mode, so shell variables don't reach `dev`. The scripts read the root `.env` themselves (`--env-file-if-exists`).

@@ -11,6 +11,11 @@ const origins = z
   )
   .pipe(z.array(z.url()).min(1));
 
+/** An optional variable where an empty value (`NAME=` in a file) counts as unset. */
+function optional<T extends z.ZodType>(schema: T) {
+  return z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
+}
+
 const shared = {
   APP_ENV: AppEnvironment,
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -19,26 +24,81 @@ const shared = {
 
 // The edge guard's shared secret (spec 0005). Optional while it rolls out; an
 // empty value counts as unset, so `.env.example`'s `EDGE_SECRET=` boots.
-const edgeSecret = z
+const edgeSecret = optional(
+  z
+    .string()
+    .min(32, 'EDGE_SECRET must be at least 32 characters.')
+    // A header carries it: printable ASCII with no spaces, so nothing is trimmed or refused on the way.
+    .regex(/^[\x21-\x7e]+$/, 'EDGE_SECRET may hold only printable ASCII characters, with no spaces.'),
+);
+
+/** The marker `.env.example`'s placeholder secret carries: fine on a laptop, refused anywhere else. */
+export const LOCAL_SECRET_MARKER = 'local-only';
+
+// A sender: `address@domain`, or `Name <address@domain>`.
+const sender = z
   .string()
-  .optional()
-  .transform((value) => (value === '' ? undefined : value))
-  .pipe(
-    z
-      .string()
-      .min(32, 'EDGE_SECRET must be at least 32 characters.')
-      // A header carries it: printable ASCII with no spaces, so nothing is trimmed or refused on the way.
-      .regex(/^[\x21-\x7e]+$/, 'EDGE_SECRET may hold only printable ASCII characters, with no spaces.')
-      .optional(),
+  .regex(
+    /^(?:[^<>@\n]+ <[^<>\s@]+@[^<>\s@]+>|[^<>\s@]+@[^<>\s@]+)$/,
+    'MAIL_FROM must be an address, or a name and an address like "CRM <sign-in@example.com>".',
   );
 
-export const ApiEnv = z.object({
-  ...shared,
-  PORT: z.coerce.number().int().positive().default(3000),
-  APP_URL: z.url(),
-  TRUSTED_ORIGINS: origins.optional(),
-  EDGE_SECRET: edgeSecret,
-});
+// Emails allowed to sign up: comma separated, compared lowercased.
+const allowlist = z
+  .string()
+  .transform((value) =>
+    value
+      .split(',')
+      .map((email) => email.trim().toLowerCase())
+      .filter(Boolean),
+  )
+  .pipe(z.array(z.email('SIGNUP_ALLOWLIST holds emails, comma separated.')));
+
+/** Locally, codes land in Mailpit unless a Resend key is set. */
+const DEFAULT_LOCAL_SENDER = 'CRM <sign-in@crm.localhost>';
+
+export const ApiEnv = z
+  .object({
+    ...shared,
+    PORT: z.coerce.number().int().positive().default(3000),
+    APP_URL: z.url(),
+    TRUSTED_ORIGINS: origins.optional(),
+    EDGE_SECRET: edgeSecret,
+    // Sign in (spec 0005).
+    IDENTITY_DATABASE_URL: z.url(),
+    BETTER_AUTH_SECRET: z.string().min(32, 'BETTER_AUTH_SECRET must be at least 32 characters.'),
+    BETTER_AUTH_URL: z.url(),
+    GOOGLE_CLIENT_ID: optional(z.string()),
+    GOOGLE_CLIENT_SECRET: optional(z.string()),
+    SIGNUP_ALLOWLIST: optional(allowlist),
+    // Mail: Resend when its key is set, else Mailpit (local only).
+    RESEND_API_KEY: optional(z.string()),
+    MAIL_FROM: optional(sender),
+    MAILPIT_URL: optional(z.url()),
+  })
+  .superRefine((env, issues) => {
+    const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });
+    if ((env.GOOGLE_CLIENT_ID === undefined) !== (env.GOOGLE_CLIENT_SECRET === undefined)) {
+      missing('GOOGLE_CLIENT_SECRET', 'Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET together, or neither.');
+    }
+    if (env.APP_ENV === 'local') {
+      if (env.RESEND_API_KEY === undefined && env.MAILPIT_URL === undefined) {
+        missing('MAILPIT_URL', 'Set MAILPIT_URL (Mailpit, http://localhost:8025) or RESEND_API_KEY to send codes.');
+      }
+      return;
+    }
+    if (env.RESEND_API_KEY === undefined) missing('RESEND_API_KEY', `RESEND_API_KEY is required in ${env.APP_ENV}.`);
+    if (env.MAIL_FROM === undefined) missing('MAIL_FROM', `MAIL_FROM is required in ${env.APP_ENV}.`);
+    if (env.BETTER_AUTH_SECRET.includes(LOCAL_SECRET_MARKER)) {
+      missing('BETTER_AUTH_SECRET', 'That is the local placeholder. Generate one: `openssl rand -base64 32`.');
+    }
+  })
+  .transform((env) => ({
+    ...env,
+    MAIL_FROM: env.MAIL_FROM ?? DEFAULT_LOCAL_SENDER,
+    // Mailpit is a laptop's inbox; a deployed API never sends there.
+    MAILPIT_URL: env.APP_ENV === 'local' ? env.MAILPIT_URL : undefined,
+  }));
 export type ApiEnv = z.infer<typeof ApiEnv>;
 
 const port = z.coerce.number().int().positive();

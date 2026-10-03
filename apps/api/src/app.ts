@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { type ErrorCode, errorStatus } from '@crm/contracts';
-import type { Database } from '@crm/db';
+import type { Database, IdentityStore } from '@crm/db';
 import type { AnyRouter } from '@orpc/server';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
+import type { Auth } from './auth/auth.ts';
 import { createEdgeGuard } from './edge.ts';
 import type { ApiEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
@@ -25,8 +26,24 @@ function errorResponse(code: ErrorCode, message: string): Response {
   return Response.json({ code, message }, { status: errorStatus(code) });
 }
 
+/** What the API serves with: the tenant database, global identity, and sign in. */
+export interface AppServices {
+  readonly db: Database;
+  readonly identity: IdentityStore;
+  readonly auth: Auth;
+}
+
 /** The API. `router` is the app's own unless a test passes one. */
-export function createApp({ db, env, router = appRouter }: { db: Database; env: ApiEnv; router?: AnyRouter }) {
+export function createApp({
+  services,
+  env,
+  router = appRouter,
+}: {
+  services: AppServices;
+  env: ApiEnv;
+  router?: AnyRouter;
+}) {
+  const { db, identity, auth } = services;
   const rpc = createRpcHandler(router);
   const edge = createEdgeGuard({ secret: env.EDGE_SECRET, environment: env.APP_ENV });
   const allowedOrigins = new Set([new URL(env.APP_URL).origin, ...(env.TRUSTED_ORIGINS ?? [])]);
@@ -84,10 +101,22 @@ export function createApp({ db, env, router = appRouter }: { db: Database; env: 
   app.all('/rpc/*', async (c) => {
     const { matched, response } = await rpc.handle(c.req.raw, {
       prefix: '/api/rpc',
-      context: { db, environment: env.APP_ENV, requestId: c.get('requestId'), clientIp: c.get('clientIp') },
+      context: {
+        db,
+        identity,
+        auth,
+        environment: env.APP_ENV,
+        requestId: c.get('requestId'),
+        clientIp: c.get('clientIp'),
+        headers: c.req.raw.headers,
+      },
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();
   });
+
+  // Better Auth's own routes (sign in by code, Google, sessions, sign out), with its own body limits.
+  // It sees only the client IP the edge guard trusted.
+  app.on(['GET', 'POST'], '/auth/*', (c) => auth.handle(c.req.raw, c.get('clientIp')));
 
   app.notFound(() => errorResponse('NOT_FOUND', 'There is nothing at this address.'));
   app.onError((error, c) => {

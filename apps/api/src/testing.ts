@@ -1,20 +1,24 @@
 // Test helpers for the api's own suites: an app wired to a test router, a
 // database that is never reached, and a way to read the log lines it writes.
 import { ENGINE_REFUSAL_CODES, type EngineRefusal } from '@crm/contracts';
-import { createDatabase, type Database } from '@crm/db';
+import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
 import { ORPCError, os } from '@orpc/server';
 import { vi } from 'vitest';
 import * as z from 'zod';
-import { createApp } from './app.ts';
+import { type AppServices, createApp } from './app.ts';
+import { createAuth } from './auth/auth.ts';
 import type { ApiEnv } from './env.ts';
+import type { MailMessage, Mailer } from './mail/mailer.ts';
 import type { RequestContext } from './orpc.ts';
 
 /** The public origin every test app trusts. */
 export const APP_URL = 'https://app.test';
 
+const NOWHERE = 'postgres://nobody:nothing@127.0.0.1:1/none';
+
 /** A database whose address answers nothing: fine for every route that never queries. */
 export function unreachableDatabase(): Database {
-  return createDatabase({ url: 'postgres://nobody:nothing@127.0.0.1:1/none', applicationName: 'crm-api-test' });
+  return createDatabase({ url: NOWHERE, applicationName: 'crm-api-test' });
 }
 
 /** An api environment, with `overrides` on top. */
@@ -22,11 +26,40 @@ export function testEnv(overrides: Partial<ApiEnv> = {}): ApiEnv {
   return {
     APP_ENV: 'local',
     NODE_ENV: 'test',
-    DATABASE_URL: 'postgres://nobody:nothing@127.0.0.1:1/none',
+    DATABASE_URL: NOWHERE,
+    IDENTITY_DATABASE_URL: NOWHERE,
     PORT: 3000,
     APP_URL,
+    BETTER_AUTH_SECRET: 'local-only-test-secret-that-is-long-enough',
+    BETTER_AUTH_URL: APP_URL,
+    MAIL_FROM: 'CRM <sign-in@crm.localhost>',
+    MAILPIT_URL: 'http://127.0.0.1:1',
     ...overrides,
   };
+}
+
+/** A mailer that keeps what it was asked to send, for tests that read the code without Mailpit. */
+export function memoryMailer(): Mailer & { readonly sent: MailMessage[] } {
+  const sent: MailMessage[] = [];
+  return {
+    transport: 'mailpit',
+    sent,
+    send: (message) => {
+      sent.push(message);
+      return Promise.resolve();
+    },
+  };
+}
+
+/** The app's services on `db` and `identity` (both unreachable unless given), with sign in on `mailer`. */
+export function testServices(
+  env: ApiEnv,
+  options: { db?: Database; identity?: IdentityStore; mailer?: Mailer } = {},
+): AppServices {
+  const db = options.db ?? unreachableDatabase();
+  const identity =
+    options.identity ?? createIdentityStore({ url: env.IDENTITY_DATABASE_URL, applicationName: 'crm-api-test' });
+  return { db, identity, auth: createAuth({ env, identity, mailer: options.mailer ?? memoryMailer() }) };
 }
 
 // Built like the engine builds them (packages/core's refusals.ts), which
@@ -68,7 +101,8 @@ export const testRouter = {
 
 /** The test app, wired to `testRouter` and an unreachable database. */
 export function createTestApp(overrides: Partial<ApiEnv> = {}) {
-  return createApp({ db: unreachableDatabase(), env: testEnv(overrides), router: testRouter });
+  const env = testEnv(overrides);
+  return createApp({ services: testServices(env), env, router: testRouter });
 }
 
 /** One JSON log line. */

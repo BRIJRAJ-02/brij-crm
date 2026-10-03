@@ -56,8 +56,11 @@ const vendorSdks = {
         'posthog-js',
         'posthog-js/*',
         'posthog-node',
-        // Mail: only apps/api/src/mail/resend.ts.
+        // Mail: only apps/api/src/mail/resend.ts; email templates (React Email)
+        // only in the template module, apps/api/src/mail/sign-in-code.ts.
         'resend',
+        'react-email',
+        '@react-email/*',
         '@aws-sdk/*',
         // Live updates: only packages/data/src/live/.
         'centrifuge',

@@ -76,15 +76,24 @@ jobs:
         run: |
           set -euo pipefail
           password=$(openssl rand -hex 24)
+          identity_password=$(openssl rand -hex 24)
           echo "::add-mask::$password"
-          as_app() { node -e 'const u = new URL(process.argv[1]); u.username = "crm_app_user"; u.password = process.argv[2]; console.log(u.href)' "$1" "$password"; }
-          DATABASE_URL=$(as_app "$OWNER_POOLED")
-          DATABASE_URL_DIRECT=$(as_app "$DATABASE_URL_OWNER")
+          echo "::add-mask::$identity_password"
+          as_login() { node -e 'const u = new URL(process.argv[1]); u.username = process.argv[2]; u.password = process.argv[3]; console.log(u.href)' "$1" "$2" "$3"; }
+          DATABASE_URL=$(as_login "$OWNER_POOLED" crm_app_user "$password")
+          DATABASE_URL_DIRECT=$(as_login "$DATABASE_URL_OWNER" crm_app_user "$password")
+          IDENTITY_DATABASE_URL=$(as_login "$OWNER_POOLED" crm_identity_user "$identity_password")
           echo "::add-mask::$DATABASE_URL"
           echo "::add-mask::$DATABASE_URL_DIRECT"
+          echo "::add-mask::$IDENTITY_DATABASE_URL"
           echo "::add-mask::$DATABASE_URL_OWNER"
-          # This branch's own app login password, never the one preview-base or production uses.
+          # This branch's own login passwords, never the ones preview-base or production uses. The
+          # identity login's group (crm_identity) comes from a migration, so the branch is migrated first;
+          # the api's pre deploy step runs the same migrations again and finds nothing to do.
+          DATABASE_URL_OWNER="$DATABASE_URL_OWNER" node packages/db/scripts/migrate.ts
           DATABASE_URL="$DATABASE_URL" DATABASE_URL_OWNER="$DATABASE_URL_OWNER" node packages/db/scripts/app-login.ts
+          DATABASE_URL="$DATABASE_URL" IDENTITY_DATABASE_URL="$IDENTITY_DATABASE_URL" \
+            DATABASE_URL_OWNER="$DATABASE_URL_OWNER" node packages/db/scripts/identity-login.ts
           railway() { npx -y "$RAILWAY_CLI" "$@"; }
 
           railway link --project "$PROJECT" --environment preview-base
@@ -96,9 +105,11 @@ jobs:
 
           # The api first: its deploy runs the migrations on this branch before it starts.
           # The worker reads APP_ENV and DATABASE_URL from the api, then redeploys too.
+          # BETTER_AUTH_SECRET, RESEND_API_KEY, MAIL_FROM and SIGNUP_ALLOWLIST come from preview-base.
           railway variable set --environment "$PR_ENV" --service api \
-            "APP_ENV=preview" "APP_URL=$APP_URL" \
-            "DATABASE_URL=$DATABASE_URL" "DATABASE_URL_OWNER=$DATABASE_URL_OWNER"
+            "APP_ENV=preview" "APP_URL=$APP_URL" "BETTER_AUTH_URL=$APP_URL" \
+            "DATABASE_URL=$DATABASE_URL" "DATABASE_URL_OWNER=$DATABASE_URL_OWNER" \
+            "IDENTITY_DATABASE_URL=$IDENTITY_DATABASE_URL"
           railway variable set --environment "$PR_ENV" --service worker \
             "DATABASE_URL_DIRECT=$DATABASE_URL_DIRECT"
 

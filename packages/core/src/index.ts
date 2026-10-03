@@ -3,3 +3,4 @@
 export { getSystemStatus, type SystemDeps } from './system/status.ts';
 export * from './engine/index.ts';
 export { enterWorkspace, type DoorDeps, type DoorInput } from './access/door.ts';
+export { getMe, startWorkspace, type AccountUser, type StartWorkspaceDeps } from './account/account.ts';

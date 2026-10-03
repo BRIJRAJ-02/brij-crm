@@ -14,6 +14,8 @@ The database layer: the Drizzle schema, committed SQL migrations, the roles and 
 | `migrations/` | Committed SQL. drizzle-kit generates the table changes; roles, grants and policies are hand written |
 | `scripts/migrate.ts` | Applies migrations as the owner role (also Railway's pre deploy step) |
 | `scripts/app-login.ts` | Creates this environment's app login role inside the `crm_app` group |
+| `scripts/identity-login.ts` | Creates this environment's identity login role inside the `crm_identity` group (both through `scripts/login.ts`) |
+| `src/identity/` | The identity store: the only code that reads or writes schema `auth`, on the identity login |
 | `drizzle.config.ts` | drizzle-kit settings (generate only, strict) |
 
 ## Commands
@@ -22,7 +24,8 @@ The database layer: the Drizzle schema, committed SQL migrations, the roles and 
 pnpm db:generate    # SQL from the schema; review it and commit it
 pnpm db:migrate     # needs DATABASE_URL_OWNER
 pnpm db:app-login   # creates crm_app_user (or the configured login) in crm_app
-pnpm db:setup       # both, in order
+pnpm db:identity-login  # creates crm_identity_user (IDENTITY_DATABASE_URL) in crm_identity
+pnpm db:setup       # all three, in order
 ```
 
 ## Conventions
@@ -38,7 +41,8 @@ pnpm db:setup       # both, in order
 - Outside `withWorkspace()`, a tenant query returns no rows rather than an error. The policies fail closed, which is safe but can look like a bug.
 - `withWorkspace()` throws a `TypeError` unless the id is a uuid.
 - `DATABASE_URL` is pooled (PgBouncer in transaction mode): no named prepared statements, and no LISTEN. LISTEN is accepted there but never delivers, so it only runs on `DATABASE_URL_DIRECT`.
-- Better Auth's tables (from #10) are global identity and sit outside row level security. Membership is always checked explicitly.
+- Better Auth's tables are global identity in schema `auth`, outside row level security. Only `crm_identity` reads and writes them; `crm_app` may only insert the two directory rows inside the workspace transaction. Membership is always checked explicitly, in the tenant `members` row.
+- Tests get `appUrl`, `identityUrl` and `ownerUrl` from `prepareTestDatabase`. Outside this package, use `testQuery()` from `@crm/db/testing` instead of opening a connection.
 
 ## Agent skills
 

@@ -22,7 +22,7 @@
     },
     "test": {
       "dependsOn": ["transit"],
-      "passThroughEnv": ["TEST_DATABASE_ADMIN_URL"]
+      "passThroughEnv": ["TEST_DATABASE_ADMIN_URL", "TEST_MAILPIT_URL"]
     },
     "dev": {
       "cache": false,

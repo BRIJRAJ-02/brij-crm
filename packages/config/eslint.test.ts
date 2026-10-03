@@ -241,6 +241,7 @@ describe('vendor SDKs (spec 0005: sign in, mail and live updates)', () => {
     'src/auth-client.ts':
       "import { createAuthClient } from 'better-auth/client';\nexport const c = createAuthClient;\n",
     'src/mail.ts': "import { Resend } from 'resend';\nexport const mail = Resend;\n",
+    'src/template.ts': "import { render } from 'react-email';\nexport const r = render;\n",
     'src/live.ts': "import { Centrifuge } from 'centrifuge';\nexport const live = Centrifuge;\n",
     'src/wrapper/auth.ts': "import { betterAuth } from 'better-auth';\nexport const auth = betterAuth;\n",
   };

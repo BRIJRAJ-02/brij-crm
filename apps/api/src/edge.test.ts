@@ -60,7 +60,12 @@ describe('EDGE_SECRET in the api environment', () => {
   const base = {
     APP_ENV: 'production',
     DATABASE_URL: 'postgres://u:p@db.test/crm',
+    IDENTITY_DATABASE_URL: 'postgres://i:p@db.test/crm',
     APP_URL: 'https://app.test',
+    BETTER_AUTH_SECRET: 'a-production-secret-of-at-least-32-characters',
+    BETTER_AUTH_URL: 'https://app.test',
+    RESEND_API_KEY: 're_test',
+    MAIL_FROM: 'onboarding@resend.dev',
   };
 
   it('is optional, and an empty value counts as unset', () => {
