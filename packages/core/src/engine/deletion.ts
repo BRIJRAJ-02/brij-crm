@@ -8,17 +8,19 @@
 // and the reference values on the records it links to.
 //
 // The workspace's counters row is the busiest lock in a workspace (every
-// create and, from #7, every write's outbox number takes it), so each step
-// here reads what it needs first and takes its record slot after.
+// create and, from #7, every write's outbox number takes it), so every write
+// takes it last (spec 0005, the outbox): each step here does its reads and
+// its heavy work first and takes or gives back its record slot at the end,
+// holding the row only while its transaction finishes.
 import { eq, sql, type SQL } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { uuidArray } from './ids.ts';
+import { checkId, uuidArray } from './ids.ts';
 import { RESTORE_WINDOW, takeRecordSlots } from './limits.ts';
 import { refuse } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
 import { deleteSortKeys, setRecordKeysLive } from './sort-keys.ts';
 import { holdUniqueKeys, releaseUniqueKeys } from './unique.ts';
-import { CHANGE_CAP, runWrite, type AfterWrite, type RecordRef, type ReferenceChange } from './write.ts';
+import { runWrite, type AfterWrite, type RecordRef, type ReferenceChange } from './write.ts';
 
 const { records } = schema;
 
@@ -51,31 +53,43 @@ async function liveEntryIds(tx: WorkspaceTx, recordId: string): Promise<readonly
 /**
  * The reference values on live records that show this record: the far end of
  * each of its current links, where that end has an attribute. A delete, a
- * restore or an erasure of the record changes them with no new version. At
- * most one more record per object than a `Change` lists, which is enough for
- * it to tell the object went coarse.
+ * restore or an erasure of the record changes them with no new version, and
+ * the hooks get every one (the audit log names them all; the outbox hook caps
+ * its own copy). The read goes per object: only the relationships with an end
+ * on the record's object, each end looked up by relationship and record
+ * (`record_links_from` and `record_links_to`, or the history indexes, all
+ * lead with both), so a record's links cost index lookups, never a scan of
+ * `record_links`. Every caller runs it before it takes the workspace
+ * counter row, so this read never holds that lock.
  */
-async function farReferences(tx: WorkspaceTx, recordId: string): Promise<readonly ReferenceChange[]> {
+async function farReferences(
+  tx: WorkspaceTx,
+  record: { readonly recordId: string; readonly objectId: string },
+): Promise<readonly ReferenceChange[]> {
+  const { recordId, objectId } = record;
   const result = await tx.execute<{ record_id: string; object_id: string; attribute_id: string }>(sql`
-    select record_id, object_id, attribute_id from (
-      select refs.*, dense_rank() over (partition by refs.object_id order by refs.record_id) as n
-      from (
-        select distinct far.id::text as record_id, far.object_id::text as object_id,
-          ends.attribute_id::text as attribute_id
-        from record_links l
-        join relationships rel on rel.workspace_id = l.workspace_id and rel.id = l.relationship_id
-        cross join lateral (
-          select case when l.from_record_id = ${recordId} then l.to_record_id else l.from_record_id end as far_id,
-            case when l.from_record_id = ${recordId} then rel.to_attribute_id else rel.from_attribute_id end
-              as attribute_id
-        ) ends
-        join records far on far.workspace_id = l.workspace_id and far.id = ends.far_id and far.deleted_at is null
-        where (l.from_record_id = ${recordId} or l.to_record_id = ${recordId})
-          and l.active_until is null and ends.attribute_id is not null
-      ) refs
-    ) ranked
-    where n <= ${CHANGE_CAP + 1}
-    order by record_id, attribute_id
+    select far.id::text as record_id, far.object_id::text as object_id, ends.attribute_id::text as attribute_id
+    from relationships rel
+    join attributes fa on fa.workspace_id = rel.workspace_id and fa.id = rel.from_attribute_id
+    left join attributes ta on ta.workspace_id = rel.workspace_id and ta.id = rel.to_attribute_id
+    cross join lateral (
+      -- The record is the from end: the far record shows it through the to end's attribute, if it has one.
+      select l.to_record_id as far_id, rel.to_attribute_id as attribute_id
+      from record_links l
+      where fa.object_id = ${objectId} and rel.to_attribute_id is not null
+        and l.workspace_id = rel.workspace_id and l.relationship_id = rel.id
+        and l.from_record_id = ${recordId} and l.active_until is null
+      union all
+      -- The record is the to end (a two way end on its object, or a one way reference naming it).
+      select l.from_record_id, rel.from_attribute_id
+      from record_links l
+      where (ta.object_id = ${objectId} or ${objectId}::uuid = any(rel.target_object_ids))
+        and l.workspace_id = rel.workspace_id and l.relationship_id = rel.id
+        and l.to_record_id = ${recordId} and l.active_until is null
+    ) ends
+    join records far on far.workspace_id = rel.workspace_id and far.id = ends.far_id and far.deleted_at is null
+    where fa.object_id = ${objectId} or ta.object_id = ${objectId} or ${objectId}::uuid = any(rel.target_object_ids)
+    order by far.object_id, far.id, ends.attribute_id
   `);
   return result.rows.map((row) => ({
     recordId: row.record_id,
@@ -94,6 +108,7 @@ export async function deleteRecord(
   input: { readonly recordId: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<{ recordId: string; state: RecordState }> {
+  checkId(input.recordId, 'That record does not exist.');
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -112,9 +127,10 @@ export async function deleteRecord(
         })
         .where(eq(records.id, input.recordId));
       const entryIds = await liveEntryIds(tx, input.recordId);
-      const references = await farReferences(tx, input.recordId);
+      const references = await farReferences(tx, { recordId: input.recordId, objectId: record.objectId });
       await holdUniqueKeys(tx, [input.recordId, ...entryIds]);
       await setRecordKeysLive(tx, input.recordId, false);
+      // Last, as every write takes the counter row.
       await takeRecordSlots(tx, scope, -1);
       context.record({
         deletedRecords: [{ recordId: input.recordId, objectId: record.objectId }],
@@ -138,6 +154,7 @@ export async function restoreRecord(
   input: { readonly recordId: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<{ recordId: string; state: RecordState }> {
+  checkId(input.recordId, 'That record does not exist.');
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -146,15 +163,16 @@ export async function restoreRecord(
       if (record.deletedAt === null) return { recordId: input.recordId, state: 'live' as const };
       if (record.expired) throw refuse('NOT_FOUND', 'That record was deleted more than 30 days ago.');
       const entryIds = await liveEntryIds(tx, input.recordId);
-      const references = await farReferences(tx, input.recordId);
-      // The slot before the unique keys, as a create takes it before its values: neither waits on the other's key.
-      await takeRecordSlots(tx, scope, 1);
+      const references = await farReferences(tx, { recordId: input.recordId, objectId: record.objectId });
       await releaseUniqueKeys(tx, [input.recordId, ...entryIds]);
       await tx
         .update(records)
         .set({ deletedAt: null, deletedByType: null, deletedById: null, deletedByMemberId: null })
         .where(eq(records.id, input.recordId));
       await setRecordKeysLive(tx, input.recordId, true);
+      // Last, as every write takes the counter row (a create checks its slot after its values too). A full
+      // workspace refuses here, and the refusal rolls back everything above.
+      await takeRecordSlots(tx, scope, 1);
       context.record({
         restoredRecords: [{ recordId: input.recordId, objectId: record.objectId }],
         shownEntries: entryIds,
@@ -216,12 +234,20 @@ export function deleteEntryValues(entryIds: readonly string[]): SQL {
 /**
  * Hard deletes some records and everything that hangs off them, in foreign
  * key order: values (the records' and their entries'), links, entries, then
- * the records. Entries still in their lists give their slots back. Every
- * step finds its rows through an index that leads with the owner or record.
+ * the records. Entries still in their lists give their slots back: their
+ * lists are locked first, in id order, the order erasure and entry writes
+ * take lists in, so none of them waits on another holding a list it needs.
+ * Every step finds its rows through an index that leads with the owner or
+ * record.
  */
 async function removeRecords(tx: WorkspaceTx, recordIds: readonly string[]): Promise<Removed> {
   if (recordIds.length === 0) return { counts: NONE, records: [], entryIds: [] };
   const ids = uuidArray(recordIds);
+  await tx.execute(sql`
+    select 1 from lists
+    where id in (select list_id from list_entries where record_id = any(${ids}) and deleted_at is null)
+    order by id for no key update
+  `);
   await tx.execute(sql`
     update lists l set entry_count = l.entry_count - gone.n
     from (
@@ -331,26 +357,30 @@ export async function eraseRecord(
   input: { readonly recordId: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<RemovedCounts> {
+  checkId(input.recordId, 'That record does not exist.');
   const { result } = await runWrite(
     scope,
     async (context) => {
       const { tx } = context;
-      // The lists its live entries give slots back to, then the record: the order entry writes lock in.
+      // The lists its live entries give slots back to (in id order, as removeRecords takes them again), then
+      // the record: the order entry writes lock in.
       await tx.execute(sql`
         select 1 from lists
         where id in (select list_id from list_entries where record_id = ${input.recordId} and deleted_at is null)
-        order by id for update
+        order by id for no key update
       `);
       const record = await lockAnyRecord(tx, input.recordId);
       const ref = { recordId: input.recordId, objectId: record.objectId };
+      const live = record.deletedAt === null;
       // A live record disappears from every read here, like a delete; a trashed one already had.
-      if (record.deletedAt === null) {
+      if (live) {
         const hiddenEntries = await liveEntryIds(tx, input.recordId);
-        const references = await farReferences(tx, input.recordId);
-        await takeRecordSlots(tx, scope, -1);
+        const references = await farReferences(tx, ref);
         context.record({ deletedRecords: [ref], hiddenEntries, references });
       }
       const gone = await removeRecords(tx, [input.recordId]);
+      // Last, after the heavy deletes, as every write takes the counter row.
+      if (live) await takeRecordSlots(tx, scope, -1);
       context.record({ purgedRecords: gone.records, purgedEntries: gone.entryIds });
       return gone.counts;
     },

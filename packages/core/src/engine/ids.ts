@@ -2,6 +2,7 @@
 // sort by creation and inserts stay local in every index (spec 0004).
 import { randomBytes } from 'node:crypto';
 import { sql, type SQL } from 'drizzle-orm';
+import { refuse } from './refusals.ts';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -24,6 +25,15 @@ export function isUuidV7(value: string): boolean {
 /** True for a well formed uuid, so a malformed id is refused before it reaches Postgres. */
 export function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID.test(value);
+}
+
+/**
+ * Refuses `NOT_FOUND` with `message` when an id a caller gave isn't a uuid:
+ * nothing can have that id, and casting it would fail the query (or a whole
+ * batch) instead of refusing. Call it before any query that casts the id.
+ */
+export function checkId(value: string, message: string): void {
+  if (!isUuid(value)) throw refuse('NOT_FOUND', message);
 }
 
 /** Ids as one `uuid[]` parameter list, for `= any(...)` in raw SQL. */

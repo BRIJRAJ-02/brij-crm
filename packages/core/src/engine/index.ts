@@ -85,8 +85,10 @@ export {
 } from './workspaces.ts';
 export {
   CHANGE_CAP,
+  capChange,
   runWrite,
   type AfterWrite,
+  type CappedChange,
   type Change,
   type RecordRef,
   type ReferenceChange,

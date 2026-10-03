@@ -5,6 +5,7 @@ import { and, asc, eq, lte, or, gt, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { ValueVersion } from '@crm/contracts/values';
 import { decodeValue, type StoredItem } from './columns.ts';
+import { checkId } from './ids.ts';
 import { refuse } from './refusals.ts';
 import { linkHistory, linkValues } from './relationships.ts';
 import type { Actor, EngineScope } from './scope.ts';
@@ -16,6 +17,7 @@ const ISO = (column: unknown) => sql<string>`to_char(${column} at time zone 'UTC
 
 /** A live record's object and creation time. A record in the trash is hidden from history reads too (AC-8). */
 async function ownerExists(tx: WorkspaceTx, recordId: string): Promise<{ objectId: string; createdAt: Date }> {
+  checkId(recordId, 'That record does not exist.');
   const [row] = await tx
     .select({ objectId: records.objectId, createdAt: records.createdAt, deletedAt: records.deletedAt })
     .from(records)
@@ -33,6 +35,7 @@ async function ownerOf(tx: WorkspaceTx, owner: HistoryOwner): Promise<string> {
     await ownerExists(tx, owner.recordId);
     return owner.recordId;
   }
+  checkId(owner.entryId, 'That entry does not exist.');
   const [row] = await tx
     .select({ recordId: listEntries.recordId, deletedAt: listEntries.deletedAt })
     .from(listEntries)

@@ -17,8 +17,10 @@ import type { EngineScope } from './scope.ts';
 import type { AttributeDef } from './values.ts';
 import { createWorkspace } from './workspaces.ts';
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
+/** The owner, for what the app role may not do: vacuum and analyze. */
+let owner: Database;
 let scope: EngineScope;
 let craft: string;
 let fleet: string;
@@ -72,6 +74,7 @@ function valueFor(slug: (typeof KINDS)[number]): unknown {
 
 beforeAll(async () => {
   db = createDatabase({ url: appUrl, applicationName: 'crm-sort-keys-tests' });
+  owner = createDatabase({ url: ownerUrl, applicationName: 'crm-sort-keys-tests-owner' });
   const created = await createWorkspace(db, {
     name: 'Keys',
     slug: `keys-${String(Date.now())}`,
@@ -121,6 +124,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await db.close();
+  await owner.close();
 });
 
 const id = (slug: string): string => {
@@ -339,17 +343,39 @@ describe('seeks under row level security', () => {
   });
 
   it('seeks a text cursor in the index, as the app role', async () => {
+    // Current statistics and visibility map first: other test files write sort_keys at the same time, and with
+    // stale ones the planner weighed a bitmap scan cheaper about one run in four. The claim is that row level
+    // security leaves the seek to the index (spec 0004 verify: an Index Cond of an index only scan), so the
+    // probe turns off the scans that read the table instead, as the one above does.
+    await owner.vacuumAnalyze(['sort_keys']);
     const plan = await db.withWorkspace(scope.workspaceId, async (tx) => {
       await tx.execute(sql`set local enable_seqscan = off`);
-      const result = await tx.execute<{ 'QUERY PLAN': unknown }>(sql`
+      await tx.execute(sql`set local enable_bitmapscan = off`);
+      const result = await tx.execute<{ 'QUERY PLAN': readonly { Plan: PlanNode }[] }>(sql`
         explain (format json) select d.owner_id from sort_keys d
         where d.attribute_id = ${id('title')} and d.live and d.text_key is not null and d.text_key >= ${'m'}
         order by d.text_key, d.owner_id limit 5
       `);
-      return JSON.stringify(result.rows[0]?.['QUERY PLAN']);
+      const root = result.rows[0]?.['QUERY PLAN'][0]?.Plan;
+      if (root === undefined) throw new Error('No plan.');
+      return root;
     });
-    expect(plan).toContain('Index Only Scan');
-    expect(plan).toContain('sort_keys_text');
-    expect(plan).toMatch(/"Index Cond":"[^"]*text_key >=/);
+    const nodes: PlanNode[] = [];
+    const walk = (node: PlanNode) => {
+      nodes.push(node);
+      for (const child of node.Plans ?? []) walk(child);
+    };
+    walk(plan);
+    const seek = nodes.find((node) => node['Index Name'] === 'sort_keys_text');
+    expect(seek?.['Node Type']).toBe('Index Only Scan');
+    expect(seek?.['Index Cond']).toMatch(/text_key >=/);
   });
 });
+
+/** The parts of an `explain (format json)` node the plan tests read. */
+interface PlanNode {
+  readonly 'Node Type': string;
+  readonly 'Index Name'?: string;
+  readonly 'Index Cond'?: string;
+  readonly Plans?: readonly PlanNode[];
+}

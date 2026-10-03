@@ -5,7 +5,7 @@ import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { parseAttributeValue, type AttributeType } from '@crm/contracts/values';
 import { encodeValue, sameItems, type ItemColumns, type StoredItem } from './columns.ts';
-import { isUuid, uuidArray } from './ids.ts';
+import { checkId, isUuid, uuidArray } from './ids.ts';
 import { postgresError, refuse, writeConflict } from './refusals.ts';
 import { syncSortKey } from './sort-keys.ts';
 import { UNIQUE_TYPES, uniqueKeyOf } from './unique.ts';
@@ -94,6 +94,7 @@ export async function loadListAttributes(tx: WorkspaceTx, listId: string): Promi
  * Refuses an entry that is missing or removed, or whose record is in the trash.
  */
 export async function lockEntry(tx: WorkspaceTx, entryId: string): Promise<{ listId: string; recordId: string }> {
+  checkId(entryId, 'That entry does not exist.');
   const [parents] = await tx
     .select({ recordId: listEntries.recordId })
     .from(listEntries)
@@ -122,6 +123,7 @@ export async function lockEntry(tx: WorkspaceTx, entryId: string): Promise<{ lis
  * deleted record.
  */
 export async function lockRecord(tx: WorkspaceTx, recordId: string): Promise<{ objectId: string }> {
+  checkId(recordId, 'That record does not exist.');
   const rows = await tx
     .select({ objectId: records.objectId, deletedAt: records.deletedAt })
     .from(records)
@@ -220,33 +222,53 @@ async function checkOptions(
   }
 }
 
+/** One actor a value names: an actor reference's own, or the `by` of an interaction. */
+interface NamedActor {
+  readonly type: string | null;
+  readonly id: string | null;
+}
+
+/** The actors an attribute's items name: an actor reference's own columns, an interaction's `by`, or none. */
+function namedActors(type: AttributeDef['type'], items: readonly ItemColumns[]): readonly NamedActor[] {
+  if (type === 'actor_reference') return items.map((item) => ({ type: item.actorType, id: item.actorId }));
+  if (type !== 'interaction') return [];
+  const fields = (value: unknown): Readonly<Record<string, unknown>> =>
+    typeof value === 'object' && value !== null ? (value as Readonly<Record<string, unknown>>) : {};
+  return items.map((item) => {
+    const by = fields(fields(item.jsonValue).by);
+    return { type: typeof by.type === 'string' ? by.type : null, id: typeof by.id === 'string' ? by.id : null };
+  });
+}
+
 /**
- * Refuses, as `ATTRIBUTE_VALUE_INVALID` naming the attribute, actor values a
- * write may not add: an id that isn't a uuid (refused here, so a batch refuses
- * that record alone instead of failing the cast), a member who isn't an active
- * member of this workspace, and any other kind of actor (an API key, an
- * automation, the system) unless it is the scope's own actor naming itself.
- * Actors already held may stay. Members found active are remembered for the
- * rest of the write, so a batch looks each one up once.
+ * Refuses, as `ATTRIBUTE_VALUE_INVALID` naming the attribute, actors a write
+ * may not add, whether an actor reference's value or an interaction's `by`:
+ * an id that isn't a uuid (refused here, so a batch refuses that record alone
+ * instead of failing the cast), a member who isn't an active member of this
+ * workspace, and any other kind of actor (an API key, an automation, the
+ * system) unless it is the scope's own actor naming itself. Actors already
+ * held may stay. Members found active are remembered for the rest of the
+ * write, so a batch looks each one up once.
  */
 async function checkActors(
   context: WriteContext,
   attribute: AttributeDef,
-  next: readonly ItemColumns[],
-  held: readonly ItemColumns[],
+  nextItems: readonly ItemColumns[],
+  heldItems: readonly ItemColumns[],
 ): Promise<void> {
+  const next = namedActors(attribute.type, nextItems);
+  const held = namedActors(attribute.type, heldItems);
   const invalid = () =>
     refuse('ATTRIBUTE_VALUE_INVALID', `Pick a member of this workspace for ${attribute.title}.`, attribute.id);
-  if (!next.every((item) => item.actorId === null || isUuid(item.actorId))) throw invalid();
-  const keyOf = (item: ItemColumns) => `${item.actorType ?? ''}:${item.actorId?.toLowerCase() ?? ''}`;
+  if (!next.every((item) => item.id === null || isUuid(item.id))) throw invalid();
+  const keyOf = (item: NamedActor) => `${item.type ?? ''}:${item.id?.toLowerCase() ?? ''}`;
   const kept = new Set(held.map(keyOf));
-  const added = next.filter((item) => item.actorType !== null && !kept.has(keyOf(item)));
+  const added = next.filter((item) => item.type !== null && !kept.has(keyOf(item)));
   const self = context.scope.actor;
-  const isSelf = (item: ItemColumns) =>
-    item.actorType === self.type && item.actorId?.toLowerCase() === self.id?.toLowerCase();
-  if (added.some((item) => item.actorType !== 'member' && !isSelf(item))) throw invalid();
+  const isSelf = (item: NamedActor) => item.type === self.type && item.id?.toLowerCase() === self.id?.toLowerCase();
+  if (added.some((item) => item.type !== 'member' && !isSelf(item))) throw invalid();
   const memberIds = added.flatMap((item) =>
-    item.actorType === 'member' && item.actorId !== null ? [item.actorId.toLowerCase()] : [],
+    item.type === 'member' && item.id !== null ? [item.id.toLowerCase()] : [],
   );
   const unknown = [...new Set(memberIds)].filter((id) => !context.activeMembers.has(id));
   if (unknown.length === 0) return;
@@ -343,7 +365,9 @@ export async function writeAttribute(
   if (sameItems(held, next)) return undefined;
   if (UNIQUE_TYPES.includes(attribute.type)) await holdDefinition();
   if (attribute.type === 'select' || attribute.type === 'status') await checkOptions(tx, attribute, next, held);
-  if (attribute.type === 'actor_reference') await checkActors(context, attribute, next, held);
+  if (attribute.type === 'actor_reference' || attribute.type === 'interaction') {
+    await checkActors(context, attribute, next, held);
+  }
 
   const stamp = await tx.execute<{ t: string; version: string }>(sql`
     select greatest(

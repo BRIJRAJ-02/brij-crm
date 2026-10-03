@@ -248,13 +248,19 @@ export async function initialValues(
   return parseAll(attributes, inputs, missing);
 }
 
-/** Creates one record inside a write (shared by single creates and batches). */
+/**
+ * Creates one record inside a write (shared by single creates and batches).
+ * Its record slot is taken last, after the record and its values are
+ * written, as every write takes the workspace counter row last: the row is
+ * held only for the end of the transaction, and a create never holds it
+ * while it waits on another write's unique value. A full workspace refuses
+ * there, and the refusal rolls the record and its values back.
+ */
 export async function insertRecord(context: WriteContext, input: RecordInput) {
   const { tx, scope } = context;
   await liveObject(tx, input.objectId);
   const attributes = await loadAttributes(tx, input.objectId);
   const parsed = await initialValues(tx, scope, attributes, input.values ?? {}, input.timeZone ?? 'UTC');
-  await takeRecordSlots(tx, scope, 1);
   const by = actorRow(scope.actor);
   let recordId: string;
   try {
@@ -280,6 +286,7 @@ export async function insertRecord(context: WriteContext, input: RecordInput) {
   }
   context.record({ createdRecords: [{ recordId, objectId: input.objectId }] });
   const versions = await writeAll(context, 'record', recordId, parsed);
+  await takeRecordSlots(tx, scope, 1);
   return { recordId, versions };
 }
 

@@ -520,6 +520,48 @@ describe('actor values', () => {
     );
     expect(other.map((refusal) => refusal.code)).toEqual(['ATTRIBUTE_VALUE_INVALID']);
   });
+
+  it("checks an interaction's by as an actor value: an active member, or the scope's own actor (AC-13)", async () => {
+    const { scope, objects, memberId } = await workspace();
+    const elsewhere = await workspace();
+    const companiesObject = id(objects.companies);
+    const companies = await slugs(scope, companiesObject);
+    const { attributeId: touch } = await defineAttribute(scope, {
+      objectId: companiesObject,
+      apiSlug: 'last_touch',
+      title: 'Last touch',
+      type: 'interaction',
+    });
+    const { recordId } = await createRecord(scope, {
+      objectId: companiesObject,
+      values: { [id(companies.name)]: 'A' },
+    });
+    const by = (actor: unknown) => ({
+      [touch]: { value: { kind: 'email', at: '2026-10-01T09:30:00.000Z', by: actor } },
+    });
+    for (const actor of [
+      { type: 'member', id: elsewhere.memberId },
+      { type: 'member', id: newId() },
+      { type: 'member', id: 'not-a-uuid' },
+      { type: 'system', id: null },
+      { type: 'api_key', id: newId() },
+    ]) {
+      const refused = await refusals(setValues(scope, { recordId, values: by(actor) }));
+      expect(refused.map((refusal) => [refusal.code, refusal.attributeId])).toEqual([
+        ['ATTRIBUTE_VALUE_INVALID', touch],
+      ]);
+    }
+    await setValues(scope, { recordId, values: by({ type: 'member', id: memberId }) });
+    expect((await getRecords(scope, { ids: [recordId] }))[0]?.values[touch]).toMatchObject({
+      by: { type: 'member', id: memberId },
+    });
+    // The system records its own interactions.
+    const asSystem: EngineScope = { ...scope, actor: { type: 'system', id: null } };
+    await setValues(asSystem, { recordId, values: by({ type: 'system', id: null }) });
+    expect((await getRecords(scope, { ids: [recordId] }))[0]?.values[touch]).toMatchObject({
+      by: { type: 'system', id: null },
+    });
+  });
 });
 
 describe('limits', () => {

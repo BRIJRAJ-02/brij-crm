@@ -13,6 +13,7 @@ import {
   eraseRecord,
   purgeDeleted,
   restoreRecord,
+  type RemovedCounts,
 } from './deletion.ts';
 import { getHistory, getTimeInStages, getValuesAsOf } from './history.ts';
 import { addEntry, defineList, getEntries, getRecordEntries, removeEntry, restoreEntry } from './lists.ts';
@@ -22,7 +23,7 @@ import { isRefusal, postgresError } from './refusals.ts';
 import { defineRelationship } from './relationships.ts';
 import type { EngineScope } from './scope.ts';
 import { createWorkspace } from './workspaces.ts';
-import { CHANGE_CAP, type AfterWrite, type Change } from './write.ts';
+import { CHANGE_CAP, capChange, type AfterWrite, type Change } from './write.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 const APP_NAME = 'crm-links-tests';
@@ -796,7 +797,7 @@ describe('deletion', () => {
     );
   }
 
-  it('names an object coarse instead of listing more than 1,000 of its records (AC-17)', async () => {
+  it('hands the hooks every record, and the outbox cap names an object coarse past 1,000 (AC-17)', async () => {
     const world = await workspace();
     const acme = await newCompany(world, 'Acme');
     await staff(world, acme, CHANGE_CAP + 1);
@@ -805,79 +806,264 @@ describe('deletion', () => {
       seen.push(change);
       return Promise.resolve();
     };
+    const of = (change: Change | undefined): Change => {
+      if (change === undefined) throw new Error('The hook saw no change.');
+      return change;
+    };
 
+    // The hooks see every reference (the audit log names them all); capChange, for the outbox, cuts them.
     await deleteRecord(world.scope, { recordId: acme }, [hook]);
-    expect(seen[0]?.deletedRecords).toEqual([{ recordId: acme, objectId: world.companies }]);
-    expect(seen[0]?.references).toEqual([]);
-    expect(seen[0]?.coarse).toEqual([{ objectId: world.people }]);
+    const deleted = of(seen[0]);
+    expect(deleted.deletedRecords).toEqual([{ recordId: acme, objectId: world.companies }]);
+    expect(deleted.references).toHaveLength(CHANGE_CAP + 1);
+    expect(new Set(deleted.references.map((ref) => ref.recordId)).size).toBe(CHANGE_CAP + 1);
+    const capped = capChange(deleted);
+    expect(capped.references).toEqual([]);
+    expect(capped.deletedRecords).toEqual([{ recordId: acme, objectId: world.companies }]);
+    expect(capped.coarse).toEqual([{ objectId: world.people }]);
 
     // At the cap, every id is still listed.
     const globex = await newCompany(world, 'Globex');
     await staff(world, globex, CHANGE_CAP);
     await deleteRecord(world.scope, { recordId: globex }, [hook]);
-    expect(seen[1]?.references).toHaveLength(CHANGE_CAP);
-    expect(seen[1]?.coarse).toEqual([]);
+    const atCap = capChange(of(seen[1]));
+    expect(atCap.references).toHaveLength(CHANGE_CAP);
+    expect(atCap.coarse).toEqual([]);
 
-    // A purge of more than 1,000 records of one object names it too.
+    // A purge of more than 1,000 records of one object lists them all, and the cap names the object.
     await db.withWorkspace(world.scope.workspaceId, (tx) =>
       tx.execute(sql`update records set deleted_at = now() - interval '31 days', deleted_by_type = 'system'
         where object_id = ${world.people}`),
     );
     await purgeDeleted(world.scope, { batchSize: 5_000 }, [hook]);
-    expect(seen.at(-1)?.purgedRecords.filter((ref) => ref.objectId === world.people)).toEqual([]);
-    expect(seen.at(-1)?.coarse).toEqual([{ objectId: world.people }]);
+    const purged = of(seen.at(-1));
+    expect(purged.purgedRecords.filter((ref) => ref.objectId === world.people)).toHaveLength(2 * CHANGE_CAP + 1);
+    const cappedPurge = capChange(purged);
+    expect(cappedPurge.purgedRecords.filter((ref) => ref.objectId === world.people)).toEqual([]);
+    expect(cappedPurge.coarse).toEqual([{ objectId: world.people }]);
   });
+
+  it('merges record lists, references and values per object when it caps (AC-17)', () => {
+    const objectId = '0190f0f0-0000-7000-8000-000000000001';
+    const other = '0190f0f0-0000-7000-8000-000000000002';
+    const ids = Array.from({ length: CHANGE_CAP + 1 }, (_, index) => `rec-${String(index)}`);
+    const half = Math.floor(ids.length / 2);
+    const change: Change = {
+      kind: 'write',
+      workspaceId: 'ws',
+      actor: { type: 'system', id: null },
+      createdRecords: ids.slice(0, half).map((recordId) => ({ recordId, objectId })),
+      deletedRecords: [{ recordId: 'kept', objectId: other }],
+      restoredRecords: [],
+      purgedRecords: [],
+      createdEntries: [],
+      removedEntries: [],
+      restoredEntries: [],
+      hiddenEntries: [],
+      shownEntries: [],
+      purgedEntries: [],
+      values: ids.slice(half).map((ownerId) => ({
+        ownerId,
+        ownerKind: 'record' as const,
+        objectId,
+        attributeId: 'a',
+        versionId: 'v',
+      })),
+      references: [],
+    };
+    // Neither list passes the cap alone; together they do.
+    const capped = capChange(change);
+    expect(capped.coarse).toEqual([{ objectId }]);
+    expect(capped.createdRecords).toEqual([]);
+    expect(capped.values).toEqual([]);
+    expect(capped.deletedRecords).toEqual([{ recordId: 'kept', objectId: other }]);
+    expect(capChange({ ...change, values: change.values.slice(1) }).coarse).toEqual([]);
+  });
+
+  /**
+   * Holds row locks on the rows `rows` selects, in the test's own workspace,
+   * until `release`: a write that updates or deletes one of them waits there.
+   * Row locks, not a table lock, so the other test files sharing this
+   * database never wait on it.
+   */
+  async function holdRows(world: World, rows: SQL) {
+    const locked = Promise.withResolvers<undefined>();
+    const release = Promise.withResolvers<undefined>();
+    const holder = owner.withWorkspace(world.scope.workspaceId, async (tx) => {
+      const held = await tx.execute(sql`${rows} for update`);
+      if (held.rows.length === 0) throw new Error('Nothing to hold.');
+      locked.resolve(undefined);
+      await release.promise;
+    });
+    // A holder that fails before it locks fails the wait too, instead of hanging it.
+    await Promise.race([locked.promise, holder]);
+    return {
+      release: async () => {
+        release.resolve(undefined);
+        await holder;
+      },
+    };
+  }
+
+  /** Waits until `n` of this file's app connections are waiting on a lock. */
+  async function waitForWaiters(world: World, n: number, what: string): Promise<void> {
+    for (let tries = 0; ; tries += 1) {
+      const result = await owner.withWorkspace(world.scope.workspaceId, (tx) =>
+        tx.execute<{ n: number }>(sql`
+          select count(distinct l.pid)::int as n from pg_locks l join pg_stat_activity a on a.pid = l.pid
+          where not l.granted and a.application_name = ${APP_NAME}
+        `),
+      );
+      if ((result.rows[0]?.n ?? 0) >= n) return;
+      if (tries > 1_000) throw new Error(`${what} never waited.`);
+      await delay(10);
+    }
+  }
+
+  /** Whether another transaction could take the workspace counter row right now. */
+  async function counterState(world: World): Promise<'free' | 'held'> {
+    return db
+      .withWorkspace(world.scope.workspaceId, (tx) =>
+        tx.execute(
+          sql`select 1 from workspace_counters where workspace_id = ${world.scope.workspaceId} for update nowait`,
+        ),
+      )
+      .then(
+        () => 'free' as const,
+        (error: unknown) => {
+          if (postgresError(error)?.code === '55P03') return 'held' as const;
+          throw error;
+        },
+      );
+  }
+
+  /** The scope with its transactions counted: more than one means `runWrite` retried a deadlock or conflict. */
+  function counted(scope: EngineScope): { scope: EngineScope; attempts: () => number } {
+    let attempts = 0;
+    return {
+      scope: {
+        ...scope,
+        db: {
+          ...scope.db,
+          withWorkspace: (workspaceId, work) => {
+            attempts += 1;
+            return scope.db.withWorkspace(workspaceId, work);
+          },
+        },
+      },
+      attempts: () => attempts,
+    };
+  }
 
   it('reads the links and entries before it takes the workspace counter, so creates are not held (AC-16, AC-17)', async () => {
     const world = await workspace();
     const acme = await newCompany(world, 'Acme');
-    await newPerson(world, 'Ada', {
+    const ada = await newPerson(world, 'Ada', {
       [world.person('company')]: { objectId: world.companies, recordId: acme },
     });
-    // Stops the delete inside its far references read, the only step that reads relationships.
-    const locked = Promise.withResolvers<undefined>();
-    const release = Promise.withResolvers<undefined>();
-    const holder = owner.withWorkspace(world.scope.workspaceId, async (tx) => {
-      await tx.execute(sql`lock table relationships in access exclusive mode`);
-      locked.resolve(undefined);
-      await release.promise;
-    });
+    const seen: Change[] = [];
+    const hook: AfterWrite = (change) => {
+      seen.push(change);
+      return Promise.resolve();
+    };
+    // Stops the delete at its sort keys, after its entries and far references reads and before its slot.
+    const hold = await holdRows(world, sql`select 1 from sort_keys where record_id = ${acme}`);
+    let deleting: Promise<unknown> | undefined;
     try {
-      await locked.promise;
-      const deleting = deleteRecord(world.scope, { recordId: acme });
-      const waitingOnRelationships = async () => {
-        const result = await owner.withWorkspace(world.scope.workspaceId, (tx) =>
-          tx.execute<{ n: number }>(sql`
-            select count(*)::int as n from pg_locks l join pg_stat_activity a on a.pid = l.pid
-            where l.relation = 'relationships'::regclass and not l.granted and a.application_name = ${APP_NAME}
-          `),
-        );
-        return (result.rows[0]?.n ?? 0) > 0;
-      };
-      for (let tries = 0; !(await waitingOnRelationships()); tries += 1) {
-        if (tries > 500) throw new Error('The delete never reached its far references.');
-        await delay(10);
-      }
-      const counter = await db
-        .withWorkspace(world.scope.workspaceId, (tx) =>
-          tx.execute(
-            sql`select 1 from workspace_counters where workspace_id = ${world.scope.workspaceId} for update nowait`,
-          ),
-        )
-        .then(
-          () => 'free',
-          (error: unknown) => {
-            if (postgresError(error)?.code === '55P03') return 'held';
-            throw error;
-          },
-        );
-      expect(counter).toBe('free');
-      release.resolve(undefined);
-      await holder;
+      deleting = deleteRecord(world.scope, { recordId: acme }, [hook]);
+      await waitForWaiters(world, 1, 'The delete');
+      expect(await counterState(world)).toBe('free');
+      await hold.release();
       expect(await deleting).toEqual({ recordId: acme, state: 'deleted' });
+      expect(seen[0]?.references).toEqual([
+        { recordId: ada, objectId: world.people, attributeId: world.person('company') },
+      ]);
     } finally {
-      release.resolve(undefined);
-      await holder;
+      await hold.release();
+      await deleting?.catch(() => undefined);
+    }
+  });
+
+  it('erases a record with many links without holding the workspace counter while it deletes (AC-16, AC-18)', async () => {
+    const world = await workspace();
+    const acme = await newCompany(world, 'Acme');
+    await staff(world, acme, 300);
+    const seen: Change[] = [];
+    const hook: AfterWrite = (change) => {
+      seen.push(change);
+      return Promise.resolve();
+    };
+    // Stops the erasure in its heavy step, at the links it deletes.
+    const hold = await holdRows(
+      world,
+      sql`select 1 from record_links where to_record_id = ${acme} or from_record_id = ${acme} limit 1`,
+    );
+    let erasing: Promise<RemovedCounts> | undefined;
+    try {
+      erasing = eraseRecord(world.scope, { recordId: acme }, [hook]);
+      await waitForWaiters(world, 1, 'The erasure');
+      expect(await counterState(world)).toBe('free');
+      await hold.release();
+      expect((await erasing).links).toBe(300);
+      expect(seen[0]?.references).toHaveLength(300);
+    } finally {
+      await hold.release();
+      await erasing?.catch(() => undefined);
+    }
+  });
+
+  it('lets a create take the unique value a concurrent delete gives up, with no deadlock (AC-8, AC-10, AC-16)', async () => {
+    const world = await workspace();
+    const emails = world.person('email_addresses');
+    const ada = await newPerson(world, 'Ada', { [emails]: ['ada@example.com'] });
+    const deleter = counted(world.scope);
+    const creator = counted(world.scope);
+    // Stops the delete after it moved Ada's unique keys aside and before its slot.
+    const hold = await holdRows(world, sql`select 1 from sort_keys where record_id = ${ada}`);
+    let deleting: Promise<unknown> | undefined;
+    let creating: Promise<unknown> | undefined;
+    try {
+      deleting = deleteRecord(deleter.scope, { recordId: ada });
+      await waitForWaiters(world, 1, 'The delete');
+      // The create waits on the delete's key change; it has not taken the counter, so the delete can.
+      creating = createRecord(creator.scope, {
+        objectId: world.people,
+        values: { [world.person('name')]: { firstName: 'New Ada' }, [emails]: ['ada@example.com'] },
+      });
+      await waitForWaiters(world, 2, 'The create');
+      expect(await counterState(world)).toBe('free');
+      await hold.release();
+      const [deleted, created] = await Promise.allSettled([deleting, creating]);
+      expect(deleted.status).toBe('fulfilled');
+      expect(created.status).toBe('fulfilled');
+      // One transaction each: no deadlock (40P01) or conflict was retried.
+      expect([deleter.attempts(), creator.attempts()]).toEqual([1, 1]);
+    } finally {
+      await hold.release();
+      await Promise.allSettled([deleting, creating]);
+    }
+  });
+
+  it('refuses a malformed record id as not found, before any query (AC-8, AC-18)', async () => {
+    const world = await workspace();
+    const quiet = counted(world.scope);
+    for (const attempt of [
+      () => deleteRecord(quiet.scope, { recordId: 'not-a-uuid' }),
+      () => restoreRecord(quiet.scope, { recordId: "1'; select 1" }),
+      () => eraseRecord(quiet.scope, { recordId: '' }),
+    ]) {
+      expect((await refusals(attempt()))[0]?.code).toBe('NOT_FOUND');
+    }
+    // Refused before they open a transaction at all.
+    expect(quiet.attempts()).toBe(0);
+    // The siblings that cast a record id refuse it the same way, not with a failed cast.
+    for (const attempt of [
+      () => setValues(world.scope, { recordId: 'nope', values: {} }),
+      () => getHistory(world.scope, { recordId: 'nope', attributeId: world.person('name') }),
+      () => getValuesAsOf(world.scope, { recordId: 'nope', at: new Date().toISOString() }),
+      () => getRecordEntries(world.scope, { recordId: 'nope' }),
+    ]) {
+      expect((await refusals(attempt()))[0]?.code).toBe('NOT_FOUND');
     }
   });
 

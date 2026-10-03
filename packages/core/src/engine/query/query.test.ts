@@ -767,6 +767,9 @@ describe('refusals', () => {
     const zones = ['Europe/London', ZONE, 'Asia/Kolkata', 'Pacific/Kiritimati'];
     const fastest = (statement: (zone: string) => ReturnType<typeof sql>) =>
       db.withWorkspace(scope.workspaceId, async (tx) => {
+        // Each zone once untimed first, on this same connection: the first use of a zone in a backend reads its
+        // file, which is the cold start, not the check, and would make the ratio depend on the pool.
+        for (const zone of zones) await tx.execute(statement(zone));
         const times: number[] = [];
         for (const zone of zones) {
           const plan = await tx.execute<{ 'QUERY PLAN': readonly { 'Execution Time': number }[] }>(

@@ -63,39 +63,45 @@ export interface Change {
   readonly values: readonly ValueChange[];
   /** Reference values on other records that a delete, restore or erasure changed without a new version. */
   readonly references: readonly ReferenceChange[];
+}
+
+/** A change cut down for a published event: past the cap, an object's record ids give way to a coarse marker. */
+export interface CappedChange extends Change {
   /**
-   * Objects with more than `CHANGE_CAP` record ids in one record list or in
-   * `references`: their ids are left out of those lists, and a screen
-   * refetches whatever it holds of the object instead.
+   * Objects with more than `CHANGE_CAP` distinct record ids across the
+   * change: their ids are left out of every record list, `references` and the
+   * record values, and a screen refetches whatever it holds of the object.
    */
   readonly coarse: readonly { readonly objectId: string }[];
 }
 
-/** The most record ids of one object a `Change` lists in one record list or in `references`. */
+/** The most record ids of one object a published event lists before it names the object coarse. */
 export const CHANGE_CAP = 1_000;
 
-/** The lists the cap applies to: every list of records, and the reference values. */
+/** The record lists the cap merges: every list of records, and the reference values. */
 const CAPPED_KEYS = ['createdRecords', 'deletedRecords', 'restoredRecords', 'purgedRecords', 'references'] as const;
 
 /**
- * Caps a change's record lists and references at `CHANGE_CAP` distinct
- * record ids per object. An object past the cap in any of them goes into
- * `coarse`, and its ids leave all of them, so a bulk delete or purge never
- * builds an event the size of the table.
+ * Caps a change for the outbox hook (spec 0005): each object's record ids,
+ * merged across the record lists, `references` and the record values, at
+ * `CHANGE_CAP` distinct ids. An object past the cap goes into `coarse` and
+ * its ids leave all of them, so a bulk delete or purge never becomes an event
+ * the size of the table. `runWrite` never calls it: every hook receives the
+ * full `Change`, since the audit log must name every record.
  */
-export function capChange(change: Omit<Change, 'coarse'>): Change {
-  const coarse = new Set<string>();
-  for (const key of CAPPED_KEYS) {
-    const idsByObject = new Map<string, Set<string>>();
-    for (const item of change[key]) {
-      const ids = idsByObject.get(item.objectId) ?? new Set<string>();
-      idsByObject.set(item.objectId, ids.add(item.recordId));
-    }
-    for (const [objectId, ids] of idsByObject) if (ids.size > CHANGE_CAP) coarse.add(objectId);
-  }
-  if (coarse.size === 0) return { ...change, coarse: [] };
+export function capChange(change: Change): CappedChange {
+  const idsByObject = new Map<string, Set<string>>();
+  const note = (objectId: string, recordId: string) => {
+    const ids = idsByObject.get(objectId) ?? new Set<string>();
+    idsByObject.set(objectId, ids.add(recordId));
+  };
+  for (const key of CAPPED_KEYS) for (const item of change[key]) note(item.objectId, item.recordId);
+  for (const value of change.values) if (value.ownerKind === 'record') note(value.objectId, value.ownerId);
+  const coarse = [...idsByObject].flatMap(([objectId, ids]) => (ids.size > CHANGE_CAP ? [objectId] : []));
+  if (coarse.length === 0) return { ...change, coarse: [] };
+  const isCoarse = new Set(coarse);
   const fine = <T extends { readonly objectId: string }>(items: readonly T[]) =>
-    items.filter((item) => !coarse.has(item.objectId));
+    items.filter((item) => !isCoarse.has(item.objectId));
   return {
     ...change,
     createdRecords: fine(change.createdRecords),
@@ -103,12 +109,13 @@ export function capChange(change: Omit<Change, 'coarse'>): Change {
     restoredRecords: fine(change.restoredRecords),
     purgedRecords: fine(change.purgedRecords),
     references: fine(change.references),
-    coarse: [...coarse].sort().map((objectId) => ({ objectId })),
+    values: change.values.filter((value) => value.ownerKind !== 'record' || !isCoarse.has(value.objectId)),
+    coarse: coarse.sort().map((objectId) => ({ objectId })),
   };
 }
 
 /** The lists of a change that a write step adds to. */
-type ChangeLists = Omit<Change, 'kind' | 'workspaceId' | 'actor' | 'coarse'>;
+type ChangeLists = Omit<Change, 'kind' | 'workspaceId' | 'actor'>;
 const LIST_KEYS = [
   'createdRecords',
   'deletedRecords',
@@ -215,7 +222,8 @@ export async function runWrite<T>(
           },
         };
         const result = await work(context);
-        const change = capChange({
+        // The full change: the outbox hook caps its own copy with `capChange`, and the audit log names every record.
+        const change: Change = {
           kind,
           workspaceId: scope.workspaceId,
           actor: scope.actor,
@@ -231,7 +239,7 @@ export async function runWrite<T>(
           purgedEntries: [...collected.purgedEntries],
           values: [...collected.values],
           references: [...collected.references],
-        });
+        };
         for (const hook of hooks) await hook(change, tx);
         return { result, change };
       });

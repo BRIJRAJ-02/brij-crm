@@ -9,6 +9,7 @@ import { decodeValue } from './columns.ts';
 import { checkName, checkSlug, definitionGuard, audit, touched } from './definitions.ts';
 import { RESTORE_WINDOW, takeEntrySlots, takeList } from './limits.ts';
 import { bucketItems, initialValues, writeAll, type AttributeResult } from './records.ts';
+import { checkId } from './ids.ts';
 import { refuse } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
 import { setEntryKeysLive } from './sort-keys.ts';
@@ -109,6 +110,8 @@ export async function addEntry(
   input: EntryInput,
   hooks: readonly AfterWrite[] = [],
 ): Promise<{ entryId: string; versions: Record<string, AttributeResult> }> {
+  checkId(input.listId, 'That list does not exist.');
+  checkId(input.recordId, 'That record does not exist.');
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -144,6 +147,7 @@ export async function addEntry(
 
 /** An entry's list and record, unlocked: neither ever changes, so a write can lock them first. */
 async function entryParents(tx: WorkspaceTx, entryId: string): Promise<{ listId: string; recordId: string }> {
+  checkId(entryId, 'That entry does not exist.');
   const [entry] = await tx
     .select({ listId: listEntries.listId, recordId: listEntries.recordId })
     .from(listEntries)
@@ -320,5 +324,6 @@ export async function getEntries(scope: EngineScope, input: { readonly ids: read
 
 /** Every live entry of one record, across its lists (a record page's "Lists" panel). */
 export async function getRecordEntries(scope: EngineScope, input: { readonly recordId: string }) {
+  checkId(input.recordId, 'That record does not exist.');
   return scope.db.withWorkspace(scope.workspaceId, (tx) => readEntries(tx, eq(listEntries.recordId, input.recordId)));
 }
