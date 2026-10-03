@@ -34,12 +34,6 @@ function refusalsOf(error: unknown): WelcomeRefusal[] {
   return all.length > 0 ? all : [{ code: error.code, message: error.message }];
 }
 
-/** The refusals left once those about `fields` are dropped. */
-function without(refusals: readonly WelcomeRefusal[], fields: readonly string[]): readonly WelcomeRefusal[] {
-  const next = refusals.filter((refusal) => refusal.field === undefined || !fields.includes(refusal.field));
-  return next.length === refusals.length ? refusals : next;
-}
-
 /** What is wrong with the typed values before they are sent, in the server's words. */
 function problemsWith(memberName: string, name: string, slug: string): WelcomeRefusal[] {
   return [
@@ -70,13 +64,6 @@ export function WelcomeScreen({ data, toasts, user }: WelcomeScreenProps) {
   const [isBusy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly WelcomeRefusal[]>([]);
   const [isSigningOut, setSigningOut] = useState(false);
-  // A refusal goes once its field changes, including a field that follows
-  // another: the Form drops it as the value changes, and this drops it from
-  // the state too, so it can't come back, and the address hint returns.
-  const drop = (...fields: readonly string[]) => {
-    setRefusals((current) => without(current, fields));
-  };
-  const isSlugRefused = refusals.some((refusal) => refusal.field === FIELDS.slug);
 
   const create = () => {
     const problems = problemsWith(memberName, name, slug);
@@ -135,13 +122,10 @@ export function WelcomeScreen({ data, toasts, user }: WelcomeScreenProps) {
           isRequired
           maxLength={80}
           value={memberName}
-          onChange={(next) => {
-            setMemberName(next);
-            // The workspace name, and the address after it, follow "Your name" until edited.
-            const following =
-              typedName === undefined ? [FIELDS.name, ...(typedSlug === undefined ? [FIELDS.slug] : [])] : [];
-            drop(FIELDS.memberName, ...following);
-          }}
+          // The workspace name, and the address after it, follow "Your name"
+          // until edited. A refusal goes once its field's value changes, even
+          // one that follows another: the Form drops it, for this answer.
+          onChange={setMemberName}
         />
         <Field
           label={strings.workspaceName}
@@ -150,10 +134,7 @@ export function WelcomeScreen({ data, toasts, user }: WelcomeScreenProps) {
           isRequired
           maxLength={80}
           value={name}
-          onChange={(next) => {
-            setTypedName(next);
-            drop(FIELDS.name, ...(typedSlug === undefined ? [FIELDS.slug] : []));
-          }}
+          onChange={setTypedName}
         />
         <Field
           label={strings.webAddress}
@@ -164,10 +145,9 @@ export function WelcomeScreen({ data, toasts, user }: WelcomeScreenProps) {
           value={slug}
           onChange={(next) => {
             setTypedSlug(addressAsTyped(next));
-            drop(FIELDS.slug);
           }}
-          // The hint steps aside while the field shows its refusal.
-          {...(isSlugRefused ? {} : { hint: strings.webAddressHint(SLUG_RULE.test(slug) ? slug : '') })}
+          // Field puts a refusal in the hint's place while it shows one.
+          hint={strings.webAddressHint(SLUG_RULE.test(slug) ? slug : '')}
         />
       </Form>
     </AuthLayout>

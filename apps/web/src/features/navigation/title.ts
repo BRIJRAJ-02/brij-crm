@@ -6,10 +6,10 @@
 /** The product's name, after the page's in every title. */
 export const PRODUCT = 'CRM';
 
-/** "<page title> · CRM", or "CRM" alone while the page has no title. */
+/** "<page title> · CRM", or "CRM" alone while the page has no title, or its title is the product's name. */
 export function documentTitle(pageTitle: string | undefined): string {
   const title = pageTitle?.replaceAll(/\s+/g, ' ').trim() ?? '';
-  return title === '' ? PRODUCT : `${title} · ${PRODUCT}`;
+  return title === '' || title === PRODUCT ? PRODUCT : `${title} · ${PRODUCT}`;
 }
 
 /** What `followPageTitle` needs from the browser. */

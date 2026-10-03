@@ -93,6 +93,15 @@ export const ThemeVertical: Story = {
     // Stacked, and as narrow as the rail allows.
     await expect(dark.getBoundingClientRect().top).toBeGreaterThan(light.getBoundingClientRect().top);
     await expect(group.getBoundingClientRect().width).toBeLessThanOrEqual(32);
+    // Each stacked segment is still a touch sized target (WCAG 2.5.8, 24 px or more).
+    for (const radio of [light, dark, system]) {
+      // The radio is a hidden input; the segment is the label around it.
+      const segment = radio.closest('label');
+      if (segment === null) throw new Error('a segment is missing');
+      const box = segment.getBoundingClientRect();
+      await expect(box.width).toBeGreaterThanOrEqual(24);
+      await expect(box.height).toBeGreaterThanOrEqual(24);
+    }
     await userEvent.click(system);
     await expect(system).toBeChecked();
     await userEvent.keyboard('{ArrowUp}');

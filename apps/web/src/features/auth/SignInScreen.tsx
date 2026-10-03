@@ -29,9 +29,20 @@ export interface SignInScreenProps {
 export function SignInScreen({ data, google, redirect, returnTo, googleError, email }: SignInScreenProps) {
   const navigate = useNavigate();
   const [status, setStatus] = useState<SignInStatus>('idle');
-  const [error, setError] = useState<string | undefined>(() =>
+  // A refused send is about the address, so it shows on the field; a refused
+  // Google sign in is about the sign in, so it shows above the form.
+  const [error, setError] = useState<string | undefined>(undefined);
+  const [notice, setNotice] = useState<string | undefined>(() =>
     googleError === undefined ? undefined : googleRefusal(googleError),
   );
+
+  // The refused Google sign in is said once: the address drops `?error=`
+  // (keeping `?redirect=`), so a reload or a return to this entry doesn't say
+  // it again. The notice was read from it as the page started, and stays.
+  useEffect(() => {
+    if (googleError === undefined) return;
+    void navigate({ to: '/sign-in', search: redirect === undefined ? {} : { redirect }, replace: true });
+  }, [googleError, redirect, navigate]);
 
   // Back from Google with the browser's back button, the page comes out of
   // the back/forward cache as it was left: "Opening Google". Start over.
@@ -46,6 +57,7 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, em
   }, []);
 
   const sendCode = (address: string) => {
+    setNotice(undefined);
     setStatus('sending');
     data.auth.sendCode(address).then(
       () => {
@@ -60,11 +72,12 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, em
   };
 
   const signInWithGoogle = () => {
+    setNotice(undefined);
     setStatus('google');
     // On success the browser leaves for Google; only a failure comes back here.
     data.auth.signInWithGoogle(returnTo).catch((failure: unknown) => {
       setStatus('idle');
-      setError(sendRefusal(failure));
+      setNotice(sendRefusal(failure));
     });
   };
 
@@ -75,6 +88,7 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, em
         onContinue={sendCode}
         {...(email === undefined ? {} : { defaultEmail: email })}
         {...(error === undefined ? {} : { error })}
+        {...(notice === undefined ? {} : { notice })}
         {...(google ? { onGoogle: signInWithGoogle } : {})}
       />
     </AuthLayout>

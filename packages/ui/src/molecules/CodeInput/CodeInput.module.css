@@ -72,7 +72,21 @@
     letter-spacing: var(--tracking-label);
   }
 
+  /* The error's sentence, when a screen moves focus to it: the focus ring. */
+  .message {
+    border-radius: var(--radius-xs);
+    outline: none;
+  }
+
+  .message:focus-visible {
+    box-shadow: var(--shadow-focus);
+  }
+
   @media (forced-colors: active) {
+    .message:focus-visible {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+
     .box {
       border-color: CanvasText;
     }

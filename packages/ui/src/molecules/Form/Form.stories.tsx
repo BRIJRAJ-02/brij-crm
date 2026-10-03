@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { expect, fn, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -221,6 +222,10 @@ export const RefusalTakesFocus: Story = {
     await waitFor(() => expect(slug).not.toHaveAttribute('aria-invalid'));
     await userEvent.click(canvas.getByRole('button', { name: 'Create workspace' }));
     await waitFor(() => expect(slug).toHaveAttribute('aria-invalid', 'true'));
+    // Watching starts again with the new answer: changing the field clears it again.
+    await waitFor(() => expect(slug).toHaveFocus());
+    await userEvent.keyboard('-west');
+    await expect(slug).not.toHaveAttribute('aria-invalid');
   },
 };
 
@@ -361,5 +366,87 @@ export const RefusalClearsWhenFilled: Story = {
     await userEvent.paste(' West');
     await expect(name).toHaveValue('Halcyon Labs HQ West');
     await expect(slug).toHaveValue('halcyon-labs-hq-west');
+  },
+};
+
+/**
+ * A dropped refusal stays dropped for that answer: changing the address and
+ * then changing it back to the refused one doesn't bring the refusal back.
+ * Only the next answer can.
+ */
+export const RefusalStaysDropped: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <TakenAddress onSubmit={args.onSubmit} />,
+  play: async ({ canvas, userEvent }) => {
+    const submit = canvas.getByRole('button', { name: 'Create workspace' });
+    await userEvent.click(submit);
+    const slug = canvas.getByRole('textbox', { name: 'Web address' });
+    await waitFor(() => expect(slug).toHaveAttribute('aria-invalid', 'true'));
+    await waitFor(() => expect(slug).toHaveFocus());
+    await userEvent.keyboard('-hq');
+    await expect(slug).not.toHaveAttribute('aria-invalid');
+    await userEvent.keyboard('{Backspace}{Backspace}{Backspace}');
+    await expect(slug).toHaveValue('halcyon-labs');
+    await expect(slug).not.toHaveAttribute('aria-invalid');
+    await expect(canvas.queryByText('That address is taken. Try another.')).toBeNull();
+    // The next answer refuses it again.
+    await userEvent.click(submit);
+    await waitFor(() => expect(slug).toHaveAttribute('aria-invalid', 'true'));
+  },
+};
+
+/**
+ * A field drawn elsewhere on the page (a portal) that names the form with
+ * `form` belongs to it: it is sent, and its refusal goes as it changes.
+ */
+function LinkedAddress({ onSubmit }: { readonly onSubmit: (values: FormValues) => void }) {
+  const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
+  const [outside, setOutside] = useState<HTMLElement | null>(null);
+  return (
+    <Stage direction="column" width="narrow">
+      <Form
+        id="linked-form"
+        refusals={refusals}
+        fieldFor={byAttribute}
+        onSubmit={(values) => {
+          onSubmit(values);
+          setRefusals([{ ...SLUG_TAKEN }]);
+        }}
+      >
+        <Field label="Workspace name" name="name" defaultValue="Halcyon Labs" />
+        {outside !== null &&
+          createPortal(
+            <Field
+              label="Web address"
+              name="slug"
+              defaultValue="halcyon-labs"
+              ref={(input) => {
+                input?.setAttribute('form', 'linked-form');
+              }}
+            />,
+            outside,
+          )}
+      </Form>
+      <div ref={setOutside} />
+      <Button variant="primary" type="submit" form="linked-form">
+        Create workspace
+      </Button>
+    </Stage>
+  );
+}
+
+/** A field outside the form's markup, linked with `form`: sent with the form, and its refusal clears as it changes. */
+export const LinkedFieldRefusalClears: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <LinkedAddress onSubmit={args.onSubmit} />,
+  play: async ({ args, canvas, userEvent }) => {
+    const slug = await canvas.findByRole('textbox', { name: 'Web address' });
+    await expect(slug.closest('form')).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'Create workspace' }));
+    await expect(args.onSubmit).toHaveBeenCalledWith({ name: 'Halcyon Labs', slug: 'halcyon-labs' });
+    await waitFor(() => expect(slug).toHaveAttribute('aria-invalid', 'true'));
+    await userEvent.click(slug);
+    await userEvent.keyboard('-hq');
+    await expect(slug).not.toHaveAttribute('aria-invalid');
   },
 };

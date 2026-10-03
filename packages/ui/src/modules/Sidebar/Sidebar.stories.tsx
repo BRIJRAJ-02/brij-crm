@@ -153,6 +153,18 @@ export const Loading: Story = {
   },
 };
 
+/** Folded and loading: tile marks on the rail where the icons will go, as the open sidebar draws skeleton rows. */
+export const CollapsedLoading: Story = {
+  args: { isCollapsed: true, isLoading: true },
+  play: async ({ canvas }) => {
+    const records = canvas.getByRole('group', { name: 'Records' });
+    await expect(records).toHaveAttribute('aria-busy', 'true');
+    await waitFor(() => expect(records.querySelectorAll('[data-shape="tile"]').length).toBe(3));
+    await expect(records).toHaveTextContent('Loading');
+    await expect(canvas.queryByRole('link', { name: 'People' })).toBeNull();
+  },
+};
+
 /** No lists yet: the section says what goes there. */
 export const Empty: Story = {
   args: { hasLists: false },
@@ -169,6 +181,21 @@ export const WorkspaceBusy: Story = {
     const button = canvas.getByRole('button', { name: 'Brightline, workspace menu Signing out' });
     await expect(button).toHaveAttribute('aria-disabled', 'true');
     await expect(canvas.getByRole('progressbar', { name: 'Signing out' })).toBeInTheDocument();
+    await userEvent.click(button);
+    await expect(document.querySelector('[role="menu"]')).toBeNull();
+  },
+};
+
+/** Signing out with the sidebar folded: the workspace mark spins in place, says what is under way, and ignores presses. */
+export const CollapsedWorkspaceBusy: Story = {
+  args: { isCollapsed: true, isWorkspaceBusy: true },
+  play: async ({ canvas, userEvent }) => {
+    const button = canvas.getByRole('button', { name: 'Brightline, workspace menu Signing out' });
+    await expect(button).toHaveAttribute('aria-disabled', 'true');
+    const spinner = canvas.getByRole('progressbar', { name: 'Signing out' });
+    await expect(button).toContainElement(spinner);
+    const nav = canvas.getByRole('navigation', { name: 'Main navigation' });
+    await expect(button.getBoundingClientRect().right).toBeLessThanOrEqual(nav.getBoundingClientRect().right);
     await userEvent.click(button);
     await expect(document.querySelector('[role="menu"]')).toBeNull();
   },

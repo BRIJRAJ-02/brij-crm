@@ -19,7 +19,7 @@ Ported from the artifact's EmptyState card. Every component's empty, error and l
 - `title` is one line; `children` say what to do next, or why.
 - `error` shows "Try again" when given `onRetry`, and is announced as an alert. `empty` and `locked` are announced politely.
 - `icon` overrides the tone's icon (inbox, triangle alert, lock).
-- `isLoading` holds the place while what goes here is still on its way: the tile, then two skeleton lines where the title and text go, marked busy, with `title` ("Loading") read by screen readers. Why a variant: a page body that loads, then shows an EmptyState (nothing yet, failed, not found), jumped from a flush skeleton to a padded, centred state; drawn in the EmptyState's own place, it lands where the skeleton was. Show it after the loading delay (`useDelayedLoading`, or a router's pending delay), as with Skeleton.
+- `isLoading` holds the place while what goes here is still on its way: the tile, then two skeleton lines where the title and text go, marked busy, with `title` ("Loading") read by screen readers. Why a variant: a page body that loads, then shows an EmptyState (nothing yet, failed, not found), jumped from a flush skeleton to a padded, centred state; drawn in the EmptyState's own place, it lands where the skeleton was. It waits out the loading delay itself (`useDelayedLoading`, as TopBar does): the region is busy and holds its place from the start, and the tile and lines come only after the delay, so a fast load never flashes them. Pass `isLoading` for as long as it loads. The lines are centred (Skeleton's `align="center"`), like the title and text they stand in for.
 
 ## States
 

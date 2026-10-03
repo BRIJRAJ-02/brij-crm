@@ -42,7 +42,7 @@ describe('authErrorResponse', () => {
     expect(wrong.headers.getSetCookie()).toEqual(['x=; Max-Age=0']);
     expect(await wrong.json()).toEqual({
       code: 'INVALID_OTP',
-      message: "That code isn't right. Check it, or send a new one.",
+      message: 'That code isn’t right. Try again, or send a new one.',
     });
   });
 

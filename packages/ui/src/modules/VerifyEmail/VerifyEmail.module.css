@@ -1,8 +1,9 @@
 /* VerifyEmail: where the code went (the address in body-strong), the code
-   boxes, why verifying is off when it is, "Checking the code" with a spinner
-   while it is checked, then the resend and back buttons in a row with the
-   resend wait space-8 under them; the lines in text-secondary, the parts
-   space-16 apart. */
+   boxes with their refusal, why verifying is off when it is, "Checking the
+   code" with a spinner while it is checked, then the foot: the resend and
+   back buttons in a row, a refused resend's danger Callout and the resend
+   wait under them, space-8 apart. The lines are text-secondary, and the
+   parts space-16 apart. */
 @layer components {
   .root {
     display: flex;

@@ -21,7 +21,11 @@ export interface Auth {
   sendCode(email: string): Promise<void>;
   /** Signs in with the code sent to the address. */
   verify(email: string, code: string): Promise<void>;
-  /** Sends the browser to Google; it comes back to `returnTo` (a path in the app), or to `/sign-in` on a failure. */
+  /**
+   * Sends the browser to Google; it comes back to `returnTo` (a path in the
+   * app, already checked by the screen), or on a failure to `/sign-in` with
+   * `?redirect=` set to `returnTo`, so a refused sign in keeps the deep link.
+   */
   signInWithGoogle(returnTo: string): Promise<void>;
   /** Ends the session on this device and forgets what was cached for it. */
   signOut(): Promise<void>;
@@ -52,7 +56,10 @@ export function createAuth({ origin, fetch, reset }: AuthOptions): Auth {
       reset();
     },
     async signInWithGoogle(returnTo) {
-      await (await load()).signInWithGoogle(new URL(returnTo, origin).href, new URL('/sign-in', origin).href);
+      // Better Auth adds `error` to this address's search, beside `redirect`.
+      const back = new URL('/sign-in', origin);
+      if (returnTo !== '/') back.searchParams.set('redirect', returnTo);
+      await (await load()).signInWithGoogle(new URL(returnTo, origin).href, back.href);
     },
     async signOut() {
       try {

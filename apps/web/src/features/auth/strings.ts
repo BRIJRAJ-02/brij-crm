@@ -22,11 +22,13 @@ export const strings = {
   duration,
   /** A code send refused for sending too often, with the server's wait. */
   sendLimited: (seconds: number) => `Too many codes sent to this email. Try again in ${duration(seconds)}.`,
+  /** A resend refused for sending too often, on /verify, where the wait line under the button counts the wait. */
+  resendLimited: 'Too many codes sent to this email.',
   /** A code check refused for trying too often, with the server's wait. */
   verifyLimited: (seconds: number) => `Too many sign in tries for this email. Try again in ${duration(seconds)}.`,
   signUpClosed: 'There’s no account for this email, and sign up isn’t open yet. Check the address.',
   /** A wrong code while a new one can't be sent yet: no point offering one. */
-  codeWrongWaiting: 'That code isn’t right. Check it.',
+  codeWrongWaiting: 'That code isn’t right. Try again.',
   googleSignUpClosed:
     'There’s no account for that Google email, and sign up isn’t open yet. Try another account, or use your email.',
   googleCancelled: 'Google sign in was cancelled. Try again, or use your email.',

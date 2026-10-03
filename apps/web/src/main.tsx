@@ -10,7 +10,7 @@ import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { signInHref } from './features/auth/redirect.ts';
-import { focusPage } from './features/navigation/focus.ts';
+import { focusFirstLoad, focusPage } from './features/navigation/focus.ts';
 import { followPageTitle } from './features/navigation/title.ts';
 import { routeTree } from './routeTree.gen.ts';
 
@@ -74,10 +74,17 @@ const router = createRouter({
 
 // After moving to another page, focus goes to its title (the page's h1), so
 // a screen reader starts there and Tab continues from the top of the page;
-// on /sign-in and /verify, to their one field (focus.ts).
+// on /sign-in and /verify, to their one field (focus.ts). On the first load,
+// only those one field pages move focus, into their field.
 router.subscribe('onRendered', (event) => {
-  if (event.fromLocation === undefined || !event.pathChanged) return;
   const { pathname } = event.toLocation;
+  if (event.fromLocation === undefined) {
+    requestAnimationFrame(() => {
+      focusFirstLoad(document, pathname);
+    });
+    return;
+  }
+  if (!event.pathChanged) return;
   requestAnimationFrame(() => {
     focusPage(document, pathname);
   });

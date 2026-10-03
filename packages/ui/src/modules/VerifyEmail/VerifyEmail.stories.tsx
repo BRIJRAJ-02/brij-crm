@@ -164,7 +164,7 @@ export const Resent: Story = {
   },
 };
 
-const LIMITED = 'Too many codes sent to this email. Try again in 10 minutes.';
+const LIMITED = 'Too many codes sent to this email.';
 
 /** The resend was refused: why shows under "Send a new code" and is announced; the boxes keep their own state, and the wait counts to the server's. */
 export const ResendRefused: Story = {
@@ -237,6 +237,64 @@ export const CodeSpent: Story = {
     const code = canvas.getByRole('textbox', { name: 'Code' });
     await expect(code).toBeDisabled();
     await expect(code).toHaveAccessibleDescription(/Too many wrong tries for this code/);
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Send a new code' })).toHaveFocus());
+  },
+};
+
+const SPENT = 'Too many wrong tries for this code. Send a new one.';
+
+/**
+ * A spent code while the resend wait still runs: the boxes are off, so focus
+ * goes to the message that says why, not lost with the boxes.
+ */
+export const CodeSpentWaiting: Story = {
+  args: { isCodeSpent: true, error: SPENT, resendWait: 42 },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Code' })).toBeDisabled();
+    await expect(canvas.getByRole('button', { name: 'Send a new code' })).toBeDisabled();
+    // The message under the boxes, not the status line that announced it.
+    const message = canvas.getByText(SPENT, { selector: '[tabindex="-1"]' });
+    await waitFor(() => expect(message).toHaveFocus());
+    await expect(message).toHaveAttribute('tabindex', '-1');
+  },
+};
+
+/** Counts a spent code's resend wait down to zero, as the screen does. */
+function SpentCountdown() {
+  const [wait, setWait] = useState(2);
+  return (
+    <AuthLayout productName="CRM" title="Check your email">
+      <VerifyEmail
+        email="maya@halcyonlabs.io"
+        onVerify={() => undefined}
+        isCodeSpent
+        error={SPENT}
+        resendWait={wait}
+        onResend={() => undefined}
+        onUseAnotherEmail={() => undefined}
+      />
+      <Button
+        variant="ghost"
+        onPress={() => {
+          setWait(0);
+        }}
+      >
+        End the wait
+      </Button>
+    </AuthLayout>
+  );
+}
+
+/** A spent code: focus waits on the message while the wait runs, then moves to "Send a new code" when it is ready. */
+export const CodeSpentThenReady: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <SpentCountdown />,
+  play: async ({ canvas }) => {
+    // The message under the boxes, not the status line that announced it.
+    const message = canvas.getByText(SPENT, { selector: '[tabindex="-1"]' });
+    await waitFor(() => expect(message).toHaveFocus());
+    // Pressed from code, so focus stays on the message, as when the wait runs out by itself.
+    canvas.getByRole('button', { name: 'End the wait' }).click();
     await waitFor(() => expect(canvas.getByRole('button', { name: 'Send a new code' })).toHaveFocus());
   },
 };

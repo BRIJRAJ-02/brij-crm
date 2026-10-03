@@ -1,5 +1,6 @@
 /* Skeleton: grey placeholders in the content's shape, pulsing once per
-   duration-pulse. Under reduced motion they hold still. */
+   duration-pulse. Under reduced motion they hold still. A column of lines
+   starts at the start, or centres under centred text. */
 @layer components {
   .root {
     display: block;
@@ -29,6 +30,11 @@
     border-radius: var(--radius-full);
   }
 
+  .root[data-shape='tile'] {
+    inline-size: var(--size-tile);
+    block-size: var(--size-tile);
+  }
+
   .root[data-shape='block'] {
     block-size: var(--size-toolbar);
     border-radius: var(--radius-md);
@@ -39,6 +45,11 @@
     flex-direction: column;
     gap: var(--space-8);
     inline-size: 100%;
+  }
+
+  /* Under centred text, the shorter last line sits in the middle too. */
+  .lines[data-align='center'] {
+    align-items: center;
   }
 
   @keyframes pulse {

@@ -22,6 +22,13 @@ export interface SignInFormProps {
   readonly status?: SignInStatus;
   /** Why the address was refused, as a sentence that says what to do. Shown on the email field until it changes. */
   readonly error?: string;
+  /**
+   * A refusal about the sign in as a whole, not the address (a refused Google
+   * sign in), as a sentence that says what to do. Shown above the field as a
+   * danger Callout, and announced; it never marks the email field invalid.
+   * Clear it when the next attempt starts.
+   */
+  readonly notice?: string;
   /** The address to start with: the one used last, coming back from "Use another email". */
   readonly defaultEmail?: string;
   /** Signing in is off for now: the field and buttons are off. */
@@ -32,9 +39,10 @@ export interface SignInFormProps {
   readonly isSignUpClosed?: boolean;
 }
 
-/** Every refusal here is about the one field. */
+/** Every refusal here is about the one field, except the notice, which is about the whole form. */
 const EMAIL_FIELD = 'email';
-const onEmailField = () => EMAIL_FIELD;
+const NOTICE = 'NOTICE';
+const fieldOf = (refusal: FormRefusal) => (refusal.code === NOTICE ? undefined : EMAIL_FIELD);
 
 /** What is wrong with a typed address before it is sent, or undefined when it looks like one. */
 function problemWith(email: string): FormRefusal | undefined {
@@ -53,6 +61,7 @@ export function SignInForm({
   onGoogle,
   status = 'idle',
   error,
+  notice,
   defaultEmail = '',
   isDisabled = false,
   disabledReason,
@@ -77,8 +86,12 @@ export function SignInForm({
         busyLabel={strings.sending}
         isBusy={status === 'sending'}
         isDisabled={isDisabled || status === 'google'}
-        refusals={shown === undefined ? [] : [shown]}
-        fieldFor={onEmailField}
+        refusals={[
+          ...(shown === undefined ? [] : [shown]),
+          // Through the Form's banner: about the sign in, not the address.
+          ...(notice === undefined ? [] : [{ code: NOTICE, message: notice }]),
+        ]}
+        fieldFor={fieldOf}
         {...(hasReason ? { submitDescribedBy: reasonId } : {})}
         onSubmit={() => {
           const typed = email.trim();

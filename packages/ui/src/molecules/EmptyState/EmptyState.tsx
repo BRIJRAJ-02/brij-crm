@@ -4,6 +4,7 @@ import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
+import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './EmptyState.module.css';
 import { strings } from './strings.ts';
 
@@ -26,7 +27,9 @@ export interface EmptyStateProps {
   /**
    * What will show here is still loading: the tile, then skeleton lines where
    * the title and text go, so the empty, failed or loaded page that follows
-   * lands in the same place. `title` ("Loading") is read by screen readers.
+   * lands in the same place. The region is busy at once, and the tile and
+   * lines come only after the loading delay, so a fast load never flashes
+   * them. `title` ("Loading") is read by screen readers.
    */
   readonly isLoading?: boolean;
 }
@@ -51,13 +54,20 @@ export function EmptyState({
   onRetry,
   isLoading = false,
 }: EmptyStateProps) {
+  const showSkeleton = useDelayedLoading(isLoading);
   if (isLoading) {
+    // Busy from the start, so screen readers hear the title at once; the
+    // marks wait for the delay.
     return (
-      <div className={styles.root} data-loading="" role="status" aria-busy="true">
-        <span className={styles.icon} />
-        <span className={styles.lines}>
-          <Skeleton lines={2} />
-        </span>
+      <div className={styles.root} role="status" aria-busy="true">
+        {showSkeleton && (
+          <>
+            <span className={styles.icon} />
+            <span className={styles.lines}>
+              <Skeleton lines={2} align="center" />
+            </span>
+          </>
+        )}
         <VisuallyHidden>{title}</VisuallyHidden>
       </div>
     );

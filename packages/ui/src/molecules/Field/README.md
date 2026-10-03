@@ -16,7 +16,7 @@ Ported from the artifact's Field card. Every text, number and link attribute is 
 ```
 
 - `placeholder` follows the Field card: "Set <Attribute>…" (`strings.setAttribute`). It is `text-tertiary`, so never put an instruction only there; use `hint`.
-- `error` is a sentence that says how to fix it ("Enter a domain like halcyonlabs.io, without spaces."). The outline turns `danger` and the message shows under the box with an icon. With `isErrorFloating` (a grid cell, one line tall) the message floats under the box on a raised surface, over the rows below.
+- `error` is a sentence that says how to fix it ("Enter a domain like halcyonlabs.io, without spaces."). The outline turns `danger` and the message shows under the box with an icon, in the hint's place: while the field is invalid (its own `error`, or a Form's refusal) the `hint` steps aside, so the field never carries two lines under it and a screen reader hears the one that matters. A read only or disabled reason still shows. The error says how to fix it, so the hint's help isn't lost. With `isErrorFloating` (a grid cell, one line tall) the message floats under the box on a raised surface, over the rows below.
 - `isReadOnly` fills the box with `surface-subtle` and shows a lock; `readOnlyReason` says why, as the hint. `isDisabled` fades it; `disabledReason` says who can change it.
 - `descriptionId` sets the `id` of the line under the box (the hint or reason), so a control nearby can point `aria-describedby` at it: SignInForm's buttons read the field's `disabledReason` this way. The input stays described by it.
 - `prefix` holds a unit (`USD`, `%`) or a picker (the currency editor's code Select); `suffix` a clear button or a trigger.
@@ -30,7 +30,7 @@ Ported from the artifact's Field card. Every text, number and link attribute is 
 
 ## States
 
-Empty (placeholder), filled, hover (pointer only), focus (accent border and ring), invalid (danger border and message), read only (filled, lock, reason), disabled (faded, reason).
+Empty (placeholder), filled, hover (pointer only), focus (accent border and ring), invalid (danger border and message, in place of the hint), read only (filled, lock, reason), disabled (faded, reason).
 
 ## Keyboard
 

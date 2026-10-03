@@ -6,7 +6,7 @@ import { isDataError, type DataLayer } from '@crm/data';
 import { AuthLayout, VerifyEmail } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
-import { sendRefusal, verifyRefusal } from './messages.ts';
+import { resendRefusal, verifyRefusal } from './messages.ts';
 import { clearPending, saveLastEmail, savePending, sessionStore, type PendingSignIn } from './pending.ts';
 import { safeRedirect } from './redirect.ts';
 import { strings } from './strings.ts';
@@ -79,7 +79,7 @@ export function VerifyScreen({ data, pending, redirect }: VerifyScreenProps) {
       },
       (failure: unknown) => {
         // The refusal comes in the same answer that ends the resend, so "New code sent" is never said.
-        setResendError(sendRefusal(failure));
+        setResendError(resendRefusal(failure));
         waitFrom(failure);
         setResending(false);
       },

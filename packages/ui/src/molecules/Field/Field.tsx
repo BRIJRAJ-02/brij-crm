@@ -104,7 +104,7 @@ export function Field({
   ref,
 }: FieldProps) {
   const { locale } = useFormatSettings();
-  const description = (isReadOnly ? readOnlyReason : undefined) ?? (isDisabled ? disabledReason : undefined) ?? hint;
+  const reason = (isReadOnly ? readOnlyReason : undefined) ?? (isDisabled ? disabledReason : undefined);
   const length = (value ?? defaultValue ?? '').length;
   const leading = variant === 'search' ? 'search' : icon;
   const inputProps = {
@@ -148,49 +148,58 @@ export function Field({
       {...(autoComplete === undefined ? {} : { autoComplete })}
       {...(name === undefined ? {} : { name })}
     >
-      {!isLabelHidden && <Label className={styles.label}>{label}</Label>}
-      <span className={styles.box} data-multiline={isMultiline || undefined}>
-        {leading !== undefined && <Icon name={leading} size="sm" tone="muted" />}
-        {prefix !== undefined && <span className={styles.prefix}>{prefix}</span>}
-        {isMultiline ? <TextArea {...inputProps} /> : <Input {...inputProps} />}
-        {isReadOnly && (
-          <span className={styles.lock}>
-            <Icon name="lock" size="xs" label={strings.readOnly} />
-          </span>
-        )}
-        {suffix !== undefined && <span className={styles.suffix}>{suffix}</span>}
-      </span>
-      {(description !== undefined || (showCounter && maxLength !== undefined)) && (
-        <span className={styles.foot}>
-          {description !== undefined && (
-            <Text
-              slot="description"
-              className={styles.hint}
-              // React Aria takes a given id over its own, and the input's
-              // aria-describedby follows it.
-              {...(descriptionId === undefined ? {} : { id: descriptionId })}
-            >
-              {description}
-            </Text>
-          )}
-          {showCounter && maxLength !== undefined && (
-            <span className={styles.counter} aria-hidden="true">
-              {strings.counter(
-                new Intl.NumberFormat(locale).format(length),
-                new Intl.NumberFormat(locale).format(maxLength),
-              )}
-            </span>
-          )}
-        </span>
-      )}
-      <FieldError className={styles.error}>
-        {({ validationErrors }) => (
+      {({ isInvalid }) => {
+        // An error takes the hint's place, so the field never carries two
+        // lines under it; a read only or disabled reason always shows.
+        const description = reason ?? (isInvalid ? undefined : hint);
+        return (
           <>
-            <Icon name="circle-alert" size="xs" />
-            {error ?? validationErrors.join(' ')}
+            {!isLabelHidden && <Label className={styles.label}>{label}</Label>}
+            <span className={styles.box} data-multiline={isMultiline || undefined}>
+              {leading !== undefined && <Icon name={leading} size="sm" tone="muted" />}
+              {prefix !== undefined && <span className={styles.prefix}>{prefix}</span>}
+              {isMultiline ? <TextArea {...inputProps} /> : <Input {...inputProps} />}
+              {isReadOnly && (
+                <span className={styles.lock}>
+                  <Icon name="lock" size="xs" label={strings.readOnly} />
+                </span>
+              )}
+              {suffix !== undefined && <span className={styles.suffix}>{suffix}</span>}
+            </span>
+            {(description !== undefined || (showCounter && maxLength !== undefined)) && (
+              <span className={styles.foot}>
+                {description !== undefined && (
+                  <Text
+                    slot="description"
+                    className={styles.hint}
+                    // React Aria takes a given id over its own, and the input's
+                    // aria-describedby follows it.
+                    {...(descriptionId === undefined ? {} : { id: descriptionId })}
+                  >
+                    {description}
+                  </Text>
+                )}
+                {showCounter && maxLength !== undefined && (
+                  <span className={styles.counter} aria-hidden="true">
+                    {strings.counter(
+                      new Intl.NumberFormat(locale).format(length),
+                      new Intl.NumberFormat(locale).format(maxLength),
+                    )}
+                  </span>
+                )}
+              </span>
+            )}
+            <FieldError className={styles.error}>
+              {({ validationErrors }) => (
+                <>
+                  <Icon name="circle-alert" size="xs" />
+                  {error ?? validationErrors.join(' ')}
+                </>
+              )}
+            </FieldError>
           </>
-        )}
-      </FieldError>
+        );
+      }}
     </TextField>
   );
 }

@@ -49,7 +49,9 @@ export function pendingPage() {
 /** The workspace's page when loading failed: under the workspace's name (when known), what happened, what to do, and a retry. */
 export function failedPage(workspaceName: string | undefined, onRetry: () => void) {
   return {
-    topBar: <TopBar title={workspaceName ?? strings.failedTitle} />,
+    // Before the workspace is known, the product names the page, so the body
+    // says "Couldn’t load this workspace" once, not twice.
+    topBar: <TopBar title={workspaceName ?? strings.product} />,
     body: (
       <EmptyState tone="error" title={strings.failedTitle} onRetry={onRetry}>
         {strings.failedText}

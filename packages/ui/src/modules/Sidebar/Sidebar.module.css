@@ -145,6 +145,15 @@
     padding: var(--space-8);
   }
 
+  /* The rail while a section loads: a tile mark centred in each item's place. */
+  .railLoading {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: calc(var(--size-nav-item) - var(--size-tile));
+    padding-block: calc((var(--size-nav-item) - var(--size-tile)) / 2);
+  }
+
   .empty {
     margin: 0;
     padding: var(--space-4) var(--space-8);

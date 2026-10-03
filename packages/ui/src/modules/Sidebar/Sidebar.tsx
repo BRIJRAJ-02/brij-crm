@@ -246,7 +246,7 @@ export interface NavSectionProps {
   readonly defaultExpanded?: boolean;
 }
 
-/** A folding group of nav items under a quiet label. Collapsed, the sidebar draws its items without the label. */
+/** A folding group of nav items under a quiet label. Collapsed, the sidebar draws its items without the label, and tile marks while they load. */
 export function NavSection({
   title,
   children,
@@ -258,9 +258,22 @@ export function NavSection({
   const showSkeleton = useDelayedLoading(isLoading);
   const hasItems = Children.toArray(children).length > 0;
   if (isCollapsed) {
+    // On the rail, loading draws tile marks where the icons will go, as the
+    // open sidebar draws skeleton rows.
+    let rail: ReactNode = children;
+    if (isLoading) {
+      rail = showSkeleton ? (
+        <div className={styles.railLoading}>
+          <Skeleton shape="tile" />
+          <Skeleton shape="tile" />
+          <Skeleton shape="tile" />
+          <VisuallyHidden>{strings.loading}</VisuallyHidden>
+        </div>
+      ) : null;
+    }
     return (
-      <div role="group" aria-label={title} className={styles.rail}>
-        {!isLoading && children}
+      <div role="group" aria-label={title} className={styles.rail} aria-busy={isLoading || undefined}>
+        {rail}
       </div>
     );
   }

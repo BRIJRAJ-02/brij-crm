@@ -160,6 +160,9 @@ export const TopBarLoading: Story = {
     await expect(canvas.getByRole('banner')).toHaveAttribute('aria-busy', 'true');
     // The skeleton shows after the loading delay; the bar is its full height before and after.
     await waitFor(() => expect(canvas.getByRole('banner').querySelector('[aria-hidden="true"]')).not.toBeNull());
-    await expect(canvas.getByRole('banner').getBoundingClientRect().height).toBe(46);
+    const banner = canvas.getByRole('banner');
+    const bar = Number.parseFloat(getComputedStyle(banner).getPropertyValue('--size-bar'));
+    await expect(bar).toBeGreaterThan(0);
+    await expect(banner.getBoundingClientRect().height).toBe(bar);
   },
 };

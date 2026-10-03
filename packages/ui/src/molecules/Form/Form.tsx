@@ -31,7 +31,8 @@ interface FormBase<R extends FormRefusal> {
   /**
    * The last answer's refusals. Each one `fieldFor` maps to a field in the
    * form shows on that field until its value changes (as it is typed, or
-   * when the screen fills it); the rest (about no
+   * when the screen fills it), and stays gone for that answer even if the
+   * value changes back; the rest (about no
    * field, or about a name no field in the form has) show above the fields.
    * They are hidden while busy, and each submit is a new answer, so the same
    * refusal again shows again.
@@ -77,6 +78,9 @@ export type FormProps<R extends FormRefusal = FormRefusal> = FormBase<R> & (OwnS
 /** Refusal messages by field name, in the shape React Aria's Form reads. */
 type FieldRefusals = Readonly<Record<string, string[]>>;
 
+/** No names: none dropped yet. One shared empty set, so a memo over it holds. */
+const NONE: ReadonlySet<string> = new Set();
+
 /**
  * Splits refusals into messages by field name, and the messages about no
  * field. A name no field in the form has goes to the banner too, so its
@@ -121,26 +125,29 @@ function valuesOf(form: HTMLFormElement): FormValues {
   );
 }
 
-/** The names whose value now differs from the value that was refused, sorted, as one key. */
-function changedSince(refused: FormValues, now: FormValues): string {
-  return Object.keys(refused)
-    .filter((name) => now[name] !== refused[name])
-    .sort()
-    .join('\n');
+/** The refused names whose value now differs from the value that was refused. */
+function changedSince(refused: FormValues, now: FormValues, names: Iterable<string>): readonly string[] {
+  return [...names].filter((name) => now[name] !== refused[name]);
 }
 
-/** The refusals left once the changed fields' are dropped; the same object when nothing changed. */
-function withoutChanged(errors: FieldRefusals, changed: string): FieldRefusals {
-  if (changed === '') return errors;
-  const dropped = new Set(changed.split('\n'));
+/** The refusals left once the dropped fields' are taken out; the same object when none are. */
+function withoutDropped(errors: FieldRefusals, dropped: ReadonlySet<string>): FieldRefusals {
+  if (![...dropped].some((name) => name in errors)) return errors;
   return Object.fromEntries(Object.entries(errors).filter(([name]) => !dropped.has(name)));
+}
+
+/** Whether an edited element is one of the form's fields: inside it, or outside it and naming it with `form`. */
+function isFieldOf(form: HTMLFormElement, target: EventTarget | null): boolean {
+  if (!(target instanceof Node)) return false;
+  return form.contains(target) || ('form' in target && target.form === form);
 }
 
 /**
  * A form that maps the server's refusals to its fields. Built on React Aria's
  * Form: Enter in a field submits, a refusal `fieldFor` maps shows on the Field
  * with that `name` (and clears as soon as its value changes, on input, so the
- * form never shifts under a press of its submit), and any other,
+ * form never shifts under a press of its submit, and stays cleared for that
+ * answer), and any other,
  * including one mapped to a name no field has, shows above the fields as a
  * danger Callout, which is announced. When field refusals arrive, focus moves
  * to the first refused field; if it is there already, the refusal is
@@ -187,37 +194,55 @@ export function Form<R extends FormRefusal = FormRefusal>({
   // differs from it (typed, or filled in by the screen), its refusal goes, at
   // once rather than on blur: a refusal leaving on blur shifted the form
   // under the pointer, so a press of the submit that blurred the field missed.
+  // A dropped refusal stays dropped for that answer, so editing back to the
+  // refused value doesn't bring it back; only the next answer can.
   const submitted = useRef<FormValues | undefined>(undefined);
   const [refused, setRefused] = useState<{ readonly key: string; readonly values: FormValues } | undefined>(undefined);
-  const [current, setCurrent] = useState<FormValues>({});
-  const readCurrent = () => {
-    const form = formRef.current;
-    if (form === null) return;
-    const now = valuesOf(form);
-    setCurrent((known) => (JSON.stringify(known) === JSON.stringify(now) ? known : now));
-  };
+  const [dropped, setDropped] = useState<{ readonly key: string; readonly names: ReadonlySet<string> }>({
+    key: kept.key,
+    names: new Set(),
+  });
+  const droppedNow = dropped.key === kept.key ? dropped.names : NONE;
   useLayoutEffect(() => {
     const form = formRef.current;
     if (form === null || refused?.key === kept.key) return;
     // The values these refusals are about: the ones sent, or (refusals given
     // without a submit) the ones on show now.
-    const values = submitted.current ?? valuesOf(form);
-    setRefused({ key: kept.key, values });
-    setCurrent(values);
+    setRefused({ key: kept.key, values: submitted.current ?? valuesOf(form) });
   }, [kept.key, refused?.key]);
-  // Every keystroke (the input event, which bubbles to the form) and every
-  // committed change; a screen that fills a field itself (one name following
-  // another) re-renders the form, which reads the values again.
-  useLayoutEffect(readCurrent);
+  // Values are read only while a field still shows a refusal of this answer:
+  // a form with nothing to drop does no work per keystroke or render.
+  const isWatching = Object.keys(kept.errors).some((name) => !droppedNow.has(name));
+  // Reads the fields and drops the refusal of each that changed. In a ref, so
+  // the listeners below, added once per watch, always read this render's answer.
+  const readCurrent = useRef(() => {});
+  useLayoutEffect(() => {
+    readCurrent.current = () => {
+      const form = formRef.current;
+      if (form === null || refused?.key !== kept.key) return;
+      const changed = changedSince(refused.values, valuesOf(form), Object.keys(kept.errors));
+      if (changed.every((name) => droppedNow.has(name))) return;
+      setDropped({ key: kept.key, names: new Set([...droppedNow, ...changed]) });
+    };
+  });
+  // A screen that fills a field itself (one name following another)
+  // re-renders the form, which reads the values again.
+  useLayoutEffect(() => {
+    if (isWatching) readCurrent.current();
+  });
+  // Every keystroke (the input event) and every committed change. On the
+  // document, so React has handled the event first: a re-render flushed
+  // before React reads a controlled field's new value (a listener on the form
+  // runs earlier) would put the old value back. React's own onInput on the
+  // form would avoid that too, but it reaches only fields inside the form's
+  // React tree, never one outside it that names the form with `form`, which
+  // FormData does send.
   useEffect(() => {
     const form = formRef.current;
-    if (form === null) return;
-    // On the document, so React has handled the event first: a re-render
-    // flushed before React reads a controlled field's new value (a listener
-    // on the form runs earlier) would put the old value back.
+    if (form === null || !isWatching) return;
     const doc = form.ownerDocument;
     const onEdit = (event: Event) => {
-      if (event.target instanceof Node && form.contains(event.target)) readCurrent();
+      if (isFieldOf(form, event.target)) readCurrent.current();
     };
     doc.addEventListener('input', onEdit);
     doc.addEventListener('change', onEdit);
@@ -225,9 +250,8 @@ export function Form<R extends FormRefusal = FormRefusal>({
       doc.removeEventListener('input', onEdit);
       doc.removeEventListener('change', onEdit);
     };
-  });
-  const changed = refused?.key === kept.key ? changedSince(refused.values, current) : '';
-  const errors = useMemo(() => withoutChanged(kept.errors, changed), [kept.errors, changed]);
+  }, [isWatching]);
+  const errors = useMemo(() => withoutDropped(kept.errors, droppedNow), [kept.errors, droppedNow]);
 
   // A new answer (another submit, or a refusal on a field that had none)
   // moves focus or speaks; a refusal leaving, or the screen dropping one,

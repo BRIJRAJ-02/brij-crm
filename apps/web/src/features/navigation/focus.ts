@@ -12,6 +12,20 @@ const FIRST_FIELD: Readonly<Record<string, string>> = {
   '/verify': 'main input[autocomplete="one-time-code"]',
 };
 
+/**
+ * On the first load: the one field page's field, so the phone's keyboard and
+ * code suggestion come up as they do after a route change. Anywhere else,
+ * nothing: the browser starts at the top of the page, which is where focus on
+ * the title would put a screen reader anyway. Never takes focus the person
+ * already moved.
+ */
+export function focusFirstLoad(doc: Document, pathname: string): void {
+  const field = FIRST_FIELD[pathname];
+  if (field === undefined) return;
+  if (doc.activeElement !== null && doc.activeElement !== doc.body) return;
+  doc.querySelector<HTMLElement>(field)?.focus();
+}
+
 /** Moves focus to the page's one field on a one field page, else to its title, if the page has one. */
 export function focusPage(doc: Document, pathname: string): void {
   const field = FIRST_FIELD[pathname];

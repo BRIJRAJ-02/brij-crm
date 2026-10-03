@@ -13,7 +13,7 @@ const Refusal = z.object({ code: z.string().optional(), message: z.string().opti
 
 /** Plain sentences for Better Auth's own codes the sign in screens show. */
 const MESSAGES: Readonly<Record<string, string>> = {
-  INVALID_OTP: "That code isn't right. Check it, or send a new one.",
+  INVALID_OTP: 'That code isn’t right. Try again, or send a new one.',
   OTP_EXPIRED: 'That code has expired. Send a new one.',
   TOO_MANY_ATTEMPTS: 'Too many wrong tries for this code. Send a new one.',
 };

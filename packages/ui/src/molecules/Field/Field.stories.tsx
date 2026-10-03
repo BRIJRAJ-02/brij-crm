@@ -57,6 +57,29 @@ export const States: Story = {
   },
 };
 
+/**
+ * An error takes the hint's place: one line under the field, read as its
+ * description. A read only or disabled reason would still show.
+ */
+export const ErrorReplacesHint: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="narrow">
+      <Field
+        label="Domain"
+        defaultValue="northwind .com"
+        hint="Without https:// or a path."
+        error="Enter a domain like halcyonlabs.io, without spaces."
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const input = canvas.getByRole('textbox', { name: 'Domain' });
+    await expect(input).toHaveAccessibleDescription('Enter a domain like halcyonlabs.io, without spaces.');
+    await expect(canvas.queryByText('Without https:// or a path.')).toBeNull();
+  },
+};
+
 function Counted() {
   const [value, setValue] = useState('Met at SaaStr. Interested in the API.');
   return (

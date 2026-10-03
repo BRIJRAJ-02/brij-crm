@@ -119,6 +119,8 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await expect(page).toHaveURL(/\/sign-in$/);
   await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeVisible();
   await expect(page).toHaveTitle('Sign in · CRM');
+  // A one field page puts focus in its field on the first load too.
+  await expect(page.getByLabel('Email')).toBeFocused();
   await checkScreen(page, '1-sign-in');
 
   // A code goes out, and /verify asks for it, with focus in the code boxes.
@@ -136,7 +138,7 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   const code = await codeFor(page.request, email);
   const wrong = code === '000000' ? '111111' : '000000';
   await page.getByLabel('Code').fill(wrong);
-  await expect(page.getByText('That code isn’t right. Check it.').first()).toBeVisible();
+  await expect(page.getByText('That code isn’t right. Try again.').first()).toBeVisible();
   await checkScreen(page, '3-verify-wrong-code');
 
   // The right code signs in; with no workspace yet, /welcome.
@@ -242,6 +244,8 @@ test('drops each refusal as its field changes, so one press sends the fixed welc
   await address.press('End');
   await address.pressSequentially('-two');
   await expect(address).not.toHaveAttribute('aria-invalid');
+  // The hint comes back in the refusal's place.
+  await expect(page.getByText(`Opens at /w/${taken}-two`)).toBeVisible();
   await page.getByRole('button', { name: 'Create workspace' }).click();
   await expect(page).toHaveURL(new RegExp(`/w/${taken}-two/objects/people$`));
 });
@@ -257,6 +261,8 @@ test('a refused resend says why under its button and waits as long as the server
     sessionStorage.setItem('crm.signIn.pending', JSON.stringify({ ...JSON.parse(raw), sentAt: Date.now() - 120_000 }));
   });
   await page.reload();
+  // The first load of /verify puts focus in the code boxes.
+  await expect(page.getByLabel('Code')).toBeFocused();
   await page.route('**/api/auth/email-otp/send-verification-otp', (route) =>
     route.fulfill({
       status: 429,
@@ -269,7 +275,8 @@ test('a refused resend says why under its button and waits as long as the server
   );
   const resend = page.getByRole('button', { name: 'Send a new code' });
   await resend.click();
-  await expect(page.getByRole('alert')).toHaveText('Too many codes sent to this email. Try again in 10 minutes.');
+  // The Callout says what happened; the wait line under the button carries the time.
+  await expect(page.getByRole('alert')).toHaveText('Too many codes sent to this email.');
   await expect(page.getByText('You can send another in 10 minutes.')).toBeVisible();
   await expect(resend).toBeDisabled();
   await expect(page.getByRole('textbox', { name: 'Code' })).not.toHaveAttribute('aria-invalid');
@@ -298,6 +305,56 @@ test('a workspace that fails to load says so, with no Records section, and Try a
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'People' })).toBeVisible();
   await expect(nav.getByRole('link', { name: 'People' })).toBeVisible();
+
+  // Failing before the person is known: the product names the page, and the failure is said once.
+  await page.route('**/api/rpc/me/get', (route) => route.abort('connectionrefused'));
+  await page.reload();
+  await expect(page.getByRole('alert')).toContainText('Couldn’t load this workspace');
+  await expect(page.getByRole('heading', { level: 1, name: 'CRM' })).toBeVisible();
+  await expect(page.getByText('Couldn’t load this workspace')).toHaveCount(1);
+  await expect(page).toHaveTitle('CRM');
+  await checkScreen(page, '8b-workspace-failed-signed-in-unknown');
+  await page.unroute('**/api/rpc/me/get');
+});
+
+test('a refused Google sign in says so above the form, keeps the deep link, and says it once', async ({ page }) => {
+  await page.goto('/sign-in?redirect=%2Fw%2Facme%2Fobjects%2Fpeople&error=access_denied');
+  const notice = page.getByRole('alert');
+  await expect(notice).toHaveText('Google sign in was cancelled. Try again, or use your email.');
+  // About the sign in, not the address: the email field stays valid, and has focus.
+  const email = page.getByLabel('Email');
+  await expect(email).not.toHaveAttribute('aria-invalid');
+  await expect(email).toBeFocused();
+  // The address drops ?error= and keeps ?redirect=, so a reload doesn't say it again.
+  await expect(page).toHaveURL(/\/sign-in\?redirect=%2Fw%2Facme%2Fobjects%2Fpeople$/);
+  await checkScreen(page, '1b-sign-in-google-refused');
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('a spent code moves focus to why while the wait runs', async ({ page }) => {
+  const tag = randomUUID().slice(0, 8);
+  await page.goto('/sign-in');
+  await askForCode(page, `flow-spent-${tag}@example.com`);
+  await page.route('**/api/auth/sign-in/email-otp', (route) =>
+    route.fulfill({
+      status: 403,
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        code: 'TOO_MANY_ATTEMPTS',
+        message: 'Too many wrong tries for this code. Send a new one.',
+      }),
+    }),
+  );
+  const code = page.getByRole('textbox', { name: 'Code', exact: true });
+  await code.pressSequentially('123456');
+  await expect(code).toBeDisabled();
+  // The message under the boxes (focusable from script only), not the status line that announced it.
+  const why = page.locator('main [tabindex="-1"]', { hasText: 'Too many wrong tries for this code. Send a new one.' });
+  await expect(why).toBeFocused();
+  await expect(page.getByRole('button', { name: 'Send a new code' })).toBeDisabled();
+  await checkScreen(page, '3c-verify-code-spent');
 });
 
 test('a second person signing in in the same tab never sees the first one’s workspace', async ({ page }) => {
@@ -344,6 +401,8 @@ test('keeps the status screen at /status, open to anyone, and says plainly when 
 }) => {
   await page.goto('/status');
   await expect(page.getByRole('heading', { level: 1, name: 'CRM' })).toBeVisible();
+  // A first load elsewhere leaves focus where the browser starts, not on the title.
+  await expect(page.getByRole('heading', { level: 1, name: 'CRM' })).not.toBeFocused();
   await expect(page.getByText('Healthy')).toBeVisible();
   await checkScreen(page, '9-status');
   await page.goto('/nowhere');

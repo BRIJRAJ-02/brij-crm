@@ -18,6 +18,12 @@ export interface CodeInputProps {
   readonly isDisabled?: boolean;
   /** The one real input under the boxes, for moving focus to it (after a new code is sent). */
   readonly ref?: Ref<HTMLInputElement>;
+  /**
+   * The error's sentence, made focusable from code only (`tabIndex={-1}`), so
+   * a screen can move focus to it when the boxes turn off with it (a spent
+   * code) and focus would otherwise be lost.
+   */
+  readonly errorRef?: Ref<HTMLSpanElement>;
 }
 
 /**
@@ -34,6 +40,7 @@ export function CodeInput({
   error,
   isDisabled = false,
   ref,
+  errorRef,
 }: CodeInputProps) {
   const boxes = Array.from({ length }, (_, index) => value[index] ?? '');
   return (
@@ -68,7 +75,13 @@ export function CodeInput({
       </span>
       <FieldError className={styles.error}>
         <Icon name="circle-alert" size="xs" />
-        {error}
+        {errorRef === undefined ? (
+          error
+        ) : (
+          <span ref={errorRef} className={styles.message} tabIndex={-1}>
+            {error}
+          </span>
+        )}
       </FieldError>
     </TextField>
   );

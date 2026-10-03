@@ -2,7 +2,8 @@
    and a raised thumb with a keycap edge that slides to the chosen one over
    duration-move (at once for the keyboard and under reduced motion).
    Vertical, the segments stack and keep only space-4 at their sides, so icon
-   only ones fit the folded sidebar's rail. */
+   only ones fit the folded sidebar's rail, and each is a full size-control
+   square, so a stacked segment is still a 24 px or larger touch target. */
 @layer components {
   .root {
     position: relative;
@@ -44,6 +45,8 @@
   }
 
   .root[data-orientation='vertical'] .segment {
+    block-size: var(--size-control);
+    min-inline-size: var(--size-control);
     padding-inline: var(--space-4);
   }
 

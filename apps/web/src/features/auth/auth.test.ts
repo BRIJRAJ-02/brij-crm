@@ -3,7 +3,7 @@
 // storage, and the resend countdown.
 import { dataError } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { googleRefusal, sendRefusal, verifyRefusal } from './messages.ts';
+import { googleRefusal, resendRefusal, sendRefusal, verifyRefusal } from './messages.ts';
 import { clearPending, readLastEmail, readPending, saveLastEmail, savePending } from './pending.ts';
 import { redirectSearch, safeRedirect, signInHref } from './redirect.ts';
 import { strings } from './strings.ts';
@@ -149,6 +149,14 @@ describe('what a refused step says', () => {
     expect(sendRefusal(dataError('API_UNAVAILABLE', 'Can’t reach the CRM.'))).toBe('Can’t reach the CRM.');
   });
 
+  it('leaves the wait out of a rate limited resend, since the wait line counts it', () => {
+    expect(resendRefusal(dataError('RATE_LIMITED', 'Too many codes.', undefined, 600))).toBe(
+      'Too many codes sent to this email.',
+    );
+    expect(resendRefusal(dataError('RATE_LIMITED', 'Too many codes.'))).toBe('Too many codes.');
+    expect(resendRefusal(dataError('API_UNAVAILABLE', 'Can’t reach the CRM.'))).toBe('Can’t reach the CRM.');
+  });
+
   it('says plainly that sign up is closed', () => {
     expect(sendRefusal(dataError('SIGNUP_CLOSED', "Sign up isn't open yet."))).toBe(
       'There’s no account for this email, and sign up isn’t open yet. Check the address.',
@@ -170,7 +178,7 @@ describe('what a refused step says', () => {
 
   it('doesn’t offer a new code for a wrong one while none can be sent', () => {
     expect(verifyRefusal(dataError('INVALID_OTP', 'Wrong. Check it, or send a new one.'), true).message).toBe(
-      'That code isn’t right. Check it.',
+      'That code isn’t right. Try again.',
     );
   });
 

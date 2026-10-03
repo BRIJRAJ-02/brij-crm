@@ -53,6 +53,21 @@ export const Refused: Story = {
   },
 };
 
+/**
+ * A refused Google sign in: the notice shows above the field as a danger
+ * Callout and is announced. It is about the sign in, not the address, so the
+ * email field stays valid.
+ */
+export const GoogleRefused: Story = {
+  args: { notice: 'Google sign in was cancelled. Try again, or use your email.' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('alert')).toHaveTextContent('Google sign in was cancelled.');
+    const email = canvas.getByRole('textbox', { name: 'Email' });
+    await expect(email).not.toHaveAttribute('aria-invalid');
+    await expect(email).not.toHaveAccessibleDescription(/cancelled/);
+  },
+};
+
 /** Changing the address clears the refusal. */
 export const RefusalClears: Story = {
   ...Refused,

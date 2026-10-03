@@ -22,6 +22,7 @@ New (spec 0005, pulled forward from spec 0003's milestone 4). Sign in (#10) is b
 
 - `onContinue(email)` gets the trimmed address. Before calling it, the form checks only that something like an address was typed ("Enter your email address.", "Enter an email address like name@company.com."); the server decides the rest.
 - `error` is the server's refusal, as a sentence that says what to do. It shows on the email field until the address changes, and comes back with the next answer. It is hidden while `status` is `sending`.
+- `notice` is a refusal about the sign in as a whole, not the address: a refused Google sign in. It shows above the field as a danger Callout (Form's banner), announced, and never marks the email field invalid. Why apart from `error`: a cancelled Google sign in said on the email field read as if the address were wrong. The screen clears it when the next attempt starts.
 - `onGoogle` shows "Continue with Google" (text only: the icon set has no brand marks) under Continue and as wide, a `Button` with `isFullWidth="center"` like Form's submit. Leave it out when Google isn't set up.
 - `status`: `sending` spins Continue as "Sending code" and turns Google off; `google` spins the Google button as "Opening Google" and turns Continue off.
 - `isDisabled` turns the field and both buttons off; `disabledReason` says why, under the field, and describes both buttons (their `aria-describedby`), so a screen reader hears why each is off.
@@ -30,7 +31,7 @@ New (spec 0005, pulled forward from spec 0003's milestone 4). Sign in (#10) is b
 
 ## States
 
-Idle, sending, refused (the reason on the field), checked (nothing or no address typed), opening Google, without Google, sign up closed, disabled.
+Idle, sending, refused (the reason on the field), Google refused (the notice above the field), checked (nothing or no address typed), opening Google, without Google, sign up closed, disabled.
 
 ## Keyboard
 

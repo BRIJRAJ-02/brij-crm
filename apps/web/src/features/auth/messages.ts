@@ -9,7 +9,7 @@ import { strings } from './strings.ts';
 /** A refusal's sentence: the DataError's message, or the thrown value as text. */
 const messageOf = (error: unknown): string => (isDataError(error) ? error.message : String(error));
 
-/** Why sending a code was refused (Continue on `/sign-in`, Send a new code on `/verify`). */
+/** Why sending a code was refused (Continue on `/sign-in`, and Google failing to start). */
 export function sendRefusal(error: unknown): string {
   if (!isDataError(error)) return messageOf(error);
   if (error.code === 'SIGNUP_CLOSED') return strings.signUpClosed;
@@ -17,6 +17,18 @@ export function sendRefusal(error: unknown): string {
     return strings.sendLimited(error.retryAfterSeconds);
   }
   return error.message;
+}
+
+/**
+ * Why "Send a new code" was refused on `/verify`. A rate limit says only what
+ * happened: the wait line under the button counts the server's wait down, so
+ * the time isn't said twice (and the Callout's copy never goes stale).
+ */
+export function resendRefusal(error: unknown): string {
+  if (isDataError(error) && error.code === 'RATE_LIMITED' && error.retryAfterSeconds !== undefined) {
+    return strings.resendLimited;
+  }
+  return sendRefusal(error);
 }
 
 /** Codes after which the code can't be used again: a new one has to be sent. */

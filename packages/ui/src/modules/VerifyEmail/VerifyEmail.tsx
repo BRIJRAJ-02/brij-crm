@@ -21,8 +21,9 @@ export interface VerifyEmailProps {
   readonly error?: string;
   /**
    * The code can't be used any more (tried too often, or expired): the boxes
-   * are off until a new code is sent, and focus moves to "Send a new code"
-   * when it is ready. `error` says why.
+   * are off until a new code is sent. While the resend wait runs, focus moves
+   * to `error`, which says why; when "Send a new code" is ready, focus moves
+   * there.
    */
   readonly isCodeSpent?: boolean;
   /** Sends a new code. */
@@ -100,6 +101,8 @@ export function VerifyEmail({
   const { locale } = useFormatSettings();
   const codeRef = useRef<HTMLInputElement>(null);
   const resendRef = useRef<HTMLButtonElement>(null);
+  const anotherRef = useRef<HTMLButtonElement>(null);
+  const spentRef = useRef<HTMLSpanElement>(null);
   const reasonId = useId();
   const waitId = useId();
   const [code, setCode] = useState('');
@@ -141,13 +144,21 @@ export function VerifyEmail({
     if (!isDisabled) codeRef.current?.focus();
   }, [resends, isDisabled]);
 
-  // A spent code: once "Send a new code" is ready, focus goes there, the next thing to do.
+  // A spent code turns the boxes off, and focus would be lost with them.
+  // While the wait runs, it goes to the message that says why (or, without
+  // one, "Use another email"); once "Send a new code" is ready, there, the
+  // next thing to do.
   const isResendReady = !isDisabled && !isResending && resendWait <= 0;
   useEffect(() => {
-    if (!isCodeSpent || !isResendReady) return;
-    // Only when focus was in the boxes (now off) or lost with them, never taken from elsewhere.
+    if (!isCodeSpent) return;
+    // Only when focus was in the boxes (now off), lost with them, or on the
+    // message this put it on; never taken from elsewhere.
     const active = document.activeElement;
-    if (active === null || active === document.body || active === codeRef.current) resendRef.current?.focus();
+    const isOurs =
+      active === null || active === document.body || active === codeRef.current || active === spentRef.current;
+    if (!isOurs) return;
+    if (isResendReady) resendRef.current?.focus();
+    else if (active !== spentRef.current) (spentRef.current ?? anotherRef.current)?.focus();
   }, [isCodeSpent, isResendReady]);
 
   const shown = isErrorShown && !isVerifying ? error : undefined;
@@ -181,6 +192,7 @@ export function VerifyEmail({
           if (!isVerifying) onVerify(complete);
         }}
         {...(shown === undefined ? {} : { error: shown })}
+        {...(isCodeSpent ? { errorRef: spentRef } : {})}
       />
       {hasReason && (
         <p id={reasonId} className={styles.reason}>
@@ -208,6 +220,7 @@ export function VerifyEmail({
             {isResending ? strings.resending : strings.resend}
           </Button>
           <Button
+            ref={anotherRef}
             variant="ghost"
             onPress={onUseAnotherEmail}
             isDisabled={isDisabled}

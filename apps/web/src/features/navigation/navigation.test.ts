@@ -2,14 +2,20 @@
 // against a stand in document: which element takes focus, and what the tab
 // is called.
 import { describe, expect, it } from 'vitest';
-import { focusPage } from './focus.ts';
+import { focusFirstLoad, focusPage } from './focus.ts';
 import { documentTitle, followPageTitle } from './title.ts';
 
-/** A stand in document: the elements each selector finds, which record a focus, and a title. */
-function fakeDocument(found: Readonly<Record<string, { textContent?: string }>>) {
+/** A stand in document: the elements each selector finds, which record a focus, a title, and what has focus. */
+function fakeDocument(
+  found: Readonly<Record<string, { textContent?: string }>>,
+  active: 'body' | 'elsewhere' = 'body',
+) {
   const focused: string[] = [];
+  const body = {};
   const doc = {
     title: 'CRM',
+    body,
+    activeElement: active === 'body' ? body : {},
     querySelector: (selector: string) => {
       const element = found[selector];
       if (element === undefined) return null;
@@ -50,6 +56,35 @@ describe('focusPage', () => {
   });
 });
 
+describe('focusFirstLoad', () => {
+  const page = {
+    'main h1': { textContent: 'Sign in' },
+    'main input[name="email"]': {},
+    'main input[autocomplete="one-time-code"]': {},
+  };
+
+  it('puts focus in the one field on /sign-in and /verify, as after a route change', () => {
+    const signIn = fakeDocument(page);
+    focusFirstLoad(signIn.asDocument, '/sign-in');
+    expect(signIn.focused).toEqual(['main input[name="email"]']);
+    const verify = fakeDocument(page);
+    focusFirstLoad(verify.asDocument, '/verify');
+    expect(verify.focused).toEqual(['main input[autocomplete="one-time-code"]']);
+  });
+
+  it('leaves focus alone everywhere else, never moving it to the title', () => {
+    const welcome = fakeDocument(page);
+    focusFirstLoad(welcome.asDocument, '/welcome');
+    expect(welcome.focused).toEqual([]);
+  });
+
+  it('never takes focus the person already moved', () => {
+    const moved = fakeDocument(page, 'elsewhere');
+    focusFirstLoad(moved.asDocument, '/sign-in');
+    expect(moved.focused).toEqual([]);
+  });
+});
+
 describe('the document title', () => {
   it('is the page title, then the product', () => {
     expect(documentTitle('People')).toBe('People · CRM');
@@ -59,6 +94,10 @@ describe('the document title', () => {
   it('is the product alone while the page has no title', () => {
     expect(documentTitle(undefined)).toBe('CRM');
     expect(documentTitle('   ')).toBe('CRM');
+  });
+
+  it('says the product once when the page is named after it (a failed load before the workspace is known)', () => {
+    expect(documentTitle('CRM')).toBe('CRM');
   });
 
   it('follows the h1 from the first load, at most once a frame', () => {

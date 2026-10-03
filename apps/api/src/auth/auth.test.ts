@@ -101,7 +101,7 @@ describe('signing in by email code', () => {
     expect(refused.status).toBe(400);
     expect(await refused.json()).toEqual({
       code: 'INVALID_OTP',
-      message: "That code isn't right. Check it, or send a new one.",
+      message: 'That code isn’t right. Try again, or send a new one.',
     });
     expect(refused.headers.getSetCookie().some((value) => value.includes('session_token='))).toBe(false);
     expect(await userCount(email)).toBe(0);

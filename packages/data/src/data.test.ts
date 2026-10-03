@@ -352,10 +352,30 @@ describe('auth', () => {
     ]);
   });
 
+  it('sends Google back to the deep link, and a refused Google sign in to /sign-in that still holds it', async () => {
+    const sent: { readonly path: string; readonly callbackURL: unknown; readonly errorCallbackURL: unknown }[] = [];
+    const api = fakeApi({}, (path, body) => {
+      const { callbackURL, errorCallbackURL } = (body ?? {}) as Record<string, unknown>;
+      sent.push({ path, callbackURL, errorCallbackURL });
+      return json({ url: 'https://accounts.google.com/o/oauth2/auth', redirect: false });
+    });
+    const { data } = layer(api);
+    await data.auth.signInWithGoogle('/w/acme/objects/people');
+    await data.auth.signInWithGoogle('/');
+    expect(sent).toEqual([
+      {
+        path: '/sign-in/social',
+        callbackURL: `${ORIGIN}/w/acme/objects/people`,
+        errorCallbackURL: `${ORIGIN}/sign-in?redirect=%2Fw%2Facme%2Fobjects%2Fpeople`,
+      },
+      { path: '/sign-in/social', callbackURL: `${ORIGIN}/`, errorCallbackURL: `${ORIGIN}/sign-in` },
+    ]);
+  });
+
   it('rejects a closed sign up and a wrong code with their codes and messages', async () => {
     const api = fakeApi({}, (path) =>
       path === '/sign-in/email-otp'
-        ? json({ code: 'INVALID_OTP', message: "That code isn't right. Check it, or send a new one." }, 400)
+        ? json({ code: 'INVALID_OTP', message: 'That code isn’t right. Try again, or send a new one.' }, 400)
         : json({ code: 'SIGNUP_CLOSED', message: "Sign up isn't open yet." }, 403),
     );
     const { data, signedOut } = layer(api);
@@ -365,7 +385,7 @@ describe('auth', () => {
     });
     expect(await failure(data.auth.verify('ada@example.com', '123456'))).toMatchObject({
       code: 'INVALID_OTP',
-      message: "That code isn't right. Check it, or send a new one.",
+      message: 'That code isn’t right. Try again, or send a new one.',
     });
     expect(signedOut).toEqual([]);
   });
