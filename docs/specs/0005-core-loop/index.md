@@ -148,7 +148,8 @@ Ids only, never values: a browser refetches the records through `records.get`, s
 - The browser holds one copy per record; screens never fetch.
 
 **Security model**:
-- Better Auth's tables and the directory live in schema `auth`, outside row level security, reachable only through `packages/db`'s identity store (lint keeps the pool there). `crm_app` gets select, insert, update and delete on schema `auth`; no tenant table lives there (a guard test checks).
+- Better Auth's tables and the directory live in schema `auth`, outside row level security, reachable only through `packages/db`'s identity store (lint keeps the pool there). The identity store connects as its own login, `crm_identity` (a second `IDENTITY_DATABASE_URL`), which alone can read and write `auth`. `crm_app`, which runs every tenant query, keeps only `insert` on the two directory tables (written inside the workspace transaction), so a mistake in tenant code can never read sessions or accounts. No tenant table lives in `auth` (a guard test checks).
+- Google tokens are stored encrypted (`account.encryptOAuthTokens: true`).
 - Workspace data stays behind forced row level security and the door. Non member and unknown workspace answer the same `NOT_FOUND`.
 - The relay learns which workspaces have unpublished rows through one security definer function that returns workspace ids only, owned by a narrow role (see [0005-change-events.md](0005-change-events.md)); it reads and marks the rows themselves inside `withWorkspace`, under row level security. The guard tests list the function by name beside `crm_search_text`.
 - The edge secret makes the forwarded IP trustworthy; without it, rate limits would be bypassable by calling Railway directly.
@@ -158,6 +159,7 @@ Ids only, never values: a browser refetches the records through `records.get`, s
 
 **Configuration required**:
 - `BETTER_AUTH_SECRET` (api): signs sessions; generated per environment.
+- `IDENTITY_DATABASE_URL` (api): the `crm_identity` login, created by the same setup script as the app login, pooled like `DATABASE_URL`.
 - `BETTER_AUTH_URL` (api): the public origin (`APP_URL`), never the Railway host.
 - `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` (api, optional): Google sign in; the button hides without them. The OAuth client is the owner's to create.
 - `RESEND_API_KEY`, `MAIL_FROM` (api, production and previews): code emails. `MAIL_FROM=onboarding@resend.dev` until a domain is verified; until then Resend only delivers to the account owner's address.
