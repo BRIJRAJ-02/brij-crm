@@ -4,7 +4,7 @@
 // audit hook; a hook that throws rolls the whole write back.
 import type { WorkspaceTx } from '@crm/db';
 import type { EngineRefusal } from '@crm/contracts/values';
-import { isRefusal, postgresError } from './refusals.ts';
+import { isRefusal, postgresError, refuse } from './refusals.ts';
 import type { Actor, EngineScope } from './scope.ts';
 
 /** A record a write touched, with its object: the outbox groups a change by object. */
@@ -209,10 +209,16 @@ export function append<T>(target: T[], items: readonly T[] | undefined): void {
 const RETRYABLE = new Set(['40P01', '40001']);
 const ATTEMPTS = 3;
 
+/** What a write says when every attempt met a concurrent write. */
+const BUSY_MESSAGE = 'Other changes landed on this at the same moment. Try again.';
+
 /**
  * Runs `work` as one transaction in the scope's workspace, then the hooks.
- * Retries the whole transaction up to 3 times on a deadlock or a
- * serialisation failure. A refusal or any other error rolls it all back.
+ * Tries the whole transaction up to 3 times on a deadlock or a serialisation
+ * failure (`writeConflict` included); when the last attempt meets one too, it
+ * refuses `QUERY_CANCELLED` (503, retry after a moment), so the API answers
+ * with a message rather than an internal error. A refusal or any other error
+ * rolls it all back.
  */
 export async function runWrite<T>(
   scope: EngineScope,
@@ -296,8 +302,10 @@ export async function runWrite<T>(
       });
     } catch (error) {
       const code = postgresError(error)?.code;
-      if (attempt < ATTEMPTS && code !== undefined && RETRYABLE.has(code)) continue;
-      throw error;
+      if (code === undefined || !RETRYABLE.has(code)) throw error;
+      if (attempt < ATTEMPTS) continue;
+      // Every attempt met a concurrent write: a refusal the caller can show and retry, never an internal error.
+      throw Object.assign(refuse('QUERY_CANCELLED', BUSY_MESSAGE), { cause: error });
     }
   }
 }

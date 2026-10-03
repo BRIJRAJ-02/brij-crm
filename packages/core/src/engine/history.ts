@@ -96,20 +96,24 @@ export async function getHistory(
 }
 
 /**
- * A moment a caller gave, as the UTC text a `timestamptz` cast always takes
- * (`2026-10-01T09:30:00.000Z`), or `CONFIG_INVALID`. Only a full ISO instant
- * with its zone passes (`IsoInstant`): `Date.parse` alone lets through a bare
- * year, a time with no zone (read in the server's zone) and expanded years,
- * and the raw text would then reach the cast. Years outside 1 to 9999, which
- * Postgres or the text form can't hold, are refused too.
+ * A moment a caller gave, as text for a `timestamptz` cast, or
+ * `CONFIG_INVALID`. Only a full ISO instant with its zone passes
+ * (`IsoInstant`): `Date.parse` alone lets through a bare year, a time with no
+ * zone (read in the server's zone) and expanded years. The validated text
+ * itself goes to the cast, never a `Date`'s, which would drop everything past
+ * the millisecond: links and values are stamped to the microsecond, so a
+ * moment between two versions a few microseconds apart must still fall
+ * between them. The `Date` only checks the range: years outside 1 to 9999 in
+ * UTC, which Postgres or the text form can't hold, are refused too.
  */
 export function checkInstant(value: string, message: string): string {
   const instant = IsoInstant.safeParse(value);
-  const date = instant.success ? new Date(instant.data) : undefined;
-  if (date === undefined || Number.isNaN(date.getTime())) throw refuse('CONFIG_INVALID', message);
+  if (!instant.success) throw refuse('CONFIG_INVALID', message);
+  const date = new Date(instant.data);
+  if (Number.isNaN(date.getTime())) throw refuse('CONFIG_INVALID', message);
   const year = date.getUTCFullYear();
   if (year < 1 || year > 9999) throw refuse('CONFIG_INVALID', message);
-  return date.toISOString();
+  return instant.data;
 }
 
 /** A record's values as they stood at `at` (an ISO timestamp with its zone), by attribute id. Empty before the record existed. */

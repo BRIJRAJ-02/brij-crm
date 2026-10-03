@@ -9,7 +9,7 @@ import { decodeValue } from './columns.ts';
 import { checkName, checkSlug, definitionGuard, audit, touched } from './definitions.ts';
 import { RESTORE_WINDOW, takeEntrySlots, takeList } from './limits.ts';
 import { bucketItems, initialValues, writeAll, type AttributeResult } from './records.ts';
-import { checkId, isUuid } from './ids.ts';
+import { canonicalId, checkId, isUuid } from './ids.ts';
 import { refuse } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
 import { setEntryKeysLive } from './sort-keys.ts';
@@ -315,7 +315,8 @@ async function readEntries(tx: WorkspaceTx, where: ReturnType<typeof and>): Prom
 /** Reads live entries by id inside an open transaction, in the order of `ids`. */
 export async function readEntriesById(tx: WorkspaceTx, ids: readonly string[]): Promise<readonly EntryView[]> {
   if (ids.length === 0) return [];
-  const order = new Map(ids.map((id, index) => [id, index]));
+  // Keyed by the canonical spelling, the one the entries come back with.
+  const order = new Map(ids.map((id, index) => [canonicalId(id), index]));
   const entries = await readEntries(tx, inArray(listEntries.id, [...ids]));
   return [...entries].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
 }
@@ -323,7 +324,7 @@ export async function readEntriesById(tx: WorkspaceTx, ids: readonly string[]): 
 /** Reads live entries by id, up to 500 at once. A malformed id names nothing, so it is left out like a missing one. */
 export async function getEntries(scope: EngineScope, input: { readonly ids: readonly string[] }) {
   if (input.ids.length > 500) throw refuse('CONFIG_INVALID', 'Read at most 500 entries at once.');
-  const ids = input.ids.filter(isUuid);
+  const ids = input.ids.filter(isUuid).map(canonicalId);
   if (ids.length === 0) return [];
   return scope.db.withWorkspace(scope.workspaceId, (tx) => readEntries(tx, inArray(listEntries.id, ids)));
 }

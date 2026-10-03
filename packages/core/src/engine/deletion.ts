@@ -329,7 +329,7 @@ export async function purgeDeleted(
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 10_000) {
     throw refuse('CONFIG_INVALID', 'Purge 1 to 10,000 rows at a time.');
   }
-  // Checked and rewritten as UTC text, so only a full instant with its zone reaches the cast.
+  // Checked first, so only a full instant with its zone reaches the cast.
   const given =
     input.cutoff === undefined
       ? undefined

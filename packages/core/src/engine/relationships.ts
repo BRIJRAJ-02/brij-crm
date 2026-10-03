@@ -376,9 +376,8 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
 
   // What this write ends on its own end: a single end's one link whatever the far record's state, and on a
   // multi end every link it shows. A multi end's links to records in the trash stay, so a restore brings
-  // them back: their far records are `kept`.
+  // them back.
   const ending = end.mySingle ? current : visible;
-  const kept = end.mySingle ? [] : current.flatMap((link) => (link.farDeleted ? [link.far] : []));
   let latest: string | undefined;
   for (const link of [ending, freed].flat()) {
     if (latest === undefined || link.activeFrom > latest) latest = link.activeFrom;
@@ -394,10 +393,12 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
 
   const ended = { activeUntil: at, endedByType: by.type, endedById: by.id, endedByMemberId: by.memberId };
   if (ending.length > 0) {
-    // One set based statement however many links the end holds (a company with 70,000 people): the far
-    // records to keep go as one array parameter, never one parameter per link, so neither drizzle's stack nor
-    // Postgres's 65,535 parameters bound it. Only links still current: a past version never changes. When
-    // the far end ended or added a link meanwhile, the count differs: start again so this write sees it.
+    // One set based statement however many links the end holds (a company with 70,000 people), naming the
+    // links this write read: their ids go as one array parameter, never one parameter per link, so neither
+    // drizzle's stack nor Postgres's 65,535 parameters bound it. Only those links, and only while current (a
+    // past version never changes): a link the far end added meanwhile was never read, so this write neither
+    // ends it nor reports its far record, and it stays. When the far end ended one of them meanwhile, the
+    // count falls short: start again, so this write sees it.
     const result = await tx
       .update(recordLinks)
       .set(ended)
@@ -406,7 +407,7 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
           eq(recordLinks.relationshipId, relationship.id),
           eq(end.mine, ownerId),
           isNull(recordLinks.activeUntil),
-          sql`${end.far} <> all(${uuidList(kept)})`,
+          sql`${recordLinks.id} = any(${uuidList(ending.map((link) => link.id))})`,
         ),
       );
     if (result.rowCount !== ending.length) throw writeConflict('A link changed under this write.');

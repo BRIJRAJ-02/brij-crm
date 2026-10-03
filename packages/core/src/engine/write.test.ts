@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Database, WorkspaceTx } from '@crm/db';
 import { newId } from './ids.ts';
+import { isRefusal, writeConflict } from './refusals.ts';
 import type { EngineScope } from './scope.ts';
 import { CHANGE_CAP, capChange, cappedHook, runWrite, type CappedChange, type ReferenceChange } from './write.ts';
 
@@ -67,5 +68,35 @@ describe('a huge change', () => {
     expect(seen?.references).toEqual([]);
     // The full change still reaches every other hook: the audit log names every record.
     expect(change.references).toHaveLength(HUGE);
+  });
+});
+
+describe('a write that keeps meeting concurrent writes', () => {
+  const scope: EngineScope = { db: standIn(), workspaceId: newId(), actor: { type: 'system', id: null } };
+
+  it('tries three times, then refuses with a code the API can show rather than a raw 40001', async () => {
+    let attempts = 0;
+    const error = await runWrite(scope, () => {
+      attempts += 1;
+      return Promise.reject(writeConflict('A link changed under this write.'));
+    }).catch((caught: unknown) => caught);
+    expect(attempts).toBe(3);
+    expect(isRefusal(error)).toBe(true);
+    expect(error).toMatchObject({
+      refusal: { code: 'QUERY_CANCELLED', message: 'Other changes landed on this at the same moment. Try again.' },
+    });
+  });
+
+  it('lands on a later attempt, and lets any other error through as it was', async () => {
+    let attempts = 0;
+    const { result } = await runWrite(scope, () => {
+      attempts += 1;
+      if (attempts === 1) return Promise.reject(Object.assign(new Error('deadlock detected'), { code: '40P01' }));
+      return Promise.resolve('landed');
+    });
+    expect(result).toBe('landed');
+    expect(attempts).toBe(2);
+    const other = new Error('Something else.');
+    await expect(runWrite(scope, () => Promise.reject(other))).rejects.toBe(other);
   });
 });

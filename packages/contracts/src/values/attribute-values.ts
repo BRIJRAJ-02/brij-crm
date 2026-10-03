@@ -66,8 +66,11 @@ export type Timestamp = z.infer<typeof Timestamp>;
 
 /**
  * A moment a caller asks about (values as of a time, a purge cutoff): a full
- * ISO 8601 date and time, seconds and fractions optional, with its zone (`Z`
- * or an offset). A bare year, a month or a time with no zone names no one
+ * ISO 8601 date and time to the second, any fraction of a second optional,
+ * with its zone (`Z` or an `+hh:mm` offset): `2026-10-01T09:30:00Z`,
+ * `2026-10-01T09:30:00.123456+02:00`. A time without seconds
+ * (`2026-10-01T09:30Z`) is refused, as Zod's ISO check takes it only when
+ * every time does. A bare year, a month or a time with no zone names no one
  * instant, so it is refused rather than read in some default zone.
  */
 export const IsoInstant = z.iso.datetime({

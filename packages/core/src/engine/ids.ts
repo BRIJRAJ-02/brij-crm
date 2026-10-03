@@ -53,10 +53,13 @@ export function checkId(value: string, message: string): string {
 /**
  * A map keyed by ids (values by attribute id) with every key canonical. Two
  * spellings of one id would be one key, so they are refused `CONFIG_INVALID`
- * rather than letting one of them win unseen.
+ * rather than letting one of them win unseen. The result has no prototype, so
+ * a key such as `__proto__` (which `JSON.parse` makes an own key) stays an
+ * ordinary key, refused later as no attribute, and never becomes the map's
+ * prototype, whose keys `in` would then find.
  */
 export function canonicalKeys<T>(map: Readonly<Record<string, T>>): Record<string, T> {
-  const result: Record<string, T> = {};
+  const result = Object.create(null) as Record<string, T>;
   for (const [key, value] of Object.entries(map)) {
     const canonical = canonicalId(key);
     if (Object.hasOwn(result, canonical)) {

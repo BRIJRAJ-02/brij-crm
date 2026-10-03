@@ -2,8 +2,9 @@
 // (delete, restore, purge, erasure), against a real Postgres.
 import { setTimeout as delay } from 'node:timers/promises';
 import { sql, type SQL } from 'drizzle-orm';
+import { PgDialect } from 'drizzle-orm/pg-core';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { createDatabase, type Database } from '@crm/db';
+import { createDatabase, type Database, type WorkspaceTx } from '@crm/db';
 import type { EngineRefusal } from '@crm/contracts/values';
 import { defineAttribute, defineObject, updateAttribute } from './definitions.ts';
 import {
@@ -22,7 +23,7 @@ import { defineOption } from './options.ts';
 import { createRecord, getRecords, setValues } from './records.ts';
 import { isRefusal, postgresError } from './refusals.ts';
 import { defineRelationship } from './relationships.ts';
-import type { EngineScope } from './scope.ts';
+import { SYSTEM_ACTOR, type EngineScope } from './scope.ts';
 import { createWorkspace } from './workspaces.ts';
 import { CHANGE_CAP, capChange, type AfterWrite, type Change } from './write.ts';
 
@@ -120,6 +121,79 @@ async function refusals(promise: Promise<unknown>): Promise<readonly EngineRefus
 async function rowCount(scope: EngineScope, query: ReturnType<typeof sql>): Promise<number> {
   const result = await db.withWorkspace(scope.workspaceId, (tx) => tx.execute<{ n: number }>(query));
   return result.rows[0]?.n ?? 0;
+}
+
+const at = (world: World, companyId: string) => ({ objectId: world.companies, recordId: companyId });
+const person = (world: World, personId: string) => ({ objectId: world.people, recordId: personId });
+
+/** A hook that keeps every change it sees. */
+const watch =
+  (seen: Change[]): AfterWrite =>
+  (change) => {
+    seen.push(change);
+    return Promise.resolve();
+  };
+
+/** Acme with Ada and Bob on its team, and Cy at no company. */
+async function team() {
+  const world = await workspace();
+  const acme = await newCompany(world, 'Acme');
+  const ada = await newPerson(world, 'Ada', { [world.person('company')]: at(world, acme) });
+  const bob = await newPerson(world, 'Bob', { [world.person('company')]: at(world, acme) });
+  const cy = await newPerson(world, 'Cy');
+  return { world, acme, ada, bob, cy };
+}
+
+/**
+ * The test database, but each transaction pauses once, at the first link
+ * write's version stamp (after the write read its end's links, before it ends
+ * any), to run `meanwhile` on other connections and let it commit. Counts the
+ * stamps, so a test sees whether the write started again.
+ */
+function pausingAtStamp(meanwhile: () => Promise<void>): { readonly db: Database; readonly stamps: () => number } {
+  const dialect = new PgDialect();
+  let stamps = 0;
+  const pausing = (tx: WorkspaceTx): WorkspaceTx =>
+    new Proxy(tx, {
+      get(target, property, receiver) {
+        if (property !== 'execute') return Reflect.get(target, property, receiver) as unknown;
+        return async (query: Parameters<WorkspaceTx['execute']>[0]) => {
+          const text = typeof query === 'string' ? query : dialect.sqlToQuery(query.getSQL()).sql;
+          if (text.includes('as version')) {
+            stamps += 1;
+            if (stamps === 1) await meanwhile();
+          }
+          return target.execute(query);
+        };
+      },
+    });
+  return {
+    db: { ...db, withWorkspace: (workspaceId, work) => db.withWorkspace(workspaceId, (tx) => work(pausing(tx))) },
+    stamps: () => stamps,
+  };
+}
+
+/**
+ * Every link the member ended on `ownerId`'s side names a far record the
+ * write reported, unless the write linked it again (`kept`): no far record
+ * loses a link without its screen hearing of it.
+ */
+async function expectEveryEndedFarRecordReported(
+  world: World,
+  ownerId: string,
+  kept: readonly string[],
+  changed: ReadonlySet<string>,
+) {
+  const ended = await db.withWorkspace(world.scope.workspaceId, (tx) =>
+    tx.execute<{ far: string }>(sql`
+      select (case when from_record_id = ${ownerId} then to_record_id else from_record_id end)::text as far
+      from record_links
+      where (from_record_id = ${ownerId} or to_record_id = ${ownerId}) and ended_by_type = 'member'
+    `),
+  );
+  const lost = ended.rows.map((row) => row.far).filter((far) => !kept.includes(far));
+  expect(lost.length).toBeGreaterThan(0);
+  for (const far of lost) expect(changed, far).toContain(far);
 }
 
 describe('relationships', () => {
@@ -409,6 +483,84 @@ describe('relationships', () => {
     expect(await valueOf(world.scope, ada, world.person('associated_deals'))).toEqual([
       { objectId: world.deals, recordId: deal },
     ]);
+  });
+
+  it('never ends a link the far end added between its read and its update, and needs no new attempt (AC-3, AC-5, AC-17)', async () => {
+    const { world, acme, ada, bob, cy } = await team();
+    const asSystem: EngineScope = { ...world.scope, actor: SYSTEM_ACTOR };
+    // Cy joins Acme on another connection, after the write read Acme's team and before it ends any of it.
+    const pause = pausingAtStamp(async () => {
+      await setValues(asSystem, { recordId: cy, values: { [world.person('company')]: { value: at(world, acme) } } });
+    });
+    const seen: Change[] = [];
+    await setValues(
+      { ...world.scope, db: pause.db },
+      { recordId: acme, values: { [world.company('team')]: { value: [person(world, ada)] } } },
+      [watch(seen)],
+    );
+    expect(pause.stamps()).toBe(1);
+    // Cy's link was never read, so it stays: the team is Ada and Cy, and Cy's Company is still Acme.
+    expect(await valueOf(world.scope, acme, world.company('team'))).toEqual([person(world, ada), person(world, cy)]);
+    expect(await valueOf(world.scope, cy, world.person('company'))).toEqual(at(world, acme));
+    expect(await valueOf(world.scope, bob, world.person('company'))).toBeNull();
+    const changed = new Set(seen[0]?.values.map((value) => value.ownerId));
+    expect(changed).toEqual(new Set([acme, bob]));
+    await expectEveryEndedFarRecordReported(world, acme, [ada], changed);
+  });
+
+  it('starts again when the far end ends a link it read, and reports every far record whose link it ends (AC-3, AC-5, AC-17)', async () => {
+    const { world, acme, ada, bob, cy } = await team();
+    const asSystem: EngineScope = { ...world.scope, actor: SYSTEM_ACTOR };
+    // An add and an end land together between the read and the update: Cy joins Acme and Bob leaves it. A
+    // statement that ended whatever is current would end Cy's link in place of Bob's with the same count, and
+    // Cy's screen would never hear of it.
+    const pause = pausingAtStamp(async () => {
+      await setValues(asSystem, { recordId: cy, values: { [world.person('company')]: { value: at(world, acme) } } });
+      await setValues(asSystem, { recordId: bob, values: { [world.person('company')]: { value: null } } });
+    });
+    const seen: Change[] = [];
+    await setValues(
+      { ...world.scope, db: pause.db },
+      { recordId: acme, values: { [world.company('team')]: { value: [person(world, ada)] } } },
+      [watch(seen)],
+    );
+    // The first attempt found Bob's link already ended and started again; the second read Cy's link and ended it.
+    expect(pause.stamps()).toBe(2);
+    expect(await valueOf(world.scope, acme, world.company('team'))).toEqual([person(world, ada)]);
+    expect(await valueOf(world.scope, cy, world.person('company'))).toBeNull();
+    const changed = new Set(seen[0]?.values.map((value) => value.ownerId));
+    expect(changed).toEqual(new Set([acme, cy]));
+    await expectEveryEndedFarRecordReported(world, acme, [ada], changed);
+  });
+
+  it('reads values as of a moment to the microsecond, between two link versions 100 microseconds apart (AC-3)', async () => {
+    const world = await workspace();
+    const acme = await newCompany(world, 'Acme');
+    const beta = await newCompany(world, 'Beta');
+    const ada = await newPerson(world, 'Ada', { [world.person('company')]: at(world, acme) });
+    await setValues(world.scope, {
+      recordId: ada,
+      values: { [world.person('company')]: { value: at(world, beta) } },
+    });
+    // Pinned as the owner, so the boundary is exact: Acme until .000100, Beta from then on.
+    await owner.withWorkspace(world.scope.workspaceId, async (tx) => {
+      await tx.execute(sql`update records set created_at = '2025-01-01T00:00:00Z' where id = ${ada}`);
+      await tx.execute(sql`
+        update record_links set active_from = '2026-01-01T00:00:00Z', active_until = '2026-01-01T00:00:00.000100Z'
+        where ${ada} in (from_record_id, to_record_id) and ${acme} in (from_record_id, to_record_id)
+      `);
+      await tx.execute(sql`
+        update record_links set active_from = '2026-01-01T00:00:00.000100Z'
+        where ${ada} in (from_record_id, to_record_id) and ${beta} in (from_record_id, to_record_id)
+      `);
+    });
+    const companyAt = async (moment: string) =>
+      (await getValuesAsOf(world.scope, { recordId: ada, at: moment }))[world.person('company')];
+    expect(await companyAt('2026-01-01T00:00:00.000099Z')).toEqual(at(world, acme));
+    // A millisecond Date would read this as .000, before the boundary, and answer Acme.
+    expect(await companyAt('2026-01-01T00:00:00.000100Z')).toEqual(at(world, beta));
+    expect(await companyAt('2026-01-01T02:00:00.000100+02:00')).toEqual(at(world, beta));
+    expect(await companyAt('2026-01-01T01:00:00.000099+01:00')).toEqual(at(world, acme));
   });
 
   it('hands a single end over from a record in the trash, and its restore leaves it handed over (AC-5, AC-8)', async () => {

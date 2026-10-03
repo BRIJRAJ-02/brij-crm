@@ -218,10 +218,26 @@ describe('the edge cases the editors rely on', () => {
 
 describe('instants and defaults for the system only types', () => {
   it('takes only a full ISO instant with its zone as a moment', () => {
-    for (const valid of ['2026-10-01T09:30:00Z', '2026-10-01T09:30:00.123456Z', '2026-10-01T09:30:00+02:00']) {
+    const valids = [
+      '2026-10-01T09:30:00Z',
+      '2026-10-01T09:30:00.123456Z',
+      '2026-10-01T09:30:00+02:00',
+      '2026-10-01T09:30:00.123456+02:00',
+    ];
+    for (const valid of valids) {
       expect(IsoInstant.safeParse(valid).success).toBe(true);
     }
-    for (const invalid of ['2026', '2026-10', '2026-10-01', '+002026-10-01T00:00:00Z', '2026-10-01T09:30:00']) {
+    const invalids = [
+      '2026',
+      '2026-10',
+      '2026-10-01',
+      '+002026-10-01T00:00:00Z',
+      '2026-10-01T09:30:00',
+      // Seconds are required, as the doc comment says.
+      '2026-10-01T09:30Z',
+      '2026-10-01T09:30+02:00',
+    ];
+    for (const invalid of invalids) {
       expect(IsoInstant.safeParse(invalid).success).toBe(false);
     }
   });

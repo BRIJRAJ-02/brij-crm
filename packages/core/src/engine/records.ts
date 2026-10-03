@@ -195,7 +195,8 @@ export async function writeAll(
       ownerKind,
       attribute,
       value: input.value,
-      ...(input.baseVersionId === undefined ? {} : { baseVersionId: input.baseVersionId }),
+      // Canonical on the way in: the write compares it with the stored version id as text.
+      ...(input.baseVersionId === undefined ? {} : { baseVersionId: canonicalId(input.baseVersionId) }),
     };
     const landed = await writeOne(context, write, holdDefinition);
     const [change, ...far] = landed;
@@ -249,12 +250,14 @@ export async function initialValues(
   timeZone: string,
 ): Promise<readonly { attribute: AttributeDef; input: ValueInput }[]> {
   const given = canonicalKeys(givenAsIs);
+  // `Object.fromEntries` and `Object.hasOwn`, never `in`: a given `__proto__` key stays a key (refused as no
+  // attribute), and nothing inherited counts as given.
   const inputs: Record<string, ValueInput> = Object.fromEntries(
     Object.entries(given).map(([id, value]) => [id, { value }]),
   );
   const defaulted = new Set<string>();
   for (const attribute of attributes.values()) {
-    if (attribute.isSystem || attribute.archivedAt !== null || attribute.id in given) continue;
+    if (attribute.isSystem || attribute.archivedAt !== null || Object.hasOwn(given, attribute.id)) continue;
     const value = await defaultFor(tx, scope, attribute, timeZone);
     if (value === undefined) continue;
     inputs[attribute.id] = { value };
@@ -267,7 +270,7 @@ export async function initialValues(
         !attribute.isSystem &&
         attribute.archivedAt === null &&
         attribute.type !== 'checkbox' &&
-        !(attribute.id in inputs),
+        !Object.hasOwn(inputs, attribute.id),
     )
     .map((attribute) => ({
       code: 'VALUE_REQUIRED',

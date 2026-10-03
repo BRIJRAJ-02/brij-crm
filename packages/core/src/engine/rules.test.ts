@@ -15,9 +15,9 @@ import {
   updateObject,
 } from './definitions.ts';
 import { purgeDeleted } from './deletion.ts';
-import { defineList, getEntries } from './lists.ts';
+import { addEntry, defineList, getEntries, readEntriesById } from './lists.ts';
 import { defineRelationship } from './relationships.ts';
-import { newId } from './ids.ts';
+import { canonicalKeys, newId } from './ids.ts';
 import { getHistory, getTimeInStages, getValuesAsOf } from './history.ts';
 import { defineOption, listOptions, updateOption } from './options.ts';
 import { createRecord, getRecords, setValues, setValuesBatch } from './records.ts';
@@ -914,6 +914,149 @@ describe('upper case ids', () => {
     expect(batch?.recordId).toBe(deal);
     const again = await setValues(scope, { recordId: deal, values: { [id(deals.stage)]: { value: lead } } });
     expect(again[id(deals.stage)]).toEqual({});
+  });
+
+  it("stores an interaction's by id in lower case, so the same actor in either spelling is no new version", async () => {
+    const { scope, objects, memberId } = await workspace();
+    const asSystem: EngineScope = { ...scope, actor: SYSTEM_ACTOR };
+    const companiesObject = id(objects.companies);
+    const companies = await slugs(scope, companiesObject);
+    const { attributeId: touch } = await defineAttribute(scope, {
+      objectId: companiesObject,
+      apiSlug: 'last_touch',
+      title: 'Last touch',
+      type: 'interaction',
+    });
+    const { recordId } = await createRecord(scope, {
+      objectId: companiesObject,
+      values: { [id(companies.name)]: 'A' },
+    });
+    const touched = (memberIdSpelt: string) => ({
+      [touch]: { value: { kind: 'email', at: '2026-10-01T09:30:00.000Z', by: { type: 'member', id: memberIdSpelt } } },
+    });
+    const first = await setValues(asSystem, { recordId, values: touched(memberId.toUpperCase()) });
+    expect(first[touch]?.versionId).toBeTruthy();
+    expect((await getRecords(scope, { ids: [recordId] }))[0]?.values[touch]).toEqual({
+      kind: 'email',
+      at: '2026-10-01T09:30:00.000Z',
+      by: { type: 'member', id: memberId },
+    });
+    expect(await setValues(asSystem, { recordId, values: touched(memberId) })).toEqual({ [touch]: {} });
+    expect(await setValues(asSystem, { recordId, values: touched(memberId.toUpperCase()) })).toEqual({ [touch]: {} });
+  });
+
+  it('reads a base version id in upper case as the version it names: no replaced version (AC-12)', async () => {
+    const { scope, objects } = await workspace();
+    const companiesObject = id(objects.companies);
+    const companies = await slugs(scope, companiesObject);
+    const name = id(companies.name);
+    const parent = id(companies.parent_company);
+    const make = async (title: string) =>
+      (await createRecord(scope, { objectId: companiesObject, values: { [name]: title } })).recordId;
+    const acme = await make('Acme');
+    const holding = await make('Holding');
+    const group = await make('Group');
+
+    // A value: the edit started from the current version, spelt in upper case.
+    const named = await setValues(scope, { recordId: acme, values: { [name]: { value: 'Acme Ltd' } } });
+    const base = id(named[name]?.versionId);
+    const renamed = await setValues(scope, {
+      recordId: acme,
+      values: { [name]: { value: 'Acme Group', baseVersionId: base.toUpperCase() } },
+    });
+    expect(renamed[name]?.versionId).toBeTruthy();
+    expect(renamed[name]?.replaced).toBeUndefined();
+
+    // A record reference, the same way.
+    const linked = await setValues(scope, {
+      recordId: acme,
+      values: { [parent]: { value: { objectId: companiesObject, recordId: holding } } },
+    });
+    const linkBase = id(linked[parent]?.versionId);
+    const relinked = await setValues(scope, {
+      recordId: acme,
+      values: {
+        [parent]: { value: { objectId: companiesObject, recordId: group }, baseVersionId: linkBase.toUpperCase() },
+      },
+    });
+    expect(relinked[parent]?.versionId).toBeTruthy();
+    expect(relinked[parent]?.replaced).toBeUndefined();
+
+    // An older version still reads as replaced, whatever its spelling.
+    const stale = await setValues(scope, {
+      recordId: acme,
+      values: { [name]: { value: 'Acme Holdings', baseVersionId: base.toUpperCase() } },
+    });
+    expect(stale[name]?.replaced?.versionId).toBe(renamed[name]?.versionId);
+  });
+
+  it('reads entries by upper case ids with their canonical ids, in the order asked', async () => {
+    const { scope, objects } = await workspace();
+    const deals = await slugs(scope, id(objects.deals));
+    const { listId } = await defineList(scope, {
+      objectId: id(objects.deals),
+      apiSlug: 'pipeline',
+      name: 'Pipeline',
+      allowsDuplicates: true,
+    });
+    const entries: string[] = [];
+    for (const title of ['One', 'Two']) {
+      const { recordId } = await createRecord(scope, {
+        objectId: id(objects.deals),
+        values: { [id(deals.name)]: title },
+      });
+      entries.push((await addEntry(scope, { listId, recordId })).entryId);
+    }
+    const [one, two] = entries.map((entry) => id(entry));
+    const read = await getEntries(scope, { ids: [id(two).toUpperCase(), id(one).toUpperCase(), 'not-an-id'] });
+    expect(read.map((entry) => entry.id).sort()).toEqual([id(one), id(two)].sort());
+    const ordered = await db.withWorkspace(scope.workspaceId, (tx) =>
+      readEntriesById(tx, [id(two).toUpperCase(), id(one).toUpperCase()]),
+    );
+    expect(ordered.map((entry) => entry.id)).toEqual([two, one]);
+  });
+});
+
+describe('a __proto__ key', () => {
+  it('stays an own key of the canonical map, never its prototype', () => {
+    const attribute = newId();
+    const given = JSON.parse(`{"__proto__": {"${attribute}": "x"}, "${attribute.toUpperCase()}": "y"}`) as Record<
+      string,
+      unknown
+    >;
+    const keys = canonicalKeys(given);
+    expect(Object.getPrototypeOf(keys)).toBeNull();
+    expect(Object.hasOwn(keys, '__proto__')).toBe(true);
+    expect(Object.keys(keys).sort()).toEqual(['__proto__', attribute].sort());
+    expect(keys[attribute]).toBe('y');
+  });
+
+  it('is refused as no attribute on a create and a save, and never hides a default or a required value', async () => {
+    const { scope, objects } = await workspace();
+    const companiesObject = id(objects.companies);
+    const companies = await slugs(scope, companiesObject);
+    const { attributeId: tier } = await defineAttribute(scope, {
+      objectId: companiesObject,
+      apiSlug: 'tier',
+      title: 'Tier',
+      type: 'text',
+      defaultValue: { kind: 'static', value: 'Standard' },
+    });
+    const name = id(companies.name);
+    // Parsed the way a request body is: `__proto__` is an own key, here naming the default attribute inside.
+    const values = JSON.parse(`{"${name}": "Acme", "__proto__": {"${tier}": "Gold"}}`) as Record<string, unknown>;
+    const created = await refusals(createRecord(scope, { objectId: companiesObject, values }));
+    expect(created.map((refusal) => [refusal.code, refusal.attributeId])).toEqual([['NOT_FOUND', '__proto__']]);
+
+    const { recordId } = await createRecord(scope, { objectId: companiesObject, values: { [name]: 'Acme' } });
+    expect((await getRecords(scope, { ids: [recordId] }))[0]?.values[tier]).toBe('Standard');
+    const saved = await refusals(
+      setValues(scope, {
+        recordId,
+        values: JSON.parse(`{"__proto__": {"value": "x"}}`) as Record<string, { value: unknown }>,
+      }),
+    );
+    expect(saved.map((refusal) => [refusal.code, refusal.attributeId])).toEqual([['NOT_FOUND', '__proto__']]);
   });
 });
 

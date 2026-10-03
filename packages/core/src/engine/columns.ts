@@ -80,8 +80,16 @@ function encodeItem(type: AttributeType, item: unknown): ItemColumns {
       return { ...EMPTY, actorType: text(parts.type) as Actor['type'], actorId: canonicalId(text(parts.id)) };
     case 'file':
       return { ...EMPTY, textValue: text(parts.name), jsonValue: item };
-    case 'interaction':
-      return { ...EMPTY, timestampValue: text(parts.at), jsonValue: item };
+    case 'interaction': {
+      // The actor's id in its canonical spelling, like an actor reference's, so an upper case id is the same
+      // value as the stored one (no new version) and every reader sees one spelling.
+      const by = asRecord(parts.by);
+      return {
+        ...EMPTY,
+        timestampValue: text(parts.at),
+        jsonValue: { ...parts, by: { ...by, id: canonicalId(by.id) } },
+      };
+    }
     default:
       throw new TypeError(`The ${type} type is not stored as value rows.`);
   }
