@@ -63,10 +63,52 @@ export interface Change {
   readonly values: readonly ValueChange[];
   /** Reference values on other records that a delete, restore or erasure changed without a new version. */
   readonly references: readonly ReferenceChange[];
+  /**
+   * Objects with more than `CHANGE_CAP` record ids in one record list or in
+   * `references`: their ids are left out of those lists, and a screen
+   * refetches whatever it holds of the object instead.
+   */
+  readonly coarse: readonly { readonly objectId: string }[];
+}
+
+/** The most record ids of one object a `Change` lists in one record list or in `references`. */
+export const CHANGE_CAP = 1_000;
+
+/** The lists the cap applies to: every list of records, and the reference values. */
+const CAPPED_KEYS = ['createdRecords', 'deletedRecords', 'restoredRecords', 'purgedRecords', 'references'] as const;
+
+/**
+ * Caps a change's record lists and references at `CHANGE_CAP` distinct
+ * record ids per object. An object past the cap in any of them goes into
+ * `coarse`, and its ids leave all of them, so a bulk delete or purge never
+ * builds an event the size of the table.
+ */
+export function capChange(change: Omit<Change, 'coarse'>): Change {
+  const coarse = new Set<string>();
+  for (const key of CAPPED_KEYS) {
+    const idsByObject = new Map<string, Set<string>>();
+    for (const item of change[key]) {
+      const ids = idsByObject.get(item.objectId) ?? new Set<string>();
+      idsByObject.set(item.objectId, ids.add(item.recordId));
+    }
+    for (const [objectId, ids] of idsByObject) if (ids.size > CHANGE_CAP) coarse.add(objectId);
+  }
+  if (coarse.size === 0) return { ...change, coarse: [] };
+  const fine = <T extends { readonly objectId: string }>(items: readonly T[]) =>
+    items.filter((item) => !coarse.has(item.objectId));
+  return {
+    ...change,
+    createdRecords: fine(change.createdRecords),
+    deletedRecords: fine(change.deletedRecords),
+    restoredRecords: fine(change.restoredRecords),
+    purgedRecords: fine(change.purgedRecords),
+    references: fine(change.references),
+    coarse: [...coarse].sort().map((objectId) => ({ objectId })),
+  };
 }
 
 /** The lists of a change that a write step adds to. */
-type ChangeLists = Omit<Change, 'kind' | 'workspaceId' | 'actor'>;
+type ChangeLists = Omit<Change, 'kind' | 'workspaceId' | 'actor' | 'coarse'>;
 const LIST_KEYS = [
   'createdRecords',
   'deletedRecords',
@@ -91,6 +133,12 @@ export interface WriteContext {
   readonly scope: EngineScope;
   /** Notes a change, for the hooks. */
   record(part: Partial<ChangeLists>): void;
+  /**
+   * Member ids this write already found active, shared by its savepoints, so
+   * a batch looks each member up once. Only a read a rollback can't undo
+   * belongs here, never a lock: a savepoint's rollback releases its locks.
+   */
+  readonly activeMembers: Set<string>;
   /**
    * Runs one record's part of a batch under its own savepoint, handing `work`
    * a context whose `tx` is that savepoint. A refusal rolls back only that
@@ -137,6 +185,7 @@ export async function runWrite<T>(
         const context: WriteContext = {
           tx,
           scope,
+          activeMembers: new Set<string>(),
           record(part) {
             collected.createdRecords.push(...(part.createdRecords ?? []));
             collected.deletedRecords.push(...(part.deletedRecords ?? []));
@@ -166,7 +215,7 @@ export async function runWrite<T>(
           },
         };
         const result = await work(context);
-        const change: Change = {
+        const change = capChange({
           kind,
           workspaceId: scope.workspaceId,
           actor: scope.actor,
@@ -182,7 +231,7 @@ export async function runWrite<T>(
           purgedEntries: [...collected.purgedEntries],
           values: [...collected.values],
           references: [...collected.references],
-        };
+        });
         for (const hook of hooks) await hook(change, tx);
         return { result, change };
       });

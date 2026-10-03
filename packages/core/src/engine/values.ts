@@ -220,45 +220,78 @@ async function checkOptions(
   }
 }
 
-/** Refuses member ids that aren't active members of this workspace. Members already held may stay. */
-async function checkMembers(
-  tx: WorkspaceTx,
+/**
+ * Refuses, as `ATTRIBUTE_VALUE_INVALID` naming the attribute, actor values a
+ * write may not add: an id that isn't a uuid (refused here, so a batch refuses
+ * that record alone instead of failing the cast), a member who isn't an active
+ * member of this workspace, and any other kind of actor (an API key, an
+ * automation, the system) unless it is the scope's own actor naming itself.
+ * Actors already held may stay. Members found active are remembered for the
+ * rest of the write, so a batch looks each one up once.
+ */
+async function checkActors(
+  context: WriteContext,
   attribute: AttributeDef,
   next: readonly ItemColumns[],
   held: readonly ItemColumns[],
 ): Promise<void> {
-  const memberIds = (items: readonly ItemColumns[]) =>
-    items.flatMap((item) => (item.actorType === 'member' && item.actorId !== null ? [item.actorId] : []));
-  const kept = new Set(memberIds(held));
-  const added = [...new Set(memberIds(next).filter((id) => !kept.has(id)))];
-  if (added.length === 0) return;
   const invalid = () =>
     refuse('ATTRIBUTE_VALUE_INVALID', `Pick a member of this workspace for ${attribute.title}.`, attribute.id);
-  if (!added.every(isUuid)) throw invalid();
-  const rows = await tx
+  if (!next.every((item) => item.actorId === null || isUuid(item.actorId))) throw invalid();
+  const keyOf = (item: ItemColumns) => `${item.actorType ?? ''}:${item.actorId?.toLowerCase() ?? ''}`;
+  const kept = new Set(held.map(keyOf));
+  const added = next.filter((item) => item.actorType !== null && !kept.has(keyOf(item)));
+  const self = context.scope.actor;
+  const isSelf = (item: ItemColumns) =>
+    item.actorType === self.type && item.actorId?.toLowerCase() === self.id?.toLowerCase();
+  if (added.some((item) => item.actorType !== 'member' && !isSelf(item))) throw invalid();
+  const memberIds = added.flatMap((item) =>
+    item.actorType === 'member' && item.actorId !== null ? [item.actorId.toLowerCase()] : [],
+  );
+  const unknown = [...new Set(memberIds)].filter((id) => !context.activeMembers.has(id));
+  if (unknown.length === 0) return;
+  const rows = await context.tx
     .select({ id: members.id })
     .from(members)
-    .where(and(inArray(members.id, added), eq(members.status, 'active')));
-  if (rows.length < added.length) throw invalid();
+    .where(and(inArray(members.id, unknown), eq(members.status, 'active')));
+  if (rows.length < unknown.length) throw invalid();
+  for (const row of rows) context.activeMembers.add(row.id);
 }
 
 /**
- * Takes a key share lock on the attribute's row, then starts the write again
- * if its unique or archived flag changed since it was read. Turning Unique on
- * or off, and archiving or restoring, lock that row for update before they
- * fill or clear keys, so a value write either lands before they scan the
- * values, or waits for them and writes with the new definition (AC-10).
+ * A hold on the definitions of the unique capable attributes one `writeAll`
+ * writes. The first value that changes takes a key share lock on all of their
+ * rows in one query, in id order, then starts the write again if any unique
+ * or archived flag changed since it was read; later calls do nothing. Turning
+ * Unique on or off, and archiving or restoring, lock that row for update
+ * before they fill or clear keys, so a value write either lands before they
+ * scan the values, or waits for them and writes with the new definition
+ * (AC-10). Each `writeAll` makes its own inside its savepoint: a refused
+ * record's rollback releases the locks, and the next record takes them again.
  */
-async function holdDefinition(tx: WorkspaceTx, attribute: AttributeDef): Promise<void> {
-  const [row] = await tx
-    .select({ isUnique: attributes.isUnique, archivedAt: attributes.archivedAt })
-    .from(attributes)
-    .where(eq(attributes.id, attribute.id))
-    .for('key share');
-  if (row === undefined) throw refuse('NOT_FOUND', 'That attribute does not exist.', attribute.id);
-  if (row.isUnique !== attribute.isUnique || (row.archivedAt === null) !== (attribute.archivedAt === null)) {
-    throw writeConflict(`${attribute.title} changed under this write.`);
-  }
+export function holdDefinitions(tx: WorkspaceTx, written: readonly AttributeDef[]): () => Promise<void> {
+  const unique = written.filter((attribute) => UNIQUE_TYPES.includes(attribute.type));
+  const take = async (): Promise<void> => {
+    if (unique.length === 0) return;
+    const ids = [...new Set(unique.map((attribute) => attribute.id))].sort();
+    const rows = await tx.execute<{ id: string; is_unique: boolean; archived: boolean }>(sql`
+      select id::text as id, is_unique, archived_at is not null as archived from attributes
+      where id = any(${uuidArray(ids)}) order by id for key share
+    `);
+    const now = new Map(rows.rows.map((row) => [row.id, row]));
+    for (const attribute of unique) {
+      const row = now.get(attribute.id);
+      if (row === undefined) throw refuse('NOT_FOUND', 'That attribute does not exist.', attribute.id);
+      if (row.is_unique !== attribute.isUnique || row.archived !== (attribute.archivedAt !== null)) {
+        throw writeConflict(`${attribute.title} changed under this write.`);
+      }
+    }
+  };
+  let held: Promise<void> | undefined;
+  return () => {
+    held = held ?? take();
+    return held;
+  };
 }
 
 /** The object a record's value belongs to, or the list an entry's does, as a change reports it. */
@@ -283,12 +316,15 @@ function ownerPart(write: AttributeWrite): OwnerPart {
  * Otherwise the current rows end at `t` and the new rows (or a cleared marker)
  * start at `t`, all under one new version id.
  */
-export async function writeAttribute(context: WriteContext, write: AttributeWrite): Promise<ValueChange | undefined> {
+export async function writeAttribute(
+  context: WriteContext,
+  write: AttributeWrite,
+  holdDefinition: () => Promise<void>,
+): Promise<ValueChange | undefined> {
   const { tx, scope } = context;
   const { attribute, ownerId } = write;
   const parsed = parseFor(attribute, write.value);
   const next = encodeValue(attribute.type, parsed);
-  if (UNIQUE_TYPES.includes(attribute.type)) await holdDefinition(tx, attribute);
 
   const current = await currentRows(tx, ownerId, attribute.id);
   const held: readonly ItemColumns[] = current
@@ -305,8 +341,9 @@ export async function writeAttribute(context: WriteContext, write: AttributeWrit
       jsonValue: row.jsonValue,
     }));
   if (sameItems(held, next)) return undefined;
+  if (UNIQUE_TYPES.includes(attribute.type)) await holdDefinition();
   if (attribute.type === 'select' || attribute.type === 'status') await checkOptions(tx, attribute, next, held);
-  if (attribute.type === 'actor_reference') await checkMembers(tx, attribute, next, held);
+  if (attribute.type === 'actor_reference') await checkActors(context, attribute, next, held);
 
   const stamp = await tx.execute<{ t: string; version: string }>(sql`
     select greatest(
@@ -396,22 +433,6 @@ function itemInsert(item: ItemColumns) {
     actorMemberId: item.actorType === 'member' ? item.actorId : null,
     jsonValue: item.jsonValue,
   };
-}
-
-/**
- * Moves the `updated_at` and `updated_by` of the records on the far side of a
- * link write to now and the scope's actor, locking them in id order (AC-7): a
- * company that gains a person changed too.
- */
-export async function touchRecords(context: WriteContext, recordIds: readonly string[]): Promise<void> {
-  if (recordIds.length === 0) return;
-  const by = actorRow(context.scope.actor);
-  const ids = uuidArray([...new Set(recordIds)].sort());
-  await context.tx.execute(sql`
-    update records set updated_at = now(), updated_by_type = ${by.type}, updated_by_id = ${by.id},
-      updated_by_member_id = ${by.memberId}
-    where id in (select id from records where id = any(${ids}) order by id for no key update)
-  `);
 }
 
 /** Moves a record's (or entry's) `updated_at` and `updated_by` to now and the scope's actor (AC-7). */

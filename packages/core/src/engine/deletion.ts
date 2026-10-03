@@ -6,7 +6,11 @@
 // hidden on delete, shown on restore, removed before their values. The hooks
 // hear about everything that appears or disappears: the record, its entries,
 // and the reference values on the records it links to.
-import { eq, sql } from 'drizzle-orm';
+//
+// The workspace's counters row is the busiest lock in a workspace (every
+// create and, from #7, every write's outbox number takes it), so each step
+// here reads what it needs first and takes its record slot after.
+import { eq, sql, type SQL } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { uuidArray } from './ids.ts';
 import { RESTORE_WINDOW, takeRecordSlots } from './limits.ts';
@@ -14,7 +18,7 @@ import { refuse } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
 import { deleteSortKeys, setRecordKeysLive } from './sort-keys.ts';
 import { holdUniqueKeys, releaseUniqueKeys } from './unique.ts';
-import { runWrite, type AfterWrite, type RecordRef, type ReferenceChange } from './write.ts';
+import { CHANGE_CAP, runWrite, type AfterWrite, type RecordRef, type ReferenceChange } from './write.ts';
 
 const { records } = schema;
 
@@ -47,21 +51,31 @@ async function liveEntryIds(tx: WorkspaceTx, recordId: string): Promise<readonly
 /**
  * The reference values on live records that show this record: the far end of
  * each of its current links, where that end has an attribute. A delete, a
- * restore or an erasure of the record changes them with no new version.
+ * restore or an erasure of the record changes them with no new version. At
+ * most one more record per object than a `Change` lists, which is enough for
+ * it to tell the object went coarse.
  */
 async function farReferences(tx: WorkspaceTx, recordId: string): Promise<readonly ReferenceChange[]> {
   const result = await tx.execute<{ record_id: string; object_id: string; attribute_id: string }>(sql`
-    select distinct far.id::text as record_id, far.object_id::text as object_id, ends.attribute_id::text as attribute_id
-    from record_links l
-    join relationships rel on rel.workspace_id = l.workspace_id and rel.id = l.relationship_id
-    cross join lateral (
-      select case when l.from_record_id = ${recordId} then l.to_record_id else l.from_record_id end as far_id,
-        case when l.from_record_id = ${recordId} then rel.to_attribute_id else rel.from_attribute_id end as attribute_id
-    ) ends
-    join records far on far.workspace_id = l.workspace_id and far.id = ends.far_id and far.deleted_at is null
-    where (l.from_record_id = ${recordId} or l.to_record_id = ${recordId})
-      and l.active_until is null and ends.attribute_id is not null
-    order by 1, 3
+    select record_id, object_id, attribute_id from (
+      select refs.*, dense_rank() over (partition by refs.object_id order by refs.record_id) as n
+      from (
+        select distinct far.id::text as record_id, far.object_id::text as object_id,
+          ends.attribute_id::text as attribute_id
+        from record_links l
+        join relationships rel on rel.workspace_id = l.workspace_id and rel.id = l.relationship_id
+        cross join lateral (
+          select case when l.from_record_id = ${recordId} then l.to_record_id else l.from_record_id end as far_id,
+            case when l.from_record_id = ${recordId} then rel.to_attribute_id else rel.from_attribute_id end
+              as attribute_id
+        ) ends
+        join records far on far.workspace_id = l.workspace_id and far.id = ends.far_id and far.deleted_at is null
+        where (l.from_record_id = ${recordId} or l.to_record_id = ${recordId})
+          and l.active_until is null and ends.attribute_id is not null
+      ) refs
+    ) ranked
+    where n <= ${CHANGE_CAP + 1}
+    order by record_id, attribute_id
   `);
   return result.rows.map((row) => ({
     recordId: row.record_id,
@@ -98,13 +112,14 @@ export async function deleteRecord(
         })
         .where(eq(records.id, input.recordId));
       const entryIds = await liveEntryIds(tx, input.recordId);
+      const references = await farReferences(tx, input.recordId);
       await holdUniqueKeys(tx, [input.recordId, ...entryIds]);
       await setRecordKeysLive(tx, input.recordId, false);
       await takeRecordSlots(tx, scope, -1);
       context.record({
         deletedRecords: [{ recordId: input.recordId, objectId: record.objectId }],
         hiddenEntries: entryIds,
-        references: await farReferences(tx, input.recordId),
+        references,
       });
       return { recordId: input.recordId, state: 'deleted' as const };
     },
@@ -130,8 +145,10 @@ export async function restoreRecord(
       const record = await lockAnyRecord(tx, input.recordId);
       if (record.deletedAt === null) return { recordId: input.recordId, state: 'live' as const };
       if (record.expired) throw refuse('NOT_FOUND', 'That record was deleted more than 30 days ago.');
-      await takeRecordSlots(tx, scope, 1);
       const entryIds = await liveEntryIds(tx, input.recordId);
+      const references = await farReferences(tx, input.recordId);
+      // The slot before the unique keys, as a create takes it before its values: neither waits on the other's key.
+      await takeRecordSlots(tx, scope, 1);
       await releaseUniqueKeys(tx, [input.recordId, ...entryIds]);
       await tx
         .update(records)
@@ -141,7 +158,7 @@ export async function restoreRecord(
       context.record({
         restoredRecords: [{ recordId: input.recordId, objectId: record.objectId }],
         shownEntries: entryIds,
-        references: await farReferences(tx, input.recordId),
+        references,
       });
       return { recordId: input.recordId, state: 'live' as const };
     },
@@ -177,6 +194,26 @@ interface Removed {
 }
 
 /**
+ * The statement that hard deletes every value of some records and of their
+ * entries, past versions too. The owners are one array, worked out once, so
+ * the owner index finds the rows: an `or` with a subquery here scanned all of
+ * `values`. A test pins the plan.
+ */
+export function deleteRecordValues(recordIds: readonly string[]): SQL {
+  const ids = uuidArray(recordIds);
+  return sql`
+    delete from "values" where owner_id = any(array(
+      select unnest(${ids}) union all select id from list_entries where record_id = any(${ids})
+    ))
+  `;
+}
+
+/** The statement that hard deletes every value of some entries, past versions too, through the owner index. */
+export function deleteEntryValues(entryIds: readonly string[]): SQL {
+  return sql`delete from "values" where owner_id = any(${uuidArray(entryIds)})`;
+}
+
+/**
  * Hard deletes some records and everything that hangs off them, in foreign
  * key order: values (the records' and their entries'), links, entries, then
  * the records. Entries still in their lists give their slots back. Every
@@ -194,10 +231,7 @@ async function removeRecords(tx: WorkspaceTx, recordIds: readonly string[]): Pro
     where l.id = gone.list_id
   `);
   await deleteSortKeys(tx, { recordIds });
-  const values = await tx.execute(sql`
-    delete from "values" where owner_id = any(${ids})
-      or owner_id in (select id from list_entries where record_id = any(${ids}))
-  `);
+  const values = await tx.execute(deleteRecordValues(recordIds));
   const links = await tx.execute(
     sql`delete from record_links where from_record_id = any(${ids}) or to_record_id = any(${ids})`,
   );
@@ -258,11 +292,11 @@ export async function purgeDeleted(
           select id::text from list_entries where deleted_at < ${cutoff}
           order by deleted_at, id limit ${batchSize} for update skip locked
         `);
-        const entryIds = uuidArray(removedEntries.rows.map((row) => row.id));
-        await deleteSortKeys(tx, { entryIds: removedEntries.rows.map((row) => row.id) });
-        const entryValues = await tx.execute(sql`delete from "values" where owner_id = any(${entryIds})`);
+        const entryIds = removedEntries.rows.map((row) => row.id);
+        await deleteSortKeys(tx, { entryIds });
+        const entryValues = await tx.execute(deleteEntryValues(entryIds));
         const entries = await tx.execute<{ id: string }>(
-          sql`delete from list_entries where id = any(${entryIds}) returning id::text`,
+          sql`delete from list_entries where id = any(${uuidArray(entryIds)}) returning id::text`,
         );
         context.record({
           purgedRecords: gone.records,
@@ -301,16 +335,20 @@ export async function eraseRecord(
     scope,
     async (context) => {
       const { tx } = context;
+      // The lists its live entries give slots back to, then the record: the order entry writes lock in.
+      await tx.execute(sql`
+        select 1 from lists
+        where id in (select list_id from list_entries where record_id = ${input.recordId} and deleted_at is null)
+        order by id for update
+      `);
       const record = await lockAnyRecord(tx, input.recordId);
       const ref = { recordId: input.recordId, objectId: record.objectId };
       // A live record disappears from every read here, like a delete; a trashed one already had.
       if (record.deletedAt === null) {
+        const hiddenEntries = await liveEntryIds(tx, input.recordId);
+        const references = await farReferences(tx, input.recordId);
         await takeRecordSlots(tx, scope, -1);
-        context.record({
-          deletedRecords: [ref],
-          hiddenEntries: await liveEntryIds(tx, input.recordId),
-          references: await farReferences(tx, input.recordId),
-        });
+        context.record({ deletedRecords: [ref], hiddenEntries, references });
       }
       const gone = await removeRecords(tx, [input.recordId]);
       context.record({ purgedRecords: gone.records, purgedEntries: gone.entryIds });

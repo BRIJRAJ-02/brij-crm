@@ -160,6 +160,11 @@ async function prepare(
   return { context: searches.size === 0 ? context : { ...context, searches }, level };
 }
 
+/** The one statement `checkTimeZone` runs: it fails with `22023` for a zone Postgres doesn't know. */
+export function timeZoneProbe(timeZone: string): SQL {
+  return sql`select now() at time zone ${timeZone}`;
+}
+
 /**
  * Refuses a time zone Postgres does not know with `FILTER_INVALID`. UTC, the
  * default, is always known; any other zone is tried once with `at time zone`,
@@ -170,7 +175,7 @@ async function prepare(
 export async function checkTimeZone(tx: WorkspaceTx, timeZone: string): Promise<void> {
   if (timeZone === 'UTC') return;
   try {
-    await tx.execute(sql`select now() at time zone ${timeZone}`);
+    await tx.execute(timeZoneProbe(timeZone));
   } catch (error) {
     if (postgresError(error)?.code === '22023') throw refuse('FILTER_INVALID', 'That time zone is not known.');
     throw error;

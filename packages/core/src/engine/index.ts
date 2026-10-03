@@ -77,6 +77,7 @@ export { defineRelationship, type Cardinality, type RelationshipEnd, type Relati
 export { SYSTEM_ACTOR, type Actor, type EngineScope } from './scope.ts';
 export { createWorkspace, type CreatedWorkspace, type WorkspaceInput } from './workspaces.ts';
 export {
+  CHANGE_CAP,
   runWrite,
   type AfterWrite,
   type Change,

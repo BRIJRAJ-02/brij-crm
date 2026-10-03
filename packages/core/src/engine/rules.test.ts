@@ -467,6 +467,59 @@ describe('actor values', () => {
     });
     expect(results.map((result) => result.ok)).toEqual([false, true]);
   });
+
+  it('refuses an API key, an automation or the system from a member, malformed ids one record at a time (AC-13)', async () => {
+    const { scope, objects, memberId } = await workspace();
+    const companiesObject = id(objects.companies);
+    const companies = await slugs(scope, companiesObject);
+    const owner = id(companies.owner);
+    const created = await Promise.all(
+      ['A', 'B', 'C'].map((name) =>
+        createRecord(scope, { objectId: companiesObject, values: { [id(companies.name)]: name } }),
+      ),
+    );
+    const [first, second, third] = created.map((each) => each.recordId);
+    const set = (actor: unknown) => ({ [owner]: { value: actor } });
+    for (const actor of [
+      { type: 'system', id: null },
+      { type: 'api_key', id: newId() },
+      { type: 'automation', id: newId() },
+    ]) {
+      const refused = await refusals(setValues(scope, { recordId: id(first), values: set(actor) }));
+      expect(refused.map((refusal) => [refusal.code, refusal.attributeId])).toEqual([
+        ['ATTRIBUTE_VALUE_INVALID', owner],
+      ]);
+    }
+    // A malformed id is refused before it reaches the uuid column, so the batch goes on without that record.
+    const results = await setValuesBatch(scope, {
+      items: [
+        { recordId: id(first), values: set({ type: 'member', id: memberId }) },
+        { recordId: id(second), values: set({ type: 'api_key', id: 'not-a-uuid' }) },
+        { recordId: id(third), values: set({ type: 'member', id: memberId }) },
+      ],
+    });
+    expect(results.map((result) => (result.ok ? 'ok' : result.refusals[0]?.code))).toEqual([
+      'ok',
+      'ATTRIBUTE_VALUE_INVALID',
+      'ok',
+    ]);
+    const records = await getRecords(scope, { ids: [id(first), id(second), id(third)] });
+    expect(records.map((record) => record.values[owner])).toEqual([
+      { type: 'member', id: memberId },
+      null,
+      { type: 'member', id: memberId },
+    ]);
+
+    // An API key may name itself (a record it made), and only itself.
+    const key = newId();
+    const asKey: EngineScope = { ...scope, actor: { type: 'api_key', id: key } };
+    await setValues(asKey, { recordId: id(second), values: set({ type: 'api_key', id: key }) });
+    expect((await getRecords(scope, { ids: [id(second)] }))[0]?.values[owner]).toEqual({ type: 'api_key', id: key });
+    const other = await refusals(
+      setValues(asKey, { recordId: id(third), values: set({ type: 'api_key', id: newId() }) }),
+    );
+    expect(other.map((refusal) => refusal.code)).toEqual(['ATTRIBUTE_VALUE_INVALID']);
+  });
 });
 
 describe('limits', () => {

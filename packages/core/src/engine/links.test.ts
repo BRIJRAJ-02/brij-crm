@@ -1,29 +1,42 @@
 // Milestone 3 of spec 0004: relationships, lists and entries, and deletion
 // (delete, restore, purge, erasure), against a real Postgres.
-import { sql } from 'drizzle-orm';
+import { setTimeout as delay } from 'node:timers/promises';
+import { sql, type SQL } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import type { EngineRefusal } from '@crm/contracts/values';
 import { defineAttribute, defineObject, updateAttribute } from './definitions.ts';
-import { deleteRecord, eraseRecord, purgeDeleted, restoreRecord } from './deletion.ts';
+import {
+  deleteEntryValues,
+  deleteRecord,
+  deleteRecordValues,
+  eraseRecord,
+  purgeDeleted,
+  restoreRecord,
+} from './deletion.ts';
 import { getHistory, getTimeInStages, getValuesAsOf } from './history.ts';
 import { addEntry, defineList, getEntries, getRecordEntries, removeEntry, restoreEntry } from './lists.ts';
 import { defineOption } from './options.ts';
 import { createRecord, getRecords, setValues } from './records.ts';
-import { isRefusal } from './refusals.ts';
+import { isRefusal, postgresError } from './refusals.ts';
 import { defineRelationship } from './relationships.ts';
 import type { EngineScope } from './scope.ts';
 import { createWorkspace } from './workspaces.ts';
-import type { AfterWrite, Change } from './write.ts';
+import { CHANGE_CAP, type AfterWrite, type Change } from './write.ts';
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, ownerUrl } = inject('testDatabase');
+const APP_NAME = 'crm-links-tests';
 let db: Database;
+/** The owner, for what the app role may not do: table locks and analyze. */
+let owner: Database;
 
 beforeAll(() => {
-  db = createDatabase({ url: appUrl, applicationName: 'crm-links-tests' });
+  db = createDatabase({ url: appUrl, applicationName: APP_NAME });
+  owner = createDatabase({ url: ownerUrl, applicationName: 'crm-links-tests-owner' });
 });
 afterAll(async () => {
   await db.close();
+  await owner.close();
 });
 
 const id = (value: string | undefined): string => {
@@ -220,17 +233,20 @@ describe('relationships', () => {
     expect(again[world.person('company')]).toEqual({});
   });
 
-  it("moves the far record too when a link changes, and names each record's object (AC-7, AC-17)", async () => {
+  it("reports the far record when a link changes, without writing it, and names each record's object (AC-7, AC-17)", async () => {
     const world = await workspace();
     const acme = await newCompany(world, 'Acme');
     const ada = await newPerson(world, 'Ada');
+    const [acmeBefore] = await getRecords(world.scope, { ids: [acme] });
     const before = await rowCount(
       world.scope,
       sql`select extract(epoch from updated_at)::float8 * 1000000 as n from records where id = ${acme}`,
     );
+    // Someone else makes the link, so a moved updated_by would show.
+    const other = { ...world.scope, actor: { type: 'system' as const, id: null } };
     const seen: Change[] = [];
     await setValues(
-      world.scope,
+      other,
       {
         recordId: ada,
         values: { [world.person('company')]: { value: { objectId: world.companies, recordId: acme } } },
@@ -242,17 +258,21 @@ describe('relationships', () => {
         },
       ],
     );
-    const after = await rowCount(
-      world.scope,
-      sql`select extract(epoch from updated_at)::float8 * 1000000 as n from records where id = ${acme}`,
-    );
-    expect(after).toBeGreaterThan(before);
-    const [acmeView] = await getRecords(world.scope, { ids: [acme] });
-    expect(acmeView?.updatedBy).toEqual(world.scope.actor);
+    // The far record is reported, so screens showing it read its references again...
     expect(seen[0]?.values.map((change) => [change.ownerId, 'objectId' in change && change.objectId])).toEqual([
       [ada, world.people],
       [acme, world.companies],
     ]);
+    // ...but never written: the link row keeps its own who and when.
+    const after = await rowCount(
+      world.scope,
+      sql`select extract(epoch from updated_at)::float8 * 1000000 as n from records where id = ${acme}`,
+    );
+    expect(after).toBe(before);
+    const [acmeView, adaView] = await getRecords(world.scope, { ids: [acme, ada] });
+    expect(acmeView?.updatedBy).toEqual(acmeBefore?.updatedBy);
+    expect(acmeView?.updatedAt).toBe(acmeBefore?.updatedAt);
+    expect(adaView?.updatedBy).toEqual(other.actor);
   });
 
   it('refuses a taken single end, naming the record, and lets one of two racing links win (AC-5)', async () => {
@@ -749,4 +769,168 @@ describe('deletion', () => {
       { recordId: other, objectId: world.deals, attributeId: world.deal('associated_people') },
     ]);
   });
+
+  /** Makes `n` people at once, straight in SQL, each linked to the company through its `company` reference. */
+  async function staff(world: World, companyId: string, n: number): Promise<void> {
+    await db.withWorkspace(world.scope.workspaceId, (tx) =>
+      tx.execute(sql`
+        with rel as (
+          select id, from_attribute_id = ${world.person('company')} as person_is_from,
+            cardinality in ('one_to_one', 'many_to_one') as from_single,
+            cardinality in ('one_to_one', 'one_to_many') as to_single
+          from relationships
+          where from_attribute_id = ${world.person('company')} or to_attribute_id = ${world.person('company')}
+        ), people as (
+          insert into records (workspace_id, object_id, created_by_type, updated_by_type)
+          select ${world.scope.workspaceId}, ${world.people}, 'system', 'system' from generate_series(1, ${n})
+          returning id
+        )
+        insert into record_links (workspace_id, version_id, relationship_id, from_record_id, to_record_id,
+          position, to_position, from_single, to_single, active_from, set_by_type)
+        select ${world.scope.workspaceId}, uuidv7(), rel.id,
+          case when rel.person_is_from then p.id else ${companyId}::uuid end,
+          case when rel.person_is_from then ${companyId}::uuid else p.id end,
+          0, 0, rel.from_single, rel.to_single, now(), 'system'
+        from people p cross join rel
+      `),
+    );
+  }
+
+  it('names an object coarse instead of listing more than 1,000 of its records (AC-17)', async () => {
+    const world = await workspace();
+    const acme = await newCompany(world, 'Acme');
+    await staff(world, acme, CHANGE_CAP + 1);
+    const seen: Change[] = [];
+    const hook: AfterWrite = (change) => {
+      seen.push(change);
+      return Promise.resolve();
+    };
+
+    await deleteRecord(world.scope, { recordId: acme }, [hook]);
+    expect(seen[0]?.deletedRecords).toEqual([{ recordId: acme, objectId: world.companies }]);
+    expect(seen[0]?.references).toEqual([]);
+    expect(seen[0]?.coarse).toEqual([{ objectId: world.people }]);
+
+    // At the cap, every id is still listed.
+    const globex = await newCompany(world, 'Globex');
+    await staff(world, globex, CHANGE_CAP);
+    await deleteRecord(world.scope, { recordId: globex }, [hook]);
+    expect(seen[1]?.references).toHaveLength(CHANGE_CAP);
+    expect(seen[1]?.coarse).toEqual([]);
+
+    // A purge of more than 1,000 records of one object names it too.
+    await db.withWorkspace(world.scope.workspaceId, (tx) =>
+      tx.execute(sql`update records set deleted_at = now() - interval '31 days', deleted_by_type = 'system'
+        where object_id = ${world.people}`),
+    );
+    await purgeDeleted(world.scope, { batchSize: 5_000 }, [hook]);
+    expect(seen.at(-1)?.purgedRecords.filter((ref) => ref.objectId === world.people)).toEqual([]);
+    expect(seen.at(-1)?.coarse).toEqual([{ objectId: world.people }]);
+  });
+
+  it('reads the links and entries before it takes the workspace counter, so creates are not held (AC-16, AC-17)', async () => {
+    const world = await workspace();
+    const acme = await newCompany(world, 'Acme');
+    await newPerson(world, 'Ada', {
+      [world.person('company')]: { objectId: world.companies, recordId: acme },
+    });
+    // Stops the delete inside its far references read, the only step that reads relationships.
+    const locked = Promise.withResolvers<undefined>();
+    const release = Promise.withResolvers<undefined>();
+    const holder = owner.withWorkspace(world.scope.workspaceId, async (tx) => {
+      await tx.execute(sql`lock table relationships in access exclusive mode`);
+      locked.resolve(undefined);
+      await release.promise;
+    });
+    try {
+      await locked.promise;
+      const deleting = deleteRecord(world.scope, { recordId: acme });
+      const waitingOnRelationships = async () => {
+        const result = await owner.withWorkspace(world.scope.workspaceId, (tx) =>
+          tx.execute<{ n: number }>(sql`
+            select count(*)::int as n from pg_locks l join pg_stat_activity a on a.pid = l.pid
+            where l.relation = 'relationships'::regclass and not l.granted and a.application_name = ${APP_NAME}
+          `),
+        );
+        return (result.rows[0]?.n ?? 0) > 0;
+      };
+      for (let tries = 0; !(await waitingOnRelationships()); tries += 1) {
+        if (tries > 500) throw new Error('The delete never reached its far references.');
+        await delay(10);
+      }
+      const counter = await db
+        .withWorkspace(world.scope.workspaceId, (tx) =>
+          tx.execute(
+            sql`select 1 from workspace_counters where workspace_id = ${world.scope.workspaceId} for update nowait`,
+          ),
+        )
+        .then(
+          () => 'free',
+          (error: unknown) => {
+            if (postgresError(error)?.code === '55P03') return 'held';
+            throw error;
+          },
+        );
+      expect(counter).toBe('free');
+      release.resolve(undefined);
+      await holder;
+      expect(await deleting).toEqual({ recordId: acme, state: 'deleted' });
+    } finally {
+      release.resolve(undefined);
+      await holder;
+    }
+  });
+
+  it('purges and erases values through the owner index, never a scan of values (AC-8, AC-18)', async () => {
+    const world = await workspace();
+    const deal = await newDeal(world, 'Big deal');
+    const { listId } = await pipeline(world);
+    const { entryId } = await addEntry(world.scope, { listId, recordId: deal });
+    // Enough history on another record that the planner weighs the table as it would in production.
+    const filler = await newDeal(world, 'Filler');
+    await db.withWorkspace(world.scope.workspaceId, (tx) =>
+      tx.execute(sql`
+        insert into "values" (workspace_id, version_id, attribute_id, record_id, owner_id, position, text_value,
+          active_from, active_until, set_by_type)
+        select workspace_id, uuidv7(), attribute_id, record_id, owner_id, 0, 'Filler ' || g,
+          now() - make_interval(days => g + 1), now() - make_interval(days => g), 'system'
+        from "values", generate_series(1, 20000) g
+        where owner_id = ${filler} and attribute_id = ${world.deal('name')} and active_until is null
+      `),
+    );
+    await owner.vacuumAnalyze(['values']);
+
+    const scans = async (statement: SQL) => {
+      const result = await db.withWorkspace(world.scope.workspaceId, (tx) =>
+        tx.execute<{ 'QUERY PLAN': readonly { Plan: PlanNode }[] }>(sql`explain (format json) ${statement}`),
+      );
+      const nodes: PlanNode[] = [];
+      const walk = (node: PlanNode) => {
+        nodes.push(node);
+        for (const child of node.Plans ?? []) walk(child);
+      };
+      const plan = result.rows[0]?.['QUERY PLAN'][0]?.Plan;
+      if (plan === undefined) throw new Error('No plan.');
+      walk(plan);
+      return {
+        seqScansOfValues: nodes.filter(
+          (node) => node['Node Type'] === 'Seq Scan' && node['Relation Name'] === 'values',
+        ),
+        valueIndexes: nodes.flatMap((node) => (node['Index Name']?.startsWith('values_') ? [node['Index Name']] : [])),
+      };
+    };
+    for (const statement of [deleteRecordValues([deal]), deleteEntryValues([entryId])]) {
+      const plan = await scans(statement);
+      expect(plan.seqScansOfValues).toEqual([]);
+      expect(plan.valueIndexes).toContain('values_history');
+    }
+  });
 });
+
+/** The parts of an `explain (format json)` node the plan tests read. */
+interface PlanNode {
+  readonly 'Node Type': string;
+  readonly 'Relation Name'?: string;
+  readonly 'Index Name'?: string;
+  readonly Plans?: readonly PlanNode[];
+}

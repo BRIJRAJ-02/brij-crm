@@ -12,13 +12,13 @@ import { actorRow, type Actor, type EngineScope } from './scope.ts';
 import { linkValues, writeLinks } from './relationships.ts';
 import {
   currentItems,
+  holdDefinitions,
   loadAttributes,
   loadListAttributes,
   lockEntry,
   lockRecord,
   parseFor,
   touchOwner,
-  touchRecords,
   writeAttribute,
   type AttributeDef,
   type AttributeWrite,
@@ -147,9 +147,13 @@ function parseAll(
 }
 
 /** Writes one attribute: links for a record reference, value rows for every other type. */
-async function writeOne(context: WriteContext, write: AttributeWrite): Promise<readonly ValueChange[]> {
+async function writeOne(
+  context: WriteContext,
+  write: AttributeWrite,
+  holdDefinition: () => Promise<void>,
+): Promise<readonly ValueChange[]> {
   if (write.attribute.type === 'record_reference') return writeLinks(context, write);
-  const change = await writeAttribute(context, write);
+  const change = await writeAttribute(context, write, holdDefinition);
   return change === undefined ? [] : [change];
 }
 
@@ -162,6 +166,10 @@ export async function writeAll(
 ): Promise<Record<string, AttributeResult>> {
   const results: Record<string, AttributeResult> = {};
   const changes: ValueChange[] = [];
+  const holdDefinition = holdDefinitions(
+    context.tx,
+    parsed.map((each) => each.attribute),
+  );
   for (const { attribute, input } of parsed) {
     const write = {
       ownerId,
@@ -170,7 +178,7 @@ export async function writeAll(
       value: input.value,
       ...(input.baseVersionId === undefined ? {} : { baseVersionId: input.baseVersionId }),
     };
-    const landed = await writeOne(context, write);
+    const landed = await writeOne(context, write, holdDefinition);
     const [change, ...far] = landed;
     if (change === undefined) {
       results[attribute.id] = {};
@@ -182,12 +190,10 @@ export async function writeAll(
         ? { versionId: change.versionId }
         : { versionId: change.versionId, replaced: change.replaced };
   }
+  // A link write lists the far records' reference values too, so their screens read them again. Their own
+  // updated_at and updated_by stay put: the link row carries its own who and when, and writing the far rows
+  // would lock records this write never asked for (two link writes from opposite ends would deadlock).
   context.record({ values: changes });
-  // A link write changes the far records' values too, so they move like the owner does (AC-7).
-  await touchRecords(
-    context,
-    changes.flatMap((change) => (change.ownerKind === 'record' && change.ownerId !== ownerId ? [change.ownerId] : [])),
-  );
   return results;
 }
 

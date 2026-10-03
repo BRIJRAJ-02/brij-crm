@@ -19,7 +19,7 @@ import type { EngineScope } from '../scope.ts';
 import { loadAttributesById, type AttributeDef } from '../values.ts';
 import { createWorkspace } from '../workspaces.ts';
 import { evaluate, type EvaluateContext, type PlainRecord } from './evaluate.ts';
-import { checkTimeZone, countMatches, queryPage, type PageQuery, type ViewSource } from './page.ts';
+import { checkTimeZone, countMatches, queryPage, timeZoneProbe, type PageQuery, type ViewSource } from './page.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 const NOW = '2026-10-15T14:00:00.000Z';
@@ -760,11 +760,27 @@ describe('refusals', () => {
     expect(codes).toEqual(attempts.map(() => 'FILTER_INVALID'));
   });
 
-  it('checks a time zone in well under a millisecond of server time, not by reading every zone file (AC-15)', async () => {
-    // pg_timezone_names parses every zone file on each call (tens of milliseconds); the check must not.
+  it('checks a time zone far faster than reading every zone file (AC-15)', async () => {
+    // pg_timezone_names parses every zone file on each call (16 to 25 ms locally); the check must not. Both are
+    // timed by the server on the same machine and the fastest of a few runs compared, so a slow or busy CI
+    // machine slows both alike and a stall in one run doesn't count: no fixed number of milliseconds to miss.
+    const zones = ['Europe/London', ZONE, 'Asia/Kolkata', 'Pacific/Kiritimati'];
+    const fastest = (statement: (zone: string) => ReturnType<typeof sql>) =>
+      db.withWorkspace(scope.workspaceId, async (tx) => {
+        const times: number[] = [];
+        for (const zone of zones) {
+          const plan = await tx.execute<{ 'QUERY PLAN': readonly { 'Execution Time': number }[] }>(
+            sql`explain (analyze, format json) ${statement(zone)}`,
+          );
+          times.push(plan.rows[0]?.['QUERY PLAN'][0]?.['Execution Time'] ?? Number.NaN);
+        }
+        return Math.min(...times);
+      });
+    const probe = await fastest(timeZoneProbe);
+    const listing = await fastest((zone) => sql`select exists (select 1 from pg_timezone_names where name = ${zone})`);
+    expect(probe * 20).toBeLessThan(listing);
     await db.withWorkspace(scope.workspaceId, async (tx) => {
-      await tx.execute(sql`set local statement_timeout = '5ms'`);
-      for (const zone of ['Europe/London', ZONE, 'Asia/Kolkata', 'Pacific/Kiritimati']) await checkTimeZone(tx, zone);
+      for (const zone of zones) await checkTimeZone(tx, zone);
     });
     const refused = await db
       .withWorkspace(scope.workspaceId, (tx) => checkTimeZone(tx, 'Mars/Olympus'))
