@@ -25,11 +25,23 @@
       "skillPath": "skills/building-components/SKILL.md",
       "computedHash": "20889af7cb9b3abca1e38824f7fffaa873eb0cc4d45187967b97bd85462cf934"
     },
+    "centrifugo": {
+      "source": "pedronauck/skills",
+      "sourceType": "github",
+      "skillPath": "skills/curated/centrifugo/SKILL.md",
+      "computedHash": "b7ef537294f3b4cd3653dbb12d113c5afbc932b360a8102f0100d549e709d76b"
+    },
     "cloudflare": {
       "source": "cloudflare/skills",
       "sourceType": "github",
       "skillPath": "skills/cloudflare/SKILL.md",
       "computedHash": "163d684e39202f0073a15b84181d6bc1c825092d66947193daefd153102e2839"
+    },
+    "db-core": {
+      "source": "tanstack/db",
+      "sourceType": "github",
+      "skillPath": "packages/db/skills/db-core/SKILL.md",
+      "computedHash": "1dcd9b8040c0967db512a01e46ac7862a8745584a4460ad21eebd3923b1f86c7"
     },
     "design-critique": {
       "source": "anthropics/knowledge-work-plugins",
@@ -133,6 +145,12 @@
       "sourceType": "well-known",
       "computedHash": "69a333ca4abfc4c5fd674ef3d505bc74014ee8b1be6e89b44eaa855c81536661",
       "wellKnownDigest": "sha256:ffc7cd806e4e648bf353d5a5538946bbc882560444a5fae24176e68f239337a3"
+    },
+    "react-db": {
+      "source": "tanstack/db",
+      "sourceType": "github",
+      "skillPath": "packages/react-db/skills/react-db/SKILL.md",
+      "computedHash": "9f12c53b741c1117785c7b1409a0aca338b84bda76a21affc63c64cd7835f495"
     },
     "react-email": {
       "source": "resend/react-email",
