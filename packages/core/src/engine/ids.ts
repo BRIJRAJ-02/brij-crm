@@ -3,6 +3,7 @@
 import { randomBytes } from 'node:crypto';
 import { sql, type SQL } from 'drizzle-orm';
 
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const V7 = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 /** A new UUID v7. Postgres 18's `uuidv7()` makes the same shape for rows the server inserts. */
@@ -27,4 +28,14 @@ export function uuidArray(ids: readonly string[]): SQL {
     ids.map((id) => sql`${id}::uuid`),
     sql`, `,
   )}]`;
+}
+
+/**
+ * Ids as a single `uuid[]` parameter, for long lists (a search's thousands of
+ * owner ids) where one parameter per id would bloat the statement. Only ids the
+ * database returned belong here: each is checked to be a uuid first.
+ */
+export function uuidList(ids: readonly string[]): SQL {
+  if (!ids.every((id) => UUID.test(id))) throw new TypeError('uuidList takes uuids only.');
+  return sql`${`{${ids.join(',')}}`}::uuid[]`;
 }

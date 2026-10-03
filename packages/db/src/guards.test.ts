@@ -90,6 +90,57 @@ describe('every tenant table', () => {
   });
 });
 
+describe('the one hole in row level security (spec 0004, stored sort keys, AC-24)', () => {
+  it('has exactly one security definer function, crm_search_text, owned by crm_search', async () => {
+    const definers = await owner.query<{ name: string; owner: string }>(`
+      select p.proname as name, pg_get_userbyid(p.proowner) as owner
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where p.prosecdef and n.nspname not in ('pg_catalog', 'information_schema')
+        and not exists (select 1 from pg_depend d where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e')
+    `);
+    expect(definers.rows).toEqual([{ name: 'crm_search_text', owner: 'crm_search' }]);
+  });
+
+  it('lets no role but crm_search and the owner bypass it, outside the superusers', async () => {
+    const bypass = await owner.query<{ role: string }>(`
+      select rolname as role from pg_roles
+      where rolbypassrls and not rolsuper
+        and rolname <> (select pg_get_userbyid(datdba) from pg_database where datname = current_database())
+      order by rolname
+    `);
+    expect(bypass.rows.map((row) => row.role)).toEqual(['crm_search']);
+  });
+
+  it('keeps crm_search unable to log in, owning nothing else, and out of the app’s reach', async () => {
+    const role = await owner.query<{ login: boolean; owned: number; members: number; app: boolean }>(`
+      select r.rolcanlogin as login,
+        (select count(*)::int from pg_class c where c.relowner = r.oid)
+          + (select count(*)::int from pg_proc p where p.proowner = r.oid and p.proname <> 'crm_search_text')
+          + (select count(*)::int from pg_namespace s where s.nspowner = r.oid)
+          + (select count(*)::int from pg_type t where t.typowner = r.oid) as owned,
+        (select count(*)::int from pg_auth_members m where m.roleid = r.oid
+          and (m.set_option or m.inherit_option
+            or m.member <> (select datdba from pg_database where datname = current_database()))) as members,
+        pg_has_role('crm_app', r.oid, 'USAGE') or pg_has_role('crm_app', r.oid, 'SET') as app
+      from pg_roles r where r.rolname = 'crm_search'
+    `);
+    expect(role.rows).toEqual([{ login: false, owned: 0, members: 0, app: false }]);
+    // The app can call it, and nobody else by default.
+    const grants = await owner.query<{ app: boolean; anyone: boolean }>(`
+      select has_function_privilege('crm_app', 'crm_search_text(uuid, text, integer)', 'EXECUTE') as app,
+        exists (select 1 from aclexplode((select proacl from pg_proc where proname = 'crm_search_text'))
+          where grantee = 0) as anyone
+    `);
+    expect(grants.rows).toEqual([{ app: true, anyone: false }]);
+    // And an app login can't become it.
+    await expect(
+      db.withWorkspace(randomUUID(), (tx) => tx.execute(sql`set local role crm_search`)),
+    ).rejects.toMatchObject({
+      cause: { code: '42501' },
+    });
+  });
+});
+
 describe('isolation', () => {
   it('returns nothing from another workspace, even with no filter', async () => {
     const a = await workspaceWithMember('alpha');

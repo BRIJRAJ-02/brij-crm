@@ -100,6 +100,7 @@ export function createDatabase(options: DatabaseOptions): Database {
         rolsuper: boolean;
         rolbypassrls: boolean;
         owns_database: boolean;
+        reaches_bypass: boolean;
         is_app_member: boolean;
       }>(`
         select
@@ -107,6 +108,11 @@ export function createDatabase(options: DatabaseOptions): Database {
           r.rolsuper,
           r.rolbypassrls,
           d.datdba = r.oid as owns_database,
+          exists (
+            select 1 from pg_roles b
+            where b.oid <> r.oid and (b.rolbypassrls or b.rolsuper)
+              and (pg_has_role(r.oid, b.oid, 'USAGE') or pg_has_role(r.oid, b.oid, 'SET'))
+          ) as reaches_bypass,
           exists (
             select 1
             from pg_auth_members m
@@ -119,7 +125,8 @@ export function createDatabase(options: DatabaseOptions): Database {
       `);
       const row = result.rows[0];
       if (!row) throw new Error('Could not read the connected role.');
-      if (row.rolsuper || row.rolbypassrls || row.owns_database) {
+      // Through a role it can become (crm_search, say) counts too.
+      if (row.rolsuper || row.rolbypassrls || row.owns_database || row.reaches_bypass) {
         throw new Error(
           `The app is connected as "${row.role}", which can bypass row level security. ` +
             'Point DATABASE_URL at the app login role (see `pnpm db:app-login`).',

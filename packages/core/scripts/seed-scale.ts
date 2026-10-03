@@ -1,7 +1,8 @@
 // `pnpm db:seed:scale`: a workspace of 1,000,000 deals for the benchmark grid
 // (spec 0004, AC-15). The workspace, its template and its definitions go
 // through the engine's services; the rows themselves are written in bulk SQL,
-// 50,000 at a time, inside withWorkspace() so row level security still holds.
+// 50,000 at a time, inside withWorkspace(), each statement naming the
+// workspace itself (the owner role bypasses row level security, as on Neon).
 // Deals get the template's attributes filled realistically, a past stage
 // version each, a company link (90%), and a list of 200,000 entries; about
 // 1% of deals then go to the trash and 1% of entries are removed, and the
@@ -155,6 +156,8 @@ try {
   });
   log(`${String(COMPANIES)} companies`);
 
+  // Rare words for the contains grid (11, 12): one on 0.1% of names, another on 0.4%, never both.
+  const rareWords = sql`case when n % 1000 = 7 then ' zephyr' when n % 250 = 3 then ' quokka' else '' end`;
   const first = ['Acme', 'Globex', 'Initech', 'Umbrella', 'Hooli', 'Stark', 'Wayne', 'Wonka', 'Tyrell', 'Cyberdyne'];
   const second = ['renewal', 'expansion', 'pilot', 'upgrade', 'migration', 'rollout', 'support', 'licence'];
   const steps = ['Call back', 'Send proposal', 'Book demo', 'Chase legal', 'Intro to CFO'];
@@ -177,7 +180,8 @@ try {
       await tx.execute(sql`
         insert into "values" (workspace_id, version_id, attribute_id, record_id, owner_id, text_value, active_from, set_by_type, set_by_id, set_by_member_id)
         select ${workspaceId}, uuidv7(), ${attr('deal.name')}, id, id,
-          (${texts(first)})[1 + floor(r1 * 10)::int] || ' ' || (${texts(second)})[1 + floor(r2 * 8)::int] || ' ' || n,
+          (${texts(first)})[1 + floor(r1 * 10)::int] || ' ' || (${texts(second)})[1 + floor(r2 * 8)::int] || ' ' || n
+            || ${rareWords},
           made, 'member', member, member
         from seed_deals
       `);

@@ -49,7 +49,10 @@ export async function prepareTestDatabase(
   await admin.query('select pg_advisory_lock($1)', [SETUP_LOCK]);
   const ownerUrl = withCredentials(adminUrl, OWNER.role, OWNER.password, name);
   try {
-    await ensureRole(admin, OWNER.role, OWNER.password, 'createrole');
+    await ensureRole(admin, OWNER.role, OWNER.password, 'createrole bypassrls');
+    // Like Neon's owner, it bypasses row level security, so it can create crm_search (a role made before that
+    // was added gets it here).
+    await admin.query(`alter role ${admin.escapeIdentifier(OWNER.role)} bypassrls`);
     await admin.query(`drop database if exists ${admin.escapeIdentifier(name)} with (force)`);
     await admin.query(`create database ${admin.escapeIdentifier(name)} owner ${admin.escapeIdentifier(OWNER.role)}`);
 

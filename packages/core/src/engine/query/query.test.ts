@@ -302,6 +302,7 @@ async function allPages(
   sorts: SortRule[],
   limit = 9,
   candidates?: number,
+  search?: false,
 ): Promise<string[]> {
   const ids: string[] = [];
   let cursor: string | undefined;
@@ -314,7 +315,10 @@ async function allPages(
       limit,
       ...(cursor === undefined ? {} : { cursor }),
     };
-    const result = await queryPage(scope, query, candidates === undefined ? {} : { candidates });
+    const result = await queryPage(scope, query, {
+      ...(candidates === undefined ? {} : { candidates }),
+      ...(search === undefined ? {} : { search }),
+    });
     ids.push(...(result.entries ?? result.records).map((row) => row.id));
     if (result.nextCursor === undefined) return ids;
     cursor = result.nextCursor;
@@ -354,6 +358,11 @@ describe('the compiler matches the reference evaluator', () => {
     ['long text does not contain', () => and(is('notes', 'does_not_contain', 'oyag'))],
     ['url is', () => and(is('site', 'is', 'https://beta.example.com'))],
     ['multi email contains any item', () => and(is('contacts', 'contains', 'dan'))],
+    ['either of two contains', () => or(is('name', 'contains', 'gemini'), is('notes', 'contains', 'mercury'))],
+    [
+      'a contains and a negative in an and, beside an or',
+      () => and(is('name', 'contains', 'voy'), is('notes', 'does_not_contain', 'two'), or(is('crewed', 'is_checked'))),
+    ],
     ['multi email is', () => and(is('contacts', 'is', 'ANN@example.com'))],
     [
       'number comparisons',
@@ -511,6 +520,15 @@ describe('the compiler matches the reference evaluator', () => {
     );
   });
 
+  it.each(filters.filter(([title]) => /contain|through one hop$/.test(title)))(
+    'without the search function, by the narrowed path (AC-25): %s',
+    async (_, filter) => {
+      expect(await allPages({ objectId: missions }, filter(), [by('name')], 9, undefined, false)).toEqual(
+        evaluate(context, rows, filter(), [by('name')]),
+      );
+    },
+  );
+
   it('pages the same at any page size', async () => {
     const sort = [by('budget', 'descending'), by('name')];
     expect(await allPages({ objectId: missions }, undefined, sort, 1)).toEqual(
@@ -595,6 +613,13 @@ describe('list views', () => {
       () => [by('stage')],
     ],
     ['no filter, by record created at', () => undefined, () => [by('created_at')]],
+    // The search's record ids go on the entry's record column.
+    ['record name contains, by entry status', () => and(is('name', 'contains', 'voyager')), () => [by('stage')]],
+    [
+      'either of two record name contains',
+      () => or(is('name', 'contains', 'gemini'), is('notes', 'contains', 'skylab')),
+      () => [by('due')],
+    ],
   ];
   it.each(cases)('%s', async (_, filter, sorts) => {
     const expected = evaluate(context, entryRows, filter(), sorts());
@@ -863,6 +888,11 @@ describe('hidden rows', () => {
     // Its negative matches every live probe, linked or not.
     const negative = and(through(['firm'], is('company_name', 'is_not', 'Gone corp')));
     expect(sorted(await allPages({ objectId: probes }, negative, [by('probe_score')], 2))).toEqual(sorted(live));
+    // The same through the search function, which returns the trashed company's id too (AC-24).
+    const contains = and(through(['firm'], is('company_name', 'contains', 'gone')));
+    expect(await allPages({ objectId: probes }, contains, [by('probe_score')], 2)).toEqual([]);
+    const notContains = and(through(['firm'], is('company_name', 'does_not_contain', 'gone')));
+    expect(sorted(await allPages({ objectId: probes }, notContains, [by('probe_score')], 2))).toEqual(sorted(live));
   });
 });
 

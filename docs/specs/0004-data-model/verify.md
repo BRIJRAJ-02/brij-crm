@@ -1,10 +1,10 @@
-# Verify: The data model · spec 0004 · updated 2026-10-02
+# Verify: The data model · spec 0004 · updated 2026-10-03
 _Steps derived from spec 0004's acceptance criteria and its Value sourcing table. `/check verify` runs these; `/test` locks the durable ones. Every engine test runs against a real Postgres 18 (the local Docker one, or the CI service), never a mock._
 
 ## Commands
 - [ ] `pnpm --filter @crm/db test` → the guard tests pass: every table forces row level security with a policy, every index leads with `workspace_id`, a read without the workspace returns nothing, and a write into another workspace is refused by the database → AC-7, AC-9
-- [ ] `pnpm --filter @crm/core test` → the engine suites pass (`engine.test.ts`, `rules.test.ts`, `links.test.ts`, `query/query.test.ts`, `sort-keys.test.ts`) → AC-1 to AC-21
-- [ ] `pnpm db:migrate` on an empty database → migrations 0001 to 0011 apply in order; `pnpm db:generate` afterwards reports no schema changes → AC-9
+- [ ] `pnpm --filter @crm/core test` → the engine suites pass (`engine.test.ts`, `rules.test.ts`, `links.test.ts`, `query/query.test.ts`, `query/search.test.ts`, `sort-keys.test.ts`) → AC-1 to AC-25
+- [ ] `pnpm db:migrate` on an empty database → migrations 0001 to 0012 apply in order; `pnpm db:generate` afterwards reports no schema changes → AC-9
 - [ ] `pnpm db:migrate` on a database that already has data → 0009 fills `sort_keys` for every workspace, and afterwards every table still forces row level security → AC-9, AC-20
 - [ ] `pnpm check` → green
 
@@ -61,6 +61,21 @@ _Steps derived from spec 0004's acceptance criteria and its Value sourcing table
 - [ ] On the scale seed, every grid row is under 300 ms at p95 (results below) → AC-22
 - [ ] A cursor key out of its type's range (a number past int8, a 30th of February, hour 25) is refused `FILTER_INVALID`, never a database error → AC-14
 - [ ] After a deploy whose migration adds key kinds, `pnpm db:reconcile:sort-keys` (owner, direct connection) repairs any key the old version's saves missed during the deploy; run again, it reports 0 written and 0 removed (locally: 0 and 0 across 7.8 million keys) → AC-20
+
+## Milestone 7: contains through the search function
+- [ ] On the Neon branch, the owner role can create a role that bypasses row level security, and the key comparisons are leakproof (checked on the `pr-2` preview branch of `brij-crm`, in a transaction rolled back: `neondb_owner` has BYPASSRLS, migration 0012 applied cleanly and left the owner only its ADMIN grant on `crm_search`) → AC-24, AC-25
+- [ ] `crm_search_text` matches current text in any case, takes `%`, `_` and `\` in the pattern literally, returns at most its limit (clamped to 1 to 5,000), and returns trashed records' ids, which the page still hides (`search.test.ts`) → AC-24
+- [ ] It returns nothing for another workspace's attribute, nothing with the workspace set to empty, and nothing after `reset app.workspace_id` → AC-24
+- [ ] The guard tests list exactly one security definer function (`crm_search_text`, owned by `crm_search`) and, outside superusers and the database owner, exactly one role that bypasses row level security (`crm_search`); `crm_search` can't log in, owns nothing else, has no member with SET or INHERIT, and an app login can't `set role` to it; only `crm_app` may execute the function → AC-24
+- [ ] Contains, does not contain and file name contains match the reference evaluator with the search (the default) and without it (`search: false`, the narrowed path), directly, on a multi valued email, and through a relationship, including a trashed far record → AC-24, AC-25
+- [ ] A pattern with no run of 3 letters or digits (`t p`, `%`) skips the function and still answers correctly → AC-24
+- [ ] The function's body is standard SQL (`begin atomic`), parsed once: with `standard_conforming_strings` off and `search_path` set to `pg_temp`, it still reads `public."values"` and still matches `_` literally → AC-24
+- [ ] One query asks the function only about contains that can narrow (positive, under "and"s, or an "or" of direct contains), at most 3, each under a 2 s timeout in its own savepoint; past either, that contains takes the narrowed path. A count's abort can cancel its searches → AC-23, AC-24
+- [ ] An "or" of contains, a contains beside a negative, and a list view filtered by its record's name contains match the evaluator (`query.test.ts`) → AC-24
+- [ ] Migration 0012 sets `crm_search`'s attributes even when the role already exists, and refuses to finish if any role but the database owner is a member, if the owner has SET or INHERIT on it, if `crm_app` can reach it, or if it is a superuser, replication or createdb role → AC-24
+- [ ] `assertAppRole` refuses an app login that can become, or inherits from, any role that bypasses row level security → AC-24
+- [ ] On the scale seed, grid 11, 11b to 11e and 12 are under 300 ms at p95 (results below) → AC-22, AC-24
+- [ ] The extended grid on the paid Neon branch, seeded by `pnpm db:seed:scale` (AC-26): deferred. On 3 October 2026 you chose to keep the `brij-crm` Neon project on its current plan, whose branches cap at 1 GB, and the seed is about 10 GB. The proof stays local (Docker) until the plan changes; AC-26 stays open → AC-22, AC-26
 
 ## Value sourcing
 - [ ] `t` for a version is `clock_timestamp()` after the owner's row lock, never before the version it replaces; a delete's `deleted_at` is taken the same way, so no save looks later than the delete it lost to → write protocol
@@ -140,9 +155,38 @@ Still open, for /architect (measured by the performance review, outside the grid
 - A select or status first sort, a second sort and a filter matching 0.5 to 4% of rows: the group reads can't fill a page, so the page filters first, 0.4 to 1.7 s. It needs a design call (a smaller fallback scope, a covering key lookup, or a stated bound).
 - Capped counts with a rare filter that has no index (a rare OR, or "name contains") still read every row: 1.5 to 2.5 s locally, under the 10 s timeout but with little headroom on a small Neon compute. The AC-26 run should time one.
 - The key view finds one owner's value through the history index, so a save's key sync slows with a very long edit history (an attribute an automation rewrites every minute). Not measured yet; the seed has at most one past version per owner.
+- A common contains (query 3) still pays its search, about 50 ms of CPU, on every page and count before falling back: 40.4 ms became 98.7 ms, under budget locally, but a small Neon compute is slower. Next steps, if the AC-26 run shows a need: carry a "came back full" hint in the cursor so later pages skip the search, or run the first key driven rounds before searching. A count with a common contains stays slow (1.3 s), because a full answer can't filter.
+- 11b (4,000 rare ids) filters first with about 8,000 random index reads; fine cached, but on Neon `values` won't stay cached. Above about 1,000 ids, putting the ids into the key driven scan may beat lookups. Measure on Neon.
 - A list sorted by its records' values refuses a jump (`FILTER_INVALID`) and pages by cursor, as AC-21 says. The best effort pair stays outside the budget, as spec 0004 says. The capped count makes every count but query 3's (name contains, no index yet) finish well inside the timeout. Location keys are stored, but a location sort (country, then locality) still sorts without driving, so its jumps stay best effort: the locality can be empty inside a country, and one index can't put empties last in both directions.
 
-### What the first run showed, and what changed
+### Milestone 7: contains through the search function (local Docker, 3 October 2026)
+
+Migration 0012 added `crm_search` and `crm_search_text`. The seed now puts a rare word on 0.1% of deal names (zephyr, 1,002 deals) and another on 0.4% (quokka, 4,008); the local seed got them in place, with their keys. After the security and performance reviews' fixes, `BENCH_ONLY=1,3,4,10,11,11b,11c,11d,11e,12,13 BENCH_SPLIT=off`, 20 warm runs each, as the app role:
+
+| Query | first run (ms) | p50 (ms) | p95 (ms) | whole call p95 (ms) | count |
+|---|---|---|---|---|---|
+| 1. No filter, sort by name | 4.9 | 3.0 | 4.1 | 31.1 | none |
+| 3. Name contains, probability between, deal type is; sort by close date, then name | 332.6 | 93.9 | 98.7 | 196.0 | 10,000+ in 1,275 ms |
+| 4. Through the company: its category is Industry 3 (5%), sort by name | 103.0 | 32.3 | 35.9 | 96.7 | 10,000+ in 207 ms |
+| 10. Sort by stage, then by name | 40.5 | 11.5 | 14.6 | 72.8 | none |
+| 11. Name contains a word on 0.1% of deals, sort by name | 57.1 | 29.2 | 35.4 | 88.0 | 989 in 24 ms |
+| 11b. Name contains a word on 0.4% of deals, sort by name | 154.1 | 104.2 | 116.7 | 153.6 | 3,959 in 96 ms |
+| 11c. Name contains either rare word (0.5% of deals), sort by name | 148.3 | 147.2 | 157.5 | 179.6 | 4,948 in 112 ms |
+| 11d. Name does not contain the 0.4% word, sort by name | 6.4 | 3.0 | 4.6 | 36.3 | 10,000+ in 32 ms |
+| 11e. Through the company: its name contains "company 1" (about 1,100 companies, 50,000 deals), sort by name | 41.4 | 21.0 | 23.7 | 66.9 | 10,000+ in 444 ms |
+| 12. Name contains the 0.1% word, sort by close date | 139.2 | 27.7 | 31.3 | 95.0 | 989 in 25 ms |
+| 13. Probability between 41 and 42, sort by name | 94.9 | 29.6 | 31.8 | 156.3 | 10,000+ in 57 ms |
+
+The function alone: 14 ms for 1,000 matches, 20 ms for 4,000, 0.6 ms for none, and 42 to 56 ms for a common word, which stops at 5,000 rows (the trigram index still reads every posting for it). With `distinct`, as the spec first said, a common word read every match first (200 ms, and 1.5 s for a weak pattern), so the function returns rows without it and the engine drops repeats. A `set statement_timeout` on a function has no effect in Postgres (tested), so the engine sets 2 s around each search instead.
+
+What the reviews changed:
+- **Only searches that can narrow.** A positive contains reached through "and"s (directly or at the end of a path), or the parts of an "or" made only of direct contains. Negatives aren't searched (11d: 46 ms with the search, 4.6 ms without). At most 3 per query, and it stops at the first complete answer every row must match.
+- **Narrowing follows the filter's shape.** An "and" narrows when any part does, an "or" only when every part does (11c: 442 ms before, 157.5 ms). A contains through a relationship never narrows: 4,000 matching companies can link 180,000 deals (2.2 s filtered first), so it keeps the key driven path with the far ids on the link (11e: 23.7 ms).
+- **One row back.** The search returns its count and, only when under the cap, its ids, so a discarded common answer never crosses the network.
+- **Text sorts read `sort_keys.text_key`,** the same expression, instead of probing the value history per row.
+- **On a list,** a record attribute's ids go on the entry's `record_id`, which its index covers.
+
+### What the first run showed, and what changed### What the first run showed, and what changed
 
 The first run missed on queries 3 (11.7 s), 4 (788 ms), 5 (342 ms) and 6 (322 ms). The cause is row level security. With a policy on every table, Postgres won't use an operator that isn't marked leakproof as an index condition, or trust its selectivity. Numeric comparisons, `like`, `lower` and `left` aren't leakproof (text comparisons are). Only a superuser can change that, and Neon gives no superuser. So the planner guessed 1 row where 400,000 matched, filtered first and sorted everything. The engine now plans those pages itself when the first sort is an indexed value of the row:
 

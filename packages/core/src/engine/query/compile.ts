@@ -20,7 +20,7 @@ import {
   type RelativeRange,
   type SortRule,
 } from '@crm/contracts/values';
-import { uuidArray } from '../ids.ts';
+import { uuidArray, uuidList } from '../ids.ts';
 import { refuse } from '../refusals.ts';
 import { hasSortKey } from '../sort-keys.ts';
 import type { RelationshipDef } from '../relationships.ts';
@@ -49,6 +49,12 @@ export interface CompileContext {
    * stop at the limit.
    */
   readonly fence?: boolean;
+  /**
+   * What the search function found for each contains it could answer
+   * completely (`searchKey` to owner ids); a contains missing here takes the
+   * narrowed path, a LIKE checked row by row.
+   */
+  readonly searches?: ReadonlyMap<string, readonly string[]>;
 }
 
 /** Where a condition stands: the row alias, the record alias that holds system columns, and what's in reach. */
@@ -120,6 +126,26 @@ function likeLiteral(value: string): string {
 
 function containsPattern(value: unknown): string {
   return `%${likeLiteral(operandText(value).toLowerCase())}%`;
+}
+
+/**
+ * The most rows a contains asks the search function for. Fewer back means
+ * every match came back (a rare match, so the page filters those ids first);
+ * a full answer means a common match, and the page takes its usual path.
+ */
+export const SEARCH_CAP = 5000;
+/** A run of 3 letters or digits: the shortest text with a trigram the index can look up. */
+const TRIGRAM_RUN = /[\p{L}\p{N}]{3}/u;
+
+/** A contains the search function can answer: the attribute, and the text lowercased as the compiler matches it. */
+export interface SearchTerm {
+  readonly attributeId: string;
+  readonly text: string;
+}
+
+/** The key a search's result is kept under in `CompileContext.searches`. */
+export function searchKey(term: SearchTerm): string {
+  return `${term.attributeId}:${term.text}`;
 }
 
 function numberOperand(value: unknown): string {
@@ -340,6 +366,7 @@ function hopExists(
   attribute: AttributeDef,
   inner: (far: string) => SQL,
   farObjectId?: string,
+  farIds?: readonly string[],
 ): SQL {
   const relationship = relationshipOf(context, attribute);
   const columns = linkColumns(relationship, attribute.id);
@@ -348,7 +375,9 @@ function hopExists(
   const far = `f${String(hop)}`;
   const narrow =
     farObjectId !== undefined && columns.allowed.length > 1 ? sql` and ${raw(far)}.object_id = ${farObjectId}` : sql``;
-  return sql`exists (select 1 from record_links ${link} join records ${raw(far)} on ${raw(far)}.workspace_id = ${link}.workspace_id and ${raw(far)}.id = ${link}.${columns.far} and ${raw(far)}.deleted_at is null where ${link}.workspace_id = ${raw(level.record)}.workspace_id and ${link}.relationship_id = ${relationship.id} and ${link}.${columns.mine} = ${ownerOf(level, attribute)} and ${link}.active_until is null${narrow} and ${inner(far)}${fenceOf(context)})`;
+  // The search's far record ids, on the link itself, so the link index finds the few that point at them.
+  const onLink = farIds === undefined ? sql`` : sql` and ${link}.${columns.far} = any(${uuidList(farIds)})`;
+  return sql`exists (select 1 from record_links ${link} join records ${raw(far)} on ${raw(far)}.workspace_id = ${link}.workspace_id and ${raw(far)}.id = ${link}.${columns.far} and ${raw(far)}.deleted_at is null where ${link}.workspace_id = ${raw(level.record)}.workspace_id and ${link}.relationship_id = ${relationship.id} and ${link}.${columns.mine} = ${ownerOf(level, attribute)} and ${link}.active_until is null${narrow}${onLink} and ${inner(far)}${fenceOf(context)})`;
 }
 
 /** A `through` condition flattened: every hop's attribute, then the far condition. */
@@ -379,12 +408,18 @@ function compileThrough(context: CompileContext, level: Level, condition: Filter
       invalid(`${next.title} is not on the records ${hop.title} links to.`);
     }
     const objectId = next.objectId;
+    // On the last hop, a search's far ids go on the link alone; the join to the far record already holds them.
+    const farIds = rest.length === 0 ? searchHit(context, positive) : undefined;
     return hopExists(
       context,
       at,
       hop,
-      (far) => walk({ row: far, record: far, objectId, listId: null, hops: at.hops + 1 }, rest),
+      (far) =>
+        farIds === undefined
+          ? walk({ row: far, record: far, objectId, listId: null, hops: at.hops + 1 }, rest)
+          : sql`true`,
       objectId,
+      farIds,
     );
   };
   const body = walk(level, path);
@@ -565,6 +600,94 @@ function valuePredicate(context: CompileContext, attribute: AttributeDef, condit
   }
 }
 
+/** The search a contains (or its negative) would ask for, or undefined when the search function can't serve it. */
+function searchTermOf(context: CompileContext, condition: FilterCondition): SearchTerm | undefined {
+  if (condition.operator === 'through') return undefined;
+  const { positive } = splitNegation(condition);
+  if (positive.operator === 'through') return undefined;
+  const attribute = context.attributes.get(positive.attributeId);
+  if (attribute === undefined || attribute.systemColumn !== null) return undefined;
+  const searchable =
+    (positive.operator === 'contains' && CONTAINS.has(attribute.type)) ||
+    (positive.operator === 'name_contains' && attribute.type === 'file');
+  const value = valueOf(positive);
+  if (!searchable || typeof value !== 'string') return undefined;
+  const text = value.trim().toLowerCase();
+  if (text === '' || value.length > MAX_OPERAND || !TRIGRAM_RUN.test(text)) return undefined;
+  return { attributeId: attribute.id, text };
+}
+
+/** The ids the search function found for a contains, when it found them all. */
+function searchHit(context: CompileContext, condition: FilterCondition): readonly string[] | undefined {
+  const term = searchTermOf(context, condition);
+  return term === undefined ? undefined : context.searches?.get(searchKey(term));
+}
+
+/** A search worth running, and whether its answer alone can narrow the page (a direct contains under "and"s). */
+export interface PlannedSearch extends SearchTerm {
+  readonly narrows: boolean;
+}
+
+/**
+ * The searches worth running for a filter, the ones that can narrow the page
+ * first: positive contains reached from the top through "and"s (directly, or
+ * at the end of a path), and the parts of an "or" made only of direct
+ * positive contains. A negative or a contains beside other conditions in an
+ * "or" is cheap row by row and gains nothing from the ids, so it isn't asked.
+ */
+export function searchTermsOf(context: CompileContext, group: FilterGroup | undefined): readonly PlannedSearch[] {
+  const planned = new Map<string, PlannedSearch>();
+  const add = (condition: FilterCondition, narrows: boolean) => {
+    const leaf = flatten(condition).leaf;
+    if (splitNegation(leaf).negated) return;
+    const term = searchTermOf(context, leaf);
+    if (term === undefined) return;
+    const key = searchKey(term);
+    planned.set(key, { ...term, narrows: narrows || (planned.get(key)?.narrows ?? false) });
+  };
+  const direct = (item: FilterCondition | FilterGroup): item is FilterCondition =>
+    !('conjunction' in item) && item.operator !== 'through' && searchTermOf(context, item) !== undefined;
+  const visit = (item: FilterCondition | FilterGroup): void => {
+    if (!('conjunction' in item)) {
+      add(item, item.operator !== 'through');
+      return;
+    }
+    if (item.conjunction === 'and' || item.conditions.length === 1) {
+      item.conditions.forEach(visit);
+      return;
+    }
+    if (item.conditions.every(direct)) item.conditions.forEach((condition) => add(condition, false));
+  };
+  if (group !== undefined) visit(group);
+  return [...planned.values()].sort((left, right) => Number(right.narrows) - Number(left.narrows));
+}
+
+/** True for a positive, direct (not through) contains the search function answered in full. */
+function isSearchHit(context: CompileContext, item: FilterCondition | FilterGroup): boolean {
+  return (
+    !('conjunction' in item) &&
+    item.operator !== 'through' &&
+    !splitNegation(item).negated &&
+    searchHit(context, item) !== undefined
+  );
+}
+
+/**
+ * True when every row the filter keeps must be among a search's few ids: an
+ * "and" with a narrowed part, or an "or" whose parts are all narrowed, down to
+ * a positive, direct contains the search function answered in full. Then the
+ * page filters first instead of reading rows in sort order. A contains through
+ * a relationship never narrows here: a few far records can link to very many.
+ */
+export function narrowedBySearch(context: CompileContext, group: FilterGroup | undefined): boolean {
+  const narrows = (item: FilterCondition | FilterGroup): boolean => {
+    if (!('conjunction' in item)) return isSearchHit(context, item);
+    if (item.conditions.length === 0) return false;
+    return item.conjunction === 'and' ? item.conditions.some(narrows) : item.conditions.every(narrows);
+  };
+  return group !== undefined && narrows(group);
+}
+
 /** One positive condition (no negative operator, no path) at a level. */
 function compilePositive(context: CompileContext, level: Level, condition: FilterCondition): SQL {
   if (condition.operator === 'through') return compileThrough(context, level, condition);
@@ -596,6 +719,14 @@ function compilePositive(context: CompileContext, level: Level, condition: Filte
       ids.map((id) => valueExists(context, level, attribute, sql`v.option_id = ${id}::uuid`)),
       sql` and `,
     )})`;
+  }
+  // A contains the search function answered in full: the owner is one of its ids.
+  const found = searchHit(context, condition);
+  if (found !== undefined) {
+    // On a list's entries, a record attribute's ids go on the entry's own record column, which its index covers.
+    const owner = ownerOf(level, attribute);
+    const column = level.row !== level.record && attribute.listId === null ? sql`${raw(level.row)}.record_id` : owner;
+    return sql`${column} = any(${uuidList(found)})`;
   }
   const onKey = keyPredicate(attribute, condition);
   if (onKey !== undefined) return keyExists(context, level, attribute, onKey);
@@ -739,7 +870,8 @@ export function compileSorts(context: CompileContext, level: Level, sorts: reado
       case 'personal_name':
       case 'phone':
       case 'file':
-        return one(valueJoin(level, attribute, alias, [TEXT_KEY]), 'text');
+        // The stored key: the same expression, from a narrow table that stays cached better than the history.
+        return one(keyJoin(level, attribute, alias, [sql`k.text_key`]), 'text');
       // Numbers sort by their stored key (the value times 10,000), so every path's cursor holds the same text.
       case 'number':
       case 'rating':

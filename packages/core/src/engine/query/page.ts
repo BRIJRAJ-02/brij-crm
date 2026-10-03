@@ -23,6 +23,10 @@ import {
   fromText,
   isUuid,
   keyText,
+  narrowedBySearch,
+  SEARCH_CAP,
+  searchKey,
+  searchTermsOf,
   orderBy,
   tieDirection,
   type CompileContext,
@@ -47,6 +51,10 @@ const MAX_OPTION_WALK = 12;
 
 /** How many cut groups one page reads on their own (each a few statements) before it filters first instead. */
 const MAX_GROUPS = 8;
+/** The most contains one query asks the search function about; the rest take the narrowed path. */
+const MAX_SEARCHES = 3;
+/** How long one search may run before its contains takes the narrowed path. */
+const SEARCH_TIMEOUT = '2s';
 
 /** A group of equal first keys this small is read whole from its key index and sorted, instead of driven. */
 const GROUP_SORT = 20_000;
@@ -105,6 +113,7 @@ async function prepare(
   tx: WorkspaceTx,
   scope: EngineScope,
   query: ViewSource & QueryClock & { readonly filter?: FilterGroup; readonly sorts?: SortRules },
+  search = true,
 ): Promise<{ context: CompileContext; level: Level }> {
   // Checked against the contract first, so its caps on size and depth hold before anything walks the filter.
   for (const [value, shape] of [
@@ -153,7 +162,51 @@ async function prepare(
     );
     if (known.rows[0]?.ok !== true) throw refuse('FILTER_INVALID', 'That time zone is not known.');
   }
-  return { context, level };
+  const searches = search ? await runSearches(tx, context, query.filter) : new Map<string, readonly string[]>();
+  return { context: searches.size === 0 ? context : { ...context, searches }, level };
+}
+
+/**
+ * Asks the search function (spec 0004, stored sort keys, AC-24) about the
+ * contains that can narrow the page (`searchTermsOf`), at most 3, each within
+ * 2 s, and keeps the answers that came back complete (under the cap), without
+ * repeats. It stops at the first complete answer every row must match. The
+ * function reads past row level security but only inside this transaction's
+ * workspace, and returns only ids.
+ */
+async function runSearches(
+  tx: WorkspaceTx,
+  context: CompileContext,
+  filter: FilterGroup | undefined,
+): Promise<ReadonlyMap<string, readonly string[]>> {
+  const found = new Map<string, readonly string[]>();
+  const terms = searchTermsOf(context, filter).slice(0, MAX_SEARCHES);
+  if (terms.length === 0) return found;
+  // A full answer is thrown away, so only its count comes back, not its 5,000 ids.
+  // Each search gets SEARCH_TIMEOUT under a savepoint; one that runs out takes the narrowed path instead.
+  const before = await tx.execute<{ timeout: string }>(sql`select current_setting('statement_timeout') as timeout`);
+  await tx.execute(sql`set local statement_timeout = ${sql.raw(`'${SEARCH_TIMEOUT}'`)}`);
+  for (const term of terms) {
+    await tx.execute(sql`savepoint crm_search`);
+    try {
+      const result = await tx.execute<{ n: number; ids: string[] | null }>(sql`
+        select count(*)::int as n, case when count(*) < ${SEARCH_CAP} then array_agg(id::text) end as ids
+        from crm_search_text(${term.attributeId}::uuid, ${term.text}, ${SEARCH_CAP}::int) as id
+      `);
+      await tx.execute(sql`release savepoint crm_search`);
+      const answer = result.rows[0];
+      if (answer !== undefined && answer.n < SEARCH_CAP) {
+        found.set(searchKey(term), [...new Set(answer.ids ?? [])]);
+        // A rare contains every row must match already narrows the page; the rest are cheap row by row.
+        if (term.narrows) break;
+      }
+    } catch (error) {
+      if (postgresError(error)?.code !== '57014') throw error;
+      await tx.execute(sql`rollback to savepoint crm_search`);
+    }
+  }
+  await tx.execute(sql`select set_config('statement_timeout', ${before.rows[0]?.timeout ?? STATEMENT_TIMEOUT}, true)`);
+  return found;
 }
 
 /** The view's tables and the conditions that keep only its live rows; lateral sort joins sit between the two. */
@@ -235,9 +288,10 @@ async function buildPage(
   scope: EngineScope,
   query: PageQuery,
   candidates = CANDIDATES,
+  search = true,
 ): Promise<BuiltPage> {
   const { limit, cursor } = checkPage(query);
-  const { context, level } = await prepare(tx, scope, query);
+  const { context, level } = await prepare(tx, scope, query, search);
   const sorts = query.sorts ?? [];
   const keys = compileSorts(context, level, sorts);
   const filter = compileFilter(context, level, query.filter);
@@ -294,7 +348,11 @@ async function buildPage(
   // The first sort drives when its stored keys are exactly the keys it compiles to (one, or two for currency).
   const firstKeyCount = first === undefined ? 0 : compileSorts(context, level, [first]).length;
   const candidate = drivingSort(context, level, first, optionIds);
-  const drive = candidate !== undefined && candidate.keys.length === firstKeyCount ? candidate : undefined;
+  // A rare contains narrows the view to the search's few ids, so filtering first beats reading in key order.
+  const drive =
+    candidate !== undefined && candidate.keys.length === firstKeyCount && !narrowedBySearch(context, query.filter)
+      ? candidate
+      : undefined;
   if (drive === undefined) {
     const statement = plain(keys, sql``, sql`true`, cursor === undefined ? sql`true` : afterCursor(keys, cursor), 0);
     return {
@@ -752,10 +810,15 @@ export async function benchPage(
   return { rows: 0, plans };
 }
 
-/** Knobs for tests: a lower first pass cap, and a short statement timeout (one fixed value, so no text reaches the raw SQL). */
+/**
+ * Knobs for tests: a lower first pass cap, a short statement timeout (one
+ * fixed value, so no text reaches the raw SQL), and `search: false` to answer
+ * every contains by the narrowed path, as if the search function were absent.
+ */
 export interface PageTuning {
   readonly candidates?: number;
   readonly timeout?: '200ms';
+  readonly search?: false;
 }
 
 /**
@@ -781,7 +844,7 @@ export async function queryPage(scope: EngineScope, query: PageQuery, tuning: Pa
 /** The body of `queryPage`, inside its workspace transaction. */
 async function readPage(tx: WorkspaceTx, scope: EngineScope, query: PageQuery, tuning: PageTuning): Promise<Page> {
   await tx.execute(sql`set local statement_timeout = ${sql.raw(`'${tuning.timeout ?? STATEMENT_TIMEOUT}'`)}`);
-  const built = await buildPage(tx, scope, query, tuning.candidates);
+  const built = await buildPage(tx, scope, query, tuning.candidates, tuning.search ?? true);
   const all = await pageRows(tx, built, query.position);
   const { limit, keyCount, isList } = built;
   const rows = all.slice(0, limit);
@@ -810,6 +873,9 @@ async function readPage(tx: WorkspaceTx, scope: EngineScope, query: PageQuery, t
   return nextCursor === undefined ? page : { ...page, nextCursor };
 }
 
+/** Whether `signal` has aborted, read fresh (a call, so a check made earlier doesn't narrow it). */
+const isAborted = (signal: AbortSignal | undefined) => signal?.aborted === true;
+
 /** Where a filtered count stops: past it, the view says "10,000+". */
 export const COUNT_CAP = 10_000;
 
@@ -824,22 +890,21 @@ export interface MatchCount {
  * in its own statement with a 10 second timeout: exact up to 10,000, then
  * "at least 10,000". An unfiltered object or list always gets its exact
  * total. Aborting `signal` cancels it; either way the refusal is
- * `QUERY_CANCELLED`. `tuning.cap` lowers the cap, for tests.
+ * `QUERY_CANCELLED`. For tests, `tuning.cap` lowers the cap, and `tuning.search`
+ * false answers every contains by the narrowed path.
  */
 export async function countMatches(
   scope: EngineScope,
   query: ViewSource & QueryClock & { readonly filter?: FilterGroup },
   signal?: AbortSignal,
-  tuning: { readonly cap?: number } = {},
+  tuning: { readonly cap?: number; readonly search?: false } = {},
 ): Promise<MatchCount> {
   const cap = tuning.cap ?? COUNT_CAP;
   const cancelled = () => refuse('QUERY_CANCELLED', 'The count took too long or was cancelled.');
   if (signal?.aborted === true) throw cancelled();
   try {
     return await scope.db.withWorkspace(scope.workspaceId, async (tx) => {
-      const { context, level } = await prepare(tx, scope, query);
-      const filter = compileFilter(context, level, query.filter);
-      const { tables, where } = fromParts(level);
+      // Set first, so the searches the filter runs while it is prepared are bounded too.
       await tx.execute(sql`set local statement_timeout = ${sql.raw(`'${STATEMENT_TIMEOUT}'`)}`);
       // A name only this count's transaction carries: the cancel checks it, so a connection the pool has
       // since handed to another request (another workspace's) is never the one cancelled.
@@ -859,9 +924,15 @@ export async function countMatches(
           .catch(() => undefined);
       };
       signal?.addEventListener('abort', cancel, { once: true });
-      // An abort while the catalog loaded fired before the listener existed.
+      // An abort while the tag was set fired before the listener existed.
       if (signal?.aborted === true) throw cancelled();
       try {
+        // Prepared under the listener, so an abort cancels the filter's searches too.
+        const { context, level } = await prepare(tx, scope, query, tuning.search ?? true);
+        // A cancel that landed on a search looks like its timeout there, which only narrows that contains.
+        if (isAborted(signal)) throw cancelled();
+        const filter = compileFilter(context, level, query.filter);
+        const { tables, where } = fromParts(level);
         const filtered = query.filter !== undefined && query.filter.conditions.length > 0;
         if (!filtered) {
           // The whole object: its live records, index only. The whole list: its entry count, less the live

@@ -76,6 +76,7 @@ async function lookups(db: Database) {
       owner: await attribute(deals, 'owner'),
       company: await attribute(deals, 'associated_company'),
       categories,
+      companyName: await attribute(companies, 'name'),
       source,
       dealType,
       inbound: await option(source, 'Inbound'),
@@ -97,6 +98,8 @@ const scope: EngineScope = { db: app, workspaceId, actor: { type: 'member', id: 
 const and = (...conditions: FilterGroup['conditions']): FilterGroup => ({ conjunction: 'and', conditions });
 const ascendingBy = (attributeId: string) => [{ attributeId, direction: 'ascending' as const }];
 const byName = ascendingBy(ids.name);
+/** A contains on the rare words the seed puts on 0.1% (zephyr) and 0.4% (quokka) of deal names. */
+const rareName = (word: string) => ({ attributeId: ids.name, operator: 'contains' as const, value: word });
 /** The cursor after the row before `position`, so the page that follows starts at `position`. */
 async function cursorAt(position: number, sorts = byName): Promise<string> {
   const page = await queryPage(scope, { objectId: ids.deals, sorts, position: position - 1, limit: 1 });
@@ -196,6 +199,42 @@ const fullGrid: { name: string; query: PageQuery }[] = [
         { attributeId: ids.name, direction: 'ascending' },
       ],
     },
+  },
+  {
+    name: '11. Name contains a word on 0.1% of deals, sort by name',
+    query: { objectId: ids.deals, filter: and(rareName('zephyr')), sorts: byName },
+  },
+  {
+    name: '11b. Name contains a word on 0.4% of deals, sort by name',
+    query: { objectId: ids.deals, filter: and(rareName('quokka')), sorts: byName },
+  },
+  {
+    name: '11c. Name contains either rare word (0.5% of deals), sort by name',
+    query: {
+      objectId: ids.deals,
+      filter: { conjunction: 'or', conditions: [rareName('zephyr'), rareName('quokka')] },
+      sorts: byName,
+    },
+  },
+  {
+    name: '11d. Name does not contain the 0.4% word, sort by name',
+    query: { objectId: ids.deals, filter: and({ ...rareName('quokka'), operator: 'does_not_contain' }), sorts: byName },
+  },
+  {
+    name: '11e. Through the company: its name contains "company 1" (about 1,100 companies, 50,000 deals), sort by name',
+    query: {
+      objectId: ids.deals,
+      filter: and({
+        operator: 'through',
+        path: [ids.company],
+        condition: { attributeId: ids.companyName, operator: 'contains', value: 'company 1' },
+      }),
+      sorts: byName,
+    },
+  },
+  {
+    name: '12. Name contains the 0.1% word, sort by close date',
+    query: { objectId: ids.deals, filter: and(rareName('zephyr')), sorts: ascendingBy(ids.closeDate) },
   },
   {
     name: '13. Probability between 41 and 42, sort by name',
