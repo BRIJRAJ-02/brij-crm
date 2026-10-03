@@ -39,7 +39,14 @@ const auth = createAuth({ env, identity, mailer });
 log.info('Sign in ready', {
   mail: mailer.transport,
   google: auth.providers.google,
-  signup: env.SIGNUP_ALLOWLIST === undefined ? (env.APP_ENV === 'local' ? 'open' : 'closed') : 'allowlist',
+  signup:
+    env.SIGNUP_ALLOWLIST === undefined
+      ? env.APP_ENV === 'local'
+        ? 'open'
+        : 'closed'
+      : env.SIGNUP_ALLOWLIST[0] === '*'
+        ? 'open'
+        : 'allowlist',
 });
 
 const server = serve(
