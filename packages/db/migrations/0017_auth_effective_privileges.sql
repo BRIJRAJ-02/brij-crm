@@ -10,6 +10,7 @@
 -- - crm_app, and a role in it: insert on workspace_directory and workspace_membership;
 -- - the owner, and the roles the owner is itself in (like Neon's neon_superuser), as 0016 tolerates them;
 -- - superusers, which no grant can fence (the logins are checked against reaching one when the api starts).
+-- - Neon's own platform roles, neon_service and cloud_admin, by name.
 -- Built in roles (oid below 16384, pg_read_all_data among them) are judged through the roles in them.
 do $$
 declare
@@ -31,6 +32,10 @@ begin
     and c.relkind in ('r', 'p', 'v', 'm', 'f')
     and r.oid >= 16384
     and not r.rolsuper
+    -- Neon's own platform roles (neon_service, cloud_admin) already read every tenant and can't be fenced by a
+    -- grant, so they are skipped by name (decided by the owner, 3 October 2026). Any other role, including one
+    -- made in the Neon console, is still checked. Off Neon these roles don't exist and nothing is skipped.
+    and r.rolname not in ('neon_service', 'cloud_admin')
     and not pg_has_role(auth_owner, r.oid, 'USAGE')
     -- What r can do as itself (with what it inherits), or as any role it can SET ROLE to.
     and exists (

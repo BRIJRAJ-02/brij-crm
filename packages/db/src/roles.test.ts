@@ -311,6 +311,26 @@ describe("migration 0018's closing check", () => {
     ).rejects.toThrow(/crm_test_identity_login has TRUNCATE on auth\.session/);
   });
 
+  it("skips Neon's own platform roles by name, and still refuses a role made in the Neon console", async () => {
+    // As on Neon: neon_superuser holds pg_read_all_data, the owner is in it, and neon_service and a console made
+    // role are in it too.
+    const owner = admin.escapeIdentifier((await ownerName()) ?? 'crm_owner');
+    const neon = [
+      'create role neon_superuser',
+      'grant pg_read_all_data to neon_superuser',
+      `grant neon_superuser to ${owner} with inherit true`,
+      'create role neon_service login',
+      'grant neon_superuser to neon_service',
+    ];
+    for (const file of ['0017_auth_effective_privileges.sql', '0018_auth_privileges_by_membership.sql']) {
+      const sql = await closingCheck(file);
+      await checkAfter(neon, sql);
+      await expect(
+        checkAfter([...neon, 'create role crm_test_console login', 'grant neon_superuser to crm_test_console'], sql),
+      ).rejects.toThrow(/crm_test_console has SELECT on auth\./);
+    }
+  });
+
   it("tolerates the owner's own groups, as 0016 does", async () => {
     // A role the owner is in already holds what the owner holds.
     await checkAfter([
