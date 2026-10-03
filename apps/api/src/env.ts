@@ -17,11 +17,27 @@ const shared = {
   DATABASE_URL: z.url(),
 };
 
+// The edge guard's shared secret (spec 0005). Optional while it rolls out; an
+// empty value counts as unset, so `.env.example`'s `EDGE_SECRET=` boots.
+const edgeSecret = z
+  .string()
+  .optional()
+  .transform((value) => (value === '' ? undefined : value))
+  .pipe(
+    z
+      .string()
+      .min(32, 'EDGE_SECRET must be at least 32 characters.')
+      // A header carries it: printable ASCII with no spaces, so nothing is trimmed or refused on the way.
+      .regex(/^[\x21-\x7e]+$/, 'EDGE_SECRET may hold only printable ASCII characters, with no spaces.')
+      .optional(),
+  );
+
 export const ApiEnv = z.object({
   ...shared,
   PORT: z.coerce.number().int().positive().default(3000),
   APP_URL: z.url(),
   TRUSTED_ORIGINS: origins.optional(),
+  EDGE_SECRET: edgeSecret,
 });
 export type ApiEnv = z.infer<typeof ApiEnv>;
 

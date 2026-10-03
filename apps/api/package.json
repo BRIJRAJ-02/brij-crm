@@ -22,6 +22,7 @@
   },
   "devDependencies": {
     "@crm/config": "workspace:*",
+    "@orpc/client": "catalog:",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "typescript": "catalog:",

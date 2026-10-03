@@ -2,7 +2,7 @@
 // the API is told about the caller. Vercel reads the rewrite and the upstream
 // request headers from the response's x-middleware-* headers.
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import middleware, { config } from './middleware.ts';
+import middleware, { config, EDGE_HEADER } from './middleware.ts';
 
 const API = 'https://api-production.up.railway.app';
 
@@ -57,6 +57,44 @@ describe('api proxy middleware', () => {
     });
     expect(upstreamHeader(response, 'cookie')).toBe('session=abc');
     expect(upstreamHeader(response, 'origin')).toBe('https://brij-crm.vercel.app');
+  });
+
+  it('vouches for the request with the edge secret, replacing a forged copy from the client', () => {
+    vi.stubEnv('API_ORIGIN_INTERNAL', API);
+    vi.stubEnv('EDGE_SECRET', 'the-real-edge-secret-of-32-characters');
+    const response = call('/api/rpc/system/status', { [EDGE_HEADER]: 'forged-by-the-client' });
+    expect(upstreamHeader(response, EDGE_HEADER)).toBe('the-real-edge-secret-of-32-characters');
+  });
+
+  it.each([
+    ['unset', undefined],
+    ['empty', ''],
+  ])('strips a client’s edge header and sends none while EDGE_SECRET is %s', (_name, secret) => {
+    vi.stubEnv('API_ORIGIN_INTERNAL', API);
+    vi.stubEnv('EDGE_SECRET', secret);
+    const response = call('/api/rpc/system/status', { [EDGE_HEADER]: 'forged-by-the-client' });
+    expect(upstreamHeader(response, EDGE_HEADER)).toBeNull();
+    expect(response.headers.get('x-middleware-override-headers')?.split(',')).not.toContain(EDGE_HEADER);
+  });
+
+  it.each([
+    ['a secret too short', 'short'],
+    ['a secret with a space', 'the-real-edge-secret of-32-characters'],
+  ])('answers 503 rather than send %s', async (_name, secret) => {
+    vi.stubEnv('API_ORIGIN_INTERNAL', API);
+    vi.stubEnv('EDGE_SECRET', secret);
+    const response = call('/api/health');
+    expect(response.status).toBe(503);
+    expect(response.headers.get('x-middleware-rewrite')).toBeNull();
+    expect(((await response.json()) as { code: string }).code).toBe('API_UNAVAILABLE');
+  });
+
+  it('never sends the secret to an API address that isn’t https', () => {
+    vi.stubEnv('API_ORIGIN_INTERNAL', 'http://api-production.up.railway.app');
+    vi.stubEnv('EDGE_SECRET', 'the-real-edge-secret-of-32-characters');
+    const response = call('/api/health');
+    expect(response.status).toBe(503);
+    expect(response.headers.get('x-middleware-rewrite')).toBeNull();
   });
 
   it('answers 503 with the error shape when the deployment has no API address', async () => {

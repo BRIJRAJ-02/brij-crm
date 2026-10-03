@@ -56,9 +56,17 @@ const vendorSdks = {
         'posthog-js',
         'posthog-js/*',
         'posthog-node',
+        // Mail: only apps/api/src/mail/resend.ts.
         'resend',
         '@aws-sdk/*',
+        // Live updates: only packages/data/src/live/.
         'centrifuge',
+        // Sign in (spec 0005). The server library only in packages/db/src/identity/
+        // (its Drizzle adapter) and apps/api/src/auth/; its browser client,
+        // better-auth/client, only in packages/data/src/auth/.
+        'better-auth',
+        'better-auth/*',
+        '@better-auth/*',
         // Icons: only packages/ui's Icon registry (src/atoms/Icon/icons.ts).
         'lucide-react',
         'lucide-react/*',

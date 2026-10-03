@@ -232,6 +232,47 @@ describe('server preset (apps/api, packages/core, packages/contracts)', () => {
   });
 });
 
+describe('vendor SDKs (spec 0005: sign in, mail and live updates)', () => {
+  const files = {
+    'src/auth.ts': "import { betterAuth } from 'better-auth';\nexport const auth = betterAuth;\n",
+    'src/adapter.ts':
+      "import { drizzleAdapter } from 'better-auth/adapters/drizzle';\nexport const a = drizzleAdapter;\n",
+    'src/scoped.ts': "import { x } from '@better-auth/utils';\nexport const y = x;\n",
+    'src/auth-client.ts':
+      "import { createAuthClient } from 'better-auth/client';\nexport const c = createAuthClient;\n",
+    'src/mail.ts': "import { Resend } from 'resend';\nexport const mail = Resend;\n",
+    'src/live.ts': "import { Centrifuge } from 'centrifuge';\nexport const live = Centrifuge;\n",
+    'src/wrapper/auth.ts': "import { betterAuth } from 'better-auth';\nexport const auth = betterAuth;\n",
+  };
+
+  let serverMessages: Messages;
+  let clientMessages: Messages;
+
+  beforeAll(async () => {
+    const root = createWorkspace(files);
+    serverMessages = await lintWorkspace(root, [
+      ...server({ root }),
+      // How a wrapper lifts the ban for itself in its workspace's eslint.config.js.
+      { files: ['src/wrapper/**'], rules: { '@typescript-eslint/no-restricted-imports': 'off' } },
+    ]);
+    clientMessages = await lintWorkspace(root, client({ root, collaboration: true }));
+  }, 60_000);
+
+  it.each(Object.keys(files).filter((file) => !file.includes('wrapper')))(
+    'refuses %s outside its wrapper module, in server and client code',
+    (file) => {
+      for (const messages of [serverMessages, clientMessages]) {
+        expect(rulesFor(messages, file)).toContain('@typescript-eslint/no-restricted-imports');
+        expect(messagesFor(messages, file).join()).toMatch(/one wrapper module/);
+      }
+    },
+  );
+
+  it('lets the wrapper module import its vendor once its config lifts the ban', () => {
+    expect(rulesFor(serverMessages, 'src/wrapper/auth.ts')).not.toContain('@typescript-eslint/no-restricted-imports');
+  });
+});
+
 describe('server preset for packages/db', () => {
   it('lets packages/db open the database connection', async () => {
     const root = createWorkspace({ 'src/client.ts': "import pg from 'pg';\nexport const pool = pg;\n" });

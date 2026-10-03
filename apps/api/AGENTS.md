@@ -10,7 +10,10 @@ The one modular API (Hono + oRPC) that every read and write goes through, and th
 |---|---|
 | `src/server.ts` | The api entrypoint: parse env, connect, refuse a role that can bypass row level security, serve, shut down on SIGTERM |
 | `src/worker.ts` | The worker entrypoint: the direct connection for jobs (#8) and the relay (#7), plus its own `/health` |
-| `src/app.ts` | The Hono app: health checks, the `Origin` check on writes, `/api/rpc/*`, the 404 and 500 shapes |
+| `src/app.ts` | The Hono app: request ids, the edge guard, health checks, the `Origin` check on writes, the 1 MB body limit and `/api/rpc/*`, the 404 and 500 shapes |
+| `src/edge.ts` | The edge guard: refuses `/api/*` (health checks aside) without `x-crm-edge` when `EDGE_SECRET` is set outside local, and `clientIp()` for trusted requests only |
+| `src/rpc.ts` | The RPC handler and its error interceptors: every error leaves with a code from `ERROR_MAP` in `@crm/contracts` |
+| `src/errors.ts` | `toApiError()`: refusals keep their code and list every refusal, bad input is `INPUT_INVALID`, anything else `INTERNAL` |
 | `src/router.ts` | Joins the module routers into the one router the contract describes |
 | `src/modules/<feature>/router.ts` | Thin handlers for one feature, each calling a service in `packages/core` |
 | `src/orpc.ts` | The `base` implementer and `RequestContext` (actor and workspace join with sign in) |
@@ -44,7 +47,8 @@ docker build -f apps/api/Dockerfile .   # from the repo root
 - Locally the api owns `PORT` and the worker uses `WORKER_PORT` (default 3001). On Railway, each service gets its own `PORT`.
 - Turbo runs tasks in strict env mode, so shell variables don't reach `dev`. The scripts read the root `.env` themselves (`--env-file-if-exists`).
 - Railway runs migrations as the api's pre deploy step, on the owner role.
-- Forwarded headers (`x-forwarded-for` and the rest) can't be trusted yet, because the API's host address is public. See #57 Edge only API access.
+- Forwarded headers (`x-forwarded-for` and the rest) are trusted only when the edge guard admitted the request by its secret (or locally). Read the IP from `context.clientIp`, never from the header. While `EDGE_SECRET` is unset in a deployed environment the guard is off and `clientIp` stays undefined. #57 makes the secret required.
+- A procedure throws an engine refusal or `apiError(code, message)`; never a hand made `ORPCError` with a status. Anything else is logged and answered as `INTERNAL`.
 
 ## Agent skills
 

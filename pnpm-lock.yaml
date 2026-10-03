@@ -228,6 +228,9 @@ importers:
       '@crm/config':
         specifier: workspace:*
         version: link:../../packages/config
+      '@orpc/client':
+        specifier: 'catalog:'
+        version: 1.15.4
       '@types/node':
         specifier: 'catalog:'
         version: 24.19.0

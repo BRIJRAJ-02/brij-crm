@@ -5,11 +5,32 @@ import { ipAddress, rewrite } from '@vercel/functions';
 
 export const config = { matcher: ['/api', '/api/:path*'] };
 
+/**
+ * The header carrying the edge secret, which proves to the API that a request
+ * came through here (spec 0005, the edge guard). The API checks it as
+ * `EDGE_HEADER` in apps/api/src/edge.ts; the two must stay equal.
+ */
+export const EDGE_HEADER = 'x-crm-edge';
+
+/** What an edge secret must look like: 32 or more printable ASCII characters, no spaces. */
+const EDGE_SECRET_FORMAT = /^[\x21-\x7e]{32,}$/;
+
 export default function middleware(request: Request): Response {
   const origin = process.env.API_ORIGIN_INTERNAL;
   if (origin === undefined || origin === '') {
     return Response.json(
       { code: 'API_UNAVAILABLE', message: 'This deployment has no API address set.' },
+      { status: 503 },
+    );
+  }
+
+  // The secret travels to the API in a header, so only over https, and only a
+  // value a header keeps intact (the API's EDGE_SECRET has the same rule).
+  const edgeSecret = process.env.EDGE_SECRET;
+  const vouching = edgeSecret !== undefined && edgeSecret !== '';
+  if (vouching && (!EDGE_SECRET_FORMAT.test(edgeSecret) || new URL(origin).protocol !== 'https:')) {
+    return Response.json(
+      { code: 'API_UNAVAILABLE', message: 'This deployment’s API settings are invalid.' },
       { status: 503 },
     );
   }
@@ -22,6 +43,10 @@ export default function middleware(request: Request): Response {
   const clientIp = ipAddress(request);
   if (clientIp === undefined) headers.delete('x-forwarded-for');
   else headers.set('x-forwarded-for', clientIp);
+  // Only this middleware may vouch for a request: a client's own copy never
+  // passes through, and none is sent while EDGE_SECRET is unset.
+  if (vouching) headers.set(EDGE_HEADER, edgeSecret);
+  else headers.delete(EDGE_HEADER);
 
   return rewrite(new URL(url.pathname + url.search, origin), { request: { headers } });
 }

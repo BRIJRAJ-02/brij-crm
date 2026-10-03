@@ -1,5 +1,6 @@
 import { systemContract } from './system.ts';
 
+export * from './errors.ts';
 export * from './system.ts';
 export * from './values/index.ts';
 
