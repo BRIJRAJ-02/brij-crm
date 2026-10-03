@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@crm/contracts": "workspace:*",
+    "better-auth": "catalog:",
     "drizzle-orm": "catalog:",
     "pg": "catalog:",
     "zod": "catalog:"

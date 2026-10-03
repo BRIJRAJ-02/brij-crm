@@ -86,6 +86,27 @@ export async function prepareTestDatabase(
   return { appUrl: withCredentials(adminUrl, APP.role, APP.password, name), ownerUrl };
 }
 
+/**
+ * Adds a signed up user (an `auth.user` row, as Better Auth would make one) for
+ * tests that need a real identity, connecting through `url` (the app login).
+ * Returns the user's id.
+ */
+export async function createTestUser(url: string, input: { email: string; name?: string }): Promise<string> {
+  const client = new pg.Client({ connectionString: url, application_name: 'crm-test-user' });
+  await client.connect();
+  try {
+    const result = await client.query<{ id: string }>(
+      'insert into auth."user" (email, name, email_verified) values ($1, $2, true) returning id',
+      [input.email, input.name ?? ''],
+    );
+    const id = result.rows[0]?.id;
+    if (id === undefined) throw new Error('The test user was not created.');
+    return id;
+  } finally {
+    await client.end();
+  }
+}
+
 async function ensureRole(client: pg.Client, role: string, password: string, options: string): Promise<void> {
   const exists = await client.query('select 1 from pg_roles where rolname = $1', [role]);
   if (exists.rowCount === 0) {

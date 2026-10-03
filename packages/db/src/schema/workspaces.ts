@@ -59,7 +59,7 @@ export const workspaceCounters = pgTable(
 /** Whether a member can still act in the workspace. */
 export const memberStatus = pgEnum('member_status', ['active', 'removed']);
 
-/** A person in a workspace. `user_id` links the sign in identity once #10 adds Better Auth. */
+/** A person in a workspace. `user_id` is the signed in identity (`auth.user`), set for everyone who signs in. */
 export const members = pgTable(
   'members',
   {
@@ -86,6 +86,10 @@ export const members = pgTable(
     }),
     uniqueIndex('members_email')
       .on(t.workspaceId, sql`lower(${t.email})`)
+      .where(sql`${t.status} = 'active'`),
+    // One active member per signed in user in a workspace: the access door finds the actor by it (spec 0005).
+    uniqueIndex('members_user')
+      .on(t.workspaceId, t.userId)
       .where(sql`${t.status} = 'active'`),
     actorCheck('members_created_by_actor', { type: t.createdByType, id: t.createdById, memberId: t.createdByMemberId }),
     actorCheck('members_updated_by_actor', { type: t.updatedByType, id: t.updatedById, memberId: t.updatedByMemberId }),

@@ -2,7 +2,8 @@
 #   postgres    5433  direct connection (DATABASE_URL_DIRECT, DATABASE_URL_OWNER)
 #   pgbouncer   6432  transaction pooling, like Neon's pooler (DATABASE_URL)
 #   centrifugo  8000  client connections · 9000 HTTP API, admin, /health
-# Mailpit (email) and S3 compatible storage (files) join when those features land.
+#   mailpit     1025  SMTP · 8025 the inbox and its API (MAILPIT_URL), where sign in codes land locally
+# S3 compatible storage (files) joins when that feature lands.
 name: crm
 
 services:
@@ -56,6 +57,22 @@ services:
       - "9000:9000"
     healthcheck:
       test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:9000/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  mailpit:
+    # Catches every email locally (spec 0005): the api sends with POST /api/v1/send, tests read
+    # GET /api/v1/messages. 1.14 or later for the send API.
+    image: axllent/mailpit:v1.31.4
+    environment:
+      MP_MAX_MESSAGES: 500
+    # Bound to this machine only: the inbox holds sign in codes.
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
       interval: 2s
       timeout: 3s
       retries: 30

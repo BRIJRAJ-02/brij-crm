@@ -8,4 +8,12 @@ export {
   type WorkspaceTx,
 } from './client.ts';
 export { assertDirectUrl, openDirectConnection } from './direct.ts';
+export { addWorkspaceToDirectory, DIRECTORY_SLUG_CONSTRAINT, type DirectoryEntry } from './identity/directory.ts';
+export {
+  createIdentityStore,
+  type AuthDatabase,
+  type DirectoryWorkspace,
+  type IdentityStore,
+  type IdentityUser,
+} from './identity/store.ts';
 export * as schema from './schema/index.ts';

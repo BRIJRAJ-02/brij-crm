@@ -4,9 +4,11 @@
 // reference into another workspace is refused by the database itself.
 import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
+import { getTableConfig, PgTable } from 'drizzle-orm/pg-core';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from './client.ts';
+import * as tenantSchema from './schema/index.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 
@@ -212,5 +214,94 @@ describe('isolation', () => {
         );
       }),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'records_created_by' } });
+  });
+});
+
+describe('the auth schema: global identity, outside row level security (spec 0005)', () => {
+  const AUTH_TABLES = [
+    'account',
+    'rate_limit',
+    'session',
+    'user',
+    'verification',
+    'workspace_directory',
+    'workspace_membership',
+  ];
+
+  it("holds Better Auth's tables and the directory, and only the directory carries a workspace id", async () => {
+    const tables = await owner.query<{ table: string; workspace: boolean; enabled: boolean }>(`
+      select c.relname as table, c.relrowsecurity as enabled,
+        exists (
+          select 1 from pg_attribute a where a.attrelid = c.oid and a.attname = 'workspace_id' and not a.attisdropped
+        ) as workspace
+      from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = 'auth' and c.relkind in ('r', 'p', 'v', 'm', 'f')
+      order by 1
+    `);
+    expect(tables.rows.map((row) => row.table)).toEqual(AUTH_TABLES);
+    expect(tables.rows.filter((row) => row.workspace).map((row) => row.table)).toEqual([
+      'workspace_directory',
+      'workspace_membership',
+    ]);
+    // No row level security here: the grants below are the fence.
+    expect(tables.rows.filter((row) => row.enabled).map((row) => row.table)).toEqual([]);
+  });
+
+  it('lets the app select, insert, update and delete there, and nothing more', async () => {
+    const grants = await owner.query<{ table: string; privileges: string }>(`
+      select table_name as table, string_agg(privilege_type, ',' order by privilege_type) as privileges
+      from information_schema.role_table_grants
+      where table_schema = 'auth' and grantee = 'crm_app'
+      group by table_name order by 1
+    `);
+    expect(grants.rows).toEqual(AUTH_TABLES.map((table) => ({ table, privileges: 'DELETE,INSERT,SELECT,UPDATE' })));
+    const schema = await owner.query<{ usage: boolean; create: boolean }>(
+      `select has_schema_privilege('crm_app', 'auth', 'USAGE') as usage, has_schema_privilege('crm_app', 'auth', 'CREATE') as create`,
+    );
+    expect(schema.rows).toEqual([{ usage: true, create: false }]);
+  });
+
+  it('stays out of the schema `@crm/db` exports, so only the identity store reaches it', () => {
+    const exported: readonly unknown[] = Object.values(tenantSchema);
+    const tables = exported.flatMap((value) => (value instanceof PgTable ? [getTableConfig(value)] : []));
+    expect(tables.length).toBeGreaterThan(0);
+    expect(tables.filter((table) => table.schema !== undefined).map((table) => table.name)).toEqual([]);
+  });
+
+  it('is closed to every other role, crm_search included', async () => {
+    const schema = await owner.query<{ grantee: string }>(`
+      select coalesce(pg_get_userbyid(nullif(a.grantee, 0)), 'PUBLIC') as grantee
+      from aclexplode((select nspacl from pg_namespace where nspname = 'auth')) a
+      where a.grantee not in ('crm_app'::regrole, (select nspowner from pg_namespace where nspname = 'auth'))
+    `);
+    expect(schema.rows).toEqual([]);
+    const tables = await owner.query<{ grantee: string }>(`
+      select distinct grantee from information_schema.role_table_grants
+      where table_schema = 'auth'
+        and grantee not in ('crm_app', (select pg_get_userbyid(nspowner) from pg_namespace where nspname = 'auth'))
+    `);
+    expect(tables.rows).toEqual([]);
+    const search = await owner.query<{ usage: boolean }>(
+      `select has_schema_privilege('crm_search', 'auth', 'USAGE') as usage`,
+    );
+    expect(search.rows).toEqual([{ usage: false }]);
+  });
+
+  it('keeps one active member per user in a workspace, and lets a removed one come back', async () => {
+    const { workspaceId } = await workspaceWithMember('theta');
+    const userId = randomUUID();
+    const add = (id: string) =>
+      db.withWorkspace(workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into members (workspace_id, id, user_id, name, email, created_by_type, updated_by_type) values (${workspaceId}, ${id}, ${userId}, 'x', ${`${id}@example.com`}, 'system', 'system')`,
+        ),
+      );
+    const first = randomUUID();
+    await add(first);
+    await expect(add(randomUUID())).rejects.toMatchObject({ cause: { code: '23505', constraint: 'members_user' } });
+    await db.withWorkspace(workspaceId, (tx) =>
+      tx.execute(sql`update members set status = 'removed' where id = ${first}`),
+    );
+    await add(randomUUID());
   });
 });
