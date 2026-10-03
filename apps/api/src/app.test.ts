@@ -3,7 +3,7 @@
 // the shared error shape on each.
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AUTH_BODY_LIMIT_BYTES, RPC_BODY_LIMIT_BYTES } from './app.ts';
-import { EDGE_HEADER } from './edge.ts';
+import { EDGE_HEADER, ORIGIN_HEADER } from './edge.ts';
 import { APP_URL, captureLogs, createTestApp } from './testing.ts';
 
 const SECRET = 'an-edge-secret-of-at-least-32-characters';
@@ -57,7 +57,9 @@ describe('the edge guard', () => {
 
   it('lets a request with the secret through, and trusts its forwarded IP', async () => {
     const response = await guarded.fetch(
-      rpcRequest('context', { headers: { [EDGE_HEADER]: SECRET, 'x-forwarded-for': '203.0.113.7, 10.0.0.1' } }),
+      rpcRequest('context', {
+        headers: { [EDGE_HEADER]: SECRET, [ORIGIN_HEADER]: APP_URL, 'x-forwarded-for': '203.0.113.7, 10.0.0.1' },
+      }),
     );
     expect(response.status).toBe(200);
     const body = (await response.json()) as { json: { clientIp: string | null } };
@@ -101,6 +103,46 @@ describe('the edge guard', () => {
     await guarded.fetch(rpcRequest('context', { headers: { [EDGE_HEADER]: SECRET } }));
     await guarded.fetch(rpcRequest('context', { headers: { [EDGE_HEADER]: 'wrong' } }));
     expect(JSON.stringify(logs.lines())).not.toContain(SECRET);
+  });
+});
+
+describe('the origin check behind the edge', () => {
+  const guarded = createTestApp({ APP_ENV: 'production', EDGE_SECRET: SECRET });
+  const write = (headers: Record<string, string>) =>
+    guarded.fetch(
+      new Request(`${APP_URL}/api/rpc/context`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', [EDGE_HEADER]: SECRET, ...headers },
+        body: JSON.stringify({ json: null }),
+      }),
+    );
+
+  it('accepts a write whose vouched origin is the app’s, even when the rewrite dropped its own', async () => {
+    expect((await write({ [ORIGIN_HEADER]: APP_URL })).status).toBe(200);
+  });
+
+  it('refuses a write whose vouched origin is another, whatever its own origin says', async () => {
+    const response = await write({ [ORIGIN_HEADER]: 'https://evil.test', origin: APP_URL });
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { code: string }).code).toBe('FORBIDDEN_ORIGIN');
+  });
+
+  it('fails closed: a vouched write with no copied origin is refused, even if its own origin is the app’s', async () => {
+    const response = await write({ origin: APP_URL });
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { code: string }).code).toBe('FORBIDDEN_ORIGIN');
+  });
+
+  it('refuses a sign in route with no vouched origin before Better Auth sees it', async () => {
+    const response = await guarded.fetch(
+      new Request(`${APP_URL}/api/auth/sign-out`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', [EDGE_HEADER]: SECRET, origin: APP_URL },
+        body: '{}',
+      }),
+    );
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { code: string }).code).toBe('FORBIDDEN_ORIGIN');
   });
 });
 

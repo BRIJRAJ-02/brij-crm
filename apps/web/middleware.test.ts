@@ -79,8 +79,22 @@ describe('api proxy middleware', () => {
       [ORIGIN_HEADER]: 'https://evil.test',
     });
     expect(upstreamHeader(response, ORIGIN_HEADER)).toBe('https://brij-crm.vercel.app');
+    expect(response.headers.get('x-middleware-override-headers')?.split(',')).toContain(ORIGIN_HEADER);
     const noOrigin = call('/api/rpc/system/status', { [ORIGIN_HEADER]: 'https://evil.test' });
     expect(upstreamHeader(noOrigin, ORIGIN_HEADER)).toBeNull();
+    expect(noOrigin.headers.get('x-middleware-override-headers')?.split(',')).not.toContain(ORIGIN_HEADER);
+  });
+
+  it('sends no vouched origin while EDGE_SECRET is unset in development, and drops a client’s copy', () => {
+    vi.stubEnv('API_ORIGIN_INTERNAL', API);
+    vi.stubEnv('EDGE_SECRET', '');
+    vi.stubEnv('VERCEL_ENV', 'development');
+    const response = call('/api/rpc/system/status', {
+      origin: 'https://brij-crm.vercel.app',
+      [ORIGIN_HEADER]: 'https://evil.test',
+    });
+    expect(upstreamHeader(response, ORIGIN_HEADER)).toBeNull();
+    expect(response.headers.get('x-middleware-override-headers')?.split(',')).not.toContain(ORIGIN_HEADER);
   });
 
   it.each([

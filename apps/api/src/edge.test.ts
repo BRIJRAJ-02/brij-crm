@@ -50,6 +50,20 @@ describe('origin', () => {
     expect(guard.origin(refused)).toBeUndefined();
   });
 
+  it('fails closed where enforced: a vouched request without the copied header has no origin, whatever it sent', () => {
+    const guard = createEdgeGuard({ secret: SECRET, environment: 'production' });
+    const admitted = request({ [EDGE_HEADER]: SECRET, origin: 'https://app.test' });
+    expect(guard.admit(admitted)).toBe(true);
+    expect(guard.origin(admitted)).toBeUndefined();
+  });
+
+  it('gives a health check let through without the secret no origin', () => {
+    const guard = createEdgeGuard({ secret: SECRET, environment: 'production' });
+    const health = new Request('https://api.test/api/health', { headers: { origin: 'https://app.test' } });
+    expect(guard.admit(health)).toBe(true);
+    expect(guard.origin(health)).toBeUndefined();
+  });
+
   it('reads the request’s own origin locally, where Vite’s proxy keeps it', () => {
     const guard = createEdgeGuard({ secret: undefined, environment: 'local' });
     const local = request({ origin: 'http://localhost:5173', [ORIGIN_HEADER]: 'https://evil.test' });

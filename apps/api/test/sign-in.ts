@@ -13,11 +13,11 @@ import type { ApiEnv } from '../src/env.ts';
 import { createMailpitMailer } from '../src/mail/mailpit.ts';
 import type { Mailer } from '../src/mail/mailer.ts';
 import type { router } from '../src/router.ts';
-import { EDGE_HEADER } from '../src/edge.ts';
+import { EDGE_HEADER, ORIGIN_HEADER } from '../src/edge.ts';
 import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices } from '../src/testing.ts';
 
-/** What Vercel's middleware adds to every request it proxies (outside local; harmless locally). */
-const THROUGH_THE_EDGE = { [EDGE_HEADER]: TEST_EDGE_SECRET };
+/** What Vercel's middleware adds to every request it proxies (outside local; ignored locally). */
+const THROUGH_THE_EDGE = { [EDGE_HEADER]: TEST_EDGE_SECRET, [ORIGIN_HEADER]: APP_URL };
 
 /** Mailpit's API, from docker-compose.yml. */
 export const MAILPIT_URL = process.env.TEST_MAILPIT_URL ?? 'http://localhost:8025';

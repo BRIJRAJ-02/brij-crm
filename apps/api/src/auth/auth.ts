@@ -151,8 +151,9 @@ export function forwardedHeaders(headers: Headers, clientIp: string | undefined,
   const next = new Headers(headers);
   next.delete('x-forwarded-for');
   if (clientIp !== undefined && isIP(clientIp) !== 0) next.set('x-forwarded-for', clientIp);
-  // Better Auth checks the request's own origin; give it the one the edge guard read.
-  if (origin !== undefined) next.set('origin', origin);
+  // Better Auth checks the request's own origin; give it the one the edge guard read, and no other.
+  if (origin === undefined) next.delete('origin');
+  else next.set('origin', origin);
   return next;
 }
 

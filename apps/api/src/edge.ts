@@ -39,10 +39,10 @@ export interface EdgeGuard {
    */
   readonly clientIp: (request: Request) => string | undefined;
   /**
-   * The browser's Origin: from `x-crm-origin` on a request the guard admitted
-   * by the secret (the middleware copied it there), else the request's own
-   * `origin` header (locally, where Vite's proxy keeps it). Undefined when
-   * neither is sent.
+   * The browser's Origin. Where the guard is enforced, only `x-crm-origin` on a
+   * request it admitted by the secret (the middleware copied it there), and
+   * never the request's own `origin`, so a request the middleware didn't vouch
+   * for has none. Locally, the request's own `origin` (Vite's proxy keeps it).
    */
   readonly origin: (request: Request) => string | undefined;
 }
@@ -85,8 +85,9 @@ export function createEdgeGuard(options: EdgeGuardOptions): EdgeGuard {
       return true;
     },
     origin(request) {
-      const copied = enforced && trusted.has(request) ? request.headers.get(ORIGIN_HEADER) : null;
-      return copied ?? request.headers.get('origin') ?? undefined;
+      if (!enforced) return request.headers.get('origin') ?? undefined;
+      if (!trusted.has(request)) return undefined;
+      return request.headers.get(ORIGIN_HEADER) ?? undefined;
     },
     clientIp(request) {
       if (!trusted.has(request)) return undefined;

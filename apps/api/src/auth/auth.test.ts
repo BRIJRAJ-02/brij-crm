@@ -406,6 +406,12 @@ describe('forwardedHeaders', () => {
       expect(forwardedHeaders(sent, ip).has('x-forwarded-for')).toBe(false);
     },
   );
+
+  it('sets the origin the edge guard read, and drops the caller’s own when the guard read none', () => {
+    const withOrigin = new Headers({ origin: 'https://evil.test' });
+    expect(forwardedHeaders(withOrigin, undefined, 'https://app.test').get('origin')).toBe('https://app.test');
+    expect(forwardedHeaders(withOrigin, undefined, undefined).has('origin')).toBe(false);
+  });
 });
 
 describe('limits with no usable client IP (a forwarded value that is not an IP)', () => {
