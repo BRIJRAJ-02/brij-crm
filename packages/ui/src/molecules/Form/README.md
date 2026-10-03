@@ -26,9 +26,9 @@ New (spec 0005, pulled forward from spec 0003's milestone 4). Sign in, verify, t
 - `refusals` are the last answer's refusals, in any shape with `code`, `message` and an optional `attributeId` (`FormRefusal`). `fieldFor` turns one into the `name` of the field it is about (often straight from `attributeId`, or through a map from attribute ids to field names). That field shows the message until the person changes it.
 - A refusal `fieldFor` doesn't map (no attribute, a rate limit, a lost connection) shows above the fields as a danger Callout, which is announced. Without `fieldFor`, every refusal shows there. So does one mapped to a name no field in the form has (an attribute this form doesn't show), so no message ever vanishes; give the field that `name` to show it in place.
 - Each submit is a new answer: the same refusal again shows again, even on a field the person had changed. Refusals are hidden while `isBusy`.
-- `isBusy` while the server answers: the submit spins and reads `busyLabel`, and Enter or a second press does nothing. `isDisabled` turns the submit off (disable the fields too).
+- `isBusy` while the server answers: the submit spins and reads `busyLabel`, and Enter or a second press does nothing. `isDisabled` turns the submit off (disable the fields too). `submitDescribedBy` takes the ids of lines that describe the submit, such as why it is off (SignInForm points it at its email field's reason, through Field's `descriptionId`).
 - The submit (`size="lg"`, `isFullWidth="center"`) fills the width under the fields, as on a sign in page or the welcome screen. `actions` go under it: another way to go on, such as Continue with Google, as a `Button` with `size="lg"` and `isFullWidth="center"`. The column never stretches a button; each asks to fill through Button's own variant.
-- **In a Modal**, the submit lives in the Modal's footer, not in the form. Leave out `submitLabel` (and `busyLabel` and `actions`), give the Form an `id`, and put the primary in Modal's `actions` as a `Button` with `type="submit"` and `form` set to that `id`. Pressing it, or Enter in a field, submits the form; Cancel comes first with `slot="close"`. While the server answers, pass `isBusy` to the Form (so a second submit does nothing) and `isPending` with the ongoing verb to the Button:
+- **In a Modal**, the submit lives in the Modal's footer, not in the form. Leave out `submitLabel` (and `busyLabel` and `actions`), give the Form an `id`, and put the primary in Modal's `actions` as a `Button` with `type="submit"` and `form` set to that `id`. Pressing it, or Enter in a field, submits the form; Cancel comes first with `slot="close"`. The Form can't reach a submit outside it, so pass each state to both: while the server answers, `isBusy` to the Form (so a second submit does nothing) and `isPending` with the ongoing verb to the Button; when the form can't be sent, `isDisabled` to the Form (so Enter in a field does nothing) and `isDisabled` to the Button (so it reads and acts as off), with `aria-describedby` on the Button pointing at the line that says why:
 
   ```tsx
   <Modal
@@ -36,13 +36,20 @@ New (spec 0005, pulled forward from spec 0003's milestone 4). Sign in, verify, t
     actions={
       <>
         <Button slot="close">Cancel</Button>
-        <Button variant="primary" type="submit" form="new-person" isPending={pending}>
+        <Button variant="primary" type="submit" form="new-person" isPending={pending} isDisabled={!canAdd}>
           {pending ? 'Adding person' : 'Add person'}
         </Button>
       </>
     }
   >
-    <Form id="new-person" isBusy={pending} refusals={refusals} fieldFor={toField} onSubmit={add}>
+    <Form
+      id="new-person"
+      isBusy={pending}
+      isDisabled={!canAdd}
+      refusals={refusals}
+      fieldFor={toField}
+      onSubmit={add}
+    >
       <Field label="Name" name="name" />
     </Form>
   </Modal>

@@ -107,12 +107,20 @@ export const SignUpClosed: Story = {
   },
 };
 
-/** Signing in is off for now: the field says why, and nothing can be pressed. */
+/** Signing in is off for now: the field says why, the reason describes both buttons, and nothing can be pressed. */
 export const Disabled: Story = {
   args: { isDisabled: true, disabledReason: 'Signing in is paused for a few minutes. Try again soon.' },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('textbox', { name: 'Email' })).toBeDisabled();
-    await expect(canvas.getByRole('button', { name: 'Continue' })).toBeDisabled();
-    await expect(canvas.getByRole('button', { name: 'Continue with Google' })).toBeDisabled();
+    const reason = 'Signing in is paused for a few minutes. Try again soon.';
+    const email = canvas.getByRole('textbox', { name: 'Email' });
+    const submit = canvas.getByRole('button', { name: 'Continue' });
+    const google = canvas.getByRole('button', { name: 'Continue with Google' });
+    await expect(email).toBeDisabled();
+    await expect(submit).toBeDisabled();
+    await expect(google).toBeDisabled();
+    await expect(canvas.getByText(reason)).toBeVisible();
+    await waitFor(() => expect(email).toHaveAccessibleDescription(reason));
+    await expect(submit).toHaveAccessibleDescription(reason);
+    await expect(google).toHaveAccessibleDescription(reason);
   },
 };

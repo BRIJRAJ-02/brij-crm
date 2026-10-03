@@ -91,9 +91,14 @@ export function VerifyEmail({
     }
   }
   // Focus was on "Send a new code"; once the code is sent, the next thing to
-  // do is type it.
+  // do is type it. Each resend moves focus once, at most: the last one acted
+  // on is kept, so turning the screen off and on again moves nothing, and a
+  // resend that lands while it is off is passed over.
+  const actedOn = useRef(0);
   useEffect(() => {
-    if (resends > 0 && !isDisabled) codeRef.current?.focus();
+    if (resends === actedOn.current) return;
+    actedOn.current = resends;
+    if (!isDisabled) codeRef.current?.focus();
   }, [resends, isDisabled]);
 
   const shown = isErrorShown && !isVerifying ? error : undefined;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Form, type FormRefusal } from '../../molecules/Form/Form.tsx';
@@ -26,7 +26,7 @@ export interface SignInFormProps {
   readonly defaultEmail?: string;
   /** Signing in is off for now: the field and buttons are off. */
   readonly isDisabled?: boolean;
-  /** Why it is off, under the field. */
+  /** Why it is off, under the field. It describes both buttons too. */
   readonly disabledReason?: string;
   /** Sign up is closed: a quiet line under the buttons says so. */
   readonly isSignUpClosed?: boolean;
@@ -66,6 +66,10 @@ export function SignInForm({
   const refusal: FormRefusal | undefined =
     error === undefined || error === dismissed ? undefined : { code: 'REFUSED', message: error };
   const shown = problem ?? refusal;
+  // The reason shows under the field; it describes both buttons as well, so
+  // each says why it is off.
+  const reasonId = useId();
+  const hasReason = isDisabled && disabledReason !== undefined;
   return (
     <div className={styles.root}>
       <Form
@@ -75,6 +79,7 @@ export function SignInForm({
         isDisabled={isDisabled || status === 'google'}
         refusals={shown === undefined ? [] : [shown]}
         fieldFor={onEmailField}
+        {...(hasReason ? { submitDescribedBy: reasonId } : {})}
         onSubmit={() => {
           const typed = email.trim();
           const found = problemWith(typed);
@@ -93,6 +98,7 @@ export function SignInForm({
                   onPress={onGoogle}
                   isPending={status === 'google'}
                   isDisabled={isDisabled || status === 'sending'}
+                  {...(hasReason ? { 'aria-describedby': reasonId } : {})}
                 >
                   {status === 'google' ? strings.googlePending : strings.google}
                 </Button>
@@ -114,6 +120,7 @@ export function SignInForm({
           }}
           isDisabled={isDisabled}
           {...(disabledReason === undefined ? {} : { disabledReason })}
+          {...(hasReason ? { descriptionId: reasonId } : {})}
         />
       </Form>
       {isSignUpClosed && <p className={styles.note}>{strings.signUpClosed}</p>}

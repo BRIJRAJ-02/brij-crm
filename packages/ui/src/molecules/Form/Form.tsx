@@ -50,6 +50,8 @@ interface OwnSubmit {
   readonly busyLabel?: string;
   /** Other ways to go on, under the submit (Continue with Google): Buttons with `size="lg"` and `isFullWidth="center"`. */
   readonly actions?: ReactNode;
+  /** The ids, space separated, of lines that describe the submit button, such as why it is off. */
+  readonly submitDescribedBy?: string;
   /** The form's `id`. */
   readonly id?: string;
 }
@@ -61,6 +63,7 @@ interface OutsideSubmit {
   readonly submitLabel?: never;
   readonly busyLabel?: never;
   readonly actions?: never;
+  readonly submitDescribedBy?: never;
 }
 
 /**
@@ -138,6 +141,7 @@ export function Form<R extends FormRefusal = FormRefusal>({
   refusals = [],
   fieldFor,
   actions,
+  submitDescribedBy,
   id,
   label,
 }: FormProps<R>) {
@@ -195,7 +199,12 @@ export function Form<R extends FormRefusal = FormRefusal>({
       {...(id === undefined ? {} : { id })}
       {...(label === undefined ? {} : { 'aria-label': label })}
     >
-      {banner.length > 0 && <Callout tone="danger">{banner.join(' ')}</Callout>}
+      {banner.length > 0 && (
+        // A new alert for each submit, so the same refusal again is announced again.
+        <Callout key={attempt} tone="danger">
+          {banner.join(' ')}
+        </Callout>
+      )}
       {children}
       {submitLabel !== undefined && (
         <div className={styles.actions}>
@@ -206,6 +215,7 @@ export function Form<R extends FormRefusal = FormRefusal>({
             isFullWidth="center"
             isPending={isBusy}
             isDisabled={isDisabled}
+            {...(submitDescribedBy === undefined ? {} : { 'aria-describedby': submitDescribedBy })}
           >
             {isBusy ? (busyLabel ?? submitLabel) : submitLabel}
           </Button>

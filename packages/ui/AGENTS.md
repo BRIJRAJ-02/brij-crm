@@ -21,7 +21,7 @@ The component library every screen draws with. It holds the root stylesheet (cas
 | `src/provider/` | `UiProvider` (language, time zone, router links, the toast queue, the clock, loading timing), `createToasts()`, `createClock()` and `useDelayedLoading()` |
 | `src/vite.ts` | `@crm/ui/vite`: `uiVite()`, which names CSS module classes `ws-<component>-<local>` (every Vite build that renders the library uses it), and `layerOrder()`, which links the layer order ahead of an app's bundled stylesheets |
 | `src/workbench/` | `Stage` and `StoryRoot`, used only by stories. Never exported |
-| `.storybook/` | Storybook config. `preview.tsx` wraps every story in the provider with a frozen clock; `vitest.setup.ts` runs axe in light and dark and fails a story on any CSP violation |
+| `.storybook/` | Storybook config. `preview.tsx` wraps every story in the provider with a frozen clock; `vitest.setup.ts` runs axe in light and dark and fails a story on any CSP violation; `vitest.announcer.ts` clears React Aria's live announcer before every story, so an announcement never outlives its story |
 | `vitest.config.ts` | Five test projects: `unit` (Node), `stories` (Chromium, Firefox, WebKit), `browser` (`*.browser.test.tsx`, Chromium), `perf` (`*.perf.test.tsx`, React's production build) and `visual` (screenshots) |
 | `scripts/test-visual.ts` | `pnpm test:visual`: runs the `visual` project in the pinned Playwright Linux image, against `__screenshots__/` |
 | `scripts/artifact/` | `pnpm ui:artifact`: builds the React scripts, the bundle, its stylesheet, its types and one preview per flagged story for the design system artifact |

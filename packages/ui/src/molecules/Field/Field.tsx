@@ -45,6 +45,8 @@ export interface FieldProps {
   readonly isDisabled?: boolean;
   /** Who can change it, shown as the hint. */
   readonly disabledReason?: string;
+  /** The `id` of the line under the field (its hint or reason), so a control nearby can name it in `aria-describedby`. */
+  readonly descriptionId?: string;
   readonly isRequired?: boolean;
   readonly type?: 'text' | 'email' | 'url' | 'tel' | 'search' | 'password';
   readonly inputMode?: 'text' | 'decimal' | 'numeric' | 'email' | 'tel' | 'url' | 'search';
@@ -89,6 +91,7 @@ export function Field({
   readOnlyReason,
   isDisabled = false,
   disabledReason,
+  descriptionId,
   isRequired = false,
   type = 'text',
   inputMode,
@@ -160,7 +163,13 @@ export function Field({
       {(description !== undefined || (showCounter && maxLength !== undefined)) && (
         <span className={styles.foot}>
           {description !== undefined && (
-            <Text slot="description" className={styles.hint}>
+            <Text
+              slot="description"
+              className={styles.hint}
+              // React Aria takes a given id over its own, and the input's
+              // aria-describedby follows it.
+              {...(descriptionId === undefined ? {} : { id: descriptionId })}
+            >
               {description}
             </Text>
           )}

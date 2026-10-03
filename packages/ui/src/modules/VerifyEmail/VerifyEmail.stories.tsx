@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { AuthLayout } from '../AuthLayout/AuthLayout.tsx';
 import { VerifyEmail } from './VerifyEmail.tsx';
 
@@ -160,12 +161,60 @@ export const Resent: Story = {
     await expect(canvas.getByRole('status')).toHaveTextContent('New code sent');
     await userEvent.keyboard('4');
     await waitFor(() => expect(canvas.getByRole('status')).toBeEmptyDOMElement());
-    // React Aria announced the pending button through its page wide live
-    // announcer, labelled by the button's id, and clears it after 7 s. Wait
-    // for that, or the next story's axe check finds a label that is gone.
-    await waitFor(() => expect(document.querySelector('[data-live-announcer] [aria-labelledby]')).toBeNull(), {
-      timeout: 9_000,
-    });
+  },
+};
+
+const PAUSED = 'Signing in is paused for a few minutes. Try again soon.';
+
+function Pausable({ onResend }: { readonly onResend: () => void }) {
+  const [isResending, setResending] = useState(false);
+  const [isDisabled, setDisabled] = useState(false);
+  return (
+    <AuthLayout productName="CRM" title="Check your email">
+      <VerifyEmail
+        email="maya@halcyonlabs.io"
+        onVerify={() => undefined}
+        isResending={isResending}
+        isDisabled={isDisabled}
+        {...(isDisabled ? { disabledReason: PAUSED } : {})}
+        onResend={() => {
+          onResend();
+          setResending(true);
+          setTimeout(() => {
+            setResending(false);
+          }, 0);
+        }}
+        onUseAnotherEmail={() => undefined}
+      />
+      <Button
+        variant="ghost"
+        onPress={() => {
+          setDisabled((paused) => !paused);
+        }}
+      >
+        Pause verifying
+      </Button>
+    </AuthLayout>
+  );
+}
+
+/** A new code went out, then verifying was paused and resumed: focus moved to the boxes once, for the new code, and resuming leaves it where it is. */
+export const ResentThenPaused: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <Pausable onResend={args.onResend} />,
+  play: async ({ args, canvas, userEvent }) => {
+    const code = canvas.getByRole('textbox', { name: 'Code' });
+    const pause = canvas.getByRole('button', { name: 'Pause verifying' });
+    await userEvent.click(canvas.getByRole('button', { name: 'Send a new code' }));
+    await expect(args.onResend).toHaveBeenCalled();
+    await waitFor(() => expect(code).toHaveFocus());
+    await userEvent.click(pause);
+    await waitFor(() => expect(code).toBeDisabled());
+    await userEvent.click(pause);
+    await waitFor(() => expect(code).toBeEnabled());
+    // Give the effects a frame to run, then check focus stayed put.
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+    await expect(code).not.toHaveFocus();
   },
 };
 

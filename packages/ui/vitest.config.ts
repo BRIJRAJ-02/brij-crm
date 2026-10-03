@@ -66,7 +66,7 @@ export default mergeConfig(
                   // With three engines on one CI machine, a pointer move now and then
                   // lands before the page is ready for it. A real bug fails every try.
                   retry: process.env.CI === undefined ? 0 : 2,
-                  setupFiles: [path.join(STORYBOOK, 'vitest.setup.ts')],
+                  setupFiles: [path.join(STORYBOOK, 'vitest.announcer.ts'), path.join(STORYBOOK, 'vitest.setup.ts')],
                   browser: {
                     ...headless,
                     instances: STORY_BROWSERS.map((browser) => ({ browser })),
@@ -104,7 +104,7 @@ export default mergeConfig(
             name: 'visual',
             fileParallelism: false,
             retry: process.env.CI === undefined ? 0 : 2,
-            setupFiles: [path.join(STORYBOOK, 'vitest.visual.ts')],
+            setupFiles: [path.join(STORYBOOK, 'vitest.announcer.ts'), path.join(STORYBOOK, 'vitest.visual.ts')],
             provide: { visualImage: process.env.CRM_VISUAL_IMAGE === '1' },
             browser: {
               ...headless,

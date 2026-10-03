@@ -234,3 +234,41 @@ export const RefusalAnnounced: Story = {
     await waitFor(() => expect(canvas.getByRole('status')).toHaveTextContent('That address is taken. Try another.'));
   },
 };
+
+const RATE_LIMITED: FormRefusal = { code: 'RATE_LIMITED', message: 'Too many tries. Wait a minute, then try again.' };
+
+function Limited({ onSubmit }: { readonly onSubmit: (values: FormValues) => void }) {
+  const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
+  return (
+    <Stage width="narrow">
+      <Form
+        submitLabel="Create workspace"
+        refusals={refusals}
+        fieldFor={byAttribute}
+        onSubmit={(values) => {
+          onSubmit(values);
+          // A new array with the same refusal each time, as a server would answer.
+          setRefusals([{ ...RATE_LIMITED }]);
+        }}
+      >
+        <Field label="Workspace name" name="name" defaultValue="Halcyon Labs" />
+      </Form>
+    </Stage>
+  );
+}
+
+/** The same refusal about no field, on two submits: each puts up a new alert, so it is announced again. */
+export const BannerAnnouncedAgain: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <Limited onSubmit={args.onSubmit} />,
+  play: async ({ args, canvas, userEvent }) => {
+    const submit = canvas.getByRole('button', { name: 'Create workspace' });
+    await userEvent.click(submit);
+    const first = await canvas.findByRole('alert');
+    await expect(first).toHaveTextContent(RATE_LIMITED.message);
+    await userEvent.click(submit);
+    await expect(args.onSubmit).toHaveBeenCalledTimes(2);
+    await waitFor(() => expect(first).not.toBeInTheDocument());
+    await expect(canvas.getByRole('alert')).toHaveTextContent(RATE_LIMITED.message);
+  },
+};

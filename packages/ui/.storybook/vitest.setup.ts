@@ -4,6 +4,7 @@
 //      (an injected <style>, an outside image, a blob: worker);
 //   2. it switches to dark and runs axe again, so contrast holds in both
 //      themes (AC-6).
+// `vitest.announcer.ts` runs before it, clearing React Aria's live announcer.
 import axe from 'axe-core';
 import { configure } from 'storybook/test';
 import { afterEach, beforeEach, expect } from 'vitest';

@@ -18,6 +18,7 @@ Ported from the artifact's Field card. Every text, number and link attribute is 
 - `placeholder` follows the Field card: "Set <Attribute>…" (`strings.setAttribute`). It is `text-tertiary`, so never put an instruction only there; use `hint`.
 - `error` is a sentence that says how to fix it ("Enter a domain like halcyonlabs.io, without spaces."). The outline turns `danger` and the message shows under the box with an icon. With `isErrorFloating` (a grid cell, one line tall) the message floats under the box on a raised surface, over the rows below.
 - `isReadOnly` fills the box with `surface-subtle` and shows a lock; `readOnlyReason` says why, as the hint. `isDisabled` fades it; `disabledReason` says who can change it.
+- `descriptionId` sets the `id` of the line under the box (the hint or reason), so a control nearby can point `aria-describedby` at it: SignInForm's buttons read the field's `disabledReason` this way. The input stays described by it.
 - `prefix` holds a unit (`USD`, `%`) or a picker (the currency editor's code Select); `suffix` a clear button or a trigger.
 - `isMultiline` is a textarea that grows with its content (long text); `maxLength` with `showCounter` shows "12/500".
 - `size="sm"` is the 26px cell editor; `variant="search"` the rounded search field.

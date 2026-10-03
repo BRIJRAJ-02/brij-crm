@@ -33,6 +33,7 @@
   },
   "devDependencies": {
     "@crm/config": "workspace:*",
+    "@react-aria/live-announcer": "catalog:",
     "@storybook/addon-a11y": "catalog:",
     "@storybook/addon-docs": "catalog:",
     "@storybook/addon-mcp": "catalog:",
