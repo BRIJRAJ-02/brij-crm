@@ -19,18 +19,22 @@ New (spec 0005, pulled forward from spec 0003's milestone 4). Sign in by code (#
     resendWait={secondsLeft}
     isResending={resending}
     onUseAnotherEmail={backToSignIn}
+    isDisabled={paused}
+    disabledReason="Signing in is paused for a few minutes. Try again soon."
   />
 </AuthLayout>
 ```
 
 - `onVerify(code)` runs as soon as the sixth digit is in, and not again while `isVerifying`.
 - `error` says what went wrong (a wrong or expired code) and what to do. Each answer with a refusal clears the boxes for the next code, keeps focus there and is announced; typing again hides it.
-- `resendWait` is the seconds until a new code can be sent. The screen counts it down (60 after each send) and passes it in; the component runs no timers. Above zero, "Send a new code" is off and "You can send another in 42 seconds." shows under it, as plain text a screen reader reads in place (it is not a live region, so it doesn't speak every second).
-- `isResending` spins "Send a new code" as "Sending a new code".
+- `resendWait` is the seconds until a new code can be sent. The screen counts it down (60 after each send) and passes it in; the component runs no timers. Above zero, "Send a new code" is off and "You can send another in 42 seconds." shows under it, as plain text a screen reader reads in place (it is not a live region, so it doesn't speak every second). The line describes the button (`aria-describedby`), so the two are read together.
+- `isResending` spins "Send a new code" as "Sending a new code". When it turns false again, the new code is out: the boxes and any old refusal clear, focus moves from the button to the boxes, and "New code sent" is announced. Typing hides it. If the send failed, pass the refusal as `error` in the same answer and it is shown instead.
+- `isDisabled` turns the boxes and both buttons off; `disabledReason` says why in a line under the boxes, which also describes both buttons.
+- The line over the boxes is one sentence in `strings.ts` (`sentTo`), which returns the words before the address, the address and the words after it, so a translation can put the address anywhere; the address shows in bold.
 
 ## States
 
-Idle, verifying (a spinner and "Checking the code", announced), refused (the reason under the empty boxes, announced), resend waiting (the button off, the wait written under it), resending.
+Idle, verifying (a spinner and "Checking the code", announced), refused (the reason under the empty boxes, announced), resend waiting (the button off, the wait written under it and describing it), resending, resent (focus back on the empty boxes, "New code sent" announced), disabled (everything off, the reason under the boxes).
 
 ## Keyboard
 

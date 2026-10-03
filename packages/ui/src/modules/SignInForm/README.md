@@ -22,7 +22,7 @@ New (spec 0005, pulled forward from spec 0003's milestone 4). Sign in (#10) is b
 
 - `onContinue(email)` gets the trimmed address. Before calling it, the form checks only that something like an address was typed ("Enter your email address.", "Enter an email address like name@company.com."); the server decides the rest.
 - `error` is the server's refusal, as a sentence that says what to do. It shows on the email field until the address changes, and comes back with the next answer. It is hidden while `status` is `sending`.
-- `onGoogle` shows "Continue with Google" (text only: the icon set has no brand marks). Leave it out when Google isn't set up.
+- `onGoogle` shows "Continue with Google" (text only: the icon set has no brand marks) under Continue and as wide, a `Button` with `isFullWidth="center"` like Form's submit. Leave it out when Google isn't set up.
 - `status`: `sending` spins Continue as "Sending code" and turns Google off; `google` spins the Google button as "Opening Google" and turns Continue off.
 - `isDisabled` turns the field and both buttons off; `disabledReason` says why, under the field.
 - `isSignUpClosed` adds a quiet line saying sign up isn't open yet. An address the server refuses for it (`SIGNUP_CLOSED`) still comes back as `error`.

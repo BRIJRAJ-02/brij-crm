@@ -1,7 +1,8 @@
 /* VerifyEmail: where the code went (the address in body-strong), the code
-   boxes, "Checking the code" with a spinner while it is checked, then the
-   resend and back buttons in a row with the resend wait space-8 under them
-   in text-secondary; the parts space-16 apart. */
+   boxes, why verifying is off when it is, "Checking the code" with a spinner
+   while it is checked, then the resend and back buttons in a row with the
+   resend wait space-8 under them; the lines in text-secondary, the parts
+   space-16 apart. */
 @layer components {
   .root {
     display: flex;
@@ -10,6 +11,7 @@
   }
 
   .sent,
+  .reason,
   .wait {
     margin: 0;
     color: var(--text-secondary);

@@ -1,9 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Field } from '../Field/Field.tsx';
+import { Modal, ModalTrigger } from '../Modal/Modal.tsx';
 import { Form, type FormRefusal, type FormValues } from './Form.tsx';
 
 /** The welcome screen's fields are named by attribute: a refusal's `attributeId` is the field's name. */
@@ -38,11 +39,15 @@ const SLUG_TAKEN: FormRefusal = {
   attributeId: 'slug',
 };
 
-/** Fields stacked, the submit at the end. Enter in a field submits, with each field's text by name. */
+/** Fields stacked, the submit filling the width under them. Enter in a field submits, with each field's text by name. */
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   play: async ({ args, canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('textbox', { name: 'Workspace name' }));
+    const name = canvas.getByRole('textbox', { name: 'Workspace name' });
+    const submit = canvas.getByRole('button', { name: 'Create workspace' });
+    await expect(submit).toHaveAttribute('data-full-width', 'center');
+    await expect(submit.getBoundingClientRect().width).toBe(submit.closest('form')?.getBoundingClientRect().width);
+    await userEvent.click(name);
     await userEvent.keyboard('{Enter}');
     await expect(args.onSubmit).toHaveBeenCalledWith({ name: 'Halcyon Labs', slug: 'halcyon-labs' });
   },
@@ -60,18 +65,33 @@ export const FieldRefused: Story = {
   },
 };
 
-/** A refusal about no field (or one no field matches) shows above the fields, and is announced. */
+/** A refusal about no field shows above the fields, and is announced. */
 export const FormRefused: Story = {
   args: {
-    refusals: [
-      { code: 'RATE_LIMITED', message: 'Too many tries. Wait a minute, then try again.' },
-      { code: 'REQUIRED', message: 'Choose a plan first.', attributeId: 'plan' },
-    ],
+    refusals: [{ code: 'RATE_LIMITED', message: 'Too many tries. Wait a minute, then try again.' }],
     fieldFor: (refusal) => (refusal.attributeId === 'slug' ? 'slug' : undefined),
   },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('alert')).toHaveTextContent('Too many tries. Wait a minute, then try again.');
+  },
+};
+
+/**
+ * A refusal `fieldFor` maps to a name no field in the form has (a `plan`
+ * field this form doesn't show) still shows, above the fields, instead of
+ * vanishing. One about a field that is there stays on it.
+ */
+export const RefusedForMissingField: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: {
+    refusals: [{ code: 'REQUIRED', message: 'Choose a plan first.', attributeId: 'plan' }, SLUG_TAKEN],
+  },
+  play: async ({ canvas }) => {
     await expect(canvas.getByRole('alert')).toHaveTextContent('Choose a plan first.');
+    await expect(canvas.getByRole('alert')).not.toHaveTextContent(/address is taken/);
+    const slug = canvas.getByRole('textbox', { name: 'Web address' });
+    await expect(slug).toHaveAttribute('aria-invalid', 'true');
+    await expect(slug).toHaveAccessibleDescription(/That address is taken/);
   },
 };
 
@@ -94,14 +114,16 @@ export const Disabled: Story = {
   },
 };
 
-/** Buttons in a row at the end, Cancel first, as in a dialog. */
-export const WithCancel: Story = {
-  args: { actions: <Button>Cancel</Button> },
-};
-
-/** Buttons filling the width under the fields, another way to go on under the submit, as on a sign in page. */
-export const Stacked: Story = {
-  args: { actionsLayout: 'stack', submitLabel: 'Continue', actions: <Button size="lg">Continue with Google</Button> },
+/** Another way to go on, under the submit and as wide, as on a sign in page. */
+export const WithAnotherWay: Story = {
+  args: {
+    submitLabel: 'Continue',
+    actions: (
+      <Button size="lg" isFullWidth="center">
+        Continue with Google
+      </Button>
+    ),
+  },
   render: (args) => (
     <Stage width="narrow">
       <Form {...args}>
@@ -109,6 +131,58 @@ export const Stacked: Story = {
       </Form>
     </Stage>
   ),
+  play: async ({ canvas }) => {
+    const submit = canvas.getByRole('button', { name: 'Continue' });
+    const google = canvas.getByRole('button', { name: 'Continue with Google' });
+    await expect(google.getBoundingClientRect().width).toBe(submit.getBoundingClientRect().width);
+    await expect(google.getBoundingClientRect().top).toBeGreaterThan(submit.getBoundingClientRect().top);
+  },
+};
+
+function NewPerson({ onSubmit }: { readonly onSubmit: (values: FormValues) => void }) {
+  return (
+    <Stage>
+      <ModalTrigger defaultOpen>
+        <Button icon="plus">New person</Button>
+        <Modal
+          title="New person"
+          actions={
+            <>
+              <Button slot="close">Cancel</Button>
+              <Button variant="primary" type="submit" form="new-person">
+                Add person
+              </Button>
+            </>
+          }
+        >
+          <Form id="new-person" onSubmit={onSubmit} fieldFor={byAttribute}>
+            <Field label="Name" name="name" defaultValue="Maya Patel" />
+            <Field label="Email" name="email" type="email" defaultValue="maya@halcyonlabs.io" />
+          </Form>
+        </Modal>
+      </ModalTrigger>
+    </Stage>
+  );
+}
+
+/**
+ * In a Modal: the form has no submit of its own. The primary in Modal's
+ * `actions` is a Button with `type="submit"` and `form` set to the Form's
+ * `id`, so pressing it, or Enter in a field, sends the form.
+ */
+export const InModal: Story = {
+  render: (args) => <NewPerson onSubmit={args.onSubmit} />,
+  play: async ({ args, userEvent }) => {
+    const dialog = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>('[role="dialog"]');
+      if (found === null) throw new Error('the modal did not open');
+      return found;
+    });
+    const inDialog = within(dialog);
+    await expect(inDialog.getAllByRole('button').map((button) => button.textContent)).toEqual(['Cancel', 'Add person']);
+    await userEvent.click(inDialog.getByRole('button', { name: 'Add person' }));
+    await expect(args.onSubmit).toHaveBeenCalledWith({ name: 'Maya Patel', email: 'maya@halcyonlabs.io' });
+  },
 };
 
 function Refusing({ onSubmit }: { readonly onSubmit: (values: FormValues) => void }) {

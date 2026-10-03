@@ -1,3 +1,4 @@
+import type { Ref } from 'react';
 import { FieldError, Input, Label, TextField } from 'react-aria-components';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import styles from './CodeInput.module.css';
@@ -15,6 +16,8 @@ export interface CodeInputProps {
   /** Why the code was refused, as a sentence that says what to do. */
   readonly error?: string;
   readonly isDisabled?: boolean;
+  /** The one real input under the boxes, for moving focus to it (after a new code is sent). */
+  readonly ref?: Ref<HTMLInputElement>;
 }
 
 /**
@@ -30,6 +33,7 @@ export function CodeInput({
   onComplete,
   error,
   isDisabled = false,
+  ref,
 }: CodeInputProps) {
   const boxes = Array.from({ length }, (_, index) => value[index] ?? '');
   return (
@@ -49,7 +53,7 @@ export function CodeInput({
     >
       <Label className={styles.label}>{label}</Label>
       <span className={styles.boxes}>
-        <Input className={styles.input} />
+        <Input ref={ref} className={styles.input} />
         {boxes.map((character, index) => (
           <span
             key={index}

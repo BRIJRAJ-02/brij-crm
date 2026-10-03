@@ -27,16 +27,18 @@ Ported from the design system artifact's Button card. Every pressable control in
 - `SplitButton` when the primary action has variants (Save, Save as new view). Its `menu` is a `Menu`; the chevron is named "More options" unless `menuLabel` says otherwise.
 - Labels are verbs in sentence case: "Add to list", never "ADD" or "Submit".
 
-Props: `children` (the label, a string) or `icon` with `label` (icon only); `icon`, `iconRight`; `variant`; `size` (`md` 26px, `lg` 30px, to sit beside an input); `kbd` (one keycap or several); `onPress`; `isDisabled`; `isPending`; `type`; `slot`; `ref`.
+Props: `children` (the label, a string) or `icon` with `label` (icon only); `icon`, `iconRight`; `variant`; `size` (`md` 26px, `lg` 30px, to sit beside an input); `kbd` (one keycap or several); `onPress`; `isDisabled`; `isPending`; `type`; `form`; `aria-describedby`; `isFullWidth`; `slot`; `ref`.
 
-- `isFullWidth` fills the row, with the label at the start and the keycaps at the end, for the sidebar's Quick actions.
+- `isFullWidth` fills the row, with the label at the start and the keycaps at the end, for the sidebar's Quick actions. `isFullWidth="center"` fills the row with the label in the middle: a Form's submit on a sign in page, and the other ways to go on under it (Continue with Google). A container never stretches a button itself; it asks for this.
+- `form` is the `id` of the form a `type="submit"` button sends when it sits outside it: a Modal's footer submitting the Form in its body (see Form's README).
+- `aria-describedby` points at text that says more about the button, most often the line under a disabled one that says when it turns on ("You can send another in 42 seconds."), so a screen reader reads the two together.
 
 ## States
 
 - **Hover**: `surface-hover` (the primary darkens to `accent-hover`), only on devices that can hover.
 - **Pressed**: scales to 0.97 (`scale-press`, `duration-press`, `ease-out`), so a click is felt before anything else happens. Reduced motion drops the scale.
 - **Focus**: from the keyboard only, a 1px `accent` border plus `shadow-focus`. In forced colours, a 2px `Highlight` outline.
-- **Disabled**: at `opacity-disabled`, skipped by Tab, never pressed.
+- **Disabled**: at `opacity-disabled`, skipped by Tab, never pressed. When a line beside it says why or until when, `aria-describedby` ties that line to it.
 - **Pending** (`isPending`): a spinner in place of the icon, presses ignored, still focusable, at `opacity-busy`. Screen readers hear the change. Change the label to the ongoing verb ("Saving").
 - **Selected** (`ToggleButton`): `accent-soft` with an `accent` edge, which holds 3:1 against the surface (the artifact marks a pressed day with the accent too). It keeps that look while hovered. `aria-pressed` tells screen readers.
 - **Shortcut** (`kbd`): the keycaps are for sight. The button states the shortcut through `aria-keyshortcuts` (`⌘↵` is `Meta+Enter`), so screen readers hear "Add to list", not "Add to list command return".
@@ -55,6 +57,6 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only); `ico
 - No `className`, `style` or other HTML attributes pass through: one look, set here.
 - `ToggleButton` is new (the artifact had no pressed state), for format toolbars and view toggles.
 - `SplitButton` takes its `menu` instead of an `onMenu` callback, so the menu opens from the chevron with focus handled by React Aria.
-- `disabledReason` (a tooltip that says why) arrives with Tooltip in milestone 2.
+- No `disabledReason` tooltip yet: a disabled button gets no hover or focus, so a tooltip on it would reach no one by keyboard. Until a disabled button can stay focusable, write the reason beside it and tie it with `aria-describedby`, or put a `LockReason` beside it.
 - The keycaps no longer read as part of the name, and the primary's keycap is edged instead of filled, so its text holds 4.5:1 (on the `on-accent-kbd` fill it was 3.3:1).
 - The SplitButton divider on the primary uses `on-accent-kbd`, as the artifact does.

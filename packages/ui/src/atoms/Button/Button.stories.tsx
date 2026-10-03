@@ -80,6 +80,35 @@ export const Large: Story = {
   ),
 };
 
+/**
+ * Filling the row. `isFullWidth` puts the label at the start and the keycaps
+ * at the end (the sidebar's Quick actions); `isFullWidth="center"` keeps the
+ * label in the middle, for a form's submit and the ways to go on under it.
+ */
+export const FullWidth: Story = {
+  render: () => (
+    <Stage direction="column" width="narrow">
+      <Button size="lg" icon="search" isFullWidth kbd="⌘K">
+        Quick actions
+      </Button>
+      <Button variant="primary" size="lg" isFullWidth="center">
+        Continue
+      </Button>
+      <Button size="lg" isFullWidth="center">
+        Continue with Google
+      </Button>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const quick = canvas.getByRole('button', { name: 'Quick actions' });
+    const submit = canvas.getByRole('button', { name: 'Continue' });
+    await expect(quick).toHaveAttribute('data-full-width', 'start');
+    await expect(submit).toHaveAttribute('data-full-width', 'center');
+    await expect(getComputedStyle(submit).justifyContent).toBe('center');
+    await expect(submit.getBoundingClientRect().width).toBe(quick.getBoundingClientRect().width);
+  },
+};
+
 /** Disabled: at half opacity, skipped by Tab, and never pressed. */
 export const Disabled: Story = {
   parameters: { crm: { preview: true } },
@@ -100,6 +129,23 @@ export const Disabled: Story = {
     await expect(button).not.toHaveFocus();
     await userEvent.keyboard('{Enter}');
     await expect(args.onPress).not.toHaveBeenCalled();
+  },
+};
+
+/** Disabled, with the line under it that says when it turns on: the button is described by that line, so a screen reader reads the two together. */
+export const DisabledWithReason: Story = {
+  render: () => (
+    <Stage direction="column">
+      <Button isDisabled aria-describedby="button-story-wait">
+        Send a new code
+      </Button>
+      <span id="button-story-wait">You can send another in 42 seconds.</span>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const button = canvas.getByRole('button', { name: 'Send a new code' });
+    await expect(button).toBeDisabled();
+    await expect(button).toHaveAccessibleDescription('You can send another in 42 seconds.');
   },
 };
 

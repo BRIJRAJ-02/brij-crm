@@ -14,6 +14,11 @@ export interface SignInFormProps {
   readonly onContinue: (email: string) => void;
   /** Signs in with Google. Without it, the Google button is hidden. */
   readonly onGoogle?: () => void;
+  /**
+   * What is under way, `idle` by default. `sending` spins Continue as
+   * "Sending code" (Enter does nothing more) and turns Google off; `google`
+   * spins the Google button as "Opening Google" and turns Continue off.
+   */
   readonly status?: SignInStatus;
   /** Why the address was refused, as a sentence that says what to do. Shown on the email field until it changes. */
   readonly error?: string;
@@ -68,7 +73,6 @@ export function SignInForm({
         busyLabel={strings.sending}
         isBusy={status === 'sending'}
         isDisabled={isDisabled || status === 'google'}
-        actionsLayout="stack"
         refusals={shown === undefined ? [] : [shown]}
         fieldFor={onEmailField}
         onSubmit={() => {
@@ -85,6 +89,7 @@ export function SignInForm({
               actions: (
                 <Button
                   size="lg"
+                  isFullWidth="center"
                   onPress={onGoogle}
                   isPending={status === 'google'}
                   isDisabled={isDisabled || status === 'sending'}

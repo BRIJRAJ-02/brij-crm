@@ -27,7 +27,9 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   play: async ({ args, canvas, userEvent }) => {
-    await expect(canvas.getByText('maya@halcyonlabs.io')).toBeInTheDocument();
+    await expect(canvas.getByText('maya@halcyonlabs.io').parentElement).toHaveTextContent(
+      'Enter the code sent to maya@halcyonlabs.io.',
+    );
     await userEvent.click(canvas.getByRole('textbox', { name: 'Code' }));
     await userEvent.keyboard('481593');
     await expect(args.onVerify).toHaveBeenCalledWith('481593');
@@ -102,12 +104,14 @@ export const RefusedThenRetyped: Story = {
   },
 };
 
-/** A new code can't be sent yet: the button is off, and the wait is written under it. */
+/** A new code can't be sent yet: the button is off, and the wait is written under it and describes it. */
 export const ResendWaiting: Story = {
   args: { resendWait: 42 },
   play: async ({ canvas }) => {
-    await expect(canvas.getByRole('button', { name: 'Send a new code' })).toBeDisabled();
+    const resend = canvas.getByRole('button', { name: 'Send a new code' });
+    await expect(resend).toBeDisabled();
     await expect(canvas.getByText('You can send another in 42 seconds.')).toBeInTheDocument();
+    await expect(resend).toHaveAccessibleDescription('You can send another in 42 seconds.');
   },
 };
 
@@ -116,5 +120,67 @@ export const Resending: Story = {
   args: { isResending: true },
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('button', { name: /Sending a new code/ })).toBeInTheDocument();
+  },
+};
+
+function Resend({ onResend }: { readonly onResend: () => void }) {
+  const [isResending, setResending] = useState(false);
+  return (
+    <AuthLayout productName="CRM" title="Check your email">
+      <VerifyEmail
+        email="maya@halcyonlabs.io"
+        onVerify={() => undefined}
+        error="That code is wrong or has expired. Check the latest email, or send a new code."
+        isResending={isResending}
+        onResend={() => {
+          onResend();
+          setResending(true);
+          // The new code goes out after a render, as a server's answer would.
+          setTimeout(() => {
+            setResending(false);
+          }, 0);
+        }}
+        onUseAnotherEmail={() => undefined}
+      />
+    </AuthLayout>
+  );
+}
+
+/** A new code went out: the old refusal goes, focus moves to the empty boxes, and "New code sent" is announced. Typing hides it. */
+export const Resent: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <Resend onResend={args.onResend} />,
+  play: async ({ args, canvas, userEvent }) => {
+    const code = canvas.getByRole('textbox', { name: 'Code' });
+    await expect(code).toHaveAttribute('aria-invalid', 'true');
+    await userEvent.click(canvas.getByRole('button', { name: 'Send a new code' }));
+    await expect(args.onResend).toHaveBeenCalled();
+    await waitFor(() => expect(code).toHaveFocus());
+    await expect(code).not.toHaveAttribute('aria-invalid');
+    await expect(canvas.getByRole('status')).toHaveTextContent('New code sent');
+    await userEvent.keyboard('4');
+    await waitFor(() => expect(canvas.getByRole('status')).toBeEmptyDOMElement());
+    // React Aria announced the pending button through its page wide live
+    // announcer, labelled by the button's id, and clears it after 7 s. Wait
+    // for that, or the next story's axe check finds a label that is gone.
+    await waitFor(() => expect(document.querySelector('[data-live-announcer] [aria-labelledby]')).toBeNull(), {
+      timeout: 9_000,
+    });
+  },
+};
+
+/** Verifying is off for now: the boxes and both buttons are off, and a line under the boxes says why and describes the buttons. */
+export const Disabled: Story = {
+  args: { isDisabled: true, disabledReason: 'Signing in is paused for a few minutes. Try again soon.' },
+  play: async ({ canvas }) => {
+    const reason = 'Signing in is paused for a few minutes. Try again soon.';
+    await expect(canvas.getByRole('textbox', { name: 'Code' })).toBeDisabled();
+    const resend = canvas.getByRole('button', { name: 'Send a new code' });
+    const back = canvas.getByRole('button', { name: 'Use another email' });
+    await expect(resend).toBeDisabled();
+    await expect(back).toBeDisabled();
+    await expect(canvas.getByText(reason)).toBeVisible();
+    await expect(resend).toHaveAccessibleDescription(reason);
+    await expect(back).toHaveAccessibleDescription(reason);
   },
 };

@@ -27,8 +27,13 @@ interface ButtonLook {
   readonly iconRight?: IconName;
   /** Keycaps shown after the label: `ESC`, `⌘↵`, or several. */
   readonly kbd?: string | readonly string[];
-  /** Fills its row, label at the start and keycaps at the end: the sidebar's Quick actions. */
-  readonly isFullWidth?: boolean;
+  /**
+   * Fills its row. `true` puts the label at the start and the keycaps at the
+   * end (the sidebar's Quick actions); `'center'` keeps the label in the
+   * middle (a form's submit, and the other ways to go on under it, on a sign
+   * in page).
+   */
+  readonly isFullWidth?: boolean | 'center';
   readonly isDisabled?: boolean;
   /** A slot a parent fills, such as `close` inside a toast or a dialog. */
   readonly slot?: string;
@@ -59,6 +64,10 @@ export type ButtonProps = ButtonLook &
     /** Shows a spinner in place of the icon and ignores presses, while staying focusable. Change the label to the ongoing verb ("Saving"). */
     readonly isPending?: boolean;
     readonly type?: 'button' | 'submit' | 'reset';
+    /** The `id` of the form it submits when it sits outside it, such as a Modal's footer submitting a Form in its body. */
+    readonly form?: string;
+    /** The `id` of text that says more about it, such as the line under a disabled button saying when it turns on. */
+    readonly 'aria-describedby'?: string;
   };
 
 /** Props for ToggleButton: a button that stays pressed, such as Bold in a format toolbar. */
@@ -75,7 +84,7 @@ function lookAttributes(look: ButtonLook, face: ButtonFace) {
     'data-variant': look.variant ?? 'secondary',
     'data-size': look.size ?? 'md',
     'data-icon-only': face.children === undefined || undefined,
-    'data-full-width': look.isFullWidth === true || undefined,
+    'data-full-width': look.isFullWidth === 'center' ? 'center' : look.isFullWidth === true ? 'start' : undefined,
   };
 }
 
@@ -130,7 +139,8 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
  * pressed. One `primary` per surface.
  */
 export function Button(props: ButtonProps) {
-  const { onPress, isPending = false, type = 'button', isDisabled, slot, ref } = props;
+  const { onPress, isPending = false, type = 'button', isDisabled, slot, form, ref } = props;
+  const describedBy = props['aria-describedby'];
   const face: ButtonFace = props;
   const platform = useKeyboardPlatform();
   return (
@@ -141,8 +151,10 @@ export function Button(props: ButtonProps) {
       isDisabled={isDisabled ?? false}
       isPending={isPending}
       {...(slot === undefined ? {} : { slot })}
+      {...(form === undefined ? {} : { form })}
       {...(onPress === undefined ? {} : { onPress })}
       {...(face.label === undefined ? {} : { 'aria-label': face.label })}
+      {...(describedBy === undefined ? {} : { 'aria-describedby': describedBy })}
       {...shortcutAttribute(props.kbd, platform)}
       {...lookAttributes(props, face)}
     >

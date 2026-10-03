@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Form } from '../../molecules/Form/Form.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -17,7 +18,7 @@ const meta = {
   },
   render: (args) => (
     <AuthLayout {...args}>
-      <Form submitLabel="Create workspace" actionsLayout="stack" onSubmit={fn()}>
+      <Form submitLabel="Create workspace" onSubmit={fn()}>
         <Field label="Workspace name" name="name" defaultValue="Halcyon Labs" />
         <Field label="Web address" name="slug" defaultValue="halcyon-labs" />
       </Form>
@@ -38,6 +39,20 @@ export const Default: Story = {
   },
 };
 
+/** Loading: the page's task is still coming (the session is being checked). A Skeleton stands in, and the card reads as busy. */
+export const Loading: Story = {
+  args: { isBusy: true },
+  render: (args) => (
+    <AuthLayout {...args}>
+      <Skeleton lines={3} />
+    </AuthLayout>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('main')).toHaveAttribute('aria-busy', 'true');
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Name your workspace' })).toBeInTheDocument();
+  },
+};
+
 /** A footer under a hairline, for a way back. */
 export const WithFooter: Story = {
   args: { footer: <Button variant="ghost">Sign out</Button> },
@@ -48,7 +63,7 @@ export const Narrow: Story = {
   render: (args) => (
     <Stage width="narrow">
       <AuthLayout {...args}>
-        <Form submitLabel="Create workspace" actionsLayout="stack" onSubmit={fn()}>
+        <Form submitLabel="Create workspace" onSubmit={fn()}>
           <Field label="Workspace name" name="name" defaultValue="Halcyon Labs" />
         </Form>
       </AuthLayout>
