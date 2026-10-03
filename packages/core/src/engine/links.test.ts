@@ -1169,6 +1169,7 @@ describe('deletion', () => {
         versionId: 'v',
       })),
       references: [],
+      definitions: [],
     };
     // Neither list passes the cap alone; together they do.
     const capped = capChange(change);

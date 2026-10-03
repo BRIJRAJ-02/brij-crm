@@ -110,54 +110,152 @@ describe('every tenant table', () => {
   });
 });
 
-describe('the one hole in row level security (spec 0004, stored sort keys, AC-24)', () => {
-  it('has exactly one security definer function, crm_search_text, owned by crm_search', async () => {
+describe('the two holes in row level security (crm_search_text, spec 0004 AC-24; crm_outbox_workspaces, spec 0005)', () => {
+  it('has exactly two security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
       where p.prosecdef and n.nspname not in ('pg_catalog', 'information_schema')
         and not exists (select 1 from pg_depend d where d.classid = 'pg_proc'::regclass and d.objid = p.oid and d.deptype = 'e')
+      order by 1
     `);
-    expect(definers.rows).toEqual([{ name: 'crm_search_text', owner: 'crm_search' }]);
+    expect(definers.rows).toEqual([
+      { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
+      { name: 'crm_search_text', owner: 'crm_search' },
+    ]);
   });
 
-  it('lets no role but crm_search and the owner bypass it, outside the superusers', async () => {
+  it('lets no role but crm_relay, crm_search and the owner bypass it, outside the superusers', async () => {
     const bypass = await owner.query<{ role: string }>(`
       select rolname as role from pg_roles
       where rolbypassrls and not rolsuper
         and rolname <> (select pg_get_userbyid(datdba) from pg_database where datname = current_database())
       order by rolname
     `);
-    expect(bypass.rows.map((row) => row.role)).toEqual(['crm_search']);
+    expect(bypass.rows.map((row) => row.role)).toEqual(['crm_relay', 'crm_search']);
   });
 
-  it('keeps crm_search unable to log in, owning nothing else, and out of the app’s reach', async () => {
-    const role = await owner.query<{ login: boolean; owned: number; members: number; app: boolean }>(`
+  it.each([
+    ['crm_search', 'crm_search_text', 'crm_search_text(uuid, text, integer)'],
+    ['crm_relay', 'crm_outbox_workspaces', 'crm_outbox_workspaces(integer)'],
+  ])('keeps %s unable to log in, owning only %s, and out of the app’s reach', async (name, fn, signature) => {
+    const role = await owner.query<{ login: boolean; owned: number; members: number; app: boolean }>(
+      `
       select r.rolcanlogin as login,
         (select count(*)::int from pg_class c where c.relowner = r.oid)
-          + (select count(*)::int from pg_proc p where p.proowner = r.oid and p.proname <> 'crm_search_text')
+          + (select count(*)::int from pg_proc p where p.proowner = r.oid and p.proname <> $2)
           + (select count(*)::int from pg_namespace s where s.nspowner = r.oid)
           + (select count(*)::int from pg_type t where t.typowner = r.oid) as owned,
         (select count(*)::int from pg_auth_members m where m.roleid = r.oid
           and (m.set_option or m.inherit_option
             or m.member <> (select datdba from pg_database where datname = current_database()))) as members,
-        pg_has_role('crm_app', r.oid, 'USAGE') or pg_has_role('crm_app', r.oid, 'SET') as app
-      from pg_roles r where r.rolname = 'crm_search'
-    `);
+        pg_has_role('crm_app', r.oid, 'MEMBER') as app
+      from pg_roles r where r.rolname = $1
+    `,
+      [name, fn],
+    );
     expect(role.rows).toEqual([{ login: false, owned: 0, members: 0, app: false }]);
     // The app can call it, and nobody else by default.
-    const grants = await owner.query<{ app: boolean; anyone: boolean }>(`
-      select has_function_privilege('crm_app', 'crm_search_text(uuid, text, integer)', 'EXECUTE') as app,
-        exists (select 1 from aclexplode((select proacl from pg_proc where proname = 'crm_search_text'))
-          where grantee = 0) as anyone
-    `);
+    const grants = await owner.query<{ app: boolean; anyone: boolean }>(
+      `
+      select has_function_privilege('crm_app', $1, 'EXECUTE') as app,
+        exists (select 1 from aclexplode((select proacl from pg_proc where proname = $2)) where grantee = 0) as anyone
+    `,
+      [signature, fn],
+    );
     expect(grants.rows).toEqual([{ app: true, anyone: false }]);
     // And an app login can't become it.
     await expect(
-      db.withWorkspace(randomUUID(), (tx) => tx.execute(sql`set local role crm_search`)),
+      db.withWorkspace(randomUUID(), (tx) => tx.execute(sql.raw(`set local role ${name}`))),
     ).rejects.toMatchObject({
       cause: { code: '42501' },
     });
+  });
+
+  it('gives crm_relay select on the outbox and nothing else', async () => {
+    const tables = await owner.query<{ table: string; privileges: string }>(`
+      select table_schema || '.' || table_name as table,
+        string_agg(privilege_type, ',' order by privilege_type) as privileges
+      from information_schema.role_table_grants where grantee = 'crm_relay'
+      group by 1 order by 1
+    `);
+    expect(tables.rows).toEqual([{ table: 'public.outbox', privileges: 'SELECT' }]);
+    const columns = await owner.query<{ column: string }>(`
+      select table_name || '.' || column_name as column from information_schema.column_privileges
+      where grantee = 'crm_relay' and privilege_type <> 'SELECT'
+    `);
+    expect(columns.rows).toEqual([]);
+    const schemas = await owner.query<{ schema: string; privilege: string }>(`
+      select n.nspname as schema, a.privilege_type as privilege
+      from pg_namespace n cross join aclexplode(n.nspacl) a
+      where a.grantee = 'crm_relay'::regrole order by 1, 2
+    `);
+    expect(schemas.rows).toEqual([{ schema: 'public', privilege: 'USAGE' }]);
+  });
+
+  it('lets the app insert and read outbox rows and stamp published_at, and nothing more', async () => {
+    const table = await owner.query<{ privileges: string }>(`
+      select string_agg(privilege_type, ',' order by privilege_type) as privileges
+      from information_schema.role_table_grants where grantee = 'crm_app' and table_name = 'outbox'
+    `);
+    expect(table.rows).toEqual([{ privileges: 'INSERT,SELECT' }]);
+    const updatable = await owner.query<{ column: string }>(`
+      select column_name as column from information_schema.column_privileges
+      where grantee = 'crm_app' and table_name = 'outbox' and privilege_type = 'UPDATE'
+    `);
+    expect(updatable.rows).toEqual([{ column: 'published_at' }]);
+  });
+
+  it('names the workspaces with unpublished rows, ids only, clamped to 1 to 500', async () => {
+    const a = await workspaceWithMember('outbox-a');
+    const b = await workspaceWithMember('outbox-b');
+    const done = await workspaceWithMember('outbox-done');
+    const event = (workspaceId: string, seq: number, published: boolean) =>
+      db.withWorkspace(workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into outbox (workspace_id, seq, kind, object_id, published_at) values (${workspaceId}, ${seq}, 'records', ${randomUUID()}, ${published ? sql`now()` : null})`,
+        ),
+      );
+    await event(a.workspaceId, 1, false);
+    await event(a.workspaceId, 2, false);
+    await event(b.workspaceId, 1, false);
+    await event(done.workspaceId, 1, true);
+
+    // The app, outside any workspace: the function sees past row level security, and hands back ids only.
+    const app = new pg.Client({ connectionString: appUrl });
+    await app.connect();
+    try {
+      const all = await app.query<Record<string, unknown>>('select * from crm_outbox_workspaces(500)');
+      expect(all.fields.map((field) => field.name)).toEqual(['crm_outbox_workspaces']);
+      const ids = all.rows.map((row) => row.crm_outbox_workspaces);
+      expect(ids).toEqual(expect.arrayContaining([a.workspaceId, b.workspaceId]));
+      expect(ids).not.toContain(done.workspaceId);
+      expect(new Set(ids).size).toBe(ids.length);
+      for (const max of [0, -5, 1]) {
+        const one = await app.query('select * from crm_outbox_workspaces($1)', [max]);
+        expect(one.rowCount, String(max)).toBe(1);
+      }
+      // The table itself still shows the app nothing outside withWorkspace.
+      expect((await app.query('select * from outbox')).rowCount).toBe(0);
+    } finally {
+      await app.end();
+    }
+    const definition = await owner.query<{ body: string }>(
+      `select pg_get_functiondef('crm_outbox_workspaces(integer)'::regprocedure) as body`,
+    );
+    expect(definition.rows[0]?.body).toMatch(/least\(greatest\(crm_outbox_workspaces\.max, 1\), 500\)/i);
+  });
+
+  it('answers nothing to a caller without execute', async () => {
+    const identity = new pg.Client({ connectionString: identityUrl });
+    await identity.connect();
+    try {
+      await expect(identity.query('select * from public.crm_outbox_workspaces(10)')).rejects.toMatchObject({
+        code: '42501',
+      });
+    } finally {
+      await identity.end();
+    }
   });
 });
 

@@ -347,3 +347,49 @@ describe("migration 0018's closing check", () => {
     return result.rows[0]?.owner;
   }
 });
+
+describe("migration 0020's closing check: who can reach crm_relay", () => {
+  let check: string;
+
+  beforeAll(async () => {
+    const sql = await readFile(new URL('../migrations/0020_outbox_relay.sql', import.meta.url), 'utf8');
+    check = sql.slice(sql.lastIndexOf('do $$'));
+  });
+
+  /** Runs the check after `setup`, in a transaction that is rolled back, so nothing outlives the test. */
+  async function checkAfter(setup: readonly string[]): Promise<void> {
+    await admin.query('begin');
+    try {
+      for (const statement of setup) await admin.query(statement);
+      await admin.query(check);
+    } finally {
+      await admin.query('rollback');
+    }
+  }
+
+  it('passes the database as migrated', async () => {
+    await checkAfter([]);
+  });
+
+  it.each([
+    ['the app, even WITH ADMIN alone', ['grant crm_relay to crm_app with admin true, inherit false, set false']],
+    [
+      'an app login, through a group',
+      [
+        'create role crm_test_middle',
+        'grant crm_relay to crm_test_middle',
+        'create role crm_test_login login',
+        'grant crm_test_middle to crm_test_login',
+      ],
+    ],
+    ['a login of its own', ['create role crm_test_probe login', 'grant crm_relay to crm_test_probe']],
+    ['crm_relay logging in', ['alter role crm_relay login']],
+    ['crm_relay losing BYPASSRLS, which its function needs', ['alter role crm_relay nobypassrls']],
+  ])('refuses %s', async (_name, setup) => {
+    await expect(checkAfter(setup)).rejects.toThrow(/crm_relay must be a plain role/);
+  });
+
+  it("skips Neon's own platform roles by name", async () => {
+    await checkAfter(['create role neon_service login', 'grant crm_relay to neon_service']);
+  });
+});

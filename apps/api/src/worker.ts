@@ -1,9 +1,12 @@
-// The worker entrypoint, from the same image as the api. It holds the direct
-// Postgres connection that background jobs (#8) and the outbox relay (#7) run on.
+// The worker entrypoint, from the same image as the api. It runs the outbox
+// relay (spec 0005) on its own direct Postgres connection, and later the
+// background jobs (#8).
 import { createServer } from 'node:http';
-import { createDatabase, openDirectConnection } from '@crm/db';
+import { createDatabase, createOutboxReader, openDirectConnection } from '@crm/db';
 import { loadEnv, WorkerEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
+import { createCentrifugoPublisher } from './realtime/centrifugo.ts';
+import { createRelay } from './realtime/relay.ts';
 import { onShutdown } from './shutdown.ts';
 
 const env = loadEnv(WorkerEnv);
@@ -15,21 +18,33 @@ const db = createDatabase({
   onPoolError: (error) => log.error('Idle database client failed', errorFields(error)),
 });
 
-let direct: Awaited<ReturnType<typeof openDirectConnection>>;
+const openDirect = () => openDirectConnection({ url: env.DATABASE_URL_DIRECT, applicationName: 'crm-worker-direct' });
+
+// Refuse to start on a role that can bypass row level security, or a direct URL that is really a pooler (a
+// NOTIFY must arrive). The relay opens its own connections from here on, and reconnects when one drops.
 try {
   await db.assertAppRole();
-  direct = await openDirectConnection({ url: env.DATABASE_URL_DIRECT, applicationName: 'crm-worker-direct' });
+  const proof = await openDirect();
+  await proof.end();
 } catch (error) {
   log.error('Refusing to start', errorFields(error));
   await db.close();
   process.exit(1);
 }
 
-// A LISTEN connection that drops loses notifications. Exit, and let Railway restart us.
-direct.on('error', (error) => {
-  log.error('Direct database connection failed', errorFields(error));
-  process.exit(1);
-});
+const relay =
+  env.centrifugo === undefined
+    ? undefined
+    : createRelay({
+        connect: async () => createOutboxReader(await openDirect()),
+        publish: createCentrifugoPublisher(env.centrifugo).publish,
+        log,
+      });
+if (relay === undefined) {
+  log.info('Relay off: CENTRIFUGO_API_URL and CENTRIFUGO_API_KEY are unset, so no change is published');
+} else {
+  relay.start();
+}
 
 const health = createServer((request, response) => {
   const ok = request.url === '/health';
@@ -37,11 +52,11 @@ const health = createServer((request, response) => {
   response.end(JSON.stringify(ok ? { status: 'ok' } : { code: 'NOT_FOUND' }));
 });
 health.listen(env.WORKER_PORT, '::', () =>
-  log.info('Worker ready', { port: env.WORKER_PORT, environment: env.APP_ENV }),
+  log.info('Worker ready', { port: env.WORKER_PORT, environment: env.APP_ENV, relay: relay !== undefined }),
 );
 
 onShutdown(async () => {
+  await relay?.stop();
   await new Promise<void>((resolve) => health.close(() => resolve()));
-  await direct.end();
   await db.close();
 });

@@ -1,7 +1,7 @@
 // The api's sign in and mail variables (spec 0005): what each environment
 // must set, and what an unset or empty one means.
 import { describe, expect, it } from 'vitest';
-import { ApiEnv } from './env.ts';
+import { ApiEnv, WorkerEnv } from './env.ts';
 
 const local = {
   APP_ENV: 'local',
@@ -99,5 +99,44 @@ describe('the sign in environment', () => {
     ]);
     // Locally the API may sit on its own port.
     expect(problems({ ...local, BETTER_AUTH_URL: 'http://localhost:3000' })).toEqual([]);
+  });
+});
+
+describe('the worker environment (spec 0005, the relay)', () => {
+  const worker = {
+    APP_ENV: 'local',
+    DATABASE_URL: 'postgres://app:p@localhost:6432/crm',
+    DATABASE_URL_DIRECT: 'postgres://app:p@localhost:5433/crm',
+  };
+  const centrifugo = { CENTRIFUGO_API_URL: 'http://centrifugo.railway.internal:9000', CENTRIFUGO_API_KEY: 'key' };
+
+  function workerProblems(input: Record<string, unknown>): string[] {
+    const result = WorkerEnv.safeParse(input);
+    return result.success ? [] : result.error.issues.map((issue) => issue.path.join('.'));
+  }
+
+  it('boots locally without Centrifugo, with the relay off', () => {
+    expect(WorkerEnv.parse(worker).centrifugo).toBeUndefined();
+    expect(WorkerEnv.parse({ ...worker, CENTRIFUGO_API_URL: '', CENTRIFUGO_API_KEY: '' }).centrifugo).toBeUndefined();
+  });
+
+  it('turns the relay on with both variables, and refuses one alone', () => {
+    expect(WorkerEnv.parse({ ...worker, ...centrifugo }).centrifugo).toEqual({
+      apiUrl: centrifugo.CENTRIFUGO_API_URL,
+      apiKey: 'key',
+    });
+    expect(workerProblems({ ...worker, CENTRIFUGO_API_URL: centrifugo.CENTRIFUGO_API_URL })).toEqual([
+      'CENTRIFUGO_API_KEY',
+    ]);
+    expect(workerProblems({ ...worker, CENTRIFUGO_API_URL: 'not a url', CENTRIFUGO_API_KEY: 'key' })).toEqual([
+      'CENTRIFUGO_API_URL',
+    ]);
+  });
+
+  it('needs both outside local', () => {
+    for (const APP_ENV of ['preview', 'production']) {
+      expect(workerProblems({ ...worker, APP_ENV }).sort()).toEqual(['CENTRIFUGO_API_KEY', 'CENTRIFUGO_API_URL']);
+      expect(workerProblems({ ...worker, APP_ENV, ...centrifugo })).toEqual([]);
+    }
   });
 });

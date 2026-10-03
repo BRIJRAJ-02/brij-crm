@@ -130,8 +130,33 @@ export const WorkerEnv = z
     WORKER_PORT: port.optional(),
     PORT: port.optional(),
     DATABASE_URL_DIRECT: z.url(),
+    // The relay publishes to Centrifugo's server API (spec 0005): its internal port (9000), and its HTTP API key.
+    // Both or neither; required outside local. Locally, without them the worker boots with the relay off.
+    CENTRIFUGO_API_URL: optional(z.url()),
+    CENTRIFUGO_API_KEY: optional(z.string()),
   })
-  .transform(({ WORKER_PORT, PORT, ...rest }) => ({ ...rest, WORKER_PORT: WORKER_PORT ?? PORT ?? 3001 }));
+  .superRefine((env, issues) => {
+    const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });
+    const url = env.CENTRIFUGO_API_URL === undefined;
+    const key = env.CENTRIFUGO_API_KEY === undefined;
+    if (url !== key)
+      missing('CENTRIFUGO_API_KEY', 'Set CENTRIFUGO_API_URL and CENTRIFUGO_API_KEY together, or neither.');
+    if (env.APP_ENV !== 'local' && url) {
+      missing('CENTRIFUGO_API_URL', `CENTRIFUGO_API_URL is required in ${env.APP_ENV}: the relay publishes there.`);
+    }
+    if (env.APP_ENV !== 'local' && key) {
+      missing('CENTRIFUGO_API_KEY', `CENTRIFUGO_API_KEY is required in ${env.APP_ENV}.`);
+    }
+  })
+  .transform(({ WORKER_PORT, PORT, CENTRIFUGO_API_URL, CENTRIFUGO_API_KEY, ...rest }) => ({
+    ...rest,
+    WORKER_PORT: WORKER_PORT ?? PORT ?? 3001,
+    // The relay's Centrifugo, when it is on.
+    centrifugo:
+      CENTRIFUGO_API_URL === undefined || CENTRIFUGO_API_KEY === undefined
+        ? undefined
+        : { apiUrl: CENTRIFUGO_API_URL, apiKey: CENTRIFUGO_API_KEY },
+  }));
 export type WorkerEnv = z.infer<typeof WorkerEnv>;
 
 /** Parses the environment, or stops the process with every missing or invalid variable named. */

@@ -7,6 +7,7 @@ import { systemContract } from './system.ts';
 import { workspacesContract } from './workspaces.ts';
 
 export * from './attributes.ts';
+export * from './change-event.ts';
 export * from './errors.ts';
 export * from './me.ts';
 export * from './members.ts';

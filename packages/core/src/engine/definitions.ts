@@ -291,8 +291,15 @@ export async function insertAttribute(
       })
       .returning({ id: attributes.id });
     if (row === undefined) throw new Error('The attribute was not created.');
+    if ('objectId' in parent) context.record({ definitions: [{ objectId: parent.objectId, attributeIds: [row.id] }] });
     return { attributeId: row.id };
   });
+}
+
+/** Notes an object attribute's change for the hooks (a list's attributes aren't published yet). */
+function recordDefinition(context: WriteContext, attribute: AttributeDef): void {
+  if (attribute.objectId === null) return;
+  context.record({ definitions: [{ objectId: attribute.objectId, attributeIds: [attribute.id] }] });
 }
 
 /** Defines a custom object (AC-1, AC-16). */
@@ -322,7 +329,8 @@ async function editable(tx: WorkspaceTx, attributeId: string): Promise<Attribute
 export async function updateAttribute(scope: EngineScope, input: AttributeUpdate, hooks: readonly AfterWrite[] = []) {
   const { result } = await runWrite(
     scope,
-    async ({ tx }) => {
+    async (context) => {
+      const { tx } = context;
       const attribute = await editable(tx, input.attributeId);
       if (input.title !== undefined) checkName(input.title, 'title');
       if (input.isUnique === true && !UNIQUE_TYPES.includes(attribute.type)) {
@@ -346,6 +354,7 @@ export async function updateAttribute(scope: EngineScope, input: AttributeUpdate
           ...touched(scope),
         })
         .where(eq(attributes.id, attribute.id));
+      recordDefinition(context, attribute);
       return { attributeId: attribute.id };
     },
     hooks,
@@ -357,7 +366,8 @@ export async function updateAttribute(scope: EngineScope, input: AttributeUpdate
 export async function archiveAttribute(scope: EngineScope, attributeId: string, hooks: readonly AfterWrite[] = []) {
   await runWrite(
     scope,
-    async ({ tx }) => {
+    async (context) => {
+      const { tx } = context;
       const attribute = await editable(tx, attributeId);
       const [primary] = await tx
         .select({ id: objects.id })
@@ -371,6 +381,7 @@ export async function archiveAttribute(scope: EngineScope, attributeId: string, 
         .update(attributes)
         .set({ archivedAt: sql`now()`, ...touched(scope) })
         .where(eq(attributes.id, attribute.id));
+      recordDefinition(context, attribute);
     },
     hooks,
   );
@@ -380,7 +391,8 @@ export async function archiveAttribute(scope: EngineScope, attributeId: string, 
 export async function restoreAttribute(scope: EngineScope, attributeId: string, hooks: readonly AfterWrite[] = []) {
   await runWrite(
     scope,
-    async ({ tx }) => {
+    async (context) => {
+      const { tx } = context;
       const attribute = await editable(tx, attributeId);
       if (attribute.archivedAt === null) return;
       if (attribute.isUnique) await fillUniqueKeys(tx, attribute);
@@ -388,6 +400,7 @@ export async function restoreAttribute(scope: EngineScope, attributeId: string, 
         .update(attributes)
         .set({ archivedAt: null, ...touched(scope) })
         .where(eq(attributes.id, attribute.id));
+      recordDefinition(context, attribute);
     },
     hooks,
   );

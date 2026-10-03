@@ -78,6 +78,7 @@ export {
   type RecordView,
   type ValueInput,
 } from './records.ts';
+export { outboxEvents, outboxHook, type OutboxEvent, type OutboxHookOptions } from './outbox.ts';
 export {
   inputInvalid,
   isInputError,
@@ -111,6 +112,7 @@ export {
   type CappedChange,
   type CappedStep,
   type Change,
+  type DefinitionChange,
   type RecordRef,
   type ReferenceChange,
   type ValueChange,

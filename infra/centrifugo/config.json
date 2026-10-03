@@ -9,6 +9,17 @@
   "client": {
     "allowed_origins": []
   },
+  "channel": {
+    "namespaces": [
+      {
+        "name": "workspace",
+        "allow_subscribe_for_client": false,
+        "history_size": 100,
+        "history_ttl": "300s",
+        "force_recovery": true
+      }
+    ]
+  },
   "admin": {
     "enabled": true
   },

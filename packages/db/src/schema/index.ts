@@ -6,4 +6,5 @@ export { actorType, attributeType, systemColumn } from './common.ts';
 export { memberStatus, members, workspaceCounters, workspaces } from './workspaces.ts';
 export { attributes, lists, objects, relationshipCardinality, relationships } from './definitions.ts';
 export { attributeOptions, optionOutcome } from './options.ts';
+export { outbox, outboxKind } from './outbox.ts';
 export { listEntries, recordLinks, records, sortKeys, values } from './records.ts';

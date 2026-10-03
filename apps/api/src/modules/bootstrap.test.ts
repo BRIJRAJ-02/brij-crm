@@ -8,7 +8,7 @@ import { testQuery } from '@crm/db/testing';
 import { newId } from '@crm/core';
 import { newEmail, rpcClient, signIn, signInApp, testConnections } from '../../test/sign-in.ts';
 
-const { identityUrl } = inject('testDatabase');
+const { identityUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
 let identity: IdentityStore;
 let app: ReturnType<typeof signInApp>['app'];
@@ -77,6 +77,14 @@ describe('workspaces.create', () => {
     expect(created).toEqual({ workspace: { id: input.id, slug: input.slug, name: 'Acme' } });
     expect((await client.me.get()).user.name).toBe('Ada Lovelace');
     expect(await identity.findWorkspace(input.slug)).toEqual(created.workspace);
+    // Exempt from the outbox (spec 0005): nobody can be subscribed to a workspace that didn't exist.
+    const events = await testQuery<{ events: number; seq: number }>(
+      ownerUrl,
+      `select (select count(*)::int from outbox where workspace_id = $1) as events,
+        (select outbox_seq::int from workspace_counters where workspace_id = $1) as seq`,
+      [input.id],
+    );
+    expect(events).toEqual([{ events: 0, seq: 0 }]);
   });
 
   it('answers a repeated request (a dropped response) with the same workspace, creating nothing twice', async () => {

@@ -36,6 +36,16 @@ export interface ReferenceChange {
 }
 
 /**
+ * An object's attributes that a write added, changed, archived or restored
+ * (spec 0005): a screen showing the object reads its attributes again.
+ * Attributes on a list aren't listed (no screen shows lists yet).
+ */
+export interface DefinitionChange {
+  readonly objectId: string;
+  readonly attributeIds: readonly string[];
+}
+
+/**
  * Everything one write landed or made visible or invisible, as the hooks see
  * it. Records and entries that only appear or disappear (a record's entries
  * on its delete, the reference values pointing at it) are listed too, so a
@@ -63,6 +73,8 @@ export interface Change {
   readonly values: readonly ValueChange[];
   /** Reference values on other records that a delete, restore or erasure changed without a new version. */
   readonly references: readonly ReferenceChange[];
+  /** Object attributes the write added, changed, archived or restored. */
+  readonly definitions: readonly DefinitionChange[];
 }
 
 /** Marks a change `capChange` made: a type only brand, nothing at run time. */
@@ -143,6 +155,7 @@ const LIST_KEYS = [
   'purgedEntries',
   'values',
   'references',
+  'definitions',
 ] as const satisfies readonly (keyof ChangeLists)[];
 
 /**
@@ -243,6 +256,7 @@ export async function runWrite<T>(
           purgedEntries: [] as string[],
           values: [] as ValueChange[],
           references: [] as ReferenceChange[],
+          definitions: [] as DefinitionChange[],
         };
         const context: WriteContext = {
           tx,
@@ -263,6 +277,7 @@ export async function runWrite<T>(
             append(collected.purgedEntries, part.purgedEntries);
             append(collected.values, part.values);
             append(collected.references, part.references);
+            append(collected.definitions, part.definitions);
           },
           async perRecord(step) {
             const marks = LIST_KEYS.map((key) => collected[key].length);
@@ -296,6 +311,7 @@ export async function runWrite<T>(
           purgedEntries: [...collected.purgedEntries],
           values: [...collected.values],
           references: [...collected.references],
+          definitions: [...collected.definitions],
         };
         for (const hook of hooks) await hook(change, tx);
         return { result, change };

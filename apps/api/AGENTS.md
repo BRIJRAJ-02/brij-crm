@@ -22,6 +22,9 @@ The one modular API (Hono + oRPC) that every read and write goes through, and th
 | `src/auth/` | Better Auth's one wrapper: email codes, Google, sessions, the sign up allowlist, rate limits, and its refusals in the shared error shape. Mounted on `/api/auth/*` |
 | `src/mail/` | The `Mailer` interface, Resend (deployed) and Mailpit (local), and the one React Email template |
 | `src/env.ts` | Zod schemas for the api and worker environments, and `loadEnv()` |
+| `src/hooks.ts` | `writeHooks()`: the one composer of after write hooks (the outbox) every write procedure passes |
+| `src/realtime/relay.ts` | The outbox relay the worker runs: LISTEN plus a 1 second poll, one relay by advisory lock, ordered publish, reconnect with backoff |
+| `src/realtime/centrifugo.ts` | Centrifugo's server API (`/api/publish`), the one place the backend calls it |
 | `src/door.test.ts` | The contract walk: every procedure outside the bootstrap list must be built on `member`, and no file here builds an engine scope |
 | `src/log.ts` | The logger: one JSON line per event |
 | `Dockerfile` | `turbo prune`, a production install, Node 24 alpine |
@@ -50,7 +53,8 @@ docker build -f apps/api/Dockerfile .   # from the repo root
 - The api refuses to start as the owner or a superuser. `DATABASE_URL` must be the app login that `pnpm db:app-login` creates, and `IDENTITY_DATABASE_URL` the identity login `pnpm db:identity-login` creates (the only role that reads schema `auth`).
 - A new procedure is built on `member` and takes `WorkspaceScoped` input, unless it belongs on the bootstrap list in `src/door.test.ts` (`system.*`, `me.get`, `workspaces.create`, `realtime.connectionToken`). Never build an `EngineScope` here; `context.scope` comes from the door. A write procedure takes a `mutationId` and hands the engine `writeHooks(context, { mutationId })`, never hooks of its own.
 - The tests need Postgres on 5433 and Mailpit on 8025 (`docker compose up -d postgres mailpit`): the sign in tests read the codes back from Mailpit.
-- The worker refuses a Neon `-pooler` host for `DATABASE_URL_DIRECT`, and proves a NOTIFY arrives before it starts. If its direct connection drops, it exits so Railway restarts it.
+- The worker refuses a Neon `-pooler` host for `DATABASE_URL_DIRECT`, and proves a NOTIFY arrives before it starts. If the relay's direct connection drops, the relay reconnects with backoff (1, 2, 4 up to 30 seconds); the worker keeps running.
+- The relay needs `CENTRIFUGO_API_URL` and `CENTRIFUGO_API_KEY` outside local; locally, without them the worker boots with the relay off (it logs so).
 - Locally the api owns `PORT` and the worker uses `WORKER_PORT` (default 3001). On Railway, each service gets its own `PORT`.
 - Turbo runs tasks in strict env mode, so shell variables don't reach `dev`. The scripts read the root `.env` themselves (`--env-file-if-exists`).
 - Railway runs migrations as the api's pre deploy step, on the owner role.

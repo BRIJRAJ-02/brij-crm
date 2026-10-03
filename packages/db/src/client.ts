@@ -3,7 +3,8 @@ import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import * as schema from './schema/index.ts';
 
-type Drizzle = NodePgDatabase<typeof schema>;
+/** Drizzle over this package's schema, on a pool or on one client. */
+export type Drizzle = NodePgDatabase<typeof schema>;
 export type WorkspaceTx = Parameters<Parameters<Drizzle['transaction']>[0]>[0];
 
 export interface DatabaseOptions {
@@ -75,6 +76,26 @@ const CANCEL_STATEMENT_TIMEOUT = '2s';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+/**
+ * `withWorkspace` itself, on any Drizzle instance: the pool's, or the outbox
+ * reader's one direct client. Opens a transaction and sets `app.workspace_id`
+ * first, so row level security scopes every statement to this workspace.
+ * Throws a `TypeError` unless the id is a uuid.
+ */
+export function workspaceTransaction<T>(
+  db: Drizzle,
+  workspaceId: string,
+  work: (tx: WorkspaceTx) => Promise<T>,
+): Promise<T> {
+  if (!UUID.test(workspaceId)) {
+    return Promise.reject(new TypeError('withWorkspace needs a workspace id (a uuid).'));
+  }
+  return db.transaction(async (tx) => {
+    await tx.execute(sql`select set_config('app.workspace_id', ${workspaceId}, true)`);
+    return work(tx);
+  });
+}
+
 export function createDatabase(options: DatabaseOptions): Database {
   const pool = new pg.Pool({
     connectionString: options.url,
@@ -99,15 +120,7 @@ export function createDatabase(options: DatabaseOptions): Database {
   const db = drizzle({ client: pool, schema });
 
   return {
-    async withWorkspace(workspaceId, work) {
-      if (!UUID.test(workspaceId)) {
-        throw new TypeError('withWorkspace needs a workspace id (a uuid).');
-      }
-      return db.transaction(async (tx) => {
-        await tx.execute(sql`select set_config('app.workspace_id', ${workspaceId}, true)`);
-        return work(tx);
-      });
-    },
+    withWorkspace: (workspaceId, work) => workspaceTransaction(db, workspaceId, work),
 
     async checkHealth() {
       const started = performance.now();

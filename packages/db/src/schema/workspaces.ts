@@ -3,6 +3,7 @@
 // to point at someone real.
 import { sql } from 'drizzle-orm';
 import {
+  bigint,
   foreignKey,
   integer,
   pgEnum,
@@ -42,7 +43,11 @@ export const workspaces = pgTable(
   ],
 );
 
-/** The counts the limits module checks, one row per workspace, read and updated under `FOR UPDATE`. */
+/**
+ * The counts the limits module checks, and the outbox's last number, one row
+ * per workspace, read and updated under `FOR UPDATE`. Every write takes it
+ * last: the outbox hook numbers its rows from `outbox_seq` (spec 0005).
+ */
 export const workspaceCounters = pgTable(
   'workspace_counters',
   {
@@ -50,6 +55,7 @@ export const workspaceCounters = pgTable(
     liveRecords: integer('live_records').notNull().default(0),
     customObjects: integer('custom_objects').notNull().default(0),
     lists: integer('lists').notNull().default(0),
+    outboxSeq: bigint('outbox_seq', { mode: 'number' }).notNull().default(0),
   },
   (t) => [
     foreignKey({ name: 'workspace_counters_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }),
