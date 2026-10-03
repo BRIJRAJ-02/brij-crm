@@ -18,6 +18,23 @@ export interface LoginSpec {
   readonly group: string;
   /** The other group, which the login must never be in, so one login can't reach both sides. */
   readonly apartFrom: string;
+  /**
+   * Sends the password itself instead of its SCRAM-SHA-256 verifier
+   * (`--plain-password`). A last resort, for a host that refuses a
+   * precomputed verifier: Postgres still stores only its own SCRAM hash, but
+   * the plain password travels in the statement, where a server log or
+   * `pg_stat_statements` may keep it. Rotate it afterwards if that host logs
+   * statements. Off unless asked for.
+   */
+  readonly plainPassword?: boolean;
+}
+
+/** The flag that turns on `LoginSpec.plainPassword`, as in `pnpm db:app-login -- --plain-password`. */
+export const PLAIN_PASSWORD_FLAG = '--plain-password';
+
+/** Whether a login script was run with `--plain-password` (see `LoginSpec.plainPassword`). */
+export function wantsPlainPassword(argv: readonly string[]): boolean {
+  return argv.includes(PLAIN_PASSWORD_FLAG);
 }
 
 /** The iteration count Postgres (and psql's `\password`) uses for SCRAM-SHA-256. */
@@ -89,8 +106,9 @@ async function assertOnlyItsGroup(client: pg.Client, login: string, spec: LoginS
 
 /**
  * Creates the login named in `loginUrl` inside `group`, or, if it exists,
- * clears any power it holds and sets its password. Refuses a role in any
- * group but `group`, and one in `apartFrom` by any path.
+ * clears any power it holds and sets its password (as a SCRAM verifier unless
+ * `plainPassword`). Refuses a role in any group but `group`, and one in
+ * `apartFrom` by any path.
  */
 export async function ensureLogin(spec: LoginSpec): Promise<void> {
   assertDirectUrl(spec.ownerUrl, 'DATABASE_URL_OWNER');
@@ -100,7 +118,10 @@ export async function ensureLogin(spec: LoginSpec): Promise<void> {
   if (!login || !password) {
     throw new Error(`${spec.variable} needs its login role and a password.`);
   }
-  const verifier = scramVerifier(password);
+  const sent = spec.plainPassword === true ? password : scramVerifier(password);
+  if (spec.plainPassword === true) {
+    console.log('Sending the password in plain text (--plain-password); Postgres stores only its own hash of it.');
+  }
 
   const client = new pg.Client({ connectionString: spec.ownerUrl, application_name: 'crm-login' });
   await client.connect();
@@ -110,7 +131,7 @@ export async function ensureLogin(spec: LoginSpec): Promise<void> {
       throw new Error(`${spec.variable} uses the owner role. It needs its own login role.`);
     }
     const role = client.escapeIdentifier(login);
-    const secret = client.escapeLiteral(verifier);
+    const secret = client.escapeLiteral(sent);
     const existing = await powersOf(client, login);
     if (existing === undefined) {
       await client.query(

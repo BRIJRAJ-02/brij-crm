@@ -1,6 +1,6 @@
 // The access door in the API (spec 0005, AC-32): every procedure outside the
-// bootstrap list is built on `member`, a member handler sees its scope and no
-// raw database, the door refuses everyone but an active member the same way,
+// bootstrap list is built on `member`, a member handler sees its scope and
+// neither the raw database nor the identity store, the door refuses everyone but an active member the same way,
 // and nothing in this app builds an engine scope.
 import { readdir, readFile } from 'node:fs/promises';
 import { join, sep } from 'node:path';
@@ -33,14 +33,28 @@ function isBootstrap(path: string): boolean {
  */
 const RAW_DATABASE_FILES: ReadonlySet<string> = new Set(['system/router.ts', 'workspaces/router.ts']);
 
+/**
+ * The module files holding the bootstrap handlers that read global identity:
+ * `me.get` and `workspaces.create`. No other module file may.
+ */
+const RAW_IDENTITY_FILES: ReadonlySet<string> = new Set(['me/router.ts', 'workspaces/router.ts']);
+
 /** Reaching the database around the door: the raw pool from the context, or a workspace transaction of its own. */
 const AROUND_THE_DOOR =
   /\bcontext\s*\.\s*db\b|\bcontext\s*:\s*\{[^}]*\bdb\b|\{[^}]*\bdb\b[^}]*\}\s*=\s*context\b|\bwithWorkspace\b/;
 
-/** The module files (relative to src/modules) that reach the database around the door. */
+/** Reaching global identity (sessions, the directory, every user) from the context. */
+const IDENTITY_FROM_CONTEXT =
+  /\bcontext\s*\.\s*identity\b|\bcontext\s*:\s*\{[^}]*\bidentity\b|\{[^}]*\bidentity\b[^}]*\}\s*=\s*context\b/;
+
+/** The module files (relative to src/modules) that reach the database or global identity around the door. */
 function aroundTheDoor(files: readonly { readonly path: string; readonly source: string }[]): string[] {
   return files
-    .filter(({ path, source }) => !RAW_DATABASE_FILES.has(path) && AROUND_THE_DOOR.test(source))
+    .filter(
+      ({ path, source }) =>
+        (!RAW_DATABASE_FILES.has(path) && AROUND_THE_DOOR.test(source)) ||
+        (!RAW_IDENTITY_FILES.has(path) && IDENTITY_FROM_CONTEXT.test(source)),
+    )
     .map(({ path }) => path);
 }
 
@@ -102,7 +116,7 @@ describe('the contract walk', () => {
 });
 
 describe('the door is the only way in', () => {
-  it('types a member handler with no database: it reads through `context.scope`', () => {
+  it('types a member handler with no database and no identity store: it reads through `context.scope`', () => {
     const t = os.$context<RequestContext>();
     const procedure = t
       .use(requireSession)
@@ -111,19 +125,23 @@ describe('the door is the only way in', () => {
         const scoped: string = context.scope.workspaceId;
         // @ts-expect-error A member handler has no `db` to query around the door.
         const raw: unknown = context.db.withWorkspace;
-        return { scoped, raw };
+        // @ts-expect-error Nor global identity: sessions, the directory and every user are no member handler's.
+        const users: unknown = context.identity.getUser;
+        return { scoped, raw, users };
       });
     expect(middlewaresOf(procedure)).toEqual([requireSession, requireMember]);
   });
 
-  it('finds no module reaching the database around the door, outside the named bootstrap handlers', async () => {
+  it('finds no module reaching the database or identity around the door, outside the named bootstrap handlers', async () => {
     const root = fileURLToPath(new URL('./modules/', import.meta.url));
     const files = await Promise.all(
       (await readdir(root, { recursive: true }))
         .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
         .map(async (path) => ({ path: path.split(sep).join('/'), source: await readFile(join(root, path), 'utf8') })),
     );
-    expect(files.map((file) => file.path)).toEqual(expect.arrayContaining([...RAW_DATABASE_FILES]));
+    expect(files.map((file) => file.path)).toEqual(
+      expect.arrayContaining([...RAW_DATABASE_FILES, ...RAW_IDENTITY_FILES]),
+    );
     expect(aroundTheDoor(files)).toEqual([]);
   });
 
@@ -138,8 +156,22 @@ describe('the door is the only way in', () => {
         { path: 'tasks/router.ts', source: handler('({ context }) => withWorkspace(context.scope.workspaceId)') },
         { path: 'deals/router.ts', source: handler('({ context }) => readDeals(context.scope)') },
         { path: 'system/router.ts', source: handler('({ context }) => status({ db: context.db })') },
+        { path: 'people/router.ts', source: handler('({ context }) => context.identity.getUser(id)') },
+        { path: 'teams/router.ts', source: handler('({ context: { identity } }) => identity.findWorkspace(slug)') },
+        { path: 'tags/router.ts', source: handler('({ context }) => { const { identity } = context; }') },
+        { path: 'me/router.ts', source: handler('({ context }) => getMe({ identity: context.identity })') },
+        { path: 'system/router.ts', source: handler('({ context }) => who(context.identity)') },
       ]),
-    ).toEqual(['records/router.ts', 'lists/router.ts', 'notes/router.ts', 'tasks/router.ts']);
+    ).toEqual([
+      'records/router.ts',
+      'lists/router.ts',
+      'notes/router.ts',
+      'tasks/router.ts',
+      'people/router.ts',
+      'teams/router.ts',
+      'tags/router.ts',
+      'system/router.ts',
+    ]);
   });
 });
 
@@ -174,8 +206,9 @@ describe('the member door', () => {
       .handler(({ context }) => ({
         workspaceId: context.scope.workspaceId,
         memberId: context.scope.actor.id,
-        // What the handler holds besides its scope: the raw pool must not be among it.
+        // What the handler holds besides its scope: neither the raw pool nor the identity store is among it.
         raw: (context as Record<string, unknown>).db ?? null,
+        identity: (context as Record<string, unknown>).identity ?? null,
       })),
   };
   let app: ReturnType<typeof signInApp>['app'];
@@ -237,6 +270,7 @@ describe('the member door', () => {
       workspaceId: a.workspace.id,
       memberId: members[0]?.id,
       raw: null,
+      identity: null,
     });
   });
 

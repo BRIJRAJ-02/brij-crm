@@ -85,13 +85,15 @@ describe('the edge guard', () => {
   });
 
   it.each(['preview', 'production'] as const)(
-    'is open in %s while EDGE_SECRET is unset, but trusts no forwarded IP',
+    'refuses everything but the health checks in %s if built without EDGE_SECRET (ApiEnv never boots so)',
     async (environment) => {
-      const unset = createTestApp({ APP_ENV: environment });
-      const response = await unset.fetch(rpcRequest('context', { headers: { 'x-forwarded-for': '6.6.6.6' } }));
-      expect(response.status).toBe(200);
-      const body = (await response.json()) as { json: { clientIp: string | null } };
-      expect(body.json.clientIp).toBeNull();
+      const unset = createTestApp({ APP_ENV: environment, EDGE_SECRET: undefined });
+      const response = await unset.fetch(
+        rpcRequest('context', { headers: { [EDGE_HEADER]: '', 'x-forwarded-for': '6.6.6.6' } }),
+      );
+      expect(response.status).toBe(403);
+      expect(await response.json()).toMatchObject({ code: 'EDGE_REQUIRED' });
+      expect((await unset.fetch(new Request(`${APP_URL}/api/health`))).status).toBe(200);
     },
   );
 

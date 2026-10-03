@@ -3,9 +3,10 @@
 // identity store, the sign up allowlist, and rate limits that hold across
 // instances. Nothing outside this folder imports Better Auth; the rest of the
 // API sees only `Auth`.
-import type { SignInProviders } from '@crm/contracts';
+import { isIP } from 'node:net';
+import { EmailValue, emailDomain, errorStatus, type SignInProviders } from '@crm/contracts';
 import type { IdentityStore } from '@crm/db';
-import { betterAuth } from 'better-auth';
+import { betterAuth, type DBAdapter } from 'better-auth';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
 import { emailOTP } from 'better-auth/plugins/email-otp';
 import * as z from 'zod';
@@ -54,10 +55,11 @@ interface Rule {
 
 /**
  * A per IP rule that applies only to a request carrying a trusted client IP
- * (see `forwardedHeaders`). Without one, Better Auth would key every caller
- * on one shared `no-trusted-ip|<path>` bucket, and one caller could use up
- * everyone's sign ins; so there is no per IP limit then, and the per email
- * limits still hold. `rule` undefined keeps the rule Better Auth resolved.
+ * (see `forwardedHeaders`, which sets the header only to a valid IP). Without
+ * one, Better Auth would key every caller on one shared
+ * `no-trusted-ip|<path>` bucket, and one caller could use up everyone's sign
+ * ins; so there is no per IP limit then, and the per email limits still hold.
+ * `rule` undefined keeps the rule Better Auth resolved.
  */
 function perTrustedIp(rule?: Rule) {
   return (request: Request, current: Rule): false | Rule => {
@@ -140,17 +142,57 @@ export interface AuthDeps {
 
 /**
  * The request headers Better Auth sees: `x-forwarded-for` holds exactly the
- * IP the edge guard trusted, or is absent. A forwarded chain never reaches it.
+ * IP the edge guard trusted, or is absent. A forwarded chain never reaches it,
+ * and nor does a value that isn't an IP: Better Auth would key that caller on
+ * its one shared bucket, which `perTrustedIp` keeps shut only while the header
+ * is absent.
  */
 export function forwardedHeaders(headers: Headers, clientIp: string | undefined): Headers {
   const next = new Headers(headers);
   next.delete('x-forwarded-for');
-  if (clientIp !== undefined) next.set('x-forwarded-for', clientIp);
+  if (clientIp !== undefined && isIP(clientIp) !== 0) next.set('x-forwarded-for', clientIp);
   return next;
 }
 
-const SendCodeBody = z.object({ email: z.string(), type: z.string() });
-const SignInCodeBody = z.object({ email: z.string() });
+/** The body of a route that names an email: the shared email schema (trimmed, lowercased, 254 at most). */
+const EmailBody = z.looseObject({ email: EmailValue });
+const SendCodeBody = z.object({ email: EmailValue, type: z.string() });
+const SignInCodeBody = z.object({ email: EmailValue });
+
+/** The routes whose body names an email, checked before Better Auth or its limiter sees them. */
+const EMAIL_ROUTES: ReadonlySet<string> = new Set([SEND_CODE_PATH, SIGN_IN_CODE_PATH]);
+
+/** The answer to a body without a valid email: 400 INPUT_INVALID, as every other refusal is shaped. */
+function emailInvalid(message: string): Response {
+  return Response.json({ code: 'INPUT_INVALID', message }, { status: errorStatus('INPUT_INVALID') });
+}
+
+/**
+ * For the routes that take an email: the request with its email checked
+ * against the shared schema and written back normalized, so the limits, the
+ * code's lookup and the account all use one spelling; or a 400 INPUT_INVALID
+ * answer. It runs before Better Auth, so a malformed or oversized email
+ * reaches neither its rate limiter nor the database. Other routes pass as
+ * they came.
+ */
+async function checkEmail(request: Request): Promise<Request | Response> {
+  if (request.method !== 'POST') return request;
+  if (!EMAIL_ROUTES.has(new URL(request.url).pathname.slice(AUTH_BASE_PATH.length))) return request;
+  const body: unknown = await request
+    .clone()
+    .json()
+    .catch(() => undefined);
+  const parsed = EmailBody.safeParse(body);
+  if (!parsed.success) {
+    const issue = parsed.error.issues.find((found) => found.path[0] === 'email');
+    return emailInvalid(
+      issue === undefined || issue.code === 'invalid_type' ? 'Send an email address.' : issue.message,
+    );
+  }
+  const headers = new Headers(request.headers);
+  headers.delete('content-length');
+  return new Request(request, { headers, body: JSON.stringify(parsed.data) });
+}
 
 function rateLimited(message: string, retryAfterSeconds: number): APIError {
   return new APIError(
@@ -158,6 +200,27 @@ function rateLimited(message: string, retryAfterSeconds: number): APIError {
     { code: 'RATE_LIMITED', message },
     { 'retry-after': String(retryAfterSeconds) },
   );
+}
+
+function inputInvalid(): APIError {
+  return new APIError('BAD_REQUEST', { code: 'INPUT_INVALID', message: 'Send an email address.' });
+}
+
+/**
+ * Whether `email` has a sign in code that hasn't expired (Better Auth's
+ * `sign-in-otp-<email>` verification). A plain count through its adapter:
+ * `internalAdapter.findVerificationValue` would also delete every expired
+ * row, turning an expired code's OTP_EXPIRED into INVALID_OTP.
+ */
+async function hasLiveCode(adapter: Pick<DBAdapter, 'count'>, email: string): Promise<boolean> {
+  const live = await adapter.count({
+    model: 'verification',
+    where: [
+      { field: 'identifier', value: `sign-in-otp-${email}` },
+      { field: 'expiresAt', value: new Date(), operator: 'gt' },
+    ],
+  });
+  return live > 0;
 }
 
 function signupClosed(): APIError {
@@ -249,17 +312,28 @@ export function createAuth({ env, identity, mailer }: AuthDeps): Auth {
       before: createAuthMiddleware(async (ctx) => {
         if (ctx.path === SIGN_IN_CODE_PATH) {
           const body = SignInCodeBody.safeParse(ctx.body);
-          // The route refuses a malformed body itself.
-          if (!body.success) return;
-          const email = body.data.email.trim().toLowerCase();
+          // `handle` refused a request like this already; a call from our own code gets the same answer.
+          if (!body.success) throw inputInvalid();
+          const { email } = body.data;
+          // A try only counts against the email when there is something to guess: a live code, or an account.
+          // Junk tries at an address with neither can't lock it out; Better Auth refuses them (INVALID_OTP) anyway.
+          if (!(await hasLiveCode(ctx.context.adapter, email))) {
+            if ((await ctx.context.internalAdapter.findUserByEmail(email)) === null) return;
+          }
           const key = `email:${email}|${SIGN_IN_CODE_PATH}`;
           // Both windows count every try, so neither runs ahead of the other.
-          const limits = await Promise.all([
+          const [hour, day] = await Promise.all([
             identity.consumeRateLimit(key, CODE_CHECKS_PER_EMAIL_HOUR),
             identity.consumeRateLimit(`${key}|day`, CODE_CHECKS_PER_EMAIL_DAY),
           ]);
-          const refused = limits.filter((limit) => !limit.allowed);
+          const refused = [hour, day].filter((limit) => !limit.allowed);
           if (refused.length > 0) {
+            // Never the address: its domain says enough to spot an attack on one company.
+            log.warn('Sign in tries capped for an email', {
+              domain: emailDomain(email),
+              hour: !hour.allowed,
+              day: !day.allowed,
+            });
             const wait = Math.max(
               ...refused.map((limit) => limit.retryAfterSeconds ?? CODE_CHECKS_PER_EMAIL_HOUR.window),
             );
@@ -269,12 +343,12 @@ export function createAuth({ env, identity, mailer }: AuthDeps): Auth {
         }
         if (ctx.path !== SEND_CODE_PATH) return;
         const body = SendCodeBody.safeParse(ctx.body);
-        // The route refuses a malformed body itself.
-        if (!body.success) return;
+        // `handle` refused a request like this already; a call from our own code gets the same answer.
+        if (!body.success) throw inputInvalid();
         if (body.data.type !== 'sign-in') {
           throw new APIError('BAD_REQUEST', { code: 'INPUT_INVALID', message: 'Only sign in codes are sent.' });
         }
-        const email = body.data.email.trim().toLowerCase();
+        const { email } = body.data;
         const limit = await identity.consumeRateLimit(`email:${email}|${SEND_CODE_PATH}`, CODE_SENDS_PER_EMAIL);
         if (!limit.allowed) {
           throw rateLimited(
@@ -303,7 +377,9 @@ export function createAuth({ env, identity, mailer }: AuthDeps): Auth {
     providers: { google: google !== undefined },
 
     async handle(request, clientIp) {
-      const forwarded = new Request(request, { headers: forwardedHeaders(request.headers, clientIp) });
+      const checked = await checkEmail(request);
+      if (checked instanceof Response) return checked;
+      const forwarded = new Request(checked, { headers: forwardedHeaders(checked.headers, clientIp) });
       return authErrorResponse(await auth.handler(forwarded));
     },
 

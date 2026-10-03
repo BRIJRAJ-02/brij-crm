@@ -34,8 +34,9 @@ export interface Database {
   checkHealth(): Promise<DatabaseHealth>;
   /**
    * Refuses to continue if this connection could bypass row level security
-   * (itself, or through a role it can use), or is in `pg_read_all_data` or
-   * `pg_write_all_data`, which skip every grant.
+   * (itself, or through any role it is in, by any grant, even one held only
+   * WITH ADMIN), or is in `pg_read_all_data` or `pg_write_all_data`, which
+   * skip every grant.
    */
   assertAppRole(): Promise<void>;
   /**
@@ -113,18 +114,17 @@ export function createDatabase(options: DatabaseOptions): Database {
           r.rolsuper,
           r.rolbypassrls,
           d.datdba = r.oid as owns_database,
+          -- MEMBER follows every grant, even one with neither INHERIT nor SET: a role held WITH ADMIN can
+          -- still be granted onward, so it counts as reached.
           exists (
             select 1 from pg_roles b
             where b.oid <> r.oid and (b.rolbypassrls or b.rolsuper)
-              and (pg_has_role(r.oid, b.oid, 'USAGE') or pg_has_role(r.oid, b.oid, 'SET'))
+              and pg_has_role(r.oid, b.oid, 'MEMBER')
           ) as reaches_bypass,
           (
             select string_agg(b.rolname, ', ' order by b.rolname) from pg_roles b
             where b.rolname in ('pg_read_all_data', 'pg_write_all_data')
-              and (
-                pg_has_role(r.oid, b.oid, 'MEMBER') or pg_has_role(r.oid, b.oid, 'USAGE')
-                or pg_has_role(r.oid, b.oid, 'SET')
-              )
+              and pg_has_role(r.oid, b.oid, 'MEMBER')
           ) as reaches_all_data,
           exists (
             select 1

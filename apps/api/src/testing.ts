@@ -21,6 +21,9 @@ export function unreachableDatabase(): Database {
   return createDatabase({ url: NOWHERE, applicationName: 'crm-api-test' });
 }
 
+/** The edge secret every test app holds (ignored locally), and that the sign in helpers send. */
+export const TEST_EDGE_SECRET = 'a-test-edge-secret-of-at-least-32-characters';
+
 /** An api environment, with `overrides` on top. */
 export function testEnv(overrides: Partial<ApiEnv> = {}): ApiEnv {
   return {
@@ -34,6 +37,7 @@ export function testEnv(overrides: Partial<ApiEnv> = {}): ApiEnv {
     BETTER_AUTH_URL: APP_URL,
     MAIL_FROM: 'CRM <sign-in@crm.localhost>',
     MAILPIT_URL: 'http://127.0.0.1:1',
+    EDGE_SECRET: TEST_EDGE_SECRET,
     ...overrides,
   };
 }

@@ -13,7 +13,11 @@ import type { ApiEnv } from '../src/env.ts';
 import { createMailpitMailer } from '../src/mail/mailpit.ts';
 import type { Mailer } from '../src/mail/mailer.ts';
 import type { router } from '../src/router.ts';
-import { APP_URL, testEnv, testServices } from '../src/testing.ts';
+import { EDGE_HEADER } from '../src/edge.ts';
+import { APP_URL, TEST_EDGE_SECRET, testEnv, testServices } from '../src/testing.ts';
+
+/** What Vercel's middleware adds to every request it proxies (outside local; harmless locally). */
+const THROUGH_THE_EDGE = { [EDGE_HEADER]: TEST_EDGE_SECRET };
 
 /** Mailpit's API, from docker-compose.yml. */
 export const MAILPIT_URL = process.env.TEST_MAILPIT_URL ?? 'http://localhost:8025';
@@ -47,7 +51,7 @@ export function signInApp(
 
 type App = ReturnType<typeof signInApp>['app'];
 
-/** A POST to one of Better Auth's routes, as the web app sends it. */
+/** A POST to one of Better Auth's routes, as the web app sends it through the edge. */
 export function authPost(
   app: App,
   path: string,
@@ -58,7 +62,7 @@ export function authPost(
     app.fetch(
       new Request(`${APP_URL}/api/auth${path}`, {
         method: 'POST',
-        headers: { origin: APP_URL, 'content-type': 'application/json', ...headers },
+        headers: { origin: APP_URL, 'content-type': 'application/json', ...THROUGH_THE_EDGE, ...headers },
         body: JSON.stringify(body),
       }),
     ),
@@ -130,7 +134,7 @@ export function rpcClient(app: App, cookie?: string): RouterClient<typeof router
   return createORPCClient(
     new RPCLink({
       url: `${APP_URL}/api/rpc`,
-      headers: { origin: APP_URL, ...(cookie === undefined ? {} : { cookie }) },
+      headers: { origin: APP_URL, ...THROUGH_THE_EDGE, ...(cookie === undefined ? {} : { cookie }) },
       fetch: async (request) => app.fetch(request),
     }),
   );

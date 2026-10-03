@@ -22,10 +22,8 @@ const shared = {
   DATABASE_URL: z.url(),
 };
 
-// The edge guard's shared secret (spec 0005). Optional while it rolls out; an
-// empty value counts as unset, so `.env.example`'s `EDGE_SECRET=` boots.
-// TODO(#57): required outside local once the rollout in docs/specs/0005-core-loop/index.md (build plan, step 2:
-// the API, then Vercel, then Railway) has set it everywhere.
+// The edge guard's shared secret (spec 0005, #57): required outside local (see the check below), where an
+// empty value counts as unset, so `.env.example`'s `EDGE_SECRET=` boots on a laptop.
 const edgeSecret = optional(
   z
     .string()
@@ -93,6 +91,10 @@ export const ApiEnv = z
         missing('MAILPIT_URL', 'Set MAILPIT_URL (Mailpit, http://localhost:8025) or RESEND_API_KEY to send codes.');
       }
       return;
+    }
+    // Without it anyone could call the API's public Railway address around the app (see edge.ts).
+    if (env.EDGE_SECRET === undefined) {
+      missing('EDGE_SECRET', `EDGE_SECRET is required in ${env.APP_ENV}: the same value the Vercel project sends.`);
     }
     if (env.RESEND_API_KEY === undefined) missing('RESEND_API_KEY', `RESEND_API_KEY is required in ${env.APP_ENV}.`);
     if (env.MAIL_FROM === undefined) missing('MAIL_FROM', `MAIL_FROM is required in ${env.APP_ENV}.`);

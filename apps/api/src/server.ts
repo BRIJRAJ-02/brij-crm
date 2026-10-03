@@ -28,18 +28,10 @@ try {
   process.exit(1);
 }
 
-// Whether the edge guard is on, never the secret itself. Off in a deployed
-// environment is the rollout window (spec 0005), so it warns until #57.
-if (isEdgeGuardEnforced({ secret: env.EDGE_SECRET, environment: env.APP_ENV })) {
-  log.info('Edge guard on', { edgeGuard: 'on' });
-} else if (env.APP_ENV === 'local') {
-  log.info('Edge guard off', { edgeGuard: 'off', reason: 'local' });
-} else {
-  log.warn('Edge guard off: the API answers callers that bypass the app', {
-    edgeGuard: 'off',
-    reason: 'EDGE_SECRET is unset',
-  });
-}
+// Whether the edge guard is on, never the secret itself. ApiEnv requires the secret outside local, so it is off
+// only on a laptop.
+const edgeGuard = isEdgeGuardEnforced({ environment: env.APP_ENV }) ? 'on' : 'off';
+log.info(`Edge guard ${edgeGuard}`, { edgeGuard, ...(edgeGuard === 'off' ? { reason: 'local' } : {}) });
 
 const mailer = createMailer(env);
 const auth = createAuth({ env, identity, mailer });

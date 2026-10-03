@@ -21,6 +21,7 @@ const production = {
   BETTER_AUTH_SECRET: 'a-production-secret-of-at-least-32-characters',
   RESEND_API_KEY: 're_test',
   MAIL_FROM: 'onboarding@resend.dev',
+  EDGE_SECRET: 'an-edge-secret-of-at-least-32-characters',
 };
 
 function problems(input: Record<string, unknown>): string[] {

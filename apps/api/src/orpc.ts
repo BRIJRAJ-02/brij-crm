@@ -6,8 +6,8 @@
 //   (`context.scope`), else the same NOT_FOUND for a non member, a removed
 //   member and an unknown address.
 // Only `enterWorkspace` in packages/core builds a member's scope; nothing in
-// this app builds one. A `member` handler sees `context.scope` and no
-// `context.db`, so the door is its only way to the data. The contract walking
+// this app builds one. A `member` handler sees `context.scope` and neither
+// `context.db` nor `context.identity`, so the door is its only way to the data. The contract walking
 // test fails if a procedure outside the bootstrap list isn't built on `member`.
 import { type AppEnvironment, contract, WorkspaceScoped } from '@crm/contracts';
 import { enterWorkspace } from '@crm/core';
@@ -52,18 +52,21 @@ export const requireSession = os.$context<RequestContext>().middleware(async ({ 
 });
 
 /**
- * What a `member` handler holds for `context.db`: nothing at run time, and
- * `never` in the type (oRPC lets a middleware narrow a context field, never
- * widen it), so reading anything off it doesn't compile.
+ * What a `member` handler holds for `context.db` and `context.identity`:
+ * nothing at run time, and `never` in the type (oRPC lets a middleware narrow
+ * a context field, never widen it), so reading anything off either doesn't
+ * compile. Global identity (sessions, the directory, every user) is no member
+ * handler's business; one that needs a piece of it gets a narrow interface.
  */
-const NO_DATABASE = undefined as never;
+const TAKEN_AWAY = undefined as never;
 
 /**
  * The access door for a workspace procedure: reads `workspace` (its address)
  * from the input and puts the scope `enterWorkspace` returns in
  * `context.scope`. A non member, a removed member and an unknown address all
- * get the same NOT_FOUND. It takes `context.db` away (see `NO_DATABASE`), so
- * a handler behind it reaches data only through its scope.
+ * get the same NOT_FOUND. It takes `context.db` and `context.identity` away
+ * (see `TAKEN_AWAY`), so a handler behind it reaches data only through its
+ * scope.
  */
 export const requireMember = os
   .$context<RequestContext & SessionContext>()
@@ -78,7 +81,7 @@ export const requireMember = os
       { db: context.db, identity: context.identity },
       { userId: context.user.id, slug: scoped.data.workspace },
     );
-    return next({ context: { scope, db: NO_DATABASE } });
+    return next({ context: { scope, db: TAKEN_AWAY, identity: TAKEN_AWAY } });
   });
 
 /** Procedures for a signed in person, before any workspace (the bootstrap list). */

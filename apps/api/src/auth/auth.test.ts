@@ -5,6 +5,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, inject, i
 import type { Database, IdentityStore } from '@crm/db';
 import { createTestUser, testQuery } from '@crm/db/testing';
 import {
+  authPost,
   codeFor,
   cookieFrom,
   mailTo,
@@ -23,6 +24,7 @@ import {
   CODE_CHECKS_PER_EMAIL_HOUR,
   CODE_SENDS_PER_EMAIL,
   CODE_SENDS_PER_IP,
+  forwardedHeaders,
   SIGN_INS_PER_IP,
 } from './auth.ts';
 
@@ -272,31 +274,165 @@ describe('rate limits', () => {
     expect(Number(refused.headers.get('retry-after'))).toBeGreaterThan(19 * 60 * 60);
     expect(await userCount(email)).toBe(0);
   });
+
+  it('logs an email reaching its cap by its domain only, never the address', async () => {
+    const { app } = signInApp({ db, identity });
+    const email = newEmail();
+    await authSql('insert into auth.rate_limit (key, count, last_request) values ($1, $2, $3)', [
+      `email:${email}|/sign-in/email-otp`,
+      CODE_CHECKS_PER_EMAIL_HOUR.max,
+      Date.now() + 30 * 60 * 1000,
+    ]);
+    await sendCode(app, email, newIp());
+    const logs = captureLogs();
+    try {
+      expect((await verifyCode(app, email, await codeFor(email), newIp())).status).toBe(429);
+    } finally {
+      logs.restore();
+    }
+    expect(logs.lines()).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        message: 'Sign in tries capped for an email',
+        domain: 'example.com',
+        hour: true,
+        day: false,
+      }),
+    );
+    expect(JSON.stringify(logs.lines())).not.toContain(email);
+  });
+
+  it(`never counts tries at an email with no live code and no account: ${CODE_CHECKS_PER_EMAIL_DAY.max} junk tries lock nothing`, async () => {
+    const { app } = signInApp({ db, identity });
+    const email = newEmail();
+    // From many IPs, so the per IP limit on sign ins stays out of it.
+    for (let attempt = 0; attempt < CODE_CHECKS_PER_EMAIL_DAY.max; attempt += 1) {
+      const junk = await verifyCode(app, email, String(attempt).padStart(6, '0'), newIp());
+      expect(junk.status).toBe(400);
+      expect(await junk.json()).toMatchObject({ code: 'INVALID_OTP' });
+    }
+    expect(await authSql('select key from auth.rate_limit where key like $1', [`email:${email}|/sign-in/%`])).toEqual(
+      [],
+    );
+    // An expired code is no live code either.
+    await sendCode(app, email, newIp());
+    await authSql(`update auth.verification set expires_at = now() - interval '1 second' where identifier = $1`, [
+      `sign-in-otp-${email}`,
+    ]);
+    expect((await verifyCode(app, email, '000000', newIp())).status).toBe(400);
+    expect(await authSql('select key from auth.rate_limit where key like $1', [`email:${email}|/sign-in/%`])).toEqual(
+      [],
+    );
+    // The owner of the address still signs in.
+    await signIn(app, email);
+    expect(await userCount(email)).toBe(1);
+  });
+
+  it('counts tries at an email with an account, even with no live code', async () => {
+    const { app } = signInApp({ db, identity });
+    const email = newEmail();
+    await createTestUser(identityUrl, { email });
+    expect((await verifyCode(app, email, '000000', newIp())).status).toBe(400);
+    const counted = await authSql<{ key: string; count: number }>(
+      'select key, count from auth.rate_limit where key like $1 order by key',
+      [`email:${email}|%`],
+    );
+    expect(counted).toEqual([
+      { key: `email:${email}|/sign-in/email-otp`, count: 1 },
+      { key: `email:${email}|/sign-in/email-otp|day`, count: 1 },
+    ]);
+  });
 });
 
-describe('limits with no trusted client IP (the edge guard off outside local)', () => {
+describe('the email, checked before anything is stored', () => {
+  const long = `${'a'.repeat(3 * 1024)}@example.com`;
+
+  it.each([
+    ['a 3 KB email', { email: long, type: 'sign-in' }, { email: long, otp: '000000' }],
+    ['a value that is not an email', { email: 'not an email', type: 'sign-in' }, { email: 'nope', otp: '000000' }],
+    ['no email at all', { type: 'sign-in' }, { otp: '000000' }],
+    ['an email that is not a string', { email: 42, type: 'sign-in' }, { email: ['a@b.c'], otp: '000000' }],
+  ])('answers %s with 400 INPUT_INVALID, and writes no rate limit row', async (_name, send, signInBody) => {
+    const { app } = signInApp({ db, identity });
+    const ip = newIp();
+    for (const [path, body] of [
+      ['/email-otp/send-verification-otp', send],
+      ['/sign-in/email-otp', signInBody],
+    ] as const) {
+      const refused = await authPost(app, path, body, { 'x-forwarded-for': ip });
+      expect(refused.status).toBe(400);
+      const answer = (await refused.json()) as { code: string; message: string };
+      expect(answer.code).toBe('INPUT_INVALID');
+      expect(answer.message).not.toContain('aaaa');
+    }
+    const rows = await authSql('select key from auth.rate_limit where key like $1 or key like $2', [
+      `${ip}|%`,
+      'email:aaaa%',
+    ]);
+    expect(rows).toEqual([]);
+  });
+
+  it('trims and lowercases the email once, so the limits, the code and the account agree on it', async () => {
+    const { app } = signInApp({ db, identity });
+    const email = newEmail();
+    const ip = newIp();
+    expect((await sendCode(app, `  ${email.toUpperCase()} `, ip)).status).toBe(200);
+    const signedIn = await verifyCode(app, ` ${email.toUpperCase()}`, await codeFor(email), ip);
+    expect(signedIn.status).toBe(200);
+    expect(await userCount(email)).toBe(1);
+    const keys = await authSql<{ key: string }>('select key from auth.rate_limit where key like $1 order by key', [
+      `email:${email}|%`,
+    ]);
+    expect(keys.map((row) => row.key)).toEqual([
+      `email:${email}|/email-otp/send-verification-otp`,
+      `email:${email}|/sign-in/email-otp`,
+      `email:${email}|/sign-in/email-otp|day`,
+    ]);
+  });
+});
+
+describe('forwardedHeaders', () => {
+  const sent = new Headers({ 'x-forwarded-for': '6.6.6.6, 10.0.0.1', cookie: 'a=b' });
+
+  it.each(['203.0.113.7', '2001:db8::7'])('passes the trusted IP %s on, and nothing the caller sent', (ip) => {
+    const headers = forwardedHeaders(sent, ip);
+    expect(headers.get('x-forwarded-for')).toBe(ip);
+    expect(headers.get('cookie')).toBe('a=b');
+  });
+
+  it.each([undefined, '', 'unknown', '203.0.113.7:443', '203.0.113.7 6.6.6.6', '999.1.1.1'])(
+    'drops the header for %s, so Better Auth never falls back to its shared bucket',
+    (ip) => {
+      expect(forwardedHeaders(sent, ip).has('x-forwarded-for')).toBe(false);
+    },
+  );
+});
+
+describe('limits with no usable client IP (a forwarded value that is not an IP)', () => {
   it('keeps no shared bucket: many callers send codes and sign in, and only the per email limit holds', async () => {
     const emails = Array.from({ length: CODE_SENDS_PER_IP.max + 5 }, () => newEmail());
     const { app } = signInApp({ db, identity }, { APP_ENV: 'preview', SIGNUP_ALLOWLIST: emails });
-    // Each caller sends whatever x-forwarded-for it likes; none of it is trusted.
-    for (const email of emails) {
-      expect((await sendCode(app, email, newIp())).status).toBe(200);
+    // Through the edge, but with an address Better Auth can't read as an IP: it would fall back to one shared
+    // `no-trusted-ip` bucket for everyone, so the header never reaches it.
+    const junk = (index: number) => `unknown-${index}`;
+    for (const [index, email] of emails.entries()) {
+      expect((await sendCode(app, email, junk(index))).status).toBe(200);
     }
-    for (const email of emails.slice(0, SIGN_INS_PER_IP.max + 3)) {
-      expect((await verifyCode(app, email, '000000', newIp())).status).toBe(400);
+    for (const [index, email] of emails.slice(0, SIGN_INS_PER_IP.max + 3).entries()) {
+      expect((await verifyCode(app, email, '000000', junk(index))).status).toBe(400);
     }
     // No per IP row at all: not one shared `no-trusted-ip` bucket, nor the test runtime's 127.0.0.1 stand in.
     const shared = await authSql(
-      `select key from auth.rate_limit where key like 'no-trusted-ip|%' or key like '127.0.0.1|%'`,
+      `select key from auth.rate_limit where key like 'no-trusted-ip|%' or key like '127.0.0.1|%' or key like 'unknown-%'`,
     );
     expect(shared).toEqual([]);
     // One email still gets only its 5 codes.
     const [first] = emails;
     if (first === undefined) throw new Error('No email.');
     for (let send = 1; send < CODE_SENDS_PER_EMAIL.max; send += 1) {
-      expect((await sendCode(app, first, newIp())).status).toBe(200);
+      expect((await sendCode(app, first, 'unknown')).status).toBe(200);
     }
-    const over = await sendCode(app, first, newIp());
+    const over = await sendCode(app, first, 'unknown');
     expect(over.status).toBe(429);
     expect(await over.json()).toMatchObject({ code: 'RATE_LIMITED' });
   });
@@ -386,23 +522,19 @@ describe('mail failures', () => {
 });
 
 describe('the client IP (AC-33)', () => {
-  it('ignores a forged x-forwarded-for while the edge guard is off outside local', async () => {
+  it('refuses a request without the edge secret outside local before sign in sees it', async () => {
     const { app } = signInApp({ db, identity }, { APP_ENV: 'preview', SIGNUP_ALLOWLIST: [] });
     const email = newEmail();
     await createTestUser(identityUrl, { email });
     const forged = '203.0.113.77';
-    const sent = await sendCode(app, email, forged);
-    expect(sent.status).toBe(200);
-    const signedIn = await verifyCode(app, email, await codeFor(email), forged);
-    expect(signedIn.status).toBe(200);
-    // Outside local the cookie is Secure (and so __Secure- prefixed).
-    expect(signedIn.headers.getSetCookie().find((value) => value.includes('session_token'))).toMatch(/; Secure/i);
-    const stored = await authSql<{ ip: string | null }>(
-      `select s.ip_address as ip from auth.session s join auth."user" u on u.id = s.user_id where u.email = $1`,
-      [email],
-    );
-    expect(stored.map((row) => row.ip)).not.toContain(forged);
-    const keys = await authSql('select 1 from auth.rate_limit where key like $1', [`${forged}%`]);
+    const refused = await sendCode(app, email, forged, { 'x-crm-edge': 'not-the-secret' });
+    expect(refused.status).toBe(403);
+    expect(await refused.json()).toMatchObject({ code: 'EDGE_REQUIRED' });
+    expect(await mailTo(email)).toEqual([]);
+    const keys = await authSql('select 1 from auth.rate_limit where key like $1 or key like $2', [
+      `${forged}%`,
+      `email:${email}%`,
+    ]);
     expect(keys).toEqual([]);
   });
 
@@ -414,7 +546,10 @@ describe('the client IP (AC-33)', () => {
     const ip = '203.0.113.88';
     const edge = { 'x-crm-edge': secret };
     expect((await sendCode(app, email, ip, edge)).status).toBe(200);
-    expect((await verifyCode(app, email, await codeFor(email), ip, edge)).status).toBe(200);
+    const signedIn = await verifyCode(app, email, await codeFor(email), ip, edge);
+    expect(signedIn.status).toBe(200);
+    // Outside local the cookie is Secure (and so __Secure- prefixed).
+    expect(signedIn.headers.getSetCookie().find((value) => value.includes('session_token'))).toMatch(/; Secure/i);
     const keys = await authSql('select 1 from auth.rate_limit where key like $1', [`${ip}|%`]);
     expect(keys.length).toBeGreaterThan(0);
     const stored = await authSql<{ ip: string | null }>(

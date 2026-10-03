@@ -1,12 +1,13 @@
 // Making a login (spec 0005, the sign in security review): the password goes
-// over as a SCRAM-SHA-256 verifier, never in plain text; an existing role loses
-// any power it held; and a role in some other group is refused. Run as the
+// over as a SCRAM-SHA-256 verifier, not in plain text; an existing role loses
+// any power it held; and a role in some other group is refused. `--plain-password`
+// sends the password itself, as a last resort only. Run as the
 // test database's owner, which, like Neon's, is not a superuser.
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
 import { withSetupLock } from '../src/testing.ts';
-import { ensureLogin, SCRAM_ITERATIONS, scramVerifier } from './login.ts';
+import { ensureLogin, PLAIN_PASSWORD_FLAG, SCRAM_ITERATIONS, scramVerifier, wantsPlainPassword } from './login.ts';
 
 const { ownerUrl, adminUrl } = inject('testDatabase');
 
@@ -152,6 +153,43 @@ describe('ensureLogin', () => {
         await admin.query(`drop role if exists ${login.role}`);
       }
     }));
+
+  /** Every statement text the owner's client sends while `work` runs. */
+  async function statementsDuring(work: () => Promise<void>): Promise<string[]> {
+    const query = vi.spyOn(pg.Client.prototype, 'query');
+    try {
+      await work();
+      return query.mock.calls.map(([text]) => (typeof text === 'string' ? text : JSON.stringify(text)));
+    } finally {
+      query.mockRestore();
+    }
+  }
+
+  it('never sends the plain password by default', async () => {
+    const login = newLogin();
+    const sent = await statementsDuring(() => ensureLogin(spec(login.url)));
+    expect(sent.some((text) => /create role .* login password 'SCRAM-SHA-256\$4096:/.test(text))).toBe(true);
+    expect(sent.join('\n')).not.toContain(login.password);
+  });
+
+  it('sends the plain password with --plain-password (a last resort), and Postgres still stores only a hash', async () => {
+    expect(wantsPlainPassword(['node', 'app-login.ts'])).toBe(false);
+    expect(wantsPlainPassword(['node', 'app-login.ts', '--', PLAIN_PASSWORD_FLAG])).toBe(true);
+
+    const login = newLogin();
+    const sent = await statementsDuring(() => ensureLogin({ ...spec(login.url), plainPassword: true }));
+    expect(sent.some((text) => text.includes(`login password '${login.password}'`))).toBe(true);
+    expect(await connectAs(login.url)).toBe(login.role);
+    const row = await stored(login.role);
+    expect(row?.password?.startsWith('SCRAM-SHA-256$')).toBe(true);
+    expect(row).toMatchObject({ in_group: true });
+
+    // An existing login gets its new password the same way.
+    const changed = new URL(login.url);
+    changed.password = `pw-${randomUUID()}`;
+    await ensureLogin({ ...spec(changed.toString()), plainPassword: true });
+    expect(await connectAs(changed.toString())).toBe(login.role);
+  });
 
   it('refuses one in the other group', async () => {
     const login = newLogin();

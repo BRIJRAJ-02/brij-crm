@@ -54,7 +54,7 @@ After the cross check (a read only pass on another model, 36 points), these were
 - One relay definer function that returns workspace ids only, instead of two that read and mark rows: the rows are then read under row level security, so the bypass is as small as it can be.
 - The relay reconnects with backoff instead of exiting the worker, since Neon's free compute sleeps.
 - Account linking uses Better Auth's default (verified emails only), not `trustedProviders`, which would link unverified Google emails.
-- The edge guard turns on only when its secret is set, so the rollout can't lock production out.
+- The edge guard turns on only when its secret is set, so the rollout can't lock production out. (Later reversed by the security review: the secret is required outside local, set on every host before merge, and the brief 403 window between the API and web deploys is accepted.)
 - Confirmations replace a record's base while optimistic layers stay on top, so a second edit never flickers.
 - Replays are defined for every create (workspace, record, attribute), so a retried request after a lost answer succeeds.
 

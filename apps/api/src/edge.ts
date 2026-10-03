@@ -11,7 +11,11 @@ export const EDGE_HEADER = 'x-crm-edge';
 /** The health checks Railway calls straight, never through Vercel. Exact paths, so nothing else slips through. */
 export const EDGE_OPEN_PATHS: ReadonlySet<string> = new Set(['/api/health', '/api/health/ready']);
 
-/** What the guard needs to decide: the secret (unset during the rollout) and where the API runs. */
+/**
+ * What the guard needs to decide: the secret and where the API runs. `ApiEnv`
+ * requires the secret outside local; a guard built there without one refuses
+ * everything but the health checks.
+ */
 export interface EdgeGuardOptions {
   readonly secret: string | undefined;
   readonly environment: AppEnvironment;
@@ -19,23 +23,23 @@ export interface EdgeGuardOptions {
 
 /** One guard per app: it admits or refuses each request, and knows which requests it trusted. */
 export interface EdgeGuard {
-  /** True when requests must carry the secret: it is set, and the API isn't running locally. */
+  /** True when requests must carry the secret: everywhere but local. */
   readonly enforced: boolean;
   /** True when the request may go on. A request it admits by the secret (or locally) is trusted for `clientIp`. */
   readonly admit: (request: Request) => boolean;
   /**
    * The caller's IP from `x-forwarded-for`, which Vercel's middleware replaced
-   * with the address it saw. Undefined for a request the guard hasn't trusted:
-   * before the guard ran on it, and always while the guard is off outside
-   * local, since anyone could have sent the header then. Pass the same
-   * `Request` the guard saw (a middleware that rebuilds it loses the mark).
+   * with the address it saw. Undefined for a request the guard hasn't trusted
+   * (before the guard ran on it, or a health check it let through without the
+   * secret). Pass the same `Request` the guard saw (a middleware that rebuilds
+   * it loses the mark). It may not be an IP at all; callers that need one check.
    */
   readonly clientIp: (request: Request) => string | undefined;
 }
 
-/** Whether the guard refuses requests without the secret: set, and not local. */
-export function isEdgeGuardEnforced({ secret, environment }: EdgeGuardOptions): boolean {
-  return secret !== undefined && environment !== 'local';
+/** Whether the guard refuses requests without the secret: everywhere but local. */
+export function isEdgeGuardEnforced({ environment }: Pick<EdgeGuardOptions, 'environment'>): boolean {
+  return environment !== 'local';
 }
 
 // Hashing both sides first gives equal lengths for timingSafeEqual, so the
@@ -52,6 +56,7 @@ export function createEdgeGuard(options: EdgeGuardOptions): EdgeGuard {
 
   const carriesSecret = (request: Request): boolean => {
     const presented = request.headers.get(EDGE_HEADER);
+    // No secret outside local (ApiEnv refuses to boot so) admits nobody.
     if (expected === undefined || presented === null) return false;
     return timingSafeEqual(digest(presented), expected);
   };
@@ -61,7 +66,7 @@ export function createEdgeGuard(options: EdgeGuardOptions): EdgeGuard {
     admit(request) {
       if (!enforced) {
         // Locally there is no edge: Vite's proxy stands in, and sets no forwarded header.
-        if (options.environment === 'local') trusted.add(request);
+        trusted.add(request);
         return true;
       }
       if (EDGE_OPEN_PATHS.has(new URL(request.url).pathname)) return true;

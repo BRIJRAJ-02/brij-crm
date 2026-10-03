@@ -11,14 +11,24 @@ function request(headers: Record<string, string> = {}): Request {
 
 describe('isEdgeGuardEnforced', () => {
   it.each([
-    [SECRET, 'preview', true],
-    [SECRET, 'production', true],
-    [SECRET, 'local', false],
-    [undefined, 'preview', false],
-    [undefined, 'production', false],
-  ] as const)('with secret %s in %s is %s', (secret, environment, enforced) => {
-    expect(isEdgeGuardEnforced({ secret, environment })).toBe(enforced);
+    ['preview', true],
+    ['production', true],
+    ['local', false],
+  ] as const)('in %s is %s', (environment, enforced) => {
+    expect(isEdgeGuardEnforced({ environment })).toBe(enforced);
   });
+
+  it.each(['preview', 'production'] as const)(
+    'refuses everything but the health checks in %s when built without a secret (ApiEnv never boots so)',
+    (environment) => {
+      const guard = createEdgeGuard({ secret: undefined, environment });
+      expect(guard.enforced).toBe(true);
+      const open = request({ [EDGE_HEADER]: '', 'x-forwarded-for': '6.6.6.6' });
+      expect(guard.admit(open)).toBe(false);
+      expect(guard.clientIp(open)).toBeUndefined();
+      expect(guard.admit(new Request('https://api.test/api/health'))).toBe(true);
+    },
+  );
 });
 
 describe('clientIp', () => {
@@ -41,11 +51,11 @@ describe('clientIp', () => {
     expect(guard.clientIp(refused)).toBeUndefined();
   });
 
-  it('is undefined while the guard is off outside local', () => {
-    const guard = createEdgeGuard({ secret: undefined, environment: 'production' });
-    const open = request({ 'x-forwarded-for': '6.6.6.6' });
-    expect(guard.admit(open)).toBe(true);
-    expect(guard.clientIp(open)).toBeUndefined();
+  it('is undefined for a health check let through without the secret', () => {
+    const guard = createEdgeGuard({ secret: SECRET, environment: 'production' });
+    const health = new Request('https://api.test/api/health', { headers: { 'x-forwarded-for': '6.6.6.6' } });
+    expect(guard.admit(health)).toBe(true);
+    expect(guard.clientIp(health)).toBeUndefined();
   });
 
   it('is undefined with no forwarded header, even when trusted', () => {
@@ -66,11 +76,22 @@ describe('EDGE_SECRET in the api environment', () => {
     BETTER_AUTH_URL: 'https://app.test',
     RESEND_API_KEY: 're_test',
     MAIL_FROM: 'onboarding@resend.dev',
+    EDGE_SECRET: SECRET,
   };
 
-  it('is optional, and an empty value counts as unset', () => {
-    expect(ApiEnv.parse(base).EDGE_SECRET).toBeUndefined();
-    expect(ApiEnv.parse({ ...base, EDGE_SECRET: '' }).EDGE_SECRET).toBeUndefined();
+  const problems = (input: Record<string, unknown>) =>
+    ApiEnv.safeParse(input).error?.issues.map((issue) => issue.path.join('.')) ?? [];
+
+  it.each(['preview', 'production'])('is required in %s, and an empty value counts as unset', (environment) => {
+    const { EDGE_SECRET: _secret, ...unset } = base;
+    expect(problems({ ...unset, APP_ENV: environment })).toEqual(['EDGE_SECRET']);
+    expect(problems({ ...base, APP_ENV: environment, EDGE_SECRET: '' })).toEqual(['EDGE_SECRET']);
+    expect(problems({ ...base, APP_ENV: environment })).toEqual([]);
+  });
+
+  it('is optional locally, where the guard is off', () => {
+    const local = { ...base, APP_ENV: 'local', MAILPIT_URL: 'http://localhost:8025', EDGE_SECRET: '' };
+    expect(ApiEnv.parse(local).EDGE_SECRET).toBeUndefined();
   });
 
   it('refuses a secret shorter than 32 characters', () => {

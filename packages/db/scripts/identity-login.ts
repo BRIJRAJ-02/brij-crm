@@ -1,10 +1,12 @@
 // One time per environment: creates the login role named in
 // IDENTITY_DATABASE_URL and makes it a member of crm_identity, the only role
 // that reads and writes schema `auth` (spec 0005, security model). Run it after
-// the migration that creates crm_identity (0016), as the owner.
+// the migration that creates crm_identity (0016), as the owner. `-- --plain-password`
+// sends the password as plain text, a last resort for a host that refuses a
+// SCRAM verifier.
 import * as z from 'zod';
 import { scriptEnv } from './env.ts';
-import { ensureLogin } from './login.ts';
+import { ensureLogin, wantsPlainPassword } from './login.ts';
 
 const env = scriptEnv({ DATABASE_URL_OWNER: z.url(), DATABASE_URL: z.url(), IDENTITY_DATABASE_URL: z.url() });
 
@@ -19,4 +21,5 @@ await ensureLogin({
   variable: 'IDENTITY_DATABASE_URL',
   group: 'crm_identity',
   apartFrom: 'crm_app',
+  plainPassword: wantsPlainPassword(process.argv),
 });

@@ -195,13 +195,11 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
                 b.rolsuper or b.rolbypassrls or b.rolcreaterole or b.rolcreatedb
                 or b.rolname in ('pg_read_all_data', 'pg_write_all_data')
               )
-              and (
-                pg_has_role(r.oid, b.oid, 'MEMBER') or pg_has_role(r.oid, b.oid, 'USAGE')
-                or pg_has_role(r.oid, b.oid, 'SET')
-              )
+              -- MEMBER follows every grant, even one with neither INHERIT nor SET (held WITH ADMIN, say).
+              and pg_has_role(r.oid, b.oid, 'MEMBER')
           ) as reaches_power,
           pg_has_role(r.oid, 'crm_identity', 'USAGE') as is_identity_member,
-          pg_has_role(r.oid, 'crm_app', 'USAGE') or pg_has_role(r.oid, 'crm_app', 'SET') as is_app_member
+          pg_has_role(r.oid, 'crm_app', 'MEMBER') as is_app_member
         from pg_roles r
         cross join pg_database d
         where r.rolname = current_user and d.datname = current_database()

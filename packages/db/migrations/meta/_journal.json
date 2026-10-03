@@ -127,6 +127,13 @@
       "when": 1791018795087,
       "tag": "0017_auth_effective_privileges",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1791020568860,
+      "tag": "0018_auth_privileges_by_membership",
+      "breakpoints": true
     }
   ]
 }
