@@ -9,7 +9,7 @@ The thinnest real thread through every layer: sign up, get a workspace, open Peo
 **Done when:** a new user signs up with a verified email or Google, lands in their own workspace, creates and edits People records, and a second browser sees every change within a second; every write records who and when; it runs in production.
 - [x] Design it (spec): `/architect core loop`
 - [ ] Build it: `/develop core loop`
-   - [ ] Signed in, in production, on an empty People page: errors, the edge guard, Better Auth by email code, the access door, the workspace bootstrap, the sign in library modules and the first routes (AC-27, AC-29 to AC-33, AC-41)
+   - [x] Signed in, in production, on an empty People page: errors, the edge guard, Better Auth by email code, the access door, the workspace bootstrap, the sign in library modules and the first routes (AC-27, AC-29 to AC-33, AC-41)
    - [ ] The People table: the store prototype gate, the record and attribute procedures, the data layer's windows and optimistic writes, and the screen with its two dialogs (AC-34 to AC-37, AC-40, AC-41)
    - [ ] Live: the outbox, the relay, Centrifugo channels and tokens, and the browser subscription, proven with two browsers in production (AC-38, AC-39, AC-41)
    - [ ] Finish and harden: Google sign in, session expiry, the keyboard, focus and contrast passes, and the full Playwright flow (AC-28, AC-31, AC-41)
