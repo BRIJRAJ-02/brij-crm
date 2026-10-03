@@ -22,6 +22,8 @@ export const AUTH_BODY_LIMIT_BYTES = 64 * 1024;
 interface AppVariables {
   requestId: string;
   clientIp: string | undefined;
+  /** The browser's Origin, as the edge guard reads it (see `EdgeGuard.origin`). */
+  origin: string | undefined;
 }
 
 /** A `{ code, message }` answer at the status the error map gives the code. */
@@ -68,6 +70,7 @@ export function createApp({
       return errorResponse('EDGE_REQUIRED', 'This API is reachable only through the app.');
     }
     c.set('clientIp', edge.clientIp(c.req.raw));
+    c.set('origin', edge.origin(c.req.raw));
     return next();
   });
 
@@ -86,7 +89,7 @@ export function createApp({
   // The app and API share one origin, so a write from anywhere else is refused.
   app.use('*', async (c, next) => {
     if (SAFE_METHODS.has(c.req.method)) return next();
-    const origin = c.req.header('origin');
+    const origin = c.get('origin');
     if (!origin || !allowedOrigins.has(origin)) {
       return errorResponse('FORBIDDEN_ORIGIN', 'This request came from an origin the API does not accept.');
     }
@@ -134,7 +137,7 @@ export function createApp({
   );
 
   // It sees only the client IP the edge guard trusted.
-  app.on(['GET', 'POST'], '/auth/*', (c) => auth.handle(c.req.raw, c.get('clientIp')));
+  app.on(['GET', 'POST'], '/auth/*', (c) => auth.handle(c.req.raw, c.get('clientIp'), c.get('origin')));
 
   app.notFound(() => errorResponse('NOT_FOUND', 'There is nothing at this address.'));
   app.onError((error, c) => {

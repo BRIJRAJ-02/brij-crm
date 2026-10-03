@@ -128,7 +128,7 @@ export interface Auth {
    * by it, or dropped, so rate limits never key on a forged address. Refusals
    * leave as `{ code, message }`.
    */
-  handle(request: Request, clientIp: string | undefined): Promise<Response>;
+  handle(request: Request, clientIp: string | undefined, origin?: string): Promise<Response>;
   /** The session the request's cookie names, or undefined when there is none or it expired. */
   session(headers: Headers, clientIp: string | undefined): Promise<AuthSession | undefined>;
 }
@@ -147,10 +147,12 @@ export interface AuthDeps {
  * its one shared bucket, which `perTrustedIp` keeps shut only while the header
  * is absent.
  */
-export function forwardedHeaders(headers: Headers, clientIp: string | undefined): Headers {
+export function forwardedHeaders(headers: Headers, clientIp: string | undefined, origin?: string): Headers {
   const next = new Headers(headers);
   next.delete('x-forwarded-for');
   if (clientIp !== undefined && isIP(clientIp) !== 0) next.set('x-forwarded-for', clientIp);
+  // Better Auth checks the request's own origin; give it the one the edge guard read.
+  if (origin !== undefined) next.set('origin', origin);
   return next;
 }
 
@@ -376,10 +378,10 @@ export function createAuth({ env, identity, mailer }: AuthDeps): Auth {
   return {
     providers: { google: google !== undefined },
 
-    async handle(request, clientIp) {
+    async handle(request, clientIp, origin) {
       const checked = await checkEmail(request);
       if (checked instanceof Response) return checked;
-      const forwarded = new Request(checked, { headers: forwardedHeaders(checked.headers, clientIp) });
+      const forwarded = new Request(checked, { headers: forwardedHeaders(checked.headers, clientIp, origin) });
       return authErrorResponse(await auth.handler(forwarded));
     },
 

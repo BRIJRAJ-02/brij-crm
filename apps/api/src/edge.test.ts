@@ -1,6 +1,6 @@
 // The guard on its own: when it is on, and when the forwarded IP is believed.
 import { describe, expect, it } from 'vitest';
-import { createEdgeGuard, EDGE_HEADER, isEdgeGuardEnforced } from './edge.ts';
+import { createEdgeGuard, EDGE_HEADER, isEdgeGuardEnforced, ORIGIN_HEADER } from './edge.ts';
 import { ApiEnv } from './env.ts';
 
 const SECRET = 'an-edge-secret-of-at-least-32-characters';
@@ -29,6 +29,33 @@ describe('isEdgeGuardEnforced', () => {
       expect(guard.admit(new Request('https://api.test/api/health'))).toBe(true);
     },
   );
+});
+
+describe('origin', () => {
+  it('reads the vouched origin header on a request admitted by the secret', () => {
+    const guard = createEdgeGuard({ secret: SECRET, environment: 'production' });
+    const admitted = request({
+      [EDGE_HEADER]: SECRET,
+      [ORIGIN_HEADER]: 'https://app.test',
+      origin: 'https://api.test',
+    });
+    expect(guard.admit(admitted)).toBe(true);
+    expect(guard.origin(admitted)).toBe('https://app.test');
+  });
+
+  it('ignores the vouched origin header on a request the guard did not admit', () => {
+    const guard = createEdgeGuard({ secret: SECRET, environment: 'production' });
+    const refused = request({ [ORIGIN_HEADER]: 'https://app.test' });
+    expect(guard.admit(refused)).toBe(false);
+    expect(guard.origin(refused)).toBeUndefined();
+  });
+
+  it('reads the request’s own origin locally, where Vite’s proxy keeps it', () => {
+    const guard = createEdgeGuard({ secret: undefined, environment: 'local' });
+    const local = request({ origin: 'http://localhost:5173', [ORIGIN_HEADER]: 'https://evil.test' });
+    expect(guard.admit(local)).toBe(true);
+    expect(guard.origin(local)).toBe('http://localhost:5173');
+  });
 });
 
 describe('clientIp', () => {

@@ -12,6 +12,14 @@ export const config = { matcher: ['/api', '/api/:path*'] };
  */
 export const EDGE_HEADER = 'x-crm-edge';
 
+/**
+ * The header carrying the browser's own Origin to the API. Vercel's rewrite
+ * doesn't pass `origin` through intact, so the API reads the app's origin from
+ * here, and believes it only on a request carrying the edge secret. Equal to
+ * `ORIGIN_HEADER` in apps/api/src/edge.ts.
+ */
+export const ORIGIN_HEADER = 'x-crm-origin';
+
 /** What an edge secret must look like: 32 or more printable ASCII characters, no spaces. */
 const EDGE_SECRET_FORMAT = /^[\x21-\x7e]{32,}$/;
 
@@ -59,6 +67,10 @@ export default function middleware(request: Request): Response {
   // passes through, and none is sent while EDGE_SECRET is unset.
   if (vouching) headers.set(EDGE_HEADER, edgeSecret);
   else headers.delete(EDGE_HEADER);
+  // The browser's Origin, copied where the rewrite keeps it; a client's own copy never passes through.
+  const appOrigin = request.headers.get('origin');
+  if (vouching && appOrigin !== null) headers.set(ORIGIN_HEADER, appOrigin);
+  else headers.delete(ORIGIN_HEADER);
 
   return rewrite(new URL(url.pathname + url.search, origin), { request: { headers } });
 }

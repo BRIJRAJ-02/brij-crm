@@ -8,6 +8,9 @@ import type { AppEnvironment } from '@crm/contracts';
 /** The header Vercel's middleware puts the shared secret in. */
 export const EDGE_HEADER = 'x-crm-edge';
 
+/** The header Vercel's middleware copies the browser's Origin into (its rewrite doesn't keep `origin` intact). */
+export const ORIGIN_HEADER = 'x-crm-origin';
+
 /** The health checks Railway calls straight, never through Vercel. Exact paths, so nothing else slips through. */
 export const EDGE_OPEN_PATHS: ReadonlySet<string> = new Set(['/api/health', '/api/health/ready']);
 
@@ -35,6 +38,13 @@ export interface EdgeGuard {
    * it loses the mark). It may not be an IP at all; callers that need one check.
    */
   readonly clientIp: (request: Request) => string | undefined;
+  /**
+   * The browser's Origin: from `x-crm-origin` on a request the guard admitted
+   * by the secret (the middleware copied it there), else the request's own
+   * `origin` header (locally, where Vite's proxy keeps it). Undefined when
+   * neither is sent.
+   */
+  readonly origin: (request: Request) => string | undefined;
 }
 
 /** Whether the guard refuses requests without the secret: everywhere but local. */
@@ -73,6 +83,10 @@ export function createEdgeGuard(options: EdgeGuardOptions): EdgeGuard {
       if (!carriesSecret(request)) return false;
       trusted.add(request);
       return true;
+    },
+    origin(request) {
+      const copied = enforced && trusted.has(request) ? request.headers.get(ORIGIN_HEADER) : null;
+      return copied ?? request.headers.get('origin') ?? undefined;
     },
     clientIp(request) {
       if (!trusted.has(request)) return undefined;

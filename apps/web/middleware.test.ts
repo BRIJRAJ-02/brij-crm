@@ -2,7 +2,7 @@
 // the API is told about the caller. Vercel reads the rewrite and the upstream
 // request headers from the response's x-middleware-* headers.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import middleware, { config, EDGE_HEADER } from './middleware.ts';
+import middleware, { config, EDGE_HEADER, ORIGIN_HEADER } from './middleware.ts';
 
 const API = 'https://api-production.up.railway.app';
 
@@ -69,6 +69,18 @@ describe('api proxy middleware', () => {
     vi.stubEnv('EDGE_SECRET', 'the-real-edge-secret-of-32-characters');
     const response = call('/api/rpc/system/status', { [EDGE_HEADER]: 'forged-by-the-client' });
     expect(upstreamHeader(response, EDGE_HEADER)).toBe('the-real-edge-secret-of-32-characters');
+  });
+
+  it('copies the browser’s Origin into the vouched origin header, replacing a client’s own copy', () => {
+    vi.stubEnv('API_ORIGIN_INTERNAL', API);
+    vi.stubEnv('EDGE_SECRET', 'the-real-edge-secret-of-32-characters');
+    const response = call('/api/rpc/system/status', {
+      origin: 'https://brij-crm.vercel.app',
+      [ORIGIN_HEADER]: 'https://evil.test',
+    });
+    expect(upstreamHeader(response, ORIGIN_HEADER)).toBe('https://brij-crm.vercel.app');
+    const noOrigin = call('/api/rpc/system/status', { [ORIGIN_HEADER]: 'https://evil.test' });
+    expect(upstreamHeader(noOrigin, ORIGIN_HEADER)).toBeNull();
   });
 
   it.each([
