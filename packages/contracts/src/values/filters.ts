@@ -56,7 +56,10 @@ export const FilterOperator = z.enum([
 ]);
 export type FilterOperator = z.infer<typeof FilterOperator>;
 
-const attributeId = z.string().trim().min(1);
+/** The longest attribute id a filter or sort names (ids are uuids; this only bounds what a caller sends). */
+export const MAX_ATTRIBUTE_ID_LENGTH = 64;
+
+const attributeId = z.string().trim().min(1).max(MAX_ATTRIBUTE_ID_LENGTH);
 
 /** The most relationships one `through` condition follows, nested ones included. */
 export const MAX_THROUGH_HOPS = 2;
@@ -94,7 +97,8 @@ export type FilterCondition =
   | { readonly attributeId: string; readonly operator: (typeof BARE_OPERATORS)[number] }
   | { readonly operator: 'through'; readonly path: readonly string[]; readonly condition: FilterCondition };
 
-export const FilterCondition: z.ZodType<FilterCondition> = z.lazy(() =>
+/** One condition's shape, recursive through `through`; only parsed behind `nestingCheck`, which bounds the depth. */
+const conditionShape: z.ZodType<FilterCondition> = z.lazy(() =>
   z.union([
     z.object({ attributeId, operator: z.enum(SINGLE_VALUE_OPERATORS), value: z.unknown() }),
     z.object({ attributeId, operator: z.literal('between'), from: z.unknown(), to: z.unknown() }),
@@ -104,7 +108,7 @@ export const FilterCondition: z.ZodType<FilterCondition> = z.lazy(() =>
     z.object({
       operator: z.literal('through'),
       path: z.array(attributeId).min(1).max(MAX_THROUGH_HOPS),
-      condition: FilterCondition,
+      condition: conditionShape,
     }),
   ]),
 );
@@ -124,18 +128,53 @@ export interface FilterGroup {
   readonly conditions: readonly (FilterCondition | FilterGroup)[];
 }
 
-function depthOf(group: FilterGroup): number {
-  const inner = group.conditions.map((item) => ('conjunction' in item ? depthOf(item) : 0));
-  return 1 + Math.max(0, ...inner);
-}
-
 function leavesOf(group: FilterGroup): number {
   return group.conditions.reduce((total, item) => total + ('conjunction' in item ? leavesOf(item) : 1), 0);
 }
 
-const condition = FilterCondition.refine((value) => hopsOf(value) <= MAX_THROUGH_HOPS, {
-  error: `A filter follows at most ${String(MAX_THROUGH_HOPS)} relationships.`,
-});
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+
+const TOO_DEEP = `Groups can nest at most ${String(MAX_FILTER_DEPTH)} deep.`;
+const TOO_MANY_HOPS = `A filter follows at most ${String(MAX_THROUGH_HOPS)} relationships.`;
+
+/**
+ * Walks a filter or condition as sent, with a stack and no recursion, and
+ * refuses one whose groups nest past `MAX_FILTER_DEPTH` or whose `through`
+ * conditions nest past `MAX_THROUGH_HOPS` (each follows at least one
+ * relationship). It runs before the recursive schemas, so a filter nested a
+ * thousand deep is refused here as bad input rather than overflowing the
+ * stack in the parse. Anything not shaped like a group or a condition is
+ * left for the schemas to refuse.
+ */
+function nestingCheck(groupDepth: number) {
+  return (value: unknown, context: z.RefinementCtx): void => {
+    const stack: { value: unknown; groups: number; hops: number }[] = [{ value, groups: groupDepth, hops: 0 }];
+    for (let next = stack.pop(); next !== undefined; next = stack.pop()) {
+      const item = next.value;
+      if (!isObject(item)) continue;
+      if (Array.isArray(item.conditions)) {
+        const groups = next.groups + 1;
+        if (groups > MAX_FILTER_DEPTH) {
+          context.addIssue({ code: 'custom', message: TOO_DEEP });
+          return;
+        }
+        for (const inner of item.conditions as unknown[]) stack.push({ value: inner, groups, hops: 0 });
+      } else if (item.operator === 'through') {
+        const hops = next.hops + 1;
+        if (hops > MAX_THROUGH_HOPS) {
+          context.addIssue({ code: 'custom', message: TOO_MANY_HOPS });
+          return;
+        }
+        stack.push({ value: item.condition, groups: next.groups, hops });
+      }
+    }
+  };
+}
+
+const condition = conditionShape.refine((value) => hopsOf(value) <= MAX_THROUGH_HOPS, { error: TOO_MANY_HOPS });
+
+/** One condition on one attribute, its `through` nesting checked before it is parsed. */
+export const FilterCondition: z.ZodType<FilterCondition> = z.unknown().superRefine(nestingCheck(0)).pipe(condition);
 
 const group: z.ZodType<FilterGroup> = z.lazy(() =>
   z.object({
@@ -146,10 +185,15 @@ const group: z.ZodType<FilterGroup> = z.lazy(() =>
   }),
 );
 
-export const FilterGroup: z.ZodType<FilterGroup> = group
-  .refine((value) => depthOf(value) <= MAX_FILTER_DEPTH, {
-    error: `Groups can nest at most ${String(MAX_FILTER_DEPTH)} deep.`,
-  })
-  .refine((value) => leavesOf(value) <= MAX_FILTER_CONDITIONS, {
-    error: `A filter holds at most ${String(MAX_FILTER_CONDITIONS)} conditions.`,
-  });
+/**
+ * A filter: groups nest at most three deep, checked without recursion before
+ * the parse, and hold at most 100 conditions in all.
+ */
+export const FilterGroup: z.ZodType<FilterGroup> = z
+  .unknown()
+  .superRefine(nestingCheck(0))
+  .pipe(
+    group.refine((value) => leavesOf(value) <= MAX_FILTER_CONDITIONS, {
+      error: `A filter holds at most ${String(MAX_FILTER_CONDITIONS)} conditions.`,
+    }),
+  );

@@ -6,6 +6,7 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { Database, IdentityStore } from '@crm/db';
 import { holdTableLock, testQuery } from '@crm/db/testing';
+import type { FilterGroup } from '@crm/contracts/values';
 import { deleteRecord, enterWorkspace, newId } from '@crm/core';
 import { rpcClient, signInApp, testConnections } from '../../test/sign-in.ts';
 import { failure, memberWithWorkspace, NOT_A_MEMBER, refusal, refusalsOf } from '../../test/workspace.ts';
@@ -389,6 +390,16 @@ describe('records.query and records.count', () => {
       code: 'INPUT_INVALID',
       message: otherView,
     });
+  });
+
+  it('refuses a filter nested a thousand deep with 400 INPUT_INVALID, not a 500', async () => {
+    const m = await memberWithWorkspace(app);
+    let filter: FilterGroup = { conjunction: 'and', conditions: [] };
+    for (let level = 0; level < 1_000; level += 1) filter = { conjunction: 'and', conditions: [filter] };
+    const scope = { workspace: m.slug, objectId: m.people.id, filter };
+    for (const call of [() => m.client.records.query(scope), () => m.client.records.count(scope)]) {
+      expect(await refusal(call)).toMatchObject({ code: 'INPUT_INVALID', status: 400 });
+    }
   });
 
   it('refuses a limit over 200, a position with a cursor, a bad cursor, and an unknown object', async () => {

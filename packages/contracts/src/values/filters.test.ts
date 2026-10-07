@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  FilterCondition,
   FilterGroup,
+  MAX_ATTRIBUTE_ID_LENGTH,
   MAX_FILTER_CONDITIONS,
+  MAX_FILTER_DEPTH,
   MAX_GROUP_CONDITIONS,
   MAX_THROUGH_HOPS,
-  type FilterCondition,
 } from './filters.ts';
 
 const leaf: FilterCondition = { attributeId: 'a', operator: 'is_empty' };
@@ -39,5 +41,38 @@ describe('FilterGroup', () => {
     expect(FilterGroup.safeParse(long).success).toBe(false);
     const nested = { conjunction: 'and', conditions: [through(['x'], through(['y', 'z'], leaf))] };
     expect(FilterGroup.safeParse(nested).success).toBe(false);
+  });
+
+  it(`takes groups nested ${String(MAX_FILTER_DEPTH)} deep, and refuses a fourth level with the depth message`, () => {
+    const nest = (levels: number) => {
+      let group: unknown = { conjunction: 'and', conditions: [leaf] };
+      for (let level = 1; level < levels; level += 1) group = { conjunction: 'or', conditions: [leaf, group] };
+      return group;
+    };
+    expect(FilterGroup.safeParse(nest(MAX_FILTER_DEPTH)).success).toBe(true);
+    const deeper = FilterGroup.safeParse(nest(MAX_FILTER_DEPTH + 1));
+    expect(deeper.error?.issues.map((issue) => issue.message)).toEqual([
+      `Groups can nest at most ${String(MAX_FILTER_DEPTH)} deep.`,
+    ]);
+  });
+
+  it('refuses a filter nested a thousand deep as bad input, without overflowing the stack', () => {
+    let group: unknown = { conjunction: 'and', conditions: [] };
+    for (let level = 0; level < 1_000; level += 1) group = { conjunction: 'and', conditions: [group] };
+    const parsed = FilterGroup.safeParse(group);
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues[0]?.message).toBe(`Groups can nest at most ${String(MAX_FILTER_DEPTH)} deep.`);
+
+    let condition: unknown = leaf;
+    for (let level = 0; level < 5_000; level += 1) condition = through(['x'], condition as FilterCondition);
+    const hops = `A filter follows at most ${String(MAX_THROUGH_HOPS)} relationships.`;
+    expect(FilterCondition.safeParse(condition).error?.issues[0]?.message).toBe(hops);
+    expect(FilterGroup.safeParse({ conjunction: 'and', conditions: [condition] }).error?.issues[0]?.message).toBe(hops);
+  });
+
+  it('refuses an attribute id past its length cap', () => {
+    const long = 'a'.repeat(MAX_ATTRIBUTE_ID_LENGTH + 1);
+    expect(FilterCondition.safeParse({ attributeId: long, operator: 'is_empty' }).success).toBe(false);
+    expect(FilterCondition.safeParse({ attributeId: long.slice(1), operator: 'is_empty' }).success).toBe(true);
   });
 });
