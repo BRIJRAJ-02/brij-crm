@@ -152,7 +152,10 @@ export type SetValuesInput = z.infer<typeof SetValuesInput>;
  * `ATTRIBUTE_VALUE_INVALID`, `UNIQUE_CONFLICT`). `create` with an id already
  * made for this object answers that record (a retry after a lost response),
  * or `RECORD_DELETED` once it is in the trash; `setValues` on a record in the
- * trash is `RECORD_DELETED`. A replay answers only the member who made the
+ * trash is `RECORD_DELETED`. Either write answering `RECORD_DELETED` after
+ * its values were accepted means the record went to the trash between the
+ * write and its read back: the write committed, and the client should drop
+ * the record (as for an event that trashes it). A replay answers only the member who made the
  * record: another member's record with that id is `ID_TAKEN` on `id`. An
  * unknown object or record is 404 `NOT_FOUND`.
  */

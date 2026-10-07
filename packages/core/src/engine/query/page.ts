@@ -59,6 +59,9 @@ const SEARCH_TIMEOUT = '2s';
 /** A group of equal first keys this small is read whole from its key index and sorted, instead of driven. */
 const GROUP_SORT = 20_000;
 
+/** Attribute definitions by object id, then by attribute id. */
+type ObjectAttributes = ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>;
+
 /** Which rows a view reads: one object's records, or one list's entries. */
 export type ViewSource = { readonly objectId: string } | { readonly listId: string };
 
@@ -114,7 +117,7 @@ async function prepare(
   scope: EngineScope,
   query: ViewSource & QueryClock & { readonly filter?: FilterGroup; readonly sorts?: SortRules },
   search = true,
-): Promise<{ context: CompileContext; level: Level }> {
+): Promise<{ context: CompileContext; level: Level; objectAttributes: ObjectAttributes }> {
   // Checked against the contract first, so its caps on size and depth hold before anything walks the filter.
   for (const [value, shape] of [
     [query.filter, FilterGroup],
@@ -127,18 +130,23 @@ async function prepare(
   }
   let level: Level;
   let own: ReadonlyMap<string, AttributeDef>;
+  let objectAttributes: ObjectAttributes;
   if ('listId' in query) {
     if (!isUuid(query.listId)) throw refuse('FILTER_INVALID', 'That list does not exist.');
     const [list] = await tx.select({ objectId: lists.objectId }).from(lists).where(eq(lists.id, query.listId));
     if (list === undefined) throw refuse('NOT_FOUND', 'That list does not exist.');
     level = baseLevel({ objectId: list.objectId, listId: query.listId });
-    own = new Map([...(await loadListAttributes(tx, query.listId)), ...(await loadAttributes(tx, list.objectId))]);
+    const recordAttributes = await loadAttributes(tx, list.objectId);
+    own = new Map([...(await loadListAttributes(tx, query.listId)), ...recordAttributes]);
+    objectAttributes = new Map([[list.objectId, recordAttributes]]);
   } else {
     if (!isUuid(query.objectId)) throw refuse('FILTER_INVALID', 'That object does not exist.');
     const [object] = await tx.select({ id: objects.id }).from(objects).where(eq(objects.id, query.objectId));
     if (object === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
     level = baseLevel({ objectId: query.objectId });
     own = await loadAttributes(tx, query.objectId);
+    // Keyed by the id as stored (lower case), which the read back looks records' objects up by.
+    objectAttributes = new Map([[object.id, own]]);
   }
   const named = attributeIdsOf(query.filter, query.sorts ?? []).filter((id) => !own.has(id));
   const attributes = new Map([...own, ...(await loadAttributesById(tx, named))]);
@@ -157,7 +165,7 @@ async function prepare(
   };
   if (context.clock.timeZone !== undefined) await checkTimeZone(tx, context.clock.timeZone);
   const searches = search ? await runSearches(tx, context, query.filter) : new Map<string, readonly string[]>();
-  return { context: searches.size === 0 ? context : { ...context, searches }, level };
+  return { context: searches.size === 0 ? context : { ...context, searches }, level, objectAttributes };
 }
 
 /** The one statement `checkTimeZone` runs: it fails with `22023` for a zone Postgres doesn't know. */
@@ -270,6 +278,8 @@ type Branch = (tx: WorkspaceTx, take: number, skip: number) => Promise<readonly 
 /** A built page: its parts in order, its shape, and its statements for EXPLAIN. */
 interface BuiltPage {
   readonly branches: readonly Branch[];
+  /** The attributes of the object whose records the page shows, as `prepare` loaded them, for the read back. */
+  readonly attributesByObject: ObjectAttributes;
   readonly keyCount: number;
   readonly limit: number;
   readonly isList: boolean;
@@ -307,7 +317,7 @@ async function buildPage(
   search = true,
 ): Promise<BuiltPage> {
   const { limit, cursor } = checkPage(query);
-  const { context, level } = await prepare(tx, scope, query, search);
+  const { context, level, objectAttributes } = await prepare(tx, scope, query, search);
   const sorts = query.sorts ?? [];
   const keys = compileSorts(context, level, sorts);
   const filter = compileFilter(context, level, query.filter);
@@ -373,6 +383,7 @@ async function buildPage(
     const statement = plain(keys, sql``, sql`true`, cursor === undefined ? sql`true` : afterCursor(keys, cursor), 0);
     return {
       branches: [run(statement)],
+      attributesByObject: objectAttributes,
       keyCount: keys.length,
       limit,
       isList,
@@ -755,6 +766,7 @@ async function buildPage(
   };
   return {
     branches: inEmpties ? [emptiesBranch] : [valued, emptiesBranch],
+    attributesByObject: objectAttributes,
     keyCount: keys.length,
     limit,
     isList,
@@ -898,7 +910,8 @@ async function readPage(
         })
       : undefined;
   const recordIds = [...new Set(rows.map((row) => row.record_id))];
-  const records = await readRecords(tx, recordIds);
+  // The view's own attributes are loaded already: the read back uses them rather than loading them again.
+  const records = await readRecords(tx, recordIds, { attributes: built.attributesByObject });
   const page: Page = !isList
     ? { records }
     : {

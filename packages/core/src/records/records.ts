@@ -8,9 +8,10 @@ import type { FilterGroup, SortRules } from '@crm/contracts/values';
 import { schema } from '@crm/db';
 import { canonicalId, isUuidV7, uuidV7Time } from '../engine/ids.ts';
 import { queryPage } from '../engine/query/page.ts';
-import { createRecord, getRecords, setValues, type ValueInput } from '../engine/records.ts';
+import { createRecord, getRecords, setRecordValues, type ValueInput } from '../engine/records.ts';
 import { inputInvalid, isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
+import type { AttributeDef } from '../engine/values.ts';
 import type { AfterWrite } from '../engine/write.ts';
 
 const { records } = schema;
@@ -59,9 +60,16 @@ export async function readRecordsById(scope: EngineScope, ids: readonly string[]
   return [...(await getRecords(scope, { ids }))];
 }
 
-/** One live record, read after its write committed, or `RECORD_DELETED` if it went to the trash meanwhile. */
-async function freshRecord(scope: EngineScope, recordId: string): Promise<RecordView> {
-  const [view] = await getRecords(scope, { ids: [recordId] });
+/** Attribute definitions a write already loaded, by object id, so its read back doesn't load them again. */
+type LoadedAttributes = ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>;
+
+/**
+ * One live record, read after its write committed. `RECORD_DELETED` means it
+ * went to the trash between the write and this read: the write committed,
+ * and the client should drop the record.
+ */
+async function freshRecord(scope: EngineScope, recordId: string, attributes?: LoadedAttributes): Promise<RecordView> {
+  const [view] = await getRecords(scope, { ids: [recordId], ...(attributes === undefined ? {} : { attributes }) });
   if (view === undefined) throw refuse('RECORD_DELETED', 'That record is in the trash. Restore it first.');
   return view;
 }
@@ -102,12 +110,12 @@ export async function addRecord(
     throw inputInvalid('id', CLOCK_SKEW_MESSAGE);
   }
   try {
-    const { recordId } = await createRecord(
+    const { recordId, objectId, attributes } = await createRecord(
       scope,
       { objectId: input.objectId, id: input.id, ...(input.values === undefined ? {} : { values: input.values }) },
       hooks,
     );
-    return await freshRecord(scope, recordId);
+    return await freshRecord(scope, recordId, new Map([[objectId, attributes]]));
   } catch (error) {
     if (!isRefusal(error) || error.refusal.code !== 'ID_TAKEN') throw error;
     const replayed = await replayCreate(scope, input);
@@ -157,12 +165,19 @@ export interface EditRecordInput {
  * Sets values on one record, all or none, and answers it fresh (spec 0005,
  * AC-36). Refuses as the engine's `setValues` does: one refusal per attribute,
  * `RECORD_DELETED` for a record in the trash, `NOT_FOUND` for an unknown one.
+ * The read back reuses the attributes the write loaded. A `RECORD_DELETED`
+ * from the read back means the write committed and the record was trashed
+ * meanwhile.
  */
 export async function editRecord(
   scope: EngineScope,
   input: EditRecordInput,
   hooks: readonly AfterWrite[] = [],
 ): Promise<RecordView> {
-  await setValues(scope, { recordId: input.recordId, values: input.values }, hooks);
-  return freshRecord(scope, canonicalId(input.recordId));
+  const { attributesByObject } = await setRecordValues(
+    scope,
+    { recordId: input.recordId, values: input.values },
+    hooks,
+  );
+  return freshRecord(scope, canonicalId(input.recordId), attributesByObject);
 }

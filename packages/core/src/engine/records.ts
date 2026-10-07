@@ -332,7 +332,8 @@ export async function insertRecord(context: WriteContext, input: RecordInput) {
   context.record({ createdRecords: [{ recordId, objectId }] });
   const versions = await writeAll(context, 'record', recordId, parsed);
   await takeRecordSlots(tx, scope, 1);
-  return { recordId, versions };
+  // The object's attributes go back too, so a read back after the write doesn't load them again.
+  return { recordId, versions, objectId, attributes };
 }
 
 /** Sets values on a record, or on a list entry, all or none (AC-3, AC-6, AC-12, AC-13). */
@@ -369,6 +370,8 @@ async function lockOwner(
 ): Promise<{
   ownerKind: 'record' | 'entry';
   ownerId: string;
+  /** The record's object; undefined for an entry, whose attributes sit on its list. */
+  objectId?: string;
   attributes: ReadonlyMap<string, AttributeDef>;
 }> {
   if ('entryId' in input) {
@@ -378,22 +381,59 @@ async function lockOwner(
   }
   const recordId = checkId(input.recordId, 'That record does not exist.');
   const { objectId } = await lockRecord(tx, recordId);
-  return { ownerKind: 'record', ownerId: recordId, attributes: await loadAttributes(tx, objectId) };
+  return { ownerKind: 'record', ownerId: recordId, objectId, attributes: await loadAttributes(tx, objectId) };
 }
 
-/** Sets values on one record or entry inside a write: the owner is locked, then every value is parsed, then written. */
-async function updateRecord(
+/**
+ * Sets values on one record or entry inside a write: the owner is locked,
+ * then every value is parsed, then written. Answers each attribute's result,
+ * and the owner's attributes as the write loaded them.
+ */
+async function updateOwner(
   context: WriteContext,
   input: RecordValues | EntryValues,
-): Promise<Record<string, AttributeResult>> {
+): Promise<{
+  results: Record<string, AttributeResult>;
+  objectId?: string;
+  attributes: ReadonlyMap<string, AttributeDef>;
+}> {
   const { tx } = context;
-  const { ownerKind, ownerId, attributes } = await lockOwner(tx, input);
+  const { ownerKind, ownerId, objectId, attributes } = await lockOwner(tx, input);
   const parsed = parseAll(attributes, canonicalKeys(input.values), context.scope.actor);
   const results = await writeAll(context, ownerKind, ownerId, parsed);
   if (Object.values(results).some((each) => each.versionId !== undefined)) {
     await touchOwner(context, ownerKind, ownerId);
   }
-  return results;
+  return objectId === undefined ? { results, attributes } : { results, objectId, attributes };
+}
+
+/** `updateOwner`, answering only each attribute's result. */
+async function updateRecord(
+  context: WriteContext,
+  input: RecordValues | EntryValues,
+): Promise<Record<string, AttributeResult>> {
+  return (await updateOwner(context, input)).results;
+}
+
+/**
+ * Sets values on one record, all or none, like `setValues`, and also answers
+ * the record's attributes by object id as the write loaded them, so a read
+ * back after it commits doesn't load them again.
+ */
+export async function setRecordValues(
+  scope: EngineScope,
+  input: RecordValues,
+  hooks: readonly AfterWrite[] = [],
+): Promise<{
+  readonly results: Record<string, AttributeResult>;
+  readonly attributesByObject: ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>;
+}> {
+  const { result } = await runWrite(scope, (context) => updateOwner(context, input), hooks);
+  const { objectId } = result;
+  return {
+    results: result.results,
+    attributesByObject: objectId === undefined ? new Map() : new Map([[objectId, result.attributes]]),
+  };
 }
 
 /** One record's outcome in a batch. */
@@ -465,6 +505,14 @@ export function bucketItems<T extends { readonly ownerId: string; readonly attri
   return (ownerId, attributeId) => byOwner.get(ownerId)?.get(attributeId) ?? [];
 }
 
+/** What a read of records may be given: the attributes wanted, and attributes already loaded. */
+export interface ReadOptions {
+  /** Only these attributes' values (the primary attribute is read too, for the name). */
+  readonly attributeIds?: readonly string[];
+  /** Attribute definitions already loaded in this request, by object id, so the read doesn't load them again. */
+  readonly attributes?: ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>;
+}
+
 /**
  * Reads live records with their current values and display (AC-19). Up to 500
  * at once. A malformed id (or attribute id) names nothing, so it is left out
@@ -472,28 +520,38 @@ export function bucketItems<T extends { readonly ownerId: string; readonly attri
  */
 export async function getRecords(
   scope: EngineScope,
-  input: { readonly ids: readonly string[]; readonly attributeIds?: readonly string[] },
+  input: {
+    readonly ids: readonly string[];
+    readonly attributeIds?: readonly string[];
+    readonly attributes?: ReadOptions['attributes'];
+  },
 ): Promise<readonly RecordView[]> {
   if (input.ids.length > 500) throw refuse('CONFIG_INVALID', 'Read at most 500 records at once.');
   // Canonical ids, so the rows (which come back lower case) find their place in the order asked for.
   const ids = input.ids.filter(isUuid).map(canonicalId);
   const attributeIds = input.attributeIds?.filter(isUuid).map(canonicalId);
   if (ids.length === 0) return [];
-  return scope.db.withWorkspace(scope.workspaceId, (tx) => readRecords(tx, ids, attributeIds));
+  return scope.db.withWorkspace(scope.workspaceId, (tx) =>
+    readRecords(tx, ids, {
+      ...(attributeIds === undefined ? {} : { attributeIds }),
+      ...(input.attributes === undefined ? {} : { attributes: input.attributes }),
+    }),
+  );
 }
 
 /**
- * Reads live records inside an open transaction, in the order of `ids`. A
- * multi reference cell lists at most `LINK_CELL_CAP` links, with its total in
+ * Reads live records inside an open transaction, in the order of `ids`.
+ * `options.attributes` are definitions the caller already loaded (an object
+ * missing from it is loaded here). A multi reference cell lists at most `LINK_CELL_CAP` links, with its total in
  * `linkTotals` when cut short.
  */
 export async function readRecords(
   tx: WorkspaceTx,
   ids: readonly string[],
-  attributeIds?: readonly string[],
+  options: ReadOptions = {},
 ): Promise<readonly RecordView[]> {
   if (ids.length === 0) return [];
-  const input = { ids, attributeIds };
+  const input = { ids, attributeIds: options.attributeIds };
   const rows = await tx
     .select()
     .from(records)
@@ -503,7 +561,9 @@ export async function readRecords(
     objectIds.length === 0 ? [] : await tx.select().from(objects).where(inArray(objects.id, objectIds));
   const objectById = new Map(objectRows.map((row) => [row.id, row]));
   const attributesByObject = new Map(
-    await Promise.all(objectIds.map(async (id) => [id, await loadAttributes(tx, id)] as const)),
+    await Promise.all(
+      objectIds.map(async (id) => [id, options.attributes?.get(id) ?? (await loadAttributes(tx, id))] as const),
+    ),
   );
   // The record's name needs its primary attribute, even when the caller asked for other attributes only.
   const primaryIds = objectRows.flatMap((row) => (row.primaryAttributeId === null ? [] : [row.primaryAttributeId]));
