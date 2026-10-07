@@ -2,14 +2,13 @@
 // relay (spec 0005) on its own direct Postgres connection, and later the
 // background jobs (#8). Its one HTTP port answers Railway's health check and
 // the api's poke, which wakes the relay when it is dormant (`realtime/wake.ts`).
-import { createServer } from 'node:http';
 import { assertAppConnection, createDatabase, createOutboxReader, openDirectConnection } from '@crm/db';
 import { loadEnv, WorkerEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
 import { createCentrifugoPublisher } from './realtime/centrifugo.ts';
 import { createRelay } from './realtime/relay.ts';
 import { onShutdown } from './shutdown.ts';
-import { createWorkerListener } from './worker-http.ts';
+import { createWorkerServer } from './worker-http.ts';
 
 const env = loadEnv(WorkerEnv);
 
@@ -53,7 +52,7 @@ if (relay === undefined) {
   relay.start();
 }
 
-const health = createServer(createWorkerListener({ wakeSecret: env.WORKER_WAKE_SECRET, onWake: () => relay?.wake() }));
+const health = createWorkerServer({ wakeSecret: env.WORKER_WAKE_SECRET, onWake: () => relay?.wake() });
 health.listen(env.WORKER_PORT, '::', () =>
   log.info('Worker ready', { port: env.WORKER_PORT, environment: env.APP_ENV, relay: relay !== undefined }),
 );

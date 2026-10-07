@@ -1,8 +1,10 @@
 // The worker's one HTTP port: Railway's health check (`GET /health`) and the
 // api's poke (`POST /internal/outbox-wake`, see `realtime/wake.ts`). Nothing
 // here reads a request body or touches the database: a poke only wakes the
-// relay, which then drains whatever waits in the outbox.
-import type { IncomingMessage, ServerResponse } from 'node:http';
+// relay, which then drains whatever waits in the outbox. A request that comes
+// with a body is refused and its connection closed, and a slow one is cut off
+// after 5 seconds.
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { createWakeCheck, WAKE_HEADER, WAKE_PATH } from './realtime/wake.ts';
 
 export interface WorkerHttpOptions {
@@ -11,6 +13,9 @@ export interface WorkerHttpOptions {
   /** Wakes the relay. Called only for a poke that carries the secret. */
   readonly onWake: () => void;
 }
+
+/** How long a request (and its headers) may take to arrive on the worker's port. */
+const REQUEST_TIMEOUT_MS = 5_000;
 
 function answer(response: ServerResponse, status: number, body?: Record<string, string>): void {
   if (body === undefined) {
@@ -26,8 +31,14 @@ export function createWorkerListener(
 ): (request: IncomingMessage, response: ServerResponse) => void {
   const admits = createWakeCheck(options.wakeSecret);
   return (request, response) => {
-    // Whatever was sent, it isn't read.
-    request.resume();
+    // Nothing here takes a body: refuse one unread, and close the connection rather than drain it.
+    const length = request.headers['content-length'];
+    if ((length !== undefined && length !== '0') || request.headers['transfer-encoding'] !== undefined) {
+      response.setHeader('connection', 'close');
+      response.on('finish', () => request.socket.destroy());
+      answer(response, 413, { code: 'PAYLOAD_TOO_LARGE', message: 'Requests here carry no body.' });
+      return;
+    }
     // The path without parsing a URL, which throws on a malformed target (`GET http://[/`) and would end the
     // worker: only origin form (`/path?query`) is taken.
     const target = request.url ?? '';
@@ -57,4 +68,12 @@ export function createWorkerListener(
     options.onWake();
     answer(response, 204);
   };
+}
+
+/** The worker's server: the listener, with requests and their headers cut off after 5 seconds. */
+export function createWorkerServer(options: WorkerHttpOptions): Server {
+  return createServer(
+    { requestTimeout: REQUEST_TIMEOUT_MS, headersTimeout: REQUEST_TIMEOUT_MS },
+    createWorkerListener(options),
+  );
 }

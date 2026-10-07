@@ -5,7 +5,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { connect } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createWorkerListener } from '../worker-http.ts';
+import { createWorkerListener, createWorkerServer } from '../worker-http.ts';
 import { createRelayWake, WAKE_HEADER, WAKE_PATH } from './wake.ts';
 
 const SECRET = 'a-wake-secret-of-at-least-32-characters!';
@@ -170,6 +170,48 @@ describe("the worker's wake endpoint", () => {
     expect((await fetch(`${server.url}/health`)).status).toBe(200);
     const query = await fetch(`${server.url}${WAKE_PATH}?x=1`, { method: 'POST', headers: { [WAKE_HEADER]: SECRET } });
     expect(query.status).toBe(204);
+  });
+
+  it('refuses any body, unread, and closes the connection; and cuts a slow request off after 5 seconds', async () => {
+    let wakes = 0;
+    const server = createWorkerServer({ wakeSecret: SECRET, onWake: () => (wakes += 1) });
+    expect(server.requestTimeout).toBe(5_000);
+    expect(server.headersTimeout).toBe(5_000);
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const { port } = server.address() as AddressInfo;
+    servers.push({
+      close: () =>
+        new Promise<void>((resolve) => {
+          server.closeAllConnections();
+          server.close(() => resolve());
+        }),
+    });
+    const raw = (request: string) =>
+      new Promise<string>((resolve, reject) => {
+        // Never ends its side: only the worker closing the connection settles this.
+        const socket = connect(port, '127.0.0.1', () => socket.write(request));
+        let reply = '';
+        socket.on('data', (chunk: Buffer) => (reply += chunk.toString('utf8')));
+        socket.on('close', () => resolve(reply));
+        socket.on('error', reject);
+      });
+    const head = `POST ${WAKE_PATH} HTTP/1.1\r\nHost: worker\r\n${WAKE_HEADER}: ${SECRET}\r\n`;
+    for (const request of [
+      `${head}Content-Length: 5\r\n\r\nhello`,
+      `${head}Content-Length: 1000000\r\n\r\nhel`,
+      `${head}Transfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n`,
+    ]) {
+      const reply = await raw(request);
+      expect(reply.split('\r\n')[0]).toMatch(/^HTTP\/1\.1 413 /);
+      expect(reply.toLowerCase()).toContain('connection: close');
+    }
+    expect(wakes).toBe(0);
+    // An empty body is no body.
+    const ok = await fetch(`http://127.0.0.1:${String(port)}${WAKE_PATH}`, {
+      method: 'POST',
+      headers: { [WAKE_HEADER]: SECRET, 'content-length': '0' },
+    });
+    expect(ok.status).toBe(204);
   });
 
   it('answers the health check', async () => {
