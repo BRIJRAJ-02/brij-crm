@@ -306,6 +306,48 @@ describe('cancelling a read', () => {
   });
 });
 
+describe('the read gate', () => {
+  it('runs at most 6 queries and counts at once per workspace, answers the seventh 429, and frees places on abort', async () => {
+    const m = await memberWithWorkspace(app);
+    const other = await memberWithWorkspace(app);
+    const scope = { workspace: m.slug, objectId: m.people.id };
+    const lock = await holdTableLock(ownerUrl, 'records');
+    const controllers: AbortController[] = [];
+    const pending: Promise<unknown>[] = [];
+    /** Starts a read that waits on the lock until aborted. */
+    const start = (read: (signal: AbortSignal) => Promise<unknown>) => {
+      const controller = new AbortController();
+      controllers.push(controller);
+      pending.push(read(controller.signal).catch((error: unknown) => error));
+    };
+    try {
+      for (let index = 0; index < 3; index += 1) {
+        start((signal) => m.client.records.query(scope, { signal }));
+        start((signal) => m.client.records.count(scope, { signal }));
+      }
+      await eventually(async () => (await taggedStatements()).length === 6);
+      expect(await refusal(() => m.client.records.count(scope))).toEqual({
+        code: 'TOO_MANY_REQUESTS',
+        status: 429,
+        message: 'Too many requests at once. Try again in a moment.',
+      });
+      expect(await refusal(() => m.client.records.query(scope))).toMatchObject({ code: 'TOO_MANY_REQUESTS' });
+      // Another workspace has places of its own.
+      start((signal) => other.client.records.count({ workspace: other.slug, objectId: other.people.id }, { signal }));
+      await eventually(async () => (await taggedStatements()).length === 7);
+      for (const controller of controllers) controller.abort();
+      await Promise.all(pending);
+    } finally {
+      await lock.release();
+    }
+    // Every aborted read gives its place back once its statement is cancelled: six at once fit again.
+    await eventually(async () => {
+      const reads = await Promise.allSettled(Array.from({ length: 6 }, () => m.client.records.count(scope)));
+      return reads.every((read) => read.status === 'fulfilled');
+    });
+  });
+});
+
 describe('records.get', () => {
   it('answers live records in the order asked, leaving out unknown and trashed ids', async () => {
     const m = await memberWithWorkspace(app);

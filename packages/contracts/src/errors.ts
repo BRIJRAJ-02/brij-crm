@@ -52,6 +52,8 @@ export const ERROR_MAP = {
   FILTER_INVALID: UNPROCESSABLE,
   // The fallback wait when the limiter gives none of its own.
   RATE_LIMITED: { status: 429, retryAfterSeconds: 60 },
+  // Too many heavy reads in flight for one workspace at once; one finishing frees a place.
+  TOO_MANY_REQUESTS: { status: 429, retryAfterSeconds: 1 },
   // The query ran out of time or was cancelled; a moment later it usually succeeds.
   QUERY_CANCELLED: { status: 503, retryAfterSeconds: 1 },
   API_UNAVAILABLE: { status: 503 },

@@ -17,6 +17,7 @@ The one modular API (Hono + oRPC) that every read and write goes through, and th
 | `src/router.ts` | Joins the module routers into the one router the contract describes |
 | `src/modules/<feature>/router.ts` | Thin handlers for one feature, each calling a service in `packages/core` |
 | `src/orpc.ts` | `RequestContext` and the three procedure bases: `pub`, `authed` (a session) and `member` (a session plus the access door, `context.scope`) |
+| `src/gate.ts` | `createReadGate()`: at most 6 `records.query` and `records.count` calls in flight per workspace per process, made once in `createApp` and handed to procedures as `context.readGate`; one more answers 429 `TOO_MANY_REQUESTS` |
 | `src/hooks.ts` | `writeHooks(context, { mutationId })`: the one composer of the hooks every write procedure hands the engine (the outbox hook joins it in milestone 3) |
 | `src/auth/` | Better Auth's one wrapper: email codes, Google, sessions, the sign up allowlist, rate limits, and its refusals in the shared error shape. Mounted on `/api/auth/*` |
 | `src/mail/` | The `Mailer` interface, Resend (deployed) and Mailpit (local), and the one React Email template |

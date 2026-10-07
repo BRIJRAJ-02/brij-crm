@@ -126,7 +126,9 @@ export type SetValuesInput = z.infer<typeof SetValuesInput>;
 /**
  * An object's records. `query` refuses a bad cursor or filter with
  * `FILTER_INVALID` and a statement past its time with `QUERY_CANCELLED`;
- * `count` is cancelled with its request. `get` leaves out ids that are
+ * `query` and `count` are cancelled with their request, and together run at
+ * most 6 at once per workspace (per API process): one more answers 429
+ * `TOO_MANY_REQUESTS`, worth retrying a moment later. `get` leaves out ids that are
  * unknown or in the trash. `create` and `setValues` answer the fresh record;
  * their refusals list one entry per attribute (`VALUE_REQUIRED`,
  * `ATTRIBUTE_VALUE_INVALID`, `UNIQUE_CONFLICT`). `create` with an id already

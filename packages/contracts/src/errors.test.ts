@@ -35,13 +35,15 @@ describe('the error map', () => {
     for (const code of codes) expect(errorStatus(code)).toBe(status);
   });
 
-  it('asks for a retry only on rate limits and cancelled queries', () => {
+  it('asks for a retry only on rate limits, too many reads at once and cancelled queries', () => {
     const retrying = Object.entries(ERROR_MAP)
       .filter(([, entry]) => 'retryAfterSeconds' in entry)
       .map(([code]) => code)
       .sort();
-    expect(retrying).toEqual(['QUERY_CANCELLED', 'RATE_LIMITED']);
+    expect(retrying).toEqual(['QUERY_CANCELLED', 'RATE_LIMITED', 'TOO_MANY_REQUESTS']);
     expect(retryAfterSeconds('QUERY_CANCELLED')).toBeGreaterThan(0);
+    expect(retryAfterSeconds('TOO_MANY_REQUESTS')).toBe(1);
+    expect(errorStatus('TOO_MANY_REQUESTS')).toBe(429);
     expect(retryAfterSeconds('INTERNAL')).toBeUndefined();
   });
 

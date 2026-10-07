@@ -16,6 +16,7 @@ import { implement, os } from '@orpc/server';
 import type { ResponseHeadersPluginContext } from '@orpc/server/plugins';
 import type { Auth, SessionUser } from './auth/auth.ts';
 import { apiError } from './errors.ts';
+import type { ReadGate } from './gate.ts';
 
 /** What every procedure receives. */
 export interface RequestContext extends ResponseHeadersPluginContext {
@@ -31,6 +32,8 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   clientIp: string | undefined;
   /** The request's headers, for the session cookie. */
   headers: Headers;
+  /** This process's cap on heavy reads in flight per workspace (`records.query` and `records.count`). */
+  readGate: ReadGate;
 }
 
 /** What `authed` adds: the signed in person. */

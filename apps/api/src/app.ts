@@ -7,6 +7,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { AUTH_BASE_PATH, AUTH_ROUTES, type Auth } from './auth/auth.ts';
 import { createEdgeGuard } from './edge.ts';
 import type { ApiEnv } from './env.ts';
+import { createReadGate } from './gate.ts';
 import { errorFields, log } from './log.ts';
 import { router as appRouter } from './router.ts';
 import { createRpcHandler } from './rpc.ts';
@@ -52,6 +53,8 @@ export function createApp({
   const rpc = createRpcHandler(router);
   const edge = createEdgeGuard({ secret: env.EDGE_SECRET, environment: env.APP_ENV });
   const allowedOrigins = new Set([new URL(env.APP_URL).origin, ...(env.TRUSTED_ORIGINS ?? [])]);
+  // One per app, so its counts are this process's: at most 6 heavy reads per workspace at once.
+  const readGate = createReadGate();
 
   const app = new Hono<{ Variables: AppVariables }>().basePath('/api');
 
@@ -115,6 +118,7 @@ export function createApp({
         requestId: c.get('requestId'),
         clientIp: c.get('clientIp'),
         headers: c.req.raw.headers,
+        readGate,
       },
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();

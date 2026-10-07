@@ -6,25 +6,30 @@ import { member } from '../../orpc.ts';
 // Inside a workspace: the door has let in an active member, and `context.scope` is theirs.
 export const recordsRouter = member.records.router({
   // Both reads are cancelled with their request: a closed tab or a superseded window stops them in Postgres.
+  // And they share the workspace's places in the read gate: a seventh at once answers 429.
   query: member.records.query.handler(({ context, input, signal }) =>
-    queryRecords(
-      context.scope,
-      {
-        objectId: input.objectId,
-        ...(input.position === undefined ? {} : { position: input.position }),
-        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
-        ...(input.limit === undefined ? {} : { limit: input.limit }),
-        ...(input.filter === undefined ? {} : { filter: input.filter }),
-        ...(input.sorts === undefined ? {} : { sorts: input.sorts }),
-      },
-      signal,
+    context.readGate.run(context.scope.workspaceId, () =>
+      queryRecords(
+        context.scope,
+        {
+          objectId: input.objectId,
+          ...(input.position === undefined ? {} : { position: input.position }),
+          ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+          ...(input.limit === undefined ? {} : { limit: input.limit }),
+          ...(input.filter === undefined ? {} : { filter: input.filter }),
+          ...(input.sorts === undefined ? {} : { sorts: input.sorts }),
+        },
+        signal,
+      ),
     ),
   ),
   count: member.records.count.handler(({ context, input, signal }) =>
-    countMatches(
-      context.scope,
-      { objectId: input.objectId, ...(input.filter === undefined ? {} : { filter: input.filter }) },
-      signal,
+    context.readGate.run(context.scope.workspaceId, () =>
+      countMatches(
+        context.scope,
+        { objectId: input.objectId, ...(input.filter === undefined ? {} : { filter: input.filter }) },
+        signal,
+      ),
     ),
   ),
   get: member.records.get.handler(({ context, input }) => readRecordsById(context.scope, input.ids)),
