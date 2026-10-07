@@ -39,7 +39,7 @@ const relay =
     ? undefined
     : createRelay({
         connect: async () => createOutboxReader(await openDirect()),
-        publish: createCentrifugoPublisher(env.centrifugo).publish,
+        publishBatch: createCentrifugoPublisher(env.centrifugo).publishBatch,
         log,
       });
 if (relay === undefined) {

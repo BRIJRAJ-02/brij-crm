@@ -1,9 +1,12 @@
 // The outbox relay (spec 0005, change events), run by the worker. Only the
-// relay holding the advisory lock publishes. For each workspace it publishes
-// the unpublished rows in `seq` order to `workspace:<id>`, each with the
-// idempotency key `<workspace>:<seq>`, then marks them. A failed publish stops
-// that workspace's batch, to retry later, so nothing is skipped; other
-// workspaces carry on.
+// relay holding the advisory lock publishes. It works in rounds: each round
+// takes one batch from every workspace with something waiting, up to 4
+// workspaces at a time and each workspace strictly in turn, so one busy
+// workspace can't hold up the rest. A workspace's batch is its unpublished
+// rows in `seq` order, published to `workspace:<id>` in one Centrifugo call
+// (each with the idempotency key `<workspace>:<seq>`), then marked up to the
+// first failure, so nothing is skipped; a full batch gets another turn next
+// round.
 //
 // Neon bills compute by the hour and suspends it after 5 minutes without a
 // query, so the relay lets the database sleep while nothing is written:
@@ -29,7 +32,7 @@
 import { type ChangeEvent, workspaceChannel } from '@crm/contracts';
 import type { OutboxReader, OutboxRow } from '@crm/db';
 import { errorFields } from '../log.ts';
-import type { Publish } from './centrifugo.ts';
+import type { PublishBatch } from './centrifugo.ts';
 
 type Fields = Record<string, unknown>;
 
@@ -42,7 +45,7 @@ export interface RelayLog {
 export interface RelayDeps {
   /** Opens a fresh direct connection as an outbox reader; called again after one drops or the relay wakes. */
   readonly connect: () => Promise<OutboxReader>;
-  readonly publish: Publish;
+  readonly publishBatch: PublishBatch;
   readonly log: RelayLog;
   /**
    * The safety poll's waits over a quiet spell, the last repeating (default
@@ -56,8 +59,10 @@ export interface RelayDeps {
   readonly backoffMs?: number;
   /** The longest wait before reconnecting (default 30 seconds). */
   readonly maxBackoffMs?: number;
-  /** The most rows read from one workspace at a time (default 100). */
+  /** The most rows read from one workspace at a time, one Centrifugo call (default 100). */
   readonly batch?: number;
+  /** How many workspaces' batches run at once (default 4). Each workspace's own batches never overlap. */
+  readonly concurrency?: number;
   /** The least time between two prunes while active (default 1 minute). */
   readonly pruneEveryMs?: number;
 }
@@ -116,6 +121,7 @@ export function createRelay(deps: RelayDeps): Relay {
   const backoffMs = deps.backoffMs ?? 1_000;
   const maxBackoffMs = deps.maxBackoffMs ?? 30_000;
   const batch = deps.batch ?? 100;
+  const concurrency = Math.max(1, deps.concurrency ?? 4);
   const pruneEveryMs = deps.pruneEveryMs ?? 60_000;
   const { log } = deps;
 
@@ -157,35 +163,53 @@ export function createRelay(deps: RelayDeps): Relay {
   const quiet = (): boolean => Date.now() - lastWork >= dormantAfterMs;
   const pollWait = (): number => schedule[Math.min(step, schedule.length - 1)] ?? 1_000;
 
-  /** Publishes one workspace's pending rows in order and marks them; stops at the first failed publish. */
-  async function drain(reader: OutboxReader, workspaceId: string): Promise<void> {
-    for (;;) {
-      const rows = await reader.pending(workspaceId, batch);
-      if (rows.length > 0) sawWork();
-      let upto: number | undefined;
-      let failed = false;
-      for (const row of rows) {
-        if (halted()) break;
-        try {
-          await deps.publish({
-            channel: workspaceChannel(workspaceId),
-            data: changeEvent(row),
-            idempotencyKey: `${workspaceId}:${String(row.seq)}`,
-          });
-          upto = row.seq;
-        } catch (error) {
-          log.warn('Publishing a change failed; retrying on the next tick', {
-            workspaceId,
-            seq: row.seq,
-            ...errorFields(error),
-          });
-          failed = true;
-          break;
-        }
-      }
-      if (upto !== undefined) await reader.mark(workspaceId, upto);
-      if (failed || halted() || rows.length < batch) return;
+  /**
+   * One workspace's turn: reads a batch, publishes it with one call, and marks
+   * what landed. `more` when the batch was full and all of it landed, so the
+   * workspace gets another turn next round.
+   */
+  async function turn(reader: OutboxReader, workspaceId: string): Promise<'more' | 'done' | 'failed'> {
+    const rows = await reader.pending(workspaceId, batch);
+    if (rows.length === 0) return 'done';
+    sawWork();
+    const channel = workspaceChannel(workspaceId);
+    const outcome = await deps.publishBatch(
+      rows.map((row) => ({ channel, data: changeEvent(row), idempotencyKey: `${workspaceId}:${String(row.seq)}` })),
+    );
+    const landed = rows[outcome.published - 1];
+    if (landed !== undefined) await reader.mark(workspaceId, landed.seq);
+    if (outcome.error !== undefined) {
+      log.warn('Publishing a change failed; retrying on the next tick', {
+        workspaceId,
+        seq: rows[outcome.published]?.seq,
+        ...errorFields(outcome.error),
+      });
+      return 'failed';
     }
+    return rows.length === batch ? 'more' : 'done';
+  }
+
+  /**
+   * One round: a turn for each workspace, up to `concurrency` at a time.
+   * Returns the workspaces that have more waiting. Throws the first error a
+   * turn threw, once every turn has settled.
+   */
+  async function round(reader: OutboxReader, workspaces: readonly string[]): Promise<string[]> {
+    const more: string[] = [];
+    let next = 0;
+    const lane = async () => {
+      for (;;) {
+        if (halted()) return;
+        const workspaceId = workspaces[next];
+        next += 1;
+        if (workspaceId === undefined) return;
+        if ((await turn(reader, workspaceId)) === 'more') more.push(workspaceId);
+      }
+    };
+    const lanes = await Promise.allSettled(Array.from({ length: Math.min(concurrency, workspaces.length) }, lane));
+    const failed = lanes.find((settled): settled is PromiseRejectedResult => settled.status === 'rejected');
+    if (failed !== undefined) throw failed.reason;
+    return more;
   }
 
   /** Deletes one batch of published rows past retention; true when it was full, so there may be more. */
@@ -222,6 +246,8 @@ export function createRelay(deps: RelayDeps): Relay {
       let lastPoll = Number.NEGATIVE_INFINITY;
       let lastPrune = Number.NEGATIVE_INFINITY;
       let pruneAgain = false;
+      // Workspaces whose last turn left more waiting: they get the next round.
+      let leftover: readonly string[] = [];
       for (;;) {
         if (halted()) return { reason: 'stopped' };
         const error = dropped();
@@ -235,7 +261,7 @@ export function createRelay(deps: RelayDeps): Relay {
         }
         if (holding) {
           // A notification names its workspace, so it skips the definer function; the poll asks it.
-          const workspaces = new Set(notified);
+          const workspaces = new Set([...leftover, ...notified]);
           notified.clear();
           if (due) {
             lastPoll = Date.now();
@@ -244,17 +270,14 @@ export function createRelay(deps: RelayDeps): Relay {
             else step += 1;
             for (const workspaceId of waiting) workspaces.add(workspaceId);
           }
-          for (const workspaceId of workspaces) {
-            if (halted()) break;
-            await drain(reader, workspaceId);
-          }
+          leftover = await round(reader, [...workspaces]);
           // Beside a poll only, so pruning never wakes the database on its own.
           if (due && !halted() && (pruneAgain || Date.now() - lastPrune >= pruneEveryMs)) {
             lastPrune = Date.now();
             pruneAgain = await prune(reader);
           }
         }
-        if (halted() || dropped() !== undefined || (holding && notified.size > 0)) continue;
+        if (halted() || dropped() !== undefined || (holding && (notified.size > 0 || leftover.length > 0))) continue;
         if (quiet()) {
           // Only a poke from here on wakes it.
           woken = false;

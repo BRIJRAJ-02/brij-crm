@@ -40,9 +40,10 @@ export interface OutboxRow {
 }
 
 /**
- * The relay's view of the outbox, on one direct connection. Call one method
- * at a time (the relay's loop does): a transaction on the one client must not
- * interleave with another statement.
+ * The relay's view of the outbox, on one direct connection. Calls may come at
+ * once (the relay runs several workspaces' turns side by side): the reader
+ * runs them one after another, so a transaction on the one client never
+ * interleaves with another statement.
  */
 export interface OutboxReader {
   /** Takes the relay lock for this connection's session; false while another relay holds it. */
@@ -84,8 +85,15 @@ export function createOutboxReader(direct: pg.Client): OutboxReader {
     direct.on('error', (error) => resolve(error));
     direct.on('end', () => resolve(new Error('The direct database connection closed.')));
   });
+  // One call at a time on the one client: each waits for the one before it to settle.
+  let tail: Promise<unknown> = Promise.resolve();
+  function serial<T>(work: () => Promise<T>): Promise<T> {
+    const run = tail.then(work, work);
+    tail = run.catch(() => undefined);
+    return run;
+  }
 
-  return {
+  const calls: Omit<OutboxReader, 'lost'> = {
     async lock() {
       const result = await direct.query<{ locked: boolean }>('select pg_try_advisory_lock($1) as locked', [RELAY_LOCK]);
       return result.rows[0]?.locked === true;
@@ -149,8 +157,6 @@ export function createOutboxReader(direct: pg.Client): OutboxReader {
       await direct.query(`listen ${OUTBOX_CHANNEL}`);
     },
 
-    lost,
-
     async close() {
       try {
         await direct.end();
@@ -158,6 +164,19 @@ export function createOutboxReader(direct: pg.Client): OutboxReader {
         // Already gone: nothing to close.
       }
     },
+  };
+
+  return {
+    lock: () => serial(() => calls.lock()),
+    unlock: () => serial(() => calls.unlock()),
+    workspaces: (max) => serial(() => calls.workspaces(max)),
+    pending: (workspaceId, max) => serial(() => calls.pending(workspaceId, max)),
+    mark: (workspaceId, upto) => serial(() => calls.mark(workspaceId, upto)),
+    prune: (max) => serial(() => calls.prune(max)),
+    listen: (onNotify) => serial(() => calls.listen(onNotify)),
+    lost,
+    // Closing doesn't wait its turn: a call stuck on a dead connection must not hold it open.
+    close: () => calls.close(),
   };
 }
 

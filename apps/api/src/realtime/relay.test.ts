@@ -22,34 +22,64 @@ interface Publication {
   readonly idempotencyKey: string;
 }
 
-/** Answers like Centrifugo's `/api/publish`; `refuse` decides which publications fail (with a 503). */
-async function fakeCentrifugo(refuse: (publication: Publication) => boolean = () => false) {
+interface BatchBody {
+  readonly commands: readonly {
+    readonly publish: { channel: string; data: Record<string, unknown>; idempotency_key: string };
+  }[];
+  readonly parallel: boolean;
+}
+
+interface FakeOptions {
+  /** Which publications Centrifugo refuses (with an error reply for that command). */
+  readonly refuse?: (publication: Publication) => boolean;
+  /** How long each call takes to answer. */
+  readonly delayMs?: number;
+}
+
+/**
+ * Answers like Centrifugo's `/api/batch` in sequential mode: every command
+ * runs, each gets its own reply (an `error` for a refused one), and a repeated
+ * idempotency key is answered but not published again.
+ */
+async function fakeCentrifugo(options: FakeOptions = {}) {
+  const refuse = options.refuse ?? (() => false);
   const published: Publication[] = [];
   const refused: Publication[] = [];
+  const seen = new Set<string>();
+  /** Each call: its channel, and when it started and ended. */
+  const calls: { channel: string | undefined; size: number; parallel: boolean; start: number; end: number }[] = [];
   const body = async (request: IncomingMessage) => {
     const chunks: Buffer[] = [];
     for await (const chunk of request) chunks.push(chunk as Buffer);
-    return JSON.parse(Buffer.concat(chunks).toString('utf8')) as {
-      channel: string;
-      data: Record<string, unknown>;
-      idempotency_key: string;
-    };
+    return JSON.parse(Buffer.concat(chunks).toString('utf8')) as BatchBody;
   };
   const server = createServer((request, response) => {
     void (async () => {
-      if (request.url !== '/api/publish' || request.headers['x-api-key'] !== API_KEY) {
+      if (request.url !== '/api/batch' || request.headers['x-api-key'] !== API_KEY) {
         response.writeHead(401).end();
         return;
       }
+      const start = Date.now();
       const sent = await body(request);
-      const publication = { channel: sent.channel, data: sent.data, idempotencyKey: sent.idempotency_key };
-      if (refuse(publication)) {
-        refused.push(publication);
-        response.writeHead(503).end();
-        return;
-      }
-      published.push(publication);
-      response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ result: {} }));
+      if (options.delayMs !== undefined) await new Promise((resolve) => setTimeout(resolve, options.delayMs));
+      const replies = sent.commands.map(({ publish }) => {
+        const publication = { channel: publish.channel, data: publish.data, idempotencyKey: publish.idempotency_key };
+        if (refuse(publication)) {
+          refused.push(publication);
+          return { error: { code: 100, message: 'internal server error' } };
+        }
+        if (!seen.has(publication.idempotencyKey)) published.push(publication);
+        seen.add(publication.idempotencyKey);
+        return { publish: { offset: published.length, epoch: 'test' } };
+      });
+      calls.push({
+        channel: sent.commands[0]?.publish.channel,
+        size: sent.commands.length,
+        parallel: sent.parallel,
+        start,
+        end: Date.now(),
+      });
+      response.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify({ replies }));
     })();
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
@@ -58,6 +88,7 @@ async function fakeCentrifugo(refuse: (publication: Publication) => boolean = ()
     url: `http://127.0.0.1:${String(port)}`,
     published,
     refused,
+    calls,
     /** The `seq`s published to one workspace's channel, in order. */
     seqs: (workspaceId: string) =>
       published.filter((item) => item.channel === `workspace:${workspaceId}`).map((item) => item.data.seq),
@@ -73,7 +104,9 @@ afterEach(async () => {
   for (const server of servers.splice(0)) await server.close();
 });
 
-interface RelayOptions extends Partial<Pick<RelayDeps, 'pollScheduleMs' | 'dormantAfterMs' | 'pruneEveryMs'>> {
+interface RelayOptions extends Partial<
+  Pick<RelayDeps, 'pollScheduleMs' | 'dormantAfterMs' | 'pruneEveryMs' | 'batch' | 'concurrency'>
+> {
   readonly applicationName?: string;
   /** Sees each reader the relay opens, to count or time its calls. */
   readonly wrap?: (reader: OutboxReader) => OutboxReader;
@@ -87,11 +120,13 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
       const reader = createOutboxReader(await openDirectConnection({ url: appUrl, applicationName }));
       return options.wrap?.(reader) ?? reader;
     },
-    publish: createCentrifugoPublisher({ apiUrl: centrifugoUrl, apiKey: API_KEY, timeoutMs: 2_000 }).publish,
+    publishBatch: createCentrifugoPublisher({ apiUrl: centrifugoUrl, apiKey: API_KEY, timeoutMs: 2_000 }).publishBatch,
     log: { info: (message) => lines.push(message), warn: (message) => lines.push(message) },
     pollScheduleMs: options.pollScheduleMs ?? [100],
     dormantAfterMs: options.dormantAfterMs ?? 60_000,
     ...(options.pruneEveryMs === undefined ? {} : { pruneEveryMs: options.pruneEveryMs }),
+    ...(options.batch === undefined ? {} : { batch: options.batch }),
+    ...(options.concurrency === undefined ? {} : { concurrency: options.concurrency }),
     backoffMs: 50,
   });
   started.push(relay);
@@ -186,24 +221,79 @@ describe('the relay', () => {
     await expect.poll(() => centrifugo.seqs(workspaceId), { timeout: 3_000, interval: 25 }).toEqual([1]);
   });
 
-  it('stops a workspace at a failed publish and retries it on a later tick, never skipping; other workspaces carry on', async () => {
+  it('marks a batch only up to its first failed publish and retries from there, never skipping; other workspaces carry on', async () => {
     let failures = 0;
     const stuck = await workspace();
     const other = await workspace();
-    const centrifugo = await fakeCentrifugo((publication) => {
-      if (publication.idempotencyKey !== `${stuck}:2` || failures >= 3) return false;
-      failures += 1;
-      return true;
+    const centrifugo = await fakeCentrifugo({
+      refuse: (publication) => {
+        if (publication.idempotencyKey !== `${stuck}:2` || failures >= 3) return false;
+        failures += 1;
+        return true;
+      },
     });
     servers.push(centrifugo);
     await events(stuck, [1, 2, 3]);
     await events(other, [1]);
-    const { lines } = relayTo(centrifugo.url);
-    await expect.poll(() => centrifugo.seqs(stuck), WAIT).toEqual([1, 2, 3]);
+    const marked: number[] = [];
+    const { lines } = relayTo(centrifugo.url, {
+      wrap: (reader) => ({
+        ...reader,
+        mark: (workspaceId, upto) => {
+          if (workspaceId === stuck) marked.push(upto);
+          return reader.mark(workspaceId, upto);
+        },
+      }),
+    });
+    await expect.poll(() => unpublished(stuck), WAIT).toEqual([]);
     expect(centrifugo.refused.map((item) => item.idempotencyKey)).toEqual(Array(3).fill(`${stuck}:2`));
+    // Only 1 was marked while 2 failed (3, sent after it in the same call, landed but stayed unmarked).
+    expect(marked).toEqual([1, 3]);
+    // Centrifugo runs every command, so 3 went out before 2; its repeat on the retry was dropped by its key.
+    expect(centrifugo.seqs(stuck)).toEqual([1, 3, 2]);
     expect(centrifugo.seqs(other)).toEqual([1]);
     expect(lines).toContain('Publishing a change failed; retrying on the next tick');
-    await expect.poll(() => unpublished(stuck), WAIT).toEqual([]);
+  });
+
+  it('publishes a workspace’s batch in one sequential call, and gives every workspace a turn each round', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const busy = await workspace();
+    const quiet = await workspace();
+    await events(
+      busy,
+      Array.from({ length: 25 }, (_, index) => index + 1),
+    );
+    await events(quiet, [1]);
+    relayTo(centrifugo.url, { batch: 10 });
+    await expect.poll(() => unpublished(busy), WAIT).toEqual([]);
+    await expect.poll(() => unpublished(quiet), WAIT).toEqual([]);
+    expect(centrifugo.seqs(busy)).toEqual(Array.from({ length: 25 }, (_, index) => index + 1));
+    const busyCalls = centrifugo.calls.filter((call) => call.channel === `workspace:${busy}`);
+    expect(busyCalls.map((call) => call.size)).toEqual([10, 10, 5]);
+    expect(centrifugo.calls.every((call) => !call.parallel)).toBe(true);
+    // The quiet workspace's one call came before the busy one's second batch.
+    const quietCall = centrifugo.calls.findIndex((call) => call.channel === `workspace:${quiet}`);
+    const secondBusy = busyCalls[1];
+    expect(secondBusy).toBeDefined();
+    expect(quietCall).toBeLessThan(secondBusy === undefined ? -1 : centrifugo.calls.indexOf(secondBusy));
+  });
+
+  it('runs up to 4 workspaces at once, and never two calls for one workspace', async () => {
+    const centrifugo = await fakeCentrifugo({ delayMs: 150 });
+    servers.push(centrifugo);
+    const ids = await Promise.all(Array.from({ length: 6 }, () => workspace()));
+    for (const id of ids) await events(id, [1, 2, 3]);
+    relayTo(centrifugo.url, { batch: 2 });
+    for (const id of ids) await expect.poll(() => unpublished(id), WAIT).toEqual([]);
+    const mine = centrifugo.calls.filter((call) => ids.some((id) => call.channel === `workspace:${id}`));
+    const overlapping = (at: number) => mine.filter((call) => call.start <= at && at < call.end);
+    const most = Math.max(...mine.map((call) => overlapping(call.start).length));
+    expect(most).toBeLessThanOrEqual(4);
+    expect(most).toBeGreaterThan(1);
+    for (const call of mine) {
+      expect(overlapping(call.start).filter((other) => other.channel === call.channel)).toHaveLength(1);
+    }
   });
 
   it('lets one relay publish while a second waits on the lock, and hands over when the first stops', async () => {

@@ -26,7 +26,7 @@ The one modular API (Hono + oRPC) that every read and write goes through, and th
 | `src/realtime/relay.ts` | The outbox relay the worker runs: active (LISTEN plus a backing off poll) or dormant (no database call at all), one relay by advisory lock, ordered publish |
 | `src/realtime/wake.ts` | The relay's wake up call: the api's coalesced poke after a write commits (`context.wakeRelay()`), and the worker's secret check |
 | `src/worker-http.ts` | The worker's one port: `/health` and `POST /internal/outbox-wake` |
-| `src/realtime/centrifugo.ts` | Centrifugo's server API (`/api/publish`), the one place the backend calls it |
+| `src/realtime/centrifugo.ts` | Centrifugo's server API (`/api/batch`, sequential, one call per workspace batch), the one place the backend calls it |
 | `src/door.test.ts` | The contract walk: every procedure outside the bootstrap list must be built on `member`, and no file here builds an engine scope |
 | `src/log.ts` | The logger: one JSON line per event |
 | `Dockerfile` | `turbo prune`, a production install, Node 24 alpine |
