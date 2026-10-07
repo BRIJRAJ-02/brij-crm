@@ -47,6 +47,9 @@ Reasoning and options: see [rationale.md](rationale.md).
 - **AC-121**: The queue keeps no history: a finished slice leaves no row behind, a final failure is recorded on the job and removed from the queue, a dead queue row (unlocked, its attempts used up) is deleted by the next daily cleanup, and a job's done and skipped items are deleted by the next daily cleanup after it finishes. Refused items stay with their job until the job is deleted, 30 days after it finished.
 - **AC-122**: Every kind passes one shared contract test: its params schema is strict and holds no secrets; the queue payload holds ids only; replaying its last committed batch changes nothing (the batch is idempotent); and each runner call returns within 30 seconds.
 - **AC-123**: The runner, the daily cleanup and the Background jobs page run in production on `brij-crm-phi.vercel.app`. The test kind (`dev.simulate`) is registered only locally and in previews, and production answers `NOT_FOUND` for it.
+- **AC-124**: A kind's step can end its job at once by returning `failed: { code, message }`: that batch's item states and counts commit together with status `failed`, that code and message, and `finished_at`, and the job is never retried. A kind may declare an `onFailed(context, job)` hook. Every path that ends a job `failed` (this outcome, attempts used up with `JOB_FAILED`, `ACTOR_REMOVED`, `JOB_INVALID`) runs it, in the same transaction that sets `failed`, under spec 0009's `systemScope`, with its writes stored through `outboxHook` like any write. A hook that throws rolls that transaction back, the error is logged with the job id, and the ending is tried again with Graphile's backoff, so a job never ends `failed` without its hook having run. Cancelling and `WORKSPACE_GONE` don't run it. The message is plain and never quotes a value (spec 0009 AC-144).
+- **AC-125**: `startJob` starts a kind declared `actor: 'system'` from any caller's scope: a member's request, a slice of a member's job, or the worker. It runs inside the caller's write transaction (so it commits or rolls back with that write, AC-102), and the job is the system's: `created_by` system, priority 10, `JobView.startedBy.type` `'system'`, run under `systemScope`, never counted toward the 20 job limit, and visible only to holders of `jobs.manage` (AC-114). A kind declared `actor: 'member'` still needs a member in the caller's scope; `startJob` throws otherwise.
+- **AC-126**: A kind may declare `countsTowardLimit: false`, and only together with coalescing: every start of such a kind must carry a `dedupeKey` (`startJob` throws otherwise). Its jobs are still started by a member and run as that member, but never count toward AC-116's 20 unfinished member jobs, and starting one never answers `LIMIT_REACHED`. AC-110's one waiting job per kind and key bounds how many can wait.
 
 ## Decision
 
@@ -60,6 +63,7 @@ Decisions taken from the brief's recommendations and the cross check of 8 Octobe
 - **A test kind in previews** (`dev.simulate`) proves progress, cancel, resume and fairness by clicking, since the first real user kinds belong to #14, #16 and #22.
 - **Roles and system power come from spec 0009**: `members.role`, the `jobs.manage` permission, `enterAsActor` and `systemScope` from `@crm/core/system`. This spec adds no role column and no door entry of its own.
 - **Job events are spec 0007's `jobs` kind**: the job id in `item_ids`, the starter in `actor_member_id`, and spec 0009's rule decides which channels may name it.
+- **Three additions for specs 0013 and 0015** (cross check of 0013 to 0019, 8 October 2026): a step can end its job `failed` at once and a kind can declare an `onFailed` hook that always runs (AC-124); a system kind can be started from any caller's scope, a member's write transaction included (AC-125); a coalesced counting kind can stay out of the job limit with `countsTowardLimit: false` (AC-126).
 
 **Implementation skills**: `neon-postgres` (`neondatabase/agent-skills`, `.claude/skills/neon-postgres/`) · `drizzle` (`lobehub/lobehub`, `.claude/skills/drizzle/`) · `use-railway` (`railwayapp/railway-skills`, `.claude/skills/use-railway/`) · `zod` (`pproenca/dot-skills`, `.claude/skills/zod/`) · `vitest` (`antfu/skills`, `.claude/skills/vitest/`) · `playwright-cli` (`microsoft/playwright-cli`, `.claude/skills/playwright-cli/`) · `system-design` (`anthropics/knowledge-work-plugins`, `.claude/skills/system-design/`) · `security-and-hardening` (`addyosmani/agent-skills`, `.claude/skills/security-and-hardening/`) · `db-core` and `react-db` (`tanstack/db`, `.claude/skills/db-core/`, `.claude/skills/react-db/`) · `react-aria` (`.claude/skills/react-aria/`) · house skills `crm-api-backend`, `crm-data-model-access`, `crm-frontend-state`, `crm-design-system`. No skill exists for Graphile Worker; its own documentation for the pinned version (0.18.0) is the reference.
 
@@ -113,7 +117,7 @@ queued → running                        (first slice)
 running → running                       (a slice ends and the next one is queued; status stays running)
 preparing | ready | queued → cancelled  (cancel, expiry, or WORKSPACE_GONE)
 running → cancelling → cancelled        (cancel seen before the next batch)
-preparing | running → failed            (attempts used up, ACTOR_REMOVED, JOB_INVALID)
+preparing | running → failed            (attempts used up, ACTOR_REMOVED, JOB_INVALID, a step's failed outcome; the kind's onFailed runs in the same transaction)
 ```
 
 A finished job (`succeeded`, `failed`, `cancelled`) never changes again; it is deleted 30 days after `finished_at`.
@@ -127,11 +131,11 @@ A finished job (`succeeded`, `failed`, `cancelled`) never changes again; it is d
 | `jobs.cancel` | `workspace`, `jobId` | JobView | the starter, or `jobs.manage` | 404; 409 `JOB_FINISHED`, `JOB_NOT_CANCELLABLE` |
 | `jobs.confirm` | `workspace`, `jobId` | JobView (now `queued`) | the starter, or `jobs.manage` | 404; 409 `JOB_NOT_READY`, `JOB_EXPIRED`, `JOB_FINISHED` |
 | `jobs.startTest` (local and previews only) | `workspace`, `id` uuid v7, `items` 1 to 200,000, `batchSize` ≤ 5,000, `batchMillis` 0 to 2,000, `failAtPosition?`, `refuseEvery?`, `confirm?` | JobView | `jobs.manage` | 404 in production; 409 `LIMIT_REACHED`; 422 `CONFIG_INVALID` |
-| core `startJob(context, input)` (no procedure: each feature's own write procedure calls it inside its transaction) | `id`, `kind`, `params`, `subject?`, `items?` (ids), `snapshot?`, `confirm?`, `runAt?`, `dedupeKey?`, `onceKey?` | `{ jobId, merged: boolean }` | the feature's own check | 409 `LIMIT_REACHED`, 422 `JOB_TOO_LARGE`, `CONFIG_INVALID` |
+| core `startJob(context, input)` (no procedure: each feature's own write procedure, or a job's step, calls it inside its transaction; a system kind from any caller's scope, AC-125) | `id`, `kind`, `params`, `subject?`, `items?` (ids), `snapshot?`, `confirm?`, `runAt?`, `dedupeKey?`, `onceKey?` | `{ jobId, merged: boolean }` | the feature's own check | 409 `LIMIT_REACHED` (never for system kinds or kinds with `countsTowardLimit: false`), 422 `JOB_TOO_LARGE`, `CONFIG_INVALID` |
 
 `JobView`: `{ id, kind, label, status, subject?, total?, done, refused, skipped, startedBy: { type: 'member' | 'system', memberId? }, createdAt, startedAt?, finishedAt?, retryAt?, expiresAt?, error?: { code, message }, result?, cancellable }`.
 
-**Status codes**: 404 `NOT_FOUND` (unknown job, a job you may not see, non member), 409 `JOB_FINISHED`, `JOB_NOT_CANCELLABLE`, `JOB_NOT_READY`, `JOB_EXPIRED`, `LIMIT_REACHED`, 422 `JOB_TOO_LARGE`, `CONFIG_INVALID`. On the job itself (`error.code`, never an HTTP answer): `JOB_FAILED`, `JOB_INVALID` (params no longer parse, or an unknown kind after a deploy), `ACTOR_REMOVED`, `WORKSPACE_GONE`, `JOB_EXPIRED`. New codes join `ERROR_MAP` in `packages/contracts`.
+**Status codes**: 404 `NOT_FOUND` (unknown job, a job you may not see, non member), 409 `JOB_FINISHED`, `JOB_NOT_CANCELLABLE`, `JOB_NOT_READY`, `JOB_EXPIRED`, `LIMIT_REACHED`, 422 `JOB_TOO_LARGE`, `CONFIG_INVALID`. On the job itself (`error.code`, never an HTTP answer): `JOB_FAILED`, `JOB_INVALID` (params no longer parse, or an unknown kind after a deploy), `ACTOR_REMOVED`, `WORKSPACE_GONE`, `JOB_EXPIRED`, and the code a step's `failed` outcome names (an existing code from `ERROR_MAP`, such as `FORBIDDEN`). New codes join `ERROR_MAP` in `packages/contracts`.
 
 **The jobs change event** (spec 0007's `jobs` kind):
 
@@ -154,10 +158,10 @@ Ids only. `Change.jobs` holds `{ jobId, startedBy }`; `outboxHook` writes one `j
 |---|---|---|
 | start | the job id | the client's uuid v7 for member jobs (the idempotent retry key); `uuidv7()` for system jobs |
 | start | the lane, cancellable, attempt limit, batch size | the kind's definition in the registry (`packages/core/src/jobs/kinds/`) |
-| start | the actor | `context.scope.actor` from the access door (member jobs) or `systemScope` from `@crm/core/system` (system jobs, spec 0009) |
+| start | the actor | the kind's `actor`: for a member kind, `context.scope.actor` from the access door; for a system kind, always the system (spec 0009's `SYSTEM_ACTOR`), whatever the caller's scope (AC-125) |
 | start | priority | 0 for member jobs, 10 for system jobs (constants in the runner) |
 | start | `run_at` | `runAt` input, else `now()` plus the kind's start delay (0, or the coalescing window a kind declares, such as 1 second) |
-| start | the limit check | `count(*)` of the workspace's unfinished member jobs, under the `workspace_counters` row lock, against 20 |
+| start | the limit check | `count(*)` of the workspace's unfinished member jobs whose kind counts toward the limit (the registry's list of kinds without `countsTowardLimit: false`), under the `workspace_counters` row lock, against 20; skipped for system kinds and for kinds with `countsTowardLimit: false` (AC-126) |
 | start, snapshot | `total` | the number of `job_items` rows (explicit items, or the snapshot when it finishes); else the kind's own `total` or null |
 | snapshot | which ids | the kind's `snapshot` query, keyset paged, 5,000 per transaction, with `created_at` ≤ the start's `asOf` |
 | `ready` | `expires_at` | the time the snapshot finished plus 1 hour |
@@ -173,6 +177,8 @@ Ids only. `Change.jobs` holds `{ jobId, startedBy }`; `outboxHook` writes one `j
 | retry | `retryAt` shown | Graphile's `run_at` for the job key, read back into `jobs.run_at` when the runner records a failed try |
 | retry | the wait | Graphile Worker's backoff, `exp(min(attempt, 10))` seconds |
 | final failure | `attempts` limit | the kind's `maxAttempts` (8 heavy, 5 light), counted in `jobs.attempts`; Graphile's own limit (25) is only a backstop |
+| a step's failure | `error_code`, `error_message` | the step outcome's `failed` (AC-124) |
+| any failure | the hook's scope | `systemScope(db, workspaceId)` from `@crm/core/system`, in the transaction that sets `failed` |
 | see, cancel, confirm | who may | the starter (`created_by_member_id` = the actor), or `can(access, 'jobs.manage')` (spec 0009) |
 | result | the refusal summary | `job_items` where `state` = `refused`, grouped by `code`: count and the first 20 `item_id` by position |
 | list, page | the label | `JOB_KINDS[kind].label` in `packages/contracts` (for example "Daily cleanup", "Test job") |
@@ -200,12 +206,14 @@ Ids only. `Change.jobs` holds `{ jobId, startedBy }`; `outboxHook` writes one `j
 - Queue payloads hold a workspace id and a job id only. Params, values and messages live in the tenant tables, behind row level security.
 - Only the worker builds a system scope, lists workspaces, reads the queue or prunes the outbox.
 - A finished job never changes.
+- A job never ends `failed` without its kind's `onFailed` having run in the same transaction.
+- A system kind's job is always the system's, whoever started it.
 
 **Security model**:
 - `jobs` and `job_items` are tenant tables with forced row level security; all job work runs inside `withWorkspace` as `crm_app` (the worker's pooled connection), so a job can't touch another workspace even if its code is wrong.
 - The queue is the one place outside row level security, and holds only ids. `crm_app` (the API) can't read it or change it: it can only call `crm_enqueue_job`, which takes a job id, checks the job is in the caller's workspace and runnable, and builds the queue row itself, so the API can't choose a task, a payload or another workspace. `crm_queue` holds only the rights `add_job` needs in the pinned version.
 - The worker's direct connection logs in as `crm_worker_user` (group `crm_worker`), the only login with queue rights, the only one that may run `crm_outbox_workspaces`, `crm_workspace_ids` and `crm_outbox_prune`, and the relay's login. The guard tests list the definer functions (`crm_search_text`, `crm_outbox_workspaces`, `crm_outbox_prune`, `crm_enqueue_job`, `crm_workspace_ids`), the roles and the exact grants, and fail if anyone else can reach them or if a fourth login can bypass row level security. The worker refuses to start if its direct login isn't in `crm_worker` or can bypass row level security.
-- A member job runs as its member through `enterAsActor` at every slice, so a member removed or demoted is seen at the next slice. System jobs run under `systemScope`, which lint keeps to the worker entry, `apps/api/src/jobs/**`, `apps/api/src/realtime/**` and core scripts (spec 0009).
+- A member job runs as its member through `enterAsActor` at every slice, so a member removed or demoted is seen at the next slice. A member's request may start a system kind only through `startJob` inside a feature's own write, after that feature's own check; no procedure takes a kind name from the client (`jobs.startTest` aside, which names its kind itself). System jobs run under `systemScope`, which lint keeps to the worker entry, `apps/api/src/jobs/**`, `apps/api/src/realtime/**` and core scripts (spec 0009).
 - Job visibility: the starter and holders of `jobs.manage`. Events carry ids only and name a job only to channels that may read it (spec 0009). Refusal messages are stored as the engine wrote them; spec 0009 AC-144 (messages never quote what the actor can't read) applies to them too.
 - The worker has no public domain; the wake endpoint takes no body, checks the shared secret in constant time, and only makes the worker look at the queue and the outbox. `.railway/railway.ts` declares no domain for it, and a config test checks that.
 - No params, values, codes or messages appear in logs.
@@ -235,6 +243,8 @@ Ids only. `Change.jobs` holds `{ jobId, startedBy }`; `outboxHook` writes one `j
 - Limits: the 21st member job and a 1,000,001 item job are refused, verifies **AC-116**.
 - Sleep: with a short idle time the worker closes its connections (seen in `pg_stat_activity`), a write wakes it and its job starts within 5 seconds; a read only session wakes it once a minute at most; a scheduled job wakes it; the API's pool holds no connection 10 seconds after the last request; on production the compute suspends, verifies **AC-111**, **AC-117**.
 - Logs and health: a slice's log lines carry no params; `/health` answers while asleep with no database query, verifies **AC-120**.
+- Failure hook: a test kind whose step returns `failed` ends at once with that code and no retry; the same kind failing by attempts used up, by `ACTOR_REMOVED` and by `JOB_INVALID` runs `onFailed` each time in the failing transaction (its test row and its outbox row present exactly when the job is `failed`); a hook that throws once leaves the job unfinished, then ends it `failed` with the hook run on the retry; a cancel runs no hook, verifies **AC-124**.
+- System kinds and the limit: a member's write starts a system test kind (job `created_by` system, priority 10, absent from that member's `jobs.list`, present for an admin); the same start inside a write that is then refused leaves no job; a member job's step starts a system kind in its batch transaction; a member kind started from `systemScope` throws; with 20 unfinished member jobs, a start of a `countsTowardLimit: false` kind with a key succeeds and one without a key throws, verifies **AC-125**, **AC-126**.
 
 ## Build plan
 
@@ -244,7 +254,7 @@ Tracer Bullet: each milestone ends with something you can click, locally and in 
 1. Migration: `graphile-worker` 0.18.0 pinned in the catalog; `scripts/migrate.ts` runs Graphile Worker's own migrations as the owner before ours and grants its rights to `crm_worker` and `crm_queue` after; enums, `jobs` (with the `crm_queue` select policy), `job_items`, the roles `crm_worker` and `crm_queue`, `crm_enqueue_job`; `crm_outbox_workspaces` granted to `crm_worker` and revoked from `crm_app`; the guard tests extended (tenant tables, the definer functions, the roles, the exact Graphile grants, the queue unreadable by `crm_app`), satisfies **AC-102**, **AC-115**
 2. `pnpm db:worker-login`, `db:setup` updated, the worker's direct connection (and so the relay) switched to it locally, in previews and in production; the worker refuses to start if its direct login isn't in `crm_worker` or can bypass row level security, satisfies **AC-115**
 3. Contracts: `JobKind`, `JOB_KINDS` labels, `JobView`, `QueuePayload` (strict, ids only), the new error codes, the `jobs.*` procedures, satisfies **AC-114**, **AC-116**, **AC-122**
-4. Core: the kind registry and its contract test, `startJob` (limits, idempotent start, items), `getJob`, `listJobs`, `cancelJob`, `confirmJob` (visibility and cancel by the starter or `jobs.manage`), the runner (lease, slices, batches with checkpoint and progress in the engine transaction, cancel between batches, `enterAsActor` and `systemScope` from `@crm/core/system`, throttled `Change.jobs` through `outboxHook`), see [0008-runner-and-kinds.md](0008-runner-and-kinds.md), satisfies **AC-102**, **AC-105**, **AC-106**, **AC-107**, **AC-113**, **AC-114**, **AC-122**
+4. Core: the kind registry and its contract test, `startJob` (limits, idempotent start, items, a system kind started from any caller's scope as the system's job), `getJob`, `listJobs`, `cancelJob`, `confirmJob` (visibility and cancel by the starter or `jobs.manage`), the runner (lease, slices, batches with checkpoint and progress in the engine transaction, cancel between batches, `enterAsActor` and `systemScope` from `@crm/core/system`, throttled `Change.jobs` through `outboxHook`), see [0008-runner-and-kinds.md](0008-runner-and-kinds.md), satisfies **AC-102**, **AC-105**, **AC-106**, **AC-107**, **AC-113**, **AC-114**, **AC-122**, **AC-125**
 5. The `dev.simulate` kind (synthetic items, `batchMillis`, `failAtPosition`, `refuseEvery`), registered only when `APP_ENV` is `local` or `preview`; `jobs.startTest`, satisfies **AC-123**
 6. The worker: `apps/api/src/jobs/graphile.ts` as the one file in `apps/api` that imports `graphile-worker` (lint's vendor list), two runners on one pool (heavy 2, light 4), the tasks `crm_job_heavy` and `crm_job_light`, `job_key_mode` `replace` on every enqueue, graceful shutdown at a batch boundary, stale lock release on start and each minute, slice logs, `/health` state, satisfies **AC-103**, **AC-108**, **AC-120**
 7. The api: `modules/jobs/router.ts` (thin, on `member`); `startJob` sets the request's wake flag, so the worker wakes after the commit, satisfies **AC-114**, **AC-117**
@@ -253,9 +263,9 @@ Tracer Bullet: each milestone ends with something you can click, locally and in 
 10. Deploy; run the test job in a preview, open the empty page in production; `security-access-reviewer` before it lands, satisfies **AC-115**, **AC-123**
 
 **Milestone 2: dependable and fair**
-11. Retries: failed tries counted on the job, backoff from Graphile, `retryAt` shown, the final failure recorded and removed from the queue; params checked again each slice (`JOB_INVALID`), satisfies **AC-104**, **AC-116**, **AC-121**
+11. Retries: failed tries counted on the job, backoff from Graphile, `retryAt` shown, the final failure recorded and removed from the queue; params checked again each slice (`JOB_INVALID`); the step's `failed` outcome and the kind's `onFailed` hook on every path that ends a job `failed`, under `systemScope`, retried when it throws, satisfies **AC-104**, **AC-116**, **AC-121**, **AC-124**
 12. Snapshot and confirm: `preparing` slices filling `job_items` by keyset, `ready` with `expires_at`, `jobs.confirm`, expiry, items checked again in their batch and skipped with a reason, satisfies **AC-109**
-13. Coalescing (`dedupe_key`, merged items, the start delay), `once_key`, and `runAt` scheduling, satisfies **AC-110**, **AC-111**
+13. Coalescing (`dedupe_key`, merged items, the start delay), `once_key`, and `runAt` scheduling; `countsTowardLimit: false` (a key required, left out of the limit count), satisfies **AC-110**, **AC-111**, **AC-126**
 14. The restart tests (SIGTERM and SIGKILL, exactly once effects, a deploy overlap with two workers held apart by the lease) and the queue key tests against 0.18.0, satisfies **AC-103**
 15. The fairness measurement on the capped local stack, written to `verify.md`; `state-performance-reviewer` before it lands, satisfies **AC-108**
 

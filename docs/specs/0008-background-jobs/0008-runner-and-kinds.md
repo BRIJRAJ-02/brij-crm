@@ -27,14 +27,24 @@ A feature declares a kind (a type of job): its params schema, its lane, and one 
 export interface KindDefinition<P> {
   readonly kind: JobKind;                 // 'dev.simulate', 'maintenance.daily', …
   readonly lane: 'heavy' | 'light';
-  readonly actor: 'member' | 'system';    // who may start it
+  readonly actor: 'member' | 'system';    // whose job it is: a system kind is the system's from any caller's scope (AC-125)
   readonly params: z.ZodType<P>;          // strict object; ids and settings, never secrets
   readonly cancellable: boolean;
   readonly maxAttempts: number;           // 8 heavy, 5 light unless the kind says less
   readonly batchSize: number;             // 1 to 5,000; default 500
   readonly startDelayMs?: number;         // the coalescing window, for kinds started by writes
+  readonly countsTowardLimit?: boolean;   // default true; false needs a dedupeKey on every start (AC-126)
   readonly snapshot?: (tx: WorkspaceTx, params: P, after: string | undefined, limit: number) => Promise<readonly string[]>;
   readonly step: (context: WriteContext, input: StepInput<P>) => Promise<StepOutcome>;
+  readonly onFailed?: (context: WriteContext, job: FailedJob<P>) => Promise<void>; // runs wherever the job ends failed (AC-124)
+}
+
+export interface FailedJob<P> {
+  readonly id: string;
+  readonly params: P | undefined;         // undefined when the params no longer parse (JOB_INVALID)
+  readonly checkpoint: unknown;
+  readonly startedBy: { readonly type: 'member' | 'system'; readonly memberId?: string };
+  readonly error: { readonly code: string; readonly message: string };
 }
 
 export interface StepInput<P> {
@@ -49,24 +59,27 @@ export type StepOutcome = {
   readonly items?: readonly { readonly position: number; readonly state: 'done' | 'refused' | 'skipped'; readonly code?: string; readonly message?: string }[];
   readonly counts?: { readonly done: number; readonly refused?: number; readonly skipped?: number }; // cursor jobs
   readonly result?: unknown;              // merged into jobs.result (the kind's summary)
+  readonly failed?: { readonly code: string; readonly message: string }; // ends the job failed now, no retry (AC-124)
 };
 ```
 
 - **Item jobs** carry a list of ids in `job_items` (given at start, merged by coalescing, or built by the snapshot). The runner hands each batch its items and records each item's state.
 - **Cursor jobs** carry no items. The step reads its own `checkpoint` (a phase and a keyset cursor) and returns the next one. `maintenance.daily` is one.
 - A step works only through the `WriteContext` it is given: engine inner functions (`updateRecord` under `context.perRecord`, `purgeBatch`, …) or plain statements on `context.tx`. It never opens its own transaction, never sleeps, and never calls the network.
+- A step that finds the job can't go on (for example its starter lost a permission the feature needs) returns `failed: { code, message }` with whatever item states it already decided; it writes nothing else in that batch. The code is an existing one from `ERROR_MAP`; the message is plain and quotes no value.
+- `onFailed` undoes or releases what the feature holds for the job (a conversion set `failed`, an attribute marked broken). It gets a `WriteContext` under `systemScope`, since the starter may be gone, and must be short and idempotent, because it runs again if it throws.
 - A step must be idempotent for its batch: the shared contract test runs a batch, rolls the progress back to before it, and runs it again; the second run must change nothing (item jobs get this from item states; cursor jobs from a keyset cursor over rows the batch itself removes or marks).
 
 ## Starting a job
 
-`startJob(context, input)` runs inside the caller's write transaction (a feature's procedure, or the worker's cron fan out):
+`startJob(context, input)` runs inside the caller's write transaction (a feature's procedure, a job's step in its batch transaction, or the worker's cron fan out):
 
-1. Parse `params` with the kind's schema (422 `CONFIG_INVALID`). Refuse more than 1,000,000 items (422 `JOB_TOO_LARGE`).
+1. Parse `params` with the kind's schema (422 `CONFIG_INVALID`). Refuse more than 1,000,000 items (422 `JOB_TOO_LARGE`). A kind with `countsTowardLimit: false` started without a `dedupeKey`, or a member kind started from a scope with no member actor, throws (a programming error, never a refusal).
 2. If a job with this `id` exists, return it (the idempotent replay). If `onceKey` is given and a job of this kind has it, return that one.
 3. If `dedupeKey` is given and a waiting job (`queued`, `slices` = 0) of this kind has it, lock it (`for update`), append the items after its last position with `on conflict do nothing`, update `total`, and return it with `merged: true`.
-4. For a member job, count the workspace's unfinished member jobs under the `workspace_counters` row lock (taken last, as every write takes it) and refuse the 21st (409 `LIMIT_REACHED`).
-5. Insert the `jobs` row: `queued`, or `preparing` when the kind has a snapshot and the start asks for one. Insert explicit items in chunks of 5,000 positions.
-6. `select crm_enqueue_job(id, run_at)` and record `{ jobId, startedBy }` in `Change.jobs`, so `outboxHook` writes a `jobs` row (spec 0007) with the starter in `actor_member_id`. Mark the request so the API wakes the worker after the commit (the same flag the `writeHooks` composer sets when it stores an outbox row).
+4. For a member kind that counts toward the limit, count the workspace's unfinished member jobs of such kinds under the `workspace_counters` row lock (taken last, as every write takes it) and refuse the 21st (409 `LIMIT_REACHED`). System kinds and kinds with `countsTowardLimit: false` skip this step.
+5. Insert the `jobs` row: `queued`, or `preparing` when the kind has a snapshot and the start asks for one. A system kind's row is the system's whatever the caller's scope (`created_by` system, priority 10); a member kind's is the caller's member. Insert explicit items in chunks of 5,000 positions.
+6. `select crm_enqueue_job(id, run_at)` and record `{ jobId, startedBy }` in `Change.jobs`, so `outboxHook` writes a `jobs` row (spec 0007) with the starter in `actor_member_id`. Mark the request so the API wakes the worker after the commit (the same flag the `writeHooks` composer sets when it stores an outbox row); a start from a slice needs no wake, since the worker is awake.
 
 The partial unique indexes back steps 2 and 3, so two concurrent starts can't both create a job for the same key; the loser retries through `runWrite` and finds the winner.
 
@@ -75,9 +88,9 @@ The partial unique indexes back steps 2 and 3, so two concurrent starts can't bo
 A Graphile task call (`crm_job_heavy` or `crm_job_light`) parses its payload with `QueuePayload` and hands `{ workspaceId, jobId }` to `runner.runSlice()`:
 
 1. **Claim.** In one short transaction under `withWorkspace`: lock the job row, and return at once if it is finished, or `ready` (waiting for a confirm). If `lease_until` is in the future and `lease_owner` isn't this worker, queue the job again with `crm_enqueue_job(id, lease_until)` and return (see Queue keys below). Otherwise set the lease (60 seconds), `status = 'running'` (from `queued`), `started_at` if empty, `slices = slices + 1`.
-2. **Who.** Build the scope: `enterAsActor(deps, { workspaceId, actor })` from `@crm/core/system` for a member's job (spec 0009; it reads the member's current role and rules), `systemScope(db, workspaceId)` for a system job. `NOT_FOUND` from `enterAsActor` (the member was removed) ends the job `failed` with `ACTOR_REMOVED`; a deleted workspace ends it `cancelled` with `WORKSPACE_GONE`. Parse the params again; a failure ends it `failed` with `JOB_INVALID`.
+2. **Who.** Build the scope: `enterAsActor(deps, { workspaceId, actor })` from `@crm/core/system` for a member's job (spec 0009; it reads the member's current role and rules), `systemScope(db, workspaceId)` for a system job. `NOT_FOUND` from `enterAsActor` (the member was removed) ends the job `failed` with `ACTOR_REMOVED`; a deleted workspace ends it `cancelled` with `WORKSPACE_GONE`. Parse the params again; a failure ends it `failed` with `JOB_INVALID`. Both failures run the kind's `onFailed` (see Retries and failure).
 3. **Batches.** Until the job is finished, 20 seconds have passed, or the shutdown signal is set:
-   - In one `runWrite` with the API's `writeHooks` composer: read the job row again `for no key update`; if `cancel_requested_at` is set, stop (step 5). Load the batch's pending items. Call the kind's `step`. Write the item states (`update job_items … from (values …)`), the counters, the checkpoint, `attempts = 0`, `lease_until = now + 60 seconds`, `updated_at`. Merge `result`. When the step says `finished`, set `succeeded` and `finished_at` in the same transaction.
+   - In one `runWrite` with the API's `writeHooks` composer: read the job row again `for no key update`; if `cancel_requested_at` is set, stop (step 5). Load the batch's pending items. Call the kind's `step`. Write the item states (`update job_items … from (values …)`), the counters, the checkpoint, `attempts = 0`, `lease_until = now + 60 seconds`, `updated_at`. Merge `result`. When the step says `finished`, set `succeeded` and `finished_at` in the same transaction. When it returns `failed`, set `failed`, its code and message, `finished_at`, clear the lease, run `onFailed`, and send the final `jobs` event, all in the same transaction; then return without queueing a next slice.
    - `outboxHook` writes the item work's `records` rows as for any write. A `jobs` row is added when a second has passed since the last one for this job, and always on the final batch: `Change.jobs` (`{ jobId, startedBy }[]`, the field spec 0007 lists for this kind) is filled through `context.record({ jobs })`, and `outboxHook` writes one `kind: 'jobs'` row per starter, the job ids in `item_ids` and the starter in `actor_member_id`. The hooks come in as a dependency (the API's `writeHooks` composer), so `packages/core` never imports `apps/api`.
 4. **Hand over.** If the job isn't finished: in one short transaction, clear the lease and call `crm_enqueue_job(id)` (the new queue row lands behind every row already waiting, since Graphile orders by priority, then `run_at`, then id; see Queue keys for what happens to the row this call holds). Return.
 5. **Cancel.** Seen in step 3: set `cancelled`, `finished_at`, clear the lease, send the final `jobs` event. Return.
@@ -103,6 +116,7 @@ Each item is checked again in its batch (the step reads the record under its loc
 - In a fresh transaction it adds 1 to `attempts` and, below the kind's `maxAttempts`, rethrows, so Graphile waits `exp(min(attempt, 10))` seconds and calls again (the lease is cleared first so the retry can claim it). The runner copies Graphile's next `run_at` into `jobs.run_at` for the page's "Retrying at".
 - At `maxAttempts` it sets `failed`, `JOB_FAILED`, "This job stopped after repeated errors. What it finished is kept.", logs the error with `errorFields()`, and returns normally, so Graphile deletes the queue row.
 - Graphile's own `max_attempts` (25) is only a backstop for errors before the runner can count (the database unreachable). A queue row that reaches it is logged as an error; the daily cleanup queues the job again.
+- **The failure hook.** Wherever the runner sets `failed` (a step's `failed` outcome, `JOB_FAILED` at `maxAttempts`, `ACTOR_REMOVED`, `JOB_INVALID`), it calls the kind's `onFailed(context, job)` in that same transaction, with a `WriteContext` built from `systemScope(db, workspaceId)` and the API's `writeHooks` composer, so the hook's changes store their outbox rows. If the hook throws, the transaction rolls back (the job stays unfinished, its counts kept), the error is logged with the job id and `errorFields()`, and the runner rethrows so Graphile tries the ending again after its backoff; the next try sees the same cause and ends the job again with the hook. A job therefore never ends `failed` without its hook having run. Cancel and `WORKSPACE_GONE` call no hook: a cancel is the feature's own request, and a deleted workspace has nothing left to release.
 
 ## Lanes, queues and fairness
 
@@ -157,6 +171,7 @@ Its result is the counts per phase, shown on the page for owners and admins. Lat
 
 - Real Postgres (no mocked database), the runner driven directly with an injected clock: every scenario in the index's critical test list that doesn't need a browser.
 - The shared kind contract test, run for every registered kind.
+- The three additions (AC-124 to AC-126), with test only kinds registered by the test setup: `test.fails` (a step that returns `failed`, or throws, at a chosen position, and an `onFailed` that writes a test row and can be told to throw once), `test.system` (a system kind started from a member's write and from a member job's step), and `test.counted` (`countsTowardLimit: false`).
 - Graphile in the loop: start the real runners against the test database, run the test kinds end to end, kill and restart.
 - Guard tests: the queue tables unreadable by `crm_app`; `crm_enqueue_job` refuses another workspace's job and a finished one; `crm_queue`'s and `crm_worker`'s grants on `graphile_worker` equal the lists above for 0.18.0.
 - Queue keys, against the pinned 0.18.0: a hand over while the current row is locked leaves one available row at the new time and the old row deleted when the call returns; a lease requeue lands at `lease_until`; an enqueue over a waiting unlocked row replaces it; a hand over whose process is killed leaves a dead row that never runs and that `deleteDead` removes.
