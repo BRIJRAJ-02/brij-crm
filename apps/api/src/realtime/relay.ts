@@ -41,6 +41,16 @@
 // A database error in one workspace's turn costs only that workspace: it is
 // logged and the workspace backs off as after a failed publish.
 //
+// Left for the load harness (#12) to measure, at 1,000 online:
+// - `pg_notify` takes a cluster wide lock at commit, so every write that
+//   notifies commits one after another, across workspaces. If that shows,
+//   drop the NOTIFY from the hook and let the api's poke make the next poll
+//   due at once (the poke already reaches the relay after every write).
+// - A round is a barrier: the next round starts only when every turn in this
+//   one is done, so one slow workspace (a slow Centrifugo call, a big batch)
+//   holds up the rest. A continuous queue, where a lane takes the next ready
+//   workspace as soon as its turn ends, removes that head of line wait.
+//
 // Retention: while active and holding the lock, at most once a minute and
 // only beside a poll it was making anyway, the relay deletes up to 1,000 rows
 // published more than `OUTBOX_RETENTION` (24 hours) ago, and again on the
