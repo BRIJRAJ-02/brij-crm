@@ -58,18 +58,31 @@ export type StoreListener = (ids: ReadonlySet<string>) => void;
 export interface RecordStore<Row extends RecordBody> {
   /** The record as screens see it (its base with every layer on top), the same object until it changes. */
   readonly get: (id: string) => Row | undefined;
-  /** Rows from the server (a window, an event refetch, a confirmation): each replaces its record's base. */
-  readonly receive: (rows: readonly Row[]) => void;
+  /**
+   * Rows from the server (a window, an event refetch): each becomes its
+   * record's base, cell by cell by version (`newerBase`). A row nothing holds
+   * and no layer waits on isn't kept; `hold` holds each row once as it lands
+   * (a window's block), for the caller to `release`. A row with the same data
+   * as the base keeps the old object, so nothing re-renders.
+   */
+  readonly receive: (rows: readonly Row[], options?: { readonly hold?: boolean }) => void;
+  /** Holds records: each hold keeps a body until its `release`. Windows hold their ids; an open record page holds its one. */
+  readonly hold: (ids: Iterable<string>) => void;
+  /** Lets go of one hold per id. A record nothing holds and no layer waits on leaves the store at once. */
+  readonly release: (ids: Iterable<string>) => void;
   /** Records gone on the server (trashed or out of reach): dropped with any layers. */
   readonly remove: (ids: readonly string[]) => void;
   /** An optimistic edit, showing at once. `mutationId` is the one sent with it. */
   readonly edit: (recordId: string, values: RecordValues, mutationId: string) => Layer<Row>;
-  /** An optimistic new record (a draft with no base yet), showing at once. */
+  /**
+   * An optimistic new record (a draft with no base yet), showing at once. A
+   * refusal takes every edit made on the draft with it.
+   */
   readonly create: (draft: Row, mutationId: string) => Layer<Row>;
   /** The ids with layers still waiting on the server. */
   readonly pending: () => ReadonlySet<string>;
   readonly subscribe: (listener: StoreListener) => () => void;
-  /** How many records the store holds. */
+  /** How many records the store holds: those held, and those with layers waiting. */
   readonly size: () => number;
   /** Forgets everything (sign out). Pending layers are dropped without a word. */
   readonly clear: () => void;
