@@ -14,7 +14,7 @@
       {
         "name": "workspace",
         "allow_subscribe_for_client": false,
-        "history_size": 100,
+        "history_size": 1000,
         "history_ttl": "300s",
         "force_recovery": true
       }

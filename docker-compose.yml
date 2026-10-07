@@ -45,7 +45,7 @@ services:
 
   centrifugo:
     # The same image and config as Railway (infra/centrifugo): the memory engine and the `workspace`
-    # namespace (subscription tokens only, 100 messages of history for 5 minutes, recovery forced).
+    # namespace (subscription tokens only, 1,000 messages of history for 5 minutes, recovery forced).
     # After a config change: docker compose up -d --build centrifugo.
     build:
       context: .

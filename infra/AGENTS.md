@@ -8,7 +8,7 @@ Configuration for the services that aren't our own code: Centrifugo (realtime) a
 
 | File | Owns |
 |---|---|
-| `centrifugo/config.json` | Ports, the memory engine, the `workspace` namespace (subscription tokens only, history 100 for 5 minutes, forced recovery), admin and health |
+| `centrifugo/config.json` | Ports, the memory engine, the `workspace` namespace (subscription tokens only, history 1,000 for 5 minutes, forced recovery), admin and health |
 | `centrifugo/Dockerfile` | The pinned Centrifugo image with that config |
 | `postgres/init/01-roles.sql` | Local only: the owner role and the `crm` database, mirroring Neon |
 | `../.railway/railway.ts` | The `api`, `worker` and `centrifugo` services, applied per environment with `railway config plan`, then `apply` |
