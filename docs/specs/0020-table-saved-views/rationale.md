@@ -53,14 +53,17 @@ Calls and their runners up:
 - **Hard delete for views, after a confirm** (runner up: a views trash). Views are cheap settings; a trash would add a screen and a purge for little value.
 - **Drafts in the URL, not in the database** (runner up: per member drafts stored server side). A URL draft is shareable, survives reload, and costs no write or event; a stored draft would need its own table, events and cleanup.
 - **Limits 100 shared per object and 50 private per member per object** (runner up: no limit). Unbounded views make `views.list` and the switcher unbounded; the numbers are generous and live in the one limits module.
+- **Private view changes travel as coarse events** (runner up: a channel per member for private views). A per member channel is a second delivery path with its own tokens, history and catch up; the coarse event reuses spec 0009's rule and spec 0006's coalescing, and its cost (one small `views.list` a second at most per tab and object) is measured by #12.
+- **A removed member's private views are deleted** (runner up: transfer them to an admin). Nobody else could ever see them, so keeping them only stores rows nobody reads; their shared views stay, since the team uses them.
+- **A view with no sorts runs newest first** (runner up: record id order, oldest first). Every other list in the product is newest first (spec 0006 AC-57), and a fresh view should show the latest work.
 
 ## References
 
 **Project sources**:
 - Spec 0004 (the query engine, sorts, the reference evaluator), spec 0004's stored sort keys (the extended grid).
 - Spec 0006 (windows, settle, the row note, the revision rule reused for views).
-- Spec 0007 (the `views` kind, `appendOutbox`, private views to their owner).
-- Spec 0009 (`views.manage`, hidden means absent, `FORBIDDEN`).
+- Spec 0007 (the `views` kind, `outboxHook` and `context.record`, `planDelivery` and coarse events).
+- Spec 0009 (`views.manage`, hidden means absent, `FORBIDDEN`, the `views` rule in `filterEvent`, `removeMember`).
 - Spec 0012 (archived attributes, attribute order, `NAME_TAKEN`).
 - Spec 0014 (the unsaved Filter and Sort, AC-301).
 - `packages/contracts/src/values/filters.ts`, `sorts.ts`; `packages/ui/src/modules/Toolbar`, `FilterBuilder`, `SortBuilder`, `ViewSettings`, `DataGrid` READMEs.

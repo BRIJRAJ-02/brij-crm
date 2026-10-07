@@ -38,7 +38,7 @@ export const ViewLayout = z.strictObject({
 ```
 
 - The whole config, serialised, is at most 64 kB (`CONFIG_INVALID` "This view has too many settings to save." past it).
-- Server checks on every write: every attribute id in `columns`, `sorts`, `board` and the filter (at every depth; the first hop of a through path) belongs to the view's object; a through path's later hops belong to the object the hop before leads to; each sort is sortable for its type (the field set's `isSortable`, the same check `compileSorts` makes). A failure answers `CONFIG_INVALID` "That attribute isn't on <plural>." or `FILTER_INVALID` as the compiler words it.
+- Server checks on every write: every attribute id in `columns`, `sorts`, `board` and the filter (at every depth; the first hop of a through path) belongs to the view's object; a through path's later hops belong to the object the hop before leads to; each sort's attribute passes `isSortable(attribute)` (`@crm/contracts`, true exactly for the types and system columns `compileSorts` has a key for; `compileSorts`, SortBuilder's attribute list and `ViewConfig`'s refine all call it, so they can't disagree). A failure answers `CONFIG_INVALID` "That attribute isn't on <plural>." or `FILTER_INVALID` as the compiler words it.
 - `showNewAttributes` is not editable in the UI in v1: `true` on seeded default views, `false` on views created by members (a duplicate copies it).
 
 ## Effective columns (`effectiveColumns(config, attributes)`)
@@ -55,10 +55,12 @@ An empty `columns` with `showNewAttributes` (the seeded default) therefore follo
 
 ## Effective query (`effectiveQuery(query, attributes)`)
 
-Input: `{ filter?, sorts }` (saved or draft) and the object's attributes, plus a resolver for the attributes of related objects. Output: `{ filter?, sorts, skipped: attributeId[] }`.
+Input: `{ filter?, sorts }` (saved or draft) and the object's attributes, plus a resolver for the attributes of related objects. Output: `{ status: 'ready', filter?, sorts, skipped: attributeId[] }`, or `{ status: 'pending' }` while a through path's far attributes are loading.
 
 - A condition is removed when its attribute (or any attribute along its through path) is archived, deleted or absent. A group left with no conditions is removed; a top level group left empty means no filter.
 - A sort on such an attribute is removed.
+- Empty sorts (stored empty, or emptied by the removals above) run as `[{ attributeId: <Created at>, direction: 'descending' }]`, so every view lists newest first (spec 0006 AC-57). The stored sorts stay empty, and the SortChip shows the dashed "Sort" button.
+- Attributes along a through path come from `definitions.attributes(farObjectId)`, which loads an object's attributes on first ask (spec 0006). Until every object a condition passes through has loaded, `effectiveQuery` answers `pending` and the screen shows its loading state without opening a window; it never treats a not yet loaded attribute as deleted.
 - `skipped` lists the removed attribute ids that are archived and still visible; it drives the Callout of AC-480 (with the attribute's title). Absent ones are never named.
 - The browser runs only the effective query; `records.query` would refuse the rest anyway.
 
@@ -68,6 +70,7 @@ Input: `{ filter?, sorts }` (saved or draft) and the object's attributes, plus a
 - The route's `validateSearch` decodes it with `decodeDraft`, which parses with `FilterGroup` and `SortRules`; any failure drops the param (AC-467's toast).
 - The draft exists while `canonical(draft) !== canonical(saved query)`. Setting it back equal removes the param.
 - Changing filter or sorts replaces the URL entry (`replace: true`) for edits inside a Popover, and pushes one history entry when the Popover closes, so back steps through filter changes, not keystrokes.
+- An edit to a condition's operand (typing a value) reaches the draft, and so the window key, 300 ms after the last keystroke (`FILTER_EDIT_MS`); choosing an attribute, an operator or an option applies at once. When the key changes, the superseded window's requests in flight (blocks and count) are aborted, so typing never fills the workspace's 6 query slots.
 - Over 6,000 encoded characters: the draft stays in the route's memory state for this visit, the param is removed, and "Copy link" is disabled with its reason.
 - `baseQueryVersion`: the `queryVersion` of the saved view when the draft began, kept beside the draft in the route state (not in the URL). A draft opened from a link takes the `queryVersion` of the view as loaded.
 
@@ -90,9 +93,11 @@ Input: `{ filter?, sorts }` (saved or draft) and the object's attributes, plus a
 
 Archived attributes don't make a view invisible; they make it run with a hole (AC-480).
 
+On the live path, spec 0009's `filterEvent` decides per audience with the facts `viewFacts(viewIds)` reads (creator and visibility per view); until #24 adds rules that hide attributes or records, those two facts are all it needs (Follow-up for #24).
+
 ## Tests
 
-- Unit: `effectiveColumns` (new attributes with the flag on and off, archived, hidden, primary first, pin clamp), `effectiveQuery` (nested groups, through paths, empty groups removed, `skipped` names only visible archived ones), `encodeDraft` and `decodeDraft` round trips and refusals, `mergeLayout` (hidden entries keep their place, predecessor removed, pin count), `viewVisible` across the grid of rules.
+- Unit: `effectiveColumns` (new attributes with the flag on and off, archived, hidden, primary first, pin clamp), `effectiveQuery` (nested groups, through paths, empty groups removed, empty sorts run newest first, `pending` while far attributes load, `skipped` names only visible archived ones), `isSortable` against `compileSorts` for every type, `encodeDraft` and `decodeDraft` round trips and refusals, `mergeLayout` (hidden entries keep their place, predecessor removed, pin count), `viewVisible` across the grid of rules.
 - Real Postgres: config checks refuse another object's attribute and an unsortable sort; the 64 kB cap.
 
 ## Rationale (short)

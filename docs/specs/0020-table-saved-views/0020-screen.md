@@ -2,7 +2,7 @@
 
 ## Summary
 
-One screen shows any view of any object: the three bars from the library (TopBar, ViewBar, Toolbar) above the DataGrid. The ViewBar holds the switcher and the view's menu; the Toolbar holds the sorts and filters and, while there is a draft, Discard and Save. Every piece is an existing library component, so this feature adds no component and no variant (the grid's row note comes from spec 0006). Views reach the screen only through `data.views`.
+One screen shows any view of any object: the three bars from the library (TopBar, ViewBar, Toolbar) above the DataGrid. The ViewBar holds the switcher and the view's menu; the Toolbar holds the sorts and filters and, while there is a draft, Discard and Save. Every piece is an existing library component; the one variant is the ViewBar switcher's grouped and locked choices (below), reviewed by `design-system-guardian` in milestone 2. The grid's row note comes from spec 0006. Views reach the screen only through `data.views`.
 
 Brief (the three lines the house rule asks for): **Purpose**: slice one object the way you work and keep it. **Main task**: filter and sort the table, then save it. **Leaves out**: grouping inside the table, view search, charts, sharing outside the workspace.
 
@@ -10,7 +10,7 @@ Brief (the three lines the house rule asks for): **Purpose**: slice one object t
 
 | Route | Does |
 |---|---|
-| `w.$slug.objects.$object.tsx` (exists) | becomes a redirect: loads `views.list` through `data.views` and replaces the URL with the chosen view (AC-462). While it loads, the object page skeleton shows |
+| `w.$slug.objects.$object.tsx` (exists) | becomes a redirect: loads `views.list` through `data.views` and replaces the URL with the chosen view (AC-462). While it loads, the object page skeleton shows. When the list is empty for this member, it shows the EmptyState "No views are available to you" with "Create view" (the create dialog, starting from the default config) |
 | `w.$slug.objects.$object.views.$viewId.tsx` (new) | the view screen. `validateSearch` parses `draft` (and spec 0014's `record` for the panel). The loader warms `data.views.get(viewId)` and the window for the effective query (count and first block), as spec 0005's loader does; it never hands rows to the screen |
 
 Feature code lives in `apps/web/src/features/views/` (new): `ViewScreen.tsx` (replaces `features/workspace/ObjectScreen.tsx`, which keeps only the object level states), `ViewSwitcher.tsx`, `ViewMenu.tsx`, `CreateViewDialog.tsx`, `ViewChangedDialog.tsx`, `strings.ts`, `README.md` (the brief above).
@@ -20,7 +20,8 @@ Feature code lives in `apps/web/src/features/views/` (new): `ViewScreen.tsx` (re
 **TopBar**: the object's icon tile and plural name, "New <singular>" (spec 0005's create dialog), the count as `meta` ("124 people", "10,000+ people").
 
 **ViewBar**:
-- Switcher: the current view's name (a lock icon when locked); its menu lists, in order, the default view, the other shared views, a "Private" section (MenuLabel) with the member's private views, a separator and "Create view". The current view is checked.
+- Switcher: the current view's name (a lock icon when locked); its menu lists, in order, the default view, the other shared views, a "Private" section with the member's private views, a separator and "Create view". The current view is checked.
+- **The ViewBar switcher variant** (library, milestone 2): `ViewChoice` (today `{ id, name, icon? }`) gains `section?: string` and `isLocked?: boolean`. Choices with a `section` are grouped, in the order given, under the Menu's existing `MenuSection` with that label (no new Menu part: `MenuSection` already draws a labelled group); `isLocked` adds the `lock` icon after the name, in the menu and on the switcher button, with "Locked" read by screen readers. Why a variant: the switcher must show private views apart and mark locked ones, and both are the same switcher with more facts, not a second component. Stories for grouped, locked and both; README lines; `design-system-guardian` before it lands.
 - `children`, in order: the Table and Board SegmentedControl (#21 wires it; in #20 it shows only when spec 0021 milestone 1 has landed), "View settings" (Button, opens a Popover with ViewSettings), the view menu (an icon Button "More view actions" opening a Menu), and on a locked view a LockReason "Locked by <Name>".
 
 **Toolbar** (`label` "View options"):
@@ -39,7 +40,7 @@ Feature code lives in `apps/web/src/features/views/` (new): `ViewScreen.tsx` (re
 | Copy link | always, unless the draft is over 6,000 characters | "This filter is too long for a link. Save it as a view to share it." |
 | Move up, Move down | may edit, and not already first or last in its group; never on the default view | "The default view is always first." |
 | Share with everyone | a private view, its creator | |
-| Make private | a shared view, its creator, unlocked, not the default, not seeded | "The default view is shared with everyone." or "This view was made by the workspace, so it stays shared." or "Unlock it first." |
+| Make private | a shared view, its creator while still a member, unlocked, not the default, not seeded | "The default view is shared with everyone." or "This view was made by the workspace, so it stays shared." or "This view's creator has left the workspace." or "Only <Name> can make this view private." or "Unlock it first." |
 | Lock, Unlock | a shared view, `views.manage` | hidden for members |
 | Set as default | a shared view that isn't the default, `views.manage` | hidden for members |
 | Delete | may edit, not the default view | "This is the default view for <plural>. Make another view the default first." |
@@ -62,7 +63,10 @@ Rename opens a Modal with one Field (same rules and refusals as create). Copy li
 | error | `views.get` or the first block fails otherwise | the grid's error state with Retry (the bars stay when the view loaded) |
 | empty object | count 0 and no effective filter | the grid's empty state: "No <plural> yet" and "New <singular>" |
 | no matches | count 0 with an effective filter | the grid's empty state: "No <plural> match these filters" and "Discard changes" (draft) or "Edit filters" (saved; opens the Filter Popover) |
-| locked | the view is locked and the member lacks `views.manage` | the LockReason line; Save limited as AC-476 |
+| locked | the view is locked and the member lacks `views.manage` | the LockReason line ("Locked by <Name>", "Locked by A removed member" when the locker has left); Save limited as AC-476 |
+| no view available | `views.list` is empty for this member (AC-462) | on the object route: EmptyState "No views are available to you" with "Create view" |
+| through filter loading | a condition passes through an object whose attributes the definitions store hasn't loaded | the grid's loading state; no window opens until they load |
+| board before #21 | `kind` is `board` and spec 0021 milestone 1 hasn't landed | the table, with a Callout (info) "Boards arrive soon. This view shows as a table for now." |
 | archived object | the object is archived | spec 0012's archived page |
 | read only object (#24) | object level `read` | the grid's read only cells (spec 0009); filters, sorts and layout still work |
 
@@ -81,7 +85,7 @@ data.views(workspace) → {
 }
 ```
 
-- One body per view id; lists hold ids. A `views` event refetches `list` for its object (at most once per second per object, leading and trailing) and `get` for each named view the store holds. A body is replaced only by a read with a `version` at least the held one (spec 0006's revision rule, for views).
+- One body per view id; lists hold ids. A `views` event naming ids refetches `list` for its object and `get` for each named view the store holds. A coarse `views` event (a private view's change, or a deleted view, on a channel whose members may not all see it) refetches `list` for its object, then `get` only for held views of that object whose `version` in the list moved, and treats a held view absent from the list as not found. Both are coalesced at most once a second per object (leading at once, trailing after spec 0006's 0 to 2 second jitter). A body is replaced only by a read with a `version` at least the held one (spec 0006's revision rule, for views).
 - Layout on a locked view, for a member without `views.manage`: `setLayout` keeps a local layer for this view and sends nothing; the layer is dropped when the screen leaves the view.
 - The layer clears with the rest of the store on sign out and workspace switch (spec 0006 AC-64).
 - `@crm/data/react`: `useViews(objectId)`, `useView(viewId)`, `useViewDraft(viewId)` (the route's search param joined with the saved query, returning `{ query, isDraft, set, discard, baseQueryVersion }`).
@@ -104,6 +108,6 @@ Seed: #12's `crm` profile. Each row is one view's first page of 100 rows (`recor
 
 ## Tests
 
-- Fake API (Vitest): the redirect choice; the draft param round trip and its drops; Save, `VIEW_CHANGED` and Replace; layout debounce and rollback; locked local layer; the event refetch and the version rule; a view disappearing while open.
-- Real API against Postgres: each procedure's rules row by row, limits under concurrent creates, `NAME_TAKEN` on both indexes, the outbox row per write and none for `markOpened`.
+- Fake API (Vitest): the redirect choice and the empty list; the draft param round trip and its drops; the 300 ms operand debounce aborting the old window; Save, `VIEW_CHANGED` and Replace; layout debounce and rollback; locked local layer; named and coarse event refetches and the version rule; a view disappearing while open.
+- Real API against Postgres: each procedure's rules row by row, limits under concurrent creates, `NAME_TAKEN` on both indexes, a create replay and `ID_TAKEN`, move swaps under concurrent moves, the outbox row per write (private views included) and none for `markOpened`, `deleteMemberViews` inside `removeMember`.
 - Playwright: AC-489's flows; keyboard only runs of the switcher, menus, Popovers and dialogs; axe and contrast in both themes.
