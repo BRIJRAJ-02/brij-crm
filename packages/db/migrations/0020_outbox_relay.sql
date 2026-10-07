@@ -38,11 +38,12 @@ create policy outbox_tenant on outbox
   using (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid)
   with check (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid);
 --> statement-breakpoint
--- Publishing is once: an update may only stamp an unpublished row (using) with a time (with check), so the app can
--- never take a stamp back to null nor move it. Restrictive, so it holds beside the tenant policy, never instead.
+-- Publishing is once: an update may only stamp an unpublished row (using) with the transaction's own time (with
+-- check), so the app can never take a stamp back to null, move it, or date it into the past (where the prune would
+-- delete a row nobody published) or the future. Restrictive, so it holds beside the tenant policy, never instead.
 create policy outbox_publish_once on outbox as restrictive for update
   using (published_at is null)
-  with check (published_at is not null);
+  with check (published_at = now());
 --> statement-breakpoint
 
 -- The app writes a row in the write's transaction and the relay (as the app, inside withWorkspace) reads and

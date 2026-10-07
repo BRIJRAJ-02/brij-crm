@@ -343,7 +343,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     expect(definition.rows[0]?.body).toMatch(/least\(greatest\(crm_outbox_prune\.max, 1\), 1000\)/i);
   });
 
-  it('lets the app stamp published_at once, from null to a time, and never take it back or move it', async () => {
+  it('lets the app stamp published_at once, from null to now(), and never take it back, move it or date it', async () => {
     const w = await workspaceWithMember('outbox-once');
     const objectId = await objectIn(w.workspaceId);
     const run = (statement: ReturnType<typeof sql>) =>
@@ -359,10 +359,18 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     expect(
       (await run(sql`update outbox set published_at = now() + interval '1 day' where seq = 1 returning seq`)).rows,
     ).toEqual([]);
-    // An unpublished row can't be "stamped" with null either.
-    await expect(run(sql`update outbox set published_at = null where seq = 2`)).rejects.toMatchObject({
-      cause: { code: '42501' },
-    });
+    // An unpublished row can be stamped only with the transaction's own time: not null, not backdated past the
+    // prune's cutoff, not future dated.
+    for (const stamp of [
+      sql`null`,
+      sql`now() - interval '25 hours'`,
+      sql`now() + interval '1 minute'`,
+      sql`clock_timestamp()`,
+    ]) {
+      await expect(run(sql`update outbox set published_at = ${stamp} where seq = 2`)).rejects.toMatchObject({
+        cause: { code: '42501' },
+      });
+    }
     const left = await run(sql`select seq::int as seq from outbox where published_at is not null order by seq`);
     expect(left.rows).toEqual([{ seq: 1 }]);
   });
