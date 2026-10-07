@@ -703,6 +703,23 @@ describe('the relay', () => {
     await expect.poll(tries, { timeout: 1_000, interval: 10 }).toBeGreaterThan(before);
   });
 
+  it('lets no poke cut its reconnect backoff short', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const { connects, relay } = relayTo(centrifugo.url, {
+      pollScheduleMs: [20],
+      backoffMs: 300,
+      wrap: (reader) => ({ ...reader, workspaces: () => Promise.reject(new Error('the poll failed')) }),
+    });
+    await expect.poll(connects, WAIT).toBe(1);
+    // A burst of writes while it waits to reconnect.
+    const pokes = setInterval(() => relay.wake(), 10);
+    await sleep(600);
+    clearInterval(pokes);
+    // 300 ms, then 600: at most one reconnect in that time, however many pokes.
+    expect(connects()).toBeLessThanOrEqual(2);
+  });
+
   it('stops from dormant at once', async () => {
     const centrifugo = await fakeCentrifugo();
     servers.push(centrifugo);

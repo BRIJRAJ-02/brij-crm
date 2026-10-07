@@ -179,6 +179,9 @@ export function createRelay(deps: RelayDeps): Relay {
   const isWoken = (): boolean => woken;
   // Cuts the current wait short: a notification, a poke, a lost connection, or stop().
   let interrupt = (): void => undefined;
+  // True while waiting to reconnect after a failure: a poke then only marks the relay woken, and the backoff runs
+  // its course, so a burst of writes can't hammer a database that is failing.
+  let backingOff = false;
   // Workspaces waiting after failed publishes, and when each was last warned about.
   const retries = new Map<string, Retry>();
   const warnedAt = new Map<string, number>();
@@ -461,7 +464,9 @@ export function createRelay(deps: RelayDeps): Relay {
       const delay = Math.min(backoffMs * 2 ** failures, maxBackoffMs);
       failures += 1;
       log.info('Relay reconnecting', { inMs: delay });
+      backingOff = true;
       await sleep(delay);
+      backingOff = false;
     }
     current = 'stopped';
   }
@@ -477,7 +482,7 @@ export function createRelay(deps: RelayDeps): Relay {
       if (halted()) return;
       sawWork();
       woken = true;
-      interrupt();
+      if (!backingOff) interrupt();
     },
     mode: () => current,
     async stop() {
