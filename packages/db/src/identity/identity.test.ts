@@ -42,7 +42,7 @@ async function listedWorkspace(userId: string, slug = `ws-${unique()}`) {
       sql`insert into workspaces (id, name, slug, created_by_type, updated_by_type) values (${workspaceId}, ${slug}, ${slug}, 'system', 'system')`,
     );
     await tx.execute(
-      sql`insert into members (workspace_id, id, user_id, name, email, created_by_type, updated_by_type) values (${workspaceId}, ${memberId}, ${userId}, 'Ada', 'ada@example.com', 'system', 'system')`,
+      sql`insert into members (workspace_id, id, user_id, name, email, role, created_by_type, updated_by_type) values (${workspaceId}, ${memberId}, ${userId}, 'Ada', 'ada@example.com', 'owner', 'system', 'system')`,
     );
     await addWorkspaceToDirectory(tx, { workspaceId, slug, name: `Name ${slug}`, userId, memberId });
   });

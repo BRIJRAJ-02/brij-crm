@@ -1,6 +1,5 @@
-// The tenant and the people in it (spec 0004). Teams, roles and invitations
-// arrive with #23 and #9; members here are just enough for every actor column
-// to point at someone real.
+// The tenant and the people in it (spec 0004). Each member holds a role (spec
+// 0009); teams and invitations arrive with #23.
 import { sql } from 'drizzle-orm';
 import {
   bigint,
@@ -65,6 +64,13 @@ export const workspaceCounters = pgTable(
 /** Whether a member can still act in the workspace. */
 export const memberStatus = pgEnum('member_status', ['active', 'removed']);
 
+/**
+ * A member's role (spec 0009): what workspace permissions they hold, from the
+ * catalog in `@crm/contracts`. A live workspace always keeps one active owner
+ * (`members_keep_an_owner`, migration 0022).
+ */
+export const memberRole = pgEnum('member_role', ['owner', 'admin', 'member']);
+
 /** A person in a workspace. `user_id` is the signed in identity (`auth.user`), set for everyone who signs in. */
 export const members = pgTable(
   'members',
@@ -75,6 +81,7 @@ export const members = pgTable(
     name: text('name').notNull(),
     email: text('email').notNull(),
     status: memberStatus('status').notNull().default('active'),
+    role: memberRole('role').notNull().default('member'),
     ...auditColumns(),
   },
   (t) => [

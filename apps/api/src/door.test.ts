@@ -286,7 +286,16 @@ describe('the member door', () => {
     expect(await refusal(() => probe(b.cookie, a.workspace.slug))).toEqual(notFound);
     expect(await refusal(() => probe(a.cookie, `nowhere-${newId().slice(-8)}`))).toEqual(notFound);
 
-    await testQuery(ownerUrl, `update members set status = 'removed' where workspace_id = $1`, [a.workspace.id]);
+    // Another owner stays (no user), so the workspace keeps one (spec 0009, AC-137).
+    await testQuery(
+      ownerUrl,
+      `insert into members (workspace_id, name, email, role, created_by_type, updated_by_type)
+       values ($1, 'Keeper', 'keeper@example.com', 'owner', 'system', 'system')`,
+      [a.workspace.id],
+    );
+    await testQuery(ownerUrl, `update members set status = 'removed' where workspace_id = $1 and user_id is not null`, [
+      a.workspace.id,
+    ]);
     expect(await refusal(() => probe(a.cookie, a.workspace.slug))).toEqual(notFound);
   });
 

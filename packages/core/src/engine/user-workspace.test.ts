@@ -49,8 +49,8 @@ async function refusalOf(promise: Promise<unknown>) {
 async function inside(workspaceId: string) {
   return db.withWorkspace(workspaceId, async (tx) => {
     const workspaces = await tx.execute<{ id: string }>(sql`select id from workspaces`);
-    const members = await tx.execute<{ id: string; user_id: string; name: string; email: string }>(
-      sql`select id, user_id, name, email from members`,
+    const members = await tx.execute<{ id: string; user_id: string; name: string; email: string; role: string }>(
+      sql`select id, user_id, name, email, role from members`,
     );
     const objects = await tx.execute<{ standard_key: string }>(sql`select standard_key from objects order by 1`);
     return { workspaces: workspaces.rows, members: members.rows, objects: objects.rows.map((row) => row.standard_key) };
@@ -58,7 +58,7 @@ async function inside(workspaceId: string) {
 }
 
 describe('a signed in user creates a workspace', () => {
-  it('writes the workspace, the template, their member row and the directory rows', async () => {
+  it('writes the workspace, the template, their member row (its owner) and the directory rows', async () => {
     const given = await input();
     const created = await createUserWorkspace(db, given);
     expect(created).toEqual({
@@ -69,7 +69,13 @@ describe('a signed in user creates a workspace', () => {
     const state = await inside(given.id);
     expect(state.workspaces).toEqual([{ id: given.id }]);
     expect(state.members).toEqual([
-      { id: created.memberId, user_id: given.firstMember.userId, name: 'Ada Lovelace', email: given.firstMember.email },
+      {
+        id: created.memberId,
+        user_id: given.firstMember.userId,
+        name: 'Ada Lovelace',
+        email: given.firstMember.email,
+        role: 'owner',
+      },
     ]);
     expect(state.objects).toEqual(['companies', 'deals', 'people']);
     expect(await identity.findWorkspace(given.slug)).toEqual(created.workspace);

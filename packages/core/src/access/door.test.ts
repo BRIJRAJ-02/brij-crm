@@ -78,9 +78,13 @@ describe('the access door', () => {
     const a = await userWithWorkspace();
     const b = await userWithWorkspace();
     const removed = await userWithWorkspace();
-    await db.withWorkspace(removed.workspace.id, (tx) =>
-      tx.execute(sql`update members set status = 'removed' where id = ${removed.memberId}`),
-    );
+    await db.withWorkspace(removed.workspace.id, async (tx) => {
+      // Another owner stays, so the workspace keeps one (spec 0009, AC-137).
+      await tx.execute(
+        sql`insert into members (workspace_id, name, email, role, created_by_type, updated_by_type) values (${removed.workspace.id}, 'Keeper', ${`${tag()}@example.com`}, 'owner', 'system', 'system')`,
+      );
+      await tx.execute(sql`update members set status = 'removed' where id = ${removed.memberId}`);
+    });
     const deleted = await userWithWorkspace();
     await db.withWorkspace(deleted.workspace.id, (tx) => tx.execute(sql`update workspaces set deleted_at = now()`));
     const nobody = await createTestUser(identityUrl, { email: `${tag()}@example.com` });

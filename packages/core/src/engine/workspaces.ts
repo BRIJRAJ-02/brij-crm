@@ -40,7 +40,7 @@ const WORKSPACE_KEY = 'workspaces_pkey';
 /** A workspace address (spec 0005): lowercase letters and digits in single dash runs, 3 to 40 characters. */
 const WORKSPACE_SLUG = /^(?=.{3,40}$)[a-z0-9]+(?:-[a-z0-9]+)*$/;
 
-/** Creates a workspace with its first member and the standard objects. The system is the actor. */
+/** Creates a workspace with its first member, its owner, and the standard objects. The system is the actor. */
 export async function createWorkspace(
   db: EngineScope['db'],
   input: WorkspaceInput,
@@ -72,6 +72,8 @@ async function insertWorkspace(
           userId: input.firstMember.userId ?? null,
           name: input.firstMember.name.trim(),
           email: input.firstMember.email.trim(),
+          // Whoever makes a workspace owns it (spec 0009, AC-132).
+          role: 'owner',
           ...system,
         });
         const objects: Record<string, string> = {};

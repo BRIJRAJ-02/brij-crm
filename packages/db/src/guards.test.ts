@@ -29,7 +29,7 @@ afterAll(async () => {
   await db.close();
 });
 
-/** A workspace with one member, made the way the app makes them: inside `withWorkspace`. */
+/** A workspace with one member, its owner, made the way the app makes them: inside `withWorkspace`. */
 async function workspaceWithMember(name: string) {
   const workspaceId = randomUUID();
   const memberId = randomUUID();
@@ -38,7 +38,7 @@ async function workspaceWithMember(name: string) {
       sql`insert into workspaces (id, name, slug, created_by_type, updated_by_type) values (${workspaceId}, ${name}, ${`${name}-${workspaceId}`}, 'system', 'system')`,
     );
     await tx.execute(
-      sql`insert into members (workspace_id, id, name, email, created_by_type, updated_by_type) values (${workspaceId}, ${memberId}, ${name}, ${`${name}@example.com`}, 'system', 'system')`,
+      sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type) values (${workspaceId}, ${memberId}, ${name}, ${`${name}@example.com`}, 'owner', 'system', 'system')`,
     );
   });
   return { workspaceId, memberId };
