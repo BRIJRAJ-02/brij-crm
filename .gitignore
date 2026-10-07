@@ -19,3 +19,5 @@ debug-storybook.log
 # The app flow tests (Playwright) output
 test-results/
 playwright-report/
+# The load harness (spec 0011): manifest, minted session cookies and results
+.load/

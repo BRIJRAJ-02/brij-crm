@@ -1,0 +1,169 @@
+# The load stack (spec 0011, AC-193): a stack apart from the dev stack, capped
+# to the size of a small Neon compute, for `pnpm load:seed` and `pnpm load:run`.
+# Its own project, volume and ports, so starting, stopping or wiping it never
+# touches the dev stack or its data. Every port is bound to this machine only.
+#   postgres    5434  direct, as the owner (the seed) and the identity login
+#   pgbouncer   6434  transaction pooling, as the load stack's app login
+#   api         3100  the API, APP_ENV=local, with LOAD_TIMING=on (spec 0011, AC-202)
+#   worker      3101  the worker's health endpoint; it never sleeps
+#   centrifugo  8100  client connections · 9100 its HTTP API and /health
+#   mailpit     1026  SMTP · 8026 its inbox (the API needs a mail target to boot)
+# `pnpm load:stack` starts it (refusing under 11 GB of Docker memory),
+# `pnpm load:stack:down` stops it, `pnpm load:stack:wipe` also deletes its volume.
+# Every secret here is a fixed local value for this stack only (`local-only`);
+# packages/core/scripts/load-local.ts holds the same values, and a test keeps them in step.
+name: crm-load
+
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    command: ["postgres", "-c", "config_file=/etc/postgresql/load.conf"]
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "127.0.0.1:5434:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+      - ./infra/postgres/init:/docker-entrypoint-initdb.d:ro
+      - ./infra/postgres/load.conf:/etc/postgresql/load.conf:ro
+    shm_size: 1gb
+    deploy:
+      resources:
+        limits:
+          cpus: "2"
+          memory: 8g
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d crm"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+
+  pgbouncer:
+    image: edoburu/pgbouncer:v1.25.2-p0
+    environment:
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: crm
+      # The load stack's app login, created by `pnpm load:seed`.
+      DB_USER: crm_app_user
+      DB_PASSWORD: crm_load_local
+      AUTH_TYPE: scram-sha-256
+      POOL_MODE: transaction
+      LISTEN_PORT: 6432
+      DEFAULT_POOL_SIZE: 20
+      MAX_CLIENT_CONN: 1000
+      # Lets the harness read SHOW POOLS (maxwait) as the app login.
+      STATS_USERS: crm_app_user
+    ports:
+      - "127.0.0.1:6434:6432"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    environment:
+      APP_ENV: local
+      # The image bakes in production, which the API refuses beside APP_ENV=local; nothing on the request path reads it.
+      NODE_ENV: development
+      PORT: 3100
+      APP_URL: http://localhost:3100
+      DATABASE_URL: postgres://crm_app_user:crm_load_local@pgbouncer:6432/crm
+      IDENTITY_DATABASE_URL: postgres://crm_identity_user:crm_identity_load_local@postgres:5432/crm
+      BETTER_AUTH_SECRET: local-only-load-stack-better-auth-secret
+      BETTER_AUTH_URL: http://localhost:3100
+      MAILPIT_URL: http://mailpit:8025
+      # The timing header (spec 0011, AC-202, milestone 2): local only.
+      LOAD_TIMING: "on"
+      # Background jobs (spec 0008), once it lands: the API wakes the worker as in production.
+      WORKER_INTERNAL_URL: http://worker:3101
+      WORKER_WAKE_SECRET: local-only-load-stack-worker-wake-secret
+    ports:
+      - "127.0.0.1:3100:3100"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 1g
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3100/api/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+    depends_on:
+      pgbouncer:
+        condition: service_started
+      mailpit:
+        condition: service_healthy
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["node", "apps/api/src/worker.ts"]
+    environment:
+      APP_ENV: local
+      NODE_ENV: development
+      WORKER_PORT: 3101
+      DATABASE_URL: postgres://crm_app_user:crm_load_local@pgbouncer:6432/crm
+      DATABASE_URL_DIRECT: postgres://crm_app_user:crm_load_local@postgres:5432/crm
+      # WORKER_IDLE_SLEEP_SECONDS stays unset, so the worker never sleeps and runs measure it warm.
+    ports:
+      - "127.0.0.1:3101:3101"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:3101/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+    depends_on:
+      pgbouncer:
+        condition: service_started
+
+  centrifugo:
+    build:
+      context: .
+      dockerfile: infra/centrifugo/Dockerfile
+    environment:
+      CENTRIFUGO_HTTP_API_KEY: local-only-load-stack-centrifugo-api-key
+      CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY: local-only-load-stack-centrifugo-token-secret
+      CENTRIFUGO_ADMIN_PASSWORD: local-only-load-stack-admin
+      CENTRIFUGO_ADMIN_SECRET: local-only-load-stack-centrifugo-admin-secret
+      CENTRIFUGO_CLIENT_ALLOWED_ORIGINS: http://localhost:3100
+    ports:
+      - "127.0.0.1:8100:8000"
+      - "127.0.0.1:9100:9000"
+    deploy:
+      resources:
+        limits:
+          cpus: "1"
+          memory: 512m
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:9000/health"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  mailpit:
+    image: axllent/mailpit:v1.31.4
+    environment:
+      MP_MAX_MESSAGES: 500
+    ports:
+      - "127.0.0.1:1026:1025"
+      - "127.0.0.1:8026:8025"
+    healthcheck:
+      test: ["CMD", "/mailpit", "readyz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  postgres-data:
+    name: crm-load-postgres
