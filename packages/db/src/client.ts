@@ -67,6 +67,12 @@ export interface Database {
   close(): Promise<void>;
 }
 
+/** How long a cancel waits for its connection before giving up. */
+const CANCEL_CONNECT_TIMEOUT_MS = 2_000;
+
+/** How long a cancel's own statement may run: set per transaction (the pooler refuses it as a startup setting). */
+const CANCEL_STATEMENT_TIMEOUT = '2s';
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function createDatabase(options: DatabaseOptions): Database {
@@ -75,11 +81,16 @@ export function createDatabase(options: DatabaseOptions): Database {
     application_name: options.applicationName,
     max: options.maxConnections ?? 10,
   });
-  // One connection of its own for cancels: a full main pool must never hold a cancel back.
+  // One connection of its own for cancels: a full main pool must never hold a cancel back. It uses the same
+  // url as the work (the api's DATABASE_URL, Neon's pooler in production), not a direct one: the api has no
+  // direct url (only the worker does), and through the pooler the cancel is an ordinary statement, so it
+  // reaches the tagged backend's row in pg_stat_activity like any other session in the database. A
+  // connection that can't be made in 2 seconds gives up, so one hung connect can't queue every later cancel.
   const cancelPool = new pg.Pool({
     connectionString: options.url,
     application_name: `${options.applicationName}-cancel`,
     max: 1,
+    connectionTimeoutMillis: CANCEL_CONNECT_TIMEOUT_MS,
   });
   // An idle client can drop (a deploy, a Neon restart). Report it; the pool replaces it.
   pool.on('error', (error) => (options.onPoolError ?? console.error)(error));
@@ -184,12 +195,26 @@ export function createDatabase(options: DatabaseOptions): Database {
     },
 
     async cancelTagged(pid, tag) {
-      const result = await cancelPool.query<{ cancelled: boolean }>(
-        `select pg_cancel_backend(pid) as cancelled from pg_stat_activity
-         where pid = $1 and application_name = $2 and state = 'active'`,
-        [pid, tag],
-      );
-      return result.rows.some((row) => row.cancelled);
+      const client = await cancelPool.connect();
+      let broken: Error | undefined;
+      try {
+        // A short timeout of its own, local to this transaction, so a stuck cancel frees the one connection.
+        await client.query('begin');
+        await client.query(`set local statement_timeout = '${CANCEL_STATEMENT_TIMEOUT}'`);
+        const result = await client.query<{ cancelled: boolean }>(
+          `select pg_cancel_backend(pid) as cancelled from pg_stat_activity
+           where pid = $1 and application_name = $2 and state = 'active'`,
+          [pid, tag],
+        );
+        await client.query('commit');
+        return result.rows.some((row) => row.cancelled);
+      } catch (error) {
+        broken = error instanceof Error ? error : new Error(String(error));
+        throw error;
+      } finally {
+        // A connection that failed mid transaction is dropped rather than handed to the next cancel.
+        client.release(broken);
+      }
     },
 
     close: async () => {
