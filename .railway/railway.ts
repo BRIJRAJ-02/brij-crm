@@ -42,6 +42,9 @@ export default defineRailway(() => {
       MAIL_FROM: preserve(),
       GOOGLE_CLIENT_ID: preserve(),
       GOOGLE_CLIENT_SECRET: preserve(),
+      // The relay's wake up call (spec 0005): the worker's private address and port, and the shared secret.
+      WORKER_INTERNAL_URL: preserve(),
+      WORKER_WAKE_SECRET: preserve(),
     },
   });
 
@@ -55,6 +58,10 @@ export default defineRailway(() => {
       APP_ENV: api.env.APP_ENV,
       DATABASE_URL: api.env.DATABASE_URL,
       DATABASE_URL_DIRECT: preserve(),
+      // The relay (spec 0005): Centrifugo's server API on its private port, its key, and the api's wake secret.
+      CENTRIFUGO_API_URL: preserve(),
+      CENTRIFUGO_API_KEY: preserve(),
+      WORKER_WAKE_SECRET: api.env.WORKER_WAKE_SECRET,
     },
   });
 

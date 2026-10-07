@@ -22,6 +22,8 @@ const production = {
   RESEND_API_KEY: 're_test',
   MAIL_FROM: 'onboarding@resend.dev',
   EDGE_SECRET: 'an-edge-secret-of-at-least-32-characters',
+  WORKER_INTERNAL_URL: 'http://worker.railway.internal:8080',
+  WORKER_WAKE_SECRET: 'a-wake-secret-of-at-least-32-characters',
 };
 
 function problems(input: Record<string, unknown>): string[] {
@@ -102,6 +104,29 @@ describe('the sign in environment', () => {
   });
 });
 
+describe("the relay's wake up call (spec 0005)", () => {
+  it('is optional locally, where an empty value counts as unset', () => {
+    const env = ApiEnv.parse({ ...local, WORKER_INTERNAL_URL: '', WORKER_WAKE_SECRET: '' });
+    expect(env.WORKER_INTERNAL_URL).toBeUndefined();
+    expect(env.WORKER_WAKE_SECRET).toBeUndefined();
+  });
+
+  it('needs the worker address and the secret outside local', () => {
+    const { WORKER_INTERNAL_URL: _u, WORKER_WAKE_SECRET: _s, ...rest } = production;
+    for (const APP_ENV of ['preview', 'production']) {
+      expect(problems({ ...rest, APP_ENV }).sort()).toEqual(['WORKER_INTERNAL_URL', 'WORKER_WAKE_SECRET']);
+    }
+    expect(problems(production)).toEqual([]);
+  });
+
+  it('refuses a short secret, or one with spaces, anywhere', () => {
+    expect(problems({ ...local, WORKER_WAKE_SECRET: 'short' })).toEqual(['WORKER_WAKE_SECRET']);
+    expect(problems({ ...production, WORKER_WAKE_SECRET: 'a wake secret with spaces in it, 32+ long' })).toEqual([
+      'WORKER_WAKE_SECRET',
+    ]);
+  });
+});
+
 describe('the worker environment (spec 0005, the relay)', () => {
   const worker = {
     APP_ENV: 'local',
@@ -133,10 +158,16 @@ describe('the worker environment (spec 0005, the relay)', () => {
     ]);
   });
 
-  it('needs both outside local', () => {
+  it('needs both, and the wake secret, outside local', () => {
+    const wake = { WORKER_WAKE_SECRET: 'a-wake-secret-of-at-least-32-characters' };
     for (const APP_ENV of ['preview', 'production']) {
-      expect(workerProblems({ ...worker, APP_ENV }).sort()).toEqual(['CENTRIFUGO_API_KEY', 'CENTRIFUGO_API_URL']);
-      expect(workerProblems({ ...worker, APP_ENV, ...centrifugo })).toEqual([]);
+      expect(workerProblems({ ...worker, APP_ENV }).sort()).toEqual([
+        'CENTRIFUGO_API_KEY',
+        'CENTRIFUGO_API_URL',
+        'WORKER_WAKE_SECRET',
+      ]);
+      expect(workerProblems({ ...worker, APP_ENV, ...centrifugo, ...wake })).toEqual([]);
     }
+    expect(workerProblems({ ...worker, WORKER_WAKE_SECRET: 'short' })).toEqual(['WORKER_WAKE_SECRET']);
   });
 });

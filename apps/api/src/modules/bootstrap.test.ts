@@ -12,10 +12,12 @@ const { identityUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
 let identity: IdentityStore;
 let app: ReturnType<typeof signInApp>['app'];
+// Every relay poke the app made (spec 0005): a write procedure pokes once its write has committed.
+let pokes = 0;
 
 beforeAll(() => {
   ({ db, identity } = testConnections());
-  ({ app } = signInApp({ db, identity }));
+  ({ app } = signInApp({ db, identity }, {}, { wakeRelay: () => (pokes += 1) }));
 });
 afterAll(async () => {
   await identity.close();
@@ -85,6 +87,17 @@ describe('workspaces.create', () => {
       [input.id],
     );
     expect(events).toEqual([{ events: 0, seq: 0 }]);
+  });
+
+  it('pokes the relay once the workspace is made, and not for a refused create', async () => {
+    const { client } = await signedIn();
+    const input = { id: newId(), name: 'Acme', slug: `acme-${tag()}`, memberName: 'Ada' };
+    const before = pokes;
+    await client.workspaces.create(input);
+    expect(pokes - before).toBe(1);
+    const other = await signedIn();
+    await failure(() => other.client.workspaces.create({ ...input, id: newId() }));
+    expect(pokes - before).toBe(1);
   });
 
   it('answers a repeated request (a dropped response) with the same workspace, creating nothing twice', async () => {

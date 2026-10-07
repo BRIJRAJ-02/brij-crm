@@ -9,6 +9,7 @@ import { type AppServices, createApp } from './app.ts';
 import { createAuth } from './auth/auth.ts';
 import type { ApiEnv } from './env.ts';
 import type { MailMessage, Mailer } from './mail/mailer.ts';
+import { NO_WAKE, type WakeRelay } from './realtime/wake.ts';
 import type { RequestContext } from './orpc.ts';
 
 /** The public origin every test app trusts. */
@@ -55,15 +56,23 @@ export function memoryMailer(): Mailer & { readonly sent: MailMessage[] } {
   };
 }
 
-/** The app's services on `db` and `identity` (both unreachable unless given), with sign in on `mailer`. */
+/**
+ * The app's services on `db` and `identity` (both unreachable unless given), with sign in on `mailer`, and a
+ * relay poke that does nothing unless `wakeRelay` is given.
+ */
 export function testServices(
   env: ApiEnv,
-  options: { db?: Database; identity?: IdentityStore; mailer?: Mailer } = {},
+  options: { db?: Database; identity?: IdentityStore; mailer?: Mailer; wakeRelay?: WakeRelay } = {},
 ): AppServices {
   const db = options.db ?? unreachableDatabase();
   const identity =
     options.identity ?? createIdentityStore({ url: env.IDENTITY_DATABASE_URL, applicationName: 'crm-api-test' });
-  return { db, identity, auth: createAuth({ env, identity, mailer: options.mailer ?? memoryMailer() }) };
+  return {
+    db,
+    identity,
+    auth: createAuth({ env, identity, mailer: options.mailer ?? memoryMailer() }),
+    wakeRelay: options.wakeRelay ?? NO_WAKE,
+  };
 }
 
 // Built like the engine builds them (packages/core's refusals.ts), which

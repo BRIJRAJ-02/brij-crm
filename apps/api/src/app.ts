@@ -9,6 +9,7 @@ import { createEdgeGuard } from './edge.ts';
 import type { ApiEnv } from './env.ts';
 import { createReadGate } from './gate.ts';
 import { errorFields, log } from './log.ts';
+import type { WakeRelay } from './realtime/wake.ts';
 import { router as appRouter } from './router.ts';
 import { createRpcHandler } from './rpc.ts';
 
@@ -32,11 +33,12 @@ function errorResponse(code: ErrorCode, message: string): Response {
   return Response.json({ code, message }, { status: errorStatus(code) });
 }
 
-/** What the API serves with: the tenant database, global identity, and sign in. */
+/** What the API serves with: the tenant database, global identity, sign in, and the relay's wake up call. */
 export interface AppServices {
   readonly db: Database;
   readonly identity: IdentityStore;
   readonly auth: Auth;
+  readonly wakeRelay: WakeRelay;
 }
 
 /** The API. `router` is the app's own unless a test passes one. */
@@ -49,7 +51,7 @@ export function createApp({
   env: ApiEnv;
   router?: AnyRouter;
 }) {
-  const { db, identity, auth } = services;
+  const { db, identity, auth, wakeRelay } = services;
   const rpc = createRpcHandler(router);
   const edge = createEdgeGuard({ secret: env.EDGE_SECRET, environment: env.APP_ENV });
   const allowedOrigins = new Set([new URL(env.APP_URL).origin, ...(env.TRUSTED_ORIGINS ?? [])]);
@@ -114,6 +116,7 @@ export function createApp({
         db,
         identity,
         auth,
+        wakeRelay,
         environment: env.APP_ENV,
         requestId: c.get('requestId'),
         clientIp: c.get('clientIp'),

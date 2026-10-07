@@ -1,6 +1,7 @@
 // The worker entrypoint, from the same image as the api. It runs the outbox
 // relay (spec 0005) on its own direct Postgres connection, and later the
-// background jobs (#8).
+// background jobs (#8). Its one HTTP port answers Railway's health check and
+// the api's poke, which wakes the relay when it is dormant (`realtime/wake.ts`).
 import { createServer } from 'node:http';
 import { createDatabase, createOutboxReader, openDirectConnection } from '@crm/db';
 import { loadEnv, WorkerEnv } from './env.ts';
@@ -8,6 +9,7 @@ import { errorFields, log } from './log.ts';
 import { createCentrifugoPublisher } from './realtime/centrifugo.ts';
 import { createRelay } from './realtime/relay.ts';
 import { onShutdown } from './shutdown.ts';
+import { createWorkerListener } from './worker-http.ts';
 
 const env = loadEnv(WorkerEnv);
 
@@ -46,11 +48,7 @@ if (relay === undefined) {
   relay.start();
 }
 
-const health = createServer((request, response) => {
-  const ok = request.url === '/health';
-  response.writeHead(ok ? 200 : 404, { 'content-type': 'application/json' });
-  response.end(JSON.stringify(ok ? { status: 'ok' } : { code: 'NOT_FOUND' }));
-});
+const health = createServer(createWorkerListener({ wakeSecret: env.WORKER_WAKE_SECRET, onWake: () => relay?.wake() }));
 health.listen(env.WORKER_PORT, '::', () =>
   log.info('Worker ready', { port: env.WORKER_PORT, environment: env.APP_ENV, relay: relay !== undefined }),
 );

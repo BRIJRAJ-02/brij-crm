@@ -7,6 +7,7 @@ import { isEdgeGuardEnforced } from './edge.ts';
 import { ApiEnv, loadEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
 import { createMailer } from './mail/mailer.ts';
+import { createRelayWake, NO_WAKE } from './realtime/wake.ts';
 import { onShutdown } from './shutdown.ts';
 
 const env = loadEnv(ApiEnv);
@@ -49,8 +50,16 @@ log.info('Sign in ready', {
         : 'allowlist',
 });
 
+// The relay's wake up call (spec 0005). ApiEnv requires both variables outside local; a laptop without
+// WORKER_INTERNAL_URL leaves the relay to its own timer and pokes nothing.
+const wakeRelay =
+  env.WORKER_INTERNAL_URL === undefined
+    ? NO_WAKE
+    : createRelayWake({ url: env.WORKER_INTERNAL_URL, secret: env.WORKER_WAKE_SECRET, log });
+log.info(`Relay wake ${wakeRelay === NO_WAKE ? 'off' : 'on'}`);
+
 const server = serve(
-  { fetch: createApp({ services: { db, identity, auth }, env }).fetch, port: env.PORT, hostname: '::' },
+  { fetch: createApp({ services: { db, identity, auth, wakeRelay }, env }).fetch, port: env.PORT, hostname: '::' },
   (info) => log.info('API listening', { port: info.port, environment: env.APP_ENV }),
 );
 

@@ -17,6 +17,7 @@ import type { ResponseHeadersPluginContext } from '@orpc/server/plugins';
 import type { Auth, SessionUser } from './auth/auth.ts';
 import { apiError } from './errors.ts';
 import type { ReadGate } from './gate.ts';
+import type { WakeRelay } from './realtime/wake.ts';
 
 /** What every procedure receives. */
 export interface RequestContext extends ResponseHeadersPluginContext {
@@ -25,6 +26,11 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   identity: IdentityStore;
   /** Sign in: sessions and the configured providers. */
   auth: Auth;
+  /**
+   * Pokes the worker's relay (spec 0005). A write procedure calls it once its
+   * engine call has resolved, so the write committed: see `realtime/wake.ts`.
+   */
+  wakeRelay: WakeRelay;
   environment: AppEnvironment;
   /** This request's id, also sent back as `x-request-id`; every log line about the request carries it. */
   requestId: string;

@@ -32,6 +32,15 @@ const edgeSecret = optional(
     .regex(/^[\x21-\x7e]+$/, 'EDGE_SECRET may hold only printable ASCII characters, with no spaces.'),
 );
 
+// The relay's wake secret (spec 0005): the api sends it with each poke to the worker, which takes no poke without
+// it. Required outside local on both; like the edge secret, a header carries it.
+const wakeSecret = optional(
+  z
+    .string()
+    .min(32, 'WORKER_WAKE_SECRET must be at least 32 characters.')
+    .regex(/^[\x21-\x7e]+$/, 'WORKER_WAKE_SECRET may hold only printable ASCII characters, with no spaces.'),
+);
+
 /** The marker `.env.example`'s placeholder secret carries: fine on a laptop, refused anywhere else. */
 export const LOCAL_SECRET_MARKER = 'local-only';
 
@@ -81,6 +90,9 @@ export const ApiEnv = z
     RESEND_API_KEY: optional(z.string()),
     MAIL_FROM: optional(sender),
     MAILPIT_URL: optional(z.url()),
+    // The relay's wake up call (spec 0005): the worker's internal address, and the secret it checks.
+    WORKER_INTERNAL_URL: optional(z.url()),
+    WORKER_WAKE_SECRET: wakeSecret,
   })
   .superRefine((env, issues) => {
     const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });
@@ -103,6 +115,19 @@ export const ApiEnv = z
       missing('EDGE_SECRET', `EDGE_SECRET is required in ${env.APP_ENV}: the same value the Vercel project sends.`);
     }
     if (env.RESEND_API_KEY === undefined) missing('RESEND_API_KEY', `RESEND_API_KEY is required in ${env.APP_ENV}.`);
+    // Without them the relay stays dormant after a write, and changes wait for the next poke.
+    if (env.WORKER_INTERNAL_URL === undefined) {
+      missing(
+        'WORKER_INTERNAL_URL',
+        `WORKER_INTERNAL_URL is required in ${env.APP_ENV}: the worker's internal address.`,
+      );
+    }
+    if (env.WORKER_WAKE_SECRET === undefined) {
+      missing(
+        'WORKER_WAKE_SECRET',
+        `WORKER_WAKE_SECRET is required in ${env.APP_ENV}: the same value the worker holds.`,
+      );
+    }
     if (env.MAIL_FROM === undefined) missing('MAIL_FROM', `MAIL_FROM is required in ${env.APP_ENV}.`);
     if (env.BETTER_AUTH_SECRET.includes(LOCAL_SECRET_MARKER)) {
       missing('BETTER_AUTH_SECRET', 'That is the local placeholder. Generate one: `openssl rand -base64 32`.');
@@ -134,6 +159,8 @@ export const WorkerEnv = z
     // Both or neither; required outside local. Locally, without them the worker boots with the relay off.
     CENTRIFUGO_API_URL: optional(z.url()),
     CENTRIFUGO_API_KEY: optional(z.string()),
+    // The api's poke must carry it (spec 0005). Required outside local; locally, unset takes any poke.
+    WORKER_WAKE_SECRET: wakeSecret,
   })
   .superRefine((env, issues) => {
     const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });
@@ -146,6 +173,9 @@ export const WorkerEnv = z
     }
     if (env.APP_ENV !== 'local' && key) {
       missing('CENTRIFUGO_API_KEY', `CENTRIFUGO_API_KEY is required in ${env.APP_ENV}.`);
+    }
+    if (env.APP_ENV !== 'local' && env.WORKER_WAKE_SECRET === undefined) {
+      missing('WORKER_WAKE_SECRET', `WORKER_WAKE_SECRET is required in ${env.APP_ENV}: the same value the api sends.`);
     }
   })
   .transform(({ WORKER_PORT, PORT, CENTRIFUGO_API_URL, CENTRIFUGO_API_KEY, ...rest }) => ({
