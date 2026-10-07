@@ -423,6 +423,8 @@ describe("migration 0020's closing check: who can reach crm_relay", () => {
     ['updating outbox rows', ['grant update on outbox to crm_relay']],
     ['updating one outbox column', ['grant update (published_at) on outbox to crm_relay']],
     ['reading another table', ['grant select on records to crm_relay']],
+    ['reading every table, as a member of pg_read_all_data', ['grant pg_read_all_data to crm_relay']],
+    ['writing another table through PUBLIC', ['grant insert on records to public']],
   ])('refuses crm_relay %s', async (_name, setup) => {
     await expect(checkAfter(setup)).rejects.toThrow(/crm_relay may only read and delete outbox rows/);
   });

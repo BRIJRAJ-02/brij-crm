@@ -217,14 +217,26 @@ begin
     ) then
     raise exception 'crm_relay must be a plain role with no member but the database owner, with ADMIN only';
   end if;
+  -- Read from the catalog, not information_schema, which shows only grants the current user can see: every
+  -- table privilege crm_relay holds by any route (directly, through PUBLIC), every column grant, and any role it is
+  -- in (pg_read_all_data, say).
   if exists (
-    select 1 from information_schema.role_table_grants g
-    where g.grantee = 'crm_relay'
-      and not (g.table_schema = 'public' and g.table_name = 'outbox' and g.privilege_type in ('SELECT', 'DELETE'))
+    select 1
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    cross join unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) p(privilege)
+    where c.relkind in ('r', 'p', 'v', 'm', 'f')
+      and n.nspname not in ('pg_catalog', 'information_schema') and n.nspname not like 'pg\_toast%'
+      and has_table_privilege('crm_relay', c.oid, p.privilege)
+      and not (c.oid = 'public.outbox'::regclass and p.privilege in ('SELECT', 'DELETE'))
   ) or exists (
-    select 1 from information_schema.column_privileges c
-    where c.grantee = 'crm_relay'
-      and not (c.table_schema = 'public' and c.table_name = 'outbox' and c.privilege_type = 'SELECT')
+    select 1
+    from pg_attribute att
+    cross join lateral aclexplode(att.attacl) a
+    where a.grantee = 'crm_relay'::regrole
+      and not (att.attrelid = 'public.outbox'::regclass and a.privilege_type = 'SELECT')
+  ) or exists (
+    select 1 from pg_auth_members m where m.member = 'crm_relay'::regrole
   ) then
     raise exception 'crm_relay may only read and delete outbox rows';
   end if;

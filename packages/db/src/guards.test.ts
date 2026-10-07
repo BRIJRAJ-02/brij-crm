@@ -193,18 +193,25 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
   });
 
   it('gives crm_relay select and delete on the outbox and nothing else', async () => {
+    // From the catalog (information_schema hides grants the reader can't see), by every route.
     const tables = await owner.query<{ table: string; privileges: string }>(`
-      select table_schema || '.' || table_name as table,
-        string_agg(privilege_type, ',' order by privilege_type) as privileges
-      from information_schema.role_table_grants where grantee = 'crm_relay'
+      select n.nspname || '.' || c.relname as table, string_agg(p.privilege, ',' order by p.privilege) as privileges
+      from pg_class c
+      join pg_namespace n on n.oid = c.relnamespace
+      cross join unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) p(privilege)
+      where c.relkind in ('r', 'p', 'v', 'm', 'f') and n.nspname not in ('pg_catalog', 'information_schema')
+        and n.nspname not like 'pg\\_toast%' and has_table_privilege('crm_relay', c.oid, p.privilege)
       group by 1 order by 1
     `);
     expect(tables.rows).toEqual([{ table: 'public.outbox', privileges: 'DELETE,SELECT' }]);
     const columns = await owner.query<{ column: string }>(`
-      select table_name || '.' || column_name as column from information_schema.column_privileges
-      where grantee = 'crm_relay' and privilege_type <> 'SELECT'
+      select att.attrelid::regclass || '.' || att.attname as column
+      from pg_attribute att cross join lateral aclexplode(att.attacl) a
+      where a.grantee = 'crm_relay'::regrole
     `);
     expect(columns.rows).toEqual([]);
+    const memberOf = await owner.query(`select 1 from pg_auth_members where member = 'crm_relay'::regrole`);
+    expect(memberOf.rowCount).toBe(0);
     const schemas = await owner.query<{ schema: string; privilege: string }>(`
       select n.nspname as schema, a.privilege_type as privilege
       from pg_namespace n cross join aclexplode(n.nspacl) a
@@ -214,14 +221,17 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
   });
 
   it('lets the app insert and read outbox rows and stamp published_at, and nothing more', async () => {
+    // From the catalog, as for crm_relay.
     const table = await owner.query<{ privileges: string }>(`
-      select string_agg(privilege_type, ',' order by privilege_type) as privileges
-      from information_schema.role_table_grants where grantee = 'crm_app' and table_name = 'outbox'
+      select string_agg(p.privilege, ',' order by p.privilege) as privileges
+      from unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) p(privilege)
+      where has_table_privilege('crm_app', 'public.outbox', p.privilege)
     `);
     expect(table.rows).toEqual([{ privileges: 'INSERT,SELECT' }]);
     const updatable = await owner.query<{ column: string }>(`
-      select column_name as column from information_schema.column_privileges
-      where grantee = 'crm_app' and table_name = 'outbox' and privilege_type = 'UPDATE'
+      select att.attname as column from pg_attribute att
+      where att.attrelid = 'public.outbox'::regclass and att.attnum > 0 and not att.attisdropped
+        and has_column_privilege('crm_app', att.attrelid, att.attnum, 'UPDATE')
     `);
     expect(updatable.rows).toEqual([{ column: 'published_at' }]);
   });
