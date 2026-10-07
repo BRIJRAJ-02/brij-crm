@@ -107,7 +107,15 @@ afterEach(async () => {
 interface RelayOptions extends Partial<
   Pick<
     RelayDeps,
-    'pollScheduleMs' | 'dormantAfterMs' | 'pruneEveryMs' | 'batch' | 'concurrency' | 'retryMs' | 'maxRetryMs'
+    | 'pollScheduleMs'
+    | 'dormantAfterMs'
+    | 'pruneEveryMs'
+    | 'batch'
+    | 'concurrency'
+    | 'retryMs'
+    | 'maxRetryMs'
+    | 'backoffMs'
+    | 'healthyMs'
   >
 > {
   readonly applicationName?: string;
@@ -119,14 +127,20 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
   const applicationName = options.applicationName ?? 'crm-relay-tests';
   const lines: string[] = [];
   const warnings: { message: string; fields: Record<string, unknown> }[] = [];
+  const infos: { message: string; fields: Record<string, unknown> }[] = [];
+  let connects = 0;
   const relay = createRelay({
     connect: async () => {
+      connects += 1;
       const reader = createOutboxReader(await openDirectConnection({ url: appUrl, applicationName }));
       return options.wrap?.(reader) ?? reader;
     },
     publishBatch: createCentrifugoPublisher({ apiUrl: centrifugoUrl, apiKey: API_KEY, timeoutMs: 2_000 }).publishBatch,
     log: {
-      info: (message) => lines.push(message),
+      info: (message, fields = {}) => {
+        lines.push(message);
+        infos.push({ message, fields });
+      },
       warn: (message, fields = {}) => {
         lines.push(message);
         warnings.push({ message, fields });
@@ -139,11 +153,12 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
     ...(options.concurrency === undefined ? {} : { concurrency: options.concurrency }),
     retryMs: options.retryMs ?? 50,
     ...(options.maxRetryMs === undefined ? {} : { maxRetryMs: options.maxRetryMs }),
-    backoffMs: 50,
+    backoffMs: options.backoffMs ?? 50,
+    ...(options.healthyMs === undefined ? {} : { healthyMs: options.healthyMs }),
   });
   started.push(relay);
   relay.start();
-  return { relay, lines, warnings };
+  return { relay, lines, warnings, infos, connects: () => connects };
 }
 
 /** How many connections a relay named `applicationName` holds open. */
@@ -495,6 +510,60 @@ describe('the relay', () => {
     expect(whileActive).toBeGreaterThanOrEqual(2);
     await sleep(400);
     expect(prunes).toHaveLength(whileActive);
+  });
+
+  it('skips a workspace whose turn hits a database error, without ending the session', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const broken = await workspace();
+    const fine = await workspace();
+    await events(broken, [1]);
+    await events(fine, [1]);
+    let breaking = true;
+    const { lines, warnings, connects } = relayTo(centrifugo.url, {
+      wrap: (reader) => ({
+        ...reader,
+        pending: (workspaceId, max) =>
+          breaking && workspaceId === broken
+            ? Promise.reject(new Error('could not read'))
+            : reader.pending(workspaceId, max),
+      }),
+    });
+    await expect.poll(() => centrifugo.seqs(fine), WAIT).toEqual([1]);
+    await expect.poll(() => warnings.some((warning) => warning.fields.workspaceId === broken), WAIT).toBe(true);
+    expect(lines).toContain('Reading or marking changes failed; retrying the workspace with backoff');
+    breaking = false;
+    await expect.poll(() => centrifugo.seqs(broken), WAIT).toEqual([1]);
+    expect(lines).not.toContain('Relay failed; reconnecting');
+    expect(connects()).toBe(1);
+  });
+
+  it('starts its reconnect backoff again only after a connection stayed healthy for a while', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    let broken = true;
+    const { infos, relay } = relayTo(centrifugo.url, {
+      pollScheduleMs: [20],
+      backoffMs: 40,
+      healthyMs: 600,
+      wrap: (reader) => ({
+        ...reader,
+        workspaces: (max) => (broken ? Promise.reject(new Error('the poll failed')) : reader.workspaces(max)),
+      }),
+    });
+    const waits = () =>
+      infos.filter((info) => info.message === 'Relay reconnecting').map((info) => info.fields.inMs as number);
+    // Failing as soon as it connects: the backoff keeps doubling.
+    await expect.poll(() => waits().length, WAIT).toBeGreaterThanOrEqual(3);
+    broken = false;
+    const before = waits().length;
+    expect(waits().slice(0, 3)).toEqual([40, 80, 160]);
+    // Healthy for longer than healthyMs, then a failure: back to the first wait.
+    await sleep(1_200);
+    broken = true;
+    await expect.poll(() => waits().length, WAIT).toBeGreaterThan(before);
+    expect(waits()[before]).toBe(40);
+    expect(relay.mode()).toBe('active');
   });
 
   it('stops from dormant at once', async () => {

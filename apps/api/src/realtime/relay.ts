@@ -25,7 +25,11 @@
 //   next poke from any write: the rows wait in the outbox, and the next drain
 //   publishes them in order.
 // A query that fails while connected reconnects with backoff (1, 2, 4 up to
-// 30 seconds), and goes dormant instead once the quiet spell has passed.
+// 30 seconds), and goes dormant instead once the quiet spell has passed. The
+// backoff starts again from 1 second only after a connection stayed healthy
+// for 30 seconds, so a connection that fails as soon as it opens backs off.
+// A database error in one workspace's turn costs only that workspace: it is
+// logged and the workspace backs off as after a failed publish.
 //
 // Retention: while active and holding the lock, at most once a minute and
 // only beside a poll it was making anyway, the relay deletes up to 1,000 rows
@@ -61,6 +65,8 @@ export interface RelayDeps {
   readonly backoffMs?: number;
   /** The longest wait before reconnecting (default 30 seconds). */
   readonly maxBackoffMs?: number;
+  /** How long a connection must last before the reconnect backoff starts again from the first wait (default 30 seconds). */
+  readonly healthyMs?: number;
   /** The most rows read from one workspace at a time, one Centrifugo call (default 100). */
   readonly batch?: number;
   /** How many workspaces' batches run at once (default 4). Each workspace's own batches never overlap. */
@@ -135,6 +141,7 @@ export function createRelay(deps: RelayDeps): Relay {
   const dormantAfterMs = deps.dormantAfterMs ?? DORMANT_AFTER_MS;
   const backoffMs = deps.backoffMs ?? 1_000;
   const maxBackoffMs = deps.maxBackoffMs ?? 30_000;
+  const healthyMs = deps.healthyMs ?? 30_000;
   const batch = deps.batch ?? 100;
   const concurrency = Math.max(1, deps.concurrency ?? 4);
   const pruneEveryMs = deps.pruneEveryMs ?? 60_000;
@@ -186,8 +193,11 @@ export function createRelay(deps: RelayDeps): Relay {
   /** True when the workspace may take a turn now: not waiting after a failure. */
   const ready = (workspaceId: string): boolean => (retries.get(workspaceId)?.at ?? 0) <= Date.now();
 
-  /** Puts a workspace in its backoff after a failed publish, and warns at most once a minute about it. */
-  function failed(workspaceId: string, seq: number | undefined, error: Error): void {
+  /**
+   * Puts a workspace in its backoff after a failed publish or a database
+   * error in its turn, and warns at most once a minute about it.
+   */
+  function failed(workspaceId: string, seq: number | undefined, error: unknown, what: 'publish' | 'database'): void {
     const now = Date.now();
     const failures = (retries.get(workspaceId)?.failures ?? 0) + 1;
     const retryInMs = Math.min(retryMs * 2 ** (failures - 1), maxRetryMs);
@@ -196,7 +206,11 @@ export function createRelay(deps: RelayDeps): Relay {
     if (last !== undefined && now - last < WARN_EVERY_MS) return;
     for (const [id, at] of warnedAt) if (now - at >= WARN_EVERY_MS) warnedAt.delete(id);
     warnedAt.set(workspaceId, now);
-    log.warn('Publishing changes failed; retrying the workspace with backoff', {
+    const message =
+      what === 'publish'
+        ? 'Publishing changes failed; retrying the workspace with backoff'
+        : 'Reading or marking changes failed; retrying the workspace with backoff';
+    log.warn(message, {
       workspaceId,
       failures,
       retryInMs,
@@ -229,7 +243,7 @@ export function createRelay(deps: RelayDeps): Relay {
     );
     const landed = rows[outcome.published - 1];
     if (outcome.error !== undefined) {
-      failed(workspaceId, rows[outcome.published]?.seq, outcome.error);
+      failed(workspaceId, rows[outcome.published]?.seq, outcome.error, 'publish');
       if (landed !== undefined) await reader.mark(workspaceId, landed.seq);
       return undefined;
     }
@@ -242,8 +256,8 @@ export function createRelay(deps: RelayDeps): Relay {
 
   /**
    * One round: a turn for each workspace, up to `concurrency` at a time.
-   * Returns the workspaces with more waiting, and their next batch. Throws the
-   * first error a turn threw, once every turn has settled.
+   * Returns the workspaces with more waiting, and their next batch. A turn
+   * that throws (a database error) puts only its workspace in backoff.
    */
   async function round(
     reader: OutboxReader,
@@ -259,13 +273,15 @@ export function createRelay(deps: RelayDeps): Relay {
         next += 1;
         if (entry === undefined) return;
         const [workspaceId, held] = entry;
-        const rows = await turn(reader, workspaceId, held);
-        if (rows !== undefined) more.set(workspaceId, rows);
+        try {
+          const rows = await turn(reader, workspaceId, held);
+          if (rows !== undefined) more.set(workspaceId, rows);
+        } catch (error) {
+          failed(workspaceId, held?.[0]?.seq, error, 'database');
+        }
       }
     };
-    const lanes = await Promise.allSettled(Array.from({ length: Math.min(concurrency, queue.length) }, lane));
-    const failed = lanes.find((settled): settled is PromiseRejectedResult => settled.status === 'rejected');
-    if (failed !== undefined) throw failed.reason;
+    await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, lane));
     return more;
   }
 
@@ -369,9 +385,10 @@ export function createRelay(deps: RelayDeps): Relay {
       }
       let reader: OutboxReader | undefined;
       let ended: SessionEnd | undefined;
+      let connectedAt: number | undefined;
       try {
         reader = await deps.connect();
-        failures = 0;
+        connectedAt = Date.now();
         ended = await session(reader);
       } catch (error) {
         if (!halted()) log.warn('Relay failed; reconnecting', errorFields(error));
@@ -394,6 +411,8 @@ export function createRelay(deps: RelayDeps): Relay {
         current = 'dormant';
         continue;
       }
+      // Only a connection that stayed up a while proves the trouble passed.
+      if (connectedAt !== undefined && Date.now() - connectedAt >= healthyMs) failures = 0;
       const delay = Math.min(backoffMs * 2 ** failures, maxBackoffMs);
       failures += 1;
       log.info('Relay reconnecting', { inMs: delay });
