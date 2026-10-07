@@ -20,6 +20,8 @@ export interface RecordViewStore<Row extends RecordBody> {
   readonly getSnapshot: () => RecordSource<Row>;
   /** Something else the view's screen shows changed (its status, a cell's refusal): render again on the next frame. */
   readonly invalidate: () => void;
+  /** Announces now whatever waits for the next frame (a view that just became ready, so its first render has rows). */
+  readonly flush: () => void;
   readonly dispose: () => void;
 }
 
@@ -88,6 +90,7 @@ export function createRecordView<Row extends RecordBody>({
     },
     getSnapshot: () => snapshot,
     invalidate: changed,
+    flush,
     dispose: () => {
       isDisposed = true;
       stopStore();

@@ -4,7 +4,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./records": "./src/records/index.ts"
+    "./records": "./src/records/index.ts",
+    "./react": "./src/react.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -15,11 +16,13 @@
     "@crm/contracts": "workspace:*",
     "@orpc/client": "catalog:",
     "@orpc/contract": "catalog:",
-    "better-auth": "catalog:"
+    "better-auth": "catalog:",
+    "react": "catalog:"
   },
   "devDependencies": {
     "@crm/config": "workspace:*",
     "@orpc/server": "catalog:",
+    "@types/react": "catalog:",
     "eslint": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",

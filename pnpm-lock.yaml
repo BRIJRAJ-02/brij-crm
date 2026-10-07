@@ -463,6 +463,9 @@ importers:
       better-auth:
         specifier: 'catalog:'
         version: 1.7.7(drizzle-kit@0.31.11)(drizzle-orm@0.45.3(@cloudflare/workers-types@5.20260930.2)(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.1))(pg@8.23.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@5.0.3)
+      react:
+        specifier: 'catalog:'
+        version: 19.3.0
     devDependencies:
       '@crm/config':
         specifier: workspace:*
@@ -470,6 +473,9 @@ importers:
       '@orpc/server':
         specifier: 'catalog:'
         version: 1.15.4(ws@8.22.0)
+      '@types/react':
+        specifier: 'catalog:'
+        version: 19.3.0
       eslint:
         specifier: 'catalog:'
         version: 10.11.0(jiti@2.7.0)

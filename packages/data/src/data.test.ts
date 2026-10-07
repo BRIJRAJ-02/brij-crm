@@ -2,12 +2,26 @@
 // the shared contract with stand in procedures, and Better Auth's routes
 // answered by hand in the shapes the API sends. Checks the caching, the error
 // shape every failure takes, and that a 401 signs out once.
-import { contract, type Me, type ObjectSummary } from '@crm/contracts';
+import {
+  contract,
+  type AttributeDefinition,
+  type Me,
+  type MemberSummary,
+  type ObjectSummary,
+  type RecordView,
+} from '@crm/contracts';
 import { implement, ORPCError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
 import { describe, expect, it } from 'vitest';
 import { parseRetryAfter } from './errors.ts';
-import { createDataLayer, createIdMinter, isDataError, type DataError, type Notice } from './index.ts';
+import {
+  createDataLayer,
+  createIdMinter,
+  isDataError,
+  toFieldAttribute,
+  type DataError,
+  type Notice,
+} from './index.ts';
 
 const ORIGIN = 'https://crm.test';
 
@@ -27,11 +41,50 @@ const PEOPLE: ObjectSummary = {
   primaryAttributeId: '0199a6f2-0000-7000-8000-000000000004',
 };
 
+const TITLE: AttributeDefinition = {
+  id: '0199a6f2-0000-7000-8000-000000000005',
+  apiSlug: 'job_title',
+  title: 'Job title',
+  type: 'text',
+  isMulti: false,
+  isRequired: false,
+  isUnique: false,
+  isSystem: false,
+  config: {},
+  position: 3,
+};
+
+const ADA_MEMBER: MemberSummary = { id: '0199a6f2-0000-7000-8000-000000000006', name: 'Ada', email: 'ada@example.com' };
+
+/** A person as the API answers one. */
+const personRow = (index: number, title = 'Engineer'): RecordView => {
+  const id = `0199a6f2-0000-7000-8000-${(100 + index).toString(16).padStart(12, '0')}`;
+  const actor = { type: 'member' as const, id: ADA_MEMBER.id };
+  return {
+    id,
+    objectId: PEOPLE.id,
+    createdAt: '2026-10-08T09:00:00.000Z',
+    createdBy: actor,
+    updatedAt: '2026-10-08T09:00:00.000Z',
+    updatedBy: actor,
+    display: { objectId: PEOPLE.id, recordId: id, name: `P${String(index)}`, kind: 'person' },
+    values: { [TITLE.id]: title },
+    versions: { [TITLE.id]: '0199a6f2-0001-7000-8000-000000000000' },
+    linkTotals: {},
+  };
+};
+
 /** What each stand in procedure does; a test overrides the ones it needs. */
 interface Behaviour {
   me: () => Me;
   objects: (workspace: string) => ObjectSummary[];
   create: () => { workspace: Me['workspaces'][number] };
+  members: () => MemberSummary[];
+  attributes: () => AttributeDefinition[];
+  addAttribute: () => AttributeDefinition;
+  count: () => number;
+  query: (position: number, limit: number) => RecordView[];
+  setValues: () => RecordView;
 }
 
 const unauthenticated = () => new ORPCError('UNAUTHENTICATED', { status: 401, message: 'Sign in to continue.' });
@@ -47,6 +100,13 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     me: () => ME,
     objects: () => [PEOPLE],
     create: () => ({ workspace: { id: '0199a6f2-0000-7000-8000-000000000009', slug: 'new', name: 'New' } }),
+    members: () => [ADA_MEMBER],
+    attributes: () => [TITLE],
+    addAttribute: notServed,
+    count: () => 3,
+    query: (position, limit) =>
+      Array.from({ length: Math.max(0, Math.min(limit, 3 - position)) }, (_, at) => personRow(position + at)),
+    setValues: notServed,
     ...overrides,
   };
   const calls: string[] = [];
@@ -63,16 +123,20 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     me: { get: os.me.get.handler(() => behaviour.me()) },
     workspaces: { create: os.workspaces.create.handler(() => behaviour.create()) },
     objects: { list: os.objects.list.handler(({ input }) => behaviour.objects(input.workspace)) },
-    // Not used by these tests yet (the table's data layer, spec 0005 task 11, brings its own).
-    attributes: { list: os.attributes.list.handler(() => []), create: os.attributes.create.handler(notServed) },
+    attributes: {
+      list: os.attributes.list.handler(() => behaviour.attributes()),
+      create: os.attributes.create.handler(() => behaviour.addAttribute()),
+    },
     records: {
-      query: os.records.query.handler(() => ({ records: [] })),
-      count: os.records.count.handler(() => ({ count: 0, atLeast: false })),
+      query: os.records.query.handler(({ input }) => ({
+        records: behaviour.query(input.position ?? 0, input.limit ?? 50),
+      })),
+      count: os.records.count.handler(() => ({ count: behaviour.count(), atLeast: false })),
       get: os.records.get.handler(() => []),
       create: os.records.create.handler(notServed),
-      setValues: os.records.setValues.handler(notServed),
+      setValues: os.records.setValues.handler(() => behaviour.setValues()),
     },
-    members: { list: os.members.list.handler(() => []) },
+    members: { list: os.members.list.handler(() => behaviour.members()) },
   });
   const handler = new RPCHandler(router);
   const fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -289,6 +353,130 @@ describe('objects.list', () => {
       },
     });
     expect(await failure(data.objects.list('acme'))).toMatchObject({ code: 'RATE_LIMITED', retryAfterSeconds: 90 });
+  });
+});
+
+describe('members and attributes', () => {
+  it('reads a workspace’s members once', async () => {
+    const api = fakeApi();
+    const { data } = layer(api);
+    expect(await data.members.list('acme')).toEqual([ADA_MEMBER]);
+    await data.members.list('acme');
+    expect(count(api.calls, '/api/rpc/members/list')).toBe(1);
+  });
+
+  it('reads an object’s attributes once, and again after one is added', async () => {
+    const added = { ...TITLE, id: '0199a6f2-0000-7000-8000-000000000007', apiSlug: 'nickname', title: 'Nickname' };
+    const api = fakeApi({ addAttribute: () => added });
+    const { data } = layer(api);
+    await data.attributes.list('acme', PEOPLE.id);
+    await data.attributes.list('acme', PEOPLE.id);
+    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(1);
+    expect(await data.attributes.create('acme', { objectId: PEOPLE.id, title: 'Nickname', type: 'text' })).toEqual(
+      added,
+    );
+    await data.attributes.list('acme', PEOPLE.id);
+    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(2);
+  });
+
+  it('refuses a taken name on the title field', async () => {
+    const api = fakeApi({
+      addAttribute: () => {
+        throw new ORPCError('SLUG_TAKEN', {
+          status: 409,
+          message: 'An attribute with this name exists.',
+          data: { refusals: [{ code: 'SLUG_TAKEN', message: 'An attribute with this name exists.', field: 'title' }] },
+        });
+      },
+    });
+    const { data } = layer(api);
+    const error = await failure(data.attributes.create('acme', { objectId: PEOPLE.id, title: 'Name', type: 'text' }));
+    expect(error).toMatchObject({ code: 'SLUG_TAKEN', data: { refusals: [{ field: 'title' }] } });
+  });
+
+  it('maps an attribute to the field set’s, reading references and members as read only in this loop', () => {
+    expect(toFieldAttribute(TITLE)).toEqual({
+      id: TITLE.id,
+      name: 'Job title',
+      type: 'text',
+      allowMultiple: false,
+      isRequired: false,
+      isUnique: false,
+      isReadOnly: false,
+    });
+    const owner = { ...TITLE, type: 'actor_reference' as const, title: 'Owner' };
+    expect(toFieldAttribute(owner, 'Set on the record page')).toMatchObject({
+      isReadOnly: true,
+      readOnlyReason: 'Set on the record page',
+    });
+    const company = { ...TITLE, type: 'record_reference' as const, isMulti: true };
+    expect(toFieldAttribute(company)).toMatchObject({ isReadOnly: true, cardinality: 'many', allowMultiple: true });
+    const createdAt = { ...TITLE, type: 'timestamp' as const, isSystem: true };
+    expect(toFieldAttribute(createdAt, 'unused')).toMatchObject({ isReadOnly: true });
+    expect(toFieldAttribute(createdAt, 'unused').readOnlyReason).toBeUndefined();
+  });
+});
+
+describe('records', () => {
+  const settled = () => new Promise((resolve) => setTimeout(resolve, 40));
+
+  it('opens a view with its count and first block, reading the first 100 rows by position', async () => {
+    const positions: number[] = [];
+    const api = fakeApi({
+      query: (position, limit) => {
+        positions.push(position, limit);
+        return [personRow(0), personRow(1), personRow(2)];
+      },
+    });
+    const { data } = layer(api);
+    const view = await data.records.view('acme', PEOPLE.id);
+    const state = view.getSnapshot();
+    expect(state.status).toBe('ready');
+    expect(state.source.count).toBe(3);
+    expect(state.source.getItem(1)?.values[TITLE.id]).toBe('Engineer');
+    expect(positions).toEqual([0, 100]);
+    expect(await data.records.view('acme', PEOPLE.id)).toBe(view);
+  });
+
+  it('waits the answer’s Retry-After when the workspace has too many reads in flight, then reads again', async () => {
+    let busy = true;
+    const api = fakeApi({
+      count: () => {
+        if (busy) {
+          busy = false;
+          throw new ORPCError('TOO_MANY_REQUESTS', { status: 429, message: 'Busy.' });
+        }
+        return 3;
+      },
+    });
+    const { data } = layer({
+      fetch: async (input, init) => {
+        const response = await api.fetch(input, init);
+        const headers = new Headers(response.headers);
+        if (response.status === 429) headers.set('retry-after', '0');
+        return new Response(response.body, { status: response.status, headers });
+      },
+    });
+    const view = await data.records.view('acme', PEOPLE.id);
+    expect(view.getSnapshot().status).toBe('ready');
+    expect(count(api.calls, '/api/rpc/records/count')).toBe(2);
+  });
+
+  it('drops a pending edit with every record when the session ended, and goes to sign in', async () => {
+    const api = fakeApi({
+      setValues: () => {
+        throw unauthenticated();
+      },
+    });
+    const { data, signedOut, notices } = layer(api);
+    const view = await data.records.view('acme', PEOPLE.id);
+    const row = view.getSnapshot().source.getItem(0);
+    data.records.setValue('acme', { rowId: row?.id ?? '', columnId: TITLE.id, value: 'Lead' });
+    await settled();
+    // The last person's records leave the browser with their session; nothing shows the edit.
+    expect(view.getSnapshot().source.getItem(0)).toBeUndefined();
+    expect(signedOut).toEqual(['/w/acme/objects/people?view=all']);
+    expect(notices.map((notice) => notice.message)).toEqual(['You were signed out. Sign in again to carry on.']);
   });
 });
 

@@ -1,23 +1,42 @@
 // The one client data layer (spec 0005, the thin start of #6). Screens and
 // routes read and write through it and never call the network themselves.
-// This milestone holds who is signed in, the workspace's objects, creating a
-// workspace, sign in, and the status check; the record store, optimistic
-// writes and live patches land behind the same object in milestones 2 and 3.
-import type { CreateWorkspaceInput, contract, Me, ObjectSummary } from '@crm/contracts';
+// It holds who is signed in, the workspace's objects, members and attributes,
+// creating a workspace, sign in, the status check, and the records: one
+// store, a view per object, and optimistic creates and edits (loaded when a
+// screen first asks for records). Live patches land behind the same object
+// in milestone 3.
+import type {
+  AttributeDefinition,
+  CreatableAttributeType,
+  CreateWorkspaceInput,
+  contract,
+  Me,
+  MemberSummary,
+  ObjectSummary,
+  RecordView,
+} from '@crm/contracts';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import { createAuth } from './auth/auth.ts';
 import { ERROR_MESSAGES, parseRetryAfter, toDataError, withRetryAfter } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
+import type { Notice } from './notice.ts';
+import type { CellChange, RecordsApi, RecordsLayer, RecordsView } from './records/layer.ts';
 
 export type {
+  ActorDisplay,
   ApiRefusal,
+  AttributeDefinition,
+  AttributeType,
+  CreatableAttributeType,
   CreatedWorkspace,
   CreateWorkspaceInput,
   InputIssue,
   Me,
+  MemberSummary,
   ObjectSummary,
+  RecordView,
   SignedInUser,
   SystemStatus,
   WorkspaceSummary,
@@ -33,7 +52,10 @@ export {
   type SignInCode,
 } from './errors.ts';
 export type { FetchLike } from './fetch.ts';
+export { isEditableHere, toActorDisplays, toFieldAttribute, type FieldAttributeShape } from './fields.ts';
 export { createIdMinter, type IdSources } from './ids.ts';
+export type { Notice } from './notice.ts';
+export type { CellChange, RecordsView, ViewState, ViewStatus } from './records/layer.ts';
 
 /** What each API call carries to the link: where to report the answer's `Retry-After`. */
 interface CallContext {
@@ -42,12 +64,14 @@ interface CallContext {
 
 type ApiClient = ContractRouterClient<typeof contract, CallContext>;
 
-/** A message for the person, raised on the app's toast queue. The same shape as the library's `ToastContent`. */
-export interface Notice {
-  readonly tone: 'success' | 'danger';
-  readonly message: string;
-  readonly action?: { readonly label: string; readonly onAction: () => void };
+/** One API call's options: the context, and the signal that cancels it. */
+interface CallOptions {
+  readonly context: CallContext;
+  readonly signal?: AbortSignal;
 }
+
+/** The cache key of one object's attributes in one workspace. */
+const objectKey = (workspace: string, objectId: string) => `${workspace}/${objectId}`;
 
 /** What the data layer needs from the app. */
 export interface DataLayerOptions {
@@ -103,15 +127,25 @@ export function createDataLayer({
     }),
   );
 
-  // Cached per app load: who is signed in, and each workspace's objects. A
-  // failed load is dropped, so the next call tries again.
+  // Cached per app load: who is signed in, and each workspace's objects,
+  // members and attributes. A failed load is dropped, so the next call tries
+  // again.
   let me: Promise<Me | undefined> | undefined;
   let objects = new Map<string, Promise<ObjectSummary[]>>();
+  let members = new Map<string, Promise<MemberSummary[]>>();
+  let attributes = new Map<string, Promise<AttributeDefinition[]>>();
+  // The records layer, loaded with the first screen that shows records.
+  let records: Promise<RecordsLayer> | undefined;
   // Set by the first 401, so a burst of failed calls signs out once.
   let ended = false;
   const forget = () => {
     me = undefined;
     objects = new Map();
+    members = new Map();
+    attributes = new Map();
+    void records?.then((layer) => {
+      layer.clear();
+    });
   };
   const reset = () => {
     forget();
@@ -123,7 +157,7 @@ export function createDataLayer({
    * Runs one API call with a fresh context, mapping its failure to a
    * DataError that carries the answer's `Retry-After`.
    */
-  async function attempt<T>(run: (options: { readonly context: CallContext }) => Promise<T>): Promise<T> {
+  async function attempt<T>(run: (options: CallOptions) => Promise<T>, signal?: AbortSignal): Promise<T> {
     let wait: number | undefined;
     try {
       return await run({
@@ -132,6 +166,7 @@ export function createDataLayer({
             wait = seconds;
           },
         },
+        ...(signal === undefined ? {} : { signal }),
       });
     } catch (error) {
       throw withRetryAfter(toDataError(error), wait);
@@ -139,9 +174,9 @@ export function createDataLayer({
   }
 
   /** Runs a call, mapping its failure to a DataError; a 401 ends the session here. */
-  async function call<T>(run: (options: { readonly context: CallContext }) => Promise<T>): Promise<T> {
+  async function call<T>(run: (options: CallOptions) => Promise<T>, signal?: AbortSignal): Promise<T> {
     try {
-      return await attempt(run);
+      return await attempt(run, signal);
     } catch (error) {
       const failure = toDataError(error);
       if (failure.code === 'UNAUTHENTICATED' && !ended) {
@@ -157,6 +192,32 @@ export function createDataLayer({
   }
 
   const auth = createAuth({ origin, fetch, reset });
+
+  /** Reads a per workspace list once, dropping it from the cache when it fails, so the next call asks again. */
+  function cached<T>(cache: Map<string, Promise<T>>, key: string, load: () => Promise<T>): Promise<T> {
+    const hit = cache.get(key);
+    if (hit !== undefined) return hit;
+    const loading = load();
+    cache.set(key, loading);
+    loading.catch(() => {
+      if (cache.get(key) === loading) cache.delete(key);
+    });
+    return loading;
+  }
+
+  const recordsApi: RecordsApi = {
+    query: (input, signal) => call((options) => api.records.query(input, options), signal),
+    count: (input, signal) => call((options) => api.records.count(input, options), signal),
+    get: (input) => call((options) => api.records.get({ workspace: input.workspace, ids: [...input.ids] }, options)),
+    create: (input) => call((options) => api.records.create(input, options)),
+    setValues: (input) => call((options) => api.records.setValues(input, options)),
+  };
+  const recordsLayer = (): Promise<RecordsLayer> => {
+    records ??= import('./records/layer.ts').then(({ createRecordsLayer }) =>
+      createRecordsLayer({ api: recordsApi, notify, mintId }),
+    );
+    return records;
+  };
 
   return {
     me: {
@@ -209,6 +270,65 @@ export function createDataLayer({
           if (toDataError(error).code === 'NOT_FOUND') me = undefined;
         });
         return loading;
+      },
+    },
+    members: {
+      /** The workspace's active members, by name: the Owner column's names. Cached for the app load. */
+      list: (workspace: string): Promise<MemberSummary[]> =>
+        cached(members, workspace, () => call((options) => api.members.list({ workspace }, options))),
+    },
+    attributes: {
+      /** An object's live attributes in position order, system ones marked. Cached until an attribute is added. */
+      list: (workspace: string, objectId: string): Promise<AttributeDefinition[]> =>
+        cached(attributes, objectKey(workspace, objectId), () =>
+          call((options) => api.attributes.list({ workspace, objectId }, options)),
+        ),
+      /**
+       * Adds an attribute and waits for the server (no optimistic step: it is
+       * often refused, and it reshapes the table). Refusals: `SLUG_TAKEN` on
+       * `title`, `LIMIT_REACHED`, `CONFIG_INVALID`. A retry after a lost answer
+       * gets the attribute the first try made. The object's list is read again
+       * next time.
+       */
+      async create(
+        workspace: string,
+        input: { readonly objectId: string; readonly title: string; readonly type: CreatableAttributeType },
+      ): Promise<AttributeDefinition> {
+        const made = await call((options) =>
+          api.attributes.create({ workspace, ...input, mutationId: mintId() }, options),
+        );
+        attributes.delete(objectKey(workspace, input.objectId));
+        return made;
+      },
+    },
+    records: {
+      /**
+       * An object's records for one screen (the same view for every screen
+       * that asks), settled once its count and first block are in or failed.
+       * The router loader awaits it; the screen reads it through `useView`.
+       */
+      async view(workspace: string, objectId: string): Promise<RecordsView> {
+        const view = (await recordsLayer()).view(workspace, objectId);
+        await view.ready();
+        return view;
+      },
+      /** Makes a record at once (see the records layer); rejects with the refusals when the server says no. */
+      create: async (
+        workspace: string,
+        objectId: string,
+        values: Readonly<Record<string, unknown>>,
+      ): Promise<RecordView> => (await recordsLayer()).create(workspace, objectId, values),
+      /** Edits one cell at once; a refusal rolls it back with a cell message and a toast with Retry. */
+      setValue: (workspace: string, change: CellChange): void => {
+        void recordsLayer().then((layer) => {
+          layer.setValues(workspace, [change]);
+        });
+      },
+      /** Edits several cells at once (a paste, a range clear), one write per record. */
+      setValues: (workspace: string, changes: readonly CellChange[]): void => {
+        void recordsLayer().then((layer) => {
+          layer.setValues(workspace, changes);
+        });
       },
     },
     system: {

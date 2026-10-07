@@ -1,6 +1,6 @@
 // The record store, its windows and the view, for the AC-40 gate tool
-// (tools/data-gate) until the data layer serves them itself (spec 0005,
-// task 11). Screens never import this: they go through createDataLayer.
+// (tools/data-gate), which measures them on their own. Screens never import
+// this: they read records through createDataLayer's `records` and `useView`.
 export { createPlainStore, sameData } from './plain-store.ts';
 export { composeRecord, newerBase, remainingLayers } from './store.ts';
 export type { Layer, RecordBody, RecordStore, RecordValues, StoreListener } from './store.ts';
