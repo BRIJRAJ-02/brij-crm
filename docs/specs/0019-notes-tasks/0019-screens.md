@@ -42,7 +42,7 @@ A Card, heading "Open tasks", TaskList `layout="inline"` with the first 5 open t
 Brief: Purpose: everything about one task. Main task: set when it's due and who has it. Leaves out: comments on tasks, reminders, subtasks.
 
 - Modal (dialog), title "Task" (or "New task").
-- Fields, in order: Title (Field, multiline, a count to 2,000); Done (Checkbox; edit mode only); Due date (the field set's Date editor, `surface='form'`); Assignee (the field set's Member editor, single); Records (the field set's record reference editor, many, with ReferencePicker's object switcher, at most 20).
+- Fields, in order: Title (Field, multiline, a count to 2,000); Done (Checkbox; edit mode only); Due date (the field set's Date editor, `surface='form'`); Assignee (the field set's Member editor, single; a removed assignee reads "Former member"); Records (the field set's record reference editor, many, with ReferencePicker's object switcher, at most 20; a pick on an object the member can only read is refused under the field with "You can't link a task to a record you can't change.").
 - Edit mode commits each field like Details: optimistic, rolled back with the message under the field on a refusal. A footer line "Created by <name> · <relative time>". Menu (the "More" icon button): "Copy link", "Delete task".
 - New mode: the same fields, "Create task" (primary) and "Cancel"; "Create task" closes the dialog at once (optimistic) and the task shows in the lists it belongs to; refusals reopen nothing and show as a toast with Retry.
 - A task that doesn't exist, was deleted, or is hidden: the dialog shows EmptyState "This task doesn't exist or you can't see it." with "Close".
@@ -74,7 +74,7 @@ Brief: Purpose: what the team learned about this record. Main task: write a note
 - A title Field without a visible label (labelled "Title" for screen readers), placeholder "Untitled note", up to 200 characters.
 - NoteEditor (RichTextEditor in note mode) with `onChangeMaxWait={2000}`, mentions searched from the members store, the editor's code loaded lazily when the window first opens (a skeleton meanwhile).
 - Notices as a Callout above the editor: "<Name> edited this note, so it now shows their version." (neutral) or "<Name> edited this note at the same time. Your version was saved over theirs." (warning); each closes with its own button and on the next save.
-- Refusals: too long ("This note is too long to save. Split it into two notes.") and unavailable ("This note isn't available. Its record may have been deleted, or you may not have access to it.") show as danger Callouts; the text stays for copying.
+- Refusals: too long ("This note is too long to save. Split it into two notes.", from the session's own size check or the service's 422 `CONFIG_INVALID` on `content`) and unavailable ("This note isn't available. Its record may have been deleted, or you may not have access to it.") show as danger Callouts; the text stays for copying.
 - A note that doesn't exist, was deleted, or is hidden, opened from a link: EmptyState with the unavailable message and "Close".
 - Read only (no `write`): the editor and title read only, with the reason as a Callout; no Delete.
 - Closing (Esc, Close, Back) with a pending save closes at once; the save continues in the data layer.

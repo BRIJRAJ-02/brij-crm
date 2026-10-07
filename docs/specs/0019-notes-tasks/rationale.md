@@ -42,7 +42,7 @@ Per decision:
 - **Creator is the default assignee**: most tasks are for yourself, and an unassigned task would never show in My tasks.
 - **Anyone who sees a task and writes one of its records may change it**: tasks are shared work on records; tying edits to the records' write level keeps one access model.
 - **Soft delete with Undo and a 30 day cleanup**: matches records' trash window, makes a slip cost nothing, and the cleanup already exists (spec 0008).
-- **Trash by read, purge by foreign key**: trashing a record changes no note or task row, so restore is exact; purge and erase can't leave a dangling note because the database removes it.
+- **Trash by read, purge by registry, foreign keys that refuse**: trashing a record changes no note or task row, so restore is exact; purge and erase delete notes and task links explicitly through spec 0022's `PURGE_DEPENDENTS` before the records, in the same transaction, and the foreign keys have no cascade, so a removal that skipped the registry fails loudly instead of deleting rows nobody counted (cross check of 8 October 2026).
 - **No replaced notice on tasks**: task fields are short, shown live, and edited rarely by two people at once; adding versions to tasks would be cost with no requirement.
 
 ## References
