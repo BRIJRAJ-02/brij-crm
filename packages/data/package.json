@@ -8,7 +8,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit && tsc --noEmit -p prototype",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run",
+    "gate": "node prototype/measure.ts"
   },
   "dependencies": {
     "@crm/contracts": "workspace:*",
