@@ -25,6 +25,14 @@ export const MAX_GET_IDS = 500;
  * is `null`). A multi reference cell lists at most `MAX_CELL_LINKS` links, in
  * order; `linkTotals` holds the full count only for the cells cut short
  * (absent means the list is whole), so a cell can show "and 4,980 more".
+ *
+ * `versions` holds each cell's current value version by attribute id: the
+ * uuid v7 of the write that set it (a cleared cell keeps the clearing
+ * write's; a reference cell has its latest current link's). A cell never set,
+ * a reference with no current link, and a system attribute have none. Later
+ * writes have greater versions, so the client orders by them: a RecordView or
+ * event read back never replaces a cell the client holds at a newer version
+ * with an older one.
  */
 export const RecordView = z.object({
   id: z.uuid(),
@@ -35,6 +43,7 @@ export const RecordView = z.object({
   updatedBy: ActorReferenceValue,
   display: RecordRefDisplay,
   values: z.record(z.string(), z.unknown()),
+  versions: z.record(z.string(), z.uuid()),
   linkTotals: z.record(z.string(), z.number().int().min(0)),
 });
 /** A record as a screen holds it. */

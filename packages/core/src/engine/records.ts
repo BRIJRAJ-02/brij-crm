@@ -128,6 +128,13 @@ export interface RecordView {
   /** Current values by attribute id, system attributes included, each in its schema's shape. */
   readonly values: Readonly<Record<string, unknown>>;
   /**
+   * Each cell's current version id, by attribute id: the version of the write
+   * that set it (a cleared cell keeps the clearing write's), and for a
+   * reference that of its latest current link. A cell never set, a reference
+   * with no current link, and a system attribute have none.
+   */
+  readonly versions: Readonly<Record<string, string>>;
+  /**
    * For each multi reference cell cut short at `LINK_CELL_CAP` links (its
    * value lists the first 20 in order), how many live links it holds in all.
    * A cell that wasn't cut has no entry, so this is empty for most records.
@@ -505,6 +512,7 @@ export async function readRecords(
     tx,
     rows.map((row) => row.id),
     wanted,
+    { withCleared: true },
   );
   const references = [...attributesByObject.values()].flatMap((byId) =>
     [...byId.values()].filter(
@@ -520,7 +528,14 @@ export async function readRecords(
     { cap: LINK_CELL_CAP },
   );
   const order = new Map(input.ids.map((id, index) => [canonicalId(id), index]));
-  const itemsOf = bucketItems(items);
+  const itemsOf = bucketItems(items.filter((item) => !item.isCleared));
+  // A cell's version is its newest row's (uuid v7, so the greatest), a cleared marker's included.
+  const versionOf = new Map<string, string>();
+  for (const item of items) {
+    const key = `${item.ownerId}:${item.attributeId}`;
+    const seen = versionOf.get(key);
+    if (seen === undefined || item.versionId > seen) versionOf.set(key, item.versionId);
+  }
 
   return rows
     .map((row): RecordView => {
@@ -536,6 +551,7 @@ export async function readRecords(
         updated_by: updatedBy,
       };
       const values: Record<string, unknown> = {};
+      const versions: Record<string, string> = {};
       const linkTotals: Record<string, number> = {};
       for (const attribute of attributes.values()) {
         if (input.attributeIds !== undefined && !input.attributeIds.includes(attribute.id)) continue;
@@ -547,9 +563,13 @@ export async function readRecords(
           values[attribute.id] = links.values.get(row.id)?.get(attribute.id) ?? (attribute.isMulti ? [] : null);
           const total = links.totals.get(row.id)?.get(attribute.id);
           if (total !== undefined) linkTotals[attribute.id] = total;
+          const linked = links.versions.get(row.id)?.get(attribute.id);
+          if (linked !== undefined) versions[attribute.id] = linked;
           continue;
         }
         values[attribute.id] = decodeValue(attribute.type, attribute.isMulti, itemsOf(row.id, attribute.id));
+        const version = versionOf.get(`${row.id}:${attribute.id}`);
+        if (version !== undefined) versions[attribute.id] = version;
       }
       const primaryId = object?.primaryAttributeId ?? null;
       const primaryItems = primaryId === null ? [] : itemsOf(row.id, primaryId);
@@ -572,6 +592,7 @@ export async function readRecords(
         updatedBy,
         display,
         values,
+        versions,
         linkTotals,
       };
     })

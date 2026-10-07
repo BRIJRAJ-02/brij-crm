@@ -486,21 +486,32 @@ export async function touchOwner(context: WriteContext, ownerKind: 'record' | 'e
   else await context.tx.update(listEntries).set(set).where(eq(listEntries.id, ownerId));
 }
 
-/** The current, non cleared item rows of several owners, for reads. */
+/**
+ * The current item rows of several owners, for reads: those holding a value,
+ * and with `withCleared` also each cleared cell's marker row (`isCleared`),
+ * whose version is the cell's version.
+ */
 export async function currentItems(
   tx: WorkspaceTx,
   ownerIds: readonly string[],
   attributeIds?: readonly string[],
-): Promise<readonly (StoredItem & { ownerId: string; attributeId: string; versionId: string })[]> {
+  options: { readonly withCleared?: boolean } = {},
+): Promise<readonly (StoredItem & { ownerId: string; attributeId: string; versionId: string; isCleared: boolean })[]> {
   if (ownerIds.length === 0) return [];
   return tx
-    .select({ ...ITEM_COLUMNS, ownerId: values.ownerId, attributeId: values.attributeId, versionId: values.versionId })
+    .select({
+      ...ITEM_COLUMNS,
+      ownerId: values.ownerId,
+      attributeId: values.attributeId,
+      versionId: values.versionId,
+      isCleared: values.isCleared,
+    })
     .from(values)
     .where(
       and(
         inArray(values.ownerId, [...ownerIds]),
         isNull(values.activeUntil),
-        eq(values.isCleared, false),
+        options.withCleared === true ? undefined : eq(values.isCleared, false),
         attributeIds === undefined ? undefined : inArray(values.attributeId, [...attributeIds]),
       ),
     );

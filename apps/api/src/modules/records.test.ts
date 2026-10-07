@@ -168,6 +168,44 @@ describe('records.setValues', () => {
     expect(read).toEqual(view);
   });
 
+  it("answers each cell's version: newer for a later write, kept by a clear, and a reference's from its link", async () => {
+    const m = await memberWithWorkspace(app);
+    const person = await createPerson(m, 'Ada', 'ada@example.com');
+    const [name, email, title, company] = ['name', 'email_addresses', 'job_title', 'company'].map(m.attribute);
+    if (name === undefined || email === undefined || title === undefined || company === undefined) throw new Error();
+    // Set by the create, each with its own version; never set, and system attributes: none.
+    expect(person.versions[name]).toEqual(expect.any(String));
+    expect(person.versions[email]).toEqual(expect.any(String));
+    expect(Object.keys(person.versions).sort()).toEqual([name, email].sort());
+    const set = (values: Record<string, unknown>) =>
+      m.client.records.setValues({
+        workspace: m.slug,
+        recordId: person.id,
+        values: Object.fromEntries(Object.entries(values).map(([id, value]) => [id, { value }])),
+        mutationId: newId(),
+      });
+    const titled = await set({ [title]: 'Analyst' });
+    expect((titled.versions[title] ?? '') > (person.versions[email] ?? '')).toBe(true);
+    expect(titled.versions[name]).toBe(person.versions[name]);
+    const cleared = await set({ [title]: null });
+    expect(cleared.values[title]).toBeNull();
+    expect((cleared.versions[title] ?? '') > (titled.versions[title] ?? '')).toBe(true);
+    // A reference cell's version is its link's, the same from both ends.
+    const acme = await m.client.records.create({
+      workspace: m.slug,
+      objectId: m.companies.id,
+      id: newId(),
+      mutationId: newId(),
+    });
+    const linked = await set({ [company]: { objectId: m.companies.id, recordId: acme.id } });
+    expect((linked.versions[company] ?? '') > (cleared.versions[title] ?? '')).toBe(true);
+    const companyAttributes = await m.client.attributes.list({ workspace: m.slug, objectId: m.companies.id });
+    const team = companyAttributes.find((each) => each.apiSlug === 'team')?.id ?? '';
+    const [acmeNow] = await m.client.records.get({ workspace: m.slug, ids: [acme.id] });
+    expect(acmeNow?.versions[team]).toBe(linked.versions[company]);
+    expect(acmeNow?.linkTotals).toEqual({});
+  });
+
   it('refuses all or none: one bad value refuses the edit with 422 and keeps every value', async () => {
     const m = await memberWithWorkspace(app);
     const person = await createPerson(m, 'Ada');

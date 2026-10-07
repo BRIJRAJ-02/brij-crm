@@ -540,6 +540,12 @@ export interface LinkCells {
   readonly values: ReadonlyMap<string, ReadonlyMap<string, unknown>>;
   /** Only for a multi cell cut at the cap: how many live links it holds in all. */
   readonly totals: ReadonlyMap<string, ReadonlyMap<string, number>>;
+  /**
+   * Each cell's version: that of its latest link in the period (the write
+   * that made it; one write's links share its version), whether or not the far
+   * record is in the trash. A cell with no link has none.
+   */
+  readonly versions: ReadonlyMap<string, ReadonlyMap<string, string>>;
 }
 
 /** Sets `value` at `ownerId` then `attributeId` in a two level map. */
@@ -571,7 +577,8 @@ export async function linkValues(
 ): Promise<LinkCells> {
   const values = new Map<string, Map<string, unknown>>();
   const totals = new Map<string, Map<string, number>>();
-  if (ownerIds.length === 0 || references.length === 0) return { values, totals };
+  const versions = new Map<string, Map<string, string>>();
+  if (ownerIds.length === 0 || references.length === 0) return { values, totals, versions };
   const relationshipsById = await loadRelationships(
     tx,
     references.flatMap((attribute) => (attribute.relationshipId === null ? [] : [attribute.relationshipId])),
@@ -593,9 +600,15 @@ export async function linkValues(
       join records r on r.workspace_id = k.workspace_id and r.id = ${far} and r.deleted_at is null
       where k.relationship_id = ${relationship.id} and ${mine} = o.owner and ${period}
     `;
-    // One more than the cap, so a cell that holds more is known to be cut.
-    const rows = await tx.execute<{ owner: string; record_id: string | null; object_id: string | null }>(sql`
-      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id
+    // One more than the cap, so a cell that holds more is known to be cut; and each cell's latest link's version.
+    const rows = await tx.execute<{
+      owner: string;
+      record_id: string | null;
+      object_id: string | null;
+      latest: string | null;
+    }>(sql`
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
       from unnest(${owners}) as o(owner)
       left join lateral (
         select r.id as record_id, r.object_id, ${position} as p, k.active_from as f, k.id as kid
@@ -603,6 +616,12 @@ export async function linkValues(
         order by ${position}, k.active_from, k.id
         ${cap === undefined ? sql`` : sql`limit ${cap + 1}`}
       ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = ${relationship.id} and ${mine} = o.owner and ${period}
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
       order by o.owner, l.p, l.f, l.kid
     `);
     // Grouped by owner in one pass, so a page of 200 records is never 200 scans of every row.
@@ -613,6 +632,7 @@ export async function linkValues(
       if (row.record_id !== null && row.object_id !== null) {
         items.push({ objectId: row.object_id, recordId: row.record_id });
       }
+      if (row.latest !== null) setCell(versions, row.owner, attribute.id, row.latest);
     }
     const cut: string[] = [];
     for (const [ownerId, items] of byOwner) {
@@ -627,7 +647,7 @@ export async function linkValues(
     `);
     for (const row of counted.rows) setCell(totals, row.owner, attribute.id, row.n);
   }
-  return { values, totals };
+  return { values, totals, versions };
 }
 
 /**
