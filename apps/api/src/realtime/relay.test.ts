@@ -530,7 +530,7 @@ describe('the relay', () => {
     await expect.poll(() => connections(name), WAIT).toBe(0);
   });
 
-  it('goes dormant when its connection is lost while waiting, rather than reconnecting, and a poke wakes it', async () => {
+  it('reconnects with backoff when its connection is lost before the quiet spell is over, and publishes what came meanwhile', async () => {
     const centrifugo = await fakeCentrifugo();
     servers.push(centrifugo);
     const name = `crm-relay-drop-${randomUUID().slice(0, 8)}`;
@@ -540,23 +540,34 @@ describe('the relay', () => {
     await testQuery(ownerUrl, `select pg_notify('crm_outbox', $1)`, [workspaceId]);
     await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1]);
 
-    // What Neon does when it suspends the compute: the connection simply goes.
     const dropped = await testQuery<{ dropped: boolean }>(
       adminUrl,
       'select pg_terminate_backend(pid) as dropped from pg_stat_activity where application_name = $1',
       [name],
     );
     expect(dropped).toEqual([{ dropped: true }]);
-    await expect.poll(() => relay.mode(), WAIT).toBe('dormant');
-    expect(lines).toContain('Relay lost its connection; dormant until a write wakes it');
+    // Written while it was gone, with nobody listening and no poke: the reconnect's first poll finds it.
     await events(workspaceId, [2]);
-    await sleep(300);
-    expect(await connections(name)).toBe(0);
-    expect(centrifugo.seqs(workspaceId)).toEqual([1]);
-
-    relay.wake();
     await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1, 2]);
+    expect(lines).toContain('Relay lost its connection; reconnecting');
+    expect(relay.mode()).toBe('active');
     await expect.poll(() => unpublished(workspaceId), WAIT).toEqual([]);
+  });
+
+  it('never loses a poke that arrives as a dropped connection is seen', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const name = `crm-relay-race-${randomUUID().slice(0, 8)}`;
+    const workspaceId = await workspace();
+    // A short quiet spell: the drop comes as the relay is about to decide whether to sleep.
+    const { relay } = relayTo(centrifugo.url, { applicationName: name, pollScheduleMs: [60_000], dormantAfterMs: 400 });
+    await expect.poll(() => connections(name), WAIT).toBe(1);
+    await events(workspaceId, [1]);
+    await Promise.all([
+      testQuery(adminUrl, 'select pg_terminate_backend(pid) from pg_stat_activity where application_name = $1', [name]),
+      Promise.resolve().then(() => relay.wake()),
+    ]);
+    await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1]);
   });
 
   it('prunes rows published more than a day ago while active, and never while dormant', async () => {

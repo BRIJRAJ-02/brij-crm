@@ -26,8 +26,9 @@
 //   spell. Taking the lock, it LISTENs, then polls.
 // - Dormant: after 3 minutes with no rows found and no notification, it
 //   closes the connection (which unlistens and lets go of the lock) and makes
-//   no database call at all. A connection lost while waiting (Neon suspending
-//   the compute, a restart) also sends it dormant rather than reconnecting.
+//   no database call at all. A connection lost before the quiet spell is over
+//   (a restart, a network blip) reconnects with backoff; one lost after it
+//   (Neon suspending the compute) goes dormant rather than waking it again.
 // - Waking: the api pokes the worker after a write commits (`wake.ts`), and
 //   `wake()` reconnects, drains, and listens again. At boot it drains once,
 //   then follows the same rules. A lost poke only delays delivery until the
@@ -435,21 +436,22 @@ export function createRelay(deps: RelayDeps): Relay {
         ended = await session(reader);
       } catch (error) {
         if (!halted()) log.warn('Relay failed; reconnecting', errorFields(error));
-      } finally {
-        await reader?.close();
       }
+      // Decide before awaiting the close, and clear `woken` with the decision, so a poke that lands while the
+      // connection closes wakes the relay rather than being swallowed by it.
+      const dormant = !halted() && (ended?.reason === 'quiet' || quiet());
+      if (dormant) woken = false;
+      await reader?.close();
       if (halted()) break;
       if (ended?.reason === 'lost') {
-        // Neon suspending the compute drops the connection; reconnecting would wake it again for nothing.
-        // Only a poke from here on wakes it.
-        woken = false;
-        log.warn('Relay lost its connection; dormant until a write wakes it', errorFields(ended.error));
-        current = 'dormant';
-        continue;
+        log.warn(
+          dormant
+            ? 'Relay lost its connection after a quiet spell; dormant until a write wakes it'
+            : 'Relay lost its connection; reconnecting',
+          errorFields(ended.error),
+        );
       }
-      if (ended?.reason === 'quiet' || quiet()) {
-        // The session cleared `woken` when it decided; a failed connect clears it here.
-        if (ended === undefined) woken = false;
+      if (dormant) {
         log.info('Relay dormant: no database calls until a write wakes it', { quietMs: dormantAfterMs });
         current = 'dormant';
         continue;
