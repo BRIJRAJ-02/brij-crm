@@ -406,10 +406,12 @@ Tracer Bullet: each milestone ends with something you can see, in production whe
 - [ ] `/sync`: spec 0005's AC-37 ("Add attribute" opens a dialog for anyone) is amended by AC-135 and AC-136 here: only holders of `schema.manage` see it, and a member's `attributes.create` answers 403 `FORBIDDEN`. Record it against `docs/specs/0005-core-loop/index.md`.
 - [ ] `/sync`: `apps/api/src/door.test.ts` must learn the new subpaths. Its `BOOTSTRAP` list (`system.status`, `me.get`, `workspaces.create`) and `RAW_DATABASE_FILES` (`system/router.ts`, `workspaces/router.ts`) stay the only handlers allowed around the door, and `workspaces.create` keeps minting its bootstrap scope inside `packages/core`; its `AROUND_THE_DOOR` scan should also flag any module file importing `@crm/core/system` or `@crm/core/testing` (none is allowed, not even the bootstrap files), and its existing scan for `SYSTEM_ACTOR` should look for it from the new subpath. `access.mine` joins the procedures behind `member`. Record the rule in `apps/api/AGENTS.md`.
 
-## Open questions for the owner
+## Owner decisions
+
+**Answered by the owner on 8 October 2026: items 1, 2, 3 and 5 accepted as recommended. Item 4 stays open until #23.**
 
 1. **Admins get everything but five owner only permissions** (`workspace.delete`, `workspace.export`, `billing.manage`, `support.grant`, and granting or taking away the owner role). Recommended: yes. Admins run the workspace day to day, while deleting it, taking a full copy, paying and letting support in stay with the people who own it. Runner up: admins also export the whole workspace.
 2. **Every role may export the records and fields it can see** (`records.export` for owners, admins and members). Recommended: yes, as Attio does; an export never shows more than the screen does, and #24's rules let an admin narrow it later. Runner up: owners and admins only.
 3. **Delete forever and empty the trash for owners and admins** (`records.purge`). Recommended: yes, as #22's brief says; a member can still delete to the trash and restore within 30 days. Runner up: owners only.
-4. **The fourth role for #23**. Recommended: `guest`, read only on the objects shared with it and nothing else, for clients and contractors. Runner up: no fourth role until a customer asks.
+4. **The fourth role for #23** (not asked yet; settled when #23 is specced). Recommended: `guest`, read only on the objects shared with it and nothing else, for clients and contractors. Runner up: no fourth role until a customer asks.
 5. **Rollups count records a viewer can't open** (#16). Recommended: yes; a rollup's count may include hidden records, while its value is hidden when any of its inputs is hidden (the strictest of its inputs). Counting only visible records would make one stored value differ per viewer, which a stored rollup can't do. Runner up: hide every rollup over an object with any record rule.

@@ -310,6 +310,8 @@ Tracer Bullet: each milestone ends with something you can see in production or i
 - [ ] `/sync`: spec 0005's change events say "Hooks receive the full `Change`"; AC-83's far reference cap reverses that (a hook now gets at most 1,001 far ids per object and `coarseObjects`). Record it in `0005-change-events.md`, `packages/core/AGENTS.md` and `apps/api/AGENTS.md`.
 - [ ] `/sync`: record in `apps/api/AGENTS.md` and `packages/data/AGENTS.md` the live router, the audience channels, `outboxHook` as the one outbox writer, and spec 0005's AC-38 note on refetch (now catch up first).
 
-## Open questions for the owner
+## Owner decisions
+
+**Answered by the owner on 8 October 2026: accepted as recommended.**
 
 1. **The stub's timing signal.** On a channel whose audience may not read an event, the event arrives as a stub (`{ seq, at, kind: 'restricted' }`), so a member with restricted access learns that something they can't see changed, and when, but not what or where. Recommended: accept it. It is the cheapest way to keep one gap free stream per channel, it reveals no id, record, field or value, and only matters once #24 adds rules. Runner up: no stub and a sequence per channel kept by the relay, which brings back the complexity of a personal channel per member.

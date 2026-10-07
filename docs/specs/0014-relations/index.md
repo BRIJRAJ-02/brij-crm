@@ -316,7 +316,9 @@ Tracer Bullet: each milestone ends with something you can click in production. M
 - [ ] **#6**: undo for link deltas if its stack lands after this spec; a revision bump on far records if late link reads show up.
 - [ ] Sort by a many side stays best effort; revisit only if #12 shows it matters.
 
-## Open questions for the owner
+## Owner decisions
+
+**Answered by the owner on 8 October 2026: accepted as recommended.**
 
 1. **Showing and sorting by an attribute of a related record (a company's industry as a column on People, or People sorted by Company › Industry) moves to #16 (lookups).** This narrows #15's scope line: #15 shows, filters and sorts by the related record itself, and filters through its attributes. Recommended: accept, because a related attribute as a column is a lookup with its own storage and refresh rules, and building it here would build #16 twice. Runner up: build a read only, unsortable related column here and redo it in #16. On acceptance, `/sync` updates the scope's "Done when" for #15.
 
