@@ -22,6 +22,12 @@ The one client data layer. Every screen reads and writes CRM data through it and
 - The API sits at `/api/rpc` on the app's own origin, in every environment.
 - This package is the backbone of the app: follow `crm-frontend-state` for every change.
 - It is in the first load: keep Zod, the Better Auth client and anything heavy out of its static imports (load them with `import()`).
+- Change events (spec 0005; task 17 builds this): each event on `workspace:<id>` carries the workspace's `seq`, numbered with no gaps in commit order, and names what changed by id (`ChangeEvent` in `@crm/contracts`). The layer keeps the highest `seq` it has applied per workspace, and:
+  - a `seq` at or below the highest seen is ignored (a repeat, or one a refetch already covered);
+  - `highest + 1` is applied (refetch the named records, or the object's attributes for `definitions`, or everything held of the object when `coarse`), and becomes the highest;
+  - a jump past `highest + 1` is a gap: refetch everything it holds for the workspace, then move the highest forward to that `seq`;
+  - so a lower `seq` arriving late is dropped. The relay can deliver out of order: Centrifugo runs every command in a batch, so a row after a refused one may land before it, and the refused one comes again later.
+  - An event whose `mutationId` is one this browser sent is its own write's echo: move the highest forward, refetch nothing. A subscription that comes back without recovery (history gone after 5 minutes or 1,000 messages, or a Centrifugo restart) is a gap too.
 
 ## Gotchas
 
