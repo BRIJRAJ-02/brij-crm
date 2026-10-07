@@ -11,6 +11,17 @@ interface Person extends RecordBody {
 
 const person = (id: string, values: Record<string, unknown>): Person => ({ id, objectId: 'people', values });
 
+/** A server row with each cell's version and the record's `updatedAt`, as RecordView carries them. */
+const versioned = (
+  id: string,
+  values: Record<string, unknown>,
+  versions: Record<string, string>,
+  updatedAt: string,
+): Person => ({ id, objectId: 'people', values, versions, updatedAt });
+
+/** A uuid v7 shaped version whose time part is `ms`, so a greater `ms` is a later write. */
+const v = (ms: number) => `0199a6f2-${ms.toString(16).padStart(4, '0')}-7000-8000-000000000000`;
+
 /** What a screen sees: the record's id, object and values. */
 const seen = (store: RecordStore<Person>, id: string) => {
   const row = store.get(id);
@@ -155,5 +166,55 @@ describe('the plain record store', () => {
     store.receive(Array.from({ length: 50 }, (_, index) => person(`r${String(index * 20)}`, { name: 'patched' })));
     expect(heard).toEqual([50]);
     expect(seen(store, 'r980')?.values.name).toBe('patched');
+  });
+
+  describe('orders copies of a record by each cell’s version', () => {
+    const at = (second: number) => `2026-10-08T09:00:${String(second).padStart(2, '0')}.000Z`;
+    const london = versioned('r1', { name: 'Ada', city: 'London' }, { name: v(1), city: v(1) }, at(1));
+
+    it('keeps the later of two edits when their answers arrive out of order', () => {
+      const store = create();
+      store.receive([london]);
+      const first = store.edit('r1', { city: 'Paris' }, 'm1');
+      const second = store.edit('r1', { city: 'Rome' }, 'm2');
+      // The server wrote Paris (version 2), then Rome (version 3); Rome's answer arrives first.
+      second.confirm(versioned('r1', { name: 'Ada', city: 'Rome' }, { name: v(1), city: v(3) }, at(3)));
+      expect(seen(store, 'r1')?.values.city).toBe('Rome');
+      first.confirm(versioned('r1', { name: 'Ada', city: 'Paris' }, { name: v(1), city: v(2) }, at(2)));
+      expect(seen(store, 'r1')?.values.city).toBe('Rome');
+      expect(store.get('r1')?.versions?.city).toBe(v(3));
+    });
+
+    it('never lets a block sent before a confirmation, arriving after it, put the old value back', () => {
+      const store = create();
+      store.receive([london]);
+      const edit = store.edit('r1', { city: 'Paris' }, 'm1');
+      edit.confirm(versioned('r1', { name: 'Ada', city: 'Paris' }, { name: v(1), city: v(2) }, at(2)));
+      // A window's block, read before the write, lands now.
+      store.receive([london]);
+      expect(seen(store, 'r1')?.values).toEqual({ name: 'Ada', city: 'Paris' });
+    });
+
+    it('takes the newer cells from an older copy, and keeps the newer ones it holds', () => {
+      const store = create();
+      // Ours: the name changed at 3; theirs (read earlier overall) has a city written at 4 by someone else.
+      store.receive([versioned('r1', { name: 'Ada L', city: 'London' }, { name: v(3), city: v(1) }, at(3))]);
+      store.receive([versioned('r1', { name: 'Ada', city: 'Oslo' }, { name: v(1), city: v(4) }, at(2))]);
+      expect(seen(store, 'r1')?.values).toEqual({ name: 'Ada L', city: 'Oslo' });
+    });
+
+    it('lets a newer copy clear a cell that has no version left (a reference with no current link)', () => {
+      const store = create();
+      store.receive([versioned('r1', { name: 'Ada', company: { id: 'c1' } }, { name: v(1), company: v(2) }, at(2))]);
+      store.receive([versioned('r1', { name: 'Ada', company: null }, { name: v(1) }, at(3))]);
+      expect(seen(store, 'r1')?.values.company).toBeNull();
+    });
+
+    it('keeps a cell an older copy has no version for', () => {
+      const store = create();
+      store.receive([versioned('r1', { name: 'Ada', city: 'Paris' }, { name: v(1), city: v(2) }, at(2))]);
+      store.receive([versioned('r1', { name: 'Ada', city: null }, { name: v(1) }, at(1))]);
+      expect(seen(store, 'r1')?.values.city).toBe('Paris');
+    });
   });
 });

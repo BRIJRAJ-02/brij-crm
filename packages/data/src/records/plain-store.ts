@@ -4,6 +4,7 @@
 // getSnapshot). AC-40's prototype gate (tools/data-gate) measured it against TanStack DB.
 import {
   composeRecord,
+  newerBase,
   remainingLayers,
   type Layer,
   type RecordBody,
@@ -51,7 +52,8 @@ export function createPlainStore<Row extends RecordBody>(): RecordStore<Row> {
     const entry = entries.get(recordId);
     if (entry === undefined) return;
     const layers = remainingLayers(entry.layers, layerId, replaceBase);
-    if (put(recordId, replaceBase ? base : entry.base, layers)) notify(new Set([recordId]));
+    const next = replaceBase && base !== undefined ? newerBase(entry.base, base) : entry.base;
+    if (put(recordId, next, layers)) notify(new Set([recordId]));
   };
 
   const layerFor = (recordId: string, layer: PendingLayer<Row>): Layer<Row> => {
@@ -83,7 +85,8 @@ export function createPlainStore<Row extends RecordBody>(): RecordStore<Row> {
     receive: (rows) => {
       const changed = new Set<string>();
       for (const row of rows) {
-        if (put(row.id, row, entries.get(row.id)?.layers ?? [])) changed.add(row.id);
+        const entry = entries.get(row.id);
+        if (put(row.id, newerBase(entry?.base, row), entry?.layers ?? [])) changed.add(row.id);
       }
       notify(changed);
     },
