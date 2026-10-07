@@ -133,7 +133,9 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
   const relay = createRelay({
     connect: async () => {
       connects += 1;
-      const reader = createOutboxReader(await openDirectConnection({ url: appUrl, applicationName }));
+      const reader = createOutboxReader(
+        await openDirectConnection({ url: appUrl, applicationName, proveListen: false }),
+      );
       return options.wrap?.(reader) ?? reader;
     },
     publishBatch: createCentrifugoPublisher({ apiUrl: centrifugoUrl, apiKey: API_KEY, timeoutMs: 2_000 }).publishBatch,

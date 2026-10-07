@@ -19,14 +19,17 @@ const db = createDatabase({
   onPoolError: (error) => log.error('Idle database client failed', errorFields(error)),
 });
 
-const openDirect = () => openDirectConnection({ url: env.DATABASE_URL_DIRECT, applicationName: 'crm-worker-direct' });
+// The boot proof checks that a NOTIFY arrives on DATABASE_URL_DIRECT (no pooler); the relay's own connections,
+// opened each time it wakes, skip that second connection and NOTIFY.
+const openDirect = (proveListen: boolean) =>
+  openDirectConnection({ url: env.DATABASE_URL_DIRECT, applicationName: 'crm-worker-direct', proveListen });
 
 // Refuse to start on a role that can bypass row level security, on either URL (the direct one is the relay's,
 // and reads and marks rows under row level security like the pool), or a direct URL that is really a pooler (a
 // NOTIFY must arrive). The relay opens its own connections from here on.
 try {
   await db.assertAppRole();
-  const proof = await openDirect();
+  const proof = await openDirect(true);
   try {
     await assertAppConnection(proof, 'DATABASE_URL_DIRECT');
   } finally {
@@ -42,7 +45,7 @@ const relay =
   env.centrifugo === undefined
     ? undefined
     : createRelay({
-        connect: async () => createOutboxReader(await openDirect()),
+        connect: async () => createOutboxReader(await openDirect(false)),
         publishBatch: createCentrifugoPublisher(env.centrifugo).publishBatch,
         log,
       });

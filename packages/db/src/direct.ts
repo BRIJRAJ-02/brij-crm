@@ -15,19 +15,24 @@ export function assertDirectUrl(url: string, variable: string): void {
 
 /**
  * Opens a direct (unpooled) connection for LISTEN, the outbox relay and jobs.
- * Before handing it over, it proves a NOTIFY from a second session arrives.
- * Through a transaction pooler it never does, so the process refuses to start.
+ * Unless `proveListen` is false, before handing it over it proves a NOTIFY
+ * from a second session arrives: through a transaction pooler it never does,
+ * so the process refuses to start. Prove it once, at boot; a connection
+ * opened later (the relay waking) skips the proof, which costs a second
+ * connection and a round of NOTIFY each time.
  */
 export async function openDirectConnection(options: {
   url: string;
   applicationName: string;
   variable?: string;
+  proveListen?: boolean;
 }): Promise<pg.Client> {
   const variable = options.variable ?? 'DATABASE_URL_DIRECT';
   assertDirectUrl(options.url, variable);
 
   const listener = new pg.Client({ connectionString: options.url, application_name: options.applicationName });
   await listener.connect();
+  if (options.proveListen === false) return listener;
   try {
     await assertListenDelivers(listener, options.url, variable);
   } catch (error) {
