@@ -210,9 +210,10 @@ const gate: Gate = {
         count: COUNT,
         load: async (offset, limit, signal) => {
           const rows = await queryRecords(offset, limit, COUNT, latencyMs, signal);
-          store.receive(rows);
+          store.receive(rows, { hold: true });
           return rows.map((row) => row.id);
         },
+        release: store.release,
       });
       const view = createRecordView({ store, windows });
       mounted = { store, windows, view };
