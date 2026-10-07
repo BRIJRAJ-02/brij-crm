@@ -2,13 +2,14 @@
 // the first deciding first. What SortBuilder edits, and what #20 saves with a
 // view and runs.
 import * as z from 'zod';
+import { MAX_ATTRIBUTE_ID_LENGTH } from './filters.ts';
 
 /** The most sorts one view applies. */
 export const MAX_SORTS = 5;
 
 /** One sort: an attribute and a direction. */
 export const SortRule = z.object({
-  attributeId: z.string().trim().min(1),
+  attributeId: z.string().trim().min(1).max(MAX_ATTRIBUTE_ID_LENGTH),
   direction: z.enum(['ascending', 'descending']),
 });
 export type SortRule = z.infer<typeof SortRule>;

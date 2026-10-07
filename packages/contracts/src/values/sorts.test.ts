@@ -1,5 +1,6 @@
 // A view's sorts (spec 0003): an attribute and a direction each, at most five, each attribute once.
 import { describe, expect, it } from 'vitest';
+import { MAX_ATTRIBUTE_ID_LENGTH } from './filters.ts';
 import { MAX_SORTS, SortRules } from './sorts.ts';
 
 describe('SortRules', () => {
@@ -24,5 +25,11 @@ describe('SortRules', () => {
       direction: 'ascending',
     }));
     expect(SortRules.safeParse(many).success).toBe(false);
+  });
+
+  it('refuses an attribute id past its length cap', () => {
+    const long = 'a'.repeat(MAX_ATTRIBUTE_ID_LENGTH + 1);
+    expect(SortRules.safeParse([{ attributeId: long, direction: 'ascending' }]).success).toBe(false);
+    expect(SortRules.safeParse([{ attributeId: long.slice(1), direction: 'ascending' }]).success).toBe(true);
   });
 });
