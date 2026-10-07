@@ -572,6 +572,122 @@ describe('the door on every record procedure', () => {
   });
 });
 
+describe("another workspace's ids, sent from inside your own", () => {
+  it("refuses every one NOT_FOUND or ATTRIBUTE_VALUE_INVALID, and leaves the other workspace's data as it was", async () => {
+    const a = await memberWithWorkspace(app);
+    const b = await memberWithWorkspace(app);
+    const theirs = await createPerson(a, 'Ada', 'ada@example.com');
+    const theirCompany = await a.client.records.create({
+      workspace: a.slug,
+      objectId: a.companies.id,
+      id: newId(),
+      mutationId: newId(),
+    });
+    const theirMember = await memberIdOf(a);
+    const mine = await createPerson(b, 'Bea');
+    const before = {
+      attributes: await a.client.attributes.list({ workspace: a.slug, objectId: a.people.id }),
+      records: await a.client.records.get({ workspace: a.slug, ids: [theirs.id, theirCompany.id] }),
+    };
+    const own = { workspace: b.slug };
+    const setMine = (values: Record<string, unknown>) =>
+      b.client.records.setValues({
+        ...own,
+        recordId: mine.id,
+        values: Object.fromEntries(Object.entries(values).map(([id, value]) => [id, { value }])),
+        mutationId: newId(),
+      });
+    const cases: readonly { readonly name: string; readonly call: () => Promise<unknown>; readonly code: string }[] = [
+      {
+        name: "attributes.list on A's object",
+        call: () => b.client.attributes.list({ ...own, objectId: a.people.id }),
+        code: 'NOT_FOUND',
+      },
+      {
+        name: "attributes.create on A's object",
+        call: () =>
+          b.client.attributes.create({
+            ...own,
+            objectId: a.people.id,
+            title: 'Mole',
+            type: 'text',
+            mutationId: newId(),
+          }),
+        code: 'NOT_FOUND',
+      },
+      {
+        name: "records.query on A's object",
+        call: () => b.client.records.query({ ...own, objectId: a.people.id }),
+        code: 'NOT_FOUND',
+      },
+      {
+        name: "records.count on A's object",
+        call: () => b.client.records.count({ ...own, objectId: a.people.id }),
+        code: 'NOT_FOUND',
+      },
+      {
+        name: "records.create on A's object",
+        call: () => b.client.records.create({ ...own, objectId: a.people.id, id: newId(), mutationId: newId() }),
+        code: 'NOT_FOUND',
+      },
+      {
+        name: "records.setValues on A's record",
+        call: () =>
+          b.client.records.setValues({
+            ...own,
+            recordId: theirs.id,
+            values: { [b.attribute('job_title')]: { value: 'Mole' } },
+            mutationId: newId(),
+          }),
+        code: 'NOT_FOUND',
+      },
+      {
+        name: "records.setValues keyed by A's attribute",
+        call: () => setMine({ [a.attribute('job_title')]: 'Mole' }),
+        // An attribute of another workspace is no attribute here, as an unknown id is.
+        code: 'NOT_FOUND',
+      },
+      {
+        name: "records.create keyed by A's attribute",
+        call: () =>
+          b.client.records.create({
+            ...own,
+            objectId: b.people.id,
+            id: newId(),
+            values: { [a.attribute('job_title')]: 'Mole' },
+            mutationId: newId(),
+          }),
+        // An attribute of another workspace is no attribute here, as an unknown id is.
+        code: 'NOT_FOUND',
+      },
+      {
+        name: "A's member as an owner",
+        call: () => setMine({ [b.attribute('owner')]: { type: 'member', id: theirMember } }),
+        code: 'ATTRIBUTE_VALUE_INVALID',
+      },
+      {
+        name: "A's company as a reference",
+        call: () => setMine({ [b.attribute('company')]: { objectId: a.companies.id, recordId: theirCompany.id } }),
+        code: 'ATTRIBUTE_VALUE_INVALID',
+      },
+    ];
+    const answers = [];
+    for (const each of cases) answers.push({ name: each.name, code: (await failure(each.call)).code });
+    expect(answers).toEqual(cases.map((each) => ({ name: each.name, code: each.code })));
+
+    expect(await a.client.attributes.list({ workspace: a.slug, objectId: a.people.id })).toEqual(before.attributes);
+    expect(await a.client.records.get({ workspace: a.slug, ids: [theirs.id, theirCompany.id] })).toEqual(
+      before.records,
+    );
+    expect(await a.client.records.count({ workspace: a.slug, objectId: a.people.id })).toEqual({
+      count: 1,
+      atLeast: false,
+    });
+    const [mineNow] = await b.client.records.get({ ...own, ids: [mine.id] });
+    expect(mineNow).toEqual(mine);
+  });
+});
+
 describe('members.list', () => {
   it('answers the active members by name, with their emails, leaving out removed ones', async () => {
     const m = await memberWithWorkspace(app);
