@@ -2,7 +2,7 @@
 
 ## Context
 
-> ⚠️ Premise note: the worker as specs 0001 and 0005 describe it polls the database every second (the relay) and every 2 seconds (Graphile Worker). Every poll is activity, so Neon's free compute never suspends, and a month of an always awake compute is more than the free plan's monthly allowance. Spec 0005 assumed the compute would sleep and the relay would reconnect; with a poll running, it never sleeps. The right framing: the worker must hold no connection when there is no work, and something else must wake it. This spec designs that, and spec 0005's relay joins it.
+> ⚠️ Premise note: Graphile Worker polls the database every 2 seconds, and every poll is activity, so Neon's free compute would never suspend, and a month of an always awake compute is more than the free plan's monthly allowance. Spec 0005 already met this for the relay (active while there is work, dormant after 3 quiet minutes, woken by the API after a write). The right framing: the whole worker must hold no connection when there is no work, and something else must wake it. This spec extends the relay's lifecycle to the job runner, with one idle clock for both.
 
 > ⚠️ Premise note: spec 0005's follow up asks for code emails as jobs. A sign in code exists in plain form only at the moment it is sent; a job would have to store it in the queue, which sits outside row level security and keeps failed rows. The code email stays in the request, where the person is waiting for it anyway.
 
@@ -53,18 +53,25 @@ Per decision (the brief's recommendations, taken):
 - Item snapshots in `job_items`: the confirm step shows an exact count (#22), and items are checked again in their batch so a stale snapshot never writes blindly.
 - Coalescing by key into a waiting job: #16's recomputes stay one job per attribute per burst.
 - Cancel stops, never undoes: undo is a feature promise (#22's bulk delete undo), not a runner one.
-- The API enqueues only through `crm_enqueue_job`, and the worker logs in as its own role: a bug in tenant code can't read or rewrite the queue. The runner up was granting the queue to `crm_app`; simpler, but it turns every SQL injection into cross tenant queue access.
+- The API enqueues only through `crm_enqueue_job`, and the worker logs in as its own role (`crm_worker`): a bug in tenant code can't read or rewrite the queue, list workspaces or delete outbox rows. `crm_outbox_workspaces` moves from `crm_app` to it, and the relay runs on it (settled in the cross check of 8 October 2026). The runner up was granting the queue to `crm_app`; simpler, but it turns every SQL injection into cross tenant queue access.
+- `crm_queue` holds exactly the rights `add_job` needs in the pinned version, named table by table: `add_job` runs with its caller's rights, so a broad grant would hand the API's definer function more of the queue than it uses. A guard test pins the list, so an upgrade fails loudly.
+- `job_key_mode` `replace` on every enqueue: the hand over and the lease requeue run while their own queue row is locked, and `replace` then clears that row's key and inserts a fresh row at the new time; `preserve_run_at` could keep an old time on the rare path where an unlocked row waits.
+- Roles, `jobs.manage`, `enterAsActor` and `systemScope` from spec 0009, not a column or entry point of our own: one owner per concept, and a job's member is checked by the same door as a request.
+- Job events as spec 0007's `jobs` kind, delivered by spec 0009's rule: a job id never reaches a member who can't read the job; the cost is a coarse refetch for members who share a channel with people who can't.
 - A definer function to list workspaces for the daily fan out, rather than giving the worker the identity login: the worker never sees sessions.
 - The daily cleanup per workspace at 03:00 UTC, once per day by `once_key`, one day of fill.
-- Retention: finished jobs 30 days, the outbox 7 days after publish (Centrifugo history is 5 minutes, so older rows only help debugging), done items at the next cleanup.
+- Retention: finished jobs 30 days, done items at the next cleanup. The outbox is spec 0007's: published rows are kept 24 hours (`OUTBOX_RETENTION`, the catch up window), and the daily cleanup calls the same `crm_outbox_prune` the relay calls while awake.
 - The worker sleeps when idle and the API wakes it: the only design under which the free Neon compute can suspend. The runner up was accepting an always awake compute; it runs out of the free allowance within the month.
+- The API wakes it on writes and, once a minute per process, on any signed in request: the worker sleeps only when nobody uses the app, and a person who has been reading doesn't wait for a wake on their first edit. The runner up was waking on writes only, which saves a little compute but puts a cold wake in front of the first change of a session.
 - Code emails stay in the request (see the premise note).
 - A preview only test kind proves the runner by clicking, since the first user kinds belong to later features.
 
 ## Evidence
 
-- The worker today (`apps/api/src/worker.ts`) opens the pooled and direct connections, proves NOTIFY arrives, exits on a dropped direct connection, and serves `/health`. No queue, no relay yet (spec 0005 milestone 3 is unbuilt). `graphile-worker` isn't in the catalog.
-- `DATABASE_URL_DIRECT` is the app login on the direct host (`.env.example`), so the worker has no rights beyond `crm_app` today.
+- The worker on `feat/core-loop` (`apps/api/src/worker.ts`) opens the pooled and direct connections, proves NOTIFY arrives and serves `/health`. Spec 0005 milestone 3, in flight, adds the relay with its active and dormant states (`apps/api/src/realtime/relay.ts`, dormant after 3 quiet minutes, a safety poll backing off to every 60 seconds) and the wake endpoint `POST /internal/outbox-wake` with the `x-crm-wake` secret header (`WORKER_INTERNAL_URL`, `WORKER_WAKE_SECRET`); the worker checks its direct connection's role. `graphile-worker` isn't in the catalog or `node_modules`.
+- `graphile-worker` 0.18.0 (npm, 8 October 2026): schema migrations 000001 to 000020; the queue lives in `_private_jobs`, `_private_job_queues`, `_private_tasks` and `_private_known_crontabs`; `add_job` is `plpgsql` without `security definer` and calls `add_jobs`, which takes `job_key_mode` `replace`, `preserve_run_at` or `unsafe_dedupe`; `pollInterval` defaults to 2,000 ms.
+- `DATABASE_URL_DIRECT` is the app login on the direct host (`.env.example`), so the worker has no rights beyond `crm_app` today; the local PgBouncer knows only the app login.
+- `createDatabase` (`packages/db/src/client.ts`) sets no `idleTimeoutMillis`, so node-postgres's 10 second default applies.
 - The engine's `purgeDeleted` already purges in batches of 500 with `skip locked`, one transaction per batch, "a system job (#8 schedules it)", and loops itself; it locks records before their lists, the reverse of entry writes (spec 0005's follow up).
 - `runWrite` runs hooks inside the write's transaction and retries deadlocks three times; `setValuesBatch` caps at 500 records under per record savepoints, the pattern item batches reuse.
 - `.railway/railway.ts` declares no domain for the worker, so it is reachable only on Railway's private network.
