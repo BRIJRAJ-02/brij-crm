@@ -13,6 +13,8 @@ The one client data layer. Every screen reads and writes CRM data through it and
 | `src/auth/` | Sign in. `client.ts` is Better Auth's browser client, its one wrapper (lint lets only `src/auth/` import `better-auth/client`), loaded with a dynamic import by `auth.ts` |
 | `src/ids.ts` | `createIdMinter()`: UUID v7 from the clock and browser crypto |
 | `src/data.test.ts` | The layer against a fake API: the real oRPC handler over the contract, and Better Auth's routes by hand |
+| `src/records/` | The record store (spec 0005, task 9's gate): `store.ts` (the `RecordStore` interface and the layering rule, `composeRecord` and `remainingLayers`), `plain-store.ts` (a Map of base plus layers per record), `windows.ts` (a view's ordered ids in blocks of 100: load, abort, evict past 5 blocks), `view.ts` (windows plus store as the grid's RowSource, for useSyncExternalStore). Not wired into `createDataLayer` yet (task 11) |
+| `prototype/` | AC-40's prototype gate: `tanstack-store.ts` (the same interface on TanStack DB, its one importer, plus `probeTanstackLayering()`, which `tanstack-layering.test.ts` runs: TanStack DB's own transactions against the layering rule), `harness/` (the real DataGrid over 100,000 synthetic records), `measure.ts` (`pnpm --filter @crm/data gate --rounds=5`: builds the harness in production mode, then runs every source in Chromium through Playwright once per round, in a rotating order, and judges each store against the controls from its own round, with the load average printed). Numbers and the call are in `docs/specs/0005-core-loop/verify.md` |
 
 ## Conventions
 
@@ -24,7 +26,8 @@ The one client data layer. Every screen reads and writes CRM data through it and
 
 ## Gotchas
 
-- TanStack DB isn't added yet. #6 starts with a prototype of a windowed, server filtered query over a million rows. If it struggles, the implementation switches to a normalised store on TanStack Query, and the interface stays the same.
+- The record store is the plain store, not TanStack DB: AC-40's gate (verify.md) found TanStack DB's optimistic transactions break the layering rule (a later edit carries an earlier one's value as a whole row snapshot, and any in flight transaction defers every sync write for the collection), so the TanStack store had to keep its own layers anyway, and then cost more memory and time for nothing. It stays in `prototype/` (with `@tanstack/db` as a dev dependency) so the gate can be rerun.
+- The store keeps every body it has loaded; only the id windows are evicted. 100,000 records were about 70 MB of heap in the gate, and scrolling with them all loaded missed more frames than the grid alone. Task 11 should evict bodies no window or pending layer refers to, so memory stays flat while you scroll.
 
 ## Agent skills
 
