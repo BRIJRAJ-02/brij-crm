@@ -56,6 +56,11 @@ export function fieldTypeOf<T extends AttributeType>(type: T): AttributeTypeDef<
   return FIELD_TYPES[type];
 }
 
+/** An attribute type's name for people, as a type picker lists it beside the type's `icon` ("Long text"). */
+export function typeLabelOf(type: AttributeType): string {
+  return strings.types[type];
+}
+
 /** True for types people never edit: the system writes them. */
 export function isSystemOnly(type: AttributeType): boolean {
   return fieldTypeOf(type).editIn === 'none';

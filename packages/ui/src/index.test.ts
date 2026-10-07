@@ -131,6 +131,7 @@ describe('@crm/ui', () => {
       'quickPicks',
       'safeHref',
       'safeImageSrc',
+      'typeLabelOf',
       'useDelayedLoading',
     ]);
   });

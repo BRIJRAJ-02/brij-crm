@@ -53,7 +53,7 @@ export { VisuallyHidden, type VisuallyHiddenProps } from './atoms/VisuallyHidden
 export { AttributeDisplay, type AttributeDisplayProps } from './fields/AttributeDisplay.tsx';
 export { AttributeEditor, type AttributeEditorProps } from './fields/AttributeEditor.tsx';
 export { createPhoneParser, loadPhoneLibrary } from './fields/Phone/phone-library.ts';
-export { columnWidthOf, FIELD_TYPES, fieldTypeOf, isSystemOnly } from './fields/registry.ts';
+export { columnWidthOf, FIELD_TYPES, fieldTypeOf, isSystemOnly, typeLabelOf } from './fields/registry.ts';
 export type {
   AttributeTypeDef,
   CellChange,
