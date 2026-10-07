@@ -5,6 +5,7 @@ import {
   MAX_ATTRIBUTE_ID_LENGTH,
   MAX_FILTER_CONDITIONS,
   MAX_FILTER_DEPTH,
+  MAX_FILTER_NESTING,
   MAX_GROUP_CONDITIONS,
   MAX_THROUGH_HOPS,
 } from './filters.ts';
@@ -74,5 +75,33 @@ describe('FilterGroup', () => {
     const long = 'a'.repeat(MAX_ATTRIBUTE_ID_LENGTH + 1);
     expect(FilterCondition.safeParse({ attributeId: long, operator: 'is_empty' }).success).toBe(false);
     expect(FilterCondition.safeParse({ attributeId: long.slice(1), operator: 'is_empty' }).success).toBe(true);
+  });
+
+  it('walks every key of a node shaped as both a group and a through, so a chain hidden in it is refused', () => {
+    let chain: unknown = leaf;
+    for (let level = 0; level < 2_000; level += 1) chain = through(['x'], chain as FilterCondition);
+    const mixed = { conjunction: 'and', conditions: [], operator: 'through', path: ['x'], condition: chain };
+    const parsed = FilterGroup.safeParse(mixed);
+    expect(parsed.success).toBe(false);
+    expect(parsed.error?.issues[0]?.message).toBe(
+      `A filter follows at most ${String(MAX_THROUGH_HOPS)} relationships.`,
+    );
+    // Depth hidden under any other key is refused too, before a schema recurses into it.
+    let deep: unknown = 'x';
+    for (let level = 0; level < 3_000; level += 1) deep = [deep];
+    const valued = { conjunction: 'and', conditions: [{ attributeId: 'a', operator: 'is', value: deep }] };
+    expect(FilterGroup.safeParse(valued).error?.issues[0]?.message).toBe('This filter is nested too deep.');
+    const hidden = { conjunction: 'and', conditions: [], extra: deep };
+    expect(FilterGroup.safeParse(hidden).error?.issues[0]?.message).toBe('This filter is nested too deep.');
+  });
+
+  it(`takes the deepest real filter, inside ${String(MAX_FILTER_NESTING)} levels`, () => {
+    const references = Array.from({ length: 3 }, () => ({ objectId: 'o', recordId: 'r' }));
+    const deepest = through(['x'], through(['y'], { attributeId: 'a', operator: 'is_any_of', values: references }));
+    const nested = {
+      conjunction: 'and',
+      conditions: [{ conjunction: 'or', conditions: [{ conjunction: 'and', conditions: [deepest] }] }],
+    };
+    expect(FilterGroup.safeParse(nested).success).toBe(true);
   });
 });

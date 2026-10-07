@@ -402,6 +402,17 @@ describe('records.query and records.count', () => {
     }
   });
 
+  it('refuses a group that also carries a through chain 2,000 deep with 400 INPUT_INVALID, not a 500', async () => {
+    const m = await memberWithWorkspace(app);
+    let chain: unknown = { attributeId: m.attribute('job_title'), operator: 'is_empty' };
+    for (let level = 0; level < 2_000; level += 1) chain = { operator: 'through', path: ['x'], condition: chain };
+    const filter = { conjunction: 'and', conditions: [], operator: 'through', path: ['x'], condition: chain };
+    const scope = { workspace: m.slug, objectId: m.people.id, filter: filter as unknown as FilterGroup };
+    for (const call of [() => m.client.records.query(scope), () => m.client.records.count(scope)]) {
+      expect(await refusal(call)).toMatchObject({ code: 'INPUT_INVALID', status: 400 });
+    }
+  });
+
   it('refuses a limit over 200, a position with a cursor, a bad cursor, and an unknown object', async () => {
     const m = await memberWithWorkspace(app);
     const scope = { workspace: m.slug, objectId: m.people.id };
