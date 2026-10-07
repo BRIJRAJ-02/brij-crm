@@ -413,6 +413,30 @@ describe('isolation', () => {
     expect(b.memberId).not.toBe(a.memberId);
   });
 
+  it("reads none of another workspace's outbox rows, even with no filter, nor stamps them", async () => {
+    const a = await workspaceWithMember('outbox-iso-a');
+    const b = await workspaceWithMember('outbox-iso-b');
+    for (const w of [a, b]) {
+      const objectId = await objectIn(w.workspaceId);
+      await db.withWorkspace(w.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into outbox (workspace_id, seq, kind, object_id) values (${w.workspaceId}, 1, 'records', ${objectId}), (${w.workspaceId}, 2, 'records', ${objectId})`,
+        ),
+      );
+    }
+    const seenFromA = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ workspace_id: string }>(sql`select workspace_id from outbox`),
+    );
+    expect(seenFromA.rows).toHaveLength(2);
+    expect(seenFromA.rows.every((row) => row.workspace_id === a.workspaceId)).toBe(true);
+    // An unfiltered stamp from A touches only A's rows; B's still wait.
+    await db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`update outbox set published_at = now()`));
+    const fromB = await db.withWorkspace(b.workspaceId, (tx) =>
+      tx.execute<{ seq: number }>(sql`select seq::int as seq from outbox where published_at is null order by seq`),
+    );
+    expect(fromB.rows).toEqual([{ seq: 1 }, { seq: 2 }]);
+  });
+
   it('returns nothing at all outside withWorkspace', async () => {
     await workspaceWithMember('gamma');
     const pool = new pg.Pool({ connectionString: appUrl });

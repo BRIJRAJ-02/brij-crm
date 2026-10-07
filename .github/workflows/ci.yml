@@ -40,6 +40,25 @@ jobs:
         image: axllent/mailpit:v1.31.4
         ports:
           - 8025:8025
+      # Centrifugo for the realtime tests (spec 0005): the image infra/centrifugo/Dockerfile pins, on the
+      # local stack's ports and keys. A service can't take the repo's config file, so the workspace
+      # namespace comes in as JSON; a test in apps/api keeps it equal to infra/centrifugo/config.json.
+      centrifugo:
+        image: centrifugo/centrifugo:v6.9.7
+        env:
+          CENTRIFUGO_HTTP_SERVER_INTERNAL_PORT: "9000"
+          CENTRIFUGO_HEALTH_ENABLED: "true"
+          CENTRIFUGO_HTTP_API_KEY: local-centrifugo-api-key
+          CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY: local-centrifugo-token-secret
+          CENTRIFUGO_CHANNEL_NAMESPACES: '[{"name":"workspace","allow_subscribe_for_client":false,"history_size":1000,"history_ttl":"300s","force_recovery":true}]'
+        ports:
+          - 8000:8000
+          - 9000:9000
+        options: >-
+          --health-cmd "wget -q -O - http://localhost:9000/health"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
     steps:
       - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
