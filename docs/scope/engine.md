@@ -21,32 +21,42 @@ Spec [0005](../specs/0005-core-loop/index.md) · code in `apps/web/`, `apps/api/
 
 ## Slice 2: Objects and attributes
 
-### 13. Objects and attributes · needs a decision
+### 13. Objects and attributes
 Let a workspace shape its own data: create custom objects and give any object attributes of any type, with the standard objects editable in exactly the same way.
 **Done when:** an admin creates an object; adds attributes of every type (text, long text, number, currency, date, checkbox, select, multi select, status, rating, email, phone, link, location, member); marks one required or unique or gives it a default; renames, reorders, archives and restores both objects and attributes; each type renders through its one shared field design; everyone's table updates live; the object count goes through one central limits check.
-- [ ] Design it (spec): `/architect objects and attributes`
+- [x] Design it (spec): `/architect objects and attributes`
+- [ ] Build it: `/develop objects and attributes`
+Spec [0012](../specs/0012-objects-attributes/index.md)
 
-### 14. Validation and type changes · needs a decision
+### 14. Validation and type changes
 Keep data clean and let the model evolve: rules on what a value may be, and safe changes to an attribute's type after records exist.
 **Done when:** an admin sets format, min and max, or "required once status is X" rules, and a save that breaks one is refused with the reason; an attribute's type changes (for example text to select) on a million records in the background, with a preview of the values that will not convert, and nothing is lost.
-- [ ] Design it (spec): `/architect validation and type changes`
+- [x] Design it (spec): `/architect validation and type changes`
+- [ ] Build it: `/develop validation and type changes`
+Spec [0013](../specs/0013-validation-type-changes/index.md)
 
 ## Slice 3: Relations
 
 ### 15. Relations
 Connect records across objects (a person works at a company, a deal has many people), in any direction and any shape.
-**Done when:** an admin adds a relationship between any two objects, or an object and itself, as one to one, one to many or many to many, and each side gets its own named attribute (for example Company · People and Person · Company); setting a link from either side updates the other in the same save, live for everyone; cardinality is enforced on both sides; deleting a record removes its links but never the records on the other side; a table can show, filter and sort by related records and by their attributes.
+**Done when:** an admin adds a relationship between any two objects, or an object and itself, as one to one, one to many or many to many, and each side gets its own named attribute (for example Company · People and Person · Company); setting a link from either side updates the other in the same save, live for everyone; cardinality is enforced on both sides; deleting a record removes its links but never the records on the other side; a table can show, filter and sort by related records, and filter through their attributes (showing and sorting by a related record's attributes moved to #16, owner decision 8 October 2026).
 - [ ] Build it: `/develop relations`
+- [x] Design it (spec): `/architect relations`
+Spec [0014](../specs/0014-relations/index.md)
 
-### 56. Schema map · needs a decision
+### 56. Schema map
 A visual map of the workspace's data model: every object as a card listing its attributes, and a line for every relationship between them, so anyone can see how People, Companies, Deals and custom objects connect.
 **Done when:** the map shows every object the viewer may see, with its attributes grouped by type, and draws each relationship as a line labelled with both attribute names and the cardinality; clicking an object opens its settings and clicking a line opens the relationship; an admin can create a relationship by drawing a line between two objects; the map updates live as the model changes and stays readable with 50 objects.
-- [ ] Design it (spec): `/architect schema map`
+- [x] Design it (spec): `/architect schema map`
+- [ ] Build it: `/develop schema map`
+Spec [0016](../specs/0016-schema-map/index.md)
 
-### 16. Computed attributes · needs a decision
+### 16. Computed attributes
 Attributes that work themselves out: formulas on a record, rollups across relations (total deal value on a company), and lookups (the industry of a person's company).
 **Done when:** an admin creates a formula, rollup or lookup attribute; it updates live when its inputs change, including through relations; it can be filtered, sorted and shown like any other attribute; recomputing across a million records stays inside the scale budget.
-- [ ] Design it (spec): `/architect computed attributes`
+- [x] Design it (spec): `/architect computed attributes`
+- [ ] Build it: `/develop computed attributes`
+Spec [0015](../specs/0015-computed-attributes/index.md)
 
 ## Slice 4: Record page and activity
 
@@ -54,6 +64,8 @@ Attributes that work themselves out: formulas on a record, rollups across relati
 Organise attributes into sections (Contact info, Financials) and choose what each object's record page shows.
 **Done when:** an admin groups and orders attributes into sections per object; the record page, create form and settings follow the grouping; attributes hidden from the page stay available in tables and filters.
 - [ ] Build it: `/develop attribute groups and layouts`
+- [x] Design it (spec): `/architect attribute groups and layouts`
+Spec [0018](../specs/0018-attribute-groups-layouts/index.md)
 
 ## Slice 17: Lists and pipelines
 

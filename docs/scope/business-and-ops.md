@@ -4,15 +4,19 @@ Running the product as a SaaS business: monitoring, scale, plans and limits, the
 
 ## Slice 1: Core loop (the walking skeleton)
 
-### 11. Monitoring and product analytics · needs a decision
+### 11. Monitoring and product analytics
 See errors, slow requests, realtime delay and key product events from the first slice on, so problems show up before users report them.
 **Done when:** a production error is visible with its request within a minute; request time, realtime delay and job backlog are charted; signups, workspaces created and first records created are counted.
-- [ ] Design it (spec): `/architect monitoring and product analytics`
+- [x] Design it (spec): `/architect monitoring and product analytics`
+- [ ] Build it: `/develop monitoring and product analytics`
+Spec [0010](../specs/0010-monitoring-analytics/index.md)
 
-### 12. Scale budget and load harness · needs a decision
+### 12. Scale budget and load harness
 Write down the targets (100 online, room for 1,000, a million records per workspace, response and delivery times) and build the tools that prove them, so every later slice is checked against them.
 **Done when:** one command seeds a workspace with a million records across related objects; one command simulates 100 people browsing and editing at once and reports the p95 of reads, writes and live delivery against the targets.
-- [ ] Design it (spec): `/architect scale budget and load harness`
+- [x] Design it (spec): `/architect scale budget and load harness`
+- [ ] Build it: `/develop scale budget and load harness`
+Spec [0011](../specs/0011-scale-budget-load-harness/index.md)
 
 ## Slice 10: Trust and launch (the end of the first release)
 

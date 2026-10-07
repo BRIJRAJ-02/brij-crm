@@ -68,25 +68,33 @@ The engine every feature stands on, modelled on how Attio works (not on Timefix)
 - [ ] Document it: `/document data model`
 Spec [0004](../specs/0004-data-model/index.md) · code in `packages/db/`, `packages/core/`, `packages/contracts/`
 
-### 6. Client data and state · needs a decision · GA
+### 6. Client data and state · GA
 The backbone of the app and the top priority: one client data layer that holds every record a screen shows in one place, so a record shown in a table, a board, a record page and a search result is a single copy that updates everywhere at once.
 **Done when:** no screen fetches or stores records on its own; an edit appears instantly everywhere that record is shown, and rolls back with a message if the server refuses it; incoming changes patch every open view in place, with no reload; two people saving the same field get one clear winner (the last save) and the other sees a notice; the last change can be undone; memory stays flat while you scroll an object with a million records.
-- [ ] Design it (spec): `/architect client data and state`
+- [x] Design it (spec): `/architect client data and state`
+- [ ] Build it: `/develop client data and state`
+Spec [0006](../specs/0006-client-data-state/index.md)
 
-### 7. Change events and realtime · needs a decision
+### 7. Change events and realtime
 Every write produces one change event that names the records it touched. Those events reach every open screen allowed to see them, feed the client data layer, and later feed search, notifications, webhooks, automations and sync.
 **Done when:** a change shows on every permitted open screen within one second (p95) with 100 people online; a screen that drops its connection catches up on reconnect with no gap and no refresh; an event never carries data the viewer may not see.
-- [ ] Design it (spec): `/architect change events and realtime`
+- [x] Design it (spec): `/architect change events and realtime`
+- [ ] Build it: `/develop change events and realtime`
+Spec [0007](../specs/0007-realtime/index.md)
 
-### 8. Background jobs · needs a decision
+### 8. Background jobs
 A dependable way to run long work (imports, exports, recomputing, indexing, notifications, webhooks, sync) outside the request, so screens stay fast.
 **Done when:** a job survives a restart, retries on failure, reports progress and can be cancelled; one workspace's huge import never slows another workspace's work.
-- [ ] Design it (spec): `/architect background jobs`
+- [x] Design it (spec): `/architect background jobs`
+- [ ] Build it: `/develop background jobs`
+Spec [0008](../specs/0008-background-jobs/index.md)
 
-### 9. Access model · needs a decision · GA
+### 9. Access model · GA
 One permission model for the whole product: workspace roles as flat lists of permissions, teams, and rules per object, per field and per record, all checked at one door that every read and write passes through.
 **Done when:** screens, live events, search, notifications, export and the API all get their data through the same check; an unknown role or a missing rule means no access; an API key is an actor with its own scoped permissions; the last owner can never be removed.
-- [ ] Design it (spec): `/architect access model`
+- [x] Design it (spec): `/architect access model`
+- [ ] Build it: `/develop access model`
+Spec [0009](../specs/0009-access-model/index.md)
 
 ### 57. Edge only API access · needs a decision · GA
 The API should accept traffic only through the edge in front of the web app, so the forwarded details it reads (like the client IP) can be trusted. Today its host address is public, so anyone can call it directly and fake those headers. This came up during the scaffold build.
