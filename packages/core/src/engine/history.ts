@@ -142,7 +142,7 @@ export async function getValuesAsOf(
         ),
       );
     const references = [...attributes.values()].filter((attribute) => attribute.type === 'record_reference');
-    const links = (await linkValues(tx, [recordId], references, moment)).get(recordId);
+    const links = (await linkValues(tx, [recordId], references, { at: moment })).values.get(recordId);
     const result: Record<string, unknown> = {};
     for (const attribute of attributes.values()) {
       if (attribute.isSystem) continue;

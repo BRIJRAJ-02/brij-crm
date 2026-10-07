@@ -16,7 +16,7 @@ import { decodeValue } from './columns.ts';
 import { canonicalId, canonicalKeys, checkId, isUuid, isUuidV7 } from './ids.ts';
 import { isRefusal, postgresError, refuse, refuseAll } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
-import { linkValues, writeLinks } from './relationships.ts';
+import { LINK_CELL_CAP, linkValues, writeLinks } from './relationships.ts';
 import {
   checkWriter,
   currentItems,
@@ -127,6 +127,12 @@ export interface RecordView {
   readonly display: RecordRefDisplay;
   /** Current values by attribute id, system attributes included, each in its schema's shape. */
   readonly values: Readonly<Record<string, unknown>>;
+  /**
+   * For each multi reference cell cut short at `LINK_CELL_CAP` links (its
+   * value lists the first 20 in order), how many live links it holds in all.
+   * A cell that wasn't cut has no entry, so this is empty for most records.
+   */
+  readonly linkTotals: Readonly<Record<string, number>>;
 }
 
 /**
@@ -469,7 +475,11 @@ export async function getRecords(
   return scope.db.withWorkspace(scope.workspaceId, (tx) => readRecords(tx, ids, attributeIds));
 }
 
-/** Reads live records inside an open transaction, in the order of `ids`. */
+/**
+ * Reads live records inside an open transaction, in the order of `ids`. A
+ * multi reference cell lists at most `LINK_CELL_CAP` links, with its total in
+ * `linkTotals` when cut short.
+ */
 export async function readRecords(
   tx: WorkspaceTx,
   ids: readonly string[],
@@ -507,6 +517,7 @@ export async function readRecords(
     tx,
     rows.map((row) => row.id),
     references,
+    { cap: LINK_CELL_CAP },
   );
   const order = new Map(input.ids.map((id, index) => [canonicalId(id), index]));
   const itemsOf = bucketItems(items);
@@ -525,6 +536,7 @@ export async function readRecords(
         updated_by: updatedBy,
       };
       const values: Record<string, unknown> = {};
+      const linkTotals: Record<string, number> = {};
       for (const attribute of attributes.values()) {
         if (input.attributeIds !== undefined && !input.attributeIds.includes(attribute.id)) continue;
         if (attribute.systemColumn !== null) {
@@ -532,7 +544,9 @@ export async function readRecords(
           continue;
         }
         if (attribute.type === 'record_reference') {
-          values[attribute.id] = links.get(row.id)?.get(attribute.id) ?? (attribute.isMulti ? [] : null);
+          values[attribute.id] = links.values.get(row.id)?.get(attribute.id) ?? (attribute.isMulti ? [] : null);
+          const total = links.totals.get(row.id)?.get(attribute.id);
+          if (total !== undefined) linkTotals[attribute.id] = total;
           continue;
         }
         values[attribute.id] = decodeValue(attribute.type, attribute.isMulti, itemsOf(row.id, attribute.id));
@@ -558,6 +572,7 @@ export async function readRecords(
         updatedBy,
         display,
         values,
+        linkTotals,
       };
     })
     .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));

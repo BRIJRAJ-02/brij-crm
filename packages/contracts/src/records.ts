@@ -12,6 +12,9 @@ import { WorkspaceScoped } from './workspaces.ts';
 /** The most rows one `records.query` answers. */
 export const MAX_QUERY_LIMIT = 200;
 
+/** The most links one multi reference cell carries in a RecordView; `linkTotals` counts the rest. */
+export const MAX_CELL_LINKS = 20;
+
 /** The most records one `records.get` reads. */
 export const MAX_GET_IDS = 500;
 
@@ -19,7 +22,9 @@ export const MAX_GET_IDS = 500;
  * A record as a screen holds it: its id and object, who made and last changed
  * it and when, how it shows as a chip (`display`), and its current values by
  * attribute id, system attributes included, each in its type's shape (empty
- * is `null`). Version ids join it with #6.
+ * is `null`). A multi reference cell lists at most `MAX_CELL_LINKS` links, in
+ * order; `linkTotals` holds the full count only for the cells cut short
+ * (absent means the list is whole), so a cell can show "and 4,980 more".
  */
 export const RecordView = z.object({
   id: z.uuid(),
@@ -30,6 +35,7 @@ export const RecordView = z.object({
   updatedBy: ActorReferenceValue,
   display: RecordRefDisplay,
   values: z.record(z.string(), z.unknown()),
+  linkTotals: z.record(z.string(), z.number().int().min(0)),
 });
 /** A record as a screen holds it. */
 export type RecordView = z.infer<typeof RecordView>;

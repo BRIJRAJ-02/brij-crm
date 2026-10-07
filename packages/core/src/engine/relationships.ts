@@ -4,8 +4,9 @@
 // ends the current links of that end and starts new ones under one version.
 // Links to a record in the trash stay current but hidden, so a restore brings
 // them back.
-import { and, asc, eq, inArray, isNull, ne, or, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, ne, sql, type SQL } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
+import { MAX_CELL_LINKS } from '@crm/contracts';
 import type { RecordReferenceValue, ValueVersion } from '@crm/contracts/values';
 import { insertAttribute } from './definitions.ts';
 import { canonicalId, checkId, isUuid, uuidList } from './ids.ts';
@@ -530,59 +531,103 @@ function asValue(attribute: AttributeDef, items: readonly RecordReferenceValue[]
   return items[0] ?? null;
 }
 
+/** The most links one multi reference cell reads per record (the contract's cap); `LinkCells.totals` counts the rest. */
+export const LINK_CELL_CAP = MAX_CELL_LINKS;
+
+/** Reference cells read from links, each map by record id then attribute id. */
+export interface LinkCells {
+  /** Each cell's value: a list for a multi end (at most the cap, when one is given), else one reference or null. */
+  readonly values: ReadonlyMap<string, ReadonlyMap<string, unknown>>;
+  /** Only for a multi cell cut at the cap: how many live links it holds in all. */
+  readonly totals: ReadonlyMap<string, ReadonlyMap<string, number>>;
+}
+
+/** Sets `value` at `ownerId` then `attributeId` in a two level map. */
+function setCell<T>(map: Map<string, Map<string, T>>, ownerId: string, attributeId: string, value: T): void {
+  const byAttribute = map.get(ownerId) ?? new Map<string, T>();
+  byAttribute.set(attributeId, value);
+  map.set(ownerId, byAttribute);
+}
+
+/** One end's columns of `record_links` under the alias `k`, for raw statements (fixed names, never input). */
+function endColumns(isFrom: boolean): { mine: SQL; far: SQL; position: SQL } {
+  return isFrom
+    ? { mine: sql.raw('k.from_record_id'), far: sql.raw('k.to_record_id'), position: sql.raw('k.position') }
+    : { mine: sql.raw('k.to_record_id'), far: sql.raw('k.from_record_id'), position: sql.raw('k.to_position') };
+}
+
 /**
- * The current values of reference attributes on some records, from their
- * links to live records, by record id then attribute id. Each end reads in its
- * own order.
+ * The values of reference attributes on some records, from their links to
+ * live records: current ones, or those at the moment `at`. Each end reads in
+ * its own order. With `cap`, a multi cell reads at most `cap` links per
+ * record (a lateral limit per record, so a company with 70,000 people reads
+ * 20 of them, not 70,000), and a cell cut short gets its total in `totals`.
  */
 export async function linkValues(
   tx: WorkspaceTx,
   ownerIds: readonly string[],
   references: readonly AttributeDef[],
-  at?: string,
-): Promise<ReadonlyMap<string, ReadonlyMap<string, unknown>>> {
-  const result = new Map<string, Map<string, unknown>>();
-  if (ownerIds.length === 0 || references.length === 0) return result;
+  options: { readonly at?: string; readonly cap?: number } = {},
+): Promise<LinkCells> {
+  const values = new Map<string, Map<string, unknown>>();
+  const totals = new Map<string, Map<string, number>>();
+  if (ownerIds.length === 0 || references.length === 0) return { values, totals };
   const relationshipsById = await loadRelationships(
     tx,
     references.flatMap((attribute) => (attribute.relationshipId === null ? [] : [attribute.relationshipId])),
   );
-  const moment = at === undefined ? undefined : sql`${at}::timestamptz`;
+  const owners = uuidList([...new Set(ownerIds)]);
+  const period =
+    options.at === undefined
+      ? sql`k.active_until is null`
+      : sql`k.active_from <= ${options.at}::timestamptz and (k.active_until is null or k.active_until > ${options.at}::timestamptz)`;
   for (const attribute of references) {
     const relationship =
       attribute.relationshipId === null ? undefined : relationshipsById.get(attribute.relationshipId);
     if (relationship === undefined) continue;
-    const end = endOf(relationship, attribute.id);
-    const rows = await tx
-      .select({ owner: end.mine, recordId: records.id, objectId: records.objectId })
-      .from(recordLinks)
-      .innerJoin(
-        records,
-        and(eq(records.workspaceId, recordLinks.workspaceId), eq(records.id, end.far), isNull(records.deletedAt)),
-      )
-      .where(
-        and(
-          eq(recordLinks.relationshipId, relationship.id),
-          inArray(end.mine, [...ownerIds]),
-          moment === undefined
-            ? isNull(recordLinks.activeUntil)
-            : and(
-                sql`${recordLinks.activeFrom} <= ${moment}`,
-                or(isNull(recordLinks.activeUntil), sql`${recordLinks.activeUntil} > ${moment}`),
-              ),
-        ),
-      )
-      .orderBy(asc(end.myPosition), asc(recordLinks.activeFrom), asc(recordLinks.id));
-    for (const ownerId of ownerIds) {
-      const items = rows
-        .filter((row) => row.owner === ownerId)
-        .map((row): RecordReferenceValue => ({ objectId: row.objectId, recordId: row.recordId }));
-      const byAttribute = result.get(ownerId) ?? new Map<string, unknown>();
-      byAttribute.set(attribute.id, asValue(attribute, items));
-      result.set(ownerId, byAttribute);
+    const { mine, far, position } = endColumns(endOf(relationship, attribute.id).isFrom);
+    // A single cell holds one link; reading a second would only be a broken invariant, so it reads one.
+    const cap = options.cap === undefined ? undefined : attribute.isMulti ? options.cap : 1;
+    const links = sql`
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = ${far} and r.deleted_at is null
+      where k.relationship_id = ${relationship.id} and ${mine} = o.owner and ${period}
+    `;
+    // One more than the cap, so a cell that holds more is known to be cut.
+    const rows = await tx.execute<{ owner: string; record_id: string | null; object_id: string | null }>(sql`
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id
+      from unnest(${owners}) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, ${position} as p, k.active_from as f, k.id as kid
+        ${links}
+        order by ${position}, k.active_from, k.id
+        ${cap === undefined ? sql`` : sql`limit ${cap + 1}`}
+      ) l on true
+      order by o.owner, l.p, l.f, l.kid
+    `);
+    // Grouped by owner in one pass, so a page of 200 records is never 200 scans of every row.
+    const byOwner = new Map<string, RecordReferenceValue[]>();
+    for (const row of rows.rows) {
+      const items = byOwner.get(row.owner) ?? [];
+      byOwner.set(row.owner, items);
+      if (row.record_id !== null && row.object_id !== null) {
+        items.push({ objectId: row.object_id, recordId: row.record_id });
+      }
     }
+    const cut: string[] = [];
+    for (const [ownerId, items] of byOwner) {
+      const shown = cap !== undefined && items.length > cap ? items.slice(0, cap) : items;
+      if (attribute.isMulti && shown.length < items.length) cut.push(ownerId);
+      setCell(values, ownerId, attribute.id, asValue(attribute, shown));
+    }
+    if (cut.length === 0) continue;
+    const counted = await tx.execute<{ owner: string; n: number }>(sql`
+      select o.owner::text as owner, (select count(*)::int ${links}) as n
+      from unnest(${uuidList(cut)}) as o(owner)
+    `);
+    for (const row of counted.rows) setCell(totals, row.owner, attribute.id, row.n);
   }
-  return result;
+  return { values, totals };
 }
 
 /**

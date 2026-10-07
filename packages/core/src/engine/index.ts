@@ -73,7 +73,13 @@ export {
   type ValueInput,
 } from './records.ts';
 export { isRefusal, type RefusalError } from './refusals.ts';
-export { defineRelationship, type Cardinality, type RelationshipEnd, type RelationshipInput } from './relationships.ts';
+export {
+  defineRelationship,
+  LINK_CELL_CAP,
+  type Cardinality,
+  type RelationshipEnd,
+  type RelationshipInput,
+} from './relationships.ts';
 export { SYSTEM_ACTOR, type Actor, type EngineScope } from './scope.ts';
 export {
   createUserWorkspace,

@@ -251,6 +251,50 @@ describe('relationships', () => {
     ).toBe(2);
   });
 
+  it('reads at most 20 links of a multi cell per record, in order, with the live total of a cut cell', async () => {
+    const world = await workspace();
+    const acme = await newCompany(world, 'Acme');
+    const globex = await newCompany(world, 'Globex');
+    const ada = await newPerson(world, 'Ada', { [world.person('company')]: at(world, acme) });
+    const bob = await newPerson(world, 'Bob', { [world.person('company')]: at(world, globex) });
+    // 25 more people at Acme, in bulk as the owner, each after Ada in Acme's order; one of them in the trash.
+    await owner.withWorkspace(world.scope.workspaceId, (tx) =>
+      tx.execute(sql`
+        with first as (
+          select relationship_id, from_single, to_single, to_position from record_links
+          where from_record_id = ${ada} and active_until is null
+        ), added as (
+          insert into records (workspace_id, object_id, created_by_type, updated_by_type)
+          select ${world.scope.workspaceId}::uuid, ${world.people}::uuid, 'system', 'system'
+          from generate_series(1, 25)
+          returning id
+        )
+        insert into record_links (workspace_id, version_id, relationship_id, from_record_id, to_record_id,
+          position, to_position, from_single, to_single, active_from, set_by_type)
+        select ${world.scope.workspaceId}::uuid, uuidv7(), first.relationship_id, added.id, ${acme}::uuid,
+          0, first.to_position + row_number() over (), first.from_single, first.to_single,
+          now() - interval '1 minute', 'system'
+        from added, first
+      `),
+    );
+    const last = await owner.withWorkspace(world.scope.workspaceId, (tx) =>
+      tx.execute<{ id: string }>(sql`
+        select from_record_id::text as id from record_links where to_record_id = ${acme} order by to_position desc limit 1
+      `),
+    );
+    await deleteRecord(world.scope, { recordId: id(last.rows[0]?.id) });
+    const [acmeView, globexView, adaView] = await getRecords(world.scope, { ids: [acme, globex, ada] });
+    const team = acmeView?.values[world.company('team')];
+    expect(Array.isArray(team) ? team.length : undefined).toBe(20);
+    expect(Array.isArray(team) ? team[0] : undefined).toEqual(person(world, ada));
+    expect(acmeView?.linkTotals).toEqual({ [world.company('team')]: 25 });
+    // A cell that wasn't cut, and a single end, carry no total.
+    expect(globexView?.values[world.company('team')]).toEqual([person(world, bob)]);
+    expect(globexView?.linkTotals).toEqual({});
+    expect(adaView?.values[world.person('company')]).toEqual(at(world, acme));
+    expect(adaView?.linkTotals).toEqual({});
+  });
+
   it('replaces the link on a single end and ends the old one in history (AC-3, AC-5)', async () => {
     const world = await workspace();
     const acme = await newCompany(world, 'Acme');
