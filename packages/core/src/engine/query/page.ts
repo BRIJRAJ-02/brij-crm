@@ -2,7 +2,6 @@
 // sorts over an object's records or a list's entries, paged by keyset cursor
 // (or a jump to a position on an unfiltered view), then read back whole. And
 // the exact count, as its own cancellable statement.
-import { randomUUID } from 'node:crypto';
 import { asc, eq, sql, type SQL } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { FilterGroup, SortRules } from '@crm/contracts/values';
@@ -14,6 +13,7 @@ import { postgresError, refuse } from '../refusals.ts';
 import { loadRelationships } from '../relationships.ts';
 import type { EngineScope } from '../scope.ts';
 import { loadAttributes, loadAttributesById, loadListAttributes, type AttributeDef } from '../values.ts';
+import { isAborted, withCancel } from './cancel.ts';
 import {
   afterCursor,
   attributeIdsOf,
@@ -837,18 +837,32 @@ export interface PageTuning {
   readonly search?: false;
 }
 
+/** How a page runs: the request's `signal`, which cancels it, and the test knobs. */
+export interface PageOptions extends PageTuning {
+  readonly signal?: AbortSignal;
+}
+
 /**
  * The first page of a view, the page after a cursor, or the page at a
- * position. Each statement has a 10 second timeout; past it the refusal is
- * `QUERY_CANCELLED`. `tuning` is for tests.
+ * position. Each statement has a 10 second timeout, and aborting
+ * `options.signal` cancels the statement running (an already aborted signal
+ * takes no connection); either way the refusal is `QUERY_CANCELLED`. The
+ * other options are for tests.
  */
-export async function queryPage(scope: EngineScope, query: PageQuery, tuning: PageTuning = {}): Promise<Page> {
+export async function queryPage(scope: EngineScope, query: PageQuery, options: PageOptions = {}): Promise<Page> {
   checkPage(query);
+  const cancelled = () => refuse('QUERY_CANCELLED', 'That page took too long or was cancelled. Try again.');
   try {
-    return await scope.db.withWorkspace(scope.workspaceId, (tx) => readPage(tx, scope, query, tuning));
+    return await withCancel(scope, 'query', options.signal, cancelled, (tx, checkpoint) =>
+      readPage(tx, scope, query, options, checkpoint),
+    );
   } catch (error) {
     const code = postgresError(error)?.code;
-    if (code === '57014') throw refuse('QUERY_CANCELLED', 'That page took too long. Narrow the filter and try again.');
+    if (code === '57014') {
+      throw isAborted(options.signal)
+        ? cancelled()
+        : refuse('QUERY_CANCELLED', 'That page took too long. Narrow the filter and try again.');
+    }
     // A cursor key that has the right shape but no such value (a 30th of February).
     if (query.cursor !== undefined && code !== undefined && ['22003', '22007', '22008', '22P02'].includes(code)) {
       throw refuse('FILTER_INVALID', 'That page cursor is not valid. Start from the first page.');
@@ -857,11 +871,19 @@ export async function queryPage(scope: EngineScope, query: PageQuery, tuning: Pa
   }
 }
 
-/** The body of `queryPage`, inside its workspace transaction. */
-async function readPage(tx: WorkspaceTx, scope: EngineScope, query: PageQuery, tuning: PageTuning): Promise<Page> {
+/** The body of `queryPage`, inside its workspace transaction; `checkpoint` refuses once the request has gone. */
+async function readPage(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  query: PageQuery,
+  tuning: PageTuning,
+  checkpoint: () => void,
+): Promise<Page> {
   await tx.execute(sql`set local statement_timeout = ${sql.raw(`'${tuning.timeout ?? STATEMENT_TIMEOUT}'`)}`);
   const built = await buildPage(tx, scope, query, tuning.candidates, tuning.search ?? true);
+  checkpoint();
   const all = await pageRows(tx, built, query.position);
+  checkpoint();
   const { limit, keyCount, isList } = built;
   const rows = all.slice(0, limit);
   const last = rows.at(-1);
@@ -889,9 +911,6 @@ async function readPage(tx: WorkspaceTx, scope: EngineScope, query: PageQuery, t
   return nextCursor === undefined ? page : { ...page, nextCursor };
 }
 
-/** Whether `signal` has aborted, read fresh (a call, so a check made earlier doesn't narrow it). */
-const isAborted = (signal: AbortSignal | undefined) => signal?.aborted === true;
-
 /** Where a filtered count stops: past it, the view says "10,000+". */
 export const COUNT_CAP = 10_000;
 
@@ -917,63 +936,38 @@ export async function countMatches(
 ): Promise<MatchCount> {
   const cap = tuning.cap ?? COUNT_CAP;
   const cancelled = () => refuse('QUERY_CANCELLED', 'The count took too long or was cancelled.');
-  if (signal?.aborted === true) throw cancelled();
   try {
-    return await scope.db.withWorkspace(scope.workspaceId, async (tx) => {
+    return await withCancel(scope, 'count', signal, cancelled, async (tx, checkpoint) => {
       // Set first, so the searches the filter runs while it is prepared are bounded too.
       await tx.execute(sql`set local statement_timeout = ${sql.raw(`'${STATEMENT_TIMEOUT}'`)}`);
-      // A name only this count's transaction carries: the cancel checks it, so a connection the pool has
-      // since handed to another request (another workspace's) is never the one cancelled.
-      const tag = `crm-count:${randomUUID()}`;
-      await tx.execute(sql`select set_config('application_name', ${tag}, true)`);
-      const pid = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
-      const backend = pid.rows[0]?.pid;
-      const cancel = () => {
-        if (backend === undefined) return;
-        void scope.db
-          .withWorkspace(scope.workspaceId, (other) =>
-            other.execute(sql`
-              select pg_cancel_backend(pid) from pg_stat_activity
-              where pid = ${backend} and application_name = ${tag} and state = 'active'
-            `),
-          )
-          .catch(() => undefined);
-      };
-      signal?.addEventListener('abort', cancel, { once: true });
-      // An abort while the tag was set fired before the listener existed.
-      if (signal?.aborted === true) throw cancelled();
-      try {
-        // Prepared under the listener, so an abort cancels the filter's searches too.
-        const { context, level } = await prepare(tx, scope, query, tuning.search ?? true);
-        // A cancel that landed on a search looks like its timeout there, which only narrows that contains.
-        if (isAborted(signal)) throw cancelled();
-        const filter = compileFilter(context, level, query.filter);
-        const { tables, where } = fromParts(level);
-        const filtered = query.filter !== undefined && query.filter.conditions.length > 0;
-        if (!filtered) {
-          // The whole object: its live records, index only. The whole list: its entry count, less the live
-          // entries of records in the trash (which keep their slots until the purge).
-          const total =
-            level.listId === null
-              ? sql`select count(*)::int as n from records r where r.object_id = ${level.objectId} and r.deleted_at is null`
-              : sql`
-                select l.entry_count - (
-                  select count(*)::int from records t
-                  join list_entries e on e.workspace_id = t.workspace_id and e.record_id = t.id
-                  where t.deleted_at is not null and e.list_id = ${level.listId} and e.deleted_at is null
-                ) as n from lists l where l.id = ${level.listId}
-              `;
-          const result = await tx.execute<{ n: number }>(total);
-          return { count: result.rows[0]?.n ?? 0, atLeast: false };
-        }
-        const result = await tx.execute<{ n: number }>(
-          sql`select count(*)::int as n from (select 1 from ${tables} where ${where} and ${filter} limit ${cap + 1}) s`,
-        );
-        const n = result.rows[0]?.n ?? 0;
-        return n > cap ? { count: cap, atLeast: true } : { count: n, atLeast: false };
-      } finally {
-        signal?.removeEventListener('abort', cancel);
+      // Prepared under the cancel, so an abort cancels the filter's searches too.
+      const { context, level } = await prepare(tx, scope, query, tuning.search ?? true);
+      // A cancel that landed on a search looks like its timeout there, which only narrows that contains.
+      checkpoint();
+      const filter = compileFilter(context, level, query.filter);
+      const { tables, where } = fromParts(level);
+      const filtered = query.filter !== undefined && query.filter.conditions.length > 0;
+      if (!filtered) {
+        // The whole object: its live records, index only. The whole list: its entry count, less the live
+        // entries of records in the trash (which keep their slots until the purge).
+        const total =
+          level.listId === null
+            ? sql`select count(*)::int as n from records r where r.object_id = ${level.objectId} and r.deleted_at is null`
+            : sql`
+              select l.entry_count - (
+                select count(*)::int from records t
+                join list_entries e on e.workspace_id = t.workspace_id and e.record_id = t.id
+                where t.deleted_at is not null and e.list_id = ${level.listId} and e.deleted_at is null
+              ) as n from lists l where l.id = ${level.listId}
+            `;
+        const result = await tx.execute<{ n: number }>(total);
+        return { count: result.rows[0]?.n ?? 0, atLeast: false };
       }
+      const result = await tx.execute<{ n: number }>(
+        sql`select count(*)::int as n from (select 1 from ${tables} where ${where} and ${filter} limit ${cap + 1}) s`,
+      );
+      const n = result.rows[0]?.n ?? 0;
+      return n > cap ? { count: cap, atLeast: true } : { count: n, atLeast: false };
     });
   } catch (error) {
     if (postgresError(error)?.code === '57014') throw cancelled();

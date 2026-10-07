@@ -704,10 +704,21 @@ describe('positions and counts', () => {
     });
   });
 
-  it('refuses a count already cancelled', async () => {
+  it('refuses a count or a page already cancelled without taking a connection', async () => {
     const controller = new AbortController();
     controller.abort();
-    await expect(countMatches(scope, { objectId: missions }, controller.signal)).rejects.toMatchObject({
+    // A database that fails the test if anything asks it for a connection.
+    const untouched: EngineScope = {
+      ...scope,
+      db: {
+        ...scope.db,
+        withWorkspace: () => Promise.reject(new Error('A connection was taken.')),
+      },
+    };
+    await expect(countMatches(untouched, { objectId: missions }, controller.signal)).rejects.toMatchObject({
+      refusal: { code: 'QUERY_CANCELLED' },
+    });
+    await expect(queryPage(untouched, { objectId: missions }, { signal: controller.signal })).rejects.toMatchObject({
       refusal: { code: 'QUERY_CANCELLED' },
     });
   });

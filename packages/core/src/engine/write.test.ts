@@ -17,6 +17,7 @@ function standIn(): Database {
     checkHealth: () => Promise.reject(new Error('Not in this test.')),
     assertAppRole: () => Promise.reject(new Error('Not in this test.')),
     vacuumAnalyze: () => Promise.reject(new Error('Not in this test.')),
+    cancelTagged: () => Promise.reject(new Error('Not in this test.')),
     close: () => Promise.resolve(),
   };
 }

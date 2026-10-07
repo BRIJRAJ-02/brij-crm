@@ -5,12 +5,12 @@
 // members.list, which names the Owner column. Real session, real Postgres.
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { Database, IdentityStore } from '@crm/db';
-import { testQuery } from '@crm/db/testing';
+import { holdTableLock, testQuery } from '@crm/db/testing';
 import { deleteRecord, enterWorkspace, newId } from '@crm/core';
 import { rpcClient, signInApp, testConnections } from '../../test/sign-in.ts';
 import { failure, memberWithWorkspace, NOT_A_MEMBER, refusal, refusalsOf } from '../../test/workspace.ts';
 
-const { ownerUrl } = inject('testDatabase');
+const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
 let identity: IdentityStore;
 let app: ReturnType<typeof signInApp>['app'];
@@ -258,6 +258,51 @@ describe('records.query and records.count', () => {
       code: 'NOT_FOUND',
       status: 404,
     });
+  });
+});
+
+/** The statements running under a cancellable read's tag (`crm-query:…`, `crm-count:…`), as the app login sees them. */
+async function taggedStatements(): Promise<readonly string[]> {
+  const rows = await testQuery<{ name: string }>(
+    appUrl,
+    `select application_name as name from pg_stat_activity
+     where datname = current_database() and (application_name like 'crm-query:%' or application_name like 'crm-count:%')`,
+  );
+  return rows.map((row) => row.name);
+}
+
+/** Polls `check` every 50 ms until it holds, failing after `ms`. */
+async function eventually(check: () => Promise<boolean>, ms = 3_000): Promise<void> {
+  const until = Date.now() + ms;
+  while (!(await check())) {
+    if (Date.now() > until) throw new Error(`Still not so after ${String(ms)} ms.`);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+describe('cancelling a read', () => {
+  it('stops a slow query and a slow count in Postgres when their request is aborted', async () => {
+    const m = await memberWithWorkspace(app);
+    await createPerson(m, 'Ada');
+    const scope = { workspace: m.slug, objectId: m.people.id };
+    const reads = [
+      (signal: AbortSignal) => m.client.records.query(scope, { signal }),
+      (signal: AbortSignal) => m.client.records.count(scope, { signal }),
+    ];
+    // Held by another transaction, so each read waits on the records table until it is cancelled.
+    const lock = await holdTableLock(ownerUrl, 'records');
+    try {
+      for (const read of reads) {
+        const controller = new AbortController();
+        const pending = read(controller.signal).catch((error: unknown) => error);
+        await eventually(async () => (await taggedStatements()).length === 1);
+        controller.abort();
+        await pending;
+        await eventually(async () => (await taggedStatements()).length === 0, 1_000);
+      }
+    } finally {
+      await lock.release();
+    }
   });
 });
 

@@ -5,17 +5,21 @@ import { member } from '../../orpc.ts';
 
 // Inside a workspace: the door has let in an active member, and `context.scope` is theirs.
 export const recordsRouter = member.records.router({
-  query: member.records.query.handler(({ context, input }) =>
-    queryRecords(context.scope, {
-      objectId: input.objectId,
-      ...(input.position === undefined ? {} : { position: input.position }),
-      ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
-      ...(input.limit === undefined ? {} : { limit: input.limit }),
-      ...(input.filter === undefined ? {} : { filter: input.filter }),
-      ...(input.sorts === undefined ? {} : { sorts: input.sorts }),
-    }),
+  // Both reads are cancelled with their request: a closed tab or a superseded window stops them in Postgres.
+  query: member.records.query.handler(({ context, input, signal }) =>
+    queryRecords(
+      context.scope,
+      {
+        objectId: input.objectId,
+        ...(input.position === undefined ? {} : { position: input.position }),
+        ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+        ...(input.limit === undefined ? {} : { limit: input.limit }),
+        ...(input.filter === undefined ? {} : { filter: input.filter }),
+        ...(input.sorts === undefined ? {} : { sorts: input.sorts }),
+      },
+      signal,
+    ),
   ),
-  // Cancelled with its request: a closed tab or a superseded window stops the count in Postgres.
   count: member.records.count.handler(({ context, input, signal }) =>
     countMatches(
       context.scope,

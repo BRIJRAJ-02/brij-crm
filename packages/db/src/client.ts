@@ -47,6 +47,15 @@ export interface Database {
    * refuses rather than silently doing nothing.
    */
   vacuumAnalyze(tables: readonly VacuumTable[]): Promise<void>;
+  /**
+   * Cancels the statement backend `pid` is running, only while that backend
+   * still carries `tag` as its application name (set for one transaction by
+   * the work being cancelled), so a connection since handed to another
+   * request is never touched. Runs on its own one connection pool, so a
+   * cancel never waits behind the work it cancels. Reads no tenant data.
+   * Answers whether a running statement was cancelled.
+   */
+  cancelTagged(pid: number, tag: string): Promise<boolean>;
   close(): Promise<void>;
 }
 
@@ -58,8 +67,15 @@ export function createDatabase(options: DatabaseOptions): Database {
     application_name: options.applicationName,
     max: options.maxConnections ?? 10,
   });
+  // One connection of its own for cancels: a full main pool must never hold a cancel back.
+  const cancelPool = new pg.Pool({
+    connectionString: options.url,
+    application_name: `${options.applicationName}-cancel`,
+    max: 1,
+  });
   // An idle client can drop (a deploy, a Neon restart). Report it; the pool replaces it.
   pool.on('error', (error) => (options.onPoolError ?? console.error)(error));
+  cancelPool.on('error', (error) => (options.onPoolError ?? console.error)(error));
 
   const db = drizzle({ client: pool, schema });
 
@@ -159,6 +175,17 @@ export function createDatabase(options: DatabaseOptions): Database {
       }
     },
 
-    close: () => pool.end(),
+    async cancelTagged(pid, tag) {
+      const result = await cancelPool.query<{ cancelled: boolean }>(
+        `select pg_cancel_backend(pid) as cancelled from pg_stat_activity
+         where pid = $1 and application_name = $2 and state = 'active'`,
+        [pid, tag],
+      );
+      return result.rows.some((row) => row.cancelled);
+    },
+
+    close: async () => {
+      await Promise.all([pool.end(), cancelPool.end()]);
+    },
   };
 }

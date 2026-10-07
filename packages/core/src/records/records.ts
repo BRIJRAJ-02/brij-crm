@@ -28,17 +28,27 @@ export interface RecordWindow {
 /**
  * One window of an object's live records in order (id order, which is
  * creation order, when no sort is given), and the cursor for the next when
- * there are more. Refuses as the engine's `queryPage` does.
+ * there are more. Aborting `signal` (the request's) cancels the statement
+ * running; an already aborted one takes no connection. Refuses as the
+ * engine's `queryPage` does.
  */
-export async function queryRecords(scope: EngineScope, window: RecordWindow): Promise<RecordPage> {
-  const page = await queryPage(scope, {
-    objectId: window.objectId,
-    ...(window.position === undefined ? {} : { position: window.position }),
-    ...(window.cursor === undefined ? {} : { cursor: window.cursor }),
-    ...(window.limit === undefined ? {} : { limit: window.limit }),
-    ...(window.filter === undefined ? {} : { filter: window.filter }),
-    ...(window.sorts === undefined ? {} : { sorts: window.sorts }),
-  });
+export async function queryRecords(
+  scope: EngineScope,
+  window: RecordWindow,
+  signal?: AbortSignal,
+): Promise<RecordPage> {
+  const page = await queryPage(
+    scope,
+    {
+      objectId: window.objectId,
+      ...(window.position === undefined ? {} : { position: window.position }),
+      ...(window.cursor === undefined ? {} : { cursor: window.cursor }),
+      ...(window.limit === undefined ? {} : { limit: window.limit }),
+      ...(window.filter === undefined ? {} : { filter: window.filter }),
+      ...(window.sorts === undefined ? {} : { sorts: window.sorts }),
+    },
+    signal === undefined ? {} : { signal },
+  );
   return page.nextCursor === undefined
     ? { records: [...page.records] }
     : { records: [...page.records], nextCursor: page.nextCursor };

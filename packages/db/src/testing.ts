@@ -149,6 +149,33 @@ export async function testQuery<Row extends Record<string, unknown>>(
 }
 
 /**
+ * Takes an access exclusive lock on `table` through `url` and holds it until
+ * `release()`, so a statement that reads the table waits: for a test that
+ * needs a slow statement to cancel. The table name is checked, never quoted
+ * from input.
+ */
+export async function holdTableLock(url: string, table: 'records'): Promise<{ release: () => Promise<void> }> {
+  const client = new pg.Client({ connectionString: url, application_name: 'crm-test-lock' });
+  await client.connect();
+  try {
+    await client.query('begin');
+    await client.query(`lock table ${client.escapeIdentifier(table)} in access exclusive mode`);
+  } catch (error) {
+    await client.end();
+    throw error;
+  }
+  return {
+    release: async () => {
+      try {
+        await client.query('rollback');
+      } finally {
+        await client.end();
+      }
+    },
+  };
+}
+
+/**
  * Runs `work` holding the lock every suite's `prepareTestDatabase` takes, so
  * no suite migrates while it runs. For a test that briefly commits a role
  * the migrations' closing checks would refuse (a member of
