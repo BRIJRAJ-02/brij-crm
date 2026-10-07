@@ -215,7 +215,8 @@ const gate: Gate = {
         },
         release: store.release,
       });
-      const view = createRecordView({ store, windows });
+      // Announced at once rather than once a frame, so patch and edit times include the grid's render in the same task.
+      const view = createRecordView({ store, windows, schedule: (flush) => flush() });
       mounted = { store, windows, view };
       root.render(
         <UiProvider
