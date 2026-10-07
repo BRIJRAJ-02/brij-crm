@@ -2,15 +2,17 @@
 // Postgres, on one direct connection as the app login, so no raw `pg` lives
 // outside this package. Which workspaces have unpublished rows comes from the
 // security definer function `crm_outbox_workspaces` (ids only), and retention
-// from `crm_outbox_prune`; a workspace's rows are read and marked inside
-// `withWorkspace`, under row level security, like every other tenant query.
-import { and, asc, eq, isNull, lte, sql } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/node-postgres';
+// from `crm_outbox_prune`; a workspace's rows are read and marked under row
+// level security, like every other tenant query.
+//
+// The relay's hot path is one round trip per batch: `app.workspace_id` is set,
+// the last batch marked and the next one read by one simple query of several
+// statements, which Postgres runs as one implicit transaction (an error in any
+// rolls back all, and the setting ends with it), where `withWorkspace` would
+// take four (begin, set_config, the statement, commit). That query can carry
+// no parameters, so its values are inlined only after checking them: the
+// workspace id against the uuid pattern, and the numbers as whole numbers.
 import type pg from 'pg';
-import { workspaceTransaction } from './client.ts';
-import * as schema from './schema/index.ts';
-
-const { outbox } = schema;
 
 /** The channel a write notifies (`pg_notify`) once its outbox rows commit; the payload is the workspace id. */
 export const OUTBOX_CHANNEL = 'crm_outbox';
@@ -20,7 +22,7 @@ const RELAY_LOCK = 7_007_007;
 
 /** The most workspaces `crm_outbox_workspaces` returns at once (it clamps to the same). */
 const MAX_WORKSPACES = 500;
-/** The most rows one `pending` call returns. */
+/** The most rows one `pending` or `advance` call returns. */
 const MAX_ROWS = 1_000;
 /** The most rows one `prune` call deletes (`crm_outbox_prune` clamps to the same). */
 const MAX_PRUNE = 1_000;
@@ -52,10 +54,24 @@ export interface OutboxReader {
   unlock(): Promise<void>;
   /** Workspace ids with unpublished rows, at most `max` (clamped to 1 to 500), through the definer function. */
   workspaces(max: number): Promise<readonly string[]>;
-  /** A workspace's unpublished rows in `seq` order, at most `max` (clamped to 1 to 1,000), inside `withWorkspace`. */
+  /**
+   * A workspace's unpublished rows in `seq` order, at most `max` (clamped to
+   * 1 to 1,000), under its row level security. Throws a `TypeError` unless the
+   * id is a uuid.
+   */
   pending(workspaceId: string, max: number): Promise<readonly OutboxRow[]>;
-  /** Stamps a workspace's rows up to and including `upto` as published, inside `withWorkspace`; returns how many. */
+  /**
+   * Stamps a workspace's rows up to and including `upto` as published, under
+   * its row level security; returns how many. Throws a `TypeError` unless the
+   * id is a uuid and `upto` a whole number.
+   */
   mark(workspaceId: string, upto: number): Promise<number>;
+  /** `mark(workspaceId, upto)` then `pending(workspaceId, max)`, in one round trip and one transaction. */
+  advance(
+    workspaceId: string,
+    upto: number,
+    max: number,
+  ): Promise<{ readonly marked: number; readonly rows: readonly OutboxRow[] }>;
   /**
    * Deletes at most `max` (clamped to 1 to 1,000) rows published more than
    * `OUTBOX_RETENTION` ago, through the definer function; returns how many.
@@ -80,7 +96,6 @@ export interface OutboxReader {
  * connection and a new reader.
  */
 export function createOutboxReader(direct: pg.Client): OutboxReader {
-  const db = drizzle({ client: direct, schema });
   const lost = new Promise<Error>((resolve) => {
     direct.on('error', (error) => resolve(error));
     direct.on('end', () => resolve(new Error('The direct database connection closed.')));
@@ -111,35 +126,22 @@ export function createOutboxReader(direct: pg.Client): OutboxReader {
       return result.rows.map((row) => row.workspace_id);
     },
 
-    pending(workspaceId, max) {
-      return workspaceTransaction(db, workspaceId, async (tx) => {
-        const rows = await tx
-          .select({
-            seq: outbox.seq,
-            kind: outbox.kind,
-            objectId: outbox.objectId,
-            recordIds: outbox.recordIds,
-            attributeIds: outbox.attributeIds,
-            coarse: outbox.coarse,
-            mutationId: outbox.mutationId,
-          })
-          .from(outbox)
-          .where(and(eq(outbox.workspaceId, workspaceId), isNull(outbox.publishedAt)))
-          .orderBy(asc(outbox.seq))
-          .limit(clamp(max, MAX_ROWS));
-        return rows.map((row) => ({ ...row, mutationId: row.mutationId ?? undefined }));
-      });
+    async pending(workspaceId, max) {
+      const [, read] = await inWorkspace(direct, workspaceId, [readPending(workspaceId, max)]);
+      return rowsOf(read);
     },
 
-    mark(workspaceId, upto) {
-      return workspaceTransaction(db, workspaceId, async (tx) => {
-        const marked = await tx
-          .update(outbox)
-          .set({ publishedAt: sql`now()` })
-          .where(and(eq(outbox.workspaceId, workspaceId), lte(outbox.seq, upto), isNull(outbox.publishedAt)))
-          .returning({ seq: outbox.seq });
-        return marked.length;
-      });
+    async mark(workspaceId, upto) {
+      const [, marked] = await inWorkspace(direct, workspaceId, [markUpto(workspaceId, upto)]);
+      return marked?.rowCount ?? 0;
+    },
+
+    async advance(workspaceId, upto, max) {
+      const [, marked, read] = await inWorkspace(direct, workspaceId, [
+        markUpto(workspaceId, upto),
+        readPending(workspaceId, max),
+      ]);
+      return { marked: marked?.rowCount ?? 0, rows: rowsOf(read) };
     },
 
     async prune(max) {
@@ -172,12 +174,64 @@ export function createOutboxReader(direct: pg.Client): OutboxReader {
     workspaces: (max) => serial(() => calls.workspaces(max)),
     pending: (workspaceId, max) => serial(() => calls.pending(workspaceId, max)),
     mark: (workspaceId, upto) => serial(() => calls.mark(workspaceId, upto)),
+    advance: (workspaceId, upto, max) => serial(() => calls.advance(workspaceId, upto, max)),
     prune: (max) => serial(() => calls.prune(max)),
     listen: (onNotify) => serial(() => calls.listen(onNotify)),
     lost,
     // Closing doesn't wait its turn: a call stuck on a dead connection must not hold it open.
     close: () => calls.close(),
   };
+}
+
+/** An outbox row as Postgres sends it in text. */
+interface RawRow {
+  readonly seq: string;
+  readonly kind: 'records' | 'definitions';
+  readonly object_id: string;
+  readonly record_ids: string[];
+  readonly attribute_ids: string[];
+  readonly coarse: boolean;
+  readonly mutation_id: string | null;
+}
+
+/**
+ * Runs `statements` (already checked, see the header) after setting
+ * `app.workspace_id`, as one simple query: one round trip, one implicit
+ * transaction. Returns each statement's result, the setting's first.
+ */
+async function inWorkspace(
+  direct: pg.Client,
+  workspaceId: string,
+  statements: readonly string[],
+): Promise<readonly (pg.QueryResult | undefined)[]> {
+  if (!UUID.test(workspaceId)) throw new TypeError('The outbox reader needs a workspace id (a uuid).');
+  const text = [`select set_config('app.workspace_id', '${workspaceId}', true)`, ...statements].join(';\n');
+  // With more than one statement, pg answers one result per statement.
+  const results = (await direct.query(text)) as unknown as pg.QueryResult[];
+  return results;
+}
+
+function readPending(workspaceId: string, max: number): string {
+  return `select seq, kind, object_id, record_ids, attribute_ids, coarse, mutation_id from public.outbox
+    where workspace_id = '${workspaceId}' and published_at is null order by seq limit ${String(clamp(max, MAX_ROWS))}`;
+}
+
+function markUpto(workspaceId: string, upto: number): string {
+  if (!Number.isSafeInteger(upto)) throw new TypeError('An outbox number is a whole number.');
+  return `update public.outbox set published_at = now()
+    where workspace_id = '${workspaceId}' and seq <= ${String(upto)} and published_at is null`;
+}
+
+function rowsOf(result: pg.QueryResult | undefined): readonly OutboxRow[] {
+  return ((result?.rows ?? []) as RawRow[]).map((row) => ({
+    seq: Number(row.seq),
+    kind: row.kind,
+    objectId: row.object_id,
+    recordIds: row.record_ids,
+    attributeIds: row.attribute_ids,
+    coarse: row.coarse,
+    mutationId: row.mutation_id ?? undefined,
+  }));
 }
 
 /** A whole number from 1 to `most`. */

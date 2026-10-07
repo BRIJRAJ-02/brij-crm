@@ -10,7 +10,7 @@ The database layer: the Drizzle schema, committed SQL migrations, the roles and 
 |---|---|
 | `src/client.ts` | `createDatabase()`: `withWorkspace()`, `checkHealth()` and `assertAppRole()` on the pooled connection |
 | `src/direct.ts` | `assertDirectUrl()` and `openDirectConnection()` for LISTEN, the relay and jobs |
-| `src/outbox.ts` | `createOutboxReader()`: the relay's lock, LISTEN, the definer functions `crm_outbox_workspaces` (ids only) and `crm_outbox_prune` (published rows past `OUTBOX_RETENTION`, 24 hours), and reading and marking rows inside `withWorkspace` |
+| `src/outbox.ts` | `createOutboxReader()`: the relay's lock, LISTEN, the definer functions `crm_outbox_workspaces` (ids only) and `crm_outbox_prune` (published rows past `OUTBOX_RETENTION`, 24 hours), and reading and marking rows under row level security, set, marked and read in one round trip (`advance`) |
 | `src/schema/index.ts` | The Drizzle schema |
 | `migrations/` | Committed SQL. drizzle-kit generates the table changes; roles, grants and policies are hand written |
 | `scripts/migrate.ts` | Applies migrations as the owner role (also Railway's pre deploy step) |

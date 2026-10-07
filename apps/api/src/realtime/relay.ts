@@ -164,49 +164,63 @@ export function createRelay(deps: RelayDeps): Relay {
   const pollWait = (): number => schedule[Math.min(step, schedule.length - 1)] ?? 1_000;
 
   /**
-   * One workspace's turn: reads a batch, publishes it with one call, and marks
-   * what landed. `more` when the batch was full and all of it landed, so the
-   * workspace gets another turn next round.
+   * One workspace's turn: publishes a batch with one call (the rows held from
+   * its last turn, or a fresh read), then marks what landed and reads the next
+   * batch in the same round trip. Returns that next batch when there is one,
+   * so the workspace gets another turn next round.
    */
-  async function turn(reader: OutboxReader, workspaceId: string): Promise<'more' | 'done' | 'failed'> {
-    const rows = await reader.pending(workspaceId, batch);
-    if (rows.length === 0) return 'done';
+  async function turn(
+    reader: OutboxReader,
+    workspaceId: string,
+    held: readonly OutboxRow[] | undefined,
+  ): Promise<readonly OutboxRow[] | undefined> {
+    const rows = held ?? (await reader.pending(workspaceId, batch));
+    if (rows.length === 0) return undefined;
     sawWork();
     const channel = workspaceChannel(workspaceId);
     const outcome = await deps.publishBatch(
       rows.map((row) => ({ channel, data: changeEvent(row), idempotencyKey: `${workspaceId}:${String(row.seq)}` })),
     );
     const landed = rows[outcome.published - 1];
-    if (landed !== undefined) await reader.mark(workspaceId, landed.seq);
     if (outcome.error !== undefined) {
+      if (landed !== undefined) await reader.mark(workspaceId, landed.seq);
       log.warn('Publishing a change failed; retrying on the next tick', {
         workspaceId,
         seq: rows[outcome.published]?.seq,
         ...errorFields(outcome.error),
       });
-      return 'failed';
+      return undefined;
     }
-    return rows.length === batch ? 'more' : 'done';
+    const last = rows[rows.length - 1];
+    if (last === undefined) return undefined;
+    const next = await reader.advance(workspaceId, last.seq, batch);
+    return next.rows.length > 0 ? next.rows : undefined;
   }
 
   /**
    * One round: a turn for each workspace, up to `concurrency` at a time.
-   * Returns the workspaces that have more waiting. Throws the first error a
-   * turn threw, once every turn has settled.
+   * Returns the workspaces with more waiting, and their next batch. Throws the
+   * first error a turn threw, once every turn has settled.
    */
-  async function round(reader: OutboxReader, workspaces: readonly string[]): Promise<string[]> {
-    const more: string[] = [];
+  async function round(
+    reader: OutboxReader,
+    workspaces: ReadonlyMap<string, readonly OutboxRow[] | undefined>,
+  ): Promise<Map<string, readonly OutboxRow[]>> {
+    const more = new Map<string, readonly OutboxRow[]>();
+    const queue = [...workspaces];
     let next = 0;
     const lane = async () => {
       for (;;) {
         if (halted()) return;
-        const workspaceId = workspaces[next];
+        const entry = queue[next];
         next += 1;
-        if (workspaceId === undefined) return;
-        if ((await turn(reader, workspaceId)) === 'more') more.push(workspaceId);
+        if (entry === undefined) return;
+        const [workspaceId, held] = entry;
+        const rows = await turn(reader, workspaceId, held);
+        if (rows !== undefined) more.set(workspaceId, rows);
       }
     };
-    const lanes = await Promise.allSettled(Array.from({ length: Math.min(concurrency, workspaces.length) }, lane));
+    const lanes = await Promise.allSettled(Array.from({ length: Math.min(concurrency, queue.length) }, lane));
     const failed = lanes.find((settled): settled is PromiseRejectedResult => settled.status === 'rejected');
     if (failed !== undefined) throw failed.reason;
     return more;
@@ -246,8 +260,8 @@ export function createRelay(deps: RelayDeps): Relay {
       let lastPoll = Number.NEGATIVE_INFINITY;
       let lastPrune = Number.NEGATIVE_INFINITY;
       let pruneAgain = false;
-      // Workspaces whose last turn left more waiting: they get the next round.
-      let leftover: readonly string[] = [];
+      // Workspaces whose last turn left more waiting, with their next batch: they get the next round.
+      let leftover = new Map<string, readonly OutboxRow[]>();
       for (;;) {
         if (halted()) return { reason: 'stopped' };
         const error = dropped();
@@ -261,23 +275,24 @@ export function createRelay(deps: RelayDeps): Relay {
         }
         if (holding) {
           // A notification names its workspace, so it skips the definer function; the poll asks it.
-          const workspaces = new Set([...leftover, ...notified]);
+          const workspaces = new Map<string, readonly OutboxRow[] | undefined>(leftover);
+          for (const workspaceId of notified) if (!workspaces.has(workspaceId)) workspaces.set(workspaceId, undefined);
           notified.clear();
           if (due) {
             lastPoll = Date.now();
             const waiting = await reader.workspaces(WORKSPACES_PER_POLL);
             if (waiting.length > 0) sawWork();
             else step += 1;
-            for (const workspaceId of waiting) workspaces.add(workspaceId);
+            for (const workspaceId of waiting) if (!workspaces.has(workspaceId)) workspaces.set(workspaceId, undefined);
           }
-          leftover = await round(reader, [...workspaces]);
+          leftover = await round(reader, workspaces);
           // Beside a poll only, so pruning never wakes the database on its own.
           if (due && !halted() && (pruneAgain || Date.now() - lastPrune >= pruneEveryMs)) {
             lastPrune = Date.now();
             pruneAgain = await prune(reader);
           }
         }
-        if (halted() || dropped() !== undefined || (holding && (notified.size > 0 || leftover.length > 0))) continue;
+        if (halted() || dropped() !== undefined || (holding && (notified.size > 0 || leftover.size > 0))) continue;
         if (quiet()) {
           // Only a poke from here on wakes it.
           woken = false;

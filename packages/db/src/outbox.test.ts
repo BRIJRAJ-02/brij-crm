@@ -83,6 +83,45 @@ describe('the outbox reader', () => {
     expect(await outbox.workspaces(500)).not.toContain(busy);
   });
 
+  it('marks the last batch and reads the next in one round trip, scoped to the workspace, leaving no setting behind', async () => {
+    const direct = await openDirectConnection({ url: appUrl, applicationName: 'crm-outbox-reader-tests' });
+    const queries: string[] = [];
+    const query = direct.query.bind(direct) as (text: string, ...rest: unknown[]) => Promise<unknown>;
+    // Count what reaches the client: each call is one round trip.
+    Object.assign(direct, {
+      query: (text: string, ...rest: unknown[]) => {
+        queries.push(text);
+        return query(text, ...rest);
+      },
+    });
+    const outbox = createOutboxReader(direct);
+    readers.push(outbox);
+    const busy = await workspaceWithEvents([{ seq: 1 }, { seq: 2 }, { seq: 3 }, { seq: 4 }]);
+    const other = await workspaceWithEvents([{ seq: 1 }, { seq: 2 }]);
+
+    const before = queries.length;
+    const next = await outbox.advance(busy, 2, 10);
+    expect(queries.length - before).toBe(1);
+    expect(next.marked).toBe(2);
+    expect(next.rows.map((row) => row.seq)).toEqual([3, 4]);
+    expect(next.rows[0]).toMatchObject({ kind: 'records', coarse: false, mutationId: undefined });
+    // Row level security holds: a number past the other workspace's rows marks none of them.
+    expect((await outbox.advance(busy, 100, 10)).marked).toBe(2);
+    expect((await outbox.pending(other, 10)).map((row) => row.seq)).toEqual([1, 2]);
+    // The setting lived only as long as that one transaction.
+    const left = (await query("select current_setting('app.workspace_id', true) as setting")) as {
+      rows: { setting: string }[];
+    };
+    expect(left.rows).toEqual([{ setting: '' }]);
+
+    // Nothing reaches Postgres unless the id is a uuid and the number whole.
+    const sent = queries.length;
+    await expect(outbox.advance("x'; drop table outbox; --", 1, 10)).rejects.toThrow(TypeError);
+    await expect(outbox.advance(busy, 1.5, 10)).rejects.toThrow(TypeError);
+    await expect(outbox.mark(busy, Number.NaN)).rejects.toThrow(TypeError);
+    expect(queries.length).toBe(sent);
+  });
+
   it('prunes published rows exactly past OUTBOX_RETENTION, the interval crm_outbox_prune hard codes', async () => {
     const outbox = await reader();
     const workspaceId = await workspaceWithEvents([]);

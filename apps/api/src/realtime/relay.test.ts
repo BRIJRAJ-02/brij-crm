@@ -243,6 +243,10 @@ describe('the relay', () => {
           if (workspaceId === stuck) marked.push(upto);
           return reader.mark(workspaceId, upto);
         },
+        advance: (workspaceId, upto, max) => {
+          if (workspaceId === stuck) marked.push(upto);
+          return reader.advance(workspaceId, upto, max);
+        },
       }),
     });
     await expect.poll(() => unpublished(stuck), WAIT).toEqual([]);
