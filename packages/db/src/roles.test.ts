@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { createDatabase } from './client.ts';
+import { assertAppConnection, createDatabase } from './client.ts';
 import { createIdentityStore } from './identity/store.ts';
 import { withSetupLock } from './testing.ts';
 
@@ -79,11 +79,23 @@ async function group(options: string): Promise<string> {
   return role;
 }
 
+/**
+ * The app login check, on the pool (the api) and on one direct client (the
+ * worker's relay connection): both see the same role, so they must agree.
+ */
 async function appCheck(url: string): Promise<void> {
   const db = createDatabase({ url, applicationName: 'crm-roles-tests' });
+  const direct = new pg.Client({ connectionString: url, application_name: 'crm-roles-tests' });
+  await direct.connect();
   try {
-    await db.assertAppRole();
+    const [pooled, single] = await Promise.allSettled([
+      db.assertAppRole(),
+      assertAppConnection(direct, 'DATABASE_URL_DIRECT'),
+    ]);
+    expect(single.status).toBe(pooled.status);
+    if (pooled.status === 'rejected') throw pooled.reason;
   } finally {
+    await direct.end();
     await db.close();
   }
 }
@@ -98,6 +110,24 @@ async function identityCheck(url: string): Promise<void> {
 }
 
 describe('the app login check', () => {
+  it('names the variable to fix: DATABASE_URL for the pool, DATABASE_URL_DIRECT for the worker', async () => {
+    const direct = new pg.Client({ connectionString: adminUrl, application_name: 'crm-roles-tests' });
+    await direct.connect();
+    try {
+      await expect(assertAppConnection(direct, 'DATABASE_URL_DIRECT')).rejects.toThrow(
+        /bypass row level security\. Point DATABASE_URL_DIRECT at the app login/,
+      );
+    } finally {
+      await direct.end();
+    }
+    const db = createDatabase({ url: adminUrl, applicationName: 'crm-roles-tests' });
+    try {
+      await expect(db.assertAppRole()).rejects.toThrow(/Point DATABASE_URL at the app login/);
+    } finally {
+      await db.close();
+    }
+  });
+
   it(
     'passes a plain member of crm_app',
     apart(async () => {

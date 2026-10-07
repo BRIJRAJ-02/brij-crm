@@ -3,7 +3,7 @@
 // background jobs (#8). Its one HTTP port answers Railway's health check and
 // the api's poke, which wakes the relay when it is dormant (`realtime/wake.ts`).
 import { createServer } from 'node:http';
-import { createDatabase, createOutboxReader, openDirectConnection } from '@crm/db';
+import { assertAppConnection, createDatabase, createOutboxReader, openDirectConnection } from '@crm/db';
 import { loadEnv, WorkerEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
 import { createCentrifugoPublisher } from './realtime/centrifugo.ts';
@@ -22,12 +22,17 @@ const db = createDatabase({
 
 const openDirect = () => openDirectConnection({ url: env.DATABASE_URL_DIRECT, applicationName: 'crm-worker-direct' });
 
-// Refuse to start on a role that can bypass row level security, or a direct URL that is really a pooler (a
-// NOTIFY must arrive). The relay opens its own connections from here on, and reconnects when one drops.
+// Refuse to start on a role that can bypass row level security, on either URL (the direct one is the relay's,
+// and reads and marks rows under row level security like the pool), or a direct URL that is really a pooler (a
+// NOTIFY must arrive). The relay opens its own connections from here on.
 try {
   await db.assertAppRole();
   const proof = await openDirect();
-  await proof.end();
+  try {
+    await assertAppConnection(proof, 'DATABASE_URL_DIRECT');
+  } finally {
+    await proof.end();
+  }
 } catch (error) {
   log.error('Refusing to start', errorFields(error));
   await db.close();

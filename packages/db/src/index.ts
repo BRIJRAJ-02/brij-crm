@@ -1,4 +1,5 @@
 export {
+  assertAppConnection,
   createDatabase,
   type Database,
   type DatabaseHealth,
