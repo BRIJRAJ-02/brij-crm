@@ -38,7 +38,7 @@ A formula is a short expression over one record's own attributes: `{{value}} * {
 
 A computed attribute is referenced as its result type. Attributes that hold several values, Member, Location, File, Interaction and record references can't be referenced: "Formulas can't use <Type> attributes yet." (or "…attributes that hold several values yet.").
 
-The whole formula must give a number, currency, text, date or yes or no, stored as Number, Currency, Text, Date or Checkbox. A timestamp result is refused "A formula can't give a date and time yet. Use DATE()."; a formula that can only give empty is refused "A formula must give a value."
+The whole formula must give a number, currency, text, date or yes or no, stored as Number, Currency, Text, Date or Checkbox. A currency result's attribute takes as its `config.defaultCurrency` the first referenced Currency attribute's (in source order), else the code of the first `CURRENCY()` literal, else the formula is refused "Give the result a currency with CURRENCY()." (422 `CONFIG_INVALID`). Each stored value keeps the code its evaluation gave. A timestamp result is refused "A formula can't give a date and time yet. Use DATE()."; a formula that can only give empty is refused "A formula must give a value."
 
 ## Operators
 
@@ -56,7 +56,7 @@ The whole formula must give a number, currency, text, date or yes or no, stored 
 
 Any other pairing is a check error: "Can't <add, subtract, …> <type> and <type>."
 
-Text comparisons ignore case (`"won" = "Won"` is yes) and order by the ICU root collation, as the engine's sorts do.
+Text comparisons ignore case (`"won" = "Won"` is yes) and use one collator in Node and in the browser: `new Intl.Collator('und', { sensitivity: 'accent' })` (the root locale; equal when `compare` gives 0, ordered by its sign), never Postgres. Postgres orders the stored sort keys with its own ICU build, so a formula's `<` between two texts may disagree with the order a sort on those texts shows in a table; that is accepted, and the FormulaEditor's README says so.
 
 ## Empty values
 
@@ -120,7 +120,7 @@ An unknown name: "Unknown function <NAME>."; a wrong count: "<NAME> takes <n> ar
 
 ## Tests
 
-- The table driven test: every operator on every type pairing it allows (and a sample it refuses), every function with typical, empty and error inputs, exact decimals (`0.1 + 0.2`, division to 12 places, rounding half away from zero at 4), currency mismatches, text comparisons ignoring case, nesting and size limits, and positions of errors.
+- The table driven test: every operator on every type pairing it allows (and a sample it refuses), every function with typical, empty and error inputs, exact decimals (`0.1 + 0.2`, division to 12 places, rounding half away from zero at 4), currency mismatches and the currency result rule, text comparisons ignoring case through the one collator, nesting and size limits, and positions of errors.
 - Parse, check and evaluate agree in the browser and in Node on the same samples (one shared test file run by both Vitest projects).
 
 ## Rationale (short)
