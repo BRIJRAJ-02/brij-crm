@@ -17,6 +17,8 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # A hung browser once held a job for over 40 minutes; a normal run takes under 10.
+    timeout-minutes: 25
     permissions:
       contents: read
     # A real Postgres for the integration tests (never a mocked one), the same
@@ -71,6 +73,8 @@ jobs:
   stories:
     name: stories (${{ matrix.browser }})
     runs-on: ubuntu-latest
+    # A hung browser once held a job for over 40 minutes; a normal run takes under 10.
+    timeout-minutes: 25
     permissions:
       contents: read
     strategy:
@@ -102,6 +106,8 @@ jobs:
   # `pnpm test:visual` uses locally, so fonts and rendering match exactly.
   visual:
     runs-on: ubuntu-latest
+    # A hung browser once held a job for over 40 minutes; a normal run takes under 10.
+    timeout-minutes: 25
     permissions:
       contents: read
     container:
