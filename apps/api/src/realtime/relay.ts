@@ -6,7 +6,9 @@
 // rows in `seq` order, published to `workspace:<id>` in one Centrifugo call
 // (each with the idempotency key `<workspace>:<seq>`), then marked up to the
 // first failure, so nothing is skipped; a full batch gets another turn next
-// round.
+// round. A workspace whose publish failed waits before its next turn, 1
+// second doubling to 60, whatever polls or notifications name it meanwhile,
+// and its failures are logged at most once a minute, with the count.
 //
 // Neon bills compute by the hour and suspends it after 5 minutes without a
 // query, so the relay lets the database sleep while nothing is written:
@@ -65,6 +67,10 @@ export interface RelayDeps {
   readonly concurrency?: number;
   /** The least time between two prunes while active (default 1 minute). */
   readonly pruneEveryMs?: number;
+  /** A workspace's first wait after a failed publish, doubled each failure in a row (default 1 second). */
+  readonly retryMs?: number;
+  /** A workspace's longest wait after failed publishes (default 60 seconds). */
+  readonly maxRetryMs?: number;
 }
 
 /** `active` while it holds a connection, `dormant` while it makes no database call, `stopped` otherwise. */
@@ -109,6 +115,15 @@ export function changeEvent(row: OutboxRow): ChangeEvent {
   };
 }
 
+/** The least time between two warnings about one workspace's failed publishes. */
+const WARN_EVERY_MS = 60_000;
+
+/** A workspace waiting after failed publishes: how many in a row, and when it may try again. */
+interface Retry {
+  readonly failures: number;
+  readonly at: number;
+}
+
 /** How one connection's session ended. */
 type SessionEnd =
   { readonly reason: 'stopped' } | { readonly reason: 'quiet' } | { readonly reason: 'lost'; readonly error: Error };
@@ -123,6 +138,8 @@ export function createRelay(deps: RelayDeps): Relay {
   const batch = deps.batch ?? 100;
   const concurrency = Math.max(1, deps.concurrency ?? 4);
   const pruneEveryMs = deps.pruneEveryMs ?? 60_000;
+  const retryMs = deps.retryMs ?? 1_000;
+  const maxRetryMs = deps.maxRetryMs ?? 60_000;
   const { log } = deps;
 
   // The loop's own state, read through functions where an await sits between a write and a read.
@@ -139,6 +156,9 @@ export function createRelay(deps: RelayDeps): Relay {
   const isWoken = (): boolean => woken;
   // Cuts the current wait short: a notification, a poke, a lost connection, or stop().
   let interrupt = (): void => undefined;
+  // Workspaces waiting after failed publishes, and when each was last warned about.
+  const retries = new Map<string, Retry>();
+  const warnedAt = new Map<string, number>();
 
   /** Waits `ms` (forever when undefined), or until something calls `interrupt`. */
   function sleep(ms: number | undefined): Promise<void> {
@@ -160,7 +180,30 @@ export function createRelay(deps: RelayDeps): Relay {
     step = 0;
   }
 
-  const quiet = (): boolean => Date.now() - lastWork >= dormantAfterMs;
+  // Never dormant while a workspace waits to retry: its rows are still to publish.
+  const quiet = (): boolean => retries.size === 0 && Date.now() - lastWork >= dormantAfterMs;
+
+  /** True when the workspace may take a turn now: not waiting after a failure. */
+  const ready = (workspaceId: string): boolean => (retries.get(workspaceId)?.at ?? 0) <= Date.now();
+
+  /** Puts a workspace in its backoff after a failed publish, and warns at most once a minute about it. */
+  function failed(workspaceId: string, seq: number | undefined, error: Error): void {
+    const now = Date.now();
+    const failures = (retries.get(workspaceId)?.failures ?? 0) + 1;
+    const retryInMs = Math.min(retryMs * 2 ** (failures - 1), maxRetryMs);
+    retries.set(workspaceId, { failures, at: now + retryInMs });
+    const last = warnedAt.get(workspaceId);
+    if (last !== undefined && now - last < WARN_EVERY_MS) return;
+    for (const [id, at] of warnedAt) if (now - at >= WARN_EVERY_MS) warnedAt.delete(id);
+    warnedAt.set(workspaceId, now);
+    log.warn('Publishing changes failed; retrying the workspace with backoff', {
+      workspaceId,
+      failures,
+      retryInMs,
+      seq,
+      ...errorFields(error),
+    });
+  }
   const pollWait = (): number => schedule[Math.min(step, schedule.length - 1)] ?? 1_000;
 
   /**
@@ -175,7 +218,10 @@ export function createRelay(deps: RelayDeps): Relay {
     held: readonly OutboxRow[] | undefined,
   ): Promise<readonly OutboxRow[] | undefined> {
     const rows = held ?? (await reader.pending(workspaceId, batch));
-    if (rows.length === 0) return undefined;
+    if (rows.length === 0) {
+      retries.delete(workspaceId);
+      return undefined;
+    }
     sawWork();
     const channel = workspaceChannel(workspaceId);
     const outcome = await deps.publishBatch(
@@ -183,14 +229,11 @@ export function createRelay(deps: RelayDeps): Relay {
     );
     const landed = rows[outcome.published - 1];
     if (outcome.error !== undefined) {
+      failed(workspaceId, rows[outcome.published]?.seq, outcome.error);
       if (landed !== undefined) await reader.mark(workspaceId, landed.seq);
-      log.warn('Publishing a change failed; retrying on the next tick', {
-        workspaceId,
-        seq: rows[outcome.published]?.seq,
-        ...errorFields(outcome.error),
-      });
       return undefined;
     }
+    retries.delete(workspaceId);
     const last = rows[rows.length - 1];
     if (last === undefined) return undefined;
     const next = await reader.advance(workspaceId, last.seq, batch);
@@ -275,15 +318,20 @@ export function createRelay(deps: RelayDeps): Relay {
         }
         if (holding) {
           // A notification names its workspace, so it skips the definer function; the poll asks it.
+          // A workspace waiting after a failure sits out until its time, whatever names it.
           const workspaces = new Map<string, readonly OutboxRow[] | undefined>(leftover);
-          for (const workspaceId of notified) if (!workspaces.has(workspaceId)) workspaces.set(workspaceId, undefined);
+          const add = (workspaceId: string) => {
+            if (!workspaces.has(workspaceId) && ready(workspaceId)) workspaces.set(workspaceId, undefined);
+          };
+          for (const workspaceId of notified) add(workspaceId);
           notified.clear();
+          for (const workspaceId of retries.keys()) add(workspaceId);
           if (due) {
             lastPoll = Date.now();
             const waiting = await reader.workspaces(WORKSPACES_PER_POLL);
             if (waiting.length > 0) sawWork();
             else step += 1;
-            for (const workspaceId of waiting) if (!workspaces.has(workspaceId)) workspaces.set(workspaceId, undefined);
+            for (const workspaceId of waiting) add(workspaceId);
           }
           leftover = await round(reader, workspaces);
           // Beside a poll only, so pruning never wakes the database on its own.
@@ -298,7 +346,8 @@ export function createRelay(deps: RelayDeps): Relay {
           woken = false;
           return { reason: 'quiet' };
         }
-        await sleep(Math.min(lastPoll + pollWait(), lastWork + dormantAfterMs) - Date.now());
+        const nextRetry = Math.min(...[...retries.values()].map((retry) => retry.at));
+        await sleep(Math.min(lastPoll + pollWait(), lastWork + dormantAfterMs, nextRetry) - Date.now());
       }
     } finally {
       open = false;

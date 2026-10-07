@@ -105,7 +105,10 @@ afterEach(async () => {
 });
 
 interface RelayOptions extends Partial<
-  Pick<RelayDeps, 'pollScheduleMs' | 'dormantAfterMs' | 'pruneEveryMs' | 'batch' | 'concurrency'>
+  Pick<
+    RelayDeps,
+    'pollScheduleMs' | 'dormantAfterMs' | 'pruneEveryMs' | 'batch' | 'concurrency' | 'retryMs' | 'maxRetryMs'
+  >
 > {
   readonly applicationName?: string;
   /** Sees each reader the relay opens, to count or time its calls. */
@@ -115,23 +118,32 @@ interface RelayOptions extends Partial<
 function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
   const applicationName = options.applicationName ?? 'crm-relay-tests';
   const lines: string[] = [];
+  const warnings: { message: string; fields: Record<string, unknown> }[] = [];
   const relay = createRelay({
     connect: async () => {
       const reader = createOutboxReader(await openDirectConnection({ url: appUrl, applicationName }));
       return options.wrap?.(reader) ?? reader;
     },
     publishBatch: createCentrifugoPublisher({ apiUrl: centrifugoUrl, apiKey: API_KEY, timeoutMs: 2_000 }).publishBatch,
-    log: { info: (message) => lines.push(message), warn: (message) => lines.push(message) },
+    log: {
+      info: (message) => lines.push(message),
+      warn: (message, fields = {}) => {
+        lines.push(message);
+        warnings.push({ message, fields });
+      },
+    },
     pollScheduleMs: options.pollScheduleMs ?? [100],
     dormantAfterMs: options.dormantAfterMs ?? 60_000,
     ...(options.pruneEveryMs === undefined ? {} : { pruneEveryMs: options.pruneEveryMs }),
     ...(options.batch === undefined ? {} : { batch: options.batch }),
     ...(options.concurrency === undefined ? {} : { concurrency: options.concurrency }),
+    retryMs: options.retryMs ?? 50,
+    ...(options.maxRetryMs === undefined ? {} : { maxRetryMs: options.maxRetryMs }),
     backoffMs: 50,
   });
   started.push(relay);
   relay.start();
-  return { relay, lines };
+  return { relay, lines, warnings };
 }
 
 /** How many connections a relay named `applicationName` holds open. */
@@ -256,7 +268,38 @@ describe('the relay', () => {
     // Centrifugo runs every command, so 3 went out before 2; its repeat on the retry was dropped by its key.
     expect(centrifugo.seqs(stuck)).toEqual([1, 3, 2]);
     expect(centrifugo.seqs(other)).toEqual([1]);
-    expect(lines).toContain('Publishing a change failed; retrying on the next tick');
+    expect(lines).toContain('Publishing changes failed; retrying the workspace with backoff');
+  });
+
+  it('backs a failing workspace off, 1 doubling to a cap, whatever the poll finds, and warns once a minute with the count', async () => {
+    const failing = await workspace();
+    const healthy = await workspace();
+    let refusing = true;
+    const centrifugo = await fakeCentrifugo({
+      refuse: (publication) => refusing && publication.channel === `workspace:${failing}`,
+    });
+    servers.push(centrifugo);
+    await events(failing, [1]);
+    // A poll every 20 ms would retry far sooner than the backoff lets it.
+    const { warnings } = relayTo(centrifugo.url, { pollScheduleMs: [20], retryMs: 100, maxRetryMs: 400 });
+    await expect.poll(() => centrifugo.refused.length, WAIT).toBeGreaterThanOrEqual(5);
+    const tries = centrifugo.calls.filter((call) => call.channel === `workspace:${failing}`).map((call) => call.start);
+    const gaps = tries.slice(1).map((at, index) => at - (tries[index] ?? at));
+    // 100, 200, 400, then 400 again (the cap), each give or take a timer's slack.
+    expect(gaps.slice(0, 4).map((gap) => Math.round(gap / 100))).toEqual([1, 2, 4, 4]);
+
+    // Meanwhile other workspaces publish at once.
+    await events(healthy, [1]);
+    await testQuery(ownerUrl, `select pg_notify('crm_outbox', $1)`, [healthy]);
+    await expect.poll(() => centrifugo.seqs(healthy), { timeout: 1_000, interval: 10 }).toEqual([1]);
+
+    const mine = warnings.filter((warning) => warning.fields.workspaceId === failing);
+    expect(mine).toHaveLength(1);
+    expect(mine[0]?.fields).toMatchObject({ failures: 1, retryInMs: 100, seq: 1 });
+
+    refusing = false;
+    await expect.poll(() => unpublished(failing), WAIT).toEqual([]);
+    expect(centrifugo.seqs(failing)).toEqual([1]);
   });
 
   it('publishes a workspace’s batch in one sequential call, and gives every workspace a turn each round', async () => {
