@@ -54,6 +54,14 @@ export interface Database {
    * request is never touched. Runs on its own one connection pool, so a
    * cancel never waits behind the work it cancels. Reads no tenant data.
    * Answers whether a running statement was cancelled.
+   *
+   * The check and the cancel are one statement, but `pg_stat_activity` is a
+   * snapshot: if the tagged work finishes in the microseconds between the
+   * snapshot and the signal, and its connection starts its next statement
+   * (another request's, once the pool hands it on) in that window, that
+   * statement is cancelled instead. It fails with `57014` and its request
+   * sees `QUERY_CANCELLED` and retries: availability only, never data, the
+   * same race Postgres's own cancel request has.
    */
   cancelTagged(pid: number, tag: string): Promise<boolean>;
   close(): Promise<void>;
