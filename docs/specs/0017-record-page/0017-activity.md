@@ -7,9 +7,10 @@ A record's timeline is never stored. `getActivity` reads it from the history the
 ## Order and the cursor
 
 - Every entry has a sort key (`at` descending, `rank` ascending, `id` ascending). `at` is the moment with microseconds as Postgres stores it; `rank` breaks ties at one moment: `links` 1, `change` 2, `comment` 3, `note` 4, `task` 5, `created` 9. `id` is the entry id below, compared as text. The key is total, so pages never repeat or skip an entry.
-- The cursor is base64url of `{ "at": "<ISO instant with microseconds>", "rank": <0 to 9>, "id": "<entry id>" }`, at most 512 characters, parsed with a strict Zod schema (`ActivityCursor` in `packages/contracts/src/activity.ts`). Anything else answers 422 `FILTER_INVALID`.
+- The cursor is base64url of `{ "at": "<ISO instant with microseconds>", "rank": <0 to 9>, "id": "<entry id>" }`, at most 512 characters, parsed with a strict Zod schema (`ActivityCursor` in `packages/contracts/src/activity.ts`). Anything else answers 400 `INPUT_INVALID` naming field `cursor` (the settled cursor rule).
 - A source with rank `r` reads, against cursor `c`: `at <= c.at` when `r > c.rank`; `at < c.at` when `r < c.rank`; and `at < c.at or (at = c.at and id > c.id)` when `r = c.rank`. With no cursor it reads everything up to now.
 - Each source returns at most `limit + 1` entries in key order. The service merges them, keeps the first `limit`, and sets `nextCursor` from the last kept entry when any source had more.
+- Every `ActivityItem` carries this key as `key` (`<at as ISO with microseconds>|<rank>|<id>`). The browser orders and merges entries by `key` through `compareActivityKeys` (contracts: `at` descending, then `rank` ascending, then `id` ascending), never by `at`, which is cut to milliseconds for display and can tie.
 
 ## Entry ids
 
@@ -29,7 +30,7 @@ Ids are stable across reads, so the browser merges pages and refetches by id.
 
 Every source runs inside the one `inWorkspace` transaction of the read, after the record check, using the attributes the door lets the viewer see.
 
-**The record check** (before any source): the record's row by id, live (`deleted_at is null`), its object live (not archived) and visible, and inside the viewer's record rule (spec 0009's record check). Otherwise `NOT_FOUND` "That record does not exist.", the same answer for missing, trashed and hidden.
+**The record check** (before any source): the record's row by id (live, or in the trash, so a trashed record's read only page has its Activity), its object live (not archived) and visible, and inside the viewer's record rule (spec 0009's record check). Otherwise `NOT_FOUND` "That record does not exist.", the same answer for missing and hidden.
 
 **Creation** (`created`, rank 9): the record row's `created_at` and `created_by`. Exactly one entry, the oldest.
 
@@ -62,6 +63,7 @@ A moment is one (side, `at`, actor). A moment with only starts is "added", only 
 
 | Value | Source |
 |---|---|
+| every entry's `key` | its `at` with microseconds, its source's rank and its id, joined by a vertical bar |
 | creation `at` and actor | `records.created_at`, `records.created_by_*` |
 | a change's `at` and actor | the kept version's `values.active_from` and `values.set_by_*` |
 | a change's `from` and `to` | the replaced and kept versions' items, decoded by `decodeValue` (cleared versions decode to `null`) |
@@ -77,7 +79,7 @@ A moment is one (side, `at`, actor). A moment with only starts is "added", only 
 
 - `activity.forRecord` registers with the live router: a `records` event whose `recordIds` include the record, a coarse `records` event for the record's object while the store holds the record, and (from #19) a `notes` or `tasks` event whose `recordIds` include it, each schedule a head refetch. So does a confirmed write from this tab that names the record (its own events are skipped by spec 0006's pipeline, so the write path tells the activity source directly: `data.records.setValue`, `links.add` and `links.remove` notify the record and every id in `changedRecordIds`).
 - A head refetch reads the first page (no cursor). It runs at once when none is in flight, and at most once more 500 ms after (`ACTIVITY_REFRESH_MS`, leading and trailing), so a burst costs at most two reads per second per open feed.
-- Merge by id: ids the feed doesn't hold are added at the top in key order, held ids take the new content. When the first page shares no id with what the feed holds (more than 50 new entries), the feed drops everything and keeps the new first page.
+- Merge by id: ids the feed doesn't hold are added at the top in `key` order, held ids take the new content. When the first page shares no id with what the feed holds (more than 50 new entries), the feed drops everything and keeps the new first page.
 - Adding entries above keeps the entry the member is reading fixed on screen: the feed anchors on the first visible entry (an ActivityFeed requirement, storied in milestone 2).
 - A `definitions` event for the record's object resets the feed (first page again), since an attribute may have been archived, hidden or renamed.
 - A full catch up of spec 0006 or a `reset` of spec 0007 resets the feed the same way.
