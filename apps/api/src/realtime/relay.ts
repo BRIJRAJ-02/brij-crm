@@ -273,7 +273,18 @@ export function createRelay(deps: RelayDeps): Relay {
     const landed = rows[outcome.published - 1];
     if (outcome.error !== undefined) {
       failed(workspaceId, rows[outcome.published]?.seq, outcome.error, 'publish');
-      if (landed !== undefined) await reader.mark(workspaceId, landed.seq);
+      if (landed !== undefined) {
+        // One failure, already counted: a mark that fails too is only noted (what landed goes out again on the
+        // retry, and its idempotency key drops the repeat).
+        try {
+          await reader.mark(workspaceId, landed.seq);
+        } catch (error) {
+          log.warn('Marking the part of a failed batch that landed failed; it is sent again on the retry', {
+            workspaceId,
+            ...errorFields(error),
+          });
+        }
+      }
       return undefined;
     }
     retries.delete(workspaceId);

@@ -705,6 +705,29 @@ describe('the relay', () => {
     await expect.poll(tries, { timeout: 1_000, interval: 10 }).toBeGreaterThan(before);
   });
 
+  it('counts a failed publish once even when marking what landed fails too', async () => {
+    const stuck = await workspace();
+    let refusing = true;
+    const centrifugo = await fakeCentrifugo({
+      refuse: (publication) => refusing && publication.idempotencyKey === `${stuck}:2`,
+    });
+    servers.push(centrifugo);
+    await events(stuck, [1, 2]);
+    const { lines } = relayTo(centrifugo.url, {
+      pollScheduleMs: [60_000],
+      retryMs: 400,
+      wrap: (reader) => ({ ...reader, mark: () => Promise.reject(new Error('could not mark')) }),
+    });
+    await expect.poll(() => centrifugo.refused.length, WAIT).toBe(1);
+    refusing = false;
+    await expect.poll(() => unpublished(stuck), WAIT).toEqual([]);
+    const tries = centrifugo.calls.filter((call) => call.channel === `workspace:${stuck}`).map((call) => call.start);
+    // One failure waits 400 ms; counted twice it would wait 800.
+    expect((tries[1] ?? 0) - (tries[0] ?? 0)).toBeLessThan(700);
+    expect(lines).toContain('Marking the part of a failed batch that landed failed; it is sent again on the retry');
+    expect(lines).not.toContain('Reading or marking changes failed; retrying the workspace with backoff');
+  });
+
   it('lets no poke cut its reconnect backoff short', async () => {
     const centrifugo = await fakeCentrifugo();
     servers.push(centrifugo);
