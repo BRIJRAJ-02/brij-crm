@@ -24,6 +24,7 @@ records.view(workspace, objectId, {
 ## The window key and its life
 
 - Key: `objectId` plus the canonical JSON of `filter` and `sorts` (keys sorted, no whitespace). One window per key per workspace.
+- **The window's clock**: one `now` (`Date.now()`) taken when the window opens and refreshed at each settle; every block and count of the window is read with it, so relative dates ("in the last 7 days") never shift between two blocks of one view.
 - Reference counted by its readers. When the last reader goes, the window waits 30 seconds (back navigation stays instant), then drops its blocks and releases its bodies.
 - The router loader warms a window (count and the first block) as spec 0005 does; it never hands rows to the screen.
 
@@ -44,7 +45,8 @@ records.view(workspace, objectId, {
 **Both modes**:
 - Blocks hold ids. The visible blocks plus 5 on each side stay; the rest are dropped (ids released, checkpoint kept).
 - A record a read leaves out is gone for this viewer: removed from every window and subscription.
-- A `QUERY_CANCELLED` block shows the grid's error state for that range with Retry; a `FILTER_INVALID` (a stale cursor) restarts the chain from block 0.
+- A `QUERY_CANCELLED` block shows the grid's error state for that range with Retry. A `TOO_MANY_REQUESTS` block (spec 0005's cap of 6 reads in flight per workspace) waits its `Retry-After` and tries once more, then shows the same error state.
+- **A refused cursor**: spec 0005 binds a cursor to its object, filter and sorts and answers 400 `INPUT_INVALID` naming the field `cursor` when it doesn't fit. Only that answer, on a request that carried a cursor, restarts the chain from block 0, once. If the restart fails as well, or any other refusal arrives (`FILTER_INVALID` included), the view shows its error state with Retry. A window never restarts twice without a successful read in between, so it can't loop.
 
 ## Visible attributes
 
@@ -57,7 +59,7 @@ records.view(workspace, objectId, {
 
 - **Values** patch at once in every window, because bodies are shared.
 - **Order and membership** can change when a value used by the filter or a sort changes, or when a record is created, deleted or restored. Rather than guess on the client (ordering lives on the server), a window that saw any such change is marked dirty.
-- **Settle**: 1.5 seconds after the last change that dirtied it, and only while not held by an open editor, the window rereads its loaded blocks (position mode by index; cursor mode from the first loaded block's checkpoint, as many rows as it had) and its count. Settles are at most one per window at a time; changes during a settle mark it dirty again.
+- **Settle**: 1.5 seconds after the last change that dirtied it, and only while not held by an open editor, the window takes a fresh `now`, then rereads its loaded blocks (position mode by index; cursor mode from the first loaded block's checkpoint, as many rows as it had) and its count with it. Settles are at most one per window at a time; changes during a settle mark it dirty again.
 - A window with no filter and no sort other than record id order is never dirty from value changes, only from creates and deletes.
 - **The member's own rows**: a record the member edited in this view since the last settle keeps its index after the settle if it has moved away or left the view, until it scrolls out of sight or the member leaves the view; at its new place it is hidden meanwhile so it never shows twice. If it no longer matches the filter its note is `no-longer-matches` ("Doesn't match this view").
 - **Own creates**: a record created from this view is placed first, noted `new`, until the member leaves the view; settle never moves it. If it doesn't match the filter, its note is `no-longer-matches` instead.
@@ -77,9 +79,9 @@ records.view(workspace, objectId, {
 
 ## Tests
 
-- Vitest with the fake API: window keys and sharing; both modes against the engine's reference evaluator through a fake served from a sample; eviction and checkpoint reload; jump ahead and abort; short final block; visible attribute union and fetch on show; event intersection; settle timing, hold, own rows kept and hidden at their new place, own creates first; hold counts and the 30 second drop.
+- Vitest with the fake API: window keys and sharing; one `now` per window, refreshed at settle; both modes against the engine's reference evaluator through a fake served from a sample; eviction and checkpoint reload; jump ahead and abort; short final block; a refused cursor restarts once and then shows the error state; a `FILTER_INVALID` never restarts; visible attribute union and fetch on show; event intersection; settle timing, hold, own rows kept and hidden at their new place, own creates first; hold counts and the 30 second drop.
 - Real API (Vitest against Postgres): `records.query` with `attributeIds` returns only those attributes plus the primary; `canJump` agrees between contracts and `checkPage`.
-- Playwright on the local scale seed: 20 jumps timed, a full scroll with heap samples every 50,000 rows (Chrome's `performance.measureUserAgentSpecificMemory` or a CDP heap snapshot after collection), frame times from a performance trace.
+- Playwright on the local scale seed: 20 jumps timed, a full scroll with heap samples every 50,000 rows (Chrome's `performance.measureUserAgentSpecificMemory` or a CDP heap snapshot after collection), frame times from a performance trace at the grid story's scroll speed, judged by their p95 against 16.7 ms.
 
 ## Rationale (short)
 

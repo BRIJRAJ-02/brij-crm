@@ -7,7 +7,8 @@ Every value the browser reads now carries the id of its current version, and eve
 ## Reads
 
 - `RecordView.revision`: `records.revision`, bumped by every statement that updates the records row (every value write through `touchOwner`, near side link writes, delete, restore).
-- `RecordView.versions`: per returned attribute with a current version row (a cleared marker counts), its `version_id`. All items of a multi valued attribute share one version, because one write stamps them together. Record references have no entry in v1.
+- `RecordView.versions` (shipped by spec 0005): per returned attribute with a current version row (a cleared marker counts), its `version_id`. All items of a multi valued attribute share one version, because one write stamps them together. Record references have no entry in v1.
+- `RecordView.linkTotals` (shipped by spec 0005): a multi link cell carries its first 20 links, and its total when there are more. Both come from one read, so the store replaces them together under the revision rule and never counts links itself.
 - **The revision rule**: the store replaces a base only with a read whose revision is at least the held one. A write's response, a block, a `records.get` after an event: all pass the same check. Equal revisions replace (a far side link change doesn't bump, see Follow-up in [index.md](index.md)).
 
 ## Edits
@@ -27,7 +28,7 @@ Every value the browser reads now carries the id of its current version, and eve
 
 - B sees nothing: their value is the one showing.
 - Several replaced cells from one event in one record make one toast naming the first attribute and "and 2 more".
-- If A's tab is closed, nothing is shown (a lasting notification is #28).
+- If A's tab is closed, nothing is shown (a lasting notification is #28). If A's tab was offline or disconnected when it happened, nothing is shown either: spec 0007's catch up collapses the missed events and carries no `replaced`.
 
 ## Batch writes
 
@@ -39,11 +40,11 @@ Every value the browser reads now carries the id of its current version, and eve
 
 - **The stack**: per data layer (one per tab), per workspace, 50 entries, in memory. An entry is one user action: `{ label, cells: [{ recordId, attributeId, before, writtenVersionId }] }`, where `before` is the value the base showed when the action began and `writtenVersionId` comes from the confirmed response.
 - **When an entry is pushed**: when its write is confirmed. A refused cell is left out; a fully refused action pushes nothing. Unchanged cells (no new version) are left out.
-- **Running it**: `data.undo.run()` pops the top entry and sends `records.setValuesBatch` (or `records.setValues` for one record) with `value: before` and `ifVersionId: writtenVersionId` per cell. It applies optimistically. Cells refused `VERSION_CHANGED` roll back and count toward "N cells were changed by someone else since, so they were kept". Other refusals roll back with their own messages.
+- **Running it**: `data.undo.run()` pops the top entry and sends `records.setValuesBatch` (or `records.setValues` for one record) with `value: before` and `ifVersionId: writtenVersionId` per cell. It applies optimistically. Cells refused `VERSION_CHANGED` roll back and count toward "N cells were changed since, so they were kept". The copy never says who: the newer version may be the member's own, from another tab. Other refusals roll back with their own messages.
 - An undo pressed while its entry's write is still in flight waits for that response first.
 - The undo's own write is not pushed (no redo in v1); it updates the tab's own versions like any write.
 - Cleared with the store (sign out, workspace switch). Schema changes (add attribute) are not undoable here.
-- **The shortcut**: the workspace frame listens for Cmd+Z (Ctrl+Z off Apple platforms) on the document, ignores it when the event target is an input, a textarea or a content editable (their own undo wins) or when a dialog is open, and calls `data.undo.run()`. ShortcutHelp lists "Undo your last change".
+- **The shortcut**: the workspace frame listens for Cmd+Z on Apple platforms and Ctrl+Z elsewhere, on the document. Apple means `navigator.userAgentData.platform` (where the browser has it, else `navigator.platform`) names macOS, iOS or iPadOS. It ignores the key when the event target is an input, a textarea or a content editable (their own undo wins), or sits inside the library's `Modal` (`target.closest('[role="dialog"], [role="alertdialog"]')`; React Aria keeps focus inside an open Modal, so a key pressed while one is open always comes from inside it), and otherwise calls `data.undo.run()`. ShortcutHelp lists "Undo your last change".
 - **Toasts**: after an undo, "Undid <Attribute> on <Record>" (or "Undid the paste into 40 cells"). After a paste or range clear over more than one cell lands, "Pasted into 40 cells" with "Undo". Copy lives in the screen's `strings.ts`; the layer returns the facts.
 
 ## Engine
@@ -55,7 +56,7 @@ Every value the browser reads now carries the id of its current version, and eve
 ## Tests
 
 - Real Postgres: revision grows on every kind of record write; `ifVersionId` equal writes, unequal refuses and writes nothing on that record; `null` base reports `replaced`; the outbox row holds `replaced` with the writing actor, capped at 1,000.
-- Fake API and events: the revision rule with a late confirmation; base never from a layer; own versions bounded at 500; notice shown only for its four conditions; "Use mine"; batch partial refusal; undo of one cell, of a paste, with some cells changed since, while in flight, at depth 51; cleared on switch.
+- Fake API and events: the revision rule with a late confirmation; links and `linkTotals` replaced together; base never from a layer; own versions bounded at 500; notice shown only for its four conditions and never after a catch up; "Use mine"; batch partial refusal; undo of one cell, of a paste, with some cells changed since (by another member, and by the same member in a second tab: the same copy), while in flight, at depth 51; the shortcut on an Apple and a non Apple platform, ignored in a text field and inside an open Modal; cleared on switch.
 - Playwright, two browsers: the clash and "Use mine"; undo after another member's change.
 
 ## Rationale (short)
