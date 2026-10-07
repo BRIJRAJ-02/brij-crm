@@ -378,6 +378,54 @@ describe('the relay', () => {
     expect(first.seqs(workspaceId)).toEqual([1, 2]);
   });
 
+  it('without the lock, neither listens nor wakes on notifications, tries the lock on its timer, and goes dormant', async () => {
+    const centrifugo = await fakeCentrifugo();
+    const standby = await fakeCentrifugo();
+    servers.push(centrifugo, standby);
+    const leader = relayTo(centrifugo.url, { pollScheduleMs: [50] });
+    const workspaceId = await workspace();
+    await events(workspaceId, [1]);
+    await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1]);
+
+    const listens: number[] = [];
+    const locks: number[] = [];
+    const second = relayTo(standby.url, {
+      pollScheduleMs: [100, 200, 400],
+      dormantAfterMs: 1_500,
+      wrap: (reader) => ({
+        ...reader,
+        listen: (onNotify) => {
+          listens.push(Date.now());
+          return reader.listen(onNotify);
+        },
+        lock: () => {
+          locks.push(Date.now());
+          return reader.lock();
+        },
+      }),
+    });
+    await expect.poll(() => locks.length, WAIT).toBeGreaterThanOrEqual(3);
+    // A burst of notifications doesn't bring its tries forward.
+    const before = locks.length;
+    for (let seq = 2; seq <= 6; seq += 1) {
+      await events(workspaceId, [seq]);
+      await testQuery(ownerUrl, `select pg_notify('crm_outbox', $1)`, [workspaceId]);
+    }
+    await sleep(150);
+    expect(locks.length - before).toBeLessThanOrEqual(1);
+    expect(listens).toEqual([]);
+    expect(standby.published).toEqual([]);
+    await expect.poll(() => second.relay.mode(), WAIT).toBe('dormant');
+    expect(listens).toEqual([]);
+
+    // The leader goes; a poke wakes the standby, which takes the lock, listens, and publishes.
+    await leader.relay.stop();
+    await events(workspaceId, [7]);
+    second.relay.wake();
+    await expect.poll(() => standby.seqs(workspaceId), WAIT).toContain(7);
+    expect(listens).toHaveLength(1);
+  });
+
   it('backs its safety poll off over a quiet spell, and starts again at the first wait on a notification', async () => {
     const centrifugo = await fakeCentrifugo();
     servers.push(centrifugo);

@@ -15,6 +15,10 @@
 // - Active: LISTEN on `crm_outbox` on the direct connection, plus a safety
 //   poll that backs off over a quiet spell (1, 2, 5, 15, then every 60
 //   seconds) and starts again at 1 second on any notification, poke or row.
+//   A relay without the lock doesn't LISTEN (notifications are the leader's
+//   business); it tries for the lock on the same backing off timer, a poke
+//   brings its next try forward, and it goes dormant after the same quiet
+//   spell. Taking the lock, it LISTENs, then polls.
 // - Dormant: after 3 minutes with no rows found and no notification, it
 //   closes the connection (which unlistens and lets go of the lock) and makes
 //   no database call at all. A connection lost while waiting (Neon suspending
@@ -309,12 +313,6 @@ export function createRelay(deps: RelayDeps): Relay {
       interrupt();
     });
     try {
-      await reader.listen((workspaceId) => {
-        if (!open) return;
-        notified.add(workspaceId);
-        sawWork();
-        interrupt();
-      });
       let holding = false;
       let lastPoll = Number.NEGATIVE_INFINITY;
       let lastPrune = Number.NEGATIVE_INFINITY;
@@ -329,8 +327,16 @@ export function createRelay(deps: RelayDeps): Relay {
         if (!holding && due) {
           lastPoll = Date.now();
           holding = await reader.lock();
-          if (holding) log.info('Relay holds the outbox lock and is publishing');
-          else step += 1;
+          if (holding) {
+            // Before the poll below, so a write committed from here on is either seen by it or notified.
+            await reader.listen((workspaceId) => {
+              if (!open) return;
+              notified.add(workspaceId);
+              sawWork();
+              interrupt();
+            });
+            log.info('Relay holds the outbox lock and is publishing');
+          } else step += 1;
         }
         if (holding) {
           // A notification names its workspace, so it skips the definer function; the poll asks it.
