@@ -2,14 +2,15 @@
 // sorts over an object's records or a list's entries, paged by keyset cursor
 // (or a jump to a position on an unfiltered view), then read back whole. And
 // the exact count, as its own cancellable statement.
+import { createHash } from 'node:crypto';
 import { asc, eq, sql, type SQL } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { FilterGroup, SortRules } from '@crm/contracts/values';
-import { isUuid } from '../ids.ts';
+import { canonicalId, isUuid } from '../ids.ts';
 import { LIMITS } from '../limits.ts';
 import { readEntriesById, type EntryView } from '../lists.ts';
 import { readRecords, type RecordView } from '../records.ts';
-import { postgresError, refuse } from '../refusals.ts';
+import { inputInvalid, postgresError, refuse } from '../refusals.ts';
 import { loadRelationships } from '../relationships.ts';
 import type { EngineScope } from '../scope.ts';
 import { loadAttributes, loadAttributesById, loadListAttributes, type AttributeDef } from '../values.ts';
@@ -84,29 +85,78 @@ export interface Page {
   readonly nextCursor?: string;
 }
 
-/** A cursor as the opaque text a client holds. */
-export function encodeCursor(cursor: Cursor): string {
-  return Buffer.from(JSON.stringify(cursor)).toString('base64url');
+/** What a cursor is bound to: the view's object or list, and a short hash of its filter and sorts. */
+export interface CursorBinding {
+  readonly view: string;
+  readonly hash: string;
 }
 
-/** A client's cursor text back into a cursor, refusing anything malformed. */
-export function decodeCursor(text: string): Cursor {
+/** `value` as JSON with every object's keys in order, so two spellings of one filter read the same. */
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (typeof value === 'object' && value !== null) {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(',')}}`;
+  }
+  // Only JSON values reach here (a parsed filter), so `undefined` was left out above.
+  return JSON.stringify(value);
+}
+
+/**
+ * The view a cursor belongs to: its object or list id, and a 16 character
+ * hash of its filter and sorts (no filter and an empty one, or no sorts and
+ * an empty list, are the same view). A cursor carries both, so it can't page
+ * a view it didn't come from. The filter is bounded by the contract, so its
+ * canonical form stays small.
+ */
+export function cursorBinding(
+  query: ViewSource & { readonly filter?: FilterGroup; readonly sorts?: SortRules },
+): CursorBinding {
+  const view = 'listId' in query ? `list:${canonicalId(query.listId)}` : `object:${canonicalId(query.objectId)}`;
+  const filter = query.filter === undefined || query.filter.conditions.length === 0 ? null : query.filter;
+  const sorts = query.sorts === undefined || query.sorts.length === 0 ? null : query.sorts;
+  const hash = createHash('sha256').update(canonicalJson({ filter, sorts })).digest('base64url').slice(0, 16);
+  return { view, hash };
+}
+
+/** A cursor as the opaque text a client holds, bound to its view. */
+export function encodeCursor(cursor: Cursor, binding: CursorBinding): string {
+  return Buffer.from(JSON.stringify({ ...cursor, v: binding.view, h: binding.hash })).toString('base64url');
+}
+
+/** What a cursor from another view answers, on the `cursor` field. */
+export const OTHER_VIEW_CURSOR = 'This page link belongs to another view. Start again from the top.';
+
+/**
+ * A client's cursor text back into a cursor. Anything malformed is refused
+ * `FILTER_INVALID`; a well formed cursor from another view (another object,
+ * filter or sort) is an input problem on `cursor`.
+ */
+export function decodeCursor(text: string, binding: CursorBinding): Cursor {
+  let parsed: unknown;
   try {
-    const parsed: unknown = JSON.parse(Buffer.from(text, 'base64url').toString('utf8'));
-    if (
-      typeof parsed === 'object' &&
-      parsed !== null &&
-      'id' in parsed &&
-      isUuid(parsed.id) &&
-      'keys' in parsed &&
-      Array.isArray(parsed.keys) &&
-      parsed.keys.every((key: unknown) => key === null || typeof key === 'string')
-    ) {
-      const keys: (string | null)[] = parsed.keys.map((key: unknown) => (typeof key === 'string' ? key : null));
-      return { id: parsed.id, keys };
-    }
+    parsed = JSON.parse(Buffer.from(text, 'base64url').toString('utf8'));
   } catch {
-    // Falls through to the refusal below.
+    parsed = undefined;
+  }
+  if (
+    typeof parsed === 'object' &&
+    parsed !== null &&
+    'id' in parsed &&
+    isUuid(parsed.id) &&
+    'keys' in parsed &&
+    Array.isArray(parsed.keys) &&
+    parsed.keys.every((key: unknown) => key === null || typeof key === 'string') &&
+    'v' in parsed &&
+    typeof parsed.v === 'string' &&
+    'h' in parsed &&
+    typeof parsed.h === 'string'
+  ) {
+    if (parsed.v !== binding.view || parsed.h !== binding.hash) throw inputInvalid('cursor', OTHER_VIEW_CURSOR);
+    const keys: (string | null)[] = parsed.keys.map((key: unknown) => (typeof key === 'string' ? key : null));
+    return { id: parsed.id, keys };
   }
   throw refuse('FILTER_INVALID', 'That page cursor is not valid. Start from the first page.');
 }
@@ -249,7 +299,7 @@ function checkPage(query: PageQuery): { limit: number; cursor?: Cursor } {
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE) {
     throw refuse('FILTER_INVALID', `Ask for 1 to ${String(MAX_PAGE)} rows at a time.`);
   }
-  const cursor = query.cursor === undefined ? undefined : decodeCursor(query.cursor);
+  const cursor = query.cursor === undefined ? undefined : decodeCursor(query.cursor, cursorBinding(query));
   if (query.position !== undefined) {
     const filtered = query.filter !== undefined && query.filter.conditions.length > 0;
     if (
@@ -901,13 +951,16 @@ async function readPage(
   const last = rows.at(-1);
   const nextCursor =
     all.length > limit && last !== undefined
-      ? encodeCursor({
-          id: last.id,
-          keys: Array.from({ length: keyCount }, (_, index) => {
-            const value = last[`key${String(index)}`];
-            return value === null || value === undefined ? null : String(value);
-          }),
-        })
+      ? encodeCursor(
+          {
+            id: last.id,
+            keys: Array.from({ length: keyCount }, (_, index) => {
+              const value = last[`key${String(index)}`];
+              return value === null || value === undefined ? null : String(value);
+            }),
+          },
+          cursorBinding(query),
+        )
       : undefined;
   const recordIds = [...new Set(rows.map((row) => row.record_id))];
   // The view's own attributes are loaded already: the read back uses them rather than loading them again.

@@ -53,7 +53,9 @@ export type RecordView = z.infer<typeof RecordView>;
  * One window of an object's records: from row `position` (a scrollbar jump,
  * on a view with no filter and at most one sort) or after `cursor` (the last
  * page's `nextCursor`), `limit` rows (1 to 200, 50 when not given). With no
- * sort, rows come in id order, which is creation order.
+ * sort, rows come in id order, which is creation order. A cursor belongs to
+ * the object, filter and sorts it came from: sent with any other, it is
+ * refused 400 `INPUT_INVALID` on `cursor` (start again from the top).
  */
 export const QueryRecordsInput = WorkspaceScoped.extend({
   objectId: z.uuid(),

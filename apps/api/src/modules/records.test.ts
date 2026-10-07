@@ -342,6 +342,55 @@ describe('records.query and records.count', () => {
     expect(await m.client.records.count(scope)).toEqual({ count: 3, atLeast: false });
   });
 
+  it('refuses a cursor sent with another object, filter or sort on the cursor field, and takes it back for its own view', async () => {
+    const m = await memberWithWorkspace(app);
+    for (const first of ['Ada', 'Grace', 'Alan']) await createPerson(m, first);
+    const scope = { workspace: m.slug, objectId: m.people.id };
+    const name = m.attribute('name');
+    const filter = {
+      conjunction: 'and' as const,
+      conditions: [{ attributeId: name, operator: 'is_not_empty' as const }],
+    };
+    const sorts = [{ attributeId: name, direction: 'ascending' as const }];
+
+    const plain = await m.client.records.query({ ...scope, limit: 1 });
+    const cursor = plain.nextCursor ?? '';
+    const otherView = 'This page link belongs to another view. Start again from the top.';
+    for (const elsewhere of [
+      { ...scope, objectId: m.companies.id },
+      { ...scope, filter },
+      { ...scope, sorts },
+    ]) {
+      const error = await failure(() => m.client.records.query({ ...elsewhere, cursor, limit: 1 }));
+      expect({ code: error.code, status: error.status, message: error.message }).toEqual({
+        code: 'INPUT_INVALID',
+        status: 400,
+        message: otherView,
+      });
+      expect(error.data).toEqual({ issues: [{ path: ['cursor'], message: otherView }] });
+    }
+    // Its own view, however it is spelled: an empty filter or sort list is none, and an id in upper case the same.
+    const again = await m.client.records.query({
+      ...scope,
+      objectId: m.people.id.toUpperCase(),
+      filter: { conjunction: 'and', conditions: [] },
+      sorts: [],
+      cursor,
+      limit: 1,
+    });
+    expect(again.records).toHaveLength(1);
+    // A filtered and sorted view's cursor pages that view only.
+    const sorted = await m.client.records.query({ ...scope, filter, sorts, limit: 1 });
+    const next = await m.client.records.query({ ...scope, filter, sorts, cursor: sorted.nextCursor ?? '', limit: 1 });
+    expect(next.records).toHaveLength(1);
+    expect(
+      await refusal(() => m.client.records.query({ ...scope, sorts, cursor: sorted.nextCursor ?? '' })),
+    ).toMatchObject({
+      code: 'INPUT_INVALID',
+      message: otherView,
+    });
+  });
+
   it('refuses a limit over 200, a position with a cursor, a bad cursor, and an unknown object', async () => {
     const m = await memberWithWorkspace(app);
     const scope = { workspace: m.slug, objectId: m.people.id };

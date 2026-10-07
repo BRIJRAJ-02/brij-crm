@@ -1011,20 +1011,32 @@ describe('caps and timeouts', () => {
       ['company'],
       through(['company_parent_company', 'company_parent_company'], is('company_name', 'is', 'x')),
     );
-    const first = await queryPage(scope, { objectId: missions, sorts: [by('launch')], limit: 5 });
-    const decoded = JSON.parse(Buffer.from(first.nextCursor ?? '', 'base64url').toString('utf8')) as {
-      id: string;
-      keys: string[];
-    };
-    const tampered = (key: string) => Buffer.from(JSON.stringify({ ...decoded, keys: [key] })).toString('base64url');
+    // A real cursor of each sorted view (a cursor is bound to its view), with its key swapped.
+    const cursors = new Map<string, Record<string, unknown>>();
+    for (const sort of ['launch', 'budget', 'landed']) {
+      const first = await queryPage(scope, { objectId: missions, sorts: [by(sort)], limit: 1 });
+      cursors.set(sort, JSON.parse(Buffer.from(first.nextCursor ?? '', 'base64url').toString('utf8')) as never);
+    }
+    const tampered = (sort: string, key: string) =>
+      Buffer.from(JSON.stringify({ ...cursors.get(sort), keys: [key] })).toString('base64url');
     const attempts: (() => Promise<unknown>)[] = [
       () => queryPage(scope, { objectId: missions, filter: many }),
       () => queryPage(scope, { objectId: missions, filter: wide }),
       () => queryPage(scope, { objectId: missions, filter: and(nested) }),
-      () => queryPage(scope, { objectId: missions, sorts: [by('launch')], cursor: tampered('abc') }),
-      () => queryPage(scope, { objectId: missions, sorts: [by('launch')], cursor: tampered('2026-02-30') }),
-      () => queryPage(scope, { objectId: missions, sorts: [by('budget')], cursor: tampered('9999999999999999999') }),
-      () => queryPage(scope, { objectId: missions, sorts: [by('landed')], cursor: tampered('2026-10-02 25:00:00+00') }),
+      () => queryPage(scope, { objectId: missions, sorts: [by('launch')], cursor: tampered('launch', 'abc') }),
+      () => queryPage(scope, { objectId: missions, sorts: [by('launch')], cursor: tampered('launch', '2026-02-30') }),
+      () =>
+        queryPage(scope, {
+          objectId: missions,
+          sorts: [by('budget')],
+          cursor: tampered('budget', '9999999999999999999'),
+        }),
+      () =>
+        queryPage(scope, {
+          objectId: missions,
+          sorts: [by('landed')],
+          cursor: tampered('landed', '2026-10-02 25:00:00+00'),
+        }),
       () => countMatches(scope, { objectId: missions, filter: many }),
     ];
     const codes: string[] = [];
