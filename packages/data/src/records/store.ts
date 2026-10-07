@@ -1,7 +1,7 @@
 // The record store's interface (spec 0005, the data layer): one copy of every
 // record in the browser, keyed by id, whichever store holds it. The plain
-// store (plain-store.ts) implements it; the prototype gate (AC-40) measured
-// it against one on TanStack DB (prototype/tanstack-store.ts), and
+// store (plain-store.ts) implements it. The prototype gate (AC-40) measured
+// it against one on TanStack DB (in git at 4bac1a0), and
 // docs/specs/0005-core-loop/verify.md records the numbers and the call.
 
 /** What the store needs of a record: its id and its values by attribute id. The real layer stores RecordView. */

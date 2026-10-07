@@ -4,7 +4,7 @@
 import type { GridColumn } from '@crm/ui/grid';
 import { columnWidthFor } from '@crm/ui/grid';
 import type { FieldAttribute } from '@crm/ui';
-import type { RecordBody } from '../../src/records/store.ts';
+import type { RecordBody } from '@crm/data/records';
 
 /** A synthetic record as the server would send it: values, the display shapes the grid draws, and timestamps. */
 export interface SyntheticRecord extends RecordBody {

@@ -125,6 +125,7 @@ MCP servers: neon (connected), sentry (connected), playwright (connected), story
 - [packages/config/AGENTS.md](packages/config/AGENTS.md): shared TypeScript, ESLint and Stylelint config, and the house rule checks
 - [packages/tokens/AGENTS.md](packages/tokens/AGENTS.md): the design tokens, synced from the design system artifact, and the generated CSS
 - [packages/ui/AGENTS.md](packages/ui/AGENTS.md): the component library: React Aria based components, the provider, Storybook, screenshots and the artifact build
+- [tools/data-gate/AGENTS.md](tools/data-gate/AGENTS.md): the record store's prototype gate (AC-40), a private tool that is never shipped
 - [infra/AGENTS.md](infra/AGENTS.md): Centrifugo and local Postgres setup
 
 _Drafted by /audit from the repo, worth a quick human pass. Edit freely: once a line stops matching this draft, later runs treat it as curated and will flag rather than overwrite it._

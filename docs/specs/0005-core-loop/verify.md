@@ -7,7 +7,7 @@ _Steps derived from spec 0005's acceptance criteria. `/check verify` runs these;
 
 ### Why TanStack DB missed
 
-TanStack DB's own optimistic transactions (0.11.3) break the layering rule four ways. `probeTanstackLayering()` in `packages/data/prototype/tanstack-store.ts` shows each one, and `tanstack-layering.test.ts` keeps it rerunnable:
+TanStack DB's own optimistic transactions (0.11.3) break the layering rule four ways. `probeTanstackLayering()` in `packages/data/prototype/tanstack-store.ts` shows each one, run by `tanstack-layering.test.ts`. Both were removed after the gate, so check out commit 4bac1a0 to run them (`pnpm --filter @crm/data test`):
 
 1. Refusing an edit rolls back every later pending edit to the same record too, even one to another cell.
 2. A later edit's optimistic row is the whole row as it stood, so it carries the earlier edit's value. That value outlives the earlier edit's refusal.
@@ -18,7 +18,7 @@ To pass the edit checks, the TanStack store has to keep the layers itself, as th
 
 ### Method
 
-- Ran `pnpm --filter @crm/data gate --rounds=5` on 2026-10-08. It builds the harness (the real DataGrid, 20 columns, 100,000 synthetic records, a fake server answering a block of 100 in 20 ms) with React's production build. It then drives headless Chromium through Playwright, with a fresh browser for each source.
+- Ran `pnpm --filter @crm/data gate --rounds=5` at commit 4bac1a0 on 2026-10-08. Check out that commit to rerun the comparison with TanStack DB. The harness without TanStack DB now lives in `tools/data-gate` (`pnpm --filter @crm/data-gate gate`). It builds the harness (the real DataGrid, 20 columns, 100,000 synthetic records, a fake server answering a block of 100 in 20 ms) with React's production build. It then drives headless Chromium through Playwright, with a fresh browser for each source.
 - It measured four sources. `baseline` is the grid's own 100,000 row story, with rows made from their index. `held` is a control: the same grid while the page holds all 100,000 records in a Map. The other two are `plain` and `tanstack`, each behind the same windows and view.
 - The machine was busy, with other agents' test suites running in other worktrees. It has 8 cores. Load average (1, 5, 15 min) was 7.18 6.90 7.54 at the start and 7.85 7.64 7.55 at the end. After each round it was: 5.75 5.89 6.88; 8.09 6.87 7.04; 6.64 7.34 7.26; 7.88 8.20 7.72; 7.85 7.64 7.55.
 - To work around the load, each round ran all four sources back to back, and the order rotated each round. Each store is judged against the controls from its own round: frames against `baseline` (or against `held` once every record is loaded, since its heap is the same size), and memory against `held`. Figures below are the median over the 5 rounds, with the range in brackets.

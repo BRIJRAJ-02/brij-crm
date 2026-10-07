@@ -1,0 +1,25 @@
+{
+  "name": "@crm/data-gate",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "gate": "node measure.ts"
+  },
+  "devDependencies": {
+    "@crm/config": "workspace:*",
+    "@crm/data": "workspace:*",
+    "@crm/ui": "workspace:*",
+    "@types/node": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "eslint": "catalog:",
+    "playwright": "catalog:",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:"
+  }
+}

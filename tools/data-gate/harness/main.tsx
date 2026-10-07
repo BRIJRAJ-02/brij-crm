@@ -1,20 +1,24 @@
 // The prototype gate's browser harness (AC-40). It draws the real DataGrid
 // over 100,000 synthetic records, fed one of three ways: the grid's own
 // baseline (rows made from their index, as in its 100,000 row story), the
-// plain store, or the TanStack DB store, both behind the same windows and
-// view. measure.ts builds it with React's production build and drives
-// `window.gate` from Playwright.
+// same with every record held in a Map (a control), or the plain store
+// behind the windows and view from @crm/data. measure.ts builds it with
+// React's production build and drives `window.gate` from Playwright. The
+// TanStack DB store it was measured against is in git at 4bac1a0.
 import '@crm/ui/styles.css';
 import { createToasts, UiProvider } from '@crm/ui';
 import { DataGrid, type RowSource } from '@crm/ui/grid';
 import { useSyncExternalStore } from 'react';
 import { flushSync } from 'react-dom';
 import { createRoot } from 'react-dom/client';
-import { createPlainStore } from '../../src/records/plain-store.ts';
-import type { RecordStore } from '../../src/records/store.ts';
-import { createTanstackStore } from '../tanstack-store.ts';
-import { createRecordView, type RecordViewStore } from '../../src/records/view.ts';
-import { createWindows, type Windows } from '../../src/records/windows.ts';
+import {
+  createPlainStore,
+  createRecordView,
+  createWindows,
+  type RecordStore,
+  type RecordViewStore,
+  type Windows,
+} from '@crm/data/records';
 import { COLUMNS, idAt, queryRecords, recordAt, type SyntheticRecord } from './synthetic.ts';
 
 /**
@@ -22,7 +26,7 @@ import { COLUMNS, idAt, queryRecords, recordAt, type SyntheticRecord } from './s
  * the page holds all 100,000 records in a plain Map, to tell the cost of
  * holding the records apart from the cost of the store holding them.
  */
-export type GateKind = 'baseline' | 'held' | 'plain' | 'tanstack';
+export type GateKind = 'baseline' | 'held' | 'plain';
 
 /** Frame intervals while scrolling, in ms. */
 export interface FrameStats {
@@ -193,7 +197,7 @@ const gate: Gate = {
         </UiProvider>,
       );
     } else {
-      const store = kind === 'plain' ? createPlainStore<SyntheticRecord>() : createTanstackStore<SyntheticRecord>();
+      const store = createPlainStore<SyntheticRecord>();
       const windows = createWindows({
         count: COUNT,
         load: async (offset, limit, signal) => {

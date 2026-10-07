@@ -1,7 +1,7 @@
 // The plain record store: a Map of entries by id, each a base with its
 // optimistic layers, and the composed row cached until the entry changes.
 // Screens read it through useSyncExternalStore (the view's subscribe and
-// getSnapshot). AC-40's prototype gate measured it against TanStack DB.
+// getSnapshot). AC-40's prototype gate (tools/data-gate) measured it against TanStack DB.
 import {
   composeRecord,
   remainingLayers,

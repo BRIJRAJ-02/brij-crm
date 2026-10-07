@@ -1,6 +1,7 @@
 packages:
   - apps/*
   - packages/*
+  - tools/*
 
 # One pinned version per dependency, shared by every app and package.
 catalog:
@@ -18,7 +19,6 @@ catalog:
   "@storybook/addon-mcp": 10.6.1
   "@storybook/addon-vitest": 10.6.1
   "@storybook/react-vite": 10.6.1
-  "@tanstack/db": 0.11.3
   "@tanstack/react-router": 1.170.41
   "@tanstack/react-virtual": 3.14.13
   "@tanstack/router-plugin": 1.168.42

@@ -1,14 +1,14 @@
 // The record store's prototype gate (AC-40, spec 0005): builds the harness
 // with React's production build, opens it in Chromium through Playwright,
 // and measures each source over 100,000 records: the grid's own baseline,
-// the baseline while the page holds every record (a control), the plain
-// store and the TanStack DB store. Each source gets its own browser, so
-// heaps never mix.
+// the baseline while the page holds every record (a control), and the
+// plain store from @crm/data. Each source gets its own browser, so heaps
+// never mix. The TanStack DB store it was measured against is in git at
+// 4bac1a0 (packages/data/prototype/), to rerun the comparison.
 //
-//   pnpm --filter @crm/data gate                        every source, once
-//   pnpm --filter @crm/data gate --rounds=5             five rounds, every source in each
-//   pnpm --filter @crm/data gate plain tanstack         only those (the two controls always run)
-//   pnpm --filter @crm/data gate --out=results.json     also writes every round as JSON
+//   pnpm --filter @crm/data-gate gate                     every source, once
+//   pnpm --filter @crm/data-gate gate --rounds=5          five rounds, every source in each
+//   pnpm --filter @crm/data-gate gate --out=results.json  also writes every round as JSON
 //
 // A busy machine moves frame times for every source alike, so each round
 // runs every source back to back, in an order that rotates each round, and
@@ -26,7 +26,7 @@ import { build, preview } from 'vite';
 import type { EditResults, FrameStats, GateKind } from './harness/main.tsx';
 
 const HARNESS = path.join(import.meta.dirname, 'harness');
-const KINDS: readonly GateKind[] = ['baseline', 'held', 'plain', 'tanstack'];
+const KINDS: readonly GateKind[] = ['baseline', 'held', 'plain'];
 /** The controls: every round runs them, and each store is judged against them. */
 const CONTROLS: readonly GateKind[] = ['baseline', 'held'];
 /** The fake server's answer time for one block, in ms. */
@@ -295,29 +295,6 @@ function versusTable(rounds: readonly ReadonlyMap<GateKind, Result>[], kinds: re
   ].join('\n');
 }
 
-/** TanStack DB's timings over the plain store's from the same round, as a ratio. */
-function headToHead(rounds: readonly ReadonlyMap<GateKind, Result>[]): string {
-  const rows: readonly (readonly [string, (result: Result) => number | undefined])[] = [
-    ['Patch 50, store and grid render: median', (r) => r.patch?.renderedMedianMs],
-    ['Patch 50, store and notice: median', (r) => r.patch?.storeMedianMs],
-    ['Edit apply and render', (r) => r.edits?.applyMs],
-    ['Rollback and render', (r) => r.edits?.rollbackMs],
-    ['Whole table scrolled, block by block', (r) => r.wholeScroll.ms],
-  ];
-  const lines = rows.flatMap(([label, pick]) => {
-    const ratios = rounds.flatMap((round) => {
-      const plain = round.get('plain');
-      const tanstack = round.get('tanstack');
-      if (plain === undefined || tanstack === undefined) return [];
-      const a = pick(plain);
-      const b = pick(tanstack);
-      return a === undefined || b === undefined || a === 0 ? [] : [b / a];
-    });
-    return ratios.length === 0 ? [] : [`| ${label} | ${spread(ratios, 2)} |`];
-  });
-  return lines.length === 0 ? '' : ['| TanStack DB over plain, per round | ratio |', '|---|---|', ...lines].join('\n');
-}
-
 const loads = () =>
   loadavg()
     .map((each) => fixed(each, 2))
@@ -371,7 +348,6 @@ try {
     'Medians over the rounds, with the range in brackets.',
     table(byKind),
     versusTable(rounds, kinds),
-    headToHead(rounds),
   ].filter((part) => part !== '');
   process.stdout.write(`\n${report.join('\n\n')}\n`);
   if (outFile !== undefined) {

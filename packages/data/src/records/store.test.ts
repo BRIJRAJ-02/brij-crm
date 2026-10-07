@@ -1,10 +1,9 @@
-// The layering rule (spec 0005, writes), on both record stores: a base per
+// The layering rule (spec 0005, writes), on the record store: a base per
 // record, optimistic layers on top, a confirmation replaces the base, and a
 // layer goes only with its own answer.
 import { describe, expect, it } from 'vitest';
 import { createPlainStore } from './plain-store.ts';
 import type { RecordBody, RecordStore } from './store.ts';
-import { createTanstackStore } from '../../prototype/tanstack-store.ts';
 
 interface Person extends RecordBody {
   readonly objectId: string;
@@ -12,20 +11,15 @@ interface Person extends RecordBody {
 
 const person = (id: string, values: Record<string, unknown>): Person => ({ id, objectId: 'people', values });
 
-/** What a screen sees, without TanStack DB's `$` virtual props. */
+/** What a screen sees: the record's id, object and values. */
 const seen = (store: RecordStore<Person>, id: string) => {
   const row = store.get(id);
   if (row === undefined) return undefined;
   return { id: row.id, objectId: row.objectId, values: row.values };
 };
 
-let stores = 0;
-const kinds = [
-  ['plain', () => createPlainStore<Person>()],
-  ['TanStack DB', () => createTanstackStore<Person>({ id: `records-${String((stores += 1))}` })],
-] as const;
-
-describe.each(kinds)('the %s record store', (_name, create) => {
+describe('the plain record store', () => {
+  const create = () => createPlainStore<Person>();
   const ada = person('r1', { name: 'Ada', city: 'London', role: 'Engineer' });
 
   const withAda = () => {
