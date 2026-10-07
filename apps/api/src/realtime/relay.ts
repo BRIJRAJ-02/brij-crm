@@ -21,6 +21,11 @@
 //   publishes them in order.
 // A query that fails while connected reconnects with backoff (1, 2, 4 up to
 // 30 seconds), and goes dormant instead once the quiet spell has passed.
+//
+// Retention: while active and holding the lock, at most once a minute and
+// only beside a poll it was making anyway, the relay deletes up to 1,000 rows
+// published more than `OUTBOX_RETENTION` (24 hours) ago, and again on the
+// next poll while it keeps finding a full batch. Dormant, it prunes nothing.
 import { type ChangeEvent, workspaceChannel } from '@crm/contracts';
 import type { OutboxReader, OutboxRow } from '@crm/db';
 import { errorFields } from '../log.ts';
@@ -53,6 +58,8 @@ export interface RelayDeps {
   readonly maxBackoffMs?: number;
   /** The most rows read from one workspace at a time (default 100). */
   readonly batch?: number;
+  /** The least time between two prunes while active (default 1 minute). */
+  readonly pruneEveryMs?: number;
 }
 
 /** `active` while it holds a connection, `dormant` while it makes no database call, `stopped` otherwise. */
@@ -81,6 +88,9 @@ export const DORMANT_AFTER_MS = 180_000;
 /** The most workspaces asked for in one poll (the definer function's own cap). */
 const WORKSPACES_PER_POLL = 500;
 
+/** The most published rows one prune deletes (the definer function's own cap). */
+const PRUNE_BATCH = 1_000;
+
 /** The event for one outbox row: ids only, `mutationId` and `coarse` only when set. */
 export function changeEvent(row: OutboxRow): ChangeEvent {
   return {
@@ -106,6 +116,7 @@ export function createRelay(deps: RelayDeps): Relay {
   const backoffMs = deps.backoffMs ?? 1_000;
   const maxBackoffMs = deps.maxBackoffMs ?? 30_000;
   const batch = deps.batch ?? 100;
+  const pruneEveryMs = deps.pruneEveryMs ?? 60_000;
   const { log } = deps;
 
   // The loop's own state, read through functions where an await sits between a write and a read.
@@ -177,6 +188,18 @@ export function createRelay(deps: RelayDeps): Relay {
     }
   }
 
+  /** Deletes one batch of published rows past retention; true when it was full, so there may be more. */
+  async function prune(reader: OutboxReader): Promise<boolean> {
+    try {
+      const pruned = await reader.prune(PRUNE_BATCH);
+      if (pruned > 0) log.info('Relay pruned published changes past retention', { pruned });
+      return pruned >= PRUNE_BATCH;
+    } catch (error) {
+      log.warn('Pruning the outbox failed; trying again in a minute', errorFields(error));
+      return false;
+    }
+  }
+
   /** Runs on one connection until it drops, the relay stops, or a quiet spell sends it dormant. */
   async function session(reader: OutboxReader): Promise<SessionEnd> {
     let open = true;
@@ -197,6 +220,8 @@ export function createRelay(deps: RelayDeps): Relay {
       });
       let holding = false;
       let lastPoll = Number.NEGATIVE_INFINITY;
+      let lastPrune = Number.NEGATIVE_INFINITY;
+      let pruneAgain = false;
       for (;;) {
         if (halted()) return { reason: 'stopped' };
         const error = dropped();
@@ -222,6 +247,11 @@ export function createRelay(deps: RelayDeps): Relay {
           for (const workspaceId of workspaces) {
             if (halted()) break;
             await drain(reader, workspaceId);
+          }
+          // Beside a poll only, so pruning never wakes the database on its own.
+          if (due && !halted() && (pruneAgain || Date.now() - lastPrune >= pruneEveryMs)) {
+            lastPrune = Date.now();
+            pruneAgain = await prune(reader);
           }
         }
         if (halted() || dropped() !== undefined || (holding && notified.size > 0)) continue;

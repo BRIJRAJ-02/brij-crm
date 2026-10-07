@@ -73,7 +73,7 @@ afterEach(async () => {
   for (const server of servers.splice(0)) await server.close();
 });
 
-interface RelayOptions extends Partial<Pick<RelayDeps, 'pollScheduleMs' | 'dormantAfterMs'>> {
+interface RelayOptions extends Partial<Pick<RelayDeps, 'pollScheduleMs' | 'dormantAfterMs' | 'pruneEveryMs'>> {
   readonly applicationName?: string;
   /** Sees each reader the relay opens, to count or time its calls. */
   readonly wrap?: (reader: OutboxReader) => OutboxReader;
@@ -91,6 +91,7 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
     log: { info: (message) => lines.push(message), warn: (message) => lines.push(message) },
     pollScheduleMs: options.pollScheduleMs ?? [100],
     dormantAfterMs: options.dormantAfterMs ?? 60_000,
+    ...(options.pruneEveryMs === undefined ? {} : { pruneEveryMs: options.pruneEveryMs }),
     backoffMs: 50,
   });
   started.push(relay);
@@ -318,6 +319,45 @@ describe('the relay', () => {
     relay.wake();
     await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1, 2]);
     await expect.poll(() => unpublished(workspaceId), WAIT).toEqual([]);
+  });
+
+  it('prunes rows published more than a day ago while active, and never while dormant', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const workspaceId = await workspace();
+    await events(workspaceId, [1, 2]);
+    await testQuery(
+      ownerUrl,
+      `update outbox set published_at = now() - interval '25 hours' where workspace_id = $1 and seq = 1`,
+      [workspaceId],
+    );
+    const prunes: number[] = [];
+    const counting = (reader: OutboxReader): OutboxReader => ({
+      ...reader,
+      prune: (max) => {
+        prunes.push(Date.now());
+        return reader.prune(max);
+      },
+    });
+    const { relay } = relayTo(centrifugo.url, {
+      pollScheduleMs: [50],
+      dormantAfterMs: 500,
+      pruneEveryMs: 100,
+      wrap: counting,
+    });
+    const left = async () =>
+      (
+        await testQuery<{ seq: number }>(ownerUrl, 'select seq::int as seq from outbox where workspace_id = $1', [
+          workspaceId,
+        ])
+      ).map((row) => row.seq);
+    await expect.poll(left, WAIT).toEqual([2]);
+    expect(centrifugo.seqs(workspaceId)).toEqual([2]);
+    await expect.poll(() => relay.mode(), WAIT).toBe('dormant');
+    const whileActive = prunes.length;
+    expect(whileActive).toBeGreaterThanOrEqual(2);
+    await sleep(400);
+    expect(prunes).toHaveLength(whileActive);
   });
 
   it('stops from dormant at once', async () => {

@@ -1,9 +1,9 @@
 // The outbox reader (spec 0005, change events): everything the relay asks of
 // Postgres, on one direct connection as the app login, so no raw `pg` lives
 // outside this package. Which workspaces have unpublished rows comes from the
-// one security definer function, `crm_outbox_workspaces` (ids only); a
-// workspace's rows are read and marked inside `withWorkspace`, under row level
-// security, like every other tenant query.
+// security definer function `crm_outbox_workspaces` (ids only), and retention
+// from `crm_outbox_prune`; a workspace's rows are read and marked inside
+// `withWorkspace`, under row level security, like every other tenant query.
 import { and, asc, eq, isNull, lte, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import type pg from 'pg';
@@ -22,6 +22,8 @@ const RELAY_LOCK = 7_007_007;
 const MAX_WORKSPACES = 500;
 /** The most rows one `pending` call returns. */
 const MAX_ROWS = 1_000;
+/** The most rows one `prune` call deletes (`crm_outbox_prune` clamps to the same). */
+const MAX_PRUNE = 1_000;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -53,6 +55,11 @@ export interface OutboxReader {
   pending(workspaceId: string, max: number): Promise<readonly OutboxRow[]>;
   /** Stamps a workspace's rows up to and including `upto` as published, inside `withWorkspace`; returns how many. */
   mark(workspaceId: string, upto: number): Promise<number>;
+  /**
+   * Deletes at most `max` (clamped to 1 to 1,000) rows published more than
+   * `OUTBOX_RETENTION` ago, through the definer function; returns how many.
+   */
+  prune(max: number): Promise<number>;
   /** LISTENs on `crm_outbox`, calling `onNotify` with the workspace id each committed write names. */
   listen(onNotify: (workspaceId: string) => void): Promise<void>;
   /**
@@ -125,6 +132,13 @@ export function createOutboxReader(direct: pg.Client): OutboxReader {
           .returning({ seq: outbox.seq });
         return marked.length;
       });
+    },
+
+    async prune(max) {
+      const result = await direct.query<{ pruned: number }>('select public.crm_outbox_prune($1::integer) as pruned', [
+        clamp(max, MAX_PRUNE),
+      ]);
+      return result.rows[0]?.pruned ?? 0;
     },
 
     async listen(onNotify) {

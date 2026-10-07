@@ -74,7 +74,9 @@ describe('every tenant table', () => {
           !(
             row.first === 'workspace_id' ||
             (row.table === 'workspaces' && row.first === 'id') ||
-            row.index === 'workspaces_slug'
+            row.index === 'workspaces_slug' ||
+            // Retention reads published rows oldest first across workspaces, through crm_outbox_prune only.
+            row.index === 'outbox_published'
           ),
       )
       .map((row) => row.index);
@@ -110,8 +112,8 @@ describe('every tenant table', () => {
   });
 });
 
-describe('the two holes in row level security (crm_search_text, spec 0004 AC-24; crm_outbox_workspaces, spec 0005)', () => {
-  it('has exactly two security definer functions, each owned by its own narrow role', async () => {
+describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005)', () => {
+  it('has exactly three security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -120,6 +122,7 @@ describe('the two holes in row level security (crm_search_text, spec 0004 AC-24;
       order by 1
     `);
     expect(definers.rows).toEqual([
+      { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
       { name: 'crm_search_text', owner: 'crm_search' },
     ]);
@@ -136,14 +139,18 @@ describe('the two holes in row level security (crm_search_text, spec 0004 AC-24;
   });
 
   it.each([
-    ['crm_search', 'crm_search_text', 'crm_search_text(uuid, text, integer)'],
-    ['crm_relay', 'crm_outbox_workspaces', 'crm_outbox_workspaces(integer)'],
-  ])('keeps %s unable to log in, owning only %s, and out of the app’s reach', async (name, fn, signature) => {
+    ['crm_search', ['crm_search_text'], ['crm_search_text(uuid, text, integer)']],
+    [
+      'crm_relay',
+      ['crm_outbox_workspaces', 'crm_outbox_prune'],
+      ['crm_outbox_workspaces(integer)', 'crm_outbox_prune(integer)'],
+    ],
+  ])('keeps %s unable to log in, owning only %s, and out of the app’s reach', async (name, fns, signatures) => {
     const role = await owner.query<{ login: boolean; owned: number; members: number; app: boolean }>(
       `
       select r.rolcanlogin as login,
         (select count(*)::int from pg_class c where c.relowner = r.oid)
-          + (select count(*)::int from pg_proc p where p.proowner = r.oid and p.proname <> $2)
+          + (select count(*)::int from pg_proc p where p.proowner = r.oid and p.proname <> all($2))
           + (select count(*)::int from pg_namespace s where s.nspowner = r.oid)
           + (select count(*)::int from pg_type t where t.typowner = r.oid) as owned,
         (select count(*)::int from pg_auth_members m where m.roleid = r.oid
@@ -152,18 +159,20 @@ describe('the two holes in row level security (crm_search_text, spec 0004 AC-24;
         pg_has_role('crm_app', r.oid, 'MEMBER') as app
       from pg_roles r where r.rolname = $1
     `,
-      [name, fn],
+      [name, fns],
     );
     expect(role.rows).toEqual([{ login: false, owned: 0, members: 0, app: false }]);
-    // The app can call it, and nobody else by default.
-    const grants = await owner.query<{ app: boolean; anyone: boolean }>(
-      `
-      select has_function_privilege('crm_app', $1, 'EXECUTE') as app,
-        exists (select 1 from aclexplode((select proacl from pg_proc where proname = $2)) where grantee = 0) as anyone
-    `,
-      [signature, fn],
-    );
-    expect(grants.rows).toEqual([{ app: true, anyone: false }]);
+    // The app can call each, and nobody else by default.
+    for (const [index, signature] of signatures.entries()) {
+      const grants = await owner.query<{ app: boolean; anyone: boolean }>(
+        `
+        select has_function_privilege('crm_app', $1, 'EXECUTE') as app,
+          exists (select 1 from aclexplode((select proacl from pg_proc where proname = $2)) where grantee = 0) as anyone
+      `,
+        [signature, fns[index]],
+      );
+      expect(grants.rows, signature).toEqual([{ app: true, anyone: false }]);
+    }
     // And an app login can't become it.
     await expect(
       db.withWorkspace(randomUUID(), (tx) => tx.execute(sql.raw(`set local role ${name}`))),
@@ -172,14 +181,14 @@ describe('the two holes in row level security (crm_search_text, spec 0004 AC-24;
     });
   });
 
-  it('gives crm_relay select on the outbox and nothing else', async () => {
+  it('gives crm_relay select and delete on the outbox and nothing else', async () => {
     const tables = await owner.query<{ table: string; privileges: string }>(`
       select table_schema || '.' || table_name as table,
         string_agg(privilege_type, ',' order by privilege_type) as privileges
       from information_schema.role_table_grants where grantee = 'crm_relay'
       group by 1 order by 1
     `);
-    expect(tables.rows).toEqual([{ table: 'public.outbox', privileges: 'SELECT' }]);
+    expect(tables.rows).toEqual([{ table: 'public.outbox', privileges: 'DELETE,SELECT' }]);
     const columns = await owner.query<{ column: string }>(`
       select table_name || '.' || column_name as column from information_schema.column_privileges
       where grantee = 'crm_relay' and privilege_type <> 'SELECT'
@@ -246,13 +255,51 @@ describe('the two holes in row level security (crm_search_text, spec 0004 AC-24;
     expect(definition.rows[0]?.body).toMatch(/least\(greatest\(crm_outbox_workspaces\.max, 1\), 500\)/i);
   });
 
+  it('prunes only rows published more than a day ago, at most 1,000 at a time, and nothing unpublished', async () => {
+    const w = await workspaceWithMember('outbox-prune');
+    const event = (seq: number, published: string | undefined) =>
+      db.withWorkspace(w.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into outbox (workspace_id, seq, kind, object_id, created_at, published_at) values (${w.workspaceId}, ${seq}, 'records', ${randomUUID()}, now() - interval '30 days', ${published === undefined ? null : sql`now() - ${published}::interval`})`,
+        ),
+      );
+    await event(1, '25 hours');
+    await event(2, '24 hours 1 minute');
+    await event(3, '23 hours 59 minutes');
+    await event(4, undefined);
+    const app = new pg.Client({ connectionString: appUrl });
+    await app.connect();
+    try {
+      // The app, outside any workspace: the function reaches past row level security, oldest first.
+      const prune = (max: number) =>
+        app.query<{ pruned: number }>('select crm_outbox_prune($1) as pruned', [max]).then((r) => r.rows[0]?.pruned);
+      const left = () =>
+        owner
+          .query<{ seq: number }>('select seq::int as seq from outbox where workspace_id = $1 order by seq', [
+            w.workspaceId,
+          ])
+          .then((r) => r.rows.map((row) => row.seq));
+      // Clamped to 1 to 1,000.
+      expect(await prune(0)).toBeLessThanOrEqual(1);
+      expect(await prune(1_000_000)).toBeLessThanOrEqual(1_000);
+      expect(await left()).toEqual([3, 4]);
+      expect(await prune(1_000)).toBe(0);
+    } finally {
+      await app.end();
+    }
+    const definition = await owner.query<{ body: string }>(
+      `select pg_get_functiondef('crm_outbox_prune(integer)'::regprocedure) as body`,
+    );
+    expect(definition.rows[0]?.body).toMatch(/least\(greatest\(crm_outbox_prune\.max, 1\), 1000\)/i);
+  });
+
   it('answers nothing to a caller without execute', async () => {
     const identity = new pg.Client({ connectionString: identityUrl });
     await identity.connect();
     try {
-      await expect(identity.query('select * from public.crm_outbox_workspaces(10)')).rejects.toMatchObject({
-        code: '42501',
-      });
+      for (const call of ['select * from public.crm_outbox_workspaces(10)', 'select public.crm_outbox_prune(10)']) {
+        await expect(identity.query(call)).rejects.toMatchObject({ code: '42501' });
+      }
     } finally {
       await identity.end();
     }

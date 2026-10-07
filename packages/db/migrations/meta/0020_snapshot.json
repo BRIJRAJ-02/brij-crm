@@ -1,5 +1,5 @@
 {
-  "id": "f038eee5-2c8b-4bfa-b855-aaec54446811",
+  "id": "edf09280-9eeb-497c-a5ff-cb67f0b6fdb1",
   "prevId": "f219cc21-776b-4d69-ae0c-d2b7686985d1",
   "version": "7",
   "dialect": "postgresql",
@@ -1728,6 +1728,22 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "outbox_published": {
+          "name": "outbox_published",
+          "columns": [
+            {
+              "expression": "published_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "where": "\"outbox\".\"published_at\" is not null",
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -1741,7 +1757,7 @@
           "columnsTo": [
             "id"
           ],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         }
       },

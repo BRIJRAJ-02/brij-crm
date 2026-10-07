@@ -22,8 +22,9 @@ CREATE TABLE "outbox" (
 );
 --> statement-breakpoint
 ALTER TABLE "workspace_counters" ADD COLUMN "outbox_seq" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint
-ALTER TABLE "outbox" ADD CONSTRAINT "outbox_workspace" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "outbox_pending" ON "outbox" USING btree ("workspace_id","seq") WHERE "outbox"."published_at" is null;
+ALTER TABLE "outbox" ADD CONSTRAINT "outbox_workspace" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "outbox_pending" ON "outbox" USING btree ("workspace_id","seq") WHERE "outbox"."published_at" is null;--> statement-breakpoint
+CREATE INDEX "outbox_published" ON "outbox" USING btree ("published_at") WHERE "outbox"."published_at" is not null;
 --> statement-breakpoint
 
 -- Hand written from here.
@@ -38,7 +39,8 @@ create policy outbox_tenant on outbox
 --> statement-breakpoint
 
 -- The app writes a row in the write's transaction and the relay (as the app, inside withWorkspace) reads and
--- stamps it. Nothing else: no delete (#8 prunes, as a job), and no update of an event once it is written.
+-- stamps it. Nothing else: no delete (only crm_outbox_prune deletes, below), and no update of an event once it is
+-- written.
 revoke all on outbox from crm_app;
 --> statement-breakpoint
 grant select, insert on outbox to crm_app;
@@ -46,10 +48,10 @@ grant select, insert on outbox to crm_app;
 grant update (published_at) on outbox to crm_app;
 --> statement-breakpoint
 
--- crm_relay: the owner of the one function that reads across workspaces. It can't log in, bypasses row level
--- security, and can read the outbox and nothing else. It and crm_search are the only roles besides the owner
--- that bypass row level security, and its function and crm_search_text the only security definer functions; the
--- guard tests list them. Any change here goes through security-access-reviewer.
+-- crm_relay: the owner of the two functions that reach across workspaces. It can't log in, bypasses row level
+-- security, and can read and delete outbox rows and nothing else. It and crm_search are the only roles besides
+-- the owner that bypass row level security, and its two functions and crm_search_text the only security definer
+-- functions; the guard tests list them. Any change here goes through security-access-reviewer.
 do $$
 begin
   if not exists (select 1 from pg_roles where rolname = 'crm_relay') then
@@ -64,7 +66,7 @@ alter role crm_relay nologin bypassrls nocreaterole noinherit password null;
 --> statement-breakpoint
 grant usage on schema public to crm_relay;
 --> statement-breakpoint
-grant select on outbox to crm_relay;
+grant select, delete on outbox to crm_relay;
 --> statement-breakpoint
 
 -- The workspaces with unpublished outbox rows, at most `max` (clamped to 1 to 500). Workspace ids only, never a
@@ -94,6 +96,37 @@ revoke all on function crm_outbox_workspaces(integer) from public;
 grant execute on function crm_outbox_workspaces(integer) to crm_app;
 --> statement-breakpoint
 
+-- Retention: deletes at most `max` (clamped to 1 to 1,000) rows published more than 24 hours ago, oldest first,
+-- and returns how many. Screens that were offline catch up from published rows (spec 0007), so a row is kept that
+-- long; never an unpublished row. The cutoff is hard coded, so the app can't widen it: it is OUTBOX_RETENTION in
+-- packages/db, and a test keeps the two in step. The relay calls it only while it is active, so pruning never
+-- wakes the database. Hardened as crm_outbox_workspaces.
+create function crm_outbox_prune(max integer)
+  returns integer
+  language sql
+  volatile
+  security definer
+  set search_path = pg_catalog, pg_temp
+begin atomic
+  with gone as (
+    delete from public.outbox o
+    where (o.workspace_id, o.seq) in (
+      select p.workspace_id, p.seq
+      from public.outbox p
+      where p.published_at < now() - interval '24 hours'
+      order by p.published_at
+      limit least(greatest(crm_outbox_prune.max, 1), 1000)
+    )
+    returning 1
+  )
+  select count(*)::integer from gone;
+end;
+--> statement-breakpoint
+revoke all on function crm_outbox_prune(integer) from public;
+--> statement-breakpoint
+grant execute on function crm_outbox_prune(integer) to crm_app;
+--> statement-breakpoint
+
 -- Hand the function to crm_relay. Postgres 16 and later don't give the creator SET on a role it creates, and a
 -- new owner needs CREATE on the schema, so both are granted for the change, then taken back.
 grant crm_relay to current_user with inherit false, set true;
@@ -102,13 +135,16 @@ grant create on schema public to crm_relay;
 --> statement-breakpoint
 alter function crm_outbox_workspaces(integer) owner to crm_relay;
 --> statement-breakpoint
+alter function crm_outbox_prune(integer) owner to crm_relay;
+--> statement-breakpoint
 revoke create on schema public from crm_relay;
 --> statement-breakpoint
 revoke crm_relay from current_user;
 --> statement-breakpoint
 
--- Refuse to finish if anything but the database owner can reach crm_relay, or if the app can by any grant, or
--- if crm_relay can log in or holds a power no grant can fence. Neon's own platform roles (neon_service and
+-- Refuse to finish if anything but the database owner can reach crm_relay, or if the app can by any grant, if
+-- crm_relay can log in or holds a power no grant can fence, or if it holds any table privilege beyond reading and
+-- deleting outbox rows. Neon's own platform roles (neon_service and
 -- cloud_admin) are skipped by name, as in 0017 and 0018; off Neon they don't exist and nothing is skipped.
 do $$
 begin
@@ -127,6 +163,17 @@ begin
       where rolname = 'crm_relay' and (rolsuper or rolreplication or rolcreatedb or rolcanlogin or not rolbypassrls)
     ) then
     raise exception 'crm_relay must be a plain role with no member but the database owner, with ADMIN only';
+  end if;
+  if exists (
+    select 1 from information_schema.role_table_grants g
+    where g.grantee = 'crm_relay'
+      and not (g.table_schema = 'public' and g.table_name = 'outbox' and g.privilege_type in ('SELECT', 'DELETE'))
+  ) or exists (
+    select 1 from information_schema.column_privileges c
+    where c.grantee = 'crm_relay'
+      and not (c.table_schema = 'public' and c.table_name = 'outbox' and c.privilege_type = 'SELECT')
+  ) then
+    raise exception 'crm_relay may only read and delete outbox rows';
   end if;
 end
 $$;

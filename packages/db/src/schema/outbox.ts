@@ -3,7 +3,9 @@
 // gaps, so an event can never describe a change that rolled back, nor miss one
 // that committed. Ids only, never values, and no actor columns: who and when
 // live on the records and values. The relay publishes the rows in `seq` order
-// and stamps `published_at`. Row level security and the grants (the app may
+// and stamps `published_at`; published rows are kept for `OUTBOX_RETENTION`
+// (screens that were offline catch up from them), then pruned by the relay
+// through `crm_outbox_prune`. Row level security and the grants (the app may
 // only insert, read, and set `published_at`) are hand written in the migration.
 import { sql } from 'drizzle-orm';
 import { bigint, boolean, foreignKey, index, pgEnum, pgTable, primaryKey, uuid } from 'drizzle-orm/pg-core';
@@ -16,6 +18,13 @@ import { workspaces } from './workspaces.ts';
  * attributes). Lists add `entries` when they get screens.
  */
 export const outboxKind = pgEnum('outbox_kind', ['records', 'definitions']);
+
+/**
+ * How long a published outbox row is kept, as a Postgres interval. The
+ * migration hard codes the same interval in `crm_outbox_prune` (the app can't
+ * pass a cutoff, so it can't widen it); a test keeps the two in step.
+ */
+export const OUTBOX_RETENTION = '24 hours';
 
 /** One change event, waiting for the relay until `published_at` is set. */
 export const outbox = pgTable(
@@ -43,10 +52,17 @@ export const outbox = pgTable(
   },
   (t) => [
     primaryKey({ name: 'outbox_pkey', columns: [t.workspaceId, t.seq] }),
-    foreignKey({ name: 'outbox_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }),
+    // A workspace's events go with it.
+    foreignKey({ name: 'outbox_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }).onDelete(
+      'cascade',
+    ),
     // What the relay reads: a workspace's unpublished rows in order.
     index('outbox_pending')
       .on(t.workspaceId, t.seq)
       .where(sql`${t.publishedAt} is null`),
+    // What the prune reads: published rows, oldest first.
+    index('outbox_published')
+      .on(t.publishedAt)
+      .where(sql`${t.publishedAt} is not null`),
   ],
 );

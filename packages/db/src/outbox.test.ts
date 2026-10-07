@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from './client.ts';
 import { openDirectConnection } from './direct.ts';
 import { createOutboxReader, type OutboxReader } from './outbox.ts';
+import { OUTBOX_RETENTION } from './schema/outbox.ts';
 
 const { appUrl, adminUrl } = inject('testDatabase');
 
@@ -80,6 +81,38 @@ describe('the outbox reader', () => {
     expect(await outbox.mark(busy, 100)).toBe(1);
     expect((await outbox.pending(other, 10)).map((row) => row.seq)).toEqual([1]);
     expect(await outbox.workspaces(500)).not.toContain(busy);
+  });
+
+  it('prunes published rows exactly past OUTBOX_RETENTION, the interval crm_outbox_prune hard codes', async () => {
+    const outbox = await reader();
+    const workspaceId = await workspaceWithEvents([]);
+    const admin = new pg.Client({ connectionString: adminUrl });
+    await admin.connect();
+    try {
+      const event = (seq: number, published: string | undefined) =>
+        admin.query(
+          `insert into outbox (workspace_id, seq, kind, object_id, published_at)
+           values ($1, $2, 'records', $3, case when $4::text is null then null else now() - $4::interval end)`,
+          [workspaceId, seq, randomUUID(), published ?? null],
+        );
+      // Just past the constant's cutoff, and just inside it.
+      await event(1, `${OUTBOX_RETENTION} 1 minute`);
+      await event(2, `${OUTBOX_RETENTION} -1 minute`);
+      await event(3, undefined);
+      expect(await outbox.prune(1_000)).toBeGreaterThanOrEqual(1);
+      const left = await admin.query<{ seq: number }>(
+        'select seq::int as seq from outbox where workspace_id = $1 order by seq',
+        [workspaceId],
+      );
+      expect(left.rows.map((row) => row.seq)).toEqual([2, 3]);
+
+      // A workspace's events go with it.
+      await admin.query('delete from workspaces where id = $1', [workspaceId]);
+      const gone = await admin.query('select 1 from outbox where workspace_id = $1', [workspaceId]);
+      expect(gone.rowCount).toBe(0);
+    } finally {
+      await admin.end();
+    }
   });
 
   it('hears a NOTIFY on crm_outbox naming a workspace, and ignores anything else', async () => {

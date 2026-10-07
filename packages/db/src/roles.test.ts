@@ -389,6 +389,14 @@ describe("migration 0020's closing check: who can reach crm_relay", () => {
     await expect(checkAfter(setup)).rejects.toThrow(/crm_relay must be a plain role/);
   });
 
+  it.each([
+    ['updating outbox rows', ['grant update on outbox to crm_relay']],
+    ['updating one outbox column', ['grant update (published_at) on outbox to crm_relay']],
+    ['reading another table', ['grant select on records to crm_relay']],
+  ])('refuses crm_relay %s', async (_name, setup) => {
+    await expect(checkAfter(setup)).rejects.toThrow(/crm_relay may only read and delete outbox rows/);
+  });
+
   it("skips Neon's own platform roles by name", async () => {
     await checkAfter(['create role neon_service login', 'grant crm_relay to neon_service']);
   });
