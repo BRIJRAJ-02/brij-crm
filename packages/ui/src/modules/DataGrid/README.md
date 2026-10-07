@@ -35,6 +35,7 @@ import { DataGrid } from '@crm/ui/grid';
 - `footer` draws calculations the screen worked out; the grid never computes over loaded rows.
 - `editorProps(column)` gives a column's reference or file editor its search, uploads and the signed in member.
 - `onSort` and `onFilter` add Sort and Filter to the column menu.
+- `focusRow` (`{ index }`, a new object each time) moves focus to that row's first cell and scrolls it into view, after any closing dialog has handed focus back: a screen passes the row it just made (spec 0005, "New person"). Why a prop: the grid owns its focused cell, and nothing outside could move it without reaching into its DOM.
 
 ## States
 

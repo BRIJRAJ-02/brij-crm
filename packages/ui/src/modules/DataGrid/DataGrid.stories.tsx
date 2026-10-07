@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState, type ReactNode } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
+import { Button } from '../../atoms/Button/Button.tsx';
 import type { CellChange } from '../../fields/types.ts';
 import { arraySource } from '../../lib/list-source.ts';
 import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
@@ -100,6 +101,33 @@ function SampleGrid({
         {...(footer === undefined ? {} : { footer })}
         {...(cellErrors === undefined ? {} : { cellErrors })}
         {...(onRowOpen === undefined ? {} : { onRowOpen })}
+      />
+    </Stage>
+  );
+}
+
+/** A grid of 200 companies with a button that asks it to focus row 151, as a screen does after making a record. */
+function FocusRowGrid() {
+  const [rows] = useState(() => sampleRows(200));
+  const [focusRow, setFocusRow] = useState<{ readonly index: number } | undefined>(undefined);
+  return (
+    <Stage height="grid">
+      <Button
+        onPress={() => {
+          setFocusRow({ index: 150 });
+        }}
+      >
+        Focus row 151
+      </Button>
+      <DataGrid<SampleRow>
+        label="Companies"
+        columns={sampleColumns()}
+        pinnedCount={1}
+        rows={arraySource(rows, (row) => row.id)}
+        getValue={(row, id) => row.values[id] ?? null}
+        getDisplay={(row, id) => row.displays[id]}
+        rowHeader="name"
+        {...(focusRow === undefined ? {} : { focusRow })}
       />
     </Stage>
   );
@@ -490,6 +518,17 @@ export const ScrollKeepsFocus: Story = {
     await expect(focused()).toBe('0:1');
     await press(['{ArrowDown}'], '1:1');
     await waitFor(() => expect(grid.scrollTop).toBeLessThan(3000));
+  },
+};
+
+/** A screen moves focus to a row it just made (`focusRow`): the grid scrolls to it and focuses its first cell. */
+export const FocusRow: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <FocusRowGrid />,
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Focus row 151' }));
+    await waitFor(() => expect(focused()).toBe('150:1'));
+    await expect(cell(canvasElement, 150, 1)).toHaveTextContent(/./);
   },
 };
 

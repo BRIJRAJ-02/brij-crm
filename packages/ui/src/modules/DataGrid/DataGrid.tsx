@@ -101,6 +101,12 @@ export interface DataGridProps<Row> {
   readonly phone?: PhoneParser;
   /** What a column's reference or file editor needs: search, uploads, the signed in member. */
   readonly editorProps?: (column: GridColumn) => GridEditorProps;
+  /**
+   * Moves focus to this row's first cell and scrolls it into view, once any
+   * closing overlay is gone: the row a screen just made. Pass a new object
+   * each time; the same object again does nothing.
+   */
+  readonly focusRow?: { readonly index: number };
 }
 
 const ROW = sizeToken('size-row');
@@ -112,6 +118,8 @@ const OVERSCAN = 8;
 /** Past this many drawn columns, the unpinned ones virtualise too. */
 const COLUMN_VIRTUALISE_AFTER = 12;
 const LOADING_ROWS = 8;
+/** Frames to wait at most for a closing overlay before moving focus to `focusRow`. */
+const OVERLAY_WAIT_FRAMES = 60;
 const TABBABLE = 'a[href], button, input, select, textarea, [tabindex]';
 const NO_EDITOR_PROPS: GridEditorProps = {};
 const NO_ITEMS: readonly VirtualItem[] = [];
@@ -184,6 +192,7 @@ export function DataGrid<Row>({
   members,
   phone,
   editorProps,
+  focusRow,
 }: DataGridProps<Row>) {
   const { locale, timeZone } = useFormatSettings();
   const toasts = useToasts();
@@ -391,6 +400,33 @@ export function DataGrid<Row>({
     pendingFocus.current = true;
     bringIntoView(position);
   };
+
+  // A row the screen asks for (one it just made): focus moves there once a
+  // closing dialog has finished and handed focus back, so it isn't taken back.
+  const goToLatest = useRef(goTo);
+  useLayoutEffect(() => {
+    goToLatest.current = goTo;
+  });
+  useEffect(() => {
+    if (focusRow === undefined) return;
+    let frames = 0;
+    let frame = 0;
+    const step = () => {
+      frames += 1;
+      if (frames < OVERLAY_WAIT_FRAMES && document.querySelector('[data-exiting]') !== null) {
+        frame = requestAnimationFrame(step);
+        return;
+      }
+      // One more frame: a closing overlay hands focus back as it unmounts.
+      frame = requestAnimationFrame(() => {
+        goToLatest.current({ row: focusRow.index, col: 1 });
+      });
+    };
+    frame = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [focusRow]);
 
   /** Shows `cell`'s tip, or closes the tooltip when it has none. */
   const showTip = (cell: HTMLElement, via: Tip['via']) => {
