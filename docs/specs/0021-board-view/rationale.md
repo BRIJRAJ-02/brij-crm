@@ -52,6 +52,10 @@ Calls and their runners up:
 - **Stuck badge computed in the browser** (runner up: a server flag refreshed by a job). The browser already has the stage start time and the target; a job would wake the database on a timer.
 - **Show empty columns on by default** (runner up: off). A pipeline with a hidden stage misleads more than a sparse one.
 - **Multi select excluded** (runner up: a card shown in every column of its values). A move would then be ambiguous (which value does it replace?).
+- **One deadline for a whole `records.groups` call** (runner up: an error per group in the answer, shown as that column's error state). One deadline keeps the call's cost bounded at 10 seconds and its answer all or nothing, so the store never seeds half a batch; per group errors would need a partial answer shape and a column error state for first loads.
+- **Switching to Board with nothing to group by saves the kind and shows the EmptyState** (runner up: the Board segment disabled with a reason). The SegmentedControl has no per segment disabled state, so the runner up needs a new variant; the EmptyState already exists and tells members with `schema.manage` how to fix it.
+- **Exact counts on unfiltered boards** (runner up: capped at 10,000 like tables). The grouped count over `sort_keys` is one index only statement whatever the size, so a pipeline can show "152,340" honestly; a filtered count still caps, as `countMatches` does.
+- **600 ms for a board's first load** (runner up: the 300 ms read). The first load reads a page and a count for each column; the owner accepted twice the read target for it.
 
 ## References
 
