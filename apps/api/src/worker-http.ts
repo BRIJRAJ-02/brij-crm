@@ -28,7 +28,14 @@ export function createWorkerListener(
   return (request, response) => {
     // Whatever was sent, it isn't read.
     request.resume();
-    const path = new URL(request.url ?? '/', 'http://worker').pathname;
+    // The path without parsing a URL, which throws on a malformed target (`GET http://[/`) and would end the
+    // worker: only origin form (`/path?query`) is taken.
+    const target = request.url ?? '';
+    if (!target.startsWith('/')) {
+      answer(response, 400, { code: 'BAD_REQUEST', message: 'This request target is not a path.' });
+      return;
+    }
+    const path = target.split('?', 1)[0];
     if (path === '/health') {
       answer(response, 200, { status: 'ok' });
       return;

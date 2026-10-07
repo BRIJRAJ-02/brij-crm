@@ -2,6 +2,7 @@
 // carries the secret and nothing else, and coalesces a burst; the worker takes
 // a poke only with the secret.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+import { connect } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createWorkerListener } from '../worker-http.ts';
@@ -144,6 +145,31 @@ describe("the worker's wake endpoint", () => {
     expect((await call(WAKE_PATH, { headers: { [WAKE_HEADER]: SECRET } })).status).toBe(405);
     expect((await call('/internal/other', { method: 'POST', headers: { [WAKE_HEADER]: SECRET } })).status).toBe(404);
     expect(wakes()).toBe(0);
+  });
+
+  it('answers a malformed request target 400 and keeps serving, rather than crashing', async () => {
+    const wakeSecret = SECRET;
+    let wakes = 0;
+    const server = await listen(createWorkerListener({ wakeSecret, onWake: () => (wakes += 1) }));
+    const { port } = new URL(server.url);
+    const raw = (request: string) =>
+      new Promise<string>((resolve, reject) => {
+        const socket = connect(Number(port), '127.0.0.1', () => socket.end(request));
+        let reply = '';
+        socket.on('data', (chunk: Buffer) => (reply += chunk.toString('utf8')));
+        socket.on('end', () => resolve(reply));
+        socket.on('error', reject);
+      });
+    for (const target of ['http://[/', 'http://worker/internal/outbox-wake', '*']) {
+      const reply = await raw(
+        `POST ${target} HTTP/1.1\r\nHost: worker\r\n${WAKE_HEADER}: ${SECRET}\r\nConnection: close\r\n\r\n`,
+      );
+      expect(reply.split('\r\n')[0], target).toMatch(/^HTTP\/1\.1 400 /);
+    }
+    expect(wakes).toBe(0);
+    expect((await fetch(`${server.url}/health`)).status).toBe(200);
+    const query = await fetch(`${server.url}${WAKE_PATH}?x=1`, { method: 'POST', headers: { [WAKE_HEADER]: SECRET } });
+    expect(query.status).toBe(204);
   });
 
   it('answers the health check', async () => {
