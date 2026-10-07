@@ -231,7 +231,7 @@ Secrets live in Railway variables per environment (and in Vercel environment var
 - [ ] Choose the domain. Until then production runs on `brij-crm-phi.vercel.app` (`brij-crm.vercel.app` was already taken), which works for host only cookies; email sending and Google sign in need the real domain.
 - [ ] Move Neon production to a paid plan with scale to zero off, before the realtime relay (#7) ships.
 - [ ] Confirm the Vercel managed Neon organization lets you create an API key for the preview workflow (`NEON_API_KEY`). If it doesn't, previews take their database branch from the Vercel integration instead, and `preview.yml` changes to match.
-- [ ] Prototype TanStack DB on a windowed, server filtered query over a million rows (live patches plus loading on scroll), as the first step of Client data and state (#6). If it struggles, the `packages/data` interface switches to a plain normalised store on TanStack Query, and the screens don't change.
+- [x] Prototype TanStack DB on a windowed, server filtered query over a million rows (live patches plus loading on scroll), as the first step of Client data and state (#6). If it struggles, the `packages/data` interface switches to a plain normalised store on TanStack Query, and the screens don't change. Done as spec 0005's AC-40 gate (8 October 2026): TanStack DB's own transactions broke the layering rule, so `packages/data` uses our own plain store (spec 0005 `verify.md`).
 - [ ] Confirm current releases at scaffold time, and pin them: TanStack DB, oRPC, Centrifugo, Better Auth.
 - [ ] Prove oRPC's OpenAPI output with one procedure during the core loop (#10).
 - [ ] Settle these in the specs where they belong, before Slice 1:

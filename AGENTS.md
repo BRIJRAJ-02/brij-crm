@@ -7,7 +7,7 @@ A multi tenant CRM sold as SaaS, as flexible as Attio. The plan is in [docs/scop
 - **Language / Runtime**: TypeScript 6 (strict) on Node 24 LTS. The API and worker run their `.ts` files directly on Node, with no build step.
 - **Web**: React 19 single page app on Vite 8 and TanStack Router, hosted on Vercel, where Routing Middleware proxies `/api/*`, so the app and the API share one origin.
 - **API**: one modular Hono + oRPC + Zod 4 service. Its `worker` entrypoint runs jobs (Graphile Worker) and the outbox relay.
-- **Data**: Postgres 18 on Neon, Drizzle ORM with committed SQL migrations, and forced row level security per workspace. On the client, one data layer (TanStack DB behind `packages/data`).
+- **Data**: Postgres 18 on Neon, Drizzle ORM with committed SQL migrations, and forced row level security per workspace. On the client, one data layer: our own record store behind `packages/data` (TanStack DB was measured and turned down, spec 0005 `verify.md`).
 - **Realtime**: Centrifugo, one node. Arriving with their features: Better Auth, Hocuspocus + Yjs, Sentry, PostHog, Resend, R2.
 - **Hosts**: Vercel (web, project `brij-crm`, production at https://brij-crm-phi.vercel.app), Railway (api, worker, centrifugo), Neon through Vercel (one database branch per preview), Cloudflare R2 later for files.
 - **Package manager**: pnpm 10 workspaces with one version catalog, and Turborepo 2 for tasks.
