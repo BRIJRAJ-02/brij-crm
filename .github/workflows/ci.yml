@@ -80,9 +80,12 @@ jobs:
       # The library runs after the rest, on its own: its scroll perf test counts
       # long tasks, and the database suites beside it on a small runner make them.
       - run: pnpm exec turbo run test --filter='!@crm/ui'
-      - run: pnpm exec turbo run test --filter=@crm/ui
+      - run: pnpm --filter @crm/ui exec vitest run --project stories --project unit --project browser
         env:
           CRM_STORY_BROWSERS: none
+      # The scroll perf test alone, last: vitest runs projects side by side, and the browser suites
+      # beside it made long tasks of their own on the 2 core runner (3 of 4 runs on 8 October 2026).
+      - run: pnpm --filter @crm/ui exec vitest run --project perf
       - run: pnpm size
       - run: pnpm ui:artifact --check
 
