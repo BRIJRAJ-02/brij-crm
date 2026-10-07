@@ -6,6 +6,7 @@ import { recordsContract } from './records.ts';
 import { systemContract } from './system.ts';
 import { workspacesContract } from './workspaces.ts';
 
+export * from './access.ts';
 export * from './attributes.ts';
 export * from './change-event.ts';
 export * from './errors.ts';

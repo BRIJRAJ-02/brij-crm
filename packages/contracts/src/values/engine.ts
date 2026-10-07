@@ -20,6 +20,8 @@ export const ENGINE_REFUSAL_CODES = [
   'ID_TAKEN',
   'FILTER_INVALID',
   'QUERY_CANCELLED',
+  'FORBIDDEN',
+  'LAST_OWNER',
 ] as const;
 
 /** One of the engine's refusal codes. */

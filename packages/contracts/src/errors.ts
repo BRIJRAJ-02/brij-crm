@@ -34,6 +34,8 @@ export const ERROR_MAP = {
   SIGNUP_CLOSED: { status: 403 },
   EDGE_REQUIRED: { status: 403 },
   FORBIDDEN_ORIGIN: { status: 403 },
+  // A workspace permission the actor lacks, on something they can see (spec 0009). Anything hidden is NOT_FOUND.
+  FORBIDDEN: { status: 403 },
   NOT_FOUND: { status: 404 },
   SLUG_TAKEN: CONFLICT,
   UNIQUE_CONFLICT: CONFLICT,
@@ -43,6 +45,8 @@ export const ERROR_MAP = {
   RELATIONSHIP_TAKEN: CONFLICT,
   ENTRY_EXISTS: CONFLICT,
   LIMIT_REACHED: CONFLICT,
+  // The change would leave a live workspace with no active owner (spec 0009, AC-137).
+  LAST_OWNER: CONFLICT,
   PAYLOAD_TOO_LARGE: { status: 413 },
   ATTRIBUTE_VALUE_INVALID: UNPROCESSABLE,
   VALUE_REQUIRED: UNPROCESSABLE,
