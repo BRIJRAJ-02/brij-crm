@@ -11,6 +11,7 @@ The oRPC contract and the Zod schemas the web app, the API and the worker all sh
 | `src/index.ts` | The one `contract` object, with one namespace per feature, and every schema and type |
 | `src/system.ts` | The pattern to copy: schemas, their types, and `systemContract` |
 | `src/codes.ts` | `@crm/contracts/codes`: every stable error code as plain lists with no Zod, so the browser's data layer recognises a code without loading the schema library. `errors.ts` builds `ErrorCode` from it |
+| `src/monitoring/` | `@crm/contracts/monitoring` (spec 0010): `scrub`, the one rule for what may leave for Sentry, run by every send hook of both SDKs. Plain TypeScript, no Zod, no vendor, so the browser's lazy Sentry chunk shares it |
 | `src/values/` | `@crm/contracts/values`: the attribute value shapes, filters, sorts, options, hues, countries and currencies, as plain Zod with no oRPC and no I/O, so `packages/ui` can parse what its editors emit |
 
 ## Conventions
