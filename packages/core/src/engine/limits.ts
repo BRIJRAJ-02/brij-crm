@@ -71,15 +71,22 @@ export type AttributeParent = { readonly objectId: string } | { readonly listId:
 
 /**
  * Refuses a new attribute when its object or list is full. Locks the parent
- * row, so concurrent adds take turns. Refuses a parent that doesn't exist.
+ * row, so concurrent adds take turns. Refuses `NOT_FOUND` for a parent that
+ * doesn't exist or is archived (as reading its attributes does), checked
+ * under that lock, so an archive that commits first is seen.
  */
 export async function checkAttributeRoom(tx: WorkspaceTx, scope: EngineScope, parent: AttributeParent): Promise<void> {
   const isObject = 'objectId' in parent;
-  checkId(isObject ? parent.objectId : parent.listId, `That ${isObject ? 'object' : 'list'} does not exist.`);
-  const locked = isObject
-    ? await tx.select({ id: objects.id }).from(objects).where(eq(objects.id, parent.objectId)).for('update')
-    : await tx.select({ id: lists.id }).from(lists).where(eq(lists.id, parent.listId)).for('update');
-  if (locked.length === 0) throw refuse('NOT_FOUND', `That ${isObject ? 'object' : 'list'} does not exist.`);
+  const missing = `That ${isObject ? 'object' : 'list'} does not exist.`;
+  checkId(isObject ? parent.objectId : parent.listId, missing);
+  const [locked] = isObject
+    ? await tx
+        .select({ archivedAt: objects.archivedAt })
+        .from(objects)
+        .where(eq(objects.id, parent.objectId))
+        .for('update')
+    : await tx.select({ archivedAt: lists.archivedAt }).from(lists).where(eq(lists.id, parent.listId)).for('update');
+  if (locked === undefined || locked.archivedAt !== null) throw refuse('NOT_FOUND', missing);
   const [row] = await tx
     .select({ n: count() })
     .from(attributes)

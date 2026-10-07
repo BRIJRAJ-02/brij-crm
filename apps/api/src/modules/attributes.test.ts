@@ -2,12 +2,14 @@
 // reads an object's columns and adds one, whose API name the server derives
 // from the title; a taken name refuses on the title field, and a retry after a
 // lost response answers the attribute already made. Real session, real Postgres.
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { Database, IdentityStore } from '@crm/db';
+import { testQuery } from '@crm/db/testing';
 import { newId } from '@crm/core';
 import { rpcClient, signInApp, testConnections } from '../../test/sign-in.ts';
 import { failure, memberWithWorkspace, NOT_A_MEMBER, refusal, refusalsOf } from '../../test/workspace.ts';
 
+const { ownerUrl } = inject('testDatabase');
 let db: Database;
 let identity: IdentityStore;
 let app: ReturnType<typeof signInApp>['app'];
@@ -141,6 +143,32 @@ describe('attributes.create', () => {
       expect({ code: error.code, status: error.status, message: error.message }, title).toEqual(taken);
       expect(refusalsOf(error)).toEqual([{ code: 'SLUG_TAKEN', message: taken.message, field: 'title' }]);
     }
+  });
+
+  it('refuses an archived object NOT_FOUND, as attributes.list does, and adds nothing to it', async () => {
+    const m = await memberWithWorkspace(app);
+    await testQuery(ownerUrl, `update objects set archived_at = now() where id = $1`, [m.companies.id]);
+    const notFound = { code: 'NOT_FOUND', status: 404, message: 'That object does not exist.' };
+    expect(await refusal(() => m.client.attributes.list({ workspace: m.slug, objectId: m.companies.id }))).toEqual(
+      notFound,
+    );
+    expect(
+      await refusal(() =>
+        m.client.attributes.create({
+          workspace: m.slug,
+          objectId: m.companies.id,
+          title: 'Ticker',
+          type: 'text',
+          mutationId: newId(),
+        }),
+      ),
+    ).toEqual(notFound);
+    const [row] = await testQuery<{ n: number }>(
+      ownerUrl,
+      `select count(*)::int as n from attributes where object_id = $1 and api_slug = 'ticker'`,
+      [m.companies.id],
+    );
+    expect(row?.n).toBe(0);
   });
 
   it('refuses bad input before the engine: an empty title, a type the loop does not offer, a missing mutation id', async () => {
