@@ -293,13 +293,16 @@ function fromParts(level: Level): { tables: SQL; where: SQL } {
       };
 }
 
-/** Checks a page query's limit, cursor and position, returning the limit and the decoded cursor. */
-function checkPage(query: PageQuery): { limit: number; cursor?: Cursor } {
+/**
+ * Checks a page query's limit and position, returning the limit. The cursor
+ * is decoded later, in `buildPage`, once the filter has passed its parse: its
+ * binding hashes the filter, which must be known to be bounded first.
+ */
+function checkPage(query: PageQuery): { limit: number } {
   const limit = query.limit ?? 50;
   if (!Number.isInteger(limit) || limit < 1 || limit > MAX_PAGE) {
     throw refuse('FILTER_INVALID', `Ask for 1 to ${String(MAX_PAGE)} rows at a time.`);
   }
-  const cursor = query.cursor === undefined ? undefined : decodeCursor(query.cursor, cursorBinding(query));
   if (query.position !== undefined) {
     const filtered = query.filter !== undefined && query.filter.conditions.length > 0;
     if (
@@ -308,7 +311,7 @@ function checkPage(query: PageQuery): { limit: number; cursor?: Cursor } {
       query.position > MAX_POSITION ||
       filtered ||
       (query.sorts?.length ?? 0) > 1 ||
-      cursor !== undefined
+      query.cursor !== undefined
     ) {
       throw refuse(
         'FILTER_INVALID',
@@ -316,7 +319,7 @@ function checkPage(query: PageQuery): { limit: number; cursor?: Cursor } {
       );
     }
   }
-  return cursor === undefined ? { limit } : { limit, cursor };
+  return { limit };
 }
 
 /** One row of a page statement: the row id, its record's id, and each sort key as text (`key0`, `key1`). */
@@ -366,11 +369,13 @@ async function buildPage(
   candidates = CANDIDATES,
   search = true,
 ): Promise<BuiltPage> {
-  const { limit, cursor } = checkPage(query);
+  const { limit } = checkPage(query);
   const { context, level, objectAttributes } = await prepare(tx, scope, query, search);
   const sorts = query.sorts ?? [];
   const keys = compileSorts(context, level, sorts);
   const filter = compileFilter(context, level, query.filter);
+  // Only now, with the filter and sorts parsed against their types, is the cursor's binding hashed from them.
+  const cursor = query.cursor === undefined ? undefined : decodeCursor(query.cursor, cursorBinding(query));
   const { tables, where } = fromParts(level);
   const recordColumn = level.listId === null ? sql`r.id` : sql`r.record_id`;
   const isList = level.listId !== null;

@@ -8,7 +8,7 @@ import type { Database, IdentityStore } from '@crm/db';
 import { holdTableLock, testQuery } from '@crm/db/testing';
 import type { FilterGroup } from '@crm/contracts/values';
 import { deleteRecord, enterWorkspace, newId } from '@crm/core';
-import { rpcClient, signInApp, testConnections } from '../../test/sign-in.ts';
+import { rpcClient, rpcPost, signInApp, testConnections } from '../../test/sign-in.ts';
 import { failure, memberWithWorkspace, NOT_A_MEMBER, refusal, refusalsOf } from '../../test/workspace.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
@@ -411,6 +411,22 @@ describe('records.query and records.count', () => {
     for (const call of [() => m.client.records.query(scope), () => m.client.records.count(scope)]) {
       expect(await refusal(call)).toMatchObject({ code: 'INPUT_INVALID', status: 400 });
     }
+  });
+
+  it('refuses a value nested 3,000 deep sent with a cursor with 400 INPUT_INVALID, not a 500', async () => {
+    const m = await memberWithWorkspace(app);
+    for (const first of ['Ada', 'Grace']) await createPerson(m, first);
+    const { nextCursor } = await m.client.records.query({ workspace: m.slug, objectId: m.people.id, limit: 1 });
+    // Written by hand: the typed client's own serializer can't nest this deep.
+    const deep = `${'['.repeat(3_000)}"x"${']'.repeat(3_000)}`;
+    const input = `{"workspace":${JSON.stringify(m.slug)},"objectId":${JSON.stringify(m.people.id)},"cursor":${JSON.stringify(
+      nextCursor,
+    )},"filter":{"conjunction":"and","conditions":[{"attributeId":${JSON.stringify(
+      m.attribute('job_title'),
+    )},"operator":"is","value":${deep}}]}}`;
+    const response = await rpcPost(app, m.cookie, 'records/query', input);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ json: { code: 'INPUT_INVALID' } });
   });
 
   it('refuses a limit over 200, a position with a cursor, a bad cursor, and an unknown object', async () => {

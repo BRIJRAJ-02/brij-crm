@@ -133,6 +133,23 @@ export async function signIn(app: App, email = newEmail(), ip = newIp()): Promis
   return { email, cookie: cookieFrom(signedIn) };
 }
 
+/**
+ * A POST to one procedure with a body written by hand (`{"json": …}`, oRPC's
+ * RPC body), as a browser signed in with `cookie` would send it: for inputs
+ * the typed client can't serialize, such as JSON nested thousands deep.
+ */
+export function rpcPost(app: App, cookie: string, procedure: string, jsonText: string): Promise<Response> {
+  return Promise.resolve(
+    app.fetch(
+      new Request(`${APP_URL}/api/rpc/${procedure}`, {
+        method: 'POST',
+        headers: { origin: APP_URL, 'content-type': 'application/json', ...THROUGH_THE_EDGE, cookie },
+        body: `{"json":${jsonText}}`,
+      }),
+    ),
+  );
+}
+
 /** A typed client for the app's contract, sending `cookie` like a signed in browser. */
 export function rpcClient(app: App, cookie?: string): RouterClient<typeof router> {
   return createORPCClient(

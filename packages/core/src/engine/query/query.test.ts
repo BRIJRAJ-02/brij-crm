@@ -1002,6 +1002,21 @@ describe('other workspaces', () => {
 });
 
 describe('caps and timeouts', () => {
+  it('refuses a deep value sent with a cursor as a bad filter, before the cursor is bound to it', async () => {
+    const first = await queryPage(scope, { objectId: missions, limit: 1 });
+    let deep: unknown = 'x';
+    for (let level = 0; level < 3_000; level += 1) deep = [deep];
+    const filter = {
+      conjunction: 'and',
+      conditions: [{ attributeId: 'nope', operator: 'is', value: deep }],
+    } as FilterGroup;
+    await expect(
+      queryPage(scope, { objectId: missions, filter, cursor: first.nextCursor ?? '' }),
+    ).rejects.toMatchObject({
+      refusal: { code: 'FILTER_INVALID' },
+    });
+  });
+
   it('refuses a filter too large, a path too long, and a tampered cursor key', async () => {
     const many = and(...Array.from({ length: 51 }, () => is('crewed', 'is_checked')));
     const wide = or(
