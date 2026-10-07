@@ -77,6 +77,8 @@ export interface RelayDeps {
   readonly concurrency?: number;
   /** The least time between two prunes while active (default 1 minute). */
   readonly pruneEveryMs?: number;
+  /** The most workspaces one poll asks for (default 500, the definer function's own cap). */
+  readonly workspacesPerPoll?: number;
   /** A workspace's first wait after a failed publish, doubled each failure in a row (default 1 second). */
   readonly retryMs?: number;
   /** A workspace's longest wait after failed publishes (default 60 seconds). */
@@ -105,9 +107,6 @@ export const POLL_SCHEDULE_MS: readonly number[] = [1_000, 2_000, 5_000, 15_000,
 
 /** The default quiet spell before the relay goes dormant: 3 minutes, inside Neon's 5 minute suspend timeout. */
 export const DORMANT_AFTER_MS = 180_000;
-
-/** The most workspaces asked for in one poll (the definer function's own cap). */
-const WORKSPACES_PER_POLL = 500;
 
 /** The most published rows one prune deletes (the definer function's own cap). */
 const PRUNE_BATCH = 1_000;
@@ -149,6 +148,7 @@ export function createRelay(deps: RelayDeps): Relay {
   const batch = deps.batch ?? 100;
   const concurrency = Math.max(1, deps.concurrency ?? 4);
   const pruneEveryMs = deps.pruneEveryMs ?? 60_000;
+  const workspacesPerPoll = deps.workspacesPerPoll ?? 500;
   const retryMs = deps.retryMs ?? 1_000;
   const maxRetryMs = deps.maxRetryMs ?? 60_000;
   const { log } = deps;
@@ -317,6 +317,9 @@ export function createRelay(deps: RelayDeps): Relay {
       let lastPoll = Number.NEGATIVE_INFINITY;
       let lastPrune = Number.NEGATIVE_INFINITY;
       let pruneAgain = false;
+      // Where the next poll starts: after the last workspace a full poll named, so with more waiting than one
+      // poll returns, every workspace still gets its turn.
+      let pollAfter: string | undefined;
       // Workspaces whose last turn left more waiting, with their next batch: they get the next round.
       let leftover = new Map<string, readonly OutboxRow[]>();
       for (;;) {
@@ -350,7 +353,8 @@ export function createRelay(deps: RelayDeps): Relay {
           for (const workspaceId of retries.keys()) add(workspaceId);
           if (due) {
             lastPoll = Date.now();
-            const waiting = await reader.workspaces(WORKSPACES_PER_POLL);
+            const waiting = await reader.workspaces(workspacesPerPoll, pollAfter);
+            pollAfter = waiting.length >= workspacesPerPoll ? waiting.at(-1) : undefined;
             if (waiting.length > 0) sawWork();
             else step += 1;
             for (const workspaceId of waiting) add(workspaceId);

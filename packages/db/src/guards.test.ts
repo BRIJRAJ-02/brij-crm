@@ -143,7 +143,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     [
       'crm_relay',
       ['crm_outbox_workspaces', 'crm_outbox_prune'],
-      ['crm_outbox_workspaces(integer)', 'crm_outbox_prune(integer)'],
+      ['crm_outbox_workspaces(integer, uuid)', 'crm_outbox_prune(integer)'],
     ],
   ])('keeps %s unable to log in, owning only %s, and out of the app’s reach', async (name, fns, signatures) => {
     const role = await owner.query<{ login: boolean; owned: number; members: number; app: boolean }>(
@@ -234,14 +234,14 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     const app = new pg.Client({ connectionString: appUrl });
     await app.connect();
     try {
-      const all = await app.query<Record<string, unknown>>('select * from crm_outbox_workspaces(500)');
+      const all = await app.query<Record<string, unknown>>('select * from crm_outbox_workspaces(500, null)');
       expect(all.fields.map((field) => field.name)).toEqual(['crm_outbox_workspaces']);
       const ids = all.rows.map((row) => row.crm_outbox_workspaces);
       expect(ids).toEqual(expect.arrayContaining([a.workspaceId, b.workspaceId]));
       expect(ids).not.toContain(done.workspaceId);
       expect(new Set(ids).size).toBe(ids.length);
       for (const max of [0, -5, 1]) {
-        const one = await app.query('select * from crm_outbox_workspaces($1)', [max]);
+        const one = await app.query('select * from crm_outbox_workspaces($1, null)', [max]);
         expect(one.rowCount, String(max)).toBe(1);
       }
       // The table itself still shows the app nothing outside withWorkspace.
@@ -250,9 +250,44 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       await app.end();
     }
     const definition = await owner.query<{ body: string }>(
-      `select pg_get_functiondef('crm_outbox_workspaces(integer)'::regprocedure) as body`,
+      `select pg_get_functiondef('crm_outbox_workspaces(integer, uuid)'::regprocedure) as body`,
     );
     expect(definition.rows[0]?.body).toMatch(/least\(greatest\(crm_outbox_workspaces\.max, 1\), 500\)/i);
+  });
+
+  it('starts after the id it is given and wraps round, so every waiting workspace gets its turn', async () => {
+    const made = await Promise.all(['outbox-r1', 'outbox-r2', 'outbox-r3'].map((name) => workspaceWithMember(name)));
+    const [a, b, c] = made.map((w) => w.workspaceId).sort();
+    if (a === undefined || b === undefined || c === undefined) throw new Error('Three workspaces were made.');
+    for (const workspaceId of [a, b, c]) {
+      await db.withWorkspace(workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into outbox (workspace_id, seq, kind, object_id) values (${workspaceId}, 1, 'records', ${randomUUID()}), (${workspaceId}, 2, 'records', ${randomUUID()})`,
+        ),
+      );
+    }
+    const app = new pg.Client({ connectionString: appUrl });
+    await app.connect();
+    try {
+      const ours = async (after: string | null) => {
+        const result = await app.query<{ id: string }>('select id from crm_outbox_workspaces(500, $1) as w(id)', [
+          after,
+        ]);
+        const ids = result.rows.map((row) => row.id);
+        expect(new Set(ids).size, 'one id per workspace').toBe(ids.length);
+        return ids.filter((id) => id === a || id === b || id === c);
+      };
+      expect(await ours(null)).toEqual([a, b, c]);
+      expect(await ours(b)).toEqual([c, a, b]);
+      expect(await ours(c)).toEqual([a, b, c]);
+      // An id that waits for nothing still works as a starting point.
+      expect(await ours(randomUUID())).toHaveLength(3);
+      // At most `max`, from the starting point on.
+      const two = await app.query<{ id: string }>('select id from crm_outbox_workspaces(2, $1) as w(id)', [a]);
+      expect(two.rows).toHaveLength(2);
+    } finally {
+      await app.end();
+    }
   });
 
   it('prunes only rows published more than a day ago, at most 1,000 at a time, and nothing unpublished', async () => {
@@ -297,7 +332,10 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     const identity = new pg.Client({ connectionString: identityUrl });
     await identity.connect();
     try {
-      for (const call of ['select * from public.crm_outbox_workspaces(10)', 'select public.crm_outbox_prune(10)']) {
+      for (const call of [
+        'select * from public.crm_outbox_workspaces(10, null)',
+        'select public.crm_outbox_prune(10)',
+      ]) {
         await expect(identity.query(call)).rejects.toMatchObject({ code: '42501' });
       }
     } finally {

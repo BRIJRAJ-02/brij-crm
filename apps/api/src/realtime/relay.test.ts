@@ -116,6 +116,7 @@ interface RelayOptions extends Partial<
     | 'maxRetryMs'
     | 'backoffMs'
     | 'healthyMs'
+    | 'workspacesPerPoll'
   >
 > {
   readonly applicationName?: string;
@@ -155,6 +156,7 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
     ...(options.maxRetryMs === undefined ? {} : { maxRetryMs: options.maxRetryMs }),
     backoffMs: options.backoffMs ?? 50,
     ...(options.healthyMs === undefined ? {} : { healthyMs: options.healthyMs }),
+    ...(options.workspacesPerPoll === undefined ? {} : { workspacesPerPoll: options.workspacesPerPoll }),
   });
   started.push(relay);
   relay.start();
@@ -424,6 +426,31 @@ describe('the relay', () => {
     second.relay.wake();
     await expect.poll(() => standby.seqs(workspaceId), WAIT).toContain(7);
     expect(listens).toHaveLength(1);
+  });
+
+  it('starts each poll after the last workspace a full poll named, so a long queue rotates', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const ids = await Promise.all(Array.from({ length: 5 }, () => workspace()));
+    for (const id of ids) await events(id, [1]);
+    const polls: { after: string | undefined; got: readonly string[] }[] = [];
+    relayTo(centrifugo.url, {
+      workspacesPerPoll: 2,
+      pollScheduleMs: [20],
+      wrap: (reader) => ({
+        ...reader,
+        workspaces: async (max, after) => {
+          const got = await reader.workspaces(max, after);
+          polls.push({ after, got });
+          return got;
+        },
+      }),
+    });
+    for (const id of ids) await expect.poll(() => unpublished(id), WAIT).toEqual([]);
+    const first = polls[0];
+    expect(first?.after).toBeUndefined();
+    expect(first?.got).toHaveLength(2);
+    expect(polls[1]?.after).toBe(first?.got.at(-1));
   });
 
   it('backs its safety poll off over a quiet spell, and starts again at the first wait on a notification', async () => {

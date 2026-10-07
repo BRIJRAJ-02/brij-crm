@@ -69,14 +69,20 @@ grant usage on schema public to crm_relay;
 grant select, delete on outbox to crm_relay;
 --> statement-breakpoint
 
--- The workspaces with unpublished outbox rows, at most `max` (clamped to 1 to 500). Workspace ids only, never a
--- row's contents: the relay then reads and marks each workspace's rows inside withWorkspace, under row level
--- security, as the app. One id per workspace however many rows wait (the pending index, read in order).
+-- The workspaces with unpublished outbox rows, at most `max` (clamped to 1 to 500), starting after `after` and
+-- wrapping round (ids greater than it in order, then the rest from the lowest), so a relay that passes the last id
+-- it got sees every waiting workspace in turn even when more than `max` wait. Null starts from the lowest.
+-- Workspace ids only, never a row's contents: the relay then reads and marks each workspace's rows under row level
+-- security, as the app.
+--
+-- A loose index scan (a recursive CTE) over the pending index: one index probe per workspace for the next id with
+-- anything waiting, rather than a GROUP BY over every waiting row. The nil uuid stands for "from the lowest", and
+-- the wrap includes it, so no id is ever skipped.
 --
 -- As crm_search_text: a standard SQL body (begin atomic) is parsed once, here, and binds its table by OID, so no
--- session setting can change what it reads; the parameter is qualified with the function's name, so no column
--- can shadow it.
-create function crm_outbox_workspaces(max integer)
+-- session setting can change what it reads; the parameters are qualified with the function's name, so no column
+-- can shadow them.
+create function crm_outbox_workspaces(max integer, after uuid)
   returns setof uuid
   language sql
   stable
@@ -84,16 +90,55 @@ create function crm_outbox_workspaces(max integer)
   set search_path = pg_catalog, pg_temp
   rows 500
 begin atomic
-  select o.workspace_id
-  from public.outbox o
-  where o.published_at is null
-  group by o.workspace_id
+  with recursive
+    later(id) as (
+      (
+        select o.workspace_id from public.outbox o
+        where o.published_at is null
+          and o.workspace_id > coalesce(crm_outbox_workspaces.after, '00000000-0000-0000-0000-000000000000'::uuid)
+        order by o.workspace_id
+        limit 1
+      )
+      union all
+      select (
+        select o.workspace_id from public.outbox o
+        where o.published_at is null and o.workspace_id > later.id
+        order by o.workspace_id
+        limit 1
+      )
+      from later
+      where later.id is not null
+    ),
+    earlier(id) as (
+      (
+        select o.workspace_id from public.outbox o
+        where o.published_at is null
+        order by o.workspace_id
+        limit 1
+      )
+      union all
+      select (
+        select o.workspace_id from public.outbox o
+        where o.published_at is null and o.workspace_id > earlier.id
+        order by o.workspace_id
+        limit 1
+      )
+      from earlier
+      where earlier.id < coalesce(crm_outbox_workspaces.after, '00000000-0000-0000-0000-000000000000'::uuid)
+    )
+  select w.id
+  from (
+    select l.id from later l where l.id is not null
+    union all
+    select e.id from earlier e
+    where e.id <= coalesce(crm_outbox_workspaces.after, '00000000-0000-0000-0000-000000000000'::uuid)
+  ) w
   limit least(greatest(crm_outbox_workspaces.max, 1), 500);
 end;
 --> statement-breakpoint
-revoke all on function crm_outbox_workspaces(integer) from public;
+revoke all on function crm_outbox_workspaces(integer, uuid) from public;
 --> statement-breakpoint
-grant execute on function crm_outbox_workspaces(integer) to crm_app;
+grant execute on function crm_outbox_workspaces(integer, uuid) to crm_app;
 --> statement-breakpoint
 
 -- Retention: deletes at most `max` (clamped to 1 to 1,000) rows published more than 24 hours ago, oldest first,
@@ -133,7 +178,7 @@ grant crm_relay to current_user with inherit false, set true;
 --> statement-breakpoint
 grant create on schema public to crm_relay;
 --> statement-breakpoint
-alter function crm_outbox_workspaces(integer) owner to crm_relay;
+alter function crm_outbox_workspaces(integer, uuid) owner to crm_relay;
 --> statement-breakpoint
 alter function crm_outbox_prune(integer) owner to crm_relay;
 --> statement-breakpoint

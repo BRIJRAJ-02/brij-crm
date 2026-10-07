@@ -52,8 +52,12 @@ export interface OutboxReader {
   lock(): Promise<boolean>;
   /** Lets go of the relay lock. Closing the connection lets go of it too. */
   unlock(): Promise<void>;
-  /** Workspace ids with unpublished rows, at most `max` (clamped to 1 to 500), through the definer function. */
-  workspaces(max: number): Promise<readonly string[]>;
+  /**
+   * Workspace ids with unpublished rows, at most `max` (clamped to 1 to 500),
+   * through the definer function: those after `after` first, then wrapping
+   * round from the lowest. Throws a `TypeError` for an `after` that isn't a uuid.
+   */
+  workspaces(max: number, after?: string): Promise<readonly string[]>;
   /**
    * A workspace's unpublished rows in `seq` order, at most `max` (clamped to
    * 1 to 1,000), under its row level security. Throws a `TypeError` unless the
@@ -118,10 +122,11 @@ export function createOutboxReader(direct: pg.Client): OutboxReader {
       await direct.query('select pg_advisory_unlock($1)', [RELAY_LOCK]);
     },
 
-    async workspaces(max) {
+    async workspaces(max, after) {
+      if (after !== undefined && !UUID.test(after)) throw new TypeError('A workspace id is a uuid.');
       const result = await direct.query<{ workspace_id: string }>(
-        'select workspace_id from public.crm_outbox_workspaces($1::integer) as w(workspace_id)',
-        [clamp(max, MAX_WORKSPACES)],
+        'select workspace_id from public.crm_outbox_workspaces($1::integer, $2::uuid) as w(workspace_id)',
+        [clamp(max, MAX_WORKSPACES), after ?? null],
       );
       return result.rows.map((row) => row.workspace_id);
     },
@@ -171,7 +176,7 @@ export function createOutboxReader(direct: pg.Client): OutboxReader {
   return {
     lock: () => serial(() => calls.lock()),
     unlock: () => serial(() => calls.unlock()),
-    workspaces: (max) => serial(() => calls.workspaces(max)),
+    workspaces: (max, after) => serial(() => calls.workspaces(max, after)),
     pending: (workspaceId, max) => serial(() => calls.pending(workspaceId, max)),
     mark: (workspaceId, upto) => serial(() => calls.mark(workspaceId, upto)),
     advance: (workspaceId, upto, max) => serial(() => calls.advance(workspaceId, upto, max)),
