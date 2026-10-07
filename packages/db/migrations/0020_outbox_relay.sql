@@ -23,6 +23,7 @@ CREATE TABLE "outbox" (
 --> statement-breakpoint
 ALTER TABLE "workspace_counters" ADD COLUMN "outbox_seq" bigint DEFAULT 0 NOT NULL;--> statement-breakpoint
 ALTER TABLE "outbox" ADD CONSTRAINT "outbox_workspace" FOREIGN KEY ("workspace_id") REFERENCES "public"."workspaces"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "outbox" ADD CONSTRAINT "outbox_object" FOREIGN KEY ("workspace_id","object_id") REFERENCES "public"."objects"("workspace_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 CREATE INDEX "outbox_pending" ON "outbox" USING btree ("workspace_id","seq") WHERE "outbox"."published_at" is null;--> statement-breakpoint
 CREATE INDEX "outbox_published" ON "outbox" USING btree ("published_at") WHERE "outbox"."published_at" is not null;
 --> statement-breakpoint
@@ -37,10 +38,16 @@ create policy outbox_tenant on outbox
   using (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid)
   with check (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid);
 --> statement-breakpoint
+-- Publishing is once: an update may only stamp an unpublished row (using) with a time (with check), so the app can
+-- never take a stamp back to null nor move it. Restrictive, so it holds beside the tenant policy, never instead.
+create policy outbox_publish_once on outbox as restrictive for update
+  using (published_at is null)
+  with check (published_at is not null);
+--> statement-breakpoint
 
 -- The app writes a row in the write's transaction and the relay (as the app, inside withWorkspace) reads and
--- stamps it. Nothing else: no delete (only crm_outbox_prune deletes, below), and no update of an event once it is
--- written.
+-- stamps it, once (outbox_publish_once, above). Nothing else: no delete (only crm_outbox_prune deletes, below), and
+-- no update of an event once it is written.
 revoke all on outbox from crm_app;
 --> statement-breakpoint
 grant select, insert on outbox to crm_app;

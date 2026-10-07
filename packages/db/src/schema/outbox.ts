@@ -6,10 +6,12 @@
 // and stamps `published_at`; published rows are kept for `OUTBOX_RETENTION`
 // (screens that were offline catch up from them), then pruned by the relay
 // through `crm_outbox_prune`. Row level security and the grants (the app may
-// only insert, read, and set `published_at`) are hand written in the migration.
+// only insert, read, and stamp `published_at` once, from null to a time) are
+// hand written in the migration.
 import { sql } from 'drizzle-orm';
 import { bigint, boolean, foreignKey, index, pgEnum, pgTable, primaryKey, uuid } from 'drizzle-orm/pg-core';
 import { timestamptz, workspaceId } from './common.ts';
+import { objects } from './definitions.ts';
 import { workspaces } from './workspaces.ts';
 
 /**
@@ -59,6 +61,14 @@ export const outbox = pgTable(
     foreignKey({ name: 'outbox_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }).onDelete(
       'cascade',
     ),
+    // An event names an object of its own workspace, as every cross table reference does. Objects are archived,
+    // never deleted, today; should one be erased, its events go with it, so erasing a workspace's objects and then
+    // the workspace itself never trips over its outbox.
+    foreignKey({
+      name: 'outbox_object',
+      columns: [t.workspaceId, t.objectId],
+      foreignColumns: [objects.workspaceId, objects.id],
+    }).onDelete('cascade'),
     // What the relay reads: a workspace's unpublished rows in order.
     index('outbox_pending')
       .on(t.workspaceId, t.seq)

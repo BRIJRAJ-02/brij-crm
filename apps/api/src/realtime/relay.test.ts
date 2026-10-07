@@ -182,6 +182,13 @@ async function workspace(): Promise<string> {
     `insert into workspaces (id, name, slug, created_by_type, updated_by_type) values ($1, 'Relay', $2, 'system', 'system')`,
     [id, `relay-${id}`],
   );
+  // The object its events name (an outbox row names an object of its own workspace).
+  await testQuery(
+    ownerUrl,
+    `insert into objects (workspace_id, api_slug, singular_name, plural_name, icon, hue, created_by_type, updated_by_type)
+     values ($1, 'things', 'Thing', 'Things', 'box', 'gray', 'system', 'system')`,
+    [id],
+  );
   return id;
 }
 
@@ -191,8 +198,8 @@ async function events(workspaceId: string, seqs: readonly number[], mutationId?:
     await testQuery(
       ownerUrl,
       `insert into outbox (workspace_id, seq, kind, object_id, record_ids, attribute_ids, mutation_id)
-       values ($1, $2, 'records', $3, array[$4]::uuid[], '{}', $5)`,
-      [workspaceId, seq, randomUUID(), randomUUID(), mutationId ?? null],
+       values ($1, $2, 'records', (select id from objects where workspace_id = $1), array[$3]::uuid[], '{}', $4)`,
+      [workspaceId, seq, randomUUID(), mutationId ?? null],
     );
   }
 }

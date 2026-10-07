@@ -37,9 +37,13 @@ async function workspaceWithEvents(events: readonly { seq: number; published?: b
     await tx.execute(
       sql`insert into workspaces (id, name, slug, created_by_type, updated_by_type) values (${workspaceId}, 'w', ${`w-${workspaceId}`}, 'system', 'system')`,
     );
+    const objectId = randomUUID();
+    await tx.execute(
+      sql`insert into objects (workspace_id, id, api_slug, singular_name, plural_name, icon, hue, created_by_type, updated_by_type) values (${workspaceId}, ${objectId}, 'things', 'Thing', 'Things', 'box', 'gray', 'system', 'system')`,
+    );
     for (const event of events) {
       await tx.execute(
-        sql`insert into outbox (workspace_id, seq, kind, object_id, record_ids, published_at) values (${workspaceId}, ${event.seq}, 'records', ${randomUUID()}, ${`{${randomUUID()}}`}, ${event.published === true ? sql`now()` : null})`,
+        sql`insert into outbox (workspace_id, seq, kind, object_id, record_ids, published_at) values (${workspaceId}, ${event.seq}, 'records', ${objectId}, ${`{${randomUUID()}}`}, ${event.published === true ? sql`now()` : null})`,
       );
     }
   });
@@ -131,8 +135,9 @@ describe('the outbox reader', () => {
       const event = (seq: number, published: string | undefined) =>
         admin.query(
           `insert into outbox (workspace_id, seq, kind, object_id, published_at)
-           values ($1, $2, 'records', $3, case when $4::text is null then null else now() - $4::interval end)`,
-          [workspaceId, seq, randomUUID(), published ?? null],
+           values ($1, $2, 'records', (select id from objects where workspace_id = $1),
+             case when $3::text is null then null else now() - $3::interval end)`,
+          [workspaceId, seq, published ?? null],
         );
       // Just past the constant's cutoff, and just inside it.
       await event(1, `${OUTBOX_RETENTION} 1 minute`);
@@ -145,10 +150,17 @@ describe('the outbox reader', () => {
       );
       expect(left.rows.map((row) => row.seq)).toEqual([2, 3]);
 
-      // A workspace's events go with it.
-      await admin.query('delete from workspaces where id = $1', [workspaceId]);
-      const gone = await admin.query('select 1 from outbox where workspace_id = $1', [workspaceId]);
-      expect(gone.rowCount).toBe(0);
+      // An erased object's events go with it, and so do an erased workspace's.
+      await admin.query('delete from objects where workspace_id = $1', [workspaceId]);
+      expect((await admin.query('select 1 from outbox where workspace_id = $1', [workspaceId])).rowCount).toBe(0);
+      const keys = await admin.query<{ key: string; onDelete: string }>(
+        `select conname as key, confdeltype as "onDelete" from pg_constraint
+         where conrelid = 'public.outbox'::regclass and contype = 'f' order by 1`,
+      );
+      expect(keys.rows).toEqual([
+        { key: 'outbox_object', onDelete: 'c' },
+        { key: 'outbox_workspace', onDelete: 'c' },
+      ]);
     } finally {
       await admin.end();
     }

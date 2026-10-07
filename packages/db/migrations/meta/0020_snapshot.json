@@ -1,5 +1,5 @@
 {
-  "id": "f1756d88-5dfa-46a5-b97b-851b7b0db702",
+  "id": "b3ebe4d5-f22b-4529-aad7-740854e1e894",
   "prevId": "f219cc21-776b-4d69-ae0c-d2b7686985d1",
   "version": "7",
   "dialect": "postgresql",
@@ -1755,6 +1755,21 @@
             "workspace_id"
           ],
           "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "outbox_object": {
+          "name": "outbox_object",
+          "tableFrom": "outbox",
+          "tableTo": "objects",
+          "columnsFrom": [
+            "workspace_id",
+            "object_id"
+          ],
+          "columnsTo": [
+            "workspace_id",
             "id"
           ],
           "onDelete": "cascade",

@@ -44,6 +44,17 @@ async function workspaceWithMember(name: string) {
   return { workspaceId, memberId };
 }
 
+/** An object in the workspace, made as the app makes rows: for outbox rows to name. */
+async function objectIn(workspaceId: string): Promise<string> {
+  const objectId = randomUUID();
+  await db.withWorkspace(workspaceId, (tx) =>
+    tx.execute(
+      sql`insert into objects (workspace_id, id, api_slug, singular_name, plural_name, icon, hue, created_by_type, updated_by_type) values (${workspaceId}, ${objectId}, ${`things-${objectId}`}, 'Thing', 'Things', 'box', 'gray', 'system', 'system')`,
+    ),
+  );
+  return objectId;
+}
+
 describe('every tenant table', () => {
   it('forces row level security and has a policy', async () => {
     const tables = await owner.query<{ table: string; enabled: boolean; forced: boolean; policies: number }>(`
@@ -219,12 +230,14 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     const a = await workspaceWithMember('outbox-a');
     const b = await workspaceWithMember('outbox-b');
     const done = await workspaceWithMember('outbox-done');
-    const event = (workspaceId: string, seq: number, published: boolean) =>
-      db.withWorkspace(workspaceId, (tx) =>
+    const event = async (workspaceId: string, seq: number, published: boolean) => {
+      const objectId = await objectIn(workspaceId);
+      await db.withWorkspace(workspaceId, (tx) =>
         tx.execute(
-          sql`insert into outbox (workspace_id, seq, kind, object_id, published_at) values (${workspaceId}, ${seq}, 'records', ${randomUUID()}, ${published ? sql`now()` : null})`,
+          sql`insert into outbox (workspace_id, seq, kind, object_id, published_at) values (${workspaceId}, ${seq}, 'records', ${objectId}, ${published ? sql`now()` : null})`,
         ),
       );
+    };
     await event(a.workspaceId, 1, false);
     await event(a.workspaceId, 2, false);
     await event(b.workspaceId, 1, false);
@@ -260,9 +273,10 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     const [a, b, c] = made.map((w) => w.workspaceId).sort();
     if (a === undefined || b === undefined || c === undefined) throw new Error('Three workspaces were made.');
     for (const workspaceId of [a, b, c]) {
+      const objectId = await objectIn(workspaceId);
       await db.withWorkspace(workspaceId, (tx) =>
         tx.execute(
-          sql`insert into outbox (workspace_id, seq, kind, object_id) values (${workspaceId}, 1, 'records', ${randomUUID()}), (${workspaceId}, 2, 'records', ${randomUUID()})`,
+          sql`insert into outbox (workspace_id, seq, kind, object_id) values (${workspaceId}, 1, 'records', ${objectId}), (${workspaceId}, 2, 'records', ${objectId})`,
         ),
       );
     }
@@ -292,10 +306,11 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
 
   it('prunes only rows published more than a day ago, at most 1,000 at a time, and nothing unpublished', async () => {
     const w = await workspaceWithMember('outbox-prune');
+    const objectId = await objectIn(w.workspaceId);
     const event = (seq: number, published: string | undefined) =>
       db.withWorkspace(w.workspaceId, (tx) =>
         tx.execute(
-          sql`insert into outbox (workspace_id, seq, kind, object_id, created_at, published_at) values (${w.workspaceId}, ${seq}, 'records', ${randomUUID()}, now() - interval '30 days', ${published === undefined ? null : sql`now() - ${published}::interval`})`,
+          sql`insert into outbox (workspace_id, seq, kind, object_id, created_at, published_at) values (${w.workspaceId}, ${seq}, 'records', ${objectId}, now() - interval '30 days', ${published === undefined ? null : sql`now() - ${published}::interval`})`,
         ),
       );
     await event(1, '25 hours');
@@ -326,6 +341,45 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       `select pg_get_functiondef('crm_outbox_prune(integer)'::regprocedure) as body`,
     );
     expect(definition.rows[0]?.body).toMatch(/least\(greatest\(crm_outbox_prune\.max, 1\), 1000\)/i);
+  });
+
+  it('lets the app stamp published_at once, from null to a time, and never take it back or move it', async () => {
+    const w = await workspaceWithMember('outbox-once');
+    const objectId = await objectIn(w.workspaceId);
+    const run = (statement: ReturnType<typeof sql>) =>
+      db.withWorkspace(w.workspaceId, (tx) => tx.execute<{ seq: number }>(statement));
+    await run(
+      sql`insert into outbox (workspace_id, seq, kind, object_id) values (${w.workspaceId}, 1, 'records', ${objectId}), (${w.workspaceId}, 2, 'records', ${objectId})`,
+    );
+    // Null to a time: once.
+    const stamped = await run(sql`update outbox set published_at = now() where seq = 1 returning seq`);
+    expect(stamped.rows).toHaveLength(1);
+    // Back to null, or to another time: the published row is out of reach.
+    expect((await run(sql`update outbox set published_at = null where seq = 1 returning seq`)).rows).toEqual([]);
+    expect(
+      (await run(sql`update outbox set published_at = now() + interval '1 day' where seq = 1 returning seq`)).rows,
+    ).toEqual([]);
+    // An unpublished row can't be "stamped" with null either.
+    await expect(run(sql`update outbox set published_at = null where seq = 2`)).rejects.toMatchObject({
+      cause: { code: '42501' },
+    });
+    const left = await run(sql`select seq::int as seq from outbox where published_at is not null order by seq`);
+    expect(left.rows).toEqual([{ seq: 1 }]);
+  });
+
+  it('refuses an outbox row naming an object of another workspace, or none at all', async () => {
+    const a = await workspaceWithMember('outbox-fk-a');
+    const b = await workspaceWithMember('outbox-fk-b');
+    const theirs = await objectIn(b.workspaceId);
+    for (const objectId of [theirs, randomUUID()]) {
+      await expect(
+        db.withWorkspace(a.workspaceId, (tx) =>
+          tx.execute(
+            sql`insert into outbox (workspace_id, seq, kind, object_id) values (${a.workspaceId}, 1, 'records', ${objectId})`,
+          ),
+        ),
+      ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'outbox_object' } });
+    }
   });
 
   it('answers nothing to a caller without execute', async () => {

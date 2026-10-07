@@ -205,8 +205,9 @@ describe('the outbox hook', () => {
   });
 
   it('writes a coarse row with no ids for an object past the cap, beside the fine rows', async () => {
-    const { scope, people } = await workspace();
-    const other = newId();
+    const { scope, people, objects } = await workspace();
+    // Another object of the workspace (an outbox row names a real one).
+    const other = Object.values(objects).find((objectId) => objectId !== people) ?? '';
     const many = Array.from({ length: CHANGE_CAP + 1 }, () => ({ recordId: newId(), objectId: people }));
     const few = [newId(), newId()];
     await runWrite(
