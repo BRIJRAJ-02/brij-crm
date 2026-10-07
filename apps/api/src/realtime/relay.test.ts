@@ -146,6 +146,10 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
         lines.push(message);
         warnings.push({ message, fields });
       },
+      error: (message, fields = {}) => {
+        lines.push(message);
+        warnings.push({ message, fields });
+      },
     },
     pollScheduleMs: options.pollScheduleMs ?? [100],
     dormantAfterMs: options.dormantAfterMs ?? 60_000,
@@ -646,6 +650,46 @@ describe('the relay', () => {
     await expect.poll(() => waits().length, WAIT).toBeGreaterThan(before);
     expect(waits()[before]).toBe(40);
     expect(relay.mode()).toBe('active');
+  });
+
+  it('goes dormant with a workspace that never stops failing, polling slowly meanwhile, and retries it first on waking', async () => {
+    const failing = await workspace();
+    const centrifugo = await fakeCentrifugo({
+      refuse: (publication) => publication.channel === `workspace:${failing}`,
+    });
+    servers.push(centrifugo);
+    await events(failing, [1]);
+    const polls: number[] = [];
+    const { relay, lines } = relayTo(centrifugo.url, {
+      pollScheduleMs: [50, 100, 200, 400],
+      dormantAfterMs: 800,
+      retryMs: 50,
+      maxRetryMs: 200,
+      wrap: (reader) => ({
+        ...reader,
+        workspaces: (max, after) => {
+          polls.push(Date.now());
+          return reader.workspaces(max, after);
+        },
+      }),
+    });
+    await expect.poll(() => relay.mode(), { timeout: 10_000, interval: 25 }).toBe('dormant');
+    expect(lines).toContain(
+      'Relay going dormant with workspaces still failing to publish; the next wake tries them first',
+    );
+    // The failing workspace's rows didn't keep the poll at its first wait: it backed off to the last.
+    const gaps = polls.slice(1).map((at, index) => at - (polls[index] ?? at));
+    expect(Math.max(...gaps)).toBeGreaterThanOrEqual(350);
+    expect(await unpublished(failing)).toEqual([1]);
+
+    // Dormant: no tries at all.
+    const tries = () => centrifugo.calls.filter((call) => call.channel === `workspace:${failing}`).length;
+    const before = tries();
+    await sleep(500);
+    expect(tries()).toBe(before);
+    // Woken, it tries the failing workspace at once.
+    relay.wake();
+    await expect.poll(tries, { timeout: 1_000, interval: 10 }).toBeGreaterThan(before);
   });
 
   it('stops from dormant at once', async () => {
