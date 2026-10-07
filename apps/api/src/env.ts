@@ -44,6 +44,32 @@ const wakeSecret = optional(
 /** The marker `.env.example`'s placeholder secret carries: fine on a laptop, refused anywhere else. */
 export const LOCAL_SECRET_MARKER = 'local-only';
 
+/** `.env.example`'s (and docker-compose.yml's) Centrifugo API key: fine on a laptop, refused anywhere else. */
+export const LOCAL_CENTRIFUGO_API_KEY = 'local-centrifugo-api-key';
+
+/**
+ * An address on the private network or this machine, or else https: the
+ * relay's key and the wake secret travel in its headers. Plain http only to a
+ * Railway private host (`*.railway.internal`, which Railway encrypts) or
+ * localhost.
+ */
+function internalUrl(variable: string) {
+  return z.url().refine(
+    (value) => {
+      // z.url() has already said so; one issue is enough.
+      if (!URL.canParse(value)) return true;
+      const url = new URL(value);
+      if (url.protocol === 'https:') return true;
+      const host = url.hostname;
+      return (
+        url.protocol === 'http:' &&
+        (host.endsWith('.railway.internal') || host === 'localhost' || host === '127.0.0.1' || host === '[::1]')
+      );
+    },
+    { message: `${variable} must be https, or http to a *.railway.internal host or localhost.` },
+  );
+}
+
 // A sender: `address@domain`, or `Name <address@domain>`.
 const sender = z
   .string()
@@ -91,7 +117,7 @@ export const ApiEnv = z
     MAIL_FROM: optional(sender),
     MAILPIT_URL: optional(z.url()),
     // The relay's wake up call (spec 0005): the worker's internal address, and the secret it checks.
-    WORKER_INTERNAL_URL: optional(z.url()),
+    WORKER_INTERNAL_URL: optional(internalUrl('WORKER_INTERNAL_URL')),
     WORKER_WAKE_SECRET: wakeSecret,
   })
   .superRefine((env, issues) => {
@@ -127,6 +153,8 @@ export const ApiEnv = z
         'WORKER_WAKE_SECRET',
         `WORKER_WAKE_SECRET is required in ${env.APP_ENV}: the same value the worker holds.`,
       );
+    } else if (env.WORKER_WAKE_SECRET.includes(LOCAL_SECRET_MARKER)) {
+      missing('WORKER_WAKE_SECRET', 'That is the local placeholder. Generate one: `openssl rand -hex 32`.');
     }
     if (env.MAIL_FROM === undefined) missing('MAIL_FROM', `MAIL_FROM is required in ${env.APP_ENV}.`);
     if (env.BETTER_AUTH_SECRET.includes(LOCAL_SECRET_MARKER)) {
@@ -157,7 +185,7 @@ export const WorkerEnv = z
     DATABASE_URL_DIRECT: z.url(),
     // The relay publishes to Centrifugo's server API (spec 0005): its internal port (9000), and its HTTP API key.
     // Both or neither; required outside local. Locally, without them the worker boots with the relay off.
-    CENTRIFUGO_API_URL: optional(z.url()),
+    CENTRIFUGO_API_URL: optional(internalUrl('CENTRIFUGO_API_URL')),
     CENTRIFUGO_API_KEY: optional(z.string()),
     // The api's poke must carry it (spec 0005). Required outside local; locally, unset takes any poke.
     WORKER_WAKE_SECRET: wakeSecret,
@@ -171,11 +199,18 @@ export const WorkerEnv = z
     if (env.APP_ENV !== 'local' && url) {
       missing('CENTRIFUGO_API_URL', `CENTRIFUGO_API_URL is required in ${env.APP_ENV}: the relay publishes there.`);
     }
-    if (env.APP_ENV !== 'local' && key) {
+    if (env.APP_ENV === 'local') return;
+    if (key) {
       missing('CENTRIFUGO_API_KEY', `CENTRIFUGO_API_KEY is required in ${env.APP_ENV}.`);
+    } else if (env.CENTRIFUGO_API_KEY === LOCAL_CENTRIFUGO_API_KEY) {
+      missing('CENTRIFUGO_API_KEY', "That is the local key. Use the Centrifugo service's CENTRIFUGO_HTTP_API_KEY.");
+    } else if ((env.CENTRIFUGO_API_KEY?.length ?? 0) < 32) {
+      missing('CENTRIFUGO_API_KEY', `CENTRIFUGO_API_KEY must be at least 32 characters in ${env.APP_ENV}.`);
     }
-    if (env.APP_ENV !== 'local' && env.WORKER_WAKE_SECRET === undefined) {
+    if (env.WORKER_WAKE_SECRET === undefined) {
       missing('WORKER_WAKE_SECRET', `WORKER_WAKE_SECRET is required in ${env.APP_ENV}: the same value the api sends.`);
+    } else if (env.WORKER_WAKE_SECRET.includes(LOCAL_SECRET_MARKER)) {
+      missing('WORKER_WAKE_SECRET', 'That is the local placeholder. Generate one: `openssl rand -hex 32`.');
     }
   })
   .transform(({ WORKER_PORT, PORT, CENTRIFUGO_API_URL, CENTRIFUGO_API_KEY, ...rest }) => ({

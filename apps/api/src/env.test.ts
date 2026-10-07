@@ -1,7 +1,7 @@
 // The api's sign in and mail variables (spec 0005): what each environment
 // must set, and what an unset or empty one means.
 import { describe, expect, it } from 'vitest';
-import { ApiEnv, WorkerEnv } from './env.ts';
+import { ApiEnv, LOCAL_CENTRIFUGO_API_KEY, WorkerEnv } from './env.ts';
 
 const local = {
   APP_ENV: 'local',
@@ -119,6 +119,17 @@ describe("the relay's wake up call (spec 0005)", () => {
     expect(problems(production)).toEqual([]);
   });
 
+  it("refuses .env.example's secret outside local, and plain http to a public worker address", () => {
+    const placeholder = 'local-only-worker-wake-secret-not-for-deployment';
+    expect(problems({ ...production, WORKER_WAKE_SECRET: placeholder })).toEqual(['WORKER_WAKE_SECRET']);
+    expect(problems({ ...local, WORKER_WAKE_SECRET: placeholder })).toEqual([]);
+    expect(problems({ ...production, WORKER_INTERNAL_URL: 'http://worker.example.com' })).toEqual([
+      'WORKER_INTERNAL_URL',
+    ]);
+    expect(problems({ ...production, WORKER_INTERNAL_URL: 'https://worker.example.com' })).toEqual([]);
+    expect(problems({ ...local, WORKER_INTERNAL_URL: 'http://localhost:3001' })).toEqual([]);
+  });
+
   it('refuses a short secret, or one with spaces, anywhere', () => {
     expect(problems({ ...local, WORKER_WAKE_SECRET: 'short' })).toEqual(['WORKER_WAKE_SECRET']);
     expect(problems({ ...production, WORKER_WAKE_SECRET: 'a wake secret with spaces in it, 32+ long' })).toEqual([
@@ -133,7 +144,10 @@ describe('the worker environment (spec 0005, the relay)', () => {
     DATABASE_URL: 'postgres://app:p@localhost:6432/crm',
     DATABASE_URL_DIRECT: 'postgres://app:p@localhost:5433/crm',
   };
-  const centrifugo = { CENTRIFUGO_API_URL: 'http://centrifugo.railway.internal:9000', CENTRIFUGO_API_KEY: 'key' };
+  const centrifugo = {
+    CENTRIFUGO_API_URL: 'http://centrifugo.railway.internal:9000',
+    CENTRIFUGO_API_KEY: 'a-centrifugo-key-of-at-least-32-characters',
+  };
 
   function workerProblems(input: Record<string, unknown>): string[] {
     const result = WorkerEnv.safeParse(input);
@@ -148,7 +162,7 @@ describe('the worker environment (spec 0005, the relay)', () => {
   it('turns the relay on with both variables, and refuses one alone', () => {
     expect(WorkerEnv.parse({ ...worker, ...centrifugo }).centrifugo).toEqual({
       apiUrl: centrifugo.CENTRIFUGO_API_URL,
-      apiKey: 'key',
+      apiKey: centrifugo.CENTRIFUGO_API_KEY,
     });
     expect(workerProblems({ ...worker, CENTRIFUGO_API_URL: centrifugo.CENTRIFUGO_API_URL })).toEqual([
       'CENTRIFUGO_API_KEY',
@@ -169,5 +183,55 @@ describe('the worker environment (spec 0005, the relay)', () => {
       expect(workerProblems({ ...worker, APP_ENV, ...centrifugo, ...wake })).toEqual([]);
     }
     expect(workerProblems({ ...worker, WORKER_WAKE_SECRET: 'short' })).toEqual(['WORKER_WAKE_SECRET']);
+  });
+
+  const deployed = {
+    ...worker,
+    ...centrifugo,
+    APP_ENV: 'production',
+    WORKER_WAKE_SECRET: 'a-wake-secret-of-at-least-32-characters',
+  };
+
+  it("refuses .env.example's Centrifugo key, or one shorter than 32 characters, outside local", () => {
+    expect(workerProblems({ ...deployed, CENTRIFUGO_API_KEY: LOCAL_CENTRIFUGO_API_KEY })).toEqual([
+      'CENTRIFUGO_API_KEY',
+    ]);
+    expect(workerProblems({ ...deployed, CENTRIFUGO_API_KEY: 'x'.repeat(31) })).toEqual(['CENTRIFUGO_API_KEY']);
+    expect(workerProblems({ ...deployed, CENTRIFUGO_API_KEY: 'x'.repeat(32) })).toEqual([]);
+    // Locally, the compose stack's key is the point.
+    expect(
+      workerProblems({
+        ...worker,
+        CENTRIFUGO_API_URL: 'http://localhost:9000',
+        CENTRIFUGO_API_KEY: LOCAL_CENTRIFUGO_API_KEY,
+      }),
+    ).toEqual([]);
+  });
+
+  it('refuses plain http to Centrifugo unless the host is on the private network or this machine', () => {
+    for (const url of [
+      'https://centrifugo.example.com',
+      'http://centrifugo.railway.internal:9000',
+      'http://localhost:9000',
+      'http://127.0.0.1:9000',
+    ]) {
+      expect(workerProblems({ ...deployed, CENTRIFUGO_API_URL: url }), url).toEqual([]);
+    }
+    for (const url of [
+      'http://centrifugo.example.com',
+      'http://railway.internal.example.com',
+      'ftp://centrifugo.railway.internal',
+    ]) {
+      expect(workerProblems({ ...deployed, CENTRIFUGO_API_URL: url }), url).toEqual(['CENTRIFUGO_API_URL']);
+      expect(workerProblems({ ...worker, CENTRIFUGO_API_URL: url, CENTRIFUGO_API_KEY: 'key' }), url).toEqual([
+        'CENTRIFUGO_API_URL',
+      ]);
+    }
+  });
+
+  it("refuses .env.example's wake secret outside local", () => {
+    const placeholder = 'local-only-worker-wake-secret-not-for-deployment';
+    expect(workerProblems({ ...deployed, WORKER_WAKE_SECRET: placeholder })).toEqual(['WORKER_WAKE_SECRET']);
+    expect(workerProblems({ ...worker, WORKER_WAKE_SECRET: placeholder })).toEqual([]);
   });
 });
