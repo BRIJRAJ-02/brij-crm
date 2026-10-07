@@ -54,12 +54,15 @@ Per decision:
 - **Deterministic ELK** (fixed options, sorted input, model order kept): the same model always gives the same picture, so people learn where things are and screenshot tests are stable.
 - **Overlap triggers a full layout**: pinning plus a growing node can collide; a full, announced relayout is better than overlapping cards.
 - **One `schema.graph` read**: one round trip, one consistent snapshot (one transaction), and a natural place to filter by access.
-- **The whole graph refetched per event, at most once a second**: schema changes are rare and the answer is small for real workspaces; per event patching would duplicate the server's visibility and swapping rules in the client.
+- **The whole graph refetched per event, at most once a second**: schema changes are rare and the answer is small for real workspaces; per event patching would duplicate the server's visibility rules in the client.
 - **System attributes folded into one row**: they are the same on every object (id, created, updated) and only add noise.
 - **Type families, not one group per type**: twenty types would make twenty tiny groups; eight families keep a node scannable and give ELK a fixed node height.
 - **At most 8 rows per node**: keeps nodes a known size before layout and the map readable; the full list is one click away in settings.
 - **Compact mode below zoom 0.6**: at the zoom where 50 nodes fit, rows are unreadable anyway; a large name is what helps there.
-- **One hidden end drawn one way, from the visible end**: the visible attribute already tells its viewer that it points somewhere, so drawing that is honest; naming the hidden side would leak it.
+- **A relationship with a hidden end is not drawn** (cross check, 8 October; the first draft drew it one way from the visible end): hidden means absent everywhere (spec 0009), and a line, even a one way one, tells the viewer a relationship exists on the far side. The visible attribute's row stays, since the viewer can already see that field in tables. The answer then needs no swapped or mirrored ends, which removes a rule the client could get wrong.
+- **Library parts for the toggle and Find**: the inventory already has SegmentedControl and a Menu with a search field (React Aria's Autocomplete); a ComboBox or toggle group made for one screen would be a second design for the same job.
+- **The map mints the relationship id**: #15 replays a create by its id, so the caller that opens the dialog must keep one id across retries; a new `mutationId` per attempt doesn't make a second relationship.
+- **ELK's label options fixed** (`CENTER` placement, `SMART_DOWN` side selection, measured label sizes): labels become part of the layout, which is how "no node overlaps a label" holds, and fixed options keep it deterministic.
 - **One way references drawn dashed**: #15 creates none from the UI, but the engine supports them and the API (#34) may make them; the map shows what exists.
 - **A line opens a panel, not the dialog**: members need a read only explanation of a relationship; admins get "Edit relationship" one click further.
 - **The list view as the text alternative**: like the charts' "View as table" (spec 0003), it gives screen reader and phone users the same facts in a table.
