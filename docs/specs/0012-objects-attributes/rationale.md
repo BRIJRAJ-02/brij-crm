@@ -52,6 +52,13 @@ Per decision:
 - The effectively archived rule for paired attributes: archiving an object must hide what points at it without rewriting rows, so a restore is exact.
 - Unique fills stay in the request: today's objects are small; #8 moves them to a job when it lands.
 - Three starter stages: a status with no stages is unusable; Not started, In progress and Done read clearly and map to open, open, won.
+- Archive and restore as separate procedures, the attribute pair returning an array (cross check, 8 October): a relationship changes two definitions, and a caller that gets only one back would show a stale other end; separate verbs read plainly in the access table and the public API.
+- A reserved list for object API names: `$object` sits in the same route segment as `map` (spec 0016) and beside `attributes` and `configuration` tabs; refusing those words is cheaper than escaping routes forever.
+- Creating an option from a cell as one write: two calls (create the option, then set it) can leave a stray option when the second is refused, and race a second admin typing the same label. One transaction under the record write avoids both. Runner up: two server confirmed calls with a cleanup on failure.
+- An archived default option keeps the stored default: the engine already falls back (first live option when required, none otherwise), so the editor shows that instead of refusing the archive or clearing the default, and a restore brings it back exactly.
+- `usage.get` through the access filter: a count of a hidden object's attributes says the object exists; hidden means absent.
+- Chips read the object's look from the definitions store: a record body that carried icon and hue would show the old look until each record was refetched.
+- These rest on the owner's acceptance of the recommended defaults for #11 to #22 (3 October 2026); nothing here is open.
 
 ## References
 
