@@ -14,7 +14,7 @@ Forces: the scale budget (#12: read 300 ms, edit 250 ms at p95); one field desig
 
 ### Option 1: link deltas and paged reads on the existing engine (chosen)
 
-Add `writeLinksDelta` (add or remove named records) beside the whole value path, cap reads at the first 20 links per many side with a capped total, page the rest by keyset, search through one procedure, and store a name key for sides that hold one.
+Add `writeLinksDelta` (add or remove named records) beside the whole value path, cap reads at the first 20 links per many side with its total, page the rest by keyset, search through one procedure, and store a name key for sides that hold one.
 
 **Pros**: no cost grows with the size of a side; deltas commute, so concurrent adds never overwrite each other and hidden links are never dropped; no schema change until milestone 4; reuses the engine's indexes, protocol and history.
 **Cons**: two write paths that must keep the same rules; cells show at most 20 chips; a stored key that depends on another record needs a lock rule and a job.
@@ -49,6 +49,12 @@ Per decision (the brief's recommendations, which the owner accepted):
 - **Unsaved Filter and Sort here**: the scope's "Done when" needs filtering and sorting through relations to be usable now; #20 adds saving.
 - **Related attributes as columns wait for #16**: a column showing a company's industry on People is a lookup, with its own storage and refresh rules; building it here would build #16 twice.
 - **A thin record panel here**: a hub can't be browsed in a cell; #17 takes the panel over.
+- **One dialog with two modes, and `relationships.update` for names only** (cross check, 8 October): #13's settings and #56's map both edit relationships; one owner of the dialog and the procedure keeps the rules in one place. Objects and cardinality stay fixed in edit mode, since changing them is #14's widening.
+- **The id minted once per dialog**: the server replays a create by the relationship's id, so a retry after a lost answer must resend the same id; a new `mutationId` per attempt is fine.
+- **Exact totals, measured at the worst page** (spec 0005 already ships exact counts for cells cut short): a capped count changes 0005's shape for a cost nobody has measured; the worst page (100 large companies) is measured first, and cells fall back to "20+" only if it misses.
+- **The record rule predicate in every link read from day one**: it is empty until #24, so it costs nothing now, and adding it later would mean finding every count and page again.
+- **Spec 0012's archived by object rule on every link path**: an archived object must vanish from links, search and sections the way it vanishes from tables, or a chip would lead to a record nobody can open.
+- **A bounded prefix range**: an open ended `>=` seek keeps reading keys after the last match; bounding it with `|| U&'\FFFF'` makes the plan a range scan whose cost is the matches, verified on the seed.
 
 ## Evidence
 

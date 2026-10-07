@@ -39,6 +39,8 @@ Every key derived from record B is computed after, and written while, holding a 
 
 Why it holds: every writer of a key derived from B is ordered by B's row, so whichever commits last computed its key after the earlier one committed (read committed takes a fresh snapshot per statement). Key share locks don't conflict with each other, so many people linking to one hub never wait on each other, only on B's own writes and on refresh batches (milliseconds each). No cycle exists: a link write locks its own record, then far records in id order, and no writer locks a far record first and then a near one. `runWrite` still retries a deadlock up to 3 times.
 
+This reverses spec 0004 AC-7 ("two links from opposite ends never lock each other") for sides that hold one, once this key lands: a link written from the person's side now waits on the company's own writes and refresh batches. The index spec's Follow-up asks `/sync` to record it in 0004, and spec 0011's `hub` scenario measures the cost (the hub edited while 100 users link to it).
+
 ## The refresh job
 
 - Kind `records.refresh_sort_keys` on #8's runner (spec 0008), input `{ targetRecordId }`, coalesced per target: a second rename while one is queued or running restarts it from the start, since each batch recomputes from the truth.
