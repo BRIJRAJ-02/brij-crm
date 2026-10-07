@@ -6,10 +6,10 @@ import { eq } from 'drizzle-orm';
 import type { RecordPage, RecordView } from '@crm/contracts';
 import type { FilterGroup, SortRules } from '@crm/contracts/values';
 import { schema } from '@crm/db';
-import { canonicalId } from '../engine/ids.ts';
+import { canonicalId, isUuidV7, uuidV7Time } from '../engine/ids.ts';
 import { queryPage } from '../engine/query/page.ts';
 import { createRecord, getRecords, setValues, type ValueInput } from '../engine/records.ts';
-import { isRefusal, refuse } from '../engine/refusals.ts';
+import { inputInvalid, isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import type { AfterWrite } from '../engine/write.ts';
 
@@ -73,19 +73,34 @@ export interface AddRecordInput {
   readonly values?: Readonly<Record<string, unknown>>;
 }
 
+/** How far a new record's id time may be from the server's clock: past it, the device's clock is wrong. */
+export const MAX_ID_CLOCK_SKEW_MS = 10 * 60 * 1000;
+
+/** What a create with an id from a device whose clock is off answers, on the `id` field. */
+export const CLOCK_SKEW_MESSAGE =
+  "This record couldn't be saved because this device's clock looks wrong. Check its time, then try again.";
+
 /**
  * Creates a record with the id the browser minted and answers it fresh
  * (spec 0005, AC-35). The id is the retry key: when it is already taken by a
- * live record of the same object (an earlier try whose response was lost),
- * that record is the answer; when that record is in the trash, the refusal
- * is `RECORD_DELETED`; when another object's record holds it, `ID_TAKEN`.
- * The hooks run in the write's transaction, and not at all on a replay.
+ * record this actor made for the same object (an earlier try whose response
+ * was lost), that record is the answer, or `RECORD_DELETED` once it is in
+ * the trash; when anyone else's record holds it, `ID_TAKEN`. An id whose
+ * time is more than 10 minutes from `now` (the server's clock) is refused on
+ * `id`, but only after that lookup, so a late retry still replays. The hooks
+ * run in the write's transaction, and not at all on a replay.
  */
 export async function addRecord(
   scope: EngineScope,
   input: AddRecordInput,
   hooks: readonly AfterWrite[] = [],
+  now: number = Date.now(),
 ): Promise<RecordView> {
+  if (isUuidV7(input.id) && Math.abs(uuidV7Time(input.id) - now) > MAX_ID_CLOCK_SKEW_MS) {
+    const replayed = await replayCreate(scope, input);
+    if (replayed !== undefined) return replayed;
+    throw inputInvalid('id', CLOCK_SKEW_MESSAGE);
+  }
   try {
     const { recordId } = await createRecord(
       scope,
@@ -95,17 +110,37 @@ export async function addRecord(
     return await freshRecord(scope, recordId);
   } catch (error) {
     if (!isRefusal(error) || error.refusal.code !== 'ID_TAKEN') throw error;
-    return replayCreate(scope, input, error);
+    const replayed = await replayCreate(scope, input);
+    if (replayed === undefined) throw error;
+    return replayed;
   }
 }
 
-/** Answers a create whose id is taken: the earlier try's record, or why not. */
-async function replayCreate(scope: EngineScope, input: AddRecordInput, taken: Error): Promise<RecordView> {
+/**
+ * A create's earlier try, if it made the record: that record when this actor
+ * made it for this object, or why not (`RECORD_DELETED` for its own record in
+ * the trash, `ID_TAKEN` for anyone else's). Undefined when no record holds
+ * the id.
+ */
+async function replayCreate(scope: EngineScope, input: AddRecordInput): Promise<RecordView | undefined> {
   const id = canonicalId(input.id);
   const [row] = await scope.db.withWorkspace(scope.workspaceId, (tx) =>
-    tx.select({ objectId: records.objectId, deletedAt: records.deletedAt }).from(records).where(eq(records.id, id)),
+    tx
+      .select({
+        objectId: records.objectId,
+        deletedAt: records.deletedAt,
+        createdByType: records.createdByType,
+        createdById: records.createdById,
+      })
+      .from(records)
+      .where(eq(records.id, id)),
   );
-  if (row === undefined || row.objectId !== canonicalId(input.objectId)) throw taken;
+  if (row === undefined) return undefined;
+  const isOwnTry =
+    row.objectId === canonicalId(input.objectId) &&
+    row.createdByType === scope.actor.type &&
+    row.createdById === scope.actor.id;
+  if (!isOwnTry) throw refuse('ID_TAKEN', 'A record with that id already exists.');
   if (row.deletedAt !== null) {
     throw refuse('RECORD_DELETED', 'That record was created, and is now in the trash. Restore it first.');
   }

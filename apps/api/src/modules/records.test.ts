@@ -26,6 +26,10 @@ afterAll(async () => {
 
 type Member = Awaited<ReturnType<typeof memberWithWorkspace>>;
 
+/** What a create with an id from a device whose clock is off answers. */
+const CLOCK_WRONG =
+  "This record couldn't be saved because this device's clock looks wrong. Check its time, then try again.";
+
 /** Creates a person named `first` with `email`, through the real procedure. */
 function createPerson(m: Member, first: string, email?: string, id = newId()) {
   return m.client.records.create({
@@ -113,6 +117,71 @@ describe('records.create', () => {
       code: 'RECORD_DELETED',
       status: 409,
     });
+  });
+
+  it("refuses an id minted more than 10 minutes from the server's clock on the id field, and writes nothing", async () => {
+    const m = await memberWithWorkspace(app);
+    const minutes = 60_000;
+    const create = (id: string) =>
+      m.client.records.create({ workspace: m.slug, objectId: m.people.id, id, mutationId: newId() });
+    for (const skew of [-11 * minutes, 11 * minutes]) {
+      const error = await failure(() => create(newId(Date.now() + skew)));
+      expect({ code: error.code, status: error.status, message: error.message }).toEqual({
+        code: 'INPUT_INVALID',
+        status: 400,
+        message: CLOCK_WRONG,
+      });
+      expect(error.data).toEqual({ issues: [{ path: ['id'], message: CLOCK_WRONG }] });
+    }
+    expect((await m.client.records.count({ workspace: m.slug, objectId: m.people.id })).count).toBe(0);
+    // Inside the window is fine, either way.
+    await create(newId(Date.now() - 9 * minutes));
+    await create(newId(Date.now() + 9 * minutes));
+    expect((await m.client.records.count({ workspace: m.slug, objectId: m.people.id })).count).toBe(2);
+  });
+
+  it("replays a late retry of the member's own record whatever its id's time, and refuses another member's id ID_TAKEN", async () => {
+    const m = await memberWithWorkspace(app);
+    const memberId = await memberIdOf(m);
+    const [other] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `insert into members (workspace_id, name, email, status, created_by_type, updated_by_type)
+       values ($1, 'Grace', 'grace@example.com', 'active', 'system', 'system') returning id`,
+      [m.workspace.id],
+    );
+    /** A person made an hour ago (by its id's time) by `madeBy`, written straight to the table. */
+    const madeEarlier = async (madeBy: string) => {
+      const id = newId(Date.now() - 60 * 60_000);
+      await testQuery(
+        ownerUrl,
+        `insert into records (workspace_id, id, object_id, created_by_type, created_by_id, created_by_member_id,
+           updated_by_type, updated_by_id, updated_by_member_id)
+         values ($1, $2, $3, 'member', $4, $4, 'member', $4, $4)`,
+        [m.workspace.id, id, m.people.id, madeBy],
+      );
+      return id;
+    };
+    const create = (id: string) =>
+      m.client.records.create({ workspace: m.slug, objectId: m.people.id, id, mutationId: newId() });
+
+    const mine = await madeEarlier(memberId);
+    const replayed = await create(mine);
+    expect(replayed).toMatchObject({ id: mine, createdBy: { type: 'member', id: memberId } });
+
+    const theirs = await madeEarlier(other?.id ?? '');
+    const taken = await failure(() => create(theirs));
+    expect({ code: taken.code, status: taken.status }).toEqual({ code: 'ID_TAKEN', status: 409 });
+    expect(refusalsOf(taken)).toMatchObject([{ code: 'ID_TAKEN', field: 'id' }]);
+    // Fresh ids take the ordinary path to the same answers.
+    const fresh = newId();
+    await testQuery(
+      ownerUrl,
+      `insert into records (workspace_id, id, object_id, created_by_type, created_by_id, created_by_member_id,
+         updated_by_type, updated_by_id, updated_by_member_id)
+       values ($1, $2, $3, 'member', $4, $4, 'member', $4, $4)`,
+      [m.workspace.id, fresh, m.people.id, other?.id],
+    );
+    expect(await refusal(() => create(fresh))).toMatchObject({ code: 'ID_TAKEN', status: 409 });
   });
 
   it('refuses bad values per attribute: an invalid email 422, a taken unique email 409, and writes nothing', async () => {

@@ -111,7 +111,10 @@ const ValuesById = z.record(z.uuid(), z.unknown());
 /**
  * A new record: its object, a uuid v7 the browser mints (the retry key:
  * sending the same request again answers the record already made), its first
- * values by attribute id, and the write's `mutationId`.
+ * values by attribute id, and the write's `mutationId`. An id whose time is
+ * more than 10 minutes from the server's clock is refused 400 `INPUT_INVALID`
+ * on `id` (the device's clock is wrong), unless it is a retry of a record
+ * already made.
  */
 export const CreateRecordInput = WorkspaceScoped.extend({
   objectId: z.uuid(),
@@ -149,7 +152,9 @@ export type SetValuesInput = z.infer<typeof SetValuesInput>;
  * `ATTRIBUTE_VALUE_INVALID`, `UNIQUE_CONFLICT`). `create` with an id already
  * made for this object answers that record (a retry after a lost response),
  * or `RECORD_DELETED` once it is in the trash; `setValues` on a record in the
- * trash is `RECORD_DELETED`. An unknown object or record is 404 `NOT_FOUND`.
+ * trash is `RECORD_DELETED`. A replay answers only the member who made the
+ * record: another member's record with that id is `ID_TAKEN` on `id`. An
+ * unknown object or record is 404 `NOT_FOUND`.
  */
 export const recordsContract = {
   query: oc.input(QueryRecordsInput).output(RecordPage),

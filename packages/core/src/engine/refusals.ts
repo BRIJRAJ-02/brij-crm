@@ -43,3 +43,26 @@ export function postgresError(error: unknown): { code?: string; constraint?: str
 export function writeConflict(message: string): Error {
   return Object.assign(new Error(message), { code: '40001' });
 }
+
+/** One field of a caller's input that can't be used as given, and why. */
+export interface InputProblem {
+  readonly field: string;
+  readonly message: string;
+}
+
+/** An error about one field of the caller's input, which the API answers as `INPUT_INVALID` on that field. */
+export type InputError = Error & { readonly inputProblem: InputProblem };
+
+/**
+ * Refuses one field of the input, for checks only the server can make (a
+ * record id minted on a device whose clock is wrong, say). The API answers
+ * 400 `INPUT_INVALID` with one issue at `field`.
+ */
+export function inputInvalid(field: string, message: string): InputError {
+  return Object.assign(new Error(message), { inputProblem: { field, message } });
+}
+
+/** True when an error is an input problem from `inputInvalid`. */
+export function isInputError(error: unknown): error is InputError {
+  return error instanceof Error && 'inputProblem' in error;
+}

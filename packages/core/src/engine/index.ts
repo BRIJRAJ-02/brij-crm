@@ -72,7 +72,14 @@ export {
   type RecordView,
   type ValueInput,
 } from './records.ts';
-export { isRefusal, type RefusalError } from './refusals.ts';
+export {
+  inputInvalid,
+  isInputError,
+  isRefusal,
+  type InputError,
+  type InputProblem,
+  type RefusalError,
+} from './refusals.ts';
 export {
   defineRelationship,
   LINK_CELL_CAP,

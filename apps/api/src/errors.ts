@@ -1,9 +1,10 @@
 // What a thrown error becomes on the wire. Every RPC error leaves with a code
 // from the one error map in @crm/contracts and the status it gives that code:
-// an engine refusal keeps its code and lists every refusal, bad input becomes
-// INPUT_INVALID with its issues, and anything else is INTERNAL with no detail.
+// an engine refusal keeps its code and lists every refusal, bad input (the
+// contract's, or a field only the engine could check) becomes INPUT_INVALID
+// with its issues, and anything else is INTERNAL with no detail.
 import { type ApiError, ApiRefusal, ERROR_MAP, ErrorCode, type InputIssue } from '@crm/contracts';
-import { isRefusal } from '@crm/core';
+import { isInputError, isRefusal } from '@crm/core';
 import { ORPCError, ValidationError } from '@orpc/server';
 import * as z from 'zod';
 
@@ -54,6 +55,11 @@ export function withInputFields(error: unknown, fields: Readonly<Partial<Record<
 
 /** Turns anything thrown into the API's error shape. It never throws itself. */
 export function toApiError(error: unknown): MappedError {
+  // A field only the server could check (a record id from a device with a wrong clock): one issue on it.
+  if (isInputError(error)) {
+    const { field, message } = error.inputProblem;
+    return { error: apiError('INPUT_INVALID', message, { issues: [{ path: [field], message }] }), expected: true };
+  }
   if (isRefusal(error)) {
     const refusals = Refusals.safeParse(error.refusals);
     // The first refusal names the code; something only shaped like a refusal is a fault.

@@ -22,6 +22,11 @@ export function isUuidV7(value: string): boolean {
   return V7.test(value);
 }
 
+/** The millisecond time a UUID v7 carries in its first 48 bits. */
+export function uuidV7Time(id: string): number {
+  return Number.parseInt(id.replaceAll('-', '').slice(0, 12), 16);
+}
+
 /** True for a well formed uuid, so a malformed id is refused before it reaches Postgres. */
 export function isUuid(value: unknown): value is string {
   return typeof value === 'string' && UUID.test(value);
