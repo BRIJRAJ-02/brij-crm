@@ -1,5 +1,5 @@
 {
-  "id": "edf09280-9eeb-497c-a5ff-cb67f0b6fdb1",
+  "id": "f1756d88-5dfa-46a5-b97b-851b7b0db702",
   "prevId": "f219cc21-776b-4d69-ae0c-d2b7686985d1",
   "version": "7",
   "dialect": "postgresql",
@@ -1697,7 +1697,7 @@
           "type": "timestamp (6) with time zone",
           "primaryKey": false,
           "notNull": true,
-          "default": "now()"
+          "default": "clock_timestamp()"
         },
         "published_at": {
           "name": "published_at",

@@ -16,7 +16,7 @@ CREATE TABLE "outbox" (
 	"attribute_ids" uuid[] DEFAULT '{}'::uuid[] NOT NULL,
 	"coarse" boolean DEFAULT false NOT NULL,
 	"mutation_id" uuid,
-	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
+	"created_at" timestamp (6) with time zone DEFAULT clock_timestamp() NOT NULL,
 	"published_at" timestamp (6) with time zone,
 	CONSTRAINT "outbox_pkey" PRIMARY KEY("workspace_id","seq")
 );

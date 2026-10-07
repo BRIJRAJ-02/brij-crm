@@ -248,4 +248,46 @@ describe('the outbox hook', () => {
       await reader.close();
     }
   });
+
+  it('takes the counter, stores the rows and notifies in one statement', async () => {
+    const { scope, people } = await workspace();
+    const calls: string[] = [];
+    const hook = outboxHook();
+    const counting: AfterWrite = (change, tx) =>
+      hook(
+        change,
+        new Proxy(tx, {
+          get(target, property, receiver) {
+            if (
+              typeof property === 'string' &&
+              ['execute', 'insert', 'update', 'select', 'delete'].includes(property)
+            ) {
+              calls.push(property);
+            }
+            return Reflect.get(target, property, receiver) as unknown;
+          },
+        }),
+      );
+    await createRecord(scope, { objectId: people }, [counting]);
+    expect(calls).toEqual(['execute']);
+    expect((await rowsOf(scope)).map((row) => row.seq)).toEqual([1]);
+    expect(await counterOf(scope)).toBe(1);
+  });
+
+  it('stamps created_at when the row is written, not when the transaction began', async () => {
+    const { scope, people } = await workspace();
+    let began = '';
+    const slow: AfterWrite = async (_change, tx) => {
+      const result = await tx.execute<{ began: string }>(sql`select now()::text as began`);
+      began = result.rows[0]?.began ?? '';
+      await new Promise((resolve) => setTimeout(resolve, 300));
+    };
+    await createRecord(scope, { objectId: people }, [slow, outboxHook()]);
+    const result = await db.withWorkspace(scope.workspaceId, (tx) =>
+      tx.execute<{ late: number }>(
+        sql`select extract(epoch from created_at - ${began}::timestamptz) * 1000 as late from outbox`,
+      ),
+    );
+    expect(Number(result.rows[0]?.late)).toBeGreaterThanOrEqual(250);
+  });
 });

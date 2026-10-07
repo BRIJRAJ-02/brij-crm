@@ -47,7 +47,10 @@ export const outbox = pgTable(
     coarse: boolean('coarse').notNull().default(false),
     /** The browser's id for the write, echoed so it can skip its own change. */
     mutationId: uuid('mutation_id'),
-    createdAt: timestamptz('created_at').notNull().defaultNow(),
+    /** When the row was written (`clock_timestamp()`), not when its transaction began. */
+    createdAt: timestamptz('created_at')
+      .notNull()
+      .default(sql`clock_timestamp()`),
     publishedAt: timestamptz('published_at'),
   },
   (t) => [

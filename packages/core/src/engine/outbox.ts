@@ -5,13 +5,13 @@
 // changed (`definitions`), ids only, numbered per workspace from
 // `workspace_counters.outbox_seq` under that row's lock, so the numbers have no
 // gaps and follow commit order. Then `pg_notify`, delivered on commit, wakes
-// the relay. Entry changes aren't published yet: no screen shows lists.
-import { eq, sql } from 'drizzle-orm';
-import { OUTBOX_CHANNEL, schema } from '@crm/db';
+// the relay. The counter, the rows and the notify are one statement, so the
+// hook costs the write one round trip while it holds the counter row. Entry
+// changes aren't published yet: no screen shows lists.
+import { sql } from 'drizzle-orm';
+import { OUTBOX_CHANNEL } from '@crm/db';
 import { isUuid } from './ids.ts';
 import { cappedHook, type AfterWrite, type CappedChange } from './write.ts';
-
-const { outbox, workspaceCounters } = schema;
 
 /** One outbox row before it gets its number. */
 export interface OutboxEvent {
@@ -93,11 +93,12 @@ export function outboxEvents(change: CappedChange): readonly OutboxEvent[] {
 
 /**
  * The outbox hook for one write, built with `cappedHook`, so it only ever
- * sees a change cut down by `capChange`. It numbers its rows from the
- * workspace counter row, which it takes last (every write takes that row at
- * its end), stores them, and notifies `crm_outbox` with the workspace id.
- * An empty change stores and notifies nothing. Throws a `TypeError` for a
- * `mutationId` that isn't a uuid.
+ * sees a change cut down by `capChange`. In one statement it takes the
+ * workspace counter row (every write takes that row at its end), numbers and
+ * stores its rows (`created_at` from `clock_timestamp()`, when the row was
+ * written, not when the transaction began), and notifies `crm_outbox` with
+ * the workspace id. An empty change stores and notifies nothing. Throws a
+ * `TypeError` for a `mutationId` that isn't a uuid.
  */
 export function outboxHook(options: OutboxHookOptions = {}): AfterWrite {
   const { mutationId } = options;
@@ -107,25 +108,33 @@ export function outboxHook(options: OutboxHookOptions = {}): AfterWrite {
   return cappedHook(async (change, tx) => {
     const events = outboxEvents(change);
     if (events.length === 0) return;
-    const [counter] = await tx
-      .update(workspaceCounters)
-      .set({ outboxSeq: sql`${workspaceCounters.outboxSeq} + ${events.length}` })
-      .where(eq(workspaceCounters.workspaceId, change.workspaceId))
-      .returning({ last: workspaceCounters.outboxSeq });
-    if (counter === undefined) throw new Error('The workspace has no counters row.');
-    const first = counter.last - events.length + 1;
-    await tx.insert(outbox).values(
-      events.map((event, index) => ({
-        workspaceId: change.workspaceId,
-        seq: first + index,
-        kind: event.kind,
-        objectId: event.objectId,
-        recordIds: [...event.recordIds],
-        attributeIds: [...event.attributeIds],
-        coarse: event.coarse,
-        mutationId: mutationId ?? null,
-      })),
-    );
-    await tx.execute(sql`select pg_notify(${OUTBOX_CHANNEL}, ${change.workspaceId})`);
+    const count = events.length;
+    const json = JSON.stringify(events);
+    // Arrays come out of the json in their own order (with ordinality), so ids keep the order the hook gave them.
+    const result = await tx.execute<{ stored: number }>(sql`
+      with counter as (
+        update workspace_counters set outbox_seq = outbox_seq + ${count}::bigint
+        where workspace_id = ${change.workspaceId}
+        returning outbox_seq - ${count}::bigint as base
+      ),
+      stored as (
+        insert into outbox (workspace_id, seq, kind, object_id, record_ids, attribute_ids, coarse, mutation_id, created_at)
+        select
+          ${change.workspaceId}::uuid,
+          counter.base + e.ord,
+          (e.value ->> 'kind')::outbox_kind,
+          (e.value ->> 'objectId')::uuid,
+          array(select r.id::uuid from jsonb_array_elements_text(e.value -> 'recordIds') with ordinality as r(id, i) order by r.i),
+          array(select a.id::uuid from jsonb_array_elements_text(e.value -> 'attributeIds') with ordinality as a(id, i) order by a.i),
+          (e.value ->> 'coarse')::boolean,
+          ${mutationId ?? null}::uuid,
+          clock_timestamp()
+        from counter, jsonb_array_elements(${json}::jsonb) with ordinality as e(value, ord)
+        returning 1
+      )
+      select (select count(*)::int from stored) as stored, pg_notify(${OUTBOX_CHANNEL}, ${change.workspaceId}::text)
+    `);
+    // No counters row means nothing was stored; the error rolls the write (and the notify) back.
+    if (result.rows[0]?.stored !== count) throw new Error('The workspace has no counters row.');
   });
 }
