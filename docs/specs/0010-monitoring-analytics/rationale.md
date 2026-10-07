@@ -6,7 +6,7 @@ The core loop (#10) is going into production, and sign up is open to everyone. T
 
 Forces:
 - **Privacy.** The CRM holds other people's contact data. Emails, names and attribute values must never reach a third party tool. Error messages can quote values (a Postgres `detail` names the duplicate, a refusal can quote another record), URLs carry sign in codes and Google's `code` and `state`, and modern SDKs capture request bodies by default.
-- **Cost.** The owner stays on free plans (Neon, and here Sentry and PostHog). Free quotas are small, some features (metric alerts, extra monitors) may not exist on them, and Neon's free compute is billed by the hours it is awake.
+- **Cost.** The owner stays on free plans (Neon, and here Sentry and PostHog). Free quotas are small, some features (metric alerts, extra monitors) may not exist on them, and Neon's free compute is billed by the hours it is awake: anything that queries the database on a timer keeps it awake and spends the monthly cap. The worker and relay therefore sleep when nobody uses the app (specs 0007, 0008).
 - **The first load budget** is 250 kB, and the browser already ships React, the router and the library.
 - **Security headers.** The CSP allows only our own origin today, and `vite.config.ts` publishes source maps beside the bundle.
 - **House rules.** A vendor SDK is imported in one wrapper only (the lint rule already lists `@sentry/*` and `posthog-*`), the core stays pure, and every app validates its environment.
@@ -52,11 +52,13 @@ Per decision (the brief's recommendations taken, unless noted):
 - **Span names are the oRPC procedure**: one chart per thing the app does; the HTTP path alone is `/api/rpc/...` with no meaning.
 - **Sampling 0 for health, 0.2 in production, 1.0 in previews**: health checks would drown the quota; previews are low traffic and worth seeing in full.
 - **Custom metrics for relay lag and backlog**: the scope's two charts that no auto instrumentation gives; database clock on both ends of the lag, so no clock skew.
-- **A probe list in the worker's sampler**: the thin slice of #8 that monitoring needs, so #8 adds its jobs probe without new plumbing.
+- **Backlog from the relay's memory, not a query** (decided in the cross check of 8 October; the first draft polled a definer function once a minute): the relay already reads every unpublished row while awake, so counting them costs nothing, and a timer query would keep Neon awake all month. A list of in memory sources lets #8 add its queue numbers without new plumbing.
+- **A heartbeat from memory, awake or asleep**: a sleeping worker is the normal state on a quiet night, so it must not page; only a process that stopped checking in is down. The first draft checked in after a database read, which would have either kept Neon awake or paged every night.
 - **The CSP gains the Sentry ingest host** (the brief's pick) rather than tunnelling browser events through the API: a tunnel would keep the CSP at `'self'` and dodge ad blockers, but it adds an unauthenticated forwarding route to the API, which sits in Singapore while the user may not.
 - **Errors only in the browser** (a departure from a full browser setup): tracing and replay would cost first load weight; the SDK loads in its own chunk with a small buffer for early errors.
-- **Uptime on `/api/health`, not `/api/health/ready`** (a departure from the brief): a ready probe touches the database every few minutes and keeps Neon's free compute awake; the worker's heartbeat checks in only after a successful database read, so a dead database is still caught.
-- **The worker raises `RELAY_LAGGING` itself**: issue alerts email on the free plan; metric alerts may not be available there.
+- **Uptime on `/api/health`, not `/api/health/ready`** (the owner's decision): a ready probe touches the database every few minutes and keeps Neon's free compute awake. A dead database is caught when someone uses the app (an `INTERNAL` error, or `RELAY_LAGGING`), not while it sleeps.
+- **The worker raises `RELAY_LAGGING` itself**: issue alerts email on the free plan; metric alerts may not be available there. Auto resolve after 2 hours lets a later episode regress and email again, with one fixed fingerprint.
+- **The worker sends no traces**: its work is the relay and jobs, which have their own metrics; traces there would spend the quota on loops.
 - **A switchable test fault**: the Done item is about production, and waiting for a real error to prove it is not a test.
 - **Analytics wherever a key is set, with `environment` on every event**: lets the build prove events locally without polluting the production dashboard, which filters by it.
 
@@ -73,7 +75,7 @@ What the code shows today (3 October 2026):
 - `apps/api/src/auth/auth.ts` already has `databaseHooks.user.create.before` for the allowlist; the `after` hook is the one place every new account passes.
 - `packages/core`'s `startWorkspace` runs `createUserWorkspace` in one transaction, where the `workspace_created` milestone insert belongs.
 - Spec 0001 named `SENTRY_DSN_WEB`, `SENTRY_DSN_SERVER`, `SENTRY_AUTH_TOKEN`, `SENTRY_RELEASE`, `POSTHOG_KEY` and `POSTHOG_HOST`, and said the CSP gains Sentry and PostHog with #11.
-- Spec 0005's relay polls every second and reads pending workspaces through `crm_outbox_workspaces`; `outbox` has `created_at`, `published_at` and a partial index on unpublished rows.
+- Spec 0005's relay first polled every second; the owner's decision (3 October) makes it active or dormant, woken by the API, and spec 0007 (AC-77) gives it rolling stats (lag, pending rows, the oldest pending age) from its own reads. `outbox` has `created_at`, `published_at` and a partial index on unpublished rows.
 - The installed `sentry-node-sdk` skill documents the stable `Sentry.metrics.count`, `gauge` and `distribution` API from `@sentry/node` 10.25, and `captureCheckIn` with a monitor upsert for heartbeats.
 
 Assumptions to confirm when the accounts exist: Sentry's free plan includes one uptime monitor, one cron monitor, custom metrics and issue alerts by email; PostHog's free plan deduplicates events sent with the same id.
