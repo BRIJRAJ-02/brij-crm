@@ -17,6 +17,7 @@
     "@crm/db": "workspace:*",
     "@hono/node-server": "catalog:",
     "@orpc/server": "catalog:",
+    "@sentry/node": "catalog:",
     "better-auth": "catalog:",
     "hono": "catalog:",
     "react": "catalog:",

@@ -14,6 +14,7 @@
   "dependencies": {
     "@crm/data": "workspace:*",
     "@crm/ui": "workspace:*",
+    "@sentry/react": "catalog:",
     "@tanstack/react-router": "catalog:",
     "@vercel/functions": "catalog:",
     "react": "catalog:",
@@ -22,6 +23,7 @@
   "devDependencies": {
     "@crm/config": "workspace:*",
     "@playwright/test": "catalog:",
+    "@sentry/vite-plugin": "catalog:",
     "@size-limit/preset-app": "catalog:",
     "@tanstack/router-plugin": "catalog:",
     "@types/node": "catalog:",

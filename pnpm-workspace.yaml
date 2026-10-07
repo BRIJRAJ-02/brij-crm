@@ -13,6 +13,9 @@ catalog:
   "@orpc/server": 1.15.4
   "@playwright/test": 1.63.0
   "@react-aria/live-announcer": 3.5.1
+  "@sentry/node": 11.5.0
+  "@sentry/react": 11.5.0
+  "@sentry/vite-plugin": 5.4.1
   "@size-limit/preset-app": 14.1.0
   "@storybook/addon-a11y": 10.6.1
   "@storybook/addon-docs": 10.6.1
@@ -72,3 +75,9 @@ onlyBuiltDependencies:
   - esbuild
   # Installs the git hooks from lefthook.yml (skipped in CI).
   - lefthook
+
+# Install scripts refused on purpose. @sentry/cli's postinstall downloads its
+# binary, which pnpm already installs from the platform's optional dependency
+# (@sentry/cli-<platform>), so the source map upload never needs the script.
+ignoredBuiltDependencies:
+  - "@sentry/cli"
