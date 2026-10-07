@@ -22,12 +22,14 @@ To pass the edit checks, the TanStack store has to keep the layers itself, as th
 - It measured four sources. `baseline` is the grid's own 100,000 row story, with rows made from their index. `held` is a control: the same grid while the page holds all 100,000 records in a Map. The other two are `plain` and `tanstack`, each behind the same windows and view.
 - The machine was busy, with other agents' test suites running in other worktrees. It has 8 cores. Load average (1, 5, 15 min) was 7.18 6.90 7.54 at the start and 7.85 7.64 7.55 at the end. After each round it was: 5.75 5.89 6.88; 8.09 6.87 7.04; 6.64 7.34 7.26; 7.88 8.20 7.72; 7.85 7.64 7.55.
 - To work around the load, each round ran all four sources back to back, and the order rotated each round. Each store is judged against the controls from its own round: frames against `baseline` (or against `held` once every record is loaded, since its heap is the same size), and memory against `held`. Figures below are the median over the 5 rounds, with the range in brackets.
+- The memory rerun: in that run, `held` built each id string twice (`idAt(index)` plus the record's own `id`), while the store reuses `row.id`, so the control's heap was 2.4 MB too high. With the fix (the Map keyed by `record.id`), I reran `pnpm --filter @crm/data-gate gate --rounds=3` (baseline, held and plain) on 2026-10-08. Load average was 8.66 6.88 6.93 at the start and 10.87 13.52 10.85 at the end, with a peak of 33.80 during round 3. The heap figures below come from that rerun where marked. Its frame figures are not used: at that load even the baseline dropped up to 146 of about 350 frames.
 
 ### Numbers
 
 | Measure | baseline | held | plain | tanstack |
 |---|---|---|---|---|
-| JS heap after scrolling the whole table (MB) | 12.6 (12.6 to 12.6) | 70.3 (70.3 to 70.4) | 69.7 (69.5 to 70.5) | 85.4 (85.3 to 86.8) |
+| JS heap after scrolling the whole table (MB) | 12.6 (12.6 to 12.6) | 70.3 (70.3 to 70.4), 2.4 MB too high | 69.7 (69.5 to 70.5) | 85.4 (85.3 to 86.8) |
+| The same, rerun with `held` fixed (MB) | 12.5 (12.5 to 13.2) | 67.9 (67.3 to 68.1) | 72.0 (70.9 to 74.0) | not rerun |
 | Normal scroll (1,500 px/s, 6 s), fresh view: frames over 25 ms, of about 340 | 12 (1 to 28) | 21 (16 to 36) | 5 (3 to 39) | 23 (15 to 39) |
 | Normal scroll, every record loaded: frames over 25 ms | 7 (4 to 43) | 13 (8 to 26) | 32 (20 to 58) | 39 (32 to 75) |
 | Long tasks during any scroll | 0 | 0 (one in 2 of 15 scrolls) | 0 | 0 |
@@ -42,7 +44,8 @@ Each store against the controls from its own round:
 
 | Per round | plain | tanstack |
 |---|---|---|
-| Heap after the whole table, minus held: the store's own cost (MB) | -0.6 (-0.8 to 0.2) | +15.0 (15.0 to 16.5) |
+| Heap after the whole table, minus the fixed held: the store's own cost (MB, rerun) | +4.1 (3.6 to 5.9) | about +17.5 (its 85.4 against the rerun's 67.9) |
+| Heap after the whole table, minus plain in the same round (MB) | | +15.8 (14.9 to 16.3) |
 | Fresh view scroll: frames over 25 ms, minus baseline | -7 (-23 to 35) | +11 (1 to 22) |
 | Fresh view scroll: mean frame, minus baseline (ms) | -0.34 (-1.16 to 1.82) | +0.68 (0.05 to 1.08) |
 | Every record loaded: frames over 25 ms, minus held | +14 (9 to 32) | +25 (6 to 67) |
@@ -51,7 +54,7 @@ Measured against plain in the same round, TanStack took 1.13× as long to patch 
 
 ### Against the pass line
 
-- **Memory under 200 MB:** both pass. Plain is 70 MB with every record loaded, no more than the `held` control holding the same records. TanStack carries 15 MB on top.
+- **Memory under 200 MB:** both pass. Plain is 70 to 74 MB with every record loaded. That is about 4 MB over the `held` control holding the same records, which is roughly one entry object and one layers array per record. TanStack carries about 16 MB more than plain.
 - **Patch under 16 ms:** both pass. The worst plain patch in any round was 4.3 ms, against 5.5 ms for TanStack.
 - **Rollback restores exactly:** plain passes. TanStack passes only with layers kept beside it, and fails on its own transactions (points 1 to 3 above).
 - **No dropped frames at normal scroll:** this can't be judged as an absolute on a machine this busy. Even the baseline dropped 1 to 43 frames a scroll. Every frame over 25 ms was a single missed vsync (33 ms), and no store had a long task. Against its own round's controls:
@@ -61,7 +64,9 @@ Measured against plain in the same round, TanStack took 1.13× as long to patch 
 ### Not measured cleanly
 
 - The absolute frame line: other agents' suites ran at load 6 to 10 on 8 cores, so this needs a rerun on a quiet machine.
-- Why a full store misses more frames than `held` while holding the same heap. The likely causes are GC from re-received rows and the reloaded blocks, but the gate doesn't separate them. `held` alone already misses more than `baseline`, so heap size counts for part of it.
+- Why a full store misses more frames than `held` while holding a heap within about 4 MB of it. The likely causes are GC from re-received rows and the reloaded blocks, but the gate doesn't separate them. `held` alone already misses more than `baseline`, so heap size counts for part of it.
+
+- Plain's heap rose with how long its whole-table scroll took in the rerun: 70.9 MB at 60 s, 72.0 at 71 s and 74.0 at 86 s, against 69.7 at about 51 s in the first run. So some of the +4.1 MB may come from the run, not the store. The low end, 3.6 MB, is the better estimate of the store's own cost.
 
 ### Follow-ups for task 11
 

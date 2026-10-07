@@ -183,7 +183,15 @@ const gate: Gate = {
     if (kind === 'baseline' || kind === 'held') {
       mounted =
         kind === 'held'
-          ? { held: new Map(Array.from({ length: COUNT }, (_, index) => [idAt(index), recordAt(index)] as const)) }
+          ? {
+              // Keyed by the record's own id string, as the store keys by row.id, so the two heaps compare like for like.
+              held: new Map(
+                Array.from({ length: COUNT }, (_, index) => {
+                  const record = recordAt(index);
+                  return [record.id, record] as const;
+                }),
+              ),
+            }
           : {};
       root.render(
         <UiProvider
