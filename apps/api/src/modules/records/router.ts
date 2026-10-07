@@ -1,6 +1,6 @@
 import { addRecord, countMatches, editRecord, queryRecords, readRecordsById } from '@crm/core';
 import { withInputFields } from '../../errors.ts';
-import { writeHooks } from '../../hooks.ts';
+import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
 
 // Inside a workspace: the door has let in an active member, and `context.scope` is theirs.
@@ -35,20 +35,20 @@ export const recordsRouter = member.records.router({
   get: member.records.get.handler(({ context, input }) => readRecordsById(context.scope, input.ids)),
   create: member.records.create.handler(async ({ context, input }) => {
     try {
-      return await addRecord(
-        context.scope,
-        { objectId: input.objectId, id: input.id, ...(input.values === undefined ? {} : { values: input.values }) },
-        writeHooks(context, { mutationId: input.mutationId }),
+      return await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+        addRecord(
+          context.scope,
+          { objectId: input.objectId, id: input.id, ...(input.values === undefined ? {} : { values: input.values }) },
+          hooks,
+        ),
       );
     } catch (error) {
       throw withInputFields(error, { ID_TAKEN: 'id' });
     }
   }),
   setValues: member.records.setValues.handler(({ context, input }) =>
-    editRecord(
-      context.scope,
-      { recordId: input.recordId, values: input.values },
-      writeHooks(context, { mutationId: input.mutationId }),
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      editRecord(context.scope, { recordId: input.recordId, values: input.values }, hooks),
     ),
   ),
 });
