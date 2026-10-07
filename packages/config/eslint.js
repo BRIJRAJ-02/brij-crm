@@ -54,9 +54,9 @@ const screenDataImports = {
 };
 
 // House rule: a vendor SDK is imported in exactly one wrapper module. When a
-// feature brings a vendor in, its wrapper file switches this rule off for
-// itself and nowhere else, for example:
-//   { files: ['src/monitoring/sentry.ts'], rules: { '@typescript-eslint/no-restricted-imports': 'off' } }
+// feature brings a vendor in, its workspace's preset names the wrapper file and
+// exactly the entries it may import (`vendorWrappers`), for example:
+//   server({ root, vendorWrappers: [{ files: ['src/monitoring/sentry.ts'], allow: ['@sentry/node'] }] })
 const vendorSdks = {
   patterns: [
     {
@@ -237,6 +237,26 @@ function restrictedImportsFor({ allowUi = false, allowCollaboration = false, all
 }
 
 /**
+ * Each vendor wrapper's exception: its files may import exactly the entries
+ * `allow` names, and every other vendor import (and the rest of that vendor's
+ * entries) stays refused there.
+ *
+ * @param {{ files: string[], allow: string[] }[]} vendorWrappers
+ * @param {{ allowUi?: boolean, allowCollaboration?: boolean }} [options]
+ */
+function wrapperExceptions(vendorWrappers, { allowUi = false, allowCollaboration = false } = {}) {
+  return vendorWrappers.map(({ files, allow }) => ({
+    files,
+    rules: {
+      '@typescript-eslint/no-restricted-imports': [
+        'error',
+        restrictedImportsFor({ allowUi, allowCollaboration, allowVendors: allow }),
+      ],
+    },
+  }));
+}
+
+/**
  * The rules every preset shares. `uiLibraries` lets a workspace import the UI
  * building blocks (packages/ui only); `collaboration` lets it import Yjs.
  */
@@ -311,9 +331,17 @@ function serverImports(databaseDriver, allow = []) {
 
 /**
  * Server code: apps/api, packages/core, packages/contracts and packages/db.
- * Pass `databaseDriver: true` only for packages/db.
+ * Pass `databaseDriver: true` only for packages/db. `vendorWrappers` names
+ * each vendor's one wrapper module and the entries it may import (`{ files:
+ * ['src/monitoring/sentry.ts'], allow: ['@sentry/node'] }`).
+ *
+ * @param {{
+ *   root: string,
+ *   databaseDriver?: boolean,
+ *   vendorWrappers?: { files: string[], allow: string[] }[],
+ * }} options
  */
-export function server({ root, databaseDriver = false }) {
+export function server({ root, databaseDriver = false, vendorWrappers = [] }) {
   return defineConfig(
     base(root),
     { languageOptions: { globals: globals.node } },
@@ -322,6 +350,7 @@ export function server({ root, databaseDriver = false }) {
     { files: TESTING_IMPORTERS, ...serverImports(databaseDriver, ['testing', 'load']) },
     { files: BOTH_IMPORTERS, ...serverImports(databaseDriver, ['system', 'testing', 'load']) },
     restrictSyntax([syntax.defaultExport, ...syntax.classes, ...syntax.extensions]),
+    wrapperExceptions(vendorWrappers),
   );
 }
 
@@ -353,19 +382,7 @@ export function client({ root, library = false, collaboration: allowCollaboratio
       },
     },
     restrictSyntax(entries),
-    vendorWrappers.map(({ files, allow }) => ({
-      files,
-      rules: {
-        '@typescript-eslint/no-restricted-imports': [
-          'error',
-          restrictedImportsFor({
-            allowUi: library,
-            allowCollaboration: library || allowCollaboration,
-            allowVendors: allow,
-          }),
-        ],
-      },
-    })),
+    wrapperExceptions(vendorWrappers, { allowUi: library, allowCollaboration: library || allowCollaboration }),
     library
       ? {
           files: ['src/**/*.tsx'],
@@ -376,8 +393,14 @@ export function client({ root, library = false, collaboration: allowCollaboratio
   );
 }
 
-/** apps/web: screens and routes under src/, plus the Vercel middleware at the root. */
-export function screens({ root }) {
+/**
+ * apps/web: screens and routes under src/, plus the Vercel middleware at the
+ * root. `vendorWrappers` names each vendor's one wrapper module and the
+ * entries it may import, as for `server`.
+ *
+ * @param {{ root: string, vendorWrappers?: { files: string[], allow: string[] }[] }} options
+ */
+export function screens({ root, vendorWrappers = [] }) {
   return defineConfig(
     base(root),
     { files: ['src/**/*.{ts,tsx}'], extends: [react] },
@@ -410,6 +433,7 @@ export function screens({ root }) {
     restrictSyntax([syntax.defaultExport, ...syntax.classes, ...syntax.extensions, syntax.screenStyling]),
     // Files in public/ ship as is: plain browser scripts, outside any tsconfig.
     { files: ['public/**/*.js'], languageOptions: { globals: globals.browser, sourceType: 'script' } },
+    wrapperExceptions(vendorWrappers),
   );
 }
 

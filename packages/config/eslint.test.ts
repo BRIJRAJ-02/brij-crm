@@ -380,6 +380,68 @@ describe('the load harness’s scripts (spec 0011)', () => {
   }, 60_000);
 });
 
+describe('vendor wrappers in the server and screens presets (spec 0010, AC-184)', () => {
+  const sentry = (entry: string) => `import * as Sentry from '${entry}';\nexport const s = Sentry;\n`;
+
+  it('lets the server wrapper import its one vendor entry, and nothing else of any vendor', async () => {
+    const root = createWorkspace({
+      'src/monitoring/sentry.ts': sentry('@sentry/node'),
+      'src/monitoring/other-entry.ts': sentry('@sentry/node'),
+      'src/monitoring/instrument.ts': sentry('@sentry/node'),
+      'src/monitoring/posthog.ts': "import { PostHog } from 'posthog-node';\nexport const p = PostHog;\n",
+      'src/monitoring/wrong-vendor.ts': "import { PostHog } from 'posthog-node';\nexport const p = PostHog;\n",
+      'src/wrong-sdk.ts': sentry('@sentry/react'),
+    });
+    const messages = await lintWorkspace(
+      root,
+      server({
+        root,
+        vendorWrappers: [
+          { files: ['src/monitoring/sentry.ts'], allow: ['@sentry/node'] },
+          { files: ['src/monitoring/posthog.ts'], allow: ['posthog-node'] },
+        ],
+      }),
+    );
+    for (const file of ['src/monitoring/sentry.ts', 'src/monitoring/posthog.ts']) {
+      expect(rulesFor(messages, file)).not.toContain('@typescript-eslint/no-restricted-imports');
+    }
+    for (const file of [
+      'src/monitoring/other-entry.ts',
+      'src/monitoring/instrument.ts',
+      'src/monitoring/wrong-vendor.ts',
+      'src/wrong-sdk.ts',
+    ]) {
+      expect(rulesFor(messages, file)).toContain('@typescript-eslint/no-restricted-imports');
+    }
+  }, 60_000);
+
+  it('lets the browser wrapper and the build config import their entries, and refuses the rest', async () => {
+    const root = createWorkspace({
+      'src/monitoring/sentry.ts': sentry('@sentry/react'),
+      'src/monitoring/node-sdk.ts': sentry('@sentry/node'),
+      'src/main.ts': sentry('@sentry/react'),
+      'vite.config.ts': "import { sentryVitePlugin } from '@sentry/vite-plugin';\nexport default sentryVitePlugin;\n",
+      'other.config.ts': "import { sentryVitePlugin } from '@sentry/vite-plugin';\nexport default sentryVitePlugin;\n",
+    });
+    const messages = await lintWorkspace(
+      root,
+      screens({
+        root,
+        vendorWrappers: [
+          { files: ['src/monitoring/sentry.ts'], allow: ['@sentry/react'] },
+          { files: ['vite.config.ts'], allow: ['@sentry/vite-plugin'] },
+        ],
+      }),
+    );
+    for (const file of ['src/monitoring/sentry.ts', 'vite.config.ts']) {
+      expect(rulesFor(messages, file)).not.toContain('@typescript-eslint/no-restricted-imports');
+    }
+    for (const file of ['src/monitoring/node-sdk.ts', 'src/main.ts', 'other.config.ts']) {
+      expect(rulesFor(messages, file)).toContain('@typescript-eslint/no-restricted-imports');
+    }
+  }, 60_000);
+});
+
 describe('server preset for packages/db', () => {
   it('lets packages/db open the database connection', async () => {
     const root = createWorkspace({ 'src/client.ts': "import pg from 'pg';\nexport const pool = pg;\n" });
