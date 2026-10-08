@@ -16,6 +16,7 @@ export function NumberEditor(props: EditorProps<'number'>) {
       {...props}
       initial={initial}
       inputMode="decimal"
+      align="end"
       hint={props.surface === 'cell' ? undefined : strings.hint(example)}
       check={(draft) => {
         if (draft.trim() === '') return toCommittable<'number'>(props.attribute, null);

@@ -9,6 +9,9 @@ import { strings } from './strings.ts';
 /** `md` (the default) is the 30px input of forms and panels; `sm` is the 26px of a cell editor or a toolbar. */
 export type FieldSize = 'md' | 'sm';
 
+/** `default` is the boxed field; `search` the rounded search field; `cell` the bare input a grid cell edits in. */
+export type FieldVariant = 'default' | 'search' | 'cell';
+
 /** Props for Field. */
 export interface FieldProps {
   /** What the field is ("Domain"). Always given; `isLabelHidden` keeps it for screen readers only (cell editors). */
@@ -53,8 +56,15 @@ export interface FieldProps {
   readonly autoComplete?: string;
   readonly name?: string;
   readonly size?: FieldSize;
-  /** `search` is the rounded field with a search icon, for filtering a list. */
-  readonly variant?: 'default' | 'search';
+  /**
+   * `search` is the rounded field with a search icon, for filtering a list.
+   * `cell` is the input a grid cell becomes while it edits: no box of its own,
+   * the cell's height and padding, and no focus ring, since the cell draws the
+   * one ring (and the danger edge while the value is refused).
+   */
+  readonly variant?: FieldVariant;
+  /** Where the typed text sits: `end` for numbers, which a cell aligns to its end. */
+  readonly align?: 'start' | 'end';
   /** The error floats under the input, over what follows: in a grid cell, which is one line tall. */
   readonly isErrorFloating?: boolean;
   /** Takes focus as it mounts: a search field at the top of a list that just opened. */
@@ -99,6 +109,7 @@ export function Field({
   name,
   size = 'md',
   variant = 'default',
+  align = 'start',
   isErrorFloating = false,
   autoFocus = false,
   ref,
@@ -119,6 +130,7 @@ export function Field({
       className={styles.root}
       data-size={size}
       data-variant={variant}
+      data-align={align === 'end' ? 'end' : undefined}
       data-error-floats={isErrorFloating || undefined}
       isReadOnly={isReadOnly}
       isDisabled={isDisabled}

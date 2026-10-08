@@ -54,6 +54,7 @@ export function CurrencyEditor(props: EditorProps<'currency'>) {
       {...props}
       initial={current === undefined ? '' : formatDecimal(current.amount, locale)}
       inputMode="decimal"
+      align="end"
       prefix={picker}
       check={(draft) => {
         if (draft.trim() === '') return toCommittable<'currency'>(props.attribute, null);

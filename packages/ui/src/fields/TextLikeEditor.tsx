@@ -22,6 +22,8 @@ export interface TextLikeEditorProps<T extends AttributeType> extends EditorProp
   readonly prefix?: ReactNode;
   readonly isMultiline?: boolean;
   readonly maxLength?: number;
+  /** Where the typed text sits in a cell: `end` for numbers and amounts, as their display does. */
+  readonly align?: 'start' | 'end';
 }
 
 /** One Field that commits a checked value: cells commit on Enter, forms and panels on blur. */
@@ -40,6 +42,7 @@ export function TextLikeEditor<T extends AttributeType>({
   isMultiline = false,
   maxLength,
   startText,
+  align = 'start',
 }: TextLikeEditorProps<T>) {
   const { fieldProps, cancel } = useTextDraft<T>({
     initial: startText ?? initial,
@@ -55,6 +58,9 @@ export function TextLikeEditor<T extends AttributeType>({
       label={attribute.name}
       isLabelHidden={isCompact}
       size={isCompact ? 'sm' : 'md'}
+      // In a grid cell the cell becomes the input; elsewhere it is the boxed field.
+      variant={surface === 'cell' && !isMultiline ? 'cell' : 'default'}
+      align={surface === 'cell' ? align : 'start'}
       placeholder={fieldStrings.setAttribute(attribute.name)}
       isRequired={attribute.isRequired}
       isMultiline={isMultiline}

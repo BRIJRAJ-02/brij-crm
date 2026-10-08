@@ -45,14 +45,22 @@
     background: var(--accent-soft);
   }
 
-  .root[data-invalid] {
+  .root[data-focused]:focus-visible,
+  .root[data-focused]:focus-within {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  /* A refused value, from the data layer or the editor's own check, takes the
+     danger edge in place of the focus ring: one ring on the cell, never two. */
+  .root[data-invalid],
+  .root[data-editing]:has([aria-invalid='true']) {
     outline: var(--border-width-thick) solid var(--danger);
     outline-offset: calc(-1 * var(--border-width-thick));
   }
 
-  .root[data-focused]:focus-visible,
-  .root[data-focused]:focus-within {
-    box-shadow: var(--shadow-focus-inset);
+  .root[data-focused][data-invalid]:is(:focus-visible, :focus-within),
+  .root[data-focused][data-editing]:has([aria-invalid='true']):focus-within {
+    box-shadow: none;
   }
 
   /* An editor in the cell fills it; a popover editor leaves the value where it was. */

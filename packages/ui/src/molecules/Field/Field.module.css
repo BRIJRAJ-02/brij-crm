@@ -59,6 +59,11 @@
     padding-block: var(--space-6);
   }
 
+  /* The size sets a single line's height; a textarea grows with its text at any size. */
+  .root[data-size='sm'] .box[data-multiline] {
+    block-size: auto;
+  }
+
   .input {
     flex: 1;
     min-inline-size: 0;
@@ -130,7 +135,8 @@
     letter-spacing: var(--tracking-label);
   }
 
-  /* In a grid cell: under the input, over the rows below, as wide as it needs. */
+  /* In a grid cell: on a raised surface under the cell, over the rows below,
+     as wide as it needs, drawn like a popover so it never sits on nothing. */
   .root[data-error-floats] {
     position: relative;
   }
@@ -140,10 +146,13 @@
     z-index: var(--z-popover);
     inset-block-start: 100%;
     inset-inline-start: 0;
+    box-sizing: border-box;
     min-inline-size: 100%;
     max-inline-size: var(--size-measure);
-    padding: var(--space-4) var(--space-8);
-    border-radius: var(--radius-sm);
+    margin-block-start: var(--space-4);
+    padding: var(--space-6) var(--space-8);
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-md);
     background: var(--surface-raised);
     box-shadow: var(--shadow-md);
     white-space: normal;
@@ -165,9 +174,31 @@
     cursor: default;
   }
 
+  /* In a grid cell the cell is the field: it fills the cell, keeps the cell's
+     padding and text line, and draws no box or ring of its own, focused or
+     refused. The cell draws the one focus ring, and the danger edge while the
+     value is refused. */
+  .root[data-variant='cell'] {
+    flex: 1;
+    align-self: stretch;
+  }
+
+  .root[data-variant='cell'] .box {
+    block-size: 100%;
+    padding-inline: var(--space-8);
+    border-color: transparent;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
   .root[data-readonly] .box:focus-within {
     border-color: var(--border);
     box-shadow: none;
+  }
+
+  .root[data-align='end'] .input {
+    text-align: end;
   }
 
   @media (forced-colors: active) {
@@ -177,6 +208,15 @@
 
     .box:focus-within {
       outline: var(--border-width-thick) solid Highlight;
+    }
+
+    /* The grid cell outlines itself. */
+    .root[data-variant='cell'] .box {
+      border-color: transparent;
+    }
+
+    .root[data-variant='cell'] .box:focus-within {
+      outline: none;
     }
   }
 }
