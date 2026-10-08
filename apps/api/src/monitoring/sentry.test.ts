@@ -2,8 +2,10 @@
 // scrub in every send hook (AC-165), and sending that never slows or changes an
 // answer, even when Sentry hangs (AC-166).
 import { execFile } from 'node:child_process';
+import type { AddressInfo } from 'node:net';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
+import { serve } from '@hono/node-server';
 import { describe, expect, it } from 'vitest';
 import { memoryTransport } from '../../test/sentry.ts';
 import { APP_URL, createTestApp } from '../testing.ts';
@@ -198,6 +200,48 @@ describe('once started', () => {
     expect(event?.user).toBeUndefined();
     // Nor in a session or any other envelope (the source lines around a frame quote this test, so look for keys).
     expect(transport.envelopes.join('\n')).not.toMatch(/"request_id"|"workspace_id"|"did"|"type":"session"/);
+  });
+
+  it('keeps a real HTTP request’s data, breadcrumbs and trace out of a fault outside any request', async () => {
+    const transport = memoryTransport();
+    startSentry({ ...CONFIG, deliver: transport.deliver });
+    // A real Node HTTP server, so the SDK's HTTP integration puts the incoming request on the scope.
+    const server = serve({
+      port: 0,
+      hostname: '127.0.0.1',
+      fetch: (request) =>
+        withRequestScope('req-88', () => {
+          setRequestScope({ userId: 'user-88', workspaceId: 'workspace-88' });
+          // In the request: one fault of its own, and one a pool raises in its async context.
+          captureFault(new Error('A fault in the request'), {
+            requestId: 'req-88',
+            route: new URL(request.url).pathname,
+          });
+          captureFault(new Error('Idle client terminated'), { task: 'database pool' });
+          return new Response('ok');
+        }),
+    });
+    await new Promise((resolve) => server.once('listening', resolve));
+    try {
+      const { port } = server.address() as AddressInfo;
+      const answer = await fetch(`http://127.0.0.1:${String(port)}/api/rpc/records/query?search=ada`, {
+        headers: { 'x-request-id': 'req-88' },
+      });
+      expect(await answer.text()).toBe('ok');
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
+    await flush(2000);
+    const events = transport.events();
+    const inRequest = events.find((event) => event.tags?.request_id === 'req-88');
+    const pool = events.find((event) => event.tags?.task === 'database pool');
+    // The request's own fault carries the request, which shows the HTTP integration was on.
+    expect(inRequest?.request?.url).toMatch(/\/api\/rpc\/records\/query$/);
+    expect(pool?.tags).toEqual({ service: 'api', task: 'database pool' });
+    expect(pool?.user).toBeUndefined();
+    expect(pool?.request).toBeUndefined();
+    expect(pool?.breadcrumbs ?? []).toEqual([]);
+    expect(pool?.contexts?.trace?.trace_id).not.toBe(inRequest?.contexts?.trace?.trace_id);
   });
 
   it('answers as fast and the same when Sentry hangs, and a flush gives up on time (AC-166)', async () => {

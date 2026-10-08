@@ -13,12 +13,16 @@ import {
   createTransport,
   type ErrorEvent,
   flush as flushEvents,
+  getClient,
+  getGlobalScope,
   getIsolationScope,
   init,
   isInitialized,
   type NodeOptions,
+  Scope,
   onUnhandledRejectionIntegration,
   withIsolationScope,
+  withScope,
 } from '@sentry/node';
 import { queryFailure, safeError } from '../query-errors.ts';
 
@@ -135,6 +139,8 @@ export function sentryOptions(config: SentryConfig): NodeOptions {
 /** Starts Sentry for this process. `instrument.ts` calls it once, before anything else loads, when a DSN is set. */
 export function startSentry(config: SentryConfig): void {
   init(sentryOptions(config));
+  // On the global scope too, so a scope cleared for a fault outside any request still names the service.
+  getGlobalScope().setTag('service', config.service);
 }
 
 /** Whether Sentry is sending in this process. */
@@ -166,12 +172,19 @@ export function captureFault(error: unknown, context: FaultContext = {}): void {
     captureException(safe, { tags });
     return;
   }
-  withIsolationScope((scope) => {
-    // Nothing of a request this fault may have inherited: no user, workspace or request id.
-    scope.setUser(null);
-    scope.setTags({ request_id: undefined, workspace_id: undefined });
-    captureException(safe, { tags });
-  });
+  // Nothing of a request this fault may have inherited: no user, workspace, request id, request data,
+  // breadcrumbs or trace. Fresh scopes on the same client; the service tag lives on the global scope.
+  const client = getClient();
+  const fresh = () => {
+    const scope = new Scope();
+    scope.setClient(client);
+    return scope;
+  };
+  withIsolationScope(fresh(), () =>
+    withScope(fresh(), () => {
+      captureException(safe, { tags });
+    }),
+  );
 }
 
 /**

@@ -14,6 +14,7 @@ export interface SentEvent {
   readonly breadcrumbs?: readonly Readonly<Record<string, unknown>>[];
   readonly request?: Readonly<Record<string, unknown>>;
   readonly extra?: Readonly<Record<string, unknown>>;
+  readonly contexts?: { readonly trace?: { readonly trace_id?: string } };
 }
 
 /** The error events in an envelope: each item header is a JSON line, and an `event` item's payload follows it. */
