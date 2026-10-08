@@ -120,6 +120,7 @@ export function createPlainStore<Row extends RecordBody>(): RecordStore<Row> {
 
   return {
     get: (id) => entries.get(id)?.shown,
+    base: (id) => entries.get(id)?.base,
     receive: (rows, options) => {
       if (options?.hold === true) hold(rows.map((row) => row.id));
       const changed = new Set<string>();

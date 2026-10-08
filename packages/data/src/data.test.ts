@@ -25,6 +25,7 @@ import {
   type DataError,
   type DataFault,
   type Notice,
+  type ReplacedValue,
 } from './index.ts';
 import { createLive, type LiveChannel, type LiveTransport } from './live/live.ts';
 
@@ -403,6 +404,7 @@ describe('access', () => {
     const api = fakeApi();
     const { data } = layer(api);
     expect(await data.access.mine('acme')).toEqual({
+      memberId: ADA_MEMBER.id,
       role: 'member',
       roleLabel: 'Member',
       permissions: ['records.export'],
@@ -594,11 +596,15 @@ describe('live updates', () => {
   const definitions = (seq: number): ChangeEvent => ({ seq, at: AT, kind: 'definitions', objectId: PEOPLE.id });
 
   /** The layer with live updates on a fake client, its view of People open and subscribed. */
-  async function liveLayer(overrides: Partial<Behaviour> = {}) {
+  async function liveLayer(
+    overrides: Partial<Behaviour> = {},
+    more: Partial<Parameters<typeof createDataLayer>[0]> = {},
+  ) {
     const api = fakeApi(overrides);
     const client = fakeTransport();
     let definitionChanges = 0;
     const { data } = layer(api, '/w/acme/objects/people', {
+      ...more,
       realtimeUrl: 'ws://centrifugo.test/connection/websocket',
       onDefinitionsChange: () => {
         definitionChanges += 1;
@@ -639,6 +645,60 @@ describe('live updates', () => {
     await settled();
     expect(count(api.calls, '/api/rpc/records/get')).toBe(gets);
     expect(view.getSnapshot().source.getItem(1)?.values[TITLE.id]).toBe('Lead');
+  });
+
+  it('tells this tab, by name, when another member replaced a value it saved (spec 0006, AC-46)', async () => {
+    const BEA: MemberSummary = { id: '0199a6f2-0000-7000-8000-0000000000b0', name: 'Bea', email: 'bea@example.com' };
+    const MINE = '0199a6f2-0003-7000-8000-000000000000';
+    const replaced: ReplacedValue[] = [];
+    const saved = { ...personRow(1, 'Lead'), revision: 1, versions: { [TITLE.id]: MINE } };
+    const { client, data } = await liveLayer(
+      { setValues: () => saved, members: () => [ADA_MEMBER, BEA] },
+      { onReplaced: (notice) => replaced.push(notice) },
+    );
+    data.records.setValue('acme', { rowId: saved.id, columnId: TITLE.id, value: 'Lead' });
+    await settled();
+    const by = (member: MemberSummary) => ({
+      ...changed(1, [saved.id]),
+      replaced: [
+        { recordId: saved.id, attributeId: TITLE.id, versionId: MINE, by: { type: 'member' as const, id: member.id } },
+      ],
+    });
+    // Saved by this person elsewhere (another tab): nothing.
+    client.channel().onPublication(by(ADA_MEMBER));
+    await settled();
+    expect(replaced).toEqual([]);
+    client.channel().onPublication({ ...by(BEA), seq: 2 });
+    await settled();
+    expect(replaced).toMatchObject([
+      {
+        workspace: 'acme',
+        recordId: saved.id,
+        recordName: 'P1',
+        attributeTitle: 'Job title',
+        others: 0,
+        by: { kind: 'member', name: 'Bea' },
+      },
+    ]);
+  });
+
+  it('undoes the last change, naming the attribute, and finds nothing more to undo (spec 0006, AC-48)', async () => {
+    const before = personRow(1, 'Engineer');
+    const saved = {
+      ...personRow(1, 'Lead'),
+      revision: 1,
+      versions: { [TITLE.id]: '0199a6f2-0003-7000-8000-000000000000' },
+    };
+    const answers = [
+      saved,
+      { ...before, revision: 2, versions: { [TITLE.id]: '0199a6f2-0004-7000-8000-000000000000' } },
+    ];
+    const { data, view } = await liveLayer({ setValues: () => answers.shift() ?? saved });
+    await data.records.setValues('acme', [{ rowId: saved.id, columnId: TITLE.id, value: 'Lead' }]);
+    const undone = await data.undo.run('acme');
+    expect(undone).toMatchObject({ kind: 'undone', action: 'cell', undone: 1, kept: 0, attributeTitle: 'Job title' });
+    expect(view.getSnapshot().source.getItem(1)?.values[TITLE.id]).toBe('Engineer');
+    expect(await data.undo.run('acme')).toEqual({ kind: 'nothing' });
   });
 
   it("reads an object's attributes again on a definitions change, and reloads the app's pages only when they changed", async () => {

@@ -11,13 +11,13 @@ interface Person extends RecordBody {
 
 const person = (id: string, values: Record<string, unknown>): Person => ({ id, objectId: 'people', values });
 
-/** A server row with each cell's version and the record's `updatedAt`, as RecordView carries them. */
-const versioned = (
+/** A server row at `revision`, with each cell's version, as RecordView carries them. */
+const revised = (
   id: string,
   values: Record<string, unknown>,
+  revision: number,
   versions: Record<string, string>,
-  updatedAt: string,
-): Person => ({ id, objectId: 'people', values, versions, updatedAt });
+): Person => ({ id, objectId: 'people', values, revision, versions });
 
 /** A uuid v7 shaped version whose time part is `ms`, so a greater `ms` is a later write. */
 const v = (ms: number) => `0199a6f2-${ms.toString(16).padStart(4, '0')}-7000-8000-000000000000`;
@@ -170,54 +170,59 @@ describe('the plain record store', () => {
     expect(seen(store, 'r980')?.values.name).toBe('patched');
   });
 
-  describe('orders copies of a record by each cell’s version', () => {
-    const at = (second: number) => `2026-10-08T09:00:${String(second).padStart(2, '0')}.000Z`;
-    const london = versioned('r1', { name: 'Ada', city: 'London' }, { name: v(1), city: v(1) }, at(1));
+  describe('orders copies of a record by its revision (spec 0006, AC-44)', () => {
+    const london = revised('r1', { name: 'Ada', city: 'London' }, 5, { name: v(1), city: v(1) });
 
-    it('keeps the later of two edits when their answers arrive out of order', () => {
-      const store = holding([london]);
-      const first = store.edit('r1', { city: 'Paris' }, 'm1');
-      const second = store.edit('r1', { city: 'Rome' }, 'm2');
-      // The server wrote Paris (version 2), then Rome (version 3); Rome's answer arrives first.
-      second.confirm(versioned('r1', { name: 'Ada', city: 'Rome' }, { name: v(1), city: v(3) }, at(3)));
-      expect(seen(store, 'r1')?.values.city).toBe('Rome');
-      first.confirm(versioned('r1', { name: 'Ada', city: 'Paris' }, { name: v(1), city: v(2) }, at(2)));
-      expect(seen(store, 'r1')?.values.city).toBe('Rome');
-      expect(store.get('r1')?.versions?.city).toBe(v(3));
-    });
-
-    it('never lets a block sent before a confirmation, arriving after it, put the old value back', () => {
+    it('keeps a refetch at revision 7 when a confirmation at revision 6 arrives after it', () => {
       const store = holding([london]);
       const edit = store.edit('r1', { city: 'Paris' }, 'm1');
-      edit.confirm(versioned('r1', { name: 'Ada', city: 'Paris' }, { name: v(1), city: v(2) }, at(2)));
-      // A window's block, read before the write, lands now.
+      // Someone renamed her after this tab's write landed; the refetch came back first.
+      store.receive([revised('r1', { name: 'Ada L', city: 'Paris' }, 7, { name: v(3), city: v(2) })]);
+      edit.confirm(revised('r1', { name: 'Ada', city: 'Paris' }, 6, { name: v(1), city: v(2) }));
+      expect(seen(store, 'r1')?.values).toEqual({ name: 'Ada L', city: 'Paris' });
+      expect(store.get('r1')?.revision).toBe(7);
+    });
+
+    it('never lets a block read before a write, arriving after its answer, put the old value back', () => {
+      const store = holding([london]);
+      const edit = store.edit('r1', { city: 'Paris' }, 'm1');
+      edit.confirm(revised('r1', { name: 'Ada', city: 'Paris' }, 6, { name: v(1), city: v(2) }));
       store.receive([london]);
       expect(seen(store, 'r1')?.values).toEqual({ name: 'Ada', city: 'Paris' });
+      expect(store.base('r1')?.versions?.city).toBe(v(2));
     });
 
-    it('takes the newer cells from an older copy, and keeps the newer ones it holds', () => {
-      const store = holding([]);
-      store.hold(['r1']);
-      // Ours: the name changed at 3; theirs (read earlier overall) has a city written at 4 by someone else.
-      store.receive([versioned('r1', { name: 'Ada L', city: 'London' }, { name: v(3), city: v(1) }, at(3))]);
-      store.receive([versioned('r1', { name: 'Ada', city: 'Oslo' }, { name: v(1), city: v(4) }, at(2))]);
-      expect(seen(store, 'r1')?.values).toEqual({ name: 'Ada L', city: 'Oslo' });
-    });
-
-    it('lets a newer copy clear a cell that has no version left (a reference with no current link)', () => {
-      const store = holding([]);
-      store.hold(['r1']);
-      store.receive([versioned('r1', { name: 'Ada', company: { id: 'c1' } }, { name: v(1), company: v(2) }, at(2))]);
-      store.receive([versioned('r1', { name: 'Ada', company: null }, { name: v(1) }, at(3))]);
+    it('replaces on an equal revision (a far side link change moves none)', () => {
+      const store = holding([revised('r1', { name: 'Ada', company: { id: 'c1' } }, 2, { company: v(2) })]);
+      store.receive([revised('r1', { name: 'Ada', company: null }, 2, {})]);
       expect(seen(store, 'r1')?.values.company).toBeNull();
+      expect(store.get('r1')?.versions).toEqual({});
     });
 
-    it('keeps a cell an older copy has no version for', () => {
-      const store = holding([]);
-      store.hold(['r1']);
-      store.receive([versioned('r1', { name: 'Ada', city: 'Paris' }, { name: v(1), city: v(2) }, at(2))]);
-      store.receive([versioned('r1', { name: 'Ada', city: null }, { name: v(1) }, at(1))]);
-      expect(seen(store, 'r1')?.values.city).toBe('Paris');
+    it('keeps a multi link cell’s links and total from the same read', () => {
+      const links = (count: number) => Array.from({ length: count }, (_, index) => ({ id: `c${String(index)}` }));
+      const store = holding([{ ...revised('r1', { team: links(20) }, 3, { team: v(3) }), linkTotals: { team: 4980 } }]);
+      // An older read with a different total: ignored whole.
+      store.receive([{ ...revised('r1', { team: links(20) }, 2, { team: v(2) }), linkTotals: { team: 12 } }]);
+      expect(store.get('r1')?.linkTotals).toEqual({ team: 4980 });
+      // A newer read whose cell was not cut: no total left over from the older one.
+      store.receive([revised('r1', { team: links(3) }, 4, { team: v(4) })]);
+      expect(store.get('r1')?.values.team).toEqual(links(3));
+      expect(store.get('r1')?.linkTotals ?? {}).toEqual({});
+    });
+
+    it('keeps the attributes a newer read didn’t carry: a body is the union of its reads', () => {
+      const store = holding([london]);
+      store.receive([revised('r1', { name: 'Ada L' }, 6, { name: v(3) })]);
+      expect(seen(store, 'r1')?.values).toEqual({ name: 'Ada L', city: 'London' });
+      expect(store.get('r1')?.versions).toEqual({ name: v(3), city: v(1) });
+    });
+
+    it('answers the base under a pending edit, never the layer', () => {
+      const store = holding([london]);
+      store.edit('r1', { city: 'Paris' }, 'm1');
+      expect(store.get('r1')?.values.city).toBe('Paris');
+      expect(store.base('r1')?.values.city).toBe('London');
     });
   });
 

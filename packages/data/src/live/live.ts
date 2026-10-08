@@ -147,6 +147,21 @@ const documentVisibility = (): Visibility | undefined => {
 const isString = (value: unknown): value is string => typeof value === 'string';
 const isStringArray = (value: unknown): value is string[] => Array.isArray(value) && value.every(isString);
 
+/** One value a records event's write replaced: who replaced which version of which cell (spec 0006). */
+type ReplacedEntry = NonNullable<Extract<ChangeEvent, { kind: 'records' }>['replaced']>[number];
+
+const ACTOR_TYPES: ReadonlySet<unknown> = new Set(['member', 'api_key', 'automation', 'system']);
+
+/** Whether `value` is a well formed `replaced` entry. */
+function isReplacedEntry(value: unknown): value is ReplacedEntry {
+  if (typeof value !== 'object' || value === null) return false;
+  const { recordId, attributeId, versionId, by } = value as Record<string, unknown>;
+  if (!isString(recordId) || !isString(attributeId) || !isString(versionId)) return false;
+  if (typeof by !== 'object' || by === null) return false;
+  const actor = by as Record<string, unknown>;
+  return ACTOR_TYPES.has(actor.type) && (actor.id === null || isString(actor.id));
+}
+
 /** Each kind's fields: required and optional ids, and required and optional id lists. */
 interface Shape {
   readonly refs?: readonly string[];
@@ -220,6 +235,11 @@ export function parseChangeEvent(data: unknown): Delivery | undefined {
     event[name] = raw[name];
   }
   if (shape.coarse === true && coarse === true) event.coarse = true;
+  // What a records event's write replaced (spec 0006): only well formed entries are kept.
+  if (kind === 'records' && Array.isArray(raw.replaced)) {
+    const replaced = raw.replaced.filter(isReplacedEntry);
+    if (replaced.length > 0) event.replaced = replaced.map((entry) => ({ ...entry, by: { ...entry.by } }));
+  }
   if (kind !== 'restricted' && mutationId !== undefined) event.mutationId = mutationId;
   return { seq, mutationId: kind === 'restricted' ? undefined : mutationId, event: event as ChangeEvent };
 }
@@ -342,7 +362,7 @@ export function createLive({
       if (mark !== undefined && seq <= mark) {
         // A repeat, or covered by a catch up (this tab's own write among them is echoed all the same).
         entry.held.delete(seq);
-        mutations.echoed(delivery.mutationId);
+        mutations.echoed(delivery.mutationId, delivery.seq);
         continue;
       }
       if (mark !== undefined && seq > mark + 1) return true;
@@ -350,7 +370,7 @@ export function createLive({
       mark = seq;
       marks.set(workspace, seq);
       // This tab's own write: its answer already showed it. The stub and unknown kinds only move the watermark.
-      if (mutations.echoed(delivery.mutationId)) continue;
+      if (mutations.echoed(delivery.mutationId, delivery.seq)) continue;
       if (delivery.event !== undefined) apply(workspace, entry, delivery.event);
     }
     return false;

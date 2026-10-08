@@ -230,10 +230,11 @@ describe('the watermark', () => {
     expect(t.live.watermark(WS)).toBe(5);
   });
 
-  it("skips this tab's own write, and forgets its id once it has echoed", async () => {
+  it("skips this tab's own write, and forgets its id once its echoes have come (spec 0006, AC-60)", async () => {
     const t = setup();
     await t.subscribed();
     t.mutations.sent(MUTATION);
+    t.mutations.answered(MUTATION, 1);
     t.channel().onPublication(event(1, { mutationId: MUTATION }));
     expect(t.calls).toEqual([]);
     // Another write with the same id can only be someone else's now.
@@ -313,6 +314,16 @@ describe('parsing', () => {
     expect(
       parseChangeEvent({ seq: 4, at: AT, kind: 'entries', entryIds: [], recordIds: [], attributeIds: [] }),
     ).toBeUndefined();
+  });
+
+  it('keeps the well formed entries of what a records event replaced (spec 0006)', () => {
+    const entry = { recordId: ROW(1), attributeId: ROW(2), versionId: ROW(3), by: { type: 'member', id: ROW(4) } };
+    const parsed = parseChangeEvent({
+      ...event(1),
+      replaced: [entry, { recordId: ROW(1) }, { ...entry, by: { type: 'robot', id: null } }],
+    });
+    expect(parsed?.event).toEqual({ ...event(1), replaced: [entry] });
+    expect(parseChangeEvent({ ...event(1), replaced: [{ recordId: 1 }] })?.event).toEqual(event(1));
   });
 });
 

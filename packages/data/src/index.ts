@@ -33,7 +33,16 @@ import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
 import { createLiveRouter } from './live/router.ts';
 import type { Notice } from './notice.ts';
-import type { CellChange, RecordsApi, RecordsLayer, RecordsView } from './records/layer.ts';
+import type { UndoKind } from './records/history.ts';
+import type {
+  CellChange,
+  EditOutcome,
+  RecordsApi,
+  RecordsLayer,
+  RecordsView,
+  ReplacedNotice,
+  UndoOutcome,
+} from './records/layer.ts';
 
 export type {
   ActorDisplay,
@@ -72,7 +81,33 @@ export { isEditableHere, toActorDisplays, toFieldAttribute, type FieldAttributeS
 export { createIdMinter, type IdSources } from './ids.ts';
 export type { LiveStatus } from './live/live.ts';
 export type { Notice } from './notice.ts';
-export type { CellChange, RecordsView, ViewState, ViewStatus } from './records/layer.ts';
+export type { UndoKind } from './records/history.ts';
+export type { CellChange, EditOutcome, RecordsView, ViewState, ViewStatus } from './records/layer.ts';
+
+/**
+ * A value this tab saved was replaced by someone else's later save (spec
+ * 0006, AC-46), with the names resolved for the screen's words: the record,
+ * the first attribute replaced and how many more, and who replaced it (a
+ * member by name, or an API key or an automation). "Use mine" saves this
+ * tab's values again as a normal, undoable edit.
+ */
+export interface ReplacedValue {
+  readonly workspace: string;
+  readonly recordId: string;
+  readonly recordName: string;
+  readonly attributeTitle: string;
+  /** How many more cells of the record the same save replaced ("and 2 more"). */
+  readonly others: number;
+  readonly by:
+    | { readonly kind: 'member'; readonly name: string | undefined }
+    | { readonly kind: 'api_key' }
+    | { readonly kind: 'automation' };
+  readonly useMine: () => void;
+}
+
+/** What an undo did (spec 0006, AC-48, AC-49), with the first cell's attribute named for a one cell toast. */
+export type UndoResult =
+  { readonly kind: 'nothing' } | (Extract<UndoOutcome, { kind: 'undone' }> & { readonly attributeTitle: string });
 
 /** What each API call carries to the link: where to report the answer's `Retry-After`, and that an answer came. */
 interface CallContext {
@@ -133,6 +168,11 @@ export interface DataLayerOptions {
    * column shows.
    */
   readonly onDefinitionsChange?: () => void;
+  /**
+   * A value this tab saved was replaced by someone else's later save (spec
+   * 0006, AC-46): the app raises the notice in its own words, with "Use mine".
+   */
+  readonly onReplaced?: (replaced: ReplacedValue) => void;
   /** Loads live updates. `./live/live.ts` by default; tests pass one on a fake transport. */
   readonly loadLive?: () => Promise<{ readonly createLive: typeof createLive }>;
   /**
@@ -161,6 +201,7 @@ export function createDataLayer({
   fetch = (input, init) => globalThis.fetch(input, init),
   realtimeUrl,
   onDefinitionsChange = () => undefined,
+  onReplaced = () => undefined,
   loadLive = () => import('./live/live.ts'),
   report = () => undefined,
 }: DataLayerOptions) {
@@ -431,6 +472,8 @@ export function createDataLayer({
     void records?.then((layer) => {
       if (event.coarse === true) layer.reload(workspace, event.objectId);
       else layer.changed(workspace, event.objectId, event.recordIds);
+      // What the write replaced (spec 0006): a notice for the values this tab wrote.
+      if (event.replaced !== undefined) layer.replaced(workspace, event);
     });
   });
   router.on('definitions', (workspace, event) => {
@@ -495,10 +538,63 @@ export function createDataLayer({
     get: (input) => call((options) => api.records.get({ workspace: input.workspace, ids: [...input.ids] }, options)),
     create: (input) => call((options) => api.records.create(input, options)),
     setValues: (input) => call((options) => api.records.setValues(input, options)),
+    setValuesBatch: (input) => call((options) => api.records.setValuesBatch(input, options)),
   };
+
+  /** An attribute's title, from the cached list of its object (empty when it can't be read). */
+  const attributeTitle = async (workspace: string, objectId: string, attributeId: string): Promise<string> => {
+    const list = await cached(attributes, objectKey(workspace, objectId), () =>
+      call((options) => api.attributes.list({ workspace, objectId }, options)),
+    ).catch(() => []);
+    return list.find((attribute) => attribute.id === attributeId)?.title ?? '';
+  };
+
+  /** A replaced notice from the records layer, with its names read from the cached definitions. */
+  const tellReplaced = async (notice: ReplacedNotice): Promise<void> => {
+    const [first = '', ...rest] = notice.attributeIds;
+    const title = await attributeTitle(notice.workspace, notice.objectId, first);
+    const by = notice.by;
+    const who: ReplacedValue['by'] =
+      by.type === 'member'
+        ? {
+            kind: 'member',
+            name: (
+              await cached(members, notice.workspace, () =>
+                call((options) => api.members.list({ workspace: notice.workspace }, options)),
+              ).catch(() => [])
+            ).find((member) => member.id === by.id)?.name,
+          }
+        : { kind: by.type };
+    onReplaced({
+      workspace: notice.workspace,
+      recordId: notice.recordId,
+      recordName: notice.recordName,
+      attributeTitle: title,
+      others: rest.length,
+      by: who,
+      useMine: notice.useMine,
+    });
+  };
+
   const recordsLayer = (): Promise<RecordsLayer> => {
     records ??= import('./records/layer.ts').then(({ createRecordsLayer }) =>
-      createRecordsLayer({ api: recordsApi, notify, mintId, watch, mutations, beforeRead }),
+      createRecordsLayer({
+        api: recordsApi,
+        notify,
+        mintId,
+        watch,
+        mutations,
+        beforeRead,
+        // The person's member id in the workspace (cached with their role), so their own saves raise no notice.
+        memberOf: (workspace) =>
+          cached(access, workspace, () => call((options) => api.access.mine({ workspace }, options))).then(
+            (mine) => mine.memberId,
+            () => undefined,
+          ),
+        onReplaced: (notice) => {
+          void tellReplaced(notice);
+        },
+      }),
     );
     return records;
   };
@@ -595,6 +691,8 @@ export function createDataLayer({
         mutations.sent(mutationId);
         try {
           const made = await call((options) => api.attributes.create({ workspace, ...input, mutationId }, options));
+          // It stored one definitions row: one echo.
+          mutations.answered(mutationId, 1);
           attributes.delete(objectKey(workspace, input.objectId));
           return made;
         } catch (error) {
@@ -629,15 +727,33 @@ export function createDataLayer({
       ): Promise<RecordView> => (await recordsLayer()).create(workspace, objectId, values, id),
       /** Edits one cell at once; a refusal rolls it back with a cell message and a toast with Retry. */
       setValue: (workspace: string, change: CellChange): void => {
-        void recordsLayer().then((layer) => {
-          layer.setValues(workspace, [change]);
-        });
+        void recordsLayer().then((layer) => layer.setValues(workspace, [change], 'cell'));
       },
-      /** Edits several cells at once (a paste, a range clear), one write per record. */
-      setValues: (workspace: string, changes: readonly CellChange[]): void => {
-        void recordsLayer().then((layer) => {
-          layer.setValues(workspace, changes);
-        });
+      /**
+       * Edits cells as one action (spec 0006): a cell, a paste or a range
+       * clear, as one write (one batch for up to 500 records; more is refused
+       * before anything shows, `too-many`). Each record's cells show at once
+       * and land or roll back on their own; what lands can be undone. The
+       * answer says how many cells landed, for the "Pasted into 40 cells" toast.
+       */
+      setValues: async (workspace: string, changes: readonly CellChange[], kind?: UndoKind): Promise<EditOutcome> =>
+        (await recordsLayer()).setValues(workspace, changes, kind),
+    },
+    undo: {
+      /**
+       * Undoes this tab's last confirmed change in the workspace (spec 0006,
+       * AC-48, AC-49): one cell, or every cell of one paste or range clear, up
+       * to 50 back. Each cell goes back only if nobody changed it since
+       * (checked on the server); the answer says how many went back and how
+       * many were kept, for the screen's toast.
+       */
+      run: async (workspace: string): Promise<UndoResult> => {
+        const outcome = await (await recordsLayer()).undo.run(workspace);
+        if (outcome.kind === 'nothing') return outcome;
+        return {
+          ...outcome,
+          attributeTitle: await attributeTitle(workspace, outcome.objectId, outcome.first.attributeId),
+        };
       },
     },
     live: {
