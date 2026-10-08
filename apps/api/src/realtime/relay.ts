@@ -51,14 +51,22 @@
 //   holds up the rest. A continuous queue, where a lane takes the next ready
 //   workspace as soon as its turn ends, removes that head of line wait.
 //
+// Delivery numbers (spec 0007, AC-77): Postgres answers each marked row's lag
+// from commit to publish, and the relay keeps a rolling 5 minute window of
+// them with what it still holds unpublished (`stats.ts`). While active it logs
+// them as `relay.stats` once a minute, from memory, so the log costs no query;
+// `stats()` hands the same numbers to the worker's `/health`.
+//
 // Retention: while active and holding the lock, at most once a minute and
 // only beside a poll it was making anyway, the relay deletes up to 1,000 rows
 // published more than `OUTBOX_RETENTION` (24 hours) ago, and again on the
 // next poll while it keeps finding a full batch. Dormant, it prunes nothing.
 import { type ChangeEvent, workspaceChannel } from '@crm/contracts';
+import { outboxEvent, stubEvent, wireEvent } from '@crm/core';
 import type { OutboxReader, OutboxRow } from '@crm/db';
 import { errorFields } from '../log.ts';
 import type { PublishBatch } from './centrifugo.ts';
+import { createRelayStats, type RelayStats, type RelayStatsSnapshot } from './stats.ts';
 
 type Fields = Record<string, unknown>;
 
@@ -100,6 +108,10 @@ export interface RelayDeps {
   readonly retryMs?: number;
   /** A workspace's longest wait after failed publishes (default 60 seconds). */
   readonly maxRetryMs?: number;
+  /** Where the delivery numbers go (a fresh `createRelayStats()` by default). */
+  readonly stats?: RelayStats;
+  /** How often an active relay logs `relay.stats` (default 1 minute). */
+  readonly statsEveryMs?: number;
 }
 
 /** `active` while it holds a connection, `dormant` while it makes no database call, `stopped` otherwise. */
@@ -115,6 +127,8 @@ export interface Relay {
   wake(): void;
   /** Where the relay is now. */
   mode(): RelayMode;
+  /** The delivery numbers over the last 5 minutes, from memory (the worker's `/health`). */
+  stats(): RelayStatsSnapshot;
   /** Stops after the publish in flight, closes the connection (letting go of the lock) and waits for the loop. */
   stop(): Promise<void>;
 }
@@ -128,17 +142,15 @@ export const DORMANT_AFTER_MS = 180_000;
 /** The most published rows one prune deletes (the definer function's own cap). */
 const PRUNE_BATCH = 1_000;
 
-/** The event for one outbox row: ids only, `mutationId` and `coarse` only when set. */
+/**
+ * The event for one outbox row (spec 0007's `ChangeEvent`, by kind): ids
+ * only, with its commit time `at`, `mutationId` and `coarse` only when set,
+ * and never the job starter. A row missing what its kind needs goes out as
+ * the stub, so the channel's `seq`s stay gap free.
+ */
 export function changeEvent(row: OutboxRow): ChangeEvent {
-  return {
-    seq: row.seq,
-    kind: row.kind,
-    objectId: row.objectId,
-    recordIds: [...row.recordIds],
-    attributeIds: [...row.attributeIds],
-    ...(row.mutationId === undefined ? {} : { mutationId: row.mutationId }),
-    ...(row.coarse ? { coarse: true as const } : {}),
-  };
+  const event = outboxEvent(row);
+  return event === undefined ? stubEvent(row.seq, row.at) : wireEvent(event);
 }
 
 /** The least time between two warnings about one workspace's failed publishes. */
@@ -173,6 +185,8 @@ export function createRelay(deps: RelayDeps): Relay {
   const workspacesPerPoll = deps.workspacesPerPoll ?? 500;
   const retryMs = deps.retryMs ?? 1_000;
   const maxRetryMs = deps.maxRetryMs ?? 60_000;
+  const stats = deps.stats ?? createRelayStats();
+  const statsEveryMs = deps.statsEveryMs ?? 60_000;
   const { log } = deps;
 
   // The loop's own state, read through functions where an await sits between a write and a read.
@@ -271,6 +285,7 @@ export function createRelay(deps: RelayDeps): Relay {
     const rows = held ?? (await reader.pending(workspaceId, batch));
     if (rows.length === 0) {
       retries.delete(workspaceId);
+      stats.pending(workspaceId, 0);
       return undefined;
     }
     // A failing workspace's rows aren't work until they go out.
@@ -283,11 +298,12 @@ export function createRelay(deps: RelayDeps): Relay {
     const landed = rows[outcome.published - 1];
     if (outcome.error !== undefined) {
       failed(workspaceId, rows[outcome.published]?.seq, outcome.error, 'publish');
+      stats.pending(workspaceId, rows.length - outcome.published, rows[outcome.published]?.at);
       if (landed !== undefined) {
         // One failure, already counted: a mark that fails too is only noted (what landed goes out again on the
         // retry, and its idempotency key drops the repeat).
         try {
-          await reader.mark(workspaceId, landed.seq);
+          stats.published((await reader.mark(workspaceId, landed.seq)).lagsMs);
         } catch (error) {
           log.warn('Marking the part of a failed batch that landed failed; it is sent again on the retry', {
             workspaceId,
@@ -302,6 +318,8 @@ export function createRelay(deps: RelayDeps): Relay {
     const last = rows[rows.length - 1];
     if (last === undefined) return undefined;
     const next = await reader.advance(workspaceId, last.seq, batch);
+    stats.published(next.lagsMs);
+    stats.pending(workspaceId, next.rows.length, next.rows[0]?.at);
     return next.rows.length > 0 ? next.rows : undefined;
   }
 
@@ -364,6 +382,8 @@ export function createRelay(deps: RelayDeps): Relay {
       let lastPoll = Number.NEGATIVE_INFINITY;
       let lastPrune = Number.NEGATIVE_INFINITY;
       let pruneAgain = false;
+      // The numbers go out a minute after taking the lock, then every minute while publishing.
+      let lastStats = Date.now();
       // Where the next poll starts: after the last workspace a full poll named, so with more waiting than one
       // poll returns, every workspace still gets its turn.
       let pollAfter: string | undefined;
@@ -415,6 +435,11 @@ export function createRelay(deps: RelayDeps): Relay {
             lastPrune = Date.now();
             pruneAgain = await prune(reader);
           }
+          // From memory: the line costs no query, and only the publishing relay writes it.
+          if (Date.now() - lastStats >= statsEveryMs) {
+            lastStats = Date.now();
+            log.info('relay.stats', { ...stats.snapshot() });
+          }
         }
         if (halted() || dropped() !== undefined || (holding && (notified.size > 0 || leftover.size > 0))) continue;
         if (quiet()) {
@@ -428,7 +453,8 @@ export function createRelay(deps: RelayDeps): Relay {
           return { reason: 'quiet' };
         }
         const nextRetry = Math.min(...[...retries.values()].map((retry) => retry.at));
-        await sleep(Math.min(lastPoll + pollWait(), lastWork + dormantAfterMs, nextRetry) - Date.now());
+        const nextStats = holding ? lastStats + statsEveryMs : Number.POSITIVE_INFINITY;
+        await sleep(Math.min(lastPoll + pollWait(), lastWork + dormantAfterMs, nextRetry, nextStats) - Date.now());
       }
     } finally {
       open = false;
@@ -506,6 +532,7 @@ export function createRelay(deps: RelayDeps): Relay {
       if (!backingOff) interrupt();
     },
     mode: () => current,
+    stats: () => stats.snapshot(),
     async stop() {
       stopped = true;
       interrupt();

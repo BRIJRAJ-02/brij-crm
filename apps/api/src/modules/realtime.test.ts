@@ -143,3 +143,60 @@ describe('realtime tokens', () => {
     });
   });
 });
+
+// Catch up (spec 0007, AC-72, AC-73): the head comes with the subscription
+// token, and `realtime.catchUp` answers what a member missed since it,
+// through the member door.
+describe('catch up', () => {
+  it('hands out the head with the token, and what changed since a watermark, collapsed', async () => {
+    const { client, workspace } = await memberWithWorkspace();
+    const before = await client.realtime.subscriptionToken({ workspace: workspace.slug });
+    const objects = await client.objects.list({ workspace: workspace.slug });
+    const people = objects.find((object) => object.apiSlug === 'people');
+    if (people === undefined) throw new Error('A new workspace has People.');
+    const ids = [newId(), newId()];
+    for (const id of ids) {
+      await client.records.create({ workspace: workspace.slug, objectId: people.id, id, mutationId: newId() });
+    }
+    const after = await client.realtime.subscriptionToken({ workspace: workspace.slug });
+    expect(after.head).toBe(before.head + 2);
+
+    const missed = await client.realtime.catchUp({ workspace: workspace.slug, after: before.head });
+    expect(missed).toEqual({
+      head: after.head,
+      reset: false,
+      events: [
+        {
+          seq: after.head,
+          at: expect.any(String) as string,
+          kind: 'records',
+          objectId: people.id,
+          recordIds: ids,
+          attributeIds: [],
+        },
+      ],
+    });
+    expect(await client.realtime.catchUp({ workspace: workspace.slug, after: after.head })).toEqual({
+      head: after.head,
+      reset: false,
+      events: [],
+    });
+    expect((await client.realtime.catchUp({ workspace: workspace.slug, after: after.head + 1 })).reset).toBe(true);
+  });
+
+  it("refuses someone else's workspace with NOT_FOUND, and a watermark that isn't a whole number", async () => {
+    const { client, workspace } = await memberWithWorkspace();
+    const { cookie } = await signIn(app);
+    const stranger = rpcClient(app, cookie);
+    expect(await failure(() => stranger.realtime.catchUp({ workspace: workspace.slug, after: 0 }))).toMatchObject({
+      code: 'NOT_FOUND',
+      status: 404,
+    });
+    for (const after of [-1, 1.5]) {
+      expect(await failure(() => client.realtime.catchUp({ workspace: workspace.slug, after }))).toMatchObject({
+        code: 'INPUT_INVALID',
+        status: 400,
+      });
+    }
+  });
+});

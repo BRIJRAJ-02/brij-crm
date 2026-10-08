@@ -70,7 +70,11 @@ if (relay === undefined) {
   relay.start();
 }
 
-const health = createWorkerServer({ wakeSecret: env.WORKER_WAKE_SECRET, onWake: () => relay?.wake() });
+const health = createWorkerServer({
+  wakeSecret: env.WORKER_WAKE_SECRET,
+  onWake: () => relay?.wake(),
+  health: () => (relay === undefined ? { relay: 'off' } : { relay: { mode: relay.mode(), ...relay.stats() } }),
+});
 health.listen(env.WORKER_PORT, '::', () =>
   log.info('Worker ready', { port: env.WORKER_PORT, environment: env.APP_ENV, relay: relay !== undefined }),
 );

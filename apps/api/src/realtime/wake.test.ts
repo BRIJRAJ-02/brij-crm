@@ -221,6 +221,18 @@ describe("the worker's wake endpoint", () => {
     expect(await response.json()).toEqual({ status: 'ok' });
   });
 
+  it('adds the relay’s numbers to the health check, from memory (spec 0007, AC-77)', async () => {
+    const server = await listen(
+      createWorkerListener({
+        wakeSecret: SECRET,
+        onWake: () => undefined,
+        health: () => ({ relay: { mode: 'dormant', published: 3, pending: 0 } }),
+      }),
+    );
+    const response = await fetch(`${server.url}/health`);
+    expect(await response.json()).toEqual({ status: 'ok', relay: { mode: 'dormant', published: 3, pending: 0 } });
+  });
+
   it('takes any poke on a laptop with no secret set', async () => {
     const { call, wakes } = await worker(undefined);
     expect((await call(WAKE_PATH, { method: 'POST' })).status).toBe(204);

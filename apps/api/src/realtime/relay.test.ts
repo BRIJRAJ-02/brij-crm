@@ -117,6 +117,7 @@ interface RelayOptions extends Partial<
     | 'backoffMs'
     | 'healthyMs'
     | 'workspacesPerPoll'
+    | 'statsEveryMs'
   >
 > {
   readonly applicationName?: string;
@@ -163,6 +164,7 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
     backoffMs: options.backoffMs ?? 50,
     ...(options.healthyMs === undefined ? {} : { healthyMs: options.healthyMs }),
     ...(options.workspacesPerPoll === undefined ? {} : { workspacesPerPoll: options.workspacesPerPoll }),
+    ...(options.statsEveryMs === undefined ? {} : { statsEveryMs: options.statsEveryMs }),
   });
   started.push(relay);
   relay.start();
@@ -241,6 +243,7 @@ describe('the relay', () => {
     expect(mine.map((item) => item.idempotencyKey)).toEqual([1, 2, 3].map((seq) => `${workspaceId}:${String(seq)}`));
     expect(mine[0]?.data).toEqual({
       seq: 1,
+      at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/) as string,
       kind: 'records',
       objectId: expect.any(String) as string,
       recordIds: [expect.any(String) as string],
@@ -755,5 +758,56 @@ describe('the relay', () => {
     // A poke after stop does nothing.
     relay.wake();
     expect(relay.mode()).toBe('stopped');
+  });
+
+  it('drains 2,000 rows waiting in 3 workspaces in order, 100 a call, within 30 seconds of starting (spec 0007, AC-76)', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const sizes = [1_000, 600, 400];
+    const workspaceIds = await Promise.all(sizes.map(() => workspace()));
+    for (const [index, workspaceId] of workspaceIds.entries()) {
+      await testQuery(
+        ownerUrl,
+        `insert into outbox (workspace_id, seq, kind, object_id, record_ids, created_at)
+         select $1, n, 'records', (select id from objects where workspace_id = $1), array[gen_random_uuid()],
+           now() - interval '10 minutes'
+         from generate_series(1, $2::int) n`,
+        [workspaceId, sizes[index]],
+      );
+    }
+    const began = Date.now();
+    relayTo(centrifugo.url);
+    for (const [index, workspaceId] of workspaceIds.entries()) {
+      await expect
+        .poll(() => centrifugo.seqs(workspaceId).length, { timeout: 30_000, interval: 50 })
+        .toBe(sizes[index]);
+      // Every seq once, in order: no client sees one twice or out of order.
+      expect(centrifugo.seqs(workspaceId)).toEqual(Array.from({ length: sizes[index] ?? 0 }, (_, n) => n + 1));
+      await expect.poll(() => unpublished(workspaceId), WAIT).toEqual([]);
+    }
+    expect(Date.now() - began).toBeLessThan(30_000);
+    const mine = centrifugo.calls.filter((call) =>
+      workspaceIds.some((workspaceId) => call.channel === `workspace:${workspaceId}`),
+    );
+    expect(Math.max(...mine.map((call) => call.size))).toBe(100);
+    expect(mine.every((call) => !call.parallel)).toBe(true);
+  }, 60_000);
+
+  it('logs relay.stats once a minute while publishing, with each row’s lag and what still waits (AC-77)', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const workspaceId = await workspace();
+    await events(workspaceId, [1, 2, 3]);
+    await testQuery(ownerUrl, `update outbox set created_at = now() - interval '2 seconds' where workspace_id = $1`, [
+      workspaceId,
+    ]);
+    const { relay, infos } = relayTo(centrifugo.url, { statsEveryMs: 200 });
+    await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1, 2, 3]);
+    await expect.poll(() => infos.filter((line) => line.message === 'relay.stats').length, WAIT).toBeGreaterThan(0);
+    const line = infos.findLast((info) => info.message === 'relay.stats');
+    expect(line?.fields).toMatchObject({ pending: 0, oldestPendingMs: undefined });
+    const snapshot = relay.stats();
+    expect(snapshot.published).toBeGreaterThanOrEqual(3);
+    expect(snapshot.lagMs?.max).toBeGreaterThanOrEqual(2_000);
   });
 });

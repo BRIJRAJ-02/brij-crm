@@ -1,4 +1,5 @@
-// The worker's one HTTP port: Railway's health check (`GET /health`) and the
+// The worker's one HTTP port: Railway's health check (`GET /health`, with the
+// relay's delivery numbers from memory) and the
 // api's poke (`POST /internal/outbox-wake`, see `realtime/wake.ts`). Nothing
 // here reads a request body or touches the database: a poke only wakes the
 // relay, which then drains whatever waits in the outbox. A request that comes
@@ -12,12 +13,17 @@ export interface WorkerHttpOptions {
   readonly wakeSecret: string | undefined;
   /** Wakes the relay. Called only for a poke that carries the secret. */
   readonly onWake: () => void;
+  /**
+   * What `/health` reports beside `status`: the relay's mode and delivery
+   * numbers (spec 0007, AC-77), from memory, so the check never queries.
+   */
+  readonly health?: () => Readonly<Record<string, unknown>>;
 }
 
 /** How long a request (and its headers) may take to arrive on the worker's port. */
 const REQUEST_TIMEOUT_MS = 5_000;
 
-function answer(response: ServerResponse, status: number, body?: Record<string, string>): void {
+function answer(response: ServerResponse, status: number, body?: Readonly<Record<string, unknown>>): void {
   if (body === undefined) {
     response.writeHead(status).end();
     return;
@@ -48,7 +54,7 @@ export function createWorkerListener(
     }
     const path = target.split('?', 1)[0];
     if (path === '/health') {
-      answer(response, 200, { status: 'ok' });
+      answer(response, 200, { status: 'ok', ...options.health?.() });
       return;
     }
     if (path !== WAKE_PATH) {
