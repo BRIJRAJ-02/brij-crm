@@ -5,8 +5,11 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import type { CellChange } from '../../fields/types.ts';
 import { arraySource } from '../../lib/list-source.ts';
 import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
-import { sampleColumns, sampleRows, type SampleRow } from '../../workbench/grid-samples.ts';
-import { SAMPLE_COMPANIES, SAMPLE_MEMBERS } from '../../workbench/field-samples.ts';
+import type { AttributeType } from '@crm/contracts/values';
+import type { FieldAttribute } from '../../fields/types.ts';
+import { attributeOf } from '../../workbench/attributes.ts';
+import { sampleColumn, sampleColumns, sampleRows, type SampleRow } from '../../workbench/grid-samples.ts';
+import { FIELD_SAMPLES, SAMPLE_COMPANIES, SAMPLE_MEMBERS } from '../../workbench/field-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { DataGrid, type GridStatus, type RowSource } from './DataGrid.tsx';
 import type { GridEditorProps } from './GridCell.tsx';
@@ -128,6 +131,84 @@ function FocusRowGrid() {
         getDisplay={(row, id) => row.displays[id]}
         rowHeader="name"
         {...(focusRow === undefined ? {} : { focusRow })}
+      />
+    </Stage>
+  );
+}
+
+interface TypeColumn {
+  readonly attribute: FieldAttribute;
+  readonly value: unknown;
+  readonly display?: unknown;
+}
+
+/** Every attribute type as a column, then the same type holding several values where it can. */
+function everyTypeColumns(): readonly TypeColumn[] {
+  const columns: TypeColumn[] = [{ attribute: attributeOf('text', 'Name', { isRequired: true }), value: 'Northwind' }];
+  for (const type of Object.keys(FIELD_SAMPLES) as AttributeType[]) {
+    // The name is the text column.
+    if (type === 'text') continue;
+    const sample = FIELD_SAMPLES[type];
+    // The row header is the name, so the personal name column takes another one.
+    const name = type === 'personal_name' ? 'Contact' : sample.attribute.name;
+    columns.push({ ...sample, attribute: { ...sample.attribute, id: type, name } });
+    if (sample.several !== undefined) {
+      columns.push({ ...sample.several, attribute: { ...sample.several.attribute, id: `${type}_many` } });
+    }
+  }
+  return columns;
+}
+
+/** A grid with a column per attribute type: a row of samples, a row of empty values, and the samples again. */
+function EveryTypeGrid({ cellErrors }: { readonly cellErrors?: ReadonlyMap<string, string> }) {
+  const [typeColumns] = useState(everyTypeColumns);
+  const [rows, setRows] = useState<readonly SampleRow[]>(() =>
+    [0, 1, 2].map((index) => ({
+      id: `row-${String(index)}`,
+      values: Object.fromEntries(typeColumns.map((each) => [each.attribute.id, index === 1 ? null : each.value])),
+      displays: Object.fromEntries(
+        typeColumns.map((each) => [each.attribute.id, index === 1 ? undefined : each.display]),
+      ),
+    })),
+  );
+  const [columns, setColumns] = useState<readonly GridColumn[]>(() =>
+    typeColumns.map((each) => sampleColumn(each.attribute)),
+  );
+  const apply = (changes: readonly CellChange[]) => {
+    setRows((current) =>
+      current.map((row) => {
+        const mine = changes.filter((change) => change.rowId === row.id);
+        if (mine.length === 0) return row;
+        return { ...row, values: { ...row.values, ...Object.fromEntries(mine.map((c) => [c.columnId, c.value])) } };
+      }),
+    );
+  };
+  const editorProps = (column: GridColumn): GridEditorProps => {
+    if (column.attribute.type === 'actor_reference') {
+      return { onSearch: () => arraySource(SAMPLE_MEMBERS, (member) => member.id ?? member.name) as never };
+    }
+    if (column.attribute.type === 'record_reference') {
+      return { onSearch: () => arraySource(SAMPLE_COMPANIES, (company) => company.recordId) as never };
+    }
+    return {};
+  };
+  return (
+    <Stage height="grid">
+      <DataGrid<SampleRow>
+        label="Every type"
+        columns={columns}
+        pinnedCount={1}
+        rows={arraySource(rows, (row) => row.id)}
+        getValue={(row, id) => row.values[id] ?? null}
+        getDisplay={(row, id) => row.displays[id]}
+        rowHeader="name"
+        onColumnsChange={setColumns}
+        onCellChange={(change) => {
+          apply([change]);
+        }}
+        onCellsChange={apply}
+        editorProps={editorProps}
+        {...(cellErrors === undefined ? {} : { cellErrors })}
       />
     </Stage>
   );
@@ -558,5 +639,63 @@ export const CellTips: Story = {
     await expect(await shownTooltip()).toHaveTextContent(reason);
     await userEvent.unhover(refused);
     await waitFor(() => expect(document.querySelector('[role="tooltip"]')).toBeNull());
+  },
+};
+
+/** A column per attribute type at rest: a row of values, a row of empty ones, a refused value, and the read only types. */
+export const EveryType: Story = {
+  render: () => (
+    <EveryTypeGrid cellErrors={new Map([['row-0:email', 'Another person already has this email address.']])} />
+  ),
+};
+
+/** Settles a story for its screenshot: fonts in, and every running animation (a popover's entrance) finished. */
+async function settled(): Promise<void> {
+  await document.fonts.ready;
+  await Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined)));
+}
+
+/**
+ * A typed editor is the cell itself: the input at the cell's height and
+ * padding with no box of its own, and while its text is refused, the danger
+ * edge in place of the focus ring, with the reason under the cell.
+ */
+export const EditInCell: Story = {
+  render: () => <EveryTypeGrid />,
+  play: async ({ canvasElement, userEvent }) => {
+    const press = presser((keys) => userEvent.keyboard(keys));
+    await userEvent.tab();
+    await press(['{ArrowRight}', '{ArrowRight}'], '0:3');
+    await press(['1', '2', 'x', '{Enter}']);
+    const input = cell(canvasElement, 0, 3)?.querySelector('input');
+    await waitFor(() => expect(input).toHaveAttribute('aria-invalid', 'true'));
+    await expect(input).toHaveFocus();
+    await settled();
+  },
+};
+
+/**
+ * Several values can't fit a row, so they edit in a popover under the cell:
+ * the list, the add field focused, and its hint, all on the panel. The cell
+ * keeps its ring while its popover is open.
+ */
+export const EditInPopover: Story = {
+  render: () => <EveryTypeGrid />,
+  play: async ({ userEvent }) => {
+    const press = presser((keys) => userEvent.keyboard(keys));
+    await userEvent.tab();
+    // Its place in the row: after the checkbox column.
+    const phones = everyTypeColumns().findIndex((each) => each.attribute.id === 'phone_many') + 1;
+    await expect(phones).toBeGreaterThan(1);
+    for (let col = 2; col <= phones; col += 1) await press(['{ArrowRight}'], `0:${String(col)}`);
+    await press(['{Enter}']);
+    const dialog = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>('[role="dialog"]');
+      if (found === null) throw new globalThis.Error('the popover did not open');
+      return found;
+    });
+    await waitFor(() => expect(dialog).toHaveTextContent('+44 20 7123 4567'));
+    await expect(document.activeElement).toHaveAttribute('placeholder', 'Add another…');
+    await settled();
   },
 };
