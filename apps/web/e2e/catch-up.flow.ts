@@ -165,13 +165,13 @@ test.describe('catch up after a long drop', () => {
       });
     }
     const columns = Number(await grid.getAttribute('aria-colcount'));
-    await rpc(writer, 'attributes/create', {
+    const nickname = (await rpc(writer, 'attributes/create', {
       workspace: slug,
       objectId: people.id,
       title: 'Nickname',
       type: 'text',
       mutationId: randomUUID(),
-    });
+    })) as { id: string };
     if (LONG) await reader.waitForTimeout(6 * 60_000);
 
     // Back: what the reader asks for from here on, and no navigation.
@@ -226,7 +226,9 @@ test.describe('catch up after a long drop', () => {
     expect(paths).not.toContain('/api/rpc/records/query');
     const changed = new Set([...finalTitle.keys()].map((index) => ids[index]));
     for (const request of asked.filter((each) => each.url().includes('/api/rpc/records/get'))) {
-      const body = request.postDataJSON() as { json: { ids: string[] } };
+      const body = request.postDataJSON() as { json: { ids: string[]; attributeIds?: string[] } };
+      // The new column, once shown, is read for the loaded rows alone (spec 0006, AC-55): that one attribute.
+      if (body.json.attributeIds?.length === 1 && body.json.attributeIds[0] === nickname.id) continue;
       for (const id of body.json.ids) expect(changed.has(id), `refetched unchanged ${id}`).toBe(true);
     }
 

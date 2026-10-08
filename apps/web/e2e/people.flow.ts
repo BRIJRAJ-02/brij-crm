@@ -52,8 +52,11 @@ test.describe('the People table', () => {
     const first = await cellAt(page, 0, 'Name');
     await expect(first).toContainText('Grace Hopper');
     await expect(first).toBeFocused();
+    // Newest first (spec 0006, AC-57): a record made here sits first, marked New, and takes focus there.
     await addPerson(page, 'Alan', 'Turing', `alan-${tag}@example.com`);
-    await expect(await cellAt(page, 1, 'Name')).toBeFocused();
+    await expect(await cellAt(page, 0, 'Name')).toBeFocused();
+    await expect(await cellAt(page, 0, 'Name')).toContainText('Alan Turing');
+    await expect(await cellAt(page, 1, 'Name')).toContainText('Grace Hopper');
     // The total count sits beside the title.
     await expect(page.getByText(/^2\s*people$/)).toBeVisible();
 
@@ -89,8 +92,8 @@ test.describe('the People table', () => {
     await expect(nickname).toContainText('Prof');
     await checkScreen(page, '5-people-edited');
 
-    // A refused edit rolls back, marks the cell and raises a toast with Retry.
-    const email = await cellAt(page, 1, 'Email addresses');
+    // A refused edit rolls back, marks the cell and raises a toast with Retry: Alan, first, takes Grace's email.
+    const email = await cellAt(page, 0, 'Email addresses');
     await email.click();
     await page.keyboard.press('Enter');
     // Several emails edit in a popover on the cell (its field is named for the column).
@@ -111,6 +114,6 @@ test.describe('the People table', () => {
     await page.reload();
     await expect(await cellAt(page, 0, 'Job title')).toContainText('Rear admiral');
     await expect(await cellAt(page, 1, 'Nickname')).toContainText('Prof');
-    await expect(await cellAt(page, 1, 'Name')).toContainText('Alan Turing');
+    await expect(await cellAt(page, 0, 'Name')).toContainText('Alan Turing');
   });
 });

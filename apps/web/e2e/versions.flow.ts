@@ -238,7 +238,8 @@ test.describe('versions, the replaced notice and undo between two members', () =
 
     // The second press undoes the edit before it.
     await pressUndo(ada);
-    await expect(ada.getByText('Undid Job title on Barbara Liskov')).toBeVisible();
+    // Newest first (spec 0006, AC-57): row 3 is the first person made, Grace Hopper.
+    await expect(ada.getByText('Undid Job title on Grace Hopper')).toBeVisible();
     await expect(await cellAt(ada, 3, 'Job title')).not.toContainText('Professor');
 
     // Inside a text field the key is the field's own.

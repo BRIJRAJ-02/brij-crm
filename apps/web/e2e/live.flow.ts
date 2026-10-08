@@ -147,7 +147,9 @@ test.describe('live updates between two browsers', () => {
     await picture(writer, '2-writer-edited');
     await picture(reader, '2-reader-edited');
 
-    // A new column: from Create in the writer's dialog to the column in the reader's grid.
+    // A new column: from Create in the writer's dialog to the column in the reader's grid. Once shown, it is
+    // read for the loaded rows (spec 0006, AC-55): a fetch of that one attribute, not of the writer's changes.
+    const echoRefetches = writerRefetches;
     const columns = Number(await readerGrid.getAttribute('aria-colcount'));
     await writer.getByRole('button', { name: 'Add attribute' }).click();
     const dialog = writer.getByRole('dialog', { name: 'Add attribute' });
@@ -177,7 +179,8 @@ test.describe('live updates between two browsers', () => {
     if (SHOTS !== undefined)
       writeFileSync(path.join(SHOTS, `${testInfo.project.name}-live-timings.json`), JSON.stringify(summary, null, 2));
     expect(summary.p95, JSON.stringify(summary)).toBeLessThan(BUDGET_MS);
-    expect(writerRefetches).toBe(0);
+    expect(echoRefetches).toBe(0);
+    expect(writerRefetches).toBeLessThanOrEqual(1);
 
     // The reader's connection drops: its table says live updates are paused.
     const readerTitle = await cellAt(reader, 0, 'Job title');
