@@ -12,6 +12,7 @@
     "test:flow": "playwright test"
   },
   "dependencies": {
+    "@crm/contracts": "workspace:*",
     "@crm/data": "workspace:*",
     "@crm/ui": "workspace:*",
     "@sentry/react": "catalog:",
@@ -29,9 +30,12 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@vitest/browser": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
     "@vitejs/plugin-react": "catalog:",
     "axe-core": "catalog:",
     "eslint": "catalog:",
+    "playwright": "catalog:",
     "size-limit": "catalog:",
     "typescript": "catalog:",
     "vite": "catalog:",

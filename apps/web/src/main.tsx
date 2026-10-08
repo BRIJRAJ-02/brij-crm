@@ -12,7 +12,22 @@ import { createRoot } from 'react-dom/client';
 import { signInHref } from './features/auth/redirect.ts';
 import { focusFirstLoad, focusPage } from './features/navigation/focus.ts';
 import { followPageTitle } from './features/navigation/title.ts';
+import { startMonitoring } from './monitoring/index.ts';
 import { routeTree } from './routeTree.gen.ts';
+
+// Monitoring first (spec 0010), so a fault from here on is kept. Without VITE_SENTRY_DSN_WEB in the build
+// it does nothing; with it, the Sentry chunk loads beside the app, never in its way.
+const monitor = startMonitoring({
+  config: {
+    dsn: import.meta.env.VITE_SENTRY_DSN_WEB,
+    release: import.meta.env.APP_RELEASE,
+    environment: import.meta.env.APP_ENVIRONMENT,
+    // The route pattern open now (`/w/$slug/objects/$object`), never the filled address.
+    route: () => router.state.matches.at(-1)?.routeId,
+  },
+  target: window,
+  load: () => import('./monitoring/sentry.ts'),
+});
 
 // One toast queue for the app, shared by the screens and the data layer.
 const toasts = createToasts();
@@ -55,6 +70,8 @@ const data = createDataLayer({
   currentPath: () => `${window.location.pathname}${window.location.search}`,
   ...(realtimeUrl === undefined || realtimeUrl === '' ? {} : { realtimeUrl }),
   onDefinitionsChange: reloadPages,
+  // Faults the server never saw: an answer without one of our codes, or one thrown inside the layer.
+  report: monitor.report,
 });
 
 // theme-boot.js already applied a saved choice before first paint; this keeps
@@ -125,7 +142,7 @@ followPageTitle({
 });
 
 // The browser's language and time zone until #23 adds them to the profile.
-createRoot(root).render(
+createRoot(root, monitor.rootOptions).render(
   <StrictMode>
     <UiProvider
       locale={navigator.languages[0] ?? 'en-US'}

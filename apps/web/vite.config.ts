@@ -31,10 +31,18 @@ function realtimeCsp(): Plugin {
     },
   };
 }
+// Monitoring (spec 0010): the release is the commit the deploy and preview Actions build (`GITHUB_SHA`), and the
+// environment Vercel's build names (`VERCEL_ENV`); a laptop's build is `local` for both.
+const RELEASE = process.env.GITHUB_SHA ?? 'local';
+const ENVIRONMENT = process.env.VERCEL_ENV ?? 'local';
 
 export default defineConfig({
   // One `.env` at the repo root for local work.
   envDir: '../..',
+  define: {
+    'import.meta.env.APP_RELEASE': JSON.stringify(RELEASE),
+    'import.meta.env.APP_ENVIRONMENT': JSON.stringify(ENVIRONMENT),
+  },
   plugins: [
     // Must come before the React plugin.
     tanstackRouter({
