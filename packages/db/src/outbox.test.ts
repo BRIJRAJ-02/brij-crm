@@ -79,10 +79,10 @@ describe('the outbox reader', () => {
     expect(pending[0]?.recordIds).toHaveLength(1);
     expect((await outbox.pending(busy, 1)).map((row) => row.seq)).toEqual([2]);
 
-    expect(await outbox.mark(busy, 3)).toBe(2);
+    expect((await outbox.mark(busy, 3)).marked).toBe(2);
     expect((await outbox.pending(busy, 10)).map((row) => row.seq)).toEqual([4]);
     // Another workspace's rows are out of reach of a mark, whatever the number.
-    expect(await outbox.mark(busy, 100)).toBe(1);
+    expect((await outbox.mark(busy, 100)).marked).toBe(1);
     expect((await outbox.pending(other, 10)).map((row) => row.seq)).toEqual([1]);
     expect(await outbox.workspaces(500)).not.toContain(busy);
   });
@@ -124,6 +124,36 @@ describe('the outbox reader', () => {
     await expect(outbox.advance(busy, 1.5, 10)).rejects.toThrow(TypeError);
     await expect(outbox.mark(busy, Number.NaN)).rejects.toThrow(TypeError);
     expect(queries.length).toBe(sent);
+  });
+
+  it('reads every column an event needs, with the commit time as `at`, and answers each marked row’s lag (spec 0007)', async () => {
+    const outbox = await reader();
+    const busy = await workspaceWithEvents([]);
+    const [list, item, actor] = [randomUUID(), randomUUID(), randomUUID()];
+    await db.withWorkspace(busy, (tx) =>
+      tx.execute(
+        sql`insert into outbox (workspace_id, seq, kind, list_id, item_ids, actor_member_id, created_at)
+            values (${busy}, 1, 'jobs', ${list}, ${`{${item}}`}, ${actor}, now() - interval '2 seconds')`,
+      ),
+    );
+    const [row] = await outbox.pending(busy, 10);
+    expect(row).toEqual({
+      seq: 1,
+      kind: 'jobs',
+      objectId: undefined,
+      listId: list,
+      recordIds: [],
+      attributeIds: [],
+      itemIds: [item],
+      coarse: false,
+      mutationId: undefined,
+      actorMemberId: actor,
+      at: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/) as string,
+    });
+    const { marked, lagsMs } = await outbox.mark(busy, 1);
+    expect(marked).toBe(1);
+    expect(lagsMs[0]).toBeGreaterThanOrEqual(2_000);
+    expect(lagsMs[0]).toBeLessThan(60_000);
   });
 
   it('prunes published rows exactly past OUTBOX_RETENTION, the interval crm_outbox_prune hard codes', async () => {

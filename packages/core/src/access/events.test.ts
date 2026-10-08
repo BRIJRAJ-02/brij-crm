@@ -1,6 +1,6 @@
 // Who may read a live event (spec 0009, AC-145, AC-150): `filterEvent` over
 // every kind, for the open audience and for restricted ones.
-import { ROLE_PERMISSIONS } from '@crm/contracts';
+import { CHANGE_EVENT_KINDS, ROLE_PERMISSIONS } from '@crm/contracts';
 import { describe, expect, it } from 'vitest';
 import { EVENT_KINDS, eventFacts, filterEvent, type Audience, type EventRow } from './events.ts';
 import { roleAccess, type AccessRules, type MemberPrincipal } from './policy.ts';
@@ -13,6 +13,7 @@ const HIDDEN = '00000000-0000-7000-8000-0000000000f2';
 const OWNER_ATTRIBUTE = '00000000-0000-7000-8000-0000000000f3';
 const ADA = '00000000-0000-7000-8000-000000000001';
 const BEA = '00000000-0000-7000-8000-000000000002';
+const BY_ADA = { type: 'member', id: ADA } as const;
 
 const principal = (memberId: string, role: 'owner' | 'admin' | 'member'): MemberPrincipal => ({
   kind: 'member',
@@ -64,8 +65,8 @@ const records: EventRow = {
   coarse: false,
   mutationId: 'm1',
   replaced: [
-    { recordId: 'r1', attributeId: SHOWN, versionId: 'v1', by: ADA },
-    { recordId: 'r1', attributeId: HIDDEN, versionId: 'v2', by: ADA },
+    { recordId: 'r1', attributeId: SHOWN, versionId: 'v1', by: BY_ADA },
+    { recordId: 'r1', attributeId: HIDDEN, versionId: 'v2', by: BY_ADA },
   ],
 };
 
@@ -77,6 +78,10 @@ describe('every kind has a rule', () => {
     expect(eventFacts({ seq: 1, at, kind: 'views', viewIds: [], coarse: false })).toEqual(['views']);
     expect(eventFacts({ seq: 1, at, kind: 'tasks', recordIds: [], taskIds: [] })).toEqual(['tasks']);
     expect(eventFacts(records)).toEqual([]);
+  });
+
+  it("has a rule for every kind of spec 0007's ChangeEvent but the stub (AC-79)", () => {
+    expect([...EVENT_KINDS].sort()).toEqual(CHANGE_EVENT_KINDS.filter((kind) => kind !== 'restricted').sort());
   });
 });
 
@@ -98,7 +103,7 @@ describe('records', () => {
       recordIds: ['r1', 'r2'],
       attributeIds: [SHOWN],
       coarse: false,
-      replaced: [{ recordId: 'r1', attributeId: SHOWN, versionId: 'v1', by: ADA }],
+      replaced: [{ recordId: 'r1', attributeId: SHOWN, versionId: 'v1', by: BY_ADA }],
     });
   });
 

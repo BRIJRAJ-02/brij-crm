@@ -4,87 +4,24 @@
 // needs loaded first. Pure: the relay (spec 0007) loads the facts once per
 // batch and sends the stub when nothing is left; catch up skips such a row.
 //
-// The row's shape mirrors spec 0007's `ChangeEvent` (its JSON per kind, plus
-// spec 0006's `replaced` and the outbox's never published `actor_member_id`).
-// Spec 0007 milestone 1 defines that union in `packages/contracts`; until it
-// lands, `EventRow` stands in for it here, and is replaced by it then.
-import type { Permission } from '@crm/contracts';
+// The row is spec 0007's `ChangeEvent` (`@crm/contracts`) without the stub,
+// plus what the outbox stores and never publishes: a job's starter
+// (`actor_member_id`), read here for the `jobs` rule.
+import type { ChangeEvent, Permission, ReplacedEntry } from '@crm/contracts';
 import { fieldLevel, objectLevel, OPEN_KEY, recordRule, type DataPolicy } from './policy.ts';
 
-/** A value a save replaced that its author never saw (spec 0006). */
-export interface ReplacedEntry {
-  readonly recordId: string;
-  readonly attributeId: string;
-  readonly versionId: string;
-  readonly by: unknown;
-}
+export type { ReplacedEntry };
 
-/** What every event carries: its place in the workspace's stream, its commit time, and the write's mutation id. */
-interface EventCommon {
-  readonly seq: number;
-  readonly at: string;
-  readonly mutationId?: string;
-}
+/** An event as an audience receives it: every kind of `ChangeEvent` but the stub, which the relay makes. */
+export type AudienceEvent = Exclude<ChangeEvent, { kind: 'restricted' }>;
 
-/** One outbox row as the relay reads it, by kind. */
-export type EventRow = EventCommon &
-  (
-    | {
-        readonly kind: 'records';
-        readonly objectId: string;
-        readonly recordIds: readonly string[];
-        readonly attributeIds: readonly string[];
-        readonly coarse: boolean;
-        readonly replaced?: readonly ReplacedEntry[];
-      }
-    | {
-        readonly kind: 'entries';
-        readonly listId: string;
-        /** The list's parent object (the row's `object_id`). */
-        readonly objectId?: string;
-        readonly entryIds: readonly string[];
-        readonly recordIds: readonly string[];
-        readonly attributeIds: readonly string[];
-        readonly coarse: boolean;
-        readonly replaced?: readonly ReplacedEntry[];
-      }
-    | {
-        readonly kind: 'definitions';
-        readonly objectId?: string;
-        readonly listId?: string;
-        readonly attributeIds?: readonly string[];
-      }
-    | {
-        readonly kind: 'views';
-        readonly objectId?: string;
-        readonly listId?: string;
-        readonly viewIds: readonly string[];
-        readonly coarse: boolean;
-      }
-    | {
-        readonly kind: 'notes';
-        /** The parent records' object (the row's `object_id`). */
-        readonly objectId?: string;
-        readonly recordIds: readonly string[];
-        readonly noteIds: readonly string[];
-        readonly coarse?: boolean;
-      }
-    | {
-        readonly kind: 'tasks';
-        readonly recordIds: readonly string[];
-        readonly taskIds: readonly string[];
-        readonly coarse?: boolean;
-      }
-    | { readonly kind: 'members'; readonly memberIds: readonly string[] }
-    | { readonly kind: 'access'; readonly memberIds: readonly string[] }
-    | {
-        readonly kind: 'jobs';
-        readonly jobIds: readonly string[];
-        readonly coarse: boolean;
-        /** The job's starter: read here, never published. */
-        readonly actorMemberId?: string;
-      }
-  );
+/** One outbox row as the relay reads it, by kind: the published event, and for `jobs` the job's starter. */
+export type EventRow =
+  | Exclude<AudienceEvent, { kind: 'jobs' }>
+  | (Extract<AudienceEvent, { kind: 'jobs' }> & {
+      /** The job's starter: read here, never published. */
+      readonly actorMemberId?: string;
+    });
 
 /** Every kind of event, each with a rule here. */
 export const EVENT_KINDS = [
@@ -98,10 +35,6 @@ export const EVENT_KINDS = [
   'access',
   'jobs',
 ] as const satisfies readonly EventRow['kind'][];
-
-/** An event as an audience receives it: a row without what is never published. */
-export type AudienceEvent =
-  Exclude<EventRow, { kind: 'jobs' }> | Omit<Extract<EventRow, { kind: 'jobs' }>, 'actorMemberId'>;
 
 /** One member of an audience: who, and what they may do. */
 export interface AudienceMember {
@@ -171,9 +104,9 @@ function cutRecords<
   T extends {
     readonly recordIds: readonly string[];
     readonly attributeIds: readonly string[];
-    readonly coarse: boolean;
-    readonly replaced?: readonly ReplacedEntry[];
-    readonly mutationId?: string;
+    readonly coarse?: boolean | undefined;
+    readonly replaced?: readonly ReplacedEntry[] | undefined;
+    readonly mutationId?: string | undefined;
   },
 >(policy: DataPolicy, row: T, owner: string, ruleObject: string, extraIds?: 'entryIds'): T | undefined {
   const attributeIds = row.attributeIds.filter(
@@ -186,7 +119,7 @@ function cutRecords<
     row.replaced === undefined || ruled
       ? undefined
       : row.replaced.filter((entry) => attributeIds.includes(entry.attributeId) && recordIds.includes(entry.recordId));
-  const coarse = row.coarse || ruled;
+  const coarse = row.coarse === true || ruled;
   const extra =
     extraIds === undefined ? {} : { [extraIds]: ruled || onlyHidden ? [] : (row as Record<string, unknown>)[extraIds] };
   const removed =
@@ -195,7 +128,7 @@ function cutRecords<
     (row.replaced !== undefined && (replaced === undefined || !sameList(replaced, row.replaced)));
   // Nothing left: no record, no attribute, and not a coarse refetch.
   if (removed && recordIds.length === 0 && attributeIds.length === 0 && !coarse) return undefined;
-  if (onlyHidden && !row.coarse) return undefined;
+  if (onlyHidden && row.coarse !== true) return undefined;
   const { replaced: _replaced, ...rest } = row;
   return settle(
     {

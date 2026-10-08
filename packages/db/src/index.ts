@@ -9,7 +9,17 @@ export {
   type WorkspaceTx,
 } from './client.ts';
 export { assertDirectUrl, openDirectConnection } from './direct.ts';
-export { createOutboxReader, OUTBOX_CHANNEL, type OutboxReader, type OutboxRow } from './outbox.ts';
+export {
+  createOutboxReader,
+  OUTBOX_CHANNEL,
+  OUTBOX_ROW_COLUMNS,
+  outboxRowOf,
+  type Marked,
+  type OutboxKind,
+  type OutboxReader,
+  type OutboxRow,
+  type RawOutboxRow,
+} from './outbox.ts';
 export { OUTBOX_RETENTION } from './schema/outbox.ts';
 export { addWorkspaceToDirectory, DIRECTORY_SLUG_CONSTRAINT, type DirectoryEntry } from './identity/directory.ts';
 export {

@@ -13,6 +13,10 @@
 // no parameters, so its values are inlined only after checking them: the
 // workspace id against the uuid pattern, and the numbers as whole numbers.
 import type pg from 'pg';
+import type { outboxKind } from './schema/outbox.ts';
+
+/** A kind of outbox row (`outbox_kind`): one per kind of spec 0007's `ChangeEvent` but the stub. */
+export type OutboxKind = (typeof outboxKind.enumValues)[number];
 
 /** The channel a write notifies (`pg_notify`) once its outbox rows commit; the payload is the workspace id. */
 export const OUTBOX_CHANNEL = 'crm_outbox';
@@ -29,16 +33,30 @@ const MAX_PRUNE = 1_000;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** One unpublished outbox row, as the relay turns it into an event. */
+/** One outbox row, as the relay and catch up turn it into an event (`outboxEvent` in `@crm/core`). */
 export interface OutboxRow {
   readonly seq: number;
-  readonly kind: 'records' | 'definitions';
-  readonly objectId: string;
+  readonly kind: OutboxKind;
+  readonly objectId: string | undefined;
+  readonly listId: string | undefined;
   readonly recordIds: readonly string[];
   readonly attributeIds: readonly string[];
+  /** The row's own items: entry, view, note, task, member or job ids, by kind. */
+  readonly itemIds: readonly string[];
   /** Too many records changed to list: refetch what you hold of the object. */
   readonly coarse: boolean;
   readonly mutationId: string | undefined;
+  /** The member whose write stored the row. Never published. */
+  readonly actorMemberId: string | undefined;
+  /** The commit time (`created_at`), ISO 8601: the event's `at`. */
+  readonly at: string;
+}
+
+/** What marking rows published answers: how many, and each one's lag from commit to publish, in ms. */
+export interface Marked {
+  readonly marked: number;
+  /** `published_at - created_at` of each row marked, in `seq` order. */
+  readonly lagsMs: readonly number[];
 }
 
 /**
@@ -66,16 +84,12 @@ export interface OutboxReader {
   pending(workspaceId: string, max: number): Promise<readonly OutboxRow[]>;
   /**
    * Stamps a workspace's rows up to and including `upto` as published, under
-   * its row level security; returns how many. Throws a `TypeError` unless the
-   * id is a uuid and `upto` a whole number.
+   * its row level security; answers how many, with their lags. Throws a
+   * `TypeError` unless the id is a uuid and `upto` a whole number.
    */
-  mark(workspaceId: string, upto: number): Promise<number>;
+  mark(workspaceId: string, upto: number): Promise<Marked>;
   /** `mark(workspaceId, upto)` then `pending(workspaceId, max)`, in one round trip and one transaction. */
-  advance(
-    workspaceId: string,
-    upto: number,
-    max: number,
-  ): Promise<{ readonly marked: number; readonly rows: readonly OutboxRow[] }>;
+  advance(workspaceId: string, upto: number, max: number): Promise<Marked & { readonly rows: readonly OutboxRow[] }>;
   /**
    * Deletes at most `max` (clamped to 1 to 1,000) rows published more than
    * `OUTBOX_RETENTION` ago, through the definer function; returns how many.
@@ -138,7 +152,7 @@ export function createOutboxReader(direct: pg.Client): OutboxReader {
 
     async mark(workspaceId, upto) {
       const [, marked] = await inWorkspace(direct, workspaceId, [markUpto(workspaceId, upto)]);
-      return marked?.rowCount ?? 0;
+      return markedOf(marked);
     },
 
     async advance(workspaceId, upto, max) {
@@ -146,7 +160,7 @@ export function createOutboxReader(direct: pg.Client): OutboxReader {
         markUpto(workspaceId, upto),
         readPending(workspaceId, max),
       ]);
-      return { marked: marked?.rowCount ?? 0, rows: rowsOf(read) };
+      return { ...markedOf(marked), rows: rowsOf(read) };
     },
 
     async prune(max) {
@@ -188,16 +202,25 @@ export function createOutboxReader(direct: pg.Client): OutboxReader {
   };
 }
 
-/** An outbox row as Postgres sends it in text. */
-interface RawRow {
+/** An outbox row as pg parses it. */
+export interface RawOutboxRow {
   readonly seq: string;
-  readonly kind: 'records' | 'definitions';
-  readonly object_id: string;
+  readonly kind: OutboxKind;
+  readonly object_id: string | null;
+  readonly list_id: string | null;
   readonly record_ids: string[];
   readonly attribute_ids: string[];
+  readonly item_ids: string[];
   readonly coarse: boolean;
   readonly mutation_id: string | null;
+  readonly actor_member_id: string | null;
+  /** `created_at` as ISO 8601 in UTC, to the millisecond, formatted by Postgres (so no driver's parsing matters). */
+  readonly at: string;
 }
+
+/** The columns an `OutboxRow` is read from, in SQL, for `outboxRowOf`. */
+export const OUTBOX_ROW_COLUMNS = `seq, kind, object_id, list_id, record_ids, attribute_ids, item_ids, coarse, mutation_id,
+  actor_member_id, to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as at`;
 
 /**
  * Runs `statements` (already checked, see the header) after setting
@@ -217,26 +240,45 @@ async function inWorkspace(
 }
 
 function readPending(workspaceId: string, max: number): string {
-  return `select seq, kind, object_id, record_ids, attribute_ids, coarse, mutation_id from public.outbox
+  return `select ${OUTBOX_ROW_COLUMNS} from public.outbox
     where workspace_id = '${workspaceId}' and published_at is null order by seq limit ${String(clamp(max, MAX_ROWS))}`;
 }
 
 function markUpto(workspaceId: string, upto: number): string {
   if (!Number.isSafeInteger(upto)) throw new TypeError('An outbox number is a whole number.');
-  return `update public.outbox set published_at = now()
-    where workspace_id = '${workspaceId}' and seq <= ${String(upto)} and published_at is null`;
+  // Each row's lag from commit to publish comes back with the stamp, for the relay's stats (spec 0007, AC-77).
+  return `with marked as (
+      update public.outbox set published_at = now()
+      where workspace_id = '${workspaceId}' and seq <= ${String(upto)} and published_at is null
+      returning seq, extract(epoch from published_at - created_at) * 1000 as lag_ms
+    )
+    select lag_ms::float8 as lag_ms from marked order by seq`;
+}
+
+function markedOf(result: pg.QueryResult | undefined): Marked {
+  const lagsMs = ((result?.rows ?? []) as { lag_ms: number }[]).map((row) => row.lag_ms);
+  return { marked: lagsMs.length, lagsMs };
+}
+
+/** One outbox row as pg parsed it (selected with `OUTBOX_ROW_COLUMNS`), as an `OutboxRow`. */
+export function outboxRowOf(row: RawOutboxRow): OutboxRow {
+  return {
+    seq: Number(row.seq),
+    kind: row.kind,
+    objectId: row.object_id ?? undefined,
+    listId: row.list_id ?? undefined,
+    recordIds: row.record_ids,
+    attributeIds: row.attribute_ids,
+    itemIds: row.item_ids,
+    coarse: row.coarse,
+    mutationId: row.mutation_id ?? undefined,
+    actorMemberId: row.actor_member_id ?? undefined,
+    at: row.at,
+  };
 }
 
 function rowsOf(result: pg.QueryResult | undefined): readonly OutboxRow[] {
-  return ((result?.rows ?? []) as RawRow[]).map((row) => ({
-    seq: Number(row.seq),
-    kind: row.kind,
-    objectId: row.object_id,
-    recordIds: row.record_ids,
-    attributeIds: row.attribute_ids,
-    coarse: row.coarse,
-    mutationId: row.mutation_id ?? undefined,
-  }));
+  return ((result?.rows ?? []) as RawOutboxRow[]).map(outboxRowOf);
 }
 
 /** A whole number from 1 to `most`. */

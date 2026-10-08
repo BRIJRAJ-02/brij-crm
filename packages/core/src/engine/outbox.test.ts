@@ -292,4 +292,20 @@ describe('the outbox hook', () => {
     );
     expect(Number(result.rows[0]?.late)).toBeGreaterThanOrEqual(250);
   });
+
+  it('names the member whose write stored the row, and nobody for the system (spec 0007, AC-77)', async () => {
+    const { scope, people, memberId } = await workspace();
+    await createRecord(scope, { objectId: people }, [outboxHook()]);
+    const system = testScope({ db, workspaceId: scope.workspaceId, actor: { type: 'system', id: null } });
+    await createRecord(system, { objectId: people }, [outboxHook()]);
+    const result = await db.withWorkspace(scope.workspaceId, (tx) =>
+      tx.execute<{ seq: number; actor: string | null; list: string | null; items: string[] }>(
+        sql`select seq::int as seq, actor_member_id as actor, list_id as list, item_ids as items from outbox order by seq`,
+      ),
+    );
+    expect(result.rows).toEqual([
+      { seq: 1, actor: memberId, list: null, items: [] },
+      { seq: 2, actor: null, list: null, items: [] },
+    ]);
+  });
 });

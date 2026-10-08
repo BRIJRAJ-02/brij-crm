@@ -6,8 +6,11 @@
 // `workspace_counters.outbox_seq` under that row's lock, so the numbers have no
 // gaps and follow commit order. Then `pg_notify`, delivered on commit, wakes
 // the relay. The counter, the rows and the notify are one statement, so the
-// hook costs the write one round trip while it holds the counter row. Entry
-// changes aren't published yet: no screen shows lists.
+// hook costs the write one round trip while it holds the counter row. Each row
+// also names the member whose write stored it (`actor_member_id`, spec 0007,
+// never published) and its commit time (`created_at`, taken after the counter
+// row, so it follows `seq` order). Entry changes aren't published yet: no
+// screen shows lists (spec 0007, milestone 2).
 import { sql } from 'drizzle-orm';
 import { OUTBOX_CHANNEL } from '@crm/db';
 import { isUuid } from './ids.ts';
@@ -109,6 +112,8 @@ export function outboxHook(options: OutboxHookOptions = {}): AfterWrite {
     const events = outboxEvents(change);
     if (events.length === 0) return;
     const count = events.length;
+    // The member who wrote, never published: spec 0009's access filter reads it for `jobs`.
+    const actorMemberId = change.actor.type === 'member' ? change.actor.id : null;
     const json = JSON.stringify(events);
     // Arrays come out of the json in their own order (with ordinality), so ids keep the order the hook gave them.
     const result = await tx.execute<{ stored: number }>(sql`
@@ -118,7 +123,9 @@ export function outboxHook(options: OutboxHookOptions = {}): AfterWrite {
         returning outbox_seq - ${count}::bigint as base
       ),
       stored as (
-        insert into outbox (workspace_id, seq, kind, object_id, record_ids, attribute_ids, coarse, mutation_id, created_at)
+        insert into outbox (
+          workspace_id, seq, kind, object_id, record_ids, attribute_ids, coarse, mutation_id, actor_member_id, created_at
+        )
         select
           ${change.workspaceId}::uuid,
           counter.base + e.ord,
@@ -128,6 +135,7 @@ export function outboxHook(options: OutboxHookOptions = {}): AfterWrite {
           array(select a.id::uuid from jsonb_array_elements_text(e.value -> 'attributeIds') with ordinality as a(id, i) order by a.i),
           (e.value ->> 'coarse')::boolean,
           ${mutationId ?? null}::uuid,
+          ${actorMemberId}::uuid,
           clock_timestamp()
         from counter, jsonb_array_elements(${json}::jsonb) with ordinality as e(value, ord)
         returning 1

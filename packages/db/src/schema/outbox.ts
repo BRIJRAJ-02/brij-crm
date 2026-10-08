@@ -1,8 +1,9 @@
-// The outbox (spec 0005, change events): one row per object a write touched,
-// stored in the write's own transaction and numbered per workspace with no
-// gaps, so an event can never describe a change that rolled back, nor miss one
-// that committed. Ids only, never values, and no actor columns: who and when
-// live on the records and values. The relay publishes the rows in `seq` order
+// The outbox (spec 0005, change events; spec 0007 widens it to every kind):
+// one row per object, list or kind a write touched, stored in the write's own
+// transaction and numbered per workspace with no gaps, so an event can never
+// describe a change that rolled back, nor miss one that committed. Ids only,
+// never values. `actor_member_id` names the member whose write stored the row,
+// read by the access filter for `jobs` and never published. The relay publishes the rows in `seq` order
 // and stamps `published_at`; published rows are kept for `OUTBOX_RETENTION`
 // (screens that were offline catch up from them), then pruned by the relay
 // through `crm_outbox_prune`. Row level security and the grants (the app may
@@ -15,11 +16,22 @@ import { objects } from './definitions.ts';
 import { workspaces } from './workspaces.ts';
 
 /**
- * What an outbox row names: `records` (refetch these records of the object,
- * or all you hold of it when `coarse`) or `definitions` (refetch the object's
- * attributes). Lists add `entries` when they get screens.
+ * What an outbox row names (spec 0007, `ChangeEvent` in `@crm/contracts`):
+ * `records`, `definitions`, `entries`, `views`, `notes`, `tasks`, `members`,
+ * `access` and `jobs`. Postgres can't drop an enum value, so a kind is only
+ * ever added.
  */
-export const outboxKind = pgEnum('outbox_kind', ['records', 'definitions']);
+export const outboxKind = pgEnum('outbox_kind', [
+  'records',
+  'definitions',
+  'entries',
+  'views',
+  'notes',
+  'tasks',
+  'members',
+  'access',
+  'jobs',
+]);
 
 /**
  * How long a published outbox row is kept, as a Postgres interval. The
@@ -36,7 +48,10 @@ export const outbox = pgTable(
     /** `workspace_counters.outbox_seq + 1`, taken under that row's lock in the write transaction. */
     seq: bigint('seq', { mode: 'number' }).notNull(),
     kind: outboxKind('kind').notNull(),
-    objectId: uuid('object_id').notNull(),
+    /** The object the row is about; null for kinds with no object (`members`, `access`, `jobs`, say). */
+    objectId: uuid('object_id'),
+    /** The list the row is about (`entries`, a list's `definitions` or `views`). */
+    listId: uuid('list_id'),
     recordIds: uuid('record_ids')
       .array()
       .notNull()
@@ -45,11 +60,27 @@ export const outbox = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::uuid[]`),
+    /**
+     * The ids of the row's own items: entry ids for `entries`, view, note, task
+     * or job ids, member ids for `members` and `access`; empty for the rest.
+     */
+    itemIds: uuid('item_ids')
+      .array()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
     /** More than 1,000 records of the object changed: `record_ids` is empty, refetch what you hold of it. */
     coarse: boolean('coarse').notNull().default(false),
     /** The browser's id for the write, echoed so it can skip its own change. */
     mutationId: uuid('mutation_id'),
-    /** When the row was written (`clock_timestamp()`), not when its transaction began. */
+    /**
+     * The member whose write stored the row (for `jobs`, the job's starter), or
+     * null for the system or a key. Read by the access filter; never published.
+     */
+    actorMemberId: uuid('actor_member_id'),
+    /**
+     * The commit time an event carries as `at`: `clock_timestamp()`, set by the
+     * hook after it takes the counter row, so it follows `seq` order.
+     */
     createdAt: timestamptz('created_at')
       .notNull()
       .default(sql`clock_timestamp()`),

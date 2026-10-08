@@ -162,6 +162,13 @@
       "when": 1791448319158,
       "tag": "0022_access_owner_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1791460723799,
+      "tag": "0023_outbox_kinds",
+      "breakpoints": true
     }
   ]
 }
