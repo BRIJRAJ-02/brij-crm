@@ -77,11 +77,13 @@ const LOCAL_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '::1
 /**
  * Refuses (a `loadRefusal`, exit 3) unless every host each URL names is this
  * machine: its hostname and any `host` in its query string, which
- * node-postgres would follow. There is no allow host: a load command never
- * reaches another machine (AC-210).
+ * node-postgres would follow. A URL with no host is refused (node-postgres
+ * would follow PGHOST), and so is one that doesn't parse. There is no allow
+ * host: a load command never reaches another machine (AC-210).
  */
 export function assertLocalUrls(urls: Readonly<Record<string, string>>): void {
   for (const [name, url] of Object.entries(urls)) {
+    if (!URL.canParse(url)) throw loadRefusal(`Refusing ${name}: it isn't a URL a load command can check.`);
     const remote = hostsOf(url).filter((host) => !LOCAL_HOSTS.has(host));
     if (remote.length > 0) {
       throw loadRefusal(`Refusing ${name}: it names ${remote.join(', ')}. Load commands run against localhost only.`);

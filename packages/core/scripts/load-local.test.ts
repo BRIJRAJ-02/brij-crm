@@ -10,6 +10,7 @@ import {
   loadUrls,
   REPO_ROOT,
 } from './load-local.ts';
+import { hostsOf, NO_HOST } from './local-only.ts';
 
 function refusalOf(work: () => unknown): { message: string; exitCode: number } | undefined {
   try {
@@ -50,6 +51,33 @@ describe('the localhost guard', () => {
     const refused = refusalOf(() => assertLocalUrls({ db: 'postgres://u:p@localhost/crm?host=db.example.com' }));
     expect(refused?.exitCode).toBe(3);
     expect(refused?.message).toContain('db.example.com');
+  });
+
+  it('refuses a database URL with no host, which node-postgres would send to PGHOST', () => {
+    const before = process.env.PGHOST;
+    process.env.PGHOST = 'ep-cool-1.neon.tech';
+    try {
+      for (const url of ['postgres:///crm', 'postgres://u:p@localhost/crm?host=']) {
+        const refused = refusalOf(() => assertLocalUrls({ LOAD_DATABASE_URL_OWNER: url }));
+        expect(refused?.exitCode, url).toBe(3);
+        expect(refused?.message).toContain(NO_HOST);
+      }
+      expect(refusalOf(() => loadUrls({ LOAD_DATABASE_URL_OWNER: 'postgres:///crm' }))?.exitCode).toBe(3);
+      // A URL that names localhost wins over PGHOST, so it stays allowed.
+      expect(refusalOf(() => assertLocalUrls({ db: 'postgres://u:p@localhost:5434/crm' }))).toBeUndefined();
+    } finally {
+      if (before === undefined) delete process.env.PGHOST;
+      else process.env.PGHOST = before;
+    }
+  });
+
+  it('refuses a URL that does not parse', () => {
+    expect(refusalOf(() => assertLocalUrls({ db: 'postgres://u:p@/crm' }))?.exitCode).toBe(3);
+  });
+
+  it('names an empty host for the older scale scripts’ guard too', () => {
+    expect(hostsOf('postgres:///crm')).toEqual([NO_HOST]);
+    expect(hostsOf('postgres://u:p@localhost/crm?host=db.example.com')).toEqual(['localhost', 'db.example.com']);
   });
 
   it('refuses a remote API address', () => {

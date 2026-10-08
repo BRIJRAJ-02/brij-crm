@@ -2,12 +2,16 @@
 // against localhost, or against the one host named in SEED_SCALE_ALLOW_HOST
 // (a Neon branch made for the benchmark, never production). node-postgres
 // lets `?host=` in the query string override the URL's host, so that is
-// checked too.
+// checked too. A URL with no host (`postgres:///crm`) reaches whatever PGHOST
+// names, so an empty host counts as remote.
 
-/** Every host a connection URL could reach: its hostname and any `host` in its query string. */
+/** How `hostsOf` names an empty host: node-postgres would then connect to PGHOST, or a socket. */
+export const NO_HOST = '(no host, so PGHOST or a socket)';
+
+/** Every host a connection URL could reach: its hostname and any `host` in its query string, `NO_HOST` for an empty one. */
 export function hostsOf(url: string): readonly string[] {
   const parsed = new URL(url);
-  return [parsed.hostname, ...parsed.searchParams.getAll('host')].filter((host) => host !== '');
+  return [parsed.hostname, ...parsed.searchParams.getAll('host')].map((host) => (host === '' ? NO_HOST : host));
 }
 
 /** Exits unless every host the URL names is local or is `allowed`. */
