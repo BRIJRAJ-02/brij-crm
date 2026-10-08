@@ -112,13 +112,13 @@ export const SCALE_BUDGET = {
 | Service | Image | Port (host) | Cap | Notes |
 |---|---|---|---|---|
 | postgres | `postgres:18.6-alpine` | 5434 | 2 vCPU, 8 GB, `shm_size` 1 GB | `load.conf`: `shared_buffers` 2 GB, `effective_cache_size` 6 GB, `work_mem` 16 MB, `shared_preload_libraries = pg_stat_statements`, `track_io_timing on`; the same init script as the dev stack |
-| pgbouncer | `edoburu/pgbouncer:v1.25.2-p0` | 6434 | none | transaction mode, `DB_USER: crm_app_user`, `DB_PASSWORD: crm_load_local` (the load stack's app login, created by `pnpm load:seed`), `STATS_USERS: crm_app_user`, `default_pool_size` 20, `max_client_conn` 1,000 |
+| pgbouncer | `edoburu/pgbouncer:v1.25.2-p0` | 6434 | none | transaction mode, `DB_USER: crm_app_user`, `DB_PASSWORD: local-only-load-app` (the load stack's app login, created by `pnpm load:seed`), `STATS_USERS: crm_app_user`, `default_pool_size` 20, `max_client_conn` 1,000 |
 | api | built from `apps/api/Dockerfile` | 3100 | 1 vCPU, 1 GB | `APP_ENV=local`, `NODE_ENV=development` (the env refuses local with production; nothing on the request path reads it), `LOAD_TIMING=on`, `APP_URL=http://localhost:3100`, `WORKER_INTERNAL_URL=http://worker:3101`, `WORKER_WAKE_SECRET` and `BETTER_AUTH_SECRET` fixed `local-only` values |
 | worker | the same image, `node apps/api/src/worker.ts` | 3101 | 1 vCPU, 512 MB | the relay; `WORKER_IDLE_SLEEP_SECONDS` unset, so it never sleeps; `crm_worker_user` once spec 0008 lands |
 | centrifugo | `infra/centrifugo/Dockerfile` | 8100, 9100 | 1 vCPU, 512 MB | allowed origin `http://localhost:3100` |
 | mailpit | `axllent/mailpit:v1.31.4` | 1026, 8026 (127.0.0.1 only) | none | the API needs a mail target to boot; the harness never reads it |
 
-Logins on the load database, created by `pnpm load:seed` through the same scripts as `pnpm db:setup`: `crm_app_user` (password `crm_load_local`, through PgBouncer), `crm_identity_user` (direct), and from spec 0008 `crm_worker_user` (direct). The seed, `load:sessions`, `load:reset` and the bench use the owner login (`postgres`, direct on 5434).
+Logins on the load database, created by `pnpm load:seed` through the same scripts as `pnpm db:setup`: `crm_app_user` (password `local-only-load-app`, through PgBouncer), `crm_identity_user` (direct), and from spec 0008 `crm_worker_user` (direct). The seed, `load:sessions`, `load:reset` and the bench use the owner login (`postgres`, direct on 5434).
 
 **Commands and calls** (no new procedures; the harness is a client of the existing contract):
 
