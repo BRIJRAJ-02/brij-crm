@@ -8,6 +8,11 @@
     white-space: nowrap;
   }
 
+  .when {
+    display: inline-flex;
+    flex: none;
+  }
+
   .by {
     overflow: hidden;
     color: var(--text-secondary);

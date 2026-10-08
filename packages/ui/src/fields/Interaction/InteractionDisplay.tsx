@@ -21,7 +21,10 @@ export function InteractionDisplay({ value, display, surface }: DisplayProps<'in
         tone="muted"
         label={strings[interaction.kind]}
       />
-      <RelativeTime value={interaction.at} />
+      {/* When never gives way; who does, with an ellipsis. */}
+      <span className={styles.when}>
+        <RelativeTime value={interaction.at} />
+      </span>
       <span className={styles.by}>{strings.by(by.name)}</span>
     </span>
   );
