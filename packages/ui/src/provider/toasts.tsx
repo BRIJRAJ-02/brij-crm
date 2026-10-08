@@ -86,7 +86,13 @@ export function createToasts(): Toasts {
 /** Draws the toasts at the bottom right. UiProvider renders it once; screens never do. */
 export function ToastRegion({ toasts }: { readonly toasts: Toasts }) {
   return (
-    <AriaToastRegion queue={toasts.queue} className={styles.region} aria-label={strings.notifications}>
+    <AriaToastRegion
+      queue={toasts.queue}
+      className={styles.region}
+      aria-label={strings.notifications}
+      // A screen's own shortcuts tell the region apart from a modal dialog (each toast is an alertdialog).
+      data-toast-region=""
+    >
       {({ toast }) => (
         <AriaToast
           toast={toast}

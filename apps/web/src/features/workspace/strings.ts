@@ -42,22 +42,26 @@ export const strings = {
   /** Why a company or Owner cell can't be edited in this loop. */
   referenceReadOnly: 'You can’t change this here yet.',
   /** Spec 0006: a paste or range clear that landed, with Undo (AC-48). */
-  pasted: (cells: number) => `Pasted into ${String(cells)} cells`,
-  cleared: (cells: number) => `Cleared ${String(cells)} cells`,
+  /** Counts arrive formatted in the browser's language ("1,500"). */
+  pasted: (cells: string) => `Pasted into ${cells} cells`,
+  cleared: (cells: string) => `Cleared ${cells} cells`,
   undo: 'Undo',
-  /** A paste over more records than one write takes (AC-50). */
-  pasteTooBig: (limit: number) => `Paste into at most ${String(limit)} records at once.`,
+  /** A paste over more records, or more data, than one write takes (AC-50): nothing shows or saves. */
+  pasteTooMany: (limit: string) => `Nothing was pasted. Paste into at most ${limit} records at once.`,
+  pasteTooBig: 'Nothing was pasted. That’s more than one change can save, so paste fewer cells at once.',
   /** After an undo (AC-48, AC-49). */
   undidCell: (attribute: string, record: string) => `Undid ${attribute} on ${record}`,
-  undidCells: (cells: number) => `Undid ${String(cells)} changes`,
-  undidPaste: (cells: number) => `Undid the paste into ${String(cells)} cells`,
-  undidClear: (cells: number) => `Undid the clear of ${String(cells)} cells`,
+  undidCells: (cells: string) => `Undid ${cells} changes`,
+  undidPaste: (cells: string) => `Undid the paste into ${cells} cells`,
+  undidClear: (cells: string) => `Undid the clear of ${cells} cells`,
   /** Cells an undo kept because they changed since; never says who (it may be the person, in another tab). */
-  keptSince: (cells: number) =>
-    cells === 1
-      ? '1 cell was changed since, so it was kept.'
-      : `${String(cells)} cells were changed since, so they were kept.`,
-  nothingToUndo: 'Nothing to undo.',
+  keptSince: (cells: number, shown: string) =>
+    cells === 1 ? '1 cell was changed since, so it was kept.' : `${shown} cells were changed since, so they were kept.`,
+  nothingToUndo: 'Nothing to undo',
+  /** A toast's Undo pressed after newer changes: nothing is undone. */
+  undoStale: 'Newer changes came after that one, so it wasn’t undone. Undo them first.',
+  /** The workspace menu's way to the shortcut list. */
+  keyboardShortcuts: 'Keyboard shortcuts',
   /** Someone else's later save replaced the person's value (AC-46). */
   replaced: (who: string, attribute: string, others: number, record: string) =>
     others === 0

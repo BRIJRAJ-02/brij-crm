@@ -26,6 +26,7 @@ const toasts = createToasts(); // once, in main.tsx; also handed to the data lay
 - `toasts`: the queue from `createToasts()`. Raise one with `toasts.toast({ tone, message, action? })`.
 - `clock` (optional): the shared clock behind relative times (`useNow()`), ticking every 30 seconds and paused while the tab is hidden. Stories pass `createFixedClock()`.
 - `loadingTiming` (optional): when skeletons appear. Storybook turns the delay off.
+- `useKeyboardPlatform()`: `mac` or `other`, read once by the provider. Kbd and the grid's Mod keys use it, and a screen's own shortcuts (the workspace frame's undo) read it too, so every shortcut agrees on Cmd or Ctrl.
 
 ## Toasts
 
@@ -44,6 +45,7 @@ const toasts = createToasts(); // once, in main.tsx; also handed to the data lay
 
 - Toasts sit after the page in the tab order: `Tab` reaches the toast, then its buttons. `Enter` on Dismiss closes it, and focus returns to where it was.
 - F6 landmark navigation is checked again with the overlay layer in milestone 2.
+- React Aria gives each toast `role="alertdialog"`; the region carries `data-toast-region`, so a screen's shortcut that stands aside for an open dialog can still answer while focus is on a toast.
 
 ## Differences from the artifact
 

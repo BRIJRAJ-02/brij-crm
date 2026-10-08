@@ -165,12 +165,18 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
                 // One action, one write (spec 0006, AC-50); a paste or clear of several cells says so, with Undo.
                 const kind =
                   changes.length === 1 ? 'cell' : isClear(changes.map((change) => change.value)) ? 'clear' : 'paste';
-                void data.records.setValues(slug, changes, kind).then((outcome) => {
-                  const toast = editToast(outcome, kind, () => {
-                    runUndo(data, toasts, slug);
-                  });
-                  if (toast !== undefined) toasts.toast(toast);
-                });
+                data.records.setValues(slug, changes, kind).then(
+                  (outcome) => {
+                    const toast = editToast(outcome, kind, (undoId) => {
+                      runUndo(data, toasts, slug, undoId);
+                    });
+                    if (toast !== undefined) toasts.toast(toast);
+                  },
+                  // The records layer failed to load; the edit never showed.
+                  () => {
+                    toasts.toast({ tone: 'danger', message: strings.somethingWrong });
+                  },
+                );
               }}
               // The screen confirms a paste once its write lands, with Undo (spec 0006).
               confirmsPaste={false}

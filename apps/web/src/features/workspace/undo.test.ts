@@ -6,12 +6,11 @@ import { describe, expect, it } from 'vitest';
 import {
   belongsElsewhere,
   editToast,
-  isApplePlatform,
   isClear,
   isHelpKey,
   isUndoKey,
   replacedToast,
-  undoKeys,
+  UNDO_KEYS,
   undoToast,
   type KeyTarget,
 } from './undo.ts';
@@ -31,30 +30,22 @@ const press = (
 /** A key target matching the given selectors' parts, as Element.closest would. */
 const target = (inside: readonly string[], isContentEditable = false): KeyTarget => ({
   isContentEditable,
-  closest: (selector) => (inside.some((part) => selector.includes(part)) ? {} : null),
+  closest: (selector) => (inside.some((part) => selector.split(', ').some((one) => one.includes(part))) ? {} : null),
 });
 
 describe('the undo shortcut', () => {
-  it('reads the platform from client hints first, then navigator.platform', () => {
-    expect(isApplePlatform({ userAgentData: { platform: 'macOS' }, platform: 'Win32' })).toBe(true);
-    expect(isApplePlatform({ platform: 'MacIntel' })).toBe(true);
-    expect(isApplePlatform({ platform: 'iPad' })).toBe(true);
-    expect(isApplePlatform({ userAgentData: { platform: 'Windows' }, platform: 'MacIntel' })).toBe(false);
-    expect(isApplePlatform({ platform: 'Linux x86_64' })).toBe(false);
-    expect(isApplePlatform({})).toBe(false);
-  });
-
-  it('is Cmd+Z on an Apple platform and Ctrl+Z elsewhere, never with Shift or Alt', () => {
-    expect(isUndoKey(press('z', { metaKey: true }), true)).toBe(true);
-    expect(isUndoKey(press('Z', { metaKey: true }), true)).toBe(true);
-    expect(isUndoKey(press('z', { ctrlKey: true }), true)).toBe(false);
-    expect(isUndoKey(press('z', { ctrlKey: true }), false)).toBe(true);
-    expect(isUndoKey(press('z', { metaKey: true }), false)).toBe(false);
-    expect(isUndoKey(press('z', { metaKey: true, shiftKey: true }), true)).toBe(false);
-    expect(isUndoKey(press('z', { ctrlKey: true, altKey: true }), false)).toBe(false);
-    expect(isUndoKey(press('y', { ctrlKey: true }), false)).toBe(false);
-    expect(undoKeys(true)).toEqual(['⌘', 'Z']);
-    expect(undoKeys(false)).toEqual(['Ctrl', 'Z']);
+  it('is Cmd+Z on a Mac keyboard and Ctrl+Z on any other, never with Shift or Alt, nor a held key', () => {
+    expect(isUndoKey(press('z', { metaKey: true }), 'mac')).toBe(true);
+    expect(isUndoKey(press('Z', { metaKey: true }), 'mac')).toBe(true);
+    expect(isUndoKey(press('z', { ctrlKey: true }), 'mac')).toBe(false);
+    expect(isUndoKey(press('z', { ctrlKey: true }), 'other')).toBe(true);
+    expect(isUndoKey(press('z', { metaKey: true }), 'other')).toBe(false);
+    expect(isUndoKey(press('z', { metaKey: true, shiftKey: true }), 'mac')).toBe(false);
+    expect(isUndoKey(press('z', { ctrlKey: true, altKey: true }), 'other')).toBe(false);
+    expect(isUndoKey(press('y', { ctrlKey: true }), 'other')).toBe(false);
+    expect(isUndoKey({ ...press('z', { metaKey: true }), repeat: true }, 'mac')).toBe(false);
+    // Written with Mac symbols: Kbd shows Ctrl on other keyboards.
+    expect(UNDO_KEYS).toEqual(['⌘', 'Z']);
   });
 
   it('leaves a text field, an editor and anything in an open dialog their own keys', () => {
@@ -66,6 +57,8 @@ describe('the undo shortcut', () => {
     expect(belongsElsewhere(target(['contenteditable']))).toBe(true);
     expect(belongsElsewhere(target(['role="dialog"']))).toBe(true);
     expect(belongsElsewhere(target(['role="alertdialog"']))).toBe(true);
+    // A toast is an alertdialog too, but no modal: undo answers from its buttons.
+    expect(belongsElsewhere(target(['role="alertdialog"', 'data-toast-region']))).toBe(false);
   });
 
   it('opens the shortcut list on ?', () => {
@@ -98,27 +91,37 @@ describe('the undo toast', () => {
       'Undid the paste into 40 cells. 2 cells were changed since, so they were kept.',
     );
     expect(undoToast(undone({ undone: 0, kept: 1 }))?.message).toBe('1 cell was changed since, so it was kept.');
-    expect(undoToast({ kind: 'nothing' })?.message).toBe('Nothing to undo.');
+    expect(undoToast({ kind: 'nothing' })?.message).toBe('Nothing to undo');
+    expect(undoToast({ kind: 'stale' })).toMatchObject({
+      tone: 'danger',
+      message: expect.stringMatching(/wasn’t undone/) as string,
+    });
+    expect(undoToast(undone({ action: 'paste', cells: 1500, undone: 1500 }))?.message).toBe(
+      `Undid the paste into ${new Intl.NumberFormat().format(1500)} cells`,
+    );
     // Refused for another reason: that refusal already raised its own toast.
     expect(undoToast(undone({ undone: 0, failed: 1 }))).toBeUndefined();
   });
 });
 
 describe('the edit toast (AC-48, AC-50)', () => {
-  it('offers Undo once a paste or clear of several cells lands, and refuses one too big', () => {
-    const onUndo = () => undefined;
-    expect(editToast({ kind: 'done', cells: 40, landed: 40 }, 'paste', onUndo)).toEqual({
-      tone: 'success',
-      message: 'Pasted into 40 cells',
-      action: { label: 'Undo', onAction: onUndo },
-    });
-    expect(editToast({ kind: 'done', cells: 6, landed: 4 }, 'clear', onUndo)?.message).toBe('Cleared 4 cells');
-    expect(editToast({ kind: 'done', cells: 1, landed: 1 }, 'cell', onUndo)).toBeUndefined();
+  it('offers Undo of that paste once it lands, and refuses one too big', () => {
+    const undid: string[] = [];
+    const onUndo = (undoId: string) => undid.push(undoId);
+    const toast = editToast({ kind: 'done', cells: 40, landed: 40, undoId: 'm1' }, 'paste', onUndo);
+    expect(toast).toMatchObject({ tone: 'success', message: 'Pasted into 40 cells', action: { label: 'Undo' } });
+    toast?.action?.onAction();
+    expect(undid).toEqual(['m1']);
+    expect(editToast({ kind: 'done', cells: 6, landed: 4, undoId: 'm2' }, 'clear', onUndo)?.message).toBe(
+      'Cleared 4 cells',
+    );
+    expect(editToast({ kind: 'done', cells: 1, landed: 1, undoId: 'm3' }, 'cell', onUndo)).toBeUndefined();
     expect(editToast({ kind: 'done', cells: 6, landed: 0 }, 'paste', onUndo)).toBeUndefined();
     expect(editToast({ kind: 'too-many', limit: 500 }, 'paste', onUndo)).toEqual({
       tone: 'danger',
-      message: 'Paste into at most 500 records at once.',
+      message: 'Nothing was pasted. Paste into at most 500 records at once.',
     });
+    expect(editToast({ kind: 'too-big' }, 'paste', onUndo)?.tone).toBe('danger');
     expect(isClear([null, [], null])).toBe(true);
     expect(isClear([null, 'x'])).toBe(false);
   });

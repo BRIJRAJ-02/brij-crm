@@ -20,8 +20,8 @@ import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useState, type ReactNode } from 'react';
 import { navObjects, objectHref } from './objects.ts';
 import { strings } from './strings.ts';
-import { undoKeys } from './undo.ts';
-import { useIsApple, useUndoShortcut } from './useUndoShortcut.ts';
+import { UNDO_KEYS } from './undo.ts';
+import { useUndoShortcut } from './useUndoShortcut.ts';
 
 /** Props for the workspace frame. */
 export interface WorkspaceFrameProps {
@@ -74,7 +74,6 @@ export function WorkspaceFrame({
     setHelpOpen(true);
   }, []);
   useUndoShortcut(data, toasts, slug, openHelp);
-  const isApple = useIsApple();
   const signOut = () => {
     if (isSigningOut) return;
     setSigningOut(true);
@@ -103,6 +102,7 @@ export function WorkspaceFrame({
               label={strings.workspaceMenu}
               onAction={(key) => {
                 if (key === 'sign-out') signOut();
+                if (key === 'shortcuts') openHelp();
               }}
             >
               {roleLabel === undefined ? (
@@ -113,6 +113,10 @@ export function WorkspaceFrame({
                   <MenuItem id="sign-out">{strings.signOut}</MenuItem>
                 </MenuSection>
               )}
+              {/* The shortcut list, also on ?, so it can be found with the pointer too. Sign out stays first. */}
+              <MenuItem id="shortcuts" kbd="?">
+                {strings.keyboardShortcuts}
+              </MenuItem>
             </Menu>
           }
           footer={({ isCollapsed }) => (
@@ -145,7 +149,7 @@ export function WorkspaceFrame({
           {
             title: strings.shortcutsEverywhere,
             shortcuts: [
-              { label: strings.undoShortcut, keys: undoKeys(isApple) },
+              { label: strings.undoShortcut, keys: UNDO_KEYS },
               { label: strings.showShortcuts, keys: ['?'] },
             ],
           },

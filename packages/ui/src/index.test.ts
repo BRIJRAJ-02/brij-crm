@@ -133,6 +133,7 @@ describe('@crm/ui', () => {
       'safeImageSrc',
       'typeLabelOf',
       'useDelayedLoading',
+      'useKeyboardPlatform',
     ]);
   });
 });

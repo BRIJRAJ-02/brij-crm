@@ -203,5 +203,5 @@ export {
   type ViewChoice,
 } from './modules/Toolbar/Toolbar.tsx';
 export { createToasts, type ToastAction, type ToastContent, type Toasts, type ToastTone } from './provider/toasts.tsx';
-export { UiProvider, type FormatSettings, type UiProviderProps } from './provider/UiProvider.tsx';
+export { UiProvider, useKeyboardPlatform, type FormatSettings, type UiProviderProps } from './provider/UiProvider.tsx';
 export { LOADING_TIMING, useDelayedLoading, type LoadingTiming } from './provider/useDelayedLoading.ts';

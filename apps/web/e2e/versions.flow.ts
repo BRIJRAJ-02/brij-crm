@@ -96,12 +96,9 @@ async function edit(page: Page, row: number, column: string, value: string): Pro
   await expect(cell).toContainText(value);
 }
 
-/** Presses undo the way this page's platform does it: Cmd+Z on Apple platforms, Ctrl+Z elsewhere. */
+/** Presses undo the way the page's keyboard does it (the library's rule): Cmd+Z on a Mac keyboard, Ctrl+Z elsewhere. */
 async function pressUndo(page: Page): Promise<void> {
-  const isApple = await page.evaluate(() => {
-    const hints = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData;
-    return /mac|iphone|ipad|ipod|ios/i.test(hints?.platform ?? navigator.platform);
-  });
+  const isApple = await page.evaluate(() => /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent));
   await page.keyboard.press(isApple ? 'Meta+z' : 'Control+z');
 }
 
@@ -207,6 +204,8 @@ test.describe('versions, the replaced notice and undo between two members', () =
       ['Scientist', 'Eindhoven'],
     ]);
     await expect(ada.getByText('Pasted into 6 cells')).toBeVisible();
+    // The toast region is marked, so undo still answers while focus sits on a toast's button.
+    await expect(ada.locator('[data-toast-region]')).toHaveCount(1);
     // Said once, by the screen once the write landed: the grid's own confirmation is off.
     await expect(ada.getByText('Pasted 6 cells', { exact: true })).toHaveCount(0);
     await expect(ada.getByRole('button', { name: 'Undo' })).toBeVisible();
@@ -232,6 +231,11 @@ test.describe('versions, the replaced notice and undo between two members', () =
     await picture(ada, 'undo-paste-undone');
     await checkScreen(ada, 'versions-undone');
 
+    // The paste toast's Undo is stale now (its paste was undone): it says so and undoes nothing else.
+    await ada.getByRole('button', { name: 'Undo', exact: true }).click();
+    await expect(ada.getByText(/Newer changes came after that one/)).toBeVisible();
+    await expect(await cellAt(ada, 3, 'Job title')).toContainText('Professor');
+
     // The second press undoes the edit before it.
     await pressUndo(ada);
     await expect(ada.getByText('Undid Job title on Barbara Liskov')).toBeVisible();
@@ -242,7 +246,7 @@ test.describe('versions, the replaced notice and undo between two members', () =
     await cell.click();
     await ada.keyboard.type('Draft');
     await pressUndo(ada);
-    await expect(ada.getByText('Nothing to undo.')).toHaveCount(0);
+    await expect(ada.getByText('Nothing to undo')).toHaveCount(0);
     await ada.keyboard.press('Escape');
 
     // ? lists the shortcut, from anywhere but a text field or a grid cell (where typing starts an edit).
@@ -253,6 +257,12 @@ test.describe('versions, the replaced notice and undo between two members', () =
     const help = ada.getByRole('dialog', { name: 'Keyboard shortcuts' });
     await expect(help).toContainText('Undo your last change');
     await picture(ada, 'undo-shortcut-help');
+    await ada.keyboard.press('Escape');
+    await expect(help).toBeHidden();
+    // And from the workspace menu, with the pointer.
+    await ada.getByRole('button', { name: /workspace menu/ }).click();
+    await ada.getByRole('menuitem', { name: /Keyboard shortcuts/ }).click();
+    await expect(help).toBeVisible();
     await ada.keyboard.press('Escape');
     await bea.context.close();
   });

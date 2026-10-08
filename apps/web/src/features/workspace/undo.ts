@@ -3,34 +3,28 @@
 // dialog instead, and the words of each toast. Pure, so the node tests cover
 // them; the frame and main.tsx do the listening and the raising.
 import type { EditOutcome, ReplacedValue, UndoKind, UndoResult } from '@crm/data';
-import type { ToastContent } from '@crm/ui';
+import type { KeyboardPlatform, ToastContent } from '@crm/ui';
 import { strings } from './strings.ts';
-
-/** What the platform check reads of `navigator`: User-Agent Client Hints where the browser has them. */
-export interface PlatformSource {
-  readonly platform?: string;
-  readonly userAgentData?: { readonly platform?: string };
-}
-
-/** Whether this is macOS, iOS or iPadOS, where Cmd+Z undoes; Ctrl+Z everywhere else. */
-export function isApplePlatform(source: PlatformSource): boolean {
-  const platform = source.userAgentData?.platform ?? source.platform ?? '';
-  return /mac|iphone|ipad|ipod|ios/i.test(platform);
-}
 
 /** A key press as the shortcut reads it. */
 export interface KeyPress {
   readonly key: string;
+  /** Held down: the browser repeats it, and an undo must not fire once per repeat. */
+  readonly repeat?: boolean;
   readonly metaKey: boolean;
   readonly ctrlKey: boolean;
   readonly shiftKey: boolean;
   readonly altKey: boolean;
 }
 
-/** Whether a key press is undo here: Cmd+Z on Apple platforms, Ctrl+Z elsewhere, never with Shift (redo) or Alt. */
-export function isUndoKey(press: KeyPress, isApple: boolean): boolean {
-  if (press.key.toLowerCase() !== 'z' || press.shiftKey || press.altKey) return false;
-  return isApple ? press.metaKey && !press.ctrlKey : press.ctrlKey && !press.metaKey;
+/**
+ * Whether a key press is undo here: Cmd+Z on a Mac keyboard, Ctrl+Z on any
+ * other (`useKeyboardPlatform`, the platform every Kbd shows), never with
+ * Shift (redo) or Alt, and never a held key's repeats.
+ */
+export function isUndoKey(press: KeyPress, platform: KeyboardPlatform): boolean {
+  if (press.key.toLowerCase() !== 'z' || press.shiftKey || press.altKey || press.repeat === true) return false;
+  return platform === 'mac' ? press.metaKey && !press.ctrlKey : press.ctrlKey && !press.metaKey;
 }
 
 /** Whether a key press asks for the shortcut list: ? with no Cmd, Ctrl or Alt. */
@@ -48,6 +42,8 @@ export interface KeyTarget {
 const TEXT_FIELDS = 'input, textarea, select, [contenteditable]:not([contenteditable="false"])';
 /** The library's Modal renders a React Aria dialog; focus stays inside it while it is open. */
 const DIALOGS = '[role="dialog"], [role="alertdialog"]';
+/** Each toast is an alertdialog too, but no modal: undo still answers from a toast's buttons. */
+const TOASTS = '[data-toast-region]';
 
 /**
  * Whether a key press belongs to something else: a text field or an editor
@@ -56,19 +52,21 @@ const DIALOGS = '[role="dialog"], [role="alertdialog"]';
 export function belongsElsewhere(target: KeyTarget | null): boolean {
   if (target === null) return false;
   if (target.isContentEditable === true) return true;
-  return target.closest(TEXT_FIELDS) !== null || target.closest(DIALOGS) !== null;
+  if (target.closest(TEXT_FIELDS) !== null) return true;
+  return target.closest(DIALOGS) !== null && target.closest(TOASTS) === null;
 }
 
-/** Undo's keycaps for the shortcut list, written as ShortcutHelp takes them. */
-export function undoKeys(isApple: boolean): readonly string[] {
-  return isApple ? ['⌘', 'Z'] : ['Ctrl', 'Z'];
-}
+/** Undo's keycaps for the shortcut list, with Mac symbols as ShortcutHelp takes them (Kbd shows Ctrl elsewhere). */
+export const UNDO_KEYS: readonly string[] = ['⌘', 'Z'];
+
+/** A count in the browser's language ("1,500"), as the grid writes its own. */
+const count = (value: number): string => new Intl.NumberFormat().format(value);
 
 /** What an action undid, in words: the cell, or the paste or clear and how many cells. */
 function undidWords(result: Extract<UndoResult, { kind: 'undone' }>): string {
-  if (result.action === 'paste') return strings.undidPaste(result.cells);
-  if (result.action === 'clear') return strings.undidClear(result.cells);
-  if (result.cells > 1) return strings.undidCells(result.cells);
+  if (result.action === 'paste') return strings.undidPaste(count(result.cells));
+  if (result.action === 'clear') return strings.undidClear(count(result.cells));
+  if (result.cells > 1) return strings.undidCells(count(result.cells));
   return strings.undidCell(result.attributeTitle, result.first.recordName);
 }
 
@@ -80,7 +78,9 @@ function undidWords(result: Extract<UndoResult, { kind: 'undone' }>): string {
  */
 export function undoToast(result: UndoResult): ToastContent | undefined {
   if (result.kind === 'nothing') return { tone: 'success', message: strings.nothingToUndo };
-  const kept = result.kept > 0 ? strings.keptSince(result.kept) : undefined;
+  // A toast's Undo whose change is no longer the newest: nothing was done, and the newer changes come first.
+  if (result.kind === 'stale') return { tone: 'danger', message: strings.undoStale };
+  const kept = result.kept > 0 ? strings.keptSince(result.kept, count(result.kept)) : undefined;
   if (result.undone === 0) return kept === undefined ? undefined : { tone: 'success', message: kept };
   const undid = undidWords(result);
   return { tone: 'success', message: kept === undefined ? undid : `${undid}. ${kept}` };
@@ -91,11 +91,27 @@ export function undoToast(result: UndoResult): ToastContent | undefined {
  * 40 cells" with Undo; a paste too big for one write says so. Nothing for one
  * cell, or when nothing landed (the refusal toast covers that).
  */
-export function editToast(outcome: EditOutcome, kind: UndoKind, onUndo: () => void): ToastContent | undefined {
-  if (outcome.kind === 'too-many') return { tone: 'danger', message: strings.pasteTooBig(outcome.limit) };
-  if (outcome.cells <= 1 || outcome.landed === 0) return undefined;
-  const message = kind === 'clear' ? strings.cleared(outcome.landed) : strings.pasted(outcome.landed);
-  return { tone: 'success', message, action: { label: strings.undo, onAction: onUndo } };
+export function editToast(
+  outcome: EditOutcome,
+  kind: UndoKind,
+  onUndo: (undoId: string) => void,
+): ToastContent | undefined {
+  if (outcome.kind === 'too-many') return { tone: 'danger', message: strings.pasteTooMany(count(outcome.limit)) };
+  if (outcome.kind === 'too-big') return { tone: 'danger', message: strings.pasteTooBig };
+  if (outcome.cells <= 1 || outcome.landed === 0 || outcome.undoId === undefined) return undefined;
+  const { undoId } = outcome;
+  const message = kind === 'clear' ? strings.cleared(count(outcome.landed)) : strings.pasted(count(outcome.landed));
+  // The toast's Undo undoes this action only, and only while it is the newest.
+  return {
+    tone: 'success',
+    message,
+    action: {
+      label: strings.undo,
+      onAction: () => {
+        onUndo(undoId);
+      },
+    },
+  };
 }
 
 /** Whether a grid's change of several cells clears them all (a range clear) rather than pasting. */
