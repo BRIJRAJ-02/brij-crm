@@ -5,7 +5,8 @@
     "build": {
       "dependsOn": ["^build"],
       "inputs": ["$TURBO_DEFAULT$", "$TURBO_ROOT$/.env"],
-      "env": ["VITE_*", "GITHUB_SHA", "VERCEL_ENV"],
+      "env": ["VITE_*", "GITHUB_SHA", "VERCEL_ENV", "SENTRY_ORG", "SENTRY_PROJECT_WEB"],
+      "passThroughEnv": ["SENTRY_AUTH_TOKEN"],
       "outputs": ["dist/**"]
     },
     "typecheck": {
