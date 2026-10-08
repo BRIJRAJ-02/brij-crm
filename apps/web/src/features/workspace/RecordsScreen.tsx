@@ -109,13 +109,7 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
             // The total count (AC-34), once it is known.
             {...(state.status === 'ready'
               ? {
-                  meta: (
-                    <Badge
-                      count={state.source.count}
-                      max={Number.MAX_SAFE_INTEGER}
-                      label={object.pluralName.toLowerCase()}
-                    />
-                  ),
+                  meta: <Badge count={state.source.count} max={Infinity} label={object.pluralName.toLowerCase()} />,
                 }
               : {})}
           >

@@ -15,6 +15,7 @@ Ported from the artifact's Badge card. Tabs, the sidebar and the notification in
 ```
 
 - `count` is formatted in the provider's language; over `max` (99) it shows `99+`.
+- For a total (a table's record count beside its title), pass `max={Infinity}`: uncapped, so 12,480 reads as itself.
 - `tone`: `neutral` (the default) beside a label, `accent` for counts that ask for attention.
 - `label` names what is counted for screen readers ("3 unread"); leave it out when the label beside it already says.
 
