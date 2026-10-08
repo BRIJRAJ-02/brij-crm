@@ -10,6 +10,7 @@ import { checkId } from '../engine/ids.ts';
 import { isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import type { AfterWrite } from '../engine/write.ts';
+import { requirePermission } from '../access/check.ts';
 import { inWorkspace } from '../access/run.ts';
 
 const { attributes, objects } = schema;
@@ -90,6 +91,7 @@ export async function addAttribute(
   input: AddAttributeInput,
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeDefinition> {
+  requirePermission(scope, 'schema.manage');
   const objectId = checkId(input.objectId, OBJECT_NOT_FOUND);
   const title = input.title.trim();
   const apiSlug = attributeSlugFrom(title);

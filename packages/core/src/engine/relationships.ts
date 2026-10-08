@@ -14,6 +14,7 @@ import { postgresError, refuse, writeConflict } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
 import { parseFor, type AttributeDef, type AttributeWrite } from './values.ts';
 import { runWrite, type AfterWrite, type ValueChange, type WriteContext } from './write.ts';
+import { requirePermission } from '../access/check.ts';
 
 const { attributes, objects, recordLinks, records, relationships } = schema;
 
@@ -151,6 +152,7 @@ export async function defineRelationship(
   input: RelationshipInput,
   hooks: readonly AfterWrite[] = [],
 ) {
+  requirePermission(scope, 'schema.manage');
   const { result } = await runWrite(scope, (context) => insertRelationship(context, input), hooks);
   return result;
 }

@@ -20,6 +20,7 @@ import { clearUniqueKeys, fillUniqueKeys, UNIQUE_TYPES } from './unique.ts';
 import { loadAttribute, type AttributeDef } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
+import { requirePermission } from '../access/check.ts';
 
 const { attributes, objects } = schema;
 
@@ -309,12 +310,14 @@ export async function defineObject(
   input: Omit<ObjectInput, 'standard'>,
   hooks: readonly AfterWrite[] = [],
 ) {
+  requirePermission(scope, 'schema.manage');
   const { result } = await runWrite(scope, (context) => insertObject(context, input), hooks);
   return result;
 }
 
 /** Defines an attribute on an object, or on a list for its entries (AC-1, AC-2, AC-6, AC-16). */
 export async function defineAttribute(scope: EngineScope, input: AttributeInput, hooks: readonly AfterWrite[] = []) {
+  requirePermission(scope, 'schema.manage');
   const { result } = await runWrite(scope, (context) => insertAttribute(context, input), hooks);
   return result;
 }
@@ -328,6 +331,7 @@ async function editable(tx: WorkspaceTx, attributeId: string): Promise<Attribute
 
 /** Changes an attribute's title, description, required, unique, settings or default (AC-10, AC-11). */
 export async function updateAttribute(scope: EngineScope, input: AttributeUpdate, hooks: readonly AfterWrite[] = []) {
+  requirePermission(scope, 'schema.manage');
   const { result } = await runWrite(
     scope,
     async (context) => {
@@ -365,6 +369,7 @@ export async function updateAttribute(scope: EngineScope, input: AttributeUpdate
 
 /** Archives an attribute: its values stay, it stops taking writes, and a unique one frees its keys. */
 export async function archiveAttribute(scope: EngineScope, attributeId: string, hooks: readonly AfterWrite[] = []) {
+  requirePermission(scope, 'schema.manage');
   await runWrite(
     scope,
     async (context) => {
@@ -390,6 +395,7 @@ export async function archiveAttribute(scope: EngineScope, attributeId: string, 
 
 /** Restores an archived attribute; a unique one takes its keys back, refusing if duplicates appeared meanwhile. */
 export async function restoreAttribute(scope: EngineScope, attributeId: string, hooks: readonly AfterWrite[] = []) {
+  requirePermission(scope, 'schema.manage');
   await runWrite(
     scope,
     async (context) => {
@@ -409,6 +415,7 @@ export async function restoreAttribute(scope: EngineScope, attributeId: string, 
 
 /** Changes an object's names, icon or hue. */
 export async function updateObject(scope: EngineScope, input: ObjectUpdate, hooks: readonly AfterWrite[] = []) {
+  requirePermission(scope, 'schema.manage');
   checkId(input.objectId, 'That object does not exist.');
   await runWrite(
     scope,
@@ -439,6 +446,7 @@ export async function setObjectArchived(
   input: { readonly objectId: string; readonly archived: boolean },
   hooks: readonly AfterWrite[] = [],
 ) {
+  requirePermission(scope, 'schema.manage');
   checkId(input.objectId, 'That object does not exist.');
   await runWrite(
     scope,

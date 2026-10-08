@@ -17,6 +17,7 @@ import { holdUniqueKeys, releaseUniqueKeys } from './unique.ts';
 import { currentItems, loadListAttributes, lockRecord } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
+import { requirePermission } from '../access/check.ts';
 
 const { listEntries, lists, objects, records } = schema;
 
@@ -83,6 +84,7 @@ export async function insertList(context: WriteContext, input: ListInput): Promi
 
 /** Defines a list of one object's records (AC-6, AC-16). */
 export async function defineList(scope: EngineScope, input: ListInput, hooks: readonly AfterWrite[] = []) {
+  requirePermission(scope, 'schema.manage');
   const { result } = await runWrite(scope, (context) => insertList(context, input), hooks);
   return result;
 }

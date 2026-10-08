@@ -99,6 +99,13 @@ export const KEY_SCOPES: readonly string[] = [
   ...KEY_DATA_SCOPES,
 ];
 
+/**
+ * The refusal (403 `FORBIDDEN`) when someone who isn't an owner tries to make
+ * someone an owner, or to change or remove an owner: the owner rules, which no
+ * permission grants.
+ */
+export const OWNER_RULES_MESSAGE = 'Only an owner can make someone an owner, or change or remove an owner.';
+
 /** The refusal when a change would leave a live workspace with no active owner (409 `LAST_OWNER`). */
 export const LAST_OWNER_MESSAGE = 'A workspace needs an owner. Make someone else an owner first.';
 

@@ -22,6 +22,7 @@ import { actorRow, type EngineScope } from './scope.ts';
 import { deleteSortKeys, setRecordKeysLive } from './sort-keys.ts';
 import { holdUniqueKeys, releaseUniqueKeys } from './unique.ts';
 import { runWrite, type AfterWrite, type RecordRef, type ReferenceChange } from './write.ts';
+import { requirePermission } from '../access/check.ts';
 
 const { records } = schema;
 
@@ -325,6 +326,7 @@ export async function purgeDeleted(
   input: { readonly cutoff?: string; readonly batchSize?: number } = {},
   hooks: readonly AfterWrite[] = [],
 ): Promise<RemovedCounts> {
+  requirePermission(scope, 'records.purge');
   const batchSize = input.batchSize ?? 500;
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 10_000) {
     throw refuse('CONFIG_INVALID', 'Purge 1 to 10,000 rows at a time.');
@@ -394,6 +396,7 @@ export async function eraseRecord(
   input: { readonly recordId: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<RemovedCounts> {
+  requirePermission(scope, 'records.purge');
   const recordId = checkId(input.recordId, 'That record does not exist.');
   const { result } = await runWrite(
     scope,

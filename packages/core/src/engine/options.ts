@@ -12,6 +12,7 @@ import type { EngineScope } from './scope.ts';
 import { loadAttribute } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
+import { requirePermission } from '../access/check.ts';
 
 const { attributeOptions } = schema;
 
@@ -107,6 +108,7 @@ export async function insertOption(context: WriteContext, input: OptionInput): P
 
 /** Adds an option to a select or status attribute (AC-4, AC-16). */
 export async function defineOption(scope: EngineScope, input: OptionInput, hooks: readonly AfterWrite[] = []) {
+  requirePermission(scope, 'schema.manage');
   const { result } = await runWrite(scope, (context) => insertOption(context, input), hooks);
   return result;
 }
@@ -134,6 +136,7 @@ async function renumber(tx: WorkspaceTx, attributeId: string, optionId: string, 
 
 /** Renames, recolours, reorders, archives or restores an option. No value row changes (AC-4). */
 export async function updateOption(scope: EngineScope, input: OptionUpdate, hooks: readonly AfterWrite[] = []) {
+  requirePermission(scope, 'schema.manage');
   checkId(input.optionId, 'That option does not exist.');
   await runWrite(
     scope,

@@ -45,4 +45,4 @@ export {
   type EditRecordInput,
   type RecordWindow,
 } from './records/records.ts';
-export { listMembers } from './members/members.ts';
+export { getMyAccess, listMembers, removeMember, setMemberRole, type MemberWithRole } from './members/members.ts';
