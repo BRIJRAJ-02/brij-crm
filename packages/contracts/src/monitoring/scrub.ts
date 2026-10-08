@@ -11,12 +11,22 @@ export const EMAIL_MARK = '[email]';
 /** The only request headers that may leave: neither names nor holds a person. */
 export const KEPT_HEADERS: ReadonlySet<string> = new Set(['content-type', 'x-request-id']);
 
-// Anything shaped like an email address, wherever it sits in a text.
-const EMAIL = /[\w.%+-]+@[a-z\d-]+(?:\.[a-z\d-]+)*\.[a-z]{2,}/giu;
+// Anything shaped like an email address, wherever it sits in a text. Every quantifier is bounded (a local
+// part of at most 64, labels of at most 63, at most 8 of them), so no text makes the match slow.
+const EMAIL = /[\w.%+-]{1,64}@[a-z\d-]{1,63}(?:\.[a-z\d-]{1,63}){0,8}\.[a-z]{2,24}/giu;
 
 // A URL or a path, then its query and fragment: sign in codes, Google's `code`
 // and `state`, a search. The URL keeps everything before `?` or `#`.
-const QUERY = /((?:\b[a-z][a-z\d+.-]*:\/\/|\/)[^\s?#"'<>]*)[?#][^\s"'<>]*/giu;
+// It matches from the `?` or `#` only, looking back for the path's `/`, so a
+// run of slashes costs one short look per `?` rather than a scan per slash.
+const QUERY = /[?#](?<=\/[^\s?#"'<>]{0,2048}[?#])[^\s"'<>]{0,2048}/gu;
+
+// The longest text kept: anything longer is cut before a regex runs, so a huge string (a body, a log)
+// costs no more than a short one. Sentry trims values far shorter than this anyway.
+export const MAX_TEXT = 8192;
+
+// Longer than the longest email the pattern matches, so one that straddles the cut is still marked.
+const SCRUB_MARGIN = 1024;
 
 // Request fields that carry what the person sent, or the server's environment.
 const DROPPED_REQUEST_FIELDS: ReadonlySet<string> = new Set(['cookies', 'data', 'query_string', 'env']);
@@ -34,9 +44,18 @@ const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
 // A failed query's bound values, as drizzle appends them to its message (`Failed query: …\nparams: …`).
 const QUERY_PARAMS = /\nparams:[\s\S]*$/u;
 
-/** A text with a failed query's values cut, every email marked and every URL's query and fragment cut. */
+/**
+ * A text cut to `MAX_TEXT`, with a failed query's values cut, every email
+ * marked and every URL's query and fragment cut.
+ */
 export function scrubText(text: string): string {
-  return text.replace(QUERY_PARAMS, '').replace(EMAIL, EMAIL_MARK).replace(QUERY, '$1');
+  // Scrubbed with a margin past the cut, so an email or a query that straddles it is caught whole, then cut.
+  const scrubbed = text
+    .slice(0, MAX_TEXT + SCRUB_MARGIN)
+    .replace(QUERY_PARAMS, '')
+    .replace(EMAIL, EMAIL_MARK)
+    .replace(QUERY, '');
+  return scrubbed.length > MAX_TEXT ? `${scrubbed.slice(0, MAX_TEXT)}[cut]` : scrubbed;
 }
 
 /** Only the headers in `KEPT_HEADERS`, whatever their case. */

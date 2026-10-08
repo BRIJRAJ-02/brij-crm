@@ -1,7 +1,7 @@
 // The one scrub every Sentry send hook runs (spec 0010, AC-165): nothing
 // personal survives it, and what Sentry needs to group and map an error does.
 import { describe, expect, it } from 'vitest';
-import { EMAIL_MARK, scrub, scrubText } from './scrub.ts';
+import { EMAIL_MARK, MAX_TEXT, scrub, scrubText } from './scrub.ts';
 
 /** Freezes a value and everything in it, so a test fails if scrub writes to its argument. */
 function deepFreeze<T>(value: T): T {
@@ -151,6 +151,32 @@ describe('scrub', () => {
     const extra: Record<string, unknown> = { note: EMAIL };
     extra.self = extra;
     expect(scrub({ extra })).toEqual({ extra: { note: EMAIL_MARK, self: '[cut]' } });
+  });
+});
+
+describe('scrubText on long and hostile text', () => {
+  const MEGABYTE = 1024 * 1024;
+
+  it.each([
+    ['slashes', '/'],
+    ['dotted labels', 'a.'],
+    ['at signs', 'a@'],
+    ['a path then a query', '/a?b'],
+  ])('scrubs a megabyte of %s in well under a frame', (_name, unit) => {
+    const text = unit.repeat(MEGABYTE / unit.length);
+    const started = performance.now();
+    const scrubbed = scrubText(text);
+    expect(performance.now() - started).toBeLessThan(50);
+    expect(scrubbed.length).toBeLessThanOrEqual(MAX_TEXT + '[cut]'.length);
+  });
+
+  it('cuts a long text, and still marks an email that straddles the cut', () => {
+    const email = 'ada.lovelace@example.com';
+    const text = `${'x '.repeat((MAX_TEXT - 6) / 2)}${email} and more`;
+    const scrubbed = scrubText(text);
+    expect(scrubbed.endsWith('[cut]')).toBe(true);
+    expect(scrubbed).not.toContain('ada.lovelace@');
+    expect(scrubbed).not.toContain('@example');
   });
 });
 
