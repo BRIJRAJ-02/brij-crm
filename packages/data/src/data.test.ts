@@ -775,8 +775,9 @@ describe('live updates', () => {
       get: (ids) => (ids.includes(edited.id) ? [edited] : []),
     });
     expect(afters).toEqual([4]);
-    expect(count(api.calls, '/api/rpc/records/get')).toBe(1);
-    expect(view.getSnapshot().source.getItem(0)?.values[TITLE.id]).toBe('CEO');
+    // The caught up ids are fetched a frame later, which a slow CI runner can push past the setup's settle.
+    await expect.poll(() => count(api.calls, '/api/rpc/records/get')).toBe(1);
+    await expect.poll(() => view.getSnapshot().source.getItem(0)?.values[TITLE.id]).toBe('CEO');
   });
 
   it('resyncs and starts from the live token when the head could not be read before the first reads (AC-74)', async () => {
