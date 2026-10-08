@@ -24,7 +24,13 @@ const event = (seq: number, more: Partial<ChangeEvent> = {}): ChangeEvent => ({
 });
 
 /** createLive on a fake client, with its waits, the handlers' calls and the status in the test's hands. */
-function setup(options: { readonly token?: () => Promise<{ channel: string; token: string } | undefined> } = {}) {
+function setup(
+  options: {
+    readonly token?: () => Promise<{ channel: string; token: string } | undefined>;
+    /** How many times opening the client fails before it opens. */
+    readonly openFailures?: number;
+  } = {},
+) {
   const channels: LiveChannel[] = [];
   const unlistened: string[] = [];
   const trouble = new Set<() => void>();
@@ -58,7 +64,7 @@ function setup(options: { readonly token?: () => Promise<{ channel: string; toke
       options.token ?? ((workspace) => Promise.resolve({ channel: `workspace:${workspace}-id`, token: 'sub-token' })),
     open: () => {
       opened += 1;
-      return Promise.resolve(transport);
+      return opened <= (options.openFailures ?? 0) ? Promise.reject(new Error('offline')) : Promise.resolve(transport);
     },
     handlers: {
       records: (workspace, objectId, ids) => calls.push(`records ${workspace} ${objectId} ${ids.join(',')}`),
@@ -197,6 +203,22 @@ describe('the seq contract', () => {
   });
 });
 
+describe('spreading refetches', () => {
+  it('refetches the workspace once for a burst of gaps', async () => {
+    const t = setup();
+    await t.subscribed();
+    t.channel().onPublication(event(1));
+    t.channel().onPublication(event(3));
+    t.channel().onPublication(event(6));
+    await t.elapse(jitter);
+    expect(t.calls).toEqual([`records ${WS} ${PEOPLE} ${ROW(1)}`, `workspace ${WS}`]);
+    // Once done, the next gap waits its own spread.
+    t.channel().onPublication(event(9));
+    await t.elapse(jitter);
+    expect(t.calls.slice(2)).toEqual([`workspace ${WS}`]);
+  });
+});
+
 describe('recovery', () => {
   it('waits for the recovered events after a recovered resubscribe, and refetches nothing', async () => {
     const t = setup();
@@ -284,6 +306,20 @@ describe('the live status', () => {
     expect(t.channel().name).toBe('workspace:x');
     t.channel().onSubscribed({ wasRecovering: false, recovered: false });
     expect(t.statuses).toEqual(['paused', 'live']);
+  });
+});
+
+describe('starting', () => {
+  it('tries the client again with backoff when it fails to load, then listens and says live', async () => {
+    const t = setup({ openFailures: 1 });
+    t.live.watch(WS);
+    await settle();
+    expect(t.statuses).toEqual(['paused']);
+    expect(t.live.status()).toBe('paused');
+    await t.elapse(1500);
+    expect(t.opened()).toBe(2);
+    t.channel().onSubscribed({ wasRecovering: false, recovered: false });
+    expect(t.live.status()).toBe('live');
   });
 });
 

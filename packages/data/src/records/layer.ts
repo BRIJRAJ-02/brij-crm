@@ -26,6 +26,22 @@ const MAX_BLOCK_RETRY_MS = 30_000;
 const GET_LIMIT = 500;
 /** The longest spread before a refetch many browsers make at once (a count after an unplaced change), in ms. */
 const SPREAD_MS = 2000;
+/** How long a changed id is remembered, so a block that was loading when it changed fetches it again, in ms. */
+const RECENT_MS = 10_000;
+/** How far a record id's mint time may be from now for a change to it to count as a create, in ms. */
+const NEW_ID_MS = 10 * 60_000;
+
+/**
+ * Whether a change to an id nobody here holds may be its create: a UUID v7
+ * minted within 10 minutes of now (ids carry their mint time). An older id
+ * is a record that already existed, so an edit to it out of sight leaves the
+ * count alone. Anything else (not v7) may be new.
+ */
+export function mayBeNew(id: string, now: number): boolean {
+  if (id.length !== 36 || id[14] !== '7') return true;
+  const minted = Number.parseInt(`${id.slice(0, 8)}${id.slice(9, 13)}`, 16);
+  return Number.isNaN(minted) || Math.abs(now - minted) <= NEW_ID_MS;
+}
 
 /** The calls the records layer makes, each mapped to a DataError on failure (a 401 has already signed out). */
 export interface RecordsApi {
@@ -278,8 +294,20 @@ export function createRecordsLayer({
       count: 0,
       blockSize: BLOCK_SIZE,
       load: async (offset, limit, signal) => {
+        const asked = now();
         const page = await whenFree(() => api.query({ workspace, objectId, position: offset, limit }, signal), signal);
         store.receive(page.records, { hold: true });
+        // Changed while this block was on its way: its rows may be older than the change.
+        const stale = page.records.map((record) => record.id).filter((id) => changedSince(workspace, id, asked));
+        if (stale.length > 0) {
+          whenFree(() => api.get({ workspace, ids: stale })).then(
+            (rows) => {
+              store.receive(rows);
+            },
+            // Left as loaded: the next change to it, or a reload, brings it up to date.
+            () => undefined,
+          );
+        }
         return page.records.map((record) => record.id);
       },
       onError: blockFailed,
@@ -303,6 +331,7 @@ export function createRecordsLayer({
       whenFree(() => api.count({ workspace, objectId }, controller.signal), controller.signal).then(
         ({ count }) => {
           if (countController !== controller) return;
+          countFailures = 0;
           const isFirst = !isCounted;
           isCounted = true;
           windows.setCount(count);
@@ -312,10 +341,21 @@ export function createRecordsLayer({
           checkReady();
         },
         (failure: unknown) => {
-          if (countController === controller && !controller.signal.aborted) fail(failure);
+          if (countController !== controller || controller.signal.aborted) return;
+          if (status !== 'ready') {
+            fail(failure);
+            return;
+          }
+          // Ready: the table and its count stay, and the count is asked again later, longer each time.
+          countFailures += 1;
+          const delay = Math.min(MAX_BLOCK_RETRY_MS, 1000 * 2 ** (countFailures - 1)) * (1 + random());
+          void wait(Math.round(delay)).then(() => {
+            if (countController === controller && views.get(keyOf(workspace, objectId))?.view === view) refreshCount();
+          });
         },
       );
     }
+    let countFailures = 0;
 
     let isCountDue = false;
     const refreshCountSoon = () => {
@@ -402,7 +442,8 @@ export function createRecordsLayer({
         // Still loading: what it loads is already newer than what was missed.
         if (status !== 'ready') return;
         refreshCount();
-        windows.refresh();
+        // The blocks on screen again; the others load when scrolled back to.
+        windows.refreshShown();
       },
       isReady: () => status === 'ready',
       dispose: () => {
@@ -476,15 +517,28 @@ export function createRecordsLayer({
 
   /** Reads records again by id, 500 at a time; ids the server leaves out are gone and leave every window. */
   async function refetch(workspace: string, ids: readonly string[]): Promise<void> {
-    const held = ids.filter((id) => store.get(id) !== undefined);
+    const held = ids.filter((id) => isHeldIn(workspace, id));
     await Promise.all(
       chunks(held, GET_LIMIT).map(async (part) => {
         const rows = await whenFree(() => api.get({ workspace, ids: part }));
-        store.receive(rows);
+        // Only rows this workspace's views still show: the store is keyed by record id alone.
+        store.receive(rows.filter((row) => isHeldIn(workspace, row.id)));
         const found = new Set(rows.map((row) => row.id));
-        dropRecords(part.filter((id) => !found.has(id) && !store.pending().has(id)));
+        const gone = new Set(part.filter((id) => !found.has(id) && !store.pending().has(id)));
+        if (gone.size === 0) return;
+        for (const entry of viewsOf(workspace)) entry.windows.drop(gone);
+        store.remove([...gone].filter((id) => ![...views.values()].some((entry) => entry.windows.has(id))));
       }),
     );
+  }
+
+  /**
+   * Whether one of `workspace`'s views shows `id`. Record ids are unique per
+   * workspace only, so a change event from one workspace never touches a
+   * record another workspace's view holds under the same id.
+   */
+  function isHeldIn(workspace: string, id: string): boolean {
+    return viewsOf(workspace).some((entry) => entry.windows.has(id));
   }
 
   /** Records new to a view, fetched and placed at its end in id order (the loop's order is creation order). */
@@ -496,10 +550,37 @@ export function createRecordsLayer({
     ).flat();
     if (views.get(keyOf(entry.workspace, entry.objectId)) !== entry) return;
     for (const row of [...rows].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
-      if (row.objectId !== entry.objectId || entry.windows.has(row.id)) continue;
+      if (row.objectId !== entry.objectId) continue;
+      // Placed meanwhile (a later event for it): this row may be the newer one, and versions keep the newest cells.
+      if (entry.windows.has(row.id)) {
+        store.receive([row]);
+        continue;
+      }
+      // The same id held for another workspace: leave that row alone, and let the count say a row was added.
+      if (store.get(row.id) !== undefined) {
+        entry.refreshCountSoon();
+        continue;
+      }
       entry.windows.add(row.id);
       store.receive([row]);
     }
+  }
+
+  // Ids change events named in the last 10 seconds, by workspace, with when: a block in flight checks them.
+  let recent = new Map<string, Map<string, number>>();
+  function remember(workspace: string, ids: readonly string[]) {
+    const time = now();
+    for (const [key, changed] of recent) {
+      for (const [id, at] of changed) if (time - at > RECENT_MS) changed.delete(id);
+      if (changed.size === 0) recent.delete(key);
+    }
+    const changed = recent.get(workspace) ?? new Map<string, number>();
+    recent.set(workspace, changed);
+    for (const id of ids) changed.set(id, time);
+  }
+  function changedSince(workspace: string, id: string, since: number): boolean {
+    const at = recent.get(workspace)?.get(id);
+    return at !== undefined && at >= since;
   }
 
   // Change events' record ids, by workspace and object, gathered for one frame.
@@ -511,13 +592,16 @@ export function createRecordsLayer({
     incoming = new Map();
     for (const [workspace, objects] of gathered) {
       const all = [...objects.values()].flatMap((ids) => [...ids]);
-      const held = all.filter((id) => store.get(id) !== undefined);
+      const held = all.filter((id) => isHeldIn(workspace, id));
       // A refetch that fails leaves rows out of date: load the workspace's views again a moment later.
       if (held.length > 0) {
         refetch(workspace, held).catch(() => {
-          void wait(Math.round(random() * SPREAD_MS)).then(() => {
-            records.reload(workspace);
-          });
+          // Once more a moment later; failing again, the views load what they show again.
+          void wait(Math.round((1 + random()) * SPREAD_MS))
+            .then(() => refetch(workspace, held))
+            .catch(() => {
+              records.reload(workspace);
+            });
         });
       }
       const heldIds = new Set(held);
@@ -530,7 +614,9 @@ export function createRecordsLayer({
         // The last row on screen (or none at all): an id past it is a record made since.
         const last = count === 0 ? '' : entry.windows.idAt(count - 1);
         const fresh = last === undefined ? [] : unheld.filter((id) => id > last);
-        if (fresh.length < unheld.length) entry.refreshCountSoon();
+        // Out of sight: only a record made since moves the count (an edit to an older one doesn't).
+        const time = now();
+        if (unheld.some((id) => !fresh.includes(id) && mayBeNew(id, time))) entry.refreshCountSoon();
         if (fresh.length > 0) {
           place(entry, fresh).catch(() => {
             entry.refreshCountSoon();
@@ -654,6 +740,7 @@ export function createRecordsLayer({
      */
     changed: (workspace: string, objectId: string, ids: readonly string[]): void => {
       if (ids.length === 0) return;
+      remember(workspace, ids);
       const objects = incoming.get(workspace) ?? new Map<string, Set<string>>();
       incoming.set(workspace, objects);
       const gathered = objects.get(objectId) ?? new Set<string>();
@@ -678,6 +765,7 @@ export function createRecordsLayer({
       for (const entry of views.values()) entry.dispose();
       views.clear();
       incoming = new Map();
+      recent = new Map();
       creating.clear();
       sending.clear();
       store.clear();

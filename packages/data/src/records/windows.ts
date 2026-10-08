@@ -62,8 +62,14 @@ export interface Windows {
    * after them moved up; `onStale` refetches the count.
    */
   readonly drop: (ids: ReadonlySet<string>) => void;
-  /** Loads every loaded block, and every block on screen, again (a retry, or live changes missed). */
+  /** Loads every loaded block, and every block on screen, again (a retry). */
   readonly refresh: () => void;
+  /**
+   * Loads the blocks on screen again and lets go of the other loaded ones,
+   * which load when scrolled back to (live changes missed: no more reads
+   * than the screen needs).
+   */
+  readonly refreshShown: () => void;
   /** Loads the blocks on screen that aren't loaded or loading (one that failed, tried again). */
   readonly loadMissing: () => void;
   /** How many blocks hold ids now, and how many are loading. */
@@ -287,6 +293,19 @@ export function createWindows({
     refresh: () => {
       for (const block of new Set([...blocks.keys(), ...loading.keys()])) fetchBlock(block);
       loadShown();
+    },
+    refreshShown: () => {
+      if (count === 0 || shown.end <= shown.start) return;
+      const first = blockOf(shown.start);
+      const last = Math.min(blockOf(shown.end - 1), blockCount() - 1);
+      let evicted = false;
+      for (const block of [...blocks.keys()]) {
+        if (block >= first && block <= last) continue;
+        setBlock(block, undefined);
+        evicted = true;
+      }
+      for (let block = first; block <= last; block += 1) fetchBlock(block);
+      if (evicted) notify();
     },
     loadMissing: loadShown,
     stats: () => ({ loaded: blocks.size, loading: loading.size }),

@@ -46,6 +46,24 @@ describe('the id windows', () => {
     expect(heard).toBe(2);
   });
 
+  it('loads only the blocks on screen again on refreshShown, letting go of the others until scrolled back', async () => {
+    const { calls, load } = fakeLoader();
+    const windows = createWindows({ load, count: 1000 });
+    windows.show({ start: 0, end: 40 });
+    windows.show({ start: 300, end: 340 });
+    for (const call of calls) call.answer();
+    await settle();
+    expect(windows.stats()).toEqual({ loaded: 2, loading: 0 });
+    windows.refreshShown();
+    expect(calls.slice(2).map((call) => call.offset)).toEqual([300]);
+    expect(windows.idAt(0)).toBeUndefined();
+    calls[2]?.answer();
+    await settle();
+    expect(windows.idAt(310)).toBe('id-310');
+    windows.show({ start: 0, end: 40 });
+    expect(calls.slice(3).map((call) => call.offset)).toEqual([0]);
+  });
+
   it('never asks past the last row', () => {
     const { calls, load } = fakeLoader();
     const windows = createWindows({ load, count: 250 });

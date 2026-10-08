@@ -248,14 +248,31 @@ export function createDataLayer({
     return loading;
   }
 
-  /** Drops an object's cached attributes (all of a workspace's when no object is named); says whether any were held. */
-  const dropAttributes = (workspace: string, objectId?: string): boolean => {
-    const prefix = objectId === undefined ? `${workspace}/` : objectKey(workspace, objectId);
-    const held = [...attributes.keys()].filter((key) =>
-      objectId === undefined ? key.startsWith(prefix) : key === prefix,
+  /**
+   * Reads an object's cached attributes again (all of a workspace's when no
+   * object is named), and runs `onDefinitionsChange` once when any list came
+   * back different, so the app reloads its pages only for a real change.
+   */
+  const refreshAttributes = (workspace: string, objectId?: string): void => {
+    const prefix = `${workspace}/`;
+    const held = [...attributes.entries()].filter(([key]) =>
+      objectId === undefined ? key.startsWith(prefix) : key === objectKey(workspace, objectId),
     );
-    for (const key of held) attributes.delete(key);
-    return held.length > 0;
+    const compared = held.map(async ([key, before]) => {
+      attributes.delete(key);
+      const fresh = cached(attributes, key, () =>
+        call((options) => api.attributes.list({ workspace, objectId: key.slice(prefix.length) }, options)),
+      );
+      const [old, next] = await Promise.all([before.catch(() => undefined), fresh]);
+      return JSON.stringify(old) !== JSON.stringify(next);
+    });
+    void Promise.all(compared).then(
+      (changes) => {
+        if (changes.includes(true)) onDefinitionsChange();
+      },
+      // Unreadable now: dropped from the cache, so the next page load asks again.
+      () => undefined,
+    );
   };
 
   /** Live updates, loaded the first time a screen watches a workspace. */
@@ -295,13 +312,13 @@ export function createDataLayer({
             });
           },
           definitions: (workspace, objectId) => {
-            if (dropAttributes(workspace, objectId)) onDefinitionsChange();
+            refreshAttributes(workspace, objectId);
           },
           workspace: (workspace) => {
             void records?.then((layer) => {
               layer.reload(workspace);
             });
-            if (dropAttributes(workspace)) onDefinitionsChange();
+            refreshAttributes(workspace);
           },
         },
       }),
@@ -312,20 +329,35 @@ export function createDataLayer({
   /** Listens to a workspace's changes while a view of it is open; the answer stops. Nothing when live is off. */
   const watch = (workspace: string): (() => void) => {
     if (realtimeUrl === undefined) return () => undefined;
+    const url = realtimeUrl;
     let release: (() => void) | undefined;
     let isReleased = false;
-    loadedLive(realtimeUrl).then(
-      (running) => {
-        if (!isReleased) release = running.watch(workspace);
-      },
-      () => {
-        // The live client didn't load (offline): paused, and the next view tries again.
-        live = undefined;
-        setLiveStatus('paused');
-      },
-    );
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const attempt = (failures: number) => {
+      loadedLive(url).then(
+        (running) => {
+          if (isReleased) return;
+          setLiveStatus(running.status());
+          release = running.watch(workspace);
+        },
+        () => {
+          // The live client didn't load (offline): paused, and tried again, later each time.
+          live = undefined;
+          setLiveStatus('paused');
+          if (isReleased) return;
+          retry = setTimeout(
+            () => {
+              attempt(failures + 1);
+            },
+            Math.min(30_000, 1000 * 2 ** failures),
+          );
+        },
+      );
+    };
+    attempt(0);
     return () => {
       isReleased = true;
+      clearTimeout(retry);
       release?.();
     };
   };

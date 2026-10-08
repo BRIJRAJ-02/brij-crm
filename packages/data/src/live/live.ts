@@ -124,6 +124,8 @@ interface Watched {
   state: 'starting' | 'live' | 'down';
   hasSubscribed: boolean;
   isStopped: boolean;
+  /** Refetches waiting out their spread, by what they refetch. */
+  readonly due: Set<string>;
   stop: () => void;
 }
 
@@ -177,9 +179,16 @@ export function createLive({
     return opening;
   };
 
-  /** Runs `run` after a random 0 to 2 seconds, unless the workspace stopped being watched meanwhile. */
-  const later = (entry: Watched, run: () => void) => {
+  /**
+   * Runs `run` after a random 0 to 2 seconds, unless the workspace stopped
+   * being watched meanwhile; once per `key` however often it is asked while
+   * it waits (a burst of gaps refetches once).
+   */
+  const later = (entry: Watched, key: string, run: () => void) => {
+    if (entry.due.has(key)) return;
+    entry.due.add(key);
     void wait(random() * REFETCH_JITTER_MS).then(() => {
+      entry.due.delete(key);
       if (!entry.isStopped) run();
     });
   };
@@ -188,7 +197,7 @@ export function createLive({
     if (event.kind === 'definitions') {
       handlers.definitions(workspace, event.objectId);
     } else if (event.coarse === true) {
-      later(entry, () => {
+      later(entry, `object:${event.objectId}`, () => {
         handlers.object(workspace, event.objectId);
       });
     } else {
@@ -206,7 +215,7 @@ export function createLive({
     const isOwn = mutations.echoed(event.mutationId);
     if (highest !== undefined && event.seq > highest + 1) {
       // A gap: what came between is lost, so everything held is fetched again (which covers this one too).
-      later(entry, () => {
+      later(entry, 'workspace', () => {
         handlers.workspace(workspace);
       });
       return;
@@ -216,56 +225,68 @@ export function createLive({
     apply(workspace, entry, event);
   };
 
+  /** Connects (once per tab) and subscribes, trying again with backoff while the client or a token can't load. */
   const start = async (workspace: string, entry: Watched) => {
-    const opened = await connect();
-    let granted: { readonly channel: string; readonly token: string } | undefined;
-    for (let failures = 0; granted === undefined; failures += 1) {
-      if (entry.isStopped) return;
+    // Read fresh after each await: a release may stop the entry meanwhile.
+    const isStopped = () => entry.isStopped;
+    for (let failures = 0; ; failures += 1) {
+      if (isStopped()) return;
       try {
-        granted = await subscriptionToken(workspace);
+        const opened = await connect();
+        const granted = await subscriptionToken(workspace);
         // Not allowed (signed out, or not a member): paused, and nothing to try again.
         if (granted === undefined) {
           setState(entry, 'down');
           return;
         }
+        if (isStopped()) return;
+        entry.stop = opened.listen(channelFor(workspace, entry, granted));
+        return;
       } catch {
         setState(entry, 'down');
         await wait(Math.min(MAX_TOKEN_RETRY_MS, 1000 * 2 ** failures) * (1 + random()));
       }
     }
-    if (entry.isStopped) return;
-    entry.stop = opened.listen({
-      name: granted.channel,
-      token: granted.token,
-      renew: async () => (await subscriptionToken(workspace))?.token,
-      onPublication: (data) => {
-        receive(workspace, entry, data);
-      },
-      onSubscribed: ({ wasRecovering, recovered }) => {
-        setState(entry, 'live');
-        if (!entry.hasSubscribed) {
-          // The first subscribe: anything written between the screen's first load and now was missed.
-          entry.hasSubscribed = true;
-          entry.highest = undefined;
-          handlers.workspace(workspace);
-          return;
-        }
-        // Recovered: the missed events follow, in order. Otherwise they are gone (history past 5 minutes or
-        // 1,000 messages, or Centrifugo restarted), so the next event starts the count again.
-        if (wasRecovering && recovered) return;
-        entry.highest = undefined;
-        later(entry, () => {
-          handlers.workspace(workspace);
-        });
-      },
-      onDown: (why) => {
-        // The first subscribing is the start; after that, or on a failure, the screens say paused.
-        if (why === 'failed' || entry.state === 'live') setState(entry, 'down');
-      },
-    });
   };
 
+  /** The workspace's channel, and what its events, subscribes and drops do. */
+  const channelFor = (
+    workspace: string,
+    entry: Watched,
+    granted: { readonly channel: string; readonly token: string },
+  ): LiveChannel => ({
+    name: granted.channel,
+    token: granted.token,
+    renew: async () => (await subscriptionToken(workspace))?.token,
+    onPublication: (data) => {
+      receive(workspace, entry, data);
+    },
+    onSubscribed: ({ wasRecovering, recovered }) => {
+      setState(entry, 'live');
+      if (!entry.hasSubscribed) {
+        // The first subscribe: anything written between the screen's first load and now was missed.
+        entry.hasSubscribed = true;
+        entry.highest = undefined;
+        handlers.workspace(workspace);
+        return;
+      }
+      // Recovered: the missed events follow, in order. Otherwise they are gone (history past 5 minutes or
+      // 1,000 messages, or Centrifugo restarted), so the next event starts the count again.
+      if (wasRecovering && recovered) return;
+      entry.highest = undefined;
+      later(entry, 'workspace', () => {
+        handlers.workspace(workspace);
+      });
+    },
+    onDown: (why) => {
+      // The first subscribing is the start; after that, or on a failure, the screens say paused.
+      if (why === 'failed' || entry.state === 'live') setState(entry, 'down');
+    },
+  });
+
   return {
+    /** `live` or `paused`, as last reported through `onStatus`. */
+    status: (): 'live' | 'paused' => status,
     /**
      * Listens to a workspace's changes while a screen shows it (counted, so
      * every screen may watch); the answer stops watching.
@@ -278,6 +299,7 @@ export function createLive({
         state: 'starting',
         hasSubscribed: false,
         isStopped: false,
+        due: new Set(),
         stop: () => undefined,
       };
       entry.watchers += 1;

@@ -601,14 +601,26 @@ describe('live updates', () => {
     expect(view.getSnapshot().source.getItem(1)?.values[TITLE.id]).toBe('Lead');
   });
 
-  it("drops an object's attributes on a definitions change, so the app loads them again", async () => {
-    const { api, client, data, definitionChanges } = await liveLayer();
+  it("reads an object's attributes again on a definitions change, and reloads the app's pages only when they changed", async () => {
+    const NICKNAME: AttributeDefinition = { ...TITLE, id: '0199a6f2-0000-7000-8000-000000000015', apiSlug: 'nickname' };
+    let lists = 0;
+    const { api, client, data, definitionChanges } = await liveLayer({
+      attributes: () => {
+        lists += 1;
+        return lists >= 3 ? [TITLE, NICKNAME] : [TITLE];
+      },
+    });
     await data.attributes.list('acme', PEOPLE.id);
-    const lists = count(api.calls, '/api/rpc/attributes/list');
+    // Read again, the same: nothing to reload.
     client.channel().onPublication(changed(1, [], { kind: 'definitions' }));
+    await settled();
+    expect(definitionChanges()).toBe(0);
+    // Read again, with a new column: the app's pages load again, and find it cached.
+    client.channel().onPublication(changed(2, [], { kind: 'definitions' }));
+    await settled();
     expect(definitionChanges()).toBe(1);
-    await data.attributes.list('acme', PEOPLE.id);
-    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(lists + 1);
+    expect(await data.attributes.list('acme', PEOPLE.id)).toEqual([TITLE, NICKNAME]);
+    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(3);
   });
 
   it('says paused while the subscription is down, and stops listening on sign out', async () => {

@@ -14,6 +14,11 @@ const CITY = 'attr-city';
 
 const idAt = (index: number) => `0199a6f2-0000-7000-8000-${index.toString(16).padStart(12, '0')}`;
 const version = (ms: number) => `0199a6f2-${ms.toString(16).padStart(4, '0')}-7000-8000-000000000000`;
+/** A UUID v7 minted at the test's now (`at(30)`): a record that may have just been made. */
+const justMinted = (() => {
+  const hex = Date.UTC(2026, 9, 8, 9, 0, 30).toString(16).padStart(12, '0');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-7000-8000-000000000001`;
+})();
 const at = (second: number) => `2026-10-08T09:00:${String(second).padStart(2, '0')}.000Z`;
 
 function rowOf(id: string, values: Record<string, unknown>, versions: Record<string, string> = {}, second = 1) {
@@ -556,6 +561,16 @@ describe('live changes', () => {
     expect(state.source.getItem(2)).toBeUndefined();
   });
 
+  it("never touches a record another workspace's view shows under the same id", async () => {
+    const { layer, view, gets, frame } = await readyView();
+    // Ids are unique per workspace only: another workspace's change to its own record idAt(0).
+    layer.changed('other', PEOPLE, [idAt(0)]);
+    frame();
+    await settle();
+    expect(gets).toHaveLength(0);
+    expect(view.getSnapshot().source.getItem(0)?.values[NAME]).toBe('P0');
+  });
+
   it('places a record made elsewhere at the end when the last row is loaded', async () => {
     const { layer, view, gets, counts, frame } = await readyView();
     layer.changed(WS, PEOPLE, [idAt(7)]);
@@ -571,19 +586,71 @@ describe('live changes', () => {
     expect(counts).toHaveLength(1);
   });
 
-  it('asks for the count again, spread out, for a change out of sight', async () => {
-    const { layer, view, gets, counts, waits, frame } = await readyView();
-    // Before the last row, and not held: a record in a block not loaded, or made with an older id.
-    layer.changed(WS, PEOPLE, ['0199a6f2-0000-7000-7000-000000000001']);
+  it('asks for the count again, spread out, for a record made out of sight, never for an edit to an older one', async () => {
+    const { layer, counts, queries, waits, gets, frame } = setup();
+    const view = layer.view(WS, PEOPLE);
+    await settle();
+    counts[0]?.answer(5000);
+    await settle();
+    queries[0]?.answer(block(0, 100));
+    await view.ready();
+    frame();
+    // An older record, out of sight: an edit, which leaves the count alone.
+    layer.changed(WS, PEOPLE, [idAt(4000)]);
+    frame();
+    await settle();
+    expect(counts).toHaveLength(1);
+    // An id minted just now, out of sight (the end isn't loaded): it may be new.
+    layer.changed(WS, PEOPLE, [justMinted]);
     frame();
     await settle();
     expect(gets).toHaveLength(0);
     expect(waits).toEqual([0]);
     expect(counts).toHaveLength(2);
-    counts[1]?.answer(4);
+    counts[1]?.answer(5001);
+    await settle();
+    frame();
+    expect(view.getSnapshot().source.count).toBe(5001);
+  });
+
+  it('keeps the table when a count fails after it is ready, and asks again later', async () => {
+    const { layer, view, counts, waits, frame } = await readyView();
+    layer.reload(WS);
+    counts[1]?.fail(dataError('API_UNAVAILABLE', 'Can’t reach the CRM.'));
+    await settle();
+    frame();
+    expect(view.getSnapshot().status).toBe('ready');
+    expect(waits).toEqual([1000]);
+    expect(counts).toHaveLength(3);
+  });
+
+  it('fetches a record again when it changed while its block was loading', async () => {
+    const { layer, counts, queries, gets } = setup();
+    const view = layer.view(WS, PEOPLE);
+    await settle();
+    counts[0]?.answer(3);
+    await settle();
+    // The block is on its way when an event names one of its rows.
+    layer.changed(WS, PEOPLE, [idAt(1)]);
+    queries[0]?.answer(block(0, 3));
+    await view.ready();
+    expect(gets.map((call) => call.input)).toEqual([[idAt(1)]]);
+  });
+
+  it('keeps the newer row when a record placed from an event is named again', async () => {
+    const { layer, view, gets, frame } = await readyView();
+    layer.changed(WS, PEOPLE, [idAt(7)]);
+    frame();
+    layer.changed(WS, PEOPLE, [idAt(7)]);
+    frame();
+    expect(gets).toHaveLength(2);
+    gets[0]?.answer([rowOf(idAt(7), { [NAME]: 'Ada' }, { [NAME]: version(1) })]);
+    await settle();
+    gets[1]?.answer([rowOf(idAt(7), { [NAME]: 'Ada Lovelace' }, { [NAME]: version(2) })]);
     await settle();
     frame();
     expect(view.getSnapshot().source.count).toBe(4);
+    expect(view.getSnapshot().source.getItem(3)?.values[NAME]).toBe('Ada Lovelace');
   });
 
   it('loads the count and blocks again on reload, keeping the table', async () => {
