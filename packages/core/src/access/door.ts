@@ -11,12 +11,27 @@
 // workspace and a role the code doesn't know are all refused the same way, so
 // nothing leaks whether a workspace exists.
 import { and, eq, isNull } from 'drizzle-orm';
-import { schema, type Database, type IdentityStore } from '@crm/db';
+import { schema, type Database, type IdentityStore, type WorkspaceTx } from '@crm/db';
 import { isUuid } from '../engine/ids.ts';
 import { refuse, type RefusalError } from '../engine/refusals.ts';
 import { SYSTEM_ACTOR, type Actor } from '../engine/scope.ts';
 import { mintScope, type EngineScope } from './mint.ts';
 import { isRole, NO_RULES, roleAccess, SYSTEM_ACCESS, type AccessRules } from './policy.ts';
+
+/**
+ * Where the door reads a workspace's object, field and record rules, inside
+ * its one tenant transaction (spec 0009, milestone 2): given the member it is
+ * letting in. #24 stores rules and reads them here; until then production
+ * passes nothing, so every member gets `NO_RULES`, and only tests (and the
+ * api's local test server) inject rules.
+ */
+export type RuleSource = (
+  tx: WorkspaceTx,
+  member: { readonly memberId: string; readonly role: string },
+) => Promise<AccessRules>;
+
+/** No rules at all, with no query: production's source until #24. */
+export const NO_RULE_SOURCE: RuleSource = () => Promise.resolve(NO_RULES);
 
 const { members, workspaces } = schema;
 
@@ -31,6 +46,8 @@ export interface DoorDeps {
   readonly identity: Pick<IdentityStore, 'findWorkspace'>;
   /** Where an unknown role is reported. Nothing is reported without one. */
   readonly log?: DoorLog;
+  /** Where the workspace's rules come from: none (`NO_RULE_SOURCE`) unless given. */
+  readonly rules?: RuleSource;
 }
 
 /** Who is knocking (`auth.user.id`, from the session) and which workspace address they asked for. */
@@ -50,14 +67,19 @@ interface MemberRow {
   readonly role: string;
 }
 
-/** The workspace's active member matching `which`, in a live workspace, with its role: one tenant round trip. */
+/**
+ * The workspace's active member matching `which`, in a live workspace, with
+ * its role, and the rules that apply (read by `rules` in the same
+ * transaction): one tenant round trip.
+ */
 async function activeMember(
   db: Database,
   workspaceId: string,
   which: { readonly userId: string } | { readonly memberId: string },
-): Promise<MemberRow | undefined> {
-  const [member] = await db.withWorkspace(workspaceId, (tx) =>
-    tx
+  rules: RuleSource,
+): Promise<{ readonly member: MemberRow; readonly rules: AccessRules } | undefined> {
+  return db.withWorkspace(workspaceId, async (tx) => {
+    const [member] = await tx
       .select({ id: members.id, userId: members.userId, role: members.role })
       .from(members)
       .innerJoin(workspaces, eq(workspaces.id, members.workspaceId))
@@ -68,15 +90,18 @@ async function activeMember(
           isNull(workspaces.deletedAt),
         ),
       )
-      .limit(1),
-  );
-  return member;
+      .limit(1);
+    if (member === undefined) return undefined;
+    // An unknown role is refused before any rule is read, and its rules don't matter.
+    if (!isRole(member.role)) return { member, rules: NO_RULES };
+    return { member, rules: await rules(tx, { memberId: member.id, role: member.role }) };
+  });
 }
 
 /**
  * The scope for an active member, or NOT_FOUND for a role the code doesn't
- * know (fail closed, reported with the member id only). `rules` are the
- * workspace's rules: none until #24 stores them; only tests pass any.
+ * know (fail closed, reported with the member id only). `rules` are the ones
+ * the door's `RuleSource` read: none until #24 stores them; only tests pass any.
  */
 function memberScope(
   deps: Pick<DoorDeps, 'db' | 'log'>,
@@ -111,15 +136,16 @@ export async function enterWorkspace(deps: DoorDeps, input: DoorInput): Promise<
   if (!isUuid(input.userId)) throw notFound();
   const workspace = await deps.identity.findWorkspace(input.slug);
   if (workspace === undefined) throw notFound();
-  const member = await activeMember(deps.db, workspace.id, { userId: input.userId });
-  if (member === undefined) throw notFound();
-  return memberScope(deps, workspace.id, member, NO_RULES);
+  const found = await activeMember(deps.db, workspace.id, { userId: input.userId }, deps.rules ?? NO_RULE_SOURCE);
+  if (found === undefined) throw notFound();
+  return memberScope(deps, workspace.id, found.member, found.rules);
 }
 
-/** What `enterAsActor` needs: the tenant database, and where to report an unknown role. */
+/** What `enterAsActor` needs: the tenant database, where to report an unknown role, and where rules come from. */
 export interface ActorDoorDeps {
   readonly db: Database;
   readonly log?: DoorLog;
+  readonly rules?: RuleSource;
 }
 
 /**
@@ -136,9 +162,9 @@ export async function enterAsActor(
 ): Promise<EngineScope> {
   const { workspaceId, actor } = input;
   if (!isUuid(workspaceId) || actor.type !== 'member' || actor.id === null || !isUuid(actor.id)) throw notFound();
-  const member = await activeMember(deps.db, workspaceId, { memberId: actor.id });
-  if (member === undefined) throw notFound();
-  return memberScope(deps, workspaceId, member, NO_RULES);
+  const found = await activeMember(deps.db, workspaceId, { memberId: actor.id }, deps.rules ?? NO_RULE_SOURCE);
+  if (found === undefined) throw notFound();
+  return memberScope(deps, workspaceId, found.member, found.rules);
 }
 
 /**

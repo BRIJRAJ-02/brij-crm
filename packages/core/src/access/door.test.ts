@@ -12,9 +12,9 @@ import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createUserWorkspace } from '../engine/workspaces.ts';
 import { SYSTEM_ACTOR } from '../engine/scope.ts';
-import { enterAsActor, enterWithKey, enterWorkspace, systemScope, type DoorLog } from './door.ts';
+import { enterAsActor, enterWithKey, enterWorkspace, systemScope, type DoorLog, type RuleSource } from './door.ts';
 import { mintScope } from './mint.ts';
-import { roleAccess } from './policy.ts';
+import { NO_RULES, roleAccess } from './policy.ts';
 
 const { appUrl, identityUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
@@ -201,6 +201,51 @@ describe('enterAsActor (AC-147)', () => {
       { workspaceId: 'not-a-uuid', actor: { type: 'member', id: a.memberId } },
     ] as const;
     for (const input of attempts) expect(await refusalOf(enterAsActor({ db }, input))).toEqual(NOT_FOUND);
+  });
+});
+
+describe('rules at the door (spec 0009, milestone 2)', () => {
+  it('reads the rules through its RuleSource inside its one tenant transaction, for the member it lets in', async () => {
+    const a = await userWithWorkspace();
+    const deals = newId();
+    const seen: { memberId: string; role: string; workspace: string | undefined }[] = [];
+    const rules: RuleSource = async (tx, member) => {
+      const setting = await tx.execute<{ id: string }>(sql`select current_setting('app.workspace_id', true) as id`);
+      seen.push({ ...member, workspace: setting.rows[0]?.id });
+      return {
+        levels: [
+          {
+            subject: { type: 'role', role: 'owner' },
+            target: { type: 'object', objectId: deals },
+            level: 'read',
+          },
+        ],
+        records: [],
+      };
+    };
+    const scope = await enterWorkspace({ db, identity, rules }, { userId: a.userId, slug: a.workspace.slug });
+    expect(seen).toEqual([{ memberId: a.memberId, role: 'owner', workspace: a.workspace.id }]);
+    expect(scope.access.data.objects).toEqual({ [deals]: 'read' });
+    expect(scope.access.data.key).not.toBe('open');
+    const again = await enterAsActor(
+      { db, rules },
+      { workspaceId: a.workspace.id, actor: { type: 'member', id: a.memberId } },
+    );
+    expect(again.access.data.key).toBe(scope.access.data.key);
+    // With no source, nothing restricts: production's door until #24.
+    const open = await enterWorkspace({ db, identity }, { userId: a.userId, slug: a.workspace.slug });
+    expect(open.access.data.key).toBe('open');
+  });
+
+  it('asks the source nothing for a member it refuses', async () => {
+    const a = await userWithWorkspace();
+    let asked = 0;
+    const rules: RuleSource = () => {
+      asked += 1;
+      return Promise.resolve(NO_RULES);
+    };
+    await refusalOf(enterWorkspace({ db, identity, rules }, { userId: randomUUID(), slug: a.workspace.slug }));
+    expect(asked).toBe(0);
   });
 });
 
