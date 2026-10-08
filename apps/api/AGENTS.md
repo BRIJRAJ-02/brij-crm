@@ -18,7 +18,7 @@ The one modular API (Hono + oRPC) that every read and write goes through, and th
 | `src/modules/<feature>/router.ts` | Thin handlers for one feature, each calling a service in `packages/core` |
 | `src/orpc.ts` | `RequestContext` and the three procedure bases: `pub`, `authed` (a session) and `member` (a session plus the access door, `context.scope`) |
 | `src/gate.ts` | `createReadGate()`: at most 6 `records.query` and `records.count` calls in flight per workspace per process, made once in `createApp` and handed to procedures as `context.readGate`; one more answers 429 `TOO_MANY_REQUESTS` |
-| `src/hooks.ts` | `commitWrite(context, { mutationId }, (hooks) => engineCall(..., hooks))`: the one way a write procedure calls the engine, with the write's hooks (the outbox), poking the relay once the write commits. `src/writes.test.ts` fails if a write procedure goes around it |
+| `src/hooks.ts` | `commitWrite(context, { mutationId }, (hooks) => engineCall(..., hooks))`: the one way a write procedure calls the engine, with the write's hooks (the outbox), poking the relay once the write commits; `commitCounted` is the same and also answers `echoes`, how many outbox rows the committed write stored, which every records write answers (spec 0006, AC-60). `src/writes.test.ts` fails if a write procedure goes around them |
 | `src/auth/` | Better Auth's one wrapper: email codes, Google, sessions, the sign up allowlist, rate limits, and its refusals in the shared error shape. Mounted on `/api/auth/*` |
 | `src/mail/` | The `Mailer` interface, Resend (deployed) and Mailpit (local), and the one React Email template |
 | `src/env.ts` | Zod schemas for the api and worker environments, and `loadEnv()` |
