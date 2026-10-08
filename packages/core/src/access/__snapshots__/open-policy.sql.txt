@@ -1,0 +1,1814 @@
+=== 1. no filter, sort by name
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+set local statement_timeout = '10s'
+  []
+
+select "id" from "objects" where "objects"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 2>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+
+    with c0 as materialized (
+      select d.owner_id as id_, d.workspace_id as ws_, d.text_key as dkey0_
+      from sort_keys d where d.attribute_id = $1 and d.live and d.text_key is not null and true
+      order by dkey0_ asc, id_ asc
+       limit $2
+    ), edge as (
+      -- Each last key as text, aliased apart from its column: ORDER BY would otherwise sort the text.
+      select (select count(*)::int from c0) as n, (select dkey0_::text as last_ from c0 order by dkey0_ desc limit 1) as last0_
+    )
+    select edge.*, p.* from edge left join lateral (
+      select r.id::text as id, r.id::text as record_id, c0.dkey0_::text as key0
+      from c0, records r 
+      where r.workspace_id = c0.ws_ and r.id = c0.id_ and r.object_id = $3 and r.deleted_at is null and true
+        and true
+      order by c0.dkey0_ asc, r.id asc
+      limit $4
+    ) p on true
+  
+  ["<id 5>",102,"<id 2>",51]
+
+
+    with c0 as materialized (
+      select r.id as id_, r.workspace_id as ws_ from records r where r.object_id = $1 and r.deleted_at is null and true
+      order by r.id asc limit $2
+    ), edge as (select count(*)::int as n from c0)
+    select edge.n as scanned_, p.* from edge left join lateral (
+      select r.id::text as id, r.id::text as record_id, null::text as key0
+      from c0, records r
+      where r.workspace_id = c0.ws_ and r.id = c0.id_ and true and not exists (select 1 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = r.id and k.attribute_id = $3 offset 0)
+      order by c0.id_ asc
+      limit $4
+    ) p on true
+  
+  ["<id 2>",5000,"<id 5>",47]
+
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3, $4) and "records"."deleted_at" is null)
+  ["<id 6>","<id 7>","<id 8>","<id 9>"]
+
+select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "archived_at", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
+  ["<id 2>"]
+
+select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1, $2, $3, $4) and "values"."active_until" is null)
+  ["<id 9>","<id 6>","<id 7>","<id 8>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 9>,<id 6>,<id 7>,<id 8>}","<id 3>",2,"<id 3>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 9>,<id 6>,<id 7>,<id 8>}","<id 4>",21,"<id 4>"]
+
+commit
+  []
+
+=== 1b. the same at position 2
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+set local statement_timeout = '10s'
+  []
+
+select "id" from "objects" where "objects"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 2>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+
+    with c0 as materialized (
+      select d.owner_id as id_, d.workspace_id as ws_, d.text_key as dkey0_
+      from sort_keys d where d.attribute_id = $1 and d.live and d.text_key is not null and true
+      order by dkey0_ asc, id_ asc
+      offset $2 limit $3
+    ), edge as (
+      -- Each last key as text, aliased apart from its column: ORDER BY would otherwise sort the text.
+      select (select count(*)::int from c0) as n, (select dkey0_::text as last_ from c0 order by dkey0_ desc limit 1) as last0_
+    )
+    select edge.*, p.* from edge left join lateral (
+      select r.id::text as id, r.id::text as record_id, c0.dkey0_::text as key0
+      from c0, records r 
+      where r.workspace_id = c0.ws_ and r.id = c0.id_ and r.object_id = $4 and r.deleted_at is null and true
+        and true
+      order by c0.dkey0_ asc, r.id asc
+      limit $5
+    ) p on true
+  
+  ["<id 5>",2,51,"<id 2>",51]
+
+
+    with c0 as materialized (
+      select r.id as id_, r.workspace_id as ws_ from records r where r.object_id = $1 and r.deleted_at is null and true
+      order by r.id asc limit $2
+    ), edge as (select count(*)::int as n from c0)
+    select edge.n as scanned_, p.* from edge left join lateral (
+      select r.id::text as id, r.id::text as record_id, null::text as key0
+      from c0, records r
+      where r.workspace_id = c0.ws_ and r.id = c0.id_ and true and not exists (select 1 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = r.id and k.attribute_id = $3 offset 0)
+      order by c0.id_ asc
+      limit $4
+    ) p on true
+  
+  ["<id 2>",5000,"<id 5>",49]
+
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2) and "records"."deleted_at" is null)
+  ["<id 6>","<id 7>"]
+
+select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "archived_at", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
+  ["<id 2>"]
+
+select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1, $2) and "values"."active_until" is null)
+  ["<id 7>","<id 6>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 7>,<id 6>}","<id 3>",2,"<id 3>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 7>,<id 6>}","<id 4>",21,"<id 4>"]
+
+commit
+  []
+
+=== 2. source is any of, sort by created at
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+set local statement_timeout = '10s'
+  []
+
+select "id" from "objects" where "objects"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 2>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+
+      select r.id::text as id, r.id::text as record_id, r.created_at::text as key0
+      from records r  
+      where r.object_id = $1 and r.deleted_at is null and (exists (select 1 from "values" v where v.workspace_id = r.workspace_id and v.owner_id = r.id and v.attribute_id = $2 and v.active_until is null and not v.is_cleared and v.option_id in ($3::uuid))) and true and true
+      order by r.created_at desc, r.id desc
+      limit $4
+    
+  ["<id 2>","<id 5>","<id 6>",51]
+
+commit
+  []
+
+=== 3. name contains, probability between, deal type is; close date then name
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+set local statement_timeout = '10s'
+  []
+
+select "id" from "objects" where "objects"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 2>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+select current_setting('statement_timeout') as timeout
+  []
+
+set local statement_timeout = '2s'
+  []
+
+savepoint crm_search
+  []
+
+
+        select count(*)::int as n, case when count(*) < $1 then array_agg(id::text) end as ids
+        from crm_search_text($2::uuid, $3, $4::int) as id
+      
+  [5000,"<id 5>","expansion",5000]
+
+release savepoint crm_search
+  []
+
+select set_config('statement_timeout', $1, true)
+  ["10s"]
+
+
+      select r.id::text as id, r.id::text as record_id, k0.key0::text as key0, k1.key0::text as key1
+      from records r  left join lateral (select v.date_value as key0 from "values" v where v.workspace_id = r.workspace_id and v.owner_id = r.id and v.attribute_id = $1 and v.position = 0 and v.active_until is null and not v.is_cleared) k0 on true left join lateral (select k.text_key as key0 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = r.id and k.attribute_id = $2 and k.live) k1 on true
+      where r.object_id = $3 and r.deleted_at is null and (r.id = any($4::uuid[]) and exists (select 1 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = r.id and k.attribute_id = $5 and k.live and k.number_key between $6::bigint and $7::bigint) and exists (select 1 from "values" v where v.workspace_id = r.workspace_id and v.owner_id = r.id and v.attribute_id = $8 and v.active_until is null and not v.is_cleared and v.option_id = $9::uuid)) and true and true
+      order by k0.key0 asc nulls last, k1.key0 asc nulls last, r.id asc
+      limit $10
+    
+  ["<id 6>","<id 5>","<id 2>","{<id 7>,<id 8>}","<id 9>","200000","600000","<id 10>","<id 11>",51]
+
+commit
+  []
+
+=== 4. through the company: its category, sort by name
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+set local statement_timeout = '10s'
+  []
+
+select "id" from "objects" where "objects"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."id" in ($1)
+  ["<id 3>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 4>","<id 5>"]
+
+
+    with c0 as materialized (
+      select d.owner_id as id_, d.workspace_id as ws_, d.text_key as dkey0_
+      from sort_keys d where d.attribute_id = $1 and d.live and d.text_key is not null and true
+      order by dkey0_ asc, id_ asc
+       limit $2
+    ), edge as (
+      -- Each last key as text, aliased apart from its column: ORDER BY would otherwise sort the text.
+      select (select count(*)::int from c0) as n, (select dkey0_::text as last_ from c0 order by dkey0_ desc limit 1) as last0_
+    )
+    select edge.*, p.* from edge left join lateral (
+      select r.id::text as id, r.id::text as record_id, c0.dkey0_::text as key0
+      from c0, records r 
+      where r.workspace_id = c0.ws_ and r.id = c0.id_ and r.object_id = $3 and r.deleted_at is null and (exists (select 1 from record_links l1 join records f1 on f1.workspace_id = l1.workspace_id and f1.id = l1.to_record_id and f1.deleted_at is null where l1.workspace_id = r.workspace_id and l1.relationship_id = $4 and l1.from_record_id = r.id and l1.active_until is null and exists (select 1 from "values" v where v.workspace_id = f1.workspace_id and v.owner_id = f1.id and v.attribute_id = $5 and v.active_until is null and not v.is_cleared and v.option_id in ($6::uuid) offset 0) offset 0))
+        and true
+      order by c0.dkey0_ asc, r.id asc
+      limit $7
+    ) p on true
+  
+  ["<id 6>",102,"<id 2>","<id 4>","<id 3>","<id 7>",51]
+
+
+    with c0 as materialized (
+      select r.id as id_, r.workspace_id as ws_ from records r where r.object_id = $1 and r.deleted_at is null and true
+      order by r.id asc limit $2
+    ), edge as (select count(*)::int as n from c0)
+    select edge.n as scanned_, p.* from edge left join lateral (
+      select r.id::text as id, r.id::text as record_id, null::text as key0
+      from c0, records r
+      where r.workspace_id = c0.ws_ and r.id = c0.id_ and (exists (select 1 from record_links l1 join records f1 on f1.workspace_id = l1.workspace_id and f1.id = l1.to_record_id and f1.deleted_at is null where l1.workspace_id = r.workspace_id and l1.relationship_id = $3 and l1.from_record_id = r.id and l1.active_until is null and exists (select 1 from "values" v where v.workspace_id = f1.workspace_id and v.owner_id = f1.id and v.attribute_id = $4 and v.active_until is null and not v.is_cleared and v.option_id in ($5::uuid) offset 0) offset 0)) and not exists (select 1 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = r.id and k.attribute_id = $6 offset 0)
+      order by c0.id_ asc
+      limit $7
+    ) p on true
+  
+  ["<id 2>",5000,"<id 4>","<id 3>","<id 7>","<id 6>",50]
+
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1) and "records"."deleted_at" is null)
+  ["<id 8>"]
+
+select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "archived_at", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
+  ["<id 2>"]
+
+select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1) and "values"."active_until" is null)
+  ["<id 8>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 4>","<id 5>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 8>}","<id 4>",2,"<id 4>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 8>}","<id 5>",21,"<id 5>"]
+
+commit
+  []
+
+=== 5. next step is empty, sort by stage
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+set local statement_timeout = '10s'
+  []
+
+select "id" from "objects" where "objects"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 2>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+select "id" from "attribute_options" where "attribute_options"."attribute_id" = $1 order by "attribute_options"."position" asc, "attribute_options"."id" asc
+  ["<id 5>"]
+
+
+    with c0 as materialized (
+      select d.owner_id as id_, d.workspace_id as ws_, $1::int as dkey0_
+      from sort_keys d where d.attribute_id = $2 and d.live and d.option_id is not null and d.option_id = $3::uuid and true
+      order by dkey0_ asc, id_ asc
+       limit $4
+    ), edge as (
+      -- Each last key as text, aliased apart from its column: ORDER BY would otherwise sort the text.
+      select (select count(*)::int from c0) as n, (select dkey0_::text as last_ from c0 order by dkey0_ desc limit 1) as last0_
+    )
+    select edge.*, p.* from edge left join lateral (
+      select r.id::text as id, r.id::text as record_id, c0.dkey0_::text as key0
+      from c0, records r 
+      where r.workspace_id = c0.ws_ and r.id = c0.id_ and r.object_id = $5 and r.deleted_at is null and (not exists (select 1 from "values" v where v.workspace_id = r.workspace_id and v.owner_id = r.id and v.attribute_id = $6 and v.active_until is null and not v.is_cleared offset 0))
+        and true
+      order by c0.dkey0_ asc, r.id asc
+      limit $7
+    ) p on true
+  
+  [0,"<id 5>","<id 6>",102,"<id 2>","<id 7>",51]
+
+
+    with c0 as materialized (
+      select d.owner_id as id_, d.workspace_id as ws_, $1::int as dkey0_
+      from sort_keys d where d.attribute_id = $2 and d.live and d.option_id is not null and d.option_id = $3::uuid and true
+      order by dkey0_ asc, id_ asc
+       limit $4
+    ), edge as (
+      -- Each last key as text, aliased apart from its column: ORDER BY would otherwise sort the text.
+      select (select count(*)::int from c0) as n, (select dkey0_::text as last_ from c0 order by dkey0_ desc limit 1) as last0_
+    )
+    select edge.*, p.* from edge left join lateral (
+      select r.id::text as id, r.id::text as record_id, c0.dkey0_::text as key0
+      from c0, records r 
+      where r.workspace_id = c0.ws_ and r.id = c0.id_ and r.object_id = $5 and r.deleted_at is null and (not exists (select 1 from "values" v where v.workspace_id = r.workspace_id and v.owner_id = r.id and v.attribute_id = $6 and v.active_until is null and not v.is_cleared offset 0))
+        and true
+      order by c0.dkey0_ asc, r.id asc
+      limit $7
+    ) p on true
+  
+  [1,"<id 5>","<id 8>",96,"<id 2>","<id 7>",48]
+
+
+    with c0 as materialized (
+      select d.owner_id as id_, d.workspace_id as ws_, $1::int as dkey0_
+      from sort_keys d where d.attribute_id = $2 and d.live and d.option_id is not null and d.option_id = $3::uuid and true
+      order by dkey0_ asc, id_ asc
+       limit $4
+    ), edge as (
+      -- Each last key as text, aliased apart from its column: ORDER BY would otherwise sort the text.
+      select (select count(*)::int from c0) as n, (select dkey0_::text as last_ from c0 order by dkey0_ desc limit 1) as last0_
+    )
+    select edge.*, p.* from edge left join lateral (
+      select r.id::text as id, r.id::text as record_id, c0.dkey0_::text as key0
+      from c0, records r 
+      where r.workspace_id = c0.ws_ and r.id = c0.id_ and r.object_id = $5 and r.deleted_at is null and (not exists (select 1 from "values" v where v.workspace_id = r.workspace_id and v.owner_id = r.id and v.attribute_id = $6 and v.active_until is null and not v.is_cleared offset 0))
+        and true
+      order by c0.dkey0_ asc, r.id asc
+      limit $7
+    ) p on true
+  
+  [2,"<id 5>","<id 9>",96,"<id 2>","<id 7>",48]
+
+
+    with c0 as materialized (
+      select d.owner_id as id_, d.workspace_id as ws_, $1::int as dkey0_
+      from sort_keys d where d.attribute_id = $2 and d.live and d.option_id is not null and d.option_id = $3::uuid and true
+      order by dkey0_ asc, id_ asc
+       limit $4
+    ), edge as (
+      -- Each last key as text, aliased apart from its column: ORDER BY would otherwise sort the text.
+      select (select count(*)::int from c0) as n, (select dkey0_::text as last_ from c0 order by dkey0_ desc limit 1) as last0_
+    )
+    select edge.*, p.* from edge left join lateral (
+      select r.id::text as id, r.id::text as record_id, c0.dkey0_::text as key0
+      from c0, records r 
+      where r.workspace_id = c0.ws_ and r.id = c0.id_ and r.object_id = $5 and r.deleted_at is null and (not exists (select 1 from "values" v where v.workspace_id = r.workspace_id and v.owner_id = r.id and v.attribute_id = $6 and v.active_until is null and not v.is_cleared offset 0))
+        and true
+      order by c0.dkey0_ asc, r.id asc
+      limit $7
+    ) p on true
+  
+  [3,"<id 5>","<id 10>",96,"<id 2>","<id 7>",48]
+
+
+    with c0 as materialized (
+      select r.id as id_, r.workspace_id as ws_ from records r where r.object_id = $1 and r.deleted_at is null and true
+      order by r.id asc limit $2
+    ), edge as (select count(*)::int as n from c0)
+    select edge.n as scanned_, p.* from edge left join lateral (
+      select r.id::text as id, r.id::text as record_id, null::text as key0
+      from c0, records r
+      where r.workspace_id = c0.ws_ and r.id = c0.id_ and (not exists (select 1 from "values" v where v.workspace_id = r.workspace_id and v.owner_id = r.id and v.attribute_id = $3 and v.active_until is null and not v.is_cleared offset 0)) and not exists (select 1 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = r.id and k.attribute_id = $4 offset 0)
+      order by c0.id_ asc
+      limit $5
+    ) p on true
+  
+  ["<id 2>",5000,"<id 7>","<id 5>",48]
+
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3) and "records"."deleted_at" is null)
+  ["<id 11>","<id 12>","<id 13>"]
+
+select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "archived_at", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
+  ["<id 2>"]
+
+select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1, $2, $3) and "values"."active_until" is null)
+  ["<id 11>","<id 12>","<id 13>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 11>,<id 12>,<id 13>}","<id 3>",2,"<id 3>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 11>,<id 12>,<id 13>}","<id 4>",21,"<id 4>"]
+
+commit
+  []
+
+=== 6. a list: entry stage is Qualified, sort by due
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+set local statement_timeout = '10s'
+  []
+
+select "object_id" from "lists" where "lists"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 3>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."list_id" = $1
+  ["<id 2>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 4>","<id 5>"]
+
+
+    with c0 as materialized (
+      select d.owner_id as id_, d.workspace_id as ws_, d.date_key as dkey0_
+      from sort_keys d where d.attribute_id = $1 and d.live and d.date_key is not null and true
+      order by dkey0_ asc, id_ asc
+       limit $2
+    ), edge as (
+      -- Each last key as text, aliased apart from its column: ORDER BY would otherwise sort the text.
+      select (select count(*)::int from c0) as n, (select dkey0_::text as last_ from c0 order by dkey0_ desc limit 1) as last0_
+    )
+    select edge.*, p.* from edge left join lateral (
+      select r.id::text as id, r.record_id::text as record_id, c0.dkey0_::text as key0
+      from c0, list_entries r join records rec on rec.workspace_id = r.workspace_id and rec.id = r.record_id and rec.deleted_at is null 
+      where r.workspace_id = c0.ws_ and r.id = c0.id_ and r.list_id = $3 and r.deleted_at is null and (exists (select 1 from "values" v where v.workspace_id = rec.workspace_id and v.owner_id = r.id and v.attribute_id = $4 and v.active_until is null and not v.is_cleared and v.option_id = $5::uuid offset 0))
+        and true
+      order by c0.dkey0_ asc, r.id asc
+      limit $6
+    ) p on true
+  
+  ["<id 6>",102,"<id 2>","<id 7>","<id 8>",51]
+
+
+    with c0 as materialized (
+      select r.id as id_, r.workspace_id as ws_ from list_entries r join records rec on rec.workspace_id = r.workspace_id and rec.id = r.record_id and rec.deleted_at is null where r.list_id = $1 and r.deleted_at is null and true
+      order by r.id asc limit $2
+    ), edge as (select count(*)::int as n from c0)
+    select edge.n as scanned_, p.* from edge left join lateral (
+      select r.id::text as id, r.record_id::text as record_id, null::text as key0
+      from c0, list_entries r join records rec on rec.workspace_id = r.workspace_id and rec.id = r.record_id and rec.deleted_at is null
+      where r.workspace_id = c0.ws_ and r.id = c0.id_ and (exists (select 1 from "values" v where v.workspace_id = rec.workspace_id and v.owner_id = r.id and v.attribute_id = $3 and v.active_until is null and not v.is_cleared and v.option_id = $4::uuid offset 0)) and not exists (select 1 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = r.id and k.attribute_id = $5 offset 0)
+      order by c0.id_ asc
+      limit $6
+    ) p on true
+  
+  ["<id 2>",5000,"<id 7>","<id 8>","<id 6>",50]
+
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1) and "records"."deleted_at" is null)
+  ["<id 9>"]
+
+select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "archived_at", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
+  ["<id 3>"]
+
+select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1) and "values"."active_until" is null)
+  ["<id 9>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 4>","<id 5>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 9>}","<id 4>",2,"<id 4>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 9>}","<id 5>",21,"<id 5>"]
+
+select "list_entries"."id", "list_entries"."list_id", "list_entries"."record_id", "list_entries"."created_at", "list_entries"."created_by_type", "list_entries"."created_by_id", "list_entries"."updated_at", "list_entries"."updated_by_type", "list_entries"."updated_by_id" from "list_entries" inner join "records" on ("records"."workspace_id" = "list_entries"."workspace_id" and "records"."id" = "list_entries"."record_id" and "records"."deleted_at" is null) where ("list_entries"."deleted_at" is null and "list_entries"."id" in ($1)) order by "list_entries"."id" asc
+  ["<id 10>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."list_id" = $1
+  ["<id 2>"]
+
+select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1) and "values"."active_until" is null and "values"."is_cleared" = $2)
+  ["<id 10>",false]
+
+commit
+  []
+
+=== 7. sort by name, the page after a cursor
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+set local statement_timeout = '10s'
+  []
+
+select "id" from "objects" where "objects"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 2>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+
+    with c0 as materialized (
+      select d.owner_id as id_, d.workspace_id as ws_, d.text_key as dkey0_
+      from sort_keys d where d.attribute_id = $1 and d.live and d.text_key is not null and true
+      order by dkey0_ asc, id_ asc
+       limit $2
+    ), edge as (
+      -- Each last key as text, aliased apart from its column: ORDER BY would otherwise sort the text.
+      select (select count(*)::int from c0) as n, (select dkey0_::text as last_ from c0 order by dkey0_ desc limit 1) as last0_
+    )
+    select edge.*, p.* from edge left join lateral (
+      select r.id::text as id, r.id::text as record_id, c0.dkey0_::text as key0
+      from c0, records r 
+      where r.workspace_id = c0.ws_ and r.id = c0.id_ and r.object_id = $3 and r.deleted_at is null and true
+        and true
+      order by c0.dkey0_ asc, r.id asc
+      limit $4
+    ) p on true
+  
+  ["<id 5>",4,"<id 2>",2]
+
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1) and "records"."deleted_at" is null)
+  ["<id 6>"]
+
+select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "archived_at", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
+  ["<id 2>"]
+
+select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1) and "values"."active_until" is null)
+  ["<id 6>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 6>}","<id 3>",2,"<id 3>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 6>}","<id 4>",21,"<id 4>"]
+
+commit
+  []
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+set local statement_timeout = '10s'
+  []
+
+select "id" from "objects" where "objects"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 2>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+
+    with c0 as materialized (
+      select d.owner_id as id_, d.workspace_id as ws_, d.text_key as dkey0_
+      from sort_keys d where d.attribute_id = $1 and d.live and d.text_key is not null and (d.text_key) >= ($2) and (d.text_key, d.owner_id) > ($3, $4::uuid)
+      order by dkey0_ asc, id_ asc
+       limit $5
+    ), edge as (
+      -- Each last key as text, aliased apart from its column: ORDER BY would otherwise sort the text.
+      select (select count(*)::int from c0) as n, (select dkey0_::text as last_ from c0 order by dkey0_ desc limit 1) as last0_
+    )
+    select edge.*, p.* from edge left join lateral (
+      select r.id::text as id, r.id::text as record_id, c0.dkey0_::text as key0
+      from c0, records r 
+      where r.workspace_id = c0.ws_ and r.id = c0.id_ and r.object_id = $6 and r.deleted_at is null and true
+        and (((c0.dkey0_ > $7 or c0.dkey0_ is null)) or (c0.dkey0_ = $8 and r.id > $9::uuid))
+      order by c0.dkey0_ asc, r.id asc
+      limit $10
+    ) p on true
+  
+  ["<id 5>","apollo renewal","apollo renewal","<id 6>",4,"<id 2>","apollo renewal","apollo renewal","<id 6>",2]
+
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1) and "records"."deleted_at" is null)
+  ["<id 7>"]
+
+select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "archived_at", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
+  ["<id 2>"]
+
+select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1) and "values"."active_until" is null)
+  ["<id 7>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 7>}","<id 3>",2,"<id 3>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 7>}","<id 4>",21,"<id 4>"]
+
+commit
+  []
+
+=== 10. sort by stage, then by name
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+set local statement_timeout = '10s'
+  []
+
+select "id" from "objects" where "objects"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 2>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+select "id" from "attribute_options" where "attribute_options"."attribute_id" = $1 order by "attribute_options"."position" asc, "attribute_options"."id" asc
+  ["<id 5>"]
+
+select count(*)::int as n from (select 1 from sort_keys d where d.attribute_id = $1 and d.live and d.option_id is not null and d.option_id = $2::uuid limit $3) s
+  ["<id 5>","<id 6>",20001]
+
+
+        select r.id::text as id, r.id::text as record_id, $1::text as key0, k1.key0::text as key1
+        from (select d.owner_id as id_, d.workspace_id as ws_ from sort_keys d where d.attribute_id = $2 and d.live and d.option_id is not null and d.option_id = $3::uuid) g, records r left join lateral (select k.text_key as key0 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = r.id and k.attribute_id = $4 and k.live) k1 on true
+        where r.workspace_id = g.ws_ and r.id = g.id_ and r.object_id = $5 and r.deleted_at is null and true
+          and true
+        order by k1.key0 asc nulls last, r.id asc
+        limit $6
+      
+  ["0","<id 5>","<id 6>","<id 7>","<id 2>",51]
+
+select count(*)::int as n from (select 1 from sort_keys d where d.attribute_id = $1 and d.live and d.option_id is not null and d.option_id = $2::uuid limit $3) s
+  ["<id 5>","<id 8>",20001]
+
+
+        select r.id::text as id, r.id::text as record_id, $1::text as key0, k1.key0::text as key1
+        from (select d.owner_id as id_, d.workspace_id as ws_ from sort_keys d where d.attribute_id = $2 and d.live and d.option_id is not null and d.option_id = $3::uuid) g, records r left join lateral (select k.text_key as key0 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = r.id and k.attribute_id = $4 and k.live) k1 on true
+        where r.workspace_id = g.ws_ and r.id = g.id_ and r.object_id = $5 and r.deleted_at is null and true
+          and true
+        order by k1.key0 asc nulls last, r.id asc
+        limit $6
+      
+  ["1","<id 5>","<id 8>","<id 7>","<id 2>",47]
+
+select count(*)::int as n from (select 1 from sort_keys d where d.attribute_id = $1 and d.live and d.option_id is not null and d.option_id = $2::uuid limit $3) s
+  ["<id 5>","<id 9>",20001]
+
+
+        select r.id::text as id, r.id::text as record_id, $1::text as key0, k1.key0::text as key1
+        from (select d.owner_id as id_, d.workspace_id as ws_ from sort_keys d where d.attribute_id = $2 and d.live and d.option_id is not null and d.option_id = $3::uuid) g, records r left join lateral (select k.text_key as key0 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = r.id and k.attribute_id = $4 and k.live) k1 on true
+        where r.workspace_id = g.ws_ and r.id = g.id_ and r.object_id = $5 and r.deleted_at is null and true
+          and true
+        order by k1.key0 asc nulls last, r.id asc
+        limit $6
+      
+  ["2","<id 5>","<id 9>","<id 7>","<id 2>",47]
+
+select count(*)::int as n from (select 1 from sort_keys d where d.attribute_id = $1 and d.live and d.option_id is not null and d.option_id = $2::uuid limit $3) s
+  ["<id 5>","<id 10>",20001]
+
+
+        select r.id::text as id, r.id::text as record_id, $1::text as key0, k1.key0::text as key1
+        from (select d.owner_id as id_, d.workspace_id as ws_ from sort_keys d where d.attribute_id = $2 and d.live and d.option_id is not null and d.option_id = $3::uuid) g, records r left join lateral (select k.text_key as key0 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = r.id and k.attribute_id = $4 and k.live) k1 on true
+        where r.workspace_id = g.ws_ and r.id = g.id_ and r.object_id = $5 and r.deleted_at is null and true
+          and true
+        order by k1.key0 asc nulls last, r.id asc
+        limit $6
+      
+  ["3","<id 5>","<id 10>","<id 7>","<id 2>",47]
+
+
+      select r.id::text as id, r.id::text as record_id, null::text as key0, k1.key0::text as key1
+      from records r  left join lateral (select k.text_key as key0 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = r.id and k.attribute_id = $1 and k.live) k1 on true
+      where r.object_id = $2 and r.deleted_at is null and true and not exists (select 1 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = r.id and k.attribute_id = $3) and true
+      order by k1.key0 asc nulls last, r.id asc
+      limit $4
+    
+  ["<id 7>","<id 2>","<id 5>",47]
+
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3, $4) and "records"."deleted_at" is null)
+  ["<id 11>","<id 12>","<id 13>","<id 14>"]
+
+select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "archived_at", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
+  ["<id 2>"]
+
+select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1, $2, $3, $4) and "values"."active_until" is null)
+  ["<id 14>","<id 11>","<id 12>","<id 13>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 14>,<id 11>,<id 12>,<id 13>}","<id 3>",2,"<id 3>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 14>,<id 11>,<id 12>,<id 13>}","<id 4>",21,"<id 4>"]
+
+commit
+  []
+
+=== 11. a rare contains, sort by name
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+set local statement_timeout = '10s'
+  []
+
+select "id" from "objects" where "objects"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 2>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+select current_setting('statement_timeout') as timeout
+  []
+
+set local statement_timeout = '2s'
+  []
+
+savepoint crm_search
+  []
+
+
+        select count(*)::int as n, case when count(*) < $1 then array_agg(id::text) end as ids
+        from crm_search_text($2::uuid, $3, $4::int) as id
+      
+  [5000,"<id 5>","zephyr",5000]
+
+release savepoint crm_search
+  []
+
+select set_config('statement_timeout', $1, true)
+  ["10s"]
+
+
+      select r.id::text as id, r.id::text as record_id, k0.key0::text as key0
+      from records r  left join lateral (select k.text_key as key0 from sort_keys k where k.workspace_id = r.workspace_id and k.owner_id = r.id and k.attribute_id = $1 and k.live) k0 on true
+      where r.object_id = $2 and r.deleted_at is null and (r.id = any($3::uuid[])) and true and true
+      order by k0.key0 asc nulls last, r.id asc
+      limit $4
+    
+  ["<id 5>","<id 2>","{<id 6>}",51]
+
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1) and "records"."deleted_at" is null)
+  ["<id 6>"]
+
+select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "archived_at", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
+  ["<id 2>"]
+
+select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1) and "values"."active_until" is null)
+  ["<id 6>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 6>}","<id 3>",2,"<id 3>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 6>}","<id 4>",21,"<id 4>"]
+
+commit
+  []
+
+=== 12. a sort by the linked company
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+set local statement_timeout = '10s'
+  []
+
+select "id" from "objects" where "objects"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 2>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+
+      select r.id::text as id, r.id::text as record_id, k0.key0::text as key0
+      from records r  left join lateral (select (lower(left(pv.text_value, 256)) collate "und-x-icu") as key0 from record_links sl join records fr on fr.workspace_id = sl.workspace_id and fr.id = sl.to_record_id and fr.deleted_at is null join objects fo on fo.workspace_id = fr.workspace_id and fo.id = fr.object_id left join "values" pv on pv.workspace_id = fr.workspace_id and pv.owner_id = fr.id and pv.attribute_id = fo.primary_attribute_id and pv.position = 0 and pv.active_until is null and not pv.is_cleared where sl.workspace_id = r.workspace_id and sl.relationship_id = $1 and sl.from_record_id = r.id and sl.active_until is null order by sl.position, sl.active_from, sl.id limit 1) k0 on true
+      where r.object_id = $2 and r.deleted_at is null and true and true and true
+      order by k0.key0 asc nulls last, r.id asc
+      limit $3
+    
+  ["<id 3>","<id 2>",51]
+
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3, $4) and "records"."deleted_at" is null)
+  ["<id 5>","<id 6>","<id 7>","<id 8>"]
+
+select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "archived_at", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
+  ["<id 2>"]
+
+select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1, $2, $3, $4) and "values"."active_until" is null)
+  ["<id 5>","<id 6>","<id 7>","<id 8>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 5>,<id 6>,<id 7>,<id 8>}","<id 3>",2,"<id 3>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 5>,<id 6>,<id 7>,<id 8>}","<id 4>",21,"<id 4>"]
+
+commit
+  []
+
+=== count: everything
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+set local statement_timeout = '10s'
+  []
+
+select "id" from "objects" where "objects"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 2>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+select count(*)::int as n from records r where r.object_id = $1 and r.deleted_at is null
+  ["<id 2>"]
+
+commit
+  []
+
+=== count: a filter and a contains
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+set local statement_timeout = '10s'
+  []
+
+select "id" from "objects" where "objects"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 2>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+select current_setting('statement_timeout') as timeout
+  []
+
+set local statement_timeout = '2s'
+  []
+
+savepoint crm_search
+  []
+
+
+        select count(*)::int as n, case when count(*) < $1 then array_agg(id::text) end as ids
+        from crm_search_text($2::uuid, $3, $4::int) as id
+      
+  [5000,"<id 5>","expansion",5000]
+
+release savepoint crm_search
+  []
+
+select set_config('statement_timeout', $1, true)
+  ["10s"]
+
+select count(*)::int as n from (select 1 from records r where r.object_id = $1 and r.deleted_at is null and (r.id = any($2::uuid[]) and not exists (select 1 from "values" v where v.workspace_id = r.workspace_id and v.owner_id = r.id and v.attribute_id = $3 and v.active_until is null and not v.is_cleared)) limit $4) s
+  ["<id 2>","{<id 6>,<id 7>}","<id 8>",10001]
+
+commit
+  []
+
+=== count: a list
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+set local statement_timeout = '10s'
+  []
+
+select "object_id" from "lists" where "lists"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 3>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."list_id" = $1
+  ["<id 2>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 4>","<id 5>"]
+
+
+              select l.entry_count - (
+                select count(*)::int from records t
+                join list_entries e on e.workspace_id = t.workspace_id and e.record_id = t.id
+                where t.deleted_at is not null and e.list_id = $1 and e.deleted_at is null
+              ) as n from lists l where l.id = $2
+            
+  ["<id 2>","<id 2>"]
+
+commit
+  []
+
+=== read: records by id
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+set local statement_timeout = '10s'
+  []
+
+select "id" from "objects" where "objects"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 2>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+
+      select r.id::text as id, r.id::text as record_id
+      from records r  
+      where r.object_id = $1 and r.deleted_at is null and true and true and true
+      order by r.id asc
+      limit $2
+    
+  ["<id 2>",51]
+
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3, $4) and "records"."deleted_at" is null)
+  ["<id 5>","<id 6>","<id 7>","<id 8>"]
+
+select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "archived_at", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
+  ["<id 2>"]
+
+select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1, $2, $3, $4) and "values"."active_until" is null)
+  ["<id 5>","<id 6>","<id 7>","<id 8>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 5>,<id 6>,<id 7>,<id 8>}","<id 3>",2,"<id 3>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 5>,<id 6>,<id 7>,<id 8>}","<id 4>",21,"<id 4>"]
+
+commit
+  []
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "deleted_by_id", "deleted_by_member_id", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "records" where ("records"."id" in ($1, $2, $3, $4) and "records"."deleted_at" is null)
+  ["<id 5>","<id 6>","<id 7>","<id 8>"]
+
+select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "archived_at", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 2>"]
+
+select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1, $2, $3, $4) and "values"."active_until" is null)
+  ["<id 5>","<id 6>","<id 7>","<id 8>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 3>","<id 4>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 5>,<id 6>,<id 7>,<id 8>}","<id 3>",2,"<id 3>"]
+
+
+      select o.owner::text as owner, l.record_id::text as record_id, l.object_id::text as object_id,
+        v.version_id::text as latest
+      from unnest($1::uuid[]) as o(owner)
+      left join lateral (
+        select r.id as record_id, r.object_id, k.position as p, k.active_from as f, k.id as kid
+        
+      from record_links k
+      join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null
+      where k.relationship_id = $2 and k.from_record_id = o.owner and k.active_until is null
+    
+        order by k.position, k.active_from, k.id
+        limit $3
+      ) l on true
+      left join lateral (
+        select k.version_id from record_links k
+        where k.relationship_id = $4 and k.from_record_id = o.owner and k.active_until is null
+        order by k.active_from desc, k.id desc
+        limit 1
+      ) v on true
+      order by o.owner, l.p, l.f, l.kid
+    
+  ["{<id 5>,<id 6>,<id 7>,<id 8>}","<id 4>",21,"<id 4>"]
+
+commit
+  []

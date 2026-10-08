@@ -175,6 +175,40 @@ export async function holdTableLock(url: string, table: 'records'): Promise<{ re
   };
 }
 
+/** One statement a client sent: its text and its parameters. */
+export interface SentStatement {
+  readonly text: string;
+  readonly params: readonly unknown[];
+}
+
+/**
+ * Runs `work` and answers every statement any `pg` client in this process
+ * sent meanwhile, in order: for a test that pins the SQL a service sends
+ * (spec 0009, AC-149). Run nothing else at the same time, since every client
+ * is recorded.
+ */
+export async function recordStatements(work: () => Promise<unknown>): Promise<readonly SentStatement[]> {
+  const sent: SentStatement[] = [];
+  const prototype = pg.Client.prototype as unknown as { query: (...args: unknown[]) => unknown };
+  const original = prototype.query;
+  prototype.query = function (this: unknown, ...args: unknown[]) {
+    const [first, second] = args;
+    const given = Array.isArray(second) ? (second as unknown[]) : [];
+    if (typeof first === 'string') sent.push({ text: first, params: given });
+    else if (typeof first === 'object' && first !== null && 'text' in first && typeof first.text === 'string') {
+      const values = 'values' in first && Array.isArray(first.values) ? (first.values as unknown[]) : given;
+      sent.push({ text: first.text, params: values });
+    }
+    return original.apply(this, args);
+  };
+  try {
+    await work();
+  } finally {
+    prototype.query = original;
+  }
+  return sent;
+}
+
 /**
  * Runs `work` holding the lock every suite's `prepareTestDatabase` takes, so
  * no suite migrates while it runs. For a test that briefly commits a role
