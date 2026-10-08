@@ -65,12 +65,22 @@ interface Pending<I, O> {
   readonly signal?: AbortSignal;
 }
 
+/** The versions a write made, as the server answers them: each attribute it sent, at the row's version. */
+const writtenOf = (row: RecordView, attributeIds: readonly string[]): Record<string, string> =>
+  Object.fromEntries(
+    attributeIds.flatMap((attributeId) => {
+      const version = row.versions[attributeId];
+      return version === undefined ? [] : [[attributeId, version]];
+    }),
+  );
+
 /** A fake API: each call waits in its own queue until the test answers it. */
 function fakeApi() {
   const queries: Pending<{ position: number; limit: number }, readonly RecordView[]>[] = [];
   const counts: Pending<undefined, number>[] = [];
   const creates: Pending<CreateRecordInput, RecordView>[] = [];
-  const edits: Pending<SetValuesInput, RecordView>[] = [];
+  // A test may say what the write itself made (`written`); by default, each value it sent at the answer's version.
+  const edits: Pending<SetValuesInput, RecordView & { readonly written?: Record<string, string> }>[] = [];
   const batches: Pending<SetValuesBatchInput, BatchResults>[] = [];
   const gets: Pending<readonly string[], RecordView[]>[] = [];
   const queue =
@@ -86,9 +96,24 @@ function fakeApi() {
     count: async (_input, signal) => ({ count: await queue(counts)(undefined, signal), atLeast: false }),
     get: (input) => queue(gets)(input.ids),
     // Each write stores one outbox row here: one echo.
-    create: async (input) => ({ ...(await queue(creates)(input)), echoes: 1 }),
-    setValues: async (input) => ({ ...(await queue(edits)(input)), echoes: 1 }),
-    setValuesBatch: (input) => queue(batches)(input),
+    create: async (input) => ({ ...(await queue(creates)(input)), echoes: 1, written: {} }),
+    setValues: async (input) => {
+      const { written, ...row } = await queue(edits)(input);
+      return { ...row, echoes: 1, written: written ?? writtenOf(row, Object.keys(input.values)) };
+    },
+    // A result that names no `written` made each value it sent, at its record's version.
+    setValuesBatch: async (input) => {
+      const answer = await queue(batches)(input);
+      const sent = new Map(input.items.map((item) => [item.recordId, Object.keys(item.values)]));
+      return {
+        ...answer,
+        results: answer.results.map((result) =>
+          result.record === undefined || result.written !== undefined
+            ? result
+            : { ...result, written: writtenOf(result.record, sent.get(result.recordId) ?? []) },
+        ),
+      };
+    },
   };
   return { api, queries, counts, creates, edits, batches, gets };
 }
@@ -486,7 +511,7 @@ describe('a paste or a range clear (spec 0006, AC-50)', () => {
       ],
       echoes: 1,
     });
-    expect(await done).toEqual({ kind: 'done', cells: 3, landed: 2 });
+    expect(await done).toEqual({ kind: 'done', cells: 3, landed: 2, undoId: input?.mutationId });
     frame();
     const state = view.getSnapshot();
     expect(state.source.getItem(0)?.values[CITY]).toBe('A');
@@ -806,7 +831,11 @@ describe('undo (spec 0006, AC-48, AC-49)', () => {
           recordId: idAt(0),
           record: rowOf(idAt(0), { [NAME]: 'B', [CITY]: 'A' }, { [CITY]: version(2), [NAME]: version(2) }, 2),
         },
-        { recordId: idAt(2), record: rowOf(idAt(2), { [NAME]: 'P2', [CITY]: 'C' }, { [CITY]: version(2) }, 2) },
+        {
+          recordId: idAt(2),
+          record: rowOf(idAt(2), { [NAME]: 'P2', [CITY]: 'C' }, { [CITY]: version(2) }, 2),
+          written: { [CITY]: version(2) },
+        },
       ],
       echoes: 1,
     });
@@ -832,7 +861,11 @@ describe('undo (spec 0006, AC-48, AC-49)', () => {
             { code: 'VERSION_CHANGED', message: 'City was changed since, so it was kept.', attributeId: CITY },
           ],
         },
-        { recordId: idAt(2), record: rowOf(idAt(2), { [NAME]: 'P2', [CITY]: 'London' }, { [CITY]: version(3) }, 3) },
+        {
+          recordId: idAt(2),
+          record: rowOf(idAt(2), { [NAME]: 'P2', [CITY]: 'London' }, { [CITY]: version(3) }, 3),
+          written: { [CITY]: version(3) },
+        },
       ],
       echoes: 1,
     });
@@ -891,7 +924,7 @@ describe('undo (spec 0006, AC-48, AC-49)', () => {
     void layer.setValues(WS, [change('London')]);
     await settle();
     // The same value: the server wrote nothing, so the version is the one the block read.
-    edits[1]?.answer(landedRow(1, 'London', 1));
+    edits[1]?.answer({ ...landedRow(1, 'London', 1), written: {} });
     await settle();
     expect(layer.undo.depth(WS)).toBe(0);
   });
@@ -908,6 +941,125 @@ describe('undo (spec 0006, AC-48, AC-49)', () => {
     expect(layer.undo.depth('elsewhere')).toBe(0);
     layer.clear();
     expect(layer.undo.depth(WS)).toBe(0);
+  });
+});
+
+describe('undo, walking back one cell and checking only what this tab wrote', () => {
+  const change = (value: unknown) => ({ rowId: idAt(1), columnId: CITY, value });
+  const at = (
+    city: string,
+    revision: number,
+    more: Partial<RecordView> & { written?: Record<string, string> } = {},
+  ) => ({
+    ...rowOf(idAt(1), { [NAME]: 'P1', [CITY]: city }, { [CITY]: version(revision) }, revision),
+    ...more,
+  });
+
+  it('undoes two edits of the same cell one press at a time', async () => {
+    const { layer, edits } = await readyView();
+    void layer.setValues(WS, [change('Paris')]);
+    await settle();
+    edits[0]?.answer(at('Paris', 2));
+    await settle();
+    void layer.setValues(WS, [change('Rome')]);
+    await settle();
+    edits[1]?.answer(at('Rome', 3));
+    await settle();
+    const first = layer.undo.run(WS);
+    await settle();
+    expect(edits[2]?.input.values).toEqual({ [CITY]: { value: 'Paris', ifVersionId: version(3) } });
+    edits[2]?.answer(at('Paris', 4));
+    expect(await first).toMatchObject({ undone: 1, kept: 0 });
+    // The older entry now finds the version the first undo wrote.
+    const second = layer.undo.run(WS);
+    await settle();
+    expect(edits[3]?.input.values).toEqual({ [CITY]: { value: 'London', ifVersionId: version(4) } });
+    edits[3]?.answer(at('London', 5));
+    expect(await second).toMatchObject({ undone: 1, kept: 0 });
+  });
+
+  it('calls only the version the write made its own, never a later one the read back saw', async () => {
+    const { layer, edits, replaced } = await readyView();
+    void layer.setValues(WS, [change('Paris')]);
+    await settle();
+    // Someone wrote version 3 between this write (version 2) and its read back.
+    edits[0]?.answer(at('Berlin', 3, { written: { [CITY]: version(2) } }));
+    await settle();
+    const undone = layer.undo.run(WS);
+    await settle();
+    expect(edits[1]?.input.values).toEqual({ [CITY]: { value: 'London', ifVersionId: version(2) } });
+    edits[1]?.fail(
+      dataError('VERSION_CHANGED', 'City was changed since, so it was kept.', {
+        refusals: [{ code: 'VERSION_CHANGED', message: 'City was changed since, so it was kept.', attributeId: CITY }],
+      }),
+    );
+    expect(await undone).toMatchObject({ undone: 0, kept: 1 });
+    // Their version isn't this tab's: a notice naming it says nothing.
+    layer.replaced(WS, {
+      seq: 1,
+      at: at('x', 1).updatedAt,
+      kind: 'records',
+      objectId: PEOPLE,
+      recordIds: [idAt(1)],
+      attributeIds: [CITY],
+      replaced: [{ recordId: idAt(1), attributeId: CITY, versionId: version(3), by: { type: 'member', id: BEA } }],
+    });
+    await settle();
+    expect(replaced).toEqual([]);
+  });
+
+  it('retries a refused undo as the same undo, still checked by the version it wrote', async () => {
+    const { layer, edits, notices } = await readyView();
+    void layer.setValues(WS, [change('Paris')]);
+    await settle();
+    edits[0]?.answer(at('Paris', 2));
+    await settle();
+    const undone = layer.undo.run(WS);
+    await settle();
+    edits[1]?.fail(dataError('INTERNAL', 'Something went wrong.'));
+    expect(await undone).toMatchObject({ undone: 0, failed: 1 });
+    notices[0]?.action?.onAction();
+    await settle();
+    expect(edits[2]?.input.values).toEqual({ [CITY]: { value: 'London', ifVersionId: version(2) } });
+    edits[2]?.answer(at('London', 3));
+    await settle();
+    // Not pushed: nothing is left to undo.
+    expect(layer.undo.depth(WS)).toBe(0);
+  });
+
+  it('undoes a toast’s own action only while it is the newest', async () => {
+    const { layer, edits, batches } = await readyView();
+    const pasted = layer.setValues(WS, [
+      { rowId: idAt(0), columnId: CITY, value: 'A' },
+      { rowId: idAt(2), columnId: CITY, value: 'C' },
+    ]);
+    await settle();
+    batches[0]?.answer({
+      results: [
+        { recordId: idAt(0), record: rowOf(idAt(0), { [NAME]: 'P0', [CITY]: 'A' }, { [CITY]: version(2) }, 2) },
+        { recordId: idAt(2), record: rowOf(idAt(2), { [NAME]: 'P2', [CITY]: 'C' }, { [CITY]: version(2) }, 2) },
+      ],
+      echoes: 1,
+    });
+    const outcome = await pasted;
+    const undoId = outcome.kind === 'done' ? outcome.undoId : undefined;
+    expect(undoId).toEqual(expect.any(String));
+    void layer.setValues(WS, [change('Paris')]);
+    await settle();
+    edits[0]?.answer(at('Paris', 2));
+    await settle();
+    // A later edit sits on top: the paste toast's Undo does nothing, and the edit stays undoable.
+    expect(await layer.undo.run(WS, undoId)).toEqual({ kind: 'stale' });
+    expect(layer.undo.depth(WS)).toBe(2);
+  });
+
+  it('refuses before anything shows a paste too big for one write', async () => {
+    const { layer, batches, edits } = await readyView();
+    const long = 'x'.repeat(10_000);
+    const many = Array.from({ length: 100 }, (_, index) => ({ rowId: idAt(index), columnId: CITY, value: long }));
+    expect(await layer.setValues(WS, many)).toEqual({ kind: 'too-big' });
+    expect(batches).toHaveLength(0);
+    expect(edits).toHaveLength(0);
   });
 });
 

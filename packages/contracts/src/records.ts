@@ -22,6 +22,9 @@ export const MAX_GET_IDS = 500;
 /** The most records one `records.setValuesBatch` changes (spec 0006, AC-50); more is refused 422 `CONFIG_INVALID`. */
 export const MAX_BATCH_RECORDS = 500;
 
+/** The most cells one `records.setValuesBatch` changes across its records; more is refused 422 `CONFIG_INVALID`. */
+export const MAX_BATCH_CELLS = 5_000;
+
 /**
  * A record as a screen holds it: its id and object, who made and last changed
  * it and when, how it shows as a chip (`display`), and its current values by
@@ -170,6 +173,13 @@ export type SetValuesInput = z.infer<typeof SetValuesInput>;
  */
 export const WrittenRecord = RecordView.extend({
   echoes: z.number().int().min(0),
+  /**
+   * The version this write made for each attribute it changed, by attribute
+   * id; an attribute it left unchanged is absent. Taken from the write
+   * itself, never from the read back after it (someone may have written in
+   * between), so it is what the tab can call its own (spec 0006).
+   */
+  written: z.record(z.uuid(), z.uuid()),
 });
 /** A record a write answers, with its echo count. */
 export type WrittenRecord = z.infer<typeof WrittenRecord>;
@@ -188,7 +198,8 @@ export type BatchItem = z.infer<typeof BatchItem>;
  * refused whole, 422 `CONFIG_INVALID`.
  */
 export const SetValuesBatchInput = WorkspaceScoped.extend({
-  items: z.array(BatchItem),
+  // Twice the cap, so a batch a little over it still answers the engine's CONFIG_INVALID, and junk stops at parsing.
+  items: z.array(BatchItem).max(MAX_BATCH_RECORDS * 2, `Change at most ${String(MAX_BATCH_RECORDS)} records at once.`),
   mutationId: z.uuid(),
 });
 /** New values for many records. */
@@ -203,6 +214,8 @@ export type SetValuesBatchInput = z.infer<typeof SetValuesBatchInput>;
 export const BatchRecordResult = z.object({
   recordId: z.uuid(),
   record: RecordView.optional(),
+  /** With `record`: the version this write made for each attribute it changed (as `WrittenRecord.written`). */
+  written: z.record(z.uuid(), z.uuid()).optional(),
   refusals: z.array(ApiRefusal).optional(),
 });
 /** One record's outcome in a batch. */

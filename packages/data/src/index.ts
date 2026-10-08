@@ -107,7 +107,9 @@ export interface ReplacedValue {
 
 /** What an undo did (spec 0006, AC-48, AC-49), with the first cell's attribute named for a one cell toast. */
 export type UndoResult =
-  { readonly kind: 'nothing' } | (Extract<UndoOutcome, { kind: 'undone' }> & { readonly attributeTitle: string });
+  | { readonly kind: 'nothing' }
+  | { readonly kind: 'stale' }
+  | (Extract<UndoOutcome, { kind: 'undone' }> & { readonly attributeTitle: string });
 
 /** What each API call carries to the link: where to report the answer's `Retry-After`, and that an answer came. */
 interface CallContext {
@@ -751,9 +753,9 @@ export function createDataLayer({
        * (checked on the server); the answer says how many went back and how
        * many were kept, for the screen's toast.
        */
-      run: async (workspace: string): Promise<UndoResult> => {
-        const outcome = await (await recordsLayer()).undo.run(workspace);
-        if (outcome.kind === 'nothing') return outcome;
+      run: async (workspace: string, only?: string): Promise<UndoResult> => {
+        const outcome = await (await recordsLayer()).undo.run(workspace, only);
+        if (outcome.kind !== 'undone') return outcome;
         return {
           ...outcome,
           attributeTitle: await attributeTitle(workspace, outcome.objectId, outcome.first.attributeId),

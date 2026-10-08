@@ -74,7 +74,7 @@ describe('reading back what a statement wrote or found', () => {
     const counting = countingAttributeLoads();
     const { scope, objectId } = await people(counting.db);
     const before = counting.loads();
-    const created = await addRecord(scope, { objectId, id: newId() });
+    const created = (await addRecord(scope, { objectId, id: newId() })).record;
     expect(counting.loads() - before).toBe(1);
 
     const editing = counting.loads();

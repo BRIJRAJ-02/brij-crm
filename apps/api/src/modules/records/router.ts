@@ -43,7 +43,7 @@ export const recordsRouter = member.records.router({
           hooks,
         ),
       );
-      return { ...result, echoes };
+      return { ...result.record, written: result.written, echoes };
     } catch (error) {
       throw withInputFields(error, { ID_TAKEN: 'id' });
     }
@@ -52,7 +52,7 @@ export const recordsRouter = member.records.router({
     const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
       editRecord(context.scope, { recordId: input.recordId, values: input.values }, hooks),
     );
-    return { ...result, echoes };
+    return { ...result.record, written: result.written, echoes };
   }),
   // One write for up to 500 records (spec 0006, AC-50): 200 with each record's outcome.
   setValuesBatch: member.records.setValuesBatch.handler(async ({ context, input }) => {

@@ -10,7 +10,7 @@ import { MAX_CELL_LINKS } from '@crm/contracts';
 import type { RecordReferenceValue, ValueVersion } from '@crm/contracts/values';
 import { insertAttribute } from './definitions.ts';
 import { canonicalId, checkId, isUuid, uuidList } from './ids.ts';
-import { postgresError, refuse, writeConflict } from './refusals.ts';
+import { postgresError, refuse, versionChangedMessage, writeConflict } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
 import { parseFor, type AttributeDef, type AttributeWrite } from './values.ts';
 import { runWrite, type AfterWrite, type ValueChange, type WriteContext } from './write.ts';
@@ -348,6 +348,39 @@ async function endLinks(
 }
 
 /**
+ * Refuses `VERSION_CHANGED` (spec 0006, AC-49, undo) unless the cell is at
+ * exactly `wanted`: its latest current link's version among the links the
+ * writer may see, records in the trash included, the rule reads give
+ * (`linkValues`). Checked against the links this write is about to end, so
+ * a link another write adds after them is never ended by it. A cell with no
+ * current link has no version, so it never matches.
+ */
+function checkLinkVersion(
+  attribute: AttributeDef,
+  current: readonly {
+    readonly id: string;
+    readonly versionId: string;
+    readonly activeFrom: string;
+    readonly farHidden?: boolean;
+  }[],
+  wanted: string,
+): void {
+  const seen = current.filter((link) => link.farHidden !== true);
+  const latest = seen.reduce<(typeof seen)[number] | undefined>(
+    (best, link) =>
+      best === undefined ||
+      link.activeFrom > best.activeFrom ||
+      (link.activeFrom === best.activeFrom && link.id > best.id)
+        ? link
+        : best,
+    undefined,
+  );
+  if (latest === undefined || !isUuid(wanted) || latest.versionId !== canonicalId(wanted)) {
+    throw refuse('VERSION_CHANGED', versionChangedMessage(attribute.title), attribute.id);
+  }
+}
+
+/**
  * Writes a record reference by the protocol, on a record the caller already
  * locked. An unchanged list writes nothing. Otherwise the end's current links
  * end and the new ones start under one version id. A single end replaces its
@@ -365,6 +398,7 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
   const current = await endLinks(tx, relationship, end, ownerId, scope.access);
   // Links to far records the writer can't see (spec 0009): they read as absent, and a multi end keeps them.
   const unseen = new Set(current.flatMap((link) => (link.farHidden === true ? [link.far] : [])));
+  if (write.ifVersionId !== undefined) checkLinkVersion(attribute, current, write.ifVersionId);
   await checkTargets(tx, scope.access, attribute, ownerId, end.allowed, wanted);
 
   const visible = current.filter((link) => !link.farDeleted && !unseen.has(link.far));

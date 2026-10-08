@@ -218,6 +218,13 @@ describe('the plain record store', () => {
       expect(store.get('r1')?.versions).toEqual({ name: v(3), city: v(1) });
     });
 
+    it('takes from an older read only the attributes it never held (a column shown while a write landed)', () => {
+      const store = holding([london]);
+      store.receive([revised('r1', { name: 'Ada', city: 'Old', phone: '555' }, 4, { city: v(0), phone: v(2) })]);
+      expect(seen(store, 'r1')?.values).toEqual({ name: 'Ada', city: 'London', phone: '555' });
+      expect(store.get('r1')?.revision).toBe(5);
+    });
+
     it('answers the base under a pending edit, never the layer', () => {
       const store = holding([london]);
       store.edit('r1', { city: 'Paris' }, 'm1');

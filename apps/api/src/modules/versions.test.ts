@@ -91,9 +91,12 @@ describe('revision and echoes (spec 0006, AC-44, AC-60)', () => {
       });
     const titled = await set('Analyst');
     expect({ revision: titled.revision, echoes: titled.echoes }).toEqual({ revision: 1, echoes: 1 });
+    // The version the write itself made: what the tab may call its own.
+    expect(titled.written).toEqual({ [m.attribute('job_title')]: titled.versions[m.attribute('job_title')] });
     // Unchanged: nothing written, nothing published, the revision stays.
     const again = await set('Analyst');
     expect({ revision: again.revision, echoes: again.echoes }).toEqual({ revision: 1, echoes: 0 });
+    expect(again.written).toEqual({});
     const [read] = await m.client.records.get({ workspace: m.slug, ids: [id] });
     expect(read?.revision).toBe(1);
     const page = await m.client.records.query({ workspace: m.slug, objectId: m.people.id, position: 0, limit: 10 });
@@ -235,6 +238,29 @@ describe('records.setValuesBatch (spec 0006, AC-50)', () => {
     });
     expect(retried.echoes).toBe(0);
     expect(retried.results[0]?.record?.revision).toBe(1);
+  });
+
+  it("refuses another workspace's record in a batch as unknown, and leaves it as it was", async () => {
+    const a = await memberWithWorkspace(app);
+    const b = await memberWithWorkspace(app);
+    const theirs = await createPerson(a, 'Ada');
+    const mine = await createPerson(b, 'Bea');
+    const title = b.attribute('job_title');
+    const answer = await b.client.records.setValuesBatch({
+      workspace: b.slug,
+      items: [
+        { recordId: theirs.id, values: { [title]: { value: 'Mole' } } },
+        { recordId: mine.id, values: { [title]: { value: 'Analyst' } } },
+      ],
+      mutationId: newId(),
+    });
+    expect(answer.results[0]).toEqual({
+      recordId: theirs.id,
+      refusals: [{ code: 'NOT_FOUND', message: 'That record does not exist.' }],
+    });
+    expect(answer.results[1]?.written).toEqual({ [title]: answer.results[1]?.record?.versions[title] });
+    const [untouched] = await a.client.records.get({ workspace: a.slug, ids: [theirs.id] });
+    expect(untouched?.revision).toBe(0);
   });
 
   it('refuses more than 500 records whole with 422 CONFIG_INVALID, and writes nothing', async () => {

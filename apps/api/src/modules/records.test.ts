@@ -36,7 +36,11 @@ const CLOCK_WRONG =
  * answering the record as reads give it (without the write's `echoes`).
  */
 async function createPerson(m: Member, first: string, email?: string, id = newId()) {
-  const { echoes: _echoes, ...record } = await m.client.records.create({
+  const {
+    echoes: _echoes,
+    written: _written,
+    ...record
+  } = await m.client.records.create({
     workspace: m.slug,
     objectId: m.people.id,
     id,
@@ -244,9 +248,10 @@ describe('records.setValues', () => {
     expect(view.updatedAt >= person.updatedAt).toBe(true);
     const [read] = await m.client.records.get({ workspace: m.slug, ids: [person.id] });
     // The write's answer is the record as any read gives it, plus how many events carry the write (spec 0006).
-    const { echoes, ...record } = view;
+    const { echoes, written, ...record } = view;
     expect(read).toEqual(record);
     expect(echoes).toBe(1);
+    expect(Object.keys(written).sort()).toEqual([m.attribute('job_title'), m.attribute('owner')].sort());
   });
 
   it("answers each cell's version: newer for a later write, kept by a clear, and a reference's from its link", async () => {

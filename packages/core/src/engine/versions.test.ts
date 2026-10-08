@@ -10,11 +10,12 @@ import type { EngineRefusal } from '@crm/contracts/values';
 import { deleteRecord, restoreRecord } from './deletion.ts';
 import { newId } from './ids.ts';
 import { outboxEvents, outboxHook, REPLACED_CAP } from './outbox.ts';
-import { createRecord, getRecords, setValues, setValuesBatch } from './records.ts';
+import { createRecord, getRecords, MAX_BATCH_CELLS, setValues, setValuesBatch } from './records.ts';
 import { isRefusal } from './refusals.ts';
 import { SYSTEM_ACTOR, type EngineScope } from './scope.ts';
 import { createWorkspace } from './workspaces.ts';
 import { capChange } from './write.ts';
+import { editRecords } from '../records/records.ts';
 import { rescope, testScope } from '../testing.ts';
 
 const { appUrl } = inject('testDatabase');
@@ -172,7 +173,9 @@ describe('the exact version precondition (spec 0006, AC-49)', () => {
     // A cell never set has no version to match.
     const domains = must(company.domains);
     expect(
-      await refusals(setValues(scope, { recordId, values: { [domains]: { value: null, ifVersionId: newId() } } })),
+      await refusals(
+        setValues(scope, { recordId, values: { [domains]: { value: ['acme.com'], ifVersionId: newId() } } }),
+      ),
     ).toMatchObject([{ code: 'VERSION_CHANGED', attributeId: domains }]);
   });
 
@@ -214,6 +217,69 @@ describe('the exact version precondition (spec 0006, AC-49)', () => {
       { recordId: acme, ok: false, refusals: [{ code: 'VERSION_CHANGED', attributeId: name }] },
       { recordId: beta, ok: true },
     ]);
+  });
+});
+
+describe('the precondition and the access door (spec 0006, AC-49; spec 0009)', () => {
+  it('lets a cell that already holds the value asked for pass, whatever its version (a retried undo)', async () => {
+    const { scope, companies, company } = await workspace();
+    const name = must(company.name);
+    const { recordId } = await createRecord(scope, { objectId: companies, values: { [name]: 'Acme' } });
+    const first = await setValues(scope, { recordId, values: { [name]: { value: 'Acme Ltd' } } });
+    const undo = { recordId, values: { [name]: { value: 'Acme', ifVersionId: must(first[name]?.versionId) } } };
+    await setValues(scope, undo);
+    // The same undo again (its answer was lost): it lands, writing nothing.
+    expect(await setValues(scope, undo)).toEqual({ [name]: {} });
+  });
+
+  it('answers a hidden attribute as unknown, never VERSION_CHANGED with its title, and reads back without it', async () => {
+    const { scope, people, person } = await workspace();
+    const name = must(person.name);
+    const jobTitle = must(person.job_title);
+    const { recordId } = await createRecord(scope, { objectId: people, values: { [jobTitle]: 'Spy' } });
+    const hidden = rescope(scope, {
+      role: 'member',
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'member' },
+            target: { type: 'attribute', objectId: people, attributeId: jobTitle },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+    expect(
+      await refusals(setValues(hidden, { recordId, values: { [jobTitle]: { value: 'Agent', ifVersionId: newId() } } })),
+    ).toEqual([{ code: 'NOT_FOUND', message: expect.any(String) as string, attributeId: jobTitle }]);
+    const [answer] = await editRecords(hidden, {
+      items: [{ recordId, values: { [name]: { value: { firstName: 'Ada', lastName: 'L' } } } }],
+    });
+    expect(answer?.record?.values).not.toHaveProperty(jobTitle);
+    expect(answer?.record?.versions).not.toHaveProperty(jobTitle);
+    expect(Object.keys(answer?.written ?? {})).toEqual([name]);
+  });
+
+  it(`refuses a batch of more than ${String(MAX_BATCH_CELLS)} cells whole, before writing anything`, async () => {
+    const { scope, person } = await workspace();
+    const values = Object.fromEntries(
+      [
+        'job_title',
+        'description',
+        'timezone',
+        'avatar',
+        'email_opt_out',
+        'phone_numbers',
+        'primary_location',
+        'owner',
+        'email_addresses',
+        'name',
+        'company',
+      ].map((slug) => [must(person[slug]), { value: null }]),
+    );
+    const items = Array.from({ length: 500 }, () => ({ recordId: newId(), values }));
+    expect(await refusals(setValuesBatch(scope, { items }))).toMatchObject([{ code: 'CONFIG_INVALID' }]);
   });
 });
 

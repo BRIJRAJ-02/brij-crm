@@ -105,7 +105,21 @@ export interface RecordStore<Row extends RecordBody> {
  */
 export function newerBase<Row extends RecordBody>(current: Row | undefined, incoming: Row): Row {
   if (current === undefined || current === incoming) return incoming;
-  if ((incoming.revision ?? 0) < (current.revision ?? 0)) return current;
+  if ((incoming.revision ?? 0) < (current.revision ?? 0)) {
+    // Older: only attributes the store never held come from it (a column just shown, read before a write).
+    const unheld = Object.keys(incoming.values).filter((cell) => !Object.hasOwn(current.values, cell));
+    if (unheld.length === 0) return current;
+    const pick = <T>(from: Readonly<Record<string, T>> | undefined) =>
+      Object.fromEntries(Object.entries(from ?? {}).filter(([cell]) => unheld.includes(cell)));
+    return {
+      ...current,
+      values: { ...current.values, ...pick(incoming.values) },
+      versions: { ...current.versions, ...pick(incoming.versions) },
+      ...(incoming.linkTotals === undefined
+        ? {}
+        : { linkTotals: { ...current.linkTotals, ...pick(incoming.linkTotals) } }),
+    };
+  }
   const carried = (cell: string) => Object.hasOwn(incoming.values, cell);
   const kept = Object.keys(current.values).filter((cell) => !carried(cell));
   if (kept.length === 0) return incoming;

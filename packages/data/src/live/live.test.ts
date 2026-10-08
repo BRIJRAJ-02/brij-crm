@@ -81,7 +81,11 @@ function setup(options: Setup = {}) {
   const mutations = createMutationLog();
   const router = createLiveRouter();
   router.on('records', (workspace, change) =>
-    calls.push(`records ${workspace} ${change.recordIds.join(',')}${change.coarse === true ? ' coarse' : ''}`),
+    calls.push(
+      `records ${workspace} ${change.recordIds.join(',')}${change.coarse === true ? ' coarse' : ''}${
+        change.replaced === undefined ? '' : ' replaced'
+      }`,
+    ),
   );
   router.on('definitions', (workspace, change) => calls.push(`definitions ${workspace} ${change.objectId ?? ''}`));
   router.onResync((workspace) => calls.push(`resync ${workspace}`));
@@ -290,6 +294,31 @@ describe('the watermark', () => {
     t.channels[1]?.onSubscribed({ wasRecovering: false, recovered: false });
     await settle();
     expect(t.afters).toEqual([1]);
+  });
+});
+
+describe('what a replay carries (spec 0006, AC-47)', () => {
+  const replacedEvent = (seq: number) => ({
+    ...event(seq),
+    replaced: [{ recordId: ROW(seq), attributeId: ROW(90), versionId: ROW(91), by: { type: 'member', id: ROW(92) } }],
+  });
+
+  it('hands a live event its replaced list, and drops it from what a recovered subscription replays', async () => {
+    const t = setup();
+    await t.subscribed();
+    t.channel().onPublication(replacedEvent(1));
+    expect(t.calls).toEqual([`records ${WS} ${ROW(1)} replaced`]);
+    t.channel().onDown('resubscribing');
+    // Centrifugo hands the missed publications over right after subscribed, in the same task.
+    t.channel().onSubscribed({ wasRecovering: true, recovered: true });
+    t.channel().onPublication(replacedEvent(2));
+    await settle();
+    t.channel().onPublication(replacedEvent(3));
+    expect(t.calls).toEqual([
+      `records ${WS} ${ROW(1)} replaced`,
+      `records ${WS} ${ROW(2)}`,
+      `records ${WS} ${ROW(3)} replaced`,
+    ]);
   });
 });
 

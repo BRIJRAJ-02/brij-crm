@@ -225,6 +225,12 @@ export interface AttributeWrite {
    * current version is reported replaced (spec 0006).
    */
   readonly baseVersionId?: string | null;
+  /**
+   * The version the cell must still be at (spec 0006, AC-49). Values are
+   * checked before any write of the owner (`checkVersions`); a record
+   * reference by `writeLinks`, against the links it ends.
+   */
+  readonly ifVersionId?: string;
 }
 
 /**

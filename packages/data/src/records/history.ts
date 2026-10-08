@@ -12,6 +12,9 @@ export const OWN_VERSIONS = 500;
 /** The most actions one tab can undo in one workspace (`UNDO_DEPTH`). */
 export const UNDO_DEPTH = 50;
 
+/** The most cells the undo stack keeps per workspace across its entries; past it the oldest entries go first. */
+export const UNDO_CELLS = 20_000;
+
 /** A cell this tab wrote: where, what it wrote, and the record's name then (the notice names it). */
 export interface OwnVersion {
   readonly workspace: string;
@@ -36,15 +39,16 @@ export function createOwnVersions(limit: number = OWN_VERSIONS): OwnVersions {
   const versions = new Map<string, OwnVersion>();
   return {
     add: (versionId, written) => {
-      versions.delete(versionId);
-      versions.set(versionId, written);
+      const key = versionId.toLowerCase();
+      versions.delete(key);
+      versions.set(key, written);
       while (versions.size > limit) {
         const oldest = versions.keys().next();
         if (oldest.done === true) break;
         versions.delete(oldest.value);
       }
     },
-    get: (versionId) => versions.get(versionId.toLowerCase()) ?? versions.get(versionId),
+    get: (versionId) => versions.get(versionId.toLowerCase()),
     size: () => versions.size,
     clear: () => {
       versions.clear();
@@ -58,6 +62,8 @@ export interface UndoCell {
   readonly attributeId: string;
   readonly before: unknown;
   readonly writtenVersionId: string;
+  /** The version the action replaced (the base's when it went out), so undoing it can hand an older entry its own. */
+  readonly replacedVersionId?: string;
 }
 
 /** What one action was, for the toast that names it: one cell, a paste, or a range clear. */
@@ -65,6 +71,8 @@ export type UndoKind = 'cell' | 'paste' | 'clear';
 
 /** One user action on the undo stack: its kind, its object, and every cell of it that landed. */
 export interface UndoEntry {
+  /** The action's own id (its write's mutation id): a toast's Undo names it, so it undoes that action or nothing. */
+  readonly id: string;
   readonly kind: UndoKind;
   readonly objectId: string;
   readonly cells: readonly UndoCell[];
@@ -75,18 +83,54 @@ export interface UndoStack {
   readonly push: (workspace: string, entry: UndoEntry) => void;
   /** The newest entry, taken off the stack; undefined when there is none. */
   readonly pop: (workspace: string) => UndoEntry | undefined;
+  /** The newest entry, left on the stack. */
+  readonly top: (workspace: string) => UndoEntry | undefined;
+  /**
+   * A cell an undo just put back at version `to`: an older entry that wrote
+   * `from` there (the version the undone action replaced) now finds `to`, so
+   * the next press undoes it too.
+   */
+  readonly rewrite: (workspace: string, recordId: string, attributeId: string, from: string, to: string) => void;
   readonly size: (workspace: string) => number;
   readonly clear: () => void;
 }
 
 /** An empty undo stack. */
-export function createUndoStack(depth: number = UNDO_DEPTH): UndoStack {
+export function createUndoStack(depth: number = UNDO_DEPTH, cellBudget: number = UNDO_CELLS): UndoStack {
   const stacks = new Map<string, readonly UndoEntry[]>();
   return {
     push: (workspace, entry) => {
       if (entry.cells.length === 0) return;
-      const stack = [...(stacks.get(workspace) ?? []), entry];
-      stacks.set(workspace, stack.length > depth ? stack.slice(stack.length - depth) : stack);
+      let stack = [...(stacks.get(workspace) ?? []), entry];
+      if (stack.length > depth) stack = stack.slice(stack.length - depth);
+      // Bounded by cells too, so 50 pastes of 500 rows never hold their old values for the session.
+      let cells = stack.reduce((sum, each) => sum + each.cells.length, 0);
+      while (cells > cellBudget && stack.length > 1) {
+        cells -= stack[0]?.cells.length ?? 0;
+        stack = stack.slice(1);
+      }
+      stacks.set(workspace, stack);
+    },
+    rewrite: (workspace, recordId, attributeId, from, to) => {
+      const stack = stacks.get(workspace);
+      if (stack === undefined) return;
+      stacks.set(
+        workspace,
+        stack.map((entry) =>
+          entry.cells.some(
+            (cell) => cell.recordId === recordId && cell.attributeId === attributeId && cell.writtenVersionId === from,
+          )
+            ? {
+                ...entry,
+                cells: entry.cells.map((cell) =>
+                  cell.recordId === recordId && cell.attributeId === attributeId && cell.writtenVersionId === from
+                    ? { ...cell, writtenVersionId: to }
+                    : cell,
+                ),
+              }
+            : entry,
+        ),
+      );
     },
     pop: (workspace) => {
       const stack = stacks.get(workspace) ?? [];
@@ -94,6 +138,7 @@ export function createUndoStack(depth: number = UNDO_DEPTH): UndoStack {
       if (top !== undefined) stacks.set(workspace, stack.slice(0, -1));
       return top;
     },
+    top: (workspace) => stacks.get(workspace)?.at(-1),
     size: (workspace) => stacks.get(workspace)?.length ?? 0,
     clear: () => {
       stacks.clear();

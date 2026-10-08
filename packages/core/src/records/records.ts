@@ -8,7 +8,14 @@ import type { FilterGroup, SortRules } from '@crm/contracts/values';
 import { schema } from '@crm/db';
 import { canonicalId, isUuidV7, uuidV7Time } from '../engine/ids.ts';
 import { queryPage } from '../engine/query/page.ts';
-import { createRecord, getRecords, setRecordValues, setRecordValuesBatch, type ValueInput } from '../engine/records.ts';
+import {
+  createRecord,
+  getRecords,
+  setRecordValues,
+  setRecordValuesBatch,
+  type AttributeResult,
+  type ValueInput,
+} from '../engine/records.ts';
 import { inputInvalid, isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import type { AttributeDef } from '../engine/values.ts';
@@ -61,6 +68,26 @@ export async function readRecordsById(scope: EngineScope, ids: readonly string[]
   return [...(await getRecords(scope, { ids }))];
 }
 
+/**
+ * A write's answer: the record, read back after it committed, and the
+ * version the write itself made for each attribute it changed (spec 0006).
+ * The read back may already hold someone else's later version; `written`
+ * never does, so the browser calls only these its own.
+ */
+export interface WrittenView {
+  readonly record: RecordView;
+  readonly written: Readonly<Record<string, string>>;
+}
+
+/** The versions a write made, by attribute id; an unchanged attribute is left out. */
+function writtenOf(results: Readonly<Record<string, AttributeResult>>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(results).flatMap(([attributeId, result]) =>
+      result.versionId === undefined ? [] : [[attributeId, result.versionId]],
+    ),
+  );
+}
+
 /** Attribute definitions a write already loaded, by object id, so its read back doesn't load them again. */
 type LoadedAttributes = ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>;
 
@@ -104,24 +131,29 @@ export async function addRecord(
   input: AddRecordInput,
   hooks: readonly AfterWrite[] = [],
   now: number = Date.now(),
-): Promise<RecordView> {
+): Promise<WrittenView> {
+  // A replay wrote nothing this time.
+  const replay = (record: RecordView): WrittenView => ({ record, written: {} });
   if (isUuidV7(input.id) && Math.abs(uuidV7Time(input.id) - now) > MAX_ID_CLOCK_SKEW_MS) {
     const replayed = await replayCreate(scope, input);
-    if (replayed !== undefined) return replayed;
+    if (replayed !== undefined) return replay(replayed);
     throw inputInvalid('id', CLOCK_SKEW_MESSAGE);
   }
   try {
-    const { recordId, objectId, attributes } = await createRecord(
+    const { recordId, objectId, attributes, versions } = await createRecord(
       scope,
       { objectId: input.objectId, id: input.id, ...(input.values === undefined ? {} : { values: input.values }) },
       hooks,
     );
-    return await freshRecord(scope, recordId, new Map([[objectId, attributes]]));
+    return {
+      record: await freshRecord(scope, recordId, new Map([[objectId, attributes]])),
+      written: writtenOf(versions),
+    };
   } catch (error) {
     if (!isRefusal(error) || error.refusal.code !== 'ID_TAKEN') throw error;
     const replayed = await replayCreate(scope, input);
     if (replayed === undefined) throw error;
-    return replayed;
+    return replay(replayed);
   }
 }
 
@@ -174,13 +206,16 @@ export async function editRecord(
   scope: EngineScope,
   input: EditRecordInput,
   hooks: readonly AfterWrite[] = [],
-): Promise<RecordView> {
-  const { attributesByObject } = await setRecordValues(
+): Promise<WrittenView> {
+  const { attributesByObject, results } = await setRecordValues(
     scope,
     { recordId: input.recordId, values: input.values },
     hooks,
   );
-  return freshRecord(scope, canonicalId(input.recordId), attributesByObject);
+  return {
+    record: await freshRecord(scope, canonicalId(input.recordId), attributesByObject),
+    written: writtenOf(results),
+  };
 }
 
 /** New values for many records (spec 0006, AC-50): each record's by attribute id. */
@@ -223,6 +258,6 @@ export async function editRecords(
     const record = byId.get(outcome.recordId);
     return record === undefined
       ? { recordId: outcome.recordId, refusals: [{ code: 'RECORD_DELETED', message: TRASHED_SINCE }] }
-      : { recordId: outcome.recordId, record };
+      : { recordId: outcome.recordId, record, written: writtenOf(outcome.results) };
   });
 }

@@ -162,6 +162,14 @@ function isReplacedEntry(value: unknown): value is ReplacedEntry {
   return ACTOR_TYPES.has(actor.type) && (actor.id === null || isString(actor.id));
 }
 
+/** A delivery as a catch up would carry it: a records event without `replaced`. */
+function withoutReplaced(delivery: Delivery): Delivery {
+  const { event } = delivery;
+  if (event?.kind !== 'records' || event.replaced === undefined) return delivery;
+  const { replaced: _replaced, ...rest } = event;
+  return { ...delivery, event: rest };
+}
+
 /** Each kind's fields: required and optional ids, and required and optional id lists. */
 interface Shape {
   readonly refs?: readonly string[];
@@ -258,6 +266,13 @@ interface Watched {
   /** Catch up was refused (signed out, or no longer a member): nothing tries again. */
   refused: boolean;
   again: boolean;
+  /**
+   * Centrifugo is replaying what a recovered subscription missed (it hands
+   * them over right after `subscribed`, in the same task): those deliveries
+   * lose `replaced`, since a tab away when its value was replaced hears
+   * nothing of it (spec 0006, AC-47), as after a catch up.
+   */
+  replaying: boolean;
   /** Deliveries past `W + 1`, or that arrived while catching up, waiting for their turn. */
   readonly held: Map<number, Delivery>;
   /** Refetches waiting out their spread, by what they refetch. */
@@ -455,8 +470,9 @@ export function createLive({
 
   const receive = (workspace: string, entry: Watched, data: unknown) => {
     if (entry.refused) return;
-    const delivery = parseChangeEvent(data);
-    if (delivery === undefined) return;
+    const parsed = parseChangeEvent(data);
+    if (parsed === undefined) return;
+    const delivery = entry.replaying ? withoutReplaced(parsed) : parsed;
     const mark = marks.get(workspace);
     if (mark !== undefined && delivery.seq <= mark) return;
     // Past the cap only while a catch up is due or running, which reads to the head and covers them.
@@ -526,7 +542,13 @@ export function createLive({
       }
       // Recovered: the missed events follow, in order. Otherwise they are gone from Centrifugo (history past
       // 5 minutes or 1,000 messages, or it restarted): the outbox has them.
-      if (wasRecovering && recovered) return;
+      if (wasRecovering && recovered) {
+        entry.replaying = true;
+        queueMicrotask(() => {
+          entry.replaying = false;
+        });
+        return;
+      }
       later(entry, 'catch-up', () => {
         void fill(workspace, entry);
       });
@@ -566,6 +588,7 @@ export function createLive({
         hasSubscribed: false,
         isStopped: false,
         needsResync: false,
+        replaying: false,
         catching: false,
         failing: false,
         refused: false,

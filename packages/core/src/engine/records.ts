@@ -12,15 +12,16 @@ import {
   type RecordRefDisplay,
 } from '@crm/contracts/values';
 import { takeRecordSlots } from './limits.ts';
-import { decodeValue } from './columns.ts';
+import { decodeValue, encodeValue, sameItems } from './columns.ts';
 import { canonicalId, canonicalKeys, checkId, isUuid, isUuidV7 } from './ids.ts';
-import { isRefusal, postgresError, refuse, refuseAll } from './refusals.ts';
+import { isRefusal, postgresError, refuse, refuseAll, versionChangedMessage } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
 import { LINK_CELL_CAP, linkValues, writeLinks } from './relationships.ts';
 import {
   checkWriter,
   currentItems,
   holdDefinitions,
+  ITEM_COLUMNS,
   loadAttributes,
   loadListAttributes,
   lockEntry,
@@ -248,6 +249,7 @@ export async function writeAll(
       ...(input.baseVersionId === undefined
         ? {}
         : { baseVersionId: input.baseVersionId === null ? null : canonicalId(input.baseVersionId) }),
+      ...(input.ifVersionId === undefined ? {} : { ifVersionId: input.ifVersionId }),
     };
     const landed = await writeOne(context, write, holdDefinition);
     const [change, ...far] = landed;
@@ -452,16 +454,13 @@ async function updateOwner(
   const { ownerKind, ownerId, objectId, attributes } = await lockOwner(tx, input, context.scope.access, visible);
   const parsed = parseAll(attributes, canonicalKeys(input.values), context.scope);
   // Under the owner's lock, before anything is written: a cell that moved on refuses the whole owner.
-  await checkVersions(tx, context.scope.access, ownerKind, ownerId, parsed);
+  await checkVersions(tx, context.scope.workspaceId, ownerId, parsed);
   const results = await writeAll(context, ownerKind, ownerId, parsed);
   if (Object.values(results).some((each) => each.versionId !== undefined)) {
     await touchOwner(context, ownerKind, ownerId);
   }
   return objectId === undefined ? { results, attributes } : { results, objectId, attributes };
 }
-
-/** What a cell that moved on since the version a write names answers (spec 0006, AC-49). */
-export const versionChangedMessage = (title: string) => `${title} was changed since, so it was kept.`;
 
 /**
  * Refuses `VERSION_CHANGED`, naming every attribute whose current version
@@ -473,44 +472,61 @@ export const versionChangedMessage = (title: string) => `${title} was changed si
  */
 async function checkVersions(
   tx: WorkspaceTx,
-  access: Access,
-  ownerKind: 'record' | 'entry',
+  workspaceId: string,
   ownerId: string,
   parsed: readonly { attribute: AttributeDef; input: ValueInput }[],
 ): Promise<void> {
   const checked = parsed.filter((each) => each.input.ifVersionId !== undefined);
   if (checked.length === 0) return;
-  const references = checked.filter((each) => each.attribute.type === 'record_reference');
+  // A record reference is checked by `writeLinks`, against the very links it ends (a far side write never
+  // locks this record, so a check here could pass and still end a link added after it).
   const plain = checked.filter((each) => each.attribute.type !== 'record_reference');
+  if (plain.length === 0) return;
   const current = new Map<string, string>();
-  if (plain.length > 0) {
-    const rows = await tx
-      .selectDistinct({ attributeId: valueRows.attributeId, versionId: valueRows.versionId })
-      .from(valueRows)
-      .where(
-        and(
-          eq(valueRows.ownerId, ownerId),
-          inArray(
-            valueRows.attributeId,
-            plain.map((each) => each.attribute.id),
-          ),
-          isNull(valueRows.activeUntil),
+  const rows = await tx
+    .select({
+      ...ITEM_COLUMNS,
+      attributeId: valueRows.attributeId,
+      versionId: valueRows.versionId,
+      isCleared: valueRows.isCleared,
+    })
+    .from(valueRows)
+    .where(
+      and(
+        eq(valueRows.workspaceId, workspaceId),
+        eq(valueRows.ownerId, ownerId),
+        inArray(
+          valueRows.attributeId,
+          plain.map((each) => each.attribute.id),
         ),
-      );
-    for (const row of rows) current.set(row.attributeId, row.versionId);
-  }
-  if (references.length > 0 && ownerKind === 'record') {
-    const links = await linkValues(
-      tx,
-      access,
-      [ownerId],
-      references.map((each) => each.attribute),
+        isNull(valueRows.activeUntil),
+      ),
     );
-    for (const [attributeId, versionId] of links.versions.get(ownerId) ?? []) current.set(attributeId, versionId);
-  }
-  const moved = checked.filter(({ attribute, input }) => {
+  for (const row of rows) current.set(row.attributeId, row.versionId);
+  // A cell that already holds the value asked for passes whatever its version: nothing is overwritten (a retried
+  // undo whose first try landed, or someone who made the same change).
+  const holds = (attribute: AttributeDef, value: unknown) =>
+    sameItems(
+      rows
+        .filter((row) => row.attributeId === attribute.id && !row.isCleared)
+        .sort((a, b) => a.position - b.position)
+        .map((row) => ({
+          textValue: row.textValue,
+          numberValue: row.numberValue,
+          dateValue: row.dateValue,
+          timestampValue: row.timestampValue,
+          boolValue: row.boolValue,
+          optionId: row.optionId,
+          actorType: row.actorType,
+          actorId: row.actorId,
+          jsonValue: row.jsonValue,
+        })),
+      encodeValue(attribute.type, value),
+    );
+  const moved = plain.filter(({ attribute, input }) => {
     const wanted = input.ifVersionId;
-    return wanted === undefined || !isUuid(wanted) || current.get(attribute.id) !== canonicalId(wanted);
+    if (wanted !== undefined && isUuid(wanted) && current.get(attribute.id) === canonicalId(wanted)) return false;
+    return !holds(attribute, parseFor(attribute, input.value));
   });
   const [first, ...rest] = moved.map(({ attribute }): EngineRefusal => ({
     code: 'VERSION_CHANGED',
@@ -585,6 +601,9 @@ export type BatchResult =
 /** The most records one batch may change. */
 export const MAX_BATCH = 500;
 
+/** The most cells one batch may change across its records, so one request's transaction stays bounded. */
+export const MAX_BATCH_CELLS = 5_000;
+
 /**
  * Sets values on up to 500 records in one transaction. Each record lands all
  * or nothing under its own savepoint; the hooks see only those that landed (AC-13).
@@ -612,6 +631,9 @@ export async function setRecordValuesBatch(
 }> {
   if (input.items.length > MAX_BATCH)
     throw refuse('CONFIG_INVALID', `Change at most ${String(MAX_BATCH)} records at once.`);
+  const cells = input.items.reduce((sum, item) => sum + Object.keys(item.values).length, 0);
+  if (cells > MAX_BATCH_CELLS)
+    throw refuse('CONFIG_INVALID', `Change at most ${String(MAX_BATCH_CELLS)} cells at once.`);
   const { result } = await runWrite(
     scope,
     async (context) => {

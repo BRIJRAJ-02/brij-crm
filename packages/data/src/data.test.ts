@@ -157,7 +157,11 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       create: os.records.create.handler(notServed),
       setValues: os.records.setValues.handler(({ input }) => {
         mutationIds.push(input.mutationId);
-        return { ...behaviour.setValues(), echoes: 1 };
+        const row = behaviour.setValues();
+        const written = Object.fromEntries(
+          Object.keys(input.values).flatMap((id) => (row.versions[id] === undefined ? [] : [[id, row.versions[id]]])),
+        );
+        return { ...row, echoes: 1, written };
       }),
       setValuesBatch: os.records.setValuesBatch.handler(notServed),
     },
