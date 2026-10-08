@@ -8,12 +8,12 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { memoryTransport } from '../test/sentry.ts';
 import { testConnections } from '../test/sign-in.ts';
 import { errorFields, log } from './log.ts';
-import { captureFault, flush, startSentry } from './monitoring/sentry.ts';
+import { captureFault, flush, sentryOptions, startSentry } from './monitoring/sentry.ts';
 import { queryFailure, safeError } from './query-errors.ts';
 import { captureLogs } from './testing.ts';
 
-/** A value that stands for a record value or a session token. */
-const SECRET = `ada.lovelace-${randomUUID()}@example.com`;
+/** A session token, as a failed query on the sessions table would bind it: nothing scrub would mark on its own. */
+const SECRET = `tok_${randomUUID().replaceAll('-', '')}`;
 
 let db: Database;
 let failed: unknown;
@@ -77,6 +77,37 @@ describe('a failed query', () => {
     const [event] = transport.events();
     expect(event?.exception?.values?.map((value) => value.value)).toEqual(['Query failed (22P02)']);
     expect(transport.envelopes.join('\n')).not.toContain(SECRET);
+  });
+
+  it('leaves through beforeSend without its values when the SDK caught it itself, causes and all', async () => {
+    const { beforeSend } = sentryOptions({
+      dsn: 'https://public@o1.ingest.de.sentry.io/1',
+      environment: 'production',
+      release: 'abc1234',
+      service: 'worker',
+    });
+    if (beforeSend === undefined) throw new Error('No beforeSend.');
+    const raw = (failed as Error).message;
+    // As the SDK builds an uncaught failed query: its cause first (linked errors), the thrown error last.
+    const event = {
+      type: undefined,
+      message: raw,
+      exception: {
+        values: [
+          { type: 'error', value: `invalid input syntax for type uuid: "${SECRET}"` },
+          { type: 'DrizzleQueryError', value: raw, stacktrace: { frames: [{ function: 'query', lineno: 7 }] } },
+        ],
+      },
+    } as unknown as Parameters<typeof beforeSend>[0];
+    const sent = await beforeSend(event, { originalException: failed });
+    expect(sent?.exception?.values).toEqual([
+      {
+        type: 'DrizzleQueryError',
+        value: 'Query failed (22P02)',
+        stacktrace: { frames: [{ function: 'query', lineno: 7 }] },
+      },
+    ]);
+    expect(JSON.stringify(sent)).not.toContain(SECRET);
   });
 
   it('leaves any other error as it was', () => {
