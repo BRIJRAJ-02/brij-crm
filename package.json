@@ -30,6 +30,7 @@
     "load:stack": "node packages/core/scripts/load-stack.ts up",
     "load:stack:down": "node packages/core/scripts/load-stack.ts down",
     "load:stack:wipe": "node packages/core/scripts/load-stack.ts wipe",
+    "load:sessions": "node packages/core/scripts/load-sessions.ts",
     "boundaries": "turbo boundaries",
     "lint": "turbo run lint lint:root",
     "lint:root": "eslint .railway eslint.config.js stylelint.config.js",
