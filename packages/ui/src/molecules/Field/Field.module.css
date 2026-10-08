@@ -147,6 +147,8 @@
     inset-block-start: 100%;
     inset-inline-start: 0;
     box-sizing: border-box;
+    /* Its sentence's width, up to a measure, and never narrower than the cell. */
+    inline-size: max-content;
     min-inline-size: 100%;
     max-inline-size: var(--size-measure);
     margin-block-start: var(--space-4);
