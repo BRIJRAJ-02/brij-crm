@@ -25,8 +25,15 @@ import { outboxEvent, wireEvent } from './events.ts';
 /** The most changes a catch up reads; a watermark further behind answers `reset` (spec 0007). */
 export const CATCH_UP_MAX_ROWS = 5_000;
 
-/** How many outbox rows one read of a catch up takes, so its memory stays flat whatever the range. */
-const PAGE = 1_000;
+/**
+ * How many outbox rows one read of a catch up takes, so its memory stays flat
+ * whatever the range: a row names at most 1,000 records (`CHANGE_CAP`), so a
+ * page holds at most about 200,000 ids.
+ */
+const PAGE = 200;
+
+/** How long one statement of a catch up may run before Postgres cancels it, in ms. */
+const STATEMENT_TIMEOUT_MS = 5_000;
 
 const { workspaceCounters } = schema;
 
@@ -182,12 +189,14 @@ export function workspaceHead(scope: EngineScope): Promise<number> {
 /**
  * What the caller missed since `after` (the last `seq` they applied), up to
  * the head, filtered through their own audience and collapsed. `reset: true`
- * with no events when the outbox no longer holds every change since `after`,
+ * with no events when the outbox no longer holds every change since `after` (0, the start, by default),
  * when `after` is more than `CATCH_UP_MAX_ROWS` behind, or ahead of the head.
  */
-export async function catchUp(scope: EngineScope, input: { readonly after: number }): Promise<CatchUp> {
+export async function catchUp(scope: EngineScope, input: { readonly after: number } = { after: 0 }): Promise<CatchUp> {
   const audience = audienceOf(scope.access);
   return inWorkspace(scope, async (tx) => {
+    // A catch up never holds a pooled connection long, whatever the range.
+    await tx.execute(sql`select set_config('statement_timeout', ${String(STATEMENT_TIMEOUT_MS)}, true)`);
     const head = await headIn(tx, scope.workspaceId);
     const { after } = input;
     const reset: CatchUp = { head, reset: true, events: [] };

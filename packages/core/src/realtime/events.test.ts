@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { EVENT_KINDS, type AudienceEvent } from '../access/events.ts';
 import { CHANGE_CAP } from '../engine/write.ts';
 import { createCollapse } from './catch-up.ts';
-import { outboxEvent, stubEvent, wireEvent } from './events.ts';
+import { liveEvent, outboxEvent, stubEvent, wireEvent } from './events.ts';
 
 const id = (n: number) => `00000000-0000-7000-8000-${n.toString(16).padStart(12, '0')}`;
 const OBJECT = id(0xa);
@@ -182,5 +182,32 @@ describe('the collapse', () => {
     collapse.add({ seq: 1, at, kind: 'definitions', objectId: OBJECT, attributeIds: [id(4)] });
     collapse.add({ seq: 2, at, kind: 'definitions', objectId: OBJECT });
     expect(collapse.events()).toEqual([{ seq: 2, at, kind: 'definitions', objectId: OBJECT }]);
+  });
+});
+
+describe('liveEvent, what the relay publishes on workspace:<id>', () => {
+  it('passes a records or definitions row whole, with its mutation id', () => {
+    const records = row({ objectId: OBJECT, recordIds: [id(3)], attributeIds: [id(4)], mutationId: id(9) });
+    expect(liveEvent(records)).toEqual(outboxEvent(records));
+    const definitions = row({ kind: 'definitions', objectId: OBJECT, attributeIds: [id(4)] });
+    expect(liveEvent(definitions)).toEqual(outboxEvent(definitions));
+  });
+
+  it('never names a job, its starter or its mutation id to the whole workspace', () => {
+    const job = liveEvent(row({ kind: 'jobs', itemIds: [id(1)], actorMemberId: id(5), mutationId: id(9) }));
+    expect(job).toEqual({ seq: 1, at, kind: 'jobs', jobIds: [], coarse: true });
+  });
+
+  it('names no private view or task it can’t judge, and sends the stub for a malformed row', () => {
+    expect(liveEvent(row({ kind: 'views', objectId: OBJECT, itemIds: [id(1)] }))).toMatchObject({
+      viewIds: [],
+      coarse: true,
+    });
+    expect(liveEvent(row({ kind: 'tasks', itemIds: [id(1)], recordIds: [id(2)] }))).toMatchObject({
+      taskIds: [],
+      recordIds: [],
+      coarse: true,
+    });
+    expect(liveEvent(row({ kind: 'records', seq: 4 }))).toEqual({ seq: 4, at, kind: 'restricted' });
   });
 });

@@ -5,7 +5,8 @@
 // 0009's `filterEvent`, and `wireEvent` drops it before anything leaves.
 import type { ChangeEvent } from '@crm/contracts';
 import type { OutboxRow } from '@crm/db';
-import type { AudienceEvent, EventRow } from '../access/events.ts';
+import { filterEvent, type Audience, type AudienceEvent, type EventRow } from '../access/events.ts';
+import { SYSTEM_ACCESS } from '../access/policy.ts';
 
 /** The ids a list names, copied, so an event never shares an array with the row it came from. */
 const copy = (ids: readonly string[]): string[] => [...ids];
@@ -80,6 +81,30 @@ export function outboxEvent(row: OutboxRow): EventRow | undefined {
         ...(row.actorMemberId === undefined ? {} : { actorMemberId: row.actorMemberId }),
       };
   }
+}
+
+/**
+ * The one audience of `workspace:<id>` until spec 0007 milestone 2 plans each
+ * row per audience: the open policy, and no member named, so a rule that
+ * needs to know who receives an event (a job's id, a private view, a task)
+ * fails closed and the event goes coarse with no ids.
+ */
+const WORKSPACE_AUDIENCE: Audience = Object.freeze({
+  key: SYSTEM_ACCESS.data.key,
+  policy: SYSTEM_ACCESS.data,
+  members: Object.freeze([]),
+});
+
+/**
+ * What the relay publishes for one outbox row on `workspace:<id>`: the row's
+ * event through spec 0009's `filterEvent` for the workspace's one audience,
+ * in its wire shape, or the stub when the row is malformed or nothing of it
+ * is left. A `records` or `definitions` row passes whole.
+ */
+export function liveEvent(row: OutboxRow): ChangeEvent {
+  const event = outboxEvent(row);
+  const kept = event === undefined ? undefined : filterEvent(WORKSPACE_AUDIENCE, event);
+  return kept === undefined ? stubEvent(row.seq, row.at) : wireEvent(kept);
 }
 
 /**

@@ -81,7 +81,8 @@ export function createRelayStats({
       trim(time);
       const lags = samples.map((sample) => sample.lagMs).sort((a, b) => a - b);
       const held = [...waiting.values()];
-      const oldest = Math.min(...held.map((entry) => entry.oldest));
+      // A loop, not a spread: a spread of a very long list throws.
+      const oldest = held.reduce((least, entry) => Math.min(least, entry.oldest), Number.POSITIVE_INFINITY);
       return {
         published: lags.length,
         lagMs:

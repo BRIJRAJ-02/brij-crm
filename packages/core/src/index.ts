@@ -53,5 +53,5 @@ export {
   type RecordWindow,
 } from './records/records.ts';
 export { getMyAccess, listMembers, removeMember, setMemberRole, type MemberWithRole } from './members/members.ts';
-export { outboxEvent, stubEvent, wireEvent } from './realtime/events.ts';
+export { liveEvent, outboxEvent, stubEvent, wireEvent } from './realtime/events.ts';
 export { audienceOf, catchUp, CATCH_UP_MAX_ROWS, createCollapse, workspaceHead } from './realtime/catch-up.ts';

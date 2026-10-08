@@ -21,5 +21,8 @@ export const realtimeRouter = authed.realtime.router({
     const signed = signer(context.realtime).subscription(context.user.id, context.scope.workspaceId);
     return { ...signed, head: await workspaceHead(context.scope) };
   }),
-  catchUp: member.realtime.catchUp.handler(({ context, input }) => catchUp(context.scope, { after: input.after })),
+  // Its own place in the read gate: at most 6 catch ups in flight per workspace per process, beside the reads.
+  catchUp: member.realtime.catchUp.handler(({ context, input }) =>
+    context.readGate.run(`${context.scope.workspaceId}:catch-up`, () => catchUp(context.scope, { after: input.after })),
+  ),
 });

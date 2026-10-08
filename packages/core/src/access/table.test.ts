@@ -51,6 +51,14 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'cappedHook',
   'outboxHook',
   'outboxEvents',
+  // Change events as pure data (spec 0007): rows to events, the stub, the wire shape, catch up's collapse, and
+  // the caller as an audience of one.
+  'outboxEvent',
+  'liveEvent',
+  'stubEvent',
+  'wireEvent',
+  'createCollapse',
+  'audienceOf',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;

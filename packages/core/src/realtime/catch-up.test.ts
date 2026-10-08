@@ -150,3 +150,105 @@ describe('catch up', () => {
     expect(JSON.stringify(missed)).not.toContain(people);
   });
 });
+
+/** The ids of People's attributes by API name. */
+async function attributesOf(workspaceId: string, objectId: string): Promise<Record<string, string>> {
+  const result = await db.withWorkspace(workspaceId, (tx) =>
+    tx.execute<{ id: string; slug: string }>(
+      sql`select id, api_slug as slug from attributes where object_id = ${objectId}`,
+    ),
+  );
+  return Object.fromEntries(result.rows.map((row) => [row.slug, row.id]));
+}
+
+/** One outbox row, stored as the owner as a write would have, numbered `seq` (the counter follows). */
+async function row(workspaceId: string, seq: number, values: Record<string, unknown>): Promise<void> {
+  const columns = Object.keys(values);
+  await testQuery(
+    ownerUrl,
+    `insert into outbox (workspace_id, seq, ${columns.join(', ')}) values ($1, $2, ${columns.map((_, index) => `$${String(index + 3)}`).join(', ')})`,
+    [workspaceId, seq, ...Object.values(values)],
+  );
+  await testQuery(
+    ownerUrl,
+    'update workspace_counters set outbox_seq = greatest(outbox_seq, $2) where workspace_id = $1',
+    [workspaceId, seq],
+  );
+}
+
+describe('catch up through a restricted audience (spec 0009 rules on the whole path)', () => {
+  it('removes a hidden field, and leaves out a row whose only attributes are hidden', async () => {
+    const { people, memberId, workspaceId } = await workspace();
+    const ids = await attributesOf(workspaceId, people);
+    const [ada, grace] = [newId(), newId()];
+    const name = ids.name ?? '';
+    const title = ids.job_title ?? '';
+    await row(workspaceId, 1, { kind: 'records', object_id: people, record_ids: [ada], attribute_ids: [name, title] });
+    await row(workspaceId, 2, { kind: 'records', object_id: people, record_ids: [grace], attribute_ids: [name] });
+    const rules: AccessRules = {
+      levels: [
+        {
+          subject: { type: 'role', role: 'member' },
+          target: { type: 'attribute', objectId: people, attributeId: name },
+          level: 'hidden',
+        },
+      ],
+      records: [],
+    };
+    const restricted = testScope({ db, workspaceId, actor: { type: 'member', id: memberId }, role: 'member', rules });
+    const missed = await catchUp(restricted, { after: 0 });
+    expect(missed.events).toEqual([
+      {
+        seq: 1,
+        at: expect.any(String) as string,
+        kind: 'records',
+        objectId: people,
+        recordIds: [ada],
+        attributeIds: [title],
+      },
+    ]);
+    expect(JSON.stringify(missed)).not.toContain(name);
+    expect(JSON.stringify(missed)).not.toContain(grace);
+  });
+
+  it('makes the event coarse with no record ids under a record rule', async () => {
+    const { people, memberId, workspaceId } = await workspace();
+    const ids = await attributesOf(workspaceId, people);
+    const ada = newId();
+    await row(workspaceId, 1, {
+      kind: 'records',
+      object_id: people,
+      record_ids: [ada],
+      attribute_ids: [ids.job_title],
+    });
+    const rules: AccessRules = {
+      levels: [],
+      records: [
+        { subject: { type: 'role', role: 'member' }, objectId: people, kind: 'own', attributeId: ids.owner ?? '' },
+      ],
+    };
+    const restricted = testScope({ db, workspaceId, actor: { type: 'member', id: memberId }, role: 'member', rules });
+    const missed = await catchUp(restricted, { after: 0 });
+    expect(missed.events).toEqual([expect.objectContaining({ seq: 1, kind: 'records', recordIds: [], coarse: true })]);
+    expect(JSON.stringify(missed)).not.toContain(ada);
+  });
+
+  it('names a job only to its starter, and never its starter or the mutation id', async () => {
+    const { memberId, workspaceId } = await workspace();
+    const [job, mutationId, other] = [newId(), newId(), newId()];
+    await row(workspaceId, 1, { kind: 'jobs', item_ids: [job], actor_member_id: memberId, mutation_id: mutationId });
+    const starter = testScope({ db, workspaceId, actor: { type: 'member', id: memberId }, role: 'member' });
+    const someone = testScope({ db, workspaceId, actor: { type: 'member', id: other }, role: 'member' });
+    const mine = await catchUp(starter, { after: 0 });
+    expect(mine.events).toEqual([{ seq: 1, at: expect.any(String) as string, kind: 'jobs', jobIds: [job] }]);
+    const theirs = await catchUp(someone, { after: 0 });
+    expect(theirs.events).toEqual([
+      { seq: 1, at: expect.any(String) as string, kind: 'jobs', jobIds: [], coarse: true },
+    ]);
+    for (const answer of [mine, theirs]) {
+      expect(JSON.stringify(answer)).not.toContain(mutationId);
+      expect(JSON.stringify(answer)).not.toContain('actorMemberId');
+    }
+    expect(JSON.stringify(theirs)).not.toContain(job);
+  });
+});

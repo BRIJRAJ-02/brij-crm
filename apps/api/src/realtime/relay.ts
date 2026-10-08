@@ -62,7 +62,7 @@
 // published more than `OUTBOX_RETENTION` (24 hours) ago, and again on the
 // next poll while it keeps finding a full batch. Dormant, it prunes nothing.
 import { type ChangeEvent, workspaceChannel } from '@crm/contracts';
-import { outboxEvent, stubEvent, wireEvent } from '@crm/core';
+import { liveEvent } from '@crm/core';
 import type { OutboxReader, OutboxRow } from '@crm/db';
 import { errorFields } from '../log.ts';
 import type { PublishBatch } from './centrifugo.ts';
@@ -145,12 +145,13 @@ const PRUNE_BATCH = 1_000;
 /**
  * The event for one outbox row (spec 0007's `ChangeEvent`, by kind): ids
  * only, with its commit time `at`, `mutationId` and `coarse` only when set,
- * and never the job starter. A row missing what its kind needs goes out as
- * the stub, so the channel's `seq`s stay gap free.
+ * through spec 0009's `filterEvent` for the workspace's one audience (so a
+ * job's or a private view's id never goes to everyone), and never the job
+ * starter. A malformed row, or one that leaves nothing, goes out as the stub,
+ * so the channel's `seq`s stay gap free (`liveEvent` in `@crm/core`).
  */
 export function changeEvent(row: OutboxRow): ChangeEvent {
-  const event = outboxEvent(row);
-  return event === undefined ? stubEvent(row.seq, row.at) : wireEvent(event);
+  return liveEvent(row);
 }
 
 /** The least time between two warnings about one workspace's failed publishes. */

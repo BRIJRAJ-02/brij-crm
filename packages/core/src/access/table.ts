@@ -42,6 +42,9 @@ export const ACCESS_TABLE = {
   removeMember: { ownerRules: true },
   listMembers: { anyMember: true },
   getMyAccess: { anyMember: true },
+  // Change events (spec 0007): the head, and catch up through the caller's own audience.
+  workspaceHead: { anyMember: true },
+  catchUp: { anyMember: true },
   // Reads.
   listObjects: { data: 'read' },
   listObjectAttributes: { data: 'read' },

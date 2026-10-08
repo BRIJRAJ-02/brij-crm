@@ -32,6 +32,7 @@ const READS: ReadonlySet<string> = new Set([
   'records.get',
   'realtime.connectionToken',
   'realtime.subscriptionToken',
+  'realtime.catchUp',
 ]);
 
 let db: Database;
