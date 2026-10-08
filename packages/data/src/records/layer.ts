@@ -115,6 +115,11 @@ export interface RecordsLayerOptions {
   readonly keepUnusedViewMs?: number;
   /** Listens to a workspace's live changes while one of its views is open; the answer stops (`live.watch`). */
   readonly watch?: (workspace: string) => () => void;
+  /**
+   * Settles once the workspace's head is read (spec 0007), so a view's first
+   * read comes after its first watermark. At once by default.
+   */
+  readonly beforeRead?: (workspace: string) => Promise<void>;
   /** Mutation ids about to go out (`MutationLog.sent`), and ones refused, which will never echo (`forget`). */
   readonly mutations?: { readonly sent: (mutationId: string) => void; readonly forget: (mutationId: string) => void };
 }
@@ -174,6 +179,7 @@ export function createRecordsLayer({
   random = Math.random,
   keepUnusedViewMs = 60_000,
   watch = () => () => undefined,
+  beforeRead = () => Promise.resolve(),
   mutations = { sent: () => undefined, forget: () => undefined },
 }: RecordsLayerOptions) {
   const store = createPlainStore<RecordView>();
@@ -427,7 +433,10 @@ export function createRecordsLayer({
         dispose();
       }, keepUnusedViewMs);
     };
-    refreshCount();
+    // The first read waits for the workspace's head, so nothing written meanwhile is missed.
+    void beforeRead(workspace).then(() => {
+      if (!isCounted && views.get(keyOf(workspace, objectId))?.view === view) refreshCount();
+    });
     // A view the router warmed but no screen ever showed goes too.
     letGoLater();
     return {

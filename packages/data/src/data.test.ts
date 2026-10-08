@@ -93,6 +93,10 @@ interface Behaviour {
   query: (position: number, limit: number) => RecordView[];
   setValues: () => RecordView;
   get: (ids: readonly string[]) => RecordView[];
+  /** The workspace's head, as the subscription token carries it. */
+  head: () => number;
+  /** What `realtime.catchUp` answers from `after`. */
+  catchUp: (after: number) => { head: number; reset: boolean; events: ChangeEvent[] };
 }
 
 const unauthenticated = () => new ORPCError('UNAUTHENTICATED', { status: 401, message: 'Sign in to continue.' });
@@ -117,6 +121,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       Array.from({ length: Math.max(0, Math.min(limit, 3 - position)) }, (_, at) => personRow(position + at)),
     setValues: notServed,
     get: () => [],
+    head: () => 0,
+    catchUp: () => ({ head: behaviour.head(), reset: false, events: [] }),
     ...overrides,
   };
   const calls: string[] = [];
@@ -159,7 +165,9 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       subscriptionToken: os.realtime.subscriptionToken.handler(({ input }) => ({
         channel: `workspace:${input.workspace}`,
         token: 'subscription-token',
+        head: behaviour.head(),
       })),
+      catchUp: os.realtime.catchUp.handler(({ input }) => behaviour.catchUp(input.after)),
     },
   });
   const handler = new RPCHandler(router);
@@ -571,14 +579,17 @@ describe('live updates', () => {
     return { transport, channels, channel, closed: () => closed };
   }
 
-  const changed = (seq: number, recordIds: readonly string[], more: Partial<ChangeEvent> = {}): ChangeEvent => ({
+  const AT = '2026-10-08T09:00:00.000Z';
+  const changed = (seq: number, recordIds: readonly string[], mutationId?: string): ChangeEvent => ({
     seq,
+    at: AT,
     kind: 'records',
     objectId: PEOPLE.id,
     recordIds: [...recordIds],
     attributeIds: [TITLE.id],
-    ...more,
+    ...(mutationId === undefined ? {} : { mutationId }),
   });
+  const definitions = (seq: number): ChangeEvent => ({ seq, at: AT, kind: 'definitions', objectId: PEOPLE.id });
 
   /** The layer with live updates on a fake client, its view of People open and subscribed. */
   async function liveLayer(overrides: Partial<Behaviour> = {}) {
@@ -592,7 +603,9 @@ describe('live updates', () => {
       },
       loadLive: () =>
         Promise.resolve({
-          createLive: (options) => createLive({ ...options, open: () => Promise.resolve(client.transport) }),
+          // No spread before a resync or catch up: the tests wait on real time.
+          createLive: (options) =>
+            createLive({ ...options, open: () => Promise.resolve(client.transport), random: () => 0 }),
         }),
     });
     const view = await data.records.view('acme', PEOPLE.id);
@@ -620,7 +633,7 @@ describe('live updates', () => {
     await settled();
     const [mutationId] = api.mutationIds;
     const gets = count(api.calls, '/api/rpc/records/get');
-    client.channel().onPublication(changed(1, [personRow(1).id], mutationId === undefined ? {} : { mutationId }));
+    client.channel().onPublication(changed(1, [personRow(1).id], mutationId));
     await settled();
     expect(count(api.calls, '/api/rpc/records/get')).toBe(gets);
     expect(view.getSnapshot().source.getItem(1)?.values[TITLE.id]).toBe('Lead');
@@ -637,11 +650,11 @@ describe('live updates', () => {
     });
     await data.attributes.list('acme', PEOPLE.id);
     // Read again, the same: nothing to reload.
-    client.channel().onPublication(changed(1, [], { kind: 'definitions' }));
+    client.channel().onPublication(definitions(1));
     await settled();
     expect(definitionChanges()).toBe(0);
     // Read again, with a new column: the app's pages load again, and find it cached.
-    client.channel().onPublication(changed(2, [], { kind: 'definitions' }));
+    client.channel().onPublication(definitions(2));
     await settled();
     expect(definitionChanges()).toBe(1);
     expect(await data.attributes.list('acme', PEOPLE.id)).toEqual([TITLE, NICKNAME]);
@@ -665,10 +678,72 @@ describe('live updates', () => {
   it('is off without a realtime address, and asks for no token', async () => {
     const api = fakeApi();
     const { data } = layer(api);
+    data.live.prepare('acme');
     await data.records.view('acme', PEOPLE.id);
     await settled();
     expect(data.live.status()).toBe('off');
     expect(count(api.calls, '/api/rpc/realtime/subscriptionToken')).toBe(0);
+    expect(count(api.calls, '/api/rpc/realtime/catchUp')).toBe(0);
+  });
+
+  it('reads the head before the first read, and reuses that token to listen (spec 0007, AC-74)', async () => {
+    const { api } = await liveLayer({ head: () => 7 });
+    const first = api.calls.findIndex((path) => path.startsWith('/api/rpc/realtime/subscriptionToken'));
+    const reads = ['/api/rpc/records/count', '/api/rpc/records/query'].map((path) => api.calls.indexOf(path));
+    expect(first).toBeGreaterThanOrEqual(0);
+    for (const read of reads) expect(read).toBeGreaterThan(first);
+    expect(count(api.calls, '/api/rpc/realtime/subscriptionToken')).toBe(1);
+  });
+
+  it('catches up from the head on subscribing, and a write made during the first load shows (AC-74)', async () => {
+    const edited = { ...personRow(0, 'CEO'), versions: { [TITLE.id]: '0199a6f2-0002-7000-8000-000000000000' } };
+    const afters: number[] = [];
+    const { api, view } = await liveLayer({
+      head: () => 4,
+      catchUp: (after) => {
+        afters.push(after);
+        return { head: 5, reset: false, events: [changed(5, [edited.id])] };
+      },
+      get: (ids) => (ids.includes(edited.id) ? [edited] : []),
+    });
+    expect(afters).toEqual([4]);
+    expect(count(api.calls, '/api/rpc/records/get')).toBe(1);
+    expect(view.getSnapshot().source.getItem(0)?.values[TITLE.id]).toBe('CEO');
+  });
+
+  it('fills a gap through catch up rather than refetching everything held', async () => {
+    const afters: number[] = [];
+    const { api, client } = await liveLayer({
+      catchUp: (after) => {
+        afters.push(after);
+        return after === 0 ? { head: 0, reset: false, events: [] } : { head: 3, reset: false, events: [] };
+      },
+    });
+    const queries = count(api.calls, '/api/rpc/records/query');
+    client.channel().onPublication(changed(1, []));
+    client.channel().onPublication(changed(3, []));
+    await settled();
+    expect(afters).toEqual([0, 1]);
+    expect(count(api.calls, '/api/rpc/records/query')).toBe(queries);
+  });
+
+  it('resyncs every store when catch up answers reset, with no reload of the page (AC-73)', async () => {
+    let resets = 0;
+    const { api, client } = await liveLayer({
+      catchUp: () => {
+        resets += 1;
+        return { head: 9_000, reset: true, events: [] };
+      },
+    });
+    await settled();
+    expect(resets).toBe(1);
+    // The view's count and the blocks on screen again, once; the next event counts on from the new head.
+    expect(count(api.calls, '/api/rpc/records/count')).toBe(2);
+    const counts = count(api.calls, '/api/rpc/records/count');
+    client.channel().onPublication(changed(9_001, []));
+    await settled();
+    expect(resets).toBe(1);
+    expect(count(api.calls, '/api/rpc/records/count')).toBe(counts);
   });
 });
 

@@ -1,21 +1,38 @@
 // Live updates against a fake realtime client (spec 0005, the data layer's
-// tests): the seq contract (apply the next, drop repeats and late ones, a gap
-// refetches the workspace), this tab's own echoes skipped, recovery, the
-// paused status, and one connection shared by every watch.
+// tests; spec 0007, catch up): the watermark (apply the next, drop repeats
+// and late ones, a gap catches up from the outbox), this tab's own echoes
+// skipped, unknown kinds and the stub only moving the watermark, catch up on
+// a new or unrecovered subscription and after 5 minutes hidden, the resync on
+// a reset, the paused status, and one connection shared by every watch.
 import type { ChangeEvent } from '@crm/contracts';
 import { describe, expect, it } from 'vitest';
-import { createLive, parseChangeEvent, REFETCH_JITTER_MS, type LiveChannel, type LiveTransport } from './live.ts';
+import {
+  createLive,
+  HIDDEN_CATCH_UP_MS,
+  parseChangeEvent,
+  REFETCH_JITTER_MS,
+  type CaughtUp,
+  type Granted,
+  type LiveChannel,
+  type LiveTransport,
+} from './live.ts';
 import { createMutationLog } from './mutations.ts';
+import { createLiveRouter } from './router.ts';
 
 const WS = 'acme';
 const PEOPLE = '0199a6f2-0000-7000-8000-00000000000a';
 const ROW = (n: number) => `0199a6f2-0000-7000-8000-${n.toString(16).padStart(12, '0')}`;
 const MUTATION = '0199a6f2-0000-7000-8000-0000000000ff';
+const AT = '2026-10-08T09:00:00.000Z';
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-const event = (seq: number, more: Partial<ChangeEvent> = {}): ChangeEvent => ({
+const event = (
+  seq: number,
+  more: { recordIds?: string[]; mutationId?: string; coarse?: boolean } = {},
+): ChangeEvent => ({
   seq,
+  at: AT,
   kind: 'records',
   objectId: PEOPLE,
   recordIds: [ROW(seq)],
@@ -23,14 +40,18 @@ const event = (seq: number, more: Partial<ChangeEvent> = {}): ChangeEvent => ({
   ...more,
 });
 
-/** createLive on a fake client, with its waits, the handlers' calls and the status in the test's hands. */
-function setup(
-  options: {
-    readonly token?: () => Promise<{ channel: string; token: string } | undefined>;
-    /** How many times opening the client fails before it opens. */
-    readonly openFailures?: number;
-  } = {},
-) {
+interface Setup {
+  readonly token?: (workspace: string) => Promise<Granted | undefined>;
+  /** The head read before the first read; undefined when it couldn't be. */
+  readonly head?: number | undefined;
+  /** What a catch up answers (head 0, nothing, by default). */
+  readonly catchUp?: (after: number) => Promise<CaughtUp | undefined>;
+  /** How many times opening the client fails before it opens. */
+  readonly openFailures?: number;
+}
+
+/** createLive on a fake client, with its waits, the router's calls, the catch ups and the status in the test's hands. */
+function setup(options: Setup = {}) {
   const channels: LiveChannel[] = [];
   const unlistened: string[] = [];
   const trouble = new Set<() => void>();
@@ -56,22 +77,34 @@ function setup(
   const waits: { readonly ms: number; readonly resolve: () => void }[] = [];
   const calls: string[] = [];
   const statuses: string[] = [];
+  const afters: number[] = [];
   const mutations = createMutationLog();
+  const router = createLiveRouter();
+  router.on('records', (workspace, change) =>
+    calls.push(`records ${workspace} ${change.recordIds.join(',')}${change.coarse === true ? ' coarse' : ''}`),
+  );
+  router.on('definitions', (workspace, change) => calls.push(`definitions ${workspace} ${change.objectId ?? ''}`));
+  router.onResync((workspace) => calls.push(`resync ${workspace}`));
+  let time = 0;
+  let hidden = false;
+  const visibilityListeners = new Set<() => void>();
+  const head = 'head' in options ? options.head : 0;
   const live = createLive({
     url: 'ws://centrifugo.test/connection/websocket',
     connectionToken: () => Promise.resolve('connection-token'),
     subscriptionToken:
-      options.token ?? ((workspace) => Promise.resolve({ channel: `workspace:${workspace}-id`, token: 'sub-token' })),
+      options.token ??
+      ((workspace) => Promise.resolve({ channel: `workspace:${workspace}-id`, token: 'sub-token', head: 0 })),
+    head: () => Promise.resolve(head),
+    catchUp: (_workspace, after) => {
+      afters.push(after);
+      return options.catchUp?.(after) ?? Promise.resolve({ head: after, reset: false, events: [] });
+    },
     open: () => {
       opened += 1;
       return opened <= (options.openFailures ?? 0) ? Promise.reject(new Error('offline')) : Promise.resolve(transport);
     },
-    handlers: {
-      records: (workspace, objectId, ids) => calls.push(`records ${workspace} ${objectId} ${ids.join(',')}`),
-      object: (workspace, objectId) => calls.push(`object ${workspace} ${objectId}`),
-      definitions: (workspace, objectId) => calls.push(`definitions ${workspace} ${objectId}`),
-      workspace: (workspace) => calls.push(`workspace ${workspace}`),
-    },
+    router,
     mutations,
     onStatus: (status) => statuses.push(status),
     wait: (ms) =>
@@ -79,7 +112,15 @@ function setup(
         waits.push({ ms, resolve });
       }),
     random: () => 0.5,
+    now: () => time,
     startupMs: 5000,
+    visibility: {
+      hidden: () => hidden,
+      onChange: (listener) => {
+        visibilityListeners.add(listener);
+        return () => visibilityListeners.delete(listener);
+      },
+    },
   });
   /** Resolves every wait of `ms` (the startup timer is 5000, the jitter 1000 here). */
   const elapse = async (ms: number) => {
@@ -91,13 +132,20 @@ function setup(
     if (first === undefined) throw new Error('Nothing is listened to.');
     return first;
   };
-  /** Watches WS and lets it subscribe for the first time (which refetches what is held once). */
+  /** Watches WS and lets it subscribe for the first time (which catches up from the head). */
   const subscribed = async () => {
     const release = live.watch(WS);
     await settle();
     channel().onSubscribed({ wasRecovering: false, recovered: false });
+    await settle();
     calls.length = 0;
+    afters.length = 0;
     return release;
+  };
+  const setHidden = (value: boolean, at: number) => {
+    hidden = value;
+    time = at;
+    for (const listener of visibilityListeners) listener();
   };
   return {
     live,
@@ -107,10 +155,12 @@ function setup(
     trouble,
     calls,
     statuses,
+    afters,
     waits,
     elapse,
     channel,
     subscribed,
+    setHidden,
     opened: () => opened,
     closed: () => closed,
   };
@@ -118,46 +168,63 @@ function setup(
 
 const jitter = 0.5 * REFETCH_JITTER_MS;
 
-describe('the seq contract', () => {
-  it('fetches what is held once on the first subscribe, then applies each next seq', async () => {
-    const t = setup();
+describe('the watermark', () => {
+  it('starts at the head and catches up from it on the first subscribe, then applies each next seq', async () => {
+    const t = setup({
+      head: 6,
+      catchUp: (after) => Promise.resolve({ head: after + 1, reset: false, events: [event(after + 1)] }),
+    });
     t.live.watch(WS);
     await settle();
     expect(t.channel()).toMatchObject({ name: `workspace:${WS}-id`, token: 'sub-token' });
+    expect(t.live.watermark(WS)).toBe(6);
     t.channel().onSubscribed({ wasRecovering: false, recovered: false });
-    expect(t.calls).toEqual([`workspace ${WS}`]);
-
-    t.channel().onPublication(event(7));
-    t.channel().onPublication(event(8, { recordIds: [ROW(1), ROW(2)] }));
-    expect(t.calls.slice(1)).toEqual([
-      `records ${WS} ${PEOPLE} ${ROW(7)}`,
-      `records ${WS} ${PEOPLE} ${ROW(1)},${ROW(2)}`,
-    ]);
+    await settle();
+    expect(t.afters).toEqual([6]);
+    expect(t.calls).toEqual([`records ${WS} ${ROW(7)}`]);
+    t.channel().onPublication(event(8));
+    t.channel().onPublication(event(9, { recordIds: [ROW(1), ROW(2)] }));
+    expect(t.calls.slice(1)).toEqual([`records ${WS} ${ROW(8)}`, `records ${WS} ${ROW(1)},${ROW(2)}`]);
+    expect(t.live.watermark(WS)).toBe(9);
   });
 
   it('drops a repeat and a late lower seq', async () => {
     const t = setup();
     await t.subscribed();
-    t.channel().onPublication(event(3));
-    t.channel().onPublication(event(3));
+    t.channel().onPublication(event(1));
+    t.channel().onPublication(event(1));
     t.channel().onPublication(event(2));
-    t.channel().onPublication(event(4));
-    expect(t.calls).toEqual([`records ${WS} ${PEOPLE} ${ROW(3)}`, `records ${WS} ${PEOPLE} ${ROW(4)}`]);
+    t.channel().onPublication(event(1));
+    expect(t.calls).toEqual([`records ${WS} ${ROW(1)}`, `records ${WS} ${ROW(2)}`]);
   });
 
-  it('treats a jump past the next seq as a gap: the workspace again after 0 to 2 seconds, then on from there', async () => {
-    const t = setup();
+  it('fills a gap through catch up, then applies what arrived meanwhile in order, dropping what it covered', async () => {
+    let answer: (value: CaughtUp) => void = () => undefined;
+    const t = setup({
+      catchUp: (after) =>
+        after === 0
+          ? Promise.resolve({ head: 0, reset: false, events: [] })
+          : new Promise((resolve) => {
+              answer = resolve;
+            }),
+    });
     await t.subscribed();
-    t.channel().onPublication(event(3));
-    t.channel().onPublication(event(6));
-    expect(t.calls).toEqual([`records ${WS} ${PEOPLE} ${ROW(3)}`]);
-    await t.elapse(jitter);
-    expect(t.calls).toEqual([`records ${WS} ${PEOPLE} ${ROW(3)}`, `workspace ${WS}`]);
-    // The ones the gap skipped arrive late: already covered.
+    t.channel().onPublication(event(1));
     t.channel().onPublication(event(4));
+    expect(t.afters).toEqual([1]);
+    // While catching up, events wait.
     t.channel().onPublication(event(5));
-    t.channel().onPublication(event(7));
-    expect(t.calls.slice(2)).toEqual([`records ${WS} ${PEOPLE} ${ROW(7)}`]);
+    t.channel().onPublication(event(3));
+    expect(t.calls).toEqual([`records ${WS} ${ROW(1)}`]);
+    answer({ head: 3, reset: false, events: [event(3, { recordIds: [ROW(2), ROW(3)] })] });
+    await settle();
+    expect(t.calls).toEqual([
+      `records ${WS} ${ROW(1)}`,
+      `records ${WS} ${ROW(2)},${ROW(3)}`,
+      `records ${WS} ${ROW(4)}`,
+      `records ${WS} ${ROW(5)}`,
+    ]);
+    expect(t.live.watermark(WS)).toBe(5);
   });
 
   it("skips this tab's own write, and forgets its id once it has echoed", async () => {
@@ -168,84 +235,178 @@ describe('the seq contract', () => {
     expect(t.calls).toEqual([]);
     // Another write with the same id can only be someone else's now.
     t.channel().onPublication(event(2, { mutationId: MUTATION }));
-    expect(t.calls).toEqual([`records ${WS} ${PEOPLE} ${ROW(2)}`]);
+    expect(t.calls).toEqual([`records ${WS} ${ROW(2)}`]);
   });
 
-  it("still counts a gap when the jump is this tab's own write", async () => {
+  it('moves the watermark past the stub and a kind it does not know, handing them to nobody (AC-79)', async () => {
     const t = setup();
     await t.subscribed();
-    t.channel().onPublication(event(1));
-    t.mutations.sent(MUTATION);
-    t.channel().onPublication(event(3, { mutationId: MUTATION }));
-    await t.elapse(jitter);
-    expect(t.calls).toEqual([`records ${WS} ${PEOPLE} ${ROW(1)}`, `workspace ${WS}`]);
+    t.channel().onPublication({ seq: 1, at: AT, kind: 'restricted' });
+    t.channel().onPublication({ seq: 2, at: AT, kind: 'from-a-newer-server', things: [1] });
+    t.channel().onPublication(event(3));
+    expect(t.calls).toEqual([`records ${WS} ${ROW(3)}`]);
+    expect(t.afters).toEqual([]);
+    expect(t.live.watermark(WS)).toBe(3);
   });
 
   it('refetches attributes at once for definitions, and the whole object after 0 to 2 seconds when coarse', async () => {
     const t = setup();
     await t.subscribed();
-    t.channel().onPublication(event(1, { kind: 'definitions', recordIds: [] }));
+    t.channel().onPublication({ seq: 1, at: AT, kind: 'definitions', objectId: PEOPLE });
     t.channel().onPublication(event(2, { recordIds: [], coarse: true }));
+    t.channel().onPublication(event(3, { recordIds: [], coarse: true }));
     expect(t.calls).toEqual([`definitions ${WS} ${PEOPLE}`]);
-    expect(t.waits.map((each) => each.ms)).toContain(jitter);
     await t.elapse(jitter);
-    expect(t.calls).toEqual([`definitions ${WS} ${PEOPLE}`, `object ${WS} ${PEOPLE}`]);
+    expect(t.calls).toEqual([`definitions ${WS} ${PEOPLE}`, `records ${WS}  coarse`]);
   });
 
   it('ignores anything that is not a change event', async () => {
     const t = setup();
     await t.subscribed();
-    for (const data of [null, 'x', { seq: 0 }, { ...event(1), kind: 'other' }, { ...event(1), recordIds: [1] }]) {
+    for (const data of [
+      null,
+      'x',
+      { seq: 0, kind: 'records' },
+      { ...event(1), recordIds: [1] },
+      { ...event(1), kind: 3 },
+    ]) {
       t.channel().onPublication(data);
     }
     expect(t.calls).toEqual([]);
-    expect(parseChangeEvent(event(1, { mutationId: MUTATION }))).toEqual(event(1, { mutationId: MUTATION }));
+    expect(t.live.watermark(WS)).toBe(0);
   });
-});
 
-describe('spreading refetches', () => {
-  it('refetches the workspace once for a burst of gaps', async () => {
+  it('keeps the watermark across watches, and catches up from it when watched again', async () => {
     const t = setup();
-    await t.subscribed();
+    const release = await t.subscribed();
     t.channel().onPublication(event(1));
-    t.channel().onPublication(event(3));
-    t.channel().onPublication(event(6));
-    await t.elapse(jitter);
-    expect(t.calls).toEqual([`records ${WS} ${PEOPLE} ${ROW(1)}`, `workspace ${WS}`]);
-    // Once done, the next gap waits its own spread.
-    t.channel().onPublication(event(9));
-    await t.elapse(jitter);
-    expect(t.calls.slice(2)).toEqual([`workspace ${WS}`]);
+    release();
+    t.live.watch(WS);
+    await settle();
+    t.channels[1]?.onSubscribed({ wasRecovering: false, recovered: false });
+    await settle();
+    expect(t.afters).toEqual([1]);
   });
 });
 
-describe('recovery', () => {
-  it('waits for the recovered events after a recovered resubscribe, and refetches nothing', async () => {
+describe('parsing', () => {
+  it('keeps only the fields of each kind, and marks a kind it does not know', () => {
+    expect(parseChangeEvent({ ...event(1, { mutationId: MUTATION }), extra: 'x' })).toEqual({
+      seq: 1,
+      mutationId: MUTATION,
+      event: event(1, { mutationId: MUTATION }),
+    });
+    expect(parseChangeEvent({ seq: 4, at: AT, kind: 'members', memberIds: [ROW(1)] })?.event).toEqual({
+      seq: 4,
+      at: AT,
+      kind: 'members',
+      memberIds: [ROW(1)],
+    });
+    expect(parseChangeEvent({ seq: 4, kind: 'later', at: AT })).toEqual({
+      seq: 4,
+      mutationId: undefined,
+      event: undefined,
+    });
+    expect(
+      parseChangeEvent({ seq: 4, at: AT, kind: 'entries', entryIds: [], recordIds: [], attributeIds: [] }),
+    ).toBeUndefined();
+  });
+});
+
+describe('catching up', () => {
+  it('waits for the recovered events after a recovered resubscribe, and catches up after 0 to 2 seconds when not', async () => {
     const t = setup();
     await t.subscribed();
     t.channel().onPublication(event(1));
     t.channel().onDown('resubscribing');
     t.channel().onSubscribed({ wasRecovering: true, recovered: true });
-    t.channel().onPublication(event(2));
-    await t.elapse(jitter);
-    expect(t.calls).toEqual([`records ${WS} ${PEOPLE} ${ROW(1)}`, `records ${WS} ${PEOPLE} ${ROW(2)}`]);
-  });
-
-  it('refetches the workspace after 0 to 2 seconds when recovery failed, and counts again from the next event', async () => {
-    const t = setup();
-    await t.subscribed();
-    t.channel().onPublication(event(1));
+    await settle();
+    expect(t.afters).toEqual([]);
     t.channel().onDown('resubscribing');
     t.channel().onSubscribed({ wasRecovering: true, recovered: false });
-    expect(t.calls).toEqual([`records ${WS} ${PEOPLE} ${ROW(1)}`]);
-    // The next event is a new start, not a gap.
-    t.channel().onPublication(event(40));
+    await settle();
+    expect(t.afters).toEqual([]);
     await t.elapse(jitter);
-    expect(t.calls).toEqual([
-      `records ${WS} ${PEOPLE} ${ROW(1)}`,
-      `records ${WS} ${PEOPLE} ${ROW(40)}`,
-      `workspace ${WS}`,
-    ]);
+    expect(t.afters).toEqual([1]);
+  });
+
+  it('runs every store’s resync on a reset, and counts on from the head it answered (AC-73)', async () => {
+    const t = setup({ catchUp: () => Promise.resolve({ head: 9_000, reset: true, events: [] }) });
+    t.live.watch(WS);
+    await settle();
+    t.channel().onSubscribed({ wasRecovering: false, recovered: false });
+    await settle();
+    expect(t.calls).toEqual([]);
+    await t.elapse(jitter);
+    expect(t.calls).toEqual([`resync ${WS}`]);
+    expect(t.live.watermark(WS)).toBe(9_000);
+    t.channel().onPublication(event(9_001));
+    expect(t.calls).toEqual([`resync ${WS}`, `records ${WS} ${ROW(9_001)}`]);
+  });
+
+  it('with no head read before the first read, resyncs and catches up from the token’s head', async () => {
+    const t = setup({
+      head: undefined,
+      token: () => Promise.resolve({ channel: 'workspace:x', token: 'sub-token', head: 12 }),
+    });
+    t.live.watch(WS);
+    await settle();
+    t.channel().onSubscribed({ wasRecovering: false, recovered: false });
+    await settle();
+    expect(t.afters).toEqual([12]);
+    await t.elapse(jitter);
+    expect(t.calls).toEqual([`resync ${WS}`]);
+  });
+
+  it('catches up when the tab comes back after 5 minutes hidden, and not after less', async () => {
+    const t = setup();
+    await t.subscribed();
+    t.setHidden(true, 0);
+    t.setHidden(false, HIDDEN_CATCH_UP_MS - 1);
+    await settle();
+    expect(t.afters).toEqual([]);
+    t.setHidden(true, HIDDEN_CATCH_UP_MS);
+    t.setHidden(false, 2 * HIDDEN_CATCH_UP_MS);
+    await settle();
+    expect(t.afters).toEqual([0]);
+  });
+
+  it('says paused while a catch up fails, tries again with backoff, and is live once it lands', async () => {
+    let tries = 0;
+    const t = setup({
+      catchUp: (after) => {
+        tries += 1;
+        if (tries === 2) return Promise.reject(new Error('offline'));
+        return Promise.resolve({ head: Math.max(after, tries === 1 ? 0 : 2), reset: false, events: [] });
+      },
+    });
+    await t.subscribed();
+    t.channel().onPublication(event(2));
+    await settle();
+    expect(t.statuses).toEqual(['paused']);
+    await t.elapse(1500);
+    expect(tries).toBe(3);
+    expect(t.statuses).toEqual(['paused', 'live']);
+  });
+
+  it('tries again after a spread, never at once, when a catch up leaves the gap open', async () => {
+    const t = setup();
+    await t.subscribed();
+    t.channel().onPublication(event(3));
+    await settle();
+    // The fake answers its own watermark back: the gap stays, and only the spread brings the next try.
+    expect(t.afters).toEqual([0]);
+    await t.elapse(jitter);
+    expect(t.afters).toEqual([0, 0]);
+  });
+
+  it('pauses and stops when catch up is refused (removed from the workspace)', async () => {
+    const t = setup({ catchUp: () => Promise.resolve(undefined) });
+    t.live.watch(WS);
+    await settle();
+    t.channel().onSubscribed({ wasRecovering: false, recovered: false });
+    await settle();
+    expect(t.statuses).toEqual(['paused']);
   });
 });
 
@@ -296,7 +457,7 @@ describe('the live status', () => {
         tries += 1;
         return tries === 1
           ? Promise.reject(new Error('offline'))
-          : Promise.resolve({ channel: 'workspace:x', token: 'sub-token' });
+          : Promise.resolve({ channel: 'workspace:x', token: 'sub-token', head: 0 });
       },
     });
     t.live.watch(WS);
@@ -343,15 +504,16 @@ describe('watching', () => {
     await settle();
     expect(t.unlistened).toEqual([`workspace:${WS}-id`, 'workspace:other-id']);
     expect(t.closed()).toBe(1);
+    expect(t.live.watermark(WS)).toBeUndefined();
   });
 
   it('applies nothing to a workspace nobody watches any more', async () => {
     const t = setup();
     const release = await t.subscribed();
     t.channel().onPublication(event(1));
-    t.channel().onPublication(event(5));
+    t.channel().onPublication(event(2, { recordIds: [], coarse: true }));
     release();
     await t.elapse(jitter);
-    expect(t.calls).toEqual([`records ${WS} ${PEOPLE} ${ROW(1)}`]);
+    expect(t.calls).toEqual([`records ${WS} ${ROW(1)}`]);
   });
 });

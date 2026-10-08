@@ -10,7 +10,9 @@ import { useWorkspaceName, WorkspacePage } from '../features/workspace/Workspace
 // isn't in, shows the same "not found" inside the frame (the door behind
 // objects.list answers both with NOT_FOUND).
 export const Route = createFileRoute('/w/$slug')({
-  beforeLoad: async ({ context, location }) => {
+  beforeLoad: async ({ context, location, params }) => {
+    // The workspace's head beside `me.get` (spec 0007): the first reads wait for it only when live updates are on.
+    context.data.live.prepare(params.slug);
     const me = await context.data.me.get();
     if (me === undefined) throw redirect({ href: signInHref(location.href), replace: true });
     return { me };

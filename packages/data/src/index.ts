@@ -29,8 +29,9 @@ import {
   withRetryAfter,
 } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
-import type { createLive, Live, LiveStatus } from './live/live.ts';
+import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
+import { createLiveRouter } from './live/router.ts';
 import type { Notice } from './notice.ts';
 import type { CellChange, RecordsApi, RecordsLayer, RecordsView } from './records/layer.ts';
 
@@ -87,6 +88,12 @@ interface CallOptions {
   readonly context: CallContext;
   readonly signal?: AbortSignal;
 }
+
+/** How long a read waits for the workspace's head before going ahead without it (spec 0007: the token call is usually beside `me.get`). */
+const HEAD_WAIT_MS = 5_000;
+
+/** How long the token read with the head may be handed to the live layer as its first token. */
+const FIRST_TOKEN_MS = 60_000;
 
 /** The cache key of one object's attributes in one workspace. */
 const objectKey = (workspace: string, objectId: string) => `${workspace}/${objectId}`;
@@ -186,6 +193,11 @@ export function createDataLayer({
   // Live updates: loaded with the first watched workspace, and this tab's writes waiting for their echo.
   let live: Promise<Live> | undefined;
   const mutations = createMutationLog();
+  // The stores' live handlers (spec 0007): what each kind of change, and a resync, asks of them.
+  const router = createLiveRouter();
+  // Each workspace's subscription token read before its first read: its head is the first watermark.
+  let heads = new Map<string, Promise<Granted | undefined>>();
+  let firstTokens = new Map<string, { readonly granted: Granted; readonly at: number }>();
   let liveStatus: LiveStatus = realtimeUrl === undefined ? 'off' : 'live';
   const liveListeners = new Set<() => void>();
   const setLiveStatus = (next: LiveStatus) => {
@@ -199,6 +211,8 @@ export function createDataLayer({
     members = new Map();
     access = new Map();
     attributes = new Map();
+    heads = new Map();
+    firstTokens = new Map();
     // Signed out: no more changes for the last person, and none of their writes to wait for.
     const stopping = live;
     live = undefined;
@@ -309,6 +323,47 @@ export function createDataLayer({
     );
   };
 
+  /**
+   * Reads the workspace's head (with a subscription token) once per app load,
+   * when live updates are on: the first watermark, read before any of the
+   * workspace's reads, so a write that commits while they are in flight is
+   * caught up. Without a session or membership it answers nothing and ends no
+   * session; a failure is forgotten, so the next read asks again.
+   */
+  const prepare = (workspace: string): Promise<Granted | undefined> => {
+    if (realtimeUrl === undefined) return Promise.resolve(undefined);
+    const hit = heads.get(workspace);
+    if (hit !== undefined) return hit;
+    const asking: Promise<Granted | undefined> = attempt((options) =>
+      api.realtime.subscriptionToken({ workspace }, options),
+    ).then(
+      (granted) => {
+        if (heads.get(workspace) === asking) firstTokens.set(workspace, { granted, at: Date.now() });
+        return granted;
+      },
+      () => {
+        if (heads.get(workspace) === asking) heads.delete(workspace);
+        return undefined;
+      },
+    );
+    heads.set(workspace, asking);
+    return asking;
+  };
+
+  /** Waits for the workspace's head before a read, at most 5 seconds; nothing waits when live is off. */
+  const beforeRead = (workspace: string): Promise<void> => {
+    if (realtimeUrl === undefined) return Promise.resolve();
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    return Promise.race([
+      prepare(workspace).then(() => undefined),
+      new Promise<void>((resolve) => {
+        timeout = setTimeout(resolve, HEAD_WAIT_MS);
+      }),
+    ]).finally(() => {
+      clearTimeout(timeout);
+    });
+  };
+
   /** Live updates, loaded the first time a screen watches a workspace. */
   const loadedLive = (url: string): Promise<Live> => {
     live ??= loadLive().then(({ createLive }) =>
@@ -324,6 +379,10 @@ export function createDataLayer({
           }
         },
         subscriptionToken: async (workspace) => {
+          // The token read with the head, once, while it is fresh.
+          const first = firstTokens.get(workspace);
+          firstTokens.delete(workspace);
+          if (first !== undefined && Date.now() - first.at < FIRST_TOKEN_MS) return first.granted;
           try {
             return await call((options) => api.realtime.subscriptionToken({ workspace }, options));
           } catch (error) {
@@ -332,33 +391,48 @@ export function createDataLayer({
             throw error;
           }
         },
+        head: async (workspace) => (await prepare(workspace))?.head,
+        catchUp: async (workspace, after) => {
+          try {
+            return await call((options) => api.realtime.catchUp({ workspace, after }, options));
+          } catch (error) {
+            const { code } = toDataError(error);
+            if (code === 'UNAUTHENTICATED' || code === 'NOT_FOUND') return undefined;
+            throw error;
+          }
+        },
         mutations,
         onStatus: setLiveStatus,
-        handlers: {
-          records: (workspace, objectId, recordIds) => {
-            void records?.then((layer) => {
-              layer.changed(workspace, objectId, recordIds);
-            });
-          },
-          object: (workspace, objectId) => {
-            void records?.then((layer) => {
-              layer.reload(workspace, objectId);
-            });
-          },
-          definitions: (workspace, objectId) => {
-            refreshAttributes(workspace, objectId);
-          },
-          workspace: (workspace) => {
-            void records?.then((layer) => {
-              layer.reload(workspace);
-            });
-            refreshAttributes(workspace);
-          },
-        },
+        router,
       }),
     );
     return live;
   };
+
+  // The stores' handlers: records refetch the named rows (or everything held of the object when coarse),
+  // definitions an object's attributes (or, naming neither object nor list, the workspace's objects), and a
+  // resync everything held of the workspace.
+  router.on('records', (workspace, event) => {
+    void records?.then((layer) => {
+      if (event.coarse === true) layer.reload(workspace, event.objectId);
+      else layer.changed(workspace, event.objectId, event.recordIds);
+    });
+  });
+  router.on('definitions', (workspace, event) => {
+    if (event.objectId !== undefined) {
+      refreshAttributes(workspace, event.objectId);
+    } else if (event.listId === undefined) {
+      objects.delete(workspace);
+      refreshAttributes(workspace);
+      onDefinitionsChange();
+    }
+  });
+  router.onResync((workspace) => {
+    void records?.then((layer) => {
+      layer.reload(workspace);
+    });
+    refreshAttributes(workspace);
+  });
 
   /** Listens to a workspace's changes while a view of it is open; the answer stops. Nothing when live is off. */
   const watch = (workspace: string): (() => void) => {
@@ -405,7 +479,7 @@ export function createDataLayer({
   };
   const recordsLayer = (): Promise<RecordsLayer> => {
     records ??= import('./records/layer.ts').then(({ createRecordsLayer }) =>
-      createRecordsLayer({ api: recordsApi, notify, mintId, watch, mutations }),
+      createRecordsLayer({ api: recordsApi, notify, mintId, watch, mutations, beforeRead }),
     );
     return records;
   };
@@ -454,7 +528,7 @@ export function createDataLayer({
       list(workspace: string): Promise<ObjectSummary[]> {
         const cached = objects.get(workspace);
         if (cached !== undefined) return cached;
-        const loading = call((options) => api.objects.list({ workspace }, options));
+        const loading = beforeRead(workspace).then(() => call((options) => api.objects.list({ workspace }, options)));
         objects.set(workspace, loading);
         loading.catch((error: unknown) => {
           if (objects.get(workspace) === loading) objects.delete(workspace);
@@ -466,7 +540,9 @@ export function createDataLayer({
     members: {
       /** The workspace's active members, by name: the Owner column's names. Cached for the app load. */
       list: (workspace: string): Promise<MemberSummary[]> =>
-        cached(members, workspace, () => call((options) => api.members.list({ workspace }, options))),
+        cached(members, workspace, () =>
+          beforeRead(workspace).then(() => call((options) => api.members.list({ workspace }, options))),
+        ),
     },
     access: {
       /**
@@ -475,13 +551,15 @@ export function createDataLayer({
        * hide controls the person can't use; the server checks every call.
        */
       mine: (workspace: string): Promise<MyAccess> =>
-        cached(access, workspace, () => call((options) => api.access.mine({ workspace }, options))),
+        cached(access, workspace, () =>
+          beforeRead(workspace).then(() => call((options) => api.access.mine({ workspace }, options))),
+        ),
     },
     attributes: {
       /** An object's live attributes in position order, system ones marked. Cached until an attribute is added. */
       list: (workspace: string, objectId: string): Promise<AttributeDefinition[]> =>
         cached(attributes, objectKey(workspace, objectId), () =>
-          call((options) => api.attributes.list({ workspace, objectId }, options)),
+          beforeRead(workspace).then(() => call((options) => api.attributes.list({ workspace, objectId }, options))),
         ),
       /**
        * Adds an attribute and waits for the server (no optimistic step: it is
@@ -551,6 +629,14 @@ export function createDataLayer({
        * nothing about it).
        */
       status: (): LiveStatus => liveStatus,
+      /**
+       * Reads the workspace's head before its screens read anything (spec
+       * 0007): the route loader calls it beside `me.get`, so the first reads
+       * rarely wait. Nothing when live is off; never throws.
+       */
+      prepare: (workspace: string): void => {
+        void prepare(workspace);
+      },
       /** Calls `listener` whenever `status()` changes; the answer stops. */
       subscribe: (listener: () => void): (() => void) => {
         liveListeners.add(listener);
