@@ -20,6 +20,8 @@ const { ownerUrl } = inject('testDatabase');
 /** The procedures that change nothing. Every other procedure is a write, and must be in WRITES below. */
 const READS: ReadonlySet<string> = new Set([
   'system.status',
+  // Fails on purpose when switched on (spec 0010); it writes nothing either way.
+  'system.testFault',
   'me.get',
   'objects.list',
   'attributes.list',
