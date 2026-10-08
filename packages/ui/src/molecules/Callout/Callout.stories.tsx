@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect } from 'storybook/test';
+import { expect, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Callout } from './Callout.tsx';
@@ -53,7 +53,9 @@ export const Banner: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    // Its words arrive a frame after it does, so the status region announces them.
-    await expect(await canvas.findByRole('status')).toHaveTextContent('Live updates are paused');
+    // Its words arrive a frame after it does, so the status region announces them. Firefox on a busy CI runner
+    // took longer than the default second once, so the wait is longer.
+    const status = await canvas.findByRole('status', undefined, { timeout: 5_000 });
+    await waitFor(() => expect(status).toHaveTextContent('Live updates are paused'), { timeout: 5_000 });
   },
 };

@@ -318,8 +318,14 @@ describe('the relay', () => {
     await expect.poll(() => centrifugo.refused.length, WAIT).toBeGreaterThanOrEqual(5);
     const tries = centrifugo.calls.filter((call) => call.channel === `workspace:${failing}`).map((call) => call.start);
     const gaps = tries.slice(1).map((at, index) => at - (tries[index] ?? at));
-    // 100, 200, 400, then 400 again (the cap), each give or take a timer's slack.
-    expect(gaps.slice(0, 4).map((gap) => Math.round(gap / 100))).toEqual([1, 2, 4, 4]);
+    // 100, 200, 400, then 400 again (the cap): never sooner, and late by at most a slow runner's timer slack
+    // (a 200 ms wait once took 260 ms on CI, so rounding to the nearest 100 was too tight).
+    const expected = [100, 200, 400, 400];
+    for (const [index, gap] of gaps.slice(0, 4).entries()) {
+      expect(gap).toBeGreaterThanOrEqual((expected[index] ?? 0) - 10);
+      expect(gap).toBeLessThan((expected[index] ?? 0) + 150);
+    }
+    expect(gaps.length).toBeGreaterThanOrEqual(4);
 
     // Meanwhile other workspaces publish at once.
     await events(healthy, [1]);
