@@ -183,7 +183,13 @@ test.describe('the People table', () => {
     await page.keyboard.press('Enter');
     await page.keyboard.press('Escape');
     await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
-    await expect(page.getByText(/already has this Email addresses/).first()).toBeVisible();
+    // The toast says why (the cell carries the same reason, shown on focus or hover).
+    await expect(
+      page
+        .getByText(/already has this Email addresses/)
+        .filter({ visible: true })
+        .first(),
+    ).toBeVisible();
     await expect(email).not.toContainText(`grace-${tag}@example.com`);
     await checkScreen(page, '6-edit-refused');
 
