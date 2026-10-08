@@ -334,6 +334,52 @@ describe('vendor SDKs (spec 0005: sign in, mail and live updates)', () => {
   });
 });
 
+describe('the load harness’s scripts (spec 0011)', () => {
+  let messages: Messages;
+
+  beforeAll(async () => {
+    const minting = "import { mintSessions } from '@crm/core/load-sessions';\nexport const mint = mintSessions;\n";
+    const relative = "import { mintSessions } from '../scripts/load-sessions.ts';\nexport const mint = mintSessions;\n";
+    const root = createWorkspace({
+      'src/auth/mint.ts': minting,
+      'src/relative.ts': relative,
+      // System power's importers (spec 0009) still may not mint.
+      'src/jobs/mint.ts': minting,
+      'src/worker.ts': minting,
+      'src/auth/minted-session.test.ts': minting,
+      'scripts/load-seed.ts':
+        "import { mintSessions } from './load-sessions.ts';\nimport { systemScope } from '@crm/core/system';\nexport const mint = [mintSessions, systemScope];\n",
+    });
+    messages = await lintWorkspace(root, server({ root }));
+  }, 60_000);
+
+  it.each(['src/auth/mint.ts', 'src/relative.ts', 'src/jobs/mint.ts', 'src/worker.ts'])(
+    'refuses them in app and package code (%s)',
+    (file) => {
+      expect(messagesFor(messages, file).join('\n')).toContain('they mint sessions');
+    },
+  );
+
+  it.each(['src/auth/minted-session.test.ts', 'scripts/load-seed.ts'])(
+    'lets tests and scripts use them (%s)',
+    (file) => {
+      expect(messagesFor(messages, file).join('\n')).not.toContain('they mint sessions');
+    },
+  );
+
+  it('keeps a script’s system power alongside them', () => {
+    expect(rulesFor(messages, 'scripts/load-seed.ts')).not.toContain('no-restricted-imports');
+  });
+
+  it('refuses them in packages/db too, which opens connections', async () => {
+    const root = createWorkspace({
+      'src/mint.ts': "import { mintSessions } from '@crm/core/load-sessions';\nexport const mint = mintSessions;\n",
+    });
+    const db = await lintWorkspace(root, server({ root, databaseDriver: true }));
+    expect(messagesFor(db, 'src/mint.ts').join('\n')).toContain('they mint sessions');
+  }, 60_000);
+});
+
 describe('server preset for packages/db', () => {
   it('lets packages/db open the database connection', async () => {
     const root = createWorkspace({ 'src/client.ts': "import pg from 'pg';\nexport const pool = pg;\n" });

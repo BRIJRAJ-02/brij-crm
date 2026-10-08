@@ -1,4 +1,4 @@
-import { server } from '@crm/config/eslint';
+import { loadScriptImports, server } from '@crm/config/eslint';
 
 // The one package allowed to open database connections.
 export default [
@@ -18,6 +18,8 @@ export default [
               regex: '(^|/)schema/auth(\\.ts)?$|^\\./auth(\\.ts)?$',
               message: 'Only the identity store (src/identity/) imports the auth schema. Use createIdentityStore().',
             },
+            // Spec 0011: nothing here may reach the load harness's session minting.
+            loadScriptImports,
           ],
         },
       ],

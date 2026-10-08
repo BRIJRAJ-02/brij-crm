@@ -28,6 +28,15 @@ const databaseDrivers = ['pg', 'pg-pool', 'postgres', 'drizzle-orm/node-postgres
   }),
 );
 
+// House rule (spec 0011): only the load harness's own scripts and tests reach
+// its scripts, so app and package code can never mint a session. Exported for
+// a package that sets `no-restricted-imports` itself (packages/db).
+/** The load harness's scripts, refused outside scripts and tests: they mint sessions and seed directly. */
+export const loadScriptImports = {
+  regex: '^@crm/core/load-sessions$|(^|/)scripts/load-[^/]+$',
+  message: 'Only the load harness (packages/core/scripts) and tests import its scripts: they mint sessions.',
+};
+
 // House rule: screens get data only through the client data layer.
 const screenDataImports = {
   paths: [{ name: '@crm/contracts', message: 'Screens import types from @crm/data, never from the contract.' }],
@@ -285,11 +294,17 @@ const TESTING_IMPORTERS = ['**/*.test.ts', 'test/**', 'scripts/**'];
 /** Files that may import both: scripts, and the tests of the code that may import system power. */
 const BOTH_IMPORTERS = ['scripts/**', 'src/worker.test.ts', 'src/jobs/**/*.test.ts', 'src/realtime/**/*.test.ts'];
 
-/** The server's restricted imports: the database drivers (unless allowed) and the core entries `allow` doesn't name. */
+/**
+ * The server's restricted imports: the database drivers (unless allowed), and
+ * the core entries (`system`, `testing`) and load harness scripts (`load`)
+ * that `allow` doesn't name.
+ */
 function serverImports(databaseDriver, allow = []) {
   const patterns = [
     ...(allow.includes('system') ? [] : [systemEntry]),
     ...(allow.includes('testing') ? [] : [testingEntry]),
+    // Spec 0011: the load harness's scripts, only from tests and scripts (the testing importers).
+    ...(allow.includes('load') ? [] : [loadScriptImports]),
   ];
   return { rules: { 'no-restricted-imports': ['error', { paths: databaseDriver ? [] : databaseDrivers, patterns }] } };
 }
@@ -304,8 +319,8 @@ export function server({ root, databaseDriver = false }) {
     { languageOptions: { globals: globals.node } },
     serverImports(databaseDriver),
     { files: SYSTEM_IMPORTERS, ...serverImports(databaseDriver, ['system']) },
-    { files: TESTING_IMPORTERS, ...serverImports(databaseDriver, ['testing']) },
-    { files: BOTH_IMPORTERS, ...serverImports(databaseDriver, ['system', 'testing']) },
+    { files: TESTING_IMPORTERS, ...serverImports(databaseDriver, ['testing', 'load']) },
+    { files: BOTH_IMPORTERS, ...serverImports(databaseDriver, ['system', 'testing', 'load']) },
     restrictSyntax([syntax.defaultExport, ...syntax.classes, ...syntax.extensions]),
   );
 }
