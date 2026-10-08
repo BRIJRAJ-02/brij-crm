@@ -13,6 +13,8 @@ import { isRefusal } from '../engine/refusals.ts';
 import { createUserWorkspace } from '../engine/workspaces.ts';
 import { SYSTEM_ACTOR } from '../engine/scope.ts';
 import { enterAsActor, enterWithKey, enterWorkspace, systemScope, type DoorLog } from './door.ts';
+import { mintScope } from './mint.ts';
+import { roleAccess } from './policy.ts';
 
 const { appUrl, identityUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
@@ -214,5 +216,33 @@ describe('systemScope and enterWithKey', () => {
   it('refuses every key until #34 stores them', async () => {
     const a = await userWithWorkspace();
     expect(await refusalOf(enterWithKey({ db }, { workspaceId: a.workspace.id, keyId: newId() }))).toEqual(NOT_FOUND);
+  });
+});
+
+describe('the door’s cost (AC-149)', () => {
+  const p95 = (samples: readonly number[]) =>
+    [...samples].sort((a, b) => a - b)[Math.floor(samples.length * 0.95)] ?? 0;
+
+  it('adds well under 5 ms p95 a request: the role rides the one member read, the access and seal are pure', async () => {
+    const a = await userWithWorkspace();
+    // What this spec added to each request, timed alone: the policy and the seal.
+    const added: number[] = [];
+    for (let run = 0; run < 2_000; run += 1) {
+      const started = performance.now();
+      const access = roleAccess({ kind: 'member', memberId: a.memberId, role: 'admin', teamIds: [] });
+      mintScope({ db, workspaceId: a.workspace.id, actor: { type: 'member', id: a.memberId }, access });
+      added.push(performance.now() - started);
+    }
+    // The whole door, for the record: one directory read and one tenant round trip, as before.
+    const whole: number[] = [];
+    for (let run = 0; run < 50; run += 1) {
+      const started = performance.now();
+      await enterWorkspace({ db, identity }, { userId: a.userId, slug: a.workspace.slug });
+      whole.push(performance.now() - started);
+    }
+    console.warn(
+      `door p95: added ${p95(added).toFixed(3)} ms (policy and seal), whole ${p95(whole).toFixed(1)} ms (two reads)`,
+    );
+    expect(p95(added)).toBeLessThan(5);
   });
 });
