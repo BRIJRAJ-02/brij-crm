@@ -15,6 +15,8 @@ import { actorRow, type Actor, type EngineScope } from './scope.ts';
 import { parseFor, type AttributeDef, type AttributeWrite } from './values.ts';
 import { runWrite, type AfterWrite, type ValueChange, type WriteContext } from './write.ts';
 import { requirePermission } from '../access/check.ts';
+import type { Access } from '../access/policy.ts';
+import { visibleRecords } from '../access/visibility.ts';
 
 const { attributes, objects, recordLinks, records, relationships } = schema;
 
@@ -254,9 +256,15 @@ async function recordName(tx: WorkspaceTx, recordId: string): Promise<string> {
   return row.name === null || row.name === '' ? `an unnamed ${row.singular.toLowerCase()}` : row.name;
 }
 
-/** Refuses references to records that don't exist, are in the trash, or sit on an object this end can't link to. */
+/**
+ * Refuses references to records that don't exist, are in the trash, or sit on
+ * an object this end can't link to. A record the principal can't see (a
+ * hidden object, or outside its record rule) is refused exactly as one that
+ * doesn't exist (spec 0009, AC-143).
+ */
 async function checkTargets(
   tx: WorkspaceTx,
+  access: Access,
   attribute: AttributeDef,
   ownerId: string,
   allowed: readonly string[],
@@ -276,8 +284,14 @@ async function checkTargets(
         wanted.map((item) => item.recordId),
       ),
     );
+  const seen = await visibleRecords(
+    tx,
+    access,
+    rows.map((row) => ({ objectId: row.objectId, recordId: row.id })),
+  );
   for (const item of wanted) {
-    const row = rows.find((each) => each.id === item.recordId);
+    const found = rows.find((each) => each.id === item.recordId);
+    const row = found !== undefined && seen.has(found.id) ? found : undefined;
     if (item.recordId === ownerId) {
       throw refuse('ATTRIBUTE_VALUE_INVALID', `A record can't link to itself in ${attribute.title}.`, attribute.id);
     }
@@ -333,10 +347,17 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
   const wanted = referencesOf(parseFor(attribute, write.value));
   const relationship = await relationshipOf(tx, attribute);
   const end = endOf(relationship, attribute.id);
-  await checkTargets(tx, attribute, ownerId, end.allowed, wanted);
-
   const current = await endLinks(tx, relationship, end, ownerId);
-  const visible = current.filter((link) => !link.farDeleted);
+  // Links to far records the writer can't see (spec 0009): they read as absent, and a multi end keeps them.
+  const farSeen = await visibleRecords(
+    tx,
+    scope.access,
+    current.map((link) => ({ objectId: link.farObjectId, recordId: link.far })),
+  );
+  const unseen = new Set(current.flatMap((link) => (farSeen.has(link.far) ? [] : [link.far])));
+  await checkTargets(tx, scope.access, attribute, ownerId, end.allowed, wanted);
+
+  const visible = current.filter((link) => !link.farDeleted && !unseen.has(link.far));
   const wantedIds = wanted.map((item) => item.recordId);
   if (visible.length === wantedIds.length && visible.every((link, index) => link.far === wantedIds[index])) return [];
 
@@ -379,7 +400,7 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
 
   // What this write ends on its own end: a single end's one link whatever the far record's state, and on a
   // multi end every link it shows. A multi end's links to records in the trash stay, so a restore brings
-  // them back.
+  // them back, and so do its links to records the writer can't see (spec 0009, AC-143).
   const ending = end.mySingle ? current : visible;
   let latest: string | undefined;
   for (const link of [ending, freed].flat()) {
@@ -505,10 +526,12 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
   ];
   const farAttributeId = end.farAttributeId;
   if (farAttributeId !== null) {
-    const before = new Set(visible.map((link) => link.far));
+    // A single end replaced a link the writer couldn't see too: that far record's reference changed as well.
+    const shown = end.mySingle ? current.filter((link) => !link.farDeleted) : visible;
+    const before = new Set(shown.map((link) => link.far));
     const after = new Set(wantedIds);
     const objectOf = new Map([
-      ...visible.map((link) => [link.far, link.farObjectId] as const),
+      ...shown.map((link) => [link.far, link.farObjectId] as const),
       ...wanted.map((item) => [item.recordId, item.objectId] as const),
     ]);
     const touched = [...before, ...after].filter((id) => before.has(id) !== after.has(id));

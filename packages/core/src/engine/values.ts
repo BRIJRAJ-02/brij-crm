@@ -11,8 +11,10 @@ import { syncSortKey } from './sort-keys.ts';
 import { UNIQUE_TYPES, uniqueKeyOf } from './unique.ts';
 import { actorRow, type Actor } from './scope.ts';
 import type { ValueChange, WriteContext } from './write.ts';
+import { isOpen, type Access } from '../access/policy.ts';
+import { checkList, checkObject, checkRecordVisible, UNKNOWN_ENTRY, UNKNOWN_RECORD } from '../access/visibility.ts';
 
-const { attributeOptions, attributes, listEntries, members, records, values } = schema;
+const { attributeOptions, attributes, listEntries, lists, members, records, values } = schema;
 
 /** The parts of an attribute definition the write and read paths need. */
 export interface AttributeDef {
@@ -94,14 +96,22 @@ export async function loadListAttributes(tx: WorkspaceTx, listId: string): Promi
  * Locks a live entry's row for the rest of the transaction, like `lockRecord`:
  * its record first (share), then the entry, the order every entry write takes.
  * Refuses an entry that is missing or removed, or whose record is in the trash.
+ * An entry the principal may not change answers first (spec 0009): `NOT_FOUND`
+ * when its list, its object or its record is hidden from them, `FORBIDDEN`
+ * when they may only read the list.
  */
-export async function lockEntry(tx: WorkspaceTx, entryId: string): Promise<{ listId: string; recordId: string }> {
+export async function lockEntry(
+  tx: WorkspaceTx,
+  entryId: string,
+  access: Access,
+): Promise<{ listId: string; recordId: string }> {
   checkId(entryId, 'That entry does not exist.');
   const [parents] = await tx
-    .select({ recordId: listEntries.recordId })
+    .select({ recordId: listEntries.recordId, listId: listEntries.listId })
     .from(listEntries)
     .where(eq(listEntries.id, entryId));
   if (parents === undefined) throw refuse('NOT_FOUND', 'That entry does not exist.');
+  await checkEntryAccess(tx, access, parents, 'write');
   const [record] = await tx
     .select({ deletedAt: records.deletedAt })
     .from(records)
@@ -120,11 +130,36 @@ export async function lockEntry(tx: WorkspaceTx, entryId: string): Promise<{ lis
 }
 
 /**
+ * Refuses an entry the principal may not `need` (spec 0009): `NOT_FOUND`, as
+ * an unknown entry, when its list or object is hidden or its record is outside
+ * a record rule, and `FORBIDDEN` for a change on a list they may only read.
+ * No statement under the open policy.
+ */
+export async function checkEntryAccess(
+  tx: WorkspaceTx,
+  access: Access,
+  entry: { readonly listId: string; readonly recordId: string },
+  need: 'read' | 'write',
+): Promise<void> {
+  if (isOpen(access)) return;
+  const [list] = await tx
+    .select({ id: lists.id, objectId: lists.objectId, name: lists.name })
+    .from(lists)
+    .where(eq(lists.id, entry.listId));
+  if (list === undefined) throw refuse('NOT_FOUND', UNKNOWN_ENTRY);
+  checkList(access, list, 'read', UNKNOWN_ENTRY);
+  await checkRecordVisible(tx, access, { objectId: list.objectId, recordId: entry.recordId }, UNKNOWN_ENTRY);
+  checkList(access, list, need);
+}
+
+/**
  * Locks a live record's row for the rest of the transaction, so a delete, a
  * restore and every value write on it take turns. Refuses a missing or
- * deleted record.
+ * deleted record, and (spec 0009) one the principal may not see, on a hidden
+ * object or outside its record rule, exactly as a missing one. Whether they
+ * may change it is the caller's check (`checkObject`).
  */
-export async function lockRecord(tx: WorkspaceTx, recordId: string): Promise<{ objectId: string }> {
+export async function lockRecord(tx: WorkspaceTx, recordId: string, access: Access): Promise<{ objectId: string }> {
   checkId(recordId, 'That record does not exist.');
   const rows = await tx
     .select({ objectId: records.objectId, deletedAt: records.deletedAt })
@@ -134,6 +169,8 @@ export async function lockRecord(tx: WorkspaceTx, recordId: string): Promise<{ o
     .for('no key update');
   const [row] = rows;
   if (row === undefined) throw refuse('NOT_FOUND', 'That record does not exist.');
+  await checkObject(tx, access, row.objectId, 'read', UNKNOWN_RECORD);
+  await checkRecordVisible(tx, access, { objectId: row.objectId, recordId });
   if (row.deletedAt !== null) throw refuse('RECORD_DELETED', 'That record is in the trash. Restore it first.');
   return { objectId: row.objectId };
 }

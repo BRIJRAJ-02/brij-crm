@@ -21,6 +21,7 @@ import { loadAttribute, type AttributeDef } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
 import { requirePermission } from '../access/check.ts';
+import { attributeVisible } from '../access/visibility.ts';
 
 const { attributes, objects } = schema;
 
@@ -343,7 +344,7 @@ export async function updateAttribute(scope: EngineScope, input: AttributeUpdate
       }
       const turningOn = input.isUnique === true && !attribute.isUnique && attribute.archivedAt === null;
       const turningOff = input.isUnique === false && attribute.isUnique;
-      if (turningOn) await fillUniqueKeys(tx, attribute);
+      if (turningOn) await fillUniqueKeys(tx, attribute, context.scope.access);
       if (turningOff) await clearUniqueKeys(tx, attribute.id);
       await tx
         .update(attributes)
@@ -402,7 +403,7 @@ export async function restoreAttribute(scope: EngineScope, attributeId: string, 
       const { tx } = context;
       const attribute = await editable(tx, attributeId);
       if (attribute.archivedAt === null) return;
-      if (attribute.isUnique) await fillUniqueKeys(tx, attribute);
+      if (attribute.isUnique) await fillUniqueKeys(tx, attribute, context.scope.access);
       await tx
         .update(attributes)
         .set({ archivedAt: null, ...touched(scope) })
@@ -462,14 +463,19 @@ export async function setObjectArchived(
   );
 }
 
-/** The live attributes of an object, as definitions, in position order. None for a malformed id. */
+/**
+ * The live attributes of an object, as definitions, in position order: only
+ * those the principal may see (spec 0009, AC-141), so none for an object they
+ * can't see. None for a malformed id.
+ */
 export async function listAttributes(scope: EngineScope, objectId: string) {
   if (!isUuid(objectId)) return [];
-  return inWorkspace(scope, (tx) =>
+  const rows = await inWorkspace(scope, (tx) =>
     tx
       .select()
       .from(attributes)
       .where(and(eq(attributes.objectId, objectId), isNull(attributes.archivedAt)))
       .orderBy(attributes.position),
   );
+  return rows.filter((row) => attributeVisible(scope.access, row));
 }

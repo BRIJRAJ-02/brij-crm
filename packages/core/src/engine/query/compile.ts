@@ -26,6 +26,8 @@ import { hasSortKey } from '../sort-keys.ts';
 import type { RelationshipDef } from '../relationships.ts';
 import type { Actor } from '../scope.ts';
 import type { AttributeDef } from '../values.ts';
+import type { Access } from '../../access/policy.ts';
+import { farVisibleSql, recordRuleSql } from '../../access/visibility.ts';
 
 /** The day a week starts on, for "this week". */
 export type WeekStart = 'monday' | 'sunday';
@@ -37,12 +39,19 @@ export interface QueryClock {
   readonly weekStart?: WeekStart;
 }
 
-/** Everything the compiler looks up: the attributes a query names, their relationships, and who is asking. */
+/**
+ * Everything the compiler looks up: the attributes a query names, their
+ * relationships, and who is asking. `attributes` holds only what the
+ * principal may see (spec 0009, AC-141), so a filter or sort naming a hidden
+ * one is refused exactly as an unknown one; `access` adds each level's record
+ * rule and keeps far records the principal can't see out of every hop.
+ */
 export interface CompileContext {
   readonly attributes: ReadonlyMap<string, AttributeDef>;
   readonly relationships: ReadonlyMap<string, RelationshipDef>;
   readonly clock: QueryClock;
   readonly actor: Actor;
+  readonly access: Access;
   /**
    * Keep each condition a per row check (an OFFSET 0 fence stops Postgres
    * turning EXISTS into a join), for pages that scan rows in sort order and
@@ -371,7 +380,10 @@ function hopExists(
     farObjectId !== undefined && columns.allowed.length > 1 ? sql` and ${raw(far)}.object_id = ${farObjectId}` : sql``;
   // The search's far record ids, on the link itself, so the link index finds the few that point at them.
   const onLink = farIds === undefined ? sql`` : sql` and ${link}.${columns.far} = any(${uuidList(farIds)})`;
-  return sql`exists (select 1 from record_links ${link} join records ${raw(far)} on ${raw(far)}.workspace_id = ${link}.workspace_id and ${raw(far)}.id = ${link}.${columns.far} and ${raw(far)}.deleted_at is null where ${link}.workspace_id = ${raw(level.record)}.workspace_id and ${link}.relationship_id = ${relationship.id} and ${link}.${columns.mine} = ${ownerOf(level, attribute)} and ${link}.active_until is null${narrow}${onLink} and ${inner(far)}${fenceOf(context)})`;
+  // Far records the principal can't see never match (spec 0009, AC-143); nothing is added under the open policy.
+  const visible = farVisibleSql(context.access, farObjectId === undefined ? columns.allowed : [farObjectId], far);
+  const seen = visible === undefined ? sql`` : sql` and ${visible}`;
+  return sql`exists (select 1 from record_links ${link} join records ${raw(far)} on ${raw(far)}.workspace_id = ${link}.workspace_id and ${raw(far)}.id = ${link}.${columns.far} and ${raw(far)}.deleted_at is null where ${link}.workspace_id = ${raw(level.record)}.workspace_id and ${link}.relationship_id = ${relationship.id} and ${link}.${columns.mine} = ${ownerOf(level, attribute)} and ${link}.active_until is null${narrow}${onLink}${seen} and ${inner(far)}${fenceOf(context)})`;
 }
 
 /** A `through` condition flattened: every hop's attribute, then the far condition. */
@@ -922,8 +934,11 @@ export function compileSorts(context: CompileContext, level: Level, sorts: reado
       case 'record_reference': {
         const relationship = relationshipOf(context, attribute);
         const columns = linkColumns(relationship, attribute.id);
+        // Sorted by the first far record the principal may see (spec 0009); nothing is added under the open policy.
+        const visible = farVisibleSql(context.access, columns.allowed, 'fr');
+        const seen = visible === undefined ? sql`` : sql` and ${visible}`;
         return one(
-          sql`left join lateral (select ${textKey(sql.raw('pv.text_value'))} as key0 from record_links sl join records fr on fr.workspace_id = sl.workspace_id and fr.id = sl.${columns.far} and fr.deleted_at is null join objects fo on fo.workspace_id = fr.workspace_id and fo.id = fr.object_id left join "values" pv on pv.workspace_id = fr.workspace_id and pv.owner_id = fr.id and pv.attribute_id = fo.primary_attribute_id and pv.position = 0 and pv.active_until is null and not pv.is_cleared where sl.workspace_id = ${record}.workspace_id and sl.relationship_id = ${relationship.id} and sl.${columns.mine} = ${ownerOf(level, attribute)} and sl.active_until is null order by sl.${columns.position}, sl.active_from, sl.id limit 1) ${raw(alias)} on true`,
+          sql`left join lateral (select ${textKey(sql.raw('pv.text_value'))} as key0 from record_links sl join records fr on fr.workspace_id = sl.workspace_id and fr.id = sl.${columns.far} and fr.deleted_at is null${seen} join objects fo on fo.workspace_id = fr.workspace_id and fo.id = fr.object_id left join "values" pv on pv.workspace_id = fr.workspace_id and pv.owner_id = fr.id and pv.attribute_id = fo.primary_attribute_id and pv.position = 0 and pv.active_until is null and not pv.is_cleared where sl.workspace_id = ${record}.workspace_id and sl.relationship_id = ${relationship.id} and sl.${columns.mine} = ${ownerOf(level, attribute)} and sl.active_until is null order by sl.${columns.position}, sl.active_from, sl.id limit 1) ${raw(alias)} on true`,
           'text',
         );
       }
@@ -931,6 +946,15 @@ export function compileSorts(context: CompileContext, level: Level, sorts: reado
         return invalid(`A ${attribute.type.replaceAll('_', ' ')} attribute can't be sorted.`);
     }
   });
+}
+
+/**
+ * The record rule a level's records must meet (spec 0009, the record rule
+ * predicate), on its record alias, or undefined when its object has none:
+ * nothing is added under the open policy (AC-149).
+ */
+export function levelRule(context: CompileContext, level: Level): SQL | undefined {
+  return recordRuleSql(context.access, level.objectId, level.record);
 }
 
 /** The direction the row id breaks ties in: the first sort's, so one index scan can serve both. */

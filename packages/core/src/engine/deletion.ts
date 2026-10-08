@@ -23,14 +23,28 @@ import { deleteSortKeys, setRecordKeysLive } from './sort-keys.ts';
 import { holdUniqueKeys, releaseUniqueKeys } from './unique.ts';
 import { runWrite, type AfterWrite, type RecordRef, type ReferenceChange } from './write.ts';
 import { requirePermission } from '../access/check.ts';
+import type { Access } from '../access/policy.ts';
+import { checkObject, checkRecordVisible, UNKNOWN_RECORD } from '../access/visibility.ts';
 
 const { records } = schema;
 
 /** Where a record stands. */
 export type RecordState = 'live' | 'deleted';
 
-/** Locks a record's row whatever its state, or refuses `NOT_FOUND`. */
-async function lockAnyRecord(tx: WorkspaceTx, recordId: string) {
+/**
+ * Locks a record's row whatever its state, or refuses `NOT_FOUND`: also for a
+ * record the principal can't see (a hidden object, or outside its record
+ * rule), and `FORBIDDEN` on an object they may only read (spec 0009).
+ */
+async function lockAnyRecord(tx: WorkspaceTx, recordId: string, access: Access) {
+  const row = await lockedRecord(tx, recordId);
+  await checkObject(tx, access, row.objectId, 'read', UNKNOWN_RECORD);
+  await checkRecordVisible(tx, access, { objectId: row.objectId, recordId });
+  await checkObject(tx, access, row.objectId, 'write');
+  return row;
+}
+
+async function lockedRecord(tx: WorkspaceTx, recordId: string) {
   const [row] = await tx
     .select({
       objectId: records.objectId,
@@ -149,7 +163,7 @@ export async function deleteRecord(
     scope,
     async (context) => {
       const { tx } = context;
-      const record = await lockAnyRecord(tx, recordId);
+      const record = await lockAnyRecord(tx, recordId, scope.access);
       if (record.deletedAt !== null) return { recordId, state: 'deleted' as const };
       const by = actorRow(scope.actor);
       await tx
@@ -195,12 +209,12 @@ export async function restoreRecord(
     scope,
     async (context) => {
       const { tx } = context;
-      const record = await lockAnyRecord(tx, recordId);
+      const record = await lockAnyRecord(tx, recordId, scope.access);
       if (record.deletedAt === null) return { recordId, state: 'live' as const };
       if (record.expired) throw refuse('NOT_FOUND', 'That record was deleted more than 30 days ago.');
       const entryIds = await liveEntryIds(tx, recordId);
       const references = await farReferences(tx, { recordId, objectId: record.objectId });
-      await releaseUniqueKeys(tx, [recordId, ...entryIds]);
+      await releaseUniqueKeys(tx, scope.access, [recordId, ...entryIds]);
       await tx
         .update(records)
         .set({ deletedAt: null, deletedByType: null, deletedById: null, deletedByMemberId: null })
@@ -409,7 +423,7 @@ export async function eraseRecord(
         where id in (select list_id from list_entries where record_id = ${recordId} and deleted_at is null)
         order by id for no key update
       `);
-      const record = await lockAnyRecord(tx, recordId);
+      const record = await lockAnyRecord(tx, recordId, scope.access);
       const ref = { recordId, objectId: record.objectId };
       const live = record.deletedAt === null;
       // A live record disappears from every read here, like a delete; a trashed one already had.

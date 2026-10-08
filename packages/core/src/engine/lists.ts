@@ -14,10 +14,12 @@ import { refuse } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
 import { setEntryKeysLive } from './sort-keys.ts';
 import { holdUniqueKeys, releaseUniqueKeys } from './unique.ts';
-import { currentItems, loadListAttributes, lockRecord } from './values.ts';
+import { checkEntryAccess, currentItems, loadListAttributes, lockRecord } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
 import { requirePermission } from '../access/check.ts';
+import { isOpen, objectLevel, type Access } from '../access/policy.ts';
+import { attributeVisible, checkList, visibleRecords } from '../access/visibility.ts';
 
 const { listEntries, lists, objects, records } = schema;
 
@@ -123,13 +125,21 @@ export async function addEntry(
     async (context) => {
       const { tx } = context;
       const [list] = await tx
-        .select({ objectId: lists.objectId, allowsDuplicates: lists.allowsDuplicates, archivedAt: lists.archivedAt })
+        .select({
+          objectId: lists.objectId,
+          name: lists.name,
+          allowsDuplicates: lists.allowsDuplicates,
+          archivedAt: lists.archivedAt,
+        })
         .from(lists)
         .where(eq(lists.id, listId))
         .for('update');
       if (list === undefined) throw refuse('NOT_FOUND', 'That list does not exist.');
+      // A hidden list answers as an unknown one, before anything says it is archived; a read only one is 403.
+      checkList(scope.access, { id: listId, objectId: list.objectId, name: list.name }, 'write');
       if (list.archivedAt !== null) throw refuse('NOT_FOUND', 'That list is archived. Restore it first.');
-      const record = await lockRecord(tx, recordId);
+      // The record must be one the principal sees (spec 0009, AC-143); adding it changes the list, not the record.
+      const record = await lockRecord(tx, recordId, scope.access);
       if (record.objectId !== list.objectId) {
         throw refuse('CONFIG_INVALID', "That record can't go in this list; it holds another object's records.");
       }
@@ -199,6 +209,7 @@ export async function removeEntry(
     async (context) => {
       const { tx } = context;
       const { listId, recordId } = await entryParents(tx, entryId);
+      await checkEntryAccess(tx, scope.access, { listId, recordId }, 'write');
       // The list, then the record (share, as lockEntry takes it), then the entry: a restore of the record
       // waits for this removal or this one for it, so neither leaves the entry's keys or unique values showing.
       await lockList(tx, listId);
@@ -236,6 +247,7 @@ export async function restoreEntry(
     async (context) => {
       const { tx } = context;
       const { listId, recordId } = await entryParents(tx, entryId);
+      await checkEntryAccess(tx, scope.access, { listId, recordId }, 'write');
       // The same lock order as addEntry: the list, then the record, then the entry.
       const list = await lockList(tx, listId);
       const [record] = await tx
@@ -250,7 +262,7 @@ export async function restoreEntry(
       if (record.deletedAt !== null) throw refuse('RECORD_DELETED', 'That record is in the trash. Restore it first.');
       if (!list.allowsDuplicates) await checkOnce(tx, listId, recordId, entryId);
       await takeEntrySlots(tx, scope, listId, 1);
-      await releaseUniqueKeys(tx, [entryId]);
+      await releaseUniqueKeys(tx, scope.access, [entryId]);
       await tx
         .update(listEntries)
         .set({ deletedAt: null, deletedByType: null, deletedById: null, deletedByMemberId: null, ...touched(scope) })
@@ -262,9 +274,18 @@ export async function restoreEntry(
   );
 }
 
-/** Reads live entries (not removed, record not in the trash) with their own values, in the order asked. */
-async function readEntries(tx: WorkspaceTx, where: ReturnType<typeof and>): Promise<readonly EntryView[]> {
-  const rows = await tx
+/**
+ * Reads live entries (not removed, record not in the trash) with their own
+ * values, in the order asked. Hidden is absent (spec 0009): an entry whose
+ * list or object the principal can't see, or whose record is outside a record
+ * rule, is left out, and so are the list attributes they can't see.
+ */
+async function readEntries(
+  tx: WorkspaceTx,
+  access: Access,
+  where: ReturnType<typeof and>,
+): Promise<readonly EntryView[]> {
+  const found = await tx
     .select({
       id: listEntries.id,
       listId: listEntries.listId,
@@ -287,6 +308,7 @@ async function readEntries(tx: WorkspaceTx, where: ReturnType<typeof and>): Prom
     )
     .where(and(isNull(listEntries.deletedAt), where))
     .orderBy(asc(listEntries.id));
+  const rows = isOpen(access) ? found : await visibleEntries(tx, access, found);
   const listIds = [...new Set(rows.map((row) => row.listId))];
   const attributesByList = new Map(
     await Promise.all(listIds.map(async (id) => [id, await loadListAttributes(tx, id)] as const)),
@@ -300,6 +322,7 @@ async function readEntries(tx: WorkspaceTx, where: ReturnType<typeof and>): Prom
   return rows.map((row): EntryView => {
     const values: Record<string, unknown> = {};
     for (const attribute of attributesByList.get(row.listId)?.values() ?? []) {
+      if (!attributeVisible(access, attribute)) continue;
       values[attribute.id] = decodeValue(attribute.type, attribute.isMulti, itemsOf(row.id, attribute.id));
     }
     return {
@@ -315,12 +338,42 @@ async function readEntries(tx: WorkspaceTx, where: ReturnType<typeof and>): Prom
   });
 }
 
-/** Reads live entries by id inside an open transaction, in the order of `ids`. */
-export async function readEntriesById(tx: WorkspaceTx, ids: readonly string[]): Promise<readonly EntryView[]> {
+/** The entries among `rows` the principal may see: list and object not at `none`, record inside any record rule. */
+async function visibleEntries<T extends { readonly listId: string; readonly recordId: string }>(
+  tx: WorkspaceTx,
+  access: Access,
+  rows: readonly T[],
+): Promise<readonly T[]> {
+  const listIds = [...new Set(rows.map((row) => row.listId))];
+  if (listIds.length === 0) return rows;
+  const parents = await tx
+    .select({ id: lists.id, objectId: lists.objectId })
+    .from(lists)
+    .where(inArray(lists.id, listIds));
+  const objectOf = new Map(parents.map((list) => [list.id, list.objectId]));
+  const shown = (listId: string) => {
+    const objectId = objectOf.get(listId);
+    return objectId !== undefined && objectLevel(access, listId) !== 'none' && objectLevel(access, objectId) !== 'none';
+  };
+  const candidates = rows.filter((row) => shown(row.listId));
+  const seen = await visibleRecords(
+    tx,
+    access,
+    candidates.map((row) => ({ objectId: objectOf.get(row.listId) ?? '', recordId: row.recordId })),
+  );
+  return candidates.filter((row) => seen.has(row.recordId));
+}
+
+/** Reads live entries by id inside an open transaction, in the order of `ids`, as the principal may see them. */
+export async function readEntriesById(
+  tx: WorkspaceTx,
+  access: Access,
+  ids: readonly string[],
+): Promise<readonly EntryView[]> {
   if (ids.length === 0) return [];
   // Keyed by the canonical spelling, the one the entries come back with.
   const order = new Map(ids.map((id, index) => [canonicalId(id), index]));
-  const entries = await readEntries(tx, inArray(listEntries.id, [...ids]));
+  const entries = await readEntries(tx, access, inArray(listEntries.id, [...ids]));
   return [...entries].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
 }
 
@@ -329,11 +382,11 @@ export async function getEntries(scope: EngineScope, input: { readonly ids: read
   if (input.ids.length > 500) throw refuse('CONFIG_INVALID', 'Read at most 500 entries at once.');
   const ids = input.ids.filter(isUuid).map(canonicalId);
   if (ids.length === 0) return [];
-  return inWorkspace(scope, (tx) => readEntries(tx, inArray(listEntries.id, ids)));
+  return inWorkspace(scope, (tx) => readEntries(tx, scope.access, inArray(listEntries.id, ids)));
 }
 
 /** Every live entry of one record, across its lists (a record page's "Lists" panel). */
 export async function getRecordEntries(scope: EngineScope, input: { readonly recordId: string }) {
   const recordId = checkId(input.recordId, 'That record does not exist.');
-  return inWorkspace(scope, (tx) => readEntries(tx, eq(listEntries.recordId, recordId)));
+  return inWorkspace(scope, (tx) => readEntries(tx, scope.access, eq(listEntries.recordId, recordId)));
 }

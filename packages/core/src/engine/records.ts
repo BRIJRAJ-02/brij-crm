@@ -33,6 +33,14 @@ import {
 } from './values.ts';
 import { append, runWrite, type AfterWrite, type ValueChange, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
+import { fieldReadOnlyReason, filterRecordView, isOpen, type Access } from '../access/policy.ts';
+import {
+  attributeLevel,
+  attributeVisible,
+  checkObject,
+  UNKNOWN_ATTRIBUTE,
+  visibleRecords,
+} from '../access/visibility.ts';
 
 const { attributeOptions, objects, records } = schema;
 
@@ -149,24 +157,36 @@ export interface RecordView {
  * (`SYSTEM_ONLY_TYPES`: timestamps and interactions); anyone else is refused
  * `ATTRIBUTE_READ_ONLY`. The attributes in `defaulted` got their value from
  * their default, which the system sets, so they pass whoever creates.
+ *
+ * The scope's data policy applies first (spec 0009, AC-141, AC-142): an
+ * attribute it hides answers `NOT_FOUND` exactly as one that isn't on the
+ * object, and one it leaves read only answers `ATTRIBUTE_READ_ONLY` with the
+ * reason. The caller has already checked the object (or list) itself.
  */
 function parseAll(
   attributes: ReadonlyMap<string, AttributeDef>,
   inputs: Readonly<Record<string, ValueInput>>,
-  actor: Actor,
+  scope: EngineScope,
   earlier: readonly EngineRefusal[] = [],
   defaulted: ReadonlySet<string> = new Set(),
 ): readonly { attribute: AttributeDef; input: ValueInput }[] {
   const refusals: EngineRefusal[] = [...earlier];
   const parsed: { attribute: AttributeDef; input: ValueInput }[] = [];
+  const open = isOpen(scope.access);
   for (const [attributeId, input] of Object.entries(inputs)) {
     const attribute = attributes.get(attributeId);
-    if (attribute === undefined) {
-      refusals.push({ code: 'NOT_FOUND', message: 'That attribute is not on this object.', attributeId });
+    const level = attribute === undefined || open ? 'write' : attributeLevel(scope.access, attribute);
+    if (attribute === undefined || level === 'hidden') {
+      refusals.push({ code: 'NOT_FOUND', message: UNKNOWN_ATTRIBUTE, attributeId });
       continue;
     }
     try {
-      if (!defaulted.has(attributeId)) checkWriter(attribute, actor);
+      if (!defaulted.has(attributeId)) {
+        if (level === 'read') {
+          throw refuse('ATTRIBUTE_READ_ONLY', fieldReadOnlyReason(attribute.title), attribute.id);
+        }
+        checkWriter(attribute, scope.actor);
+      }
       parseFor(attribute, input.value);
       parsed.push({ attribute, input });
     } catch (error) {
@@ -286,12 +306,17 @@ export async function initialValues(
         attribute.type !== 'checkbox' &&
         !Object.hasOwn(inputs, attribute.id),
     )
-    .map((attribute) => ({
-      code: 'VALUE_REQUIRED',
-      message: `${attribute.title} is required. Give it a value.`,
-      attributeId: attribute.id,
-    }));
-  return parseAll(attributes, inputs, scope.actor, missing, defaulted);
+    .map((attribute): EngineRefusal =>
+      attributeVisible(scope.access, attribute)
+        ? {
+            code: 'VALUE_REQUIRED',
+            message: `${attribute.title} is required. Give it a value.`,
+            attributeId: attribute.id,
+          }
+        : // A required attribute the creator can't see: refused without naming it (AC-144).
+          { code: 'VALUE_REQUIRED', message: "A field you can't see needs a value first. Ask a workspace admin." },
+    );
+  return parseAll(attributes, inputs, scope, missing, defaulted);
 }
 
 /**
@@ -304,7 +329,10 @@ export async function initialValues(
  */
 export async function insertRecord(context: WriteContext, input: RecordInput) {
   const { tx, scope } = context;
-  const objectId = await liveObject(tx, input.objectId);
+  // A hidden object answers as an unknown one, before anything says it is archived; a read only one is 403.
+  const objectId = checkId(input.objectId, 'That object does not exist.');
+  await checkObject(tx, scope.access, objectId, 'write');
+  await liveObject(tx, objectId);
   const attributes = await loadAttributes(tx, objectId);
   const parsed = await initialValues(tx, scope, attributes, input.values ?? {}, input.timeZone ?? 'UTC');
   const by = actorRow(scope.actor);
@@ -368,6 +396,7 @@ export interface EntryValues {
 async function lockOwner(
   tx: WorkspaceTx,
   input: RecordValues | EntryValues,
+  access: Access,
 ): Promise<{
   ownerKind: 'record' | 'entry';
   ownerId: string;
@@ -377,11 +406,13 @@ async function lockOwner(
 }> {
   if ('entryId' in input) {
     const entryId = checkId(input.entryId, 'That entry does not exist.');
-    const { listId } = await lockEntry(tx, entryId);
+    const { listId } = await lockEntry(tx, entryId, access);
     return { ownerKind: 'entry', ownerId: entryId, attributes: await loadListAttributes(tx, listId) };
   }
   const recordId = checkId(input.recordId, 'That record does not exist.');
-  const { objectId } = await lockRecord(tx, recordId);
+  const { objectId } = await lockRecord(tx, recordId, access);
+  // Seen, so a read only object is 403 rather than absent.
+  await checkObject(tx, access, objectId, 'write');
   return { ownerKind: 'record', ownerId: recordId, objectId, attributes: await loadAttributes(tx, objectId) };
 }
 
@@ -399,8 +430,8 @@ async function updateOwner(
   attributes: ReadonlyMap<string, AttributeDef>;
 }> {
   const { tx } = context;
-  const { ownerKind, ownerId, objectId, attributes } = await lockOwner(tx, input);
-  const parsed = parseAll(attributes, canonicalKeys(input.values), context.scope.actor);
+  const { ownerKind, ownerId, objectId, attributes } = await lockOwner(tx, input, context.scope.access);
+  const parsed = parseAll(attributes, canonicalKeys(input.values), context.scope);
   const results = await writeAll(context, ownerKind, ownerId, parsed);
   if (Object.values(results).some((each) => each.versionId !== undefined)) {
     await touchOwner(context, ownerKind, ownerId);
@@ -476,6 +507,18 @@ export async function setValuesBatch(
   return result;
 }
 
+/** A reference value's far record, as visibility reads it. */
+function isRecordAt(value: unknown): value is { objectId: string; recordId: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'objectId' in value &&
+    'recordId' in value &&
+    typeof value.objectId === 'string' &&
+    typeof value.recordId === 'string'
+  );
+}
+
 function hueOf(value: string): Hue | undefined {
   return (HUES as readonly string[]).includes(value) ? (value as Hue) : undefined;
 }
@@ -533,7 +576,7 @@ export async function getRecords(
   const attributeIds = input.attributeIds?.filter(isUuid).map(canonicalId);
   if (ids.length === 0) return [];
   return inWorkspace(scope, (tx) =>
-    readRecords(tx, ids, {
+    readRecords(tx, scope.access, ids, {
       ...(attributeIds === undefined ? {} : { attributeIds }),
       ...(input.attributes === undefined ? {} : { attributes: input.attributes }),
     }),
@@ -548,15 +591,26 @@ export async function getRecords(
  */
 export async function readRecords(
   tx: WorkspaceTx,
+  access: Access,
   ids: readonly string[],
   options: ReadOptions = {},
 ): Promise<readonly RecordView[]> {
   if (ids.length === 0) return [];
   const input = { ids, attributeIds: options.attributeIds };
-  const rows = await tx
+  const open = isOpen(access);
+  const found = await tx
     .select()
     .from(records)
     .where(and(inArray(records.id, [...input.ids]), isNull(records.deletedAt)));
+  // Hidden is absent (spec 0009, AC-140, AC-143): records on a hidden object, and outside a record rule, are left out.
+  const seen = open
+    ? undefined
+    : await visibleRecords(
+        tx,
+        access,
+        found.map((row) => ({ objectId: row.objectId, recordId: row.id })),
+      );
+  const rows = seen === undefined ? found : found.filter((row) => seen.has(row.id));
   const objectIds = [...new Set(rows.map((row) => row.objectId))];
   const objectRows =
     objectIds.length === 0 ? [] : await tx.select().from(objects).where(inArray(objects.id, objectIds));
@@ -598,6 +652,18 @@ export async function readRecords(
     if (seen === undefined || item.versionId > seen) versionOf.set(key, item.versionId);
   }
 
+  // The far records of reference values the principal may see, read once for the whole read (none when open).
+  const farSeen = open
+    ? undefined
+    : await visibleRecords(
+        tx,
+        access,
+        [...links.values.values()].flatMap((cells) =>
+          [...cells.values()]
+            .flatMap((value): unknown[] => (Array.isArray(value) ? (value as unknown[]) : [value]))
+            .filter(isRecordAt),
+        ),
+      );
   return rows
     .map((row): RecordView => {
       const object = objectById.get(row.objectId);
@@ -634,7 +700,9 @@ export async function readRecords(
       }
       const primaryId = object?.primaryAttributeId ?? null;
       const primaryItems = primaryId === null ? [] : itemsOf(row.id, primaryId);
-      const primary = primaryId === null ? undefined : attributes.get(primaryId);
+      // A record whose name attribute is hidden from the principal shows as unnamed (AC-141).
+      const primaryDef = primaryId === null ? undefined : attributes.get(primaryId);
+      const primary = primaryDef !== undefined && attributeVisible(access, primaryDef) ? primaryDef : undefined;
       const name = primary === undefined ? '' : nameOf(decodeValue(primary.type, false, primaryItems));
       const hue = object === undefined ? undefined : hueOf(object.hue);
       const display: RecordRefDisplay = {
@@ -644,7 +712,7 @@ export async function readRecords(
         kind: object?.standardKey === 'people' ? 'person' : object?.standardKey === 'companies' ? 'company' : 'other',
         ...(hue === undefined ? {} : { hue }),
       };
-      return {
+      const view: RecordView = {
         id: row.id,
         objectId: row.objectId,
         createdAt: system.created_at as string,
@@ -656,6 +724,7 @@ export async function readRecords(
         versions,
         linkTotals,
       };
+      return farSeen === undefined ? view : filterRecordView(access, view, farSeen);
     })
     .sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
 }

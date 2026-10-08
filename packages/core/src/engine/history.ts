@@ -9,21 +9,39 @@ import { checkId } from './ids.ts';
 import { refuse } from './refusals.ts';
 import { linkHistory, linkValues } from './relationships.ts';
 import type { Actor, EngineScope } from './scope.ts';
-import { ITEM_COLUMNS, loadAttribute, loadAttributes } from './values.ts';
+import { checkEntryAccess, ITEM_COLUMNS, loadAttribute, loadAttributes, type AttributeDef } from './values.ts';
 import { inWorkspace } from '../access/run.ts';
+import { isOpen, type Access } from '../access/policy.ts';
+import {
+  attributeVisible,
+  checkObject,
+  checkRecordVisible,
+  UNKNOWN_RECORD,
+  visibleRecords,
+} from '../access/visibility.ts';
 
 const { listEntries, records, values } = schema;
 
 const ISO = (column: unknown) => sql<string>`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`;
 
-/** A live record's object and creation time. A record in the trash is hidden from history reads too (AC-8). */
-async function ownerExists(tx: WorkspaceTx, recordId: string): Promise<{ objectId: string; createdAt: Date }> {
+/**
+ * A live record's object and creation time. A record in the trash is hidden
+ * from history reads too (AC-8), and so is one the principal can't see (spec
+ * 0009, AC-143): on a hidden object, or outside its record rule.
+ */
+async function ownerExists(
+  tx: WorkspaceTx,
+  access: Access,
+  recordId: string,
+): Promise<{ objectId: string; createdAt: Date }> {
   checkId(recordId, 'That record does not exist.');
   const [row] = await tx
     .select({ objectId: records.objectId, createdAt: records.createdAt, deletedAt: records.deletedAt })
     .from(records)
     .where(eq(records.id, recordId));
   if (row === undefined) throw refuse('NOT_FOUND', 'That record does not exist.');
+  await checkObject(tx, access, row.objectId, 'read', UNKNOWN_RECORD);
+  await checkRecordVisible(tx, access, { objectId: row.objectId, recordId });
   if (row.deletedAt !== null) throw refuse('RECORD_DELETED', 'That record is in the trash. Restore it first.');
   return row;
 }
@@ -31,22 +49,56 @@ async function ownerExists(tx: WorkspaceTx, recordId: string): Promise<{ objectI
 /** A record's id, or a list entry's id: the owner a history read is about. */
 export type HistoryOwner = { readonly recordId: string } | { readonly entryId: string };
 
-/** The owner's canonical id, once it is known to be live. */
-async function ownerOf(tx: WorkspaceTx, owner: HistoryOwner): Promise<string> {
+/** The owner's canonical id, once it is known to be live and visible to the principal. */
+async function ownerOf(tx: WorkspaceTx, access: Access, owner: HistoryOwner): Promise<string> {
   if ('recordId' in owner) {
     const recordId = checkId(owner.recordId, 'That record does not exist.');
-    await ownerExists(tx, recordId);
+    await ownerExists(tx, access, recordId);
     return recordId;
   }
   const entryId = checkId(owner.entryId, 'That entry does not exist.');
   const [row] = await tx
-    .select({ recordId: listEntries.recordId, deletedAt: listEntries.deletedAt })
+    .select({ recordId: listEntries.recordId, listId: listEntries.listId, deletedAt: listEntries.deletedAt })
     .from(listEntries)
     .where(eq(listEntries.id, entryId));
   if (row === undefined) throw refuse('NOT_FOUND', 'That entry does not exist.');
+  await checkEntryAccess(tx, access, row, 'read');
   if (row.deletedAt !== null) throw refuse('RECORD_DELETED', 'That entry was removed from its list. Restore it first.');
-  await ownerExists(tx, row.recordId);
+  await ownerExists(tx, access, row.recordId);
   return entryId;
+}
+
+/** One attribute, refused `NOT_FOUND` as an unknown one when the principal can't see it (spec 0009, AC-141). */
+async function visibleAttribute(tx: WorkspaceTx, access: Access, attributeId: string): Promise<AttributeDef> {
+  const attribute = await loadAttribute(tx, attributeId);
+  if (!attributeVisible(access, attribute)) throw refuse('NOT_FOUND', 'That attribute does not exist.', attribute.id);
+  return attribute;
+}
+
+/** A reference value without the far records the principal can't see. */
+function withoutUnseen(value: unknown, seen: ReadonlySet<string>): unknown {
+  const shows = (item: unknown) =>
+    typeof item === 'object' && item !== null && 'recordId' in item && typeof item.recordId === 'string'
+      ? seen.has(item.recordId)
+      : true;
+  if (Array.isArray(value)) return value.filter(shows);
+  return shows(value) ? value : null;
+}
+
+/** The far records reference values name, as visibility reads them. */
+function farRecords(values: readonly unknown[]): { objectId: string; recordId: string }[] {
+  return values
+    .flatMap((value) => (Array.isArray(value) ? (value as unknown[]) : [value]))
+    .flatMap((item) =>
+      typeof item === 'object' &&
+      item !== null &&
+      'objectId' in item &&
+      'recordId' in item &&
+      typeof item.objectId === 'string' &&
+      typeof item.recordId === 'string'
+        ? [{ objectId: item.objectId, recordId: item.recordId }]
+        : [],
+    );
 }
 
 /**
@@ -59,9 +111,15 @@ export async function getHistory(
   input: HistoryOwner & { readonly attributeId: string },
 ): Promise<readonly ValueVersion[]> {
   return inWorkspace(scope, async (tx) => {
-    const ownerId = await ownerOf(tx, input);
-    const attribute = await loadAttribute(tx, input.attributeId);
-    if (attribute.type === 'record_reference') return linkHistory(tx, attribute, ownerId);
+    const ownerId = await ownerOf(tx, scope.access, input);
+    const attribute = await visibleAttribute(tx, scope.access, input.attributeId);
+    if (attribute.type === 'record_reference') {
+      const versions = await linkHistory(tx, attribute, ownerId);
+      if (isOpen(scope.access)) return versions;
+      // Far records the principal can't see are left out of every version (AC-143).
+      const seen = await visibleRecords(tx, scope.access, farRecords(versions.map((version) => version.value)));
+      return versions.map((version) => ({ ...version, value: withoutUnseen(version.value, seen) }));
+    }
     const rows = await tx
       .select({
         ...ITEM_COLUMNS,
@@ -128,7 +186,7 @@ export async function getValuesAsOf(
   );
   const recordId = checkId(input.recordId, 'That record does not exist.');
   return inWorkspace(scope, async (tx) => {
-    const record = await ownerExists(tx, recordId);
+    const record = await ownerExists(tx, scope.access, recordId);
     if (record.createdAt.getTime() > Date.parse(moment)) return {};
     const attributes = await loadAttributes(tx, record.objectId);
     const at = sql`${moment}::timestamptz`;
@@ -142,13 +200,19 @@ export async function getValuesAsOf(
           or(isNull(values.activeUntil), gt(values.activeUntil, at)),
         ),
       );
-    const references = [...attributes.values()].filter((attribute) => attribute.type === 'record_reference');
+    // Hidden attributes are left out (spec 0009, AC-141).
+    const shown = [...attributes.values()].filter((attribute) => attributeVisible(scope.access, attribute));
+    const references = shown.filter((attribute) => attribute.type === 'record_reference');
     const links = (await linkValues(tx, [recordId], references, { at: moment })).values.get(recordId);
+    const seen = isOpen(scope.access)
+      ? undefined
+      : await visibleRecords(tx, scope.access, farRecords([...(links?.values() ?? [])]));
     const result: Record<string, unknown> = {};
-    for (const attribute of attributes.values()) {
+    for (const attribute of shown) {
       if (attribute.isSystem) continue;
       if (attribute.type === 'record_reference') {
-        result[attribute.id] = links?.get(attribute.id) ?? (attribute.isMulti ? [] : null);
+        const value = links?.get(attribute.id) ?? (attribute.isMulti ? [] : null);
+        result[attribute.id] = seen === undefined ? value : withoutUnseen(value, seen);
         continue;
       }
       const mine: StoredItem[] = rows.filter((row) => row.attributeId === attribute.id && !row.isCleared);
@@ -173,8 +237,8 @@ export async function getTimeInStages(
   input: HistoryOwner & { readonly attributeId: string },
 ): Promise<readonly { readonly optionId: string; readonly visits: readonly StageVisit[]; readonly totalMs: number }[]> {
   return inWorkspace(scope, async (tx) => {
-    const ownerId = await ownerOf(tx, input);
-    const attribute = await loadAttribute(tx, input.attributeId);
+    const ownerId = await ownerOf(tx, scope.access, input);
+    const attribute = await visibleAttribute(tx, scope.access, input.attributeId);
     if (attribute.type !== 'status')
       throw refuse('CONFIG_INVALID', 'Time in stage is for status attributes.', attribute.id);
     const rows = await tx.execute<{ option_id: string; entered: string; left: string | null; ms: string }>(sql`

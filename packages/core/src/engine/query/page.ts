@@ -15,6 +15,8 @@ import { loadRelationships } from '../relationships.ts';
 import type { EngineScope } from '../scope.ts';
 import { loadAttributes, loadAttributesById, loadListAttributes, type AttributeDef } from '../values.ts';
 import { isAborted, withCancel } from './cancel.ts';
+import { isOpen } from '../../access/policy.ts';
+import { attributeVisible, checkList, checkObject } from '../../access/visibility.ts';
 import {
   afterCursor,
   attributeIdsOf,
@@ -28,6 +30,7 @@ import {
   SEARCH_CAP,
   searchKey,
   searchTermsOf,
+  levelRule,
   orderBy,
   tieDirection,
   type CompileContext,
@@ -181,10 +184,16 @@ async function prepare(
   let level: Level;
   let own: ReadonlyMap<string, AttributeDef>;
   let objectAttributes: ObjectAttributes;
+  const { access } = scope;
   if ('listId' in query) {
     if (!isUuid(query.listId)) throw refuse('FILTER_INVALID', 'That list does not exist.');
-    const [list] = await tx.select({ objectId: lists.objectId }).from(lists).where(eq(lists.id, query.listId));
+    const [list] = await tx
+      .select({ objectId: lists.objectId, ...(isOpen(access) ? {} : { name: lists.name }) })
+      .from(lists)
+      .where(eq(lists.id, query.listId));
     if (list === undefined) throw refuse('NOT_FOUND', 'That list does not exist.');
+    // A hidden list (or one on a hidden object) answers as an unknown one (spec 0009, AC-140).
+    checkList(access, { id: query.listId, objectId: list.objectId, name: list.name ?? '' }, 'read');
     level = baseLevel({ objectId: list.objectId, listId: query.listId });
     const recordAttributes = await loadAttributes(tx, list.objectId);
     own = new Map([...(await loadListAttributes(tx, query.listId)), ...recordAttributes]);
@@ -193,13 +202,20 @@ async function prepare(
     if (!isUuid(query.objectId)) throw refuse('FILTER_INVALID', 'That object does not exist.');
     const [object] = await tx.select({ id: objects.id }).from(objects).where(eq(objects.id, query.objectId));
     if (object === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
+    // A hidden object answers as an unknown one (spec 0009, AC-140).
+    await checkObject(tx, access, object.id, 'read');
     level = baseLevel({ objectId: query.objectId });
     own = await loadAttributes(tx, query.objectId);
     // Keyed by the id as stored (lower case), which the read back looks records' objects up by.
     objectAttributes = new Map([[object.id, own]]);
   }
   const named = attributeIdsOf(query.filter, query.sorts ?? []).filter((id) => !own.has(id));
-  const attributes = new Map([...own, ...(await loadAttributesById(tx, named))]);
+  const catalog = new Map([...own, ...(await loadAttributesById(tx, named))]);
+  // Only what the principal may see: a filter or sort naming a hidden attribute, at any hop, is refused as an
+  // unknown one, and a contains on it never reaches the search function (spec 0009, AC-141).
+  const attributes = isOpen(access)
+    ? catalog
+    : new Map([...catalog].filter(([, attribute]) => attributeVisible(access, attribute)));
   const relationshipIds = [...attributes.values()].flatMap((attribute) =>
     attribute.type === 'record_reference' && attribute.relationshipId !== null ? [attribute.relationshipId] : [],
   );
@@ -212,6 +228,7 @@ async function prepare(
       weekStart: query.weekStart ?? 'monday',
     },
     actor: scope.actor,
+    access,
   };
   if (context.clock.timeZone !== undefined) await checkTimeZone(tx, context.clock.timeZone);
   const searches = search ? await runSearches(tx, context, query.filter) : new Map<string, readonly string[]>();
@@ -283,13 +300,19 @@ async function runSearches(
   return found;
 }
 
-/** The view's tables and the conditions that keep only its live rows; lateral sort joins sit between the two. */
-function fromParts(level: Level): { tables: SQL; where: SQL } {
+/**
+ * The view's tables and the conditions that keep only its live rows (and,
+ * under a record rule, only the records it lets the principal see); lateral
+ * sort joins sit between the two.
+ */
+function fromParts(context: CompileContext, level: Level): { tables: SQL; where: SQL } {
+  const rule = levelRule(context, level);
+  const ruled = rule === undefined ? sql`` : sql` and ${rule}`;
   return level.listId === null
-    ? { tables: sql`records r`, where: sql`r.object_id = ${level.objectId} and r.deleted_at is null` }
+    ? { tables: sql`records r`, where: sql`r.object_id = ${level.objectId} and r.deleted_at is null${ruled}` }
     : {
         tables: sql`list_entries r join records rec on rec.workspace_id = r.workspace_id and rec.id = r.record_id and rec.deleted_at is null`,
-        where: sql`r.list_id = ${level.listId} and r.deleted_at is null`,
+        where: sql`r.list_id = ${level.listId} and r.deleted_at is null${ruled}`,
       };
 }
 
@@ -376,7 +399,7 @@ async function buildPage(
   const filter = compileFilter(context, level, query.filter);
   // Only now, with the filter and sorts parsed against their types, is the cursor's binding hashed from them.
   const cursor = query.cursor === undefined ? undefined : decodeCursor(query.cursor, cursorBinding(query));
-  const { tables, where } = fromParts(level);
+  const { tables, where } = fromParts(context, level);
   const recordColumn = level.listId === null ? sql`r.id` : sql`r.record_id`;
   const isList = level.listId !== null;
   const tie = tieDirection(keys);
@@ -430,8 +453,13 @@ async function buildPage(
   const firstKeyCount = first === undefined ? 0 : compileSorts(context, level, [first]).length;
   const candidate = drivingSort(context, level, first, optionIds);
   // A rare contains narrows the view to the search's few ids, so filtering first beats reading in key order.
+  // Under a record rule the page filters first too: the key index's passes, counts and jumps would read past
+  // the rule (spec 0009; #24 measures the rule's cost and may drive it from an index).
   const drive =
-    candidate !== undefined && candidate.keys.length === firstKeyCount && !narrowedBySearch(context, query.filter)
+    candidate !== undefined &&
+    candidate.keys.length === firstKeyCount &&
+    !narrowedBySearch(context, query.filter) &&
+    levelRule(context, level) === undefined
       ? candidate
       : undefined;
   if (drive === undefined) {
@@ -969,13 +997,14 @@ async function readPage(
       : undefined;
   const recordIds = [...new Set(rows.map((row) => row.record_id))];
   // The view's own attributes are loaded already: the read back uses them rather than loading them again.
-  const records = await readRecords(tx, recordIds, { attributes: built.attributesByObject });
+  const records = await readRecords(tx, scope.access, recordIds, { attributes: built.attributesByObject });
   const page: Page = !isList
     ? { records }
     : {
         records,
         entries: await readEntriesById(
           tx,
+          scope.access,
           rows.map((row) => row.id),
         ),
       };
@@ -1016,8 +1045,11 @@ export async function countMatches(
       // A cancel that landed on a search looks like its timeout there, which only narrows that contains.
       checkpoint();
       const filter = compileFilter(context, level, query.filter);
-      const { tables, where } = fromParts(level);
-      const filtered = query.filter !== undefined && query.filter.conditions.length > 0;
+      const { tables, where } = fromParts(context, level);
+      // Under a record rule a count counts only the records the principal sees, through the capped path, like a
+      // filter (spec 0009, AC-143): the stored totals count every record.
+      const filtered =
+        (query.filter !== undefined && query.filter.conditions.length > 0) || levelRule(context, level) !== undefined;
       if (!filtered) {
         // The whole object: its live records, index only. The whole list: its entry count, less the live
         // entries of records in the trash (which keep their slots until the purge).

@@ -1016,7 +1016,7 @@ describe('upper case ids', () => {
     const read = await getEntries(scope, { ids: [id(two).toUpperCase(), id(one).toUpperCase(), 'not-an-id'] });
     expect(read.map((entry) => entry.id).sort()).toEqual([id(one), id(two)].sort());
     const ordered = await db.withWorkspace(scope.workspaceId, (tx) =>
-      readEntriesById(tx, [id(two).toUpperCase(), id(one).toUpperCase()]),
+      readEntriesById(tx, scope.access, [id(two).toUpperCase(), id(one).toUpperCase()]),
     );
     expect(ordered.map((entry) => entry.id)).toEqual([two, one]);
   });

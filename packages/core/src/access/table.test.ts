@@ -149,11 +149,174 @@ describe('the walk: a principal without the access is refused', () => {
     },
   );
 
-  // Data levels are enforced at the engine's choke points in milestone 2; until then every role writes everything.
-  for (const [name, entry] of entries.filter(([, each]) => 'data' in each)) {
-    it.todo(`${name} answers as absent to a principal at less than ${(entry as { data: string }).data} (milestone 2)`);
-  }
+  // Data levels (spec 0009, milestone 2): each data service, called by a principal at less than the level it
+  // needs on People (and its list), answers as absent (a read) or refuses the change (a write).
+  const dataEntries = entries.flatMap(([name, entry]) => ('data' in entry ? [[name, entry.data] as const] : []));
+
+  it('has a case for every data entry, and none for anything else', () => {
+    expect(dataEntries.map(([name]) => name).sort()).toEqual(Object.keys(DATA_CASES).sort());
+  });
+
+  it.each(dataEntries)('%s answers as absent to a principal at less than %s', async (name, level) => {
+    const world = await dataWorld();
+    const test = DATA_CASES[name];
+    if (test === undefined) throw new Error(`${name} has no case.`);
+    const scope = level === 'read' ? world.hidden : world.readOnly;
+    const outcome = await settle(test.call(scope, world));
+    if (test.expect === 'empty') {
+      expect(outcome).toMatchObject({ ok: true });
+      expect((test.leaves ?? none)(outcome.ok ? outcome.value : undefined, world)).toBe(true);
+    } else {
+      expect(outcome).toMatchObject({ ok: false, refusal: { code: test.expect } });
+    }
+    // The owner (the open policy) is let through the same call.
+    const asOwner = await settle(test.call(world.owner, world));
+    expect(asOwner.ok || !['NOT_FOUND', 'FORBIDDEN'].includes(asOwner.refusal.code)).toBe(true);
+  });
 });
+
+/** A workspace whose People object a member can't see, and one where they may only read it (and its list). */
+async function dataWorld() {
+  const { scope: memberScope, workspaceId, objects, ownerId } = await memberOf('member');
+  const people = objects.people ?? '';
+  const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });
+  const attributes = await db.withWorkspace(workspaceId, (tx) =>
+    tx.execute<{ id: string; api_slug: string }>(
+      sql`select id::text, api_slug from attributes where object_id = ${people}`,
+    ),
+  );
+  const attribute = (slug: string) => attributes.rows.find((row) => row.api_slug === slug)?.id ?? '';
+  const stage = (
+    await core.defineAttribute(owner, { objectId: people, apiSlug: 'stage', title: 'Stage', type: 'status' })
+  ).attributeId;
+  const recordId = (await core.createRecord(owner, { objectId: people, values: { [attribute('job_title')]: 'Pilot' } }))
+    .recordId;
+  const { listId } = await core.defineList(owner, { objectId: people, apiSlug: 'crew', name: 'Crew' });
+  const { entryId } = await core.addEntry(owner, { listId, recordId });
+  const member = memberScope.actor;
+  const objectRule = (objectId: string, level: string) => ({
+    subject: { type: 'role' as const, role: 'member' },
+    target: { type: 'object' as const, objectId },
+    level,
+  });
+  const hidden = testScope({
+    db,
+    workspaceId,
+    actor: member,
+    role: 'member',
+    rules: { levels: [objectRule(people, 'none')], records: [] },
+  });
+  const readOnly = testScope({
+    db,
+    workspaceId,
+    actor: member,
+    role: 'member',
+    rules: { levels: [objectRule(people, 'read'), objectRule(listId, 'read')], records: [] },
+  });
+  return {
+    owner,
+    hidden,
+    readOnly,
+    people,
+    name: attribute('name'),
+    jobTitle: attribute('job_title'),
+    stage,
+    recordId,
+    listId,
+    entryId,
+  };
+}
+type DataWorld = Awaited<ReturnType<typeof dataWorld>>;
+
+type Outcome =
+  | { readonly ok: true; readonly value: unknown; readonly refusal?: undefined }
+  | { readonly ok: false; readonly refusal: { readonly code: string } };
+
+/** A call's result, or its refusal (a batch's first refused record counts as its refusal). */
+async function settle(call: Promise<unknown>): Promise<Outcome> {
+  try {
+    const value = await call;
+    if (Array.isArray(value) && value.length === 1) {
+      const [only] = value as unknown[];
+      if (typeof only === 'object' && only !== null && 'ok' in only && only.ok === false && 'refusals' in only) {
+        const [first] = only.refusals as { code: string }[];
+        if (first !== undefined) return { ok: false, refusal: first };
+      }
+    }
+    return { ok: true, value };
+  } catch (error) {
+    if (core.isRefusal(error)) return { ok: false, refusal: error.refusal };
+    throw error;
+  }
+}
+
+interface DataCase {
+  readonly call: (scope: EngineScope, world: DataWorld) => Promise<unknown>;
+  /** A refusal code, or `empty`: answered, with the hidden thing left out (`leaves`). */
+  readonly expect: 'NOT_FOUND' | 'FORBIDDEN' | 'empty';
+  readonly leaves?: (value: unknown, world: DataWorld) => boolean;
+}
+
+const none = (value: unknown) => Array.isArray(value) && value.length === 0;
+const empty = (call: DataCase['call'], leaves: DataCase['leaves'] = none): DataCase => ({
+  call,
+  expect: 'empty',
+  leaves,
+});
+const refused = (code: 'NOT_FOUND' | 'FORBIDDEN', call: DataCase['call']): DataCase => ({ call, expect: code });
+const named = (world: DataWorld) => ({ [world.name]: { value: 'Renamed' } });
+
+/** Every data entry of the access table, called as the principal it is about. */
+const DATA_CASES: Readonly<Record<string, DataCase>> = {
+  // Reads, by a principal at `none` on People: absent.
+  listObjects: empty(
+    (scope) => core.listObjects(scope),
+    (value, world) => Array.isArray(value) && !value.some((object: { id: string }) => object.id === world.people),
+  ),
+  listObjectAttributes: refused('NOT_FOUND', (scope, world) => core.listObjectAttributes(scope, world.people)),
+  listAttributes: empty((scope, world) => core.listAttributes(scope, world.people)),
+  listOptions: empty((scope, world) => core.listOptions(scope, world.stage)),
+  getRecords: empty((scope, world) => core.getRecords(scope, { ids: [world.recordId] })),
+  readRecordsById: empty((scope, world) => core.readRecordsById(scope, [world.recordId])),
+  queryRecords: refused('NOT_FOUND', (scope, world) => core.queryRecords(scope, { objectId: world.people })),
+  queryPage: refused('NOT_FOUND', (scope, world) => core.queryPage(scope, { objectId: world.people })),
+  countMatches: refused('NOT_FOUND', (scope, world) => core.countMatches(scope, { objectId: world.people })),
+  getHistory: refused('NOT_FOUND', (scope, world) =>
+    core.getHistory(scope, { recordId: world.recordId, attributeId: world.jobTitle }),
+  ),
+  getValuesAsOf: refused('NOT_FOUND', (scope, world) =>
+    core.getValuesAsOf(scope, { recordId: world.recordId, at: new Date().toISOString() }),
+  ),
+  getTimeInStages: refused('NOT_FOUND', (scope, world) =>
+    core.getTimeInStages(scope, { recordId: world.recordId, attributeId: world.stage }),
+  ),
+  getEntries: empty((scope, world) => core.getEntries(scope, { ids: [world.entryId] })),
+  getRecordEntries: empty((scope, world) => core.getRecordEntries(scope, { recordId: world.recordId })),
+  // Writes, by a principal who may only read People and its list: 403.
+  createRecord: refused('FORBIDDEN', (scope, world) => core.createRecord(scope, { objectId: world.people })),
+  addRecord: refused('FORBIDDEN', (scope, world) =>
+    core.addRecord(scope, { objectId: world.people, id: core.newId() }),
+  ),
+  setValues: refused('FORBIDDEN', (scope, world) =>
+    core.setValues(scope, { recordId: world.recordId, values: named(world) }),
+  ),
+  setRecordValues: refused('FORBIDDEN', (scope, world) =>
+    core.setRecordValues(scope, { recordId: world.recordId, values: named(world) }),
+  ),
+  setValuesBatch: refused('FORBIDDEN', (scope, world) =>
+    core.setValuesBatch(scope, { items: [{ recordId: world.recordId, values: named(world) }] }),
+  ),
+  editRecord: refused('FORBIDDEN', (scope, world) =>
+    core.editRecord(scope, { recordId: world.recordId, values: named(world) }),
+  ),
+  deleteRecord: refused('FORBIDDEN', (scope, world) => core.deleteRecord(scope, { recordId: world.recordId })),
+  restoreRecord: refused('FORBIDDEN', (scope, world) => core.restoreRecord(scope, { recordId: world.recordId })),
+  addEntry: refused('FORBIDDEN', (scope, world) =>
+    core.addEntry(scope, { listId: world.listId, recordId: world.recordId }),
+  ),
+  removeEntry: refused('FORBIDDEN', (scope, world) => core.removeEntry(scope, { entryId: world.entryId })),
+  restoreEntry: refused('FORBIDDEN', (scope, world) => core.restoreEntry(scope, { entryId: world.entryId })),
+};
 
 describe('schema writes (AC-135)', () => {
   const attributeCount = (workspaceId: string, objectId: string) =>

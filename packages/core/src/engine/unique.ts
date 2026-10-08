@@ -8,6 +8,8 @@ import type { ItemColumns } from './columns.ts';
 import { uuidArray } from './ids.ts';
 import { postgresError, refuse } from './refusals.ts';
 import type { AttributeDef } from './values.ts';
+import { recordRule, type Access } from '../access/policy.ts';
+import { attributeVisible } from '../access/visibility.ts';
 
 /** Rows updated per statement when keys are filled in. */
 const BATCH = 10_000;
@@ -61,8 +63,13 @@ const EMPTY_ITEM: ItemColumns = {
  * record's keys go to `held_unique_key`, so they don't block anyone until a
  * restore takes them back. The same goes for list entries: a removed entry, or
  * one whose record is in the trash, holds its keys.
+ *
+ * The refusal lists the duplicate values only when the actor sees the
+ * attribute and every record of its object (no record rule there); otherwise
+ * it gives their count, so it never quotes a value of a record the actor
+ * can't read (spec 0009, AC-144).
  */
-export async function fillUniqueKeys(tx: WorkspaceTx, attribute: AttributeDef): Promise<void> {
+export async function fillUniqueKeys(tx: WorkspaceTx, attribute: AttributeDef, access: Access): Promise<void> {
   const rows = await tx.execute<{ id: string; text: string | null; number: string | null; deleted: boolean }>(sql`
     select v.id::text as id, v.text_value as text, v.number_value::text as number,
       coalesce(r.deleted_at, e.deleted_at, er.deleted_at) is not null as deleted
@@ -83,6 +90,17 @@ export async function fillUniqueKeys(tx: WorkspaceTx, attribute: AttributeDef): 
     counts.set(row.key, (counts.get(row.key) ?? 0) + 1);
   }
   const duplicates = [...counts].filter(([, n]) => n > 1);
+  const seesEvery =
+    attributeVisible(access, attribute) &&
+    (attribute.objectId === null || recordRule(access, attribute.objectId) === undefined);
+  if (duplicates.length > 0 && !seesEvery) {
+    const many = duplicates.length === 1 ? '1 value is' : `${String(duplicates.length)} values are`;
+    throw refuse(
+      'UNIQUE_HAS_DUPLICATES',
+      `${attribute.title} can't be unique yet: ${many} used by more than one record. Merge or change them first.`,
+      attribute.id,
+    );
+  }
   if (duplicates.length > 0) {
     const shown = duplicates
       .slice(0, 10)
@@ -130,13 +148,21 @@ export async function holdUniqueKeys(tx: WorkspaceTx, ownerIds: readonly string[
 
 /**
  * Moves held keys back on a restore. Refuses with `UNIQUE_CONFLICT`, listing
- * the values, when another record took one of them meanwhile (AC-8).
+ * the values, when another record took one of them meanwhile (AC-8). Only the
+ * attributes the actor can see are named (spec 0009, AC-144); the other
+ * record never is.
  */
-export async function releaseUniqueKeys(tx: WorkspaceTx, ownerIds: readonly string[]): Promise<void> {
+export async function releaseUniqueKeys(tx: WorkspaceTx, access: Access, ownerIds: readonly string[]): Promise<void> {
   if (ownerIds.length === 0) return;
   const owners = uuidArray(ownerIds);
-  const taken = await tx.execute<{ title: string; key: string }>(sql`
-    select a.title, v.held_unique_key as key
+  const found = await tx.execute<{
+    id: string;
+    object_id: string | null;
+    list_id: string | null;
+    title: string;
+    key: string;
+  }>(sql`
+    select a.id::text, a.object_id::text, a.list_id::text, a.title, v.held_unique_key as key
     from "values" v join attributes a on a.workspace_id = v.workspace_id and a.id = v.attribute_id
     where v.owner_id = any(${owners}) and v.active_until is null and v.held_unique_key is not null
       and exists (
@@ -146,12 +172,17 @@ export async function releaseUniqueKeys(tx: WorkspaceTx, ownerIds: readonly stri
       )
     order by a.title, v.held_unique_key
   `);
+  const taken = {
+    rows: found.rows.filter((row) =>
+      attributeVisible(access, { id: row.id, objectId: row.object_id, listId: row.list_id }),
+    ),
+  };
   const conflict = () =>
     refuse(
       'UNIQUE_CONFLICT',
       `Another record now has ${taken.rows.map((row) => `${row.title} ${row.key}`).join(', ') || 'one of its unique values'}. Change that record first, then restore this one.`,
     );
-  if (taken.rows.length > 0) throw conflict();
+  if (found.rows.length > 0) throw conflict();
   try {
     await tx.execute(sql`
       update "values" set unique_key = held_unique_key, held_unique_key = null
