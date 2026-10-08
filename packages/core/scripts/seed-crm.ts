@@ -858,6 +858,9 @@ export async function seedCrm(deps: SeedDeps, input: SeedInput): Promise<LoadMan
     return id;
   });
   log('trash');
+  // Fresh statistics first: planned on the empty tables' estimates, the sort key view's join is many times slower.
+  await db.vacuumAnalyze(['records', 'values', 'record_links']);
+  log('vacuum and analyse');
   // The bulk rows skipped the save path, so their stored sort keys come from the view that defines them.
   await run(async (tx) => {
     await tx.execute(sql`delete from sort_keys where workspace_id = ${workspaceId}`);
@@ -869,9 +872,8 @@ export async function seedCrm(deps: SeedDeps, input: SeedInput): Promise<LoadMan
       from sort_key_sources where workspace_id = ${workspaceId}
     `);
   });
+  await db.vacuumAnalyze(['sort_keys']);
   log('sort keys');
-  await db.vacuumAnalyze(['records', 'values', 'record_links', 'sort_keys']);
-  log('vacuum and analyse');
 
   const facts = await run(async (tx) => {
     const counts = await tx.execute<{ id: string; stored: number; live: number }>(sql`
