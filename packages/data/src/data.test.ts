@@ -5,6 +5,7 @@
 import {
   contract,
   type AttributeDefinition,
+  type ChangeEvent,
   type Me,
   type MemberSummary,
   type MyAccess,
@@ -23,6 +24,7 @@ import {
   type DataError,
   type Notice,
 } from './index.ts';
+import { createLive, type LiveChannel, type LiveTransport } from './live/live.ts';
 
 const ORIGIN = 'https://crm.test';
 
@@ -87,6 +89,7 @@ interface Behaviour {
   count: () => number;
   query: (position: number, limit: number) => RecordView[];
   setValues: () => RecordView;
+  get: (ids: readonly string[]) => RecordView[];
 }
 
 const unauthenticated = () => new ORPCError('UNAUTHENTICATED', { status: 401, message: 'Sign in to continue.' });
@@ -110,9 +113,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     query: (position, limit) =>
       Array.from({ length: Math.max(0, Math.min(limit, 3 - position)) }, (_, at) => personRow(position + at)),
     setValues: notServed,
+    get: () => [],
     ...overrides,
   };
   const calls: string[] = [];
+  // Each write's mutation id, as sent.
+  const mutationIds: string[] = [];
   const os = implement(contract);
   const router = os.router({
     system: {
@@ -135,15 +141,21 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         records: behaviour.query(input.position ?? 0, input.limit ?? 50),
       })),
       count: os.records.count.handler(() => ({ count: behaviour.count(), atLeast: false })),
-      get: os.records.get.handler(() => []),
+      get: os.records.get.handler(({ input }) => behaviour.get(input.ids)),
       create: os.records.create.handler(notServed),
-      setValues: os.records.setValues.handler(() => behaviour.setValues()),
+      setValues: os.records.setValues.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        return behaviour.setValues();
+      }),
     },
     members: { list: os.members.list.handler(() => behaviour.members()) },
     access: { mine: os.access.mine.handler(() => behaviour.access()) },
     realtime: {
-      connectionToken: os.realtime.connectionToken.handler(notServed),
-      subscriptionToken: os.realtime.subscriptionToken.handler(notServed),
+      connectionToken: os.realtime.connectionToken.handler(() => ({ token: 'connection-token' })),
+      subscriptionToken: os.realtime.subscriptionToken.handler(({ input }) => ({
+        channel: `workspace:${input.workspace}`,
+        token: 'subscription-token',
+      })),
     },
   });
   const handler = new RPCHandler(router);
@@ -161,7 +173,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     }
     return new Response('Not found', { status: 404 });
   };
-  return { fetch, calls };
+  return { fetch, calls, mutationIds };
 }
 
 function json(body: unknown, status = 200): Response {
@@ -174,7 +186,11 @@ function okAuth(path: string): Response {
 }
 
 /** A data layer on a fake API, with its notices and sign outs recorded. */
-function layer(api: Pick<ReturnType<typeof fakeApi>, 'fetch'>, path = '/w/acme/objects/people?view=all') {
+function layer(
+  api: Pick<ReturnType<typeof fakeApi>, 'fetch'>,
+  path = '/w/acme/objects/people?view=all',
+  more: Partial<Parameters<typeof createDataLayer>[0]> = {},
+) {
   const notices: Notice[] = [];
   const signedOut: string[] = [];
   // Sign outs and session changes, in the order they ran.
@@ -190,6 +206,7 @@ function layer(api: Pick<ReturnType<typeof fakeApi>, 'fetch'>, path = '/w/acme/o
     onSessionChange: () => events.push('session changed'),
     currentPath: () => path,
     fetch: api.fetch,
+    ...more,
   });
   return { data, notices, signedOut, events };
 }
@@ -501,6 +518,120 @@ describe('records', () => {
     expect(view.getSnapshot().source.getItem(0)).toBeUndefined();
     expect(signedOut).toEqual(['/w/acme/objects/people?view=all']);
     expect(notices.map((notice) => notice.message)).toEqual(['You were signed out. Sign in again to carry on.']);
+  });
+});
+
+describe('live updates', () => {
+  const settled = () => new Promise((resolve) => setTimeout(resolve, 40));
+
+  /** A realtime client that records what it was asked to listen to. */
+  function fakeTransport() {
+    const channels: LiveChannel[] = [];
+    let closed = 0;
+    const transport: LiveTransport = {
+      listen: (channel) => {
+        channels.push(channel);
+        return () => undefined;
+      },
+      onTrouble: () => () => undefined,
+      close: () => {
+        closed += 1;
+      },
+    };
+    const channel = () => {
+      const [first] = channels;
+      if (first === undefined) throw new Error('Nothing is listened to.');
+      return first;
+    };
+    return { transport, channels, channel, closed: () => closed };
+  }
+
+  const changed = (seq: number, recordIds: readonly string[], more: Partial<ChangeEvent> = {}): ChangeEvent => ({
+    seq,
+    kind: 'records',
+    objectId: PEOPLE.id,
+    recordIds: [...recordIds],
+    attributeIds: [TITLE.id],
+    ...more,
+  });
+
+  /** The layer with live updates on a fake client, its view of People open and subscribed. */
+  async function liveLayer(overrides: Partial<Behaviour> = {}) {
+    const api = fakeApi(overrides);
+    const client = fakeTransport();
+    let definitionChanges = 0;
+    const { data } = layer(api, '/w/acme/objects/people', {
+      realtimeUrl: 'ws://centrifugo.test/connection/websocket',
+      onDefinitionsChange: () => {
+        definitionChanges += 1;
+      },
+      loadLive: () =>
+        Promise.resolve({
+          createLive: (options) => createLive({ ...options, open: () => Promise.resolve(client.transport) }),
+        }),
+    });
+    const view = await data.records.view('acme', PEOPLE.id);
+    await settled();
+    client.channel().onSubscribed({ wasRecovering: false, recovered: false });
+    await settled();
+    return { api, client, data, view, definitionChanges: () => definitionChanges };
+  }
+
+  it("listens to the workspace's channel with the API's tokens, and fetches a change from elsewhere in place", async () => {
+    const edited = { ...personRow(0, 'CEO'), versions: { [TITLE.id]: '0199a6f2-0002-7000-8000-000000000000' } };
+    const { api, client, view } = await liveLayer({ get: (ids) => (ids.includes(edited.id) ? [edited] : []) });
+    expect(client.channel()).toMatchObject({ name: 'workspace:acme', token: 'subscription-token' });
+    expect(await client.channel().renew()).toBe('subscription-token');
+    const gets = count(api.calls, '/api/rpc/records/get');
+    client.channel().onPublication(changed(1, [edited.id]));
+    await settled();
+    expect(count(api.calls, '/api/rpc/records/get')).toBe(gets + 1);
+    expect(view.getSnapshot().source.getItem(0)?.values[TITLE.id]).toBe('CEO');
+  });
+
+  it("skips this tab's own write when it comes back", async () => {
+    const { api, client, data, view } = await liveLayer({ setValues: () => personRow(1, 'Lead') });
+    data.records.setValue('acme', { rowId: personRow(1).id, columnId: TITLE.id, value: 'Lead' });
+    await settled();
+    const [mutationId] = api.mutationIds;
+    const gets = count(api.calls, '/api/rpc/records/get');
+    client.channel().onPublication(changed(1, [personRow(1).id], mutationId === undefined ? {} : { mutationId }));
+    await settled();
+    expect(count(api.calls, '/api/rpc/records/get')).toBe(gets);
+    expect(view.getSnapshot().source.getItem(1)?.values[TITLE.id]).toBe('Lead');
+  });
+
+  it("drops an object's attributes on a definitions change, so the app loads them again", async () => {
+    const { api, client, data, definitionChanges } = await liveLayer();
+    await data.attributes.list('acme', PEOPLE.id);
+    const lists = count(api.calls, '/api/rpc/attributes/list');
+    client.channel().onPublication(changed(1, [], { kind: 'definitions' }));
+    expect(definitionChanges()).toBe(1);
+    await data.attributes.list('acme', PEOPLE.id);
+    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(lists + 1);
+  });
+
+  it('says paused while the subscription is down, and stops listening on sign out', async () => {
+    const { client, data } = await liveLayer();
+    const heard: string[] = [];
+    data.live.subscribe(() => heard.push(data.live.status()));
+    expect(data.live.status()).toBe('live');
+    client.channel().onDown('resubscribing');
+    expect(data.live.status()).toBe('paused');
+    client.channel().onSubscribed({ wasRecovering: true, recovered: true });
+    expect(heard).toEqual(['paused', 'live']);
+    await data.auth.signOut();
+    await settled();
+    expect(client.closed()).toBe(1);
+  });
+
+  it('is off without a realtime address, and asks for no token', async () => {
+    const api = fakeApi();
+    const { data } = layer(api);
+    await data.records.view('acme', PEOPLE.id);
+    await settled();
+    expect(data.live.status()).toBe('off');
+    expect(count(api.calls, '/api/rpc/realtime/subscriptionToken')).toBe(0);
   });
 });
 

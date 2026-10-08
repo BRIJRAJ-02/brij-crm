@@ -1,8 +1,10 @@
 // The records part of the data layer (spec 0005, task 11): one store of
 // RecordView bodies for the app, a view per object (windows over the store,
 // with a count and a status), optimistic creates and edits with rollback, cell
-// refusals and toasts. createDataLayer loads this module when a screen first
-// asks for records, so it stays out of the first load.
+// refusals and toasts, and live patches: a change event's records fetched
+// again in place, a new one placed at the end. createDataLayer loads this
+// module when a screen first asks for records, so it stays out of the first
+// load.
 import type { CreateRecordInput, RecordCount, RecordPage, RecordView, SetValuesInput } from '@crm/contracts';
 import { refusalFor, refusalSummary, toDataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
@@ -20,6 +22,10 @@ const OFFLINE_TRIES = 2;
 const DEFAULT_WAIT_SECONDS = 1;
 /** The longest wait before a block that failed to load is tried again, in ms. */
 const MAX_BLOCK_RETRY_MS = 30_000;
+/** The most ids `records.get` takes at once. */
+const GET_LIMIT = 500;
+/** The longest spread before a refetch many browsers make at once (a count after an unplaced change), in ms. */
+const SPREAD_MS = 2000;
 
 /** The calls the records layer makes, each mapped to a DataError on failure (a 401 has already signed out). */
 export interface RecordsApi {
@@ -91,6 +97,10 @@ export interface RecordsLayerOptions {
   readonly random?: () => number;
   /** How long a view nobody shows is kept before it lets go of its rows, in ms: a minute. */
   readonly keepUnusedViewMs?: number;
+  /** Listens to a workspace's live changes while one of its views is open; the answer stops (`live.watch`). */
+  readonly watch?: (workspace: string) => () => void;
+  /** Mutation ids about to go out (`MutationLog.sent`), and ones refused, which will never echo (`forget`). */
+  readonly mutations?: { readonly sent: (mutationId: string) => void; readonly forget: (mutationId: string) => void };
 }
 
 /** The words the records layer raises itself. */
@@ -125,8 +135,17 @@ interface ViewEntry {
   readonly view: RecordsView;
   readonly invalidate: () => void;
   readonly refreshCount: () => void;
+  /** The count again after a random 0 to 2 seconds, once however many ask meanwhile. */
+  readonly refreshCountSoon: () => void;
+  /** The count and every loaded block again, keeping the table (live changes may have been missed). */
+  readonly reload: () => void;
+  readonly isReady: () => boolean;
   readonly dispose: () => void;
 }
+
+/** Splits `items` into runs of at most `size`. */
+const chunks = <T>(items: readonly T[], size: number): T[][] =>
+  Array.from({ length: Math.ceil(items.length / size) }, (_, index) => items.slice(index * size, (index + 1) * size));
 
 /** The records layer: one store for the app, a view per object, and the writes that change them. */
 export function createRecordsLayer({
@@ -138,6 +157,8 @@ export function createRecordsLayer({
   now = () => Date.now(),
   random = Math.random,
   keepUnusedViewMs = 60_000,
+  watch = () => () => undefined,
+  mutations = { sent: () => undefined, forget: () => undefined },
 }: RecordsLayerOptions) {
   const store = createPlainStore<RecordView>();
   const views = new Map<string, ViewEntry>();
@@ -296,6 +317,16 @@ export function createRecordsLayer({
       );
     }
 
+    let isCountDue = false;
+    const refreshCountSoon = () => {
+      if (isCountDue) return;
+      isCountDue = true;
+      void wait(Math.round(random() * SPREAD_MS)).then(() => {
+        isCountDue = false;
+        if (views.get(keyOf(workspace, objectId))?.view === view) refreshCount();
+      });
+    };
+
     let lastSource: RecordSource<RecordView> | undefined;
     let lastErrors = cellErrors;
     let lastStatus: ViewStatus = status;
@@ -338,10 +369,13 @@ export function createRecordsLayer({
     };
     let retains = 0;
     let unused: ReturnType<typeof setTimeout> | undefined;
+    // Live changes to this workspace reach the view while it is open.
+    const unwatch = watch(workspace);
     const dispose = () => {
       countController.abort();
       blockRetry?.abort();
       inner.dispose();
+      unwatch();
     };
     /** Nobody shows the view: after a while it leaves the layer and lets go of its rows. */
     const letGoLater = () => {
@@ -363,6 +397,14 @@ export function createRecordsLayer({
       view,
       invalidate: inner.invalidate,
       refreshCount,
+      refreshCountSoon,
+      reload: () => {
+        // Still loading: what it loads is already newer than what was missed.
+        if (status !== 'ready') return;
+        refreshCount();
+        windows.refresh();
+      },
+      isReady: () => status === 'ready',
       dispose: () => {
         clearTimeout(unused);
         dispose();
@@ -380,6 +422,7 @@ export function createRecordsLayer({
     setCellErrors(changes.map((change) => [`${recordId}:${change.columnId}`, undefined]));
     const mutationId = mintId();
     const layer = store.edit(recordId, values, mutationId);
+    mutations.sent(mutationId);
     // After the record's last write (and its create, if it is still being made).
     const before = sending.get(recordId);
     const turn = (before ?? Promise.resolve()).then(
@@ -397,6 +440,7 @@ export function createRecordsLayer({
       const pendingCreate = creating.get(recordId);
       if (pendingCreate !== undefined && !(await pendingCreate)) {
         // The create was refused, and the draft went with this edit on it.
+        mutations.forget(mutationId);
         notify({ tone: 'danger', message: RECORD_WORDS.draftRefused });
         return undefined;
       }
@@ -413,6 +457,7 @@ export function createRecordsLayer({
         return undefined;
       } catch (error) {
         const failure = toDataError(error);
+        mutations.forget(mutationId);
         layer.refuse();
         // Signed out: the layer already said so, and sign in comes next.
         if (failure.code === 'UNAUTHENTICATED') return undefined;
@@ -425,6 +470,72 @@ export function createRecordsLayer({
           changes.map((change) => [`${recordId}:${change.columnId}`, refusalFor(failure, change.columnId)]),
         );
         return failure;
+      }
+    }
+  }
+
+  /** Reads records again by id, 500 at a time; ids the server leaves out are gone and leave every window. */
+  async function refetch(workspace: string, ids: readonly string[]): Promise<void> {
+    const held = ids.filter((id) => store.get(id) !== undefined);
+    await Promise.all(
+      chunks(held, GET_LIMIT).map(async (part) => {
+        const rows = await whenFree(() => api.get({ workspace, ids: part }));
+        store.receive(rows);
+        const found = new Set(rows.map((row) => row.id));
+        dropRecords(part.filter((id) => !found.has(id) && !store.pending().has(id)));
+      }),
+    );
+  }
+
+  /** Records new to a view, fetched and placed at its end in id order (the loop's order is creation order). */
+  async function place(entry: ViewEntry, ids: readonly string[]): Promise<void> {
+    const rows = (
+      await Promise.all(
+        chunks(ids, GET_LIMIT).map((part) => whenFree(() => api.get({ workspace: entry.workspace, ids: part }))),
+      )
+    ).flat();
+    if (views.get(keyOf(entry.workspace, entry.objectId)) !== entry) return;
+    for (const row of [...rows].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
+      if (row.objectId !== entry.objectId || entry.windows.has(row.id)) continue;
+      entry.windows.add(row.id);
+      store.receive([row]);
+    }
+  }
+
+  // Change events' record ids, by workspace and object, gathered for one frame.
+  let incoming = new Map<string, Map<string, Set<string>>>();
+  let isGathering = false;
+  function applyIncoming() {
+    isGathering = false;
+    const gathered = incoming;
+    incoming = new Map();
+    for (const [workspace, objects] of gathered) {
+      const all = [...objects.values()].flatMap((ids) => [...ids]);
+      const held = all.filter((id) => store.get(id) !== undefined);
+      // A refetch that fails leaves rows out of date: load the workspace's views again a moment later.
+      if (held.length > 0) {
+        refetch(workspace, held).catch(() => {
+          void wait(Math.round(random() * SPREAD_MS)).then(() => {
+            records.reload(workspace);
+          });
+        });
+      }
+      const heldIds = new Set(held);
+      for (const [objectId, ids] of objects) {
+        const entry = views.get(keyOf(workspace, objectId));
+        if (entry === undefined || !entry.isReady()) continue;
+        const unheld = [...ids].filter((id) => !heldIds.has(id) && !entry.windows.has(id));
+        if (unheld.length === 0) continue;
+        const count = entry.windows.count();
+        // The last row on screen (or none at all): an id past it is a record made since.
+        const last = count === 0 ? '' : entry.windows.idAt(count - 1);
+        const fresh = last === undefined ? [] : unheld.filter((id) => id > last);
+        if (fresh.length < unheld.length) entry.refreshCountSoon();
+        if (fresh.length > 0) {
+          place(entry, fresh).catch(() => {
+            entry.refreshCountSoon();
+          });
+        }
       }
     }
   }
@@ -475,6 +586,7 @@ export function createRecordsLayer({
         linkTotals: {},
       };
       const layer = store.create(draft, mutationId);
+      mutations.sent(mutationId);
       const placed = viewsOf(workspace).filter((entry) => entry.objectId === objectId);
       for (const entry of placed) entry.windows.add(id);
       let settle: (made: boolean) => void = () => undefined;
@@ -490,6 +602,7 @@ export function createRecordsLayer({
         settle(true);
         return row;
       } catch (error) {
+        mutations.forget(mutationId);
         layer.refuse();
         for (const entry of placed) entry.windows.withdraw(id);
         settle(false);
@@ -530,19 +643,41 @@ export function createRecordsLayer({
     },
 
     /** Reads records again by id (a change event's ids); ids the server leaves out are gone and leave every window. */
-    refetch: async (workspace: string, ids: readonly string[]): Promise<void> => {
-      const held = ids.filter((id) => store.get(id) !== undefined);
-      if (held.length === 0) return;
-      const rows = await whenFree(() => api.get({ workspace, ids: held }));
-      store.receive(rows);
-      const found = new Set(rows.map((row) => row.id));
-      dropRecords(held.filter((id) => !found.has(id) && !store.pending().has(id)));
+    refetch,
+
+    /**
+     * Another tab or person changed these records of an object (a change
+     * event). Gathered for one frame, then: the ones held are fetched again
+     * in place; one past the end of a view whose last row is loaded is new,
+     * so it joins the end; any other is out of sight, and may have changed
+     * the count (made or deleted elsewhere), so the count is asked again.
+     */
+    changed: (workspace: string, objectId: string, ids: readonly string[]): void => {
+      if (ids.length === 0) return;
+      const objects = incoming.get(workspace) ?? new Map<string, Set<string>>();
+      incoming.set(workspace, objects);
+      const gathered = objects.get(objectId) ?? new Set<string>();
+      objects.set(objectId, gathered);
+      for (const id of ids) gathered.add(id);
+      if (isGathering) return;
+      isGathering = true;
+      schedule(applyIncoming);
+    },
+
+    /**
+     * Changes may have been missed (a gap, a lost recovery, a coarse event):
+     * the workspace's views (or one object's) load their count and blocks
+     * again, keeping the table on screen.
+     */
+    reload: (workspace: string, objectId?: string): void => {
+      for (const entry of viewsOf(workspace)) if (objectId === undefined || entry.objectId === objectId) entry.reload();
     },
 
     /** Forgets every record and view (sign out, or someone else signed in). */
     clear: () => {
       for (const entry of views.values()) entry.dispose();
       views.clear();
+      incoming = new Map();
       creating.clear();
       sending.clear();
       store.clear();

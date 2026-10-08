@@ -3,8 +3,8 @@
 // It holds who is signed in, the workspace's objects, members and attributes,
 // creating a workspace, sign in, the status check, and the records: one
 // store, a view per object, and optimistic creates and edits (loaded when a
-// screen first asks for records). Live patches land behind the same object
-// in milestone 3.
+// screen first asks for records), patched in place by live change events
+// while a screen shows a workspace (the realtime client loads with the first).
 import type {
   AttributeDefinition,
   CreatableAttributeType,
@@ -22,6 +22,8 @@ import type { ContractRouterClient } from '@orpc/contract';
 import { createAuth } from './auth/auth.ts';
 import { ERROR_MESSAGES, parseRetryAfter, toDataError, withRetryAfter } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
+import type { createLive, Live, LiveStatus } from './live/live.ts';
+import { createMutationLog } from './live/mutations.ts';
 import type { Notice } from './notice.ts';
 import type { CellChange, RecordsApi, RecordsLayer, RecordsView } from './records/layer.ts';
 
@@ -59,6 +61,7 @@ export {
 export type { FetchLike } from './fetch.ts';
 export { isEditableHere, toActorDisplays, toFieldAttribute, type FieldAttributeShape } from './fields.ts';
 export { createIdMinter, type IdSources } from './ids.ts';
+export type { LiveStatus } from './live/live.ts';
 export type { Notice } from './notice.ts';
 export type { CellChange, RecordsView, ViewState, ViewStatus } from './records/layer.ts';
 
@@ -102,6 +105,19 @@ export interface DataLayerOptions {
   readonly onSessionChange?: () => void;
   /** The network. The browser's `fetch` by default; tests pass a fake API. */
   readonly fetch?: FetchLike;
+  /**
+   * Centrifugo's WebSocket address (`VITE_REALTIME_URL`). Unset (previews),
+   * live updates are off and `live.status()` says so.
+   */
+  readonly realtimeUrl?: string | undefined;
+  /**
+   * An object's attributes changed elsewhere (a live `definitions` event) and
+   * were dropped from the cache: the app loads its pages again, so a new
+   * column shows.
+   */
+  readonly onDefinitionsChange?: () => void;
+  /** Loads live updates. `./live/live.ts` by default; tests pass one on a fake transport. */
+  readonly loadLive?: () => Promise<{ readonly createLive: typeof createLive }>;
 }
 
 /**
@@ -119,6 +135,9 @@ export function createDataLayer({
   currentPath,
   onSessionChange = () => undefined,
   fetch = (input, init) => globalThis.fetch(input, init),
+  realtimeUrl,
+  onDefinitionsChange = () => undefined,
+  loadLive = () => import('./live/live.ts'),
 }: DataLayerOptions) {
   const api: ApiClient = createORPCClient(
     new RPCLink<CallContext>({
@@ -144,12 +163,29 @@ export function createDataLayer({
   let records: Promise<RecordsLayer> | undefined;
   // Set by the first 401, so a burst of failed calls signs out once.
   let ended = false;
+  // Live updates: loaded with the first watched workspace, and this tab's writes waiting for their echo.
+  let live: Promise<Live> | undefined;
+  const mutations = createMutationLog();
+  let liveStatus: LiveStatus = realtimeUrl === undefined ? 'off' : 'live';
+  const liveListeners = new Set<() => void>();
+  const setLiveStatus = (next: LiveStatus) => {
+    if (next === liveStatus) return;
+    liveStatus = next;
+    for (const listener of liveListeners) listener();
+  };
   const forget = () => {
     me = undefined;
     objects = new Map();
     members = new Map();
     access = new Map();
     attributes = new Map();
+    // Signed out: no more changes for the last person, and none of their writes to wait for.
+    const stopping = live;
+    live = undefined;
+    mutations.clear();
+    void stopping?.then((running) => {
+      running.stop();
+    });
     void records?.then((layer) => {
       layer.clear();
     });
@@ -212,6 +248,88 @@ export function createDataLayer({
     return loading;
   }
 
+  /** Drops an object's cached attributes (all of a workspace's when no object is named); says whether any were held. */
+  const dropAttributes = (workspace: string, objectId?: string): boolean => {
+    const prefix = objectId === undefined ? `${workspace}/` : objectKey(workspace, objectId);
+    const held = [...attributes.keys()].filter((key) =>
+      objectId === undefined ? key.startsWith(prefix) : key === prefix,
+    );
+    for (const key of held) attributes.delete(key);
+    return held.length > 0;
+  };
+
+  /** Live updates, loaded the first time a screen watches a workspace. */
+  const loadedLive = (url: string): Promise<Live> => {
+    live ??= loadLive().then(({ createLive }) =>
+      createLive({
+        url,
+        connectionToken: async () => {
+          try {
+            return (await call((options) => api.realtime.connectionToken(undefined, options))).token;
+          } catch (error) {
+            // Signed out: stop asking (the layer already went to sign in). Anything else: try again later.
+            if (toDataError(error).code === 'UNAUTHENTICATED') return undefined;
+            throw error;
+          }
+        },
+        subscriptionToken: async (workspace) => {
+          try {
+            return await call((options) => api.realtime.subscriptionToken({ workspace }, options));
+          } catch (error) {
+            const { code } = toDataError(error);
+            if (code === 'UNAUTHENTICATED' || code === 'NOT_FOUND') return undefined;
+            throw error;
+          }
+        },
+        mutations,
+        onStatus: setLiveStatus,
+        handlers: {
+          records: (workspace, objectId, recordIds) => {
+            void records?.then((layer) => {
+              layer.changed(workspace, objectId, recordIds);
+            });
+          },
+          object: (workspace, objectId) => {
+            void records?.then((layer) => {
+              layer.reload(workspace, objectId);
+            });
+          },
+          definitions: (workspace, objectId) => {
+            if (dropAttributes(workspace, objectId)) onDefinitionsChange();
+          },
+          workspace: (workspace) => {
+            void records?.then((layer) => {
+              layer.reload(workspace);
+            });
+            if (dropAttributes(workspace)) onDefinitionsChange();
+          },
+        },
+      }),
+    );
+    return live;
+  };
+
+  /** Listens to a workspace's changes while a view of it is open; the answer stops. Nothing when live is off. */
+  const watch = (workspace: string): (() => void) => {
+    if (realtimeUrl === undefined) return () => undefined;
+    let release: (() => void) | undefined;
+    let isReleased = false;
+    loadedLive(realtimeUrl).then(
+      (running) => {
+        if (!isReleased) release = running.watch(workspace);
+      },
+      () => {
+        // The live client didn't load (offline): paused, and the next view tries again.
+        live = undefined;
+        setLiveStatus('paused');
+      },
+    );
+    return () => {
+      isReleased = true;
+      release?.();
+    };
+  };
+
   const recordsApi: RecordsApi = {
     query: (input, signal) => call((options) => api.records.query(input, options), signal),
     count: (input, signal) => call((options) => api.records.count(input, options), signal),
@@ -221,7 +339,7 @@ export function createDataLayer({
   };
   const recordsLayer = (): Promise<RecordsLayer> => {
     records ??= import('./records/layer.ts').then(({ createRecordsLayer }) =>
-      createRecordsLayer({ api: recordsApi, notify, mintId }),
+      createRecordsLayer({ api: recordsApi, notify, mintId, watch, mutations }),
     );
     return records;
   };
@@ -310,11 +428,16 @@ export function createDataLayer({
         workspace: string,
         input: { readonly objectId: string; readonly title: string; readonly type: CreatableAttributeType },
       ): Promise<AttributeDefinition> {
-        const made = await call((options) =>
-          api.attributes.create({ workspace, ...input, mutationId: mintId() }, options),
-        );
-        attributes.delete(objectKey(workspace, input.objectId));
-        return made;
+        const mutationId = mintId();
+        mutations.sent(mutationId);
+        try {
+          const made = await call((options) => api.attributes.create({ workspace, ...input, mutationId }, options));
+          attributes.delete(objectKey(workspace, input.objectId));
+          return made;
+        } catch (error) {
+          mutations.forget(mutationId);
+          throw error;
+        }
       },
     },
     records: {
@@ -352,6 +475,22 @@ export function createDataLayer({
         void recordsLayer().then((layer) => {
           layer.setValues(workspace, changes);
         });
+      },
+    },
+    live: {
+      /**
+       * Whether other people's changes are arriving: `live`, `paused` while the
+       * connection or a subscription is down (screens say so quietly), or
+       * `off` where live updates aren't configured (previews, which show
+       * nothing about it).
+       */
+      status: (): LiveStatus => liveStatus,
+      /** Calls `listener` whenever `status()` changes; the answer stops. */
+      subscribe: (listener: () => void): (() => void) => {
+        liveListeners.add(listener);
+        return () => {
+          liveListeners.delete(listener);
+        };
       },
     },
     system: {

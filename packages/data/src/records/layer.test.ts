@@ -53,6 +53,7 @@ function fakeApi() {
   const counts: Pending<undefined, number>[] = [];
   const creates: Pending<CreateRecordInput, RecordView>[] = [];
   const edits: Pending<SetValuesInput, RecordView>[] = [];
+  const gets: Pending<readonly string[], RecordView[]>[] = [];
   const queue =
     <I, O>(list: Pending<I, O>[]) =>
     (input: I, signal?: AbortSignal) =>
@@ -64,16 +65,18 @@ function fakeApi() {
       records: [...(await queue(queries)({ position: input.position, limit: input.limit }, signal))],
     }),
     count: async (_input, signal) => ({ count: await queue(counts)(undefined, signal), atLeast: false }),
-    get: () => Promise.resolve([]),
+    get: (input) => queue(gets)(input.ids),
     create: (input) => queue(creates)(input),
     setValues: (input) => queue(edits)(input),
   };
-  return { api, queries, counts, creates, edits };
+  return { api, queries, counts, creates, edits, gets };
 }
 
 /** The records layer on a fake API, with frames, waits and notices in the test's hands. */
 function setup() {
   const server = fakeApi();
+  const watching: string[] = [];
+  const mutationLog: string[] = [];
   const notices: Notice[] = [];
   const waits: number[] = [];
   const frames: (() => void)[] = [];
@@ -89,11 +92,21 @@ function setup() {
     },
     now: () => Date.parse(at(30)),
     random: () => 0,
+    watch: (workspace) => {
+      watching.push(workspace);
+      return () => {
+        watching.splice(watching.indexOf(workspace), 1);
+      };
+    },
+    mutations: {
+      sent: (id) => mutationLog.push(`sent ${id}`),
+      forget: (id) => mutationLog.push(`forget ${id}`),
+    },
   });
   const frame = () => {
     for (const flush of frames.splice(0)) flush();
   };
-  return { ...server, layer, notices, waits, frame };
+  return { ...server, layer, notices, waits, frame, watching, mutationLog };
 }
 
 /** The first `count` rows of the table, as the server holds them. */
@@ -500,5 +513,90 @@ describe('creating a record', () => {
     await made;
     await settle();
     expect(edits[0]?.input.recordId).toBe(id);
+  });
+});
+
+describe('live changes', () => {
+  it('watches the workspace while a view of it is open', async () => {
+    const { layer, watching } = await readyView();
+    expect(watching).toEqual([WS]);
+    layer.clear();
+    expect(watching).toEqual([]);
+  });
+
+  it("logs each write's mutation id as it goes out, and forgets a refused one", async () => {
+    const { layer, edits, creates, mutationLog } = await readyView();
+    layer.setValues(WS, [{ rowId: idAt(0), columnId: CITY, value: 'Oslo' }]);
+    await settle();
+    const edit = edits[0]?.input.mutationId ?? '';
+    expect(mutationLog).toEqual([`sent ${edit}`]);
+    edits[0]?.fail(dataError('ATTRIBUTE_VALUE_INVALID', 'No.'));
+    await settle();
+    const made = layer.create(WS, PEOPLE, { [NAME]: 'Grace' });
+    await settle();
+    const create = creates[0]?.input.mutationId ?? '';
+    creates[0]?.answer(rowOf(creates[0].input.id, { [NAME]: 'Grace' }));
+    await made;
+    expect(mutationLog).toEqual([`sent ${edit}`, `forget ${edit}`, `sent ${create}`]);
+  });
+
+  it('fetches the held records a frame of events names in one records.get, and patches them in place', async () => {
+    const { layer, view, gets, frame } = await readyView();
+    layer.changed(WS, PEOPLE, [idAt(0)]);
+    layer.changed(WS, PEOPLE, [idAt(2), idAt(0)]);
+    expect(gets).toHaveLength(0);
+    frame();
+    expect(gets.map((call) => call.input)).toEqual([[idAt(0), idAt(2)]]);
+    gets[0]?.answer([rowOf(idAt(0), { [NAME]: 'P0', [CITY]: 'Paris' }, { [CITY]: version(2) })]);
+    await settle();
+    frame();
+    const state = view.getSnapshot();
+    expect(state.source.getItem(0)?.values[CITY]).toBe('Paris');
+    // Left out by the server: deleted elsewhere, so it leaves the table.
+    expect(state.source.getItem(2)).toBeUndefined();
+  });
+
+  it('places a record made elsewhere at the end when the last row is loaded', async () => {
+    const { layer, view, gets, counts, frame } = await readyView();
+    layer.changed(WS, PEOPLE, [idAt(7)]);
+    frame();
+    expect(gets.map((call) => call.input)).toEqual([[idAt(7)]]);
+    gets[0]?.answer([rowOf(idAt(7), { [NAME]: 'Ada' })]);
+    await settle();
+    frame();
+    const state = view.getSnapshot();
+    expect(state.source.count).toBe(4);
+    expect(state.source.getItem(3)?.values[NAME]).toBe('Ada');
+    // No count was needed for it.
+    expect(counts).toHaveLength(1);
+  });
+
+  it('asks for the count again, spread out, for a change out of sight', async () => {
+    const { layer, view, gets, counts, waits, frame } = await readyView();
+    // Before the last row, and not held: a record in a block not loaded, or made with an older id.
+    layer.changed(WS, PEOPLE, ['0199a6f2-0000-7000-7000-000000000001']);
+    frame();
+    await settle();
+    expect(gets).toHaveLength(0);
+    expect(waits).toEqual([0]);
+    expect(counts).toHaveLength(2);
+    counts[1]?.answer(4);
+    await settle();
+    frame();
+    expect(view.getSnapshot().source.count).toBe(4);
+  });
+
+  it('loads the count and blocks again on reload, keeping the table', async () => {
+    const { layer, view, counts, queries, frame } = await readyView();
+    layer.reload(WS);
+    frame();
+    expect(view.getSnapshot().status).toBe('ready');
+    expect(counts).toHaveLength(2);
+    expect(queries).toHaveLength(2);
+    counts[1]?.answer(3);
+    queries[1]?.answer(block(0, 3));
+    await settle();
+    layer.reload('elsewhere');
+    expect(counts).toHaveLength(2);
   });
 });
