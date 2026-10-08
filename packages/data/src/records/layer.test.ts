@@ -409,6 +409,35 @@ describe('a records view', () => {
   });
 });
 
+describe('one store (spec 0006, AC-42)', () => {
+  it('keeps one body for a record two windows show, and an edit shows in both in the same frame, one render each', async () => {
+    const { layer, counts, queries, frame } = setup();
+    const byCity = layer.view(WS, PEOPLE, { sorts: [{ attributeId: CITY, direction: 'descending' }] });
+    const newest = layer.view(WS, PEOPLE);
+    byCity.retain([CITY]);
+    newest.retain([CITY]);
+    await settle();
+    for (const count of counts) count.answer(3);
+    await settle();
+    // The same three people, in two orders.
+    queries[0]?.answer([...block(0, 3)].reverse());
+    queries[1]?.answer(block(0, 3));
+    await Promise.all([byCity.ready(), newest.ready()]);
+    frame();
+    expect(layer.size()).toBe(3);
+    const renders = [0, 0];
+    byCity.subscribe(() => (renders[0] = (renders[0] ?? 0) + 1));
+    newest.subscribe(() => (renders[1] = (renders[1] ?? 0) + 1));
+    void layer.setValues(WS, [{ rowId: idAt(1), columnId: NAME, value: 'Grace' }]);
+    frame();
+    expect(byCity.getSnapshot().source.getItem(1)?.values[NAME]).toBe('Grace');
+    expect(newest.getSnapshot().source.getItem(1)?.values[NAME]).toBe('Grace');
+    // The same object in both: one body.
+    expect(byCity.getSnapshot().source.getItem(1)).toBe(newest.getSnapshot().source.getItem(1));
+    expect(renders).toEqual([1, 1]);
+  });
+});
+
 describe('windows keyed by their question (spec 0006, AC-51 to AC-53)', () => {
   const byCity = { sorts: [{ attributeId: CITY, direction: 'ascending' as const }] };
   const byOwner = { sorts: [{ attributeId: OWNER, direction: 'ascending' as const }] };

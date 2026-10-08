@@ -12,6 +12,7 @@ The oRPC contract and the Zod schemas the web app, the API and the worker all sh
 | `src/system.ts` | The pattern to copy: schemas, their types, and `systemContract` |
 | `src/codes.ts` | `@crm/contracts/codes`: every stable error code as plain lists with no Zod, so the browser's data layer recognises a code without loading the schema library. `errors.ts` builds `ErrorCode` from it |
 | `src/monitoring/` | `@crm/contracts/monitoring` (spec 0010): `scrub`, the one rule for what may leave for Sentry, run by every send hook of both SDKs. Plain TypeScript, no Zod, no vendor, so the browser's lazy Sentry chunk shares it |
+| `src/values/jump.ts` | `@crm/contracts/jump` (also in `values`): `canJump(filter, sorts, attributeOf)`, the one rule for whether a view jumps by position or pages by cursor (spec 0006, AC-52), with no Zod, so the browser's records layer picks a window's mode by it and the engine refuses a position by it |
 | `src/values/` | `@crm/contracts/values`: the attribute value shapes, filters, sorts, options, hues, countries and currencies, as plain Zod with no oRPC and no I/O, so `packages/ui` can parse what its editors emit |
 
 ## Conventions
