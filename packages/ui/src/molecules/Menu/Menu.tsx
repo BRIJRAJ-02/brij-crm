@@ -33,6 +33,13 @@ import { strings } from './strings.ts';
 /** A menu item's key: what `onAction` and the selection hand back. */
 export type MenuKey = Key;
 
+/**
+ * Virtualised rows start at an item's height and are measured once drawn: a
+ * row with a description (a member's email) is taller, and a fixed height
+ * would draw it over the next row.
+ */
+const ROW_SIZES = { estimatedRowHeight: sizeToken('size-nav-item') } as const;
+
 /** Props for MenuTrigger. */
 export interface MenuTriggerProps {
   /** The trigger (a Button), then the Menu it opens. */
@@ -209,7 +216,7 @@ export function Menu<T extends object>(props: MenuProps<T>) {
   if (props.source !== undefined) {
     const { source, renderItem } = props;
     menu = (
-      <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: sizeToken('size-nav-item') }}>
+      <Virtualizer layout={ListLayout} layoutOptions={ROW_SIZES}>
         {/* Rows are keyed by index, so the collection draws them again when the items behind them load. */}
         <AriaMenu {...menuProps} items={rows} dependencies={[source, renderItem]} data-virtualized="">
           {(row: Row) => {
@@ -247,7 +254,7 @@ export function Menu<T extends object>(props: MenuProps<T>) {
     );
     menu =
       props.isVirtualized === true ? (
-        <Virtualizer layout={ListLayout} layoutOptions={{ rowHeight: sizeToken('size-nav-item') }}>
+        <Virtualizer layout={ListLayout} layoutOptions={ROW_SIZES}>
           {list}
         </Virtualizer>
       ) : (
