@@ -32,6 +32,14 @@ export function useTextDraft<T extends AttributeType>({
   const [draft, setDraft] = useState(initial);
   const [message, setMessage] = useState<string | undefined>(undefined);
   const [isDirty, setDirty] = useState(isChanged);
+  // The value as typed can arrive late (a phone number is written the
+  // international way once its library loads) or change underneath (a live
+  // update). Until people type, the draft follows it.
+  const [shown, setShown] = useState(initial);
+  if (shown !== initial) {
+    setShown(initial);
+    if (!isDirty) setDraft(initial);
+  }
 
   const commit = () => {
     if (!isDirty) return;
