@@ -52,6 +52,9 @@ const decoder = new TextDecoder();
 // Breadcrumbs that are never kept: a log line can quote a value.
 const DROPPED_BREADCRUMBS: ReadonlySet<string> = new Set(['console']);
 
+// Default integrations left out (the rejection handler is replaced, in strict mode).
+const DROPPED_INTEGRATIONS: ReadonlySet<string> = new Set(['ProcessSession', 'Console', 'OnUnhandledRejection']);
+
 /** A breadcrumb fit to send, or null to drop it. */
 export function keepBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb | null {
   if (breadcrumb.category !== undefined && DROPPED_BREADCRUMBS.has(breadcrumb.category)) return null;
@@ -85,7 +88,12 @@ export function sentryOptions(config: SentryConfig): NodeOptions {
     includeLocalVariables: false,
     // Node 24 stops on an unhandled rejection; a listener in warn mode would keep a broken process running.
     // Strict mode reports it, then exits the same way, so monitoring changes nothing about how the app fails.
-    integrations: [onUnhandledRejectionIntegration({ mode: 'strict' })],
+    // No process session (release health would carry the last request's user id) and no console patching
+    // (its breadcrumbs are dropped anyway).
+    integrations: (defaults) => [
+      ...defaults.filter((integration) => !DROPPED_INTEGRATIONS.has(integration.name)),
+      onUnhandledRejectionIntegration({ mode: 'strict' }),
+    ],
     // Fetch errors keep their own message; only what is sent gets the host.
     enhanceFetchErrorMessages: 'report-only',
     beforeSend: (event) => scrub(event),

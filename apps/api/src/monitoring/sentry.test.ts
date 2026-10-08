@@ -183,6 +183,23 @@ describe('once started', () => {
     expect(sent).not.toContain('someone@example.com');
   });
 
+  it('sends a fault outside any request with none of the request it ran inside (a pool error)', async () => {
+    const transport = memoryTransport();
+    startSentry({ ...CONFIG, deliver: transport.deliver });
+    // A pool's error event can fire in the async context of the request that opened the connection.
+    withRequestScope('req-77', () => {
+      setRequestScope({ userId: 'user-77' });
+      setRequestScope({ workspaceId: 'workspace-77' });
+      captureFault(new Error('Idle client terminated'), { task: 'database pool' });
+    });
+    await flush(2000);
+    const [event] = transport.events();
+    expect(event?.tags).toEqual({ service: 'api', task: 'database pool' });
+    expect(event?.user).toBeUndefined();
+    // Nor in a session or any other envelope (the source lines around a frame quote this test, so look for keys).
+    expect(transport.envelopes.join('\n')).not.toMatch(/"request_id"|"workspace_id"|"did"|"type":"session"/);
+  });
+
   it('answers as fast and the same when Sentry hangs, and a flush gives up on time (AC-166)', async () => {
     const app = createTestApp();
     const crash = () =>
