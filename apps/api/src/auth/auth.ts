@@ -14,6 +14,7 @@ import type { ApiEnv } from '../env.ts';
 import { log } from '../log.ts';
 import type { Mailer } from '../mail/mailer.ts';
 import { captureFault } from '../monitoring/sentry.ts';
+import { scrubText } from '@crm/contracts/monitoring';
 import { SIGN_IN_CODE_MINUTES, signInCodeEmail } from '../mail/sign-in-code.ts';
 import { createAllowlist } from './allowlist.ts';
 import { authErrorResponse } from './errors.ts';
@@ -231,6 +232,15 @@ function signupClosed(): APIError {
   return new APIError('FORBIDDEN', { code: 'SIGNUP_CLOSED', message: "Sign up isn't open yet." });
 }
 
+/**
+ * Better Auth's own log lines, its message only (its arguments can carry
+ * request data), scrubbed: it logs a failed query's raw message, which ends
+ * in `\nparams: <values>` (session tokens, emails), so that and any email go.
+ */
+export function logLibrary(level: 'debug' | 'info' | 'success' | 'warn' | 'error', message: string): void {
+  (level === 'error' ? log.error : log.warn)('Sign in library', { detail: scrubText(message) });
+}
+
 /** Builds sign in for this environment. */
 export function createAuth({ env, identity, mailer }: AuthDeps): Auth {
   const local = env.APP_ENV === 'local';
@@ -301,7 +311,7 @@ export function createAuth({ env, identity, mailer }: AuthDeps): Auth {
     logger: {
       level: 'warn',
       // Its messages only: arguments can carry request data.
-      log: (level, message) => (level === 'error' ? log.error : log.warn)('Sign in library', { detail: message }),
+      log: logLibrary,
     },
     databaseHooks: {
       user: {
