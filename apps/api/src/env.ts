@@ -47,6 +47,9 @@ export const LOCAL_SECRET_MARKER = 'local-only';
 /** `.env.example`'s (and docker-compose.yml's) Centrifugo API key: fine on a laptop, refused anywhere else. */
 export const LOCAL_CENTRIFUGO_API_KEY = 'local-centrifugo-api-key';
 
+/** `.env.example`'s (and docker-compose.yml's) Centrifugo token secret: fine on a laptop, refused anywhere else. */
+export const LOCAL_CENTRIFUGO_TOKEN_SECRET = 'local-centrifugo-token-secret';
+
 /**
  * An address on the private network or this machine, or else https: the
  * relay's key and the wake secret travel in its headers. Plain http only to a
@@ -119,6 +122,9 @@ export const ApiEnv = z
     // The relay's wake up call (spec 0005): the worker's internal address, and the secret it checks.
     WORKER_INTERNAL_URL: optional(internalUrl('WORKER_INTERNAL_URL')),
     WORKER_WAKE_SECRET: wakeSecret,
+    // Live updates (spec 0005): signs Centrifugo's connection and subscription tokens. The Centrifugo service's
+    // CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY. Required in production; unset (previews) turns live updates off.
+    CENTRIFUGO_TOKEN_SECRET: optional(z.string()),
   })
   .superRefine((env, issues) => {
     const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });
@@ -157,6 +163,18 @@ export const ApiEnv = z
       missing('WORKER_WAKE_SECRET', 'That is the local placeholder. Generate one: `openssl rand -hex 32`.');
     }
     if (env.MAIL_FROM === undefined) missing('MAIL_FROM', `MAIL_FROM is required in ${env.APP_ENV}.`);
+    if (env.CENTRIFUGO_TOKEN_SECRET === undefined) {
+      if (env.APP_ENV === 'production') {
+        missing(
+          'CENTRIFUGO_TOKEN_SECRET',
+          "CENTRIFUGO_TOKEN_SECRET is required in production: the Centrifugo service's token secret.",
+        );
+      }
+    } else if (env.CENTRIFUGO_TOKEN_SECRET === LOCAL_CENTRIFUGO_TOKEN_SECRET) {
+      missing('CENTRIFUGO_TOKEN_SECRET', "That is the local secret. Use the Centrifugo service's token secret.");
+    } else if (env.CENTRIFUGO_TOKEN_SECRET.length < 32) {
+      missing('CENTRIFUGO_TOKEN_SECRET', `CENTRIFUGO_TOKEN_SECRET must be at least 32 characters in ${env.APP_ENV}.`);
+    }
     if (env.BETTER_AUTH_SECRET.includes(LOCAL_SECRET_MARKER)) {
       missing('BETTER_AUTH_SECRET', 'That is the local placeholder. Generate one: `openssl rand -base64 32`.');
     }

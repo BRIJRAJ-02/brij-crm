@@ -141,6 +141,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     },
     members: { list: os.members.list.handler(() => behaviour.members()) },
     access: { mine: os.access.mine.handler(() => behaviour.access()) },
+    realtime: {
+      connectionToken: os.realtime.connectionToken.handler(notServed),
+      subscriptionToken: os.realtime.subscriptionToken.handler(notServed),
+    },
   });
   const handler = new RPCHandler(router);
   const fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {

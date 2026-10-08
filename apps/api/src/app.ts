@@ -9,6 +9,7 @@ import { createEdgeGuard } from './edge.ts';
 import type { ApiEnv } from './env.ts';
 import { createReadGate } from './gate.ts';
 import { errorFields, log } from './log.ts';
+import { createRealtimeTokens } from './realtime/tokens.ts';
 import type { WakeRelay } from './realtime/wake.ts';
 import { router as appRouter } from './router.ts';
 import { createRpcHandler } from './rpc.ts';
@@ -57,6 +58,11 @@ export function createApp({
   const allowedOrigins = new Set([new URL(env.APP_URL).origin, ...(env.TRUSTED_ORIGINS ?? [])]);
   // One per app, so its counts are this process's: at most 6 heavy reads per workspace at once.
   const readGate = createReadGate();
+  // Centrifugo's tokens, where live updates are on (spec 0005).
+  const realtime =
+    env.CENTRIFUGO_TOKEN_SECRET === undefined
+      ? undefined
+      : createRealtimeTokens({ secret: env.CENTRIFUGO_TOKEN_SECRET });
 
   const app = new Hono<{ Variables: AppVariables }>().basePath('/api');
 
@@ -122,6 +128,7 @@ export function createApp({
         clientIp: c.get('clientIp'),
         headers: c.req.raw.headers,
         readGate,
+        realtime,
       },
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();

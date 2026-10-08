@@ -3,6 +3,7 @@ import { attributesContract } from './attributes.ts';
 import { meContract } from './me.ts';
 import { membersContract } from './members.ts';
 import { objectsContract } from './objects.ts';
+import { realtimeContract } from './realtime.ts';
 import { recordsContract } from './records.ts';
 import { systemContract } from './system.ts';
 import { workspacesContract } from './workspaces.ts';
@@ -14,6 +15,7 @@ export * from './errors.ts';
 export * from './me.ts';
 export * from './members.ts';
 export * from './objects.ts';
+export * from './realtime.ts';
 export * from './records.ts';
 export * from './system.ts';
 export * from './values/index.ts';
@@ -34,4 +36,5 @@ export const contract = {
   records: recordsContract,
   members: membersContract,
   access: accessContract,
+  realtime: realtimeContract,
 };

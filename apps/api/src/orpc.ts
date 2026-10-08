@@ -18,6 +18,7 @@ import type { Auth, SessionUser } from './auth/auth.ts';
 import { apiError } from './errors.ts';
 import { log } from './log.ts';
 import type { ReadGate } from './gate.ts';
+import type { RealtimeTokens } from './realtime/tokens.ts';
 import type { WakeRelay } from './realtime/wake.ts';
 
 /** What every procedure receives. */
@@ -41,6 +42,8 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   headers: Headers;
   /** This process's cap on heavy reads in flight per workspace (`records.query` and `records.count`). */
   readGate: ReadGate;
+  /** Signs Centrifugo's tokens (spec 0005), or undefined where live updates are off (no `CENTRIFUGO_TOKEN_SECRET`). */
+  realtime: RealtimeTokens | undefined;
 }
 
 /** What `authed` adds: the signed in person. */

@@ -28,6 +28,8 @@ const READS: ReadonlySet<string> = new Set([
   'records.query',
   'records.count',
   'records.get',
+  'realtime.connectionToken',
+  'realtime.subscriptionToken',
 ]);
 
 let db: Database;

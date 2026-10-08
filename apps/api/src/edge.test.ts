@@ -119,6 +119,7 @@ describe('EDGE_SECRET in the api environment', () => {
     MAIL_FROM: 'onboarding@resend.dev',
     WORKER_INTERNAL_URL: 'http://worker.railway.internal:8080',
     WORKER_WAKE_SECRET: 'a-wake-secret-of-at-least-32-characters',
+    CENTRIFUGO_TOKEN_SECRET: 'a-centrifugo-token-secret-of-32-characters',
     EDGE_SECRET: SECRET,
   };
 

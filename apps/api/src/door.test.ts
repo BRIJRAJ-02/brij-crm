@@ -20,7 +20,12 @@ import { router } from './router.ts';
 import { APP_URL } from './testing.ts';
 
 /** The procedures that run before a workspace is chosen (spec 0005), by name; every other one passes the door. */
-const BOOTSTRAP: ReadonlySet<string> = new Set(['system.status', 'me.get', 'workspaces.create']);
+const BOOTSTRAP: ReadonlySet<string> = new Set([
+  'system.status',
+  'me.get',
+  'workspaces.create',
+  'realtime.connectionToken',
+]);
 
 function isBootstrap(path: string): boolean {
   return BOOTSTRAP.has(path);

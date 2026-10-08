@@ -1,7 +1,7 @@
 // The api's sign in and mail variables (spec 0005): what each environment
 // must set, and what an unset or empty one means.
 import { describe, expect, it } from 'vitest';
-import { ApiEnv, LOCAL_CENTRIFUGO_API_KEY, WorkerEnv } from './env.ts';
+import { ApiEnv, LOCAL_CENTRIFUGO_API_KEY, LOCAL_CENTRIFUGO_TOKEN_SECRET, WorkerEnv } from './env.ts';
 
 const local = {
   APP_ENV: 'local',
@@ -24,6 +24,7 @@ const production = {
   EDGE_SECRET: 'an-edge-secret-of-at-least-32-characters',
   WORKER_INTERNAL_URL: 'http://worker.railway.internal:8080',
   WORKER_WAKE_SECRET: 'a-wake-secret-of-at-least-32-characters',
+  CENTRIFUGO_TOKEN_SECRET: 'a-centrifugo-token-secret-of-32-characters',
 };
 
 function problems(input: Record<string, unknown>): string[] {
@@ -135,6 +136,32 @@ describe("the relay's wake up call (spec 0005)", () => {
     expect(problems({ ...production, WORKER_WAKE_SECRET: 'a wake secret with spaces in it, 32+ long' })).toEqual([
       'WORKER_WAKE_SECRET',
     ]);
+  });
+});
+
+describe("live updates' token secret (spec 0005)", () => {
+  it('is optional locally and in previews, where unset turns live updates off', () => {
+    expect(problems(local)).toEqual([]);
+    expect(ApiEnv.parse({ ...local, CENTRIFUGO_TOKEN_SECRET: '' }).CENTRIFUGO_TOKEN_SECRET).toBeUndefined();
+    expect(
+      ApiEnv.parse({ ...local, CENTRIFUGO_TOKEN_SECRET: LOCAL_CENTRIFUGO_TOKEN_SECRET }).CENTRIFUGO_TOKEN_SECRET,
+    ).toBe(LOCAL_CENTRIFUGO_TOKEN_SECRET);
+    expect(problems({ ...production, APP_ENV: 'preview', CENTRIFUGO_TOKEN_SECRET: undefined })).toEqual([]);
+  });
+
+  it('is required in production', () => {
+    expect(problems({ ...production, CENTRIFUGO_TOKEN_SECRET: undefined })).toEqual(['CENTRIFUGO_TOKEN_SECRET']);
+  });
+
+  it("refuses .env.example's secret, or one shorter than 32 characters, outside local", () => {
+    for (const APP_ENV of ['preview', 'production']) {
+      expect(problems({ ...production, APP_ENV, CENTRIFUGO_TOKEN_SECRET: LOCAL_CENTRIFUGO_TOKEN_SECRET })).toEqual([
+        'CENTRIFUGO_TOKEN_SECRET',
+      ]);
+      expect(problems({ ...production, APP_ENV, CENTRIFUGO_TOKEN_SECRET: 'short' })).toEqual([
+        'CENTRIFUGO_TOKEN_SECRET',
+      ]);
+    }
   });
 });
 

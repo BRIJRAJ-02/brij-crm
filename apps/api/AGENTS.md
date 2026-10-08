@@ -25,6 +25,7 @@ The one modular API (Hono + oRPC) that every read and write goes through, and th
 | `src/realtime/relay.ts` | The outbox relay the worker runs: active (LISTEN plus a backing off poll) or dormant (no database call at all), one relay by advisory lock, ordered publish |
 | `src/realtime/wake.ts` | The relay's wake up call: the api's coalesced poke after a write commits (`context.wakeRelay()`), and the worker's secret check |
 | `src/worker-http.ts` | The worker's one port: `/health` and `POST /internal/outbox-wake` |
+| `src/realtime/tokens.ts` | Centrifugo's connection and subscription tokens (HS256 with `node:crypto`, 10 minutes, `sub` the user id), the one place the API signs them; `realtime.connectionToken` (a session) and `realtime.subscriptionToken` (the member door, channel `workspace:<id>`) hand them out |
 | `src/realtime/centrifugo.ts` | Centrifugo's server API (`/api/batch`, sequential, one call per workspace batch), the one place the backend calls it |
 | `src/door.test.ts` | The contract walk: every procedure outside the bootstrap list must be built on `member`, and no file here builds an engine scope |
 | `src/log.ts` | The logger: one JSON line per event |
@@ -58,6 +59,7 @@ docker build -f apps/api/Dockerfile .   # from the repo root
 - Anything that calls the database on a timer keeps Neon's compute awake, and production is on the free plan's monthly compute hours. The relay goes dormant after 3 quiet minutes and a write's poke (`commitWrite` calls `context.wakeRelay()` once the engine call resolves) wakes it. Uptime monitors hit `/api/health`, never `/api/health/ready` (which queries). Graphile Worker (#8) polls too, and needs the same dormant treatment before it lands.
 - Two relay costs wait for the load harness (#12), described in `src/realtime/relay.ts`'s header: `pg_notify` serialising commits across workspaces (the fallback is to drop it and let the poke make the next poll due), and a round's barrier holding every workspace behind the slowest turn (the fix is a continuous queue).
 - `WORKER_INTERNAL_URL` and `WORKER_WAKE_SECRET` are required on the api outside local, and `WORKER_WAKE_SECRET` on the worker (the same value). Locally, without `WORKER_INTERNAL_URL` the api pokes nothing.
+- `CENTRIFUGO_TOKEN_SECRET` (the Centrifugo service's `CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY`) is required in production and optional elsewhere; where it is unset both `realtime.*` procedures answer 503 `API_UNAVAILABLE`, and the web app, without `VITE_REALTIME_URL`, never asks.
 - The relay needs `CENTRIFUGO_API_URL` and `CENTRIFUGO_API_KEY` outside local; locally, without them the worker boots with the relay off (it logs so).
 - Locally the api owns `PORT` and the worker uses `WORKER_PORT` (default 3001). On Railway, each service gets its own `PORT`.
 - Turbo runs tasks in strict env mode, so shell variables don't reach `dev`. The scripts read the root `.env` themselves (`--env-file-if-exists`).
