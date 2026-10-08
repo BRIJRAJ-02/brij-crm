@@ -13,8 +13,10 @@ import { loadAttribute } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
 import { requirePermission } from '../access/check.ts';
+import { isOpen } from '../access/policy.ts';
+import { attributeVisible } from '../access/visibility.ts';
 
-const { attributeOptions } = schema;
+const { attributeOptions, attributes } = schema;
 
 /** What a stage means for a status option. */
 export type OptionOutcome = 'open' | 'won' | 'lost';
@@ -179,12 +181,20 @@ export async function updateOption(scope: EngineScope, input: OptionUpdate, hook
 
 /**
  * An attribute's options, in order, archived ones included (they still show
- * on the values that hold them). None for a malformed id.
+ * on the values that hold them). None for a malformed id, and none for an
+ * attribute the principal can't see (spec 0009, AC-141).
  */
 export async function listOptions(scope: EngineScope, attributeId: string) {
   if (!isUuid(attributeId)) return [];
-  return inWorkspace(scope, (tx) =>
-    tx
+  return inWorkspace(scope, async (tx) => {
+    if (!isOpen(scope.access)) {
+      const [attribute] = await tx
+        .select({ id: attributes.id, objectId: attributes.objectId, listId: attributes.listId })
+        .from(attributes)
+        .where(eq(attributes.id, attributeId));
+      if (attribute === undefined || !attributeVisible(scope.access, attribute)) return [];
+    }
+    return tx
       .select({
         id: attributeOptions.id,
         label: attributeOptions.label,
@@ -196,6 +206,6 @@ export async function listOptions(scope: EngineScope, attributeId: string) {
       })
       .from(attributeOptions)
       .where(eq(attributeOptions.attributeId, attributeId))
-      .orderBy(asc(attributeOptions.position), asc(attributeOptions.id)),
-  );
+      .orderBy(asc(attributeOptions.position), asc(attributeOptions.id));
+  });
 }

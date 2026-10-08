@@ -117,9 +117,12 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
                 }
               : {})}
           >
-            <Button variant="primary" icon="plus" onPress={openCreate}>
-              {newRecord}
-            </Button>
+            {/* Only where the person may change records (spec 0009, AC-142); the server refuses anyone else. */}
+            {object.access === 'write' && (
+              <Button variant="primary" icon="plus" onPress={openCreate}>
+                {newRecord}
+              </Button>
+            )}
           </TopBar>
         ),
         viewBar: (
@@ -168,11 +171,15 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
                   title={strings.emptyTitle(object.pluralName)}
                   icon={object.icon}
                   // The top bar's New person is the one primary on the page.
-                  actions={
-                    <Button icon="plus" onPress={openCreate}>
-                      {newRecord}
-                    </Button>
-                  }
+                  {...(object.access === 'write'
+                    ? {
+                        actions: (
+                          <Button icon="plus" onPress={openCreate}>
+                            {newRecord}
+                          </Button>
+                        ),
+                      }
+                    : {})}
                 >
                   {strings.emptyText(object.pluralName)}
                 </EmptyState>

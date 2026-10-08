@@ -7,10 +7,21 @@ import { AttributeType } from './values/attribute-values.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 
 /**
+ * Why the caller can't change an attribute's values (spec 0009, AC-142): the
+ * object's reason when they may only read the object, else the field rule's,
+ * else the system's. Shown on the cell; the server checks every write anyway.
+ */
+export const AttributeReadOnly = z.object({ reason: z.string() });
+/** Why the caller can't change an attribute's values. */
+export type AttributeReadOnly = z.infer<typeof AttributeReadOnly>;
+
+/**
  * One live attribute of an object: its id (what values are keyed by), its API
  * name, its title, type and rules, its type's settings, and its place in the
  * object's order. System attributes (record id, created at and by, updated at
- * and by) are listed too, marked `isSystem`.
+ * and by) are listed too, marked `isSystem`. Only attributes the caller may
+ * see are listed (spec 0009, AC-141), and `readOnly` says why one can't be
+ * changed by them, when it can't.
  */
 export const AttributeDefinition = z.object({
   id: z.uuid(),
@@ -23,6 +34,7 @@ export const AttributeDefinition = z.object({
   isSystem: z.boolean(),
   config: z.record(z.string(), z.unknown()),
   position: z.number().int(),
+  readOnly: AttributeReadOnly.optional(),
 });
 /** One live attribute of an object. */
 export type AttributeDefinition = z.infer<typeof AttributeDefinition>;

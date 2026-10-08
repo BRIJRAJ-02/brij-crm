@@ -24,20 +24,29 @@ export interface FieldAttributeShape {
   readonly defaultCurrency?: string;
 }
 
-/** Whether people can edit this attribute's values in this loop: not a system attribute, a reference or a member. */
-export const isEditableHere = (definition: Pick<AttributeDefinition, 'type' | 'isSystem'>): boolean =>
-  !definition.isSystem && !READ_ONLY_IN_THIS_LOOP.includes(definition.type);
+/**
+ * Whether people can edit this attribute's values in this loop: not a system
+ * attribute, a reference or a member, and not one the server says they may
+ * only read (spec 0009, AC-142).
+ */
+export const isEditableHere = (definition: Pick<AttributeDefinition, 'type' | 'isSystem' | 'readOnly'>): boolean =>
+  !definition.isSystem && definition.readOnly === undefined && !READ_ONLY_IN_THIS_LOOP.includes(definition.type);
 
 /**
  * An attribute definition as the field set's attribute: title to name,
  * `isMulti` to `allowMultiple`, a currency's default from its config, and
  * read only for references and members in this loop, with `readOnlyReason`
  * (the screen's words) as the reason. A system attribute is read only with
- * the field set's own reason ("Set by the system").
+ * the field set's own reason ("Set by the system"). An attribute the server
+ * says the person may only read (`readOnly`, spec 0009, AC-142) is read only
+ * with the server's reason, which wins over the screen's: the cell shows it
+ * in the library's read only state. The server still checks every write.
  */
 export function toFieldAttribute(definition: AttributeDefinition, readOnlyReason?: string): FieldAttributeShape {
   const isReference = READ_ONLY_IN_THIS_LOOP.includes(definition.type);
   const currency = definition.config.defaultCurrency;
+  const ruled = definition.isSystem ? undefined : definition.readOnly?.reason;
+  const reason = ruled ?? (isReference && !definition.isSystem ? readOnlyReason : undefined);
   return {
     id: definition.id,
     name: definition.title,
@@ -45,8 +54,8 @@ export function toFieldAttribute(definition: AttributeDefinition, readOnlyReason
     allowMultiple: definition.isMulti,
     isRequired: definition.isRequired,
     isUnique: definition.isUnique,
-    isReadOnly: definition.isSystem || isReference,
-    ...(isReference && !definition.isSystem && readOnlyReason !== undefined ? { readOnlyReason } : {}),
+    isReadOnly: definition.isSystem || isReference || ruled !== undefined,
+    ...(reason === undefined ? {} : { readOnlyReason: reason }),
     ...(definition.type === 'record_reference' ? { cardinality: definition.isMulti ? 'many' : 'one' } : {}),
     ...(typeof currency === 'string' ? { defaultCurrency: currency } : {}),
   };

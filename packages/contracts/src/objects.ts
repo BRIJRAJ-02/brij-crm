@@ -21,6 +21,8 @@ export const ObjectSummary = z.object({
   hue: Hue,
   standardKey: z.string().optional(),
   primaryAttributeId: z.uuid().optional(),
+  /** What the caller may do with its records (spec 0009, AC-140): an object they can't see isn't listed. */
+  access: z.enum(['read', 'write']),
 });
 /** One live object, as the navigation shows it. */
 export type ObjectSummary = z.infer<typeof ObjectSummary>;

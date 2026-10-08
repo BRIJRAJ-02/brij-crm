@@ -323,6 +323,26 @@ export function recordRule(access: Pick<Access, 'data'>, objectId: string): Reco
   return Object.hasOwn(access.data.records, objectId) ? access.data.records[objectId] : undefined;
 }
 
+/**
+ * True when the policy restricts nothing (every object and field at write, no
+ * record rule): the engine then adds no check and no SQL at all, so the open
+ * policy's statements stay as they were (AC-149).
+ */
+export function isOpen(access: Pick<Access, 'data'>): boolean {
+  return access.data.key === OPEN_KEY;
+}
+
+/**
+ * The members a record rule matches for this principal: the member themself
+ * for `own`, and for `team` the members of their teams. Teams arrive with #23
+ * (`teamIds` is empty until then), so until then a team rule matches the
+ * member alone; a principal that isn't a member matches nobody (fail closed).
+ */
+export function ruleMembers(access: Pick<Access, 'principal'>, _rule: RecordRule): readonly string[] {
+  const { principal } = access;
+  return principal.kind === 'member' ? [principal.memberId] : [];
+}
+
 /** The attributes the principal may see (read or write), in their order. */
 export function visibleAttributes<T extends PolicyAttribute>(
   access: Pick<Access, 'data'>,
@@ -401,6 +421,11 @@ export function readOnlyReason(
   if (objectLevel(access, object.id) === 'read') {
     return `You can view ${object.pluralName} but not change them.`;
   }
-  if (fieldLevel(access, attribute) === 'read') return `Your role can't change ${attribute.title}.`;
+  if (fieldLevel(access, attribute) === 'read') return fieldReadOnlyReason(attribute.title);
   return undefined;
+}
+
+/** Why a field rule leaves an attribute read only: "Your role can't change <title>." */
+export function fieldReadOnlyReason(title: string): string {
+  return `Your role can't change ${title}.`;
 }

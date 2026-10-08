@@ -20,6 +20,7 @@ import {
   createDataLayer,
   createIdMinter,
   isDataError,
+  isEditableHere,
   toFieldAttribute,
   type DataError,
   type DataFault,
@@ -43,6 +44,7 @@ const PEOPLE: ObjectSummary = {
   hue: 'blue',
   standardKey: 'people',
   primaryAttributeId: '0199a6f2-0000-7000-8000-000000000004',
+  access: 'write',
 };
 
 const TITLE: AttributeDefinition = {
@@ -460,6 +462,24 @@ describe('members and attributes', () => {
     const createdAt = { ...TITLE, type: 'timestamp' as const, isSystem: true };
     expect(toFieldAttribute(createdAt, 'unused')).toMatchObject({ isReadOnly: true });
     expect(toFieldAttribute(createdAt, 'unused').readOnlyReason).toBeUndefined();
+  });
+
+  it('makes a field the server says the person may only read read only, with the server’s reason (AC-142)', () => {
+    const ruled = { ...TITLE, readOnly: { reason: "Your role can't change Job title." } };
+    expect(toFieldAttribute(ruled)).toMatchObject({
+      isReadOnly: true,
+      readOnlyReason: "Your role can't change Job title.",
+    });
+    expect(isEditableHere(ruled)).toBe(false);
+    expect(isEditableHere(TITLE)).toBe(true);
+    // On a reference, the server's reason wins over the screen's.
+    const company = { ...ruled, type: 'record_reference' as const };
+    expect(toFieldAttribute(company, 'Set on the record page').readOnlyReason).toBe(
+      "Your role can't change Job title.",
+    );
+    // A system attribute keeps the field set's own reason.
+    const createdAt = { ...TITLE, isSystem: true, readOnly: { reason: 'Created at is set by the system.' } };
+    expect(toFieldAttribute(createdAt).readOnlyReason).toBeUndefined();
   });
 });
 

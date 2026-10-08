@@ -12,6 +12,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import type { AfterWrite } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
 import { inWorkspace } from '../access/run.ts';
+import { objectLevel, readOnlyReason, visibleAttributes } from '../access/policy.ts';
 
 const { attributes, objects } = schema;
 
@@ -21,7 +22,7 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function definitionOf(row: AttributeRow): AttributeDefinition {
+function definitionOf(row: AttributeRow, readOnly?: string): AttributeDefinition {
   return {
     id: row.id,
     apiSlug: row.apiSlug,
@@ -33,29 +34,44 @@ function definitionOf(row: AttributeRow): AttributeDefinition {
     isSystem: row.isSystem,
     config: isPlainObject(row.config) ? row.config : {},
     position: row.position,
+    ...(readOnly === undefined ? {} : { readOnly: { reason: readOnly } }),
   };
 }
 
 const OBJECT_NOT_FOUND = 'That object does not exist.';
 
-/** Refuses `NOT_FOUND` unless the object is live (not archived) in this workspace. */
-async function checkLiveObject(tx: WorkspaceTx, scope: EngineScope, objectId: string): Promise<void> {
+/**
+ * Refuses `NOT_FOUND` unless the object is live (not archived) in this
+ * workspace and the caller may see it (spec 0009, AC-140); answers its plural
+ * name, for a read only object's reason.
+ */
+async function checkLiveObject(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  objectId: string,
+): Promise<{ readonly id: string; readonly pluralName: string }> {
   const [object] = await tx
-    .select({ id: objects.id })
+    .select({ id: objects.id, pluralName: objects.pluralName })
     .from(objects)
     .where(and(eq(objects.workspaceId, scope.workspaceId), eq(objects.id, objectId), isNull(objects.archivedAt)));
-  if (object === undefined) throw refuse('NOT_FOUND', OBJECT_NOT_FOUND);
+  if (object === undefined || objectLevel(scope.access, object.id) === 'none') {
+    throw refuse('NOT_FOUND', OBJECT_NOT_FOUND);
+  }
+  return object;
 }
 
 /**
  * A live object's live attributes, system ones included (marked `isSystem`),
  * by position, then when they were made. Refuses `NOT_FOUND` for an object
- * that doesn't exist here or is archived.
+ * that doesn't exist here, is archived or is hidden from the caller. Only the
+ * attributes the caller may see are listed (spec 0009, AC-141), each with
+ * `readOnly` when they can't change it (AC-142): the object's reason, else the
+ * field rule's, else the system's.
  */
 export async function listObjectAttributes(scope: EngineScope, objectId: string): Promise<AttributeDefinition[]> {
   const id = checkId(objectId, OBJECT_NOT_FOUND);
   return inWorkspace(scope, async (tx) => {
-    await checkLiveObject(tx, scope, id);
+    const object = await checkLiveObject(tx, scope, id);
     const rows = await tx
       .select()
       .from(attributes)
@@ -64,7 +80,15 @@ export async function listObjectAttributes(scope: EngineScope, objectId: string)
         and(eq(attributes.workspaceId, scope.workspaceId), eq(attributes.objectId, id), isNull(attributes.archivedAt)),
       )
       .orderBy(asc(attributes.position), asc(attributes.createdAt), asc(attributes.id));
-    return rows.map(definitionOf);
+    return visibleAttributes(
+      scope.access,
+      rows.map((row) => ({ ...row, objectId: id })),
+    ).map((row) =>
+      definitionOf(
+        row,
+        readOnlyReason(scope.access, row, object) ?? (row.isSystem ? `${row.title} is set by the system.` : undefined),
+      ),
+    );
   });
 }
 
