@@ -31,6 +31,12 @@ export interface ReferencePickerProps<D extends Reference> {
   /** Opens the search at once, starting from `startQuery`: how the grid starts an edit. */
   readonly isOpenAtStart?: boolean;
   readonly startQuery?: string;
+  /**
+   * Draws the search and its results in place, under the chosen chips: the
+   * grid cell's popover is already the panel, so a menu popover over it
+   * would be a panel on a panel.
+   */
+  readonly isInline?: boolean;
 }
 
 /** Chosen references as removable chips, and a searchable menu to pick one. */
@@ -46,6 +52,7 @@ export function ReferencePicker<D extends Reference>({
   error,
   isOpenAtStart = false,
   startQuery,
+  isInline = false,
 }: ReferencePickerProps<D>) {
   const [query, setQuery] = useState(startQuery ?? '');
   const [isOpen, setOpen] = useState(false);
@@ -90,8 +97,31 @@ export function ReferencePicker<D extends Reference>({
     if (!chosen.some((item) => keyOf(item) === keyOf(found))) onChange([...chosen, found]);
   };
   const isMe = (display: D) => pinned.some((item) => keyOf(item) === keyOf(display));
+  const menu = (
+    <Menu<D>
+      label={name}
+      isInline={isInline}
+      search={{
+        label: strings.search(name),
+        onSearch: setQuery,
+        ...(startQuery === undefined ? {} : { defaultQuery: startQuery }),
+      }}
+      source={offered}
+      renderItem={(display) => ({
+        children: display.name === '' ? strings.unknown : display.name,
+        ...(isMe(display) ? { meta: strings.me } : {}),
+        // A member's email tells two people with the same name apart.
+        ...('email' in display && display.email !== undefined ? { description: display.email } : {}),
+      })}
+      onAction={pick}
+    />
+  );
   return (
-    <div className={styles.root} data-compact={isCompact || undefined}>
+    <div
+      className={styles.root}
+      data-compact={(isCompact && !isInline) || undefined}
+      data-inline={isInline || undefined}
+    >
       {chosen.length > 0 && (
         <ul className={styles.chosen} aria-label={name}>
           {chosen.map((display) => (
@@ -109,27 +139,16 @@ export function ReferencePicker<D extends Reference>({
           ))}
         </ul>
       )}
-      <MenuTrigger isOpen={isOpen} onOpenChange={setOpen}>
-        <Button variant={chosen.length === 0 ? 'secondary' : 'ghost'} icon="plus">
-          {chosen.length === 0 || !allowMultiple ? strings.choose(name) : strings.addAnother}
-        </Button>
-        <Menu<D>
-          label={name}
-          search={{
-            label: strings.search(name),
-            onSearch: setQuery,
-            ...(startQuery === undefined ? {} : { defaultQuery: startQuery }),
-          }}
-          source={offered}
-          renderItem={(display) => ({
-            children: display.name === '' ? strings.unknown : display.name,
-            ...(isMe(display) ? { meta: strings.me } : {}),
-            // A member's email tells two people with the same name apart.
-            ...('email' in display && display.email !== undefined ? { description: display.email } : {}),
-          })}
-          onAction={pick}
-        />
-      </MenuTrigger>
+      {isInline ? (
+        menu
+      ) : (
+        <MenuTrigger isOpen={isOpen} onOpenChange={setOpen}>
+          <Button variant={chosen.length === 0 ? 'secondary' : 'ghost'} icon="plus">
+            {chosen.length === 0 || !allowMultiple ? strings.choose(name) : strings.addAnother}
+          </Button>
+          {menu}
+        </MenuTrigger>
+      )}
       {error !== undefined && (
         <span className={styles.error} role="alert">
           {error}

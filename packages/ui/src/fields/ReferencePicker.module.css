@@ -15,6 +15,14 @@
     align-items: center;
   }
 
+  /* In a grid cell's popover: the chips over the search and its results,
+     which fill the panel. The panel takes its width from the cell, not from
+     the chips in one line, so they wrap. */
+  .root[data-inline] {
+    align-items: stretch;
+    contain: inline-size;
+  }
+
   .chosen {
     display: flex;
     flex-wrap: wrap;

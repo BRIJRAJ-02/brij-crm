@@ -33,6 +33,7 @@ export function RecordReferenceEditor({
       keyOf={keyOf}
       isCompact={isCompactSurface(surface)}
       isOpenAtStart={autoOpen}
+      isInline={surface === 'cell'}
       {...(startText === undefined ? {} : { startQuery: startText })}
       {...(onSearch === undefined ? {} : { onSearch })}
       {...(shown === undefined ? {} : { error: shown })}
