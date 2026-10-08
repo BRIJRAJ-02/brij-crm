@@ -19,6 +19,7 @@ import {
   onUnhandledRejectionIntegration,
   withIsolationScope,
 } from '@sentry/node';
+import { safeError } from '../query-errors.ts';
 
 /** Which process is sending: the api or the worker (one Sentry project, tagged by service). */
 export type Service = 'api' | 'worker';
@@ -113,8 +114,12 @@ export function isSentryStarted(): boolean {
 
 /**
  * Sends an unexpected error, tagged with what `context` knows. Expected
- * refusals never come here (callers check `toApiError(...).expected`). It
- * queues the event in memory and never waits for the network.
+ * refusals never come here (callers check `toApiError(...).expected`). A
+ * failed query goes as `safeError` makes it, never with its values. A fault
+ * outside any request (`context.task`: a pool error, a start, the relay) is
+ * sent from a scope of its own, since its callback can run in the async
+ * context of whichever request opened the connection. It queues the event in
+ * memory and never waits for the network.
  */
 export function captureFault(error: unknown, context: FaultContext = {}): void {
   if (!isInitialized()) return;
@@ -126,7 +131,17 @@ export function captureFault(error: unknown, context: FaultContext = {}): void {
       task: context.task,
     }).filter((entry): entry is [string, string] => entry[1] !== undefined),
   );
-  captureException(error, { tags });
+  const safe = safeError(error);
+  if (context.task === undefined) {
+    captureException(safe, { tags });
+    return;
+  }
+  withIsolationScope((scope) => {
+    // Nothing of a request this fault may have inherited: no user, workspace or request id.
+    scope.setUser(null);
+    scope.setTags({ request_id: undefined, workspace_id: undefined });
+    captureException(safe, { tags });
+  });
 }
 
 /**

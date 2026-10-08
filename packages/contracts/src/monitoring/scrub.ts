@@ -31,9 +31,12 @@ const MAX_DEPTH = 32;
 const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-/** A text with every email marked and every URL's query and fragment cut. */
+// A failed query's bound values, as drizzle appends them to its message (`Failed query: …\nparams: …`).
+const QUERY_PARAMS = /\nparams:[\s\S]*$/u;
+
+/** A text with a failed query's values cut, every email marked and every URL's query and fragment cut. */
 export function scrubText(text: string): string {
-  return text.replace(EMAIL, EMAIL_MARK).replace(QUERY, '$1');
+  return text.replace(QUERY_PARAMS, '').replace(EMAIL, EMAIL_MARK).replace(QUERY, '$1');
 }
 
 /** Only the headers in `KEPT_HEADERS`, whatever their case. */

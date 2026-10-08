@@ -161,6 +161,10 @@ describe('scrubText', () => {
     ['reach me at a.b-c@mail.example.com today', `reach me at ${EMAIL_MARK} today`],
     ['connect ECONNREFUSED 10.0.0.7:5432', 'connect ECONNREFUSED 10.0.0.7:5432'],
     ['Is it ready? Yes.', 'Is it ready? Yes.'],
+    [
+      'Failed query: select "id" from "sessions" where "token" = $1\nparams: tok_secret,ada@example.com',
+      'Failed query: select "id" from "sessions" where "token" = $1',
+    ],
   ])('turns %s into %s', (text, expected) => {
     expect(scrubText(text)).toBe(expected);
   });
