@@ -54,11 +54,16 @@ export interface MintUser {
   readonly userId: string;
 }
 
+/** The seeded users' emails, as a `like` pattern: only these ever get a minted session. */
+export const LOAD_USER_EMAILS = 'load-user-%@example.com';
+
 /**
  * Replaces each user's sessions with one fresh session row (a random token,
  * expiring in 30 days), writing through `db` (the owner login on the load
  * database), and returns each user's cookie header by user number. Refuses
- * (exit 3) any secret but the load stack's.
+ * (exit 3) any secret but the load stack's, and, before writing anything, any
+ * user who isn't a seeded load user (`load-user-<n>@example.com`) with a
+ * membership row in `workspaceId`: a real person's sessions are never touched.
  */
 export async function mintSessions(
   db: Database,
@@ -67,15 +72,25 @@ export async function mintSessions(
   assertLoadSecret(input.secret);
   const minted = input.users.map((user) => ({ ...user, token: newSessionToken() }));
   const array = (items: readonly string[]) => `{${items.join(',')}}`;
+  const userIds = sql`${array(minted.map((user) => user.userId))}::uuid[]`;
   await db.withWorkspace(input.workspaceId, async (tx) => {
-    await tx.execute(
-      sql`delete from auth.session where user_id = any(${array(minted.map((user) => user.userId))}::uuid[])`,
-    );
+    const seeded = await tx.execute<{ count: number }>(sql`
+      select count(distinct u.id)::int as count from auth."user" u
+      join auth.workspace_membership m on m.user_id = u.id and m.workspace_id = ${input.workspaceId}
+      where u.id = any(${userIds}) and u.email like ${LOAD_USER_EMAILS}
+    `);
+    const count = seeded.rows[0]?.count ?? 0;
+    if (count !== new Set(minted.map((user) => user.userId)).size) {
+      throw loadRefusal(
+        `Refusing to mint: ${String(minted.length - count)} of the ${String(minted.length)} users aren't seeded ` +
+          'load users of this workspace. Mint only for the users `pnpm load:seed` made.',
+      );
+    }
+    await tx.execute(sql`delete from auth.session where user_id = any(${userIds})`);
     await tx.execute(sql`
       insert into auth.session (token, user_id, expires_at)
       select token, user_id, now() + make_interval(days => ${SESSION_DAYS}::int)
-      from unnest(${array(minted.map((user) => user.token))}::text[], ${array(minted.map((user) => user.userId))}::uuid[])
-        as s(token, user_id)
+      from unnest(${array(minted.map((user) => user.token))}::text[], ${userIds}) as s(token, user_id)
     `);
   });
   return Object.fromEntries(minted.map((user) => [String(user.n), signSessionCookie(user.token, input.secret)]));
