@@ -18,6 +18,8 @@ import type {
   SetValuesInput,
   WrittenRecord,
 } from '@crm/contracts';
+import { canJump, type JumpAttribute } from '@crm/contracts/jump';
+import type { FilterGroup, SortRules } from '@crm/contracts/values';
 import { dataError, refusalFor, refusalSummary, toDataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
 import { createOwnVersions, createUndoStack, type UndoCell, type UndoKind } from './history.ts';
@@ -26,8 +28,8 @@ import type { Layer } from './store.ts';
 
 /** A records change event (spec 0007's union), as the live router hands it over. */
 type RecordsEvent = Extract<ChangeEvent, { kind: 'records' }>;
-import { createRecordView, nextFrame, type RecordSource, type Scheduler } from './view.ts';
-import { createWindows, type Windows } from './windows.ts';
+import { createRecordView, nextFrame, type Pin, type RecordSource, type RowNote, type Scheduler } from './view.ts';
+import { createWindows, type ReadFrom, type WindowCount, type WindowMode, type Windows } from './windows.ts';
 
 /** Rows per block: `records.query` with `position` = block × 100 (spec 0005, value sourcing). */
 const BLOCK_SIZE = 100;
@@ -53,32 +55,99 @@ const CELL_OVERHEAD_BYTES = 120;
 const SPREAD_MS = 2000;
 /** How long a changed id is remembered, so a block that was loading when it changed fetches it again, in ms. */
 const RECENT_MS = 10_000;
-/** How far a record id's mint time may be from now for a change to it to count as a create, in ms. */
-const NEW_ID_MS = 10 * 60_000;
+/** How long a window waits after the last change in it before it settles order and membership, in ms (AC-56). */
+export const SETTLE_MS = 1500;
+/** Read refusals that mean the view itself is wrong (a bad filter or sort, a gone object): its error state, Retry. */
+const REFUSED_READS: ReadonlySet<string> = new Set(['FILTER_INVALID', 'NOT_FOUND', 'INPUT_INVALID']);
+
+/** The question a view asks (spec 0006, AC-51): its filter and sorts. Two screens asking the same one share a window. */
+export interface ViewQuery {
+  readonly filter?: FilterGroup;
+  readonly sorts?: SortRules;
+}
+
+/** What a window needs to know of its object: the primary attribute (always read) and each attribute's kind (its mode). */
+export interface ObjectShape {
+  readonly primaryAttributeId?: string;
+  readonly attributes: readonly (JumpAttribute & { readonly id: string })[];
+}
+
+/** `value` as JSON with every object's keys in order and nothing undefined, so two spellings of one query match. */
+export function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (typeof value === 'object' && value !== null) {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([left], [right]) => (left < right ? -1 : left > right ? 1 : 0));
+    return `{${entries.map(([name, item]) => `${JSON.stringify(name)}:${canonicalJson(item)}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/** The attribute ids a filter names, at any depth (a through chain's own attribute included). */
+function filterAttributes(group: FilterGroup | undefined): readonly string[] {
+  if (group === undefined) return [];
+  return group.conditions.flatMap((condition): readonly string[] => {
+    if ('conditions' in condition) return filterAttributes(condition);
+    return 'attributeId' in condition && typeof condition.attributeId === 'string' ? [condition.attributeId] : [];
+  });
+}
 
 /**
- * Whether a change to an id nobody here holds may be its create: a UUID v7
- * minted within 10 minutes of now (ids carry their mint time). An older id
- * is a record that already existed, so an edit to it out of sight leaves the
- * count alone. Anything else (not v7) may be new.
+ * What a change must touch to move a window's order or membership: the
+ * attributes its filter and sorts name. `any` when every write can (a sort or
+ * filter on updated at or updated by, which every write moves).
  */
-export function mayBeNew(id: string, now: number): boolean {
-  if (id.length !== 36 || id[14] !== '7') return true;
-  const minted = Number.parseInt(`${id.slice(0, 8)}${id.slice(9, 13)}`, 16);
-  return Number.isNaN(minted) || Math.abs(now - minted) <= NEW_ID_MS;
+function orderAttributesOf(query: ViewQuery, shape: ObjectShape | undefined): OrderAttributes {
+  const ids = new Set([...filterAttributes(query.filter), ...(query.sorts ?? []).map((sort) => sort.attributeId)]);
+  const moving = (shape?.attributes ?? []).filter(
+    (attribute) => attribute.isSystem && (attribute.apiSlug === 'updated_at' || attribute.apiSlug === 'updated_by'),
+  );
+  return {
+    ids,
+    any: moving.some((attribute) => ids.has(attribute.id)),
+    moving: new Set(moving.map((attribute) => attribute.id)),
+  };
+}
+
+/** The attributes a window's order and membership depend on (`orderAttributesOf`). */
+interface OrderAttributes {
+  readonly ids: ReadonlySet<string>;
+  readonly any: boolean;
+  /** The object's updated at and updated by: every write moves them. */
+  readonly moving: ReadonlySet<string>;
 }
 
 /** The calls the records layer makes, each mapped to a DataError on failure (a 401 has already signed out). */
 export interface RecordsApi {
   readonly query: (
-    input: { readonly workspace: string; readonly objectId: string; readonly position: number; readonly limit: number },
+    input: ReadFrom &
+      ViewQuery & {
+        readonly workspace: string;
+        readonly objectId: string;
+        readonly limit: number;
+        readonly attributeIds: readonly string[];
+        readonly now: string;
+        readonly timeZone: string;
+      },
     signal: AbortSignal,
   ) => Promise<RecordPage>;
   readonly count: (
-    input: { readonly workspace: string; readonly objectId: string },
+    input: {
+      readonly workspace: string;
+      readonly objectId: string;
+      readonly filter?: FilterGroup;
+      readonly now: string;
+      readonly timeZone: string;
+    },
     signal: AbortSignal,
   ) => Promise<RecordCount>;
-  readonly get: (input: { readonly workspace: string; readonly ids: readonly string[] }) => Promise<RecordView[]>;
+  /** Records by id; with `attributeIds`, only those and the primary. */
+  readonly get: (input: {
+    readonly workspace: string;
+    readonly ids: readonly string[];
+    readonly attributeIds?: readonly string[];
+  }) => Promise<RecordView[]>;
   readonly create: (input: CreateRecordInput) => Promise<WrittenRecord>;
   readonly setValues: (input: SetValuesInput) => Promise<WrittenRecord>;
   readonly setValuesBatch: (input: SetValuesBatchInput) => Promise<BatchResults>;
@@ -189,6 +258,19 @@ export interface ViewState {
   readonly error?: DataError;
   /** Refused values by `${recordId}:${attributeId}`, to a sentence; each goes with the cell's next edit. */
   readonly cellErrors: ReadonlyMap<string, string>;
+  /** The count for the label: exact, or "10,000+" when `atLeast` (a filtered view past 10,000). */
+  readonly count: WindowCount;
+  /** How the view reads: jumping by position, or paging by cursor (spec 0006, AC-52, AC-53). */
+  readonly mode: WindowMode;
+  /** Notes on the member's own rows (spec 0006, AC-56): made here, or no longer matching the view. */
+  readonly rowNotes: ReadonlyMap<string, RowNote>;
+}
+
+/** One screen reading a view: the columns it shows (`columns`), and `release` when it goes. */
+export interface ViewReader {
+  /** The attributes this screen shows now; a newly shown one is fetched for the loaded rows only. */
+  readonly columns: (attributeIds: readonly string[]) => void;
+  readonly release: () => void;
 }
 
 /** An object's records as one screen shows them, for useSyncExternalStore (`useView` in `@crm/data/react`). */
@@ -199,15 +281,18 @@ export interface RecordsView {
   readonly retry: () => void;
   /** Settles once the count and the first block have loaded, or failed (the status then says so). */
   readonly ready: () => Promise<void>;
-  /** The row a record sits on, while a loaded block holds it (a record just made sits at the end). */
+  /** The row a record shows at, while a loaded block or a pin holds it (a record just made here sits first). */
   readonly indexOf: (recordId: string) => number | undefined;
   /**
-   * A screen shows the view (`useView` calls it in an effect); the answer
-   * lets go. A view nobody shows for a minute lets go of its rows, and the
-   * next `view()` makes a fresh one. Counted, so StrictMode's second effect
-   * changes nothing.
+   * A screen shows the view with these columns (`useView` calls it in an
+   * effect); the reader's `release` lets go. A view nobody shows for a minute
+   * lets go of its rows, and the next `view()` makes a fresh one. Counted, so
+   * StrictMode's second effect changes nothing. The member's own rows stay
+   * in place until the last reader leaves.
    */
-  readonly retain: () => () => void;
+  readonly retain: (attributeIds?: readonly string[]) => ViewReader;
+  /** A cell editor opened (true) or closed (false) in the view: order and membership don't settle while one is open. */
+  readonly holdSettle: (isHeld: boolean) => void;
 }
 
 /** What the records layer needs from createDataLayer. */
@@ -245,6 +330,12 @@ export interface RecordsLayerOptions {
   readonly memberOf?: (workspace: string) => Promise<string | undefined>;
   /** A value this tab wrote was replaced by someone else's later save (spec 0006, AC-46): the screen words it. */
   readonly onReplaced?: (notice: ReplacedNotice) => void;
+  /** The object's primary attribute and its attributes' kinds (spec 0005's `attributes.list` cache until milestone 3). */
+  readonly describe?: (workspace: string, objectId: string) => Promise<ObjectShape>;
+  /** The browser's time zone, which relative date filters resolve in (AC-51). */
+  readonly timeZone?: () => string;
+  /** Runs `run` after `ms`, answering a cancel: settle's timer. A timer by default; tests pass their own. */
+  readonly later?: (run: () => void, ms: number) => () => void;
 }
 
 /** The words the records layer raises itself. */
@@ -290,14 +381,26 @@ const timer = (ms: number, signal?: AbortSignal) =>
 interface ViewEntry {
   readonly workspace: string;
   readonly objectId: string;
+  readonly query: ViewQuery;
   readonly windows: Windows;
   readonly view: RecordsView;
   readonly invalidate: () => void;
-  readonly refreshCount: () => void;
-  /** The count again after a random 0 to 2 seconds, once however many ask meanwhile. */
-  readonly refreshCountSoon: () => void;
-  /** The count and every loaded block again, keeping the table (live changes may have been missed). */
-  readonly reload: () => void;
+  /** Settles now: the blocks on screen and the count again (live changes may have been missed). */
+  readonly reread: () => void;
+  /** Something may have moved the order or membership: settle 1.5 s after the last such change. */
+  readonly markDirty: () => void;
+  readonly orderAttributes: () => OrderAttributes;
+  /** The attributes the window reads now: its readers' columns and the primary. */
+  readonly attributes: () => readonly string[];
+  /** The member edited these records here: those on screen keep their place through the next settle. */
+  readonly edited: (ids: readonly string[]) => void;
+  /** The member made this record here: it sits first, marked new, until they leave. */
+  readonly created: (id: string) => void;
+  /** A record made here was refused: it leaves. */
+  readonly withdrawn: (id: string) => void;
+  readonly isRetained: () => boolean;
+  /** Whether a loaded block or a pin holds `id`. */
+  readonly shows: (id: string) => boolean;
   readonly isReady: () => boolean;
   readonly dispose: () => void;
 }
@@ -305,6 +408,12 @@ interface ViewEntry {
 /** Splits `items` into runs of at most `size`. */
 const chunks = <T>(items: readonly T[], size: number): T[][] =>
   Array.from({ length: Math.ceil(items.length / size) }, (_, index) => items.slice(index * size, (index + 1) * size));
+
+/** One object's changes gathered for a frame: its record ids, and the attributes they name ('all' when one didn't say). */
+interface Gathered {
+  readonly ids: Set<string>;
+  readonly attributes: Set<string> | 'all';
+}
 
 /** The records layer: one store for the app, a view per object, and the writes that change them. */
 export function createRecordsLayer({
@@ -321,8 +430,16 @@ export function createRecordsLayer({
   mutations = { sent: () => undefined, answered: () => undefined, forget: () => undefined },
   memberOf = () => Promise.resolve(undefined),
   onReplaced = () => undefined,
+  describe = () => Promise.resolve({ attributes: [] }),
+  timeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+  later = (run, ms) => {
+    const id = setTimeout(run, ms);
+    return () => {
+      clearTimeout(id);
+    };
+  },
 }: RecordsLayerOptions) {
-  const store = createPlainStore<RecordView>();
+  const store = createPlainStore<RecordView>({ now, later });
   // The versions this tab wrote (the last 500), its undo stack, and the undoable writes still out, by workspace.
   const own = createOwnVersions();
   const undo = createUndoStack();
@@ -337,7 +454,11 @@ export function createRecordsLayer({
   const sending = new Map<string, Promise<unknown>>();
   let cellErrors: ReadonlyMap<string, string> = new Map();
 
-  const keyOf = (workspace: string, objectId: string) => `${workspace}\u0000${objectId}`;
+  const keyOf = (workspace: string, objectId: string, query: ViewQuery = {}) => {
+    const filter = query.filter === undefined || query.filter.conditions.length === 0 ? null : query.filter;
+    const sorts = query.sorts === undefined || query.sorts.length === 0 ? null : query.sorts;
+    return `${workspace}\u0000${objectId}\u0000${canonicalJson({ filter, sorts })}`;
+  };
   const viewsOf = (workspace: string) => [...views.values()].filter((entry) => entry.workspace === workspace);
 
   const setCellErrors = (changes: readonly (readonly [string, string | undefined])[]) => {
@@ -387,7 +508,8 @@ export function createRecordsLayer({
     for (const entry of views.values()) entry.windows.drop(gone);
   };
 
-  function openView(workspace: string, objectId: string): ViewEntry {
+  function openView(workspace: string, objectId: string, query: ViewQuery, warm: readonly string[]): ViewEntry {
+    const key = keyOf(workspace, objectId, query);
     let status: ViewStatus = 'loading';
     let error: DataError | undefined;
     let isCounted = false;
@@ -398,6 +520,23 @@ export function createRecordsLayer({
     let countController = new AbortController();
     let blockFailures = 0;
     let blockRetry: AbortController | undefined;
+    // What the object looks like: its primary attribute, and its attributes' kinds, which pick the mode.
+    let shape: ObjectShape | undefined;
+    let mode: WindowMode = 'position';
+    // The window's clock (spec 0006, AC-51): one `now` for every block and count, refreshed at each settle.
+    let clock = now();
+    // A refused cursor restarts the chain once; a read that lands allows it again.
+    let hasRestarted = false;
+    const isOpen = () => views.get(key)?.view === view;
+
+    // Visible attributes (spec 0006, AC-55): each reader's columns, unioned, plus the primary.
+    const readers = new Map<symbol, readonly string[]>();
+    const attributeSet = (): readonly string[] => {
+      const shown = readers.size === 0 ? warm : [...readers.values()].flat();
+      const primary = shape?.primaryAttributeId;
+      return [...new Set([...shown, ...(primary === undefined ? [] : [primary])])];
+    };
+    let readSet = attributeSet();
 
     const setStatus = (next: ViewStatus, failure?: DataError) => {
       if (status === next && error === failure) return;
@@ -413,12 +552,24 @@ export function createRecordsLayer({
       setStatus('error', toDataError(failure));
     };
     /**
-     * A block failed. Before the view is ready that is the view failing (Retry).
-     * After, the table stays and the block is tried again, later each time it fails.
+     * A read failed. Before the view is ready, or refused outright (a bad
+     * filter, a cursor the restart didn't fix), that is the view failing
+     * (Retry). Otherwise the table stays and the block is tried again later.
      */
-    const blockFailed = (failure: unknown) => {
-      if (status !== 'ready') {
-        fail(failure);
+    const blockFailed = (failure: unknown, read: { readonly withCursor: boolean }) => {
+      const problem = toDataError(failure);
+      const isCursorRefused =
+        read.withCursor &&
+        problem.code === 'INPUT_INVALID' &&
+        (problem.data?.issues ?? []).some((issue) => issue.path[0] === 'cursor');
+      // A cursor the server refused (another view's, or one it can no longer read): the chain starts again, once.
+      if (isCursorRefused && !hasRestarted) {
+        hasRestarted = true;
+        windows.restart();
+        return;
+      }
+      if (status !== 'ready' || isCursorRefused || REFUSED_READS.has(problem.code)) {
+        fail(problem);
         return;
       }
       if (blockRetry !== undefined) return;
@@ -439,58 +590,103 @@ export function createRecordsLayer({
     /** Ready once the count is in and the first row has loaded (or there are none). */
     const checkReady = () => {
       if (status !== 'loading' || !isCounted) return;
-      if (windows.count() === 0 || windows.idAt(0) !== undefined) setStatus('ready');
+      if (windows.count() === 0 || inner.getSnapshot().getItem(0) !== undefined || windows.idAt(0) !== undefined)
+        setStatus('ready');
     };
 
+    /** The clock and filter every block and count of this window carries. */
+    const clockInput = () => ({ now: new Date(clock).toISOString(), timeZone: timeZone() });
+
     const windows = createWindows({
-      count: 0,
+      mode: () => mode,
       blockSize: BLOCK_SIZE,
-      load: async (offset, limit, signal) => {
+      read: async (from, limit, signal) => {
         const asked = now();
-        const page = await whenFree(() => api.query({ workspace, objectId, position: offset, limit }, signal), signal);
+        readSet = attributeSet();
+        const page = await whenFree(
+          () =>
+            api.query(
+              {
+                workspace,
+                objectId,
+                ...from,
+                limit,
+                ...(query.filter === undefined ? {} : { filter: query.filter }),
+                ...(query.sorts === undefined ? {} : { sorts: query.sorts }),
+                attributeIds: readSet,
+                ...clockInput(),
+              },
+              signal,
+            ),
+          signal,
+        );
         store.receive(page.records, { hold: true });
         // Changed while this block was on its way: its rows may be older than the change.
         const stale = page.records.map((record) => record.id).filter((id) => changedSince(workspace, id, asked));
         if (stale.length > 0) {
-          whenFree(() => api.get({ workspace, ids: stale })).then(
+          whenFree(() => api.get({ workspace, ids: stale, attributeIds: attributeSet() })).then(
             (rows) => {
               store.receive(rows);
             },
-            // Left as loaded: the next change to it, or a reload, brings it up to date.
+            // Left as loaded: the next change to it, or a settle, brings it up to date.
             () => undefined,
           );
         }
-        return page.records.map((record) => record.id);
+        const ids = page.records.map((record) => record.id);
+        return page.nextCursor === undefined ? { ids } : { ids, nextCursor: page.nextCursor };
       },
       onError: blockFailed,
-      hold: store.hold,
+      onRead: () => {
+        hasRestarted = false;
+        blockFailures = 0;
+      },
       release: store.release,
       onStale: () => {
-        refreshCount();
+        void refreshCount();
       },
     });
-    const inner = createRecordView({ store, windows, schedule });
-    windows.subscribe(checkReady);
-    // A block that lands ends the run of failures.
-    windows.subscribe(() => {
-      blockFailures = 0;
+    const inner = createRecordView({
+      store,
+      windows,
+      schedule,
+      onShown: (range) => {
+        // An edited row held in place lets go once it scrolls out of sight (spec 0006, AC-56).
+        const kept = inner
+          .pins()
+          .filter((pin) => created.has(pin.id) || (pin.index >= range.start && pin.index < range.end));
+        if (kept.length !== inner.pins().length) inner.setPins(kept);
+      },
     });
+    windows.subscribe(checkReady);
 
-    function refreshCount() {
+    function refreshCount(): Promise<void> {
       countController.abort();
       const controller = new AbortController();
       countController = controller;
-      whenFree(() => api.count({ workspace, objectId }, controller.signal), controller.signal).then(
-        ({ count }) => {
+      return whenFree(
+        () =>
+          api.count(
+            {
+              workspace,
+              objectId,
+              ...(query.filter === undefined ? {} : { filter: query.filter }),
+              ...clockInput(),
+            },
+            controller.signal,
+          ),
+        controller.signal,
+      ).then(
+        (told) => {
           if (countController !== controller) return;
           countFailures = 0;
           const isFirst = !isCounted;
           isCounted = true;
-          windows.setCount(count);
+          windows.setCount(told);
           // The first block, so the grid has rows the moment it mounts (the router loader waits for this).
           // Only the first time: a later count must never move the windows back to the top.
-          if (isFirst && count > 0) windows.show({ start: 0, end: Math.min(count, BLOCK_SIZE) });
+          if (isFirst && windows.count() > 0) windows.show({ start: 0, end: Math.min(windows.count(), BLOCK_SIZE) });
           checkReady();
+          inner.invalidate();
         },
         (failure: unknown) => {
           if (countController !== controller || controller.signal.aborted) return;
@@ -502,27 +698,79 @@ export function createRecordsLayer({
           countFailures += 1;
           const delay = Math.min(MAX_BLOCK_RETRY_MS, 1000 * 2 ** (countFailures - 1)) * (1 + random());
           void wait(Math.round(delay)).then(() => {
-            if (countController === controller && views.get(keyOf(workspace, objectId))?.view === view) refreshCount();
+            if (countController === controller && isOpen()) void refreshCount();
           });
         },
       );
     }
     let countFailures = 0;
 
-    let isCountDue = false;
-    const refreshCountSoon = () => {
-      if (isCountDue) return;
-      isCountDue = true;
-      void wait(Math.round(random() * SPREAD_MS)).then(() => {
-        isCountDue = false;
-        if (views.get(keyOf(workspace, objectId))?.view === view) refreshCount();
-      });
+    // Settle (spec 0006, AC-56): order and membership reread 1.5 s after the last change, never under an editor.
+    const created = new Set<string>();
+    const edited = new Set<string>();
+    const dirt = { isDirty: false };
+    const isMarked = () => dirt.isDirty;
+    let isSettling = false;
+    let editors = 0;
+    let settleTimer: (() => void) | undefined;
+    let settleController: AbortController | undefined;
+    const isFiltered = () => query.filter !== undefined && query.filter.conditions.length > 0;
+
+    const scheduleSettle = (ms: number) => {
+      settleTimer?.();
+      settleTimer = later(() => {
+        settleTimer = undefined;
+        void settle();
+      }, ms);
     };
+    const markDirty = () => {
+      dirt.isDirty = true;
+      if (!isSettling) scheduleSettle(SETTLE_MS);
+    };
+    /** Rereads the blocks on screen and the count with a fresh clock, then holds the member's own rows in place. */
+    async function settle(): Promise<void> {
+      if (!dirt.isDirty || isSettling || editors > 0 || status !== 'ready' || !isOpen()) return;
+      dirt.isDirty = false;
+      isSettling = true;
+      clock = now();
+      const controller = new AbortController();
+      settleController = controller;
+      // Rows the member edited here and can see now: each keeps the screen row it is at.
+      const range = inner.shown();
+      const held = [...edited].flatMap((id): Pin[] => {
+        const index = inner.rowOf(id);
+        return index !== undefined && index >= range.start && index < range.end ? [{ id, index }] : [];
+      });
+      edited.clear();
+      try {
+        await Promise.all([windows.reread(controller.signal), refreshCount()]);
+      } catch {
+        // Left as it was; the next change settles again.
+        isSettling = false;
+        settleController = undefined;
+        return;
+      }
+      settleController = undefined;
+      isSettling = false;
+      if (!isOpen()) return;
+      const noteOf = (id: string, fallback?: RowNote): RowNote | undefined =>
+        isFiltered() && !windows.has(id) ? 'no-longer-matches' : fallback;
+      const before = inner.pins().filter((pin) => !held.some((each) => each.id === pin.id));
+      const next = [...before, ...held].map((pin) => {
+        const note = noteOf(pin.id, created.has(pin.id) ? 'new' : undefined);
+        return note === undefined ? { id: pin.id, index: pin.index } : { ...pin, note };
+      });
+      inner.setPins(next);
+      // Changed again while it settled (an event or an edit set the mark meanwhile): settle once more.
+      if (isMarked()) scheduleSettle(SETTLE_MS);
+    }
 
     let lastSource: RecordSource<RecordView> | undefined;
     let lastErrors = cellErrors;
     let lastStatus: ViewStatus = status;
     let snapshot: ViewState | undefined;
+    const rowNotesOf = (): ReadonlyMap<string, RowNote> =>
+      new Map(inner.pins().flatMap((pin) => (pin.note === undefined ? [] : [[pin.id, pin.note] as const])));
     const view: RecordsView = {
       subscribe: inner.subscribe,
       getSnapshot: () => {
@@ -531,7 +779,15 @@ export function createRecordsLayer({
           lastSource = source;
           lastErrors = cellErrors;
           lastStatus = status;
-          snapshot = { source, status, cellErrors, ...(error === undefined ? {} : { error }) };
+          snapshot = {
+            source,
+            status,
+            cellErrors,
+            count: windows.told(),
+            mode,
+            rowNotes: rowNotesOf(),
+            ...(error === undefined ? {} : { error }),
+          };
         }
         return snapshot;
       },
@@ -541,24 +797,65 @@ export function createRecordsLayer({
             settleReady = resolve;
           });
         }
+        hasRestarted = false;
         setStatus('loading');
-        refreshCount();
+        void refreshCount();
         windows.refresh();
       },
       ready: () => readyPromise,
-      indexOf: windows.indexOf,
-      retain: () => {
+      indexOf: (id) => inner.rowOf(id),
+      retain: (attributeIds = []) => {
         retains += 1;
         clearTimeout(unused);
+        const reader = Symbol('reader');
+        readers.set(reader, attributeIds);
+        showColumns();
         let isReleased = false;
-        return () => {
-          if (isReleased) return;
-          isReleased = true;
-          retains -= 1;
-          if (retains === 0) letGoLater();
+        return {
+          columns: (next) => {
+            if (isReleased) return;
+            readers.set(reader, next);
+            showColumns();
+          },
+          release: () => {
+            if (isReleased) return;
+            isReleased = true;
+            retains -= 1;
+            readers.delete(reader);
+            if (retains === 0) {
+              // The member left the view: the rows they made or edited here go back to the server's order.
+              created.clear();
+              edited.clear();
+              inner.setPins([]);
+              letGoLater();
+            }
+          },
         };
       },
+      holdSettle: (isHeld) => {
+        editors = Math.max(0, editors + (isHeld ? 1 : -1));
+        if (editors === 0 && dirt.isDirty && !isSettling) scheduleSettle(SETTLE_MS);
+      },
     };
+
+    /** Columns shown since the blocks were read: fetched for the loaded rows only, 500 ids a call. */
+    function showColumns() {
+      const next = attributeSet();
+      const added = next.filter((id) => !readSet.includes(id));
+      readSet = next;
+      if (added.length === 0 || status !== 'ready') return;
+      const ids = [...new Set([...windows.loadedIds(), ...inner.pins().map((pin) => pin.id)])];
+      for (const part of chunks(ids, GET_LIMIT)) {
+        whenFree(() => api.get({ workspace, ids: part, attributeIds: added })).then(
+          (rows) => {
+            store.receive(rows.filter((row) => store.get(row.id) !== undefined));
+          },
+          // The cells stay unknown (skeletons) until the next read of their rows.
+          () => undefined,
+        );
+      }
+    }
+
     let retains = 0;
     let unused: ReturnType<typeof setTimeout> | undefined;
     // Live changes to this workspace reach the view while it is open.
@@ -566,6 +863,8 @@ export function createRecordsLayer({
     const dispose = () => {
       countController.abort();
       blockRetry?.abort();
+      settleTimer?.();
+      settleController?.abort();
       inner.dispose();
       unwatch();
     };
@@ -574,32 +873,61 @@ export function createRecordsLayer({
       clearTimeout(unused);
       unused = setTimeout(() => {
         if (retains > 0) return;
-        const key = keyOf(workspace, objectId);
         if (views.get(key)?.view === view) views.delete(key);
         dispose();
       }, keepUnusedViewMs);
     };
-    // The first read waits for the workspace's head, so nothing written meanwhile is missed.
-    void beforeRead(workspace).then(() => {
-      if (!isCounted && views.get(keyOf(workspace, objectId))?.view === view) refreshCount();
-    });
+    // The first read waits for the workspace's head, so nothing written meanwhile is missed, and for the
+    // object's shape, which picks the mode (spec 0006, AC-52) and names the primary attribute.
+    void Promise.all([beforeRead(workspace), describe(workspace, objectId)]).then(
+      ([, described]) => {
+        shape = described;
+        const byId = new Map(described.attributes.map((attribute) => [attribute.id, attribute]));
+        mode = canJump(query.filter, query.sorts, (id) => byId.get(id)) ? 'position' : 'cursor';
+        readSet = attributeSet();
+        if (!isCounted && isOpen()) void refreshCount();
+      },
+      (failure: unknown) => {
+        if (isOpen()) fail(failure);
+      },
+    );
     // A view the router warmed but no screen ever showed goes too.
     letGoLater();
     return {
       workspace,
       objectId,
+      query,
       windows,
       view,
       invalidate: inner.invalidate,
-      refreshCount,
-      refreshCountSoon,
-      reload: () => {
+      reread: () => {
         // Still loading: what it loads is already newer than what was missed.
         if (status !== 'ready') return;
-        refreshCount();
-        // The blocks on screen again; the others load when scrolled back to.
-        windows.refreshShown();
+        dirt.isDirty = true;
+        void settle();
       },
+      markDirty,
+      orderAttributes: () => orderAttributesOf(query, shape),
+      attributes: () => readSet,
+      edited: (ids) => {
+        for (const id of ids) if (windows.has(id) || created.has(id)) edited.add(id);
+      },
+      created: (id) => {
+        created.add(id);
+        // First in the view, marked new, until the member leaves it (spec 0006, AC-56).
+        const shifted = inner.pins().map((pin) => (created.has(pin.id) ? pin : { ...pin, index: pin.index + 1 }));
+        const made = shifted.filter((pin) => created.has(pin.id)).map((pin) => ({ ...pin, index: pin.index + 1 }));
+        const others = shifted.filter((pin) => !created.has(pin.id));
+        inner.setPins([{ id, index: 0, note: 'new' }, ...made, ...others]);
+        markDirty();
+      },
+      withdrawn: (id) => {
+        if (!created.delete(id)) return;
+        const rest = inner.pins().filter((pin) => pin.id !== id);
+        inner.setPins(rest.map((pin) => ({ ...pin, index: pin.index - 1 })));
+      },
+      isRetained: () => retains > 0,
+      shows: (id) => windows.has(id) || inner.pins().some((pin) => pin.id === id),
       isReady: () => status === 'ready',
       dispose: () => {
         clearTimeout(unused);
@@ -677,6 +1005,20 @@ export function createRecordsLayer({
       ),
     );
     const mine = turn.then(() => send(workspace, mutationId, prepared, options));
+    // What lands may move rows in a filtered or sorted window: those settle, and the edited rows keep their place.
+    void mine.then((outcomes) => {
+      const landedIds = outcomes.flatMap((outcome) => (outcome.row === undefined ? [] : [outcome.recordId]));
+      if (landedIds.length === 0) return;
+      const written = new Set(
+        outcomes.flatMap((outcome) => (outcome.row === undefined ? [] : outcome.cells.map((cell) => cell.attributeId))),
+      );
+      for (const entry of viewsOf(workspace)) {
+        if (!landedIds.some((id) => entry.shows(id))) continue;
+        entry.edited(landedIds);
+        const order = entry.orderAttributes();
+        if (order.any || [...written].some((id) => order.ids.has(id))) entry.markDirty();
+      }
+    });
     for (const each of prepared) sending.set(each.recordId, mine);
     void mine.finally(() => {
       for (const each of prepared) if (sending.get(each.recordId) === mine) sending.delete(each.recordId);
@@ -1167,19 +1509,24 @@ export function createRecordsLayer({
     }
   }
 
-  /** Reads records again by id, 500 at a time; ids the server leaves out are gone and leave every window. */
-  async function refetch(workspace: string, ids: readonly string[]): Promise<void> {
+  /**
+   * Reads records again by id, 500 at a time, with only `attributeIds` when
+   * given; ids the server leaves out are gone and leave every window.
+   */
+  async function refetch(workspace: string, ids: readonly string[], attributeIds?: readonly string[]): Promise<void> {
     const held = ids.filter((id) => isHeldIn(workspace, id));
     await Promise.all(
       chunks(held, GET_LIMIT).map(async (part) => {
-        const rows = await whenFree(() => api.get({ workspace, ids: part }));
+        const rows = await whenFree(() =>
+          api.get({ workspace, ids: part, ...(attributeIds === undefined ? {} : { attributeIds }) }),
+        );
         // Only rows this workspace's views still show: the store is keyed by record id alone.
         store.receive(rows.filter((row) => isHeldIn(workspace, row.id)));
         const found = new Set(rows.map((row) => row.id));
         const gone = new Set(part.filter((id) => !found.has(id) && !store.pending().has(id)));
         if (gone.size === 0) return;
         for (const entry of viewsOf(workspace)) entry.windows.drop(gone);
-        store.remove([...gone].filter((id) => ![...views.values()].some((entry) => entry.windows.has(id))));
+        store.remove([...gone].filter((id) => ![...views.values()].some((entry) => entry.shows(id))));
       }),
     );
   }
@@ -1190,32 +1537,7 @@ export function createRecordsLayer({
    * record another workspace's view holds under the same id.
    */
   function isHeldIn(workspace: string, id: string): boolean {
-    return viewsOf(workspace).some((entry) => entry.windows.has(id));
-  }
-
-  /** Records new to a view, fetched and placed at its end in id order (the loop's order is creation order). */
-  async function place(entry: ViewEntry, ids: readonly string[]): Promise<void> {
-    const rows = (
-      await Promise.all(
-        chunks(ids, GET_LIMIT).map((part) => whenFree(() => api.get({ workspace: entry.workspace, ids: part }))),
-      )
-    ).flat();
-    if (views.get(keyOf(entry.workspace, entry.objectId)) !== entry) return;
-    for (const row of [...rows].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))) {
-      if (row.objectId !== entry.objectId) continue;
-      // Placed meanwhile (a later event for it): this row may be the newer one, and versions keep the newest cells.
-      if (entry.windows.has(row.id)) {
-        store.receive([row]);
-        continue;
-      }
-      // The same id held for another workspace: leave that row alone, and let the count say a row was added.
-      if (store.get(row.id) !== undefined) {
-        entry.refreshCountSoon();
-        continue;
-      }
-      entry.windows.add(row.id);
-      store.receive([row]);
-    }
+    return viewsOf(workspace).some((entry) => entry.shows(id));
   }
 
   // Ids change events named in the last 10 seconds, by workspace, with when: a block in flight checks them.
@@ -1235,44 +1557,55 @@ export function createRecordsLayer({
     return at !== undefined && at >= since;
   }
 
-  // Change events' record ids, by workspace and object, gathered for one frame.
-  let incoming = new Map<string, Map<string, Set<string>>>();
+  // Change events' record and attribute ids, by workspace and object, gathered for one frame.
+  let incoming = new Map<string, Map<string, Gathered>>();
   let isGathering = false;
+
   function applyIncoming() {
     isGathering = false;
     const gathered = incoming;
     incoming = new Map();
     for (const [workspace, objects] of gathered) {
-      const all = [...objects.values()].flatMap((ids) => [...ids]);
-      const held = all.filter((id) => isHeldIn(workspace, id));
-      // A refetch that fails leaves rows out of date: load the workspace's views again a moment later.
-      if (held.length > 0) {
-        refetch(workspace, held).catch(() => {
-          // Once more a moment later; failing again, the views load what they show again.
-          void wait(Math.round((1 + random()) * SPREAD_MS))
-            .then(() => refetch(workspace, held))
-            .catch(() => {
-              records.reload(workspace);
-            });
-        });
-      }
-      const heldIds = new Set(held);
-      for (const [objectId, ids] of objects) {
-        const entry = views.get(keyOf(workspace, objectId));
-        if (entry === undefined || !entry.isReady()) continue;
-        const unheld = [...ids].filter((id) => !heldIds.has(id) && !entry.windows.has(id));
-        if (unheld.length === 0) continue;
-        const count = entry.windows.count();
-        // The last row on screen (or none at all): an id past it is a record made since.
-        const last = count === 0 ? '' : entry.windows.idAt(count - 1);
-        const fresh = last === undefined ? [] : unheld.filter((id) => id > last);
-        // Out of sight: only a record made since moves the count (an edit to an older one doesn't).
-        const time = now();
-        if (unheld.some((id) => !fresh.includes(id) && mayBeNew(id, time))) entry.refreshCountSoon();
-        if (fresh.length > 0) {
-          place(entry, fresh).catch(() => {
-            entry.refreshCountSoon();
+      for (const [objectId, change] of objects) {
+        const entries = viewsOf(workspace).filter((entry) => entry.objectId === objectId);
+        const ids = [...change.ids];
+        const held = ids.filter((id) => isHeldIn(workspace, id));
+        // Visible attributes (spec 0006, AC-55): only what the event names and the windows read, plus what every
+        // write moves when a window shows it. An event naming only attributes no window reads fetches nothing.
+        const read = new Set(entries.flatMap((entry) => entry.attributes()));
+        const moving = new Set(entries.flatMap((entry) => [...entry.orderAttributes().moving]));
+        const always = [...read].filter((id) => moving.has(id));
+        const wanted =
+          change.attributes === 'all'
+            ? undefined
+            : [
+                ...new Set([
+                  ...[...change.attributes].filter((id) => read.has(id)),
+                  ...(change.attributes.size > 0 ? always : []),
+                ]),
+              ];
+        if (held.length > 0 && (wanted === undefined || wanted.length > 0)) {
+          const attributeIds = wanted === undefined ? [...read] : wanted;
+          // A refetch that fails leaves rows out of date: once more a moment later, then the views settle again.
+          refetch(workspace, held, attributeIds).catch(() => {
+            void wait(Math.round((1 + random()) * SPREAD_MS))
+              .then(() => refetch(workspace, held, attributeIds))
+              .catch(() => {
+                records.reload(workspace, objectId);
+              });
           });
+        }
+        // Order and membership (spec 0006, AC-56): settle a window when a change may move its rows.
+        for (const entry of entries) {
+          if (!entry.isReady()) continue;
+          const order = entry.orderAttributes();
+          const touches =
+            change.attributes === 'all' ||
+            change.attributes.size === 0 ||
+            order.any ||
+            [...change.attributes].some((id) => order.ids.has(id));
+          // An id the window doesn't show may be a record made or restored elsewhere: its count and rows may move.
+          if (touches || ids.some((id) => !entry.shows(id))) entry.markDirty();
         }
       }
     }
@@ -1280,22 +1613,32 @@ export function createRecordsLayer({
 
   const records = {
     /**
-     * An object's records for one screen: the same view for every screen
-     * that asks, made on first use, its count and first block loading.
+     * An object's records as one question asks for them (spec 0006, AC-51):
+     * its filter and sorts. Every screen asking the same question shares one
+     * window, made on first use, its count and first block loading; a new
+     * filter or sort opens a new window, and the old one goes once nobody
+     * shows it. `attributeIds` are the columns the first block reads until a
+     * screen names its own (`retain`); the primary attribute always comes.
      */
-    view: (workspace: string, objectId: string): RecordsView => {
-      const key = keyOf(workspace, objectId);
+    view: (
+      workspace: string,
+      objectId: string,
+      query: ViewQuery = {},
+      attributeIds: readonly string[] = [],
+    ): RecordsView => {
+      const key = keyOf(workspace, objectId, query);
       const existing = views.get(key);
       if (existing !== undefined) return existing.view;
-      const entry = openView(workspace, objectId);
+      const entry = openView(workspace, objectId, query, attributeIds);
       views.set(key, entry);
       return entry.view;
     },
 
     /**
-     * Makes a record at once: a draft joins the end of every view of its
-     * object and the count goes up, then the server's row replaces it. A
-     * refusal takes it out again (and the count back) and rejects with the
+     * Makes a record at once: a draft sits first in every view of its object
+     * a screen shows, marked new, until the member leaves it (spec 0006,
+     * AC-56); the server's row then replaces it. A refusal takes it out
+     * again and rejects with the
      * refusals, so a form can mark its fields. A write that never reached the
      * server is sent again with the same id, which the server answers with the
      * record it already made. A form that may send again (Create pressed after
@@ -1326,8 +1669,8 @@ export function createRecordsLayer({
       };
       const layer = store.create(draft, mutationId);
       mutations.sent(mutationId);
-      const placed = viewsOf(workspace).filter((entry) => entry.objectId === objectId);
-      for (const entry of placed) entry.windows.add(id);
+      const placed = viewsOf(workspace).filter((entry) => entry.objectId === objectId && entry.isRetained());
+      for (const entry of placed) entry.created(id);
       let settle: (made: boolean) => void = () => undefined;
       creating.set(
         id,
@@ -1348,7 +1691,7 @@ export function createRecordsLayer({
       } catch (error) {
         mutations.forget(mutationId);
         layer.refuse();
-        for (const entry of placed) entry.windows.withdraw(id);
+        for (const entry of placed) entry.withdrawn(id);
         settle(false);
         throw toDataError(error);
       } finally {
@@ -1391,19 +1734,25 @@ export function createRecordsLayer({
 
     /**
      * Another tab or person changed these records of an object (a change
-     * event). Gathered for one frame, then: the ones held are fetched again
-     * in place; one past the end of a view whose last row is loaded is new,
-     * so it joins the end; any other is out of sight, and may have changed
-     * the count (made or deleted elsewhere), so the count is asked again.
+     * event naming `attributeIds`). Gathered for one frame, then: the ones
+     * held are fetched again in place, with only the changed attributes the
+     * windows read (none when the event names only others); and every window
+     * a change may reorder (its filter or sort attributes, or an id it doesn't
+     * show, which may be a record made elsewhere) settles 1.5 s later.
      */
-    changed: (workspace: string, objectId: string, ids: readonly string[]): void => {
+    changed: (workspace: string, objectId: string, ids: readonly string[], attributeIds?: readonly string[]): void => {
       if (ids.length === 0) return;
       remember(workspace, ids);
-      const objects = incoming.get(workspace) ?? new Map<string, Set<string>>();
+      const objects = incoming.get(workspace) ?? new Map<string, Gathered>();
       incoming.set(workspace, objects);
-      const gathered = objects.get(objectId) ?? new Set<string>();
-      objects.set(objectId, gathered);
-      for (const id of ids) gathered.add(id);
+      const gathered = objects.get(objectId) ?? { ids: new Set<string>(), attributes: new Set<string>() };
+      for (const id of ids) gathered.ids.add(id);
+      // An event that doesn't say which attributes changed reads everything the windows show.
+      const attributes =
+        attributeIds === undefined || gathered.attributes === 'all'
+          ? 'all'
+          : new Set([...gathered.attributes, ...attributeIds]);
+      objects.set(objectId, { ids: gathered.ids, attributes });
       if (isGathering) return;
       isGathering = true;
       schedule(applyIncoming);
@@ -1411,11 +1760,11 @@ export function createRecordsLayer({
 
     /**
      * Changes may have been missed (a gap, a lost recovery, a coarse event):
-     * the workspace's views (or one object's) load their count and blocks
-     * again, keeping the table on screen.
+     * the workspace's views (or one object's) settle now, reading the blocks
+     * on screen and the count again and keeping the table on screen.
      */
     reload: (workspace: string, objectId?: string): void => {
-      for (const entry of viewsOf(workspace)) if (objectId === undefined || entry.objectId === objectId) entry.reload();
+      for (const entry of viewsOf(workspace)) if (objectId === undefined || entry.objectId === objectId) entry.reread();
     },
 
     /** Forgets every record and view (sign out, or someone else signed in). */

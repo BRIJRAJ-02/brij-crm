@@ -1,280 +1,360 @@
-// A view's ordered id windows: blocks of 100 loaded around the range on
-// screen, far loads aborted, far blocks dropped, the count replaced.
+// A view's ordered id windows (spec 0006, windows): blocks of 100 loaded
+// around the range on screen in both modes, far loads aborted, far blocks
+// dropped (a cursor block keeping its checkpoint), the read ahead of a cursor
+// chain, a short final block, the count replaced, and settle's reread.
 import { describe, expect, it } from 'vitest';
-import { createWindows, type BlockLoader } from './windows.ts';
+import { createWindows, type BlockReader, type ReadFrom, type WindowMode } from './windows.ts';
 
 interface Call {
-  readonly offset: number;
+  readonly from: ReadFrom;
+  readonly limit: number;
   readonly signal: AbortSignal;
   readonly answer: () => void;
   readonly fail: (error: unknown) => void;
 }
 
-/** A loader whose calls wait until the test answers them. */
-function fakeLoader() {
+/**
+ * A server over `rows` (the reference order), whose calls wait until the
+ * test answers them: a position reads from that row, a cursor (the id of the
+ * last row before) reads after it, as keyset paging does.
+ */
+function fakeServer(rows: () => readonly string[]) {
   const calls: Call[] = [];
-  const load: BlockLoader = (offset, limit, signal) =>
+  const read: BlockReader = (from, limit, signal) =>
     new Promise((resolve, reject) => {
       calls.push({
-        offset,
+        from,
+        limit,
         signal,
         answer: () => {
-          resolve(Array.from({ length: limit }, (_, index) => `id-${String(offset + index)}`));
+          const all = rows();
+          const start =
+            from.position ?? (from.cursor === undefined ? 0 : all.indexOf(from.cursor.slice('after:'.length)) + 1);
+          const ids = all.slice(start, start + limit);
+          const last = ids.at(-1);
+          const more = start + limit < all.length;
+          resolve(more && last !== undefined ? { ids, nextCursor: `after:${last}` } : { ids });
         },
         fail: reject,
       });
     });
-  return { calls, load };
+  const answerAll = async () => {
+    for (let round = 0; round < 500; round += 1) {
+      const open = calls.filter((call) => !answered.has(call) && !call.signal.aborted);
+      if (open.length === 0) return;
+      for (const call of open) {
+        answered.add(call);
+        call.answer();
+      }
+      await settle();
+    }
+  };
+  const answered = new Set<Call>();
+  return { calls, read, answerAll };
 }
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+const sample = (n: number) => Array.from({ length: n }, (_, index) => `id-${String(index).padStart(6, '0')}`);
 
-describe('the id windows', () => {
+function windowsOver(
+  rows: readonly string[],
+  mode: WindowMode,
+  extra: Partial<Parameters<typeof createWindows>[0]> = {},
+) {
+  let current = rows;
+  const server = fakeServer(() => current);
+  const released: string[] = [];
+  const errors: unknown[] = [];
+  const windows = createWindows({
+    mode: () => mode,
+    read: server.read,
+    release: (ids) => released.push(...ids),
+    onError: (error) => errors.push(error),
+    ...extra,
+  });
+  return {
+    windows,
+    server,
+    released,
+    errors,
+    setRows: (next: readonly string[]) => {
+      current = next;
+    },
+  };
+}
+
+/** The ids the windows hold for `start` to `end`. */
+const idsIn = (windows: ReturnType<typeof createWindows>, start: number, end: number) =>
+  Array.from({ length: end - start }, (_, index) => windows.idAt(start + index));
+
+describe('position mode', () => {
   it('loads the blocks a range covers, once each, and answers ids by position', async () => {
-    const { calls, load } = fakeLoader();
-    const windows = createWindows({ load, count: 1000 });
+    const { windows, server } = windowsOver(sample(1000), 'position');
+    windows.setCount({ count: 1000, atLeast: false });
     let heard = 0;
     windows.subscribe(() => (heard += 1));
     windows.show({ start: 50, end: 160 });
     windows.show({ start: 60, end: 170 });
-    expect(calls.map((call) => call.offset)).toEqual([0, 100]);
+    expect(server.calls.map((call) => call.from)).toEqual([{ position: 0 }, { position: 100 }]);
     expect(windows.idAt(55)).toBeUndefined();
-    for (const call of calls) call.answer();
-    await settle();
-    expect(windows.idAt(55)).toBe('id-55');
-    expect(windows.idAt(150)).toBe('id-150');
+    await server.answerAll();
+    expect(windows.idAt(55)).toBe(sample(1000)[55]);
+    expect(windows.idAt(150)).toBe(sample(1000)[150]);
     expect(heard).toBe(2);
   });
 
-  it('loads only the blocks on screen again on refreshShown, letting go of the others until scrolled back', async () => {
-    const { calls, load } = fakeLoader();
-    const windows = createWindows({ load, count: 1000 });
+  it('jumps straight to a far row with one read, aborting the loads left behind', async () => {
+    const rows = sample(1_000_000);
+    const { windows, server } = windowsOver(rows, 'position');
+    windows.setCount({ count: rows.length, atLeast: false });
     windows.show({ start: 0, end: 40 });
-    windows.show({ start: 300, end: 340 });
-    for (const call of calls) call.answer();
-    await settle();
-    expect(windows.stats()).toEqual({ loaded: 2, loading: 0 });
-    windows.refreshShown();
-    expect(calls.slice(2).map((call) => call.offset)).toEqual([300]);
-    expect(windows.idAt(0)).toBeUndefined();
-    calls[2]?.answer();
-    await settle();
-    expect(windows.idAt(310)).toBe('id-310');
-    windows.show({ start: 0, end: 40 });
-    expect(calls.slice(3).map((call) => call.offset)).toEqual([0]);
+    windows.show({ start: 600_000, end: 600_040 });
+    expect(server.calls[0]?.signal.aborted).toBe(true);
+    expect(server.calls.slice(1).map((call) => call.from)).toEqual([{ position: 600_000 }]);
+    await server.answerAll();
+    expect(idsIn(windows, 600_000, 600_040)).toEqual(rows.slice(600_000, 600_040));
+    expect(windows.stats().loaded).toBe(1);
   });
 
-  it('never asks past the last row', () => {
-    const { calls, load } = fakeLoader();
-    const windows = createWindows({ load, count: 250 });
+  it('never asks past the last row, and nothing while the count is 0', () => {
+    const { windows, server } = windowsOver(sample(250), 'position');
+    windows.show({ start: 0, end: 40 });
+    expect(server.calls).toHaveLength(0);
+    windows.setCount({ count: 250, atLeast: false });
     windows.show({ start: 180, end: 400 });
-    expect(calls.map((call) => call.offset)).toEqual([100, 200]);
+    expect(server.calls.map((call) => call.from)).toEqual([{ position: 0 }, { position: 100 }, { position: 200 }]);
   });
 
-  it('aborts a load that scrolled more than 5 blocks away, and ignores its late answer', async () => {
-    const { calls, load } = fakeLoader();
-    const windows = createWindows({ load, count: 100_000 });
+  it('keeps blocks within 5 of the range, drops the rest and lets go of their ids', async () => {
+    const { windows, server, released } = windowsOver(sample(100_000), 'position');
+    windows.setCount({ count: 100_000, atLeast: false });
     windows.show({ start: 0, end: 40 });
-    windows.show({ start: 50_000, end: 50_040 });
-    const [first] = calls;
-    expect(first?.signal.aborted).toBe(true);
-    first?.answer();
-    await settle();
-    expect(windows.idAt(0)).toBeUndefined();
-    expect(windows.stats()).toEqual({ loaded: 0, loading: 1 });
+    await server.answerAll();
+    windows.show({ start: 500, end: 540 });
+    await server.answerAll();
+    expect(windows.stats().loaded).toBe(2);
+    windows.show({ start: 2000, end: 2040 });
+    await server.answerAll();
+    expect(windows.idAt(10)).toBeUndefined();
+    expect(released).toEqual(expect.arrayContaining([sample(100)[10]]));
+    expect(windows.stats().loaded).toBe(1);
   });
 
-  it('keeps blocks within 5 of the range and drops the rest', async () => {
-    const { calls, load } = fakeLoader();
-    const windows = createWindows({ load, count: 100_000 });
-    for (let block = 0; block < 12; block += 1) {
-      windows.show({ start: block * 100, end: block * 100 + 40 });
-      for (const call of calls.splice(0)) call.answer();
-      await settle();
-    }
-    // On block 11: blocks 6 to 11 stay, 0 to 5 are gone.
-    expect(windows.stats().loaded).toBe(6);
-    expect(windows.idAt(550)).toBeUndefined();
-    expect(windows.idAt(650)).toBe('id-650');
-  });
-
-  it('reports a failed load, and tries the block again when it is next on screen', async () => {
-    const { calls, load } = fakeLoader();
-    const errors: unknown[] = [];
-    const windows = createWindows({ load, count: 1000, onError: (error) => errors.push(error) });
-    windows.show({ start: 0, end: 40 });
-    calls[0]?.fail(new Error('QUERY_CANCELLED'));
-    await settle();
-    expect(errors).toHaveLength(1);
-    windows.show({ start: 0, end: 41 });
-    expect(calls).toHaveLength(2);
-  });
-
-  it('replaces the count rather than adding to it', async () => {
-    const { calls, load } = fakeLoader();
-    const windows = createWindows({ load, count: 1000 });
-    windows.show({ start: 0, end: 40 });
-    calls[0]?.answer();
-    await settle();
-    windows.setCount(1001);
-    windows.setCount(1001);
-    expect(windows.count()).toBe(1001);
-  });
-
-  it('empties a deleted row in place, then loads its block and every later loaded block again, and the count', async () => {
-    const { calls, load } = fakeLoader();
+  it('empties a deleted row in place, then loads its block and every later loaded block again', async () => {
     let stale = 0;
-    const released: string[] = [];
-    const windows = createWindows({
-      load,
-      count: 1000,
-      onStale: () => (stale += 1),
-      release: (ids) => released.push(...ids),
-    });
-    windows.show({ start: 50, end: 260 });
-    for (const call of calls.splice(0)) call.answer();
-    await settle();
-    windows.drop(new Set(['id-150']));
-    // No hole closes up and nothing shifts: the row empties, later rows stay where they were until reloaded.
+    const rows = sample(300);
+    const { windows, server, setRows } = windowsOver(rows, 'position', { onStale: () => (stale += 1) });
+    windows.setCount({ count: 300, atLeast: false });
+    windows.show({ start: 0, end: 300 });
+    await server.answerAll();
+    const gone = rows[150] ?? '';
+    setRows(rows.filter((id) => id !== gone));
+    windows.drop(new Set([gone]));
     expect(windows.idAt(150)).toBeUndefined();
-    expect(windows.idAt(151)).toBe('id-151');
-    expect(windows.idAt(250)).toBe('id-250');
-    expect(windows.has('id-150')).toBe(false);
-    expect(released).toEqual(['id-150']);
     expect(stale).toBe(1);
-    // Blocks 1 and 2 load again; block 0, before the gone row, doesn't.
-    expect(calls.map((call) => call.offset)).toEqual([100, 200]);
-    for (const call of calls.splice(0)) call.answer();
-    await settle();
-    expect(windows.idAt(150)).toBe('id-150');
+    await server.answerAll();
+    expect(windows.idAt(150)).toBe(rows[151]);
   });
 
-  it('keeps the range it had when shown an empty one', async () => {
-    const { calls, load } = fakeLoader();
-    const windows = createWindows({ load, count: 100_000 });
-    windows.show({ start: 50_000, end: 50_040 });
-    windows.show({ start: 0, end: 0 });
-    for (const call of calls.splice(0)) call.answer();
-    await settle();
-    expect(windows.idAt(50_000)).toBe('id-50000');
-    expect(calls).toHaveLength(0);
+  it('lets go of the rows past a smaller count, and never keeps more of a late block than the count allows', async () => {
+    const { windows, server, released } = windowsOver(sample(250), 'position');
+    windows.setCount({ count: 250, atLeast: false });
+    windows.show({ start: 0, end: 250 });
+    windows.setCount({ count: 120, atLeast: false });
+    await server.answerAll();
+    expect(windows.idAt(119)).toBe(sample(250)[119]);
+    expect(windows.idAt(120)).toBeUndefined();
+    expect(released).toEqual(expect.arrayContaining([sample(250)[120]]));
   });
 
-  it('asks for nothing while the count is 0', () => {
-    const { calls, load } = fakeLoader();
-    const windows = createWindows({ load, count: 0 });
+  it('aborts every load on dispose, and lets go of a late answer', async () => {
+    const { windows, server, released } = windowsOver(sample(500), 'position');
+    windows.setCount({ count: 500, atLeast: false });
+    windows.show({ start: 0, end: 300 });
+    windows.dispose();
+    expect(server.calls.every((call) => call.signal.aborted)).toBe(true);
+    server.calls[0]?.answer();
+    await settle();
+    expect(released).toEqual(expect.arrayContaining(sample(100)));
+  });
+
+  it('rereads the blocks on screen in one read and lets the others go (settle)', async () => {
+    const rows = sample(10_000);
+    const { windows, server, setRows } = windowsOver(rows, 'position');
+    windows.setCount({ count: rows.length, atLeast: false });
     windows.show({ start: 0, end: 40 });
-    expect(calls).toHaveLength(0);
-  });
-
-  it('lets go of the rows past a smaller count', async () => {
-    const { calls, load } = fakeLoader();
-    const released: string[] = [];
-    const windows = createWindows({ load, count: 1000, release: (ids) => released.push(...ids) });
-    windows.show({ start: 0, end: 240 });
-    for (const call of calls.splice(0)) call.answer();
-    await settle();
-    windows.setCount(150);
-    expect(windows.idAt(149)).toBe('id-149');
-    expect(windows.idAt(150)).toBeUndefined();
-    expect(windows.idAt(210)).toBeUndefined();
-    expect(released).toHaveLength(150);
+    await server.answerAll();
+    windows.show({ start: 450, end: 520 });
+    await server.answerAll();
+    expect(windows.stats().loaded).toBe(3);
+    const moved = [rows[9999] ?? '', ...rows.slice(0, 9999)];
+    setRows(moved);
+    const before = server.calls.length;
+    const done = windows.reread(new AbortController().signal);
+    await server.answerAll();
+    await done;
+    expect(server.calls.slice(before).map((call) => [call.from, call.limit])).toEqual([[{ position: 400 }, 200]]);
+    expect(idsIn(windows, 450, 520)).toEqual(moved.slice(450, 520));
     expect(windows.stats().loaded).toBe(2);
   });
+});
 
-  it('never keeps more of a late block than the count allows', async () => {
-    const { calls, load } = fakeLoader();
-    const released: string[] = [];
-    const windows = createWindows({ load, count: 1000, release: (ids) => released.push(...ids) });
-    windows.show({ start: 0, end: 40 });
-    windows.setCount(30);
-    calls[0]?.answer();
-    await settle();
-    expect(windows.idAt(29)).toBe('id-29');
-    expect(windows.idAt(30)).toBeUndefined();
-    expect(released).toHaveLength(70);
+describe('cursor mode', () => {
+  it('pages forward from each checkpoint, block by block, matching the reference order', async () => {
+    const rows = sample(450);
+    const { windows, server } = windowsOver(rows, 'cursor');
+    windows.setCount({ count: 450, atLeast: false });
+    for (let start = 0; start < 450; start += 50) {
+      windows.show({ start, end: Math.min(450, start + 50) });
+      await server.answerAll();
+    }
+    expect(server.calls.map((call) => call.from.cursor === undefined)).toEqual([true, false, false, false, false]);
+    expect(windows.stats().checkpoints).toBe(4);
+    windows.show({ start: 0, end: 450 });
+    await server.answerAll();
+    expect(idsIn(windows, 0, 450)).toEqual(rows);
   });
 
-  it('adds a record made here at the end and holds it while the last block is loaded, and withdraws it', async () => {
-    const { calls, load } = fakeLoader();
-    const held: string[] = [];
-    const released: string[] = [];
-    const windows = createWindows({
-      load,
-      count: 150,
-      hold: (ids) => held.push(...ids),
-      release: (ids) => released.push(...ids),
+  it('reloads a dropped block from its own checkpoint with one call', async () => {
+    const rows = sample(2000);
+    const { windows, server } = windowsOver(rows, 'cursor');
+    windows.setCount({ count: 2000, atLeast: false });
+    for (let start = 0; start < 2000; start += 100) {
+      windows.show({ start, end: start + 40 });
+      await server.answerAll();
+    }
+    expect(windows.idAt(300)).toBeUndefined();
+    const before = server.calls.length;
+    windows.show({ start: 300, end: 340 });
+    await server.answerAll();
+    expect(server.calls.slice(before).map((call) => [call.from.cursor, call.limit])).toEqual([
+      [`after:${rows[299] ?? ''}`, 100],
+    ]);
+    expect(idsIn(windows, 300, 340)).toEqual(rows.slice(300, 340));
+  });
+
+  it('reads ahead of the chain in calls of 200 to a far row, and the second block of a call reloads from the first', async () => {
+    const rows = sample(5000);
+    const { windows, server } = windowsOver(rows, 'cursor');
+    windows.setCount({ count: 5000, atLeast: false });
+    windows.show({ start: 0, end: 40 });
+    await server.answerAll();
+    const before = server.calls.length;
+    windows.show({ start: 1050, end: 1090 });
+    await server.answerAll();
+    const ahead = server.calls.slice(before);
+    // From block 1 (block 0's cursor) to block 10: five calls of 200 fill blocks 1 to 10.
+    expect(ahead.map((call) => call.limit)).toEqual([200, 200, 200, 200, 200]);
+    expect(idsIn(windows, 1050, 1090)).toEqual(rows.slice(1050, 1090));
+    // Block 10 came as the second half of a call, so it has no checkpoint of its own: dropped, it reloads
+    // from block 9's with 200 rows; block 11 has its own and reloads with 100.
+    windows.show({ start: 3000, end: 3040 });
+    await server.answerAll();
+    windows.show({ start: 1050, end: 1090 });
+    const reload = server.calls.at(-1);
+    expect([reload?.from.cursor, reload?.limit]).toEqual([`after:${rows[899] ?? ''}`, 200]);
+    await server.answerAll();
+    expect(idsIn(windows, 1050, 1090)).toEqual(rows.slice(1050, 1090));
+    windows.show({ start: 3000, end: 3040 });
+    await server.answerAll();
+    windows.show({ start: 1150, end: 1190 });
+    const own = server.calls.at(-1);
+    expect([own?.from.cursor, own?.limit]).toEqual([`after:${rows[1099] ?? ''}`, 100]);
+  });
+
+  it('aborts a read ahead the screen moved back from', async () => {
+    const rows = sample(5000);
+    const { windows, server, errors } = windowsOver(rows, 'cursor');
+    windows.setCount({ count: 5000, atLeast: false });
+    windows.show({ start: 0, end: 40 });
+    await server.answerAll();
+    windows.show({ start: 4000, end: 4040 });
+    // Ten calls in, the screen goes back to the top: the call in flight (blocks 21 and 22) is aborted.
+    for (let call = 0; call < 10; call += 1) {
+      server.calls.at(-1)?.answer();
+      await settle();
+    }
+    const ahead = server.calls.at(-1);
+    windows.show({ start: 0, end: 40 });
+    expect(ahead?.signal.aborted).toBe(true);
+    // Only block 0 loads again: it was dropped while the screen was far down.
+    expect(server.calls.at(-1)?.from).toEqual({});
+    expect(windows.stats().loading).toBe(1);
+    await server.answerAll();
+    expect(errors).toEqual([]);
+  });
+
+  it('grows the bar past 10,000 as rows load, and a short final block sets the count', async () => {
+    const rows = sample(10_150);
+    const { windows, server } = windowsOver(rows, 'cursor');
+    windows.setCount({ count: 10_000, atLeast: true });
+    expect(windows.count()).toBe(10_000);
+    windows.show({ start: 9960, end: 10_000 });
+    await server.answerAll();
+    // The screen reached the end of a chain that may hold more: the next blocks came too, and the bar grew.
+    expect(windows.count()).toBeGreaterThan(10_000);
+    windows.show({ start: 10_060, end: windows.count() });
+    await server.answerAll();
+    expect(windows.told()).toEqual({ count: 10_150, atLeast: false });
+    expect(windows.count()).toBe(10_150);
+    expect(idsIn(windows, 10_100, 10_150)).toEqual(rows.slice(10_100));
+  });
+
+  it('starts the chain again from block 0 on restart, forgetting its checkpoints', async () => {
+    const rows = sample(1000);
+    const { windows, server } = windowsOver(rows, 'cursor');
+    windows.setCount({ count: 1000, atLeast: false });
+    windows.show({ start: 0, end: 40 });
+    await server.answerAll();
+    windows.show({ start: 500, end: 540 });
+    await server.answerAll();
+    const before = server.calls.length;
+    windows.restart();
+    expect(windows.stats()).toMatchObject({ loaded: 0, checkpoints: 0 });
+    await server.answerAll();
+    expect(server.calls[before]?.from).toEqual({});
+    expect(idsIn(windows, 500, 540)).toEqual(rows.slice(500, 540));
+  });
+
+  it('reports whether a failed read carried a cursor', async () => {
+    const rows = sample(1000);
+    const seen: boolean[] = [];
+    const { windows, server } = windowsOver(rows, 'cursor', {
+      onError: (_error, read) => seen.push(read.withCursor),
     });
-    windows.show({ start: 100, end: 150 });
-    for (const call of calls.splice(0)) call.answer();
-    await settle();
-    // The fake answers a full block: the 50 ids past the count were let go as it landed.
-    expect(released).toHaveLength(50);
-    released.length = 0;
-    expect(windows.add('new')).toBe(150);
-    expect(windows.count()).toBe(151);
-    expect(windows.idAt(150)).toBe('new');
-    expect(windows.indexOf('new')).toBe(150);
-    expect(held).toEqual(['new']);
-    windows.withdraw('new');
-    expect(windows.count()).toBe(150);
-    expect(windows.idAt(150)).toBeUndefined();
-    expect(released).toEqual(['new']);
-  });
-
-  it('adds the first record to an empty table', () => {
-    const { load } = fakeLoader();
-    const windows = createWindows({ load, count: 0 });
-    expect(windows.add('first')).toBe(0);
-    expect(windows.idAt(0)).toBe('first');
-  });
-
-  it('counts a record made here past an unloaded block without holding it', () => {
-    const { load } = fakeLoader();
-    const held: string[] = [];
-    const windows = createWindows({ load, count: 1000, hold: (ids) => held.push(...ids) });
-    expect(windows.add('new')).toBe(1000);
-    expect(windows.count()).toBe(1001);
-    expect(windows.has('new')).toBe(false);
-    expect(held).toEqual([]);
-  });
-
-  it('aborts a block request a newer one for the same block supersedes', () => {
-    const { calls, load } = fakeLoader();
-    const windows = createWindows({ load, count: 1000 });
+    windows.setCount({ count: 1000, atLeast: false });
     windows.show({ start: 0, end: 40 });
-    windows.refresh();
-    expect(calls).toHaveLength(2);
-    expect(calls[0]?.signal.aborted).toBe(true);
-    expect(calls[1]?.signal.aborted).toBe(false);
+    server.calls[0]?.fail(new Error('no'));
+    await settle();
+    windows.loadMissing();
+    await server.answerAll();
+    windows.show({ start: 100, end: 140 });
+    server.calls.at(-1)?.fail(new Error('no'));
+    await settle();
+    expect(seen).toEqual([false, true]);
   });
 
-  it('aborts every load on dispose', () => {
-    const { calls, load } = fakeLoader();
-    const windows = createWindows({ load, count: 1000 });
-    windows.show({ start: 0, end: 240 });
-    windows.dispose();
-    expect(calls.every((call) => call.signal.aborted)).toBe(true);
-  });
-
-  it('lets go of the ids of every block it drops, and of a late answer it never keeps', async () => {
-    const { calls, load } = fakeLoader();
-    const released: string[] = [];
-    const windows = createWindows({ load, count: 100_000, release: (ids) => released.push(...ids) });
-    windows.show({ start: 0, end: 40 });
-    windows.show({ start: 50_000, end: 50_040 });
-    // Block 0 was aborted, but its answer still arrives: its ids are let go at once.
-    for (const call of calls.splice(0)) call.answer();
-    await settle();
-    expect(released).toHaveLength(100);
-    expect(released[0]).toBe('id-0');
-    // Moving far again drops block 500, which was kept.
-    windows.show({ start: 0, end: 40 });
-    expect(released).toHaveLength(200);
-    expect(released.at(-1)).toBe('id-50099');
-    for (const call of calls.splice(0)) call.answer();
-    await settle();
-    windows.dispose();
-    expect(released).toHaveLength(300);
+  it('rereads from the first block on screen’s checkpoint, as many rows as the screen spans', async () => {
+    const rows = sample(3000);
+    const { windows, server, setRows } = windowsOver(rows, 'cursor');
+    windows.setCount({ count: 3000, atLeast: false });
+    for (let start = 0; start <= 1200; start += 100) {
+      windows.show({ start, end: start + 40 });
+      await server.answerAll();
+    }
+    windows.show({ start: 1250, end: 1330 });
+    await server.answerAll();
+    const changed = rows.filter((id) => id !== rows[5]);
+    setRows(changed);
+    const before = server.calls.length;
+    const done = windows.reread(new AbortController().signal);
+    await server.answerAll();
+    await done;
+    expect(server.calls.slice(before).map((call) => [call.from.cursor, call.limit])).toEqual([
+      [`after:${rows[1199] ?? ''}`, 200],
+    ]);
+    // Keyset paging: the rows after the checkpoint's record, whatever moved above it.
+    expect(idsIn(windows, 1250, 1330)).toEqual(rows.slice(1250, 1330));
+    expect(windows.stats().loaded).toBe(2);
   });
 });

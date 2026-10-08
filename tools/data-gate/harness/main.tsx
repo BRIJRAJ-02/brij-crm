@@ -205,16 +205,19 @@ const gate: Gate = {
         </UiProvider>,
       );
     } else {
-      const store = createPlainStore<SyntheticRecord>();
+      // Bodies go the moment nothing holds them, as when the gate measured the store (spec 0005, AC-40).
+      const store = createPlainStore<SyntheticRecord>({ unheldMs: 0 });
       const windows = createWindows({
-        count: COUNT,
-        load: async (offset, limit, signal) => {
+        mode: () => 'position',
+        read: async (from, limit, signal) => {
+          const offset = from.position ?? 0;
           const rows = await queryRecords(offset, limit, COUNT, latencyMs, signal);
           store.receive(rows, { hold: true });
-          return rows.map((row) => row.id);
+          return { ids: rows.map((row) => row.id) };
         },
         release: store.release,
       });
+      windows.setCount({ count: COUNT, atLeast: false });
       // Announced at once rather than once a frame, so patch and edit times include the grid's render in the same task.
       const view = createRecordView({ store, windows, schedule: (flush) => flush() });
       mounted = { store, windows, view };

@@ -30,7 +30,8 @@ const seen = (store: RecordStore<Person>, id: string) => {
 };
 
 describe('the plain record store', () => {
-  const create = () => createPlainStore<Person>();
+  // Bodies nothing holds go at once here; the 30 second stay has its own tests below.
+  const create = () => createPlainStore<Person>({ unheldMs: 0 });
   const ada = person('r1', { name: 'Ada', city: 'London', role: 'Engineer' });
 
   /** A store holding `rows`, as a window holds the rows of its blocks. */
@@ -269,6 +270,51 @@ describe('the plain record store', () => {
       const loose = store.create(person('r3', { name: 'Edsger' }), 'm2');
       loose.confirm(person('r3', { name: 'Edsger' }));
       expect(store.get('r3')).toBeUndefined();
+    });
+
+    it('keeps a body nothing holds for 30 seconds, then drops it; past 2,000 such bodies the oldest go first', () => {
+      let time = 0;
+      const timers: { at: number; run: () => void; live: boolean }[] = [];
+      const store = createPlainStore<Person>({
+        now: () => time,
+        maxUnheld: 3,
+        later: (run, ms) => {
+          const timer = { at: time + ms, run, live: true };
+          timers.push(timer);
+          return () => {
+            timer.live = false;
+          };
+        },
+      });
+      const tick = (ms: number) => {
+        time += ms;
+        for (const timer of timers.filter((each) => each.live && each.at <= time)) {
+          timer.live = false;
+          timer.run();
+        }
+      };
+      store.receive([person('a', {}), person('b', {})], { hold: true });
+      store.release(['a']);
+      tick(20_000);
+      // Held again within its 30 seconds: it stays for good.
+      store.hold(['a']);
+      store.release(['b']);
+      tick(15_000);
+      expect(store.get('a')).toBeDefined();
+      expect(store.get('b')).toBeDefined();
+      tick(15_000);
+      expect(store.get('b')).toBeUndefined();
+      expect(store.get('a')).toBeDefined();
+      // A fourth body let go pushes the oldest out at once.
+      store.receive(
+        ['c', 'd', 'e', 'f'].map((id) => person(id, {})),
+        { hold: true },
+      );
+      store.release(['c']);
+      tick(1);
+      store.release(['d', 'e', 'f']);
+      expect(store.get('c')).toBeUndefined();
+      expect(['d', 'e', 'f'].map((id) => store.get(id) !== undefined)).toEqual([true, true, true]);
     });
 
     it('drops a refused create together with the edits made on its draft', () => {

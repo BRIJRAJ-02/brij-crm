@@ -620,7 +620,8 @@ describe('live updates', () => {
             createLive({ ...options, open: () => Promise.resolve(client.transport), random: () => 0 }),
         }),
     });
-    const view = await data.records.view('acme', PEOPLE.id);
+    // The People screen shows the job title column (spec 0006, AC-55: only shown attributes are read and refetched).
+    const view = await data.records.view('acme', PEOPLE.id, {}, [TITLE.id]);
     await settled();
     client.channel().onSubscribed({ wasRecovering: false, recovered: false });
     await settled();

@@ -5,6 +5,15 @@ export { createPlainStore, sameData } from './plain-store.ts';
 export { composeRecord, newerBase, remainingLayers } from './store.ts';
 export type { Layer, RecordBody, RecordStore, RecordValues, StoreListener } from './store.ts';
 export { createRecordView, nextFrame } from './view.ts';
-export type { RecordSource, RecordViewStore, Scheduler } from './view.ts';
+export type { Pin, RecordSource, RecordViewStore, RowNote, Scheduler } from './view.ts';
 export { createWindows } from './windows.ts';
-export type { BlockLoader, RowRange, Windows, WindowsOptions } from './windows.ts';
+export type {
+  BlockReader,
+  BlockRead,
+  ReadFrom,
+  RowRange,
+  WindowCount,
+  WindowMode,
+  Windows,
+  WindowsOptions,
+} from './windows.ts';

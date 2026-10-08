@@ -23,14 +23,20 @@ const BEA = '0199a6f2-0000-7000-8000-0000000000e2';
 const PEOPLE = '0199a6f2-0000-7000-8000-00000000000a';
 const NAME = 'attr-name';
 const CITY = 'attr-city';
+const CREATED = 'attr-created-at';
+const OWNER = 'attr-owner';
+const UPDATED = 'attr-updated-at';
+/** People's attributes as `describe` gives them: a name, a city, created at, an owner (a member) and updated at. */
+const SHAPE = [
+  { id: NAME, type: 'personal_name', isSystem: false, apiSlug: 'name' },
+  { id: CITY, type: 'text', isSystem: false, apiSlug: 'city' },
+  { id: CREATED, type: 'timestamp', isSystem: true, apiSlug: 'created_at' },
+  { id: OWNER, type: 'actor_reference', isSystem: false, apiSlug: 'owner' },
+  { id: UPDATED, type: 'timestamp', isSystem: true, apiSlug: 'updated_at' },
+];
 
 const idAt = (index: number) => `0199a6f2-0000-7000-8000-${index.toString(16).padStart(12, '0')}`;
 const version = (ms: number) => `0199a6f2-${ms.toString(16).padStart(4, '0')}-7000-8000-000000000000`;
-/** A UUID v7 minted at the test's now (`at(30)`): a record that may have just been made. */
-const justMinted = (() => {
-  const hex = Date.UTC(2026, 9, 8, 9, 0, 30).toString(16).padStart(12, '0');
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-7000-8000-000000000001`;
-})();
 const at = (second: number) => `2026-10-08T09:00:${String(second).padStart(2, '0')}.000Z`;
 
 function rowOf(id: string, values: Record<string, unknown>, versions: Record<string, string> = {}, second = 1) {
@@ -76,13 +82,16 @@ const writtenOf = (row: RecordView, attributeIds: readonly string[]): Record<str
 
 /** A fake API: each call waits in its own queue until the test answers it. */
 function fakeApi() {
-  const queries: Pending<{ position: number; limit: number }, readonly RecordView[]>[] = [];
-  const counts: Pending<undefined, number>[] = [];
+  const queries: Pending<QueryCall, readonly RecordView[] | { records: readonly RecordView[]; nextCursor?: string }>[] =
+    [];
+  const counts: Pending<CountCall, number | { count: number; atLeast: boolean }>[] = [];
   const creates: Pending<CreateRecordInput, RecordView>[] = [];
   // A test may say what the write itself made (`written`); by default, each value it sent at the answer's version.
   const edits: Pending<SetValuesInput, RecordView & { readonly written?: Record<string, string> }>[] = [];
   const batches: Pending<SetValuesBatchInput, BatchResults>[] = [];
   const gets: Pending<readonly string[], RecordView[]>[] = [];
+  // What each records.get asked for besides its ids: the attributes (spec 0006, AC-55).
+  const getAttributes: (readonly string[] | undefined)[] = [];
   const queue =
     <I, O>(list: Pending<I, O>[]) =>
     (input: I, signal?: AbortSignal) =>
@@ -90,11 +99,24 @@ function fakeApi() {
         list.push({ input, answer: resolve, fail: reject, ...(signal === undefined ? {} : { signal }) });
       });
   const api: RecordsApi = {
-    query: async (input, signal) => ({
-      records: [...(await queue(queries)({ position: input.position, limit: input.limit }, signal))],
-    }),
-    count: async (_input, signal) => ({ count: await queue(counts)(undefined, signal), atLeast: false }),
-    get: (input) => queue(gets)(input.ids),
+    query: async (input, signal) => {
+      const { workspace: _workspace, objectId: _objectId, ...asked } = input;
+      // The tests that don't look at the read's attributes or clock compare only where it starts and how many.
+      const call: QueryCall = { ...asked };
+      const answer = await queue(queries)(call, signal);
+      return Array.isArray(answer)
+        ? { records: [...(answer as readonly RecordView[])] }
+        : (answer as { records: RecordView[]; nextCursor?: string });
+    },
+    count: async (input, signal) => {
+      const { workspace: _workspace, objectId: _objectId, ...asked } = input;
+      const answer = await queue(counts)(asked, signal);
+      return typeof answer === 'number' ? { count: answer, atLeast: false } : answer;
+    },
+    get: (input) => {
+      getAttributes.push(input.attributeIds);
+      return queue(gets)(input.ids);
+    },
     // Each write stores one outbox row here: one echo.
     create: async (input) => ({ ...(await queue(creates)(input)), echoes: 1, written: {} }),
     setValues: async (input) => {
@@ -115,11 +137,30 @@ function fakeApi() {
       };
     },
   };
-  return { api, queries, counts, creates, edits, batches, gets };
+  return { api, queries, counts, creates, edits, batches, gets, getAttributes };
 }
 
-/** The records layer on a fake API, with frames, waits and notices in the test's hands. */
-function setup() {
+/** What a records.query carried, past its workspace and object. */
+interface QueryCall {
+  readonly position?: number;
+  readonly cursor?: string;
+  readonly limit: number;
+  readonly attributeIds?: readonly string[];
+  readonly filter?: unknown;
+  readonly sorts?: unknown;
+  readonly now?: string;
+  readonly timeZone?: string;
+}
+
+/** What a records.count carried, past its workspace and object. */
+interface CountCall {
+  readonly filter?: unknown;
+  readonly now?: string;
+  readonly timeZone?: string;
+}
+
+/** The records layer on a fake API, with frames, waits, timers and notices in the test's hands. */
+function setup(options: { readonly describe?: Parameters<typeof createRecordsLayer>[0]['describe'] } = {}) {
   const server = fakeApi();
   const watching: string[] = [];
   const mutationLog: string[] = [];
@@ -127,6 +168,8 @@ function setup() {
   const replaced: ReplacedNotice[] = [];
   const waits: number[] = [];
   const frames: (() => void)[] = [];
+  const timers: { ms: number; run: () => void; live: boolean }[] = [];
+  let clock = Date.parse(at(30));
   let minted = 0;
   const layer = createRecordsLayer({
     api: server.api,
@@ -137,8 +180,17 @@ function setup() {
       waits.push(ms);
       return Promise.resolve();
     },
-    now: () => Date.parse(at(30)),
+    now: () => clock,
     random: () => 0,
+    timeZone: () => 'Europe/London',
+    later: (run, ms) => {
+      const timer = { ms, run, live: true };
+      timers.push(timer);
+      return () => {
+        timer.live = false;
+      };
+    },
+    describe: options.describe ?? (() => Promise.resolve({ primaryAttributeId: NAME, attributes: SHAPE })),
     watch: (workspace) => {
       watching.push(workspace);
       return () => {
@@ -156,7 +208,16 @@ function setup() {
   const frame = () => {
     for (const flush of frames.splice(0)) flush();
   };
-  return { ...server, layer, notices, replaced, waits, frame, watching, mutationLog };
+  /** Runs the timers that are due, `ms` from now (settle's 1.5 s), moving the clock on. */
+  const tick = (ms: number) => {
+    clock += ms;
+    for (const timer of timers.splice(0)) {
+      if (!timer.live) continue;
+      if (timer.ms <= ms) timer.run();
+      else timers.push({ ...timer, ms: timer.ms - ms });
+    }
+  };
+  return { ...server, layer, notices, replaced, waits, frame, tick, watching, mutationLog };
 }
 
 /** The first `count` rows of the table, as the server holds them. */
@@ -165,10 +226,11 @@ const block = (from: number, count: number) =>
     rowOf(idAt(from + index), { [NAME]: `P${String(from + index)}`, [CITY]: 'London' }, { [CITY]: version(1) }),
   );
 
-/** A view of 3 people, loaded and ready. */
+/** A view of 3 people, loaded and ready, shown by a screen with the city column. */
 async function readyView() {
   const context = setup();
   const view = context.layer.view(WS, PEOPLE);
+  const reader = view.retain([CITY]);
   await settle();
   context.counts[0]?.answer(3);
   await settle();
@@ -176,14 +238,21 @@ async function readyView() {
   await settle();
   await view.ready();
   context.frame();
-  return { ...context, view };
+  return { ...context, view, reader };
 }
 
 describe('a records view', () => {
   it('loads its count, then its first block, and is ready', async () => {
     const { view, queries, counts } = await readyView();
     expect(counts).toHaveLength(1);
-    expect(queries[0]?.input).toEqual({ position: 0, limit: 100 });
+    // Only the columns on screen and the primary, on the window's clock (spec 0006, AC-51, AC-55).
+    expect(queries[0]?.input).toEqual({
+      position: 0,
+      limit: 100,
+      attributeIds: [CITY, NAME],
+      now: at(30),
+      timeZone: 'Europe/London',
+    });
     const state = view.getSnapshot();
     expect(state.status).toBe('ready');
     expect(state.source.count).toBe(3);
@@ -283,20 +352,6 @@ describe('a records view', () => {
     expect(queries[2]?.input.position).toBe(4000);
   });
 
-  it('brings a record made here into its block when the block was still loading', async () => {
-    const { layer, counts, queries, creates } = setup();
-    const view = layer.view(WS, PEOPLE);
-    await settle();
-    counts[0]?.answer(3);
-    await settle();
-    void layer.create(WS, PEOPLE, { [NAME]: 'Grace' }, idAt(7000)).catch(() => undefined);
-    await settle();
-    queries[0]?.answer(block(0, 3));
-    await view.ready();
-    expect(view.indexOf(idAt(7000))).toBe(3);
-    expect(creates[0]?.input.id).toBe(idAt(7000));
-  });
-
   it('reads the count again when a block brings fewer rows than it promised', async () => {
     const { layer, counts, queries, frame } = setup();
     const view = layer.view(WS, PEOPLE);
@@ -324,17 +379,17 @@ describe('a records view', () => {
       keepUnusedViewMs: 0,
     });
     const view = layer.view(WS, PEOPLE);
-    const release = view.retain();
-    view.retain()();
+    const reader = view.retain();
+    view.retain().release();
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect(layer.view(WS, PEOPLE)).toBe(view);
-    release();
+    reader.release();
     await new Promise((resolve) => setTimeout(resolve, 5));
     expect(layer.view(WS, PEOPLE)).not.toBe(view);
   });
 
-  it('lets go of the bodies of blocks scrolled far away', async () => {
-    const { layer, counts, queries } = setup();
+  it('lets go of the bodies of blocks scrolled far away, 30 seconds later', async () => {
+    const { layer, counts, queries, tick } = setup();
     const view = layer.view(WS, PEOPLE);
     await settle();
     counts[0]?.answer(5000);
@@ -346,8 +401,228 @@ describe('a records view', () => {
     await settle();
     queries[1]?.answer(block(4000, 100));
     await settle();
+    // The first block's bodies stay a while (another window may show them), then go.
+    expect(layer.size()).toBe(200);
+    tick(30_000);
     expect(layer.size()).toBe(100);
     expect(view.getSnapshot().source.getItem(4001)?.id).toBe(idAt(4001));
+  });
+});
+
+describe('windows keyed by their question (spec 0006, AC-51 to AC-53)', () => {
+  const byCity = { sorts: [{ attributeId: CITY, direction: 'ascending' as const }] };
+  const byOwner = { sorts: [{ attributeId: OWNER, direction: 'ascending' as const }] };
+  const inLondon = {
+    filter: {
+      conjunction: 'and' as const,
+      conditions: [{ attributeId: CITY, operator: 'is' as const, value: 'London' }],
+    },
+  };
+
+  /** A view of `query`, ready with `rows` (a page in cursor mode when `nextCursor` is given). */
+  async function readyQuery(
+    query: Parameters<ReturnType<typeof setup>['layer']['view']>[2],
+    count: number | { count: number; atLeast: boolean },
+    rows: readonly RecordView[],
+    nextCursor?: string,
+  ) {
+    const context = setup();
+    const view = context.layer.view(WS, PEOPLE, query);
+    const reader = view.retain([CITY]);
+    await settle();
+    context.counts[0]?.answer(count);
+    await settle();
+    context.queries[0]?.answer(nextCursor === undefined ? rows : { records: rows, nextCursor });
+    await settle();
+    await view.ready();
+    context.frame();
+    return { ...context, view, reader };
+  }
+
+  it('shares one window between screens asking the same question, and opens another for a new sort', () => {
+    const { layer } = setup();
+    const one = layer.view(WS, PEOPLE, byCity);
+    // The same question spelled another way (no filter, an empty one) is the same window.
+    expect(layer.view(WS, PEOPLE, { ...byCity, filter: { conjunction: 'and', conditions: [] } })).toBe(one);
+    expect(layer.view(WS, PEOPLE, byOwner)).not.toBe(one);
+    expect(layer.view(WS, PEOPLE)).not.toBe(one);
+  });
+
+  it('jumps by position on no sort or a stored kind, and pages by cursor on a member sort or a filter', async () => {
+    const plain = await readyQuery(undefined, 3, block(0, 3));
+    expect(plain.view.getSnapshot().mode).toBe('position');
+    const city = await readyQuery(byCity, 3, block(0, 3));
+    expect(city.view.getSnapshot().mode).toBe('position');
+    expect(city.queries[0]?.input).toMatchObject({ position: 0, sorts: byCity.sorts });
+    const owner = await readyQuery(byOwner, 3, block(0, 3));
+    expect(owner.view.getSnapshot().mode).toBe('cursor');
+    expect(owner.queries[0]?.input.position).toBeUndefined();
+    expect(owner.queries[0]?.input.cursor).toBeUndefined();
+    const filtered = await readyQuery(inLondon, { count: 10_000, atLeast: true }, block(0, 100), 'c1');
+    const state = filtered.view.getSnapshot();
+    expect(state.mode).toBe('cursor');
+    // "10,000+": the label says at least, the bar covers 10,000 for now.
+    expect(state.count).toEqual({ count: 10_000, atLeast: true });
+    expect(filtered.counts[0]?.input).toMatchObject({ filter: inLondon.filter });
+  });
+
+  it('sends one clock with every block and count of a window, and takes a fresh one at each settle', async () => {
+    const { layer, view, queries, counts, tick, frame } = await readyQuery(inLondon, 300, block(0, 100), 'after-99');
+    view.getSnapshot().source.onRangeChange({ start: 90, end: 140 });
+    await settle();
+    expect(queries[1]?.input).toMatchObject({ cursor: 'after-99', now: at(30) });
+    expect(counts[0]?.input.now).toBe(at(30));
+    queries[1]?.answer({ records: block(100, 100), nextCursor: 'after-199' });
+    await settle();
+    // Someone made a record elsewhere: 1.5 s later the window settles, on a clock taken then.
+    layer.changed(WS, PEOPLE, [idAt(9000)], [NAME]);
+    frame();
+    tick(1000);
+    expect(queries).toHaveLength(2);
+    tick(500);
+    await settle();
+    const settledAt = new Date(Date.parse(at(30)) + 1500).toISOString();
+    expect(queries[2]?.input).toMatchObject({ limit: 200, now: settledAt });
+    expect(queries[2]?.input.cursor).toBeUndefined();
+    expect(counts[1]?.input.now).toBe(settledAt);
+  });
+
+  it('restarts the chain once when the server refuses a cursor, and shows the error with Retry when it fails again', async () => {
+    const { view, queries, frame } = await readyQuery(byOwner, 300, block(0, 100), 'after-99');
+    const refused = () =>
+      dataError('INPUT_INVALID', 'This page link belongs to another view.', {
+        issues: [{ path: ['cursor'], message: 'This page link belongs to another view.' }],
+      });
+    view.getSnapshot().source.onRangeChange({ start: 100, end: 140 });
+    await settle();
+    queries[1]?.fail(refused());
+    await settle();
+    // Started again from block 0, no cursor.
+    expect(queries[2]?.input.cursor).toBeUndefined();
+    queries[2]?.answer({ records: block(0, 100), nextCursor: 'after-99-again' });
+    await settle();
+    // That read landed, so one more refusal may restart again; but a refusal of the restart itself shows the error.
+    queries[3]?.fail(refused());
+    await settle();
+    queries[4]?.fail(refused());
+    await settle();
+    frame();
+    expect(view.getSnapshot().status).toBe('error');
+    expect(queries).toHaveLength(5);
+  });
+
+  it('never restarts on a refused filter: the view shows its error state', async () => {
+    const { view, queries, frame } = await readyQuery(byOwner, 300, block(0, 100), 'after-99');
+    view.getSnapshot().source.onRangeChange({ start: 100, end: 140 });
+    await settle();
+    queries[1]?.fail(dataError('FILTER_INVALID', 'That filter is not valid.'));
+    await settle();
+    frame();
+    expect(view.getSnapshot().status).toBe('error');
+    expect(queries).toHaveLength(2);
+  });
+});
+
+describe('visible attributes (spec 0006, AC-55)', () => {
+  it('fetches a newly shown column for the loaded rows only, and reads later blocks with it', async () => {
+    const { reader, gets, getAttributes, view, queries } = await readyView();
+    reader.columns([CITY, OWNER]);
+    expect(gets.map((call) => call.input)).toEqual([[idAt(0), idAt(1), idAt(2)]]);
+    expect(getAttributes).toEqual([[OWNER]]);
+    gets[0]?.answer(block(0, 3).map((row) => ({ ...row, values: { [OWNER]: null } })));
+    await settle();
+    // Merged into the bodies: the city read before stays.
+    expect(view.getSnapshot().source.getItem(0)?.values[CITY]).toBe('London');
+    view.retry();
+    await settle();
+    expect(queries.at(-1)?.input.attributeIds).toEqual([CITY, OWNER, NAME]);
+    // Hiding it fetches nothing.
+    reader.columns([CITY]);
+    expect(gets).toHaveLength(1);
+  });
+
+  it('refetches only the changed attributes a window reads, and nothing for an event naming none of them', async () => {
+    const { layer, gets, getAttributes, frame, reader } = await readyView();
+    layer.changed(WS, PEOPLE, [idAt(1)], [OWNER]);
+    frame();
+    expect(gets).toHaveLength(0);
+    layer.changed(WS, PEOPLE, [idAt(1)], [CITY, OWNER]);
+    frame();
+    expect(getAttributes).toEqual([[CITY]]);
+    // A shown updated at moves with every write, so it comes too.
+    reader.columns([CITY, UPDATED]);
+    layer.changed(WS, PEOPLE, [idAt(2)], [NAME]);
+    frame();
+    expect(getAttributes.at(-1)).toEqual([NAME, UPDATED]);
+  });
+});
+
+describe('settle (spec 0006, AC-56)', () => {
+  const byCity = { sorts: [{ attributeId: CITY, direction: 'ascending' as const }] };
+  const inLondon = {
+    filter: {
+      conjunction: 'and' as const,
+      conditions: [{ attributeId: CITY, operator: 'is' as const, value: 'London' }],
+    },
+  };
+
+  async function sortedView(query: typeof byCity | typeof inLondon) {
+    const context = setup();
+    const view = context.layer.view(WS, PEOPLE, query);
+    const reader = view.retain([CITY]);
+    await settle();
+    context.counts[0]?.answer(3);
+    await settle();
+    context.queries[0]?.answer(query === byCity ? block(0, 3) : { records: block(0, 3) });
+    await settle();
+    await view.ready();
+    context.frame();
+    view.getSnapshot().source.onRangeChange({ start: 0, end: 3 });
+    return { ...context, view, reader };
+  }
+
+  it('patches values at once, and settles order 1.5 s after the last change, never while an editor is open', async () => {
+    const { layer, view, gets, queries, counts, tick, frame } = await sortedView(byCity);
+    layer.changed(WS, PEOPLE, [idAt(0)], [CITY]);
+    frame();
+    gets[0]?.answer([rowOf(idAt(0), { [NAME]: 'P0', [CITY]: 'Zurich' }, { [CITY]: version(3) }, 3)]);
+    await settle();
+    frame();
+    // The value shows at once, in place.
+    expect(view.getSnapshot().source.getItem(0)?.values[CITY]).toBe('Zurich');
+    view.holdSettle(true);
+    tick(5000);
+    expect(queries).toHaveLength(1);
+    view.holdSettle(false);
+    tick(1500);
+    await settle();
+    expect(queries).toHaveLength(2);
+    expect(counts).toHaveLength(2);
+    counts[1]?.answer(3);
+    queries[1]?.answer([...block(1, 2), rowOf(idAt(0), { [NAME]: 'P0', [CITY]: 'Zurich' })]);
+    await settle();
+    frame();
+    expect(view.getSnapshot().source.getItem(2)?.id).toBe(idAt(0));
+  });
+
+  it('keeps a row the member edited where they see it, and notes one that no longer matches the filter', async () => {
+    const { layer, view, edits, queries, counts, tick, frame } = await sortedView(inLondon);
+    void layer.setValues(WS, [{ rowId: idAt(0), columnId: CITY, value: 'Paris' }]);
+    await settle();
+    edits[0]?.answer(rowOf(idAt(0), { [NAME]: 'P0', [CITY]: 'Paris' }, { [CITY]: version(2) }, 2));
+    await settle();
+    tick(1500);
+    await settle();
+    counts[1]?.answer(2);
+    queries[1]?.answer({ records: block(1, 2) });
+    await settle();
+    frame();
+    const state = view.getSnapshot();
+    // Still the first row, with its note; the count shows it until the member scrolls away or leaves.
+    expect(state.source.getItem(0)?.id).toBe(idAt(0));
+    expect(state.rowNotes.get(idAt(0))).toBe('no-longer-matches');
+    expect(state.source.count).toBe(3);
+    expect(state.source.getItem(1)?.id).toBe(idAt(1));
   });
 });
 
@@ -551,20 +826,22 @@ describe('a paste or a range clear (spec 0006, AC-50)', () => {
 });
 
 describe('creating a record', () => {
-  it('adds the draft at the end at once, and keeps the server’s row', async () => {
+  it('puts the draft first at once, marked new, and keeps the server’s row (spec 0006, AC-56)', async () => {
     const { layer, view, creates, frame } = await readyView();
     const made = layer.create(WS, PEOPLE, { [NAME]: 'Grace' });
     await settle();
     frame();
     const state = view.getSnapshot();
     expect(state.source.count).toBe(4);
-    expect(state.source.getItem(3)?.values[NAME]).toBe('Grace');
+    expect(state.source.getItem(0)?.values[NAME]).toBe('Grace');
+    expect(state.source.getItem(1)?.values[NAME]).toBe('P0');
     const id = creates[0]?.input.id ?? '';
-    expect(view.indexOf(id)).toBe(3);
+    expect(view.indexOf(id)).toBe(0);
+    expect(state.rowNotes.get(id)).toBe('new');
     creates[0]?.answer(rowOf(id, { [NAME]: 'Grace', created: at(30) }, { [NAME]: version(4) }, 30));
     expect((await made).id).toBe(id);
     frame();
-    expect(view.getSnapshot().source.getItem(3)?.values.created).toBe(at(30));
+    expect(view.getSnapshot().source.getItem(0)?.values.created).toBe(at(30));
   });
 
   it('takes a refused create out again, restores the count, and hands back the refusals', async () => {
@@ -576,7 +853,8 @@ describe('creating a record', () => {
     await expect(made).rejects.toMatchObject({ code: 'VALUE_REQUIRED', data: { refusals: [refusal] } });
     frame();
     expect(view.getSnapshot().source.count).toBe(3);
-    expect(view.getSnapshot().source.getItem(3)).toBeUndefined();
+    expect(view.getSnapshot().source.getItem(0)?.values[NAME]).toBe('P0');
+    expect(view.getSnapshot().rowNotes.size).toBe(0);
     expect(layer.size()).toBe(3);
   });
 
@@ -614,7 +892,7 @@ describe('creating a record', () => {
     void layer.setValues(WS, [{ rowId: id, columnId: CITY, value: 'Austin' }]);
     await settle();
     frame();
-    expect(view.getSnapshot().source.getItem(3)?.values[CITY]).toBe('Austin');
+    expect(view.getSnapshot().source.getItem(0)?.values[CITY]).toBe('Austin');
     expect(edits).toHaveLength(0);
     creates[0]?.fail(dataError('LIMIT_REACHED', 'Full.'));
     await expect(made).rejects.toMatchObject({ code: 'LIMIT_REACHED' });
@@ -689,48 +967,6 @@ describe('live changes', () => {
     expect(view.getSnapshot().source.getItem(0)?.values[NAME]).toBe('P0');
   });
 
-  it('places a record made elsewhere at the end when the last row is loaded', async () => {
-    const { layer, view, gets, counts, frame } = await readyView();
-    layer.changed(WS, PEOPLE, [idAt(7)]);
-    frame();
-    expect(gets.map((call) => call.input)).toEqual([[idAt(7)]]);
-    gets[0]?.answer([rowOf(idAt(7), { [NAME]: 'Ada' })]);
-    await settle();
-    frame();
-    const state = view.getSnapshot();
-    expect(state.source.count).toBe(4);
-    expect(state.source.getItem(3)?.values[NAME]).toBe('Ada');
-    // No count was needed for it.
-    expect(counts).toHaveLength(1);
-  });
-
-  it('asks for the count again, spread out, for a record made out of sight, never for an edit to an older one', async () => {
-    const { layer, counts, queries, waits, gets, frame } = setup();
-    const view = layer.view(WS, PEOPLE);
-    await settle();
-    counts[0]?.answer(5000);
-    await settle();
-    queries[0]?.answer(block(0, 100));
-    await view.ready();
-    frame();
-    // An older record, out of sight: an edit, which leaves the count alone.
-    layer.changed(WS, PEOPLE, [idAt(4000)]);
-    frame();
-    await settle();
-    expect(counts).toHaveLength(1);
-    // An id minted just now, out of sight (the end isn't loaded): it may be new.
-    layer.changed(WS, PEOPLE, [justMinted]);
-    frame();
-    await settle();
-    expect(gets).toHaveLength(0);
-    expect(waits).toEqual([0]);
-    expect(counts).toHaveLength(2);
-    counts[1]?.answer(5001);
-    await settle();
-    frame();
-    expect(view.getSnapshot().source.count).toBe(5001);
-  });
-
   it('keeps the table when a count fails after it is ready, and asks again later', async () => {
     const { layer, view, counts, waits, frame } = await readyView();
     layer.reload(WS);
@@ -753,22 +989,6 @@ describe('live changes', () => {
     queries[0]?.answer(block(0, 3));
     await view.ready();
     expect(gets.map((call) => call.input)).toEqual([[idAt(1)]]);
-  });
-
-  it('keeps the newer row when a record placed from an event is named again', async () => {
-    const { layer, view, gets, frame } = await readyView();
-    layer.changed(WS, PEOPLE, [idAt(7)]);
-    frame();
-    layer.changed(WS, PEOPLE, [idAt(7)]);
-    frame();
-    expect(gets).toHaveLength(2);
-    gets[0]?.answer([rowOf(idAt(7), { [NAME]: 'Ada' }, { [NAME]: version(1) })]);
-    await settle();
-    gets[1]?.answer([rowOf(idAt(7), { [NAME]: 'Ada Lovelace' }, { [NAME]: version(2) })]);
-    await settle();
-    frame();
-    expect(view.getSnapshot().source.count).toBe(4);
-    expect(view.getSnapshot().source.getItem(3)?.values[NAME]).toBe('Ada Lovelace');
   });
 
   it('loads the count and blocks again on reload, keeping the table', async () => {

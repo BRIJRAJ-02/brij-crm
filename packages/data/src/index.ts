@@ -37,11 +37,13 @@ import type { UndoKind } from './records/history.ts';
 import type {
   CellChange,
   EditOutcome,
+  ObjectShape,
   RecordsApi,
   RecordsLayer,
   RecordsView,
   ReplacedNotice,
   UndoOutcome,
+  ViewQuery,
 } from './records/layer.ts';
 
 export type {
@@ -82,7 +84,18 @@ export { createIdMinter, type IdSources } from './ids.ts';
 export type { LiveStatus } from './live/live.ts';
 export type { Notice } from './notice.ts';
 export type { UndoKind } from './records/history.ts';
-export type { CellChange, EditOutcome, RecordsView, ViewState, ViewStatus } from './records/layer.ts';
+export type {
+  CellChange,
+  EditOutcome,
+  RecordsView,
+  ViewQuery,
+  ViewReader,
+  ViewState,
+  ViewStatus,
+} from './records/layer.ts';
+export type { RowNote } from './records/view.ts';
+export type { WindowCount, WindowMode } from './records/windows.ts';
+export type { FilterGroup, SortRule, SortRules } from '@crm/contracts/values';
 
 /**
  * A value this tab saved was replaced by someone else's later save (spec
@@ -473,7 +486,7 @@ export function createDataLayer({
   router.on('records', (workspace, event) => {
     void records?.then((layer) => {
       if (event.coarse === true) layer.reload(workspace, event.objectId);
-      else layer.changed(workspace, event.objectId, event.recordIds);
+      else layer.changed(workspace, event.objectId, event.recordIds, event.attributeIds);
       // What the write replaced (spec 0006): a notice for the values this tab wrote.
       if (event.replaced !== undefined) layer.replaced(workspace, event);
     });
@@ -535,9 +548,20 @@ export function createDataLayer({
   };
 
   const recordsApi: RecordsApi = {
-    query: (input, signal) => call((options) => api.records.query(input, options), signal),
+    query: (input, signal) =>
+      call((options) => api.records.query({ ...input, attributeIds: [...input.attributeIds] }, options), signal),
     count: (input, signal) => call((options) => api.records.count(input, options), signal),
-    get: (input) => call((options) => api.records.get({ workspace: input.workspace, ids: [...input.ids] }, options)),
+    get: (input) =>
+      call((options) =>
+        api.records.get(
+          {
+            workspace: input.workspace,
+            ids: [...input.ids],
+            ...(input.attributeIds === undefined ? {} : { attributeIds: [...input.attributeIds] }),
+          },
+          options,
+        ),
+      ),
     create: (input) => call((options) => api.records.create(input, options)),
     setValues: (input) => call((options) => api.records.setValues(input, options)),
     setValuesBatch: (input) => call((options) => api.records.setValuesBatch(input, options)),
@@ -582,6 +606,38 @@ export function createDataLayer({
     });
   };
 
+  /**
+   * The workspace's live objects, cached for the app load. A non member
+   * gets the same `NOT_FOUND` as an unknown address, which also drops the
+   * cached `me`: the person may have just left it, so `/` asks again.
+   */
+  function listObjects(workspace: string): Promise<ObjectSummary[]> {
+    const cached = objects.get(workspace);
+    if (cached !== undefined) return cached;
+    const loading = beforeRead(workspace).then(() => call((options) => api.objects.list({ workspace }, options)));
+    objects.set(workspace, loading);
+    loading.catch((error: unknown) => {
+      if (objects.get(workspace) === loading) objects.delete(workspace);
+      if (toDataError(error).code === 'NOT_FOUND') me = undefined;
+    });
+    return loading;
+  }
+
+  /** An object's primary attribute and its attributes' kinds, for a window's mode (spec 0006, from the cached lists). */
+  const describeObject = async (workspace: string, objectId: string): Promise<ObjectShape> => {
+    const [list, defined] = await Promise.all([
+      listObjects(workspace),
+      cached(attributes, objectKey(workspace, objectId), () =>
+        beforeRead(workspace).then(() => call((options) => api.attributes.list({ workspace, objectId }, options))),
+      ),
+    ]);
+    const primary = list.find((object) => object.id === objectId)?.primaryAttributeId ?? undefined;
+    return {
+      ...(primary === undefined ? {} : { primaryAttributeId: primary }),
+      attributes: defined.map(({ id, type, isSystem, apiSlug }) => ({ id, type, isSystem, apiSlug })),
+    };
+  };
+
   const recordsLayer = (): Promise<RecordsLayer> => {
     records ??= import('./records/layer.ts').then(({ createRecordsLayer }) =>
       createRecordsLayer({
@@ -600,6 +656,7 @@ export function createDataLayer({
         onReplaced: (notice) => {
           void tellReplaced(notice);
         },
+        describe: describeObject,
       }),
     );
     return records;
@@ -646,17 +703,7 @@ export function createDataLayer({
        * gets the same `NOT_FOUND` as an unknown address, which also drops the
        * cached `me`: the person may have just left it, so `/` asks again.
        */
-      list(workspace: string): Promise<ObjectSummary[]> {
-        const cached = objects.get(workspace);
-        if (cached !== undefined) return cached;
-        const loading = beforeRead(workspace).then(() => call((options) => api.objects.list({ workspace }, options)));
-        objects.set(workspace, loading);
-        loading.catch((error: unknown) => {
-          if (objects.get(workspace) === loading) objects.delete(workspace);
-          if (toDataError(error).code === 'NOT_FOUND') me = undefined;
-        });
-        return loading;
-      },
+      list: listObjects,
     },
     members: {
       /** The workspace's active members, by name: the Owner column's names. Cached for the app load. */
@@ -713,8 +760,13 @@ export function createDataLayer({
        * that asks), settled once its count and first block are in or failed.
        * The router loader awaits it; the screen reads it through `useView`.
        */
-      async view(workspace: string, objectId: string): Promise<RecordsView> {
-        const view = (await recordsLayer()).view(workspace, objectId);
+      async view(
+        workspace: string,
+        objectId: string,
+        query: ViewQuery = {},
+        attributeIds: readonly string[] = [],
+      ): Promise<RecordsView> {
+        const view = (await recordsLayer()).view(workspace, objectId, query, attributeIds);
         await view.ready();
         return view;
       },

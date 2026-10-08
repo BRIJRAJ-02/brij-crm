@@ -4,9 +4,10 @@
 // getSnapshot). AC-40's prototype gate (tools/data-gate) measured it against TanStack DB.
 //
 // It holds only what something refers to: every id is reference counted
-// (windows, open record views) and a record with pending layers stays too, so
-// a body leaves the moment its last holder lets go and memory stays flat
-// while a table scrolls.
+// (windows, pinned rows, open record views) and a record with pending layers
+// stays too. A body nothing holds stays 30 seconds (a window opened again on
+// another sort reuses it), and past 2,000 such bodies the oldest go first, so
+// memory stays flat while a table scrolls (spec 0006, the store's memory).
 import {
   composeRecord,
   newerBase,
@@ -44,11 +45,61 @@ export function sameData(a: unknown, b: unknown): boolean {
   return left.length === Object.keys(right).length && left.every(([key, value]) => sameData(value, right[key]));
 }
 
+/** How long a body nothing holds stays, in ms (spec 0006): 30 seconds. */
+export const UNHELD_MS = 30_000;
+/** The most bodies nothing holds that stay; past it the oldest go first (spec 0006). */
+export const MAX_UNHELD = 2_000;
+
+/** Options for the plain store: when bodies nothing holds go, and the clock and timer that time it. */
+export interface PlainStoreOptions {
+  readonly unheldMs?: number;
+  readonly maxUnheld?: number;
+  readonly now?: () => number;
+  /** Runs `run` after `ms`; answers a cancel. A timer by default; tests pass their own. */
+  readonly later?: (run: () => void, ms: number) => () => void;
+}
+
+const timeout = (run: () => void, ms: number) => {
+  const id = setTimeout(run, ms);
+  return () => {
+    clearTimeout(id);
+  };
+};
+
 /** A record store on a plain Map, with the layering rule kept per record and bodies reference counted. */
-export function createPlainStore<Row extends RecordBody>(): RecordStore<Row> {
+export function createPlainStore<Row extends RecordBody>({
+  unheldMs = UNHELD_MS,
+  maxUnheld = MAX_UNHELD,
+  now = () => Date.now(),
+  later = timeout,
+}: PlainStoreOptions = {}): RecordStore<Row> {
   const entries = new Map<string, Entry<Row>>();
   const holds = new Map<string, number>();
   const listeners = new Set<StoreListener>();
+  // Bodies nothing holds and no layer waits on, with when they became so, oldest first (a Map keeps insertion order).
+  const unheld = new Map<string, number>();
+  let cancelSweep: (() => void) | undefined;
+
+  /** Drops the unheld bodies past their 30 seconds, and the oldest past 2,000; then times the next sweep. */
+  const sweep = () => {
+    cancelSweep?.();
+    cancelSweep = undefined;
+    const time = now();
+    for (const [id, since] of unheld) {
+      if (time - since < unheldMs && unheld.size <= maxUnheld) break;
+      unheld.delete(id);
+      const entry = entries.get(id);
+      if (entry !== undefined && entry.layers.length === 0 && !isHeld(id)) entries.delete(id);
+    }
+    const [oldest] = unheld.values();
+    if (oldest !== undefined) cancelSweep = later(sweep, Math.max(0, oldest + unheldMs - time));
+  };
+  /** A body nothing holds now: it stays a while, then goes. */
+  const letGo = (id: string) => {
+    if (unheld.has(id)) return;
+    unheld.set(id, now());
+    if (unheld.size > maxUnheld || cancelSweep === undefined) sweep();
+  };
 
   const notify = (ids: ReadonlySet<string>) => {
     if (ids.size === 0) return;
@@ -63,15 +114,18 @@ export function createPlainStore<Row extends RecordBody>(): RecordStore<Row> {
    */
   const put = (id: string, base: Row | undefined, layers: readonly PendingLayer<Row>[]): boolean => {
     const before = entries.get(id);
-    if ((base === undefined || !isHeld(id)) && layers.length === 0) {
+    if (base === undefined && layers.length === 0) {
       entries.delete(id);
+      unheld.delete(id);
       return before?.shown !== undefined;
     }
     // The same base and layers show the same row: keep the object, so nothing re-renders.
-    if (before !== undefined && before.base === base && before.layers === layers) return false;
-    const shown = layers.length === 0 ? base : composeRecord(base, layers);
-    entries.set(id, { base, layers, shown });
-    return shown !== before?.shown;
+    const isSame = before !== undefined && before.base === base && before.layers === layers;
+    const shown = isSame ? before.shown : layers.length === 0 ? base : composeRecord(base, layers);
+    if (!isSame) entries.set(id, { base, layers, shown });
+    // Nothing holds it once its last layer is answered: it stays a while like any body let go.
+    if (!isHeld(id) && layers.length === 0) letGo(id);
+    return entries.get(id)?.shown !== before?.shown;
   };
 
   /** A server row as the record's base, keeping the old object when it holds the same data. */
@@ -115,7 +169,10 @@ export function createPlainStore<Row extends RecordBody>(): RecordStore<Row> {
   };
 
   const hold = (ids: Iterable<string>) => {
-    for (const id of ids) holds.set(id, (holds.get(id) ?? 0) + 1);
+    for (const id of ids) {
+      holds.set(id, (holds.get(id) ?? 0) + 1);
+      unheld.delete(id);
+    }
   };
 
   return {
@@ -126,7 +183,7 @@ export function createPlainStore<Row extends RecordBody>(): RecordStore<Row> {
       const changed = new Set<string>();
       for (const row of rows) {
         const entry = entries.get(row.id);
-        // Nobody holds it and nothing waits on it: nothing shows it, so it isn't kept.
+        // Nobody holds it and nothing waits on it: nothing shows it, so it isn't kept (a body let go is refreshed).
         if (entry === undefined && !isHeld(row.id)) continue;
         const base = baseFrom(entry?.base, row);
         if (put(row.id, base, entry?.layers ?? [])) changed.add(row.id);
@@ -143,13 +200,16 @@ export function createPlainStore<Row extends RecordBody>(): RecordStore<Row> {
         }
         holds.delete(id);
         const entry = entries.get(id);
-        // Evicted at zero; a record with a pending layer stays until its answer.
-        if (entry !== undefined && entry.layers.length === 0) entries.delete(id);
+        // Let go at zero: it stays 30 seconds (or until 2,000 newer ones); a record with a pending layer stays anyway.
+        if (entry !== undefined && entry.layers.length === 0) letGo(id);
       }
     },
     remove: (ids) => {
       const changed = new Set<string>();
-      for (const id of ids) if (entries.delete(id)) changed.add(id);
+      for (const id of ids) {
+        unheld.delete(id);
+        if (entries.delete(id)) changed.add(id);
+      }
       notify(changed);
     },
     edit: (recordId, values, mutationId) => addLayer(recordId, { id: mutationId, values }),
@@ -170,6 +230,9 @@ export function createPlainStore<Row extends RecordBody>(): RecordStore<Row> {
       const ids = new Set(entries.keys());
       entries.clear();
       holds.clear();
+      unheld.clear();
+      cancelSweep?.();
+      cancelSweep = undefined;
       notify(ids);
     },
   };
