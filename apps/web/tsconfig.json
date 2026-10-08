@@ -12,6 +12,8 @@
     "theme-boot.test.ts",
     "first-load.ts",
     "first-load.test.ts",
+    "realtime-csp.ts",
+    "realtime-csp.test.ts",
     "playwright.config.ts",
     "e2e"
   ]

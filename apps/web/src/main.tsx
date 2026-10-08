@@ -28,6 +28,14 @@ const goTo = (href: string) => {
 const forgetPages = () => {
   router.clearCache();
 };
+// Someone changed an object's attributes (a live change): the pages showing
+// them load again, so a new column appears.
+const reloadPages = () => {
+  void router.invalidate();
+};
+
+// Centrifugo's address, baked in at build time; unset (previews), live updates are off.
+const realtimeUrl = import.meta.env.VITE_REALTIME_URL;
 
 const data = createDataLayer({
   origin: window.location.origin,
@@ -45,6 +53,8 @@ const data = createDataLayer({
   },
   onSessionChange: forgetPages,
   currentPath: () => `${window.location.pathname}${window.location.search}`,
+  ...(realtimeUrl === undefined || realtimeUrl === '' ? {} : { realtimeUrl }),
+  onDefinitionsChange: reloadPages,
 });
 
 // theme-boot.js already applied a saved choice before first paint; this keeps

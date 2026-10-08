@@ -1,7 +1,7 @@
 // Brief
 // Purpose: one object's records (People in this loop) as a fast table, under the object's name and colour tile.
-// Main task: read and edit people in place, add a person, and add a column.
-// Leaves out: filters, sorts, saved views, other objects' tables and live updates (#6, #7, #20).
+// Main task: read and edit people in place, add a person, and add a column, seeing others' changes live.
+// Leaves out: filters, sorts, saved views, other objects' tables and presence (#6, #7, #20).
 import {
   isEditableHere,
   toActorDisplays,
@@ -12,8 +12,8 @@ import {
   type RecordsView,
   type RecordView,
 } from '@crm/data';
-import { useView } from '@crm/data/react';
-import { Badge, Button, EmptyState, TopBar, ViewBar } from '@crm/ui';
+import { useLiveStatus, useView } from '@crm/data/react';
+import { Badge, Button, Callout, EmptyState, TopBar, ViewBar } from '@crm/ui';
 import { columnWidthFor, DataGrid, type GridColumn } from '@crm/ui/grid';
 import { useRouteContext, useRouter } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
@@ -70,6 +70,8 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const router = useRouter();
   const state = useView(view);
+  // Paused only while the live connection is down; off (previews) shows nothing.
+  const live = useLiveStatus(data.live);
   const [layout, setLayout] = useState<{ readonly columns: readonly GridColumn[]; readonly pinnedCount: number }>({
     columns: [],
     pinnedCount: 1,
@@ -135,6 +137,7 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
         ),
         body: (
           <>
+            {live === 'paused' && <Callout title={strings.livePausedTitle}>{strings.livePausedText}</Callout>}
             <DataGrid<RecordView>
               label={object.pluralName}
               columns={columns}

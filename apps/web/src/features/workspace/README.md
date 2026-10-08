@@ -1,6 +1,6 @@
 # Workspace
 
-Spec 0005, milestones 1 and 2. Every page inside a workspace sits in `WorkspaceFrame` (AppShell and Sidebar), through `WorkspacePage`.
+Spec 0005, milestones 1 to 3. Every page inside a workspace sits in `WorkspaceFrame` (AppShell and Sidebar), through `WorkspacePage`.
 
 ## The frame (`/w/$slug`, WorkspaceFrame)
 
@@ -11,8 +11,8 @@ Spec 0005, milestones 1 and 2. Every page inside a workspace sits in `WorkspaceF
 ## An object's page (`/w/$slug/objects/$object`, RecordsScreen)
 
 - **Purpose**: one object's records (People in this loop) as a fast table, under the object's name and colour tile.
-- **Main task**: read and edit people in place, add a person, and add a column.
-- **Leaves out**: filters, sorts, saved views, other objects' tables and live updates (#6, #7, #20).
+- **Main task**: read and edit people in place, add a person, and add a column, seeing others' changes live.
+- **Leaves out**: filters, sorts, saved views, other objects' tables and presence (#6, #7, #20).
 
 ## New person (NewRecordDialog)
 
@@ -38,3 +38,4 @@ Spec 0005, milestones 1 and 2. Every page inside a workspace sits in `WorkspaceF
 - Columns: every non system attribute by position, then Created at, each at its type's width. Moving, resizing, pinning and hiding are kept for the visit only (saved views come with #6). Company and Owner cells are read only in this loop ("You can’t change this here yet."); Owner shows member names from `members.list`.
 - An edit shows at once; a refusal rolls it back, marks the cell and raises a toast with Retry (the data layer does all three). New person waits in the dialog for the server while its row already shows; a refusal takes the row out and puts the message on its field. Add attribute waits for the server, then `router.invalidate()` reads the columns again.
 - New person asks for one email even though Email addresses holds several: the list editor's chip, added on blur, grew the dialog under the pointer on its way to Create and the press missed.
+- Live (milestone 3): someone else's create, edit or new column shows in the open table within a second, patched in place by the data layer (no reload, nothing polls). A new column reaches the screen through `onDefinitionsChange`, which reloads the route (`router.invalidate()`). While the live connection is down, an info Callout above the table says live updates are paused; previews have no live updates (no `VITE_REALTIME_URL`) and say nothing.

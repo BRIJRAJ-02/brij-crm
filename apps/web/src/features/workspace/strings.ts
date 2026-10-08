@@ -37,6 +37,9 @@ export const strings = {
   recordNameMissing: (singularName: string) => `Name the ${singularName.toLowerCase()}.`,
   /** A failure the server didn't explain. */
   somethingWrong: 'Something went wrong. Try again in a moment.',
+  /** Above the table while the live connection is down (AC-38). */
+  livePausedTitle: 'Live updates are paused',
+  livePausedText: 'Changes others make show here once the connection is back.',
   /** Why a company or Owner cell can't be edited in this loop. */
   referenceReadOnly: 'You can’t change this here yet.',
 } as const;
