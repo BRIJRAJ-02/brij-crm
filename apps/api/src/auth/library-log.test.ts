@@ -30,4 +30,18 @@ describe("Better Auth's log lines", () => {
     expect(written).not.toContain(TOKEN);
     expect(written).not.toContain('ada@example.com');
   });
+
+  it('log only the name of an Error object, never its message', () => {
+    const logs = captureLogs();
+    try {
+      logLibrary('error', new Error(`Failed query: select 1 where "token" = $1\nparams: ${TOKEN}`));
+      logLibrary('error', { token: TOKEN });
+    } finally {
+      logs.restore();
+    }
+    const [error, other] = logs.lines();
+    expect(error).toMatchObject({ level: 'error', message: 'Sign in library', detail: 'Error' });
+    expect(other).toMatchObject({ detail: 'object' });
+    expect(JSON.stringify(logs.lines())).not.toContain(TOKEN);
+  });
 });

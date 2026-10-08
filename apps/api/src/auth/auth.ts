@@ -237,8 +237,19 @@ function signupClosed(): APIError {
  * request data), scrubbed: it logs a failed query's raw message, which ends
  * in `\nparams: <values>` (session tokens, emails), so that and any email go.
  */
-export function logLibrary(level: 'debug' | 'info' | 'success' | 'warn' | 'error', message: string): void {
-  (level === 'error' ? log.error : log.warn)('Sign in library', { detail: scrubText(message) });
+export function logLibrary(level: 'debug' | 'info' | 'success' | 'warn' | 'error', message: unknown): void {
+  (level === 'error' ? log.error : log.warn)('Sign in library', { detail: libraryDetail(message) });
+}
+
+/**
+ * A log message as safe text. Better Auth sometimes logs an Error object (its
+ * session list route does), whose message may be drizzle's raw one, so only
+ * its name goes; never `String(error)`.
+ */
+function libraryDetail(message: unknown): string {
+  if (typeof message === 'string') return scrubText(message);
+  if (message instanceof Error) return message.name;
+  return typeof message;
 }
 
 /** Builds sign in for this environment. */
