@@ -49,6 +49,15 @@
     box-shadow: var(--shadow-focus);
   }
 
+  /* In a grid cell the stars sit where the display had them, and the cell draws the one ring. */
+  .root[data-variant='cell'] {
+    padding-inline: var(--space-8);
+  }
+
+  .root[data-variant='cell'] .choice[data-focus-visible] {
+    box-shadow: none;
+  }
+
   .root[data-disabled] {
     opacity: var(--opacity-disabled);
   }
@@ -76,6 +85,10 @@
 
     .choice[data-focus-visible] {
       outline: var(--border-width-thick) solid Highlight;
+    }
+
+    .root[data-variant='cell'] .choice[data-focus-visible] {
+      outline: none;
     }
   }
 }

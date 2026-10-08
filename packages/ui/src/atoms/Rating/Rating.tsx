@@ -21,13 +21,27 @@ export interface RatingProps {
   /** Shows the stars only, as the rating attribute's display. */
   readonly isReadOnly?: boolean;
   readonly isDisabled?: boolean;
+  /**
+   * `cell` is the rating a grid cell edits: the cell draws the one focus
+   * ring, so the focused star draws none (the lit stars already show the
+   * draft the arrows move).
+   */
+  readonly variant?: 'default' | 'cell';
 }
 
 /**
  * One to five stars: the rating attribute's display (read only) and its editor
  * (a radio group). Choosing the chosen star again, or Delete, clears it.
  */
-export function Rating({ label, value, defaultValue, onChange, isReadOnly = false, isDisabled = false }: RatingProps) {
+export function Rating({
+  label,
+  value,
+  defaultValue,
+  onChange,
+  isReadOnly = false,
+  isDisabled = false,
+  variant = 'default',
+}: RatingProps) {
   const current = value ?? defaultValue ?? null;
   if (isReadOnly) {
     return (
@@ -58,6 +72,7 @@ export function Rating({ label, value, defaultValue, onChange, isReadOnly = fals
     <span className={styles.wrap} onClickCapture={clearIfCurrent} onKeyDown={clearOnDelete}>
       <RadioGroup
         className={styles.root}
+        data-variant={variant}
         aria-label={label}
         orientation="horizontal"
         isDisabled={isDisabled}

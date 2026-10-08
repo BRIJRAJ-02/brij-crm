@@ -17,6 +17,7 @@ Ported from the artifact's Rating card. It is the rating type's one display (rea
 - Choosing the chosen star again, or pressing Delete or Backspace, clears it to `null`. A required attribute refuses that in the field set.
 - Read only, it is one image named "Fit: 4 out of 5 stars".
 - A hovered star lights up (pointer only).
+- `variant="cell"` is the rating a grid cell edits: the stars keep the cell's padding, where the display had them, and the focused star draws no ring, since the cell draws the one ring and the lit stars show the draft.
 
 ## States
 

@@ -38,6 +38,7 @@ export function RatingEditor({ attribute, value, surface, onCommit, onCancel, st
     >
       <Rating
         label={attribute.name}
+        variant="cell"
         value={draft}
         onChange={(next) => {
           setDraft(next);
