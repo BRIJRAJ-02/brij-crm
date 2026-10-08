@@ -711,6 +711,26 @@ describe('live updates', () => {
     expect(view.getSnapshot().source.getItem(0)?.values[TITLE.id]).toBe('CEO');
   });
 
+  it('resyncs and starts from the live token when the head could not be read before the first reads (AC-74)', async () => {
+    let tokens = 0;
+    const afters: number[] = [];
+    const { api } = await liveLayer({
+      head: () => {
+        tokens += 1;
+        if (tokens === 1) throw new ORPCError('INTERNAL', { status: 500, message: 'Something went wrong.' });
+        return 7;
+      },
+      catchUp: (after) => {
+        afters.push(after);
+        return { head: after, reset: false, events: [] };
+      },
+    });
+    await settled();
+    // The reads went ahead without a head; the live client's own token gives it, and what was read is read again.
+    expect(afters).toEqual([7]);
+    expect(count(api.calls, '/api/rpc/records/count')).toBe(2);
+  });
+
   it('fills a gap through catch up rather than refetching everything held', async () => {
     const afters: number[] = [];
     const { api, client } = await liveLayer({

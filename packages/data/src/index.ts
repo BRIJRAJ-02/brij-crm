@@ -198,6 +198,9 @@ export function createDataLayer({
   // Each workspace's subscription token read before its first read: its head is the first watermark.
   let heads = new Map<string, Promise<Granted | undefined>>();
   let firstTokens = new Map<string, { readonly granted: Granted; readonly at: number }>();
+  // Workspaces read without a head (the token call failed or took too long): their first watermark comes from
+  // the live client's own token, with a resync of everything held, so nothing read before it is missed.
+  let uncovered = new Set<string>();
   let liveStatus: LiveStatus = realtimeUrl === undefined ? 'off' : 'live';
   const liveListeners = new Set<() => void>();
   const setLiveStatus = (next: LiveStatus) => {
@@ -213,6 +216,7 @@ export function createDataLayer({
     attributes = new Map();
     heads = new Map();
     firstTokens = new Map();
+    uncovered = new Set();
     // Signed out: no more changes for the last person, and none of their writes to wait for.
     const stopping = live;
     live = undefined;
@@ -350,18 +354,25 @@ export function createDataLayer({
     return asking;
   };
 
-  /** Waits for the workspace's head before a read, at most 5 seconds; nothing waits when live is off. */
-  const beforeRead = (workspace: string): Promise<void> => {
-    if (realtimeUrl === undefined) return Promise.resolve();
+  /**
+   * Waits for the workspace's head before a read, at most 5 seconds; nothing
+   * waits when live is off. A read that goes ahead without it (the call
+   * failed, or the wait ran out) marks the workspace uncovered, and later
+   * reads stop waiting: the live client resyncs it once it listens.
+   */
+  const beforeRead = async (workspace: string): Promise<void> => {
+    if (realtimeUrl === undefined || uncovered.has(workspace)) return;
     let timeout: ReturnType<typeof setTimeout> | undefined;
-    return Promise.race([
-      prepare(workspace).then(() => undefined),
-      new Promise<void>((resolve) => {
-        timeout = setTimeout(resolve, HEAD_WAIT_MS);
+    const covered = await Promise.race([
+      prepare(workspace).then((granted) => granted !== undefined),
+      new Promise<boolean>((resolve) => {
+        timeout = setTimeout(() => {
+          resolve(false);
+        }, HEAD_WAIT_MS);
       }),
-    ]).finally(() => {
-      clearTimeout(timeout);
-    });
+    ]);
+    clearTimeout(timeout);
+    if (!covered) uncovered.add(workspace);
   };
 
   /** Live updates, loaded the first time a screen watches a workspace. */
@@ -391,7 +402,11 @@ export function createDataLayer({
             throw error;
           }
         },
-        head: async (workspace) => (await prepare(workspace))?.head,
+        // No head when a read went ahead without one: the live client then starts from its token and resyncs.
+        head: async (workspace) => {
+          const granted = await prepare(workspace);
+          return uncovered.has(workspace) ? undefined : granted?.head;
+        },
         catchUp: async (workspace, after) => {
           try {
             return await call((options) => api.realtime.catchUp({ workspace, after }, options));
@@ -432,6 +447,10 @@ export function createDataLayer({
       layer.reload(workspace);
     });
     refreshAttributes(workspace);
+    // The workspace's objects and members are read again on the next page load, which a resync asks for.
+    objects.delete(workspace);
+    members.delete(workspace);
+    onDefinitionsChange();
   });
 
   /** Listens to a workspace's changes while a view of it is open; the answer stops. Nothing when live is off. */

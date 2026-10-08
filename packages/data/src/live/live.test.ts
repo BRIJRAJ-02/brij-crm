@@ -211,6 +211,9 @@ describe('the watermark', () => {
     await t.subscribed();
     t.channel().onPublication(event(1));
     t.channel().onPublication(event(4));
+    // After a spread, so a whole workspace doesn't ask at once.
+    expect(t.afters).toEqual([]);
+    await t.elapse(jitter);
     expect(t.afters).toEqual([1]);
     // While catching up, events wait.
     t.channel().onPublication(event(5));
@@ -382,7 +385,7 @@ describe('catching up', () => {
     });
     await t.subscribed();
     t.channel().onPublication(event(2));
-    await settle();
+    await t.elapse(jitter);
     expect(t.statuses).toEqual(['paused']);
     await t.elapse(1500);
     expect(tries).toBe(3);
@@ -393,11 +396,38 @@ describe('catching up', () => {
     const t = setup();
     await t.subscribed();
     t.channel().onPublication(event(3));
-    await settle();
+    await t.elapse(jitter);
     // The fake answers its own watermark back: the gap stays, and only the spread brings the next try.
     expect(t.afters).toEqual([0]);
     await t.elapse(jitter);
     expect(t.afters).toEqual([0, 0]);
+  });
+
+  it('costs no call when a late seq closes a gap before the spread ends (out of order delivery)', async () => {
+    const t = setup();
+    await t.subscribed();
+    t.channel().onPublication(event(2));
+    t.channel().onPublication(event(1));
+    expect(t.calls).toEqual([`records ${WS} ${ROW(1)}`, `records ${WS} ${ROW(2)}`]);
+    await t.elapse(jitter);
+    expect(t.afters).toEqual([]);
+  });
+
+  it('holds at most 5,000 deliveries while a catch up is due, and the catch up covers the rest', async () => {
+    let calls = 0;
+    const t = setup({
+      catchUp: () => {
+        calls += 1;
+        return Promise.resolve({ head: calls === 1 ? 0 : 6_002, reset: false, events: [] });
+      },
+    });
+    await t.subscribed();
+    for (let seq = 2; seq <= 6_002; seq += 1) t.channel().onPublication(event(seq));
+    await t.elapse(jitter);
+    expect(t.afters).toEqual([0]);
+    expect(t.live.watermark(WS)).toBe(6_002);
+    t.channel().onPublication(event(6_003));
+    expect(t.calls).toEqual([`records ${WS} ${ROW(6_003)}`]);
   });
 
   it('pauses and stops when catch up is refused (removed from the workspace)', async () => {
@@ -407,6 +437,11 @@ describe('catching up', () => {
     t.channel().onSubscribed({ wasRecovering: false, recovered: false });
     await settle();
     expect(t.statuses).toEqual(['paused']);
+    // Nothing tries again, however many events still arrive.
+    t.channel().onPublication(event(5));
+    await t.elapse(jitter);
+    expect(t.afters).toEqual([0]);
+    expect(t.calls).toEqual([]);
   });
 });
 

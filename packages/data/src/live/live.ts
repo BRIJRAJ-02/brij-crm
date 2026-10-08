@@ -119,6 +119,12 @@ export const HIDDEN_CATCH_UP_MS = 5 * 60_000;
 /** The longest wait between tries at a workspace's subscription token or a catch up. */
 const MAX_RETRY_MS = 30_000;
 
+/**
+ * The most deliveries a workspace holds while it waits for a catch up. Past
+ * it they are dropped: the catch up reads to the head, which covers them.
+ */
+export const MAX_HELD = 5_000;
+
 const timer = (ms: number) =>
   new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
@@ -229,6 +235,8 @@ interface Watched {
   catching: boolean;
   /** The last catch up failed and waits to try again: the screens say paused meanwhile. */
   failing: boolean;
+  /** Catch up was refused (signed out, or no longer a member): nothing tries again. */
+  refused: boolean;
   again: boolean;
   /** Deliveries past `W + 1`, or that arrived while catching up, waiting for their turn. */
   readonly held: Map<number, Delivery>;
@@ -354,6 +362,7 @@ export function createLive({
    * workspace; a failed call is tried again with backoff.
    */
   const fill = async (workspace: string, entry: Watched): Promise<void> => {
+    if (entry.refused) return;
     if (entry.catching) {
       entry.again = true;
       return;
@@ -374,12 +383,15 @@ export function createLive({
           setFailing(entry, true);
           await wait(Math.min(MAX_RETRY_MS, 1000 * 2 ** failures) * (1 + random()));
           failures += 1;
+          if (isStopped()) return;
           continue;
         }
         if (isStopped()) return;
         setFailing(entry, false);
         // Not allowed any more (signed out, or removed): paused, and nothing to try again.
         if (answer === undefined) {
+          entry.refused = true;
+          entry.held.clear();
           setState(entry, 'down');
           return;
         }
@@ -401,11 +413,7 @@ export function createLive({
         // Read through a function: a trigger during the await above may have set it.
         if (askedAgain()) continue;
         // An event still past what the outbox answered: try again after a spread, never in a loop.
-        if (gap) {
-          later(entry, 'catch-up', () => {
-            void fill(workspace, entry);
-          });
-        }
+        if (gap) gapLater(workspace, entry);
         return;
       }
     } finally {
@@ -413,17 +421,32 @@ export function createLive({
     }
   };
 
+  /**
+   * Catches up after a random 0 to 2 seconds, once however many gaps open
+   * meanwhile, so every subscriber of a workspace doesn't ask at the same
+   * moment, and a seq that arrives late (out of order) can close the gap
+   * first, which then costs no call.
+   */
+  const gapLater = (workspace: string, entry: Watched) => {
+    later(entry, 'catch-up', () => {
+      if (drain(workspace, entry)) void fill(workspace, entry);
+    });
+  };
+
   const receive = (workspace: string, entry: Watched, data: unknown) => {
+    if (entry.refused) return;
     const delivery = parseChangeEvent(data);
     if (delivery === undefined) return;
     const mark = marks.get(workspace);
     if (mark !== undefined && delivery.seq <= mark) return;
+    // Past the cap only while a catch up is due or running, which reads to the head and covers them.
+    if (entry.held.size >= MAX_HELD) entry.held.clear();
     entry.held.set(delivery.seq, delivery);
     // While catching up, it waits for the catch up to end.
     if (entry.catching) return;
     // No watermark at all (it couldn't be read): this event starts the count.
     if (mark === undefined) marks.set(workspace, delivery.seq - 1);
-    if (drain(workspace, entry)) void fill(workspace, entry);
+    if (drain(workspace, entry)) gapLater(workspace, entry);
   };
 
   /** Connects (once per tab) and subscribes, trying again with backoff while the client or a token can't load. */
@@ -525,6 +548,7 @@ export function createLive({
         needsResync: false,
         catching: false,
         failing: false,
+        refused: false,
         again: false,
         held: new Map(),
         due: new Set(),
