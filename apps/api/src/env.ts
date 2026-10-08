@@ -166,16 +166,11 @@ export const ApiEnv = z
       missing('WORKER_WAKE_SECRET', 'That is the local placeholder. Generate one: `openssl rand -hex 32`.');
     }
     if (env.MAIL_FROM === undefined) missing('MAIL_FROM', `MAIL_FROM is required in ${env.APP_ENV}.`);
-    if (env.CENTRIFUGO_TOKEN_SECRET === undefined) {
-      if (env.APP_ENV === 'production') {
-        missing(
-          'CENTRIFUGO_TOKEN_SECRET',
-          "CENTRIFUGO_TOKEN_SECRET is required in production: the Centrifugo service's token secret.",
-        );
-      }
-    } else if (env.CENTRIFUGO_TOKEN_SECRET === LOCAL_CENTRIFUGO_TOKEN_SECRET) {
+    // Unset turns live updates off (the token procedures answer 503), in production too, so the API can ship
+    // before the secret is set; a set secret must be a real one.
+    if (env.CENTRIFUGO_TOKEN_SECRET === LOCAL_CENTRIFUGO_TOKEN_SECRET) {
       missing('CENTRIFUGO_TOKEN_SECRET', "That is the local secret. Use the Centrifugo service's token secret.");
-    } else if (env.CENTRIFUGO_TOKEN_SECRET.length < 32) {
+    } else if (env.CENTRIFUGO_TOKEN_SECRET !== undefined && env.CENTRIFUGO_TOKEN_SECRET.length < 32) {
       missing('CENTRIFUGO_TOKEN_SECRET', `CENTRIFUGO_TOKEN_SECRET must be at least 32 characters in ${env.APP_ENV}.`);
     }
     if (env.BETTER_AUTH_SECRET.includes(LOCAL_SECRET_MARKER)) {

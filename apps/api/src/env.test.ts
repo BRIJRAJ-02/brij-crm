@@ -149,8 +149,8 @@ describe("live updates' token secret (spec 0005)", () => {
     expect(problems({ ...production, APP_ENV: 'preview', CENTRIFUGO_TOKEN_SECRET: undefined })).toEqual([]);
   });
 
-  it('is required in production', () => {
-    expect(problems({ ...production, CENTRIFUGO_TOKEN_SECRET: undefined })).toEqual(['CENTRIFUGO_TOKEN_SECRET']);
+  it('is optional in production too, where unset turns live updates off', () => {
+    expect(problems({ ...production, CENTRIFUGO_TOKEN_SECRET: undefined })).toEqual([]);
   });
 
   it("refuses .env.example's secret, or one shorter than 32 characters, outside local", () => {
