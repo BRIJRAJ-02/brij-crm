@@ -45,10 +45,17 @@ describe('switched off (unset, the default)', () => {
     expect(await answerOf(await rpcPost(off, '', 'system/testFault', '{}'))).toEqual(missing);
   });
 
-  it('never reaches the fault by another spelling of its address', async () => {
+  it.each([
+    'system/testFault/',
+    'system/testFault//',
+    'system//testFault',
+    'system/test%46ault',
+    'system/test%46ault/',
+  ])('answers %s exactly like a procedure that does not exist, and reports nothing', async (spelling) => {
     const { cookie } = await signIn(off);
-    const answer = await rpcPost(off, cookie, 'system/test%46ault', '{}');
-    expect(answer.status).toBe(404);
+    const missing = await answerOf(await rpcPost(off, cookie, 'system/noSuchThing', '{}'));
+    expect(await answerOf(await rpcPost(off, cookie, spelling, '{}'))).toEqual(missing);
+    expect(await answerOf(await rpcPost(off, '', spelling, '{}'))).toEqual(missing);
     await flush(2000);
     expect(transport.events()).toEqual([]);
   });

@@ -20,6 +20,20 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 /** Where `system.testFault` answers, when it is switched on. */
 const TEST_FAULT_PATH = '/api/rpc/system/testFault';
 
+/**
+ * A path as the RPC router may read it: decoded, repeated slashes as one, no trailing slash. So every
+ * spelling of the test fault's address (`/testFault/`, `//testFault`, `test%46ault`) is caught as one.
+ */
+export function routedPath(path: string): string {
+  let decoded = path;
+  try {
+    decoded = decodeURIComponent(path);
+  } catch {
+    // Not valid percent encoding: the router can't read it as the test fault either.
+  }
+  return decoded.replace(/\/{2,}/g, '/').replace(/(.)\/+$/, '$1');
+}
+
 /** The largest RPC request body the API reads. */
 export const RPC_BODY_LIMIT_BYTES = 1024 * 1024;
 
@@ -128,7 +142,7 @@ export function createApp({
   );
 
   app.all('/rpc/*', async (c) => {
-    if (!testFault && c.req.path === TEST_FAULT_PATH) return c.notFound();
+    if (!testFault && routedPath(c.req.path) === TEST_FAULT_PATH) return c.notFound();
     const { matched, response } = await rpc.handle(c.req.raw, {
       prefix: '/api/rpc',
       context: {
