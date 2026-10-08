@@ -52,6 +52,8 @@ export default defineRailway(() => {
       // Monitoring (spec 0010): the brij-crm-server project's DSN. Unset means off. The release is Railway's own
       // RAILWAY_GIT_COMMIT_SHA, and the service comes from the start command's entry file.
       SENTRY_DSN_SERVER: preserve(),
+      // `on` opens system.testFault to prove an error report in production; leave it unset otherwise.
+      MONITORING_TEST_FAULT: preserve(),
     },
   });
 

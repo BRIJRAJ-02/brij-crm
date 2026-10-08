@@ -29,7 +29,15 @@ export const SystemStatus = z.object({
 /** The status screen's answer. */
 export type SystemStatus = z.infer<typeof SystemStatus>;
 
-/** Public procedures, open before sign in. */
+/**
+ * Public procedures, open before sign in, and the monitoring test fault: a
+ * procedure that never answers successfully (spec 0010, AC-168). Off, it
+ * answers NOT_FOUND like a procedure that doesn't exist; on
+ * (`MONITORING_TEST_FAULT=on`), it needs a session and fails with an
+ * unexpected error, to prove a production error reaches Sentry.
+ */
 export const systemContract = {
   status: oc.output(SystemStatus),
+  // Declared as nothing, since it never answers successfully.
+  testFault: oc.output(z.void()),
 };

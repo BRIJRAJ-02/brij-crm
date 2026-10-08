@@ -22,6 +22,7 @@ import { APP_URL } from './testing.ts';
 /** The procedures that run before a workspace is chosen (spec 0005), by name; every other one passes the door. */
 const BOOTSTRAP: ReadonlySet<string> = new Set([
   'system.status',
+  'system.testFault',
   'me.get',
   'workspaces.create',
   'realtime.connectionToken',

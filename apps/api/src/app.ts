@@ -17,6 +17,9 @@ import { createRpcHandler } from './rpc.ts';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+/** Where `system.testFault` answers, when it is switched on. */
+const TEST_FAULT_PATH = '/api/rpc/system/testFault';
+
 /** The largest RPC request body the API reads. */
 export const RPC_BODY_LIMIT_BYTES = 1024 * 1024;
 
@@ -69,6 +72,8 @@ export function createApp({
     env.CENTRIFUGO_TOKEN_SECRET === undefined
       ? undefined
       : createRealtimeTokens({ secret: env.CENTRIFUGO_TOKEN_SECRET });
+  // The monitoring test fault (spec 0010, AC-168): off, its address answers exactly as one that doesn't exist.
+  const testFault = env.MONITORING_TEST_FAULT === 'on';
 
   const app = new Hono<{ Variables: AppVariables }>().basePath('/api');
 
@@ -123,6 +128,7 @@ export function createApp({
   );
 
   app.all('/rpc/*', async (c) => {
+    if (!testFault && c.req.path === TEST_FAULT_PATH) return c.notFound();
     const { matched, response } = await rpc.handle(c.req.raw, {
       prefix: '/api/rpc',
       context: {
@@ -136,6 +142,7 @@ export function createApp({
         headers: c.req.raw.headers,
         readGate,
         realtime,
+        testFault,
       },
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();

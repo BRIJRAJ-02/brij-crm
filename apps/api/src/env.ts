@@ -125,6 +125,9 @@ export const ApiEnv = z
     // Live updates (spec 0005): signs Centrifugo's connection and subscription tokens. The Centrifugo service's
     // CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY. Required in production; unset (previews) turns live updates off.
     CENTRIFUGO_TOKEN_SECRET: optional(z.string()),
+    // Monitoring (spec 0010): `on` opens system.testFault, which fails on purpose to prove error reports in
+    // production; unset or `off` answers NOT_FOUND, as if it didn't exist. Switch it off again after the proof.
+    MONITORING_TEST_FAULT: optional(z.enum(['on', 'off'])),
   })
   .superRefine((env, issues) => {
     const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });

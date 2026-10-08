@@ -128,6 +128,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         providers: { google: false },
         checkedAt: '2026-10-03T09:00:00.000Z',
       })),
+      testFault: os.system.testFault.handler(notServed),
     },
     me: { get: os.me.get.handler(() => behaviour.me()) },
     workspaces: { create: os.workspaces.create.handler(() => behaviour.create()) },

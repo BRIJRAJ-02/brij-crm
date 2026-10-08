@@ -35,6 +35,8 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    */
   wakeRelay: WakeRelay;
   environment: AppEnvironment;
+  /** Whether `system.testFault` is switched on (`MONITORING_TEST_FAULT=on`, spec 0010). */
+  testFault: boolean;
   /** This request's id, also sent back as `x-request-id`; every log line about the request carries it. */
   requestId: string;
   /** The caller's IP, only when the edge guard trusted the request (see `edge.ts`). */
