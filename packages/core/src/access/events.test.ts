@@ -159,6 +159,10 @@ describe('entries, definitions, views and notes', () => {
     expect(filterEvent(open, definitions)).toEqual(definitions);
     expect(filterEvent(hiddenObject, definitions)).toBeUndefined();
     expect(filterEvent(hiddenField, definitions)).toEqual({ ...definitions, attributeIds: [SHOWN] });
+    // A row naming neither an object nor a list: in full when open, nothing for a restricted audience.
+    expect(filterEvent(open, { seq: 43, at, kind: 'definitions' })).toEqual({ seq: 43, at, kind: 'definitions' });
+    expect(filterEvent(hiddenField, { seq: 43, at, kind: 'definitions' })).toBeUndefined();
+    expect(filterEvent(hiddenField, { seq: 44, at, kind: 'views', viewIds: [], coarse: false })).toBeUndefined();
     expect(filterEvent(hiddenField, { seq: 43, at, kind: 'definitions', objectId: OTHER })).toEqual({
       seq: 43,
       at,

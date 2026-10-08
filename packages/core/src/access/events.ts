@@ -238,6 +238,8 @@ export function filterEvent(audience: Audience, row: EventRow, facts: EventFacts
       return cutRecords(policy, row, row.listId, row.objectId ?? row.listId, 'entryIds');
     }
     case 'definitions': {
+      // A restricted audience can't judge a row that names neither an object nor a list: nothing (fail closed).
+      if (restricted && row.objectId === undefined && row.listId === undefined) return undefined;
       if (level(row.objectId) === 'none' || level(row.listId) === 'none') return undefined;
       if (row.attributeIds === undefined) return row;
       const owner = row.objectId ?? row.listId ?? '';
@@ -247,6 +249,7 @@ export function filterEvent(audience: Audience, row: EventRow, facts: EventFacts
       return settle({ ...row, attributeIds }, !sameList(attributeIds, row.attributeIds));
     }
     case 'views': {
+      if (restricted && row.objectId === undefined && row.listId === undefined) return undefined;
       if (level(row.objectId) === 'none' || level(row.listId) === 'none') return undefined;
       const viewIds = row.viewIds.filter((id) => {
         const view = factOf(facts.views, id);

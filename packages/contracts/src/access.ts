@@ -58,7 +58,7 @@ export const Permission = z.enum(
 /** One workspace permission. */
 export type Permission = z.infer<typeof Permission>;
 
-/** The five permissions only an owner holds. Admins hold every other one. */
+/** The four permissions only an owner holds; the fifth owner only power, the owner role itself, follows the owner rules. */
 const OWNER_ONLY: readonly Permission[] = ['workspace.delete', 'workspace.export', 'billing.manage', 'support.grant'];
 
 /**

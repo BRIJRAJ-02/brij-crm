@@ -132,6 +132,40 @@ describe('the last owner guard', () => {
     });
   });
 
+  it('lets only one of two raw transactions take away the two owners, committing at the same moment', async () => {
+    const { workspaceId, memberIds } = await workspaceWith(['owner', 'owner']);
+    const clients = [0, 1].map(() => new pg.Client({ connectionString: appUrl, application_name: 'crm-owner-race' }));
+    await Promise.all(clients.map((client) => client.connect()));
+    try {
+      for (const [index, client] of clients.entries()) {
+        await client.query('begin');
+        await client.query(`select set_config('app.workspace_id', $1, true)`, [workspaceId]);
+        await client.query(`update members set role = 'admin' where id = $1`, [memberIds[index]]);
+      }
+      // Both changes are made and neither is committed: each commit's check alone would still see the other owner.
+      const commits = await Promise.allSettled(clients.map((client) => client.query('commit')));
+      expect(commits.filter((commit) => commit.status === 'fulfilled')).toHaveLength(1);
+      const [refused] = commits.filter((commit) => commit.status === 'rejected');
+      expect(refused?.reason).toMatchObject({ code: 'CRM01', message: 'LAST_OWNER' });
+    } finally {
+      await Promise.all(clients.map((client) => client.end()));
+    }
+    const owners = await db.withWorkspace(workspaceId, (tx) =>
+      tx.execute<{ id: string }>(sql`select id from members where role = 'owner' and status = 'active'`),
+    );
+    expect(owners.rows).toHaveLength(1);
+  });
+
+  it('refuses moving the only owner’s row to another workspace', async () => {
+    const a = await workspaceWith(['owner']);
+    const b = await workspaceWith(['owner']);
+    expect(
+      await sqlState(
+        owner.query(`update members set workspace_id = $1 where id = $2`, [b.workspaceId, a.memberIds[0]]),
+      ),
+    ).toBe('CRM01');
+  });
+
   it('counts only an active owner: a removed one is no owner', async () => {
     const { workspaceId, memberIds } = await workspaceWith(['owner', 'owner']);
     await db.withWorkspace(workspaceId, (tx) =>

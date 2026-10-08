@@ -2,7 +2,7 @@
 // reads `scope.db`. Every read goes through `inWorkspace`, and `runWrite`
 // (engine/write.ts) runs its transaction through it too, so nothing reaches
 // the database without a scope the door sealed. A source scan
-// (`access/scan.test.ts`) fails on `scope.db` anywhere else.
+// (`access/seal.test.ts`) fails on `scope.db` anywhere else.
 import { LAST_OWNER_MESSAGE } from '@crm/contracts';
 import type { WorkspaceTx } from '@crm/db';
 import { postgresError, refuse } from '../engine/refusals.ts';

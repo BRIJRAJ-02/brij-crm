@@ -46,8 +46,7 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'inputInvalid',
   'isInputError',
   'isRefusal',
-  // The write path's own parts: the runner checks the seal, and hooks run inside it.
-  'runWrite',
+  // The write path's own parts: hooks run inside the runner, which stays inside the package.
   'capChange',
   'cappedHook',
   'outboxHook',

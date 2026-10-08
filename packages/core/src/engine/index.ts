@@ -108,7 +108,6 @@ export {
   CHANGE_CAP,
   capChange,
   cappedHook,
-  runWrite,
   type AfterWrite,
   type CappedChange,
   type CappedStep,
@@ -117,5 +116,4 @@ export {
   type RecordRef,
   type ReferenceChange,
   type ValueChange,
-  type WriteContext,
 } from './write.ts';

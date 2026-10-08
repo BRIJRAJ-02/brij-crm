@@ -5,6 +5,7 @@ import { sql } from 'drizzle-orm';
 import { LAST_OWNER_MESSAGE, OWNER_RULES_MESSAGE, PERMISSIONS, type Role } from '@crm/contracts';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
+import { testQuery } from '@crm/db/testing';
 import { enterAsActor, systemScope } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
@@ -12,7 +13,7 @@ import { createWorkspace } from '../engine/workspaces.ts';
 import { testScope } from '../testing.ts';
 import { getMyAccess, listMembers, removeMember, setMemberRole } from './members.ts';
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
 beforeAll(() => {
   db = createDatabase({ url: appUrl, applicationName: 'crm-members-tests' });
@@ -172,9 +173,36 @@ describe('the rules hold under a race and for the system', () => {
     ]);
     expect(results.filter((result) => result.status === 'fulfilled')).toHaveLength(1);
     const [failed] = results.filter((result) => result.status === 'rejected');
-    expect(isRefusal(failed?.reason) ? failed.reason.refusal : failed?.reason).toEqual(LAST_OWNER);
+    // The second to take the lock is no owner any more: they act with their role now, a member's.
+    expect(isRefusal(failed?.reason) ? failed.reason.refusal : failed?.reason).toEqual(FORBIDDEN_MANAGE);
     const roles = await Promise.all([t.roleOf(t.owner), t.roleOf(second)]);
     expect(roles.filter((row) => row?.role === 'owner')).toHaveLength(1);
+  });
+
+  it('judges the actor by their role now, not as the door saw it, and refuses one removed since', async () => {
+    const t = await team(['owner', 'owner']);
+    const [second = '', third = ''] = t.ids;
+    // The second owner's request entered as an owner; then they were demoted.
+    const stale = t.as(second, 'owner');
+    await setMemberRole(t.as(t.owner, 'owner'), { memberId: second, role: 'member' });
+    expect(await refusalOf(setMemberRole(stale, { memberId: third, role: 'member' }))).toEqual(FORBIDDEN_MANAGE);
+    expect(await refusalOf(removeMember(stale, { memberId: third }))).toEqual(FORBIDDEN_MANAGE);
+    expect(await t.roleOf(third)).toEqual({ role: 'owner', status: 'active' });
+    await removeMember(t.as(t.owner, 'owner'), { memberId: second });
+    expect(await refusalOf(setMemberRole(stale, { memberId: second, role: 'admin' }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+  });
+
+  it('lets only an owner touch a member whose stored role the code doesn’t know', async () => {
+    await testQuery(ownerUrl, "alter type member_role add value if not exists 'visitor'");
+    const t = await team(['admin', 'member']);
+    const [admin = '', visitor = ''] = t.ids;
+    await db.withWorkspace(t.workspaceId, (tx) =>
+      tx.execute(sql`update members set role = 'visitor' where id = ${visitor}`),
+    );
+    expect(await refusalOf(removeMember(t.as(admin, 'admin'), { memberId: visitor }))).toEqual(FORBIDDEN_OWNER);
+    await removeMember(t.as(t.owner, 'owner'), { memberId: visitor });
   });
 
   it('lets the system make an owner, and still keeps the last one', async () => {

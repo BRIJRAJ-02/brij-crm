@@ -8,6 +8,7 @@ import {
   OWNER_RULES_MESSAGE,
   PERMISSIONS,
   ROLE_LABELS,
+  ROLE_PERMISSIONS,
   type MemberSummary,
   type MyAccess,
   type Role,
@@ -54,6 +55,8 @@ export interface MemberWithRole extends MemberSummary {
 }
 
 const MEMBER_NOT_FOUND = "That member doesn't exist.";
+/** What the door answers a person who is no longer an active member. */
+const NOT_A_MEMBER = "That workspace doesn't exist, or you're not a member of it.";
 
 /** The role the actor acts with for the owner rules: a member's own, the system as an owner, anyone else none. */
 function actingRole(scope: EngineScope): Role | undefined {
@@ -67,10 +70,27 @@ function isSelf(scope: EngineScope, memberId: string): boolean {
   return principal.kind === 'member' && principal.memberId === memberId;
 }
 
+/** A stored role the code doesn't know counts as an owner's, so only an owner may touch that member (fail closed). */
+const storedRole = (role: string): Role => (isRole(role) ? role : 'owner');
+
+/** Whether an actor acting with `role` (now, as locked) holds `members.manage`: the system and keys by their access. */
+function manages(scope: EngineScope, role: Role | undefined): boolean {
+  if (scope.access.principal.kind !== 'member') return can(scope.access, 'members.manage');
+  return role !== undefined && (ROLE_PERMISSIONS[role] as readonly string[]).includes('members.manage');
+}
+
+/** The actor, as the owner rules judge them: their role now, read under lock, not as the door saw it. */
+interface Acting {
+  readonly role: Role | undefined;
+}
+
 /**
- * Locks the workspace's active owners, then the target member, so two owners
- * changing each other at once take turns and the second sees the first's
- * change. Refuses NOT_FOUND unless the target is an active member.
+ * Locks the workspace's active owners, the acting member's own row and the
+ * target, so two owners changing each other at once take turns, and an
+ * actor demoted or removed since the request came in acts with their role
+ * now. Refuses NOT_FOUND unless the target is an active member, and as the
+ * door does when the actor no longer is one, or holds a role the code
+ * doesn't know.
  */
 async function lockTarget(tx: WorkspaceTx, scope: EngineScope, memberId: string) {
   await tx
@@ -79,13 +99,30 @@ async function lockTarget(tx: WorkspaceTx, scope: EngineScope, memberId: string)
     .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.role, 'owner'), eq(members.status, 'active')))
     .orderBy(asc(members.id))
     .for('update');
+  const { principal } = scope.access;
+  let acting: Acting = { role: actingRole(scope) };
+  if (principal.kind === 'member') {
+    const [self] = await tx
+      .select({ role: members.role })
+      .from(members)
+      .where(
+        and(
+          eq(members.workspaceId, scope.workspaceId),
+          eq(members.id, principal.memberId),
+          eq(members.status, 'active'),
+        ),
+      )
+      .for('update');
+    if (self === undefined || !isRole(self.role)) throw refuse('NOT_FOUND', NOT_A_MEMBER);
+    acting = { role: self.role };
+  }
   const [target] = await tx
     .select({ id: members.id, name: members.name, email: members.email, role: members.role })
     .from(members)
     .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, memberId), eq(members.status, 'active')))
     .for('update');
   if (target === undefined) throw refuse('NOT_FOUND', MEMBER_NOT_FOUND);
-  return target;
+  return { target: { ...target, role: storedRole(target.role) }, acting };
 }
 
 /** Refuses LAST_OWNER when `memberId` is the live workspace's only active owner (the database checks it too). */
@@ -105,9 +142,9 @@ async function keepAnOwner(tx: WorkspaceTx, scope: EngineScope, memberId: string
   if (other === undefined) throw refuse('LAST_OWNER', LAST_OWNER_MESSAGE);
 }
 
-/** Refuses FORBIDDEN unless the actor holds `members.manage` or is acting on themself. */
-function checkManages(scope: EngineScope, memberId: string): void {
-  if (!isSelf(scope, memberId) && !can(scope.access, 'members.manage')) {
+/** Refuses FORBIDDEN unless an actor with `role` holds `members.manage` or is acting on themself. */
+function checkManages(scope: EngineScope, role: Role | undefined, memberId: string): void {
+  if (!isSelf(scope, memberId) && !manages(scope, role)) {
     throw refuse('FORBIDDEN', PERMISSIONS['members.manage'].message);
   }
 }
@@ -119,12 +156,18 @@ function checkManages(scope: EngineScope, memberId: string): void {
  */
 function checkOwnerRules(
   scope: EngineScope,
+  acting: Acting,
   target: { readonly id: string; readonly role: Role },
   toRole?: Role,
 ): void {
-  checkManages(scope, target.id);
+  checkManages(scope, acting.role, target.id);
   const touchesOwner = target.role === 'owner' || toRole === 'owner';
-  if (touchesOwner && actingRole(scope) !== 'owner') throw refuse('FORBIDDEN', OWNER_RULES_MESSAGE);
+  if (touchesOwner && acting.role !== 'owner') throw refuse('FORBIDDEN', OWNER_RULES_MESSAGE);
+}
+
+/** A member changes no roles, not even their own. */
+function checkChangesRoles(role: Role | undefined): void {
+  if (role === 'member') throw refuse('FORBIDDEN', PERMISSIONS['members.manage'].message);
 }
 
 /**
@@ -133,6 +176,8 @@ function checkOwnerRules(
  * `admin`; a member changes no roles, their own included. A person may change
  * their own role within these rules. Demoting the only active owner of a live
  * workspace is refused 409 `LAST_OWNER`. Answers the member with their role.
+ * The actor's role is checked as the door saw it before any read, then again
+ * as it is now, under lock.
  */
 export async function setMemberRole(
   scope: EngineScope,
@@ -143,17 +188,16 @@ export async function setMemberRole(
   const memberId = checkId(input.memberId, MEMBER_NOT_FOUND);
   if (!isRole(input.role)) throw refuse('CONFIG_INVALID', 'Pick owner, admin or member.');
   const role = input.role;
-  // A member changes no roles, not even their own; anyone else needs members.manage. Checked before any read.
-  if (actingRole(scope) === 'member') throw refuse('FORBIDDEN', PERMISSIONS['members.manage'].message);
-  checkManages(scope, memberId);
+  checkChangesRoles(actingRole(scope));
+  checkManages(scope, actingRole(scope), memberId);
   const { result } = await runWrite(
     scope,
     async ({ tx }) => {
-      const target = await lockTarget(tx, scope, memberId);
-      const current: Role = isRole(target.role) ? target.role : 'member';
-      checkOwnerRules(scope, { id: target.id, role: current }, role);
-      if (current === role) return { id: target.id, name: target.name, email: target.email, role };
-      if (current === 'owner') await keepAnOwner(tx, scope, target.id);
+      const { target, acting } = await lockTarget(tx, scope, memberId);
+      checkChangesRoles(acting.role);
+      checkOwnerRules(scope, acting, target, role);
+      if (target.role === role) return { id: target.id, name: target.name, email: target.email, role };
+      if (target.role === 'owner') await keepAnOwner(tx, scope, target.id);
       await tx
         .update(members)
         .set({ role, ...touched(scope) })
@@ -179,15 +223,14 @@ export async function removeMember(
 ): Promise<void> {
   checkScope(scope);
   const memberId = checkId(input.memberId, MEMBER_NOT_FOUND);
-  checkManages(scope, memberId);
+  checkManages(scope, actingRole(scope), memberId);
   await runWrite(
     scope,
     async ({ tx }) => {
-      const target = await lockTarget(tx, scope, memberId);
-      const current: Role = isRole(target.role) ? target.role : 'member';
+      const { target, acting } = await lockTarget(tx, scope, memberId);
       // Leaving is always yours to do; the last owner guard still holds.
-      if (!isSelf(scope, target.id)) checkOwnerRules(scope, { id: target.id, role: current });
-      if (current === 'owner') await keepAnOwner(tx, scope, target.id);
+      if (!isSelf(scope, target.id)) checkOwnerRules(scope, acting, target);
+      if (target.role === 'owner') await keepAnOwner(tx, scope, target.id);
       await tx
         .update(members)
         .set({ status: 'removed', ...touched(scope) })

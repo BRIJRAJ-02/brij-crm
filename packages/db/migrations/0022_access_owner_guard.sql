@@ -29,15 +29,22 @@ where m.workspace_id = earliest.workspace_id and m.id = earliest.id;
 --    (security invoker, the default), under row level security, so it reads only its own workspace's members; a
 --    soft deleted workspace no longer needs an owner. Executing a trigger function needs no privilege at fire
 --    time, so nobody is granted it. The search path is fixed and every name qualified.
+--
+--    Before it looks, it takes a transaction advisory lock on the workspace, so two transactions taking away
+--    owners at once take turns: the second looks only once the first has committed, with a fresh snapshot (read
+--    committed), and sees its change. Without it, each would still see the other's owner and both would pass.
+--    It fires on a change of workspace_id too, so moving the only owner's row elsewhere is refused as well.
 create function crm_members_keep_an_owner()
   returns trigger
   language plpgsql
   set search_path = pg_catalog, pg_temp
 as $$
 begin
-  if old.role = 'owner'
-    and old.status = 'active'
-    and exists (select 1 from public.workspaces w where w.id = old.workspace_id and w.deleted_at is null)
+  if old.role <> 'owner' or old.status <> 'active' then
+    return null;
+  end if;
+  perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('members_keep_an_owner:' || old.workspace_id::text, 0));
+  if exists (select 1 from public.workspaces w where w.id = old.workspace_id and w.deleted_at is null)
     and not exists (
       select 1 from public.members m
       where m.workspace_id = old.workspace_id and m.role = 'owner' and m.status = 'active'
@@ -53,7 +60,7 @@ $$;
 revoke all on function crm_members_keep_an_owner() from public;
 --> statement-breakpoint
 create constraint trigger members_keep_an_owner
-  after update of role, status or delete on members
+  after update of role, status, workspace_id or delete on members
   deferrable initially deferred
   for each row
   execute function crm_members_keep_an_owner();
