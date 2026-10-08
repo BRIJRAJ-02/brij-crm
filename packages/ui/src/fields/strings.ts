@@ -13,11 +13,12 @@ export const strings = {
   whereFrom: 'Where this came from',
   more: (count: number) => `+${String(count)}`,
   showMore: (count: number) => `Show ${String(count)} more`,
-  add: (name: string) => `Add ${name}…`,
   remove: (label: string) => `Remove ${label}`,
   choose: (name: string) => `Choose ${name}…`,
   search: (name: string) => `Search ${name}`,
   addAnother: 'Add another',
+  /** The add field of a list that already holds values. */
+  addAnotherPlaceholder: 'Add another…',
   me: 'Me',
   unknown: 'Unknown',
   /** Each attribute type's name, as a type picker lists it ("Add attribute"). */

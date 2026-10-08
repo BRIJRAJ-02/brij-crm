@@ -6,6 +6,7 @@ import { useState, type ReactNode } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
 import { LinkChip } from '../atoms/LinkChip/LinkChip.tsx';
 import { Field, type FieldProps } from '../molecules/Field/Field.tsx';
+import { strings as fieldStrings } from '../molecules/Field/strings.ts';
 import styles from './ListEditor.module.css';
 import { strings } from './strings.ts';
 import type { EditorProps } from './types.ts';
@@ -41,8 +42,11 @@ export function ListEditor<T extends AttributeType, V>({
   type,
   hint,
   prefix,
+  autoOpen = false,
+  startText,
 }: ListEditorProps<T, V>) {
-  const [draft, setDraft] = useState('');
+  // Opened from a grid cell by typing: the add field starts with that key.
+  const [draft, setDraft] = useState(startText ?? '');
   const [message, setMessage] = useState<string | undefined>(undefined);
   const commitList = (next: readonly V[]) => {
     const result = toCommittable<T>(attribute, next);
@@ -84,10 +88,11 @@ export function ListEditor<T extends AttributeType, V>({
         </ul>
       )}
       <Field
-        label={strings.add(attribute.name)}
+        label={attribute.name}
         isLabelHidden={isCompact}
         size={isCompact ? 'sm' : 'md'}
-        placeholder={strings.add(attribute.name)}
+        // The copy style's empty value, then an invitation to add one more.
+        placeholder={values.length === 0 ? fieldStrings.setAttribute(attribute.name) : strings.addAnotherPlaceholder}
         value={draft}
         onChange={(next) => {
           setDraft(next);
@@ -95,6 +100,9 @@ export function ListEditor<T extends AttributeType, V>({
         }}
         onSubmit={add}
         onBlur={add}
+        // Opened from a grid cell: keys go to the add field, never to a chip's link.
+        // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the editor was opened on purpose, from the cell
+        autoFocus={autoOpen}
         {...(onCancel === undefined ? {} : { onEscape: onCancel })}
         {...((message ?? error) === undefined ? {} : { error: message ?? error })}
         {...(inputMode === undefined ? {} : { inputMode })}

@@ -45,8 +45,10 @@
     background: var(--accent-soft);
   }
 
+  /* A popover editor keeps the ring on the cell it edits, so the panel reads as that cell's. */
   .root[data-focused]:focus-visible,
-  .root[data-focused]:focus-within {
+  .root[data-focused]:focus-within,
+  .root[data-editing='popover'] {
     box-shadow: var(--shadow-focus-inset);
   }
 

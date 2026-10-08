@@ -40,7 +40,8 @@ export function editModeOf(attribute: FieldAttribute): EditMode | undefined {
   if (readOnlyReasonOf(attribute) !== undefined || definition.editIn === 'none' || definition.togglesInPlace === true) {
     return undefined;
   }
-  if (definition.editIn === 'cell') return 'cell';
+  // Several emails, phones, domains or links are a list with an add field, which can't fit a row.
+  if (definition.editIn === 'cell') return attribute.allowMultiple ? 'popover' : 'cell';
   return definition.isListEditor === true ? 'list' : 'popover';
 }
 
@@ -183,6 +184,8 @@ export function GridCell({
       {mode === 'popover' && (
         <Popover
           label={attribute.name}
+          // At least as wide as the cell it opens from, and a menu's width.
+          width="menu"
           triggerRef={ref}
           isOpen
           onOpenChange={(isOpen) => {
