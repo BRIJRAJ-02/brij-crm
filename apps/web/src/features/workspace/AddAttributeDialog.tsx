@@ -107,10 +107,16 @@ export function AddAttributeDialog({ isOpen, onOpenChange, onAdd, onAdded }: Add
     <Modal
       title={strings.addAttribute}
       isOpen={isOpen}
-      onOpenChange={onOpenChange}
+      // While the server answers, the dialog stays: a refusal has to land on its field.
+      onOpenChange={(open) => {
+        if (!open && isBusy) return;
+        onOpenChange(open);
+      }}
       actions={
         <>
-          <Button slot="close">{strings.cancel}</Button>
+          <Button slot="close" isDisabled={isBusy}>
+            {strings.cancel}
+          </Button>
           <Button variant="primary" type="submit" form={formId} isPending={isBusy}>
             {isBusy ? strings.creating : strings.create}
           </Button>
