@@ -649,10 +649,27 @@ export const EveryType: Story = {
   ),
 };
 
-/** Settles a story for its screenshot: fonts in, and every running animation (a popover's entrance) finished. */
-async function settled(): Promise<void> {
-  await document.fonts.ready;
-  await Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined)));
+/** Arrows from the first row's name to the EveryType column `id`, then Enter edits it. */
+async function editColumn(
+  userEvent: { tab: () => Promise<void>; keyboard: (keys: string) => Promise<void> },
+  id: string,
+) {
+  const press = presser((keys) => userEvent.keyboard(keys));
+  await userEvent.tab();
+  // Its place in the row: after the checkbox column.
+  const at = everyTypeColumns().findIndex((each) => each.attribute.id === id) + 1;
+  await expect(at).toBeGreaterThan(1);
+  for (let col = 2; col <= at; col += 1) await press(['{ArrowRight}'], `0:${String(col)}`);
+  await press(['{Enter}']);
+}
+
+/** The panel a popover editor opened, once it is there. */
+function openDialog(): Promise<HTMLElement> {
+  return waitFor(() => {
+    const found = document.querySelector<HTMLElement>('[role="dialog"]');
+    if (found === null) throw new globalThis.Error('the popover did not open');
+    return found;
+  });
 }
 
 /**
@@ -670,7 +687,6 @@ export const EditInCell: Story = {
     const input = cell(canvasElement, 0, 3)?.querySelector('input');
     await waitFor(() => expect(input).toHaveAttribute('aria-invalid', 'true'));
     await expect(input).toHaveFocus();
-    await settled();
   },
 };
 
@@ -682,20 +698,50 @@ export const EditInCell: Story = {
 export const EditInPopover: Story = {
   render: () => <EveryTypeGrid />,
   play: async ({ userEvent }) => {
-    const press = presser((keys) => userEvent.keyboard(keys));
-    await userEvent.tab();
-    // Its place in the row: after the checkbox column.
-    const phones = everyTypeColumns().findIndex((each) => each.attribute.id === 'phone_many') + 1;
-    await expect(phones).toBeGreaterThan(1);
-    for (let col = 2; col <= phones; col += 1) await press(['{ArrowRight}'], `0:${String(col)}`);
-    await press(['{Enter}']);
-    const dialog = await waitFor(() => {
-      const found = document.querySelector<HTMLElement>('[role="dialog"]');
-      if (found === null) throw new globalThis.Error('the popover did not open');
-      return found;
-    });
+    await editColumn(userEvent, 'phone_many');
+    const dialog = await openDialog();
     await waitFor(() => expect(dialog).toHaveTextContent('+44 20 7123 4567'));
     await expect(document.activeElement).toHaveAttribute('placeholder', 'Add another…');
-    await settled();
+  },
+};
+
+/**
+ * A status (or a short select) is its list, open at once from the cell: the
+ * cell is the trigger with no box of its own and keeps its ring, and the list
+ * opens at least a menu wide, so no option is cut to the cell's width.
+ */
+export const EditListInCell: Story = {
+  render: () => <EveryTypeGrid />,
+  play: async ({ userEvent }) => {
+    await editColumn(userEvent, 'status');
+    await waitFor(() => expect(document.activeElement?.closest('[role="listbox"]')).not.toBeNull());
+    await expect(document.querySelector('[role="listbox"]')).toHaveTextContent('Qualified');
+  },
+};
+
+/**
+ * A member cell searches inside its popover: the search focused at once and
+ * the members under it, each with the email that tells two people apart,
+ * never a menu over the panel.
+ */
+export const EditMemberInPopover: Story = {
+  render: () => <EveryTypeGrid />,
+  play: async ({ userEvent }) => {
+    await editColumn(userEvent, 'actor_reference');
+    const dialog = await openDialog();
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('aria-label', 'Search Owner'));
+    await waitFor(() => expect(dialog).toHaveTextContent('grace@northwind.com'));
+    await expect(document.querySelectorAll('[role="menu"]')).toHaveLength(1);
+  },
+};
+
+/** A select holding several searches and checks in its popover, each option drawn once, as its tag. */
+export const EditTagsInPopover: Story = {
+  render: () => <EveryTypeGrid />,
+  play: async ({ userEvent }) => {
+    await editColumn(userEvent, 'select_many');
+    const dialog = await openDialog();
+    await waitFor(() => expect(dialog.querySelectorAll('[role="menuitemcheckbox"]').length).toBeGreaterThan(3));
+    await expect(document.activeElement).toHaveAttribute('aria-label', 'Search Tags');
   },
 };
