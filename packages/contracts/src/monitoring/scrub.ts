@@ -17,9 +17,9 @@ const EMAIL = /[\w.%+-]{1,64}@[a-z\d-]{1,63}(?:\.[a-z\d-]{1,63}){0,8}\.[a-z]{2,2
 
 // A URL or a path, then its query and fragment: sign in codes, Google's `code`
 // and `state`, a search. The URL keeps everything before `?` or `#`.
-// It matches from the `?` or `#` only, looking back for the path's `/`, so a
-// run of slashes costs one short look per `?` rather than a scan per slash.
-const QUERY = /[?#](?<=\/[^\s?#"'<>]{0,2048}[?#])[^\s"'<>]{0,2048}/gu;
+// It matches from the `?` or `#` only, looking back for the path's `/` no further than the previous `?`, `#`
+// or space, so every character is looked at a bounded number of times (the text is already capped).
+const QUERY = /[?#](?<=\/[^\s?#"'<>]*[?#])[^\s"'<>]*/gu;
 
 // The longest text kept: anything longer is cut before a regex runs, so a huge string (a body, a log)
 // costs no more than a short one. Sentry trims values far shorter than this anyway.
@@ -45,17 +45,28 @@ const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
 const QUERY_PARAMS = /\nparams:[\s\S]*$/u;
 
 /**
+ * The text scrubbed: all of it when it is short, else its first `MAX_TEXT +
+ * SCRUB_MARGIN` characters less the unfinished last word, so an email the
+ * slice cut in two (too short to match) never leaves its first part. When
+ * emails before it are marked, the text shrinks and that part could otherwise
+ * move inside the final cut.
+ */
+function withinLimit(text: string): string {
+  if (text.length <= MAX_TEXT + SCRUB_MARGIN) return text;
+  const slice = text.slice(0, MAX_TEXT + SCRUB_MARGIN);
+  const lastSpace = Math.max(...[' ', '\n', '\t', '\r'].map((space) => slice.lastIndexOf(space)));
+  return lastSpace < 0 ? '' : slice.slice(0, lastSpace + 1);
+}
+
+/**
  * A text cut to `MAX_TEXT`, with a failed query's values cut, every email
  * marked and every URL's query and fragment cut.
  */
 export function scrubText(text: string): string {
   // Scrubbed with a margin past the cut, so an email or a query that straddles it is caught whole, then cut.
-  const scrubbed = text
-    .slice(0, MAX_TEXT + SCRUB_MARGIN)
-    .replace(QUERY_PARAMS, '')
-    .replace(EMAIL, EMAIL_MARK)
-    .replace(QUERY, '');
-  return scrubbed.length > MAX_TEXT ? `${scrubbed.slice(0, MAX_TEXT)}[cut]` : scrubbed;
+  const scrubbed = withinLimit(text).replace(QUERY_PARAMS, '').replace(EMAIL, EMAIL_MARK).replace(QUERY, '');
+  const cut = scrubbed.length > MAX_TEXT || text.length > MAX_TEXT + SCRUB_MARGIN;
+  return cut ? `${scrubbed.slice(0, MAX_TEXT)}[cut]` : scrubbed;
 }
 
 /** Only the headers in `KEPT_HEADERS`, whatever their case. */

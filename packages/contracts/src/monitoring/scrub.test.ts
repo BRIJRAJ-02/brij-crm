@@ -170,6 +170,23 @@ describe('scrubText on long and hostile text', () => {
     expect(scrubbed.length).toBeLessThanOrEqual(MAX_TEXT + '[cut]'.length);
   });
 
+  it('cuts a query however long what comes before it', () => {
+    const longState = `https://app.test/api/auth/callback/google?state=${'s'.repeat(2100)}&code=SECRET`;
+    expect(scrubText(longState)).toBe('https://app.test/api/auth/callback/google');
+    const longPath = `/${'p'.repeat(2100)}?code=SECRET`;
+    expect(scrubText(longPath)).toBe(`/${'p'.repeat(2100)}`);
+  });
+
+  it('never leaves the first part of an email cut by the slice, even when marking shrinks the text', () => {
+    // Emails before it are marked ([email] is shorter), so the text shrinks and the slice's end moves inside the cut.
+    const before = 'abcdefghijklmnopqrstuvwxyz@example.com '.repeat(230);
+    const text = `${before}${'x'.repeat(MAX_TEXT + 1024 - before.length - 10)}ada.lovelace.secret@example.com tail`;
+    const scrubbed = scrubText(text);
+    expect(scrubbed).not.toContain('ada.lovel');
+    expect(scrubbed).not.toContain('abcdefghijklmnopqrstuvwxyz@');
+    expect(scrubbed.endsWith('[cut]')).toBe(true);
+  });
+
   it('cuts a long text, and still marks an email that straddles the cut', () => {
     const email = 'ada.lovelace@example.com';
     const text = `${'x '.repeat((MAX_TEXT - 6) / 2)}${email} and more`;
