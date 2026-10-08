@@ -49,8 +49,12 @@ async function memberWithWorkspace(on = app) {
   return { client, workspace };
 }
 
-/** Connects to Centrifugo with `token`, subscribes to `channel` with `subscription`, and answers both replies. */
-async function centrifugo(token: string, channel: string, subscription: string) {
+/**
+ * Connects to Centrifugo with `token`, subscribes to `channel` with
+ * `subscription` (none when undefined), then tries to publish there, and
+ * answers each reply (or how the connection closed instead).
+ */
+async function centrifugo(token: string, channel: string, subscription: string | undefined) {
   const socket = new WebSocket(WS_URL);
   const replies = new Map<number, (reply: Record<string, unknown>) => void>();
   socket.addEventListener('message', (event) => {
@@ -63,15 +67,21 @@ async function centrifugo(token: string, channel: string, subscription: string) 
     socket.addEventListener('open', () => resolve());
     socket.addEventListener('error', () => reject(new Error(`Centrifugo isn't answering at ${WS_URL}.`)));
   });
+  const closed = new Promise<Record<string, unknown>>((resolve) =>
+    socket.addEventListener('close', (event) => resolve({ closed: { code: event.code, reason: event.reason } })),
+  );
   const call = (id: number, command: Record<string, unknown>) => {
     const reply = new Promise<Record<string, unknown>>((resolve) => replies.set(id, resolve));
     socket.send(JSON.stringify({ id, ...command }));
-    return reply;
+    return Promise.race([reply, closed]);
   };
   try {
     const connected = await call(1, { connect: { token } });
-    const subscribed = await call(2, { subscribe: { channel, token: subscription } });
-    return { connected, subscribed };
+    const subscribed = await call(2, {
+      subscribe: { channel, ...(subscription === undefined ? {} : { token: subscription }) },
+    });
+    const published = 'closed' in subscribed ? subscribed : await call(3, { publish: { channel, data: { seq: 1 } } });
+    return { connected, subscribed, published };
   } finally {
     socket.close();
   }
@@ -87,6 +97,20 @@ describe('realtime tokens', () => {
     const replies = await centrifugo(token, subscription.channel, subscription.token);
     expect(replies.connected).toHaveProperty('connect');
     expect(replies.subscribed).toMatchObject({ subscribe: { recoverable: true } });
+    // Listening only: a member can't forge a change event on the channel.
+    expect(replies.published).toMatchObject({ error: { code: 103 } });
+  });
+
+  it("lets Centrifugo refuse a member's token on another workspace's channel, and a channel without one", async () => {
+    const { client, workspace } = await memberWithWorkspace();
+    const { workspace: elsewhere } = await memberWithWorkspace();
+    const { token } = await client.realtime.connectionToken();
+    const own = await client.realtime.subscriptionToken({ workspace: workspace.slug });
+    const other = `workspace:${elsewhere.id}`;
+    expect((await centrifugo(token, other, own.token)).subscribed).toMatchObject({
+      closed: { code: 3500, reason: 'invalid token' },
+    });
+    expect((await centrifugo(token, other, undefined)).subscribed).toMatchObject({ error: { code: 103 } });
   });
 
   it("refuses a subscription token for someone else's workspace with the door's NOT_FOUND", async () => {
