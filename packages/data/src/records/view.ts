@@ -78,6 +78,13 @@ export function createRecordView<Row extends RecordBody>({
   let pins: readonly Pin[] = [];
   let shown: RowRange = { start: 0, end: 0 };
   const getKey = (row: Row) => row.id;
+  // One function for the view's life, so a grid can tell a new view (a new sort) from a new snapshot of this one.
+  const onRangeChange = (range: RowRange) => {
+    shown = range;
+    // The windows' rows the range covers, widened by the pins, which move rows by one each.
+    windows.show({ start: Math.max(0, range.start - pins.length), end: range.end + pins.length });
+    onShown(range);
+  };
 
   /** The windows' rows a pinned record holds (skipped), in order. */
   const hiddenRows = () =>
@@ -102,12 +109,6 @@ export function createRecordView<Row extends RecordBody>({
       const pin = byIndex.get(index);
       const id = pin === undefined ? windows.idAt(windowRow(index)) : pin.id;
       return id === undefined ? undefined : store.get(id);
-    };
-    const onRangeChange = (range: RowRange) => {
-      shown = range;
-      // The windows' rows the range covers, widened by the pins, which move rows by one each.
-      windows.show({ start: Math.max(0, range.start - pins.length), end: range.end + pins.length });
-      onShown(range);
     };
     return { count, getItem, getKey, onRangeChange };
   };

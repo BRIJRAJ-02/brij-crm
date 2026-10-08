@@ -2,7 +2,13 @@
 // draws only the rows (and, past 12 columns, the columns) on screen; rows come
 // from outside through a RowSource; every cell renders and edits through the
 // field set; the keyboard model is a spreadsheet's. AC-4, AC-7, AC-8, AC-9.
-import { defaultRangeExtractor, useVirtualizer, type VirtualItem } from '@tanstack/react-virtual';
+import {
+  defaultRangeExtractor,
+  elementScroll,
+  observeElementOffset,
+  useVirtualizer,
+  type VirtualItem,
+} from '@tanstack/react-virtual';
 import {
   memo,
   useEffect,
@@ -142,6 +148,14 @@ const OVERSCAN = 8;
 /** Past this many drawn columns, the unpinned ones virtualise too. */
 const COLUMN_VIRTUALISE_AFTER = 12;
 const LOADING_ROWS = 8;
+/**
+ * The tallest body the grid draws. Browsers stop scrolling past a few million
+ * pixels (Firefox near 17.9 million, Chrome near 33.5 million), and a million
+ * rows of 34px is 34 million: past this the body is drawn this tall and every
+ * scroll position scales up to the rows' own, so the bar still reaches every
+ * row (spec 0006, AC-52, AC-54). Under it nothing scales.
+ */
+const MAX_BODY = 15_000_000;
 /** Frames to wait at most for a closing overlay before moving focus to `focusRow`. */
 const OVERLAY_WAIT_FRAMES = 60;
 const TABBABLE = 'a[href], button, input, select, textarea, [tabindex]';
@@ -281,6 +295,8 @@ export function DataGrid<Row>({
   // Only the rows on screen, plus the overscan, draw; and the focused and edited
   // rows, so focus and a draft survive a scroll that takes them off screen.
   const kept = [focus.row, editingAt?.row].filter((row): row is number => row !== undefined && row >= 0 && row < count);
+  // How many pixels of rows one pixel of scroll moves: 1, until the rows outgrow MAX_BODY (read by the scroll hooks).
+  const scrollScale = useRef(1);
   // eslint-disable-next-line react-hooks/incompatible-library -- TanStack Virtual hands back new functions each render, so the grid stays outside the compiler's memoisation.
   const virtualizer = useVirtualizer({
     count,
@@ -297,7 +313,25 @@ export function DataGrid<Row>({
     },
     // React batches the scroll update; a synchronous flush would cut into a render already under way.
     useFlushSync: false,
+    // Scaled past MAX_BODY: the scroller's position times the scale is where the rows are.
+    observeElementOffset: (instance, report) =>
+      observeElementOffset(instance, (offset, isScrolling) => {
+        report(offset * scrollScale.current, isScrolling);
+      }),
+    scrollToFn: (offset, options, instance) => {
+      elementScroll(offset / scrollScale.current, options, instance);
+    },
   });
+  // The body as drawn, and the scale between the rows' range and the scroller's (1 while the rows fit).
+  const rowsHeight = virtualizer.getTotalSize() - HEADER;
+  const bodyHeight = Math.min(rowsHeight, MAX_BODY);
+  const outside = HEADER + (hasFooter ? ROW : 0) - (virtualizer.scrollRect?.height ?? 0);
+  const scale = rowsHeight <= MAX_BODY ? 1 : Math.max(1, (rowsHeight + outside) / Math.max(1, bodyHeight + outside));
+  useLayoutEffect(() => {
+    scrollScale.current = scale;
+  });
+  // Rows sit this much higher than their own offset, so the ones the scaled position names are on screen.
+  const rowShift = (virtualizer.scrollOffset ?? 0) * (1 - 1 / scale);
   const columnVirtualizer = useVirtualizer({
     horizontal: true,
     count: unpinned.length,
@@ -321,9 +355,11 @@ export function DataGrid<Row>({
   useLayoutEffect(() => {
     onRangeChange.current = rows.onRangeChange;
   });
+  // Asked again when the rows come from a new source (another sort's view), which knows nothing of the range yet.
+  const rangeTarget = rows.onRangeChange;
   useEffect(() => {
     if (endRow > firstRow) onRangeChange.current?.({ start: firstRow, end: endRow });
-  }, [firstRow, endRow]);
+  }, [firstRow, endRow, rangeTarget]);
 
   const isColumnVirtual = placed.length > COLUMN_VIRTUALISE_AFTER;
   const columnItems = isColumnVirtual ? columnVirtualizer.getVirtualItems() : NO_ITEMS;
@@ -652,8 +688,9 @@ export function DataGrid<Row>({
   const onScreenIds = () => {
     const element = scroller();
     if (element === null) return [];
-    const top = element.scrollTop + HEADER;
-    const bottom = element.scrollTop + element.clientHeight - (hasFooter ? ROW : 0);
+    const scrolled = virtualizer.scrollOffset ?? element.scrollTop;
+    const top = scrolled + HEADER;
+    const bottom = scrolled + element.clientHeight - (hasFooter ? ROW : 0);
     return items.filter((item) => item.start >= top && item.end <= bottom).flatMap((item) => rowIdAt(item.index) ?? []);
   };
   const selectRowRange = (from: number, to: number) => {
@@ -1117,7 +1154,7 @@ export function DataGrid<Row>({
         className={styles.row}
         data-selected={isSelected || undefined}
         data-editing={editing?.row === row || undefined}
-        style={{ '--row-offset': `${String(item.start - HEADER)}px` }}
+        style={{ '--row-offset': `${String(item.start - HEADER - rowShift)}px` }}
       >
         {/* eslint-disable-next-line jsx-a11y-x/click-events-have-key-events -- the grid's one key handler toggles it with Space */}
         <div
@@ -1304,11 +1341,7 @@ export function DataGrid<Row>({
             </div>
           ) : (
             count > 0 && (
-              <div
-                role="rowgroup"
-                className={styles.body}
-                style={{ '--body-height': `${String(virtualizer.getTotalSize() - HEADER)}px` }}
-              >
+              <div role="rowgroup" className={styles.body} style={{ '--body-height': `${String(bodyHeight)}px` }}>
                 {bodyRows}
               </div>
             )
