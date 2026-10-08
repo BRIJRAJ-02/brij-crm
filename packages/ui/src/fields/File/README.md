@@ -11,7 +11,7 @@ The field set gives every attribute type exactly one display and one editor (spe
 Screens never import it; they render values through `AttributeDisplay` and `AttributeEditor` with a `FieldAttribute` of this type.
 
 - **Display**: FileItem chips with their type icons, "+N" past `maxVisible`; each name links to the download #32 serves (`FileDisplay.href`).
-- **Editor**: a FileDrop that hands files to `onUpload` (#32 uploads and stores them, then commits the new value), and the attached files as FileItems with remove. The grid edits it in a popover.
+- **Editor**: a FileDrop that hands files to `onUpload` (#32 uploads and stores them, then commits the new value), and the attached files as FileItems with remove. The grid edits it in a popover, with focus on the panel rather than the first remove button, so the Enter that opened it is never followed by one that removes a file.
 - **Text out / in** (copy, paste, CSV, the import preview): names / refused (upload them).
 - **Filter operators**: name contains, then is empty and is not empty.
 

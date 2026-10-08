@@ -21,7 +21,7 @@ Empty (nothing in a cell, a dash elsewhere, "Empty" for screen readers), a value
 
 ## Keyboard
 
-The editor is a Field: Enter commits in a cell, blur commits elsewhere, Esc cancels.
+The editor is a Field: Enter commits in a cell, blur commits elsewhere, Esc cancels. In a grid cell one value is typed in the cell itself; several edit in a popover under the cell, the list with an add field ("Set <Attribute>…", then "Add another…").
 
 ## Differences from the artifact
 

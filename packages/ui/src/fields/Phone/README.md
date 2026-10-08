@@ -21,7 +21,7 @@ Empty, a value, loading (the number shows as stored until the library loads), an
 
 ## Keyboard
 
-The editor is a Field: Enter commits in a cell, blur commits elsewhere, Esc cancels.
+The editor is a Field: Enter commits in a cell, blur commits elsewhere, Esc cancels. In a grid cell one value is typed in the cell itself; several edit in a popover under the cell, the list with an add field ("Set <Attribute>…", then "Add another…").
 
 ## Differences from the artifact
 

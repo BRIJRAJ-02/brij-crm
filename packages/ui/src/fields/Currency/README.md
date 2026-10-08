@@ -21,7 +21,7 @@ Empty (nothing in a cell, a dash elsewhere, "Empty" for screen readers), a value
 
 ## Keyboard
 
-The code picker opens with Enter or the arrows and searches as you type; the amount is a Field (Enter commits in a cell, Esc cancels).
+The code picker opens with Enter or the arrows and searches as you type; the amount is a Field (Enter commits in a cell, Esc cancels). In a grid cell it is the cell itself (Field's `cell` variant), the code at the start and the amount typed at the end, where they show.
 
 ## Differences from the artifact
 
