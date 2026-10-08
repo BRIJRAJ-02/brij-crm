@@ -434,11 +434,7 @@ export async function writeAttribute(
   } catch (error) {
     const pg = postgresError(error);
     if (pg?.code === '23505' && pg.constraint === 'values_unique') {
-      throw refuse(
-        'UNIQUE_CONFLICT',
-        `Another record already has this ${attribute.title}. It must be unique.`,
-        attribute.id,
-      );
+      throw refuse('UNIQUE_CONFLICT', `Another record already has this value for ${attribute.title}.`, attribute.id);
     }
     // A member or option that went away (or never was) after the checks above: refuse it as they would.
     if (pg?.code === '23503' && (pg.constraint === 'values_actor' || pg.constraint === 'values_option')) {

@@ -78,6 +78,30 @@ export function parseRetryAfter(value: string | null | undefined, now: number): 
   return Number.isNaN(at) ? undefined : Math.max(0, Math.ceil((at - now) / 1000));
 }
 
+/**
+ * The sentence a refused write gives one attribute: its own refusal (a taken
+ * unique value, an invalid value), or its input problem, else, for a refusal
+ * about nothing in particular, the whole answer's; undefined when the answer
+ * is about other attributes only. The one wording a grid cell, its toast and
+ * a form's field all show, so they always say the same thing.
+ */
+export function refusalFor(error: DataError, attributeId: string): string | undefined {
+  const refusals = error.data?.refusals ?? [];
+  const own = refusals.find((refusal) => refusal.attributeId === attributeId);
+  if (own !== undefined) return own.message;
+  const issue = error.data?.issues?.find((each) => each.path[0] === 'values' && each.path[1] === attributeId);
+  if (issue !== undefined) return issue.message;
+  const isAboutAttributes =
+    refusals.some((refusal) => refusal.attributeId !== undefined) ||
+    (error.data?.issues ?? []).some((each) => each.path[0] === 'values');
+  return isAboutAttributes ? undefined : error.message;
+}
+
+/** The sentence that sums up a refused write, in the same words as `refusalFor`: its first refusal's, else the answer's. */
+export function refusalSummary(error: DataError): string {
+  return error.data?.refusals?.[0]?.message ?? error.data?.issues?.[0]?.message ?? error.message;
+}
+
 /** Whether a thrown value is a DataError, so a screen can read its code. */
 export function isDataError(error: unknown): error is DataError {
   return error instanceof Error && error.name === 'DataError' && 'code' in error && typeof error.code === 'string';

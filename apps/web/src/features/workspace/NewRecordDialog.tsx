@@ -2,7 +2,14 @@
 // Purpose: add one record (a person) without leaving the table.
 // Main task: type the name and email, then Create; the row shows in the table at once and takes focus.
 // Leaves out: every other attribute (edit those in the table), duplicates checks and templates.
-import { isDataError, toFieldAttribute, type AttributeDefinition, type RecordView } from '@crm/data';
+import {
+  isDataError,
+  refusalFor,
+  refusalSummary,
+  toFieldAttribute,
+  type AttributeDefinition,
+  type RecordView,
+} from '@crm/data';
 import { AttributeEditor, Button, Form, Modal, type FormRefusal } from '@crm/ui';
 import { useId, useRef, useState } from 'react';
 import { strings } from './strings.ts';
@@ -35,52 +42,35 @@ function askedFor(definition: AttributeDefinition) {
   return { ...toFieldAttribute(definition), allowMultiple: false };
 }
 
-/** A failure split into the refusals each editor shows, by attribute id, and the rest, shown above the fields. */
+/**
+ * A failure split into the sentence each editor shows (`refusalFor`, the same
+ * words the table's cells and toasts use), and the rest, shown above the fields.
+ */
 function refusalsOf(
   error: unknown,
   editors: readonly AttributeDefinition[],
-  singularName: string,
 ): { readonly byAttribute: ReadonlyMap<string, string>; readonly other: readonly FormRefusal[] } {
   if (!isDataError(error)) {
     return { byAttribute: new Map(), other: [{ code: 'INTERNAL', message: strings.somethingWrong }] };
   }
-  const editorIds = new Set(editors.map((editor) => editor.id));
-  // A unique value taken, in the dialog's own words ("Another person has this email address.").
-  const takenMessage = (attributeId: string | undefined, message: string) => {
-    const editor = editors.find((each) => each.id === attributeId);
-    if (editor === undefined) return message;
-    const what = editor.type === 'email' ? strings.emailAddress : editor.title.toLowerCase();
-    return strings.valueTaken(singularName, what);
-  };
-  const refusals = (error.data?.refusals ?? []).map((refusal) => ({
-    code: refusal.code,
-    message: refusal.code === 'UNIQUE_CONFLICT' ? takenMessage(refusal.attributeId, refusal.message) : refusal.message,
-    ...(refusal.attributeId === undefined ? {} : { attributeId: refusal.attributeId }),
-  }));
-  const issues = (error.data?.issues ?? []).map((issue) => {
-    const [where, attributeId] = issue.path;
-    return {
-      code: error.code,
-      message: issue.message,
-      ...(where === 'values' && typeof attributeId === 'string' ? { attributeId } : {}),
-    };
+  // Refused as a whole (a limit, a lost connection): above the fields.
+  const own = editors.flatMap((editor) => {
+    const named =
+      (error.data?.refusals ?? []).some((refusal) => refusal.attributeId === editor.id) ||
+      (error.data?.issues ?? []).some((issue) => issue.path[0] === 'values' && issue.path[1] === editor.id);
+    const message = named ? refusalFor(error, editor.id) : undefined;
+    return message === undefined ? [] : [[editor.id, message] as const];
   });
-  const all: readonly FormRefusal[] = [...refusals, ...issues];
-  const shown = all.length > 0 ? all : [{ code: error.code, message: error.message }];
-  const byAttribute = new Map<string, string>();
-  const other: FormRefusal[] = [];
-  for (const refusal of shown) {
-    if (
-      refusal.attributeId !== undefined &&
-      editorIds.has(refusal.attributeId) &&
-      !byAttribute.has(refusal.attributeId)
-    ) {
-      byAttribute.set(refusal.attributeId, refusal.message);
-    } else {
-      other.push(refusal);
-    }
-  }
-  return { byAttribute, other };
+  const editorIds = new Set(editors.map((editor) => editor.id));
+  // About an attribute the dialog doesn't show, or about nothing in particular: above the fields.
+  const elsewhere = (error.data?.refusals ?? []).filter(
+    (refusal) => refusal.attributeId === undefined || !editorIds.has(refusal.attributeId),
+  );
+  const other: readonly FormRefusal[] =
+    own.length === 0 && elsewhere.length === 0
+      ? [{ code: error.code, message: refusalSummary(error) }]
+      : elsewhere.map((refusal) => ({ code: refusal.code, message: refusal.message }));
+  return { byAttribute: new Map(own), other };
 }
 
 /** "New person": a Modal with a Form of the record's first editors; Create waits for the server, the row shows at once. */
@@ -190,7 +180,7 @@ function NewRecordForm({
       },
       (error: unknown) => {
         onBusyChange(false);
-        const { byAttribute, other } = refusalsOf(error, editors, singularName);
+        const { byAttribute, other } = refusalsOf(error, editors);
         setFieldErrors(byAttribute);
         setRefusals(other);
       },

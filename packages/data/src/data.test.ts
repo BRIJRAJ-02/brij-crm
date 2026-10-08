@@ -13,7 +13,7 @@ import {
 import { implement, ORPCError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
 import { describe, expect, it } from 'vitest';
-import { parseRetryAfter } from './errors.ts';
+import { dataError, parseRetryAfter, refusalFor, refusalSummary } from './errors.ts';
 import {
   createDataLayer,
   createIdMinter,
@@ -660,6 +660,26 @@ describe('auth', () => {
       message: 'Too many codes were sent to this email.',
       retryAfterSeconds: 600,
     });
+  });
+});
+
+describe('refusal wording', () => {
+  const taken = dataError('UNIQUE_CONFLICT', 'Not saved.', {
+    refusals: [
+      { code: 'UNIQUE_CONFLICT', message: 'Another record already has this value for Email.', attributeId: 'a1' },
+    ],
+  });
+
+  it('gives a field, a cell and a toast the same sentence', () => {
+    expect(refusalFor(taken, 'a1')).toBe('Another record already has this value for Email.');
+    expect(refusalSummary(taken)).toBe('Another record already has this value for Email.');
+  });
+
+  it('gives other attributes nothing, and a refusal about nothing in particular to every one', () => {
+    expect(refusalFor(taken, 'a2')).toBeUndefined();
+    const whole = dataError('LIMIT_REACHED', 'This object is full.');
+    expect(refusalFor(whole, 'a2')).toBe('This object is full.');
+    expect(refusalSummary(whole)).toBe('This object is full.');
   });
 });
 

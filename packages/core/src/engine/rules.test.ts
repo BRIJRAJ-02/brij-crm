@@ -322,6 +322,10 @@ describe('unique', () => {
     expect(rejected).toHaveLength(1);
     const reason: unknown = rejected[0]?.status === 'rejected' ? rejected[0].reason : undefined;
     expect(isRefusal(reason) ? reason.refusal.code : reason).toBe('UNIQUE_CONFLICT');
+    // One sentence that reads the same for any title, a plural one included.
+    expect(isRefusal(reason) ? reason.refusal.message : reason).toBe(
+      'Another record already has this value for Email addresses.',
+    );
   });
 
   it('refuses turning Unique on over duplicates, and frees keys when turned off or archived', async () => {

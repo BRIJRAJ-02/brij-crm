@@ -45,6 +45,8 @@ export type { Auth, SessionUser } from './auth/auth.ts';
 export {
   dataError,
   isDataError,
+  refusalFor,
+  refusalSummary,
   SIGN_IN_CODES,
   type DataError,
   type DataErrorCode,

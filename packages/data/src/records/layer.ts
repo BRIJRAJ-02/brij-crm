@@ -3,15 +3,8 @@
 // with a count and a status), optimistic creates and edits with rollback, cell
 // refusals and toasts. createDataLayer loads this module when a screen first
 // asks for records, so it stays out of the first load.
-import type {
-  ApiRefusal,
-  CreateRecordInput,
-  RecordCount,
-  RecordPage,
-  RecordView,
-  SetValuesInput,
-} from '@crm/contracts';
-import { toDataError, type DataError } from '../errors.ts';
+import type { CreateRecordInput, RecordCount, RecordPage, RecordView, SetValuesInput } from '@crm/contracts';
+import { refusalFor, refusalSummary, toDataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
 import { createPlainStore } from './plain-store.ts';
 import { createRecordView, nextFrame, type RecordSource, type Scheduler } from './view.ts';
@@ -124,20 +117,6 @@ const timer = (ms: number, signal?: AbortSignal) =>
       { once: true },
     );
   });
-
-/** The message a refusal gives one cell: its own refusal, else (for a refusal about nothing in particular) the whole answer's. */
-function cellMessage(failure: DataError, attributeId: string): string | undefined {
-  const refusals: readonly ApiRefusal[] = failure.data?.refusals ?? [];
-  const own = refusals.find((refusal) => refusal.attributeId === attributeId);
-  if (own !== undefined) return own.message;
-  const issue = failure.data?.issues?.find((each) => each.path[0] === 'values' && each.path[1] === attributeId);
-  if (issue !== undefined) return issue.message;
-  const aboutCells = refusals.some((refusal) => refusal.attributeId !== undefined);
-  return aboutCells ? undefined : failure.message;
-}
-
-/** The sentence a toast gives a refused write: its first refusal's, else the answer's. */
-const toastMessage = (failure: DataError) => failure.data?.refusals?.[0]?.message ?? failure.message;
 
 interface ViewEntry {
   readonly workspace: string;
@@ -443,7 +422,7 @@ export function createRecordsLayer({
           return undefined;
         }
         setCellErrors(
-          changes.map((change) => [`${recordId}:${change.columnId}`, cellMessage(failure, change.columnId)]),
+          changes.map((change) => [`${recordId}:${change.columnId}`, refusalFor(failure, change.columnId)]),
         );
         return failure;
       }
@@ -539,7 +518,7 @@ export function createRecordsLayer({
         const again = refused.flatMap((result) => result.own);
         notify({
           tone: 'danger',
-          message: refused.length === 1 ? toastMessage(first.failure) : RECORD_WORDS.notSaved(refused.length),
+          message: refused.length === 1 ? refusalSummary(first.failure) : RECORD_WORDS.notSaved(refused.length),
           action: {
             label: RECORD_WORDS.retry,
             onAction: () => {

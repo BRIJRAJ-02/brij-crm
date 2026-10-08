@@ -167,7 +167,7 @@ test.describe('the People table', () => {
     await newDialog.getByLabel('First name').fill('Grace');
     await newDialog.getByLabel('Email addresses').fill(`grace-${tag}@example.com`);
     await newDialog.getByRole('button', { name: 'Create' }).click();
-    await expect(newDialog.getByText('Another person has this email address.')).toBeVisible();
+    await expect(newDialog.getByText('Another record already has this value for Email addresses.')).toBeVisible();
     await checkScreen(page, '4-new-person-refused');
     await newDialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(grid).toHaveAttribute('aria-rowcount', '3');
@@ -196,10 +196,7 @@ test.describe('the People table', () => {
     await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
     // The toast says why (the cell carries the same reason, shown on focus or hover).
     await expect(
-      page
-        .getByText(/already has this Email addresses/)
-        .filter({ visible: true })
-        .first(),
+      page.getByText('Another record already has this value for Email addresses.').filter({ visible: true }).first(),
     ).toBeVisible();
     await expect(email).not.toContainText(`grace-${tag}@example.com`);
     await checkScreen(page, '6-edit-refused');

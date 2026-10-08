@@ -196,7 +196,11 @@ describe('records.create', () => {
     const conflict = await failure(() => createPerson(m, 'Grace', 'ADA@example.com'));
     expect({ code: conflict.code, status: conflict.status }).toEqual({ code: 'UNIQUE_CONFLICT', status: 409 });
     expect(refusalsOf(conflict)).toMatchObject([
-      { code: 'UNIQUE_CONFLICT', attributeId: m.attribute('email_addresses') },
+      {
+        code: 'UNIQUE_CONFLICT',
+        message: 'Another record already has this value for Email addresses.',
+        attributeId: m.attribute('email_addresses'),
+      },
     ]);
     expect((await m.client.records.count({ workspace: m.slug, objectId: m.people.id })).count).toBe(1);
   });
