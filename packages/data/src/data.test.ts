@@ -7,6 +7,7 @@ import {
   type AttributeDefinition,
   type Me,
   type MemberSummary,
+  type MyAccess,
   type ObjectSummary,
   type RecordView,
 } from '@crm/contracts';
@@ -80,6 +81,7 @@ interface Behaviour {
   objects: (workspace: string) => ObjectSummary[];
   create: () => { workspace: Me['workspaces'][number] };
   members: () => MemberSummary[];
+  access: () => MyAccess;
   attributes: () => AttributeDefinition[];
   addAttribute: () => AttributeDefinition;
   count: () => number;
@@ -101,6 +103,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     objects: () => [PEOPLE],
     create: () => ({ workspace: { id: '0199a6f2-0000-7000-8000-000000000009', slug: 'new', name: 'New' } }),
     members: () => [ADA_MEMBER],
+    access: () => ({ role: 'member', roleLabel: 'Member', permissions: ['records.export'] }),
     attributes: () => [TITLE],
     addAttribute: notServed,
     count: () => 3,
@@ -137,6 +140,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       setValues: os.records.setValues.handler(() => behaviour.setValues()),
     },
     members: { list: os.members.list.handler(() => behaviour.members()) },
+    access: { mine: os.access.mine.handler(() => behaviour.access()) },
   });
   const handler = new RPCHandler(router);
   const fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
@@ -353,6 +357,22 @@ describe('objects.list', () => {
       },
     });
     expect(await failure(data.objects.list('acme'))).toMatchObject({ code: 'RATE_LIMITED', retryAfterSeconds: 90 });
+  });
+});
+
+describe('access', () => {
+  it('reads the person’s own role and permissions once per workspace', async () => {
+    const api = fakeApi();
+    const { data } = layer(api);
+    expect(await data.access.mine('acme')).toEqual({
+      role: 'member',
+      roleLabel: 'Member',
+      permissions: ['records.export'],
+    });
+    await data.access.mine('acme');
+    expect(count(api.calls, '/api/rpc/access/mine')).toBe(1);
+    await data.access.mine('other');
+    expect(count(api.calls, '/api/rpc/access/mine')).toBe(2);
   });
 });
 

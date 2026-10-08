@@ -1,3 +1,4 @@
+import { accessContract } from './access.ts';
 import { attributesContract } from './attributes.ts';
 import { meContract } from './me.ts';
 import { membersContract } from './members.ts';
@@ -32,4 +33,5 @@ export const contract = {
   attributes: attributesContract,
   records: recordsContract,
   members: membersContract,
+  access: accessContract,
 };

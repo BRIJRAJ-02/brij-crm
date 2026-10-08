@@ -5,7 +5,7 @@ Spec 0005, milestones 1 and 2. Every page inside a workspace sits in `WorkspaceF
 ## The frame (`/w/$slug`, WorkspaceFrame)
 
 - **Purpose**: the frame around every page in a workspace.
-- **Main task**: move between the workspace's records (People in this loop), switch the theme, sign out from the workspace menu.
+- **Main task**: move between the workspace's records (People in this loop), switch the theme, sign out from the workspace menu (headed by the person's role: Owner, Admin or Member).
 - **Leaves out**: switching or creating workspaces, Quick actions, favourites and lists (#23 and later).
 
 ## An object's page (`/w/$slug/objects/$object`, RecordsScreen)
@@ -22,12 +22,13 @@ Spec 0005, milestones 1 and 2. Every page inside a workspace sits in `WorkspaceF
 
 ## Add attribute (AddAttributeDialog)
 
-- **Purpose**: add a column to the object, from the view bar.
+- **Purpose**: add a column to the object, from the view bar. Shown only to people whose role holds `schema.manage` (owners and admins, spec 0009); the server refuses anyone else 403 on its own.
 - **Main task**: name it, pick one of the eight types, then Add attribute; the column appears once the server agrees.
 - **Leaves out**: select, status, currency and relation types, defaults, uniqueness and descriptions (#13).
 
 ## Notes
 
+- The frame's loader reads `access.mine` beside the objects; `useCan(permission)` (in `WorkspacePage.tsx`) answers from it, false while it loads, so a control is never shown and then taken away. It only hides controls: every check is the server's. To see the app as a member locally: `pnpm --filter @crm/core member:add -- --workspace <slug> --email <email> --role member`, then sign in with that email in another browser.
 - Signed out goes to `/sign-in?redirect=<this page>`. An unknown workspace and one the person isn't in both answer `NOT_FOUND`, shown as "Workspace not found" inside the frame, with "Open your workspace".
 - While a page loads, the sidebar already shows the workspace's name (from `me`), and the page keeps a loading TopBar and EmptyState in their places. A workspace that failed to load hides Records and offers Try again; one with no objects says "No objects yet".
 - Sign out from the workspace menu spins the workspace button until it is done. The theme switch stacks when the sidebar is folded to its rail (below `bp-page-compact`).

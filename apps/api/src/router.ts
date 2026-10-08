@@ -1,3 +1,4 @@
+import { accessRouter } from './modules/access/router.ts';
 import { attributesRouter } from './modules/attributes/router.ts';
 import { meRouter } from './modules/me/router.ts';
 import { membersRouter } from './modules/members/router.ts';
@@ -16,4 +17,5 @@ export const router = base.router({
   attributes: attributesRouter,
   records: recordsRouter,
   members: membersRouter,
+  access: accessRouter,
 });

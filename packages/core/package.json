@@ -12,7 +12,8 @@
     "lint": "eslint .",
     "test": "vitest run",
     "seed:scale": "node --env-file-if-exists=../../.env scripts/seed-scale.ts",
-    "bench:scale": "node --env-file-if-exists=../../.env scripts/bench-scale.ts"
+    "bench:scale": "node --env-file-if-exists=../../.env scripts/bench-scale.ts",
+    "member:add": "node --env-file-if-exists=../../.env scripts/add-member.ts"
   },
   "dependencies": {
     "@crm/contracts": "workspace:*",

@@ -18,10 +18,16 @@ export const Route = createFileRoute('/w/$slug')({
   loader: async ({ context, params }) => {
     const workspaceName = context.me.workspaces.find((workspace) => workspace.slug === params.slug)?.name;
     try {
-      const objects = await context.data.objects.list(params.slug);
-      return { workspaceName: workspaceName ?? params.slug, objects };
+      // The person's role and permissions come with the objects (spec 0009): screens hide what they can't use.
+      const [objects, access] = await Promise.all([
+        context.data.objects.list(params.slug),
+        context.data.access.mine(params.slug),
+      ]);
+      return { workspaceName: workspaceName ?? params.slug, objects, access };
     } catch (error) {
-      if (isDataError(error) && error.code === 'NOT_FOUND') return { workspaceName: undefined, objects: undefined };
+      if (isDataError(error) && error.code === 'NOT_FOUND') {
+        return { workspaceName: undefined, objects: undefined, access: undefined };
+      }
       throw error;
     }
   },

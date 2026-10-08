@@ -20,7 +20,7 @@ import { useMemo, useState } from 'react';
 import { AddAttributeDialog } from './AddAttributeDialog.tsx';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
 import { strings } from './strings.ts';
-import { WorkspacePage } from './WorkspacePage.tsx';
+import { useCan, WorkspacePage } from './WorkspacePage.tsx';
 
 /** The one view this loop has ("All people"). */
 const ALL = 'all';
@@ -82,6 +82,8 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
   );
   const [isCreating, setCreating] = useState(false);
   const [isAdding, setAdding] = useState(false);
+  // Only owners and admins change the schema (spec 0009, AC-136); the server refuses anyone else on its own.
+  const canChangeSchema = useCan('schema.manage');
   const [focusRow, setFocusRow] = useState<{ readonly index: number } | undefined>(undefined);
   const nameAttribute = attributes.find((attribute) => attribute.id === object.primaryAttributeId);
   const emailAttribute = attributes.find(
@@ -124,9 +126,11 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
             currentViewId={ALL}
             onViewChange={() => undefined}
           >
-            <Button icon="plus" onPress={() => setAdding(true)}>
-              {strings.addAttribute}
-            </Button>
+            {canChangeSchema && (
+              <Button icon="plus" onPress={() => setAdding(true)}>
+                {strings.addAttribute}
+              </Button>
+            )}
           </ViewBar>
         ),
         body: (

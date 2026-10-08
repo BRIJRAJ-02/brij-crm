@@ -12,6 +12,7 @@ import type {
   contract,
   Me,
   MemberSummary,
+  MyAccess,
   ObjectSummary,
   RecordView,
 } from '@crm/contracts';
@@ -35,7 +36,9 @@ export type {
   InputIssue,
   Me,
   MemberSummary,
+  MyAccess,
   ObjectSummary,
+  Permission,
   RecordView,
   SignedInUser,
   SystemStatus,
@@ -135,6 +138,7 @@ export function createDataLayer({
   let me: Promise<Me | undefined> | undefined;
   let objects = new Map<string, Promise<ObjectSummary[]>>();
   let members = new Map<string, Promise<MemberSummary[]>>();
+  let access = new Map<string, Promise<MyAccess>>();
   let attributes = new Map<string, Promise<AttributeDefinition[]>>();
   // The records layer, loaded with the first screen that shows records.
   let records: Promise<RecordsLayer> | undefined;
@@ -144,6 +148,7 @@ export function createDataLayer({
     me = undefined;
     objects = new Map();
     members = new Map();
+    access = new Map();
     attributes = new Map();
     void records?.then((layer) => {
       layer.clear();
@@ -278,6 +283,15 @@ export function createDataLayer({
       /** The workspace's active members, by name: the Owner column's names. Cached for the app load. */
       list: (workspace: string): Promise<MemberSummary[]> =>
         cached(members, workspace, () => call((options) => api.members.list({ workspace }, options))),
+    },
+    access: {
+      /**
+       * The person's own role, its label and their permissions in a workspace
+       * (spec 0009, AC-136), cached for the app load. Screens use it only to
+       * hide controls the person can't use; the server checks every call.
+       */
+      mine: (workspace: string): Promise<MyAccess> =>
+        cached(access, workspace, () => call((options) => api.access.mine({ workspace }, options))),
     },
     attributes: {
       /** An object's live attributes in position order, system ones marked. Cached until an attribute is added. */

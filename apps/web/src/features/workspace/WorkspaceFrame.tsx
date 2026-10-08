@@ -3,7 +3,7 @@
 // Main task: move between the workspace's records (People in this loop), switch the theme and sign out.
 // Leaves out: switching or creating workspaces, Quick actions, favourites and lists (#23 and later).
 import type { DataLayer, ObjectSummary } from '@crm/data';
-import { AppShell, Menu, MenuItem, NavItem, NavSection, Sidebar, ThemeSwitch, type Toasts } from '@crm/ui';
+import { AppShell, Menu, MenuItem, MenuSection, NavItem, NavSection, Sidebar, ThemeSwitch, type Toasts } from '@crm/ui';
 import type { ThemeController } from '@crm/ui/theme';
 import { useNavigate } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
@@ -19,6 +19,8 @@ export interface WorkspaceFrameProps {
   readonly slug: string;
   /** Its name at the top of the sidebar; the product's name while it isn't known. */
   readonly workspaceName?: string;
+  /** The person's role here ("Owner", "Admin" or "Member"), heading the workspace menu once it is known. */
+  readonly roleLabel?: string;
   /** Its objects; undefined while they load, so the Records section shows skeleton rows. */
   readonly objects?: readonly ObjectSummary[];
   /** The workspace doesn't exist, isn't the person's, or failed to load: no Records section at all. */
@@ -43,6 +45,7 @@ export function WorkspaceFrame({
   toasts,
   slug,
   workspaceName,
+  roleLabel,
   objects,
   isMissing = false,
   currentObject,
@@ -82,7 +85,14 @@ export function WorkspaceFrame({
                 if (key === 'sign-out') signOut();
               }}
             >
-              <MenuItem id="sign-out">{strings.signOut}</MenuItem>
+              {roleLabel === undefined ? (
+                <MenuItem id="sign-out">{strings.signOut}</MenuItem>
+              ) : (
+                // The person's role heads the menu (spec 0009, AC-136).
+                <MenuSection label={roleLabel}>
+                  <MenuItem id="sign-out">{strings.signOut}</MenuItem>
+                </MenuSection>
+              )}
             </Menu>
           }
           footer={({ isCollapsed }) => (
