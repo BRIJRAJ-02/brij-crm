@@ -67,23 +67,24 @@ export function keepBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb | null {
 }
 
 /**
- * An event whose error is a failed query, as `safeError` would send it: only
- * the outermost exception (Sentry lists causes first and the thrown error
- * last), named by SQLSTATE and constraint. This covers what the SDK catches
- * itself (an uncaught exception, an unhandled rejection) and the causes its
- * linked errors would add, not only what `captureFault` sends.
+ * An event whose error is a failed query, as `safeError` would send it: every
+ * exception in the chain (the thrown error and the causes linked errors add)
+ * keeps its type and stack, and each message becomes the safe one, named by
+ * SQLSTATE and constraint. This covers what the SDK catches itself (an
+ * uncaught exception, an unhandled rejection), not only what `captureFault`
+ * sends.
  */
 export function withoutQueryValues(event: ErrorEvent, original: unknown): ErrorEvent {
   if (queryFailure(original) === undefined) return event;
   const safe = safeError(original);
-  const outermost = event.exception?.values?.at(-1);
   const name = safe instanceof Error ? safe.name : 'Error';
   const message = safe instanceof Error ? safe.message : 'Query failed';
+  const values = event.exception?.values ?? [{}];
   return {
     ...event,
     message: undefined,
     // The type stays as the SDK named it (the error class, never a value); the message is the safe one.
-    exception: { values: [{ ...outermost, type: outermost?.type ?? name, value: message }] },
+    exception: { values: values.map((value) => ({ ...value, type: value.type ?? name, value: message })) },
   };
 }
 

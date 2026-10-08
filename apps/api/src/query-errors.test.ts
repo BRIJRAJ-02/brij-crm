@@ -79,7 +79,7 @@ describe('a failed query', () => {
     expect(transport.envelopes.join('\n')).not.toContain(SECRET);
   });
 
-  it('leaves through beforeSend without its values when the SDK caught it itself, causes and all', async () => {
+  it('leaves through beforeSend without its values when the SDK caught it itself, causes kept with their messages replaced', async () => {
     const { beforeSend } = sentryOptions({
       dsn: 'https://public@o1.ingest.de.sentry.io/1',
       environment: 'production',
@@ -101,6 +101,7 @@ describe('a failed query', () => {
     } as unknown as Parameters<typeof beforeSend>[0];
     const sent = await beforeSend(event, { originalException: failed });
     expect(sent?.exception?.values).toEqual([
+      { type: 'error', value: 'Query failed (22P02)' },
       {
         type: 'DrizzleQueryError',
         value: 'Query failed (22P02)',
