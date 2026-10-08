@@ -25,9 +25,9 @@ export const LOAD_STACK = {
   /** The owner login, direct: migrations, the seed, minting sessions, reset and the bench. */
   ownerUrl: 'postgres://crm_owner:crm_owner_local@localhost:5434/crm',
   /** The app login, through PgBouncer, as the API connects. `pnpm load:seed` creates it. */
-  appUrl: 'postgres://crm_app_user:crm_load_local@localhost:6434/crm',
+  appUrl: 'postgres://crm_app_user:local-only-load-app@localhost:6434/crm',
   /** The identity login, direct. `pnpm load:seed` creates it. */
-  identityUrl: 'postgres://crm_identity_user:crm_identity_load_local@localhost:5434/crm',
+  identityUrl: 'postgres://crm_identity_user:local-only-load-identity@localhost:5434/crm',
   apiUrl: 'http://localhost:3100',
   centrifugoUrl: 'ws://localhost:8100/connection/websocket',
   /** The API's `BETTER_AUTH_SECRET` on the load stack. The API refuses any secret holding `local-only` outside local. */

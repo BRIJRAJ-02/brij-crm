@@ -20,7 +20,7 @@ services:
     command: ["postgres", "-c", "config_file=/etc/postgresql/load.conf"]
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: local-only-load-postgres
     ports:
       - "127.0.0.1:5434:5432"
     volumes:
@@ -47,7 +47,7 @@ services:
       DB_NAME: crm
       # The load stack's app login, created by `pnpm load:seed`.
       DB_USER: crm_app_user
-      DB_PASSWORD: crm_load_local
+      DB_PASSWORD: local-only-load-app
       AUTH_TYPE: scram-sha-256
       POOL_MODE: transaction
       LISTEN_PORT: 6432
@@ -71,8 +71,8 @@ services:
       NODE_ENV: development
       PORT: 3100
       APP_URL: http://localhost:3100
-      DATABASE_URL: postgres://crm_app_user:crm_load_local@pgbouncer:6432/crm
-      IDENTITY_DATABASE_URL: postgres://crm_identity_user:crm_identity_load_local@postgres:5432/crm
+      DATABASE_URL: postgres://crm_app_user:local-only-load-app@pgbouncer:6432/crm
+      IDENTITY_DATABASE_URL: postgres://crm_identity_user:local-only-load-identity@postgres:5432/crm
       BETTER_AUTH_SECRET: local-only-load-stack-better-auth-secret
       BETTER_AUTH_URL: http://localhost:3100
       MAILPIT_URL: http://mailpit:8025
@@ -109,8 +109,8 @@ services:
       APP_ENV: local
       NODE_ENV: development
       WORKER_PORT: 3101
-      DATABASE_URL: postgres://crm_app_user:crm_load_local@pgbouncer:6432/crm
-      DATABASE_URL_DIRECT: postgres://crm_app_user:crm_load_local@postgres:5432/crm
+      DATABASE_URL: postgres://crm_app_user:local-only-load-app@pgbouncer:6432/crm
+      DATABASE_URL_DIRECT: postgres://crm_app_user:local-only-load-app@postgres:5432/crm
       WORKER_WAKE_SECRET: local-only-load-stack-worker-wake-secret
       # WORKER_IDLE_SLEEP_SECONDS stays unset, so the worker never sleeps and runs measure it warm.
       # CENTRIFUGO_API_URL and CENTRIFUGO_API_KEY stay unset for now (the relay off): the worker refuses

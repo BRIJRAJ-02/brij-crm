@@ -167,9 +167,11 @@ describe('docker-compose.load.yml', () => {
     expect(file).toMatch(/cpus: "2"\n\s+memory: 8g/);
   });
 
-  it('marks every secret local-only', () => {
-    const secrets = [...file.matchAll(/(?:SECRET|KEY|ADMIN_PASSWORD)\w*: (\S+)/g)].map((match) => match[1]);
-    expect(secrets.length).toBeGreaterThan(4);
-    for (const secret of secrets) expect(secret).toContain('local-only');
+  it('marks every secret and password local-only, in variables and in connection URLs', () => {
+    const secrets = [...file.matchAll(/(?:SECRET|KEY|PASSWORD)\w*: (\S+)/g)].map((match) => match[1]);
+    const inUrls = [...file.matchAll(/postgres:\/\/[^:\s]+:([^@\s]+)@/g)].map((match) => match[1]);
+    expect(secrets.length).toBeGreaterThan(6);
+    expect(inUrls.length).toBeGreaterThan(3);
+    for (const secret of [...secrets, ...inUrls]) expect(secret).toContain('local-only');
   });
 });

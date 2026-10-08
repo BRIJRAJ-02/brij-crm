@@ -501,7 +501,7 @@ export async function seedCrm(deps: SeedDeps, input: SeedInput): Promise<LoadMan
   const optionsOf = (attributeId: string) =>
     run(async (tx) => {
       const result = await tx.execute<{ id: string }>(
-        sql`select id::text from attribute_options where attribute_id = ${attributeId} order by position`,
+        sql`select id::text from attribute_options where workspace_id = ${workspaceId} and attribute_id = ${attributeId} order by position`,
       );
       return result.rows.map((row) => row.id);
     });
