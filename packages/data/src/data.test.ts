@@ -651,9 +651,11 @@ describe('live updates', () => {
     const BEA: MemberSummary = { id: '0199a6f2-0000-7000-8000-0000000000b0', name: 'Bea', email: 'bea@example.com' };
     const MINE = '0199a6f2-0003-7000-8000-000000000000';
     const replaced: ReplacedValue[] = [];
+    let memberReads = 0;
     const saved = { ...personRow(1, 'Lead'), revision: 1, versions: { [TITLE.id]: MINE } };
     const { client, data } = await liveLayer(
-      { setValues: () => saved, members: () => [ADA_MEMBER, BEA] },
+      // Bea joined after the member list was first read: the notice reads it once more to name her.
+      { setValues: () => saved, members: () => (memberReads++ === 0 ? [ADA_MEMBER] : [ADA_MEMBER, BEA]) },
       { onReplaced: (notice) => replaced.push(notice) },
     );
     data.records.setValue('acme', { rowId: saved.id, columnId: TITLE.id, value: 'Lead' });

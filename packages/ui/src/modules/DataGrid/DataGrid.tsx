@@ -83,6 +83,12 @@ export interface DataGridProps<Row> {
   readonly onCellChange?: (change: CellChange) => void;
   /** A paste or a range clear, every change already valid. */
   readonly onCellsChange?: (changes: readonly CellChange[]) => void;
+  /**
+   * Whether a full paste says so in a toast at once (true by default). False
+   * when the screen confirms it itself once the write lands, with Undo (spec
+   * 0006); a paste that left cells out is still counted here either way.
+   */
+  readonly confirmsPaste?: boolean;
   /** Refusals from the data layer: `${rowId}:${columnId}` to a sentence. */
   readonly cellErrors?: ReadonlyMap<string, string>;
   /** Calculations by column id, computed by the screen across all matching rows. */
@@ -181,6 +187,7 @@ export function DataGrid<Row>({
   onColumnsChange,
   onCellChange,
   onCellsChange,
+  confirmsPaste = true,
   cellErrors,
   footer,
   status = 'ready',
@@ -897,7 +904,7 @@ export function DataGrid<Row>({
     addLocalErrors(refused);
     const left = refused.length + plan.clipped + readOnly;
     if (left === 0) {
-      toasts.toast({ tone: 'success', message: strings.pasted(number(changes.length)) });
+      if (confirmsPaste) toasts.toast({ tone: 'success', message: strings.pasted(number(changes.length)) });
       return;
     }
     const causes = [

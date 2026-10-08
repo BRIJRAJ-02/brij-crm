@@ -58,7 +58,7 @@ The ⌘ key on a Mac, Ctrl elsewhere (Mod):
 - Mod+Enter follows a link in the cell (an email, a website).
 - Delete or Backspace clears the cell or range (a checkbox becomes false; a required value refuses).
 - Shift with an arrow draws a cell range; Shift with a click extends it. Mod+A selects the rows on screen. Esc clears the range.
-- Mod+C copies the range as tab separated text, and announces how many cells. Mod+V pastes through each column's type: a full paste says so in a toast; otherwise one toast counts what was left and why (refused, outside the table, read only), and refused cells keep their reason.
+- Mod+C copies the range as tab separated text, and announces how many cells. Mod+V pastes through each column's type: a full paste says so in a toast (unless `confirmsPaste` is false, when the screen confirms it once the write lands, with Undo); otherwise one toast counts what was left and why (refused, outside the table, read only), and refused cells keep their reason.
 - The footer is the last row the arrows reach; it reads, and nothing in it edits.
 - On a header, Alt+Down or Enter opens the column menu: Move left and right, Pin or Unpin, Hide (focus moves to the column that takes its place), Resize, and Sort and Filter when the screen handles them. In resize mode Left and Right step the width by `space-8`, the width is announced and the keys show on the header; Enter or Esc finish, and any other key, a click or a move ends it too.
 - The selection count is announced after Space, Shift ranges and Mod+A, and a cell range's size as it grows.

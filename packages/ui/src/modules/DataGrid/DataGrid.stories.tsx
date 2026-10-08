@@ -26,6 +26,7 @@ interface SampleGridProps {
   readonly isLoading?: (index: number) => boolean;
   readonly cellErrors?: ReadonlyMap<string, string>;
   readonly onRowOpen?: (rowId: string) => void;
+  readonly confirmsPaste?: boolean;
 }
 
 /** A grid over sample companies that keeps its own edits, columns and selection, as a screen would. */
@@ -38,6 +39,7 @@ function SampleGrid({
   isLoading,
   cellErrors,
   onRowOpen,
+  confirmsPaste,
 }: SampleGridProps) {
   const [data, setData] = useState(() => sampleRows(count));
   const [layout, setLayout] = useState(() => ({ columns: sampleColumns(columnCount), pinnedCount: 1 }));
@@ -104,6 +106,7 @@ function SampleGrid({
         {...(footer === undefined ? {} : { footer })}
         {...(cellErrors === undefined ? {} : { cellErrors })}
         {...(onRowOpen === undefined ? {} : { onRowOpen })}
+        {...(confirmsPaste === undefined ? {} : { confirmsPaste })}
       />
     </Stage>
   );
@@ -342,6 +345,25 @@ export const CopyAndPaste: Story = {
     await press(['{ArrowDown}', '{ArrowDown}', '{ArrowDown}'], '4:2');
     pasteIntoFocus('copied.com\tnot a number');
     await waitFor(() => expect(cell(canvasElement, 4, 2)).toHaveTextContent('copied.com'));
+    await waitFor(() => expect(document.querySelector('[data-tone="danger"]')).not.toBeNull());
+  },
+};
+
+/**
+ * A screen that confirms a paste itself once its write lands (with Undo, spec 0006) turns the grid's own
+ * confirmation off: a full paste lands quietly here, while one that left cells out is still counted.
+ */
+export const PasteConfirmedByTheScreen: Story = {
+  args: { confirmsPaste: false },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvasElement, userEvent }) => {
+    const press = presser((keys) => userEvent.keyboard(keys));
+    await userEvent.tab();
+    await press(['{ArrowRight}'], '0:2');
+    pasteIntoFocus('pasted.com');
+    await waitFor(() => expect(cell(canvasElement, 0, 2)).toHaveTextContent('pasted.com'));
+    await expect(document.querySelector('[data-tone="success"]')).toBeNull();
+    pasteIntoFocus('again.com\tnot a number');
     await waitFor(() => expect(document.querySelector('[data-tone="danger"]')).not.toBeNull());
   },
 };

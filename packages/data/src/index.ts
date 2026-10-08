@@ -549,22 +549,26 @@ export function createDataLayer({
     return list.find((attribute) => attribute.id === attributeId)?.title ?? '';
   };
 
+  /**
+   * A member's name from the cached member list; one the list doesn't hold
+   * (someone who joined after it was read) reads the list once more.
+   */
+  const memberName = async (workspace: string, memberId: string | null): Promise<string | undefined> => {
+    const read = () =>
+      cached(members, workspace, () => call((options) => api.members.list({ workspace }, options))).catch(() => []);
+    const found = (await read()).find((member) => member.id === memberId);
+    if (found !== undefined || memberId === null) return found?.name;
+    members.delete(workspace);
+    return (await read()).find((member) => member.id === memberId)?.name;
+  };
+
   /** A replaced notice from the records layer, with its names read from the cached definitions. */
   const tellReplaced = async (notice: ReplacedNotice): Promise<void> => {
     const [first = '', ...rest] = notice.attributeIds;
     const title = await attributeTitle(notice.workspace, notice.objectId, first);
     const by = notice.by;
     const who: ReplacedValue['by'] =
-      by.type === 'member'
-        ? {
-            kind: 'member',
-            name: (
-              await cached(members, notice.workspace, () =>
-                call((options) => api.members.list({ workspace: notice.workspace }, options)),
-              ).catch(() => [])
-            ).find((member) => member.id === by.id)?.name,
-          }
-        : { kind: by.type };
+      by.type === 'member' ? { kind: 'member', name: await memberName(notice.workspace, by.id) } : { kind: by.type };
     onReplaced({
       workspace: notice.workspace,
       recordId: notice.recordId,

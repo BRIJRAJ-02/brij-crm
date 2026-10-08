@@ -172,6 +172,8 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
                   if (toast !== undefined) toasts.toast(toast);
                 });
               }}
+              // The screen confirms a paste once its write lands, with Undo (spec 0006).
+              confirmsPaste={false}
               cellErrors={state.cellErrors}
               status={state.status}
               onRetry={view.retry}
