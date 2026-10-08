@@ -666,9 +666,10 @@ describe('live updates', () => {
     await settled();
     const by = (member: MemberSummary) => ({
       ...changed(1, [saved.id]),
-      replaced: [
-        { recordId: saved.id, attributeId: TITLE.id, versionId: MINE, by: { type: 'member' as const, id: member.id } },
-      ],
+      replaced: {
+        by: { type: 'member' as const, id: member.id },
+        cells: [{ recordId: saved.id, attributeId: TITLE.id, versionId: MINE }],
+      },
     });
     // Saved by this person elsewhere (another tab): nothing.
     client.channel().onPublication(by(ADA_MEMBER));

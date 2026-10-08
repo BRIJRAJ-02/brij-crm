@@ -7,10 +7,10 @@
 // The row is spec 0007's `ChangeEvent` (`@crm/contracts`) without the stub,
 // plus what the outbox stores and never publishes: a job's starter
 // (`actor_member_id`), read here for the `jobs` rule.
-import type { ChangeEvent, Permission, ReplacedEntry } from '@crm/contracts';
+import type { ChangeEvent, Permission, Replaced } from '@crm/contracts';
 import { fieldLevel, objectLevel, OPEN_KEY, recordRule, type DataPolicy } from './policy.ts';
 
-export type { ReplacedEntry };
+export type { Replaced };
 
 /** An event as an audience receives it: every kind of `ChangeEvent` but the stub, which the relay makes. */
 export type AudienceEvent = Exclude<ChangeEvent, { kind: 'restricted' }>;
@@ -105,7 +105,7 @@ function cutRecords<
     readonly recordIds: readonly string[];
     readonly attributeIds: readonly string[];
     readonly coarse?: boolean | undefined;
-    readonly replaced?: readonly ReplacedEntry[] | undefined;
+    readonly replaced?: Replaced | undefined;
     readonly mutationId?: string | undefined;
   },
 >(policy: DataPolicy, row: T, owner: string, ruleObject: string, extraIds?: 'entryIds'): T | undefined {
@@ -115,17 +115,24 @@ function cutRecords<
   const onlyHidden = row.attributeIds.length > 0 && attributeIds.length === 0;
   const ruled = recordRule({ data: policy }, ruleObject) !== undefined;
   const recordIds = ruled || onlyHidden ? [] : row.recordIds;
-  const replaced =
+  const cells =
     row.replaced === undefined || ruled
       ? undefined
-      : row.replaced.filter((entry) => attributeIds.includes(entry.attributeId) && recordIds.includes(entry.recordId));
+      : row.replaced.cells.filter(
+          (cell) => attributeIds.includes(cell.attributeId) && recordIds.includes(cell.recordId),
+        );
+  // `by` stays once; a list with no cell left goes.
+  const replaced =
+    row.replaced === undefined || cells === undefined || cells.length === 0
+      ? undefined
+      : { by: row.replaced.by, cells };
   const coarse = row.coarse === true || ruled;
   const extra =
     extraIds === undefined ? {} : { [extraIds]: ruled || onlyHidden ? [] : (row as Record<string, unknown>)[extraIds] };
   const removed =
     !sameList(attributeIds, row.attributeIds) ||
     !sameList(recordIds, row.recordIds) ||
-    (row.replaced !== undefined && (replaced === undefined || !sameList(replaced, row.replaced)));
+    (row.replaced !== undefined && (replaced === undefined || !sameList(replaced.cells, row.replaced.cells)));
   // Nothing left: no record, no attribute, and not a coarse refetch.
   if (removed && recordIds.length === 0 && attributeIds.length === 0 && !coarse) return undefined;
   if (onlyHidden && row.coarse !== true) return undefined;

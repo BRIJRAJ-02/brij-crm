@@ -156,6 +156,40 @@ describe('the outbox reader', () => {
     expect(lagsMs[0]).toBeLessThan(60_000);
   });
 
+  it('reads a records row’s replaced as by once with its cells, and anything else as none (owner decision, 8 Oct 2026)', async () => {
+    const outbox = await reader();
+    const busy = await workspaceWithEvents([]);
+    const objectId = randomUUID();
+    const cell = { recordId: randomUUID(), attributeId: randomUUID(), versionId: randomUUID() };
+    const by = { type: 'member', id: randomUUID() };
+    const stored = [
+      { by, cells: [cell] },
+      // The old per entry list, more than 200 cells, a bad cell, and a bad actor.
+      [{ ...cell, by }],
+      { by, cells: Array.from({ length: 201 }, () => cell) },
+      { by, cells: [cell, { recordId: 'x' }] },
+      { by: { type: 'robot', id: null }, cells: [cell] },
+    ];
+    await db.withWorkspace(busy, async (tx) => {
+      await tx.execute(
+        sql`insert into objects (workspace_id, id, api_slug, singular_name, plural_name, icon, hue, created_by_type, updated_by_type) values (${busy}, ${objectId}, 'others', 'Other', 'Others', 'box', 'gray', 'system', 'system')`,
+      );
+      for (const [index, replaced] of stored.entries()) {
+        await tx.execute(
+          sql`insert into outbox (workspace_id, seq, kind, object_id, replaced) values (${busy}, ${index + 1}, 'records', ${objectId}, ${JSON.stringify(replaced)}::jsonb)`,
+        );
+      }
+    });
+    const rows = await outbox.pending(busy, 10);
+    expect(rows.map((row) => row.replaced)).toEqual([
+      { by, cells: [cell] },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+    ]);
+  });
+
   it('prunes published rows exactly past OUTBOX_RETENTION, the interval crm_outbox_prune hard codes', async () => {
     const outbox = await reader();
     const workspaceId = await workspaceWithEvents([]);

@@ -50,17 +50,25 @@ export interface OutboxRow {
   readonly actorMemberId: string | undefined;
   /** The commit time (`created_at`), ISO 8601: the event's `at`. */
   readonly at: string;
-  /** The values a `records` row's write replaced that its author never saw (spec 0006), or undefined for none. */
-  readonly replaced: readonly OutboxReplaced[] | undefined;
+  /** What a `records` row's write replaced that its author never saw (spec 0006), or undefined for none. */
+  readonly replaced: OutboxReplaced | undefined;
 }
 
-/** One value a write replaced (spec 0006, `outbox.replaced`): ids only, and who replaced it. */
+/**
+ * What a write replaced (spec 0006, `outbox.replaced`; owner decision, 8 Oct
+ * 2026): who replaced it, named once, and the cells, ids only, at most 200.
+ */
 export interface OutboxReplaced {
-  readonly recordId: string;
-  readonly attributeId: string;
-  readonly versionId: string;
   readonly by: { readonly type: 'member' | 'api_key' | 'automation' | 'system'; readonly id: string | null };
+  readonly cells: readonly {
+    readonly recordId: string;
+    readonly attributeId: string;
+    readonly versionId: string;
+  }[];
 }
+
+/** The most cells a stored `replaced` may name; a longer list is read as none (`MAX_REPLACED_CELLS` in the contract). */
+const MAX_REPLACED_CELLS = 200;
 
 /** What marking rows published answers: how many, and each one's lag from commit to publish, in ms. */
 export interface Marked {
@@ -293,22 +301,27 @@ export function outboxRowOf(row: RawOutboxRow): OutboxRow {
 const ACTOR_TYPES: ReadonlySet<unknown> = new Set(['member', 'api_key', 'automation', 'system']);
 
 /**
- * The stored `replaced` list, keeping only well formed entries (the outbox
- * hook writes nothing else), or undefined when it holds none.
+ * The stored `replaced`, or undefined when it names no cell. Only the shape
+ * the outbox hook writes counts: `by` once and its cells, each well formed,
+ * at most 200. Anything else (a malformed cell, an older row's per entry
+ * list) is read as none: no notice beats a wrong one.
  */
-function replacedOf(stored: unknown): readonly OutboxReplaced[] | undefined {
-  if (!Array.isArray(stored)) return undefined;
+function replacedOf(stored: unknown): OutboxReplaced | undefined {
+  if (typeof stored !== 'object' || stored === null || Array.isArray(stored)) return undefined;
+  const { by, cells } = stored as Record<string, unknown>;
   const isId = (value: unknown): value is string => typeof value === 'string' && UUID.test(value);
-  const entries = stored.flatMap((entry: unknown): OutboxReplaced[] => {
-    if (typeof entry !== 'object' || entry === null) return [];
-    const { recordId, attributeId, versionId, by } = entry as Record<string, unknown>;
-    if (!isId(recordId) || !isId(attributeId) || !isId(versionId)) return [];
-    if (typeof by !== 'object' || by === null) return [];
-    const { type, id } = by as Record<string, unknown>;
-    if (!ACTOR_TYPES.has(type) || (id !== null && !isId(id))) return [];
-    return [{ recordId, attributeId, versionId, by: { type: type as OutboxReplaced['by']['type'], id } }];
-  });
-  return entries.length === 0 ? undefined : entries;
+  if (typeof by !== 'object' || by === null || !Array.isArray(cells)) return undefined;
+  if (cells.length === 0 || cells.length > MAX_REPLACED_CELLS) return undefined;
+  const { type, id } = by as Record<string, unknown>;
+  if (!ACTOR_TYPES.has(type) || (id !== null && !isId(id))) return undefined;
+  const kept: OutboxReplaced['cells'][number][] = [];
+  for (const cell of cells as unknown[]) {
+    if (typeof cell !== 'object' || cell === null) return undefined;
+    const { recordId, attributeId, versionId } = cell as Record<string, unknown>;
+    if (!isId(recordId) || !isId(attributeId) || !isId(versionId)) return undefined;
+    kept.push({ recordId, attributeId, versionId });
+  }
+  return { by: { type: type as OutboxReplaced['by']['type'], id }, cells: kept };
 }
 
 function rowsOf(result: pg.QueryResult | undefined): readonly OutboxRow[] {

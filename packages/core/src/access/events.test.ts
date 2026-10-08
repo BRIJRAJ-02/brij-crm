@@ -64,10 +64,13 @@ const records: EventRow = {
   attributeIds: [SHOWN, HIDDEN],
   coarse: false,
   mutationId: 'm1',
-  replaced: [
-    { recordId: 'r1', attributeId: SHOWN, versionId: 'v1', by: BY_ADA },
-    { recordId: 'r1', attributeId: HIDDEN, versionId: 'v2', by: BY_ADA },
-  ],
+  replaced: {
+    by: BY_ADA,
+    cells: [
+      { recordId: 'r1', attributeId: SHOWN, versionId: 'v1' },
+      { recordId: 'r1', attributeId: HIDDEN, versionId: 'v2' },
+    ],
+  },
 };
 
 describe('every kind has a rule', () => {
@@ -103,12 +106,20 @@ describe('records', () => {
       recordIds: ['r1', 'r2'],
       attributeIds: [SHOWN],
       coarse: false,
-      replaced: [{ recordId: 'r1', attributeId: SHOWN, versionId: 'v1', by: BY_ADA }],
+      replaced: { by: BY_ADA, cells: [{ recordId: 'r1', attributeId: SHOWN, versionId: 'v1' }] },
     });
   });
 
+  it('drops the replaced list whole when every cell in it is hidden', () => {
+    const onlyHidden: EventRow = {
+      ...records,
+      replaced: { by: BY_ADA, cells: [{ recordId: 'r1', attributeId: HIDDEN, versionId: 'v2' }] },
+    };
+    expect(filterEvent(hiddenField, onlyHidden)).not.toHaveProperty('replaced');
+  });
+
   it('drops records whose only changed attributes are hidden, which leaves nothing', () => {
-    expect(filterEvent(hiddenField, { ...records, attributeIds: [HIDDEN], replaced: [] })).toBeUndefined();
+    expect(filterEvent(hiddenField, { ...records, attributeIds: [HIDDEN], replaced: undefined })).toBeUndefined();
   });
 
   it('under a record rule, removes record ids and replaced, and makes the event coarse', () => {

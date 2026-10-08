@@ -25,22 +25,34 @@ const mutationId = z.uuid().optional();
  */
 const coarse = z.boolean().optional();
 
-/**
- * A value a save replaced that its author never saw (spec 0006 fills it):
- * the record, the attribute, the replaced version and who replaced it. Never
- * on a catch up.
- */
-export const ReplacedEntry = z.object({
+/** The most cells one event's `replaced` names (owner decision, 8 Oct 2026); past it the event carries no list. */
+export const MAX_REPLACED_CELLS = 200;
+
+/** A cell a save replaced: the record, the attribute and the replaced version, ids only. */
+export const ReplacedCell = z.object({
   recordId: z.uuid(),
   attributeId: z.uuid(),
   versionId: z.uuid(),
+});
+/** A cell a save replaced. */
+export type ReplacedCell = z.infer<typeof ReplacedCell>;
+
+/**
+ * The values a save replaced that its author never saw (spec 0006, AC-46):
+ * who replaced them, named once (the write's actor), and the cells, at most
+ * `MAX_REPLACED_CELLS`. A write that replaced more carries no list at all, so
+ * its tab only refetches the records (no notice beats a wrong one). Never on
+ * a catch up.
+ */
+export const Replaced = z.object({
   by: z.object({
     type: z.enum(['member', 'api_key', 'automation', 'system']),
     id: z.uuid().nullable(),
   }),
+  cells: z.array(ReplacedCell).min(1).max(MAX_REPLACED_CELLS),
 });
-/** A value a save replaced. */
-export type ReplacedEntry = z.infer<typeof ReplacedEntry>;
+/** The values a save replaced. */
+export type Replaced = z.infer<typeof Replaced>;
 
 /** These records of the object changed (refetch the ones you hold), or, when `coarse`, too many to list. */
 export const RecordsEvent = z.object({
@@ -51,7 +63,7 @@ export const RecordsEvent = z.object({
   attributeIds: ids,
   coarse,
   mutationId,
-  replaced: z.array(ReplacedEntry).optional(),
+  replaced: Replaced.optional(),
 });
 
 /** These entries of the list changed, with their records (`objectId` is the list's parent object). */
@@ -65,7 +77,7 @@ export const EntriesEvent = z.object({
   attributeIds: ids,
   coarse,
   mutationId,
-  replaced: z.array(ReplacedEntry).optional(),
+  replaced: Replaced.optional(),
 });
 
 /**

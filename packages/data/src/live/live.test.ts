@@ -300,7 +300,10 @@ describe('the watermark', () => {
 describe('what a replay carries (spec 0006, AC-47)', () => {
   const replacedEvent = (seq: number) => ({
     ...event(seq),
-    replaced: [{ recordId: ROW(seq), attributeId: ROW(90), versionId: ROW(91), by: { type: 'member', id: ROW(92) } }],
+    replaced: {
+      by: { type: 'member', id: ROW(92) },
+      cells: [{ recordId: ROW(seq), attributeId: ROW(90), versionId: ROW(91) }],
+    },
   });
 
   it('hands a live event its replaced list, and drops it from what a recovered subscription replays', async () => {
@@ -345,14 +348,22 @@ describe('parsing', () => {
     ).toBeUndefined();
   });
 
-  it('keeps the well formed entries of what a records event replaced (spec 0006)', () => {
-    const entry = { recordId: ROW(1), attributeId: ROW(2), versionId: ROW(3), by: { type: 'member', id: ROW(4) } };
-    const parsed = parseChangeEvent({
-      ...event(1),
-      replaced: [entry, { recordId: ROW(1) }, { ...entry, by: { type: 'robot', id: null } }],
-    });
-    expect(parsed?.event).toEqual({ ...event(1), replaced: [entry] });
-    expect(parseChangeEvent({ ...event(1), replaced: [{ recordId: 1 }] })?.event).toEqual(event(1));
+  it('keeps what a records event replaced only when the whole list is well formed (spec 0006)', () => {
+    const cell = { recordId: ROW(1), attributeId: ROW(2), versionId: ROW(3) };
+    const replaced = { by: { type: 'member', id: ROW(4) }, cells: [cell] };
+    expect(parseChangeEvent({ ...event(1), replaced })?.event).toEqual({ ...event(1), replaced });
+    // One bad cell, a bad actor, the old per entry list, or more than 200 cells: the event keeps going, without a list.
+    for (const bad of [
+      { ...replaced, cells: [cell, { recordId: ROW(1) }] },
+      { ...replaced, by: { type: 'robot', id: null } },
+      [{ ...cell, by: replaced.by }],
+      { ...replaced, cells: Array.from({ length: 201 }, () => cell) },
+      { ...replaced, cells: [] },
+    ]) {
+      expect(parseChangeEvent({ ...event(1), replaced: bad })?.event).toEqual(event(1));
+    }
+    const full = { ...replaced, cells: Array.from({ length: 200 }, () => cell) };
+    expect(parseChangeEvent({ ...event(1), replaced: full })?.event).toEqual({ ...event(1), replaced: full });
   });
 });
 

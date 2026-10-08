@@ -12,23 +12,32 @@
 // row, so it follows `seq` order). Entry changes aren't published yet: no
 // screen shows lists (spec 0007, milestone 2).
 import { sql } from 'drizzle-orm';
+import { MAX_REPLACED_CELLS } from '@crm/contracts';
 import { OUTBOX_CHANNEL } from '@crm/db';
 import { isUuid } from './ids.ts';
 import type { Actor } from './scope.ts';
 import { cappedHook, type AfterWrite, type CappedChange } from './write.ts';
 
-/** One value a write replaced that its author never saw (spec 0006, AC-46): ids only, and who replaced it. */
-export interface ReplacedValue {
+/** One cell a write replaced that its author never saw (spec 0006, AC-46): ids only. */
+export interface ReplacedCell {
   readonly recordId: string;
   readonly attributeId: string;
   /** The version the write replaced. */
   readonly versionId: string;
-  /** The write's actor: who replaced it. */
-  readonly by: Actor;
 }
 
-/** The most `replaced` entries one outbox row carries; past it the list is left empty (no notices for a bulk overwrite). */
-export const REPLACED_CAP = 1_000;
+/** What a write replaced: who replaced it (the write's actor, named once), and the cells. */
+export interface ReplacedValues {
+  readonly by: Actor;
+  readonly cells: readonly ReplacedCell[];
+}
+
+/**
+ * The most cells one outbox row's `replaced` names (owner decision, 8 Oct
+ * 2026, `MAX_REPLACED_CELLS` in the contract); past it the row carries none,
+ * and the tabs only refetch (no notice for a bulk overwrite).
+ */
+export const REPLACED_CAP = MAX_REPLACED_CELLS;
 
 /** One outbox row before it gets its number. */
 export interface OutboxEvent {
@@ -37,8 +46,8 @@ export interface OutboxEvent {
   readonly recordIds: readonly string[];
   readonly attributeIds: readonly string[];
   readonly coarse: boolean;
-  /** On a `records` row: the values the write replaced, when there were some and no more than `REPLACED_CAP`. */
-  readonly replaced?: readonly ReplacedValue[];
+  /** On a `records` row: what the write replaced, when it replaced some cells and no more than `REPLACED_CAP`. */
+  readonly replaced?: ReplacedValues;
 }
 
 /** What the outbox hook needs from the request. */
@@ -64,12 +73,12 @@ export interface OutboxHookOptions {
 export function outboxEvents(change: CappedChange): readonly OutboxEvent[] {
   const records = new Map<
     string,
-    { readonly recordIds: Set<string>; readonly attributeIds: Set<string>; readonly replaced: ReplacedValue[] }
+    { readonly recordIds: Set<string>; readonly attributeIds: Set<string>; readonly replaced: ReplacedCell[] }
   >();
   const touch = (objectId: string) => {
     const found = records.get(objectId);
     if (found !== undefined) return found;
-    const created = { recordIds: new Set<string>(), attributeIds: new Set<string>(), replaced: [] as ReplacedValue[] };
+    const created = { recordIds: new Set<string>(), attributeIds: new Set<string>(), replaced: [] as ReplacedCell[] };
     records.set(objectId, created);
     return created;
   };
@@ -92,7 +101,6 @@ export function outboxEvents(change: CappedChange): readonly OutboxEvent[] {
         recordId: value.ownerId,
         attributeId: value.attributeId,
         versionId: value.replaced.versionId,
-        by: { type: change.actor.type, id: change.actor.id },
       });
     }
   }
@@ -118,7 +126,10 @@ export function outboxEvents(change: CappedChange): readonly OutboxEvent[] {
         recordIds: isCoarse ? [] : [...object.recordIds],
         attributeIds: [...object.attributeIds],
         coarse: isCoarse,
-        ...(replaced.length === 0 ? {} : { replaced }),
+        // The write's actor replaced every cell, so it is named once.
+        ...(replaced.length === 0
+          ? {}
+          : { replaced: { by: { type: change.actor.type, id: change.actor.id }, cells: replaced } }),
       };
     }),
     ...[...definitions.keys()].sort(byId).map((objectId): OutboxEvent => ({

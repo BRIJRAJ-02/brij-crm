@@ -79,9 +79,10 @@ export const outbox = pgTable(
     actorMemberId: uuid('actor_member_id'),
     /**
      * The values this write replaced that its author never saw (spec 0006,
-     * AC-46), on a `records` row: `[{ recordId, attributeId, versionId, by:
-     * { type, id } }]`, ids only. Null when there were none, and left empty
-     * past 1,000 entries (no notices for a bulk overwrite). Never on a catch up.
+     * AC-46), on a `records` row: `{ by: { type, id }, cells: [{ recordId,
+     * attributeId, versionId }] }`, ids only, `by` named once (owner decision,
+     * 8 Oct 2026). Null when there were none, and past 200 cells (no notices
+     * for a bulk overwrite). Never on a catch up.
      */
     replaced: jsonb('replaced'),
     /**

@@ -337,15 +337,16 @@ describe('a save that replaced a value its author never saw (spec 0006, AC-46)',
     expect(rows).toEqual([
       {
         mutation_id: mutationId,
-        replaced: [
-          { recordId, attributeId: name, versionId: theirs[name]?.versionId, by: { type: 'system', id: null } },
-        ],
+        replaced: {
+          by: { type: 'system', id: null },
+          cells: [{ recordId, attributeId: name, versionId: theirs[name]?.versionId }],
+        },
       },
       { mutation_id: expect.any(String) as string, replaced: null },
     ]);
   });
 
-  it(`keeps up to ${String(REPLACED_CAP)} entries on one row, and leaves the list empty past that`, () => {
+  it(`keeps up to ${String(REPLACED_CAP)} cells on one row with by named once, and none past that (owner decision, 8 Oct 2026)`, () => {
     const objectId = newId();
     const attributes = [newId(), newId()];
     const by = { type: 'member' as const, id: newId() };
@@ -377,9 +378,11 @@ describe('a save that replaced a value its author never saw (spec 0006, AC-46)',
           })),
         ),
       });
+    expect(REPLACED_CAP).toBe(200);
     const [atCap] = outboxEvents(changeOf(REPLACED_CAP / 2));
-    expect(atCap?.replaced).toHaveLength(REPLACED_CAP);
-    expect(atCap?.replaced?.[0]?.by).toEqual(by);
+    expect(atCap?.replaced?.cells).toHaveLength(REPLACED_CAP);
+    expect(atCap?.replaced?.by).toEqual(by);
+    expect(Object.keys(atCap?.replaced?.cells[0] ?? {}).sort()).toEqual(['attributeId', 'recordId', 'versionId']);
     const [past] = outboxEvents(changeOf(REPLACED_CAP / 2 + 1));
     expect(past?.recordIds).toHaveLength(REPLACED_CAP / 2 + 1);
     expect(past?.replaced).toBeUndefined();

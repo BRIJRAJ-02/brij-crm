@@ -33,10 +33,15 @@ export function outboxEvent(row: OutboxRow): EventRow | undefined {
         recordIds: copy(row.recordIds),
         attributeIds: copy(row.attributeIds),
         ...coarse,
-        // The values the write replaced (spec 0006), each copied, so the event shares nothing with its row.
+        // What the write replaced (spec 0006), copied, so the event shares nothing with its row.
         ...(row.replaced === undefined
           ? {}
-          : { replaced: row.replaced.map((entry) => ({ ...entry, by: { ...entry.by } })) }),
+          : {
+              replaced: {
+                by: { ...row.replaced.by },
+                cells: row.replaced.cells.map((cell) => ({ ...cell })),
+              },
+            }),
       };
     case 'entries':
       if (row.listId === undefined) return undefined;

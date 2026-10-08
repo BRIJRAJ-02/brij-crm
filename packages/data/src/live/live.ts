@@ -147,19 +147,34 @@ const documentVisibility = (): Visibility | undefined => {
 const isString = (value: unknown): value is string => typeof value === 'string';
 const isStringArray = (value: unknown): value is string[] => Array.isArray(value) && value.every(isString);
 
-/** One value a records event's write replaced: who replaced which version of which cell (spec 0006). */
-type ReplacedEntry = NonNullable<Extract<ChangeEvent, { kind: 'records' }>['replaced']>[number];
+/** What a records event's write replaced: who, named once, and which version of which cells (spec 0006). */
+type Replaced = NonNullable<Extract<ChangeEvent, { kind: 'records' }>['replaced']>;
 
 const ACTOR_TYPES: ReadonlySet<unknown> = new Set(['member', 'api_key', 'automation', 'system']);
 
-/** Whether `value` is a well formed `replaced` entry. */
-function isReplacedEntry(value: unknown): value is ReplacedEntry {
-  if (typeof value !== 'object' || value === null) return false;
-  const { recordId, attributeId, versionId, by } = value as Record<string, unknown>;
-  if (!isString(recordId) || !isString(attributeId) || !isString(versionId)) return false;
-  if (typeof by !== 'object' || by === null) return false;
+/** The most cells a `replaced` names (`MAX_REPLACED_CELLS`, owner decision of 8 Oct 2026); a longer one is dropped. */
+const MAX_REPLACED_CELLS = 200;
+
+/**
+ * A well formed `replaced`, copied, or undefined. Anything off (a malformed
+ * cell, a missing `by`, more than 200 cells) drops the whole list: the event
+ * still refetches its records, and no notice beats a wrong one.
+ */
+function replacedOf(value: unknown): Replaced | undefined {
+  if (typeof value !== 'object' || value === null) return undefined;
+  const { by, cells } = value as Record<string, unknown>;
+  if (typeof by !== 'object' || by === null || !Array.isArray(cells)) return undefined;
+  if (cells.length === 0 || cells.length > MAX_REPLACED_CELLS) return undefined;
   const actor = by as Record<string, unknown>;
-  return ACTOR_TYPES.has(actor.type) && (actor.id === null || isString(actor.id));
+  if (!ACTOR_TYPES.has(actor.type) || !(actor.id === null || isString(actor.id))) return undefined;
+  const kept: Replaced['cells'][number][] = [];
+  for (const cell of cells as unknown[]) {
+    if (typeof cell !== 'object' || cell === null) return undefined;
+    const { recordId, attributeId, versionId } = cell as Record<string, unknown>;
+    if (!isString(recordId) || !isString(attributeId) || !isString(versionId)) return undefined;
+    kept.push({ recordId, attributeId, versionId });
+  }
+  return { by: { type: actor.type as Replaced['by']['type'], id: actor.id }, cells: kept };
 }
 
 /** A delivery as a catch up would carry it: a records event without `replaced`. */
@@ -243,10 +258,10 @@ export function parseChangeEvent(data: unknown): Delivery | undefined {
     event[name] = raw[name];
   }
   if (shape.coarse === true && coarse === true) event.coarse = true;
-  // What a records event's write replaced (spec 0006): only well formed entries are kept.
-  if (kind === 'records' && Array.isArray(raw.replaced)) {
-    const replaced = raw.replaced.filter(isReplacedEntry);
-    if (replaced.length > 0) event.replaced = replaced.map((entry) => ({ ...entry, by: { ...entry.by } }));
+  // What a records event's write replaced (spec 0006): kept only when the whole list is well formed.
+  if (kind === 'records' && raw.replaced !== undefined) {
+    const replaced = replacedOf(raw.replaced);
+    if (replaced !== undefined) event.replaced = replaced;
   }
   if (kind !== 'restricted' && mutationId !== undefined) event.mutationId = mutationId;
   return { seq, mutationId: kind === 'restricted' ? undefined : mutationId, event: event as ChangeEvent };

@@ -1126,26 +1126,28 @@ export function createRecordsLayer({
    * hears nothing.
    */
   async function replacedIn(workspace: string, event: RecordsEvent): Promise<void> {
-    const mine = (event.replaced ?? []).flatMap((entry) => {
+    // No list (none replaced, or more than 200 cells): the records are refetched, and nothing is said.
+    const replaced = event.replaced;
+    if (replaced === undefined) return;
+    const by = replaced.by;
+    if (by.type === 'system') return;
+    const mine = replaced.cells.flatMap((entry) => {
       const written = own.get(entry.versionId);
       if (written === undefined || written.workspace !== workspace || entry.recordId !== written.recordId) return [];
-      if (entry.by.type === 'system') return [];
       return [{ entry, written }];
     });
     if (mine.length === 0) return;
     const me = await memberOf(workspace);
     // Not knowing who this is, a save from the person's own other tab can't be told apart: say nothing.
     if (me === undefined) return;
+    if (by.type === 'member' && by.id === me) return;
     const byRecord = new Map<string, typeof mine>();
     for (const each of mine) {
-      if (each.entry.by.type === 'member' && each.entry.by.id === me) continue;
       byRecord.set(each.entry.recordId, [...(byRecord.get(each.entry.recordId) ?? []), each]);
     }
     for (const [recordId, cells] of byRecord) {
       const [firstCell] = cells;
       if (firstCell === undefined) continue;
-      const by = firstCell.entry.by;
-      if (by.type === 'system') continue;
       onReplaced({
         workspace,
         objectId: firstCell.written.objectId,

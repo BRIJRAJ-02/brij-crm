@@ -134,14 +134,10 @@ describe('a save over a value its author never saw (spec 0006, AC-45, AC-46)', (
       kind: 'records',
       record_ids: [person.id],
       mutation_id: mutationId,
-      replaced: [
-        {
-          recordId: person.id,
-          attributeId: title,
-          versionId: adas.versions[title],
-          by: { type: 'member', id: bea.memberId },
-        },
-      ],
+      replaced: {
+        by: { type: 'member', id: bea.memberId },
+        cells: [{ recordId: person.id, attributeId: title, versionId: adas.versions[title] }],
+      },
     });
     // Ada's first save replaced nothing (the cell was never set), and a save from the current version names nothing.
     await m.client.records.setValues({

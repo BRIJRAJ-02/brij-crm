@@ -79,7 +79,10 @@ describe('outboxEvent', () => {
   });
 
   it('carries what a records row replaced (spec 0006), which the relay publishes whole and catch up drops', () => {
-    const replaced = [{ recordId: id(3), attributeId: id(4), versionId: id(5), by: { type: 'member', id: id(6) } }];
+    const replaced = {
+      by: { type: 'member', id: id(6) },
+      cells: [{ recordId: id(3), attributeId: id(4), versionId: id(5) }],
+    };
     const stored = row({ objectId: OBJECT, recordIds: [id(3)], attributeIds: [id(4)], replaced } as Partial<OutboxRow>);
     const event = outboxEvent(stored);
     expect(event).toMatchObject({ kind: 'records', replaced });

@@ -1056,7 +1056,10 @@ describe('undo, walking back one cell and checking only what this tab wrote', ()
       objectId: PEOPLE,
       recordIds: [idAt(1)],
       attributeIds: [CITY],
-      replaced: [{ recordId: idAt(1), attributeId: CITY, versionId: version(3), by: { type: 'member', id: BEA } }],
+      replaced: {
+        by: { type: 'member', id: BEA },
+        cells: [{ recordId: idAt(1), attributeId: CITY, versionId: version(3) }],
+      },
     });
     await settle();
     expect(replaced).toEqual([]);
@@ -1130,7 +1133,7 @@ describe('the replaced notice (spec 0006, AC-46, AC-47)', () => {
       objectId: PEOPLE,
       recordIds: [idAt(1)],
       attributeIds: [CITY],
-      replaced: [{ recordId: idAt(1), attributeId: CITY, versionId, by }],
+      replaced: { by, cells: [{ recordId: idAt(1), attributeId: CITY, versionId }] },
     }) satisfies ChangeEvent;
 
   /** A view where this tab saved Paris over London, landing as version 2. */
@@ -1176,6 +1179,14 @@ describe('the replaced notice (spec 0006, AC-46, AC-47)', () => {
     layer.replaced(WS, replacedBy({ type: 'api_key', id: BEA }, version(2)));
     await settle();
     expect(replaced.map((notice) => notice.by)).toEqual([{ type: 'api_key', id: BEA }]);
+  });
+
+  it('says nothing for a write that replaced more than 200 cells, whose event carries no list (owner decision, 8 Oct 2026)', async () => {
+    const { layer, replaced } = await saved();
+    const { replaced: _list, ...bulk } = replacedBy({ type: 'member', id: BEA }, version(2));
+    layer.replaced(WS, bulk);
+    await settle();
+    expect(replaced).toEqual([]);
   });
 
   it('forgets its own versions with the records', async () => {
