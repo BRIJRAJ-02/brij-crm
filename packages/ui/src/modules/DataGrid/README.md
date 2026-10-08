@@ -45,7 +45,7 @@ import { DataGrid } from '@crm/ui/grid';
 - Selected rows take `surface-selected`, and keep it under the pointer; a cell range takes `accent-soft`, so it reads apart from them; the focused cell carries the inset focus ring. In forced colours, selection and ranges are outlined in `Highlight`.
 - The focused row and the row being edited stay drawn while they scroll off screen, so focus and a draft survive the scroll.
 - One tooltip serves the whole grid: after the tooltip delay on hover, or at once on keyboard focus, it shows a cell's reason, or else the full text of anything cut in it (`TruncatedText`, and chips that mark their label `data-truncated`). Cells mount no tooltip of their own.
-- Rows recycle by their place on screen, so a scroll step of any length redraws rows in place, in order, and the header stays as it is. Each row is its own layout box (`contain: strict`), except one being edited, whose error floats below it.
+- Rows recycle by their place on screen, so a scroll step of any length redraws rows in place, in order, and the header stays as it is. Cells and headers are keyed by their column, so when a sideways scroll drops columns off the start, the cells still drawn stay mounted and the focused one keeps focus. Each row is its own layout box (`contain: strict`), except one being edited, whose error floats below it.
 
 ## Keyboard
 

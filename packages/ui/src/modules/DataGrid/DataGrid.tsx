@@ -1089,7 +1089,7 @@ export function DataGrid<Row>({
         >
           {rowData !== undefined && <CheckboxMark label={strings.selectRow(name)} isSelected={isSelected} />}
         </div>
-        {drawn.map((each, index) => {
+        {drawn.flatMap((each, index) => {
           const place = placeOf(each);
           const value = rowData === undefined ? undefined : getValue(rowData, each.column.id);
           const display = rowData === undefined ? undefined : getDisplay?.(rowData, each.column.id);
@@ -1160,7 +1160,7 @@ export function DataGrid<Row>({
         data-focused={isFocusedAt(count, 0) || undefined}
         tabIndex={isFocusedAt(count, 0) ? 0 : -1}
       />
-      {drawn.map((each, index) => {
+      {drawn.flatMap((each, index) => {
         const place = placeOf(each);
         return [
           index === leadIndex ? <Spacer key="lead" width={leadSpacer} /> : null,
@@ -1371,7 +1371,7 @@ const GridHeader = memo(function GridHeader({
           isReadOnly={isEmpty}
         />
       </div>
-      {drawn.map((each, index) => {
+      {drawn.flatMap((each, index) => {
         const place = cellPlace(placed, each, lastPinnedId);
         return [
           index === leadIndex ? <Spacer key="lead" width={leadSpacer} /> : null,

@@ -286,9 +286,15 @@ export const ManyColumns: Story = {
   args: { columnCount: 20 },
   // The first screen of columns is the default story's.
   parameters: { crm: { screenshot: false } },
-  play: async ({ canvas }) => {
+  play: async ({ canvas, userEvent }) => {
     await expect(canvas.getByRole('grid')).toHaveAttribute('aria-colcount', '21');
     await expect(canvas.getAllByRole('columnheader').length).toBeLessThan(21);
+    // Arrowing past the first screen drops columns off the start; the focused cell keeps focus.
+    const press = presser((keys) => userEvent.keyboard(keys));
+    await userEvent.tab();
+    await press(['{End}'], '0:20');
+    await press(['{Home}'], '0:0');
+    for (let col = 1; col <= 16; col += 1) await press(['{ArrowRight}'], `0:${String(col)}`);
   },
 };
 
