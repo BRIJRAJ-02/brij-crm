@@ -788,11 +788,11 @@ export async function readRecords(
     wanted,
     { withCleared: true },
   );
+  // The attributes a read returns: those asked for and the primary (spec 0006, AC-55), or every one.
+  const returned = wanted === undefined ? undefined : new Set(wanted);
   const references = [...attributesByObject.values()].flatMap((byId) =>
     [...byId.values()].filter(
-      (attribute) =>
-        attribute.type === 'record_reference' &&
-        (input.attributeIds === undefined || input.attributeIds.includes(attribute.id)),
+      (attribute) => attribute.type === 'record_reference' && (returned === undefined || returned.has(attribute.id)),
     ),
   );
   const links = await linkValues(
@@ -840,7 +840,7 @@ export async function readRecords(
       const versions: Record<string, string> = {};
       const linkTotals: Record<string, number> = {};
       for (const attribute of attributes.values()) {
-        if (input.attributeIds !== undefined && !input.attributeIds.includes(attribute.id)) continue;
+        if (returned !== undefined && !returned.has(attribute.id)) continue;
         if (attribute.systemColumn !== null) {
           values[attribute.id] = system[attribute.systemColumn];
           continue;

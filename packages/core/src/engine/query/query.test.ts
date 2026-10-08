@@ -7,7 +7,7 @@
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
-import type { FilterCondition, FilterGroup, SortRule } from '@crm/contracts/values';
+import { canJump, type FilterCondition, type FilterGroup, type SortRule } from '@crm/contracts/values';
 import { deleteRecord } from '../deletion.ts';
 import { defineAttribute, defineObject } from '../definitions.ts';
 import { addEntry, defineList, getEntries, removeEntry } from '../lists.ts';
@@ -671,6 +671,67 @@ describe('positions and counts', () => {
       position: 5,
     });
     await expect(attempt).rejects.toMatchObject({ refusal: { code: 'FILTER_INVALID' } });
+  });
+
+  it('jumps exactly where canJump from the contracts says it can (spec 0006, AC-52)', async () => {
+    const attributes = await db.withWorkspace(scope.workspaceId, (tx) =>
+      tx.execute<{ id: string; type: string; is_system: boolean; api_slug: string }>(
+        sql`select id::text, type::text, is_system, api_slug from attributes where object_id = ${missions} and archived_at is null`,
+      ),
+    );
+    const byId = new Map(
+      attributes.rows.map((row) => [row.id, { type: row.type, isSystem: row.is_system, apiSlug: row.api_slug }]),
+    );
+    let jumps = 0;
+    for (const attributeId of byId.keys()) {
+      const sorts = [{ attributeId, direction: 'descending' as const }];
+      const expected = canJump(undefined, sorts, (each) => byId.get(each));
+      if (expected) jumps += 1;
+      const attempt = queryPage(scope, { objectId: missions, sorts, position: 3, limit: 5 });
+      if (expected) {
+        const order = evaluate(context, rows, undefined, sorts);
+        expect((await attempt).records.map((record) => record.id)).toEqual(order.slice(3, 8));
+      } else {
+        await expect(attempt).rejects.toMatchObject({ refusal: { code: 'FILTER_INVALID' } });
+      }
+    }
+    // Most kinds jump; members, references, location and long text page by cursor.
+    expect(jumps).toBeGreaterThan(10);
+    expect(jumps).toBeLessThan(byId.size);
+    expect(canJump(undefined, [by('budget'), by('launch')], (each) => byId.get(each))).toBe(false);
+    await expect(
+      queryPage(scope, { objectId: missions, sorts: [by('budget'), by('launch')], position: 1 }),
+    ).rejects.toMatchObject({ refusal: { code: 'FILTER_INVALID' } });
+    expect(canJump(and(is('crewed', 'is_checked')), [], (each) => byId.get(each))).toBe(false);
+    expect(canJump(undefined, undefined, (each) => byId.get(each))).toBe(true);
+  });
+
+  it('reads only the attributes asked for, plus the primary (spec 0006, AC-55)', async () => {
+    const [object] = await db.withWorkspace(scope.workspaceId, (tx) =>
+      tx
+        .execute<{ primary: string | null }>(
+          sql`select primary_attribute_id::text as primary from objects where id = ${missions}`,
+        )
+        .then((result) => result.rows),
+    );
+    const primary = object?.primary ?? undefined;
+    const asked = [id('budget'), id('company'), id('budget').replace(/.$/, '0'), 'not-a-uuid', id('company_name')];
+    const page = await queryPage(scope, { objectId: missions, limit: 20, attributeIds: asked });
+    expect(page.records.length).toBeGreaterThan(0);
+    const allowed = new Set([id('budget'), id('company'), ...(primary === undefined ? [] : [primary])]);
+    for (const record of page.records) {
+      for (const key of [...Object.keys(record.values), ...Object.keys(record.versions)]) {
+        expect(allowed.has(key)).toBe(true);
+      }
+      expect(Object.hasOwn(record.values, id('budget'))).toBe(true);
+      expect(Object.hasOwn(record.values, id('company'))).toBe(true);
+      if (primary !== undefined) expect(Object.hasOwn(record.values, primary)).toBe(true);
+    }
+    // The same through a read by id.
+    const [first] = page.records;
+    const read = await getRecords(scope, { ids: [first?.id ?? ''], attributeIds: [id('launch')] });
+    expect(Object.keys(read[0]?.values ?? {}).every((key) => key === id('launch') || key === primary)).toBe(true);
+    expect(Object.hasOwn(read[0]?.values ?? {}, id('launch'))).toBe(true);
   });
 
   it('counts exactly what the filter matches, for objects and lists', async () => {

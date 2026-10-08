@@ -32,6 +32,11 @@ export interface RecordWindow {
   readonly limit?: number;
   readonly filter?: FilterGroup;
   readonly sorts?: SortRules;
+  /** Only these attributes' values, plus the primary (spec 0006, AC-55). */
+  readonly attributeIds?: readonly string[];
+  /** The window's clock (spec 0006, AC-51): relative dates resolve against it. */
+  readonly now?: string;
+  readonly timeZone?: string;
 }
 
 /**
@@ -55,6 +60,9 @@ export async function queryRecords(
       ...(window.limit === undefined ? {} : { limit: window.limit }),
       ...(window.filter === undefined ? {} : { filter: window.filter }),
       ...(window.sorts === undefined ? {} : { sorts: window.sorts }),
+      ...(window.attributeIds === undefined ? {} : { attributeIds: window.attributeIds }),
+      ...(window.now === undefined ? {} : { now: window.now }),
+      ...(window.timeZone === undefined ? {} : { timeZone: window.timeZone }),
     },
     signal === undefined ? {} : { signal },
   );
@@ -63,9 +71,16 @@ export async function queryRecords(
     : { records: [...page.records], nextCursor: page.nextCursor };
 }
 
-/** Live records by id, in the order asked; unknown, malformed and trashed ids are left out. */
-export async function readRecordsById(scope: EngineScope, ids: readonly string[]): Promise<RecordView[]> {
-  return [...(await getRecords(scope, { ids }))];
+/**
+ * Live records by id, in the order asked; unknown, malformed and trashed ids
+ * are left out. With `attributeIds`, only those attributes and the primary.
+ */
+export async function readRecordsById(
+  scope: EngineScope,
+  ids: readonly string[],
+  attributeIds?: readonly string[],
+): Promise<RecordView[]> {
+  return [...(await getRecords(scope, { ids, ...(attributeIds === undefined ? {} : { attributeIds }) }))];
 }
 
 /**

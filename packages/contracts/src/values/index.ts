@@ -57,6 +57,7 @@ export {
   SINGLE_VALUE_OPERATORS,
 } from './filters.ts';
 export { MAX_SORTS, SortRule, SortRules } from './sorts.ts';
+export { canJump, canJumpOn, JUMP_TYPES, type JumpAttribute } from './jump.ts';
 export { ENGINE_REFUSAL_CODES, type EngineRefusal, type EngineRefusalCode } from './engine.ts';
 export { AttributeConfig, AttributeDefault, defaultKindsFor, type AttributeConfigOf } from './attribute-config.ts';
 export { HUES } from './hue-list.ts';

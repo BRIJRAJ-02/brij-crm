@@ -359,6 +359,64 @@ describe('records.query and records.count', () => {
     expect(await m.client.records.count(scope)).toEqual({ count: 3, atLeast: false });
   });
 
+  it('reads only the attributes asked for, plus the primary, and resolves relative dates on the window clock (spec 0006)', async () => {
+    const m = await memberWithWorkspace(app);
+    const made = await createPerson(m, 'Ada', 'ada@example.com');
+    const scope = { workspace: m.slug, objectId: m.people.id };
+    const name = m.attribute('name');
+    const email = m.attribute('email_addresses');
+    // Another object's attribute is ignored, not refused, so it reveals nothing.
+    const companyAttributes = await m.client.attributes.list({ workspace: m.slug, objectId: m.companies.id });
+    const attributeIds = [email, ...companyAttributes.slice(0, 2).map((each) => each.id)];
+    const page = await m.client.records.query({ ...scope, position: 0, limit: 10, attributeIds });
+    expect(Object.keys(page.records[0]?.values ?? {}).sort()).toEqual([email, name].sort());
+    expect(Object.keys(page.records[0]?.versions ?? {}).every((key) => key === email || key === name)).toBe(true);
+    const [read] = await m.client.records.get({ workspace: m.slug, ids: [made.id], attributeIds: [email] });
+    expect(Object.keys(read?.values ?? {}).sort()).toEqual([email, name].sort());
+    // Without attributeIds, every attribute, as before.
+    const whole = await m.client.records.query({ ...scope, position: 0, limit: 10 });
+    expect(Object.keys(whole.records[0]?.values ?? {}).length).toBeGreaterThan(2);
+
+    // "Created in the last day", against a clock a year on: nothing matches; against today: Ada.
+    const filter: FilterGroup = {
+      conjunction: 'and',
+      conditions: [
+        { attributeId: m.attribute('created_at'), operator: 'within_last', range: { amount: 1, unit: 'day' } },
+      ],
+    };
+    const later = new Date(Date.now() + 365 * 86_400_000).toISOString();
+    const clock = { now: later, timeZone: 'Europe/London' };
+    expect(await m.client.records.count({ ...scope, filter, ...clock })).toEqual({ count: 0, atLeast: false });
+    expect((await m.client.records.query({ ...scope, filter, ...clock })).records).toEqual([]);
+    const today = { now: new Date().toISOString(), timeZone: 'Europe/London' };
+    expect(await m.client.records.count({ ...scope, filter, ...today })).toEqual({ count: 1, atLeast: false });
+    // An unknown zone is refused, so the clock really reaches the engine.
+    const unknownZone = await failure(() =>
+      m.client.records.count({ ...scope, filter, now: today.now, timeZone: 'Mars/Olympus' }),
+    );
+    expect(unknownZone.code).toBe('FILTER_INVALID');
+  });
+
+  it('refuses a position on a view sorted by a member, and allows it sorted newest first (canJump)', async () => {
+    const m = await memberWithWorkspace(app);
+    for (const first of ['Ada', 'Grace']) await createPerson(m, first);
+    const scope = { workspace: m.slug, objectId: m.people.id };
+    const newest = await m.client.records.query({
+      ...scope,
+      position: 0,
+      sorts: [{ attributeId: m.attribute('created_at'), direction: 'descending' }],
+    });
+    expect(newest.records.map((each) => each.display.name)).toEqual(['Grace Lovelace', 'Ada Lovelace']);
+    const byMember = await failure(() =>
+      m.client.records.query({
+        ...scope,
+        position: 1,
+        sorts: [{ attributeId: m.attribute('created_by'), direction: 'ascending' }],
+      }),
+    );
+    expect(byMember.code).toBe('FILTER_INVALID');
+  });
+
   it('refuses a cursor sent with another object, filter or sort on the cursor field, and takes it back for its own view', async () => {
     const m = await memberWithWorkspace(app);
     for (const first of ['Ada', 'Grace', 'Alan']) await createPerson(m, first);

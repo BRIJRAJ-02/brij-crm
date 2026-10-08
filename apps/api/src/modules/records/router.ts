@@ -18,6 +18,9 @@ export const recordsRouter = member.records.router({
           ...(input.limit === undefined ? {} : { limit: input.limit }),
           ...(input.filter === undefined ? {} : { filter: input.filter }),
           ...(input.sorts === undefined ? {} : { sorts: input.sorts }),
+          ...(input.attributeIds === undefined ? {} : { attributeIds: input.attributeIds }),
+          ...(input.now === undefined ? {} : { now: input.now }),
+          ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
         },
         signal,
       ),
@@ -27,12 +30,19 @@ export const recordsRouter = member.records.router({
     context.readGate.run(context.scope.workspaceId, () =>
       countMatches(
         context.scope,
-        { objectId: input.objectId, ...(input.filter === undefined ? {} : { filter: input.filter }) },
+        {
+          objectId: input.objectId,
+          ...(input.filter === undefined ? {} : { filter: input.filter }),
+          ...(input.now === undefined ? {} : { now: input.now }),
+          ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+        },
         signal,
       ),
     ),
   ),
-  get: member.records.get.handler(({ context, input }) => readRecordsById(context.scope, input.ids)),
+  get: member.records.get.handler(({ context, input }) =>
+    readRecordsById(context.scope, input.ids, input.attributeIds),
+  ),
   // Every write answers `echoes` (spec 0006): how many change events carry its mutation id, so its tab skips them.
   create: member.records.create.handler(async ({ context, input }) => {
     try {

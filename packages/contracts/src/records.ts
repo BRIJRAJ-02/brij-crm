@@ -19,6 +19,31 @@ export const MAX_CELL_LINKS = 20;
 /** The most records one `records.get` reads. */
 export const MAX_GET_IDS = 500;
 
+/** The most attributes one read names (`attributeIds`, spec 0006, AC-55). */
+export const MAX_READ_ATTRIBUTES = 250;
+
+/**
+ * Which attributes a read returns (spec 0006, AC-55): only these, plus the
+ * object's primary attribute (the record's name). Ids that aren't the
+ * object's are ignored, not refused, so they reveal nothing. Absent reads
+ * every attribute.
+ */
+const ReadAttributeIds = z
+  .array(z.uuid())
+  .max(MAX_READ_ATTRIBUTES, `Read at most ${String(MAX_READ_ATTRIBUTES)} attributes at once.`);
+
+/**
+ * The query clock (spec 0006, AC-51): relative dates in a filter ("in the
+ * last 7 days") resolve against `now` in `timeZone`. The browser takes one
+ * `now` per window and sends it with every block and count of that window,
+ * so two blocks never disagree about "today". The server's clock and UTC
+ * when absent; an unknown zone is refused `FILTER_INVALID`.
+ */
+const QueryClock = {
+  now: Timestamp.optional(),
+  timeZone: z.string().min(1).max(64).optional(),
+};
+
 /** The most records one `records.setValuesBatch` changes (spec 0006, AC-50); more is refused 422 `CONFIG_INVALID`. */
 export const MAX_BATCH_RECORDS = 500;
 
@@ -63,7 +88,8 @@ export type RecordView = z.infer<typeof RecordView>;
 
 /**
  * One window of an object's records: from row `position` (a scrollbar jump,
- * on a view with no filter and at most one sort) or after `cursor` (the last
+ * on a view `canJump` allows: no filter, and no sort or one on a stored key
+ * kind, created at, updated at or record id) or after `cursor` (the last
  * page's `nextCursor`), `limit` rows (1 to 200, 50 when not given). With no
  * sort, rows come in id order, which is creation order. A cursor belongs to
  * the object, filter and sorts it came from: sent with any other, it is
@@ -81,6 +107,8 @@ export const QueryRecordsInput = WorkspaceScoped.extend({
     .optional(),
   filter: FilterGroup.optional(),
   sorts: SortRules.optional(),
+  attributeIds: ReadAttributeIds.optional(),
+  ...QueryClock,
 }).refine((input) => input.position === undefined || input.cursor === undefined, {
   error: 'Give a position or a cursor, not both.',
   path: ['cursor'],
@@ -100,6 +128,7 @@ export type RecordPage = z.infer<typeof RecordPage>;
 export const CountRecordsInput = WorkspaceScoped.extend({
   objectId: z.uuid(),
   filter: FilterGroup.optional(),
+  ...QueryClock,
 });
 /** How many of an object's records there are. */
 export type CountRecordsInput = z.infer<typeof CountRecordsInput>;
@@ -115,6 +144,7 @@ export type RecordCount = z.infer<typeof RecordCount>;
 /** Records by id, up to 500, in the order asked. */
 export const GetRecordsInput = WorkspaceScoped.extend({
   ids: z.array(z.uuid()).max(MAX_GET_IDS, `Read at most ${String(MAX_GET_IDS)} records at once.`),
+  attributeIds: ReadAttributeIds.optional(),
 });
 /** Records by id. */
 export type GetRecordsInput = z.infer<typeof GetRecordsInput>;

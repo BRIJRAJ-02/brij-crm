@@ -5,7 +5,7 @@
 import { createHash } from 'node:crypto';
 import { asc, eq, sql, type SQL } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { FilterGroup, SortRules } from '@crm/contracts/values';
+import { canJump, FilterGroup, SortRules } from '@crm/contracts/values';
 import { canonicalId, isUuid } from '../ids.ts';
 import { LIMITS } from '../limits.ts';
 import { readEntriesById, type EntryView } from '../lists.ts';
@@ -77,9 +77,11 @@ export type PageQuery = ViewSource &
     readonly sorts?: SortRules;
     /** The `nextCursor` of the page before, to continue after it. */
     readonly cursor?: string;
-    /** Start at this row instead, on a view with no filter and at most one sort (a scrollbar jump). */
+    /** Start at this row instead, on a view `canJump` allows (a scrollbar jump). */
     readonly position?: number;
     readonly limit?: number;
+    /** Only these attributes' values, plus the primary (spec 0006, AC-55); every attribute when absent. */
+    readonly attributeIds?: readonly string[];
   };
 
 /** One page: records in order (for a list, its entries in order and their records), and the cursor for the next. */
@@ -317,8 +319,13 @@ function fromParts(context: CompileContext, level: Level): { tables: SQL; where:
       };
 }
 
+/** What a position on a view that can't jump answers. */
+const JUMP_REFUSED =
+  'Jump to a position only on a view with no filter and no sort, or one sort on a stored value, created at, updated at or record id; page by cursor otherwise.';
+
 /**
- * Checks a page query's limit and position, returning the limit. The cursor
+ * Checks a page query's limit and position, returning the limit. The rest of
+ * `canJump` (the sort's kind) is checked once the attributes are loaded. The cursor
  * is decoded later, in `buildPage`, once the filter has passed its parse: its
  * binding hashes the filter, which must be known to be bounded first.
  */
@@ -337,10 +344,7 @@ function checkPage(query: PageQuery): { limit: number } {
       (query.sorts?.length ?? 0) > 1 ||
       query.cursor !== undefined
     ) {
-      throw refuse(
-        'FILTER_INVALID',
-        'Jump to a position only on a view with no filter and at most one sort; page by cursor otherwise.',
-      );
+      throw refuse('FILTER_INVALID', JUMP_REFUSED);
     }
   }
   return { limit };
@@ -396,6 +400,10 @@ async function buildPage(
   const { limit } = checkPage(query);
   const { context, level, objectAttributes } = await prepare(tx, scope, query, search);
   const sorts = query.sorts ?? [];
+  // The browser picks a window's mode by the same rule (spec 0006, AC-52), so a position it sends is one this allows.
+  if (query.position !== undefined && !canJump(query.filter, sorts, (id) => context.attributes.get(id))) {
+    throw refuse('FILTER_INVALID', JUMP_REFUSED);
+  }
   const keys = compileSorts(context, level, sorts);
   const filter = compileFilter(context, level, query.filter);
   // Only now, with the filter and sorts parsed against their types, is the cursor's binding hashed from them.
@@ -1026,6 +1034,8 @@ async function readPage(
   const records = await readRecords(tx, scope.access, recordIds, {
     attributes: built.attributesByObject,
     visibleAlready: true,
+    // Malformed ids name nothing; ids of another object's attributes are ignored by the read.
+    ...(query.attributeIds === undefined ? {} : { attributeIds: query.attributeIds.filter(isUuid).map(canonicalId) }),
   });
   const page: Page = !isList
     ? { records }
