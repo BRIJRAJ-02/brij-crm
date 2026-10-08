@@ -79,7 +79,10 @@ jobs:
       # Every package's tests; the library's stories run in their own jobs below.
       # The library runs after the rest, on its own: its scroll perf test counts
       # long tasks, and the database suites beside it on a small runner make them.
-      - run: pnpm exec turbo run test --filter='!@crm/ui'
+      - run: pnpm exec turbo run test --filter='!@crm/ui' --filter='!@crm/core'
+      # The engine's suite alone, after the rest: its 70,000 link, count cancel and plan tests ran out
+      # of time beside the api and db suites on the 2 core runner (twice on 8 October 2026), and pass alone.
+      - run: pnpm --filter @crm/core run test
       - run: pnpm --filter @crm/ui exec vitest run --project stories --project unit --project browser
         env:
           CRM_STORY_BROWSERS: none
