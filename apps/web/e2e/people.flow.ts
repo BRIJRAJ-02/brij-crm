@@ -4,105 +4,9 @@
 // Every state it reaches is checked with axe (WCAG A and AA, contrast
 // included) in light and in dark. Set FLOW_SCREENSHOTS to a folder to keep a
 // light and a dark picture of each, per project. Verifies AC-34 to AC-37.
-import { createRequire } from 'node:module';
-import path from 'node:path';
 import { randomUUID } from 'node:crypto';
-import { expect, test, type Page } from '@playwright/test';
-import { codeFor } from './mailpit.ts';
-
-const SHOTS = process.env.FLOW_SCREENSHOTS;
-const AXE = createRequire(import.meta.url).resolve('axe-core/axe.min.js');
-
-/** axe, once its script is on the page (sign-in.flow.ts declares it on Window). */
-interface Axe {
-  readonly run: (
-    context: unknown,
-    options: unknown,
-  ) => Promise<{ violations: { id: string; help: string; nodes: { html: string }[] }[] }>;
-}
-
-/** The page's WCAG A and AA violations, as `rule (help): elements` lines. */
-async function violations(page: Page): Promise<string[]> {
-  const hasAxe = () => (globalThis as unknown as { axe?: Axe }).axe !== undefined;
-  if (!(await page.evaluate(hasAxe))) await page.addScriptTag({ path: AXE });
-  return page.evaluate(async () => {
-    const result = await (globalThis as unknown as { axe?: Axe }).axe?.run(
-      { exclude: [['[data-live-announcer]']] },
-      { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'] } },
-    );
-    return (result?.violations ?? []).map(
-      (violation) => `${violation.id} (${violation.help}): ${violation.nodes.map((node) => node.html).join(', ')}`,
-    );
-  });
-}
-
-/** No axe violations in light and in dark, and a picture of each when FLOW_SCREENSHOTS asks. */
-async function checkScreen(page: Page, name: string): Promise<void> {
-  for (const scheme of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme: scheme });
-    await page.waitForFunction(() => document.getAnimations().every((animation) => animation.playState !== 'running'));
-    expect(await violations(page), `${name} in ${scheme}`).toEqual([]);
-    if (SHOTS !== undefined) {
-      await page.screenshot({ path: path.join(SHOTS, `${test.info().project.name}-${name}-${scheme}.png`) });
-    }
-  }
-  await page.emulateMedia({ colorScheme: 'light' });
-}
-
-/** Signs a new person in through Mailpit and makes their workspace, landing on its People page. */
-async function newWorkspace(page: Page, email: string, slug: string): Promise<void> {
-  await page.goto('/sign-in');
-  await page.getByLabel('Email').fill(email);
-  await page.getByRole('button', { name: 'Continue', exact: true }).click();
-  await expect(page).toHaveURL(/\/verify/);
-  await page.getByLabel('Code').fill(await codeFor(page.request, email));
-  await expect(page).toHaveURL(/\/welcome$/);
-  await page.getByLabel('Your name').fill('Ada Lovelace');
-  await page.getByLabel('Web address').fill(slug);
-  await page.getByRole('button', { name: 'Create workspace' }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people$`));
-}
-
-/**
- * Scrolls the grid sideways until a column's header is drawn (columns past
- * the first dozen are virtualised), and answers its place in the row.
- */
-async function showColumn(page: Page, column: string): Promise<number> {
-  const grid = page.getByRole('grid', { name: 'People' });
-  await grid.evaluate((element) => {
-    element.scrollLeft = 0;
-  });
-  for (let step = 0; step < 40; step += 1) {
-    const header = grid.getByRole('columnheader', { name: new RegExp(column) });
-    if ((await header.count()) > 0) {
-      await header.scrollIntoViewIfNeeded();
-      return Number(await header.getAttribute('aria-colindex')) - 1;
-    }
-    await grid.evaluate((element) => {
-      element.scrollLeft += 300;
-    });
-    await page.waitForTimeout(50);
-  }
-  throw new Error(`No "${column}" column.`);
-}
-
-/** The grid cell at a row (0 based, records only) and a column header's name, scrolled into view. */
-async function cellAt(page: Page, row: number, column: string) {
-  const col = await showColumn(page, column);
-  return page.getByRole('grid', { name: 'People' }).locator(`[data-cell="${String(row)}:${String(col)}"]`);
-}
-
-/** Adds a person through "New person": first and last name, and an email; waits for the row and its focus. */
-async function addPerson(page: Page, first: string, last: string, email: string): Promise<void> {
-  await page.getByRole('button', { name: 'New person' }).first().click();
-  const dialog = page.getByRole('dialog', { name: 'New person' });
-  await expect(dialog).toBeVisible();
-  await dialog.getByLabel('First name').fill(first);
-  await dialog.getByLabel('Last name').fill(last);
-  await dialog.getByLabel('Email addresses').fill(email);
-  await dialog.getByRole('button', { name: 'Create' }).click();
-  await expect(dialog).toBeHidden();
-}
+import { expect, test } from '@playwright/test';
+import { addPerson, cellAt, checkScreen, newWorkspace, showColumn } from './people.ts';
 
 test.describe('the People table', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'The table flow runs at desktop width.');
@@ -189,7 +93,10 @@ test.describe('the People table', () => {
     const email = await cellAt(page, 1, 'Email addresses');
     await email.click();
     await page.keyboard.press('Enter');
-    const editor = page.getByLabel('Add Email addresses…');
+    // Several emails edit in a popover on the cell (its field is named for the column).
+    const editor = page
+      .getByRole('dialog', { name: 'Email addresses' })
+      .getByRole('textbox', { name: 'Email addresses' });
     await editor.fill(`grace-${tag}@example.com`);
     await page.keyboard.press('Enter');
     await page.keyboard.press('Escape');
