@@ -372,6 +372,20 @@ describe('a record rule (AC-143)', () => {
       sorts: [{ attributeId: id('companies.name'), direction: 'ascending' }],
     });
     expect(page.records.map((each) => each.id)).toEqual([id('acme'), id('initech')]);
+    // Paged by cursor (the name's key index drives, checking the rule per row) and jumped by position.
+    const byName = [{ attributeId: id('companies.name'), direction: 'ascending' as const }];
+    const first = await queryPage(member, { objectId: id('companies'), sorts: byName, limit: 1 });
+    expect(first.records.map((each) => each.id)).toEqual([id('acme')]);
+    const next = await queryPage(member, {
+      objectId: id('companies'),
+      sorts: byName,
+      limit: 1,
+      ...(first.nextCursor === undefined ? {} : { cursor: first.nextCursor }),
+    });
+    expect(next.records.map((each) => each.id)).toEqual([id('initech')]);
+    expect(next.nextCursor).toBeUndefined();
+    const jumped = await queryPage(member, { objectId: id('companies'), sorts: byName, position: 1, limit: 5 });
+    expect(jumped.records.map((each) => each.id)).toEqual([id('initech')]);
     expect(await countMatches(member, { objectId: id('companies') })).toEqual({ count: 2, atLeast: false });
     expect(await countMatches(owner, { objectId: id('companies') })).toEqual({ count: 3, atLeast: false });
     expect(await getRecords(member, { ids: [id('globex'), id('acme')] })).toHaveLength(1);

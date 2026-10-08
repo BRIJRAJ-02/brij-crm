@@ -35,6 +35,7 @@ import {
   tieDirection,
   type CompileContext,
   type Cursor,
+  type DrivingSort,
   type Level,
   type QueryClock,
   type SortKey,
@@ -453,15 +454,18 @@ async function buildPage(
   const firstKeyCount = first === undefined ? 0 : compileSorts(context, level, [first]).length;
   const candidate = drivingSort(context, level, first, optionIds);
   // A rare contains narrows the view to the search's few ids, so filtering first beats reading in key order.
-  // Under a record rule the page filters first too: the key index's passes, counts and jumps would read past
-  // the rule (spec 0009; #24 measures the rule's cost and may drive it from an index).
-  const drive =
+  // Under a record rule (spec 0009) the key index still drives: every pass checks each row it reads against
+  // `where`, which carries the rule. Only the index's own counts read past the rule, so they go: a jump to a
+  // position filters first instead, and the first part's count is a filtered one.
+  const ruled = levelRule(context, level) !== undefined;
+  const drivable =
     candidate !== undefined &&
     candidate.keys.length === firstKeyCount &&
     !narrowedBySearch(context, query.filter) &&
-    levelRule(context, level) === undefined
+    !(ruled && (query.position ?? 0) > 0)
       ? candidate
       : undefined;
+  const drive = drivable === undefined || !ruled ? drivable : withoutCounts(drivable);
   if (drive === undefined) {
     const statement = plain(keys, sql``, sql`true`, cursor === undefined ? sql`true` : afterCursor(keys, cursor), 0);
     return {
@@ -876,6 +880,13 @@ async function buildPage(
               rest.length > 0 ? empties(take, skip) : scanEmpties(take, skip),
             ],
   };
+}
+
+/** A driving sort without its index only counts, which can't see a record rule. */
+function withoutCounts(drive: DrivingSort): DrivingSort {
+  return Object.fromEntries(
+    Object.entries(drive).filter(([key]) => key !== 'count' && key !== 'optionCount'),
+  ) as unknown as DrivingSort;
 }
 
 /**
