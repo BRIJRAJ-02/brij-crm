@@ -126,9 +126,10 @@ test.describe('the People table', () => {
     await expect(addDialog).toBeVisible();
     await addDialog.getByLabel('Name').fill('Nickname');
     await checkScreen(page, '2-add-attribute');
-    await addDialog.getByRole('button', { name: 'Add attribute' }).click();
+    await addDialog.getByRole('button', { name: 'Create' }).click();
     await expect(addDialog).toBeHidden();
     await expect.poll(async () => Number(await grid.getAttribute('aria-colcount'))).toBe(columnsBefore + 1);
+    await expect(page.getByText('Nickname added as the last column.')).toBeVisible();
     await showColumn(page, 'Nickname');
 
     // The same name again is refused inline, on the name field.
@@ -136,7 +137,7 @@ test.describe('the People table', () => {
     await addDialog.getByLabel('Name').fill('Nickname');
     await addDialog.getByRole('button', { name: 'Type' }).click();
     await page.getByRole('option', { name: 'Number' }).click();
-    await addDialog.getByRole('button', { name: 'Add attribute' }).click();
+    await addDialog.getByRole('button', { name: 'Create' }).click();
     await expect(addDialog.getByText('An attribute with this name exists.')).toBeVisible();
     await checkScreen(page, '3-add-attribute-taken');
     await addDialog.getByRole('button', { name: 'Cancel' }).click();
@@ -149,6 +150,16 @@ test.describe('the People table', () => {
     await expect(first).toBeFocused();
     await addPerson(page, 'Alan', 'Turing', `alan-${tag}@example.com`);
     await expect(await cellAt(page, 1, 'Name')).toBeFocused();
+    // The total count sits beside the title.
+    await expect(page.getByText(/^2\s*people$/)).toBeVisible();
+
+    // Create with no name is refused in the dialog, before any row is made.
+    await page.getByRole('button', { name: 'New person' }).first().click();
+    const blank = page.getByRole('dialog', { name: 'New person' });
+    await blank.getByRole('button', { name: 'Create' }).click();
+    await expect(blank.getByText('Name the person.')).toBeVisible();
+    await blank.getByRole('button', { name: 'Cancel' }).click();
+    await expect(blank).toBeHidden();
 
     // A refused create keeps the dialog open with the message on its field, and no row.
     await page.getByRole('button', { name: 'New person' }).first().click();
@@ -156,7 +167,7 @@ test.describe('the People table', () => {
     await newDialog.getByLabel('First name').fill('Grace');
     await newDialog.getByLabel('Email addresses').fill(`grace-${tag}@example.com`);
     await newDialog.getByRole('button', { name: 'Create' }).click();
-    await expect(newDialog.getByText(/already|unique|taken/i).first()).toBeVisible();
+    await expect(newDialog.getByText('Another person has this email address.')).toBeVisible();
     await checkScreen(page, '4-new-person-refused');
     await newDialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(grid).toHaveAttribute('aria-rowcount', '3');

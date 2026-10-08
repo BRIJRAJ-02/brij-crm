@@ -15,8 +15,12 @@ export interface NewRecordDialogProps {
   readonly title: string;
   /** The attributes the dialog asks for, each through its one editor (the name, the email). */
   readonly editors: readonly AttributeDefinition[];
+  /** The object's name for one record ("Person"), for the dialog's own messages. */
+  readonly singularName: string;
+  /** Mints the new record's id, once per opening: a second press after a lost answer sends the same one. */
+  readonly newId: () => string;
   /** Makes the record (optimistic: the row is in the table while this waits); rejects with the refusals. */
-  readonly onCreate: (values: Readonly<Record<string, unknown>>) => Promise<RecordView>;
+  readonly onCreate: (id: string, values: Readonly<Record<string, unknown>>) => Promise<RecordView>;
   /** The server made it: close, and focus its row. */
   readonly onCreated: (record: RecordView) => void;
 }
@@ -34,12 +38,23 @@ function askedFor(definition: AttributeDefinition) {
 /** A failure split into the refusals each editor shows, by attribute id, and the rest, shown above the fields. */
 function refusalsOf(
   error: unknown,
-  editorIds: ReadonlySet<string>,
+  editors: readonly AttributeDefinition[],
+  singularName: string,
 ): { readonly byAttribute: ReadonlyMap<string, string>; readonly other: readonly FormRefusal[] } {
-  if (!isDataError(error)) return { byAttribute: new Map(), other: [{ code: 'INTERNAL', message: String(error) }] };
+  if (!isDataError(error)) {
+    return { byAttribute: new Map(), other: [{ code: 'INTERNAL', message: strings.somethingWrong }] };
+  }
+  const editorIds = new Set(editors.map((editor) => editor.id));
+  // A unique value taken, in the dialog's own words ("Another person has this email address.").
+  const takenMessage = (attributeId: string | undefined, message: string) => {
+    const editor = editors.find((each) => each.id === attributeId);
+    if (editor === undefined) return message;
+    const what = editor.type === 'email' ? strings.emailAddress : editor.title.toLowerCase();
+    return strings.valueTaken(singularName, what);
+  };
   const refusals = (error.data?.refusals ?? []).map((refusal) => ({
     code: refusal.code,
-    message: refusal.message,
+    message: refusal.code === 'UNIQUE_CONFLICT' ? takenMessage(refusal.attributeId, refusal.message) : refusal.message,
     ...(refusal.attributeId === undefined ? {} : { attributeId: refusal.attributeId }),
   }));
   const issues = (error.data?.issues ?? []).map((issue) => {
@@ -69,7 +84,16 @@ function refusalsOf(
 }
 
 /** "New person": a Modal with a Form of the record's first editors; Create waits for the server, the row shows at once. */
-export function NewRecordDialog({ isOpen, onOpenChange, title, editors, onCreate, onCreated }: NewRecordDialogProps) {
+export function NewRecordDialog({
+  isOpen,
+  onOpenChange,
+  title,
+  singularName,
+  editors,
+  newId,
+  onCreate,
+  onCreated,
+}: NewRecordDialogProps) {
   const formId = useId();
   const [isBusy, setBusy] = useState(false);
   // Each opening starts idle; the fields start empty because the Modal mounts them afresh.
@@ -82,10 +106,16 @@ export function NewRecordDialog({ isOpen, onOpenChange, title, editors, onCreate
     <Modal
       title={title}
       isOpen={isOpen}
-      onOpenChange={onOpenChange}
+      // While Create waits, the dialog stays: a refusal has to land on its field.
+      onOpenChange={(open) => {
+        if (!open && isBusy) return;
+        onOpenChange(open);
+      }}
       actions={
         <>
-          <Button slot="close">{strings.cancel}</Button>
+          <Button slot="close" isDisabled={isBusy}>
+            {strings.cancel}
+          </Button>
           <Button variant="primary" type="submit" form={formId} isPending={isBusy}>
             {isBusy ? strings.creating : strings.create}
           </Button>
@@ -95,6 +125,8 @@ export function NewRecordDialog({ isOpen, onOpenChange, title, editors, onCreate
       <NewRecordForm
         formId={formId}
         label={title}
+        singularName={singularName}
+        newId={newId}
         editors={editors}
         isBusy={isBusy}
         onBusyChange={setBusy}
@@ -106,7 +138,10 @@ export function NewRecordDialog({ isOpen, onOpenChange, title, editors, onCreate
 }
 
 /** Props for the dialog's form. */
-interface NewRecordFormProps extends Pick<NewRecordDialogProps, 'editors' | 'onCreate' | 'onCreated'> {
+interface NewRecordFormProps extends Pick<
+  NewRecordDialogProps,
+  'editors' | 'onCreate' | 'onCreated' | 'singularName' | 'newId'
+> {
   readonly formId: string;
   readonly label: string;
   readonly isBusy: boolean;
@@ -114,7 +149,19 @@ interface NewRecordFormProps extends Pick<NewRecordDialogProps, 'editors' | 'onC
 }
 
 /** The dialog's form: each editor's last committed value, sent on Create; refusals on their editors or above them. */
-function NewRecordForm({ formId, label, editors, isBusy, onBusyChange, onCreate, onCreated }: NewRecordFormProps) {
+function NewRecordForm({
+  formId,
+  label,
+  singularName,
+  newId,
+  editors,
+  isBusy,
+  onBusyChange,
+  onCreate,
+  onCreated,
+}: NewRecordFormProps) {
+  // One id per opening (the Modal mounts this afresh), sent again on every press.
+  const [id] = useState(newId);
   // What each editor last committed. A ref as well as state, so a submit that a blur's commit runs just before sees it.
   const committed = useRef<Record<string, unknown>>({});
   // The same values in the shape the attribute takes: an attribute that holds several gets a list.
@@ -126,17 +173,24 @@ function NewRecordForm({ formId, label, editors, isBusy, onBusyChange, onCreate,
   const create = () => {
     if (isBusy) return;
     const sent = Object.fromEntries(Object.entries(sending.current).filter(([, value]) => value !== null));
+    // A person needs a name: nothing typed in it is refused here, before a blank row is made.
+    const name = editors.find((editor) => editor.type === 'personal_name');
+    if (name !== undefined && sent[name.id] === undefined) {
+      setRefusals([]);
+      setFieldErrors(new Map([[name.id, strings.recordNameMissing(singularName)]]));
+      return;
+    }
     onBusyChange(true);
     setRefusals([]);
     setFieldErrors(new Map());
-    onCreate(sent).then(
+    onCreate(id, sent).then(
       (record) => {
         onBusyChange(false);
         onCreated(record);
       },
       (error: unknown) => {
         onBusyChange(false);
-        const { byAttribute, other } = refusalsOf(error, new Set(editors.map((editor) => editor.id)));
+        const { byAttribute, other } = refusalsOf(error, editors, singularName);
         setFieldErrors(byAttribute);
         setRefusals(other);
       },

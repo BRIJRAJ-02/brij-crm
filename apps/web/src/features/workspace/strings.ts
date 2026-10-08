@@ -27,11 +27,19 @@ export const strings = {
   creating: 'Creating',
   cancel: 'Cancel',
   addAttribute: 'Add attribute',
-  adding: 'Adding',
   attributeName: 'Name',
   attributeType: 'Type',
   attributeNameMissing: 'Name the attribute.',
   attributeNameTaken: 'An attribute with this name exists.',
+  /** After Add attribute: the new column sits at the table's end, often off screen. */
+  attributeAdded: (title: string) => `${title} added as the last column.`,
+  /** New person with no name typed. */
+  recordNameMissing: (singularName: string) => `Name the ${singularName.toLowerCase()}.`,
+  /** A unique value another record already holds ("Another person has this email address."). */
+  valueTaken: (singularName: string, what: string) => `Another ${singularName.toLowerCase()} has this ${what}.`,
+  emailAddress: 'email address',
+  /** A failure the server didn't explain. */
+  somethingWrong: 'Something went wrong. Try again in a moment.',
   /** Why a company or Owner cell can't be edited in this loop. */
   referenceReadOnly: 'You can’t change this here yet.',
 } as const;

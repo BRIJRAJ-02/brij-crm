@@ -42,7 +42,7 @@ export interface AddAttributeDialogProps {
 
 /** The server's refusals as this form's, a taken name on the name field in the dialog's own words. */
 function refusalsOf(error: unknown): readonly FormRefusal[] {
-  if (!isDataError(error)) return [{ code: 'INTERNAL', message: String(error) }];
+  if (!isDataError(error)) return [{ code: 'INTERNAL', message: strings.somethingWrong }];
   const refusals = (error.data?.refusals ?? []).map((refusal) => ({
     code: refusal.code,
     message: refusal.code === 'SLUG_TAKEN' ? strings.attributeNameTaken : refusal.message,
@@ -112,7 +112,7 @@ export function AddAttributeDialog({ isOpen, onOpenChange, onAdd, onAdded }: Add
         <>
           <Button slot="close">{strings.cancel}</Button>
           <Button variant="primary" type="submit" form={formId} isPending={isBusy}>
-            {isBusy ? strings.adding : strings.addAttribute}
+            {isBusy ? strings.creating : strings.create}
           </Button>
         </>
       }

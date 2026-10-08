@@ -13,7 +13,7 @@ import {
   type RecordView,
 } from '@crm/data';
 import { useView } from '@crm/data/react';
-import { Button, EmptyState, TopBar, ViewBar } from '@crm/ui';
+import { Badge, Button, EmptyState, TopBar, ViewBar } from '@crm/ui';
 import { columnWidthFor, DataGrid, type GridColumn } from '@crm/ui/grid';
 import { useRouteContext, useRouter } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
@@ -41,24 +41,33 @@ function shownAttributes(attributes: readonly AttributeDefinition[]): readonly A
   return createdAt === undefined ? own : [...own, createdAt];
 }
 
-/** The grid's columns: the ones the person laid out first (order and widths), then any new attribute at its type's width. */
+/**
+ * The grid's columns: the ones the person laid out (order and widths), with
+ * any new attribute at its type's width before Created at, where it sits
+ * when nothing was moved.
+ */
 function columnsFor(attributes: readonly AttributeDefinition[], laidOut: readonly GridColumn[]): readonly GridColumn[] {
-  const fresh = shownAttributes(attributes).map((definition) => {
+  const shown = shownAttributes(attributes);
+  const fresh = shown.map((definition) => {
     const attribute = toFieldAttribute(definition, strings.referenceReadOnly);
     return { id: definition.id, attribute, width: columnWidthFor(attribute) };
   });
+  if (laidOut.length === 0) return fresh;
   const byId = new Map(fresh.map((column) => [column.id, column]));
   const kept = laidOut.flatMap((column) => {
     const current = byId.get(column.id);
     return current === undefined ? [] : [{ ...column, attribute: current.attribute }];
   });
   const placed = new Set(kept.map((column) => column.id));
-  return [...kept, ...fresh.filter((column) => !placed.has(column.id))];
+  const added = fresh.filter((column) => !placed.has(column.id));
+  const createdAt = shown.find((definition) => definition.isSystem)?.id;
+  const at = kept.findIndex((column) => column.id === createdAt);
+  return at === -1 ? [...kept, ...added] : [...kept.slice(0, at), ...added, ...kept.slice(at)];
 }
 
 /** One object's page: the TopBar with New person, the ViewBar with Add attribute, and the table. */
 export function RecordsScreen({ slug, object, attributes, members, view }: RecordsScreenProps) {
-  const { data } = useRouteContext({ from: '__root__' });
+  const { data, toasts } = useRouteContext({ from: '__root__' });
   const router = useRouter();
   const state = useView(view);
   const [layout, setLayout] = useState<{ readonly columns: readonly GridColumn[]; readonly pinnedCount: number }>({
@@ -93,7 +102,23 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
       currentObject={object.apiSlug}
       page={{
         topBar: (
-          <TopBar title={object.pluralName} icon={object.icon} hue={object.hue}>
+          <TopBar
+            title={object.pluralName}
+            icon={object.icon}
+            hue={object.hue}
+            // The total count (AC-34), once it is known.
+            {...(state.status === 'ready'
+              ? {
+                  meta: (
+                    <Badge
+                      count={state.source.count}
+                      max={Number.MAX_SAFE_INTEGER}
+                      label={object.pluralName.toLowerCase()}
+                    />
+                  ),
+                }
+              : {})}
+          >
             <Button variant="primary" icon="plus" onPress={openCreate}>
               {newRecord}
             </Button>
@@ -137,8 +162,9 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
                 <EmptyState
                   title={strings.emptyTitle(object.pluralName)}
                   icon={object.icon}
+                  // The top bar's New person is the one primary on the page.
                   actions={
-                    <Button variant="primary" icon="plus" onPress={openCreate}>
+                    <Button icon="plus" onPress={openCreate}>
                       {newRecord}
                     </Button>
                   }
@@ -153,7 +179,9 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
               onOpenChange={setCreating}
               title={newRecord}
               editors={editors}
-              onCreate={(values) => data.records.create(slug, object.id, values)}
+              newId={data.records.newId}
+              onCreate={(id, values) => data.records.create(slug, object.id, id, values)}
+              singularName={object.singularName}
               onCreated={(record) => {
                 setCreating(false);
                 const index = view.indexOf(record.id) ?? state.source.count - 1;
@@ -164,8 +192,9 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
               isOpen={isAdding}
               onOpenChange={setAdding}
               onAdd={(input) => data.attributes.create(slug, { objectId: object.id, ...input })}
-              onAdded={() => {
+              onAdded={(attribute) => {
                 setAdding(false);
+                toasts.toast({ tone: 'success', message: strings.attributeAdded(attribute.title) });
                 void router.invalidate();
               }}
             />
