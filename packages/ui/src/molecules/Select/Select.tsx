@@ -61,6 +61,13 @@ export interface SelectProps {
   readonly readOnlyReason?: string;
   readonly isDisabled?: boolean;
   readonly size?: 'md' | 'sm';
+  /**
+   * `cell` is the trigger a grid cell becomes while its list is open: it
+   * fills the cell with the value where the display had it, with no box or
+   * ring of its own (the cell draws the one ring), and the list opens at
+   * least a menu wide.
+   */
+  readonly variant?: 'default' | 'cell';
   /** A search field over the options, for long lists such as countries. */
   readonly isSearchable?: boolean;
   /** The search field's name. Defaults to "Search". */
@@ -118,6 +125,7 @@ export function Select({
   readOnlyReason,
   isDisabled = false,
   size = 'md',
+  variant = 'default',
   defaultOpen,
   onOpenChange,
   isSearchable = false,
@@ -184,6 +192,7 @@ export function Select({
     <AriaSelect
       className={styles.root}
       data-size={size}
+      data-variant={variant}
       isDisabled={isDisabled}
       isRequired={isRequired}
       isInvalid={error !== undefined}
@@ -221,7 +230,7 @@ export function Select({
         <Icon name="circle-alert" size="xs" />
         {error}
       </FieldError>
-      <Popover width="trigger">
+      <Popover width={variant === 'cell' ? 'menu' : 'trigger'}>
         {isSearchable ? (
           <div className={styles.searchable}>
             <Autocomplete filter={contains}>

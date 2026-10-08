@@ -2,7 +2,7 @@ import { withEmpty } from '../operators.ts';
 import type { AttributeTypeDef, FieldAttribute } from '../types.ts';
 import { asList, listFromText, refuse } from '../values.ts';
 import { optionOf, SelectDisplay } from './SelectDisplay.tsx';
-import { SelectEditor } from './SelectEditor.tsx';
+import { SELECT_MENU_THRESHOLD, SelectEditor } from './SelectEditor.tsx';
 
 /** Finds an option by its label, ignoring case; archived options can't be chosen by text. */
 export function optionByLabel(attribute: FieldAttribute, label: string) {
@@ -35,6 +35,6 @@ export const selectType: AttributeTypeDef<'select'> = {
   align: 'start',
   editIn: 'popover',
   closesOnCommit: true,
-  isListEditor: true,
+  isListEditor: (attribute) => !attribute.allowMultiple && (attribute.options?.length ?? 0) <= SELECT_MENU_THRESHOLD,
   width: 'default',
 };

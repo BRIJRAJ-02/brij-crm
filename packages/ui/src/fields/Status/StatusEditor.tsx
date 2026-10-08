@@ -27,6 +27,7 @@ export function StatusEditor({
       label={attribute.name}
       isLabelHidden={isCompact}
       size={isCompact ? 'sm' : 'md'}
+      variant={surface === 'cell' ? 'cell' : 'default'}
       optionStyle="dot"
       placeholder={strings.choose(attribute.name)}
       isRequired={attribute.isRequired}

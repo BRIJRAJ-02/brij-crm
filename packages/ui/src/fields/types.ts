@@ -134,8 +134,12 @@ export interface AttributeTypeDef<T extends AttributeType> {
   readonly editIn: 'cell' | 'popover' | 'none';
   /** A popover editor done after one choice (a date, a single select), so the grid closes it on commit. */
   readonly closesOnCommit?: boolean;
-  /** Its editor is a list that opens itself (a select, a status), so the grid draws it in the cell, already open, not in a popover. */
-  readonly isListEditor?: boolean;
+  /**
+   * For this attribute, its editor is a list that opens itself (a short single
+   * select, a status), so the grid draws it in the cell, already open, not in
+   * a popover. A long or multiple select searches in the cell's popover instead.
+   */
+  readonly isListEditor?: (attribute: FieldAttribute) => boolean;
   /** A click or Space toggles the value where it is (a checkbox); it never opens an editor. */
   readonly togglesInPlace?: boolean;
   /** What clearing the value leaves: `false` for a checkbox, which is never empty. Unset means empty. */

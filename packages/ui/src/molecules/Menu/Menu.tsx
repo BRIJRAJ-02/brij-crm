@@ -21,6 +21,7 @@ import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Kbd } from '../../atoms/Kbd/Kbd.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
+import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { ListSource } from '../../lib/list-source.ts';
 import { RowShown, useRangeReporter } from '../../lib/range-reporter.tsx';
 import { safeHref } from '../../lib/safe-href.ts';
@@ -296,6 +297,8 @@ export interface MenuItemProps {
   readonly icon?: IconName;
   /** Something to draw before the label instead of an icon: an Avatar, a Tag, a StatusDot. */
   readonly leading?: ReactNode;
+  /** `leading` already shows the label (a Tag of the option), so the label is kept for screen readers and typing only, never drawn twice. */
+  readonly isLabelInLeading?: boolean;
   /** A second line under the label. */
   readonly description?: string;
   /** Quiet text at the end: a count, a type. */
@@ -330,7 +333,7 @@ function itemProps({ id, children, isDanger = false, href, onAction, isDisabled 
 }
 
 function ItemFace({ look, state }: { readonly look: Omit<MenuItemProps, 'id'>; readonly state: ItemState }) {
-  const { children, icon, leading, description, meta, kbd } = look;
+  const { children, icon, leading, isLabelInLeading = false, description, meta, kbd } = look;
   return (
     <>
       {state.selectionMode !== 'none' && (
@@ -339,7 +342,7 @@ function ItemFace({ look, state }: { readonly look: Omit<MenuItemProps, 'id'>; r
       {leading ?? (icon !== undefined && <Icon name={icon} size="sm" />)}
       <span className={styles.text}>
         <Text slot="label" className={styles.label}>
-          {children}
+          {isLabelInLeading && leading !== undefined ? <VisuallyHidden>{children}</VisuallyHidden> : children}
         </Text>
         {description !== undefined && (
           <Text slot="description" className={styles.description}>

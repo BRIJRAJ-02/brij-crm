@@ -42,7 +42,7 @@ export function editModeOf(attribute: FieldAttribute): EditMode | undefined {
   }
   // Several emails, phones, domains or links are a list with an add field, which can't fit a row.
   if (definition.editIn === 'cell') return attribute.allowMultiple ? 'popover' : 'cell';
-  return definition.isListEditor === true ? 'list' : 'popover';
+  return definition.isListEditor?.(attribute) === true ? 'list' : 'popover';
 }
 
 /** Props for GridCell. */

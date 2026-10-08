@@ -17,6 +17,6 @@ export const statusType: AttributeTypeDef<'status'> = {
   align: 'start',
   editIn: 'popover',
   closesOnCommit: true,
-  isListEditor: true,
+  isListEditor: () => true,
   width: 'default',
 };

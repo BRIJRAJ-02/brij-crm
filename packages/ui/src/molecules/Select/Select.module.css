@@ -71,6 +71,21 @@
     cursor: default;
   }
 
+  /* In a grid cell the cell is the trigger: the value where the display had
+     it, no box, and no ring of its own, focused, hovered or pressed. */
+  .root[data-variant='cell'] {
+    flex: 1;
+    align-self: stretch;
+  }
+
+  .root[data-variant='cell'] .trigger {
+    block-size: 100%;
+    border-color: transparent;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
   .value {
     display: flex;
     flex: 1;

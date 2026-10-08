@@ -47,6 +47,7 @@ export function SelectEditor({
         label={attribute.name}
         isLabelHidden={isCompact}
         size={isCompact ? 'sm' : 'md'}
+        variant={surface === 'cell' ? 'cell' : 'default'}
         optionStyle="tag"
         placeholder={strings.choose(attribute.name)}
         isRequired={attribute.isRequired}
@@ -67,6 +68,40 @@ export function SelectEditor({
   const disabledKeys = options
     .filter((option) => option.archived && !chosen.includes(option.id))
     .map((option) => option.id);
+  const menu = (
+    <Menu
+      label={attribute.name}
+      // In a grid cell's popover, the search and the choices sit in the panel itself.
+      isInline={surface === 'cell'}
+      search={{
+        label: strings.search(attribute.name),
+        ...(startText === undefined ? {} : { defaultQuery: startText }),
+      }}
+      selectionMode={attribute.allowMultiple ? 'multiple' : 'single'}
+      selectedKeys={chosen}
+      disabledKeys={disabledKeys}
+      onSelectionChange={(keys: ReadonlySet<Key>) => {
+        const ids = options.filter((option) => keys.has(option.id)).map((option) => option.id);
+        commit(attribute.allowMultiple ? ids : (ids[0] ?? null));
+      }}
+    >
+      {options.map((option) => (
+        <MenuItem
+          key={option.id}
+          id={option.id}
+          isLabelInLeading
+          leading={
+            <Tag hue={option.hue} isArchived={option.archived}>
+              {option.label}
+            </Tag>
+          }
+        >
+          {option.label}
+        </MenuItem>
+      ))}
+    </Menu>
+  );
+  if (surface === 'cell') return menu;
   return (
     <MenuTrigger {...opening}>
       <Button variant="secondary" iconRight="chevron-down">
@@ -77,34 +112,7 @@ export function SelectEditor({
               .map((option) => option.label)
               .join(strings.listJoin)}
       </Button>
-      <Menu
-        label={attribute.name}
-        search={{
-          label: strings.search(attribute.name),
-          ...(startText === undefined ? {} : { defaultQuery: startText }),
-        }}
-        selectionMode={attribute.allowMultiple ? 'multiple' : 'single'}
-        selectedKeys={chosen}
-        disabledKeys={disabledKeys}
-        onSelectionChange={(keys: ReadonlySet<Key>) => {
-          const ids = options.filter((option) => keys.has(option.id)).map((option) => option.id);
-          commit(attribute.allowMultiple ? ids : (ids[0] ?? null));
-        }}
-      >
-        {options.map((option) => (
-          <MenuItem
-            key={option.id}
-            id={option.id}
-            leading={
-              <Tag hue={option.hue} isArchived={option.archived}>
-                {option.label}
-              </Tag>
-            }
-          >
-            {option.label}
-          </MenuItem>
-        ))}
-      </Menu>
+      {menu}
     </MenuTrigger>
   );
 }

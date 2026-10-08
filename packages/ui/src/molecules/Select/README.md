@@ -15,6 +15,7 @@ Ported from the artifact's Select card (version 8). It is the editor for select 
 
 - `items`: each has an `id` and a `label`, and optionally a `hue`, an `icon`, a `description` or any `leading` piece (an Avatar).
 - `optionStyle`: `plain` (the default), `tag` (select attributes) or `dot` (statuses).
+- `variant="cell"` is the trigger a grid cell becomes while its list is open: it fills the cell and shows the value where the display had it, with no box or ring of its own (the cell draws the one ring), and the list opens at least a menu wide, so options never cut to the cell's width.
 - An archived option (`isArchived`) can't be chosen, but still shows, muted, when it is the current value.
 - `isClearable` adds a "Clear" option while something is chosen; leave it off for a required attribute.
 - `isReadOnly` shows the value in a filled box with a lock, and `readOnlyReason` says why.
