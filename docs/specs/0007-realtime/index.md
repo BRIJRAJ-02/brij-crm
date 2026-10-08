@@ -95,7 +95,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 
 | Table or function | Change | Rules |
 |---|---|---|
-| `outbox` (milestone 1) | The `outbox_kind` enum gains `entries`, `views`, `notes`, `tasks`, `members`, `access`, `jobs`. `object_id` becomes nullable (kinds with no object). New: `list_id` uuid null, `item_ids` uuid[] not null default `'{}'`, `actor_member_id` uuid null. `created_at` now defaults to `clock_timestamp()` and the hook sets it explicitly. (Spec 0006 adds `replaced`.) | Existing primary key (`workspace_id`, `seq`) and the unpublished partial index stay. No new index: pruning walks the primary key from each workspace's oldest `seq`. `actor_member_id` is never published: it is the member whose write stored the row (for `jobs`, the job's starter), read by spec 0009's `filterEvent` for `jobs`. |
+| `outbox` (milestone 1) | The `outbox_kind` enum gains `entries`, `views`, `notes`, `tasks`, `members`, `access`, `jobs`. `object_id` becomes nullable (kinds with no object). New: `list_id` uuid null, `item_ids` uuid[] not null default `'{}'`, `actor_member_id` uuid null. `created_at` now defaults to `clock_timestamp()` and the hook sets it explicitly. (Spec 0006 adds `replaced`: `{ by, cells }`, `by` once, at most 200 cells, null past that; owner decision, 8 October 2026.) | Existing primary key (`workspace_id`, `seq`) and the unpublished partial index stay. No new index: pruning walks the primary key from each workspace's oldest `seq`. `actor_member_id` is never published: it is the member whose write stored the row (for `jobs`, the job's starter), read by spec 0009's `filterEvent` for `jobs`. |
 | `crm_outbox_prune(before timestamptz, max integer)` (milestone 3) | new security definer function, owned by `crm_relay`, which gains `delete` on `outbox`; execute granted to `crm_worker` only (spec 0008 milestone 1 creates it), never to `crm_app` | Deletes published rows with `created_at` before `before`, oldest `seq` first in each workspace (a skip scan over the primary key), stopping at a workspace's first unpublished row; at most `max` rows per call (clamped 1 to 10,000); returns the count deleted, nothing else. Same hardening as `crm_outbox_workspaces` (begin atomic, fixed `search_path`, qualified names, the migration refuses to finish if anyone but the owner can reach `crm_relay`). The guard tests list it. |
 
 `crm_app` gets no `delete` on `outbox`: every delete goes through the function.
@@ -111,7 +111,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 **The event** (`ChangeEvent`, Zod in `packages/contracts/src/realtime.ts`; `seq` and `at` on every kind):
 
 ```json
-{ "seq": 41, "at": "2026-10-03T09:12:44.318Z", "kind": "records", "objectId": "…", "recordIds": ["…"], "attributeIds": ["…"], "coarse": false, "mutationId": "…", "replaced": [] }
+{ "seq": 41, "at": "2026-10-03T09:12:44.318Z", "kind": "records", "objectId": "…", "recordIds": ["…"], "attributeIds": ["…"], "coarse": false, "mutationId": "…", "replaced": { "by": { "type": "member", "id": "…" }, "cells": [{ "recordId": "…", "attributeId": "…", "versionId": "…" }] } }
 { "seq": 42, "at": "…", "kind": "entries", "listId": "…", "entryIds": ["…"], "recordIds": ["…"], "attributeIds": ["…"], "coarse": false }
 { "seq": 43, "at": "…", "kind": "definitions", "objectId": "…" }
 { "seq": 44, "at": "…", "kind": "views", "objectId": "…", "viewIds": ["…"], "coarse": false }
@@ -315,3 +315,7 @@ Tracer Bullet: each milestone ends with something you can see in production or i
 **Answered by the owner on 8 October 2026: accepted as recommended.**
 
 1. **The stub's timing signal.** On a channel whose audience may not read an event, the event arrives as a stub (`{ seq, at, kind: 'restricted' }`), so a member with restricted access learns that something they can't see changed, and when, but not what or where. Recommended: accept it. It is the cheapest way to keep one gap free stream per channel, it reveals no id, record, field or value, and only matters once #24 adds rules. Runner up: no stub and a sequence per channel kept by the relay, which brings back the complexity of a personal channel per member.
+
+**Decided by the owner on 8 October 2026, with spec 0006 milestone 2.**
+
+2. **The `replaced` list's size.** A `records` event's `replaced` names `by` once per event, not per entry (`{ by, cells }`), and holds at most 200 cells; a write that replaced more carries no list, so tabs refetch and show no notice. Spec 0006's [versions and undo](../0006-client-data-state/0006-versions-and-undo.md#owner-decisions) has the detail.

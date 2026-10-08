@@ -107,7 +107,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 | Table | Change | Rules |
 |---|---|---|
 | `records` | new `revision` bigint not null default 0 | `revision = revision + 1` in every statement that updates a records row: `touchOwner` (every value write and near side link write), delete, restore. Adding a column with a constant default rewrites nothing. Far side link changes don't move it (spec 0004, AC-7). |
-| `outbox` | new `replaced` jsonb null | `[{ recordId, attributeId, versionId, by: { type, id } }]`: the version each write replaced (from `Change.values[].replaced`) and the actor who replaced it (the write's actor). Capped at 1,000 entries per row; past that the list is left empty (no notices for a bulk overwrite). |
+| `outbox` | new `replaced` jsonb null | `{ by: { type, id }, cells: [{ recordId, attributeId, versionId }] }`: the actor who replaced the values (the write's actor, named once) and the version each cell replaced (from `Change.values[].replaced`). At most 200 cells per row; past that the column is null (no notices for a bulk overwrite). Owner decision, 8 October 2026 (see [0006-versions-and-undo.md](0006-versions-and-undo.md)). |
 
 No new tables. The undo stack, windows and store live only in the tab's memory.
 
@@ -129,7 +129,7 @@ No new tables. The undo stack, windows and store live only in the tab's memory.
 | `records.setValuesBatch` | new | `workspace`, `items` ≤ 500 `[{ recordId, values }]` (values as above), `mutationId` | `{ results: [{ recordId, record?: RecordView, refusals? }], echoes }` | 422 `CONFIG_INVALID` over 500; per record refusals in the results |
 | `attributes.list` | options inline | `workspace`, `objectId` | `AttributeDefinition[]` with `options?: [{ id, label, hue, position, isArchived, outcome?, targetTimeInStage? }]` for select and status | 404 |
 
-`RecordView` (which spec 0005 already gave `versions: Record<attributeId, versionId>` and `linkTotals`) gains `revision: number`, and `values` holds only the attributes asked for (plus the primary). Write answers gain `echoes: number`: how many outbox rows the write stored (one per object or list it touched, so how many events carry its `mutationId`); an older client ignores it. The `records` event gains `replaced?: [{ recordId, attributeId, versionId, by: { type, id } }]` in spec 0007's `ChangeEvent` union; everything else in it is spec 0007's.
+`RecordView` (which spec 0005 already gave `versions: Record<attributeId, versionId>` and `linkTotals`) gains `revision: number`, and `values` holds only the attributes asked for (plus the primary). Write answers gain `echoes: number`: how many outbox rows the write stored (one per object or list it touched, so how many events carry its `mutationId`); an older client ignores it. The `records` event gains `replaced?: { by: { type, id }, cells: [{ recordId, attributeId, versionId }] }` (at most 200 cells, `by` once; owner decision, 8 October 2026) in spec 0007's `ChangeEvent` union; everything else in it is spec 0007's.
 
 **Status codes**: as spec 0005, plus 409 `VERSION_CHANGED`. A batch answers 200 with per record refusals; only a malformed or oversized batch is refused whole.
 
@@ -142,7 +142,7 @@ No new tables. The undo stack, windows and store live only in the tab's memory.
 | any read | a multi link cell and its total | spec 0005's read: the first 20 links in `values`, the full count in `linkTotals` when there are more; the store never counts links itself |
 | edit | `baseVersionId` | the base layer's `versions[attributeId]` for that record; `null` when the base holds the attribute with no version |
 | edit | the new versions | the response's `RecordView.versions` |
-| replaced notice | whether it is ours | the event's `replaced[].versionId` is in this tab's own versions (versions returned to this tab's writes, the last 500, in memory) and `by` is not the current member and not the system |
+| replaced notice | whether it is ours | a cell's `replaced.cells[].versionId` is in this tab's own versions (versions returned to this tab's writes, the last 500, in memory) and the event's `replaced.by` is not the current member and not the system; an event with no list (none replaced, or more than 200 cells) raises nothing |
 | replaced notice | the name | `by`: a member's name from the definitions store's members; "An API key", "An automation" otherwise (`strings.ts`) |
 | replaced notice | attribute and record | the attribute title from the definitions store; the record's `display.name` from the store |
 | "Use mine" | the value to save | the value this tab wrote, kept beside its own version id |
@@ -270,6 +270,10 @@ Tracer Bullet: each milestone ends with something you can click in production. M
 - [ ] `/sync`: spec 0005's data layer says "a new record goes at the end" of the People table, in id order; AC-57 supersedes it with newest first (`created_at` descending), and own creates show first (AC-56). Record it in `0005-data-layer.md` and `packages/data/AGENTS.md`.
 - [ ] `/sync`: spec 0005's gap and unrecovered refetch becomes the store's resync, called by spec 0007's live layer; record it in `packages/data/AGENTS.md`.
 - [ ] `packages/data/AGENTS.md` should list `db-core`, `react-db`, `tanstack-virtual` and `centrifugo` under its agent skills (area scoped, not root).
+
+## Owner decisions
+
+- **8 October 2026**: the `replaced` list names `by` once per event and holds at most 200 cells; past that an event carries no list and tabs only refetch, with no notice. Recorded in [0006-versions-and-undo.md](0006-versions-and-undo.md#owner-decisions).
 
 ## Open questions for the owner
 

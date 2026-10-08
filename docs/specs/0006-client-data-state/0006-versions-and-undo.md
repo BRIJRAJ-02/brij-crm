@@ -21,9 +21,9 @@ Every value the browser reads now carries the id of its current version, and eve
 ## The replaced notice
 
 1. B's save carries a base older than the current version (A's). The engine writes it (last save wins) and its `Change` names `replaced: { versionId: A's, setBy: A }`.
-2. The outbox hook adds `{ recordId, attributeId, versionId: A's, by: B }` to the row's `replaced` (at most 1,000 per row).
+2. The outbox hook adds `{ recordId, attributeId, versionId: A's }` to the row's `replaced.cells` and names `by: B` once for the row (`replaced: { by, cells }`, at most 200 cells; past that the row carries no list, and the tabs only refetch). See Owner decisions.
 3. A's tab receives the event. The record is refetched as usual (A now sees B's value).
-4. For each `replaced` entry whose `versionId` is in A's own versions and whose `by` is not A's member and not the system: one toast per record and attribute, "<B's name> changed <Attribute> on <Record> just after you, so your value was replaced." with "Use mine".
+4. When the event's `replaced.by` is not A's member and not the system, for each cell whose `versionId` is in A's own versions: one toast per record and attribute, "<B's name> changed <Attribute> on <Record> just after you, so your value was replaced." with "Use mine".
 5. "Use mine" sends A's value as a normal edit, based on B's version (now A's base), so it raises nothing for B. It is undoable like any edit.
 
 - B sees nothing: their value is the one showing.
@@ -55,10 +55,14 @@ Every value the browser reads now carries the id of its current version, and eve
 
 ## Tests
 
-- Real Postgres: revision grows on every kind of record write; `ifVersionId` equal writes, unequal refuses and writes nothing on that record; `null` base reports `replaced`; the outbox row holds `replaced` with the writing actor, capped at 1,000.
+- Real Postgres: revision grows on every kind of record write; `ifVersionId` equal writes, unequal refuses and writes nothing on that record; `null` base reports `replaced`; the outbox row holds `replaced` as `{ by, cells }` with the writing actor named once, capped at 200 cells (none past that).
 - Fake API and events: the revision rule with a late confirmation; links and `linkTotals` replaced together; base never from a layer; own versions bounded at 500; notice shown only for its four conditions and never after a catch up; "Use mine"; batch partial refusal; undo of one cell, of a paste, with some cells changed since (by another member, and by the same member in a second tab: the same copy), while in flight, at depth 51; the shortcut on an Apple and a non Apple platform, ignored in a text field and inside an open Modal; cleared on switch.
 - Playwright, two browsers: the clash and "Use mine"; undo after another member's change.
 
 ## Rationale (short)
 
 The engine already reports a replaced version (spec 0004, AC-12); publishing its id lets the loser's tab match it against versions it wrote, so the server never needs to know who is online. A revision per record is the cheapest total order for reads: version ids aren't ordered reliably and `updated_at` is the transaction's start time, which can run backwards across two writes. A strict version check is the only safe undo when others edit live.
+
+## Owner decisions
+
+**8 October 2026, the size of the `replaced` list on change events.** A `records` event's `replaced` names `by` once per event (the write's actor, who replaced every cell in it), not once per entry: `replaced: { by: { type, id }, cells: [{ recordId, attributeId, versionId }] }`. It holds at most 200 cells (`MAX_REPLACED_CELLS` in `@crm/contracts`). A write that replaced more stores and sends no list at all (the outbox column is null), so the tabs refetch the records as for any event and show no per cell notice: no notice is better than a wrong one. The spec's copy has no general wording ("someone changed records you just edited"), so nothing is shown in that case. This replaces the earlier cap of 1,000 entries with `by` on each. The notice's tone is a separate decision.
