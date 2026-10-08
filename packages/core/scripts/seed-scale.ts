@@ -3,8 +3,9 @@
 // through the engine's services; the rows themselves are written in bulk SQL,
 // 50,000 at a time, inside withWorkspace(), each statement naming the
 // workspace itself (the owner role bypasses row level security, as on Neon).
-// Deals get the template's attributes filled realistically, a past stage
-// version each, a company link (90%), and a list of 200,000 entries; about
+// Deals get the template's attributes filled at `FILL_RATES.deals` (shared
+// with the load seed, `seed-crm.ts`), a past stage version on most, a company
+// link (90%), and a list of 200,000 entries; about
 // 1% of deals then go to the trash and 1% of entries are removed, and the
 // stored sort keys are rebuilt from the values.
 // Runs as the owner role, and refuses any host but localhost unless you name
@@ -15,6 +16,7 @@ import { createDatabase, type WorkspaceTx } from '@crm/db';
 import { createWorkspace, defineAttribute, defineList, defineOption } from '../src/index.ts';
 import { refuseRemote } from './local-only.ts';
 import { testScope } from '../src/testing.ts';
+import { FILL_DETAILS, FILL_RATES } from './seed-crm.ts';
 
 const env = z
   .object({
@@ -28,6 +30,10 @@ const env = z
 refuseRemote(env.DATABASE_URL_OWNER, env.SEED_SCALE_ALLOW_HOST, 'the seed');
 
 const CHUNK = 50_000;
+/** A share from the fill rates (shared with the load seed, `seed-crm.ts`) as a SQL number. */
+const rate = (share: number) => sql.raw(String(share));
+/** The share of deals with no past stage: their current stage is their first. */
+const noPastStage = rate(1 - FILL_DETAILS.pastStage);
 const COMPANIES = 20_000;
 const MEMBERS = 20;
 const started = Date.now();
@@ -190,13 +196,13 @@ try {
       await tx.execute(sql`
         insert into "values" (workspace_id, version_id, attribute_id, record_id, owner_id, option_id, active_from, active_until, set_by_type, set_by_id, set_by_member_id)
         select ${workspaceId}, uuidv7(), ${attr('deal.stage')}, id, id, (${uuids(stages)})[1], made, made + interval '10 days', 'member', member, member
-        from seed_deals where r3 >= 0.25
+        from seed_deals where r3 >= ${noPastStage}
       `);
       await tx.execute(sql`
         insert into "values" (workspace_id, version_id, attribute_id, record_id, owner_id, option_id, active_from, set_by_type, set_by_id, set_by_member_id)
         select ${workspaceId}, uuidv7(), ${attr('deal.stage')}, id, id,
-          (${uuids(stages)})[case when r3 < 0.25 then 1 else 2 + floor((r3 - 0.25) / 0.75 * 3)::int end],
-          case when r3 < 0.25 then made else made + interval '10 days' end, 'member', member, member
+          (${uuids(stages)})[case when r3 < ${noPastStage} then 1 else 2 + floor((r3 - ${noPastStage}) / ${rate(FILL_DETAILS.pastStage)} * 3)::int end],
+          case when r3 < ${noPastStage} then made else made + interval '10 days' end, 'member', member, member
         from seed_deals
       `);
       await tx.execute(sql`
@@ -206,12 +212,12 @@ try {
       await tx.execute(sql`
         insert into "values" (workspace_id, version_id, attribute_id, record_id, owner_id, number_value, text_value, active_from, set_by_type, set_by_id, set_by_member_id)
         select ${workspaceId}, uuidv7(), ${attr('deal.value')}, id, id, round((r4 * 250000)::numeric, 2), 'USD', made, 'member', member, member
-        from seed_deals where r4 < 0.85
+        from seed_deals where r4 < ${rate(FILL_RATES.deals.value)}
       `);
       await tx.execute(sql`
         insert into "values" (workspace_id, version_id, attribute_id, record_id, owner_id, date_value, active_from, set_by_type, set_by_id, set_by_member_id)
         select ${workspaceId}, uuidv7(), ${attr('deal.close_date')}, id, id, (made + r5 * interval '200 days')::date, made, 'member', member, member
-        from seed_deals where r5 < 0.9
+        from seed_deals where r5 < ${rate(FILL_RATES.deals.close_date)}
       `);
       await tx.execute(sql`
         insert into "values" (workspace_id, version_id, attribute_id, record_id, owner_id, number_value, active_from, set_by_type, set_by_id, set_by_member_id)
@@ -235,7 +241,7 @@ try {
         insert into "values" (workspace_id, version_id, attribute_id, record_id, owner_id, text_value, active_from, set_by_type, set_by_id, set_by_member_id)
         select ${workspaceId}, uuidv7(), ${attr('deal.next_step')}, id, id, (${texts(steps)})[1 + floor(r1 * 5)::int] || ' (' || n || ')',
           made, 'member', member, member
-        from seed_deals where r2 < 0.5
+        from seed_deals where r2 < ${rate(FILL_RATES.deals.next_step)}
       `);
       await tx.execute(sql`
         insert into record_links (workspace_id, version_id, relationship_id, from_record_id, to_record_id, position, to_position,
@@ -244,7 +250,7 @@ try {
         from seed_deals d
         join (select id, row_number() over (order by id) - 1 as k from records where object_id = ${companies}) c
           on c.k = d.n % ${COMPANIES}::int
-        where d.r8 < 0.9
+        where d.r8 < ${rate(FILL_RATES.deals.associated_company)}
       `);
     });
     log(`deals ${String(end)}`);
