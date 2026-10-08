@@ -7,7 +7,9 @@
 # Repository variables: NEON_PROJECT_ID, NEON_OWNER_ROLE, RAILWAY_PROJECT_ID,
 #   VERCEL_ORG_ID, VERCEL_PROJECT_ID
 # Repository secrets: NEON_API_KEY, RAILWAY_TOKEN (an account or workspace token),
-#   VERCEL_TOKEN
+#   VERCEL_TOKEN, SENTRY_AUTH_TOKEN (optional; with SENTRY_ORG and SENTRY_PROJECT_WEB as variables, the
+#   build uploads its hidden source maps to Sentry, spec 0010; maps are deleted either way)
+# Vercel's Preview variables: VITE_SENTRY_DSN_WEB (optional, the brij-crm-web DSN)
 name: Preview
 
 on:
@@ -125,8 +127,15 @@ jobs:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           # Read by the middleware: set for the build and again for the deployment.
           API_ORIGIN_INTERNAL: ${{ steps.railway.outputs.api_origin }}
+          # The source map upload (spec 0010), skipped when the token is absent.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT_WEB: ${{ vars.SENTRY_PROJECT_WEB }}
         run: |
           set -euo pipefail
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
+            echo "::notice::SENTRY_AUTH_TOKEN isn't set, so source maps aren't uploaded to Sentry (they're deleted all the same)."
+          fi
           vercel() { npx -y "$VERCEL_CLI" "$@" --token "$VERCEL_TOKEN"; }
           vercel pull --yes --environment=preview
           vercel build

@@ -12,6 +12,8 @@
     "build.test.ts",
     "theme-boot.test.ts",
     "first-load.ts",
+    "csp.ts",
+    "csp.test.ts",
     "first-load.test.ts",
     "realtime-csp.ts",
     "realtime-csp.test.ts",

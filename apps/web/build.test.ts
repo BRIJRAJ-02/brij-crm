@@ -23,7 +23,8 @@ beforeAll(async () => {
     root: ROOT,
     configFile: path.join(ROOT, 'vite.config.ts'),
     logLevel: 'silent',
-    build: { outDir, emptyOutDir: true, sourcemap: false },
+    // The real config's source maps too: hidden, then deleted (AC-164).
+    build: { outDir, emptyOutDir: true },
   });
   assets = readdirSync(path.join(outDir, 'assets'));
   html = readFileSync(path.join(outDir, 'index.html'), 'utf8');
@@ -93,7 +94,32 @@ describe('the built page', () => {
   });
 });
 
+describe('source maps (spec 0010, AC-164)', () => {
+  it('leaves no .map file in the output', () => {
+    const files = readdirSync(outDir, { recursive: true, encoding: 'utf8' });
+    expect(files.length).toBeGreaterThan(0);
+    expect(files.filter((file) => file.endsWith('.map'))).toEqual([]);
+  });
+
+  it('links no source map from any script or stylesheet', () => {
+    const shipped = readdirSync(outDir, { recursive: true, encoding: 'utf8' }).filter((file) =>
+      /\.(js|css|html)$/.test(file),
+    );
+    for (const file of shipped) expect(readFileSync(path.join(outDir, file), 'utf8')).not.toMatch(/sourceMappingURL/);
+  });
+});
+
 describe('the first load', () => {
+  it('loads the Sentry SDK in its own chunk, never up front (spec 0010, AC-169)', () => {
+    const { chunks } = firstLoad(manifest);
+    const sentry = Object.entries(manifest).find(([key]) => key.endsWith('src/monitoring/sentry.ts'));
+    expect(sentry?.[1].isDynamicEntry).toBe(true);
+    for (const key of chunks) {
+      expect(key).not.toMatch(/@sentry|src\/monitoring\/sentry\.ts/);
+      expect(readFileSync(path.join(outDir, manifest[key]?.file ?? ''), 'utf8')).not.toContain('sentry.javascript');
+    }
+  });
+
   const HEAVY_ENTRY = /packages\/ui\/src\/(grid|editor|charts|schema-map)\.ts$/;
 
   it('starts from index.html and follows only static imports', () => {

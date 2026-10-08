@@ -1,9 +1,13 @@
 # Production web deploy. Railway deploys api, worker and centrifugo from `main`
 # on its own; this ships the web app to Vercel. Production's variables
 # (API_ORIGIN_INTERNAL and the VITE_* URLs) live in the Vercel project's
-# Production environment, and `vercel pull` brings them into the build.
+# Production environment, and `vercel pull` brings them into the build. Monitoring (spec 0010):
+# VITE_SENTRY_DSN_WEB lives there too (Production and Preview), and the build uploads its hidden source
+# maps to Sentry only when SENTRY_AUTH_TOKEN is set here; without it the step says so and deploys the same
+# build, maps deleted either way. The release is the commit (GITHUB_SHA).
 #
-# Repository variables: VERCEL_ORG_ID, VERCEL_PROJECT_ID · secret: VERCEL_TOKEN
+# Repository variables: VERCEL_ORG_ID, VERCEL_PROJECT_ID, SENTRY_ORG, SENTRY_PROJECT_WEB
+# Secrets: VERCEL_TOKEN, SENTRY_AUTH_TOKEN (optional: an organization token that can only upload releases)
 name: Deploy web
 
 on:
@@ -34,11 +38,18 @@ jobs:
       - name: Build and deploy
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          # The source map upload (spec 0010), skipped when the token is absent.
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ vars.SENTRY_ORG }}
+          SENTRY_PROJECT_WEB: ${{ vars.SENTRY_PROJECT_WEB }}
         run: |
           set -euo pipefail
           if [ -z "$VERCEL_TOKEN" ]; then
             echo "::notice::VERCEL_TOKEN isn't set yet, so there's nothing to deploy to."
             exit 0
+          fi
+          if [ -z "$SENTRY_AUTH_TOKEN" ]; then
+            echo "::notice::SENTRY_AUTH_TOKEN isn't set, so source maps aren't uploaded to Sentry (they're deleted all the same)."
           fi
           vercel() { npx -y "$VERCEL_CLI" "$@" --token "$VERCEL_TOKEN"; }
           vercel pull --yes --environment=production
