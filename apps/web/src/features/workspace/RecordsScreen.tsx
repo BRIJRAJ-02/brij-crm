@@ -137,7 +137,11 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
         ),
         body: (
           <>
-            {live === 'paused' && <Callout title={strings.livePausedTitle}>{strings.livePausedText}</Callout>}
+            {live === 'paused' && (
+              <Callout placement="banner" isAnnounced>
+                {strings.livePaused}
+              </Callout>
+            )}
             <DataGrid<RecordView>
               label={object.pluralName}
               columns={columns}
