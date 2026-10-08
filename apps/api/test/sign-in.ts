@@ -2,6 +2,7 @@
 // sent to Mailpit and read back through its API (`GET /api/v1/messages`, then
 // `GET /api/v1/message/{id}`), and an oRPC client carrying the session cookie.
 import { randomInt, randomUUID } from 'node:crypto';
+import type { RuleSource } from '@crm/core';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
@@ -46,7 +47,7 @@ export function testConnections(): { db: Database; identity: IdentityStore } {
 export function signInApp(
   connections: { db: Database; identity: IdentityStore },
   overrides: Partial<ApiEnv> = {},
-  options: { mailer?: Mailer; router?: AnyRouter; wakeRelay?: WakeRelay } = {},
+  options: { mailer?: Mailer; router?: AnyRouter; wakeRelay?: WakeRelay; rules?: RuleSource } = {},
 ) {
   const env = testEnv(overrides);
   const mailer = options.mailer ?? createMailpitMailer({ url: MAILPIT_URL, from: env.MAIL_FROM });
@@ -54,6 +55,7 @@ export function signInApp(
     ...connections,
     mailer,
     ...(options.wakeRelay ? { wakeRelay: options.wakeRelay } : {}),
+    ...(options.rules ? { rules: options.rules } : {}),
   });
   return { app: createApp({ services, env, ...(options.router ? { router: options.router } : {}) }), services };
 }

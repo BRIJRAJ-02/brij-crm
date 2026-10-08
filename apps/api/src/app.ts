@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { type ErrorCode, errorStatus } from '@crm/contracts';
+import type { RuleSource } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import type { AnyRouter } from '@orpc/server';
 import { Hono } from 'hono';
@@ -63,6 +64,12 @@ export interface AppServices {
   readonly identity: IdentityStore;
   readonly auth: Auth;
   readonly wakeRelay: WakeRelay;
+  /**
+   * Where the door reads object, field and record rules (spec 0009). The
+   * server passes none (no rules until #24); only tests and the local test
+   * server (`test/rules-server.ts`) inject some.
+   */
+  readonly rules?: RuleSource;
 }
 
 /** The API. `router` is the app's own unless a test passes one. */
@@ -75,7 +82,7 @@ export function createApp({
   env: ApiEnv;
   router?: AnyRouter;
 }) {
-  const { db, identity, auth, wakeRelay } = services;
+  const { db, identity, auth, wakeRelay, rules } = services;
   const rpc = createRpcHandler(router);
   const edge = createEdgeGuard({ secret: env.EDGE_SECRET, environment: env.APP_ENV });
   const allowedOrigins = new Set([new URL(env.APP_URL).origin, ...(env.TRUSTED_ORIGINS ?? [])]);
@@ -157,6 +164,7 @@ export function createApp({
         readGate,
         realtime,
         testFault,
+        ...(rules === undefined ? {} : { rules }),
       },
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();

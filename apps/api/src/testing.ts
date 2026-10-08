@@ -1,6 +1,7 @@
 // Test helpers for the api's own suites: an app wired to a test router, a
 // database that is never reached, and a way to read the log lines it writes.
 import { ENGINE_REFUSAL_CODES, type EngineRefusal } from '@crm/contracts';
+import type { RuleSource } from '@crm/core';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
 import { ORPCError, os } from '@orpc/server';
 import { vi } from 'vitest';
@@ -62,7 +63,7 @@ export function memoryMailer(): Mailer & { readonly sent: MailMessage[] } {
  */
 export function testServices(
   env: ApiEnv,
-  options: { db?: Database; identity?: IdentityStore; mailer?: Mailer; wakeRelay?: WakeRelay } = {},
+  options: { db?: Database; identity?: IdentityStore; mailer?: Mailer; wakeRelay?: WakeRelay; rules?: RuleSource } = {},
 ): AppServices {
   const db = options.db ?? unreachableDatabase();
   const identity =
@@ -72,6 +73,7 @@ export function testServices(
     identity,
     auth: createAuth({ env, identity, mailer: options.mailer ?? memoryMailer() }),
     wakeRelay: options.wakeRelay ?? NO_WAKE,
+    ...(options.rules === undefined ? {} : { rules: options.rules }),
   };
 }
 

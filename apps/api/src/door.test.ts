@@ -223,6 +223,22 @@ describe('no scope is built in this app', () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  it('injects no rules into the door outside tests: production has none until #24 (spec 0009)', async () => {
+    const root = fileURLToPath(new URL('.', import.meta.url));
+    // Only the app passes the services' source on, and the request context carries it to the door.
+    const plumbing = new Set(['app.ts', 'orpc.ts', 'testing.ts']);
+    const files = (await readdir(root, { recursive: true }))
+      .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+      .map((file) => file.split(sep).join('/'))
+      .filter((file) => !plumbing.has(file));
+    const offenders: string[] = [];
+    for (const file of files) {
+      const source = await readFile(join(root, file), 'utf8');
+      if (/\bRuleSource\b|\brules\s*[:,}]/.test(source)) offenders.push(file);
+    }
+    expect(offenders).toEqual([]);
+  });
 });
 
 describe('the member door', () => {

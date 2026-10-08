@@ -10,7 +10,7 @@
 // `context.db` nor `context.identity`, so the door is its only way to the data. The contract walking
 // test fails if a procedure outside the bootstrap list isn't built on `member`.
 import { type AppEnvironment, contract, WorkspaceScoped } from '@crm/contracts';
-import { enterWorkspace } from '@crm/core';
+import { enterWorkspace, type RuleSource } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { implement, os } from '@orpc/server';
 import type { ResponseHeadersPluginContext } from '@orpc/server/plugins';
@@ -47,6 +47,8 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   readGate: ReadGate;
   /** Signs Centrifugo's tokens (spec 0005), or undefined where live updates are off (no `CENTRIFUGO_TOKEN_SECRET`). */
   realtime: RealtimeTokens | undefined;
+  /** Where the door reads the workspace's rules: absent (none) outside tests until #24 (spec 0009). */
+  rules?: RuleSource;
 }
 
 /** What `authed` adds: the signed in person. */
@@ -96,7 +98,12 @@ export const requireMember = os
       });
     }
     const scope = await enterWorkspace(
-      { db: context.db, identity: context.identity, log },
+      {
+        db: context.db,
+        identity: context.identity,
+        log,
+        ...(context.rules === undefined ? {} : { rules: context.rules }),
+      },
       { userId: context.user.id, slug: scoped.data.workspace },
     );
     // An error report from here on names the workspace the door let them into.

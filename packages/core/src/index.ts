@@ -2,7 +2,14 @@
 // One folder per feature; the access door (spec 0005, thin #9) is `access/`.
 export { getSystemStatus, type SystemDeps } from './system/status.ts';
 export * from './engine/index.ts';
-export { enterWithKey, enterWorkspace, type DoorDeps, type DoorInput, type DoorLog } from './access/door.ts';
+export {
+  enterWithKey,
+  enterWorkspace,
+  type DoorDeps,
+  type DoorInput,
+  type DoorLog,
+  type RuleSource,
+} from './access/door.ts';
 export {
   EVENT_KINDS,
   eventFacts,
