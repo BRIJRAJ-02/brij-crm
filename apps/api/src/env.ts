@@ -123,8 +123,10 @@ export const ApiEnv = z
     WORKER_INTERNAL_URL: optional(internalUrl('WORKER_INTERNAL_URL')),
     WORKER_WAKE_SECRET: wakeSecret,
     // Live updates (spec 0005): signs Centrifugo's connection and subscription tokens. The Centrifugo service's
-    // CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY. Required in production; unset (previews) turns live updates off.
+    // CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY. Unset turns live updates off.
     CENTRIFUGO_TOKEN_SECRET: optional(z.string()),
+    // The deployed commit, which Railway sets: /api/health names it, so the web deploy can wait for this API.
+    RAILWAY_GIT_COMMIT_SHA: optional(z.string().regex(/^[0-9a-f]{7,40}$/i)),
     // Monitoring (spec 0010): `on` opens system.testFault, which fails on purpose to prove error reports in
     // production; unset or `off` answers NOT_FOUND, as if it didn't exist. Switch it off again after the proof.
     MONITORING_TEST_FAULT: optional(z.enum(['on', 'off'])),

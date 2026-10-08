@@ -4,14 +4,21 @@
 # Production environment, and `vercel pull` brings them into the build. Monitoring (spec 0010):
 # VITE_SENTRY_DSN_WEB lives there too (Production and Preview), and the build uploads its hidden source
 # maps to Sentry only when SENTRY_AUTH_TOKEN is set here; without it the step says so and deploys the same
-# build, maps deleted either way. The release is the commit (GITHUB_SHA).
+# build, maps deleted either way. The release is the commit CI passed (set as GITHUB_SHA for the build).
 #
 # Repository variables: VERCEL_ORG_ID, VERCEL_PROJECT_ID, SENTRY_ORG, SENTRY_PROJECT_WEB
 # Secrets: VERCEL_TOKEN, SENTRY_AUTH_TOKEN (optional: an organization token that can only upload releases)
+#
+# Order (8 October 2026): the web app ships only after CI passes on main, and only once the API it talks to
+# runs this commit, when the commit changed the API at all. A new web app calling procedures the old API lacks
+# broke the People page for a deploy's length before. Railway deploys the API after CI too, from the same
+# watch paths as below (.railway/railway.ts); /api/health names the API's commit.
 name: Deploy web
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
 
 concurrency:
@@ -20,7 +27,9 @@ concurrency:
 
 jobs:
   deploy:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     permissions:
       contents: read
     env:
@@ -29,6 +38,32 @@ jobs:
       VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - name: Wait for the API to run this commit
+        env:
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          HEALTH_URL: https://brij-crm-phi.vercel.app/api/health
+        run: |
+          set -euo pipefail
+          # Railway's api watch paths: a commit that changes none of them doesn't redeploy the API.
+          WATCHED=(apps/api packages pnpm-lock.yaml pnpm-workspace.yaml)
+          for attempt in $(seq 1 90); do
+            release=$(curl -fsS "$HEALTH_URL" | jq -r '.release // empty' || true)
+            if [ -n "$release" ] && git cat-file -e "$release^{commit}" 2>/dev/null; then
+              if git merge-base --is-ancestor "$SHA" "$release"; then
+                echo "The API runs $release, which includes $SHA."; exit 0
+              fi
+              if git diff --quiet "$release" "$SHA" -- "${WATCHED[@]}"; then
+                echo "Nothing the API deploys from changed since $release."; exit 0
+              fi
+            fi
+            echo "The API runs ${release:-an unknown commit}; waiting for $SHA (attempt $attempt)."
+            sleep 30
+          done
+          echo "::error::The API never reached $SHA in 45 minutes, so the web app wasn't deployed."
+          exit 1
       - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v7
         with:
@@ -42,8 +77,11 @@ jobs:
           SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
           SENTRY_ORG: ${{ vars.SENTRY_ORG }}
           SENTRY_PROJECT_WEB: ${{ vars.SENTRY_PROJECT_WEB }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
+          # Under workflow_run, GITHUB_SHA is main's newest commit, not the one CI passed; the release is that one.
+          export GITHUB_SHA="$HEAD_SHA"
           if [ -z "$VERCEL_TOKEN" ]; then
             echo "::notice::VERCEL_TOKEN isn't set yet, so there's nothing to deploy to."
             exit 0

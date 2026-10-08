@@ -28,6 +28,16 @@ afterEach(() => {
   logs.restore();
 });
 
+describe('the health check', () => {
+  it('names the deployed commit, so the web deploy can wait for this API', async () => {
+    const deployed = createTestApp({ RAILWAY_GIT_COMMIT_SHA: '4ceb92a8a4ae73c9dc81c7ba26989c709200e7d2' });
+    const response = await deployed.fetch(new Request(`${APP_URL}/api/health`));
+    expect(await response.json()).toEqual({ status: 'ok', release: '4ceb92a8a4ae73c9dc81c7ba26989c709200e7d2' });
+    const laptop = await createTestApp().fetch(new Request(`${APP_URL}/api/health`));
+    expect(await laptop.json()).toEqual({ status: 'ok', release: 'local' });
+  });
+});
+
 describe('the edge guard', () => {
   const guarded = createTestApp({ APP_ENV: 'preview', EDGE_SECRET: SECRET });
 

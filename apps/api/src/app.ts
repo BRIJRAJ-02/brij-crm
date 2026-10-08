@@ -119,7 +119,9 @@ export function createApp({
   });
 
   // Liveness: the process is up. Readiness: it can reach Postgres.
-  app.get('/health', (c) => c.json({ status: 'ok' }));
+  // The release is the deployed commit (or `local`): the web deploy waits until it matches its own.
+  const release = env.RAILWAY_GIT_COMMIT_SHA ?? 'local';
+  app.get('/health', (c) => c.json({ status: 'ok', release }));
   app.get('/health/ready', async (c) => {
     try {
       await db.checkHealth();
