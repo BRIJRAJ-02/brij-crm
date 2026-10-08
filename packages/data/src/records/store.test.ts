@@ -226,6 +226,18 @@ describe('the plain record store', () => {
       expect(store.get('r1')?.revision).toBe(5);
     });
 
+    it('keeps the newer cell when two partial reads of one record land out of order', () => {
+      const store = holding([revised('r1', { name: 'Ada', city: 'London' }, 7, { name: v(1), city: v(1) })]);
+      // A read of the city alone at revision 9 lands before a read of the name alone at revision 8.
+      store.receive([revised('r1', { city: 'Paris' }, 9, { city: v(3) })]);
+      store.receive([revised('r1', { name: 'Ada Lovelace' }, 8, { name: v(2) })]);
+      expect(seen(store, 'r1')?.values).toEqual({ name: 'Ada Lovelace', city: 'Paris' });
+      expect(store.get('r1')?.revision).toBe(9);
+      // An older cell never replaces a newer one.
+      store.receive([revised('r1', { name: 'Ada', city: 'London' }, 7, { name: v(1), city: v(1) })]);
+      expect(seen(store, 'r1')?.values).toEqual({ name: 'Ada Lovelace', city: 'Paris' });
+    });
+
     it('answers the base under a pending edit, never the layer', () => {
       const store = holding([london]);
       store.edit('r1', { city: 'Paris' }, 'm1');

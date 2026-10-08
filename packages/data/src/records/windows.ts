@@ -124,6 +124,9 @@ const idsIn = (block: Block): readonly string[] => block.filter((id): id is stri
 /** Where a filtered count stops (`COUNT_CAP` on the server): past it a cursor window grows as rows load. */
 export const COUNT_CAP = 10_000;
 
+/** The most reads one run ahead of a cursor chain makes: 50 reads of 200 cover 10,000 rows (spec 0006). */
+export const MAX_READ_AHEAD = 50;
+
 /** A view's windows over `read`, starting with nothing loaded and a count of 0. */
 export function createWindows({
   mode,
@@ -160,16 +163,26 @@ export function createWindows({
   const blockOf = (index: number) => Math.floor(index / blockSize);
   const isCursor = () => mode() === 'cursor';
   /** The rows the scrollbar covers. */
+  /**
+   * The rows the scrollbar covers. By position, the count. By cursor, the
+   * count up to 10,000; past it (a capped count, or an exact one over
+   * 10,000, as an unfiltered view sorted by a member has) 10,000 plus the
+   * rows loaded beyond it, so a drag never reaches further than 50 reads of
+   * 200 could go, and the bar grows as the end comes into reach.
+   */
   const height = () => {
     if (!isCursor()) return told.count;
     if (ended !== undefined) return ended;
-    return told.atLeast ? Math.max(told.count, reached) : told.count;
+    if (!told.atLeast && told.count <= COUNT_CAP) return told.count;
+    const grown = Math.max(COUNT_CAP, reached);
+    return told.atLeast ? grown : Math.min(told.count, grown);
   };
   const blockCount = () => Math.ceil(height() / blockSize);
   const lastShown = () => blockOf(Math.max(shown.start, shown.end - 1));
   const isFar = (block: number) => block < blockOf(shown.start) - keep || block > lastShown() + keep;
   /** Whether a cursor chain may hold rows past the scrollbar's end (a count of 10,000+ not yet reached). */
-  const mayGrow = () => isCursor() && ended === undefined && told.atLeast;
+  const mayGrow = () =>
+    isCursor() && ended === undefined && (told.atLeast || (told.count > COUNT_CAP && height() < told.count));
 
   /**
    * Puts `next` in place of `block` (or empties it), keeping the positions.
@@ -284,7 +297,7 @@ export function createWindows({
       return;
     }
     const controller = new AbortController();
-    const run = { target, from: target, controller };
+    const run = { target, from: target, controller, calls: 0 };
     jump = run;
     const step = async (): Promise<void> => {
       if (blocks.has(run.target)) return;
@@ -294,6 +307,7 @@ export function createWindows({
       run.from = from;
       const cursor = from === 0 ? undefined : checkpoints.get(from);
       const blocksRead = Math.max(1, Math.floor(jumpSize / blockSize));
+      run.calls += 1;
       const answer = await read(cursor === undefined ? {} : { cursor }, blocksRead * blockSize, controller.signal);
       if (jump !== run || isDisposed) {
         release(answer.ids);
@@ -308,6 +322,8 @@ export function createWindows({
       if (answer.nextCursor === undefined || nextFrom > run.target) return;
       // Moved back before where the next call would start: stop here.
       if (lastShown() + keep < nextFrom) return;
+      // Never more than 50 reads in one run (10,000 rows): the bar never offers further than that past what loaded.
+      if (run.calls >= MAX_READ_AHEAD) return;
       await step();
     };
     step().then(

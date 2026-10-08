@@ -352,13 +352,17 @@ describe('a records view', () => {
     expect(queries[2]?.input.position).toBe(4000);
   });
 
-  it('reads the count again when a block brings fewer rows than it promised', async () => {
-    const { layer, counts, queries, frame } = setup();
+  it('reads the count again at the next settle when a block brings fewer rows than it promised', async () => {
+    const { layer, counts, queries, frame, tick } = setup();
     const view = layer.view(WS, PEOPLE);
+    view.retain([CITY]);
     await settle();
     counts[0]?.answer(3);
     await settle();
     queries[0]?.answer(block(0, 2));
+    await settle();
+    expect(counts).toHaveLength(1);
+    tick(1500);
     await settle();
     expect(counts).toHaveLength(2);
     counts[1]?.answer(2);
@@ -503,8 +507,9 @@ describe('windows keyed by their question (spec 0006, AC-51 to AC-53)', () => {
     expect(counts[0]?.input.now).toBe(at(30));
     queries[1]?.answer({ records: block(100, 100), nextCursor: 'after-199' });
     await settle();
-    // Someone made a record elsewhere: 1.5 s later the window settles, on a clock taken then.
-    layer.changed(WS, PEOPLE, [idAt(9000)], [NAME]);
+    // Someone made a record elsewhere (an id minted just now): 1.5 s later the window settles, on a clock taken then.
+    const minted = Date.parse(at(30)).toString(16).padStart(12, '0');
+    layer.changed(WS, PEOPLE, [`${minted.slice(0, 8)}-${minted.slice(8, 12)}-7000-8000-000000000002`], [NAME]);
     frame();
     tick(1000);
     expect(queries).toHaveLength(2);
@@ -632,6 +637,23 @@ describe('settle (spec 0006, AC-56)', () => {
     await settle();
     frame();
     expect(view.getSnapshot().source.getItem(2)?.id).toBe(idAt(0));
+  });
+
+  it('settles for a record just made out of sight, never for an edit to an older one (no herd of rereads)', async () => {
+    const { layer, queries, tick, frame } = await sortedView(byCity);
+    // An older record (idAt mints long ago), out of sight, and an attribute the sort ignores: nothing moves.
+    layer.changed(WS, PEOPLE, [idAt(4000)], [NAME]);
+    frame();
+    tick(5000);
+    await settle();
+    expect(queries).toHaveLength(1);
+    // A record minted just now, out of sight: it may be new, so the window settles.
+    const minted = Date.parse(at(30)).toString(16).padStart(12, '0');
+    layer.changed(WS, PEOPLE, [`${minted.slice(0, 8)}-${minted.slice(8, 12)}-7000-8000-000000000001`], [NAME]);
+    frame();
+    tick(1500);
+    await settle();
+    expect(queries).toHaveLength(2);
   });
 
   it('keeps a row the member edited where they see it, and notes one that no longer matches the filter', async () => {
@@ -1358,6 +1380,16 @@ describe('undo, walking back one cell and checking only what this tab wrote', ()
     // A later edit sits on top: the paste toast's Undo does nothing, and the edit stays undoable.
     expect(await layer.undo.run(WS, undoId)).toEqual({ kind: 'stale' });
     expect(layer.undo.depth(WS)).toBe(2);
+  });
+
+  it('pushes nothing to undo for a cell whose old value was never read (a column not read yet)', async () => {
+    const { layer, edits } = await readyView();
+    // The view reads the city and the name; Owner was never read, so its old value is unknown.
+    void layer.setValues(WS, [{ rowId: idAt(1), columnId: OWNER, value: null }]);
+    await settle();
+    edits[0]?.answer(rowOf(idAt(1), { [NAME]: 'P1', [OWNER]: null }, { [OWNER]: version(2) }, 2));
+    await settle();
+    expect(layer.undo.depth(WS)).toBe(0);
   });
 
   it('refuses before anything shows a paste too big for one write', async () => {

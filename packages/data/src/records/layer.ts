@@ -55,8 +55,27 @@ const CELL_OVERHEAD_BYTES = 120;
 const SPREAD_MS = 2000;
 /** How long a changed id is remembered, so a block that was loading when it changed fetches it again, in ms. */
 const RECENT_MS = 10_000;
+/** How far a record id's mint time may be from now for a change to it to count as its create, in ms. */
+const NEW_ID_MS = 10 * 60_000;
+
+/**
+ * Whether a change to a record may be its create: a UUID v7 (ids carry their
+ * mint time) minted within 10 minutes of now. Anything else (not a v7) may be
+ * new too. Change events don't say which ids were made (spec 0007), so a
+ * window doesn't settle for an edit to an older record it doesn't show.
+ */
+export function mayBeNew(id: string, now: number): boolean {
+  if (id.length !== 36 || id[14] !== '7') return true;
+  const minted = Number.parseInt(`${id.slice(0, 8)}${id.slice(9, 13)}`, 16);
+  return Number.isNaN(minted) || Math.abs(now - minted) <= NEW_ID_MS;
+}
+
 /** How long a window waits after the last change in it before it settles order and membership, in ms (AC-56). */
 export const SETTLE_MS = 1500;
+/** The longest a window waits after the first change that dirtied it, so steady traffic never starves a settle, in ms. */
+export const SETTLE_MAX_MS = 5000;
+/** How many times a block or a count that failed is tried again by itself before it waits for the screen or Retry. */
+const MAX_AUTO_RETRIES = 5;
 /** Read refusals that mean the view itself is wrong (a bad filter or sort, a gone object): its error state, Retry. */
 const REFUSED_READS: ReadonlySet<string> = new Set(['FILTER_INVALID', 'NOT_FOUND', 'INPUT_INVALID']);
 
@@ -285,7 +304,7 @@ export interface RecordsView {
   readonly indexOf: (recordId: string) => number | undefined;
   /**
    * A screen shows the view with these columns (`useView` calls it in an
-   * effect); the reader's `release` lets go. A view nobody shows for a minute
+   * effect); the reader's `release` lets go. A view nobody shows for 30 seconds
    * lets go of its rows, and the next `view()` makes a fresh one. Counted, so
    * StrictMode's second effect changes nothing. The member's own rows stay
    * in place until the last reader leaves.
@@ -342,6 +361,8 @@ export interface RecordsLayerOptions {
 export const RECORD_WORDS = {
   retry: 'Retry',
   draftRefused: 'That record wasn’t created, so the change to it wasn’t saved.',
+  /** A column just shown whose values couldn't be read for the rows on screen (spec 0006, AC-55). */
+  columnNotRead: 'Couldn’t load that column’s values.',
   recordGone: 'That record was deleted, so the change wasn’t saved.',
   notSaved: (count: number) => `${String(count)} changes weren’t saved.`,
   /** A refused undo, sent again from its toast's Retry. */
@@ -424,7 +445,7 @@ export function createRecordsLayer({
   wait = timer,
   now = () => Date.now(),
   random = Math.random,
-  keepUnusedViewMs = 60_000,
+  keepUnusedViewMs = 30_000,
   watch = () => () => undefined,
   beforeRead = () => Promise.resolve(),
   mutations = { sent: () => undefined, answered: () => undefined, forget: () => undefined },
@@ -573,6 +594,9 @@ export function createRecordsLayer({
         return;
       }
       if (blockRetry !== undefined) return;
+      // A statement that ran out of time would only run out again: it waits for the screen to ask (a scroll,
+      // Retry). Anything else is tried again by itself a few times, longer each time, then waits too.
+      if (problem.code === 'QUERY_CANCELLED' || blockFailures >= MAX_AUTO_RETRIES) return;
       blockFailures += 1;
       const controller = new AbortController();
       blockRetry = controller;
@@ -641,8 +665,9 @@ export function createRecordsLayer({
         blockFailures = 0;
       },
       release: store.release,
+      // Rows moved under the windows (a short block, a record gone): the settle rereads the count with the rows.
       onStale: () => {
-        void refreshCount();
+        markDirty();
       },
     });
     const inner = createRecordView({
@@ -694,7 +719,9 @@ export function createRecordsLayer({
             fail(failure);
             return;
           }
-          // Ready: the table and its count stay, and the count is asked again later, longer each time.
+          // Ready: the table and its count stay, and the count is asked again later, longer each time, a few times
+          // at most (the next settle or Retry asks again), so an idle tab never keeps a failing query going.
+          if (countFailures >= MAX_AUTO_RETRIES || toDataError(failure).code === 'QUERY_CANCELLED') return;
           countFailures += 1;
           const delay = Math.min(MAX_BLOCK_RETRY_MS, 1000 * 2 ** (countFailures - 1)) * (1 + random());
           void wait(Math.round(delay)).then(() => {
@@ -716,21 +743,37 @@ export function createRecordsLayer({
     let settleController: AbortController | undefined;
     const isFiltered = () => query.filter !== undefined && query.filter.conditions.length > 0;
 
-    const scheduleSettle = (ms: number) => {
+    // When the first change still waiting to settle came: a settle never waits longer than SETTLE_MAX_MS after it.
+    let dirtySince: number | undefined;
+    /**
+     * Times the settle: 1.5 s after the last change, never more than 5 s after
+     * the first, then a random 0 to 2 s more, so the many tabs one change
+     * dirties never reread in the same instant (spec 0006's rule for any
+     * refetch many tabs may start at once).
+     */
+    const scheduleSettle = () => {
       settleTimer?.();
-      settleTimer = later(() => {
-        settleTimer = undefined;
-        void settle();
-      }, ms);
+      const since = dirtySince ?? now();
+      const quiet = Math.max(0, Math.min(SETTLE_MS, since + SETTLE_MAX_MS - now()));
+      settleTimer = later(
+        () => {
+          settleTimer = undefined;
+          void settle();
+        },
+        quiet + Math.round(random() * SPREAD_MS),
+      );
     };
     const markDirty = () => {
+      if (!dirt.isDirty) dirtySince = now();
       dirt.isDirty = true;
-      if (!isSettling) scheduleSettle(SETTLE_MS);
+      if (!isSettling && retains > 0) scheduleSettle();
     };
     /** Rereads the blocks on screen and the count with a fresh clock, then holds the member's own rows in place. */
     async function settle(): Promise<void> {
-      if (!dirt.isDirty || isSettling || editors > 0 || status !== 'ready' || !isOpen()) return;
+      // A view nobody shows keeps its mark and settles when a screen shows it again.
+      if (!dirt.isDirty || isSettling || editors > 0 || status !== 'ready' || !isOpen() || retains === 0) return;
       dirt.isDirty = false;
+      dirtySince = undefined;
       isSettling = true;
       clock = now();
       const controller = new AbortController();
@@ -745,9 +788,12 @@ export function createRecordsLayer({
       try {
         await Promise.all([windows.reread(controller.signal), refreshCount()]);
       } catch {
-        // Left as it was; the next change settles again.
+        // Left as it was (failed, or an editor opened): still dirty, and the rows held stay the member's.
         isSettling = false;
         settleController = undefined;
+        for (const pin of held) edited.add(pin.id);
+        if (!isMarked()) dirtySince = now();
+        dirt.isDirty = true;
         return;
       }
       settleController = undefined;
@@ -762,7 +808,7 @@ export function createRecordsLayer({
       });
       inner.setPins(next);
       // Changed again while it settled (an event or an edit set the mark meanwhile): settle once more.
-      if (isMarked()) scheduleSettle(SETTLE_MS);
+      if (isMarked()) scheduleSettle();
     }
 
     let lastSource: RecordSource<RecordView> | undefined;
@@ -798,7 +844,14 @@ export function createRecordsLayer({
           });
         }
         hasRestarted = false;
+        blockFailures = 0;
+        countFailures = 0;
         setStatus('loading');
+        // The object's shape never came (its attributes failed to load): ask for it first, which then counts.
+        if (shape === undefined) {
+          start();
+          return;
+        }
         void refreshCount();
         windows.refresh();
       },
@@ -810,6 +863,8 @@ export function createRecordsLayer({
         const reader = Symbol('reader');
         readers.set(reader, attributeIds);
         showColumns();
+        // Changes came while nobody showed it: they settle now that a screen does.
+        if (retains === 1 && dirt.isDirty && !isSettling) scheduleSettle();
         let isReleased = false;
         return {
           columns: (next) => {
@@ -834,7 +889,9 @@ export function createRecordsLayer({
       },
       holdSettle: (isHeld) => {
         editors = Math.max(0, editors + (isHeld ? 1 : -1));
-        if (editors === 0 && dirt.isDirty && !isSettling) scheduleSettle(SETTLE_MS);
+        // An editor opened under a settle already reading: it stops, so rows never move under the draft.
+        if (isHeld) settleController?.abort();
+        if (editors === 0 && dirt.isDirty && !isSettling) scheduleSettle();
       },
     };
 
@@ -844,16 +901,31 @@ export function createRecordsLayer({
       const added = next.filter((id) => !readSet.includes(id));
       readSet = next;
       if (added.length === 0 || status !== 'ready') return;
+      fetchColumns(added);
+    }
+
+    /** Reads `added` for the rows loaded now; a failure says so once, with Retry, and the cells stay skeletons. */
+    function fetchColumns(added: readonly string[]) {
       const ids = [...new Set([...windows.loadedIds(), ...inner.pins().map((pin) => pin.id)])];
-      for (const part of chunks(ids, GET_LIMIT)) {
-        whenFree(() => api.get({ workspace, ids: part, attributeIds: added })).then(
-          (rows) => {
+      void Promise.all(
+        chunks(ids, GET_LIMIT).map((part) =>
+          whenFree(() => api.get({ workspace, ids: part, attributeIds: added })).then((rows) => {
             store.receive(rows.filter((row) => store.get(row.id) !== undefined));
+          }),
+        ),
+      ).catch(() => {
+        if (!isOpen()) return;
+        notify({
+          tone: 'danger',
+          message: RECORD_WORDS.columnNotRead,
+          action: {
+            label: RECORD_WORDS.retry,
+            onAction: () => {
+              fetchColumns(added);
+            },
           },
-          // The cells stay unknown (skeletons) until the next read of their rows.
-          () => undefined,
-        );
-      }
+        });
+      });
     }
 
     let retains = 0;
@@ -879,18 +951,21 @@ export function createRecordsLayer({
     };
     // The first read waits for the workspace's head, so nothing written meanwhile is missed, and for the
     // object's shape, which picks the mode (spec 0006, AC-52) and names the primary attribute.
-    void Promise.all([beforeRead(workspace), describe(workspace, objectId)]).then(
-      ([, described]) => {
-        shape = described;
-        const byId = new Map(described.attributes.map((attribute) => [attribute.id, attribute]));
-        mode = canJump(query.filter, query.sorts, (id) => byId.get(id)) ? 'position' : 'cursor';
-        readSet = attributeSet();
-        if (!isCounted && isOpen()) void refreshCount();
-      },
-      (failure: unknown) => {
-        if (isOpen()) fail(failure);
-      },
-    );
+    function start() {
+      void Promise.all([beforeRead(workspace), describe(workspace, objectId)]).then(
+        ([, described]) => {
+          shape = described;
+          const byId = new Map(described.attributes.map((attribute) => [attribute.id, attribute]));
+          mode = canJump(query.filter, query.sorts, (id) => byId.get(id)) ? 'position' : 'cursor';
+          readSet = attributeSet();
+          if (!isCounted && isOpen()) void refreshCount();
+        },
+        (failure: unknown) => {
+          if (isOpen()) fail(failure);
+        },
+      );
+    }
+    start();
     // A view the router warmed but no screen ever showed goes too.
     letGoLater();
     return {
@@ -988,7 +1063,14 @@ export function createRecordsLayer({
       return {
         recordId: each.recordId,
         cells: each.cells,
-        before: new Map(each.cells.map((cell) => [cell.attributeId, shown?.values[cell.attributeId] ?? null])),
+        // Only cells whose value was read: an unknown one (a column not read yet) has no old value to put back.
+        before: new Map(
+          each.cells.flatMap((cell) =>
+            shown !== undefined && !Object.hasOwn(shown.values, cell.attributeId)
+              ? []
+              : [[cell.attributeId, shown?.values[cell.attributeId] ?? null] as const],
+          ),
+        ),
         bases: baseVersionsOf(store.base(each.recordId), each.cells),
         layer: store.edit(each.recordId, values, mutationId),
       };
@@ -1050,8 +1132,8 @@ export function createRecordsLayer({
       if (outcome?.row === undefined) return [];
       return each.cells.flatMap((cell): UndoCell[] => {
         const written = outcome.written?.[cell.attributeId];
-        // Unchanged (no new version) is left out: there is nothing to undo.
-        if (written === undefined) return [];
+        // Unchanged (no new version) is left out: there is nothing to undo. So is a cell whose old value was never read.
+        if (written === undefined || !each.before.has(cell.attributeId)) return [];
         const replaced = outcome.sentFrom?.get(cell.attributeId);
         return [
           {
@@ -1604,8 +1686,11 @@ export function createRecordsLayer({
             change.attributes.size === 0 ||
             order.any ||
             [...change.attributes].some((id) => order.ids.has(id));
-          // An id the window doesn't show may be a record made or restored elsewhere: its count and rows may move.
-          if (touches || ids.some((id) => !entry.shows(id))) entry.markDirty();
+          // An id the window doesn't show, in an event naming only attributes its order ignores, moves it only if the
+          // record was just made (a delete or restore names no attributes, so `touches` covers it). Without this, an
+          // edit to any record out of sight would dirty every tab's window at once.
+          const time = now();
+          if (touches || ids.some((id) => !entry.shows(id) && mayBeNew(id, time))) entry.markDirty();
         }
       }
     }

@@ -357,4 +357,19 @@ describe('cursor mode', () => {
     expect(idsIn(windows, 1250, 1330)).toEqual(rows.slice(1250, 1330));
     expect(windows.stats().loaded).toBe(2);
   });
+
+  it('sizes the bar of a cursor window counted past 10,000 by what loaded, so a drag reads 50 calls at most', async () => {
+    const rows = sample(1_000_000);
+    const { windows, server } = windowsOver(rows, 'cursor');
+    windows.setCount({ count: 1_000_000, atLeast: false });
+    // The label keeps the exact count; the bar covers 10,000 until more loads.
+    expect(windows.told()).toEqual({ count: 1_000_000, atLeast: false });
+    expect(windows.count()).toBe(10_000);
+    windows.show({ start: 600_000, end: 600_040 });
+    windows.show({ start: 9_960, end: 10_000 });
+    await server.answerAll();
+    expect(server.calls.length).toBeLessThanOrEqual(51);
+    expect(windows.count()).toBeGreaterThan(10_000);
+    expect(idsIn(windows, 9_960, 10_000)).toEqual(rows.slice(9_960, 10_000));
+  });
 });

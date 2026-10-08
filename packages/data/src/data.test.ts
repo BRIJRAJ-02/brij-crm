@@ -622,6 +622,8 @@ describe('live updates', () => {
     });
     // The People screen shows the job title column (spec 0006, AC-55: only shown attributes are read and refetched).
     const view = await data.records.view('acme', PEOPLE.id, {}, [TITLE.id]);
+    // Shown by a screen: a view nobody shows keeps its changes until one does.
+    view.retain([TITLE.id]);
     await settled();
     client.channel().onSubscribed({ wasRecovering: false, recovered: false });
     await settled();

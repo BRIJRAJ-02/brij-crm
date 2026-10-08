@@ -106,8 +106,15 @@ export interface RecordStore<Row extends RecordBody> {
 export function newerBase<Row extends RecordBody>(current: Row | undefined, incoming: Row): Row {
   if (current === undefined || current === incoming) return incoming;
   if ((incoming.revision ?? 0) < (current.revision ?? 0)) {
-    // Older: only attributes the store never held come from it (a column just shown, read before a write).
-    const unheld = Object.keys(incoming.values).filter((cell) => !Object.hasOwn(current.values, cell));
+    // Older: only attributes the store never held come from it (a column just shown, read before a write), and
+    // a cell whose version is newer than the held one's (two partial reads of one record landing out of order:
+    // versions are uuid v7, ordered by the write that made them).
+    const isNewer = (cell: string) => {
+      const theirs = incoming.versions?.[cell];
+      const ours = current.versions?.[cell];
+      return theirs !== undefined && ours !== undefined && theirs > ours;
+    };
+    const unheld = Object.keys(incoming.values).filter((cell) => !Object.hasOwn(current.values, cell) || isNewer(cell));
     if (unheld.length === 0) return current;
     const pick = <T>(from: Readonly<Record<string, T>> | undefined) =>
       Object.fromEntries(Object.entries(from ?? {}).filter(([cell]) => unheld.includes(cell)));
