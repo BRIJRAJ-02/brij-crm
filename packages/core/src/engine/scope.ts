@@ -1,8 +1,6 @@
 // Who is acting, in which workspace (spec 0004). Every engine service takes a
-// scope. From #9 the access door produces it; until then tests and the seed
-// scripts build it directly, and no endpoint exists yet.
-import type { Database } from '@crm/db';
-import type { Limits } from './limits.ts';
+// scope, which only the access door makes (spec 0009, `access/mint.ts`).
+export type { EngineScope } from '../access/mint.ts';
 
 /** Who did something: a member, an API key, an automation, or the system (whose id is null). */
 export interface Actor {
@@ -10,17 +8,11 @@ export interface Actor {
   readonly id: string | null;
 }
 
-/** The workspace and actor a service acts for, and the database it acts on. */
-export interface EngineScope {
-  readonly db: Database;
-  readonly workspaceId: string;
-  readonly actor: Actor;
-  /** Lower limits than the defaults, for tests (and, from #38, the workspace's plan). */
-  readonly limits?: Partial<Limits>;
-}
-
-/** The system itself: seeding, jobs, migrations of data. */
-export const SYSTEM_ACTOR: Actor = { type: 'system', id: null };
+/**
+ * The system itself: seeding, jobs, migrations of data. Exported to the rest
+ * of the code only from `@crm/core/system`, which lint keeps to the worker.
+ */
+export const SYSTEM_ACTOR: Actor = Object.freeze({ type: 'system', id: null });
 
 /** An actor as the three columns every actor is stored in (`<prefix>_type`, `_id`, `_member_id`). */
 export function actorRow(actor: Actor): { type: Actor['type']; id: string | null; memberId: string | null } {

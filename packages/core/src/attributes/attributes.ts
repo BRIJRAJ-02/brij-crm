@@ -10,6 +10,7 @@ import { checkId } from '../engine/ids.ts';
 import { isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import type { AfterWrite } from '../engine/write.ts';
+import { inWorkspace } from '../access/run.ts';
 
 const { attributes, objects } = schema;
 
@@ -52,7 +53,7 @@ async function checkLiveObject(tx: WorkspaceTx, scope: EngineScope, objectId: st
  */
 export async function listObjectAttributes(scope: EngineScope, objectId: string): Promise<AttributeDefinition[]> {
   const id = checkId(objectId, OBJECT_NOT_FOUND);
-  return scope.db.withWorkspace(scope.workspaceId, async (tx) => {
+  return inWorkspace(scope, async (tx) => {
     await checkLiveObject(tx, scope, id);
     const rows = await tx
       .select()
@@ -109,7 +110,7 @@ export async function addAttribute(
 
 /** One attribute's definition by id, archived or not. */
 async function readDefinition(scope: EngineScope, attributeId: string): Promise<AttributeDefinition | undefined> {
-  const [row] = await scope.db.withWorkspace(scope.workspaceId, (tx) =>
+  const [row] = await inWorkspace(scope, (tx) =>
     tx
       .select()
       .from(attributes)
@@ -123,7 +124,7 @@ async function earlierTry(
   scope: EngineScope,
   wanted: { readonly objectId: string; readonly apiSlug: string; readonly title: string; readonly type: string },
 ): Promise<AttributeDefinition | undefined> {
-  const [row] = await scope.db.withWorkspace(scope.workspaceId, (tx) =>
+  const [row] = await inWorkspace(scope, (tx) =>
     tx
       .select()
       .from(attributes)

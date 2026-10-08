@@ -268,6 +268,32 @@ const react = [
   { languageOptions: { globals: globals.browser } },
 ];
 
+// House rule (spec 0009, AC-138): system power and hand made scopes stay where
+// they belong. `@crm/core/system` (the system scope, `enterAsActor`, the system
+// actor) only in the worker entry, its jobs, the relay and core's scripts;
+// `@crm/core/testing` (scopes built by hand) only in tests and scripts.
+const systemEntry = {
+  group: ['@crm/core/system'],
+  message: 'System power is for the worker: only src/worker.ts, src/jobs/**, src/realtime/** and scripts/** import it.',
+};
+const testingEntry = {
+  group: ['@crm/core/testing'],
+  message: 'Scopes built by hand are for tests and scripts only. Everything else gets its scope from the door.',
+};
+const SYSTEM_IMPORTERS = ['src/worker.ts', 'src/jobs/**', 'src/realtime/**', 'scripts/**'];
+const TESTING_IMPORTERS = ['**/*.test.ts', 'test/**', 'scripts/**'];
+/** Files that may import both: scripts, and the tests of the code that may import system power. */
+const BOTH_IMPORTERS = ['scripts/**', 'src/worker.test.ts', 'src/jobs/**/*.test.ts', 'src/realtime/**/*.test.ts'];
+
+/** The server's restricted imports: the database drivers (unless allowed) and the core entries `allow` doesn't name. */
+function serverImports(databaseDriver, allow = []) {
+  const patterns = [
+    ...(allow.includes('system') ? [] : [systemEntry]),
+    ...(allow.includes('testing') ? [] : [testingEntry]),
+  ];
+  return { rules: { 'no-restricted-imports': ['error', { paths: databaseDriver ? [] : databaseDrivers, patterns }] } };
+}
+
 /**
  * Server code: apps/api, packages/core, packages/contracts and packages/db.
  * Pass `databaseDriver: true` only for packages/db.
@@ -276,7 +302,10 @@ export function server({ root, databaseDriver = false }) {
   return defineConfig(
     base(root),
     { languageOptions: { globals: globals.node } },
-    databaseDriver ? [] : { rules: { 'no-restricted-imports': ['error', { paths: databaseDrivers }] } },
+    serverImports(databaseDriver),
+    { files: SYSTEM_IMPORTERS, ...serverImports(databaseDriver, ['system']) },
+    { files: TESTING_IMPORTERS, ...serverImports(databaseDriver, ['testing']) },
+    { files: BOTH_IMPORTERS, ...serverImports(databaseDriver, ['system', 'testing']) },
     restrictSyntax([syntax.defaultExport, ...syntax.classes, ...syntax.extensions]),
   );
 }

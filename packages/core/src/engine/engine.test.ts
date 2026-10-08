@@ -9,6 +9,7 @@ import { defineAttribute, defineObject } from './definitions.ts';
 import { createRecord, getRecords, setValues } from './records.ts';
 import { createWorkspace } from './workspaces.ts';
 import type { AfterWrite, Change } from './write.ts';
+import { rescope, testScope } from '../testing.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -29,7 +30,7 @@ async function workspace() {
     firstMember: { name: 'Ada Lovelace', email: 'ada@example.com' },
   });
   const actor: Actor = { type: 'member', id: created.memberId };
-  const scope: EngineScope = { db, workspaceId: created.workspaceId, actor };
+  const scope = testScope({ db, workspaceId: created.workspaceId, actor });
   return { ...created, scope };
 }
 
@@ -241,7 +242,7 @@ describe('records and values', () => {
       values: { [name]: { fullName: 'First' } },
     });
     const base = versions[name]?.versionId ?? '';
-    const other: EngineScope = { ...scope, actor: { type: 'system', id: null } };
+    const other: EngineScope = rescope(scope, { actor: { type: 'system', id: null } });
     const [a, b] = await Promise.all([
       setValues(scope, { recordId, values: { [name]: { value: { fullName: 'From A' }, baseVersionId: base } } }),
       setValues(other, { recordId, values: { [name]: { value: { fullName: 'From B' }, baseVersionId: base } } }),

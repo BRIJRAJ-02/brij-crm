@@ -6,7 +6,7 @@ import { describe, expect, it } from 'vitest';
 import type { Database, WorkspaceTx } from '@crm/db';
 import { newId } from './ids.ts';
 import { isRefusal, writeConflict } from './refusals.ts';
-import type { EngineScope } from './scope.ts';
+import { testScope } from '../testing.ts';
 import { CHANGE_CAP, capChange, cappedHook, runWrite, type CappedChange, type ReferenceChange } from './write.ts';
 
 /** A database whose transaction is never used: the work only records a change. */
@@ -25,7 +25,7 @@ function standIn(): Database {
 const HUGE = 200_000;
 
 describe('a huge change', () => {
-  const scope: EngineScope = { db: standIn(), workspaceId: newId(), actor: { type: 'system', id: null } };
+  const scope = testScope({ db: standIn(), workspaceId: newId(), actor: { type: 'system', id: null } });
   const objectId = newId();
   const attributeId = newId();
   const references: readonly ReferenceChange[] = Array.from({ length: HUGE }, () => ({
@@ -73,7 +73,7 @@ describe('a huge change', () => {
 });
 
 describe('a write that keeps meeting concurrent writes', () => {
-  const scope: EngineScope = { db: standIn(), workspaceId: newId(), actor: { type: 'system', id: null } };
+  const scope = testScope({ db: standIn(), workspaceId: newId(), actor: { type: 'system', id: null } });
 
   it('tries three times, then refuses with a code the API can show rather than a raw 40001', async () => {
     let attempts = 0;

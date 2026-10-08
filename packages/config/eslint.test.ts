@@ -245,6 +245,53 @@ describe('server preset (apps/api, packages/core, packages/contracts)', () => {
   });
 });
 
+describe('system power and hand made scopes (spec 0009, AC-138)', () => {
+  let messages: Messages;
+  const system = "import { systemScope } from '@crm/core/system';\nexport const s = systemScope;\n";
+  const testing = "import { testScope } from '@crm/core/testing';\nexport const t = testScope;\n";
+
+  beforeAll(async () => {
+    const root = createWorkspace({
+      'src/modules/records/router.ts': system,
+      'src/modules/records/testing.ts': testing,
+      'src/worker.ts': system,
+      'src/jobs/export.ts': system,
+      'src/realtime/relay.ts': system,
+      'src/realtime/relay-testing.ts': testing,
+      'src/realtime/relay.test.ts': system + testing.replace('export const t', 'export const u'),
+      'src/records.test.ts': testing,
+      'src/records-system.test.ts': system,
+      'scripts/seed.ts': system + testing.replace('export const t', 'export const u'),
+    });
+    messages = await lintWorkspace(root, server({ root }));
+  }, 60_000);
+
+  it.each(['src/modules/records/router.ts', 'src/records-system.test.ts'])(
+    'refuses @crm/core/system outside the worker, its jobs, the relay and scripts (%s)',
+    (file) => {
+      expect(messagesFor(messages, file).join()).toMatch(/System power is for the worker/);
+    },
+  );
+
+  it.each(['src/modules/records/testing.ts', 'src/realtime/relay-testing.ts'])(
+    'refuses @crm/core/testing outside tests and scripts (%s)',
+    (file) => {
+      expect(messagesFor(messages, file).join()).toMatch(/for tests and scripts only/);
+    },
+  );
+
+  it.each([
+    'src/worker.ts',
+    'src/jobs/export.ts',
+    'src/realtime/relay.ts',
+    'src/realtime/relay.test.ts',
+    'src/records.test.ts',
+    'scripts/seed.ts',
+  ])('lets %s import what it may', (file) => {
+    expect(rulesFor(messages, file)).not.toContain('no-restricted-imports');
+  });
+});
+
 describe('vendor SDKs (spec 0005: sign in, mail and live updates)', () => {
   const files = {
     'src/auth.ts': "import { betterAuth } from 'better-auth';\nexport const auth = betterAuth;\n",

@@ -5,6 +5,7 @@ import { randomUUID } from 'node:crypto';
 import { sql } from 'drizzle-orm';
 import type { WorkspaceTx } from '@crm/db';
 import type { EngineScope } from '../scope.ts';
+import { cancelTagged, inWorkspace } from '../../access/run.ts';
 
 /** Whether `signal` has aborted, read fresh (a call, so a check made earlier doesn't narrow it). */
 export const isAborted = (signal: AbortSignal | undefined): boolean => signal?.aborted === true;
@@ -31,8 +32,8 @@ export async function withCancel<T>(
   const checkpoint = () => {
     if (isAborted(signal)) throw cancelled();
   };
-  if (signal === undefined) return scope.db.withWorkspace(scope.workspaceId, (tx) => work(tx, checkpoint));
-  return scope.db.withWorkspace(scope.workspaceId, async (tx) => {
+  if (signal === undefined) return inWorkspace(scope, (tx) => work(tx, checkpoint));
+  return inWorkspace(scope, async (tx) => {
     // A name only this transaction carries: the cancel checks it, so a connection the pool has since handed
     // to another request (another workspace's) is never the one cancelled. Local, so it ends with the transaction.
     const tag = `crm-${kind}:${randomUUID()}`;
@@ -42,7 +43,7 @@ export async function withCancel<T>(
     const backend = named.rows[0]?.pid;
     const cancel = () => {
       if (backend === undefined) return;
-      void scope.db.cancelTagged(backend, tag).catch(() => undefined);
+      void cancelTagged(scope, backend, tag).catch(() => undefined);
     };
     signal.addEventListener('abort', cancel, { once: true });
     try {

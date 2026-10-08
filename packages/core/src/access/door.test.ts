@@ -1,18 +1,20 @@
-// The access door (spec 0005, AC-32) against a real Postgres as the app role:
+// The access door (spec 0005, AC-32; spec 0009) against a real Postgres as the app role:
 // a member gets a scope for their workspace and nothing else, and every other
 // caller gets the same NOT_FOUND, so nothing says whether a workspace exists.
 import { randomUUID } from 'node:crypto';
+import { PERMISSION_NAMES, ROLE_PERMISSIONS } from '@crm/contracts';
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
-import { createTestUser } from '@crm/db/testing';
+import { createTestUser, testQuery } from '@crm/db/testing';
 import { listAttributes } from '../engine/definitions.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createUserWorkspace } from '../engine/workspaces.ts';
-import { enterWorkspace } from './door.ts';
+import { SYSTEM_ACTOR } from '../engine/scope.ts';
+import { enterAsActor, enterWithKey, enterWorkspace, systemScope, type DoorLog } from './door.ts';
 
-const { appUrl, identityUrl } = inject('testDatabase');
+const { appUrl, identityUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
 let identity: IdentityStore;
 
@@ -55,7 +57,17 @@ describe('the access door', () => {
     const a = await userWithWorkspace();
     const b = await userWithWorkspace();
     const scope = await enterWorkspace({ db, identity }, { userId: a.userId, slug: a.workspace.slug });
-    expect(scope).toEqual({ db, workspaceId: a.workspace.id, actor: { type: 'member', id: a.memberId } });
+    expect(scope).toMatchObject({ db, workspaceId: a.workspace.id, actor: { type: 'member', id: a.memberId } });
+    // The workspace's creator is its owner, with the owner's permissions and the open policy (spec 0009).
+    expect(scope.access.principal).toEqual({
+      kind: 'member',
+      memberId: a.memberId,
+      userId: a.userId,
+      role: 'owner',
+      teamIds: [],
+    });
+    expect(scope.access.permissions).toEqual(ROLE_PERMISSIONS.owner);
+    expect(scope.access.data.key).toBe('open');
 
     const seen = await db.withWorkspace(scope.workspaceId, async (tx) => ({
       workspaces: (await tx.execute<{ id: string }>(sql`select id from workspaces`)).rows.map((row) => row.id),
@@ -104,5 +116,103 @@ describe('the access door', () => {
     const refusals = await Promise.all(attempts.map((input) => refusalOf(enterWorkspace({ db, identity }, input))));
     const expected = [{ code: 'NOT_FOUND', message: "That workspace doesn't exist, or you're not a member of it." }];
     for (const refusal of refusals) expect(refusal).toEqual(expected);
+  });
+});
+
+/** Adds a signed up user to a workspace as a member with `role` (as #23's invites will). */
+async function addMember(workspaceId: string, role: string) {
+  const email = `${tag()}@example.com`;
+  const userId = await createTestUser(identityUrl, { email });
+  const memberId = newId();
+  await db.withWorkspace(workspaceId, (tx) =>
+    tx.execute(
+      sql`insert into members (workspace_id, id, user_id, name, email, role, created_by_type, updated_by_type) values (${workspaceId}, ${memberId}, ${userId}, 'Bea', ${email}, ${role}::member_role, 'system', 'system')`,
+    ),
+  );
+  return { userId, memberId };
+}
+
+/** A log that keeps what the door reports. */
+function recordingLog(): DoorLog & { readonly warnings: { message: string; fields: unknown }[] } {
+  const warnings: { message: string; fields: unknown }[] = [];
+  return { warnings, warn: (message, fields) => warnings.push({ message, fields }) };
+}
+
+const NOT_FOUND = [{ code: 'NOT_FOUND', message: "That workspace doesn't exist, or you're not a member of it." }];
+
+describe('roles at the door (spec 0009)', () => {
+  it.each(['admin', 'member'] as const)('lets an %s in with exactly their role’s permissions', async (role) => {
+    const a = await userWithWorkspace();
+    const other = await addMember(a.workspace.id, role);
+    const scope = await enterWorkspace({ db, identity }, { userId: other.userId, slug: a.workspace.slug });
+    expect(scope.access.principal).toMatchObject({ kind: 'member', memberId: other.memberId, role });
+    expect(scope.access.permissions).toEqual(ROLE_PERMISSIONS[role]);
+  });
+
+  it('refuses a role the code does not know like a non member, and reports the member id only', async () => {
+    // A value a later migration might add before this code knows it.
+    await testQuery(ownerUrl, "alter type member_role add value if not exists 'visitor'");
+    const a = await userWithWorkspace();
+    const visitor = await addMember(a.workspace.id, 'visitor');
+    const log = recordingLog();
+    expect(
+      await refusalOf(enterWorkspace({ db, identity, log }, { userId: visitor.userId, slug: a.workspace.slug })),
+    ).toEqual(NOT_FOUND);
+    expect(log.warnings).toEqual([
+      { message: 'Refused a member whose role the code does not know', fields: { memberId: visitor.memberId } },
+    ]);
+    const actor = { type: 'member', id: visitor.memberId } as const;
+    expect(await refusalOf(enterAsActor({ db, log }, { workspaceId: a.workspace.id, actor }))).toEqual(NOT_FOUND);
+  });
+});
+
+describe('enterAsActor (AC-147)', () => {
+  it('enters a member again with their current role', async () => {
+    const a = await userWithWorkspace();
+    const other = await addMember(a.workspace.id, 'admin');
+    const actor = { type: 'member', id: other.memberId } as const;
+    const first = await enterAsActor({ db }, { workspaceId: a.workspace.id, actor });
+    expect(first.access.principal).toMatchObject({ role: 'admin', memberId: other.memberId, userId: other.userId });
+    expect(first.actor).toEqual(actor);
+    await db.withWorkspace(a.workspace.id, (tx) =>
+      tx.execute(sql`update members set role = 'member' where id = ${other.memberId}`),
+    );
+    const demoted = await enterAsActor({ db }, { workspaceId: a.workspace.id, actor });
+    expect(demoted.access.permissions).toEqual(ROLE_PERMISSIONS.member);
+  });
+
+  it('refuses a member removed since, a deleted workspace, another workspace’s member and any non member', async () => {
+    const a = await userWithWorkspace();
+    const b = await userWithWorkspace();
+    const removed = await addMember(a.workspace.id, 'member');
+    await db.withWorkspace(a.workspace.id, (tx) =>
+      tx.execute(sql`update members set status = 'removed' where id = ${removed.memberId}`),
+    );
+    const deleted = await userWithWorkspace();
+    await db.withWorkspace(deleted.workspace.id, (tx) => tx.execute(sql`update workspaces set deleted_at = now()`));
+    const attempts = [
+      { workspaceId: a.workspace.id, actor: { type: 'member', id: removed.memberId } },
+      { workspaceId: deleted.workspace.id, actor: { type: 'member', id: deleted.memberId } },
+      { workspaceId: a.workspace.id, actor: { type: 'member', id: b.memberId } },
+      { workspaceId: a.workspace.id, actor: SYSTEM_ACTOR },
+      { workspaceId: a.workspace.id, actor: { type: 'api_key', id: newId() } },
+      { workspaceId: 'not-a-uuid', actor: { type: 'member', id: a.memberId } },
+    ] as const;
+    for (const input of attempts) expect(await refusalOf(enterAsActor({ db }, input))).toEqual(NOT_FOUND);
+  });
+});
+
+describe('systemScope and enterWithKey', () => {
+  it('gives the system every permission and the open policy', async () => {
+    const a = await userWithWorkspace();
+    const scope = systemScope(db, a.workspace.id);
+    expect(scope.actor).toEqual(SYSTEM_ACTOR);
+    expect(scope.access.permissions).toEqual(PERMISSION_NAMES);
+    expect(scope.access.data.key).toBe('open');
+  });
+
+  it('refuses every key until #34 stores them', async () => {
+    const a = await userWithWorkspace();
+    expect(await refusalOf(enterWithKey({ db }, { workspaceId: a.workspace.id, keyId: newId() }))).toEqual(NOT_FOUND);
   });
 });

@@ -4,9 +4,9 @@
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, schema, type Database, type WorkspaceTx } from '@crm/db';
 import { createWorkspace } from '../engine/workspaces.ts';
-import type { EngineScope } from '../engine/scope.ts';
 import { addRecord, editRecord, queryRecords } from './records.ts';
 import { newId } from '../engine/ids.ts';
+import { testScope } from '../testing.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -59,11 +59,11 @@ async function people(database: Database) {
     slug: `records-service-${String(made)}-${String(Date.now())}`,
     firstMember: { name: 'Ada', email: 'ada@example.com' },
   });
-  const scope: EngineScope = {
+  const scope = testScope({
     db: database,
     workspaceId: created.workspaceId,
     actor: { type: 'member', id: created.memberId },
-  };
+  });
   const objectId = created.objects.people;
   if (objectId === undefined) throw new Error('No People object.');
   return { scope, objectId };

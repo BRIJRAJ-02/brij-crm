@@ -6,6 +6,7 @@ import type { ObjectSummary } from '@crm/contracts';
 import { HUES, OBJECT_ICONS, type Hue, type ObjectIcon } from '@crm/contracts/values';
 import { schema } from '@crm/db';
 import type { EngineScope } from '../engine/scope.ts';
+import { inWorkspace } from '../access/run.ts';
 
 const { objects } = schema;
 
@@ -19,7 +20,7 @@ const isHue = (hue: string): hue is Hue => (HUES as readonly string[]).includes(
  * a broken invariant and throws.
  */
 export async function listObjects(scope: EngineScope): Promise<ObjectSummary[]> {
-  const rows = await scope.db.withWorkspace(scope.workspaceId, (tx) =>
+  const rows = await inWorkspace(scope, (tx) =>
     tx
       .select({
         id: objects.id,

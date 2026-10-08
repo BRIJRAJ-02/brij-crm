@@ -12,8 +12,9 @@
 import { sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { createDatabase, type WorkspaceTx } from '@crm/db';
-import { createWorkspace, defineAttribute, defineList, defineOption, type EngineScope } from '../src/index.ts';
+import { createWorkspace, defineAttribute, defineList, defineOption } from '../src/index.ts';
 import { refuseRemote } from './local-only.ts';
+import { testScope } from '../src/testing.ts';
 
 const env = z
   .object({
@@ -73,12 +74,12 @@ try {
     firstMember: { name: 'Scale owner', email: 'scale@example.com' },
   });
   const workspaceId = created.workspaceId;
-  const scope: EngineScope = {
+  const scope = testScope({
     db,
     workspaceId,
     actor: { type: 'member', id: created.memberId },
     limits: { liveRecords: 2_000_000 },
-  };
+  });
   const run = <T>(work: (tx: WorkspaceTx) => Promise<T>) => db.withWorkspace(workspaceId, work);
   const deals = created.objects.deals ?? '';
   const companies = created.objects.companies ?? '';

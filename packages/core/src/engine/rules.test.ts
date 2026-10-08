@@ -25,6 +25,7 @@ import { isRefusal } from './refusals.ts';
 import { SYSTEM_ACTOR, type EngineScope } from './scope.ts';
 import { createWorkspace } from './workspaces.ts';
 import type { AfterWrite, Change } from './write.ts';
+import { rescope, testScope } from '../testing.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -44,12 +45,12 @@ async function workspace(limits?: EngineScope['limits']) {
     slug: `rules-${String(count)}-${String(Date.now())}`,
     firstMember: { name: 'Ada', email: 'ada@example.com' },
   });
-  const scope: EngineScope = {
+  const scope = testScope({
     db,
     workspaceId: created.workspaceId,
     actor: { type: 'member', id: created.memberId },
     ...(limits === undefined ? {} : { limits }),
-  };
+  });
   return { ...created, scope };
 }
 
@@ -527,7 +528,7 @@ describe('actor values', () => {
 
     // An API key may name itself (a record it made), and only itself.
     const key = newId();
-    const asKey: EngineScope = { ...scope, actor: { type: 'api_key', id: key } };
+    const asKey: EngineScope = rescope(scope, { actor: { type: 'api_key', id: key } });
     await setValues(asKey, { recordId: id(second), values: set({ type: 'api_key', id: key }) });
     expect((await getRecords(scope, { ids: [id(second)] }))[0]?.values[owner]).toEqual({ type: 'api_key', id: key });
     const other = await refusals(
@@ -539,7 +540,7 @@ describe('actor values', () => {
   it('lets only the system write an interaction or a timestamp, checking its by like an actor value (AC-13)', async () => {
     const { scope, objects, memberId } = await workspace();
     const elsewhere = await workspace();
-    const asSystem: EngineScope = { ...scope, actor: SYSTEM_ACTOR };
+    const asSystem: EngineScope = rescope(scope, { actor: SYSTEM_ACTOR });
     const companiesObject = id(objects.companies);
     const companies = await slugs(scope, companiesObject);
     const { attributeId: touch } = await defineAttribute(scope, {
@@ -922,7 +923,7 @@ describe('upper case ids', () => {
 
   it("stores an interaction's by id in lower case, so the same actor in either spelling is no new version", async () => {
     const { scope, objects, memberId } = await workspace();
-    const asSystem: EngineScope = { ...scope, actor: SYSTEM_ACTOR };
+    const asSystem: EngineScope = rescope(scope, { actor: SYSTEM_ACTOR });
     const companiesObject = id(objects.companies);
     const companies = await slugs(scope, companiesObject);
     const { attributeId: touch } = await defineAttribute(scope, {

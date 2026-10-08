@@ -32,6 +32,7 @@ import {
   type AttributeWrite,
 } from './values.ts';
 import { append, runWrite, type AfterWrite, type ValueChange, type WriteContext } from './write.ts';
+import { inWorkspace } from '../access/run.ts';
 
 const { attributeOptions, objects, records } = schema;
 
@@ -531,7 +532,7 @@ export async function getRecords(
   const ids = input.ids.filter(isUuid).map(canonicalId);
   const attributeIds = input.attributeIds?.filter(isUuid).map(canonicalId);
   if (ids.length === 0) return [];
-  return scope.db.withWorkspace(scope.workspaceId, (tx) =>
+  return inWorkspace(scope, (tx) =>
     readRecords(tx, ids, {
       ...(attributeIds === undefined ? {} : { attributeIds }),
       ...(input.attributes === undefined ? {} : { attributes: input.attributes }),

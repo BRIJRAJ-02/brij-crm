@@ -16,6 +16,7 @@ import { implement, os } from '@orpc/server';
 import type { ResponseHeadersPluginContext } from '@orpc/server/plugins';
 import type { Auth, SessionUser } from './auth/auth.ts';
 import { apiError } from './errors.ts';
+import { log } from './log.ts';
 import type { ReadGate } from './gate.ts';
 import type { WakeRelay } from './realtime/wake.ts';
 
@@ -87,7 +88,7 @@ export const requireMember = os
       });
     }
     const scope = await enterWorkspace(
-      { db: context.db, identity: context.identity },
+      { db: context.db, identity: context.identity, log },
       { userId: context.user.id, slug: scoped.data.workspace },
     );
     return next({ context: { scope, db: TAKEN_AWAY, identity: TAKEN_AWAY } });

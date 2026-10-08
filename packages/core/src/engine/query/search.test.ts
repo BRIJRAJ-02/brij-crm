@@ -11,6 +11,7 @@ import { createRecord, setValues } from '../records.ts';
 import type { EngineScope } from '../scope.ts';
 import { createWorkspace } from '../workspaces.ts';
 import { countMatches, queryPage } from './page.ts';
+import { testScope } from '../../testing.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -52,7 +53,7 @@ beforeAll(async () => {
     slug: `search-${String(Date.now())}`,
     firstMember: { name: 'Sam', email: 'sam@example.com' },
   });
-  scope = { db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } };
+  scope = testScope({ db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } });
   deals = created.objects.deals ?? '';
   name = await nameAttribute(scope, deals);
   for (const item of NAMES) {
@@ -68,11 +69,11 @@ beforeAll(async () => {
     slug: `elsewhere-${String(Date.now())}`,
     firstMember: { name: 'Eli', email: 'eli@example.com' },
   });
-  const otherScope: EngineScope = {
+  const otherScope = testScope({
     db,
     workspaceId: other.workspaceId,
     actor: { type: 'member', id: other.memberId },
-  };
+  });
   theirName = await nameAttribute(otherScope, other.objects.deals ?? '');
   await createRecord(otherScope, { objectId: other.objects.deals ?? '', values: { [theirName]: 'Rocket theirs' } });
 });

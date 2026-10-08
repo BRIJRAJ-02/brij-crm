@@ -20,6 +20,7 @@ import { loadAttributesById, type AttributeDef } from '../values.ts';
 import { createWorkspace } from '../workspaces.ts';
 import { evaluate, type EvaluateContext, type PlainRecord } from './evaluate.ts';
 import { checkTimeZone, countMatches, queryPage, timeZoneProbe, type PageQuery, type ViewSource } from './page.ts';
+import { rescope, testScope } from '../../testing.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 const NOW = '2026-10-15T14:00:00.000Z';
@@ -83,7 +84,7 @@ beforeAll(async () => {
     slug: `query-${String(Date.now())}`,
     firstMember: { name: 'Quinn', email: 'q@example.com' },
   });
-  scope = { db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } };
+  scope = testScope({ db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } });
   members.push(created.memberId);
   for (const name of ['ada', 'Bob']) {
     const inserted = await db.withWorkspace(scope.workspaceId, (tx) =>
@@ -221,10 +222,10 @@ beforeAll(async () => {
     });
     const bySystem = given.filter(([attributeId]) => systemOnly.has(attributeId));
     if (bySystem.length > 0) {
-      await setValues(
-        { ...scope, actor: SYSTEM_ACTOR },
-        { recordId, values: Object.fromEntries(bySystem.map(([attributeId, value]) => [attributeId, { value }])) },
-      );
+      await setValues(rescope(scope, { actor: SYSTEM_ACTOR }), {
+        recordId,
+        values: Object.fromEntries(bySystem.map(([attributeId, value]) => [attributeId, { value }])),
+      });
     }
     missionIds.push(recordId);
   }
@@ -708,13 +709,12 @@ describe('positions and counts', () => {
     const controller = new AbortController();
     controller.abort();
     // A database that fails the test if anything asks it for a connection.
-    const untouched: EngineScope = {
-      ...scope,
+    const untouched = rescope(scope, {
       db: {
         ...scope.db,
         withWorkspace: () => Promise.reject(new Error('A connection was taken.')),
       },
-    };
+    });
     await expect(countMatches(untouched, { objectId: missions }, controller.signal)).rejects.toMatchObject({
       refusal: { code: 'QUERY_CANCELLED' },
     });
@@ -958,11 +958,11 @@ describe('other workspaces', () => {
       slug: `other-${String(Date.now())}`,
       firstMember: { name: 'Olive', email: 'o@example.com' },
     });
-    const otherScope: EngineScope = {
+    const otherScope = testScope({
       db,
       workspaceId: other.workspaceId,
       actor: { type: 'member', id: other.memberId },
-    };
+    });
     const { listId: theirList } = await defineList(otherScope, {
       objectId: other.objects.deals ?? '',
       apiSlug: 'theirs',

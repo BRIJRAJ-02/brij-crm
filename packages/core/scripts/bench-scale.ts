@@ -8,9 +8,10 @@ import { sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { createDatabase, type Database, type WorkspaceTx } from '@crm/db';
 import type { FilterGroup } from '@crm/contracts/values';
-import { countMatches, queryPage, type EngineScope, type PageQuery } from '../src/index.ts';
+import { countMatches, queryPage, type PageQuery } from '../src/index.ts';
 import { benchPage } from '../src/engine/query/page.ts';
 import { refuseRemote } from './local-only.ts';
+import { testScope } from '../src/testing.ts';
 
 const env = z
   .object({
@@ -94,7 +95,7 @@ const memberId = await app.withWorkspace(workspaceId, async (tx) => {
   const result = await tx.execute<{ id: string }>(sql`select id::text from members order by created_at limit 1`);
   return result.rows[0]?.id ?? null;
 });
-const scope: EngineScope = { db: app, workspaceId, actor: { type: 'member', id: memberId } };
+const scope = testScope({ db: app, workspaceId, actor: { type: 'member', id: memberId } });
 const and = (...conditions: FilterGroup['conditions']): FilterGroup => ({ conjunction: 'and', conditions });
 const ascendingBy = (attributeId: string) => [{ attributeId, direction: 'ascending' as const }];
 const byName = ascendingBy(ids.name);

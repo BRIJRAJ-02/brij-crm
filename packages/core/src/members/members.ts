@@ -5,12 +5,13 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import type { MemberSummary } from '@crm/contracts';
 import { schema } from '@crm/db';
 import type { EngineScope } from '../engine/scope.ts';
+import { inWorkspace } from '../access/run.ts';
 
 const { members } = schema;
 
 /** The workspace's active members (id, name, email), by name. Removed members are left out. */
 export async function listMembers(scope: EngineScope): Promise<MemberSummary[]> {
-  return scope.db.withWorkspace(scope.workspaceId, (tx) =>
+  return inWorkspace(scope, (tx) =>
     tx
       .select({ id: members.id, name: members.name, email: members.email })
       .from(members)

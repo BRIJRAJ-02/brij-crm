@@ -94,7 +94,8 @@ export {
   type RelationshipEnd,
   type RelationshipInput,
 } from './relationships.ts';
-export { SYSTEM_ACTOR, type Actor, type EngineScope } from './scope.ts';
+// SYSTEM_ACTOR is exported only from `@crm/core/system` (spec 0009).
+export { type Actor, type EngineScope } from './scope.ts';
 export {
   createUserWorkspace,
   createWorkspace,

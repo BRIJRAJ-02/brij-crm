@@ -16,6 +16,7 @@ import { createRecord, setValues } from './records.ts';
 import { SYSTEM_ACTOR, type EngineScope } from './scope.ts';
 import type { AttributeDef } from './values.ts';
 import { createWorkspace } from './workspaces.ts';
+import { rescope, testScope } from '../testing.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
@@ -80,7 +81,7 @@ beforeAll(async () => {
     slug: `keys-${String(Date.now())}`,
     firstMember: { name: 'Kit', email: 'kit@example.com' },
   });
-  scope = { db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } };
+  scope = testScope({ db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } });
   ({ objectId: craft } = await defineObject(scope, {
     apiSlug: 'craft',
     singularName: 'Craft',
@@ -157,7 +158,7 @@ async function drift(): Promise<{ extra: number; missing: number }> {
 describe('keys follow values (AC-20)', () => {
   it('stays equal to what the current values say through every kind of write', async () => {
     // Only the system writes the timestamp and the interaction, so it makes the records and their random values.
-    const system: EngineScope = { ...scope, actor: SYSTEM_ACTOR };
+    const system: EngineScope = rescope(scope, { actor: SYSTEM_ACTOR });
     for (let index = 0; index < 30; index += 1) {
       const { recordId } = await createRecord(system, {
         objectId: craft,

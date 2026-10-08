@@ -13,6 +13,7 @@ import { inputInvalid, isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import type { AttributeDef } from '../engine/values.ts';
 import type { AfterWrite } from '../engine/write.ts';
+import { inWorkspace } from '../access/run.ts';
 
 const { records } = schema;
 
@@ -132,7 +133,7 @@ export async function addRecord(
  */
 async function replayCreate(scope: EngineScope, input: AddRecordInput): Promise<RecordView | undefined> {
   const id = canonicalId(input.id);
-  const [row] = await scope.db.withWorkspace(scope.workspaceId, (tx) =>
+  const [row] = await inWorkspace(scope, (tx) =>
     tx
       .select({
         objectId: records.objectId,

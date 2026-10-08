@@ -19,6 +19,7 @@ import { actorRow, type EngineScope } from './scope.ts';
 import { clearUniqueKeys, fillUniqueKeys, UNIQUE_TYPES } from './unique.ts';
 import { loadAttribute, type AttributeDef } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
+import { inWorkspace } from '../access/run.ts';
 
 const { attributes, objects } = schema;
 
@@ -456,7 +457,7 @@ export async function setObjectArchived(
 /** The live attributes of an object, as definitions, in position order. None for a malformed id. */
 export async function listAttributes(scope: EngineScope, objectId: string) {
   if (!isUuid(objectId)) return [];
-  return scope.db.withWorkspace(scope.workspaceId, (tx) =>
+  return inWorkspace(scope, (tx) =>
     tx
       .select()
       .from(attributes)

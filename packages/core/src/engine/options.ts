@@ -11,6 +11,7 @@ import { postgresError, refuse } from './refusals.ts';
 import type { EngineScope } from './scope.ts';
 import { loadAttribute } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
+import { inWorkspace } from '../access/run.ts';
 
 const { attributeOptions } = schema;
 
@@ -179,7 +180,7 @@ export async function updateOption(scope: EngineScope, input: OptionUpdate, hook
  */
 export async function listOptions(scope: EngineScope, attributeId: string) {
   if (!isUuid(attributeId)) return [];
-  return scope.db.withWorkspace(scope.workspaceId, (tx) =>
+  return inWorkspace(scope, (tx) =>
     tx
       .select({
         id: attributeOptions.id,

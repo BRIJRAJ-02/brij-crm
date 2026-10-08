@@ -10,6 +10,7 @@ import { refuse } from './refusals.ts';
 import { linkHistory, linkValues } from './relationships.ts';
 import type { Actor, EngineScope } from './scope.ts';
 import { ITEM_COLUMNS, loadAttribute, loadAttributes } from './values.ts';
+import { inWorkspace } from '../access/run.ts';
 
 const { listEntries, records, values } = schema;
 
@@ -57,7 +58,7 @@ export async function getHistory(
   scope: EngineScope,
   input: HistoryOwner & { readonly attributeId: string },
 ): Promise<readonly ValueVersion[]> {
-  return scope.db.withWorkspace(scope.workspaceId, async (tx) => {
+  return inWorkspace(scope, async (tx) => {
     const ownerId = await ownerOf(tx, input);
     const attribute = await loadAttribute(tx, input.attributeId);
     if (attribute.type === 'record_reference') return linkHistory(tx, attribute, ownerId);
@@ -126,7 +127,7 @@ export async function getValuesAsOf(
     'Give the moment as an ISO timestamp with its zone, such as 2026-10-01T09:30:00Z.',
   );
   const recordId = checkId(input.recordId, 'That record does not exist.');
-  return scope.db.withWorkspace(scope.workspaceId, async (tx) => {
+  return inWorkspace(scope, async (tx) => {
     const record = await ownerExists(tx, recordId);
     if (record.createdAt.getTime() > Date.parse(moment)) return {};
     const attributes = await loadAttributes(tx, record.objectId);
@@ -171,7 +172,7 @@ export async function getTimeInStages(
   scope: EngineScope,
   input: HistoryOwner & { readonly attributeId: string },
 ): Promise<readonly { readonly optionId: string; readonly visits: readonly StageVisit[]; readonly totalMs: number }[]> {
-  return scope.db.withWorkspace(scope.workspaceId, async (tx) => {
+  return inWorkspace(scope, async (tx) => {
     const ownerId = await ownerOf(tx, input);
     const attribute = await loadAttribute(tx, input.attributeId);
     if (attribute.type !== 'status')

@@ -14,6 +14,7 @@ import { createRecord, setValues } from './records.ts';
 import type { Actor, EngineScope } from './scope.ts';
 import { createWorkspace } from './workspaces.ts';
 import { CHANGE_CAP, runWrite, type AfterWrite } from './write.ts';
+import { testScope } from '../testing.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -34,7 +35,7 @@ async function workspace() {
     firstMember: { name: 'Ada Lovelace', email: 'ada@example.com' },
   });
   const actor: Actor = { type: 'member', id: created.memberId };
-  const scope: EngineScope = { db, workspaceId: created.workspaceId, actor };
+  const scope = testScope({ db, workspaceId: created.workspaceId, actor });
   const people = created.objects.people ?? '';
   const names = await db.withWorkspace(scope.workspaceId, (tx) =>
     tx.execute<{ id: string }>(sql`select id from attributes where object_id = ${people} and api_slug = 'name'`),

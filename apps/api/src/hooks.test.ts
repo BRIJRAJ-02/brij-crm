@@ -2,7 +2,8 @@
 // outbox hook with the mutation id, and pokes the relay only once the write
 // has committed, never for a refused one.
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { createRecord, createWorkspace, newId, type EngineScope } from '@crm/core';
+import { createRecord, createWorkspace, newId } from '@crm/core';
+import { testScope } from '@crm/core/testing';
 import { createDatabase, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { commitWrite } from './hooks.ts';
@@ -24,11 +25,7 @@ describe('commitWrite', () => {
       slug: `hooks-${newId().slice(-12)}`,
       firstMember: { name: 'Ada', email: 'ada@example.com' },
     });
-    const scope: EngineScope = {
-      db,
-      workspaceId: created.workspaceId,
-      actor: { type: 'member', id: created.memberId },
-    };
+    const scope = testScope({ db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } });
     const people = created.objects.people ?? '';
     const stored = () =>
       testQuery<{ seq: number; record_ids: string[]; mutation_id: string }>(

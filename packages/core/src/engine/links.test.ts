@@ -26,6 +26,7 @@ import { defineRelationship } from './relationships.ts';
 import { SYSTEM_ACTOR, type EngineScope } from './scope.ts';
 import { createWorkspace } from './workspaces.ts';
 import { CHANGE_CAP, capChange, type AfterWrite, type Change } from './write.ts';
+import { rescope, testScope } from '../testing.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 const APP_NAME = 'crm-links-tests';
@@ -55,12 +56,12 @@ async function workspace(limits?: EngineScope['limits']) {
     slug: `links-${String(count)}-${String(Date.now())}`,
     firstMember: { name: 'Ada', email: 'ada@example.com' },
   });
-  const scope: EngineScope = {
+  const scope = testScope({
     db,
     workspaceId: created.workspaceId,
     actor: { type: 'member', id: created.memberId },
     ...(limits === undefined ? {} : { limits }),
-  };
+  });
   const slugsOf = async (objectId: string) => {
     const rows = await db.withWorkspace(scope.workspaceId, (tx) =>
       tx.execute<{ id: string; api_slug: string }>(
@@ -363,7 +364,7 @@ describe('relationships', () => {
       sql`select extract(epoch from updated_at)::float8 * 1000000 as n from records where id = ${acme}`,
     );
     // Someone else makes the link, so a moved updated_by would show.
-    const other = { ...world.scope, actor: { type: 'system' as const, id: null } };
+    const other = rescope(world.scope, { actor: { type: 'system', id: null } });
     const seen: Change[] = [];
     await setValues(
       other,
@@ -531,14 +532,14 @@ describe('relationships', () => {
 
   it('never ends a link the far end added between its read and its update, and needs no new attempt (AC-3, AC-5, AC-17)', async () => {
     const { world, acme, ada, bob, cy } = await team();
-    const asSystem: EngineScope = { ...world.scope, actor: SYSTEM_ACTOR };
+    const asSystem: EngineScope = rescope(world.scope, { actor: SYSTEM_ACTOR });
     // Cy joins Acme on another connection, after the write read Acme's team and before it ends any of it.
     const pause = pausingAtStamp(async () => {
       await setValues(asSystem, { recordId: cy, values: { [world.person('company')]: { value: at(world, acme) } } });
     });
     const seen: Change[] = [];
     await setValues(
-      { ...world.scope, db: pause.db },
+      rescope(world.scope, { db: pause.db }),
       { recordId: acme, values: { [world.company('team')]: { value: [person(world, ada)] } } },
       [watch(seen)],
     );
@@ -554,7 +555,7 @@ describe('relationships', () => {
 
   it('starts again when the far end ends a link it read, and reports every far record whose link it ends (AC-3, AC-5, AC-17)', async () => {
     const { world, acme, ada, bob, cy } = await team();
-    const asSystem: EngineScope = { ...world.scope, actor: SYSTEM_ACTOR };
+    const asSystem: EngineScope = rescope(world.scope, { actor: SYSTEM_ACTOR });
     // An add and an end land together between the read and the update: Cy joins Acme and Bob leaves it. A
     // statement that ended whatever is current would end Cy's link in place of Bob's with the same count, and
     // Cy's screen would never hear of it.
@@ -564,7 +565,7 @@ describe('relationships', () => {
     });
     const seen: Change[] = [];
     await setValues(
-      { ...world.scope, db: pause.db },
+      rescope(world.scope, { db: pause.db }),
       { recordId: acme, values: { [world.company('team')]: { value: [person(world, ada)] } } },
       [watch(seen)],
     );
@@ -1241,8 +1242,7 @@ describe('deletion', () => {
   function counted(scope: EngineScope): { scope: EngineScope; attempts: () => number } {
     let attempts = 0;
     return {
-      scope: {
-        ...scope,
+      scope: rescope(scope, {
         db: {
           ...scope.db,
           withWorkspace: (workspaceId, work) => {
@@ -1250,7 +1250,7 @@ describe('deletion', () => {
             return scope.db.withWorkspace(workspaceId, work);
           },
         },
-      },
+      }),
       attempts: () => attempts,
     };
   }

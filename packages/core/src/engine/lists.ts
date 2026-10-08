@@ -16,6 +16,7 @@ import { setEntryKeysLive } from './sort-keys.ts';
 import { holdUniqueKeys, releaseUniqueKeys } from './unique.ts';
 import { currentItems, loadListAttributes, lockRecord } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
+import { inWorkspace } from '../access/run.ts';
 
 const { listEntries, lists, objects, records } = schema;
 
@@ -326,11 +327,11 @@ export async function getEntries(scope: EngineScope, input: { readonly ids: read
   if (input.ids.length > 500) throw refuse('CONFIG_INVALID', 'Read at most 500 entries at once.');
   const ids = input.ids.filter(isUuid).map(canonicalId);
   if (ids.length === 0) return [];
-  return scope.db.withWorkspace(scope.workspaceId, (tx) => readEntries(tx, inArray(listEntries.id, ids)));
+  return inWorkspace(scope, (tx) => readEntries(tx, inArray(listEntries.id, ids)));
 }
 
 /** Every live entry of one record, across its lists (a record page's "Lists" panel). */
 export async function getRecordEntries(scope: EngineScope, input: { readonly recordId: string }) {
   const recordId = checkId(input.recordId, 'That record does not exist.');
-  return scope.db.withWorkspace(scope.workspaceId, (tx) => readEntries(tx, eq(listEntries.recordId, recordId)));
+  return inWorkspace(scope, (tx) => readEntries(tx, eq(listEntries.recordId, recordId)));
 }

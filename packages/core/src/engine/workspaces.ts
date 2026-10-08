@@ -15,7 +15,9 @@ import { isUuidV7, newId } from './ids.ts';
 import { insertOption } from './options.ts';
 import { isRefusal, postgresError, refuse } from './refusals.ts';
 import { insertRelationship } from './relationships.ts';
-import { SYSTEM_ACTOR, type EngineScope } from './scope.ts';
+import { systemScope } from '../access/door.ts';
+import { inWorkspace } from '../access/run.ts';
+import type { EngineScope } from './scope.ts';
 import { runWrite, type AfterWrite } from './write.ts';
 
 const { attributes, members, workspaceCounters, workspaces } = schema;
@@ -57,7 +59,8 @@ async function insertWorkspace(
   hooks: readonly AfterWrite[],
 ): Promise<CreatedWorkspace> {
   const { workspaceId, memberId } = ids;
-  const scope: EngineScope = { db, workspaceId, actor: SYSTEM_ACTOR };
+  // The bootstrap's own system scope, minted here: the workspace doesn't exist yet, so no member could enter it.
+  const scope = systemScope(db, workspaceId);
   try {
     const { result } = await runWrite(
       scope,
@@ -207,7 +210,7 @@ type EarlierWrite =
  * user is its active member, `taken` when it exists otherwise, else `absent`.
  */
 async function findUserWorkspace(db: EngineScope['db'], workspaceId: string, userId: string): Promise<EarlierWrite> {
-  const [row] = await db.withWorkspace(workspaceId, (tx) =>
+  const [row] = await inWorkspace(systemScope(db, workspaceId), (tx) =>
     tx
       .select({ slug: workspaces.slug, name: workspaces.name, deletedAt: workspaces.deletedAt, memberId: members.id })
       .from(workspaces)

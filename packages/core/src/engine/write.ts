@@ -6,6 +6,7 @@ import type { WorkspaceTx } from '@crm/db';
 import type { EngineRefusal } from '@crm/contracts/values';
 import { isRefusal, postgresError, refuse } from './refusals.ts';
 import type { Actor, EngineScope } from './scope.ts';
+import { inWorkspace } from '../access/run.ts';
 
 /** A record a write touched, with its object: the outbox groups a change by object. */
 export interface RecordRef {
@@ -241,7 +242,7 @@ export async function runWrite<T>(
 ): Promise<{ result: T; change: Change }> {
   for (let attempt = 1; ; attempt += 1) {
     try {
-      return await scope.db.withWorkspace(scope.workspaceId, async (tx) => {
+      return await inWorkspace(scope, async (tx) => {
         // Collected as the write goes; local to this attempt, so nothing outlives it.
         const collected = {
           createdRecords: [] as RecordRef[],

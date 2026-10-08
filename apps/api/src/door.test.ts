@@ -47,13 +47,17 @@ const AROUND_THE_DOOR =
 const IDENTITY_FROM_CONTEXT =
   /\bcontext\s*\.\s*identity\b|\bcontext\s*:\s*\{[^}]*\bidentity\b|\{[^}]*\bidentity\b[^}]*\}\s*=\s*context\b/;
 
+/** Importing system power or hand made scopes (spec 0009): no module file may, not even a bootstrap one. */
+const CORE_ENTRIES = /from\s+['"]@crm\/core\/(system|testing)['"]/;
+
 /** The module files (relative to src/modules) that reach the database or global identity around the door. */
 function aroundTheDoor(files: readonly { readonly path: string; readonly source: string }[]): string[] {
   return files
     .filter(
       ({ path, source }) =>
         (!RAW_DATABASE_FILES.has(path) && AROUND_THE_DOOR.test(source)) ||
-        (!RAW_IDENTITY_FILES.has(path) && IDENTITY_FROM_CONTEXT.test(source)),
+        (!RAW_IDENTITY_FILES.has(path) && IDENTITY_FROM_CONTEXT.test(source)) ||
+        CORE_ENTRIES.test(source),
     )
     .map(({ path }) => path);
 }
@@ -161,6 +165,11 @@ describe('the door is the only way in', () => {
         { path: 'tags/router.ts', source: handler('({ context }) => { const { identity } = context; }') },
         { path: 'me/router.ts', source: handler('({ context }) => getMe({ identity: context.identity })') },
         { path: 'system/router.ts', source: handler('({ context }) => who(context.identity)') },
+        { path: 'jobs/router.ts', source: `import { systemScope } from '@crm/core/system';\n${handler('() => 1')}` },
+        {
+          path: 'workspaces/router.ts',
+          source: `import { testScope } from "@crm/core/testing";\n${handler('() => 1')}`,
+        },
       ]),
     ).toEqual([
       'records/router.ts',
@@ -171,6 +180,8 @@ describe('the door is the only way in', () => {
       'teams/router.ts',
       'tags/router.ts',
       'system/router.ts',
+      'jobs/router.ts',
+      'workspaces/router.ts',
     ]);
   });
 });
@@ -186,6 +197,23 @@ describe('no scope is built in this app', () => {
     for (const file of files) {
       const source = await readFile(file, 'utf8');
       if (/\bEngineScope\b|\bSYSTEM_ACTOR\b|\bactor\s*:/.test(source)) offenders.push(file.slice(root.length));
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it('imports system power only in the worker entry, its jobs and the relay, and test scopes nowhere (spec 0009)', async () => {
+    const root = fileURLToPath(new URL('.', import.meta.url));
+    const files = (await readdir(root, { recursive: true }))
+      .filter((file) => file.endsWith('.ts') && !file.endsWith('.test.ts'))
+      .map((file) => file.split(sep).join('/'));
+    const allowed = (file: string) => file === 'worker.ts' || file.startsWith('jobs/') || file.startsWith('realtime/');
+    const offenders: string[] = [];
+    for (const file of files) {
+      const source = await readFile(join(root, file), 'utf8');
+      if (/from\s+['"]@crm\/core\/testing['"]/.test(source)) offenders.push(file);
+      if (/from\s+['"]@crm\/core\/system['"]/.test(source) && !allowed(file)) offenders.push(file);
+      // The system actor comes only from the system entry now, never the main one.
+      if (/\bSYSTEM_ACTOR\b/.test(source) && !allowed(file)) offenders.push(file);
     }
     expect(offenders).toEqual([]);
   });
