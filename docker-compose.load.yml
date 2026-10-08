@@ -78,8 +78,9 @@ services:
       MAILPIT_URL: http://mailpit:8025
       # The timing header (spec 0011, AC-202, milestone 2): local only.
       LOAD_TIMING: "on"
-      # Background jobs (spec 0008), once it lands: the API wakes the worker as in production.
-      WORKER_INTERNAL_URL: http://worker:3101
+      # The relay's wake (spec 0005). WORKER_INTERNAL_URL stays unset for now: the API refuses an http address
+      # that isn't localhost or *.railway.internal, so http://worker:3101 can't be named yet (spec 0011 milestone 3
+      # settles it); without it the relay keeps to its own timer.
       WORKER_WAKE_SECRET: local-only-load-stack-worker-wake-secret
     ports:
       - "127.0.0.1:3100:3100"
@@ -110,7 +111,10 @@ services:
       WORKER_PORT: 3101
       DATABASE_URL: postgres://crm_app_user:crm_load_local@pgbouncer:6432/crm
       DATABASE_URL_DIRECT: postgres://crm_app_user:crm_load_local@postgres:5432/crm
+      WORKER_WAKE_SECRET: local-only-load-stack-worker-wake-secret
       # WORKER_IDLE_SLEEP_SECONDS stays unset, so the worker never sleeps and runs measure it warm.
+      # CENTRIFUGO_API_URL and CENTRIFUGO_API_KEY stay unset for now (the relay off): the worker refuses
+      # http://centrifugo:9000 for the same reason as WORKER_INTERNAL_URL above; milestone 3 turns the relay on.
     ports:
       - "127.0.0.1:3101:3101"
     deploy:
