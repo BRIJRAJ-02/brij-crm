@@ -11,14 +11,8 @@ import { linkHistory, linkValues } from './relationships.ts';
 import type { Actor, EngineScope } from './scope.ts';
 import { checkEntryAccess, ITEM_COLUMNS, loadAttribute, loadAttributes, type AttributeDef } from './values.ts';
 import { inWorkspace } from '../access/run.ts';
-import { isOpen, type Access } from '../access/policy.ts';
-import {
-  attributeVisible,
-  checkObject,
-  checkRecordVisible,
-  UNKNOWN_RECORD,
-  visibleRecords,
-} from '../access/visibility.ts';
+import type { Access } from '../access/policy.ts';
+import { attributeVisible, checkObject, checkRecordVisible, UNKNOWN_RECORD } from '../access/visibility.ts';
 
 const { listEntries, records, values } = schema;
 
@@ -75,32 +69,6 @@ async function visibleAttribute(tx: WorkspaceTx, access: Access, attributeId: st
   return attribute;
 }
 
-/** A reference value without the far records the principal can't see. */
-function withoutUnseen(value: unknown, seen: ReadonlySet<string>): unknown {
-  const shows = (item: unknown) =>
-    typeof item === 'object' && item !== null && 'recordId' in item && typeof item.recordId === 'string'
-      ? seen.has(item.recordId)
-      : true;
-  if (Array.isArray(value)) return value.filter(shows);
-  return shows(value) ? value : null;
-}
-
-/** The far records reference values name, as visibility reads them. */
-function farRecords(values: readonly unknown[]): { objectId: string; recordId: string }[] {
-  return values
-    .flatMap((value) => (Array.isArray(value) ? (value as unknown[]) : [value]))
-    .flatMap((item) =>
-      typeof item === 'object' &&
-      item !== null &&
-      'objectId' in item &&
-      'recordId' in item &&
-      typeof item.objectId === 'string' &&
-      typeof item.recordId === 'string'
-        ? [{ objectId: item.objectId, recordId: item.recordId }]
-        : [],
-    );
-}
-
 /**
  * Every version of one attribute on one record or entry, oldest first; a
  * cleared version's value is null (an empty list for a multi reference).
@@ -113,13 +81,8 @@ export async function getHistory(
   return inWorkspace(scope, async (tx) => {
     const ownerId = await ownerOf(tx, scope.access, input);
     const attribute = await visibleAttribute(tx, scope.access, input.attributeId);
-    if (attribute.type === 'record_reference') {
-      const versions = await linkHistory(tx, attribute, ownerId);
-      if (isOpen(scope.access)) return versions;
-      // Far records the principal can't see are left out of every version (AC-143).
-      const seen = await visibleRecords(tx, scope.access, farRecords(versions.map((version) => version.value)));
-      return versions.map((version) => ({ ...version, value: withoutUnseen(version.value, seen) }));
-    }
+    // Far records the principal can't see are left out of every version, inside the read (AC-143).
+    if (attribute.type === 'record_reference') return linkHistory(tx, scope.access, attribute, ownerId);
     const rows = await tx
       .select({
         ...ITEM_COLUMNS,
@@ -203,16 +166,12 @@ export async function getValuesAsOf(
     // Hidden attributes are left out (spec 0009, AC-141).
     const shown = [...attributes.values()].filter((attribute) => attributeVisible(scope.access, attribute));
     const references = shown.filter((attribute) => attribute.type === 'record_reference');
-    const links = (await linkValues(tx, [recordId], references, { at: moment })).values.get(recordId);
-    const seen = isOpen(scope.access)
-      ? undefined
-      : await visibleRecords(tx, scope.access, farRecords([...(links?.values() ?? [])]));
+    const links = (await linkValues(tx, scope.access, [recordId], references, { at: moment })).values.get(recordId);
     const result: Record<string, unknown> = {};
     for (const attribute of shown) {
       if (attribute.isSystem) continue;
       if (attribute.type === 'record_reference') {
-        const value = links?.get(attribute.id) ?? (attribute.isMulti ? [] : null);
-        result[attribute.id] = seen === undefined ? value : withoutUnseen(value, seen);
+        result[attribute.id] = links?.get(attribute.id) ?? (attribute.isMulti ? [] : null);
         continue;
       }
       const mine: StoredItem[] = rows.filter((row) => row.attributeId === attribute.id && !row.isCleared);

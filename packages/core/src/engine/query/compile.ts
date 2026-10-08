@@ -27,7 +27,7 @@ import type { RelationshipDef } from '../relationships.ts';
 import type { Actor } from '../scope.ts';
 import type { AttributeDef } from '../values.ts';
 import type { Access } from '../../access/policy.ts';
-import { farVisibleSql, recordRuleSql } from '../../access/visibility.ts';
+import { farVisibleSql, hiddenFieldIds, recordRuleSql } from '../../access/visibility.ts';
 
 /** The day a week starts on, for "this week". */
 export type WeekStart = 'monday' | 'sunday';
@@ -937,8 +937,11 @@ export function compileSorts(context: CompileContext, level: Level, sorts: reado
         // Sorted by the first far record the principal may see (spec 0009); nothing is added under the open policy.
         const visible = farVisibleSql(context.access, columns.allowed, 'fr');
         const seen = visible === undefined ? sql`` : sql` and ${visible}`;
+        // A far name attribute the principal can't see gives no key, so the order never tells its values.
+        const hidden = hiddenFieldIds(context.access);
+        const named = hidden.length === 0 ? sql`` : sql` and pv.attribute_id <> all(${uuidList(hidden)})`;
         return one(
-          sql`left join lateral (select ${textKey(sql.raw('pv.text_value'))} as key0 from record_links sl join records fr on fr.workspace_id = sl.workspace_id and fr.id = sl.${columns.far} and fr.deleted_at is null${seen} join objects fo on fo.workspace_id = fr.workspace_id and fo.id = fr.object_id left join "values" pv on pv.workspace_id = fr.workspace_id and pv.owner_id = fr.id and pv.attribute_id = fo.primary_attribute_id and pv.position = 0 and pv.active_until is null and not pv.is_cleared where sl.workspace_id = ${record}.workspace_id and sl.relationship_id = ${relationship.id} and sl.${columns.mine} = ${ownerOf(level, attribute)} and sl.active_until is null order by sl.${columns.position}, sl.active_from, sl.id limit 1) ${raw(alias)} on true`,
+          sql`left join lateral (select ${textKey(sql.raw('pv.text_value'))} as key0 from record_links sl join records fr on fr.workspace_id = sl.workspace_id and fr.id = sl.${columns.far} and fr.deleted_at is null${seen} join objects fo on fo.workspace_id = fr.workspace_id and fo.id = fr.object_id left join "values" pv on pv.workspace_id = fr.workspace_id and pv.owner_id = fr.id and pv.attribute_id = fo.primary_attribute_id and pv.position = 0 and pv.active_until is null and not pv.is_cleared${named} where sl.workspace_id = ${record}.workspace_id and sl.relationship_id = ${relationship.id} and sl.${columns.mine} = ${ownerOf(level, attribute)} and sl.active_until is null order by sl.${columns.position}, sl.active_from, sl.id limit 1) ${raw(alias)} on true`,
           'text',
         );
       }

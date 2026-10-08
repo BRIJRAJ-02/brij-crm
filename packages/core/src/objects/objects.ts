@@ -7,7 +7,7 @@ import { HUES, OBJECT_ICONS, type Hue, type ObjectIcon } from '@crm/contracts/va
 import { schema } from '@crm/db';
 import type { EngineScope } from '../engine/scope.ts';
 import { inWorkspace } from '../access/run.ts';
-import { objectLevel } from '../access/policy.ts';
+import { fieldLevel, objectLevel } from '../access/policy.ts';
 
 const { objects } = schema;
 
@@ -50,7 +50,11 @@ export async function listObjects(scope: EngineScope): Promise<ObjectSummary[]> 
       icon,
       hue,
       ...(standardKey === null ? {} : { standardKey }),
-      ...(primaryAttributeId === null ? {} : { primaryAttributeId }),
+      // A name attribute the caller can't see is left out, id and all (AC-141).
+      ...(primaryAttributeId === null ||
+      fieldLevel(scope.access, { id: primaryAttributeId, objectId: row.id }) === 'hidden'
+        ? {}
+        : { primaryAttributeId }),
     };
   });
 }

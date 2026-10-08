@@ -8,7 +8,7 @@ import type { ItemColumns } from './columns.ts';
 import { uuidArray } from './ids.ts';
 import { postgresError, refuse } from './refusals.ts';
 import type { AttributeDef } from './values.ts';
-import { recordRule, type Access } from '../access/policy.ts';
+import { objectLevel, recordRule, type Access } from '../access/policy.ts';
 import { attributeVisible } from '../access/visibility.ts';
 
 /** Rows updated per statement when keys are filled in. */
@@ -90,9 +90,18 @@ export async function fillUniqueKeys(tx: WorkspaceTx, attribute: AttributeDef, a
     counts.set(row.key, (counts.get(row.key) ?? 0) + 1);
   }
   const duplicates = [...counts].filter(([, n]) => n > 1);
+  // The records behind the values: the attribute's object's, or for a list attribute its list's object's.
+  const objectId =
+    attribute.objectId ??
+    (attribute.listId === null
+      ? undefined
+      : (await tx.execute<{ object_id: string }>(sql`select object_id::text from lists where id = ${attribute.listId}`))
+          .rows[0]?.object_id);
   const seesEvery =
     attributeVisible(access, attribute) &&
-    (attribute.objectId === null || recordRule(access, attribute.objectId) === undefined);
+    objectId !== undefined &&
+    objectLevel(access, objectId) !== 'none' &&
+    recordRule(access, objectId) === undefined;
   if (duplicates.length > 0 && !seesEvery) {
     const many = duplicates.length === 1 ? '1 value is' : `${String(duplicates.length)} values are`;
     throw refuse(

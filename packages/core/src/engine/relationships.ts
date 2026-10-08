@@ -16,7 +16,7 @@ import { parseFor, type AttributeDef, type AttributeWrite } from './values.ts';
 import { runWrite, type AfterWrite, type ValueChange, type WriteContext } from './write.ts';
 import { requirePermission } from '../access/check.ts';
 import type { Access } from '../access/policy.ts';
-import { visibleRecords } from '../access/visibility.ts';
+import { attributeVisible, farVisibleSql, visibleRecords } from '../access/visibility.ts';
 
 const { attributes, objects, recordLinks, records, relationships } = schema;
 
@@ -242,9 +242,15 @@ function referencesOf(value: unknown): readonly RecordReferenceValue[] {
 }
 
 /** A record's name for a message: its primary attribute's text, or "an unnamed <object>". */
-async function recordName(tx: WorkspaceTx, recordId: string): Promise<string> {
-  const result = await tx.execute<{ name: string | null; singular: string }>(sql`
-    select v.text_value as name, o.singular_name as singular
+async function recordName(tx: WorkspaceTx, access: Access, recordId: string): Promise<string> {
+  const result = await tx.execute<{
+    name: string | null;
+    singular: string;
+    object_id: string;
+    primary_id: string | null;
+  }>(sql`
+    select v.text_value as name, o.singular_name as singular, o.id::text as object_id,
+      o.primary_attribute_id::text as primary_id
     from records r
     join objects o on o.workspace_id = r.workspace_id and o.id = r.object_id
     left join "values" v on v.workspace_id = r.workspace_id and v.owner_id = r.id
@@ -253,7 +259,11 @@ async function recordName(tx: WorkspaceTx, recordId: string): Promise<string> {
   `);
   const [row] = result.rows;
   if (row === undefined) return 'that record';
-  return row.name === null || row.name === '' ? `an unnamed ${row.singular.toLowerCase()}` : row.name;
+  const unnamed = `an unnamed ${row.singular.toLowerCase()}`;
+  // A name attribute the principal can't see is never quoted (spec 0009, AC-144): the record reads as unnamed.
+  const named =
+    row.primary_id !== null && attributeVisible(access, { id: row.primary_id, objectId: row.object_id, listId: null });
+  return !named || row.name === null || row.name === '' ? unnamed : row.name;
 }
 
 /**
@@ -313,7 +323,11 @@ async function endLinks(
   relationship: RelationshipDef,
   end: ReturnType<typeof endOf>,
   ownerId: string,
+  access: Access,
 ) {
+  // Whether the writer may see each far record (spec 0009), read with the links: no list of ids goes back to
+  // the database however many links the end holds. Nothing is added under the open policy.
+  const visible = farVisibleSql(access, end.allowed, 'records');
   return tx
     .select({
       id: recordLinks.id,
@@ -325,6 +339,7 @@ async function endLinks(
       setById: recordLinks.setById,
       activeFrom: micro(recordLinks.activeFrom),
       farDeleted: sql<boolean>`${records.deletedAt} is not null`,
+      ...(visible === undefined ? {} : { farHidden: sql<boolean>`not (${visible})` }),
     })
     .from(recordLinks)
     .innerJoin(records, and(eq(records.workspaceId, recordLinks.workspaceId), eq(records.id, end.far)))
@@ -347,19 +362,23 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
   const wanted = referencesOf(parseFor(attribute, write.value));
   const relationship = await relationshipOf(tx, attribute);
   const end = endOf(relationship, attribute.id);
-  const current = await endLinks(tx, relationship, end, ownerId);
+  const current = await endLinks(tx, relationship, end, ownerId, scope.access);
   // Links to far records the writer can't see (spec 0009): they read as absent, and a multi end keeps them.
-  const farSeen = await visibleRecords(
-    tx,
-    scope.access,
-    current.map((link) => ({ objectId: link.farObjectId, recordId: link.far })),
-  );
-  const unseen = new Set(current.flatMap((link) => (farSeen.has(link.far) ? [] : [link.far])));
+  const unseen = new Set(current.flatMap((link) => (link.farHidden === true ? [link.far] : [])));
   await checkTargets(tx, scope.access, attribute, ownerId, end.allowed, wanted);
 
   const visible = current.filter((link) => !link.farDeleted && !unseen.has(link.far));
   const wantedIds = wanted.map((item) => item.recordId);
   if (visible.length === wantedIds.length && visible.every((link, index) => link.far === wantedIds[index])) return [];
+  // A single end holding a live link the writer can't see: replacing it would end that link, and a write never
+  // removes what the writer can't see (spec 0009), so the change is refused without naming the record.
+  if (end.mySingle && current.some((link) => !link.farDeleted && unseen.has(link.far))) {
+    throw refuse(
+      'ATTRIBUTE_READ_ONLY',
+      `${attribute.title} holds a record you can't see, so you can't change it.`,
+      attribute.id,
+    );
+  }
 
   // A far end that holds one link: a live record's link refuses, one in the trash gives way.
   const freed: { id: string; activeFrom: string }[] = [];
@@ -387,7 +406,7 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
       .for('share', { of: records });
     for (const link of held) {
       if (!link.holderDeleted) {
-        const name = await recordName(tx, link.target);
+        const name = await recordName(tx, scope.access, link.target);
         throw refuse(
           'RELATIONSHIP_TAKEN',
           `${name} is already linked to another record through ${attribute.title}. Unlink it there first.`,
@@ -526,8 +545,7 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
   ];
   const farAttributeId = end.farAttributeId;
   if (farAttributeId !== null) {
-    // A single end replaced a link the writer couldn't see too: that far record's reference changed as well.
-    const shown = end.mySingle ? current.filter((link) => !link.farDeleted) : visible;
+    const shown = visible;
     const before = new Set(shown.map((link) => link.far));
     const after = new Set(wantedIds);
     const objectOf = new Map([
@@ -593,9 +611,13 @@ function endColumns(isFrom: boolean): { mine: SQL; far: SQL; position: SQL } {
  * its own order. With `cap`, a multi cell reads at most `cap` links per
  * record (a lateral limit per record, so a company with 70,000 people reads
  * 20 of them, not 70,000), and a cell cut short gets its total in `totals`.
+ * Only far records `access` may see are read (spec 0009, AC-143): the cap,
+ * the total and the cell's version all count visible links alone, and the
+ * open policy adds nothing to the statement.
  */
 export async function linkValues(
   tx: WorkspaceTx,
+  access: Access,
   ownerIds: readonly string[],
   references: readonly AttributeDef[],
   options: { readonly at?: string; readonly cap?: number } = {},
@@ -617,14 +639,22 @@ export async function linkValues(
     const relationship =
       attribute.relationshipId === null ? undefined : relationshipsById.get(attribute.relationshipId);
     if (relationship === undefined) continue;
-    const { mine, far, position } = endColumns(endOf(relationship, attribute.id).isFrom);
+    const ends = endOf(relationship, attribute.id);
+    const { mine, far, position } = endColumns(ends.isFrom);
     // A single cell holds one link; reading a second would only be a broken invariant, so it reads one.
     const cap = options.cap === undefined ? undefined : attribute.isMulti ? options.cap : 1;
+    const farVisible = farVisibleSql(access, ends.allowed, 'r');
+    const seen = farVisible === undefined ? sql`` : sql` and ${farVisible}`;
     const links = sql`
       from record_links k
-      join records r on r.workspace_id = k.workspace_id and r.id = ${far} and r.deleted_at is null
+      join records r on r.workspace_id = k.workspace_id and r.id = ${far} and r.deleted_at is null${seen}
       where k.relationship_id = ${relationship.id} and ${mine} = o.owner and ${period}
     `;
+    // The cell's version: its latest link's, among the links to far records the principal may see.
+    const versionFrom =
+      farVisible === undefined
+        ? sql`from record_links k`
+        : sql`from record_links k join records r on r.workspace_id = k.workspace_id and r.id = ${far} and ${farVisible}`;
     // One more than the cap, so a cell that holds more is known to be cut; and each cell's latest link's version.
     const rows = await tx.execute<{
       owner: string;
@@ -642,7 +672,7 @@ export async function linkValues(
         ${cap === undefined ? sql`` : sql`limit ${cap + 1}`}
       ) l on true
       left join lateral (
-        select k.version_id from record_links k
+        select k.version_id ${versionFrom}
         where k.relationship_id = ${relationship.id} and ${mine} = o.owner and ${period}
         order by k.active_from desc, k.id desc
         limit 1
@@ -682,11 +712,14 @@ export async function linkValues(
  */
 export async function linkHistory(
   tx: WorkspaceTx,
+  access: Access,
   attribute: AttributeDef,
   ownerId: string,
 ): Promise<readonly ValueVersion[]> {
   const relationship = await relationshipOf(tx, attribute);
   const end = endOf(relationship, attribute.id);
+  // Links to far records the principal can't see leave the history whole (spec 0009): no version marks them.
+  const farVisible = farVisibleSql(access, end.allowed, 'records');
   const links = await tx
     .select({
       recordId: records.id,
@@ -704,7 +737,7 @@ export async function linkHistory(
       records,
       and(eq(records.workspaceId, recordLinks.workspaceId), eq(records.id, end.far), isNull(records.deletedAt)),
     )
-    .where(and(eq(recordLinks.relationshipId, relationship.id), eq(end.mine, ownerId)))
+    .where(and(eq(recordLinks.relationshipId, relationship.id), eq(end.mine, ownerId), farVisible))
     .orderBy(asc(recordLinks.activeFrom), asc(end.myPosition), asc(recordLinks.id));
   const moments = [
     ...new Set(links.flatMap((link) => (link.until === null ? [link.from] : [link.from, link.until]))),

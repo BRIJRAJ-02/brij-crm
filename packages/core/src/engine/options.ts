@@ -75,6 +75,10 @@ async function labelGuard<T>(work: () => Promise<T>): Promise<T> {
 export async function insertOption(context: WriteContext, input: OptionInput): Promise<{ optionId: string }> {
   const { tx, scope } = context;
   const attribute = await loadAttribute(tx, input.attributeId);
+  // One the actor can't see answers as an unknown attribute (spec 0009, AC-141).
+  if (!attributeVisible(scope.access, attribute)) {
+    throw refuse('NOT_FOUND', 'That attribute does not exist.', attribute.id);
+  }
   if (attribute.type !== 'select' && attribute.type !== 'status') {
     throw refuse('CONFIG_INVALID', 'Only select and status attributes have options.', attribute.id);
   }
@@ -149,6 +153,11 @@ export async function updateOption(scope: EngineScope, input: OptionUpdate, hook
         .where(eq(attributeOptions.id, input.optionId))
         .for('update');
       if (option === undefined) throw refuse('NOT_FOUND', 'That option does not exist.');
+      // An option of an attribute the actor can't see answers as an unknown option (spec 0009, AC-141).
+      if (!isOpen(scope.access)) {
+        const owner = await loadAttribute(tx, option.attributeId);
+        if (!attributeVisible(scope.access, owner)) throw refuse('NOT_FOUND', 'That option does not exist.');
+      }
       if (input.label !== undefined) checkLabel(input.label);
       if (input.hue !== undefined) checkHue(input.hue);
       checkTarget(input.targetTimeInStage);

@@ -159,7 +159,13 @@ export async function checkEntryAccess(
  * object or outside its record rule, exactly as a missing one. Whether they
  * may change it is the caller's check (`checkObject`).
  */
-export async function lockRecord(tx: WorkspaceTx, recordId: string, access: Access): Promise<{ objectId: string }> {
+export async function lockRecord(
+  tx: WorkspaceTx,
+  recordId: string,
+  access: Access,
+  /** Records a batch already found inside the principal's record rule, in this transaction: not checked again. */
+  visible?: ReadonlySet<string>,
+): Promise<{ objectId: string }> {
   checkId(recordId, 'That record does not exist.');
   const rows = await tx
     .select({ objectId: records.objectId, deletedAt: records.deletedAt })
@@ -170,7 +176,7 @@ export async function lockRecord(tx: WorkspaceTx, recordId: string, access: Acce
   const [row] = rows;
   if (row === undefined) throw refuse('NOT_FOUND', 'That record does not exist.');
   await checkObject(tx, access, row.objectId, 'read', UNKNOWN_RECORD);
-  await checkRecordVisible(tx, access, { objectId: row.objectId, recordId });
+  if (visible?.has(recordId) !== true) await checkRecordVisible(tx, access, { objectId: row.objectId, recordId });
   if (row.deletedAt !== null) throw refuse('RECORD_DELETED', 'That record is in the trash. Restore it first.');
   return { objectId: row.objectId };
 }

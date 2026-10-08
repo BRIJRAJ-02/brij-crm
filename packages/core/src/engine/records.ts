@@ -397,6 +397,7 @@ async function lockOwner(
   tx: WorkspaceTx,
   input: RecordValues | EntryValues,
   access: Access,
+  visible?: ReadonlySet<string>,
 ): Promise<{
   ownerKind: 'record' | 'entry';
   ownerId: string;
@@ -410,7 +411,7 @@ async function lockOwner(
     return { ownerKind: 'entry', ownerId: entryId, attributes: await loadListAttributes(tx, listId) };
   }
   const recordId = checkId(input.recordId, 'That record does not exist.');
-  const { objectId } = await lockRecord(tx, recordId, access);
+  const { objectId } = await lockRecord(tx, recordId, access, visible);
   // Seen, so a read only object is 403 rather than absent.
   await checkObject(tx, access, objectId, 'write');
   return { ownerKind: 'record', ownerId: recordId, objectId, attributes: await loadAttributes(tx, objectId) };
@@ -424,13 +425,14 @@ async function lockOwner(
 async function updateOwner(
   context: WriteContext,
   input: RecordValues | EntryValues,
+  visible?: ReadonlySet<string>,
 ): Promise<{
   results: Record<string, AttributeResult>;
   objectId?: string;
   attributes: ReadonlyMap<string, AttributeDef>;
 }> {
   const { tx } = context;
-  const { ownerKind, ownerId, objectId, attributes } = await lockOwner(tx, input, context.scope.access);
+  const { ownerKind, ownerId, objectId, attributes } = await lockOwner(tx, input, context.scope.access, visible);
   const parsed = parseAll(attributes, canonicalKeys(input.values), context.scope);
   const results = await writeAll(context, ownerKind, ownerId, parsed);
   if (Object.values(results).some((each) => each.versionId !== undefined)) {
@@ -443,8 +445,36 @@ async function updateOwner(
 async function updateRecord(
   context: WriteContext,
   input: RecordValues | EntryValues,
+  visible?: ReadonlySet<string>,
 ): Promise<Record<string, AttributeResult>> {
-  return (await updateOwner(context, input)).results;
+  return (await updateOwner(context, input, visible)).results;
+}
+
+/**
+ * The batch's records the principal may see under a record rule, found in one
+ * read per ruled object before the batch starts, so each record's lock doesn't
+ * ask again (spec 0009). Nothing is read under the open policy.
+ */
+async function batchVisible(context: WriteContext, items: readonly RecordValues[]): Promise<ReadonlySet<string>> {
+  const { access } = context.scope;
+  const ids = [
+    ...new Set(
+      items
+        .map((item) => item.recordId)
+        .filter(isUuid)
+        .map(canonicalId),
+    ),
+  ];
+  if (isOpen(access) || ids.length === 0) return new Set();
+  const rows = await context.tx
+    .select({ id: records.id, objectId: records.objectId })
+    .from(records)
+    .where(inArray(records.id, ids));
+  return visibleRecords(
+    context.tx,
+    access,
+    rows.map((row) => ({ objectId: row.objectId, recordId: row.id })),
+  );
 }
 
 /**
@@ -491,8 +521,9 @@ export async function setValuesBatch(
     scope,
     async (context) => {
       const outcomes: BatchResult[] = [];
+      const visible = await batchVisible(context, input.items);
       for (const item of input.items) {
-        const outcome = await context.perRecord((child) => updateRecord(child, item));
+        const outcome = await context.perRecord((child) => updateRecord(child, item, visible));
         const recordId = canonicalId(item.recordId);
         outcomes.push(
           outcome.ok
@@ -555,6 +586,12 @@ export interface ReadOptions {
   readonly attributeIds?: readonly string[];
   /** Attribute definitions already loaded in this request, by object id, so the read doesn't load them again. */
   readonly attributes?: ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>;
+  /**
+   * The ids came from a statement that already kept only records the
+   * principal may see (a page, in the same transaction), so the record rule
+   * isn't checked again. Values and far records are still cut to the policy.
+   */
+  readonly visibleAlready?: true;
 }
 
 /**
@@ -603,13 +640,14 @@ export async function readRecords(
     .from(records)
     .where(and(inArray(records.id, [...input.ids]), isNull(records.deletedAt)));
   // Hidden is absent (spec 0009, AC-140, AC-143): records on a hidden object, and outside a record rule, are left out.
-  const seen = open
-    ? undefined
-    : await visibleRecords(
-        tx,
-        access,
-        found.map((row) => ({ objectId: row.objectId, recordId: row.id })),
-      );
+  const seen =
+    open || options.visibleAlready === true
+      ? undefined
+      : await visibleRecords(
+          tx,
+          access,
+          found.map((row) => ({ objectId: row.objectId, recordId: row.id })),
+        );
   const rows = seen === undefined ? found : found.filter((row) => seen.has(row.id));
   const objectIds = [...new Set(rows.map((row) => row.objectId))];
   const objectRows =
@@ -638,6 +676,7 @@ export async function readRecords(
   );
   const links = await linkValues(
     tx,
+    access,
     rows.map((row) => row.id),
     references,
     { cap: LINK_CELL_CAP },
@@ -652,16 +691,15 @@ export async function readRecords(
     if (seen === undefined || item.versionId > seen) versionOf.set(key, item.versionId);
   }
 
-  // The far records of reference values the principal may see, read once for the whole read (none when open).
+  // `linkValues` read only the far records the principal may see, so every one it answered is visible.
   const farSeen = open
     ? undefined
-    : await visibleRecords(
-        tx,
-        access,
+    : new Set(
         [...links.values.values()].flatMap((cells) =>
           [...cells.values()]
             .flatMap((value): unknown[] => (Array.isArray(value) ? (value as unknown[]) : [value]))
-            .filter(isRecordAt),
+            .filter(isRecordAt)
+            .map((reference) => reference.recordId),
         ),
       );
   return rows

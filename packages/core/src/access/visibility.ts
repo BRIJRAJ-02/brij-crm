@@ -94,6 +94,18 @@ export function farVisibleSql(access: Access, objectIds: readonly string[], far:
   return parts.length === 0 ? undefined : sql.join(parts, sql` and `);
 }
 
+/**
+ * The attributes a field rule hides from the principal (a level the code
+ * doesn't know hides too), as uuids: none under the open policy. Fields on an
+ * object at `none` aren't listed; the object's own checks keep them out.
+ */
+export function hiddenFieldIds(access: Access): readonly string[] {
+  if (isOpen(access)) return [];
+  return Object.entries(access.data.fields).flatMap(([id, level]) =>
+    level !== 'read' && level !== 'write' && isUuid(id) ? [id] : [],
+  );
+}
+
 /** A record as far as visibility needs it. */
 export interface RecordAt {
   readonly objectId: string;
@@ -112,19 +124,22 @@ export async function visibleRecords(
 ): Promise<ReadonlySet<string>> {
   if (isOpen(access)) return new Set(records.map((record) => record.recordId));
   const visible = new Set<string>();
-  const ruled = new Map<string, string[]>();
+  // Sets built in place (local to this call), never copied per record: a link write can name 70,000 records.
+  const ruled = new Map<string, Set<string>>();
   for (const record of records) {
     if (objectLevel(access, record.objectId) === 'none') continue;
     if (recordRule(access, record.objectId) === undefined) {
       visible.add(record.recordId);
       continue;
     }
-    ruled.set(record.objectId, [...(ruled.get(record.objectId) ?? []), record.recordId]);
+    const ids = ruled.get(record.objectId);
+    if (ids === undefined) ruled.set(record.objectId, new Set([record.recordId]));
+    else ids.add(record.recordId);
   }
   for (const [objectId, ids] of ruled) {
     const condition = recordRuleSql(access, objectId, 'r') ?? sql`true`;
     const rows = await tx.execute<{ id: string }>(
-      sql`select r.id::text as id from records r where r.id = any(${uuidList([...new Set(ids)])}) and r.object_id = ${objectId}::uuid and ${condition}`,
+      sql`select r.id::text as id from records r where r.id = any(${uuidList([...ids])}) and r.object_id = ${objectId}::uuid and ${condition}`,
     );
     for (const row of rows.rows) visible.add(row.id);
   }

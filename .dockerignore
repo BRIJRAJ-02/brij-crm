@@ -8,3 +8,5 @@
 !.env.example
 docs
 .load
+# Test helpers and the local rules server (spec 0009) never ship in the image.
+apps/api/test

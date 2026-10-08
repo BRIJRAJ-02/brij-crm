@@ -284,6 +284,7 @@ async function readEntries(
   tx: WorkspaceTx,
   access: Access,
   where: ReturnType<typeof and>,
+  visibleAlready = false,
 ): Promise<readonly EntryView[]> {
   const found = await tx
     .select({
@@ -308,7 +309,7 @@ async function readEntries(
     )
     .where(and(isNull(listEntries.deletedAt), where))
     .orderBy(asc(listEntries.id));
-  const rows = isOpen(access) ? found : await visibleEntries(tx, access, found);
+  const rows = isOpen(access) || visibleAlready ? found : await visibleEntries(tx, access, found);
   const listIds = [...new Set(rows.map((row) => row.listId))];
   const attributesByList = new Map(
     await Promise.all(listIds.map(async (id) => [id, await loadListAttributes(tx, id)] as const)),
@@ -369,11 +370,13 @@ export async function readEntriesById(
   tx: WorkspaceTx,
   access: Access,
   ids: readonly string[],
+  /** The ids came from a page that already kept only entries the principal may see. */
+  visibleAlready = false,
 ): Promise<readonly EntryView[]> {
   if (ids.length === 0) return [];
   // Keyed by the canonical spelling, the one the entries come back with.
   const order = new Map(ids.map((id, index) => [canonicalId(id), index]));
-  const entries = await readEntries(tx, access, inArray(listEntries.id, [...ids]));
+  const entries = await readEntries(tx, access, inArray(listEntries.id, [...ids]), visibleAlready);
   return [...entries].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
 }
 

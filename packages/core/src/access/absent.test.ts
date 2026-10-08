@@ -440,8 +440,69 @@ describe('a record rule (AC-143)', () => {
     expect(empty).toEqual({ count: 1, atLeast: false });
     const asOf = await getValuesAsOf(member, { recordId: id('bob'), at: new Date().toISOString() });
     expect(asOf[id('people.company')]).toBeNull();
-    const history = await getHistory(member, { recordId: id('bob'), attributeId: id('people.company') });
-    expect(history.every((version) => version.value === null)).toBe(true);
+    // No version marks a link to a record the member can't see: not when it was made, nor by whom.
+    expect(await getHistory(member, { recordId: id('bob'), attributeId: id('people.company') })).toEqual([]);
+    expect(await getHistory(owner, { recordId: id('bob'), attributeId: id('people.company') })).toHaveLength(1);
+  });
+
+  it('cuts a multi cell after the rule: the visible links past hidden ones show, and the total counts them alone', async () => {
+    const hub = await record('companies', {
+      [id('companies.name')]: 'Hub',
+      [id('companies.owner')]: { type: 'member', id: memberId },
+    });
+    const theirs = { type: 'member', id: id('ownerMember') };
+    // 22 hidden subsidiaries first (the cell reads 20, in order), then 2 the member owns.
+    for (let index = 0; index < 22; index += 1) {
+      await record('companies', {
+        [id('companies.name')]: `Hidden ${String(index)}`,
+        [id('companies.owner')]: theirs,
+        [id('companies.parent_company')]: { objectId: id('companies'), recordId: hub },
+      });
+    }
+    const shown: string[] = [];
+    for (const name of ['Seen 1', 'Seen 2']) {
+      shown.push(
+        await record('companies', {
+          [id('companies.name')]: name,
+          [id('companies.owner')]: { type: 'member', id: memberId },
+          [id('companies.parent_company')]: { objectId: id('companies'), recordId: hub },
+        }),
+      );
+    }
+    const [mine] = await getRecords(member, { ids: [hub] });
+    expect(mine?.values[id('companies.subsidiaries')]).toEqual(
+      shown.map((recordId) => ({ objectId: id('companies'), recordId })),
+    );
+    expect(mine?.linkTotals).toEqual({});
+    const [all] = await getRecords(owner, { ids: [hub] });
+    expect(all?.values[id('companies.subsidiaries')]).toHaveLength(20);
+    expect(all?.linkTotals).toEqual({ [id('companies.subsidiaries')]: 24 });
+    // Batched writes check the rule once for the batch: the member's records land, the hidden one doesn't.
+    const batch = await setValuesBatch(member, {
+      items: [
+        { recordId: shown[0] ?? '', values: { [id('companies.code')]: { value: 'S1' } } },
+        { recordId: id('globex'), values: { [id('companies.code')]: { value: 'S1' } } },
+      ],
+    });
+    expect(batch.map((each) => each.ok)).toEqual([true, false]);
+  });
+
+  it('refuses to replace a single reference holding a record the writer can’t see, and keeps it', async () => {
+    const refused = await refusals(
+      setValues(member, {
+        recordId: id('bob'),
+        values: { [id('people.company')]: { value: { objectId: id('companies'), recordId: id('acme') } } },
+      }),
+    );
+    expect(refused).toEqual([
+      {
+        code: 'ATTRIBUTE_READ_ONLY',
+        message: "Company holds a record you can't see, so you can't change it.",
+        attributeId: id('people.company'),
+      },
+    ]);
+    const [bob] = await getRecords(owner, { ids: [id('bob')] });
+    expect(bob?.values[id('people.company')]).toEqual({ objectId: id('companies'), recordId: id('globex') });
   });
 
   it('answers a write or a link naming a record outside it NOT_FOUND, as an unknown one', async () => {
@@ -480,6 +541,45 @@ describe('a record rule (AC-143)', () => {
       id('adaEntry'),
     ]);
     expect((await getEntries(member, { ids: [id('adaEntry')] })).map((entry) => entry.id)).toEqual([id('adaEntry')]);
+  });
+});
+
+describe('a hidden name attribute (AC-141, AC-144)', () => {
+  const nameless = () =>
+    testScope({
+      db,
+      workspaceId: owner.workspaceId,
+      actor: { type: 'member', id: memberId },
+      role: 'member',
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'member' },
+            target: { type: 'attribute', objectId: id('companies'), attributeId: id('companies.name') },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+
+  it('leaves the object’s primary attribute id out, names its records unnamed, and never quotes it in a refusal', async () => {
+    const scope = nameless();
+    const companies = (await listObjects(scope)).find((object) => object.id === id('companies'));
+    expect(companies).toBeDefined();
+    expect(companies?.primaryAttributeId).toBeUndefined();
+    const [globex] = await getRecords(scope, { ids: [id('globex')] });
+    expect(globex?.display.name).toBe('Unnamed company');
+    // Globex already has a parent (Acme): linking it under Initech is refused, without its name.
+    const refused = await refusals(
+      setValues(scope, {
+        recordId: id('initech'),
+        values: { [id('companies.subsidiaries')]: { value: [{ objectId: id('companies'), recordId: id('globex') }] } },
+      }),
+    );
+    expect(refused[0]?.code).toBe('RELATIONSHIP_TAKEN');
+    expect(refused[0]?.message).toContain('an unnamed company');
+    expect(refused[0]?.message).not.toContain('Globex');
   });
 });
 

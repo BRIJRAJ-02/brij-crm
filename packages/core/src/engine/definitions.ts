@@ -22,6 +22,7 @@ import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
 import { requirePermission } from '../access/check.ts';
 import { attributeVisible } from '../access/visibility.ts';
+import { objectLevel, type Access } from '../access/policy.ts';
 
 const { attributes, objects } = schema;
 
@@ -323,8 +324,10 @@ export async function defineAttribute(scope: EngineScope, input: AttributeInput,
   return result;
 }
 
-async function editable(tx: WorkspaceTx, attributeId: string): Promise<AttributeDef> {
+async function editable(tx: WorkspaceTx, access: Access, attributeId: string): Promise<AttributeDef> {
   const attribute = await loadAttribute(tx, attributeId, true);
+  // One the actor can't see answers as an unknown attribute (spec 0009, AC-141).
+  if (!attributeVisible(access, attribute)) throw refuse('NOT_FOUND', 'That attribute does not exist.', attribute.id);
   if (attribute.isSystem)
     throw refuse('ATTRIBUTE_READ_ONLY', `${attribute.title} is a system attribute.`, attribute.id);
   return attribute;
@@ -337,7 +340,7 @@ export async function updateAttribute(scope: EngineScope, input: AttributeUpdate
     scope,
     async (context) => {
       const { tx } = context;
-      const attribute = await editable(tx, input.attributeId);
+      const attribute = await editable(tx, context.scope.access, input.attributeId);
       if (input.title !== undefined) checkName(input.title, 'title');
       if (input.isUnique === true && !UNIQUE_TYPES.includes(attribute.type)) {
         throw refuse('CONFIG_INVALID', 'Only text, email, domain, URL, phone and number attributes can be unique.');
@@ -375,7 +378,7 @@ export async function archiveAttribute(scope: EngineScope, attributeId: string, 
     scope,
     async (context) => {
       const { tx } = context;
-      const attribute = await editable(tx, attributeId);
+      const attribute = await editable(tx, context.scope.access, attributeId);
       const [primary] = await tx
         .select({ id: objects.id })
         .from(objects)
@@ -401,7 +404,7 @@ export async function restoreAttribute(scope: EngineScope, attributeId: string, 
     scope,
     async (context) => {
       const { tx } = context;
-      const attribute = await editable(tx, attributeId);
+      const attribute = await editable(tx, context.scope.access, attributeId);
       if (attribute.archivedAt === null) return;
       if (attribute.isUnique) await fillUniqueKeys(tx, attribute, context.scope.access);
       await tx
@@ -418,6 +421,9 @@ export async function restoreAttribute(scope: EngineScope, attributeId: string, 
 export async function updateObject(scope: EngineScope, input: ObjectUpdate, hooks: readonly AfterWrite[] = []) {
   requirePermission(scope, 'schema.manage');
   checkId(input.objectId, 'That object does not exist.');
+  // An object the actor can't see answers as an unknown one (spec 0009, AC-140).
+  if (objectLevel(scope.access, input.objectId.toLowerCase()) === 'none')
+    throw refuse('NOT_FOUND', 'That object does not exist.');
   await runWrite(
     scope,
     async ({ tx }) => {
@@ -449,6 +455,9 @@ export async function setObjectArchived(
 ) {
   requirePermission(scope, 'schema.manage');
   checkId(input.objectId, 'That object does not exist.');
+  // An object the actor can't see answers as an unknown one (spec 0009, AC-140).
+  if (objectLevel(scope.access, input.objectId.toLowerCase()) === 'none')
+    throw refuse('NOT_FOUND', 'That object does not exist.');
   await runWrite(
     scope,
     async ({ tx }) => {

@@ -466,6 +466,20 @@ async function buildPage(
       ? candidate
       : undefined;
   const drive = drivable === undefined || !ruled ? drivable : withoutCounts(drivable);
+  // A jump the open policy refuses is refused under a rule too, so a rule never changes what a query may ask.
+  const jumpsOnRecordValues =
+    ruled &&
+    (query.position ?? 0) > 0 &&
+    candidate !== undefined &&
+    candidate.keys.length === firstKeyCount &&
+    !narrowedBySearch(context, query.filter) &&
+    candidate.count === undefined;
+  if (jumpsOnRecordValues) {
+    throw refuse(
+      'FILTER_INVALID',
+      'A list sorted by its records’ values pages by cursor; jump on an entry value instead.',
+    );
+  }
   if (drive === undefined) {
     const statement = plain(keys, sql``, sql`true`, cursor === undefined ? sql`true` : afterCursor(keys, cursor), 0);
     return {
@@ -1008,7 +1022,11 @@ async function readPage(
       : undefined;
   const recordIds = [...new Set(rows.map((row) => row.record_id))];
   // The view's own attributes are loaded already: the read back uses them rather than loading them again.
-  const records = await readRecords(tx, scope.access, recordIds, { attributes: built.attributesByObject });
+  // The page's own statement kept only what the principal may see; the read back doesn't check it again.
+  const records = await readRecords(tx, scope.access, recordIds, {
+    attributes: built.attributesByObject,
+    visibleAlready: true,
+  });
   const page: Page = !isList
     ? { records }
     : {
@@ -1017,6 +1035,7 @@ async function readPage(
           tx,
           scope.access,
           rows.map((row) => row.id),
+          true,
         ),
       };
   return nextCursor === undefined ? page : { ...page, nextCursor };
