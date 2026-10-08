@@ -18,15 +18,19 @@ const isSentryOrigin = (source: string) =>
   isEuIngestHost(new URL(source).hostname) &&
   new URL(source).origin === source;
 
-/** Whether a connect-src source is a live updates socket's origin. */
+/** Whether a connect-src source is the live updates socket's origin: Centrifugo on Railway, nothing else. */
 const isSocketOrigin = (source: string) =>
-  URL.canParse(source) && new URL(source).protocol === 'wss:' && new URL(source).origin === source;
+  URL.canParse(source) &&
+  new URL(source).protocol === 'wss:' &&
+  /^centrifugo[-\w]*\.up\.railway\.app$/u.test(new URL(source).hostname) &&
+  new URL(source).origin === source;
 
 describe("vercel.json's policy", () => {
   it("lets the browser connect to our own origin, Centrifugo's socket and at most one Sentry host, nothing else", () => {
     const [self, ...others] = directiveSources(policy, 'connect-src');
     expect(self).toBe("'self'");
     expect(others.filter(isSentryOrigin).length).toBeLessThanOrEqual(1);
+    expect(others.filter(isSocketOrigin).length).toBeLessThanOrEqual(1);
     for (const origin of others) expect(isSentryOrigin(origin) || isSocketOrigin(origin)).toBe(true);
   });
 
