@@ -2,7 +2,7 @@
 // seed writes and the session cookies minted for its users. Both are local to
 // this machine and gitignored; the harness (`packages/load`, milestone 2)
 // reads them through these schemas.
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import * as z from 'zod';
 import { loadRefusal } from './load-local.ts';
@@ -42,7 +42,11 @@ export const LoadManifest = z.object({
 });
 export type LoadManifest = z.infer<typeof LoadManifest>;
 
-/** The minted session cookies (AC-196), by user number, for the API at `apiUrl`. */
+/**
+ * The minted session cookies (AC-196), by user number, for the API at
+ * `apiUrl`. The file can be edited by hand, so milestone 2's `load:run` must
+ * check `apiUrl` with `assertLocalUrls` again before it sends a cookie there.
+ */
 export const LoadSessions = z.object({
   apiUrl: z.url(),
   mintedAt: z.iso.datetime({ offset: true }),
@@ -53,14 +57,24 @@ export type LoadSessions = z.infer<typeof LoadSessions>;
 const MANIFEST = 'manifest.json';
 const SESSIONS = 'sessions.json';
 
+/**
+ * Writes `value` as JSON to `dir/name`, readable by this user only: the folder
+ * 0700 and the file 0600 (sessions.json holds live cookies). The file is
+ * written beside its name and renamed into place, so a file that was there
+ * before, with looser modes, is replaced rather than kept.
+ */
 async function writeJson(dir: string, name: string, value: unknown): Promise<string> {
-  await mkdir(dir, { recursive: true });
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  await chmod(dir, 0o700);
   const path = join(dir, name);
-  await writeFile(path, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+  const temporary = `${path}.${String(process.pid)}.tmp`;
+  await writeFile(temporary, `${JSON.stringify(value, null, 2)}\n`, { mode: 0o600 });
+  await chmod(temporary, 0o600);
+  await rename(temporary, path);
   return path;
 }
 
-/** Writes `.load/manifest.json` in `dir`, and returns its path. */
+/** Writes `.load/manifest.json` in `dir` (0600, its folder 0700), and returns its path. */
 export function writeManifest(dir: string, manifest: LoadManifest): Promise<string> {
   return writeJson(dir, MANIFEST, LoadManifest.parse(manifest));
 }
