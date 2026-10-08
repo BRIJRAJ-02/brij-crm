@@ -5,6 +5,7 @@
 import { assertAppConnection, createDatabase, createOutboxReader, openDirectConnection } from '@crm/db';
 import { loadEnv, WorkerEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
+import { captureFault, flush, MONITORING_FLUSH_MS } from './monitoring/sentry.ts';
 import { createCentrifugoPublisher } from './realtime/centrifugo.ts';
 import { createRelay } from './realtime/relay.ts';
 import { onShutdown } from './shutdown.ts';
@@ -16,7 +17,10 @@ const db = createDatabase({
   url: env.DATABASE_URL,
   applicationName: 'crm-worker',
   maxConnections: 5,
-  onPoolError: (error) => log.error('Idle database client failed', errorFields(error)),
+  onPoolError: (error) => {
+    log.error('Idle database client failed', errorFields(error));
+    captureFault(error, { task: 'database pool' });
+  },
 });
 
 // The boot proof checks that a NOTIFY arrives on DATABASE_URL_DIRECT (no pooler); the relay's own connections,
@@ -37,9 +41,20 @@ try {
   }
 } catch (error) {
   log.error('Refusing to start', errorFields(error));
-  await db.close();
+  captureFault(error, { task: 'start' });
+  await Promise.all([db.close(), flush(MONITORING_FLUSH_MS)]);
   process.exit(1);
 }
+
+// The relay logs a fault it can't recover from as an error; each one is reported too (its message only: the fields
+// can name workspaces, which stay in the log).
+const reportingLog = {
+  ...log,
+  error: (message: string, fields?: Record<string, unknown>) => {
+    log.error(message, fields);
+    captureFault(new Error(message), { task: 'relay' });
+  },
+};
 
 const relay =
   env.centrifugo === undefined
@@ -47,7 +62,7 @@ const relay =
     : createRelay({
         connect: async () => createOutboxReader(await openDirect(false)),
         publishBatch: createCentrifugoPublisher(env.centrifugo).publishBatch,
-        log,
+        log: reportingLog,
       });
 if (relay === undefined) {
   log.info('Relay off: CENTRIFUGO_API_URL and CENTRIFUGO_API_KEY are unset, so no change is published');
@@ -64,4 +79,6 @@ onShutdown(async () => {
   await relay?.stop();
   await new Promise<void>((resolve) => health.close(() => resolve()));
   await db.close();
+  // What monitoring still holds goes out, within the shutdown window.
+  await flush(MONITORING_FLUSH_MS);
 });

@@ -1,5 +1,5 @@
 # One image, two Railway services: `api` (default command) and `worker`
-# (start command `node apps/api/src/worker.ts`). Build from the repo root:
+# (start command `node --import ./apps/api/src/monitoring/instrument.ts apps/api/src/worker.ts`). Build from the repo root:
 #   docker build -f apps/api/Dockerfile .
 # Node 24 runs the TypeScript sources directly (type stripping), so there is no build step.
 FROM node:24-alpine AS base
@@ -23,4 +23,5 @@ RUN addgroup -S app && adduser -S app -G app
 COPY --from=install --chown=app:app /app .
 USER app
 EXPOSE 8080
-CMD ["node", "apps/api/src/server.ts"]
+# Sentry's instrument loads first (spec 0010); without SENTRY_DSN_SERVER it starts nothing.
+CMD ["node", "--import", "./apps/api/src/monitoring/instrument.ts", "apps/api/src/server.ts"]

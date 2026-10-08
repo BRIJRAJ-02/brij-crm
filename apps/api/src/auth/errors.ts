@@ -8,6 +8,7 @@
 import { type ErrorCode, errorStatus, retryAfterSeconds } from '@crm/contracts';
 import * as z from 'zod';
 import { log } from '../log.ts';
+import { captureFault } from '../monitoring/sentry.ts';
 
 const Refusal = z.object({ code: z.string().optional(), message: z.string().optional() });
 
@@ -36,7 +37,7 @@ function json(body: { code: string; message: string }, status: number, headers: 
 }
 
 /** Rewrites an error answer from Better Auth into the shared shape. Success passes through untouched. */
-export async function authErrorResponse(response: Response): Promise<Response> {
+export async function authErrorResponse(response: Response, route = ''): Promise<Response> {
   if (response.status < 400) return response;
   const read: unknown = await response
     .clone()
@@ -57,6 +58,8 @@ export async function authErrorResponse(response: Response): Promise<Response> {
   }
   if (response.status >= 500) {
     log.error('Sign in route failed', { status: response.status, code });
+    // Better Auth caught the error itself (its logger has the detail); the report names the route and status.
+    captureFault(new Error(`Sign in route answered ${String(response.status)}`), { route: `auth ${route}` });
     return json({ code: 'INTERNAL', message: 'Something went wrong. Try again.' }, 500, response.headers);
   }
   const answered = code ?? BY_STATUS[response.status] ?? 'INPUT_INVALID';

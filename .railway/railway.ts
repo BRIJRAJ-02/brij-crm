@@ -22,7 +22,8 @@ export default defineRailway(() => {
     build: apiImage,
     // Migrations run on the direct connection as the owner, before the new version starts.
     preDeploy: 'node packages/db/scripts/migrate.ts',
-    start: 'node apps/api/src/server.ts',
+    // Sentry's instrument loads first (spec 0010); it starts nothing without SENTRY_DSN_SERVER.
+    start: 'node --import ./apps/api/src/monitoring/instrument.ts apps/api/src/server.ts',
     healthcheck: '/api/health/ready',
     env: {
       APP_ENV: preserve(),
@@ -48,6 +49,9 @@ export default defineRailway(() => {
       // Live updates (spec 0005): signs Centrifugo's tokens. In production, a reference to the Centrifugo
       // service's CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY; unset in preview-base, which has no live updates.
       CENTRIFUGO_TOKEN_SECRET: preserve(),
+      // Monitoring (spec 0010): the brij-crm-server project's DSN. Unset means off. The release is Railway's own
+      // RAILWAY_GIT_COMMIT_SHA, and the service comes from the start command's entry file.
+      SENTRY_DSN_SERVER: preserve(),
     },
   });
 
@@ -55,7 +59,7 @@ export default defineRailway(() => {
     source,
     regions: REGIONS,
     build: apiImage,
-    start: 'node apps/api/src/worker.ts',
+    start: 'node --import ./apps/api/src/monitoring/instrument.ts apps/api/src/worker.ts',
     healthcheck: '/health',
     env: {
       APP_ENV: api.env.APP_ENV,
@@ -65,6 +69,8 @@ export default defineRailway(() => {
       CENTRIFUGO_API_URL: preserve(),
       CENTRIFUGO_API_KEY: preserve(),
       WORKER_WAKE_SECRET: api.env.WORKER_WAKE_SECRET,
+      // The same Sentry project as the api, tagged service=worker.
+      SENTRY_DSN_SERVER: api.env.SENTRY_DSN_SERVER,
     },
   });
 

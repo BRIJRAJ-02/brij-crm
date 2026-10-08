@@ -27,6 +27,7 @@ The one modular API (Hono + oRPC) that every read and write goes through, and th
 | `src/worker-http.ts` | The worker's one port: `/health` and `POST /internal/outbox-wake` |
 | `src/realtime/tokens.ts` | Centrifugo's connection and subscription tokens (HS256 with `node:crypto`, 10 minutes, `sub` the user id), the one place the API signs them; `realtime.connectionToken` (a session) and `realtime.subscriptionToken` (the member door, channel `workspace:<id>`) hand them out |
 | `src/realtime/centrifugo.ts` | Centrifugo's server API (`/api/batch`, sequential, one call per workspace batch), the one place the backend calls it |
+| `src/monitoring/` | Sentry (spec 0010): `sentry.ts` is the one `@sentry/node` import (`startSentry`, `captureFault`, `withRequestScope`, `setRequestScope`, `flush`), `instrument.ts` starts it before anything else loads (`node --import`) when `SENTRY_DSN_SERVER` is set, and `config.ts` holds its small env schema |
 | `src/door.test.ts` | The contract walk: every procedure outside the bootstrap list must be built on `member`, and no file here builds an engine scope |
 | `src/log.ts` | The logger: one JSON line per event |
 | `Dockerfile` | `turbo prune`, a production install, Node 24 alpine |
@@ -65,7 +66,8 @@ docker build -f apps/api/Dockerfile .   # from the repo root
 - Turbo runs tasks in strict env mode, so shell variables don't reach `dev`. The scripts read the root `.env` themselves (`--env-file-if-exists`).
 - Railway runs migrations as the api's pre deploy step, on the owner role.
 - Forwarded headers (`x-forwarded-for` and the rest) are trusted only when the edge guard admitted the request by its secret (or locally). Read the IP from `context.clientIp`, never from the header. `EDGE_SECRET` is required outside local (the API refuses to boot without it), and only a value that is an IP reaches Better Auth's limiter.
-- A procedure throws an engine refusal or `apiError(code, message)`; never a hand made `ORPCError` with a status. Anything else is logged and answered as `INTERNAL`.
+- A procedure throws an engine refusal or `apiError(code, message)`; never a hand made `ORPCError` with a status. Anything else is logged, reported to Sentry (`captureFault`) and answered as `INTERNAL`. Refusals are never reported.
+- Both processes start with `node --import ./apps/api/src/monitoring/instrument.ts` (the scripts, `railway.ts` and the Dockerfile's `CMD`). Without `SENTRY_DSN_SERVER` every monitoring function is a no op, so tests and laptops send nothing. Nothing personal goes: `scrub` (`@crm/contracts/monitoring`) runs in every send hook, and the SDK's `dataCollection` is all off. Sentry drops an event identical to the one just before it, so a test that sends the same error twice sees one.
 
 ## Agent skills
 

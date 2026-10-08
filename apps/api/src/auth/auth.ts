@@ -13,6 +13,7 @@ import * as z from 'zod';
 import type { ApiEnv } from '../env.ts';
 import { log } from '../log.ts';
 import type { Mailer } from '../mail/mailer.ts';
+import { captureFault } from '../monitoring/sentry.ts';
 import { SIGN_IN_CODE_MINUTES, signInCodeEmail } from '../mail/sign-in-code.ts';
 import { createAllowlist } from './allowlist.ts';
 import { authErrorResponse } from './errors.ts';
@@ -250,6 +251,8 @@ export function createAuth({ env, identity, mailer }: AuthDeps): Auth {
       // Our mailers' messages name the service and the status, never the recipient.
       const failure = error instanceof Error ? { name: error.name, message: error.message } : { name: typeof error };
       log.error('Sign in code not sent', { mail: mailer.transport, error: failure });
+      // Nobody can sign in while mail fails, though the answer says sent; scrub marks any address in the message.
+      captureFault(error, { task: 'sign in mail' });
     }
   }
 
@@ -383,7 +386,10 @@ export function createAuth({ env, identity, mailer }: AuthDeps): Auth {
       const checked = await checkEmail(request);
       if (checked instanceof Response) return checked;
       const forwarded = new Request(checked, { headers: forwardedHeaders(checked.headers, clientIp, origin) });
-      return authErrorResponse(await auth.handler(forwarded));
+      return authErrorResponse(
+        await auth.handler(forwarded),
+        new URL(checked.url).pathname.slice(AUTH_BASE_PATH.length),
+      );
     },
 
     async session(headers, clientIp) {

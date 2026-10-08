@@ -12,7 +12,7 @@ const origins = z
   .pipe(z.array(z.url()).min(1));
 
 /** An optional variable where an empty value (`NAME=` in a file) counts as unset. */
-function optional<T extends z.ZodType>(schema: T) {
+export function optional<T extends z.ZodType>(schema: T) {
   return z.preprocess((value) => (value === '' ? undefined : value), schema.optional());
 }
 

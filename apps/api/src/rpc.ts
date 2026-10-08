@@ -15,6 +15,7 @@ import { RPCHandler } from '@orpc/server/fetch';
 import { ResponseHeadersPlugin } from '@orpc/server/plugins';
 import { apiError, toApiError } from './errors.ts';
 import { errorFields, log } from './log.ts';
+import { captureFault } from './monitoring/sentry.ts';
 import type { RequestContext } from './orpc.ts';
 
 // The error's name and where it was thrown, without its message: a parse
@@ -37,11 +38,9 @@ export function createRpcHandler(router: AnyRouter): RPCHandler<RequestContext> 
         } catch (thrown) {
           const { error, expected } = toApiError(thrown);
           if (!expected) {
-            log.error('Unhandled error', {
-              requestId: context.requestId,
-              procedure: path.join('.'),
-              ...errorFields(thrown),
-            });
+            const procedure = path.join('.');
+            log.error('Unhandled error', { requestId: context.requestId, procedure, ...errorFields(thrown) });
+            captureFault(thrown, { requestId: context.requestId, procedure });
           }
           const retryAfter = retryAfterSeconds(error.code);
           if (retryAfter !== undefined) context.resHeaders?.set('retry-after', String(retryAfter));
@@ -59,7 +58,10 @@ export function createRpcHandler(router: AnyRouter): RPCHandler<RequestContext> 
           if (thrown instanceof ORPCError && ErrorCode.safeParse(thrown.code).success) throw thrown;
           if (thrown instanceof ORPCError) {
             const { error, expected } = toApiError(thrown);
-            if (!expected) log.error('Unhandled error', { requestId: context.requestId, ...errorFields(thrown) });
+            if (!expected) {
+              log.error('Unhandled error', { requestId: context.requestId, ...errorFields(thrown) });
+              captureFault(thrown, { requestId: context.requestId, route: '/api/rpc' });
+            }
             throw error;
           }
           log.warn('Unreadable RPC request', { requestId: context.requestId, ...withoutMessage(thrown) });

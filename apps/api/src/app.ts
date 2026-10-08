@@ -9,6 +9,7 @@ import { createEdgeGuard } from './edge.ts';
 import type { ApiEnv } from './env.ts';
 import { createReadGate } from './gate.ts';
 import { errorFields, log } from './log.ts';
+import { captureFault, withRequestScope } from './monitoring/sentry.ts';
 import { createRealtimeTokens } from './realtime/tokens.ts';
 import type { WakeRelay } from './realtime/wake.ts';
 import { router as appRouter } from './router.ts';
@@ -32,6 +33,11 @@ interface AppVariables {
 /** A `{ code, message }` answer at the status the error map gives the code. */
 function errorResponse(code: ErrorCode, message: string): Response {
   return Response.json({ code, message }, { status: errorStatus(code) });
+}
+
+/** The route an error report names: a sign in route by its Better Auth path (`auth /sign-in/email-otp`), else the path. */
+export function routeOf(path: string): string {
+  return path.startsWith(`${AUTH_BASE_PATH}/`) ? `auth ${path.slice(AUTH_BASE_PATH.length)}` : path;
 }
 
 /** What the API serves with: the tenant database, global identity, sign in, and the relay's wake up call. */
@@ -70,7 +76,8 @@ export function createApp({
   app.use('*', async (c, next) => {
     const requestId = randomUUID();
     c.set('requestId', requestId);
-    await next();
+    // Its own monitoring scope too, so an error report names this request (and its user and workspace) only.
+    await withRequestScope(requestId, next);
     c.header('x-request-id', requestId);
   });
 
@@ -156,6 +163,7 @@ export function createApp({
   app.notFound(() => errorResponse('NOT_FOUND', 'There is nothing at this address.'));
   app.onError((error, c) => {
     log.error('Unhandled error', { requestId: c.get('requestId'), path: c.req.path, ...errorFields(error) });
+    captureFault(error, { requestId: c.get('requestId'), route: routeOf(c.req.path) });
     return errorResponse('INTERNAL', 'Something went wrong. Try again.');
   });
 

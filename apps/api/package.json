@@ -3,10 +3,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --env-file-if-exists=../../.env --watch src/server.ts",
-    "dev:worker": "node --env-file-if-exists=../../.env --watch src/worker.ts",
-    "start": "node src/server.ts",
-    "start:worker": "node src/worker.ts",
+    "dev": "node --env-file-if-exists=../../.env --import ./src/monitoring/instrument.ts --watch src/server.ts",
+    "dev:worker": "node --env-file-if-exists=../../.env --import ./src/monitoring/instrument.ts --watch src/worker.ts",
+    "start": "node --import ./src/monitoring/instrument.ts src/server.ts",
+    "start:worker": "node --import ./src/monitoring/instrument.ts src/worker.ts",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run"

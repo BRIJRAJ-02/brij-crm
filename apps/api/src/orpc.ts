@@ -18,6 +18,7 @@ import type { Auth, SessionUser } from './auth/auth.ts';
 import { apiError } from './errors.ts';
 import { log } from './log.ts';
 import type { ReadGate } from './gate.ts';
+import { setRequestScope } from './monitoring/sentry.ts';
 import type { RealtimeTokens } from './realtime/tokens.ts';
 import type { WakeRelay } from './realtime/wake.ts';
 
@@ -60,6 +61,8 @@ export const pub = base;
 export const requireSession = os.$context<RequestContext>().middleware(async ({ context, next }) => {
   const session = await context.auth.session(context.headers, context.clientIp);
   if (session === undefined) throw apiError('UNAUTHENTICATED', 'Sign in to continue.');
+  // An error report from here on names the user, by id only.
+  setRequestScope({ userId: session.user.id });
   for (const cookie of session.setCookies) context.resHeaders?.append('set-cookie', cookie);
   return next({ context: { user: session.user } });
 });
@@ -94,6 +97,8 @@ export const requireMember = os
       { db: context.db, identity: context.identity, log },
       { userId: context.user.id, slug: scoped.data.workspace },
     );
+    // An error report from here on names the workspace the door let them into.
+    setRequestScope({ workspaceId: scope.workspaceId });
     return next({ context: { scope, db: TAKEN_AWAY, identity: TAKEN_AWAY } });
   });
 

@@ -7,12 +7,16 @@ import { isEdgeGuardEnforced } from './edge.ts';
 import { ApiEnv, loadEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
 import { createMailer } from './mail/mailer.ts';
+import { captureFault, flush, MONITORING_FLUSH_MS } from './monitoring/sentry.ts';
 import { createRelayWake, NO_WAKE } from './realtime/wake.ts';
 import { onShutdown } from './shutdown.ts';
 
 const env = loadEnv(ApiEnv);
 
-const onPoolError = (error: Error) => log.error('Idle database client failed', errorFields(error));
+const onPoolError = (error: Error) => {
+  log.error('Idle database client failed', errorFields(error));
+  captureFault(error, { task: 'database pool' });
+};
 const db = createDatabase({ url: env.DATABASE_URL, applicationName: 'crm-api', onPoolError });
 // Global identity on its own login (spec 0005): the only role that reads and writes schema `auth`.
 const identity = createIdentityStore({
@@ -25,7 +29,8 @@ try {
   await identity.assertIdentityRole();
 } catch (error) {
   log.error('Refusing to start', errorFields(error));
-  await Promise.all([db.close(), identity.close()]);
+  captureFault(error, { task: 'start' });
+  await Promise.all([db.close(), identity.close(), flush(MONITORING_FLUSH_MS)]);
   process.exit(1);
 }
 
@@ -66,4 +71,6 @@ const server = serve(
 onShutdown(async () => {
   await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   await Promise.all([db.close(), identity.close()]);
+  // What monitoring still holds goes out, within the shutdown window.
+  await flush(MONITORING_FLUSH_MS);
 });
