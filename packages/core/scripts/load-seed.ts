@@ -5,19 +5,29 @@
 // seeds the profile (`crm` by default), mints a session for every seeded
 // user, writes `.load/manifest.json` and `.load/sessions.json`, then starts
 // the API and the worker. It refuses (exit 3) a database that already holds a
-// `load` workspace (naming `pnpm load:stack:wipe`) and any address that isn't
-// localhost. The root `.env` is never read: every address comes from the
-// `LOAD_*` variables, each defaulting to the load stack. Pointed at another
-// local Postgres (`LOAD_DATABASE_URL_OWNER`), it leaves Docker alone.
+// `load` workspace (naming `pnpm load:stack:wipe`) before touching it, and any
+// address that isn't localhost. Off the load stack it refuses to set up logins
+// unless both login URLs name their own logins (`assertLoginsApart`). The
+// root `.env` is never read: every address comes from the `LOAD_*` variables,
+// each defaulting to the load stack. Pointed at another local Postgres
+// (`LOAD_DATABASE_URL_OWNER`), it leaves Docker alone.
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseArgs } from 'node:util';
 import { createDatabase, createIdentityStore } from '@crm/db';
 import { SeedProfileName, writeManifest, writeSessions } from './load-files.ts';
-import { isLoadStackDatabase, LOAD_DIR, loadRefusal, loadUrls, runLoadCommand, type LoadUrls } from './load-local.ts';
+import {
+  assertLoginsApart,
+  isLoadStackDatabase,
+  LOAD_DIR,
+  loadRefusal,
+  loadUrls,
+  runLoadCommand,
+  type LoadUrls,
+} from './load-local.ts';
 import { LOAD_AUTH_SECRET, mintSessions } from './load-sessions.ts';
 import { isLoadStackUp, startLoadStack } from './load-stack.ts';
-import { seedCrm } from './seed-crm.ts';
+import { refuseSeeded, seedCrm } from './seed-crm.ts';
 
 const DB_SCRIPTS = fileURLToPath(new URL('../../db/scripts/', import.meta.url));
 
@@ -51,17 +61,19 @@ async function main(): Promise<void> {
   const profile = SeedProfileName.safeParse(values.profile);
   if (!profile.success) throw loadRefusal(`Unknown profile "${values.profile}": use crm, smoke or test.`);
   const urls = loadUrls(process.env);
+  assertLoginsApart(process.env, urls);
   const onStack = isLoadStackDatabase(urls.LOAD_DATABASE_URL_OWNER);
   if (onStack && !isLoadStackUp()) {
     log('starting the load stack');
     startLoadStack(false);
   }
-  setUpDatabase(urls);
-  log('migrations and logins');
-
   const db = createDatabase({ url: urls.LOAD_DATABASE_URL_OWNER, applicationName: 'crm-load-seed', maxConnections: 2 });
   const identity = createIdentityStore({ url: urls.LOAD_DATABASE_URL_OWNER, applicationName: 'crm-load-seed' });
   try {
+    // Before the migrations and logins touch anything: a seeded database is refused as it stands.
+    await refuseSeeded(db);
+    setUpDatabase(urls);
+    log('migrations and logins');
     log(`seeding the ${profile.data} profile`);
     const manifest = await seedCrm({ db, identity, log }, { profile: profile.data });
     log(`manifest ${await writeManifest(LOAD_DIR, manifest)}`);

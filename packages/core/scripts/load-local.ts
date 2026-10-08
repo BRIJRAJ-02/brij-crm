@@ -105,6 +105,34 @@ export function isLoadStackDatabase(url: string): boolean {
   return LOCAL_HOSTS.has(parsed.hostname) && parsed.port === String(LOAD_STACK.ports.postgres);
 }
 
+/** The dev stack's Postgres port (docker-compose.yml), which a load command never sets logins on by default. */
+export const DEV_POSTGRES_PORT = 5433;
+
+/**
+ * Refuses (exit 3) to create logins anywhere but the load stack unless both
+ * login URLs are named explicitly and with their own login names. Setting up a
+ * database resets its logins' passwords, and the stack's login names
+ * (`crm_app_user`, `crm_identity_user`) are the dev stack's too, so pointing
+ * `load:seed` at another Postgres (the dev one on 5433, say) with the defaults
+ * would break every app connected to it. Roles belong to the whole server.
+ */
+export function assertLoginsApart(env: Readonly<Record<string, string | undefined>>, urls: LoadUrls): void {
+  if (isLoadStackDatabase(urls.LOAD_DATABASE_URL_OWNER)) return;
+  const owner = new URL(urls.LOAD_DATABASE_URL_OWNER);
+  const where = owner.port === String(DEV_POSTGRES_PORT) ? 'the dev Postgres' : 'a Postgres other than the load stack';
+  const stackLogins = new Set([new URL(LOAD_STACK.appUrl).username, new URL(LOAD_STACK.identityUrl).username]);
+  for (const name of ['LOAD_PGBOUNCER_URL', 'LOAD_IDENTITY_DATABASE_URL'] as const) {
+    const login = new URL(urls[name]).username;
+    if (env[name] === undefined || stackLogins.has(login)) {
+      throw loadRefusal(
+        `Refusing to set up logins on ${where} with ${name} ${env[name] === undefined ? 'unset' : `as ${login}`}: ` +
+          'it would reset the passwords other apps there connect with. Name its own login (a load_ prefixed one) in ' +
+          `${name}, or use the load stack (\`pnpm load:stack\`).`,
+      );
+    }
+  }
+}
+
 /** Refuses (exit 3) when Docker has less memory than the load stack needs, naming what it found. */
 export function assertDockerMemory(bytes: number): void {
   if (bytes >= LOAD_STACK.minDockerMemoryBytes) return;

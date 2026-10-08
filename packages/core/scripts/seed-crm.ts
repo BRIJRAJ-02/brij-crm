@@ -389,9 +389,18 @@ export interface SeedInput {
   readonly chunk?: number;
 }
 
-/** Refuses (exit 3) when the database already holds a `load` workspace, or once did (a slug is never reused). */
-async function refuseSeeded(db: Database, probeId: string): Promise<void> {
-  const taken = await db.withWorkspace(probeId, async (tx) => {
+/**
+ * Refuses (exit 3) when the database already holds a `load` workspace, or
+ * once did (a slug is never reused). A database with no tables yet (before its
+ * first migration) holds none. `load:seed` calls it before it touches the
+ * database at all, and the seed again before it writes.
+ */
+export async function refuseSeeded(db: Database): Promise<void> {
+  const taken = await db.withWorkspace(newId(), async (tx) => {
+    const tables = await tx.execute<{ ready: boolean }>(sql`
+      select to_regclass('public.workspaces') is not null and to_regclass('auth.workspace_directory') is not null as ready
+    `);
+    if (tables.rows[0]?.ready !== true) return false;
     const result = await tx.execute<{ taken: boolean }>(sql`
       select exists (select 1 from workspaces where slug = ${LOAD_SLUG})
         or exists (select 1 from auth.workspace_directory where slug = ${LOAD_SLUG}) as taken
@@ -417,7 +426,7 @@ export async function seedCrm(deps: SeedDeps, input: SeedInput): Promise<LoadMan
   const profile = SEED_PROFILES[input.profile];
   const chunk = input.chunk ?? CHUNK;
   const workspaceId = newId();
-  await refuseSeeded(db, workspaceId);
+  await refuseSeeded(db);
   const run = <T>(work: (tx: WorkspaceTx) => Promise<T>) => db.withWorkspace(workspaceId, work);
 
   // Users: verified, named, made up. User 1 makes the workspace as a signed in person does.

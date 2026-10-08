@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   assertDockerMemory,
+  assertLoginsApart,
   assertLocalUrls,
   isLoadRefusal,
   isLoadStackDatabase,
@@ -87,6 +88,40 @@ describe('the localhost guard', () => {
   it('knows the load stack’s own database by its port', () => {
     expect(isLoadStackDatabase(LOAD_STACK.ownerUrl)).toBe(true);
     expect(isLoadStackDatabase('postgres://crm_owner:x@localhost:5433/load_smoke')).toBe(false);
+  });
+});
+
+describe('setting up logins off the load stack', () => {
+  const dev = 'postgres://crm_owner:crm_owner_local@localhost:5433/load_proof';
+  const apart = (env: Record<string, string>) => refusalOf(() => assertLoginsApart(env, loadUrls(env)));
+
+  it('lets the load stack’s own logins through on the load stack', () => {
+    expect(apart({})).toBeUndefined();
+  });
+
+  it('refuses the dev Postgres when the login URLs are left at their defaults', () => {
+    const refused = apart({ LOAD_DATABASE_URL_OWNER: dev });
+    expect(refused?.exitCode).toBe(3);
+    expect(refused?.message).toContain('the dev Postgres');
+  });
+
+  it('refuses the dev Postgres when a login URL names the stack’s (and the dev stack’s) login', () => {
+    const refused = apart({
+      LOAD_DATABASE_URL_OWNER: dev,
+      LOAD_PGBOUNCER_URL: 'postgres://crm_app_user:x@localhost:5433/load_proof',
+      LOAD_IDENTITY_DATABASE_URL: 'postgres://load_identity:x@localhost:5433/load_proof',
+    });
+    expect(refused?.message).toContain('crm_app_user');
+  });
+
+  it('lets another local Postgres through when both logins are its own', () => {
+    expect(
+      apart({
+        LOAD_DATABASE_URL_OWNER: dev,
+        LOAD_PGBOUNCER_URL: 'postgres://load_app:x@localhost:5433/load_proof',
+        LOAD_IDENTITY_DATABASE_URL: 'postgres://load_identity:x@localhost:5433/load_proof',
+      }),
+    ).toBeUndefined();
   });
 });
 

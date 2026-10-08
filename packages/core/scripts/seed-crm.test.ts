@@ -10,7 +10,7 @@ import { readRecordsById } from '../src/index.ts';
 import { testScope } from '../src/testing.ts';
 import { LoadManifest } from './load-files.ts';
 import { isLoadRefusal } from './load-local.ts';
-import { FILL_DETAILS, FILL_RATES, SEED_PROFILES, seedCrm } from './seed-crm.ts';
+import { FILL_DETAILS, FILL_RATES, refuseSeeded, SEED_PROFILES, seedCrm } from './seed-crm.ts';
 
 const { ownerUrl, appUrl } = inject('testDatabase');
 const profile = SEED_PROFILES.test;
@@ -247,5 +247,8 @@ describe('the test profile', () => {
     );
     expect(isLoadRefusal(refused) && refused.exitCode === 3).toBe(true);
     expect(String(refused)).toContain('pnpm load:stack:wipe');
+    // The same check load:seed makes before its migrations and logins touch the database.
+    const before: unknown = await refuseSeeded(db).catch((error: unknown) => error);
+    expect(isLoadRefusal(before) && before.exitCode === 3).toBe(true);
   });
 });

@@ -29,6 +29,14 @@ describe('pnpm load:seed', () => {
     expect(status).toBe(3);
   });
 
+  it('refuses to reset the dev Postgres’s logins, with exit 3, before connecting', () => {
+    const { status, output } = run('./load-seed.ts', ['--profile', 'test'], {
+      LOAD_DATABASE_URL_OWNER: 'postgres://crm_owner:crm_owner_local@localhost:5433/crm',
+    });
+    expect(status).toBe(3);
+    expect(output).toContain('the dev Postgres');
+  });
+
   it('refuses an unknown profile, with exit 3', () => {
     const { status, output } = run('./load-seed.ts', ['--profile', 'huge'], {});
     expect(status).toBe(3);
