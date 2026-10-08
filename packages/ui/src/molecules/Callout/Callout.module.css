@@ -1,6 +1,7 @@
 /* Callout: a bordered message in its tone's tag colours (info blue, success
    green, warning yellow, danger red), with an icon, an optional bold title
-   and the next step. The tag colours hold 4.5:1 for the text in both themes. */
+   and the next step; as a banner, full width under a view's bars. The tag
+   colours hold 4.5:1 for the text in both themes. */
 @layer components {
   .root {
     display: flex;
@@ -12,6 +13,15 @@
     border-radius: var(--radius-md);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
+  }
+
+  /* Banner: full width under a view's bars, which already draw the line above it. Square, a hairline
+     below in the tone's border colour, its content in line with the bars' content. */
+  .root[data-placement='banner'] {
+    padding-inline: var(--space-16);
+    border-block-start-style: none;
+    border-inline-style: none;
+    border-radius: 0;
   }
 
   .root[data-tone='info'] {

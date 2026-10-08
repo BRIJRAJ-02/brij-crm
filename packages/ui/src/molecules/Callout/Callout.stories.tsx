@@ -36,3 +36,24 @@ export const Tones: Story = {
     await expect(canvas.getByRole('alert')).toHaveTextContent('The sync stopped');
   },
 };
+
+/**
+ * Full width under a view's bars, for a state of the whole view: square, a
+ * hairline below, and announced politely as it appears.
+ */
+export const Banner: Story = {
+  render: () => (
+    <Stage direction="column">
+      <Callout placement="banner" isAnnounced>
+        Live updates are paused. Changes others make show here once the connection is back.
+      </Callout>
+      <Callout placement="banner" tone="warning" title="This view is read only">
+        An admin limited who can edit People.
+      </Callout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    // Its words arrive a frame after it does, so the status region announces them.
+    await expect(await canvas.findByRole('status')).toHaveTextContent('Live updates are paused');
+  },
+};

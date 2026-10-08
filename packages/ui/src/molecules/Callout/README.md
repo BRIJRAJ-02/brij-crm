@@ -16,10 +16,12 @@ New. An import that skipped rows (#30), a secret shown once (#34), a plan near i
 
 - `info` explains, `success` confirms in place, `warning` comes before a risky step, `danger` says what failed (and is announced).
 - Never the only copy of something critical for long: pair it with the place to act.
+- `placement`: `inline` (the default) sits inside a padded region, as a bordered box. `banner` runs full width under a view's bars, for a state of the whole view (live updates paused): square, with only a hairline below in its tone's colour (the bar above draws the line over it), its content in line with the bars' content. Why a variant: a bordered, rounded box flush against the view's edges notched against the sidebar, doubled the bar's hairline and sat out of line with the bars.
+- `isAnnounced` says it politely when it appears (`role="status"`), for a state that changed under the person rather than one they caused. Its words go in a frame after it mounts, since a status region announces changes, not what it was born with. `danger` is always announced, as an alert.
 
 ## States
 
-The four tones.
+The four tones, inline and as a banner, announced or not.
 
 ## Keyboard
 

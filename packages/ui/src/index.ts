@@ -76,7 +76,7 @@ export { arraySource, type ListRange, type ListSource } from './lib/list-source.
 export { safeHref } from './lib/safe-href.ts';
 export { safeImageSrc } from './lib/safe-image-src.ts';
 export { Breadcrumbs, type BreadcrumbsProps, type Crumb } from './molecules/Breadcrumbs/Breadcrumbs.tsx';
-export { Callout, type CalloutProps, type CalloutTone } from './molecules/Callout/Callout.tsx';
+export { Callout, type CalloutPlacement, type CalloutProps, type CalloutTone } from './molecules/Callout/Callout.tsx';
 export { Card, type CardProps } from './molecules/Card/Card.tsx';
 export { CodeInput, type CodeInputProps } from './molecules/CodeInput/CodeInput.tsx';
 export {
