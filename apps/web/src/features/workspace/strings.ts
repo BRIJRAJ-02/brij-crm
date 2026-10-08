@@ -35,6 +35,11 @@ export const strings = {
   attributeAdded: (title: string) => `${title} added.`,
   /** New person with no name typed. */
   recordNameMissing: (singularName: string) => `Name the ${singularName.toLowerCase()}.`,
+  /** While another order's first rows load (spec 0006, AC-57). */
+  sorting: 'Sorting',
+  retry: 'Retry',
+  /** A sort whose first rows didn't load; Retry asks again. */
+  sortFailed: (column: string) => (column === '' ? 'Couldn’t sort the table.' : `Couldn’t sort by ${column}.`),
   /** A failure the server didn't explain. */
   somethingWrong: 'Something went wrong. Try again in a moment.',
   /** Above the table while the live connection is down (AC-38). */

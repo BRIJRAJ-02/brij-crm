@@ -104,22 +104,15 @@
     }
   }
 
-  /* A row's note on its row header, after the value: label type in a quiet
-     pill, accent tinted for a record just made, neutral for one that left the
-     view. It never takes the click meant for the name. */
+  /* A row's note (a Badge with a label) on its row header, after the value
+     and apart from it; it may shrink and truncate in a narrow column, and never
+     takes the click meant for the name. */
   .note {
-    flex: none;
+    display: inline-flex;
+    flex: 0 1 auto;
+    min-inline-size: 0;
     margin-inline-start: auto;
-    padding-inline: var(--space-6);
-    border-radius: var(--radius-xs);
-    background: var(--surface-subtle);
-    color: var(--text-secondary);
-    font: var(--text-label);
+    padding-inline-start: var(--space-8);
     pointer-events: none;
-  }
-
-  .note[data-note='new'] {
-    background: var(--accent-soft);
-    color: var(--link);
   }
 }

@@ -32,3 +32,19 @@ export const Tones: Story = {
     await expect(canvas.getByText('unread')).toBeInTheDocument();
   },
 };
+
+/** A capped count (a filtered view past 10,000), and short labels (a grid row's notes). */
+export const AtLeastAndLabel: Story = {
+  render: () => (
+    <Stage>
+      <Badge count={10_000} max={Infinity} isAtLeast label="people" />
+      <Badge text="New" />
+      <Badge text="Doesn’t match this view" />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('10,000+')).toBeInTheDocument();
+    await expect(canvas.getByText('New')).toBeInTheDocument();
+    await expect(canvas.getByText('Doesn’t match this view')).toBeInTheDocument();
+  },
+};

@@ -10,19 +10,19 @@ _Steps derived from spec 0006's acceptance criteria. `/check verify` runs these;
 - **Not the dev server.** The same flow against `vite dev` (React's development build) measured jumps p95 689 ms, frames p95 33.3 ms and a 52 MB heap: development React drops frames on its own, so the numbers below are the production build's, as the grid's own perf test is.
 - **The machine** ran other agents' work at the same time (8 cores).
 
-### Numbers (production build, 2026-10-08)
+### Numbers (production build, 2026-10-08, after the reviews' fixes)
 
 | Measure | Result | Budget |
 |---|---|---|
-| AC-52: 20 scrollbar jumps over the deals table, each until its rows show | p50 245 ms, p95 462 ms, max 831 ms | p95 under 1 s |
-| AC-52: a jump to row 600,000 | 309 ms | under 1 s |
-| AC-54: heap after GC, whole view by position (989,993 rows, a step every 2,000 rows, sampled every 50,000) | 18.7 MB at the top, 22.7 MB at most; growth after 50,000 rows 2.6 MB | under 200 MB; growth under 30 MB |
-| AC-54: heap after GC, 10,000 rows by cursor (Owner, ascending, a step every 100 rows) | 22.0 to 22.5 MB | under 200 MB |
-| AC-54: frame times over the grid story's scripted scroll (60 steps in 3 s, top to bottom), by position | 184 frames, p95 16.7 ms, max 16.8 ms | p95 under 16.7 ms (see below) |
+| AC-52: 20 scrollbar jumps over the deals table, each until its rows show | p50 355 ms, p95 639 ms, max 1,044 ms | p95 under 1 s |
+| AC-52: a jump to row 600,000 | 444 ms | under 1 s |
+| AC-54: heap after GC, whole view by position (989,993 rows, a step every 2,000 rows, sampled every 50,000) | 19.0 MB at the top, 23.3 MB at most; growth after 50,000 rows 3.2 MB | under 200 MB; growth under 30 MB |
+| AC-54: heap after GC, 10,000 rows by cursor (Owner, ascending, a step every 100 rows) | 16.5 to 17.4 MB | under 200 MB |
+| AC-54: frame times over the grid story's scripted scroll (60 steps in 3 s, top to bottom), by position | 184 frames, p95 16.7 ms, max 33.3 ms (one dropped frame) | p95 under 16.7 ms (see below) |
 | AC-54: the same by cursor | 184 frames, p95 16.8 ms, max 16.8 ms | as above |
-| Cursor blocks of 100 rows sorted by Owner (a member's name) | p50 2,091 ms, p95 2,640 ms | none in this spec |
+| Cursor blocks of 100 rows sorted by Owner (a member's name) | p50 1,993 ms, p95 2,856 ms | none in this spec |
 
-Frame times are the gaps between animation frames, which sit on the 60 Hz beat (16.67 ms) with up to a millisecond of jitter; a dropped frame shows as 33 ms. No frame was dropped in either scroll (max 16.8 ms), so the p95 sits on the beat. The flow asserts the p95 under 17.7 ms for that reason.
+Frame times are the gaps between animation frames, which sit on the 60 Hz beat (16.67 ms) with up to a millisecond of jitter; a dropped frame shows as 33 ms. One frame was dropped in the scroll by position and none by cursor, so the p95 sits on the beat. An earlier run before the reviews' fixes measured jumps p95 462 ms, heap 18.7 to 22.7 MB and no dropped frame: the machine was shared, so the two runs differ by load. The flow asserts the p95 under 17.7 ms for that reason.
 
 ### Steps
 
@@ -45,3 +45,5 @@ Frame times are the gaps between animation frames, which sit on the 60 Hz beat (
 - **The grid could not reach the last rows.** Browsers stop scrolling near 33.5 million px (Firefox near 17.9 million), and 989,993 rows of 34 px is 33.7 million, so a scroll to the bottom stopped near row 986,900. The grid now draws a body of at most 15 million px and scales scroll positions past it (`DataGrid.tsx`, `MAX_BODY`).
 - **A new sort's view never heard the range on screen.** The grid asked a source for its rows only when the range changed, so after a sort the new view loaded only its first block. A view's `onRangeChange` is now one function for its life, and the grid asks again when it changes.
 - **Sorting by a member is slow at this size.** Cursor blocks sorted by Owner took about 2 s each on the scale seed (spec 0004 lists member and reference sorts as best effort). Nothing in this spec budgets it; worth a look with #20's saved views.
+- **A cursor window counted past 10,000 read without bound.** An unfiltered view sorted by a member has an exact count (989,993), and a drag far down read ahead in calls of 200 until it got there: about 3,000 calls of 2 s. Its bar now covers 10,000 plus the rows loaded, as a capped count's does, and one read ahead makes 50 calls at most (`windows.test.ts`).
+- **A change could make every tab reread at once.** Any event naming a record a window didn't show dirtied it, so an edit out of sight made all tabs settle 1.5 s later together. Now such an id dirties a window only when it was minted in the last 10 minutes (it may be a create), and every settle waits a random 0 to 2 s more, at most 5 s after the first change (`layer.test.ts`).

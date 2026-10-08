@@ -4,6 +4,7 @@
 // refused, which the grid's one shared tooltip shows.
 import { useRef, type MouseEvent, type ReactNode } from 'react';
 import { FocusScope } from 'react-aria';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { SharedTooltipContext } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -144,7 +145,8 @@ export function GridCell({
     content = (
       <>
         <Skeleton width="medium" />
-        {isRowHeader && <VisuallyHidden>{strings.loadingRow}</VisuallyHidden>}
+        {/* A row still loading, or a value not read yet (a column just shown): never read as empty. */}
+        <VisuallyHidden>{strings.loadingRow}</VisuallyHidden>
       </>
     );
   } else if (mode === 'cell' || mode === 'list') content = editor;
@@ -185,8 +187,10 @@ export function GridCell({
     >
       {content}
       {note !== undefined && isLoaded && mode === undefined && (
-        <span className={styles.note} data-note={note}>
-          {note === 'new' ? strings.rowNew : strings.rowNoLongerMatches}
+        <span className={styles.note}>
+          {/* Read apart from the name before it. */}
+          <VisuallyHidden>{strings.noteSeparator}</VisuallyHidden>
+          <Badge text={note === 'new' ? strings.rowNew : strings.rowNoLongerMatches} />
         </span>
       )}
       {tip !== undefined && (

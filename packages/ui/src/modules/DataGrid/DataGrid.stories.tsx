@@ -31,6 +31,7 @@ interface SampleGridProps {
   readonly rowNotes?: ReadonlyMap<string, RowNote>;
   /** Columns not read yet for these rows (a column just shown): their cells draw skeletons. */
   readonly unknown?: { readonly rows: readonly string[]; readonly column: string };
+  readonly sort?: { readonly columnId: string; readonly direction: 'ascending' | 'descending' };
 }
 
 /** A grid over sample companies that keeps its own edits, columns and selection, as a screen would. */
@@ -46,6 +47,7 @@ function SampleGrid({
   confirmsPaste,
   rowNotes,
   unknown,
+  sort,
 }: SampleGridProps) {
   const [data, setData] = useState(() => sampleRows(count));
   const [layout, setLayout] = useState(() => ({ columns: sampleColumns(columnCount), pinnedCount: 1 }));
@@ -114,6 +116,7 @@ function SampleGrid({
         {...(onRowOpen === undefined ? {} : { onRowOpen })}
         {...(confirmsPaste === undefined ? {} : { confirmsPaste })}
         {...(rowNotes === undefined ? {} : { rowNotes })}
+        {...(sort === undefined ? {} : { sort, onSort: () => undefined })}
         {...(unknown === undefined
           ? {}
           : {
@@ -470,6 +473,15 @@ export const RowNotesAndUnreadCells: Story = {
     await expect(cell(canvasElement, 0, 1)).toHaveTextContent('New');
     await expect(cell(canvasElement, 3, 2)?.querySelector('[data-shape]')).not.toBeNull();
     await expect(cell(canvasElement, 1, 2)?.querySelector('[data-shape]')).toBeNull();
+  },
+};
+
+/** Sorted by Employees, descending: the header says so (aria-sort) and shows the direction's arrow. */
+export const Sorted: Story = {
+  args: { sort: { columnId: 'employees', direction: 'descending' } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('columnheader', { name: /Employees/ })).toHaveAttribute('aria-sort', 'descending');
+    await expect(canvas.getByRole('columnheader', { name: /Domain/ })).not.toHaveAttribute('aria-sort');
   },
 };
 

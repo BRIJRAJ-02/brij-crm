@@ -14,10 +14,10 @@ import {
   type SortRule,
 } from '@crm/data';
 import { useLiveStatus, useView } from '@crm/data/react';
-import { Badge, Button, Callout, EmptyState, TopBar, ViewBar } from '@crm/ui';
+import { Badge, Button, Callout, EmptyState, Spinner, TopBar, useDelayedLoading, ViewBar } from '@crm/ui';
 import { columnWidthFor, DataGrid, type GridColumn } from '@crm/ui/grid';
 import { useRouteContext, useRouter } from '@tanstack/react-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AddAttributeDialog } from './AddAttributeDialog.tsx';
 import { queryOf, shownAttributes } from './columns.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
@@ -78,7 +78,7 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
   // The column menu's sort, for this visit (spec 0006, AC-57): it replaces the order, and #20 saves it with a view.
   const [sort, setSort] = useState(opening);
   // The view for that sort: the warmed one until another sort's first rows are in, so the table never blanks.
-  const [shown, setShown] = useState({ key: sortKey(opening), view: warmed });
+  const [shown, setShown] = useState({ key: sortKey(opening), view: warmed, sort: opening });
   const wanted = sortKey(sort);
   const [layout, setLayout] = useState<{ readonly columns: readonly GridColumn[]; readonly pinnedCount: number }>({
     columns: [],
@@ -90,15 +90,35 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
     () => columns.filter((column) => column.isHidden !== true).map((column) => column.id),
     [columns],
   );
+  // An order that arrived while a cell was being edited waits until the editor closes, so the draft keeps its row.
+  const isEditing = useRef(false);
+  const waiting = useRef<typeof shown | undefined>(undefined);
   useEffect(() => {
     if (shown.key === wanted) return;
     let isCurrent = true;
     data.records.view(slug, object.id, queryOf(sort), visible).then(
       (next) => {
-        if (isCurrent) setShown({ key: wanted, view: next });
+        if (!isCurrent) return;
+        const arrived = { key: wanted, view: next, sort };
+        if (isEditing.current) waiting.current = arrived;
+        else setShown(arrived);
       },
       () => {
-        if (isCurrent) toasts.toast({ tone: 'danger', message: strings.somethingWrong });
+        if (!isCurrent) return;
+        // Back to the order on screen, so choosing that sort again asks again; Retry asks for it now.
+        const failed = sort;
+        setSort(shown.sort);
+        const title = attributes.find((attribute) => attribute.id === failed?.attributeId)?.title ?? '';
+        toasts.toast({
+          tone: 'danger',
+          message: strings.sortFailed(title),
+          action: {
+            label: strings.retry,
+            onAction: () => {
+              setSort(failed);
+            },
+          },
+        });
       },
     );
     return () => {
@@ -108,6 +128,8 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wanted, shown.key, data, slug, object.id]);
   const view = shown.view;
+  // Another order's first rows are on their way: the old ones stay, and the view bar says it is working.
+  const isReordering = useDelayedLoading(shown.key !== wanted);
   const state = useView(view, visible);
   // Paused only while the live connection is down; off (previews) shows nothing.
   const live = useLiveStatus(data.live);
@@ -149,8 +171,9 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
               ? {
                   meta: (
                     <Badge
-                      count={state.count.atLeast ? state.count.count + 1 : state.count.count}
-                      max={state.count.atLeast ? state.count.count : Infinity}
+                      count={state.count.count}
+                      max={Infinity}
+                      isAtLeast={state.count.atLeast}
                       label={object.pluralName.toLowerCase()}
                     />
                   ),
@@ -171,6 +194,7 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
             currentViewId={ALL}
             onViewChange={() => undefined}
           >
+            {isReordering && <Spinner label={strings.sorting} />}
             {canChangeSchema && (
               <Button icon="plus" onPress={() => setAdding(true)}>
                 {strings.addAttribute}
@@ -193,10 +217,21 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
               getValue={(row, columnId) => row.values[columnId] ?? null}
               isCellKnown={isCellKnown}
               rowNotes={state.rowNotes}
-              onEditingChange={view.holdSettle}
+              onEditingChange={(isOpen) => {
+                view.holdSettle(isOpen);
+                isEditing.current = isOpen;
+                const arrived = waiting.current;
+                if (!isOpen && arrived !== undefined) {
+                  waiting.current = undefined;
+                  if (arrived.key === sortKey(sort)) setShown(arrived);
+                }
+              }}
               onSort={(columnId, direction) => {
                 setSort({ attributeId: columnId, direction });
               }}
+              {...(shown.sort === undefined
+                ? {}
+                : { sort: { columnId: shown.sort.attributeId, direction: shown.sort.direction } })}
               getDisplay={(_row, columnId) => (actorColumns.has(columnId) ? memberDisplays : undefined)}
               rowHeader={rowHeader}
               onColumnsChange={(next, pinnedCount) => {

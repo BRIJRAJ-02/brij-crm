@@ -43,6 +43,8 @@ export interface GridHeaderCellProps {
   readonly isMenuOpen: boolean;
   readonly onMenuOpenChange: (isOpen: boolean) => void;
   readonly actions: ColumnActions;
+  /** The rows are sorted by this column, this way: `aria-sort`, and the direction's arrow after the name. */
+  readonly sorted?: 'ascending' | 'descending';
 }
 
 const COLUMN_TYPE = 'application/x-crm-grid-column';
@@ -62,6 +64,7 @@ export function GridHeaderCell({
   isMenuOpen,
   onMenuOpenChange,
   actions,
+  sorted,
 }: GridHeaderCellProps) {
   const ref = useRef<HTMLDivElement>(null);
   const [dropSide, setDropSide] = useState<'before' | 'after'>('before');
@@ -143,6 +146,7 @@ export function GridHeaderCell({
       ref={ref}
       role="columnheader"
       aria-colindex={place.col + 1}
+      aria-sort={sorted}
       className={styles.root}
       data-cell={`-1:${String(place.col)}`}
       data-focused={isFocused || undefined}
@@ -163,6 +167,14 @@ export function GridHeaderCell({
           <TruncatedText>{attribute.name}</TruncatedText>
         </Tooltip>
       </span>
+      {/* Decorative: aria-sort says it to screen readers. */}
+      {sorted !== undefined && (
+        <Icon
+          name={sorted === 'ascending' ? 'arrow-up-narrow-wide' : 'arrow-down-wide-narrow'}
+          size="sm"
+          tone="muted"
+        />
+      )}
       {attribute.computed !== undefined && (
         <Icon name="square-function" size="sm" tone="muted" label={strings.computedColumn} />
       )}

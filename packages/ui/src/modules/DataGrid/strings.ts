@@ -22,6 +22,8 @@ export const strings = {
   loadingRow: 'Loading',
   /** A row's note (spec 0006, AC-56): a record just made here, and an edited row that left the view's filter. */
   rowNew: 'New',
+  /** Between a row header's value and its note, for screen readers. */
+  noteSeparator: ', ',
   rowNoLongerMatches: 'Doesn’t match this view',
   empty: 'No records yet',
   emptyText: 'Records you add or import show here.',
@@ -39,6 +41,8 @@ export const strings = {
     count === '1' ? `1 was refused: ${reason}` : `${count} were refused, such as: ${reason}`,
   clippedCause: (count: string) => (count === '1' ? '1 fell outside the table.' : `${count} fell outside the table.`),
   readOnlyCause: (count: string) => (count === '1' ? '1 is read only.' : `${count} are read only.`),
+  /** Cells whose values weren't read yet (a column just shown): never written over. */
+  unreadCause: (count: string) => (count === '1' ? '1 isn’t loaded yet.' : `${count} aren’t loaded yet.`),
   notCleared: (count: string, reason: string) =>
     count === '1' ? `1 cell wasn’t cleared: ${reason}` : `${count} cells weren’t cleared: ${reason}`,
   leftOut: (count: string) =>

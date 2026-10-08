@@ -112,6 +112,8 @@ export interface DataGridProps<Row> {
   readonly onRowOpen?: (rowId: string) => void;
   /** Adds Sort to the column menu. */
   readonly onSort?: (columnId: string, direction: 'ascending' | 'descending') => void;
+  /** The order the rows are in, by one column: its header says so (`aria-sort`, and the direction's arrow). */
+  readonly sort?: { readonly columnId: string; readonly direction: 'ascending' | 'descending' };
   /** Adds Filter to the column menu. */
   readonly onFilter?: (columnId: string) => void;
   /** Members to match pasted names and emails against. */
@@ -227,6 +229,7 @@ export function DataGrid<Row>({
   emptyState,
   onRowOpen,
   onSort,
+  sort,
   onFilter,
   members,
   phone,
@@ -355,6 +358,15 @@ export function DataGrid<Row>({
   useLayoutEffect(() => {
     onRangeChange.current = rows.onRangeChange;
   });
+  // A new order starts at its top: the rows that were on screen are elsewhere in it, so focus goes to its first row.
+  const sortKey = sort === undefined ? '' : `${sort.columnId}:${sort.direction}`;
+  const sortedBy = useRef(sortKey);
+  useEffect(() => {
+    if (sortedBy.current === sortKey) return;
+    sortedBy.current = sortKey;
+    virtualizer.scrollToOffset(0);
+    setFocusAt((at) => ({ row: Math.min(at.row, 0), col: at.col }));
+  }, [sortKey, virtualizer]);
   // Asked again when the rows come from a new source (another sort's view), which knows nothing of the range yet.
   const rangeTarget = rows.onRangeChange;
   useEffect(() => {
@@ -413,9 +425,11 @@ export function DataGrid<Row>({
   });
   useEffect(() => {
     if (!isEditingNow) return;
-    editingChange.current?.(true);
+    // The callback of the screen the editor opened under: a new source meanwhile (another sort) never takes the release.
+    const told = editingChange.current;
+    told?.(true);
     return () => {
-      editingChange.current?.(false);
+      told?.(false);
     };
   }, [isEditingNow]);
   const textContext = (attribute: FieldAttribute, display?: unknown): TextContext => ({
@@ -650,6 +664,8 @@ export function DataGrid<Row>({
     const column = columnAt(position.col);
     const item = rowItem(position.row);
     if (column === undefined || item === undefined || readOnlyReasonOf(column.attribute) !== undefined) return;
+    // A value not read yet can't be flipped: its old value is unknown.
+    if (isCellKnown?.(item, column.id) === false) return;
     emit([{ rowId: rows.getKey(item), columnId: column.id, value: getValue(item, column.id) !== true }]);
   };
 
@@ -666,12 +682,19 @@ export function DataGrid<Row>({
     const edges = targetEdges();
     const changes: CellChange[] = [];
     const refused: (readonly [string, string])[] = [];
+    let unread = 0;
     for (let row = edges.top; row <= edges.bottom; row += 1) {
       const id = rowIdAt(row);
-      if (id === undefined) continue;
+      const data = rowItem(row);
+      if (id === undefined || data === undefined) continue;
       for (let col = Math.max(1, edges.left); col <= edges.right; col += 1) {
         const column = columnAt(col);
         if (column === undefined || readOnlyReasonOf(column.attribute) !== undefined) continue;
+        // A value not read yet is never cleared: what it held is unknown, so nothing could put it back.
+        if (isCellKnown?.(data, column.id) === false) {
+          unread += 1;
+          continue;
+        }
         const result = toCommittable(column.attribute, clearedValueOf(column.attribute));
         if (result.ok) changes.push({ rowId: id, columnId: column.id, value: result.value });
         else refused.push([`${id}:${column.id}`, result.message]);
@@ -679,6 +702,7 @@ export function DataGrid<Row>({
     }
     emit(changes);
     addLocalErrors(refused);
+    if (unread > 0) toasts.toast({ tone: 'danger', message: strings.notLoaded });
     if (refused.length > 0 && range !== undefined) {
       toasts.toast({ tone: 'danger', message: strings.notCleared(number(refused.length), refused[0]?.[1] ?? '') });
     }
@@ -921,6 +945,12 @@ export function DataGrid<Row>({
       for (let col = Math.max(1, edges.left); col <= edges.right; col += 1) {
         const column = columnAt(col);
         if (column === undefined) continue;
+        // A value not read yet would copy as empty: say so, as for a row still loading.
+        if (isCellKnown?.(item, column.id) === false) {
+          event.preventDefault();
+          toasts.toast({ tone: 'danger', message: strings.notLoaded });
+          return;
+        }
         const value = getValue(item, column.id);
         const display = getDisplay?.(item, column.id);
         line.push(
@@ -952,6 +982,7 @@ export function DataGrid<Row>({
     const changes: CellChange[] = [];
     const refused: (readonly [string, string])[] = [];
     let readOnly = 0;
+    let unread = 0;
     for (const cell of plan.cells) {
       const column = columnAt(cell.col);
       const id = rowIdAt(cell.row);
@@ -959,6 +990,12 @@ export function DataGrid<Row>({
       const { attribute } = column;
       if (readOnlyReasonOf(attribute) !== undefined) {
         readOnly += 1;
+        continue;
+      }
+      // A value not read yet is never written over: what it held is unknown, so nothing could put it back.
+      const data = rowItem(cell.row);
+      if (data !== undefined && isCellKnown?.(data, column.id) === false) {
+        unread += 1;
         continue;
       }
       const parsed =
@@ -976,7 +1013,7 @@ export function DataGrid<Row>({
     emit(changes);
     // Refused cells keep their reason, so they can be found after the toast has gone.
     addLocalErrors(refused);
-    const left = refused.length + plan.clipped + readOnly;
+    const left = refused.length + plan.clipped + readOnly + unread;
     if (left === 0) {
       if (confirmsPaste) toasts.toast({ tone: 'success', message: strings.pasted(number(changes.length)) });
       return;
@@ -985,6 +1022,7 @@ export function DataGrid<Row>({
       refused.length > 0 ? strings.refusedCause(number(refused.length), refused[0]?.[1] ?? '') : '',
       plan.clipped > 0 ? strings.clippedCause(number(plan.clipped)) : '',
       readOnly > 0 ? strings.readOnlyCause(number(readOnly)) : '',
+      unread > 0 ? strings.unreadCause(number(unread)) : '',
     ].filter((cause) => cause !== '');
     toasts.toast({ tone: 'danger', message: strings.notPasted(number(left), causes.join(' ')) });
   };
@@ -1113,6 +1151,8 @@ export function DataGrid<Row>({
       screen={isScreenSelected ? 'all' : screenSelected > 0 ? 'some' : 'none'}
       isEmpty={count === 0}
       handlers={headerHandlers}
+      sortColumn={sort?.columnId}
+      sortDirection={sort?.direction}
     />
   );
 
@@ -1412,6 +1452,9 @@ interface GridHeaderProps {
   readonly screen: 'none' | 'some' | 'all';
   readonly isEmpty: boolean;
   readonly handlers: HeaderHandlers;
+  /** The column the rows are sorted by, and which way. */
+  readonly sortColumn: string | undefined;
+  readonly sortDirection: 'ascending' | 'descending' | undefined;
 }
 
 /** The header row: the checkbox for the rows on screen, then a header per drawn column. Memoised, so a scroll step skips it. */
@@ -1430,6 +1473,8 @@ const GridHeader = memo(function GridHeader({
   screen,
   isEmpty,
   handlers,
+  sortColumn,
+  sortDirection,
 }: GridHeaderProps) {
   const runOf = (id: string) => layout.columns.findIndex((each) => each.id === id) < layout.pinnedCount;
   const canMove = (id: string, direction: -1 | 1) => moveColumn(layout, id, direction) !== layout;
@@ -1467,6 +1512,7 @@ const GridHeader = memo(function GridHeader({
             isFocused={focusCol === place.col}
             isResizing={resizing === each.column.id}
             isMenuOpen={menuFor === each.column.id}
+            {...(sortColumn === each.column.id && sortDirection !== undefined ? { sorted: sortDirection } : {})}
             onMenuOpenChange={(isOpen) => {
               handlers.setMenuFor(isOpen ? each.column.id : undefined);
             }}

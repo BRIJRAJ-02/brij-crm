@@ -1,4 +1,5 @@
-/* Badge: a 16px count, tabular figures, grey or accent. */
+/* Badge: a 16px count, tabular figures, grey or accent; or a short label that
+   truncates past the room it has (its full text stays in the DOM). */
 @layer components {
   .root {
     display: inline-flex;
@@ -15,6 +16,19 @@
     letter-spacing: var(--tracking-label-strong);
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
+  }
+
+  /* A label may shrink below its text, so the value beside it keeps its room. */
+  .root[data-text] {
+    flex: 0 1 auto;
+    justify-content: flex-start;
+    min-inline-size: 0;
+    overflow: hidden;
+  }
+
+  .text {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .root[data-tone='accent'] {
