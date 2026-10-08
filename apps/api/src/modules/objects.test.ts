@@ -61,6 +61,8 @@ describe('objects.list', () => {
       hue: 'blue',
       standardKey: 'people',
       primaryAttributeId: expect.any(String) as string,
+      // What the member may do with its records (spec 0009): every role writes everything until #24.
+      access: 'write',
     });
     expect(objects.map((object) => object.standardKey)).toContain('companies');
 
