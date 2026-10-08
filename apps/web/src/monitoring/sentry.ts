@@ -3,7 +3,7 @@
 // loaded in its own chunk, never in the first load (AC-169), and started by
 // `startMonitoring` only when the build carries a DSN. Nothing personal goes
 // (AC-165): the SDK collects nothing on its own, `scrub` runs in every send
-// hook, console, input and navigation breadcrumbs are dropped, fetch
+// hook, console, input, click and navigation breadcrumbs are dropped, fetch
 // breadcrumbs keep the path only, and an event names the route pattern
 // (`/w/$slug/objects/$object`), never the address that was open.
 import { scrub } from '@crm/contracts/monitoring';
@@ -31,9 +31,9 @@ export interface SentryConfig {
   readonly deliver?: (envelope: string) => Promise<void>;
 }
 
-// Breadcrumbs never kept: a log line or a typed value can quote a person, and a
-// navigation names the filled address.
-const DROPPED_BREADCRUMBS: ReadonlySet<string> = new Set(['console', 'ui.input', 'navigation']);
+// Breadcrumbs never kept: a log line or a typed value can quote a person, a click's selector carries the
+// element's aria-label (a person's name on a row or a chip), and a navigation names the filled address.
+const DROPPED_BREADCRUMBS: ReadonlySet<string> = new Set(['console', 'ui.input', 'ui.click', 'navigation']);
 const NETWORK_BREADCRUMBS: ReadonlySet<string> = new Set(['fetch', 'xhr']);
 // Default integrations left out: sessions send the user agent, and console breadcrumbs are never kept.
 const DROPPED_INTEGRATIONS: ReadonlySet<string> = new Set(['BrowserSession', 'Console']);

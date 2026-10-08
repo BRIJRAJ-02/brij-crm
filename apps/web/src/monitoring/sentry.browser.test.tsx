@@ -120,7 +120,10 @@ describe('the browser SDK, end to end', () => {
 });
 
 describe('the send hooks', () => {
-  it('drops console, input and navigation breadcrumbs, and keeps only the path of a fetch', () => {
+  it('drops console, input, click and navigation breadcrumbs, and keeps only the path of a fetch', () => {
+    expect(
+      keepBreadcrumb({ category: 'ui.click', message: 'div.ws-row > button[aria-label="Open Ada Lovelace"]' }),
+    ).toBeNull();
     expect(keepBreadcrumb({ category: 'console', message: `${EMAIL} signed in` })).toBeNull();
     expect(keepBreadcrumb({ category: 'ui.input', message: 'input[name="email"]' })).toBeNull();
     expect(
