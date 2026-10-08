@@ -40,7 +40,10 @@ const ReadAttributeIds = z
  * when absent; an unknown zone is refused `FILTER_INVALID`.
  */
 const QueryClock = {
-  now: Timestamp.optional(),
+  // Postgres has no year 0: a clock in 0000 would fail in the database rather than as an input problem.
+  now: Timestamp.refine((value) => !value.startsWith('0000'), {
+    error: 'Give a time from the year 0001 on.',
+  }).optional(),
   timeZone: z.string().min(1).max(64).optional(),
 };
 

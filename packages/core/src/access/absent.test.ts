@@ -581,6 +581,19 @@ describe('a hidden name attribute (AC-141, AC-144)', () => {
     expect(refused[0]?.message).toContain('an unnamed company');
     expect(refused[0]?.message).not.toContain('Globex');
   });
+
+  it('keeps a hidden primary out of reads that name their attributes, though the primary always comes (spec 0006, AC-55)', async () => {
+    const scope = nameless();
+    const subsidiaries = id('companies.subsidiaries');
+    const page = await queryPage(scope, { objectId: id('companies'), attributeIds: [subsidiaries], limit: 50 });
+    const [read] = await getRecords(scope, { ids: [id('globex')], attributeIds: [subsidiaries, id('companies.name')] });
+    for (const record of [...page.records, ...(read === undefined ? [] : [read])]) {
+      expect(Object.hasOwn(record.values, id('companies.name'))).toBe(false);
+      expect(Object.hasOwn(record.versions, id('companies.name'))).toBe(false);
+    }
+    expect(read?.display.name).toBe('Unnamed company');
+    expect(Object.hasOwn(read?.values ?? {}, subsidiaries)).toBe(true);
+  });
 });
 
 describe('refusal messages (AC-144)', () => {

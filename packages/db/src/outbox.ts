@@ -12,6 +12,7 @@
 // take four (begin, set_config, the statement, commit). That query can carry
 // no parameters, so its values are inlined only after checking them: the
 // workspace id against the uuid pattern, and the numbers as whole numbers.
+import { MAX_REPLACED_CELLS } from '@crm/contracts';
 import type pg from 'pg';
 import type { outboxKind } from './schema/outbox.ts';
 
@@ -66,9 +67,6 @@ export interface OutboxReplaced {
     readonly versionId: string;
   }[];
 }
-
-/** The most cells a stored `replaced` may name; a longer list is read as none (`MAX_REPLACED_CELLS` in the contract). */
-const MAX_REPLACED_CELLS = 200;
 
 /** What marking rows published answers: how many, and each one's lag from commit to publish, in ms. */
 export interface Marked {
