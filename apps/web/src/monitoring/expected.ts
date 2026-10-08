@@ -6,7 +6,9 @@
 import { isDataError } from '@crm/data';
 import { isNotFound, isRedirect } from '@tanstack/react-router';
 
-// What each browser's fetch rejects with when it can't reach the server.
+// What each browser's fetch rejects with when it can't reach the server. The same words come when the
+// CSP or a browser extension blocks the request, so those are dropped too; a CSP mistake shows in
+// the build checks (csp.ts) and in the browser's console, not here.
 const OFFLINE_MESSAGES: ReadonlySet<string> = new Set([
   'Failed to fetch',
   'NetworkError when attempting to fetch resource.',
