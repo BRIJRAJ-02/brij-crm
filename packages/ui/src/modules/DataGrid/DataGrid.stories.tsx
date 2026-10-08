@@ -11,7 +11,7 @@ import { attributeOf } from '../../workbench/attributes.ts';
 import { sampleColumn, sampleColumns, sampleRows, type SampleRow } from '../../workbench/grid-samples.ts';
 import { FIELD_SAMPLES, SAMPLE_COMPANIES, SAMPLE_MEMBERS } from '../../workbench/field-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { DataGrid, type GridStatus, type RowSource } from './DataGrid.tsx';
+import { DataGrid, type GridStatus, type RowNote, type RowSource } from './DataGrid.tsx';
 import type { GridEditorProps } from './GridCell.tsx';
 import type { GridColumn } from './grid-columns.ts';
 import { noRows, withRows, type GridSelection } from './grid-selection.ts';
@@ -27,6 +27,10 @@ interface SampleGridProps {
   readonly cellErrors?: ReadonlyMap<string, string>;
   readonly onRowOpen?: (rowId: string) => void;
   readonly confirmsPaste?: boolean;
+  /** Notes on rows by id: a record made here, a row that left the view. */
+  readonly rowNotes?: ReadonlyMap<string, RowNote>;
+  /** Columns not read yet for these rows (a column just shown): their cells draw skeletons. */
+  readonly unknown?: { readonly rows: readonly string[]; readonly column: string };
 }
 
 /** A grid over sample companies that keeps its own edits, columns and selection, as a screen would. */
@@ -40,6 +44,8 @@ function SampleGrid({
   cellErrors,
   onRowOpen,
   confirmsPaste,
+  rowNotes,
+  unknown,
 }: SampleGridProps) {
   const [data, setData] = useState(() => sampleRows(count));
   const [layout, setLayout] = useState(() => ({ columns: sampleColumns(columnCount), pinnedCount: 1 }));
@@ -107,6 +113,12 @@ function SampleGrid({
         {...(cellErrors === undefined ? {} : { cellErrors })}
         {...(onRowOpen === undefined ? {} : { onRowOpen })}
         {...(confirmsPaste === undefined ? {} : { confirmsPaste })}
+        {...(rowNotes === undefined ? {} : { rowNotes })}
+        {...(unknown === undefined
+          ? {}
+          : {
+              isCellKnown: (row: SampleRow, id: string) => !(id === unknown.column && unknown.rows.includes(row.id)),
+            })}
       />
     </Stage>
   );
@@ -435,6 +447,29 @@ export const SelectedAndRefused: Story = {
     columnCount: 20,
     selected: ['company-1', 'company-2'],
     cellErrors: new Map([['company-0:domain', 'Another company already has this domain.']]),
+  },
+};
+
+/**
+ * The person's own rows while the view settles (spec 0006, AC-56): a company they just made sits first, noted
+ * New, and one they edited out of the view's filter keeps its row, noted. A column just shown draws skeletons
+ * in rows not read for it yet, and they don't open an editor.
+ */
+export const RowNotesAndUnreadCells: Story = {
+  args: {
+    rowNotes: new Map<string, RowNote>([
+      ['company-0', 'new'],
+      ['company-2', 'no-longer-matches'],
+    ]),
+    unknown: { rows: ['company-3', 'company-4'], column: 'domain' },
+  },
+  play: async ({ canvas, canvasElement }) => {
+    await expect(canvas.getByText('New')).toBeVisible();
+    await expect(canvas.getByText('Doesn’t match this view')).toBeVisible();
+    // The note is part of the row header, so it is read with the name.
+    await expect(cell(canvasElement, 0, 1)).toHaveTextContent('New');
+    await expect(cell(canvasElement, 3, 2)?.querySelector('[data-shape]')).not.toBeNull();
+    await expect(cell(canvasElement, 1, 2)?.querySelector('[data-shape]')).toBeNull();
   },
 };
 

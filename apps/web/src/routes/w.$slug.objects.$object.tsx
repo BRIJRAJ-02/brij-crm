@@ -1,5 +1,6 @@
 import { isDataError } from '@crm/data';
 import { createFileRoute, useRouter } from '@tanstack/react-router';
+import { defaultSort, queryOf, shownAttributes } from '../features/workspace/columns.ts';
 import { failedPage, missingPage, objectPendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { RecordsScreen } from '../features/workspace/RecordsScreen.tsx';
 import { strings } from '../features/workspace/strings.ts';
@@ -7,9 +8,10 @@ import { useWorkspaceName, WorkspacePage } from '../features/workspace/Workspace
 
 // One object's page, by its address (`people`). Object URLs are generic, so
 // custom objects (#13) reuse this route. The loader warms the object's view
-// (its count and first block) beside its attributes and the workspace's
-// members, all through the data layer; the table reads the view itself and
-// loads with this route's component, so the grid stays out of the first load.
+// (its count and first block, newest first, reading only the columns the
+// table shows) after its attributes and beside the workspace's members, all
+// through the data layer; the table reads the view itself and loads with this
+// route's component, so the grid stays out of the first load.
 export const Route = createFileRoute('/w/$slug/objects/$object')({
   loader: async ({ context, params }) => {
     const objects = await context.data.objects.list(params.slug).catch((error: unknown) => {
@@ -19,12 +21,16 @@ export const Route = createFileRoute('/w/$slug/objects/$object')({
     });
     const object = objects.find((each) => each.apiSlug === params.object);
     if (object === undefined) return { table: undefined };
-    const [attributes, members, view] = await Promise.all([
-      context.data.attributes.list(params.slug, object.id),
-      context.data.members.list(params.slug),
-      context.data.records.view(params.slug, object.id),
+    const membersLoading = context.data.members.list(params.slug);
+    // The view reads only the columns the table shows, in its opening order (newest first, spec 0006).
+    const attributes = await context.data.attributes.list(params.slug, object.id);
+    const sort = defaultSort(attributes);
+    const columns = shownAttributes(attributes).map((attribute) => attribute.id);
+    const [members, view] = await Promise.all([
+      membersLoading,
+      context.data.records.view(params.slug, object.id, queryOf(sort), columns),
     ]);
-    return { table: { object, attributes, members, view } };
+    return { table: { object, attributes, members, view, sort } };
   },
   pendingComponent: () => <WorkspacePage page={objectPendingPage()} />,
   errorComponent: ObjectError,

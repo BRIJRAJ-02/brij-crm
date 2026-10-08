@@ -35,6 +35,9 @@ import { DataGrid } from '@crm/ui/grid';
 - `footer` draws calculations the screen worked out; the grid never computes over loaded rows.
 - `editorProps(column)` gives a column's reference or file editor its search, uploads and the signed in member.
 - `onSort` and `onFilter` add Sort and Filter to the column menu.
+- `rowNotes` (row key to `new` or `no-longer-matches`) draws a row's note after its row header's value, so it is read with the name: "New" (accent soft, a record the person just made, kept first) or "Doesn't match this view" (neutral, a row they edited out of the view's filter, kept where they saw it). Spec 0006, AC-56. Why a variant: the note belongs to one row of this grid only, and no atom says "this row is held here for you"; a Tag is a data value's colour, a Badge a count.
+- `isCellKnown(row, columnId)` says whether a row holds a column's value yet. An unknown cell draws a skeleton like a loading row and doesn't open its editor, so a column just shown never reads as empty (spec 0006, AC-55).
+- `onEditingChange(isEditing)` runs when a cell editor opens and closes, so a screen can hold back reordering rows under it (spec 0006, AC-56).
 - `focusRow` (`{ index }`, a new object each time) moves focus to that row's first cell and scrolls it into view, after any closing dialog has handed focus back: a screen passes the row it just made (spec 0005, "New person"). Why a prop: the grid owns its focused cell, and nothing outside could move it without reaching into its DOM.
 
 ## States

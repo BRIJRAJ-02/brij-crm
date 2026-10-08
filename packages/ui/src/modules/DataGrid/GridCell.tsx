@@ -77,6 +77,8 @@ export interface GridCellProps {
   readonly onOpen?: () => void;
   /** A checkbox value: a click on the mark toggles it. */
   readonly onToggle?: () => void;
+  /** On the row header: the row's note (spec 0006, AC-56), drawn after the value and read with it. */
+  readonly note?: 'new' | 'no-longer-matches';
 }
 
 /**
@@ -106,6 +108,7 @@ export function GridCell({
   onDoubleClick,
   onOpen,
   onToggle,
+  note,
 }: GridCellProps) {
   const ref = useRef<HTMLDivElement>(null);
   const definition = fieldTypeOf(attribute.type);
@@ -181,6 +184,11 @@ export function GridCell({
       style={{ '--col-width': `${String(place.width)}px`, '--col-offset': `${String(place.stickyOffset ?? 0)}px` }}
     >
       {content}
+      {note !== undefined && isLoaded && mode === undefined && (
+        <span className={styles.note} data-note={note}>
+          {note === 'new' ? strings.rowNew : strings.rowNoLongerMatches}
+        </span>
+      )}
       {tip !== undefined && (
         <span id={tipId} hidden data-tip="">
           {tip}

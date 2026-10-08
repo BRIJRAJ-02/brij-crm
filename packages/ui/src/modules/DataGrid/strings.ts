@@ -20,6 +20,9 @@ export const strings = {
   aiColumn: 'Filled by AI',
   loading: 'Loading rows',
   loadingRow: 'Loading',
+  /** A row's note (spec 0006, AC-56): a record just made here, and an edited row that left the view's filter. */
+  rowNew: 'New',
+  rowNoLongerMatches: 'Doesn’t match this view',
   empty: 'No records yet',
   emptyText: 'Records you add or import show here.',
   failed: 'Couldn’t load these records',

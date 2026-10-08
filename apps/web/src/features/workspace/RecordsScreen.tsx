@@ -1,7 +1,7 @@
 // Brief
 // Purpose: one object's records (People in this loop) as a fast table, under the object's name and colour tile.
-// Main task: read and edit people in place (a paste or clear is one change, undone with ⌘Z), add a person and a column, live.
-// Leaves out: filters, sorts, saved views, other objects' tables and presence (#6, #7, #20).
+// Main task: read and edit people in place (a paste or clear is one change, undone with ⌘Z), sort a column, add a person and a column, live.
+// Leaves out: filters, saved views and sorts that last past the visit, other objects' tables and presence (#7, #20).
 import {
   isEditableHere,
   toActorDisplays,
@@ -11,13 +11,15 @@ import {
   type ObjectSummary,
   type RecordsView,
   type RecordView,
+  type SortRule,
 } from '@crm/data';
 import { useLiveStatus, useView } from '@crm/data/react';
 import { Badge, Button, Callout, EmptyState, TopBar, ViewBar } from '@crm/ui';
 import { columnWidthFor, DataGrid, type GridColumn } from '@crm/ui/grid';
 import { useRouteContext, useRouter } from '@tanstack/react-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AddAttributeDialog } from './AddAttributeDialog.tsx';
+import { queryOf, shownAttributes } from './columns.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
 import { strings } from './strings.ts';
 import { editToast, isClear } from './undo.ts';
@@ -33,15 +35,17 @@ export interface RecordsScreenProps {
   readonly object: ObjectSummary;
   readonly attributes: readonly AttributeDefinition[];
   readonly members: readonly MemberSummary[];
+  /** The view the loader warmed, in the table's opening order (`sort`). */
   readonly view: RecordsView;
+  /** The opening order: newest first (spec 0006, AC-57). */
+  readonly sort: SortRule | undefined;
 }
 
-/** The attributes the table shows, in order: every non system attribute by position, then the record's created at. */
-function shownAttributes(attributes: readonly AttributeDefinition[]): readonly AttributeDefinition[] {
-  const own = attributes.filter((attribute) => !attribute.isSystem).sort((a, b) => a.position - b.position);
-  const createdAt = attributes.find((attribute) => attribute.isSystem && attribute.apiSlug === 'created_at');
-  return createdAt === undefined ? own : [...own, createdAt];
-}
+/** A sort as one string, so a new object with the same sort is the same order. */
+const sortKey = (sort: SortRule | undefined) => (sort === undefined ? '' : `${sort.attributeId}:${sort.direction}`);
+
+/** Whether a record holds a column's value yet (a column just shown is read for the loaded rows first). */
+const isCellKnown = (row: RecordView, columnId: string) => Object.hasOwn(row.values, columnId);
 
 /**
  * The grid's columns: the ones the person laid out (order and widths), with
@@ -68,17 +72,45 @@ function columnsFor(attributes: readonly AttributeDefinition[], laidOut: readonl
 }
 
 /** One object's page: the TopBar with New person, the ViewBar with Add attribute, and the table. */
-export function RecordsScreen({ slug, object, attributes, members, view }: RecordsScreenProps) {
+export function RecordsScreen({ slug, object, attributes, members, view: warmed, sort: opening }: RecordsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const router = useRouter();
-  const state = useView(view);
-  // Paused only while the live connection is down; off (previews) shows nothing.
-  const live = useLiveStatus(data.live);
+  // The column menu's sort, for this visit (spec 0006, AC-57): it replaces the order, and #20 saves it with a view.
+  const [sort, setSort] = useState(opening);
+  // The view for that sort: the warmed one until another sort's first rows are in, so the table never blanks.
+  const [shown, setShown] = useState({ key: sortKey(opening), view: warmed });
+  const wanted = sortKey(sort);
   const [layout, setLayout] = useState<{ readonly columns: readonly GridColumn[]; readonly pinnedCount: number }>({
     columns: [],
     pinnedCount: 1,
   });
   const columns = useMemo(() => columnsFor(attributes, layout.columns), [attributes, layout.columns]);
+  // Only the columns on screen are read (spec 0006, AC-55); showing a hidden one reads it for the loaded rows.
+  const visible = useMemo(
+    () => columns.filter((column) => column.isHidden !== true).map((column) => column.id),
+    [columns],
+  );
+  useEffect(() => {
+    if (shown.key === wanted) return;
+    let isCurrent = true;
+    data.records.view(slug, object.id, queryOf(sort), visible).then(
+      (next) => {
+        if (isCurrent) setShown({ key: wanted, view: next });
+      },
+      () => {
+        if (isCurrent) toasts.toast({ tone: 'danger', message: strings.somethingWrong });
+      },
+    );
+    return () => {
+      isCurrent = false;
+    };
+    // `visible` is read when the sort changes; a column shown later reaches the view through useView.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [wanted, shown.key, data, slug, object.id]);
+  const view = shown.view;
+  const state = useView(view, visible);
+  // Paused only while the live connection is down; off (previews) shows nothing.
+  const live = useLiveStatus(data.live);
   const memberDisplays = useMemo(() => toActorDisplays(members), [members]);
   const actorColumns = useMemo(
     () => new Set(attributes.filter((attribute) => attribute.type === 'actor_reference').map((each) => each.id)),
@@ -112,10 +144,16 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
             title={object.pluralName}
             icon={object.icon}
             hue={object.hue}
-            // The total count (AC-34), once it is known.
+            // The total count (AC-34), once it is known: "10,000+" past a filtered view's cap (spec 0006, AC-53).
             {...(state.status === 'ready'
               ? {
-                  meta: <Badge count={state.source.count} max={Infinity} label={object.pluralName.toLowerCase()} />,
+                  meta: (
+                    <Badge
+                      count={state.count.atLeast ? state.count.count + 1 : state.count.count}
+                      max={state.count.atLeast ? state.count.count : Infinity}
+                      label={object.pluralName.toLowerCase()}
+                    />
+                  ),
                 }
               : {})}
           >
@@ -153,6 +191,12 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
               pinnedCount={layout.pinnedCount}
               rows={state.source}
               getValue={(row, columnId) => row.values[columnId] ?? null}
+              isCellKnown={isCellKnown}
+              rowNotes={state.rowNotes}
+              onEditingChange={view.holdSettle}
+              onSort={(columnId, direction) => {
+                setSort({ attributeId: columnId, direction });
+              }}
               getDisplay={(_row, columnId) => (actorColumns.has(columnId) ? memberDisplays : undefined)}
               rowHeader={rowHeader}
               onColumnsChange={(next, pinnedCount) => {
@@ -214,7 +258,8 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
               singularName={object.singularName}
               onCreated={(record) => {
                 setCreating(false);
-                const index = view.indexOf(record.id) ?? state.source.count - 1;
+                // A record made here sits first (spec 0006, AC-56).
+                const index = view.indexOf(record.id) ?? 0;
                 setFocusRow({ index });
               }}
             />

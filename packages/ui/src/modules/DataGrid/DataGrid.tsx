@@ -62,6 +62,13 @@ export interface RowSource<Row> extends ListSource<Row> {
 /** What the grid shows instead of rows: loading, a failed load, or no access to the view. */
 export type GridStatus = 'ready' | 'loading' | 'error' | 'no-access';
 
+/**
+ * A note on one row (spec 0006, AC-56): `new`, a record the person just made
+ * here, kept first; `no-longer-matches`, a row they edited that left the
+ * view's filter, kept where they saw it until they scroll away.
+ */
+export type RowNote = 'new' | 'no-longer-matches';
+
 /** Props for DataGrid. */
 export interface DataGridProps<Row> {
   /** The grid's accessible name ("Companies"). */
@@ -107,6 +114,17 @@ export interface DataGridProps<Row> {
   readonly phone?: PhoneParser;
   /** What a column's reference or file editor needs: search, uploads, the signed in member. */
   readonly editorProps?: (column: GridColumn) => GridEditorProps;
+  /**
+   * Whether a row holds a column's value yet (spec 0006, AC-55: a column just
+   * shown is read for the loaded rows). An unknown cell draws a skeleton,
+   * never an empty value, and doesn't open its editor. Every cell is known
+   * when absent.
+   */
+  readonly isCellKnown?: (row: Row, columnId: string) => boolean;
+  /** Notes on rows, by row key: drawn after the row header's value, and read with it. */
+  readonly rowNotes?: ReadonlyMap<string, RowNote>;
+  /** A cell editor opened (true) or closed (false): a screen holds back reordering its rows meanwhile. */
+  readonly onEditingChange?: (isEditing: boolean) => void;
   /**
    * Moves focus to this row's first cell and scrolls it into view, once any
    * closing overlay is gone: the row a screen just made. Pass a new object
@@ -200,6 +218,9 @@ export function DataGrid<Row>({
   phone,
   editorProps,
   focusRow,
+  isCellKnown,
+  rowNotes,
+  onEditingChange,
 }: DataGridProps<Row>) {
   const { locale, timeZone } = useFormatSettings();
   const toasts = useToasts();
@@ -348,6 +369,19 @@ export function DataGrid<Row>({
     columnAt(editingAt.col)?.id === editingAt.columnId
       ? editingAt
       : undefined;
+  // Tells the screen when an editor opens and closes (it holds back reordering its rows meanwhile).
+  const isEditingNow = editing !== undefined;
+  const editingChange = useRef(onEditingChange);
+  useLayoutEffect(() => {
+    editingChange.current = onEditingChange;
+  });
+  useEffect(() => {
+    if (!isEditingNow) return;
+    editingChange.current?.(true);
+    return () => {
+      editingChange.current?.(false);
+    };
+  }, [isEditingNow]);
   const textContext = (attribute: FieldAttribute, display?: unknown): TextContext => ({
     locale,
     timeZone,
@@ -517,6 +551,9 @@ export function DataGrid<Row>({
     const column = columnAt(position.col);
     const id = rowIdAt(position.row);
     if (column === undefined || id === undefined || editModeOf(column.attribute) === undefined) return;
+    // A value not read yet has nothing to edit from.
+    const data = rowItem(position.row);
+    if (data !== undefined && isCellKnown?.(data, column.id) === false) return;
     closeTip();
     clearLocalErrors([`${id}:${column.id}`]);
     setEditing({
@@ -1098,7 +1135,8 @@ export function DataGrid<Row>({
         </div>
         {drawn.flatMap((each, index) => {
           const place = placeOf(each);
-          const value = rowData === undefined ? undefined : getValue(rowData, each.column.id);
+          const isKnown = rowData !== undefined && isCellKnown?.(rowData, each.column.id) !== false;
+          const value = isKnown ? getValue(rowData, each.column.id) : undefined;
           const display = rowData === undefined ? undefined : getDisplay?.(rowData, each.column.id);
           const error = id === undefined ? undefined : errorFor(id, each.column.id);
           const isEditing = editing !== undefined && editing.row === row && editing.col === place.col;
@@ -1111,8 +1149,11 @@ export function DataGrid<Row>({
               attribute={each.column.attribute}
               value={value}
               display={display}
-              isLoaded={rowData !== undefined}
+              isLoaded={isKnown}
               isRowHeader={each.column.id === rowHeader}
+              {...(each.column.id === rowHeader && id !== undefined && rowNotes?.get(id) !== undefined
+                ? { note: rowNotes.get(id) }
+                : {})}
               isFocused={isFocusedAt(row, place.col)}
               isInRange={isInRange(range, row, place.col)}
               tipId={`${gridId}-tip-${keyOf(row, place.col)}`}

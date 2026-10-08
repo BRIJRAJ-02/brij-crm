@@ -103,4 +103,23 @@
       outline-offset: calc(-1 * var(--border-width-thick));
     }
   }
+
+  /* A row's note on its row header, after the value: label type in a quiet
+     pill, accent tinted for a record just made, neutral for one that left the
+     view. It never takes the click meant for the name. */
+  .note {
+    flex: none;
+    margin-inline-start: auto;
+    padding-inline: var(--space-6);
+    border-radius: var(--radius-xs);
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    pointer-events: none;
+  }
+
+  .note[data-note='new'] {
+    background: var(--accent-soft);
+    color: var(--link);
+  }
 }
