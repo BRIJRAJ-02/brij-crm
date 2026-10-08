@@ -7,7 +7,7 @@ import { dataError } from '@crm/data';
 import { createRoot } from 'react-dom/client';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { startMonitoring } from './index.ts';
-import { keepBreadcrumb, prepareEvent } from './sentry.ts';
+import { keepBreadcrumb, prepareEvent, reportFault } from './sentry.ts';
 
 const EMAIL = 'ada.lovelace@example.com';
 const ROUTE = '/w/$slug/objects/$object';
@@ -116,6 +116,18 @@ describe('the browser SDK, end to end', () => {
     expect(all).not.toContain('That address is taken.');
     // No session envelopes: release health would send the user agent, and it isn't needed for errors.
     expect(all).not.toContain('"type":"session"');
+
+    // Once started, what the SDK sees itself passes the same test: a refusal or being offline never goes.
+    reportFault({ error: dataError('SLUG_TAKEN', 'That address is taken.') });
+    reportFault({ error: new TypeError('Failed to fetch') });
+    reportFault({ error: new Error('A fault after the refusals') });
+    await vi.waitFor(
+      () => {
+        expect(events()).toHaveLength(4);
+      },
+      { timeout: 5000 },
+    );
+    expect(valueOf(events()[3])).toBe('A fault after the refusals');
   });
 });
 

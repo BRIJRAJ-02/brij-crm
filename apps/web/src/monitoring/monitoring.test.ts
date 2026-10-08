@@ -154,8 +154,28 @@ describe('startMonitoring', () => {
     });
   });
 
-  it('knows a fault from how the app works', () => {
+  it('knows a fault from how the app works, and from the network being gone', () => {
     expect(isExpected(new Error('bug'))).toBe(false);
+    expect(isExpected(new TypeError("Cannot read properties of undefined (reading 'id')"))).toBe(false);
     expect(isExpected(dataError('INTERNAL', 'Something went wrong.'))).toBe(true);
+    expect(isExpected(new TypeError('Failed to fetch'))).toBe(true);
+    expect(isExpected(new TypeError('NetworkError when attempting to fetch resource.'))).toBe(true);
+    expect(isExpected(new TypeError('Load failed'))).toBe(true);
+  });
+
+  it("never keeps a window error or rejection that isn't a fault", async () => {
+    const target = new EventTarget();
+    const chunk = fakeChunk();
+    startMonitoring({ config: { ...CONFIG, dsn: 'https://k@o1.ingest.de.sentry.io/2' }, target, load: chunk.load });
+    target.dispatchEvent(rejection(dataError('SLUG_TAKEN', 'That address is taken.')));
+    target.dispatchEvent(rejection(new TypeError('Failed to fetch')));
+    const bug = new Error('a real bug');
+    target.dispatchEvent(errorEvent(bug));
+    await vi.waitFor(() => {
+      expect(chunk.started).toHaveLength(1);
+    });
+    const sent: Fault[] = [];
+    chunk.started[0]?.buffered.drain((fault) => sent.push(fault));
+    expect(sent).toEqual([{ error: bug, handled: false }]);
   });
 });

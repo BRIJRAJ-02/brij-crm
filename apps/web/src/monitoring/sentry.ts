@@ -17,6 +17,7 @@ import {
   withScope,
 } from '@sentry/react';
 import type { Fault, FaultBuffer } from './buffer.ts';
+import { isExpected } from './expected.ts';
 
 /** What the browser's Sentry needs. */
 export interface SentryConfig {
@@ -103,7 +104,9 @@ export function sentryOptions(config: SentryConfig): BrowserOptions {
     integrations: (defaults) => defaults.filter((integration) => !DROPPED_INTEGRATIONS.has(integration.name)),
     // Fetch errors keep their own message for the app; only what is sent gets the host.
     enhanceFetchErrorMessages: 'report-only',
-    beforeSend: (event) => prepareEvent(event, currentRoute(config.route)),
+    // What the SDK's own handlers catch passes the same test as reports: a refusal or being offline is no fault.
+    beforeSend: (event, hint) =>
+      isExpected(hint.originalException) ? null : prepareEvent(event, currentRoute(config.route)),
     beforeBreadcrumb: keepBreadcrumb,
     ...(deliver === undefined
       ? {}

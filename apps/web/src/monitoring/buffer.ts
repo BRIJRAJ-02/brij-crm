@@ -44,13 +44,19 @@ function thrown(event: Event): unknown {
   return 'message' in event ? event.message : event.type;
 }
 
-/** Starts listening for uncaught errors and unhandled rejections on `target`, keeping up to `max`. */
+/**
+ * Starts listening for uncaught errors and unhandled rejections on `target`,
+ * keeping up to `max`; one `ignore` says is no fault (a refusal, being
+ * offline) is never kept.
+ */
 export function createFaultBuffer({
   target,
   max = BUFFERED_FAULTS,
+  ignore = () => false,
 }: {
   readonly target: FaultTarget;
   readonly max?: number;
+  readonly ignore?: (error: unknown) => boolean;
 }): FaultBuffer {
   const kept: Fault[] = [];
   let sink: FaultSink | undefined;
@@ -63,7 +69,8 @@ export function createFaultBuffer({
     if (kept.length < max) kept.push(fault);
   };
   const onError = (event: Event) => {
-    keep({ error: thrown(event), handled: false });
+    const error = thrown(event);
+    if (!ignore(error)) keep({ error, handled: false });
   };
   target.addEventListener('error', onError);
   target.addEventListener('unhandledrejection', onError);

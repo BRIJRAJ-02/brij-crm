@@ -1,16 +1,17 @@
 // Monitoring in the browser (spec 0010, AC-163, AC-169), without the vendor:
 // with no DSN in the build it is a no op; with one, it buffers faults from the
 // first moment, loads the Sentry chunk without waiting for it, and hands React
-// the root error options. Only unexpected faults go: a DataError is the data
-// layer's answer (it reports what the server never saw itself), and the
-// router's not found and redirect are how routing works.
-import { isDataError } from '@crm/data';
-import { isNotFound, isRedirect } from '@tanstack/react-router';
+// the root error options. Only unexpected faults go (`expected.ts`): a
+// DataError is the data layer's answer (it reports what the server never saw
+// itself), the router's not found and redirect are how routing works, and
+// fetch failing offline is the network.
 import type { ErrorInfo } from 'react';
 import { createFaultBuffer, type Fault, type FaultBuffer, type FaultTarget } from './buffer.ts';
+import { isExpected } from './expected.ts';
 import type { SentryConfig } from './sentry.ts';
 
 export type { Fault } from './buffer.ts';
+export { isExpected } from './expected.ts';
 
 /** What the build says about monitoring. */
 export interface MonitoringConfig {
@@ -42,11 +43,6 @@ export type LoadSentry = () => Promise<{
   readonly startSentry: (config: SentryConfig, buffered: FaultBuffer) => void;
 }>;
 
-/** Whether a thrown value is how the app works rather than a fault. */
-export function isExpected(error: unknown): boolean {
-  return isDataError(error) || isNotFound(error) || isRedirect(error);
-}
-
 /** Monitoring when the build has no DSN: nothing listens, nothing loads, nothing is sent. */
 const OFF: Monitor = { report: () => undefined, rootOptions: {} };
 
@@ -70,7 +66,8 @@ export function startMonitoring({
 }): Monitor {
   const { dsn } = config;
   if (dsn === undefined || dsn === '') return OFF;
-  const buffer = createFaultBuffer({ target });
+  // The window's own errors pass the same test as reports: a refusal or being offline is no fault.
+  const buffer = createFaultBuffer({ target, ignore: isExpected });
   load()
     .then(({ startSentry }) => {
       startSentry({ dsn, release: config.release, environment: config.environment, route: config.route }, buffer);
