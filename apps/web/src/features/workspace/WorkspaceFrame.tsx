@@ -1,14 +1,27 @@
 // Brief
 // Purpose: the frame every page inside a workspace sits in: the sidebar beside the page.
-// Main task: move between the workspace's records (People in this loop), switch the theme and sign out.
+// Main task: move between the workspace's records (People in this loop), switch the theme and sign out; undo (⌘Z).
 // Leaves out: switching or creating workspaces, Quick actions, favourites and lists (#23 and later).
 import type { DataLayer, ObjectSummary } from '@crm/data';
-import { AppShell, Menu, MenuItem, MenuSection, NavItem, NavSection, Sidebar, ThemeSwitch, type Toasts } from '@crm/ui';
+import {
+  AppShell,
+  Menu,
+  MenuItem,
+  MenuSection,
+  NavItem,
+  NavSection,
+  ShortcutHelp,
+  Sidebar,
+  ThemeSwitch,
+  type Toasts,
+} from '@crm/ui';
 import type { ThemeController } from '@crm/ui/theme';
 import { useNavigate } from '@tanstack/react-router';
-import { useState, type ReactNode } from 'react';
+import { useCallback, useState, type ReactNode } from 'react';
 import { navObjects, objectHref } from './objects.ts';
 import { strings } from './strings.ts';
+import { undoKeys } from './undo.ts';
+import { useIsApple, useUndoShortcut } from './useUndoShortcut.ts';
 
 /** Props for the workspace frame. */
 export interface WorkspaceFrameProps {
@@ -55,6 +68,13 @@ export function WorkspaceFrame({
 }: WorkspaceFrameProps) {
   const navigate = useNavigate();
   const [isSigningOut, setSigningOut] = useState(false);
+  // Cmd+Z (Ctrl+Z elsewhere) undoes this tab's last change; ? lists the shortcuts (spec 0006, AC-48).
+  const [isHelpOpen, setHelpOpen] = useState(false);
+  const openHelp = useCallback(() => {
+    setHelpOpen(true);
+  }, []);
+  useUndoShortcut(data, toasts, slug, openHelp);
+  const isApple = useIsApple();
   const signOut = () => {
     if (isSigningOut) return;
     setSigningOut(true);
@@ -118,6 +138,19 @@ export function WorkspaceFrame({
       }
     >
       {children}
+      <ShortcutHelp
+        isOpen={isHelpOpen}
+        onOpenChange={setHelpOpen}
+        groups={[
+          {
+            title: strings.shortcutsEverywhere,
+            shortcuts: [
+              { label: strings.undoShortcut, keys: undoKeys(isApple) },
+              { label: strings.showShortcuts, keys: ['?'] },
+            ],
+          },
+        ]}
+      />
     </AppShell>
   );
 }

@@ -12,6 +12,7 @@ import { createRoot } from 'react-dom/client';
 import { signInHref } from './features/auth/redirect.ts';
 import { focusFirstLoad, focusPage } from './features/navigation/focus.ts';
 import { followPageTitle } from './features/navigation/title.ts';
+import { replacedToast } from './features/workspace/undo.ts';
 import { startMonitoring } from './monitoring/index.ts';
 import { routeTree } from './routeTree.gen.ts';
 
@@ -70,6 +71,10 @@ const data = createDataLayer({
   currentPath: () => `${window.location.pathname}${window.location.search}`,
   ...(realtimeUrl === undefined || realtimeUrl === '' ? {} : { realtimeUrl }),
   onDefinitionsChange: reloadPages,
+  // Someone else's later save replaced a value this tab saved (spec 0006): say so, with Use mine.
+  onReplaced: (replaced) => {
+    toasts.toast(replacedToast(replaced));
+  },
   // Faults the server never saw: an answer without one of our codes, or one thrown inside the layer.
   report: monitor.report,
 });

@@ -41,4 +41,34 @@ export const strings = {
   livePaused: 'Live updates are paused. Changes others make show here once the connection is back.',
   /** Why a company or Owner cell can't be edited in this loop. */
   referenceReadOnly: 'You can’t change this here yet.',
+  /** Spec 0006: a paste or range clear that landed, with Undo (AC-48). */
+  pasted: (cells: number) => `Pasted into ${String(cells)} cells`,
+  cleared: (cells: number) => `Cleared ${String(cells)} cells`,
+  undo: 'Undo',
+  /** A paste over more records than one write takes (AC-50). */
+  pasteTooBig: (limit: number) => `Paste into at most ${String(limit)} records at once.`,
+  /** After an undo (AC-48, AC-49). */
+  undidCell: (attribute: string, record: string) => `Undid ${attribute} on ${record}`,
+  undidCells: (cells: number) => `Undid ${String(cells)} changes`,
+  undidPaste: (cells: number) => `Undid the paste into ${String(cells)} cells`,
+  undidClear: (cells: number) => `Undid the clear of ${String(cells)} cells`,
+  /** Cells an undo kept because they changed since; never says who (it may be the person, in another tab). */
+  keptSince: (cells: number) =>
+    cells === 1
+      ? '1 cell was changed since, so it was kept.'
+      : `${String(cells)} cells were changed since, so they were kept.`,
+  nothingToUndo: 'Nothing to undo.',
+  /** Someone else's later save replaced the person's value (AC-46). */
+  replaced: (who: string, attribute: string, others: number, record: string) =>
+    others === 0
+      ? `${who} changed ${attribute} on ${record} just after you, so your value was replaced.`
+      : `${who} changed ${attribute} and ${String(others)} more on ${record} just after you, so your values were replaced.`,
+  useMine: 'Use mine',
+  someone: 'Someone',
+  anApiKey: 'An API key',
+  anAutomation: 'An automation',
+  /** ShortcutHelp, opened with ? anywhere in the workspace. */
+  shortcutsEverywhere: 'Everywhere',
+  undoShortcut: 'Undo your last change',
+  showShortcuts: 'Show keyboard shortcuts',
 } as const;

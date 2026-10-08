@@ -1,6 +1,6 @@
 // Brief
 // Purpose: one object's records (People in this loop) as a fast table, under the object's name and colour tile.
-// Main task: read and edit people in place, add a person, and add a column, seeing others' changes live.
+// Main task: read and edit people in place (a paste or clear is one change, undone with ⌘Z), add a person and a column, live.
 // Leaves out: filters, sorts, saved views, other objects' tables and presence (#6, #7, #20).
 import {
   isEditableHere,
@@ -20,6 +20,8 @@ import { useMemo, useState } from 'react';
 import { AddAttributeDialog } from './AddAttributeDialog.tsx';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
 import { strings } from './strings.ts';
+import { editToast, isClear } from './undo.ts';
+import { runUndo } from './useUndoShortcut.ts';
 import { useCan, WorkspacePage } from './WorkspacePage.tsx';
 
 /** The one view this loop has ("All people"). */
@@ -160,7 +162,15 @@ export function RecordsScreen({ slug, object, attributes, members, view }: Recor
                 data.records.setValue(slug, change);
               }}
               onCellsChange={(changes) => {
-                data.records.setValues(slug, changes);
+                // One action, one write (spec 0006, AC-50); a paste or clear of several cells says so, with Undo.
+                const kind =
+                  changes.length === 1 ? 'cell' : isClear(changes.map((change) => change.value)) ? 'clear' : 'paste';
+                void data.records.setValues(slug, changes, kind).then((outcome) => {
+                  const toast = editToast(outcome, kind, () => {
+                    runUndo(data, toasts, slug);
+                  });
+                  if (toast !== undefined) toasts.toast(toast);
+                });
               }}
               cellErrors={state.cellErrors}
               status={state.status}
