@@ -50,10 +50,10 @@ export interface InputProblem {
   readonly message: string;
 }
 
-/** An error about one field of the caller's input, which the API answers as `INPUT_INVALID` on that field. */
 /** What a cell that moved on since the version a write names answers (spec 0006, AC-49, undo's `ifVersionId`). */
 export const versionChangedMessage = (title: string): string => `${title} was changed since, so it was kept.`;
 
+/** An error about one field of the caller's input, which the API answers as `INPUT_INVALID` on that field. */
 export type InputError = Error & { readonly inputProblem: InputProblem };
 
 /**

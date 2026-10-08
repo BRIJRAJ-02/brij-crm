@@ -978,6 +978,60 @@ describe('undo, walking back one cell and checking only what this tab wrote', ()
     expect(await second).toMatchObject({ undone: 1, kept: 0 });
   });
 
+  it('walks back two changes to one cell on a quick double press, one after the other', async () => {
+    const { layer, edits } = await readyView();
+    void layer.setValues(WS, [change('Paris')]);
+    await settle();
+    edits[0]?.answer(at('Paris', 2));
+    await settle();
+    void layer.setValues(WS, [change('Rome')]);
+    await settle();
+    edits[1]?.answer(at('Rome', 3));
+    await settle();
+    // Both presses before either answer comes back.
+    const first = layer.undo.run(WS);
+    const second = layer.undo.run(WS);
+    await settle();
+    expect(edits).toHaveLength(3);
+    edits[2]?.answer(at('Paris', 4));
+    expect(await first).toMatchObject({ undone: 1, kept: 0 });
+    await settle();
+    expect(edits[3]?.input.values).toEqual({ [CITY]: { value: 'London', ifVersionId: version(4) } });
+    edits[3]?.answer(at('London', 5));
+    expect(await second).toMatchObject({ undone: 1, kept: 0 });
+  });
+
+  it('puts back old values too big for one request in several, each record whole', async () => {
+    const { layer, batches, edits } = await readyView();
+    const long = 'x'.repeat(400_000);
+    // A long city on each row, one edit at a time, then a clear of all three: the clear is small, its undo is not.
+    for (const row of [0, 1, 2]) {
+      void layer.setValues(WS, [{ rowId: idAt(row), columnId: CITY, value: long }]);
+      await settle();
+      edits.at(-1)?.answer(rowOf(idAt(row), { [NAME]: `P${String(row)}`, [CITY]: long }, { [CITY]: version(2) }, 2));
+      await settle();
+    }
+    void layer.setValues(
+      WS,
+      [0, 1, 2].map((row) => ({ rowId: idAt(row), columnId: CITY, value: null })),
+      'clear',
+    );
+    await settle();
+    batches[0]?.answer({
+      results: [0, 1, 2].map((row) => ({
+        recordId: idAt(row),
+        record: rowOf(idAt(row), { [NAME]: `P${String(row)}`, [CITY]: null }, { [CITY]: version(3) }, 3),
+      })),
+      echoes: 1,
+    });
+    await settle();
+    void layer.undo.run(WS);
+    await settle();
+    // About 1.2 MB of old values: two records in one batch, the third on its own, neither past the limit.
+    expect(batches[1]?.input.items.map((item) => item.recordId)).toEqual([idAt(0), idAt(1)]);
+    expect(edits.at(-1)?.input.recordId).toBe(idAt(2));
+  });
+
   it('calls only the version the write made its own, never a later one the read back saw', async () => {
     const { layer, edits, replaced } = await readyView();
     void layer.setValues(WS, [change('Paris')]);
@@ -1023,7 +1077,8 @@ describe('undo, walking back one cell and checking only what this tab wrote', ()
     expect(edits[2]?.input.values).toEqual({ [CITY]: { value: 'London', ifVersionId: version(2) } });
     edits[2]?.answer(at('London', 3));
     await settle();
-    // Not pushed: nothing is left to undo.
+    // No screen asked for the retry: the layer says what it did. Not pushed: nothing is left to undo.
+    expect(notices.at(-1)?.message).toBe(RECORD_WORDS.undoRetried(1));
     expect(layer.undo.depth(WS)).toBe(0);
   });
 

@@ -398,12 +398,13 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
   const current = await endLinks(tx, relationship, end, ownerId, scope.access);
   // Links to far records the writer can't see (spec 0009): they read as absent, and a multi end keeps them.
   const unseen = new Set(current.flatMap((link) => (link.farHidden === true ? [link.far] : [])));
-  if (write.ifVersionId !== undefined) checkLinkVersion(attribute, current, write.ifVersionId);
   await checkTargets(tx, scope.access, attribute, ownerId, end.allowed, wanted);
 
   const visible = current.filter((link) => !link.farDeleted && !unseen.has(link.far));
   const wantedIds = wanted.map((item) => item.recordId);
+  // Already as asked: nothing is written, so nothing can be overwritten (a retried undo whose first try landed).
   if (visible.length === wantedIds.length && visible.every((link, index) => link.far === wantedIds[index])) return [];
+  if (write.ifVersionId !== undefined) checkLinkVersion(attribute, current, write.ifVersionId);
   // A single end holding a live link the writer can't see: replacing it would end that link, and a write never
   // removes what the writer can't see (spec 0009), so the change is refused without naming the record.
   if (end.mySingle && current.some((link) => !link.farDeleted && unseen.has(link.far))) {

@@ -198,6 +198,12 @@ describe('the exact version precondition (spec 0006, AC-49)', () => {
       values: { [parent]: { value: null, ifVersionId: must(linked[parent]?.versionId) } },
     });
     expect(unlinked[parent]?.versionId).toBeTruthy();
+    // The same unlink again (its answer was lost): the cell already holds what it asks, so it lands, writing nothing.
+    const again = await setValues(scope, {
+      recordId: acme,
+      values: { [parent]: { value: null, ifVersionId: must(linked[parent]?.versionId) } },
+    });
+    expect(again).toEqual({ [parent]: {} });
   });
 
   it('refuses one record of a batch and lands the others (spec 0006, AC-50)', async () => {

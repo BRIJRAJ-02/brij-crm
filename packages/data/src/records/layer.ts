@@ -21,7 +21,7 @@ import type {
 import { dataError, refusalFor, refusalSummary, toDataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
 import { createOwnVersions, createUndoStack, type UndoCell, type UndoKind } from './history.ts';
-import { createPlainStore } from './plain-store.ts';
+import { createPlainStore, sameData } from './plain-store.ts';
 import type { Layer } from './store.ts';
 
 /** A records change event (spec 0007's union), as the live router hands it over. */
@@ -253,7 +253,22 @@ export const RECORD_WORDS = {
   draftRefused: 'That record wasn’t created, so the change to it wasn’t saved.',
   recordGone: 'That record was deleted, so the change wasn’t saved.',
   notSaved: (count: number) => `${String(count)} changes weren’t saved.`,
+  /** A refused undo, sent again from its toast's Retry. */
+  undoRetried: (count: number) => (count === 1 ? 'Undid 1 change' : `Undid ${String(count)} changes`),
+  kept: (count: number) =>
+    count === 1
+      ? '1 cell was changed since, so it was kept.'
+      : `${String(count)} cells were changed since, so they were kept.`,
 } as const;
+
+/** UTF-8, as a request body counts its bytes. */
+const UTF8 = new TextEncoder();
+
+/** How many bytes a cell adds to a write: its value as JSON in UTF-8, and its ids and version around it. */
+function cellBytes(value: unknown): number {
+  // A cell's value is JSON shaped; `undefined` (nothing at all) is the one that stringifies to nothing.
+  return CELL_OVERHEAD_BYTES + (value === undefined ? 0 : UTF8.encode(JSON.stringify(value)).byteLength);
+}
 
 const timer = (ms: number, signal?: AbortSignal) =>
   new Promise<void>((resolve, reject) => {
@@ -312,6 +327,8 @@ export function createRecordsLayer({
   const own = createOwnVersions();
   const undo = createUndoStack();
   const inflight = new Map<string, Set<Promise<void>>>();
+  // Each workspace's undo work, one press at a time.
+  const undoing = new Map<string, Promise<void>>();
   const views = new Map<string, ViewEntry>();
   // Creates still waiting on the server, by record id: an edit to the draft is sent after it.
   const creating = new Map<string, Promise<boolean>>();
@@ -873,14 +890,9 @@ export function createRecordsLayer({
     });
   }
 
-  /** Roughly how many bytes a write of these cells sends: their values, and each cell's ids and version. */
+  /** Roughly how many bytes a write of these cells sends: their values in UTF-8, and each cell's ids and version. */
   const encodedSize = (changes: readonly CellChange[]): number =>
-    changes.reduce(
-      // A cell's values are JSON shaped; `undefined` (nothing at all) is the one that stringifies to nothing.
-      (sum, change) =>
-        sum + CELL_OVERHEAD_BYTES + (change.value === undefined ? 0 : JSON.stringify(change.value).length),
-      0,
-    );
+    changes.reduce((sum, change) => sum + cellBytes(change.value), 0);
 
   /**
    * Edits cells as one action (spec 0006, AC-48, AC-50): a cell, a paste or a
@@ -927,6 +939,36 @@ export function createRecordsLayer({
     return { kind: 'done', cells: changes.length, landed: landedCells, ...(pushed ? { undoId: mutationId } : {}) };
   }
 
+  /** Splits record writes into runs whose encoded size stays under one request's limit; each record stays whole. */
+  function bySize(writes: readonly RecordWrite[]): RecordWrite[][] {
+    const runs: RecordWrite[][] = [];
+    let run: RecordWrite[] = [];
+    let size = 0;
+    for (const each of writes) {
+      const own = each.cells.reduce((sum, cell) => sum + cellBytes(cell.value), 0);
+      if (run.length > 0 && (size + own > MAX_WRITE_BYTES || run.length >= MAX_BATCH_RECORDS)) {
+        runs.push(run);
+        run = [];
+        size = 0;
+      }
+      run.push(each);
+      size += own;
+    }
+    if (run.length > 0) runs.push(run);
+    return runs;
+  }
+
+  /** Writes record writes in runs a request can carry (an undo's old values can be far bigger than the change). */
+  async function writeInRuns(
+    workspace: string,
+    objectId: string,
+    writes: readonly RecordWrite[],
+    options: WriteOptions,
+  ): Promise<readonly RecordOutcome[]> {
+    const outcomes = await Promise.all(bySize(writes).map((run) => write(workspace, objectId, run, options)));
+    return outcomes.flat();
+  }
+
   /**
    * Writes undo cells back, each checked by the version its action wrote
    * (`ifVersionId`): a record refused only because some of its cells changed
@@ -948,7 +990,7 @@ export function createRecordsLayer({
       ]);
     }
     const quiet = new Set(['VERSION_CHANGED']);
-    const first = await write(
+    const first = await writeInRuns(
       workspace,
       objectId,
       [...byRecord].map(([recordId, writes]) => ({ recordId, cells: writes })),
@@ -971,70 +1013,109 @@ export function createRecordsLayer({
       kept += outcome.cells.length - rest.length;
       if (rest.length > 0) retry.push({ recordId: outcome.recordId, cells: rest });
     }
-    const second = retry.length === 0 ? [] : await write(workspace, objectId, retry, { quiet });
+    const second = retry.length === 0 ? [] : await writeInRuns(workspace, objectId, retry, { quiet });
     for (const outcome of second) {
       if (outcome.failure?.code === 'VERSION_CHANGED') kept += outcome.cells.length;
       else settled.push(outcome);
     }
-    // Each cell put back hands its new version to the older entry that wrote what this one replaced.
+    // Each cell put back hands its new version to the older entry that wrote what this one replaced, in one pass.
+    // A cell that landed writing nothing (a resend whose first try had landed) holds the value at the row's version.
     const byCell = new Map(cells.map((cell) => [`${cell.recordId}:${cell.attributeId}`, cell]));
+    const handOver = new Map<string, string>();
     for (const outcome of settled) {
-      for (const [attributeId, versionId] of Object.entries(outcome.written ?? {})) {
-        const replaced = byCell.get(`${outcome.recordId}:${attributeId}`)?.replacedVersionId;
-        if (replaced !== undefined) undo.rewrite(workspace, outcome.recordId, attributeId, replaced, versionId);
+      const { row } = outcome;
+      if (row === undefined) continue;
+      for (const cell of outcome.cells) {
+        const undone = byCell.get(`${outcome.recordId}:${cell.attributeId}`);
+        const now =
+          outcome.written?.[cell.attributeId] ??
+          (sameData(row.values[cell.attributeId] ?? null, cell.value) ? row.versions[cell.attributeId] : undefined);
+        if (undone?.replacedVersionId !== undefined && now !== undefined) {
+          handOver.set(`${outcome.recordId}:${cell.attributeId}:${undone.replacedVersionId}`, now);
+        }
       }
     }
+    undo.rewrite(workspace, handOver);
     const landedCells = settled.reduce(
       (sum, outcome) => sum + (outcome.row === undefined ? 0 : outcome.cells.length),
       0,
     );
     const failed = settled.filter((outcome) => outcome.failure !== undefined);
-    // Retry sends the same undo again, still checked by the versions its action wrote.
+    // Retry sends the same undo again, after any undo still running, still checked by the versions its action wrote.
     tellRefusals(failed, (refusedOnes) => {
       const ids = new Set(
         refusedOnes.flatMap((outcome) => outcome.cells.map((cell) => `${outcome.recordId}:${cell.attributeId}`)),
       );
-      void undoCellsBack(
-        workspace,
-        objectId,
-        cells.filter((cell) => ids.has(`${cell.recordId}:${cell.attributeId}`)),
-      );
+      void inTurn(workspace, async () => {
+        const again = await undoCellsBack(
+          workspace,
+          objectId,
+          cells.filter((cell) => ids.has(`${cell.recordId}:${cell.attributeId}`)),
+        );
+        // No screen asked for this one: the layer says what it did.
+        if (again.landed > 0) notify({ tone: 'success', message: RECORD_WORDS.undoRetried(again.landed) });
+        if (again.kept > 0) notify({ tone: 'success', message: RECORD_WORDS.kept(again.kept) });
+      });
     });
     return { landed: landedCells, kept, failed };
   }
 
   /**
-   * Undoes the newest action on this tab's stack for the workspace (spec
-   * 0006, AC-48, AC-49), after any undoable write still out has answered;
-   * with `only`, that action alone and only while it is the newest (a toast's
-   * Undo). Each cell is written back only while it still holds the version
-   * the action wrote (checked on the server): a cell changed since is kept.
-   * The undo shows at once, rolls back what is refused, is live to others,
-   * and is never pushed itself (no redo).
+   * Runs undo work for a workspace one at a time, after every undoable write
+   * still out: a second press waits until the first press's writes have
+   * answered and handed their versions on, so a quick double press walks
+   * back two changes to one cell.
    */
-  async function runUndo(workspace: string, only?: string): Promise<UndoOutcome> {
-    await Promise.all([...(inflight.get(workspace) ?? [])]);
-    // A toast's Undo undoes its own action or nothing: once a newer one sits on top (or it was undone), it is stale.
-    if (only !== undefined && undo.top(workspace)?.id !== only) return { kind: 'stale' };
-    const entry = undo.pop(workspace);
-    const [firstCell] = entry?.cells ?? [];
-    if (entry === undefined || firstCell === undefined) return { kind: 'nothing' };
-    const { landed: undone, kept, failed } = await undoCellsBack(workspace, entry.objectId, entry.cells);
-    const shown = store.get(firstCell.recordId) ?? store.base(firstCell.recordId);
-    return {
-      kind: 'undone',
-      action: entry.kind,
-      objectId: entry.objectId,
-      cells: entry.cells.length,
-      undone,
-      kept,
-      failed: failed.reduce((sum, outcome) => sum + outcome.cells.length, 0),
-      first: {
-        recordId: firstCell.recordId,
-        attributeId: firstCell.attributeId,
-        recordName: shown?.display.name ?? '',
-      },
-    };
+  function inTurn<T>(workspace: string, work: () => Promise<T>): Promise<T> {
+    const before = undoing.get(workspace) ?? Promise.resolve();
+    const mine = before.then(async () => {
+      await Promise.all([...(inflight.get(workspace) ?? [])]);
+      return work();
+    });
+    const done = mine.then(
+      () => undefined,
+      () => undefined,
+    );
+    undoing.set(workspace, done);
+    void done.then(() => {
+      if (undoing.get(workspace) === done) undoing.delete(workspace);
+    });
+    return mine;
+  }
+
+  /**
+   * Undoes the newest action on this tab's stack for the workspace (spec
+   * 0006, AC-48, AC-49), after any undoable write and any undo still out has
+   * answered; with `only`, that action alone and only while it is the newest
+   * (a toast's Undo). Each cell is written back only while it still holds the
+   * version the action wrote (checked on the server): a cell changed since is
+   * kept. The undo shows at once, rolls back what is refused, is live to
+   * others, and is never pushed itself (no redo).
+   */
+  function runUndo(workspace: string, only?: string): Promise<UndoOutcome> {
+    return inTurn(workspace, async (): Promise<UndoOutcome> => {
+      // A toast's Undo undoes its own action or nothing: once a newer one sits on top (or it was undone), it is stale.
+      if (only !== undefined && undo.top(workspace)?.id !== only) return { kind: 'stale' };
+      const entry = undo.pop(workspace);
+      const [firstCell] = entry?.cells ?? [];
+      if (entry === undefined || firstCell === undefined) return { kind: 'nothing' };
+      const { landed: undone, kept, failed } = await undoCellsBack(workspace, entry.objectId, entry.cells);
+      const shown = store.get(firstCell.recordId) ?? store.base(firstCell.recordId);
+      return {
+        kind: 'undone',
+        action: entry.kind,
+        objectId: entry.objectId,
+        cells: entry.cells.length,
+        undone,
+        kept,
+        failed: failed.reduce((sum, outcome) => sum + outcome.cells.length, 0),
+        first: {
+          recordId: firstCell.recordId,
+          attributeId: firstCell.attributeId,
+          recordName: shown?.display.name ?? '',
+        },
+      };
+    });
   }
 
   /**
@@ -1348,6 +1429,7 @@ export function createRecordsLayer({
       own.clear();
       undo.clear();
       inflight.clear();
+      undoing.clear();
     },
 
     /** How many record bodies the store holds now (for tests and the gate). */

@@ -86,11 +86,12 @@ export interface UndoStack {
   /** The newest entry, left on the stack. */
   readonly top: (workspace: string) => UndoEntry | undefined;
   /**
-   * A cell an undo just put back at version `to`: an older entry that wrote
-   * `from` there (the version the undone action replaced) now finds `to`, so
-   * the next press undoes it too.
+   * Cells an undo just put back, by `${recordId}:${attributeId}:${from}` to
+   * the version it wrote: an older entry that wrote `from` there (the version
+   * the undone action replaced) now finds the new one, so the next press
+   * undoes it too. One pass over the stack, however many cells.
    */
-  readonly rewrite: (workspace: string, recordId: string, attributeId: string, from: string, to: string) => void;
+  readonly rewrite: (workspace: string, handOver: ReadonlyMap<string, string>) => void;
   readonly size: (workspace: string) => number;
   readonly clear: () => void;
 }
@@ -111,22 +112,20 @@ export function createUndoStack(depth: number = UNDO_DEPTH, cellBudget: number =
       }
       stacks.set(workspace, stack);
     },
-    rewrite: (workspace, recordId, attributeId, from, to) => {
+    rewrite: (workspace, handOver) => {
       const stack = stacks.get(workspace);
-      if (stack === undefined) return;
+      if (stack === undefined || handOver.size === 0) return;
+      const now = (cell: UndoCell) => handOver.get(`${cell.recordId}:${cell.attributeId}:${cell.writtenVersionId}`);
       stacks.set(
         workspace,
         stack.map((entry) =>
-          entry.cells.some(
-            (cell) => cell.recordId === recordId && cell.attributeId === attributeId && cell.writtenVersionId === from,
-          )
+          entry.cells.some((cell) => now(cell) !== undefined)
             ? {
                 ...entry,
-                cells: entry.cells.map((cell) =>
-                  cell.recordId === recordId && cell.attributeId === attributeId && cell.writtenVersionId === from
-                    ? { ...cell, writtenVersionId: to }
-                    : cell,
-                ),
+                cells: entry.cells.map((cell) => {
+                  const to = now(cell);
+                  return to === undefined ? cell : { ...cell, writtenVersionId: to };
+                }),
               }
             : entry,
         ),
