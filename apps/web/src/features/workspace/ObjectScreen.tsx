@@ -2,7 +2,7 @@
 // Purpose: the states of a page inside a workspace around its content: loading, failed, missing, or no objects.
 // Main task: say plainly what happened and offer the way on (Try again, or open your workspace).
 // Leaves out: the records themselves, which RecordsScreen shows.
-import { EmptyState, Link, TopBar } from '@crm/ui';
+import { EmptyState, Link, TopBar, ViewBar } from '@crm/ui';
 import { strings } from './strings.ts';
 
 /** A workspace with no objects to list: its name, and a plain empty state (no way out to loop through). */
@@ -30,6 +30,14 @@ export function pendingPage() {
   return {
     topBar: <TopBar title={strings.loadingTitle} isLoading />,
     body: <EmptyState title={strings.loadingTitle} isLoading />,
+  };
+}
+
+/** An object's page while it loads: the page's bars and a view bar holding their places, so the table arrives without a jump. */
+export function objectPendingPage() {
+  return {
+    ...pendingPage(),
+    viewBar: <ViewBar views={[]} currentViewId="" onViewChange={() => undefined} isLoading />,
   };
 }
 

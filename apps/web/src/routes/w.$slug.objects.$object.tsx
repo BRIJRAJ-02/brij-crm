@@ -1,6 +1,6 @@
 import { isDataError } from '@crm/data';
 import { createFileRoute, useRouter } from '@tanstack/react-router';
-import { failedPage, missingPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
+import { failedPage, missingPage, objectPendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { RecordsScreen } from '../features/workspace/RecordsScreen.tsx';
 import { strings } from '../features/workspace/strings.ts';
 import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
@@ -26,7 +26,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object')({
     ]);
     return { table: { object, attributes, members, view } };
   },
-  pendingComponent: () => <WorkspacePage page={pendingPage()} />,
+  pendingComponent: () => <WorkspacePage page={objectPendingPage()} />,
   errorComponent: ObjectError,
   component: ObjectRoute,
 });
