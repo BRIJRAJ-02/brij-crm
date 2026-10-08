@@ -61,6 +61,11 @@ afterEach(async (context) => {
   try {
     for (const name of ['light', 'dark'] as const) {
       html.dataset.theme = name;
+      // A theme swap starts colour transitions; let the finite ones end so the matcher compares settled frames.
+      const finite = document
+        .getAnimations()
+        .filter((animation) => animation.effect?.getTiming().iterations !== Infinity);
+      await Promise.all(finite.map((animation) => animation.finished));
       await expect.element(page.getByTestId('story-root')).toMatchScreenshot(name);
     }
   } finally {

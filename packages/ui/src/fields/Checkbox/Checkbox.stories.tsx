@@ -40,8 +40,12 @@ export const Editor: Story = {
     const checkbox = canvas.getByRole('checkbox', { name: 'Is customer' });
     await userEvent.click(checkbox);
     await expect(args.onCommit).toHaveBeenCalledWith(true);
-    // The value is controlled and stays false; move focus away so the screenshot never catches a fading ring.
+    // The value is controlled and stays false. Move the pointer off and focus away, then wait for the hover,
+    // press and focus transitions to end, so the screenshot never catches a ring or edge mid fade.
+    await userEvent.unhover(checkbox);
     checkbox.blur();
     await expect(checkbox).not.toHaveFocus();
+    await expect(checkbox.closest('label') ?? checkbox).not.toHaveAttribute('data-hovered');
+    await Promise.all(document.getAnimations().map((animation) => animation.finished));
   },
 };
