@@ -169,6 +169,24 @@ function detailsOf(data: unknown): DataErrorDetails | undefined {
 }
 
 /**
+ * What each browser's fetch rejects with when it can't reach the server (or the CSP or an extension blocks
+ * the request). Only these TypeErrors mean "offline": any other TypeError is a bug in the app, never the
+ * network, so it must not be shown as "Can't reach the CRM".
+ */
+export const OFFLINE_FETCH_MESSAGES: ReadonlySet<string> = new Set([
+  'Failed to fetch',
+  'NetworkError when attempting to fetch resource.',
+  'Load failed',
+  'The network connection was lost.',
+  'The Internet connection appears to be offline.',
+]);
+
+/** Whether a thrown value is fetch failing to reach the server, rather than a bug. */
+export function isFetchFailure(error: unknown): boolean {
+  return error instanceof TypeError && OFFLINE_FETCH_MESSAGES.has(error.message);
+}
+
+/**
  * Any failure from a call (an oRPC error, Better Auth's `{ code, message,
  * status }`, a dropped connection) as a DataError. An answer the server
  * didn't shape gets a code from its status; failing to reach the server is
@@ -180,8 +198,9 @@ export function toDataError(error: unknown): DataError {
     if (!isKnownCode(error.code)) return byStatus(error.status);
     return dataError(error.code, messageFor(error.code, error.message), detailsOf(error.data));
   }
-  // fetch rejects with a TypeError when the network or the server can't be reached.
-  if (error instanceof TypeError) return dataError('API_UNAVAILABLE', ERROR_MESSAGES.offline);
+  // fetch rejects with a TypeError when the network or the server can't be reached; any other TypeError is
+  // a bug (once, a field the new screen read from an older API), which is INTERNAL, never "offline".
+  if (isFetchFailure(error)) return dataError('API_UNAVAILABLE', ERROR_MESSAGES.offline);
   if (isRecord(error) && 'status' in error) {
     if (!isKnownCode(error.code)) return byStatus(error.status);
     return dataError(error.code, messageFor(error.code, error.message));
@@ -215,8 +234,8 @@ function isAbort(error: unknown): boolean {
 export function isUnseenFault(error: unknown): boolean {
   if (isDataError(error) || isAbort(error)) return false;
   if (error instanceof ORPCError) return !isKnownCode(error.code);
-  // fetch's own failure: offline, or the server unreachable.
-  if (error instanceof TypeError) return false;
+  // fetch's own failure: offline, or the server unreachable. Any other TypeError is a bug, and is reported.
+  if (isFetchFailure(error)) return false;
   if (isRecord(error) && 'status' in error) return !isKnownCode(error.code);
   return true;
 }

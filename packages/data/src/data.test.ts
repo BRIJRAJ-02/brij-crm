@@ -912,6 +912,13 @@ describe('reporting faults the server never saw (spec 0010, AC-163)', () => {
     expect(faults[0]).toMatchObject({ requestId: 'req-from-the-edge', procedure: 'system.status' });
   });
 
+  it('treats a TypeError that is not fetch failing as a bug, never as being offline', async () => {
+    const bug = new TypeError("Cannot read properties of undefined (reading 'map')");
+    const { data, faults } = layer({ fetch: () => Promise.reject(bug) });
+    expect(await failure(data.system.status())).toMatchObject({ code: 'INTERNAL' });
+    expect(faults).toEqual([{ error: bug }]);
+  });
+
   it('reports an error thrown inside the layer, which no answer carried', async () => {
     const bug = new RangeError('a bug on the way out');
     const { data, faults } = layer({ fetch: () => Promise.reject(bug) });
