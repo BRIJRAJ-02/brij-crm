@@ -10,7 +10,7 @@
 // only insert, read, and stamp `published_at` once, from null to a time) are
 // hand written in the migration.
 import { sql } from 'drizzle-orm';
-import { bigint, boolean, foreignKey, index, pgEnum, pgTable, primaryKey, uuid } from 'drizzle-orm/pg-core';
+import { bigint, boolean, foreignKey, index, jsonb, pgEnum, pgTable, primaryKey, uuid } from 'drizzle-orm/pg-core';
 import { timestamptz, workspaceId } from './common.ts';
 import { objects } from './definitions.ts';
 import { workspaces } from './workspaces.ts';
@@ -77,6 +77,13 @@ export const outbox = pgTable(
      * null for the system or a key. Read by the access filter; never published.
      */
     actorMemberId: uuid('actor_member_id'),
+    /**
+     * The values this write replaced that its author never saw (spec 0006,
+     * AC-46), on a `records` row: `[{ recordId, attributeId, versionId, by:
+     * { type, id } }]`, ids only. Null when there were none, and left empty
+     * past 1,000 entries (no notices for a bulk overwrite). Never on a catch up.
+     */
+    replaced: jsonb('replaced'),
     /**
      * The commit time an event carries as `at`: `clock_timestamp()`, set by the
      * hook after it takes the counter row, so it follows `seq` order.

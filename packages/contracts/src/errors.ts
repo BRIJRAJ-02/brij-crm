@@ -47,6 +47,8 @@ export const ERROR_MAP = {
   LIMIT_REACHED: CONFLICT,
   // The change would leave a live workspace with no active owner (spec 0009, AC-137).
   LAST_OWNER: CONFLICT,
+  // Undo's precondition (spec 0006, AC-49): the cell changed since the version the write names.
+  VERSION_CHANGED: CONFLICT,
   PAYLOAD_TOO_LARGE: { status: 413 },
   ATTRIBUTE_VALUE_INVALID: UNPROCESSABLE,
   VALUE_REQUIRED: UNPROCESSABLE,

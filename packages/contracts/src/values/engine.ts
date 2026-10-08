@@ -22,6 +22,7 @@ export const ENGINE_REFUSAL_CODES = [
   'QUERY_CANCELLED',
   'FORBIDDEN',
   'LAST_OWNER',
+  'VERSION_CHANGED',
 ] as const;
 
 /** One of the engine's refusal codes. */

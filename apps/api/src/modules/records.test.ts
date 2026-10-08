@@ -31,9 +31,12 @@ type Member = Awaited<ReturnType<typeof memberWithWorkspace>>;
 const CLOCK_WRONG =
   "This record couldn't be saved because this device's clock looks wrong. Check its time, then try again.";
 
-/** Creates a person named `first` with `email`, through the real procedure. */
-function createPerson(m: Member, first: string, email?: string, id = newId()) {
-  return m.client.records.create({
+/**
+ * Creates a person named `first` with `email`, through the real procedure,
+ * answering the record as reads give it (without the write's `echoes`).
+ */
+async function createPerson(m: Member, first: string, email?: string, id = newId()) {
+  const { echoes: _echoes, ...record } = await m.client.records.create({
     workspace: m.slug,
     objectId: m.people.id,
     id,
@@ -43,6 +46,7 @@ function createPerson(m: Member, first: string, email?: string, id = newId()) {
     },
     mutationId: newId(),
   });
+  return record;
 }
 
 /** The member id the door made this person's actor. */
@@ -239,7 +243,10 @@ describe('records.setValues', () => {
     expect(view.values[m.attribute('owner')]).toEqual({ type: 'member', id: memberId });
     expect(view.updatedAt >= person.updatedAt).toBe(true);
     const [read] = await m.client.records.get({ workspace: m.slug, ids: [person.id] });
-    expect(read).toEqual(view);
+    // The write's answer is the record as any read gives it, plus how many events carry the write (spec 0006).
+    const { echoes, ...record } = view;
+    expect(read).toEqual(record);
+    expect(echoes).toBe(1);
   });
 
   it("answers each cell's version: newer for a later write, kept by a clear, and a reference's from its link", async () => {

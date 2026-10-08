@@ -46,7 +46,12 @@ export function getMyAccess(scope: EngineScope): MyAccess {
   checkScope(scope);
   const { principal, permissions } = scope.access;
   if (principal.kind !== 'member') throw new Error('Only a member has a role to show.');
-  return { role: principal.role, roleLabel: ROLE_LABELS[principal.role], permissions: [...permissions] };
+  return {
+    memberId: principal.memberId,
+    role: principal.role,
+    roleLabel: ROLE_LABELS[principal.role],
+    permissions: [...permissions],
+  };
 }
 
 /** A member as the owner rules return it: who, and their role now. */

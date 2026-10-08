@@ -174,6 +174,8 @@ export async function deleteRecord(
           deletedByType: by.type,
           deletedById: by.id,
           deletedByMemberId: by.memberId,
+          // Every statement that updates the row moves the revision (spec 0006, AC-44).
+          revision: sql`${records.revision} + 1`,
         })
         .where(eq(records.id, recordId));
       const entryIds = await liveEntryIds(tx, recordId);
@@ -217,7 +219,13 @@ export async function restoreRecord(
       await releaseUniqueKeys(tx, scope.access, [recordId, ...entryIds]);
       await tx
         .update(records)
-        .set({ deletedAt: null, deletedByType: null, deletedById: null, deletedByMemberId: null })
+        .set({
+          deletedAt: null,
+          deletedByType: null,
+          deletedById: null,
+          deletedByMemberId: null,
+          revision: sql`${records.revision} + 1`,
+        })
         .where(eq(records.id, recordId));
       await setRecordKeysLive(tx, recordId, true);
       // Last, as every write takes the counter row (a create checks its slot after its values too). A full

@@ -17,6 +17,7 @@ export {
   type Marked,
   type OutboxKind,
   type OutboxReader,
+  type OutboxReplaced,
   type OutboxRow,
   type RawOutboxRow,
 } from './outbox.ts';

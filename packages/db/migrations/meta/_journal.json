@@ -169,6 +169,13 @@
       "when": 1791460723799,
       "tag": "0023_outbox_kinds",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1791464448311,
+      "tag": "0024_record_revision",
+      "breakpoints": true
     }
   ]
 }

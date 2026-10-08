@@ -246,7 +246,13 @@ async function settle(call: Promise<unknown>): Promise<Outcome> {
     const value = await call;
     if (Array.isArray(value) && value.length === 1) {
       const [only] = value as unknown[];
-      if (typeof only === 'object' && only !== null && 'ok' in only && only.ok === false && 'refusals' in only) {
+      // A batch's one outcome: the engine's (`ok: false`) or the service's (refusals and no record).
+      const isRefused =
+        typeof only === 'object' &&
+        only !== null &&
+        'refusals' in only &&
+        (('ok' in only && only.ok === false) || (!('ok' in only) && !('record' in only)));
+      if (isRefused) {
         const [first] = only.refusals as { code: string }[];
         if (first !== undefined) return { ok: false, refusal: first };
       }
@@ -316,6 +322,9 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   ),
   editRecord: refused('FORBIDDEN', (scope, world) =>
     core.editRecord(scope, { recordId: world.recordId, values: named(world) }),
+  ),
+  editRecords: refused('FORBIDDEN', (scope, world) =>
+    core.editRecords(scope, { items: [{ recordId: world.recordId, values: named(world) }] }),
   ),
   deleteRecord: refused('FORBIDDEN', (scope, world) => core.deleteRecord(scope, { recordId: world.recordId })),
   restoreRecord: refused('FORBIDDEN', (scope, world) => core.restoreRecord(scope, { recordId: world.recordId })),

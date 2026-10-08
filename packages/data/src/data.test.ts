@@ -74,6 +74,7 @@ const personRow = (index: number, title = 'Engineer'): RecordView => {
     updatedAt: '2026-10-08T09:00:00.000Z',
     updatedBy: actor,
     display: { objectId: PEOPLE.id, recordId: id, name: `P${String(index)}`, kind: 'person' },
+    revision: 0,
     values: { [TITLE.id]: title },
     versions: { [TITLE.id]: '0199a6f2-0001-7000-8000-000000000000' },
     linkTotals: {},
@@ -113,7 +114,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     objects: () => [PEOPLE],
     create: () => ({ workspace: { id: '0199a6f2-0000-7000-8000-000000000009', slug: 'new', name: 'New' } }),
     members: () => [ADA_MEMBER],
-    access: () => ({ role: 'member', roleLabel: 'Member', permissions: ['records.export'] }),
+    access: () => ({ memberId: ADA_MEMBER.id, role: 'member', roleLabel: 'Member', permissions: ['records.export'] }),
     attributes: () => [TITLE],
     addAttribute: notServed,
     count: () => 3,
@@ -155,8 +156,9 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       create: os.records.create.handler(notServed),
       setValues: os.records.setValues.handler(({ input }) => {
         mutationIds.push(input.mutationId);
-        return behaviour.setValues();
+        return { ...behaviour.setValues(), echoes: 1 };
       }),
+      setValuesBatch: os.records.setValuesBatch.handler(notServed),
     },
     members: { list: os.members.list.handler(() => behaviour.members()) },
     access: { mine: os.access.mine.handler(() => behaviour.access()) },

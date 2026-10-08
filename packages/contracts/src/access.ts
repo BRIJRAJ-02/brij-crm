@@ -109,8 +109,12 @@ export const OWNER_RULES_MESSAGE = 'Only an owner can make someone an owner, or 
 /** The refusal when a change would leave a live workspace with no active owner (409 `LAST_OWNER`). */
 export const LAST_OWNER_MESSAGE = 'A workspace needs an owner. Make someone else an owner first.';
 
-/** The caller's own access in a workspace: their role, its label, and their permissions. */
+/**
+ * The caller's own access in a workspace: their member id (what actor values
+ * and change events name them by), their role, its label, and their permissions.
+ */
 export const MyAccess = z.object({
+  memberId: z.uuid(),
   role: Role,
   roleLabel: z.string(),
   permissions: z.array(Permission),

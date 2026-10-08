@@ -26,6 +26,7 @@ const row = (overrides: Partial<OutboxRow>): OutboxRow => ({
   mutationId: undefined,
   actorMemberId: undefined,
   at,
+  replaced: undefined,
   ...overrides,
 });
 
@@ -75,6 +76,18 @@ describe('outboxEvent', () => {
     expect(outboxEvent(row({ kind: 'definitions', objectId: OBJECT, attributeIds: [id(4)] }))).toMatchObject({
       attributeIds: [id(4)],
     });
+  });
+
+  it('carries what a records row replaced (spec 0006), which the relay publishes whole and catch up drops', () => {
+    const replaced = [{ recordId: id(3), attributeId: id(4), versionId: id(5), by: { type: 'member', id: id(6) } }];
+    const stored = row({ objectId: OBJECT, recordIds: [id(3)], attributeIds: [id(4)], replaced } as Partial<OutboxRow>);
+    const event = outboxEvent(stored);
+    expect(event).toMatchObject({ kind: 'records', replaced });
+    expect(ChangeEvent.safeParse(liveEvent(stored)).success).toBe(true);
+    expect(liveEvent(stored)).toMatchObject({ replaced });
+    const collapse = createCollapse();
+    if (event !== undefined) collapse.add(event);
+    expect(collapse.events()[0]).not.toHaveProperty('replaced');
   });
 
   it('has nothing for a row missing what its kind needs', () => {

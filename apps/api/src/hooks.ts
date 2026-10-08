@@ -17,10 +17,11 @@ export interface WriteMeta {
 /**
  * The hooks one write runs in its transaction, after its change lands: the
  * outbox hook (spec 0005, task 15), storing one outbox row per object the
- * write touched with `mutationId`, so a refused write stores none.
+ * write touched with `mutationId`, so a refused write stores none, and
+ * telling `onStored` how many.
  */
-function writeHooks(meta: WriteMeta): readonly AfterWrite[] {
-  return [outboxHook({ mutationId: meta.mutationId })];
+function writeHooks(meta: WriteMeta, onStored: (count: number) => void): readonly AfterWrite[] {
+  return [outboxHook({ mutationId: meta.mutationId, onStored })];
 }
 
 /**
@@ -34,7 +35,29 @@ export async function commitWrite<T>(
   meta: WriteMeta | undefined,
   write: (hooks: readonly AfterWrite[]) => Promise<T>,
 ): Promise<T> {
-  const result = await write(meta === undefined ? [] : writeHooks(meta));
+  return (await commitCounted(context, meta, write)).result;
+}
+
+/**
+ * `commitWrite`, also answering `echoes`: how many outbox rows (so change
+ * events carrying the write's `mutationId`) the committed write stored, one
+ * per object it touched, 0 when it changed nothing (spec 0006, AC-60). The
+ * browser skips exactly that many of its own echoes.
+ */
+export async function commitCounted<T>(
+  context: Pick<RequestContext, 'wakeRelay'>,
+  meta: WriteMeta | undefined,
+  write: (hooks: readonly AfterWrite[]) => Promise<T>,
+): Promise<{ readonly result: T; readonly echoes: number }> {
+  // Set, never added to: a write tried again after a deadlock runs its hooks again, and the last run committed.
+  let echoes = 0;
+  const hooks =
+    meta === undefined
+      ? []
+      : writeHooks(meta, (count) => {
+          echoes = count;
+        });
+  const result = await write(hooks);
   context.wakeRelay();
-  return result;
+  return { result, echoes };
 }

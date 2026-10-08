@@ -67,6 +67,7 @@ export const ACCESS_TABLE = {
   setRecordValues: { data: 'write' },
   setValuesBatch: { data: 'write' },
   editRecord: { data: 'write' },
+  editRecords: { data: 'write' },
   deleteRecord: { data: 'write' },
   restoreRecord: { data: 'write' },
   addEntry: { data: 'write' },

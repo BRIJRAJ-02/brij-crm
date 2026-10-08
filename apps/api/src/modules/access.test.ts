@@ -50,6 +50,7 @@ describe('access.mine', () => {
     const { workspace, slug } = await memberWithWorkspace(app);
     const member = await joined(workspace.id, 'member');
     expect(await member.access.mine({ workspace: slug })).toEqual({
+      memberId: expect.any(String) as string,
       role: 'member',
       roleLabel: 'Member',
       permissions: ['records.export'],

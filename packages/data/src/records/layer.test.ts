@@ -36,6 +36,7 @@ function rowOf(id: string, values: Record<string, unknown>, versions: Record<str
       name: typeof values[NAME] === 'string' ? values[NAME] : '',
       kind: 'person',
     },
+    revision: 0,
     values,
     versions,
     linkTotals: {},

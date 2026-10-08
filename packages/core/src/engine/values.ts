@@ -219,8 +219,12 @@ export interface AttributeWrite {
   readonly attribute: AttributeDef;
   /** The new value as the caller gave it; parsed here by the attribute's schema. */
   readonly value: unknown;
-  /** The version the caller's edit started from, to report a replaced save (AC-12). */
-  readonly baseVersionId?: string;
+  /**
+   * The version the caller's edit started from, to report a replaced save
+   * (AC-12); `null` when the caller's copy had none (never set), so any
+   * current version is reported replaced (spec 0006).
+   */
+  readonly baseVersionId?: string | null;
 }
 
 /**
@@ -517,12 +521,19 @@ function itemInsert(item: ItemColumns) {
   };
 }
 
-/** Moves a record's (or entry's) `updated_at` and `updated_by` to now and the scope's actor (AC-7). */
+/**
+ * Moves a record's (or entry's) `updated_at` and `updated_by` to now and the
+ * scope's actor (AC-7), and a record's `revision` up by one (spec 0006, AC-44).
+ */
 export async function touchOwner(context: WriteContext, ownerKind: 'record' | 'entry', ownerId: string): Promise<void> {
   const by = actorRow(context.scope.actor);
   const set = { updatedAt: sql`now()`, updatedByType: by.type, updatedById: by.id, updatedByMemberId: by.memberId };
-  if (ownerKind === 'record') await context.tx.update(records).set(set).where(eq(records.id, ownerId));
-  else await context.tx.update(listEntries).set(set).where(eq(listEntries.id, ownerId));
+  if (ownerKind === 'record') {
+    await context.tx
+      .update(records)
+      .set({ ...set, revision: sql`${records.revision} + 1` })
+      .where(eq(records.id, ownerId));
+  } else await context.tx.update(listEntries).set(set).where(eq(listEntries.id, ownerId));
 }
 
 /**

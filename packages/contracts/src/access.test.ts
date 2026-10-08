@@ -114,8 +114,13 @@ describe('the key scope catalog', () => {
 });
 
 describe('access.mine', () => {
-  it('answers a role, its label and permissions from the catalog', () => {
-    expect(MyAccess.parse({ role: 'member', roleLabel: 'Member', permissions: ['records.export'] })).toEqual({
+  const MEMBER = '01a11b9d-2f11-7efa-871e-95e7b00fbe23';
+
+  it('answers the member id, a role, its label and permissions from the catalog', () => {
+    expect(
+      MyAccess.parse({ memberId: MEMBER, role: 'member', roleLabel: 'Member', permissions: ['records.export'] }),
+    ).toEqual({
+      memberId: MEMBER,
       role: 'member',
       roleLabel: 'Member',
       permissions: ['records.export'],

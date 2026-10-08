@@ -3,12 +3,12 @@
 // it), and setting values, each write answering the fresh record. Every read
 // and write goes through the scope the access door made.
 import { eq } from 'drizzle-orm';
-import type { RecordPage, RecordView } from '@crm/contracts';
+import type { BatchRecordResult, RecordPage, RecordView } from '@crm/contracts';
 import type { FilterGroup, SortRules } from '@crm/contracts/values';
 import { schema } from '@crm/db';
 import { canonicalId, isUuidV7, uuidV7Time } from '../engine/ids.ts';
 import { queryPage } from '../engine/query/page.ts';
-import { createRecord, getRecords, setRecordValues, type ValueInput } from '../engine/records.ts';
+import { createRecord, getRecords, setRecordValues, setRecordValuesBatch, type ValueInput } from '../engine/records.ts';
 import { inputInvalid, isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import type { AttributeDef } from '../engine/values.ts';
@@ -181,4 +181,48 @@ export async function editRecord(
     hooks,
   );
   return freshRecord(scope, canonicalId(input.recordId), attributesByObject);
+}
+
+/** New values for many records (spec 0006, AC-50): each record's by attribute id. */
+export interface EditRecordsInput {
+  readonly items: readonly EditRecordInput[];
+}
+
+/** What a record that landed and then went to the trash before its read back answers. */
+const TRASHED_SINCE = 'That record is in the trash. Restore it first.';
+
+/**
+ * Sets values on up to 500 records in one write (spec 0006, AC-50): each
+ * record lands all or nothing under its own savepoint, and the hooks see only
+ * those that landed, so one write stores one outbox row per object. Answers
+ * each record in the order asked: fresh when it landed (read back in one
+ * read, reusing the attributes the write loaded), or its refusals. More than
+ * 500 records is refused whole (`CONFIG_INVALID`). A retried batch writes
+ * nothing twice: an unchanged value writes nothing.
+ */
+export async function editRecords(
+  scope: EngineScope,
+  input: EditRecordsInput,
+  hooks: readonly AfterWrite[] = [],
+): Promise<BatchRecordResult[]> {
+  const { outcomes, attributesByObject } = await setRecordValuesBatch(scope, { items: input.items }, hooks);
+  const landed = [...new Set(outcomes.flatMap((outcome) => (outcome.ok ? [outcome.recordId] : [])))];
+  const views = landed.length === 0 ? [] : await getRecords(scope, { ids: landed, attributes: attributesByObject });
+  const byId = new Map(views.map((view) => [view.id, view]));
+  return outcomes.map((outcome): BatchRecordResult => {
+    if (!outcome.ok) {
+      return {
+        recordId: outcome.recordId,
+        refusals: outcome.refusals.map((refusal) => ({
+          code: refusal.code,
+          message: refusal.message,
+          ...(refusal.attributeId === undefined ? {} : { attributeId: refusal.attributeId }),
+        })),
+      };
+    }
+    const record = byId.get(outcome.recordId);
+    return record === undefined
+      ? { recordId: outcome.recordId, refusals: [{ code: 'RECORD_DELETED', message: TRASHED_SINCE }] }
+      : { recordId: outcome.recordId, record };
+  });
 }

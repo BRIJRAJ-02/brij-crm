@@ -14,7 +14,21 @@
 import { sql } from 'drizzle-orm';
 import { OUTBOX_CHANNEL } from '@crm/db';
 import { isUuid } from './ids.ts';
+import type { Actor } from './scope.ts';
 import { cappedHook, type AfterWrite, type CappedChange } from './write.ts';
+
+/** One value a write replaced that its author never saw (spec 0006, AC-46): ids only, and who replaced it. */
+export interface ReplacedValue {
+  readonly recordId: string;
+  readonly attributeId: string;
+  /** The version the write replaced. */
+  readonly versionId: string;
+  /** The write's actor: who replaced it. */
+  readonly by: Actor;
+}
+
+/** The most `replaced` entries one outbox row carries; past it the list is left empty (no notices for a bulk overwrite). */
+export const REPLACED_CAP = 1_000;
 
 /** One outbox row before it gets its number. */
 export interface OutboxEvent {
@@ -23,12 +37,21 @@ export interface OutboxEvent {
   readonly recordIds: readonly string[];
   readonly attributeIds: readonly string[];
   readonly coarse: boolean;
+  /** On a `records` row: the values the write replaced, when there were some and no more than `REPLACED_CAP`. */
+  readonly replaced?: readonly ReplacedValue[];
 }
 
 /** What the outbox hook needs from the request. */
 export interface OutboxHookOptions {
   /** The browser's id for this write (a uuid), echoed in the event so it can skip its own change. */
   readonly mutationId?: string | undefined;
+  /**
+   * Told how many rows the write stored, each time the hook runs (a write
+   * tried again after a deadlock runs it again: the last call is the one
+   * that committed). Not called for an empty change, which stores none.
+   * The write's answer carries it as `echoes` (spec 0006, AC-60).
+   */
+  readonly onStored?: (count: number) => void;
 }
 
 /**
@@ -39,11 +62,14 @@ export interface OutboxHookOptions {
  * that only touched list entries.
  */
 export function outboxEvents(change: CappedChange): readonly OutboxEvent[] {
-  const records = new Map<string, { readonly recordIds: Set<string>; readonly attributeIds: Set<string> }>();
+  const records = new Map<
+    string,
+    { readonly recordIds: Set<string>; readonly attributeIds: Set<string>; readonly replaced: ReplacedValue[] }
+  >();
   const touch = (objectId: string) => {
     const found = records.get(objectId);
     if (found !== undefined) return found;
-    const created = { recordIds: new Set<string>(), attributeIds: new Set<string>() };
+    const created = { recordIds: new Set<string>(), attributeIds: new Set<string>(), replaced: [] as ReplacedValue[] };
     records.set(objectId, created);
     return created;
   };
@@ -60,6 +86,15 @@ export function outboxEvents(change: CappedChange): readonly OutboxEvent[] {
     const object = touch(value.objectId);
     object.recordIds.add(value.ownerId);
     object.attributeIds.add(value.attributeId);
+    // Counted one past the cap, which is enough to know the list goes empty.
+    if (value.replaced !== undefined && object.replaced.length <= REPLACED_CAP) {
+      object.replaced.push({
+        recordId: value.ownerId,
+        attributeId: value.attributeId,
+        versionId: value.replaced.versionId,
+        by: { type: change.actor.type, id: change.actor.id },
+      });
+    }
   }
   const coarse = new Set(change.coarse.map((item) => item.objectId));
   for (const objectId of coarse) touch(objectId);
@@ -76,12 +111,14 @@ export function outboxEvents(change: CappedChange): readonly OutboxEvent[] {
     ...[...records.keys()].sort(byId).map((objectId): OutboxEvent => {
       const object = touch(objectId);
       const isCoarse = coarse.has(objectId);
+      const replaced = isCoarse || object.replaced.length > REPLACED_CAP ? [] : object.replaced;
       return {
         kind: 'records',
         objectId,
         recordIds: isCoarse ? [] : [...object.recordIds],
         attributeIds: [...object.attributeIds],
         coarse: isCoarse,
+        ...(replaced.length === 0 ? {} : { replaced }),
       };
     }),
     ...[...definitions.keys()].sort(byId).map((objectId): OutboxEvent => ({
@@ -104,7 +141,7 @@ export function outboxEvents(change: CappedChange): readonly OutboxEvent[] {
  * `TypeError` for a `mutationId` that isn't a uuid.
  */
 export function outboxHook(options: OutboxHookOptions = {}): AfterWrite {
-  const { mutationId } = options;
+  const { mutationId, onStored } = options;
   if (mutationId !== undefined && !isUuid(mutationId)) {
     throw new TypeError('A mutation id is a uuid.');
   }
@@ -124,7 +161,8 @@ export function outboxHook(options: OutboxHookOptions = {}): AfterWrite {
       ),
       stored as (
         insert into outbox (
-          workspace_id, seq, kind, object_id, record_ids, attribute_ids, coarse, mutation_id, actor_member_id, created_at
+          workspace_id, seq, kind, object_id, record_ids, attribute_ids, coarse, mutation_id, actor_member_id, created_at,
+          replaced
         )
         select
           ${change.workspaceId}::uuid,
@@ -136,7 +174,8 @@ export function outboxHook(options: OutboxHookOptions = {}): AfterWrite {
           (e.value ->> 'coarse')::boolean,
           ${mutationId ?? null}::uuid,
           ${actorMemberId}::uuid,
-          clock_timestamp()
+          clock_timestamp(),
+          e.value -> 'replaced'
         from counter, jsonb_array_elements(${json}::jsonb) with ordinality as e(value, ord)
         returning 1
       )
@@ -144,5 +183,6 @@ export function outboxHook(options: OutboxHookOptions = {}): AfterWrite {
     `);
     // No counters row means nothing was stored; the error rolls the write (and the notify) back.
     if (result.rows[0]?.stored !== count) throw new Error('The workspace has no counters row.');
+    onStored?.(count);
   });
 }

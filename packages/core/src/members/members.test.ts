@@ -155,6 +155,7 @@ describe('a member', () => {
   it('sees their own role and permissions (access.mine)', async () => {
     const t = await team(['member']);
     expect(getMyAccess(t.as(t.ids[0] ?? '', 'member'))).toEqual({
+      memberId: t.ids[0],
       role: 'member',
       roleLabel: 'Member',
       permissions: ['records.export'],

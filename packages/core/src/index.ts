@@ -46,6 +46,7 @@ export { addAttribute, listObjectAttributes, type AddAttributeInput } from './at
 export {
   addRecord,
   editRecord,
+  editRecords,
   queryRecords,
   readRecordsById,
   type AddRecordInput,

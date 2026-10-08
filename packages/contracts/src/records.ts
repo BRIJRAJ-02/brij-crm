@@ -3,6 +3,7 @@
 // through), creating one, and setting its values.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
+import { ApiRefusal } from './errors.ts';
 import { ActorReferenceValue, Timestamp } from './values/attribute-values.ts';
 import { FilterGroup } from './values/filters.ts';
 import { RecordRefDisplay } from './values/options.ts';
@@ -17,6 +18,9 @@ export const MAX_CELL_LINKS = 20;
 
 /** The most records one `records.get` reads. */
 export const MAX_GET_IDS = 500;
+
+/** The most records one `records.setValuesBatch` changes (spec 0006, AC-50); more is refused 422 `CONFIG_INVALID`. */
+export const MAX_BATCH_RECORDS = 500;
 
 /**
  * A record as a screen holds it: its id and object, who made and last changed
@@ -33,6 +37,10 @@ export const MAX_GET_IDS = 500;
  * writes have greater versions, so the client orders by them: a RecordView or
  * event read back never replaces a cell the client holds at a newer version
  * with an older one.
+ *
+ * `revision` grows with every write to the record's row (each value or near
+ * side link write, a delete, a restore; spec 0006, AC-44): the client never
+ * lets a read with a lower revision than the one it holds replace it.
  */
 export const RecordView = z.object({
   id: z.uuid(),
@@ -42,6 +50,7 @@ export const RecordView = z.object({
   updatedAt: Timestamp,
   updatedBy: ActorReferenceValue,
   display: RecordRefDisplay,
+  revision: z.number().int().min(0),
   values: z.record(z.string(), z.unknown()),
   versions: z.record(z.string(), z.uuid()),
   linkTotals: z.record(z.string(), z.number().int().min(0)),
@@ -127,9 +136,19 @@ export const CreateRecordInput = WorkspaceScoped.extend({
 /** A new record. */
 export type CreateRecordInput = z.infer<typeof CreateRecordInput>;
 
-/** One attribute's new value (`null` clears it). */
+/**
+ * One attribute's new value (`null` clears it). `baseVersionId` is the
+ * version the browser's server copy held when the edit began (`null` when it
+ * held none): a save over a newer version still lands (the last save wins),
+ * and the change event names the version it replaced (spec 0006, AC-45,
+ * AC-46). `ifVersionId` (undo, AC-49) lands the record's write only while the
+ * cell is still at exactly that version: otherwise 409 `VERSION_CHANGED`,
+ * naming the attribute, and nothing on the record is written.
+ */
 export const ValueChangeInput = z.object({
   value: z.unknown(),
+  baseVersionId: z.uuid().nullable().optional(),
+  ifVersionId: z.uuid().optional(),
 });
 /** One attribute's new value. */
 export type ValueChangeInput = z.infer<typeof ValueChangeInput>;
@@ -142,6 +161,60 @@ export const SetValuesInput = WorkspaceScoped.extend({
 });
 /** New values for one record. */
 export type SetValuesInput = z.infer<typeof SetValuesInput>;
+
+/**
+ * A record a write answers: fresh, plus `echoes`, how many change events
+ * carry the write's `mutationId` (one per object it touched; 0 when it
+ * changed nothing), so the tab that sent it skips exactly its own echoes
+ * (spec 0006, AC-60). An older client ignores it.
+ */
+export const WrittenRecord = RecordView.extend({
+  echoes: z.number().int().min(0),
+});
+/** A record a write answers, with its echo count. */
+export type WrittenRecord = z.infer<typeof WrittenRecord>;
+
+/** One record's new values in a batch. */
+export const BatchItem = z.object({
+  recordId: z.uuid(),
+  values: z.record(z.uuid(), ValueChangeInput),
+});
+/** One record's new values in a batch. */
+export type BatchItem = z.infer<typeof BatchItem>;
+
+/**
+ * New values for up to 500 records at once (a paste, a range clear, an undo;
+ * spec 0006, AC-50), one `mutationId` for the whole batch. More than 500 is
+ * refused whole, 422 `CONFIG_INVALID`.
+ */
+export const SetValuesBatchInput = WorkspaceScoped.extend({
+  items: z.array(BatchItem),
+  mutationId: z.uuid(),
+});
+/** New values for many records. */
+export type SetValuesBatchInput = z.infer<typeof SetValuesBatchInput>;
+
+/**
+ * One record's outcome in a batch, in the order asked: the fresh `record`
+ * when its values landed (each record all or none), or its `refusals` (one
+ * per attribute, as a single write's error data lists them). A record that
+ * landed and was then trashed before the read back answers `RECORD_DELETED`.
+ */
+export const BatchRecordResult = z.object({
+  recordId: z.uuid(),
+  record: RecordView.optional(),
+  refusals: z.array(ApiRefusal).optional(),
+});
+/** One record's outcome in a batch. */
+export type BatchRecordResult = z.infer<typeof BatchRecordResult>;
+
+/** A batch's outcomes, one per record asked, and how many change events carry its `mutationId`. */
+export const BatchResults = z.object({
+  results: z.array(BatchRecordResult),
+  echoes: z.number().int().min(0),
+});
+/** A batch's outcomes. */
+export type BatchResults = z.infer<typeof BatchResults>;
 
 /**
  * An object's records. `query` refuses a bad cursor or filter with
@@ -159,12 +232,16 @@ export type SetValuesInput = z.infer<typeof SetValuesInput>;
  * write and its read back: the write committed, and the client should drop
  * the record (as for an event that trashes it). A replay answers only the member who made the
  * record: another member's record with that id is `ID_TAKEN` on `id`. An
- * unknown object or record is 404 `NOT_FOUND`.
+ * unknown object or record is 404 `NOT_FOUND`. `setValues` with an
+ * `ifVersionId` the cell has moved on from is 409 `VERSION_CHANGED`.
+ * `setValuesBatch` answers 200 with each record's outcome; only a malformed
+ * or oversized batch is refused whole. Every write answers `echoes`.
  */
 export const recordsContract = {
   query: oc.input(QueryRecordsInput).output(RecordPage),
   count: oc.input(CountRecordsInput).output(RecordCount),
   get: oc.input(GetRecordsInput).output(z.array(RecordView)),
-  create: oc.input(CreateRecordInput).output(RecordView),
-  setValues: oc.input(SetValuesInput).output(RecordView),
+  create: oc.input(CreateRecordInput).output(WrittenRecord),
+  setValues: oc.input(SetValuesInput).output(WrittenRecord),
+  setValuesBatch: oc.input(SetValuesBatchInput).output(BatchResults),
 };

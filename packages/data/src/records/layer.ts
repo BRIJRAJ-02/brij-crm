@@ -676,6 +676,7 @@ export function createRecordsLayer({
         updatedAt: at,
         updatedBy: nobody,
         display: { objectId, recordId: id, name: '', kind: 'other' },
+        revision: 0,
         values,
         versions: {},
         linkTotals: {},

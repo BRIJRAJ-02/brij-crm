@@ -40,6 +40,13 @@ export const records = pgTable(
     deletedByType: deletedBy.type,
     deletedById: deletedBy.id,
     deletedByMemberId: deletedBy.memberId,
+    /**
+     * Grows by one in every statement that updates the row (spec 0006, AC-44):
+     * each value or near side link write (`touchOwner`), a delete and a
+     * restore. A read carries it, so the browser never lets an older read
+     * replace a newer one. Far side link changes don't move it (spec 0004, AC-7).
+     */
+    revision: bigint('revision', { mode: 'number' }).notNull().default(0),
     ...auditColumns(),
   },
   (t) => [

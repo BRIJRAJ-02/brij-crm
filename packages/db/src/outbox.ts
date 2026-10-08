@@ -50,6 +50,16 @@ export interface OutboxRow {
   readonly actorMemberId: string | undefined;
   /** The commit time (`created_at`), ISO 8601: the event's `at`. */
   readonly at: string;
+  /** The values a `records` row's write replaced that its author never saw (spec 0006), or undefined for none. */
+  readonly replaced: readonly OutboxReplaced[] | undefined;
+}
+
+/** One value a write replaced (spec 0006, `outbox.replaced`): ids only, and who replaced it. */
+export interface OutboxReplaced {
+  readonly recordId: string;
+  readonly attributeId: string;
+  readonly versionId: string;
+  readonly by: { readonly type: 'member' | 'api_key' | 'automation' | 'system'; readonly id: string | null };
 }
 
 /** What marking rows published answers: how many, and each one's lag from commit to publish, in ms. */
@@ -216,11 +226,13 @@ export interface RawOutboxRow {
   readonly actor_member_id: string | null;
   /** `created_at` as ISO 8601 in UTC, to the millisecond, formatted by Postgres (so no driver's parsing matters). */
   readonly at: string;
+  /** As the outbox hook stored it (pg parses jsonb), or null. */
+  readonly replaced: unknown;
 }
 
 /** The columns an `OutboxRow` is read from, in SQL, for `outboxRowOf`. */
 export const OUTBOX_ROW_COLUMNS = `seq, kind, object_id, list_id, record_ids, attribute_ids, item_ids, coarse, mutation_id,
-  actor_member_id, to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as at`;
+  actor_member_id, to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as at, replaced`;
 
 /**
  * Runs `statements` (already checked, see the header) after setting
@@ -274,7 +286,29 @@ export function outboxRowOf(row: RawOutboxRow): OutboxRow {
     mutationId: row.mutation_id ?? undefined,
     actorMemberId: row.actor_member_id ?? undefined,
     at: row.at,
+    replaced: replacedOf(row.replaced),
   };
+}
+
+const ACTOR_TYPES: ReadonlySet<unknown> = new Set(['member', 'api_key', 'automation', 'system']);
+
+/**
+ * The stored `replaced` list, keeping only well formed entries (the outbox
+ * hook writes nothing else), or undefined when it holds none.
+ */
+function replacedOf(stored: unknown): readonly OutboxReplaced[] | undefined {
+  if (!Array.isArray(stored)) return undefined;
+  const isId = (value: unknown): value is string => typeof value === 'string' && UUID.test(value);
+  const entries = stored.flatMap((entry: unknown): OutboxReplaced[] => {
+    if (typeof entry !== 'object' || entry === null) return [];
+    const { recordId, attributeId, versionId, by } = entry as Record<string, unknown>;
+    if (!isId(recordId) || !isId(attributeId) || !isId(versionId)) return [];
+    if (typeof by !== 'object' || by === null) return [];
+    const { type, id } = by as Record<string, unknown>;
+    if (!ACTOR_TYPES.has(type) || (id !== null && !isId(id))) return [];
+    return [{ recordId, attributeId, versionId, by: { type: type as OutboxReplaced['by']['type'], id } }];
+  });
+  return entries.length === 0 ? undefined : entries;
 }
 
 function rowsOf(result: pg.QueryResult | undefined): readonly OutboxRow[] {

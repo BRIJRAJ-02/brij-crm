@@ -118,6 +118,23 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'records', object_id: m.people.id, record_ids: [id], mutation_id: mutationId },
     ];
   },
+  'records.setValuesBatch': async (m, mutationId) => {
+    const ids = [newId(), newId()];
+    for (const id of ids) {
+      await m.client.records.create({ workspace: m.slug, objectId: m.people.id, id, mutationId: newId() });
+    }
+    await m.client.records.setValuesBatch({
+      workspace: m.slug,
+      items: ids.map((recordId) => ({ recordId, values: { [m.attribute('job_title')]: { value: 'Analyst' } } })),
+      mutationId,
+    });
+    // The two creates' rows, then this write's one row for both records.
+    return [
+      { kind: 'records', object_id: m.people.id, record_ids: [ids[0] ?? ''] },
+      { kind: 'records', object_id: m.people.id, record_ids: [ids[1] ?? ''] },
+      { kind: 'records', object_id: m.people.id, record_ids: ids, mutation_id: mutationId },
+    ];
+  },
   'attributes.create': async (m, mutationId) => {
     const made = await m.client.attributes.create({
       workspace: m.slug,
@@ -158,7 +175,7 @@ describe('the one write path', () => {
       const before = pokes;
       const expected = await write(m, mutationId);
       // One poke per write the case made (setValues makes its record first).
-      expect(pokes - before).toBe(path === 'records.setValues' ? 2 : 1);
+      expect(pokes - before).toBe(path === 'records.setValues' ? 2 : path === 'records.setValuesBatch' ? 3 : 1);
       const rows = await outboxOf(m.workspace.id);
       expect(rows).toHaveLength(expected.length);
       expected.forEach((row, index) => expect(rows[index]).toMatchObject(row));

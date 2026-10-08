@@ -42,7 +42,7 @@ import {
   visibleRecords,
 } from '../access/visibility.ts';
 
-const { attributeOptions, objects, records } = schema;
+const { attributeOptions, objects, records, values: valueRows } = schema;
 
 /** What a new record needs: its object, its values by attribute id, and optionally a client minted UUID v7. */
 export interface RecordInput {
@@ -113,10 +113,20 @@ async function defaultFor(
   }
 }
 
-/** One attribute's new value, and the version the edit started from. */
+/** One attribute's new value, the version the edit started from, and the version it must still be at. */
 export interface ValueInput {
   readonly value: unknown;
-  readonly baseVersionId?: string;
+  /**
+   * The version the caller's copy held when the edit began, to report the
+   * save it replaces (AC-12); `null` when its copy had none (never set).
+   */
+  readonly baseVersionId?: string | null;
+  /**
+   * The cell's current version must be exactly this one (spec 0006, AC-49,
+   * undo): otherwise the record's write is refused `VERSION_CHANGED`, naming
+   * the attribute, and nothing on that record is written.
+   */
+  readonly ifVersionId?: string;
 }
 
 /** What one attribute's write did: its new version, or nothing when the value was unchanged. */
@@ -134,6 +144,11 @@ export interface RecordView {
   readonly updatedAt: string;
   readonly updatedBy: Actor;
   readonly display: RecordRefDisplay;
+  /**
+   * Grows with every statement that updates the record's row (spec 0006,
+   * AC-44): a read with a lower revision than one a client holds is older.
+   */
+  readonly revision: number;
   /** Current values by attribute id, system attributes included, each in its schema's shape. */
   readonly values: Readonly<Record<string, unknown>>;
   /**
@@ -230,7 +245,9 @@ export async function writeAll(
       attribute,
       value: input.value,
       // Canonical on the way in: the write compares it with the stored version id as text.
-      ...(input.baseVersionId === undefined ? {} : { baseVersionId: canonicalId(input.baseVersionId) }),
+      ...(input.baseVersionId === undefined
+        ? {}
+        : { baseVersionId: input.baseVersionId === null ? null : canonicalId(input.baseVersionId) }),
     };
     const landed = await writeOne(context, write, holdDefinition);
     const [change, ...far] = landed;
@@ -434,11 +451,73 @@ async function updateOwner(
   const { tx } = context;
   const { ownerKind, ownerId, objectId, attributes } = await lockOwner(tx, input, context.scope.access, visible);
   const parsed = parseAll(attributes, canonicalKeys(input.values), context.scope);
+  // Under the owner's lock, before anything is written: a cell that moved on refuses the whole owner.
+  await checkVersions(tx, context.scope.access, ownerKind, ownerId, parsed);
   const results = await writeAll(context, ownerKind, ownerId, parsed);
   if (Object.values(results).some((each) => each.versionId !== undefined)) {
     await touchOwner(context, ownerKind, ownerId);
   }
   return objectId === undefined ? { results, attributes } : { results, objectId, attributes };
+}
+
+/** What a cell that moved on since the version a write names answers (spec 0006, AC-49). */
+export const versionChangedMessage = (title: string) => `${title} was changed since, so it was kept.`;
+
+/**
+ * Refuses `VERSION_CHANGED`, naming every attribute whose current version
+ * isn't the `ifVersionId` its input names (spec 0006, AC-49): read under the
+ * owner's lock, so no write can slip in between the check and the write. A
+ * value's version is its current rows' (a cleared marker's included; all
+ * rows of one write share it); a record reference's is its latest current
+ * link's, as reads give it. A cell with no current version never matches.
+ */
+async function checkVersions(
+  tx: WorkspaceTx,
+  access: Access,
+  ownerKind: 'record' | 'entry',
+  ownerId: string,
+  parsed: readonly { attribute: AttributeDef; input: ValueInput }[],
+): Promise<void> {
+  const checked = parsed.filter((each) => each.input.ifVersionId !== undefined);
+  if (checked.length === 0) return;
+  const references = checked.filter((each) => each.attribute.type === 'record_reference');
+  const plain = checked.filter((each) => each.attribute.type !== 'record_reference');
+  const current = new Map<string, string>();
+  if (plain.length > 0) {
+    const rows = await tx
+      .selectDistinct({ attributeId: valueRows.attributeId, versionId: valueRows.versionId })
+      .from(valueRows)
+      .where(
+        and(
+          eq(valueRows.ownerId, ownerId),
+          inArray(
+            valueRows.attributeId,
+            plain.map((each) => each.attribute.id),
+          ),
+          isNull(valueRows.activeUntil),
+        ),
+      );
+    for (const row of rows) current.set(row.attributeId, row.versionId);
+  }
+  if (references.length > 0 && ownerKind === 'record') {
+    const links = await linkValues(
+      tx,
+      access,
+      [ownerId],
+      references.map((each) => each.attribute),
+    );
+    for (const [attributeId, versionId] of links.versions.get(ownerId) ?? []) current.set(attributeId, versionId);
+  }
+  const moved = checked.filter(({ attribute, input }) => {
+    const wanted = input.ifVersionId;
+    return wanted === undefined || !isUuid(wanted) || current.get(attribute.id) !== canonicalId(wanted);
+  });
+  const [first, ...rest] = moved.map(({ attribute }): EngineRefusal => ({
+    code: 'VERSION_CHANGED',
+    message: versionChangedMessage(attribute.title),
+    attributeId: attribute.id,
+  }));
+  if (first !== undefined) throw refuseAll([first, ...rest]);
 }
 
 /** `updateOwner`, answering only each attribute's result. */
@@ -515,23 +594,43 @@ export async function setValuesBatch(
   input: { readonly items: readonly RecordValues[] },
   hooks: readonly AfterWrite[] = [],
 ): Promise<readonly BatchResult[]> {
+  return (await setRecordValuesBatch(scope, input, hooks)).outcomes;
+}
+
+/**
+ * `setValuesBatch`, also answering the attributes of each object it wrote,
+ * as the write loaded them, so a read back after it commits doesn't load
+ * them again (spec 0006, `records.setValuesBatch`).
+ */
+export async function setRecordValuesBatch(
+  scope: EngineScope,
+  input: { readonly items: readonly RecordValues[] },
+  hooks: readonly AfterWrite[] = [],
+): Promise<{
+  readonly outcomes: readonly BatchResult[];
+  readonly attributesByObject: ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>;
+}> {
   if (input.items.length > MAX_BATCH)
     throw refuse('CONFIG_INVALID', `Change at most ${String(MAX_BATCH)} records at once.`);
   const { result } = await runWrite(
     scope,
     async (context) => {
       const outcomes: BatchResult[] = [];
+      const attributesByObject = new Map<string, ReadonlyMap<string, AttributeDef>>();
       const visible = await batchVisible(context, input.items);
       for (const item of input.items) {
-        const outcome = await context.perRecord((child) => updateRecord(child, item, visible));
+        const outcome = await context.perRecord((child) => updateOwner(child, item, visible));
         const recordId = canonicalId(item.recordId);
+        if (outcome.ok && outcome.value.objectId !== undefined) {
+          attributesByObject.set(outcome.value.objectId, outcome.value.attributes);
+        }
         outcomes.push(
           outcome.ok
-            ? { recordId, ok: true, results: outcome.value }
+            ? { recordId, ok: true, results: outcome.value.results }
             : { recordId, ok: false, refusals: outcome.refusals },
         );
       }
-      return outcomes;
+      return { outcomes, attributesByObject };
     },
     hooks,
   );
@@ -758,6 +857,7 @@ export async function readRecords(
         updatedAt: system.updated_at as string,
         updatedBy,
         display,
+        revision: row.revision,
         values,
         versions,
         linkTotals,
