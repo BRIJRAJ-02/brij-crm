@@ -88,6 +88,7 @@ function setup() {
       return Promise.resolve();
     },
     now: () => Date.parse(at(30)),
+    random: () => 0,
   });
   const frame = () => {
     for (const flush of frames.splice(0)) flush();
@@ -177,6 +178,98 @@ describe('a records view', () => {
     expect(view.getSnapshot().status).toBe('ready');
   });
 
+  it('keeps the windows where they are when the count is read again', async () => {
+    const { layer, counts, queries, edits } = setup();
+    const view = layer.view(WS, PEOPLE);
+    await settle();
+    counts[0]?.answer(5000);
+    await settle();
+    queries[0]?.answer(block(0, 100));
+    await view.ready();
+    view.getSnapshot().source.onRangeChange({ start: 4000, end: 4040 });
+    await settle();
+    queries[1]?.answer(block(4000, 100));
+    await settle();
+    // An edit finds its record deleted: the rows after it reload and the count is read again.
+    layer.setValues(WS, [{ rowId: idAt(4001), columnId: CITY, value: 'Oslo' }]);
+    await settle();
+    edits[0]?.fail(dataError('RECORD_DELETED', 'In the trash.'));
+    await settle();
+    counts[1]?.answer(4999);
+    await settle();
+    // Only block 40 loads again; nothing jumps back to the top.
+    expect(queries.slice(2).map((query) => query.input.position)).toEqual([4000]);
+    expect(view.getSnapshot().source.getItem(4005)?.id).toBe(idAt(4005));
+  });
+
+  it('keeps the table when a block fails after it is ready, and tries the block again', async () => {
+    const { layer, counts, queries, waits, frame } = setup();
+    const view = layer.view(WS, PEOPLE);
+    await settle();
+    counts[0]?.answer(5000);
+    await settle();
+    queries[0]?.answer(block(0, 100));
+    await view.ready();
+    view.getSnapshot().source.onRangeChange({ start: 4000, end: 4040 });
+    await settle();
+    queries[1]?.fail(dataError('API_UNAVAILABLE', 'Can’t reach the CRM.'));
+    await settle();
+    frame();
+    expect(view.getSnapshot().status).toBe('ready');
+    expect(waits).toEqual([1000]);
+    expect(queries[2]?.input.position).toBe(4000);
+  });
+
+  it('brings a record made here into its block when the block was still loading', async () => {
+    const { layer, counts, queries, creates } = setup();
+    const view = layer.view(WS, PEOPLE);
+    await settle();
+    counts[0]?.answer(3);
+    await settle();
+    void layer.create(WS, PEOPLE, { [NAME]: 'Grace' }, idAt(7000)).catch(() => undefined);
+    await settle();
+    queries[0]?.answer(block(0, 3));
+    await view.ready();
+    expect(view.indexOf(idAt(7000))).toBe(3);
+    expect(creates[0]?.input.id).toBe(idAt(7000));
+  });
+
+  it('reads the count again when a block brings fewer rows than it promised', async () => {
+    const { layer, counts, queries, frame } = setup();
+    const view = layer.view(WS, PEOPLE);
+    await settle();
+    counts[0]?.answer(3);
+    await settle();
+    queries[0]?.answer(block(0, 2));
+    await settle();
+    expect(counts).toHaveLength(2);
+    counts[1]?.answer(2);
+    await settle();
+    frame();
+    expect(view.getSnapshot().source.count).toBe(2);
+  });
+
+  it('lets go of a view nobody shows, and makes a fresh one next time', async () => {
+    const server = fakeApi();
+    const layer = createRecordsLayer({
+      api: server.api,
+      notify: () => undefined,
+      mintId: () => idAt(1),
+      schedule: (flush) => {
+        flush();
+      },
+      keepUnusedViewMs: 0,
+    });
+    const view = layer.view(WS, PEOPLE);
+    const release = view.retain();
+    view.retain()();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(layer.view(WS, PEOPLE)).toBe(view);
+    release();
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(layer.view(WS, PEOPLE)).not.toBe(view);
+  });
+
   it('lets go of the bodies of blocks scrolled far away', async () => {
     const { layer, counts, queries } = setup();
     const view = layer.view(WS, PEOPLE);
@@ -237,7 +330,7 @@ describe('editing a cell', () => {
     expect(edits).toHaveLength(2);
   });
 
-  it('never shows the older of two quick edits to one cell, whatever order the answers come in', async () => {
+  it('sends a record’s edits one after another, and never shows the older of two quick edits to one cell', async () => {
     const { layer, view, edits, frame } = await readyView();
     const city = () => {
       frame();
@@ -247,13 +340,25 @@ describe('editing a cell', () => {
     layer.setValues(WS, [change('Rome')]);
     await settle();
     expect(city()).toBe('Rome');
-    // The server wrote Paris then Rome; Rome's answer arrives first.
-    edits[1]?.answer(rowOf(idAt(1), { [NAME]: 'P1', [CITY]: 'Rome' }, { [CITY]: version(3) }, 3));
-    await settle();
-    expect(city()).toBe('Rome');
+    // Rome waits for Paris's answer, so the server writes them in the order they were made.
+    expect(edits).toHaveLength(1);
     edits[0]?.answer(rowOf(idAt(1), { [NAME]: 'P1', [CITY]: 'Paris' }, { [CITY]: version(2) }, 2));
     await settle();
     expect(city()).toBe('Rome');
+    expect(edits[1]?.input.values).toEqual({ [CITY]: { value: 'Rome' } });
+    edits[1]?.answer(rowOf(idAt(1), { [NAME]: 'P1', [CITY]: 'Rome' }, { [CITY]: version(3) }, 3));
+    await settle();
+    expect(city()).toBe('Rome');
+  });
+
+  it('sends the next edit even when the one before it was refused', async () => {
+    const { layer, edits } = await readyView();
+    layer.setValues(WS, [change('Paris')]);
+    layer.setValues(WS, [change('Rome')]);
+    await settle();
+    edits[0]?.fail(dataError('ATTRIBUTE_VALUE_INVALID', 'No.'));
+    await settle();
+    expect(edits).toHaveLength(2);
   });
 
   it('keeps a second edit showing when the first is confirmed', async () => {
@@ -338,6 +443,19 @@ describe('creating a record', () => {
     expect(view.getSnapshot().source.count).toBe(3);
     expect(view.getSnapshot().source.getItem(3)).toBeUndefined();
     expect(layer.size()).toBe(3);
+  });
+
+  it('sends a create again with the id the form minted, so a second press makes nothing twice', async () => {
+    const { layer, creates } = await readyView();
+    const first = layer.create(WS, PEOPLE, { [NAME]: 'Grace' }, idAt(8000));
+    await settle();
+    creates[0]?.fail(dataError('INTERNAL', 'Lost.'));
+    await expect(first).rejects.toMatchObject({ code: 'INTERNAL' });
+    const second = layer.create(WS, PEOPLE, { [NAME]: 'Grace' }, idAt(8000));
+    await settle();
+    expect(creates[1]?.input.id).toBe(idAt(8000));
+    creates[1]?.answer(rowOf(idAt(8000), { [NAME]: 'Grace' }));
+    expect((await second).id).toBe(idAt(8000));
   });
 
   it('sends the same create again when it never reached the server', async () => {

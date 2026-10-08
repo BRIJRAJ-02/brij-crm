@@ -312,12 +312,19 @@ export function createDataLayer({
         await view.ready();
         return view;
       },
-      /** Makes a record at once (see the records layer); rejects with the refusals when the server says no. */
+      /** A new record's id: mint it once per form, and send the same one on every try, so nothing is made twice. */
+      newId: () => mintId(),
+      /**
+       * Makes a record at once (see the records layer) with `id` (from
+       * `newId`); rejects with the refusals when the server says no. Sending the
+       * same id again after a lost answer gets the record already made.
+       */
       create: async (
         workspace: string,
         objectId: string,
+        id: string,
         values: Readonly<Record<string, unknown>>,
-      ): Promise<RecordView> => (await recordsLayer()).create(workspace, objectId, values),
+      ): Promise<RecordView> => (await recordsLayer()).create(workspace, objectId, values, id),
       /** Edits one cell at once; a refusal rolls it back with a cell message and a toast with Retry. */
       setValue: (workspace: string, change: CellChange): void => {
         void recordsLayer().then((layer) => {

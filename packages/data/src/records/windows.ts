@@ -64,6 +64,8 @@ export interface Windows {
   readonly drop: (ids: ReadonlySet<string>) => void;
   /** Loads every loaded block, and every block on screen, again (a retry, or live changes missed). */
   readonly refresh: () => void;
+  /** Loads the blocks on screen that aren't loaded or loading (one that failed, tried again). */
+  readonly loadMissing: () => void;
   /** How many blocks hold ids now, and how many are loading. */
   readonly stats: () => { readonly loaded: number; readonly loading: number };
   readonly subscribe: (listener: () => void) => () => void;
@@ -92,6 +94,8 @@ export function createWindows({
   // Where each loaded id sits, so a store change can tell whether it's on screen.
   const positions = new Map<string, number>();
   const loading = new Map<number, AbortController>();
+  // Records made here while their block was still loading: they join it when it lands.
+  const joining = new Map<number, readonly string[]>();
   const listeners = new Set<() => void>();
 
   const notify = () => {
@@ -139,15 +143,22 @@ export function createWindows({
           return;
         }
         loading.delete(block);
+        // A record made here while this block loaded joins it, unless the server already sent it.
+        const extra = (joining.get(block) ?? []).filter((id) => !ids.includes(id));
+        joining.delete(block);
+        const landed = [...ids, ...extra];
         // Never past the count: a smaller count arrived while this block loaded.
         const room = count - block * blockSize;
-        setBlock(block, ids.length > room ? ids.slice(0, room) : ids, true);
-        if (ids.length > room) release(ids.slice(room));
+        setBlock(block, landed.length > room ? landed.slice(0, room) : landed, true);
+        if (landed.length > room) release(landed.slice(room));
+        // Fewer rows than the count promised: rows went elsewhere, so the count is out of date.
+        if (landed.length < Math.min(blockSize, room)) onStale();
         notify();
       },
       (error: unknown) => {
         if (loading.get(block) !== controller) return;
         loading.delete(block);
+        // Records made here while it loaded wait for its next load.
         if (!controller.signal.aborted) onError?.(error);
       },
     );
@@ -211,6 +222,7 @@ export function createWindows({
     },
     setCount: (next) => {
       if (next === count) return;
+      const grew = next > count;
       count = next;
       const end = blockCount();
       for (const [block, controller] of loading) {
@@ -223,6 +235,8 @@ export function createWindows({
         const room = count - block * blockSize;
         if (room <= 0) setBlock(block, undefined);
         else if (ids.length > room) setBlock(block, ids.slice(0, room));
+        // More rows than a loaded block holds: it loads again to bring them.
+        else if (grew && ids.length < Math.min(blockSize, room) && !loading.has(block)) fetchBlock(block);
       }
       loadShown();
       notify();
@@ -239,11 +253,23 @@ export function createWindows({
         const padded =
           current.length >= at ? current.slice(0, at) : [...current, ...new Array<undefined>(at - current.length)];
         setBlock(block, [...padded, id]);
+      } else if (loading.has(block)) {
+        // Its block is on its way: the record joins it when it lands.
+        hold([id]);
+        joining.set(block, [...(joining.get(block) ?? []), id]);
       }
       notify();
       return index;
     },
     withdraw: (id) => {
+      for (const [block, ids] of joining) {
+        if (!ids.includes(id)) continue;
+        joining.set(
+          block,
+          ids.filter((each) => each !== id),
+        );
+        release([id]);
+      }
       const at = positions.get(id);
       if (at !== undefined && at !== count - 1) {
         // Something joined after it: its place empties and the rows after it load again.
@@ -262,6 +288,7 @@ export function createWindows({
       for (const block of new Set([...blocks.keys(), ...loading.keys()])) fetchBlock(block);
       loadShown();
     },
+    loadMissing: loadShown,
     stats: () => ({ loaded: blocks.size, loading: loading.size }),
     subscribe: (listener) => {
       listeners.add(listener);
@@ -272,6 +299,8 @@ export function createWindows({
     dispose: () => {
       for (const controller of loading.values()) controller.abort();
       loading.clear();
+      for (const ids of joining.values()) release(ids);
+      joining.clear();
       for (const block of [...blocks.keys()]) setBlock(block, undefined);
     },
   };

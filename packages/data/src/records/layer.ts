@@ -25,6 +25,8 @@ const BUSY_TRIES = 5;
 const OFFLINE_TRIES = 2;
 /** The wait before trying again when the answer named none, in seconds. */
 const DEFAULT_WAIT_SECONDS = 1;
+/** The longest wait before a block that failed to load is tried again, in ms. */
+const MAX_BLOCK_RETRY_MS = 30_000;
 
 /** The calls the records layer makes, each mapped to a DataError on failure (a 401 has already signed out). */
 export interface RecordsApi {
@@ -72,6 +74,13 @@ export interface RecordsView {
   readonly ready: () => Promise<void>;
   /** The row a record sits on, while a loaded block holds it (a record just made sits at the end). */
   readonly indexOf: (recordId: string) => number | undefined;
+  /**
+   * A screen shows the view (`useView` calls it in an effect); the answer
+   * lets go. A view nobody shows for a minute lets go of its rows, and the
+   * next `view()` makes a fresh one. Counted, so StrictMode's second effect
+   * changes nothing.
+   */
+  readonly retain: () => () => void;
 }
 
 /** What the records layer needs from createDataLayer. */
@@ -85,6 +94,10 @@ export interface RecordsLayerOptions {
   readonly wait?: (ms: number, signal?: AbortSignal) => Promise<void>;
   /** Unix milliseconds now, for a draft's timestamps. */
   readonly now?: () => number;
+  /** A number in [0, 1), to spread retries out so many browsers don't retry in step (`Math.random`). */
+  readonly random?: () => number;
+  /** How long a view nobody shows is kept before it lets go of its rows, in ms: a minute. */
+  readonly keepUnusedViewMs?: number;
 }
 
 /** The words the records layer raises itself. */
@@ -144,11 +157,16 @@ export function createRecordsLayer({
   schedule = nextFrame,
   wait = timer,
   now = () => Date.now(),
+  random = Math.random,
+  keepUnusedViewMs = 60_000,
 }: RecordsLayerOptions) {
   const store = createPlainStore<RecordView>();
   const views = new Map<string, ViewEntry>();
   // Creates still waiting on the server, by record id: an edit to the draft is sent after it.
   const creating = new Map<string, Promise<boolean>>();
+  // Each record's last write still out: the next one is sent after it, so the server applies a
+  // record's edits in the order they were made and the later value gets the later version.
+  const sending = new Map<string, Promise<unknown>>();
   let cellErrors: ReadonlyMap<string, string> = new Map();
 
   const keyOf = (workspace: string, objectId: string) => `${workspace}\u0000${objectId}`;
@@ -173,7 +191,9 @@ export function createRecordsLayer({
       } catch (error) {
         const failure = toDataError(error);
         if (failure.code !== 'TOO_MANY_REQUESTS' || attempt >= BUSY_TRIES || signal?.aborted === true) throw failure;
-        await wait((failure.retryAfterSeconds ?? DEFAULT_WAIT_SECONDS) * 1000, signal);
+        // At least the server's wait, longer each try, and spread out, so busy browsers don't retry in step.
+        const seconds = failure.retryAfterSeconds ?? DEFAULT_WAIT_SECONDS;
+        await wait(Math.round(seconds * 1000 * attempt * (1 + random())), signal);
       }
     }
   }
@@ -208,6 +228,8 @@ export function createRecordsLayer({
       settleReady = resolve;
     });
     let countController = new AbortController();
+    let blockFailures = 0;
+    let blockRetry: AbortController | undefined;
 
     const setStatus = (next: ViewStatus, failure?: DataError) => {
       if (status === next && error === failure) return;
@@ -221,6 +243,30 @@ export function createRecordsLayer({
     };
     const fail = (failure: unknown) => {
       setStatus('error', toDataError(failure));
+    };
+    /**
+     * A block failed. Before the view is ready that is the view failing (Retry).
+     * After, the table stays and the block is tried again, later each time it fails.
+     */
+    const blockFailed = (failure: unknown) => {
+      if (status !== 'ready') {
+        fail(failure);
+        return;
+      }
+      if (blockRetry !== undefined) return;
+      blockFailures += 1;
+      const controller = new AbortController();
+      blockRetry = controller;
+      const delay = Math.min(MAX_BLOCK_RETRY_MS, 1000 * 2 ** (blockFailures - 1)) * (1 + random());
+      wait(Math.round(delay), controller.signal).then(
+        () => {
+          blockRetry = undefined;
+          windows.loadMissing();
+        },
+        () => {
+          blockRetry = undefined;
+        },
+      );
     };
     /** Ready once the count is in and the first row has loaded (or there are none). */
     const checkReady = () => {
@@ -236,7 +282,7 @@ export function createRecordsLayer({
         store.receive(page.records, { hold: true });
         return page.records.map((record) => record.id);
       },
-      onError: fail,
+      onError: blockFailed,
       hold: store.hold,
       release: store.release,
       onStale: () => {
@@ -245,6 +291,10 @@ export function createRecordsLayer({
     });
     const inner = createRecordView({ store, windows, schedule });
     windows.subscribe(checkReady);
+    // A block that lands ends the run of failures.
+    windows.subscribe(() => {
+      blockFailures = 0;
+    });
 
     function refreshCount() {
       countController.abort();
@@ -253,10 +303,12 @@ export function createRecordsLayer({
       whenFree(() => api.count({ workspace, objectId }, controller.signal), controller.signal).then(
         ({ count }) => {
           if (countController !== controller) return;
+          const isFirst = !isCounted;
           isCounted = true;
           windows.setCount(count);
           // The first block, so the grid has rows the moment it mounts (the router loader waits for this).
-          if (count > 0) windows.show({ start: 0, end: Math.min(count, BLOCK_SIZE) });
+          // Only the first time: a later count must never move the windows back to the top.
+          if (isFirst && count > 0) windows.show({ start: 0, end: Math.min(count, BLOCK_SIZE) });
           checkReady();
         },
         (failure: unknown) => {
@@ -293,8 +345,38 @@ export function createRecordsLayer({
       },
       ready: () => readyPromise,
       indexOf: windows.indexOf,
+      retain: () => {
+        retains += 1;
+        clearTimeout(unused);
+        let isReleased = false;
+        return () => {
+          if (isReleased) return;
+          isReleased = true;
+          retains -= 1;
+          if (retains === 0) letGoLater();
+        };
+      },
+    };
+    let retains = 0;
+    let unused: ReturnType<typeof setTimeout> | undefined;
+    const dispose = () => {
+      countController.abort();
+      blockRetry?.abort();
+      inner.dispose();
+    };
+    /** Nobody shows the view: after a while it leaves the layer and lets go of its rows. */
+    const letGoLater = () => {
+      clearTimeout(unused);
+      unused = setTimeout(() => {
+        if (retains > 0) return;
+        const key = keyOf(workspace, objectId);
+        if (views.get(key)?.view === view) views.delete(key);
+        dispose();
+      }, keepUnusedViewMs);
     };
     refreshCount();
+    // A view the router warmed but no screen ever showed goes too.
+    letGoLater();
     return {
       workspace,
       objectId,
@@ -303,8 +385,8 @@ export function createRecordsLayer({
       invalidate: inner.invalidate,
       refreshCount,
       dispose: () => {
-        countController.abort();
-        inner.dispose();
+        clearTimeout(unused);
+        dispose();
       },
     };
   }
@@ -319,35 +401,52 @@ export function createRecordsLayer({
     setCellErrors(changes.map((change) => [`${recordId}:${change.columnId}`, undefined]));
     const mutationId = mintId();
     const layer = store.edit(recordId, values, mutationId);
-    const pendingCreate = creating.get(recordId);
-    if (pendingCreate !== undefined && !(await pendingCreate)) {
-      // The create was refused, and the draft went with this edit on it.
-      notify({ tone: 'danger', message: RECORD_WORDS.draftRefused });
-      return undefined;
-    }
-    try {
-      const row = await delivered(() =>
-        api.setValues({
-          workspace,
-          recordId,
-          mutationId,
-          values: Object.fromEntries(changes.map((change) => [change.columnId, { value: change.value }])),
-        }),
-      );
-      layer.confirm(row);
-      return undefined;
-    } catch (error) {
-      const failure = toDataError(error);
-      layer.refuse();
-      // Signed out: the layer already said so, and sign in comes next.
-      if (failure.code === 'UNAUTHENTICATED') return undefined;
-      if (failure.code === 'RECORD_DELETED' || failure.code === 'NOT_FOUND') {
-        dropRecords([recordId]);
-        notify({ tone: 'danger', message: RECORD_WORDS.recordGone });
+    // After the record's last write (and its create, if it is still being made).
+    const before = sending.get(recordId);
+    const turn = (before ?? Promise.resolve()).then(
+      () => undefined,
+      () => undefined,
+    );
+    const mine = turn.then(() => send());
+    sending.set(recordId, mine);
+    void mine.finally(() => {
+      if (sending.get(recordId) === mine) sending.delete(recordId);
+    });
+    return mine;
+
+    async function send(): Promise<DataError | undefined> {
+      const pendingCreate = creating.get(recordId);
+      if (pendingCreate !== undefined && !(await pendingCreate)) {
+        // The create was refused, and the draft went with this edit on it.
+        notify({ tone: 'danger', message: RECORD_WORDS.draftRefused });
         return undefined;
       }
-      setCellErrors(changes.map((change) => [`${recordId}:${change.columnId}`, cellMessage(failure, change.columnId)]));
-      return failure;
+      try {
+        const row = await delivered(() =>
+          api.setValues({
+            workspace,
+            recordId,
+            mutationId,
+            values: Object.fromEntries(changes.map((change) => [change.columnId, { value: change.value }])),
+          }),
+        );
+        layer.confirm(row);
+        return undefined;
+      } catch (error) {
+        const failure = toDataError(error);
+        layer.refuse();
+        // Signed out: the layer already said so, and sign in comes next.
+        if (failure.code === 'UNAUTHENTICATED') return undefined;
+        if (failure.code === 'RECORD_DELETED' || failure.code === 'NOT_FOUND') {
+          dropRecords([recordId]);
+          notify({ tone: 'danger', message: RECORD_WORDS.recordGone });
+          return undefined;
+        }
+        setCellErrors(
+          changes.map((change) => [`${recordId}:${change.columnId}`, cellMessage(failure, change.columnId)]),
+        );
+        return failure;
+      }
     }
   }
 
@@ -371,14 +470,15 @@ export function createRecordsLayer({
      * refusal takes it out again (and the count back) and rejects with the
      * refusals, so a form can mark its fields. A write that never reached the
      * server is sent again with the same id, which the server answers with the
-     * record it already made.
+     * record it already made. A form that may send again (Create pressed after
+     * a lost answer) mints `id` once (`newId`) and passes it each time.
      */
     create: async (
       workspace: string,
       objectId: string,
       values: Readonly<Record<string, unknown>>,
+      id: string = mintId(),
     ): Promise<RecordView> => {
-      const id = mintId();
       const mutationId = mintId();
       const at = new Date(now()).toISOString();
       // Who made it is the server's to say; the draft shows only its values until the answer.
@@ -465,6 +565,7 @@ export function createRecordsLayer({
       for (const entry of views.values()) entry.dispose();
       views.clear();
       creating.clear();
+      sending.clear();
       store.clear();
       cellErrors = new Map();
     },
