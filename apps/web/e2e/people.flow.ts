@@ -129,7 +129,7 @@ test.describe('the People table', () => {
     await addDialog.getByRole('button', { name: 'Create' }).click();
     await expect(addDialog).toBeHidden();
     await expect.poll(async () => Number(await grid.getAttribute('aria-colcount'))).toBe(columnsBefore + 1);
-    await expect(page.getByText('Nickname added as the last column.')).toBeVisible();
+    await expect(page.getByText('Nickname added.')).toBeVisible();
     await showColumn(page, 'Nickname');
 
     // The same name again is refused inline, on the name field.

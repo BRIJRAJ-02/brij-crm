@@ -31,8 +31,8 @@ export const strings = {
   attributeType: 'Type',
   attributeNameMissing: 'Name the attribute.',
   attributeNameTaken: 'An attribute with this name exists.',
-  /** After Add attribute: the new column sits at the table's end, often off screen. */
-  attributeAdded: (title: string) => `${title} added as the last column.`,
+  /** After Add attribute: the new column often lands off screen, so say it was added. */
+  attributeAdded: (title: string) => `${title} added.`,
   /** New person with no name typed. */
   recordNameMissing: (singularName: string) => `Name the ${singularName.toLowerCase()}.`,
   /** A failure the server didn't explain. */
