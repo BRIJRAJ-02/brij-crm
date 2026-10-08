@@ -72,3 +72,28 @@ Measured against plain in the same round, TanStack took 1.13× as long to patch 
 
 - The store keeps every body it ever loads, so memory grows with scrolling (70 MB at 100,000 records) instead of staying flat as rule 7 of `crm-frontend-state` asks. It also brings the extra missed frames above. Evicting bodies no window or pending layer refers to should fix both.
   - **Done in task 11** (2026-10-08): the store reference counts ids (a window's block holds its ids; a pending layer keeps its record) and evicts at zero. `pnpm --filter @crm/data-gate gate --rounds=1` (baseline, held, plain), load average 5.0 to 6.2 on 8 cores: JS heap after scrolling all 100,000 records was 12.7 MB for plain against 12.5 MB for the bare grid and 68.1 MB for `held` (before eviction plain was 70 to 74 MB). The store held 600 records (6 blocks) at the end. With every record scrolled past, plain missed 15 frames over 25 ms against baseline 13 and held 14 (one round, so read it as "no worse", not a measure). Patch 50 and render: 2.7 ms median; edit apply 3.1 ms, rollback 2.3 ms, every edit check held.
+
+## AC-38: live updates between two browsers
+
+**Locally: passes. Production: still to measure** (the variables and CSP below must be set first, then `e2e/live.flow.ts` runs against production from saved signed in browser states).
+
+### Method
+
+`pnpm --filter @crm/web test:flow e2e/live.flow.ts` against `pnpm dev:apps` (Postgres 5433, Centrifugo 8000/9000, the worker's relay woken by the api's poke). One person signs in twice, in two browser contexts on one workspace. The writer creates a person, makes one warm up edit, then 20 timed edits of one cell, then adds a column. Each change is timed from the writer's action (Enter, or Create) to the change in the reader's page, checked every frame. The flow also checks that the writer makes no `records.get` call (its own changes are never fetched back), and that dropping the reader's socket (Playwright's `routeWebSocket`) shows "Live updates are paused" (axe clean in light and dark), and that a change made meanwhile arrives once the socket is back.
+
+### Numbers (2026-10-08, local, 22 changes per run)
+
+| Run | Machine load (1 min) | p50 | p95 | max |
+|---|---|---|---|---|
+| Quiet | about 7 | 83 ms | 227 ms | 475 ms |
+| Busy (other agents' suites and a Docker screenshot run) | 15 to 28 | 120 ms | 601 ms | 710 ms |
+
+Every run stayed under the 1 second p95. The create is the slowest change each time (the new row is fetched and placed at the end).
+
+### Production checklist
+
+- Railway api: `CENTRIFUGO_TOKEN_SECRET` as a reference to the Centrifugo service's `CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY`.
+- Railway centrifugo: `CENTRIFUGO_CLIENT_ALLOWED_ORIGINS` holds `https://brij-crm-phi.vercel.app`.
+- Vercel Production: `VITE_REALTIME_URL=wss://<Centrifugo's public domain>/connection/websocket`.
+- `apps/web/vercel.json`: `wss://<Centrifugo's public domain>` in the CSP's `connect-src` (the build refuses the deploy otherwise).
+- Previews: no `VITE_REALTIME_URL`, so live updates are off and nothing shows.
