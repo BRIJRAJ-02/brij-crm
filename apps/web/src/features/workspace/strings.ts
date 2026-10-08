@@ -19,4 +19,19 @@ export const strings = {
   openWorkspace: 'Open your workspace',
   emptyTitle: (pluralName: string) => `No ${pluralName.toLowerCase()} yet`,
   emptyText: (pluralName: string) => `${pluralName} you add show here.`,
+  /** The object's one view in this loop ("All people"). */
+  allRecords: (pluralName: string) => `All ${pluralName.toLowerCase()}`,
+  /** The TopBar's action and the new record dialog's title ("New person"). */
+  newRecord: (singularName: string) => `New ${singularName.toLowerCase()}`,
+  create: 'Create',
+  creating: 'Creating',
+  cancel: 'Cancel',
+  addAttribute: 'Add attribute',
+  adding: 'Adding',
+  attributeName: 'Name',
+  attributeType: 'Type',
+  attributeNameMissing: 'Name the attribute.',
+  attributeNameTaken: 'An attribute with this name exists.',
+  /** Why a company or Owner cell can't be edited in this loop. */
+  referenceReadOnly: 'You can’t change this here yet.',
 } as const;

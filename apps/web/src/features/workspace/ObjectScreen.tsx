@@ -1,22 +1,9 @@
 // Brief
-// Purpose: one object's page in a workspace (People in this loop), under its name and colour tile.
-// Main task: see the object's records; in milestone 1 there are none yet, and the page says so plainly.
-// Leaves out: the table, "New person" and "Add attribute", which arrive with records in milestone 2.
-import type { ObjectSummary } from '@crm/data';
+// Purpose: the states of a page inside a workspace around its content: loading, failed, missing, or no objects.
+// Main task: say plainly what happened and offer the way on (Try again, or open your workspace).
+// Leaves out: the records themselves, which RecordsScreen shows.
 import { EmptyState, Link, TopBar } from '@crm/ui';
 import { strings } from './strings.ts';
-
-/** The object's page: its TopBar and, until records exist, the empty state. Goes inside WorkspaceFrame as `topBar` and children. */
-export function objectPage(object: ObjectSummary) {
-  return {
-    topBar: <TopBar title={object.pluralName} icon={object.icon} hue={object.hue} />,
-    body: (
-      <EmptyState title={strings.emptyTitle(object.pluralName)} icon={object.icon}>
-        {strings.emptyText(object.pluralName)}
-      </EmptyState>
-    ),
-  };
-}
 
 /** A workspace with no objects to list: its name, and a plain empty state (no way out to loop through). */
 export function noObjectsPage(workspaceName: string) {

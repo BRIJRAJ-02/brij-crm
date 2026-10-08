@@ -27,6 +27,8 @@ export interface WorkspaceFrameProps {
   readonly currentObject?: string;
   /** The page's TopBar. */
   readonly topBar?: ReactNode;
+  /** The view's ViewBar, on an object's page. */
+  readonly viewBar?: ReactNode;
   readonly children: ReactNode;
 }
 
@@ -45,6 +47,7 @@ export function WorkspaceFrame({
   isMissing = false,
   currentObject,
   topBar,
+  viewBar,
   children,
 }: WorkspaceFrameProps) {
   const navigate = useNavigate();
@@ -66,6 +69,7 @@ export function WorkspaceFrame({
   return (
     <AppShell
       topBar={topBar}
+      viewBar={viewBar}
       sidebar={
         <Sidebar
           workspace={workspaceName ?? strings.product}

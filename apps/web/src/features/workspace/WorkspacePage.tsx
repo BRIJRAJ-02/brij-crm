@@ -7,9 +7,10 @@ import { useMatch, useParams, useRouteContext } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { WorkspaceFrame } from './WorkspaceFrame.tsx';
 
-/** One page in the frame: its TopBar (its title, the h1) and its body. */
+/** One page in the frame: its TopBar (its title, the h1), on a view its ViewBar, and its body. */
 export interface FramedPage {
   readonly topBar: ReactNode;
+  readonly viewBar?: ReactNode;
   readonly body: ReactNode;
 }
 
@@ -49,6 +50,7 @@ export function WorkspacePage({ page, currentObject, isFailed = false }: Workspa
       isMissing={workspace === undefined ? isFailed : workspace.objects === undefined}
       {...(currentObject === undefined ? {} : { currentObject })}
       topBar={page.topBar}
+      viewBar={page.viewBar}
     >
       {page.body}
     </WorkspaceFrame>
