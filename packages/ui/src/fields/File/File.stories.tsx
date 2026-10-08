@@ -53,11 +53,16 @@ export const Editor: Story = {
     </Stage>
   ),
   play: async ({ canvas, args, userEvent }) => {
-    await userEvent.click(canvas.getByRole('button', { name: /Remove Logo.png/ }));
+    const remove = canvas.getByRole('button', { name: /Remove Logo.png/ });
+    await userEvent.click(remove);
     await expect(args.onCommit).toHaveBeenCalledWith([
       { fileId: 'f1', name: 'MSA.pdf', size: 284_000, contentType: 'application/pdf' },
       { fileId: 'f3', name: 'Pricing.xlsx', size: 46_000, contentType: 'application/vnd.ms-excel' },
       { fileId: 'f4', name: 'Kickoff.mp4', size: 48_000_000, contentType: 'video/mp4' },
     ]);
+    // The value is controlled, so Logo.png stays. Nothing may still move when the screenshot is taken:
+    // the pointer leaves the button it pressed, and its hover and press transitions finish.
+    await userEvent.unhover(remove);
+    await Promise.all(document.getAnimations().map((animation) => animation.finished.catch(() => undefined)));
   },
 };
