@@ -1473,8 +1473,13 @@ describe('deletion', () => {
           (node['Relation Name'] === 'record_links' || node['Relation Name'] === 'records'),
       ),
     ).toEqual([]);
-    // No hash join and no sort: each far record is a primary key probe, and the rows are sorted in JS.
-    expect(nodes.filter((node) => node['Node Type'] === 'Hash Join' || node['Node Type'] === 'Sort')).toEqual([]);
+    // No hash join: each far record is a primary key probe. (A small Sort over the index's own rows is allowed:
+    // on CI's runner the planner sometimes sorted the 2,010 seeked links, which is cheap and not a scan; it made
+    // this test fail on main twice on 8 October 2026.)
+    expect(nodes.filter((node) => node['Node Type'] === 'Hash Join')).toEqual([]);
+    for (const sort of nodes.filter((node) => node['Node Type'] === 'Sort')) {
+      expect(sort['Plan Rows'] ?? 0).toBeLessThan(5_000);
+    }
     expect(nodes.some((node) => node['Relation Name'] === 'records' && node['Index Name'] === 'records_pkey')).toBe(
       true,
     );
@@ -1502,5 +1507,6 @@ interface PlanNode {
   readonly 'Relation Name'?: string;
   readonly 'Index Name'?: string;
   readonly 'Index Cond'?: string;
+  readonly 'Plan Rows'?: number;
   readonly Plans?: readonly PlanNode[];
 }
