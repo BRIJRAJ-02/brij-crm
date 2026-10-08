@@ -23,8 +23,9 @@ export interface RatingProps {
   readonly isDisabled?: boolean;
   /**
    * `cell` is the rating a grid cell edits: the cell draws the one focus
-   * ring, so the focused star draws none (the lit stars already show the
-   * draft the arrows move).
+   * ring, so the chosen star draws none when focused (the lit stars already
+   * show the draft the arrows move). With nothing chosen, the focused star
+   * keeps its ring.
    */
   readonly variant?: 'default' | 'cell';
 }

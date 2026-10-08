@@ -5,6 +5,18 @@
     flex-direction: column;
     gap: var(--space-8);
     min-inline-size: 0;
+    border-radius: var(--radius-md);
     outline: none;
+  }
+
+  /* Opened from a grid cell by keyboard, focus rests on the group and shows. */
+  .root:focus-visible {
+    box-shadow: var(--shadow-focus);
+  }
+
+  @media (forced-colors: active) {
+    .root:focus-visible {
+      outline: var(--border-width-thick) solid Highlight;
+    }
   }
 }

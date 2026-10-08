@@ -96,7 +96,9 @@
     }
 
     .root[data-focused]:focus-visible,
-    .root[data-focused]:focus-within {
+    .root[data-focused]:focus-within,
+    .root[data-editing='list'],
+    .root[data-editing='popover'] {
       outline: var(--border-width-thick) solid Highlight;
       outline-offset: calc(-1 * var(--border-width-thick));
     }

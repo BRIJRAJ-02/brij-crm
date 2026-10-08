@@ -10,7 +10,7 @@ import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
 import { AttributeEditor } from '../../fields/AttributeEditor.tsx';
 import { fieldTypeOf, readOnlyReasonOf } from '../../fields/registry.ts';
-import type { AttributeType } from '@crm/contracts/values';
+import { MULTIPLE_VALUE_TYPES, type AttributeType } from '@crm/contracts/values';
 import type { EditorProps, FieldAttribute } from '../../fields/types.ts';
 import { Popover } from '../../molecules/Popover/Popover.tsx';
 import styles from './GridCell.module.css';
@@ -34,6 +34,11 @@ export interface CellPlace {
  */
 export type EditMode = 'cell' | 'list' | 'popover';
 
+/** True when the attribute holds a list: it allows several, and its type can (`allowMultiple` means nothing to the others). */
+function holdsSeveral(attribute: FieldAttribute): boolean {
+  return attribute.allowMultiple && (MULTIPLE_VALUE_TYPES as readonly AttributeType[]).includes(attribute.type);
+}
+
 /** How `attribute` edits in a grid cell, or `undefined` when it never does. */
 export function editModeOf(attribute: FieldAttribute): EditMode | undefined {
   const definition = fieldTypeOf(attribute.type);
@@ -41,7 +46,7 @@ export function editModeOf(attribute: FieldAttribute): EditMode | undefined {
     return undefined;
   }
   // Several emails, phones, domains or links are a list with an add field, which can't fit a row.
-  if (definition.editIn === 'cell') return attribute.allowMultiple ? 'popover' : 'cell';
+  if (definition.editIn === 'cell') return holdsSeveral(attribute) ? 'popover' : 'cell';
   return definition.isListEditor?.(attribute) === true ? 'list' : 'popover';
 }
 

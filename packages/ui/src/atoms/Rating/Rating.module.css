@@ -49,12 +49,14 @@
     box-shadow: var(--shadow-focus);
   }
 
-  /* In a grid cell the stars sit where the display had them, and the cell draws the one ring. */
+  /* In a grid cell the stars sit where the display had them, and the cell
+     draws the one ring: the chosen star, lit up to, shows where focus is.
+     With nothing chosen yet, the focused star keeps its ring. */
   .root[data-variant='cell'] {
     padding-inline: var(--space-8);
   }
 
-  .root[data-variant='cell'] .choice[data-focus-visible] {
+  .root[data-variant='cell'] .choice[data-focus-visible][data-selected] {
     box-shadow: none;
   }
 
@@ -87,7 +89,7 @@
       outline: var(--border-width-thick) solid Highlight;
     }
 
-    .root[data-variant='cell'] .choice[data-focus-visible] {
+    .root[data-variant='cell'] .choice[data-focus-visible][data-selected] {
       outline: none;
     }
   }

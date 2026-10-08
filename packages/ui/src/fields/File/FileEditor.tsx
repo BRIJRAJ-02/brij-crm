@@ -18,7 +18,12 @@ export function FileEditor({ attribute, value, onCommit, onUpload, autoOpen = fa
     if (autoOpen) ref.current?.focus({ preventScroll: true });
   }, [autoOpen]);
   return (
-    <div ref={ref} className={styles.root} {...(autoOpen ? { tabIndex: -1 } : {})}>
+    <div
+      ref={ref}
+      className={styles.root}
+      // A named group, so the focus that rests here says where it is.
+      {...(autoOpen ? { tabIndex: -1, role: 'group', 'aria-label': attribute.name } : {})}
+    >
       {files.map((file) => (
         <FileItem
           key={file.fileId}

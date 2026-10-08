@@ -107,7 +107,7 @@ export const Multiline: Story = {
   },
 };
 
-/** The search variant and the small size a cell editor uses. */
+/** The search variant, and the small size of a filter value or a record panel row. A grid cell edits in the `cell` variant (the DataGrid stories). */
 export const Variants: Story = {
   render: () => (
     <Stage direction="column" width="narrow">
