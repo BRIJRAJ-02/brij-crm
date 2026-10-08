@@ -20,7 +20,14 @@ import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import { createAuth } from './auth/auth.ts';
-import { ERROR_MESSAGES, parseRetryAfter, toDataError, withRetryAfter } from './errors.ts';
+import {
+  type DataFault,
+  ERROR_MESSAGES,
+  isUnseenFault,
+  parseRetryAfter,
+  toDataError,
+  withRetryAfter,
+} from './errors.ts';
 import type { FetchLike } from './fetch.ts';
 import type { createLive, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
@@ -56,6 +63,7 @@ export {
   type DataError,
   type DataErrorCode,
   type DataErrorDetails,
+  type DataFault,
   type SignInCode,
 } from './errors.ts';
 export type { FetchLike } from './fetch.ts';
@@ -65,9 +73,11 @@ export type { LiveStatus } from './live/live.ts';
 export type { Notice } from './notice.ts';
 export type { CellChange, RecordsView, ViewState, ViewStatus } from './records/layer.ts';
 
-/** What each API call carries to the link: where to report the answer's `Retry-After`. */
+/** What each API call carries to the link: where to report the answer's `Retry-After`, and that an answer came. */
 interface CallContext {
   readonly onRetryAfter?: (seconds: number) => void;
+  /** The answer's request id (`x-request-id`) and the procedure it answered, for a fault report. */
+  readonly onAnswer?: (answer: { readonly requestId?: string; readonly procedure: string }) => void;
 }
 
 type ApiClient = ContractRouterClient<typeof contract, CallContext>;
@@ -118,6 +128,13 @@ export interface DataLayerOptions {
   readonly onDefinitionsChange?: () => void;
   /** Loads live updates. `./live/live.ts` by default; tests pass one on a fake transport. */
   readonly loadLive?: () => Promise<{ readonly createLive: typeof createLive }>;
+  /**
+   * Monitoring (spec 0010, AC-163): called only for a failure the server can't
+   * have seen (an answer without one of our codes, or an error thrown inside
+   * the layer), with the answer's request id when there was one. Never for
+   * being offline, a cancelled call or a refusal. It must not throw.
+   */
+  readonly report?: (fault: DataFault) => void;
 }
 
 /**
@@ -138,12 +155,15 @@ export function createDataLayer({
   realtimeUrl,
   onDefinitionsChange = () => undefined,
   loadLive = () => import('./live/live.ts'),
+  report = () => undefined,
 }: DataLayerOptions) {
   const api: ApiClient = createORPCClient(
     new RPCLink<CallContext>({
       url: new URL('/api/rpc', origin).href,
-      fetch: async (request, init, { context }) => {
+      fetch: async (request, init, { context }, path) => {
         const response = await fetch(request, init);
+        const requestId = response.headers.get('x-request-id') ?? undefined;
+        context.onAnswer?.({ procedure: path.join('.'), ...(requestId === undefined ? {} : { requestId }) });
         const wait = response.ok ? undefined : parseRetryAfter(response.headers.get('retry-after'), Date.now());
         if (wait !== undefined) context.onRetryAfter?.(wait);
         return response;
@@ -196,22 +216,36 @@ export function createDataLayer({
     onSessionChange();
   };
 
+  /** Hands a fault to monitoring, which never gets to break the call it came from. */
+  const reportSafely = (fault: DataFault) => {
+    try {
+      report(fault);
+    } catch {
+      // Monitoring failed; the call's own failure still goes to the caller.
+    }
+  };
+
   /**
    * Runs one API call with a fresh context, mapping its failure to a
    * DataError that carries the answer's `Retry-After`.
    */
   async function attempt<T>(run: (options: CallOptions) => Promise<T>, signal?: AbortSignal): Promise<T> {
     let wait: number | undefined;
+    let answer: { readonly requestId?: string; readonly procedure: string } | undefined;
     try {
       return await run({
         context: {
           onRetryAfter: (seconds) => {
             wait = seconds;
           },
+          onAnswer: (answered) => {
+            answer = answered;
+          },
         },
         ...(signal === undefined ? {} : { signal }),
       });
     } catch (error) {
+      if (signal?.aborted !== true && isUnseenFault(error)) reportSafely({ error, ...answer });
       throw withRetryAfter(toDataError(error), wait);
     }
   }
@@ -234,7 +268,7 @@ export function createDataLayer({
     }
   }
 
-  const auth = createAuth({ origin, fetch, reset });
+  const auth = createAuth({ origin, fetch, reset, report: reportSafely });
 
   /** Reads a per workspace list once, dropping it from the cache when it fails, so the next call asks again. */
   function cached<T>(cache: Map<string, Promise<T>>, key: string, load: () => Promise<T>): Promise<T> {

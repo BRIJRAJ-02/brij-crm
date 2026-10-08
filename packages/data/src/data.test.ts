@@ -15,13 +15,14 @@ import {
 import { implement, ORPCError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
 import { describe, expect, it } from 'vitest';
-import { dataError, parseRetryAfter, refusalFor, refusalSummary } from './errors.ts';
+import { dataError, isUnseenFault, parseRetryAfter, refusalFor, refusalSummary } from './errors.ts';
 import {
   createDataLayer,
   createIdMinter,
   isDataError,
   toFieldAttribute,
   type DataError,
+  type DataFault,
   type Notice,
 } from './index.ts';
 import { createLive, type LiveChannel, type LiveTransport } from './live/live.ts';
@@ -196,6 +197,8 @@ function layer(
   const signedOut: string[] = [];
   // Sign outs and session changes, in the order they ran.
   const events: string[] = [];
+  // What the layer handed monitoring.
+  const faults: DataFault[] = [];
   const data = createDataLayer({
     origin: ORIGIN,
     notify: (notice) => notices.push(notice),
@@ -207,9 +210,10 @@ function layer(
     onSessionChange: () => events.push('session changed'),
     currentPath: () => path,
     fetch: api.fetch,
+    report: (fault) => faults.push(fault),
     ...more,
   });
-  return { data, notices, signedOut, events };
+  return { data, notices, signedOut, events, faults };
 }
 
 async function failure(promise: Promise<unknown>): Promise<DataError> {
@@ -706,6 +710,81 @@ describe('failures that never reached the API', () => {
       fetch: () => Promise.resolve(new Response('<html>Bad gateway</html>', { status: 503 })),
     });
     expect(await failure(data.system.status())).toMatchObject({ code: 'API_UNAVAILABLE' });
+  });
+});
+
+describe('reporting faults the server never saw (spec 0010, AC-163)', () => {
+  const proxyPage = (status: number) =>
+    new Response('<html>Bad gateway</html>', { status, headers: { 'x-request-id': 'req-from-the-edge' } });
+
+  it("reports a proxy's page, with the answer's request id and the procedure, once", async () => {
+    const { data, faults } = layer({ fetch: () => Promise.resolve(proxyPage(502)) });
+    expect(await failure(data.system.status())).toMatchObject({ code: 'API_UNAVAILABLE' });
+    expect(faults).toHaveLength(1);
+    expect(faults[0]).toMatchObject({ requestId: 'req-from-the-edge', procedure: 'system.status' });
+  });
+
+  it('reports an error thrown inside the layer, which no answer carried', async () => {
+    const bug = new RangeError('a bug on the way out');
+    const { data, faults } = layer({ fetch: () => Promise.reject(bug) });
+    expect(await failure(data.system.status())).toMatchObject({ code: 'INTERNAL' });
+    expect(faults).toEqual([{ error: bug }]);
+  });
+
+  it('never reports being offline, a refusal, or a fault the server reported itself', async () => {
+    const offline = layer({ fetch: () => Promise.reject(new TypeError('Failed to fetch')) });
+    await failure(offline.data.system.status());
+    const refused = layer(
+      fakeApi({
+        objects: () => {
+          throw new ORPCError('NOT_FOUND', { status: 404, message: 'There is no workspace at this address.' });
+        },
+      }),
+    );
+    await failure(refused.data.objects.list('acme'));
+    const internal = layer(
+      fakeApi({
+        objects: () => {
+          throw new ORPCError('INTERNAL', { status: 500, message: 'Something went wrong. Try again.' });
+        },
+      }),
+    );
+    await failure(internal.data.objects.list('acme'));
+    expect([...offline.faults, ...refused.faults, ...internal.faults]).toEqual([]);
+  });
+
+  it('still rejects with the DataError when monitoring itself throws', async () => {
+    const data = createDataLayer({
+      origin: ORIGIN,
+      notify: () => undefined,
+      mintId: () => 'id',
+      onSignedOut: () => undefined,
+      currentPath: () => '/',
+      fetch: () => Promise.resolve(proxyPage(502)),
+      report: () => {
+        throw new Error('monitoring is broken');
+      },
+    });
+    expect(await failure(data.system.status())).toMatchObject({ code: 'API_UNAVAILABLE' });
+  });
+
+  it('reports a sign in step answered by a proxy, and not a refused code', async () => {
+    const proxied = layer({ fetch: () => Promise.resolve(proxyPage(502)) });
+    await failure(proxied.data.auth.sendCode('ada@example.com'));
+    expect(proxied.faults).toHaveLength(1);
+    expect(proxied.faults[0]).toMatchObject({ requestId: 'req-from-the-edge', procedure: 'auth.sendCode' });
+
+    const refused = layer(
+      fakeApi({}, () => json({ code: 'INVALID_OTP', message: 'That code isn’t right.', status: 400 }, 400)),
+    );
+    await failure(refused.data.auth.verify('ada@example.com', '000000'));
+    expect(refused.faults).toEqual([]);
+  });
+
+  it('counts a cancelled call as nothing that failed', () => {
+    expect(isUnseenFault(new DOMException('The operation was aborted.', 'AbortError'))).toBe(false);
+    expect(isUnseenFault(new Error('a bug inside the layer'))).toBe(true);
+    expect(isUnseenFault(dataError('INTERNAL', 'Something went wrong.'))).toBe(false);
   });
 });
 

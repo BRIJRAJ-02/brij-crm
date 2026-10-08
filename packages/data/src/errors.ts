@@ -189,6 +189,38 @@ export function toDataError(error: unknown): DataError {
   return dataError('INTERNAL', ERROR_MESSAGES.internal);
 }
 
+/**
+ * A failure the server can't have seen, for monitoring (spec 0010, AC-163):
+ * what failed, the request id of the answer when there was one (its
+ * `x-request-id`), and the procedure or sign in step.
+ */
+export interface DataFault {
+  readonly error: unknown;
+  readonly requestId?: string;
+  readonly procedure?: string;
+}
+
+/** Whether a thrown value is a cancelled call: the caller let go of it, nothing failed. */
+function isAbort(error: unknown): boolean {
+  return isRecord(error) && error.name === 'AbortError';
+}
+
+/**
+ * Whether a failure is one the server never saw and nobody expected, so the
+ * layer reports it (spec 0010, AC-163): an answer without one of our codes (a
+ * proxy's page, a malformed body), or an error thrown inside the layer. Being
+ * offline, a cancelled call and every answer with one of our codes are not:
+ * the server reports its own faults, and a refusal is no fault.
+ */
+export function isUnseenFault(error: unknown): boolean {
+  if (isDataError(error) || isAbort(error)) return false;
+  if (error instanceof ORPCError) return !isKnownCode(error.code);
+  // fetch's own failure: offline, or the server unreachable.
+  if (error instanceof TypeError) return false;
+  if (isRecord(error) && 'status' in error) return !isKnownCode(error.code);
+  return true;
+}
+
 /** An answer without one of our codes (a proxy's page, a malformed body): our own code and words, from its status. */
 function byStatus(status: unknown): DataError {
   const code = codeForStatus(status);

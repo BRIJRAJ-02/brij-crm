@@ -1,7 +1,7 @@
 // Sign in for the data layer (spec 0005). The Better Auth client loads on
 // first use through a dynamic import, so the first load stays small; the
 // session, `me` and the caches are the layer's to reset around it.
-import { toDataError } from '../errors.ts';
+import { type DataFault, toDataError } from '../errors.ts';
 import type { FetchLike } from '../fetch.ts';
 import type { AuthClient, SessionUser } from './client.ts';
 
@@ -13,6 +13,8 @@ export interface AuthOptions {
   readonly fetch: FetchLike;
   /** Forgets everything cached for the person who was signed in. */
   readonly reset: () => void;
+  /** Monitoring: a sign in failure the server can't have seen (see `DataLayerOptions.report`). */
+  readonly report?: (fault: DataFault) => void;
 }
 
 /** Sign in, as screens use it. Each method resolves on success and rejects with a DataError. */
@@ -34,11 +36,13 @@ export interface Auth {
 }
 
 /** Builds sign in. The Better Auth client is imported and built the first time a method runs. */
-export function createAuth({ origin, fetch, reset }: AuthOptions): Auth {
+export function createAuth({ origin, fetch, reset, report }: AuthOptions): Auth {
   let client: Promise<AuthClient> | undefined;
   const load = (): Promise<AuthClient> => {
     client ??= import('./client.ts')
-      .then(({ createBetterAuthClient }) => createBetterAuthClient({ origin, fetch }))
+      .then(({ createBetterAuthClient }) =>
+        createBetterAuthClient({ origin, fetch, ...(report === undefined ? {} : { report }) }),
+      )
       .catch((error: unknown) => {
         // A failed load (offline) is tried again next time.
         client = undefined;
