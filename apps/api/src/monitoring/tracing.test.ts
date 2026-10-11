@@ -10,7 +10,7 @@ import { promisify } from 'node:util';
 import { serve } from '@hono/node-server';
 import { describe, expect, inject, it } from 'vitest';
 import { memoryTransport, type SentSpan, spansIn } from '../../test/sentry.ts';
-import { newEmail } from '../../test/sign-in.ts';
+import { newEmail, newIp } from '../../test/sign-in.ts';
 import { APP_URL, createTestApp } from '../testing.ts';
 import { flush, type SentryConfig, sentryOptions, startSentry } from './sentry.ts';
 import { keepSpan, keepSpanOrBlank, requestSampleRate, sqlShape, TRACE_RATES } from './tracing.ts';
@@ -276,12 +276,14 @@ describe('a traced api process, on a real Postgres', () => {
   it('names sign in routes and procedures, with database queries as child spans, and nothing personal', async () => {
     const { appUrl, identityUrl } = inject('testDatabase');
     const email = newEmail();
+    const ip = newIp();
     const { stdout } = await run(process.execPath, [TRACED_API], {
       env: {
         PATH: process.env.PATH ?? '',
         TRACE_DATABASE_URL: appUrl,
         TRACE_IDENTITY_URL: identityUrl,
         TRACE_EMAIL: email,
+        TRACE_IP: ip,
         TRACE_ENVIRONMENT: 'preview',
       },
       maxBuffer: 64 * 1024 * 1024,
@@ -311,14 +313,7 @@ describe('a traced api process, on a real Postgres', () => {
     );
     const sent = envelopes.join('\n');
     // The failing query's bound value, which Postgres quotes in its message (the span's status message).
-    for (const secret of [
-      email,
-      'TraceTestBrowser',
-      '203.0.113.77',
-      'search=ada',
-      'better-auth.session_token',
-      'Ada Lovelace',
-    ]) {
+    for (const secret of [email, 'TraceTestBrowser', ip, 'search=ada', 'better-auth.session_token', 'Ada Lovelace']) {
       expect(sent).not.toContain(secret);
     }
   });

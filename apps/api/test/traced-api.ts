@@ -8,7 +8,8 @@
 // for both health checks, flushes and exits. No Vitest here: it runs on Node.
 //
 // Env: TRACE_DATABASE_URL, TRACE_IDENTITY_URL (the test database's two logins),
-// TRACE_EMAIL (who signs in), TRACE_ENVIRONMENT (`preview` traces everything).
+// TRACE_EMAIL (who signs in), TRACE_IP (where from: a fresh one, so no other suite's rate limit rows meet
+// these), TRACE_ENVIRONMENT (`preview` traces everything).
 import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { AppEnvironment } from '@crm/contracts';
@@ -19,6 +20,7 @@ const Env = z.object({
   TRACE_DATABASE_URL: z.url(),
   TRACE_IDENTITY_URL: z.url(),
   TRACE_EMAIL: z.email(),
+  TRACE_IP: z.ipv4(),
   TRACE_ENVIRONMENT: AppEnvironment,
 });
 const env = Env.parse(process.env);
@@ -99,7 +101,7 @@ const headers = {
   'x-crm-edge': 'the-edge-header-is-only-checked-for-presence-by-the-sampler',
   'content-type': 'application/json',
   'user-agent': 'TraceTestBrowser/1.0',
-  'x-forwarded-for': '203.0.113.77',
+  'x-forwarded-for': env.TRACE_IP,
 };
 const post = (path: string, body: unknown, extra: Record<string, string> = {}) =>
   fetch(`${base}${path}`, { method: 'POST', headers: { ...headers, ...extra }, body: JSON.stringify(body) });
