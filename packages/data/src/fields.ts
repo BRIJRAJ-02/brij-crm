@@ -2,7 +2,7 @@
 // value sourcing): one `toFieldAttribute()` for every column and form field,
 // and members as the actor displays an Owner cell draws. Plain and small, so
 // it sits in the first load with the rest of the layer's surface.
-import type { ActorDisplay, AttributeDefinition, AttributeType, MemberSummary } from '@crm/contracts';
+import type { ActorDisplay, AttributeDefinition, AttributeType, Hue, MemberSummary } from '@crm/contracts';
 
 /** The types this loop shows but never edits: a record reference (a company) and a member (Owner). */
 const READ_ONLY_IN_THIS_LOOP: readonly AttributeType[] = ['record_reference', 'actor_reference'];
@@ -22,6 +22,13 @@ export interface FieldAttributeShape {
   readonly readOnlyReason?: string;
   readonly cardinality?: 'one' | 'many';
   readonly defaultCurrency?: string;
+  /** A select's options or a status attribute's stages, in order, archived ones marked (spec 0012). */
+  readonly options?: readonly {
+    readonly id: string;
+    readonly label: string;
+    readonly hue: Hue;
+    readonly archived: boolean;
+  }[];
 }
 
 /**
@@ -35,6 +42,7 @@ export const isEditableHere = (definition: Pick<AttributeDefinition, 'type' | 'i
 /**
  * An attribute definition as the field set's attribute: title to name,
  * `isMulti` to `allowMultiple`, a currency's default from its config, and
+ * the options of a select or status attribute (archived ones marked), and
  * read only for references and members in this loop, with `readOnlyReason`
  * (the screen's words) as the reason. A system attribute is read only with
  * the field set's own reason ("Set by the system"). An attribute the server
@@ -58,6 +66,17 @@ export function toFieldAttribute(definition: AttributeDefinition, readOnlyReason
     ...(reason === undefined ? {} : { readOnlyReason: reason }),
     ...(definition.type === 'record_reference' ? { cardinality: definition.isMulti ? 'many' : 'one' } : {}),
     ...(typeof currency === 'string' ? { defaultCurrency: currency } : {}),
+    // Options inline (spec 0006, AC-59; spec 0012), so a select or status cell never fetches.
+    ...(definition.options === undefined
+      ? {}
+      : {
+          options: definition.options.map((option) => ({
+            id: option.id,
+            label: option.label,
+            hue: option.hue,
+            archived: option.isArchived,
+          })),
+        }),
   };
 }
 

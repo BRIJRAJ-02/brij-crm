@@ -12,6 +12,7 @@ import {
   type MyAccess,
   type ObjectSummary,
   type RecordView,
+  type Usage,
 } from '@crm/contracts';
 import { implement, ORPCError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
@@ -47,10 +48,16 @@ const PEOPLE: ObjectSummary = {
   standardKey: 'people',
   primaryAttributeId: '0199a6f2-0000-7000-8000-000000000004',
   access: 'write',
+  position: 0,
+  isStandard: true,
+  isArchived: false,
 };
 
 const TITLE: AttributeDefinition = {
   id: '0199a6f2-0000-7000-8000-000000000005',
+  objectId: '0199a6f2-0000-7000-8000-000000000003',
+  isPrimary: false,
+  isArchived: false,
   apiSlug: 'job_title',
   title: 'Job title',
   type: 'text',
@@ -105,6 +112,9 @@ interface Behaviour {
   jobGet: (jobId: string) => JobView;
   jobCancel: (jobId: string) => JobView;
   jobStartTest: (id: string) => JobView;
+  /** What every object write answers (spec 0012). */
+  objectWrite: () => ObjectSummary;
+  usage: () => Usage;
 }
 
 const unauthenticated = () => new ORPCError('UNAUTHENTICATED', { status: 401, message: 'Sign in to continue.' });
@@ -135,6 +145,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     jobGet: notServed,
     jobCancel: notServed,
     jobStartTest: notServed,
+    objectWrite: notServed,
+    usage: () => ({ attributes: { [PEOPLE.id]: { used: 20, limit: 250 } }, optionsPerAttribute: 500 }),
     ...overrides,
   };
   const calls: string[] = [];
@@ -153,7 +165,30 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     },
     me: { get: os.me.get.handler(() => behaviour.me()) },
     workspaces: { create: os.workspaces.create.handler(() => behaviour.create()) },
-    objects: { list: os.objects.list.handler(({ input }) => behaviour.objects(input.workspace)) },
+    objects: {
+      list: os.objects.list.handler(({ input }) => behaviour.objects(input.workspace)),
+      create: os.objects.create.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        return behaviour.objectWrite();
+      }),
+      update: os.objects.update.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        return behaviour.objectWrite();
+      }),
+      reorder: os.objects.reorder.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        return [behaviour.objectWrite()];
+      }),
+      archive: os.objects.archive.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        return behaviour.objectWrite();
+      }),
+      restore: os.objects.restore.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        return behaviour.objectWrite();
+      }),
+    },
+    usage: { get: os.usage.get.handler(() => behaviour.usage()) },
     attributes: {
       list: os.attributes.list.handler(() => behaviour.attributes()),
       create: os.attributes.create.handler(() => behaviour.addAttribute()),
@@ -1314,5 +1349,85 @@ describe('jobs', () => {
     fail = false;
     await view.reload();
     expect(view.getSnapshot()).toMatchObject({ status: 'ready', jobs: [{ status: 'queued' }] });
+describe('objects in settings (spec 0012)', () => {
+  const PROJECTS: ObjectSummary = {
+    id: '0199a6f2-0000-7000-8000-0000000000c1',
+    apiSlug: 'projects',
+    singularName: 'Project',
+    pluralName: 'Projects',
+    icon: 'folder',
+    hue: 'blue',
+    access: 'write',
+    position: 1,
+    isStandard: false,
+    isArchived: true,
+  };
+
+  it('lists the live objects for the sidebar and every object for settings, from one read', async () => {
+    const api = fakeApi({ objects: () => [PEOPLE, PROJECTS] });
+    const { data } = layer(api);
+    expect((await data.objects.list('acme')).map((object) => object.apiSlug)).toEqual(['people']);
+    expect((await data.objects.all('acme')).map((object) => object.apiSlug)).toEqual(['people', 'projects']);
+    expect(count(api.calls, '/api/rpc/objects/list')).toBe(1);
+  });
+
+  it('waits for an object write, then reads the objects and usage again and reloads the pages once', async () => {
+    let reads = 0;
+    let changes = 0;
+    const api = fakeApi({
+      objects: () => (reads++ === 0 ? [PEOPLE] : [PEOPLE, { ...PROJECTS, isArchived: false }]),
+      objectWrite: () => ({ ...PROJECTS, isArchived: false }),
+    });
+    const { data } = layer(api, '/w/acme/settings/objects', {
+      onDefinitionsChange: () => {
+        changes += 1;
+      },
+    });
+    await data.objects.list('acme');
+    await data.usage.get('acme');
+    const made = await data.objects.create('acme', {
+      id: data.objects.newId(),
+      singularName: 'Project',
+      pluralName: 'Projects',
+      icon: 'folder',
+      hue: 'blue',
+    });
+    expect(made.apiSlug).toBe('projects');
+    expect(changes).toBe(1);
+    expect(api.mutationIds).toHaveLength(1);
+    expect((await data.objects.list('acme')).map((object) => object.apiSlug)).toEqual(['people', 'projects']);
+    await data.usage.get('acme');
+    expect(count(api.calls, '/api/rpc/usage/get')).toBe(2);
+  });
+
+  it('rejects a refused object write with its refusals, and reloads nothing', async () => {
+    let changes = 0;
+    const api = fakeApi({
+      objectWrite: () => {
+        throw new ORPCError('NAME_TAKEN', {
+          status: 409,
+          message: 'An object called Projects already exists.',
+          data: {
+            refusals: [
+              { code: 'NAME_TAKEN', message: 'An object called Projects already exists.', field: 'pluralName' },
+            ],
+          },
+        });
+      },
+    });
+    const { data } = layer(api, '/w/acme/settings/objects', {
+      onDefinitionsChange: () => {
+        changes += 1;
+      },
+    });
+    const error = await failure(data.objects.update('acme', PEOPLE.id, { pluralName: 'Projects' }));
+    expect(error.code).toBe('NAME_TAKEN');
+    expect(error.data?.refusals?.[0]?.field).toBe('pluralName');
+    expect(changes).toBe(0);
+  });
+
+  it('counts an object’s records for the archive confirm', async () => {
+    const { data } = layer(fakeApi({ count: () => 1240 }));
+    expect(await data.records.count('acme', PEOPLE.id)).toBe(1240);
   });
 });

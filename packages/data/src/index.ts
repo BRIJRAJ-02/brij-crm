@@ -16,6 +16,7 @@ import type {
   MyAccess,
   ObjectSummary,
   RecordView,
+  Usage,
 } from '@crm/contracts';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
@@ -52,6 +53,7 @@ export type {
   ActorDisplay,
   ApiRefusal,
   AttributeDefinition,
+  AttributeOption,
   AttributeType,
   CreatableAttributeType,
   CreatedWorkspace,
@@ -68,8 +70,15 @@ export type {
   RecordView,
   SignedInUser,
   SystemStatus,
+  Usage,
+  UsageCount,
   WorkspaceSummary,
 } from '@crm/contracts';
+export type { Hue, ObjectIcon } from '@crm/contracts/values';
+// The API name rule and the new object's defaults (spec 0012): plain modules with no Zod, so the dialogs share
+// the server's own functions without loading the schema library.
+export { isReservedSlug, RESERVED_SLUGS, toApiSlug } from '@crm/contracts/slugs';
+export { freeHue } from '@crm/contracts/picker';
 export type { Auth, SessionUser } from './auth/auth.ts';
 export {
   dataError,
@@ -154,6 +163,25 @@ const SPREAD_MS = 2_000;
 
 /** How long the token read with the head may be handed to the live layer as its first token. */
 const FIRST_TOKEN_MS = 60_000;
+
+/** A new object, as settings sends it (spec 0012, AC-223): the id from `objects.newId`, minted once per dialog. */
+export interface NewObject {
+  readonly id: string;
+  readonly singularName: string;
+  readonly pluralName: string;
+  /** Derived from the plural name on the server (`toApiSlug`) when absent. */
+  readonly apiSlug?: string;
+  readonly icon: ObjectSummary['icon'];
+  readonly hue: ObjectSummary['hue'];
+}
+
+/** What settings may change on an object (spec 0012, AC-224). Its API name never changes. */
+export interface ObjectChanges {
+  readonly singularName?: string;
+  readonly pluralName?: string;
+  readonly icon?: ObjectSummary['icon'];
+  readonly hue?: ObjectSummary['hue'];
+}
 
 /** The cache key of one object's attributes in one workspace. */
 const objectKey = (workspace: string, objectId: string) => `${workspace}/${objectId}`;
@@ -258,7 +286,9 @@ export function createDataLayer({
   // members and attributes. A failed load is dropped, so the next call tries
   // again.
   let me: Promise<Me | undefined> | undefined;
+  // Every object, archived ones too (settings lists them; the sidebar filters them out), in the workspace's order.
   let objects = new Map<string, Promise<ObjectSummary[]>>();
+  let usage = new Map<string, Promise<Usage>>();
   let members = new Map<string, Promise<MemberSummary[]>>();
   let access = new Map<string, Promise<MyAccess>>();
   let attributes = new Map<string, Promise<AttributeDefinition[]>>();
@@ -287,6 +317,7 @@ export function createDataLayer({
   const forget = () => {
     me = undefined;
     objects = new Map();
+    usage = new Map();
     members = new Map();
     access = new Map();
     attributes = new Map();
@@ -567,13 +598,18 @@ export function createDataLayer({
   router.on('definitions', (workspace, event) => {
     // A list's own definitions: no screen holds lists yet.
     if (event.listId !== undefined) return;
-    if (event.objectId !== undefined) {
-      // The object itself was made, renamed, archived or restored: the workspace's objects too. One reload at most.
+    // Any definition change may move a count the settings meters show (spec 0012, AC-243).
+    const counted = refreshHeld(usage, workspace, () => readUsage(workspace));
+    if (event.objectId !== undefined && event.attributeIds !== undefined) {
+      reloadIfChanged([refreshAttributes(workspace, event.objectId), counted]);
+    } else if (event.objectId !== undefined) {
+      // The object itself was made, renamed, restyled, moved, archived or restored (spec 0012): the workspace's
+      // objects, and every held object's attributes, since a reference to an archived object is archived too.
+      // One reload at most.
       reloadIfChanged([
-        refreshAttributes(workspace, event.objectId),
-        event.attributeIds === undefined
-          ? refreshHeld(objects, workspace, () => listObjects(workspace))
-          : Promise.resolve(false),
+        refreshAttributes(workspace),
+        refreshHeld(objects, workspace, () => allObjects(workspace)),
+        counted,
       ]);
     } else {
       objects.delete(workspace);
@@ -614,8 +650,9 @@ export function createDataLayer({
       layer.reload(workspace);
     });
     void refreshAttributes(workspace);
-    // The workspace's objects and members are read again on the next page load, which a resync asks for.
+    // The workspace's objects, usage and members are read again on the next page load, which a resync asks for.
     objects.delete(workspace);
+    usage.delete(workspace);
     members.delete(workspace);
     onDefinitionsChange();
   });
@@ -749,20 +786,59 @@ export function createDataLayer({
   };
 
   /**
-   * The workspace's live objects, cached for the app load. A non member
-   * gets the same `NOT_FOUND` as an unknown address, which also drops the
-   * cached `me`: the person may have just left it, so `/` asks again.
+   * Every object of the workspace, archived ones too, in its order (spec
+   * 0012), cached for the app load. A non member gets the same `NOT_FOUND`
+   * as an unknown address, which also drops the cached `me`: the person may
+   * have just left it, so `/` asks again.
    */
-  function listObjects(workspace: string): Promise<ObjectSummary[]> {
+  function allObjects(workspace: string): Promise<ObjectSummary[]> {
     const cached = objects.get(workspace);
     if (cached !== undefined) return cached;
-    const loading = beforeRead(workspace).then(() => call((options) => api.objects.list({ workspace }, options)));
+    const loading = beforeRead(workspace).then(() =>
+      call((options) => api.objects.list({ workspace, includeArchived: true }, options)),
+    );
     objects.set(workspace, loading);
     loading.catch((error: unknown) => {
       if (objects.get(workspace) === loading) objects.delete(workspace);
       if (toDataError(error).code === 'NOT_FOUND') me = undefined;
     });
     return loading;
+  }
+
+  /** The workspace's live objects in its order (the sidebar's), from the same cached list. */
+  function listObjects(workspace: string): Promise<ObjectSummary[]> {
+    return allObjects(workspace).then((all) => all.filter((object) => !object.isArchived));
+  }
+
+  /** The workspace's usage of its limits (spec 0012, AC-243), cached until a definition changes. */
+  function readUsage(workspace: string): Promise<Usage> {
+    return cached(usage, workspace, () =>
+      beforeRead(workspace).then(() => call((options) => api.usage.get({ workspace }, options))),
+    );
+  }
+
+  /**
+   * Runs one object write (spec 0012): server confirmed, never optimistic.
+   * Its echo is skipped (one definitions event), and once it lands the
+   * workspace's objects, usage and held attributes are read again and the
+   * app reloads its pages, so this tab shows the change as every other tab
+   * does.
+   */
+  async function writeObject<T>(workspace: string, write: (mutationId: string, options: CallOptions) => Promise<T>) {
+    const mutationId = mintId();
+    mutations.sent(mutationId);
+    try {
+      const answer = await call((options) => write(mutationId, options));
+      mutations.answered(mutationId, 1);
+      objects.delete(workspace);
+      usage.delete(workspace);
+      await refreshAttributes(workspace);
+      onDefinitionsChange();
+      return answer;
+    } catch (error) {
+      mutations.forget(mutationId);
+      throw error;
+    }
   }
 
   /** An object's primary attribute and its attributes' kinds, for a window's mode (spec 0006, from the cached lists). */
@@ -841,11 +917,65 @@ export function createDataLayer({
     },
     objects: {
       /**
-       * The workspace's live objects, cached for the app load. A non member
-       * gets the same `NOT_FOUND` as an unknown address, which also drops the
-       * cached `me`: the person may have just left it, so `/` asks again.
+       * The workspace's live objects in its order (the sidebar's), cached for
+       * the app load. A non member gets the same `NOT_FOUND` as an unknown
+       * address, which also drops the cached `me`: the person may have just
+       * left it, so `/` asks again.
        */
       list: listObjects,
+      /** Every object, archived ones too, in the workspace's order (settings, an archived object's page). */
+      all: allObjects,
+      /** A new object's id: mint it once per dialog, and send the same one again on a retry. */
+      newId: () => mintId(),
+      /**
+       * Creates a custom object and waits for the server (spec 0012, AC-223).
+       * Refusals: `SLUG_TAKEN` (field `apiSlug`), `NAME_TAKEN` (on the name it
+       * names), `CONFIG_INVALID` (on its field), `LIMIT_REACHED`, `FORBIDDEN`.
+       */
+      create: (workspace: string, input: NewObject): Promise<ObjectSummary> =>
+        writeObject(workspace, (mutationId, options) =>
+          api.objects.create(
+            {
+              workspace,
+              id: input.id,
+              singularName: input.singularName,
+              pluralName: input.pluralName,
+              ...(input.apiSlug === undefined ? {} : { apiSlug: input.apiSlug }),
+              icon: input.icon,
+              hue: input.hue,
+              mutationId,
+            },
+            options,
+          ),
+        ),
+      /** Renames or restyles an object (AC-224), waiting for the server. Refusals: `NAME_TAKEN`, `CONFIG_INVALID`. */
+      update: (workspace: string, objectId: string, changes: ObjectChanges): Promise<ObjectSummary> =>
+        writeObject(workspace, (mutationId, options) =>
+          api.objects.update({ workspace, objectId, ...changes, mutationId }, options),
+        ),
+      /** Moves an object to `position` in the workspace's order (AC-225), archived objects counted. */
+      reorder: (workspace: string, objectId: string, position: number): Promise<ObjectSummary[]> =>
+        writeObject(workspace, (mutationId, options) =>
+          api.objects.reorder({ workspace, objectId, position, mutationId }, options),
+        ),
+      /** Archives an object (AC-226): it leaves the sidebar; its records stay. */
+      archive: (workspace: string, objectId: string): Promise<ObjectSummary> =>
+        writeObject(workspace, (mutationId, options) =>
+          api.objects.archive({ workspace, objectId, mutationId }, options),
+        ),
+      /** Restores an archived object (AC-226), at its old place. */
+      restore: (workspace: string, objectId: string): Promise<ObjectSummary> =>
+        writeObject(workspace, (mutationId, options) =>
+          api.objects.restore({ workspace, objectId, mutationId }, options),
+        ),
+    },
+    usage: {
+      /**
+       * The workspace's usage of its limits (spec 0012, AC-243): the custom
+       * object meter for owners and admins, each object's attribute count.
+       * Cached until a definition changes.
+       */
+      get: readUsage,
     },
     members: {
       /** The workspace's active members, by name: the Owner column's names. Cached for the app load. */
@@ -941,6 +1071,15 @@ export function createDataLayer({
       },
       /** A new record's id: mint it once per form, and send the same one on every try, so nothing is made twice. */
       newId: () => mintId(),
+      /**
+       * How many live records an object holds (spec 0012: the archive
+       * confirm says so). One count, never cached: it is asked for once per
+       * confirm.
+       */
+      count: (workspace: string, objectId: string): Promise<number> =>
+        beforeRead(workspace)
+          .then(() => call((options) => api.records.count({ workspace, objectId }, options)))
+          .then((answer) => answer.count),
       /**
        * Makes a record at once (see the records layer) with `id` (from
        * `newId`); rejects with the refusals when the server says no. Sending the
