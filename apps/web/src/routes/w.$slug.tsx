@@ -1,5 +1,5 @@
 import { isDataError } from '@crm/data';
-import { createFileRoute, Outlet, redirect, useRouter } from '@tanstack/react-router';
+import { createFileRoute, Outlet, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { signInHref } from '../features/auth/redirect.ts';
 import { failedPage, missingPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { strings } from '../features/workspace/strings.ts';
@@ -46,8 +46,8 @@ function WorkspaceRoute() {
   return <Outlet />;
 }
 
-function WorkspaceError() {
+function WorkspaceError({ error }: ErrorComponentProps) {
   const router = useRouter();
   const workspaceName = useWorkspaceName();
-  return <WorkspacePage page={failedPage(workspaceName, () => void router.invalidate())} isFailed />;
+  return <WorkspacePage page={failedPage(workspaceName, () => void router.invalidate(), error)} isFailed />;
 }

@@ -10,7 +10,7 @@ export const strings = {
   noObjectsText: 'This workspace has no records to show yet.',
   loadingTitle: 'Loading',
   failedTitle: 'Couldn’t load this workspace',
-  failedText: 'Check your connection, then try again.',
+  failedText: 'Something went wrong. Try again in a moment.',
   workspaceMissingTitle: 'Workspace not found',
   workspaceMissingText: 'That workspace doesn’t exist, or you’re not a member of it.',
   pageMissingTitle: 'Page not found',
@@ -43,26 +43,30 @@ export const strings = {
   /** A failure the server didn't explain. */
   somethingWrong: 'Something went wrong. Try again in a moment.',
   /** Above the table while the live connection is down (AC-38). */
-  livePaused: 'Live updates are paused. Changes others make show here once the connection is back.',
+  livePaused: 'Live updates paused',
+  /** A row with no name ("Unnamed person"), muted in its row header. */
+  unnamed: (singularName: string) => `Unnamed ${singularName.toLowerCase()}`,
+  /** A linked record this person can't see, or that was deleted. */
+  unavailableRecord: 'Unavailable',
   /** Why a company or Owner cell can't be edited in this loop. */
   referenceReadOnly: 'You can’t change this here yet.',
   /** Spec 0006: a paste or range clear that landed, with Undo (AC-48). */
   /** Counts arrive formatted in the browser's language ("1,500"). */
-  pasted: (cells: string) => `Pasted into ${cells} cells`,
-  cleared: (cells: string) => `Cleared ${cells} cells`,
+  pasted: (cells: string) => `Pasted into ${cells} cells.`,
+  cleared: (cells: string) => `Cleared ${cells} cells.`,
   undo: 'Undo',
   /** A paste over more records, or more data, than one write takes (AC-50): nothing shows or saves. */
   pasteTooMany: (limit: string) => `Nothing was pasted. Paste into at most ${limit} records at once.`,
   pasteTooBig: 'Nothing was pasted. That’s more than one change can save, so paste fewer cells at once.',
   /** After an undo (AC-48, AC-49). */
-  undidCell: (attribute: string, record: string) => `Undid ${attribute} on ${record}`,
-  undidCells: (cells: string) => `Undid ${cells} changes`,
-  undidPaste: (cells: string) => `Undid the paste into ${cells} cells`,
-  undidClear: (cells: string) => `Undid the clear of ${cells} cells`,
+  undidCell: (attribute: string, record: string) => `Undid ${attribute} on ${record}.`,
+  undidCells: (cells: string) => `Undid ${cells} changes.`,
+  undidPaste: (cells: string) => `Undid the paste into ${cells} cells.`,
+  undidClear: (cells: string) => `Undid the clear of ${cells} cells.`,
   /** Cells an undo kept because they changed since; never says who (it may be the person, in another tab). */
   keptSince: (cells: number, shown: string) =>
     cells === 1 ? '1 cell was changed since, so it was kept.' : `${shown} cells were changed since, so they were kept.`,
-  nothingToUndo: 'Nothing to undo',
+  nothingToUndo: 'Nothing to undo.',
   /** A toast's Undo pressed after newer changes: nothing is undone. */
   undoStale: 'Newer changes came after that one, so it wasn’t undone. Undo them first.',
   /** The workspace menu's way to the shortcut list. */
@@ -78,6 +82,8 @@ export const strings = {
   anAutomation: 'An automation',
   /** ShortcutHelp, opened with ? anywhere in the workspace. */
   shortcutsEverywhere: 'Everywhere',
+  /** The new record dialog's one email field: one address here, more in the table. */
+  emailAddress: 'Email address',
   undoShortcut: 'Undo your last change',
   showShortcuts: 'Show keyboard shortcuts',
 } as const;

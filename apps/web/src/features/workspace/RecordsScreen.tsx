@@ -8,7 +8,10 @@ import {
   toFieldAttribute,
   type AttributeDefinition,
   type MemberSummary,
+  type NameState,
   type ObjectSummary,
+  type RecordRef,
+  type RecordRefDisplay,
   type RecordsView,
   type RecordView,
   type SortRule,
@@ -19,7 +22,7 @@ import { columnWidthFor, DataGrid, type GridColumn } from '@crm/ui/grid';
 import { useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AddAttributeDialog } from './AddAttributeDialog.tsx';
-import { queryOf, shownAttributes } from './columns.ts';
+import { avatarAttribute, listedAttributes, queryOf } from './columns.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
 import { strings } from './strings.ts';
 import { editToast, isClear } from './undo.ts';
@@ -41,6 +44,23 @@ export interface RecordsScreenProps {
   readonly sort: SortRule | undefined;
 }
 
+/** A reference value's links, as a list: one link, several, or none. */
+function refsOf(value: unknown): readonly RecordRef[] {
+  const list: readonly unknown[] = Array.isArray(value) ? value : value === null || value === undefined ? [] : [value];
+  return list.flatMap((each) => {
+    if (typeof each !== 'object' || each === null) return [];
+    const { objectId, recordId } = each as { readonly objectId?: unknown; readonly recordId?: unknown };
+    return typeof objectId === 'string' && typeof recordId === 'string' ? [{ objectId, recordId }] : [];
+  });
+}
+
+/** How a linked record shows while its name loads (no name: a skeleton chip) or when it can't be read. */
+function displayOf(ref: RecordRef, state: NameState): RecordRefDisplay {
+  if (state === 'loading') return { ...ref, name: '', kind: 'other' };
+  if (state === 'unknown') return { ...ref, name: strings.unavailableRecord, kind: 'other' };
+  return state;
+}
+
 /** A sort as one string, so a new object with the same sort is the same order. */
 const sortKey = (sort: SortRule | undefined) => (sort === undefined ? '' : `${sort.attributeId}:${sort.direction}`);
 
@@ -50,13 +70,19 @@ const isCellKnown = (row: RecordView, columnId: string) => Object.hasOwn(row.val
 /**
  * The grid's columns: the ones the person laid out (order and widths), with
  * any new attribute at its type's width before Created at, where it sits
- * when nothing was moved.
+ * when nothing was moved. A standard object opens with its opening columns
+ * shown and the rest hidden (`listedAttributes`).
  */
-function columnsFor(attributes: readonly AttributeDefinition[], laidOut: readonly GridColumn[]): readonly GridColumn[] {
-  const shown = shownAttributes(attributes);
-  const fresh = shown.map((definition) => {
+function columnsFor(
+  object: ObjectSummary,
+  attributes: readonly AttributeDefinition[],
+  laidOut: readonly GridColumn[],
+): readonly GridColumn[] {
+  const listed = listedAttributes(object, attributes);
+  const shown = listed.map((each) => each.definition);
+  const fresh = listed.map(({ definition, isHidden }) => {
     const attribute = toFieldAttribute(definition, strings.referenceReadOnly);
-    return { id: definition.id, attribute, width: columnWidthFor(attribute) };
+    return { id: definition.id, attribute, width: columnWidthFor(attribute), ...(isHidden ? { isHidden } : {}) };
   });
   if (laidOut.length === 0) return fresh;
   const byId = new Map(fresh.map((column) => [column.id, column]));
@@ -84,12 +110,14 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
     columns: [],
     pinnedCount: 1,
   });
-  const columns = useMemo(() => columnsFor(attributes, layout.columns), [attributes, layout.columns]);
+  const columns = useMemo(() => columnsFor(object, attributes, layout.columns), [object, attributes, layout.columns]);
+  // The row's picture (People's Avatar) sits in the Name cell, so it is read even while its column is hidden.
+  const avatar = useMemo(() => avatarAttribute(object, attributes), [object, attributes]);
   // Only the columns on screen are read (spec 0006, AC-55); showing a hidden one reads it for the loaded rows.
-  const visible = useMemo(
-    () => columns.filter((column) => column.isHidden !== true).map((column) => column.id),
-    [columns],
-  );
+  const visible = useMemo(() => {
+    const shownIds = columns.filter((column) => column.isHidden !== true).map((column) => column.id);
+    return avatar === undefined || shownIds.includes(avatar.id) ? shownIds : [...shownIds, avatar.id];
+  }, [columns, avatar]);
   // An order that arrived while a cell was being edited waits until the editor closes, so the draft keeps its row.
   const isEditing = useRef(false);
   const waiting = useRef<typeof shown | undefined>(undefined);
@@ -136,6 +164,10 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
   const memberDisplays = useMemo(() => toActorDisplays(members), [members]);
   const actorColumns = useMemo(
     () => new Set(attributes.filter((attribute) => attribute.type === 'actor_reference').map((each) => each.id)),
+    [attributes],
+  );
+  const referenceColumns = useMemo(
+    () => new Set(attributes.filter((attribute) => attribute.type === 'record_reference').map((each) => each.id)),
     [attributes],
   );
   const [isCreating, setCreating] = useState(false);
@@ -195,8 +227,14 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
             onViewChange={() => undefined}
           >
             {isReordering && <Spinner label={strings.sorting} />}
+            {/* In the bar, so the table never moves when the connection drops and comes back. */}
+            {live === 'paused' && (
+              <Callout placement="bar" isAnnounced>
+                {strings.livePaused}
+              </Callout>
+            )}
             {canChangeSchema && (
-              <Button icon="plus" onPress={() => setAdding(true)}>
+              <Button variant="ghost" icon="plus" onPress={() => setAdding(true)}>
                 {strings.addAttribute}
               </Button>
             )}
@@ -204,11 +242,6 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
         ),
         body: (
           <>
-            {live === 'paused' && (
-              <Callout placement="banner" isAnnounced>
-                {strings.livePaused}
-              </Callout>
-            )}
             <DataGrid<RecordView>
               label={object.pluralName}
               columns={columns}
@@ -232,8 +265,25 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
               {...(shown.sort === undefined
                 ? {}
                 : { sort: { columnId: shown.sort.attributeId, direction: shown.sort.direction } })}
-              getDisplay={(_row, columnId) => (actorColumns.has(columnId) ? memberDisplays : undefined)}
+              getDisplay={(row, columnId) => {
+                if (actorColumns.has(columnId)) return memberDisplays;
+                if (!referenceColumns.has(columnId)) return undefined;
+                // The linked records' names, read by the data layer (a person's Company), never "Unknown".
+                const refs = refsOf(row.values[columnId]);
+                if (refs.length === 0) return undefined;
+                const names = state.referenceDisplays(refs);
+                return refs.map((ref, index) => displayOf(ref, names[index] ?? 'loading'));
+              }}
               rowHeader={rowHeader}
+              untitled={strings.unnamed(object.singularName)}
+              {...(avatar === undefined
+                ? {}
+                : {
+                    rowAvatar: (row: RecordView) => {
+                      const src = row.values[avatar.id];
+                      return typeof src === 'string' && src !== '' ? src : undefined;
+                    },
+                  })}
               onColumnsChange={(next, pinnedCount) => {
                 setLayout({ columns: next, pinnedCount });
               }}
@@ -262,6 +312,8 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
               cellErrors={state.cellErrors}
               status={state.status}
               onRetry={view.retry}
+              // What failed, in the data layer's words: "Can't reach the CRM" only when the network did.
+              {...(state.error === undefined ? {} : { errorText: state.error.message })}
               members={memberDisplays}
               emptyState={
                 <EmptyState

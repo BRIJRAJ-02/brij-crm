@@ -1,5 +1,5 @@
 import { isDataError } from '@crm/data';
-import { createFileRoute, redirect, useRouter } from '@tanstack/react-router';
+import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { failedPage, noObjectsPage, pendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { navObjects } from '../features/workspace/objects.ts';
 import { strings } from '../features/workspace/strings.ts';
@@ -33,8 +33,8 @@ function NoObjects() {
   return <WorkspacePage page={noObjectsPage(useWorkspaceName() ?? strings.product)} />;
 }
 
-function IndexError() {
+function IndexError({ error }: ErrorComponentProps) {
   const router = useRouter();
   const workspaceName = useWorkspaceName();
-  return <WorkspacePage page={failedPage(workspaceName, () => void router.invalidate())} />;
+  return <WorkspacePage page={failedPage(workspaceName, () => void router.invalidate(), error)} />;
 }

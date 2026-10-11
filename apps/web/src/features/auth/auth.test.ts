@@ -3,7 +3,7 @@
 // storage, and the resend countdown.
 import { dataError } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { googleRefusal, resendRefusal, sendRefusal, verifyRefusal } from './messages.ts';
+import { googleRefusal, isAboutAddress, resendRefusal, sendRefusal, verifyRefusal } from './messages.ts';
 import { clearPending, readLastEmail, readPending, saveLastEmail, savePending } from './pending.ts';
 import { redirectSearch, safeRedirect, signInHref } from './redirect.ts';
 import { strings } from './strings.ts';
@@ -147,6 +147,15 @@ describe('what a refused step says', () => {
     );
     expect(sendRefusal(dataError('RATE_LIMITED', 'Too many codes.'))).toBe('Too many codes.');
     expect(sendRefusal(dataError('API_UNAVAILABLE', 'Can’t reach the CRM.'))).toBe('Can’t reach the CRM.');
+  });
+
+  it('puts only a refusal of the address itself on the email field', () => {
+    expect(isAboutAddress(dataError('INPUT_INVALID', 'Enter an email address.'))).toBe(true);
+    // About signing in, not the address: above the form, never a red field.
+    expect(isAboutAddress(dataError('SIGNUP_CLOSED', 'Sign up is closed.'))).toBe(false);
+    expect(isAboutAddress(dataError('RATE_LIMITED', 'Too many codes.', undefined, 600))).toBe(false);
+    expect(isAboutAddress(dataError('API_UNAVAILABLE', 'Can’t reach the CRM.'))).toBe(false);
+    expect(isAboutAddress(new Error('boom'))).toBe(false);
   });
 
   it('leaves the wait out of a rate limited resend, since the wait line counts it', () => {

@@ -5,6 +5,7 @@
 import type { DataLayer, ObjectSummary } from '@crm/data';
 import {
   AppShell,
+  GRID_SHORTCUTS,
   Menu,
   MenuItem,
   MenuSection,
@@ -95,6 +96,8 @@ export function WorkspaceFrame({
       sidebar={
         <Sidebar
           workspace={workspaceName ?? strings.product}
+          // Not known yet: skeletons, never the product's name as a stand in that then changes.
+          isWorkspaceLoading={workspaceName === undefined && !isMissing}
           isWorkspaceBusy={isSigningOut}
           workspaceBusyLabel={strings.signingOut}
           workspaceMenu={
@@ -120,7 +123,12 @@ export function WorkspaceFrame({
             </Menu>
           }
           footer={({ isCollapsed }) => (
-            <ThemeSwitch controller={theme} isCompact orientation={isCollapsed ? 'vertical' : 'horizontal'} />
+            // Words beside the icons while there is room; icons alone (named in tooltips) in the folded rail.
+            <ThemeSwitch
+              controller={theme}
+              isCompact={isCollapsed}
+              orientation={isCollapsed ? 'vertical' : 'horizontal'}
+            />
           )}
         >
           {!isMissing && (
@@ -153,6 +161,7 @@ export function WorkspaceFrame({
               { label: strings.showShortcuts, keys: ['?'] },
             ],
           },
+          GRID_SHORTCUTS,
         ]}
       />
     </AppShell>

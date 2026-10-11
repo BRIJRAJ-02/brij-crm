@@ -83,7 +83,7 @@ export function undoToast(result: UndoResult): ToastContent | undefined {
   const kept = result.kept > 0 ? strings.keptSince(result.kept, count(result.kept)) : undefined;
   if (result.undone === 0) return kept === undefined ? undefined : { tone: 'success', message: kept };
   const undid = undidWords(result);
-  return { tone: 'success', message: kept === undefined ? undid : `${undid}. ${kept}` };
+  return { tone: 'success', message: kept === undefined ? undid : `${undid} ${kept}` };
 }
 
 /**

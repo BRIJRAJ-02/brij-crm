@@ -1,6 +1,6 @@
 import { isDataError } from '@crm/data';
-import { createFileRoute, useRouter } from '@tanstack/react-router';
-import { defaultSort, queryOf, shownAttributes } from '../features/workspace/columns.ts';
+import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
+import { defaultSort, queryOf, readAttributeIds } from '../features/workspace/columns.ts';
 import { failedPage, missingPage, objectPendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { RecordsScreen } from '../features/workspace/RecordsScreen.tsx';
 import { strings } from '../features/workspace/strings.ts';
@@ -25,7 +25,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object')({
     // The view reads only the columns the table shows, in its opening order (newest first, spec 0006).
     const attributes = await context.data.attributes.list(params.slug, object.id);
     const sort = defaultSort(attributes);
-    const columns = shownAttributes(attributes).map((attribute) => attribute.id);
+    const columns = readAttributeIds(object, attributes);
     const [members, view] = await Promise.all([
       membersLoading,
       context.data.records.view(params.slug, object.id, queryOf(sort), columns),
@@ -46,8 +46,8 @@ function ObjectRoute() {
   return <RecordsScreen slug={params.slug} {...table} />;
 }
 
-function ObjectError() {
+function ObjectError({ error }: ErrorComponentProps) {
   const router = useRouter();
   const workspaceName = useWorkspaceName();
-  return <WorkspacePage page={failedPage(workspaceName, () => void router.invalidate())} />;
+  return <WorkspacePage page={failedPage(workspaceName, () => void router.invalidate(), error)} />;
 }

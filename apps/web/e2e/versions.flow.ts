@@ -141,7 +141,7 @@ test.describe('versions, the replaced notice and undo between two members', () =
 
     // Bea's live connection drops, so she doesn't see Ada's next save: both start from the same version.
     await bea.realtime.drop();
-    await expect(bea.page.getByText('Live updates are paused')).toBeVisible();
+    await expect(bea.page.getByText('Live updates paused')).toBeVisible();
     await edit(ada, 0, 'Job title', 'Principal');
     await expect(await cellAt(bea.page, 0, 'Job title')).toContainText('Lead analyst');
     const notice = 'Bea changed Job title on Grace Hopper just after you, so your value was replaced.';
@@ -203,7 +203,7 @@ test.describe('versions, the replaced notice and undo between two members', () =
       ['Mathematician', 'Bletchley'],
       ['Scientist', 'Eindhoven'],
     ]);
-    await expect(ada.getByText('Pasted into 6 cells')).toBeVisible();
+    await expect(ada.getByText('Pasted into 6 cells.')).toBeVisible();
     // The toast region is marked, so undo still answers while focus sits on a toast's button.
     await expect(ada.locator('[data-toast-region]')).toHaveCount(1);
     // Said once, by the screen once the write landed: the grid's own confirmation is off.
@@ -239,7 +239,7 @@ test.describe('versions, the replaced notice and undo between two members', () =
     // The second press undoes the edit before it.
     await pressUndo(ada);
     // Newest first (spec 0006, AC-57): row 3 is the first person made, Grace Hopper.
-    await expect(ada.getByText('Undid Job title on Grace Hopper')).toBeVisible();
+    await expect(ada.getByText('Undid Job title on Grace Hopper.')).toBeVisible();
     await expect(await cellAt(ada, 3, 'Job title')).not.toContainText('Professor');
 
     // Inside a text field the key is the field's own.
@@ -247,7 +247,7 @@ test.describe('versions, the replaced notice and undo between two members', () =
     await cell.click();
     await ada.keyboard.type('Draft');
     await pressUndo(ada);
-    await expect(ada.getByText('Nothing to undo')).toHaveCount(0);
+    await expect(ada.getByText('Nothing to undo.')).toHaveCount(0);
     await ada.keyboard.press('Escape');
 
     // ? lists the shortcut, from anywhere but a text field or a grid cell (where typing starts an edit).

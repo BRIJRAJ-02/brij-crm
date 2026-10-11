@@ -39,7 +39,9 @@ export interface NewRecordDialogProps {
  * on its way to Create, as the list's chips did when a blur added one.
  */
 function askedFor(definition: AttributeDefinition) {
-  return { ...toFieldAttribute(definition), allowMultiple: false };
+  const attribute = { ...toFieldAttribute(definition), allowMultiple: false };
+  // One field asks for one address, so its label says one ("Email address", not "Email addresses").
+  return definition.type === 'email' && definition.isMulti ? { ...attribute, name: strings.emailAddress } : attribute;
 }
 
 /**
@@ -103,10 +105,10 @@ export function NewRecordDialog({
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy}>
+          <Button slot="close" isDisabled={isBusy} kbd="ESC">
             {strings.cancel}
           </Button>
-          <Button variant="primary" type="submit" form={formId} isPending={isBusy}>
+          <Button variant="primary" type="submit" form={formId} isPending={isBusy} kbd="⌘↵">
             {isBusy ? strings.creating : strings.create}
           </Button>
         </>
@@ -188,7 +190,7 @@ function NewRecordForm({
   };
 
   return (
-    <Form id={formId} isBusy={isBusy} refusals={refusals} onSubmit={create} label={label}>
+    <Form id={formId} isBusy={isBusy} refusals={refusals} onSubmit={create} label={label} focusesFirstField>
       {editors.map((definition) => {
         const error = fieldErrors.get(definition.id);
         return (

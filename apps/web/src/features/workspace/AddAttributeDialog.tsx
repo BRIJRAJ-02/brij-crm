@@ -114,10 +114,10 @@ export function AddAttributeDialog({ isOpen, onOpenChange, onAdd, onAdded }: Add
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy}>
+          <Button slot="close" isDisabled={isBusy} kbd="ESC">
             {strings.cancel}
           </Button>
-          <Button variant="primary" type="submit" form={formId} isPending={isBusy}>
+          <Button variant="primary" type="submit" form={formId} isPending={isBusy} kbd="⌘↵">
             {isBusy ? strings.creating : strings.create}
           </Button>
         </>
@@ -130,6 +130,7 @@ export function AddAttributeDialog({ isOpen, onOpenChange, onAdd, onAdded }: Add
         fieldFor={(refusal) => refusal.attributeId}
         onSubmit={add}
         label={strings.addAttribute}
+        focusesFirstField
       >
         <Field
           label={strings.attributeName}

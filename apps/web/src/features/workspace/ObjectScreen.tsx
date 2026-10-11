@@ -2,6 +2,7 @@
 // Purpose: the states of a page inside a workspace around its content: loading, failed, missing, or no objects.
 // Main task: say plainly what happened and offer the way on (Try again, or open your workspace).
 // Leaves out: the records themselves, which RecordsScreen shows.
+import { isDataError } from '@crm/data';
 import { EmptyState, Link, TopBar, ViewBar } from '@crm/ui';
 import { strings } from './strings.ts';
 
@@ -41,15 +42,20 @@ export function objectPendingPage() {
   };
 }
 
-/** The workspace's page when loading failed: under the workspace's name (when known), what happened, what to do, and a retry. */
-export function failedPage(workspaceName: string | undefined, onRetry: () => void) {
+/**
+ * The workspace's page when loading failed: under the workspace's name (when
+ * known), what happened, what to do, and a retry. `error` says what went wrong
+ * in the data layer's words ("Can't reach the CRM" only when the network
+ * failed); anything else gets a plain "try again".
+ */
+export function failedPage(workspaceName: string | undefined, onRetry: () => void, error?: unknown) {
   return {
     // Before the workspace is known, the product names the page, so the body
     // says "Couldn’t load this workspace" once, not twice.
     topBar: <TopBar title={workspaceName ?? strings.product} />,
     body: (
       <EmptyState tone="error" title={strings.failedTitle} onRetry={onRetry}>
-        {strings.failedText}
+        {isDataError(error) ? error.message : strings.failedText}
       </EmptyState>
     ),
   };

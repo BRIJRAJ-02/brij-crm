@@ -6,7 +6,7 @@ import type { DataLayer } from '@crm/data';
 import { AuthLayout, SignInForm, type SignInStatus } from '@crm/ui';
 import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
-import { googleRefusal, sendRefusal } from './messages.ts';
+import { googleRefusal, isAboutAddress, sendRefusal } from './messages.ts';
 import { savePending, sessionStore } from './pending.ts';
 import { strings } from './strings.ts';
 
@@ -29,8 +29,9 @@ export interface SignInScreenProps {
 export function SignInScreen({ data, google, redirect, returnTo, googleError, email }: SignInScreenProps) {
   const navigate = useNavigate();
   const [status, setStatus] = useState<SignInStatus>('idle');
-  // A refused send is about the address, so it shows on the field; a refused
-  // Google sign in is about the sign in, so it shows above the form.
+  // A refused send about the address (not one) shows on the field; any other
+  // refusal (sign up closed, too many tries, a refused Google sign in) is
+  // about signing in, so it shows above the form.
   const [error, setError] = useState<string | undefined>(undefined);
   const [notice, setNotice] = useState<string | undefined>(() =>
     googleError === undefined ? undefined : googleRefusal(googleError),
@@ -58,6 +59,7 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, em
 
   const sendCode = (address: string) => {
     setNotice(undefined);
+    setError(undefined);
     setStatus('sending');
     data.auth.sendCode(address).then(
       () => {
@@ -66,7 +68,12 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, em
       },
       (failure: unknown) => {
         setStatus('idle');
-        setError(sendRefusal(failure));
+        if (isAboutAddress(failure)) {
+          setError(sendRefusal(failure));
+        } else {
+          setError(undefined);
+          setNotice(sendRefusal(failure));
+        }
       },
     );
   };

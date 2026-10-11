@@ -20,6 +20,16 @@ export function sendRefusal(error: unknown): string {
 }
 
 /**
+ * Whether a refused send is about the address typed (it isn't one), so it
+ * belongs on the email field. Anything else (sign up closed, too many tries,
+ * the server down) is about signing in, and shows above the form: a red field
+ * would say the address was wrong when it wasn't.
+ */
+export function isAboutAddress(error: unknown): boolean {
+  return isDataError(error) && error.code === 'INPUT_INVALID';
+}
+
+/**
  * Why "Send a new code" was refused on `/verify`. A rate limit says only what
  * happened: the wait line under the button counts the server's wait down, so
  * the time isn't said twice (and the Callout's copy never goes stale).

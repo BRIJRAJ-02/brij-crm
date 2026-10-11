@@ -150,7 +150,7 @@ test.describe('catch up after a long drop', () => {
 
     // Away: 150 edits across the forty, and a new column.
     await realtime.drop();
-    await expect(reader.getByText('Live updates are paused')).toBeVisible();
+    await expect(reader.getByText('Live updates paused')).toBeVisible();
     const finalTitle = new Map<number, string>();
     for (let edit = 0; edit < EDITS; edit += 1) {
       // Thirty of the forty change; the last ten stay as they were, so a refetch of one would show.
@@ -217,7 +217,7 @@ test.describe('catch up after a long drop', () => {
     const shownMs = Date.now() - back;
     testInfo.annotations.push({ type: 'catch up shown after (ms)', description: String(shownMs) });
     expect(shownMs).toBeLessThan(BUDGET_MS);
-    await expect(reader.getByText('Live updates are paused')).toHaveCount(0);
+    await expect(reader.getByText('Live updates paused')).toHaveCount(0);
 
     // From the outbox, with no reload and no refetch of a row that didn't change.
     expect(navigations).toBe(0);

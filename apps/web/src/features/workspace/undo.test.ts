@@ -82,22 +82,22 @@ describe('the undo toast', () => {
   });
 
   it('names the one cell, the paste or the clear it undid, and the cells it kept', () => {
-    expect(undoToast(undone({}))).toEqual({ tone: 'success', message: 'Undid Email on Jane Doe' });
+    expect(undoToast(undone({}))).toEqual({ tone: 'success', message: 'Undid Email on Jane Doe.' });
     expect(undoToast(undone({ action: 'paste', cells: 40, undone: 40 }))?.message).toBe(
-      'Undid the paste into 40 cells',
+      'Undid the paste into 40 cells.',
     );
-    expect(undoToast(undone({ action: 'clear', cells: 6, undone: 6 }))?.message).toBe('Undid the clear of 6 cells');
+    expect(undoToast(undone({ action: 'clear', cells: 6, undone: 6 }))?.message).toBe('Undid the clear of 6 cells.');
     expect(undoToast(undone({ action: 'paste', cells: 40, undone: 38, kept: 2 }))?.message).toBe(
       'Undid the paste into 40 cells. 2 cells were changed since, so they were kept.',
     );
     expect(undoToast(undone({ undone: 0, kept: 1 }))?.message).toBe('1 cell was changed since, so it was kept.');
-    expect(undoToast({ kind: 'nothing' })?.message).toBe('Nothing to undo');
+    expect(undoToast({ kind: 'nothing' })?.message).toBe('Nothing to undo.');
     expect(undoToast({ kind: 'stale' })).toMatchObject({
       tone: 'danger',
       message: expect.stringMatching(/wasn’t undone/) as string,
     });
     expect(undoToast(undone({ action: 'paste', cells: 1500, undone: 1500 }))?.message).toBe(
-      `Undid the paste into ${new Intl.NumberFormat().format(1500)} cells`,
+      `Undid the paste into ${new Intl.NumberFormat().format(1500)} cells.`,
     );
     // Refused for another reason: that refusal already raised its own toast.
     expect(undoToast(undone({ undone: 0, failed: 1 }))).toBeUndefined();
@@ -109,11 +109,11 @@ describe('the edit toast (AC-48, AC-50)', () => {
     const undid: string[] = [];
     const onUndo = (undoId: string) => undid.push(undoId);
     const toast = editToast({ kind: 'done', cells: 40, landed: 40, undoId: 'm1' }, 'paste', onUndo);
-    expect(toast).toMatchObject({ tone: 'success', message: 'Pasted into 40 cells', action: { label: 'Undo' } });
+    expect(toast).toMatchObject({ tone: 'success', message: 'Pasted into 40 cells.', action: { label: 'Undo' } });
     toast?.action?.onAction();
     expect(undid).toEqual(['m1']);
     expect(editToast({ kind: 'done', cells: 6, landed: 4, undoId: 'm2' }, 'clear', onUndo)?.message).toBe(
-      'Cleared 4 cells',
+      'Cleared 4 cells.',
     );
     expect(editToast({ kind: 'done', cells: 1, landed: 1, undoId: 'm3' }, 'cell', onUndo)).toBeUndefined();
     expect(editToast({ kind: 'done', cells: 6, landed: 0 }, 'paste', onUndo)).toBeUndefined();

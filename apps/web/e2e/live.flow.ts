@@ -106,7 +106,7 @@ test.describe('live updates between two browsers', () => {
     await expect(reader.getByText('No people yet')).toBeVisible();
     await expect.poll(() => realtime.subscribes(), { message: "the reader's live subscription" }).toBeGreaterThan(0);
     // Live: nothing says otherwise.
-    await expect(reader.getByText('Live updates are paused')).toHaveCount(0);
+    await expect(reader.getByText('Live updates paused')).toHaveCount(0);
 
     // The writer's own changes never come back to it as fetches.
     let writerRefetches = 0;
@@ -186,7 +186,7 @@ test.describe('live updates between two browsers', () => {
     const readerTitle = await cellAt(reader, 0, 'Job title');
     const subscribesBefore = realtime.subscribes();
     await realtime.drop();
-    await expect(reader.getByText('Live updates are paused')).toBeVisible();
+    await expect(reader.getByText('Live updates paused')).toBeVisible();
     await checkScreen(reader, 'live-paused');
     // A change made meanwhile reaches it once the connection is back (recovered from the channel's history).
     const missed = await cellAt(writer, 0, 'Job title');
@@ -198,7 +198,7 @@ test.describe('live updates between two browsers', () => {
     realtime.restore();
     await expect.poll(() => realtime.subscribes(), { timeout: 30_000 }).toBeGreaterThan(subscribesBefore);
     await expect(readerTitle).toContainText('While paused');
-    await expect(reader.getByText('Live updates are paused')).toHaveCount(0);
+    await expect(reader.getByText('Live updates paused')).toHaveCount(0);
     await picture(reader, '4-reader-back');
 
     await readerContext.close();
