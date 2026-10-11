@@ -49,6 +49,12 @@ export const ERROR_MAP = {
   LAST_OWNER: CONFLICT,
   // Undo's precondition (spec 0006, AC-49): the cell changed since the version the write names.
   VERSION_CHANGED: CONFLICT,
+  // Background jobs (spec 0008): the job already ended, its kind can't be cancelled, it isn't waiting for a
+  // confirm, or it waited past its hour unconfirmed.
+  JOB_FINISHED: CONFLICT,
+  JOB_NOT_CANCELLABLE: CONFLICT,
+  JOB_NOT_READY: CONFLICT,
+  JOB_EXPIRED: CONFLICT,
   PAYLOAD_TOO_LARGE: { status: 413 },
   ATTRIBUTE_VALUE_INVALID: UNPROCESSABLE,
   VALUE_REQUIRED: UNPROCESSABLE,
@@ -56,6 +62,8 @@ export const ERROR_MAP = {
   ATTRIBUTE_READ_ONLY: UNPROCESSABLE,
   CONFIG_INVALID: UNPROCESSABLE,
   FILTER_INVALID: UNPROCESSABLE,
+  // A job past a million items (spec 0008, AC-116).
+  JOB_TOO_LARGE: UNPROCESSABLE,
   // The fallback wait when the limiter gives none of its own.
   RATE_LIMITED: { status: 429, retryAfterSeconds: 60 },
   // Too many heavy reads in flight for one workspace at once; one finishing frees a place.

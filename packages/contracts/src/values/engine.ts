@@ -23,6 +23,12 @@ export const ENGINE_REFUSAL_CODES = [
   'FORBIDDEN',
   'LAST_OWNER',
   'VERSION_CHANGED',
+  // Background jobs (spec 0008).
+  'JOB_FINISHED',
+  'JOB_NOT_CANCELLABLE',
+  'JOB_NOT_READY',
+  'JOB_EXPIRED',
+  'JOB_TOO_LARGE',
 ] as const;
 
 /** One of the engine's refusal codes. */

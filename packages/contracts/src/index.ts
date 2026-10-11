@@ -1,5 +1,6 @@
 import { accessContract } from './access.ts';
 import { attributesContract } from './attributes.ts';
+import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
 import { membersContract } from './members.ts';
 import { objectsContract } from './objects.ts';
@@ -12,6 +13,7 @@ export * from './access.ts';
 export * from './attributes.ts';
 export * from './change-event.ts';
 export * from './errors.ts';
+export * from './jobs.ts';
 export * from './me.ts';
 export * from './members.ts';
 export * from './objects.ts';
@@ -37,4 +39,5 @@ export const contract = {
   members: membersContract,
   access: accessContract,
   realtime: realtimeContract,
+  jobs: jobsContract,
 };
