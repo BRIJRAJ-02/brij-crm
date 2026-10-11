@@ -41,6 +41,13 @@
     gap: var(--space-2);
   }
 
+  /* A touch only device has no keys to press: the keycaps go, as ShortcutHelp leaves held keys out there. */
+  @media (hover: none) and (pointer: coarse) {
+    .keys {
+      display: none;
+    }
+  }
+
   /* Sizes */
   .root[data-full-width] {
     inline-size: 100%;

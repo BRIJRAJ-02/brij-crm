@@ -24,15 +24,25 @@
     border-radius: 0;
   }
 
-  /* In a bar: one line at a control's height, so it fits beside the bar's buttons and never moves the view. */
+  /* In a bar: one quiet line (its tone's icon and text, no fill or edge, so it never reads as a button) at a
+     control's height, so it fits beside the bar's buttons and never moves the view; a long one is cut short. */
   .root[data-placement='bar'] {
     align-items: center;
     gap: var(--space-6);
     box-sizing: border-box;
+    min-inline-size: 0;
     block-size: var(--size-control);
     padding-block: 0;
-    padding-inline: var(--space-8);
+    padding-inline: var(--space-4);
+    overflow: hidden;
+    border-color: transparent;
+    background: transparent;
     white-space: nowrap;
+  }
+
+  .root[data-placement='bar'] .text {
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .root[data-tone='info'] {

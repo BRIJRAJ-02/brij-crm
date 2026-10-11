@@ -87,6 +87,7 @@ export function Sidebar({
   // Below the compact breakpoint the shell folds it, and it stays folded.
   const { isCompact } = useContext(AppShellContext);
   const isCollapsed = isCollapsedProp || isCompact;
+  const showWorkspaceSkeleton = useDelayedLoading(isWorkspaceLoading);
   const onCollapsedChange = isCompact ? undefined : onCollapsedChangeProp;
   const spinner = <Spinner {...(workspaceBusyLabel === undefined ? {} : { label: workspaceBusyLabel })} />;
   const mark =
@@ -107,8 +108,9 @@ export function Sidebar({
         <div className={styles.head}>
           {isWorkspaceLoading ? (
             <span className={styles.workspace} aria-busy="true">
-              <Skeleton shape="tile" />
-              {!isCollapsed && <Skeleton width="medium" />}
+              {/* After the loading delay, so a quick load flashes nothing. */}
+              {showWorkspaceSkeleton && <Skeleton shape="tile" />}
+              {showWorkspaceSkeleton && !isCollapsed && <Skeleton width="medium" />}
               <VisuallyHidden>{strings.loadingWorkspace}</VisuallyHidden>
             </span>
           ) : workspaceMenu === undefined ? (

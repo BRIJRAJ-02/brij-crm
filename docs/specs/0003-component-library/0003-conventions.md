@@ -153,7 +153,7 @@ const toasts = createToasts();        // once, in main.tsx; also passed to creat
   - The `ToastRegion` for `toasts`.
 - `createToasts()` returns `{ toast({ tone, message, action? }), dismiss(id), queue }` and holds no module level state. Storybook creates one per story.
   - Confirmations last 5 seconds, paused while hovered or focused.
-  - Errors, and toasts with an action, stay until dismissed.
+  - Errors with no action leave after 8 seconds (paused while hovered or focused); toasts with an action stay until dismissed.
   - At most three show at once, and older ones queue.
 - `useDelayedLoading(isLoading)` returns whether to show the skeleton (200 ms delay, 300 ms minimum).
 - `apps/web/src/main.tsx` passes the browser's language and time zone today. When #23 adds them to the profile, the saved values are passed instead, and no component changes.

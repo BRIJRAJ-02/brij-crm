@@ -34,7 +34,7 @@ export const strings = {
   noAccess: 'You don’t have access to this view',
   noAccessText: 'Ask a workspace admin to share it with you.',
   notLoaded: 'Scroll to load these rows first.',
-  copied: (count: string) => (count === '1' ? 'Copied 1 cell' : `Copied ${count} cells`),
+  copied: (count: string) => (count === '1' ? 'Copied 1 cell.' : `Copied ${count} cells.`),
   pasted: (count: string) => (count === '1' ? 'Pasted 1 cell.' : `Pasted ${count} cells.`),
   /** A paste that left some cells: how many, then each cause. */
   notPasted: (count: string, causes: string) =>

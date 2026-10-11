@@ -73,4 +73,6 @@ The ⌘ key on a Mac, Ctrl elsewhere (Mod):
 
 ## Differences from the artifact
 
+- Column headers are 13px medium (`body-strong`), as the artifact's README asks, not the 11px label they first had (owner decision, 8 Oct 2026).
+
 The artifact's `DataTable` card drew a static table. This is the grid the spec describes: virtualised rows and columns, rows from outside, editing in place through the field set, and column state that leaves through `onColumnsChange`. A select or status opens as its list on the cell, with no popover around it, so one key reaches the choices.

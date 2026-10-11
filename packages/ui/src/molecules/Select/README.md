@@ -24,7 +24,7 @@ Ported from the artifact's Select card (version 8). It is the editor for select 
 
 ## States
 
-Placeholder, chosen, hover (pointer only), focus and open (accent border and ring), invalid, read only, disabled. The list opens from the keyboard at once and grows from the trigger for a pointer.
+Placeholder, chosen, focus and open (a 1px `accent-line` border and the faint halo), outlined in `control-border` at rest like a Field (3:1 on every surface), invalid, read only, disabled. The list opens from the keyboard at once and grows from the trigger for a pointer.
 
 ## Keyboard
 

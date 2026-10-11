@@ -48,7 +48,7 @@
 
   /* Read by the last pinned header and cells (an inherited custom property): an edge over what scrolls under them. */
   .root[data-scrolled-x] {
-    --pinned-edge: var(--space-2) 0 var(--space-4) calc(-1 * var(--space-2)) var(--scrim);
+    --pinned-edge: var(--shadow-pinned-edge);
   }
 
   .header {
