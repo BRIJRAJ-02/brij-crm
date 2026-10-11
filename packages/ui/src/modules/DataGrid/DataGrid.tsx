@@ -553,6 +553,26 @@ export function DataGrid<Row>({
     clearTimeout(hoverTimer.current);
     setTip(undefined);
   };
+  // Rows recycle their elements, and focusing a row gives it an element of its own, so the element a tip was
+  // anchored to can come to draw another row. After each render the tip finds its cell again, by its place,
+  // and opens afresh there; a cell that has gone, or has nothing to say now, closes it. Every render, since
+  // a scroll step recycles rows without changing the tip; it settles at once, as the anchor it sets is the
+  // cell it checks for.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    if (tip === undefined) return;
+    const cellKey = tip.key.slice(0, tip.key.lastIndexOf(':'));
+    const anchor = tipAnchor.current;
+    if (anchor?.isConnected === true && anchor.closest('[data-cell]')?.getAttribute('data-cell') === cellKey) return;
+    const found = scrollRef.current?.querySelector<HTMLElement>(`[data-cell="${cellKey}"]`);
+    const next = found === null || found === undefined ? undefined : tipIn(found);
+    if (next === undefined) {
+      setTip(undefined);
+      return;
+    }
+    tipAnchor.current = next.anchor;
+    setTip({ ...tip, key: `${tip.key}+`, text: next.text });
+  });
   // A pointer resting on a cell shows its tip after the tooltip delay, or at
   // once while another is showing; keyboard focus shows it at once.
   const onPointerOver = (event: PointerEvent<HTMLDivElement>) => {
@@ -572,7 +592,10 @@ export function DataGrid<Row>({
       return;
     }
     hoverTimer.current = setTimeout(() => {
-      if (hoveredCell.current === key) showTip(cell, 'hover');
+      if (hoveredCell.current !== key) return;
+      // By its place, not the element hovered: a click meanwhile may have given that element another row.
+      const current = scrollRef.current?.querySelector<HTMLElement>(`[data-cell="${key ?? ''}"]`);
+      if (current !== null && current !== undefined) showTip(current, 'hover');
     }, TOOLTIP_DELAY_MS);
   };
   const onPointerLeave = () => {
@@ -919,6 +942,9 @@ export function DataGrid<Row>({
     if (resizing !== undefined && position.row >= 0) setResizing(undefined);
     setTipDismissed(false);
     setFocusAt(position);
+    // The focused row takes an element of its own as it renders, and the element just focused goes on to
+    // draw another row: focus follows to the cell's new element once it has rendered.
+    pendingFocus.current = true;
   };
   // Focus that left the grid is gone; focus that fell to the page because its
   // cell left the page comes back to the focused cell.
