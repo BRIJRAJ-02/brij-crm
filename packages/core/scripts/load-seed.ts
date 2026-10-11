@@ -20,6 +20,7 @@ import {
   assertLoginsApart,
   isLoadStackDatabase,
   LOAD_DIR,
+  LOAD_STACK,
   loadRefusal,
   loadUrls,
   runLoadCommand,
@@ -40,7 +41,11 @@ function dbScript(name: string, env: Readonly<Record<string, string>>): void {
   if (result.status !== 0) throw new Error(`packages/db/scripts/${name} failed (exit ${String(result.status)}).`);
 }
 
-/** Migrations, then the app login (as PgBouncer connects) and the identity login, on the load database. */
+/**
+ * Migrations, then the app login (as PgBouncer connects) and the identity
+ * login, on the load database; and on the load stack's own Postgres, the
+ * worker's direct login (spec 0008), whose name the dev stack shares.
+ */
 function setUpDatabase(urls: LoadUrls): void {
   const owner = { DATABASE_URL_OWNER: urls.LOAD_DATABASE_URL_OWNER };
   dbScript('migrate.ts', owner);
@@ -50,6 +55,13 @@ function setUpDatabase(urls: LoadUrls): void {
     DATABASE_URL: urls.LOAD_PGBOUNCER_URL,
     IDENTITY_DATABASE_URL: urls.LOAD_IDENTITY_DATABASE_URL,
   });
+  if (isLoadStackDatabase(urls.LOAD_DATABASE_URL_OWNER)) {
+    dbScript('worker-login.ts', {
+      ...owner,
+      DATABASE_URL: urls.LOAD_PGBOUNCER_URL,
+      DATABASE_URL_DIRECT: LOAD_STACK.workerUrl,
+    });
+  }
 }
 
 async function main(): Promise<void> {

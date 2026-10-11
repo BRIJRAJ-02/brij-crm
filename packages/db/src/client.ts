@@ -191,12 +191,16 @@ export function createDatabase(options: DatabaseOptions): Database {
  * the worker's direct client. Refuses a role that could bypass row level
  * security (itself, or through any role it is in, by any grant, even one held
  * only WITH ADMIN), or that is in `pg_read_all_data` or `pg_write_all_data`,
- * or that isn't in crm_app. `variable` names the setting to fix in the error.
+ * or that isn't directly in `group`: crm_app for the app login, crm_worker
+ * for the worker's direct login (spec 0008, which inherits crm_app).
+ * `variable` names the setting to fix in the error.
  */
 export async function assertAppConnection(
   connection: pg.Pool | pg.ClientBase,
   variable = 'DATABASE_URL',
+  group: LoginGroup = 'crm_app',
 ): Promise<void> {
+  const { label, script } = LOGIN_GROUPS[group];
   const result = await connection.query<{
     role: string;
     rolsuper: boolean;
@@ -205,7 +209,8 @@ export async function assertAppConnection(
     reaches_bypass: boolean;
     reaches_all_data: string | null;
     is_app_member: boolean;
-  }>(`
+  }>(
+    `
       select
         r.rolname as role,
         r.rolsuper,
@@ -227,31 +232,42 @@ export async function assertAppConnection(
           select 1
           from pg_auth_members m
           join pg_roles g on g.oid = m.roleid
-          where g.rolname = 'crm_app' and m.member = r.oid
+          where g.rolname = $1 and m.member = r.oid
         ) as is_app_member
       from pg_roles r
       cross join pg_database d
       where r.rolname = current_user and d.datname = current_database()
-    `);
+    `,
+    [group],
+  );
   const row = result.rows[0];
   if (!row) throw new Error('Could not read the connected role.');
   // Through a role it can become (crm_search, say) counts too.
   if (row.rolsuper || row.rolbypassrls || row.owns_database || row.reaches_bypass) {
     throw new Error(
       `The app is connected as "${row.role}", which can bypass row level security. ` +
-        `Point ${variable} at the app login role (see \`pnpm db:app-login\`).`,
+        `Point ${variable} at the ${label} (see \`pnpm ${script}\`).`,
     );
   }
   // pg_read_all_data and pg_write_all_data skip every grant, the `auth` schema's included.
   if (row.reaches_all_data !== null) {
     throw new Error(
       `The app is connected as "${row.role}", a member of ${row.reaches_all_data}, which reads or writes every table. ` +
-        `Point ${variable} at the app login role (see \`pnpm db:app-login\`).`,
+        `Point ${variable} at the ${label} (see \`pnpm ${script}\`).`,
     );
   }
   if (!row.is_app_member) {
     throw new Error(
-      `The role "${row.role}" is not a member of crm_app. Run \`pnpm db:migrate\` and \`pnpm db:app-login\`.`,
+      `The role "${row.role}" is not a member of ${group}. Run \`pnpm db:migrate\` and \`pnpm ${script}\`.`,
     );
   }
 }
+
+/** The group a login must be directly in: the app's (`crm_app`) or the worker's direct login's (`crm_worker`). */
+export type LoginGroup = 'crm_app' | 'crm_worker';
+
+/** How each login is named in an error, and the script that makes it. */
+const LOGIN_GROUPS: Readonly<Record<LoginGroup, { readonly label: string; readonly script: string }>> = {
+  crm_app: { label: 'app login role', script: 'db:app-login' },
+  crm_worker: { label: 'worker login role', script: 'db:worker-login' },
+};

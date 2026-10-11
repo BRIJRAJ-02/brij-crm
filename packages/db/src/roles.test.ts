@@ -110,6 +110,24 @@ async function identityCheck(url: string): Promise<void> {
 }
 
 describe('the app login check', () => {
+  it('holds the worker’s direct login to crm_worker (spec 0008): the worker login passes, the app login is refused', async () => {
+    const { workerUrl } = inject('testDatabase');
+    for (const [url, outcome] of [
+      [workerUrl, undefined],
+      [appUrl, /is not a member of crm_worker\. Run `pnpm db:migrate` and `pnpm db:worker-login`/],
+    ] as const) {
+      const direct = new pg.Client({ connectionString: url, application_name: 'crm-roles-tests' });
+      await direct.connect();
+      try {
+        const checked = assertAppConnection(direct, 'DATABASE_URL_DIRECT', 'crm_worker');
+        if (outcome === undefined) await checked;
+        else await expect(checked).rejects.toThrow(outcome);
+      } finally {
+        await direct.end();
+      }
+    }
+  });
+
   it('names the variable to fix: DATABASE_URL for the pool, DATABASE_URL_DIRECT for the worker', async () => {
     const direct = new pg.Client({ connectionString: adminUrl, application_name: 'crm-roles-tests' });
     await direct.connect();

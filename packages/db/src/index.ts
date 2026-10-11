@@ -4,6 +4,7 @@ export {
   type Database,
   type DatabaseHealth,
   type DatabaseOptions,
+  type LoginGroup,
   VACUUM_TABLES,
   type VacuumTable,
   type WorkspaceTx,

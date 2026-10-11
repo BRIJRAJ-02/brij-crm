@@ -28,6 +28,8 @@ export const LOAD_STACK = {
   appUrl: 'postgres://crm_app_user:local-only-load-app@localhost:6434/crm',
   /** The identity login, direct. `pnpm load:seed` creates it. */
   identityUrl: 'postgres://crm_identity_user:local-only-load-identity@localhost:5434/crm',
+  /** The worker's direct login (spec 0008, in crm_worker). `pnpm load:seed` creates it on the load stack only. */
+  workerUrl: 'postgres://crm_worker_user:local-only-load-worker@localhost:5434/crm',
   apiUrl: 'http://localhost:3100',
   centrifugoUrl: 'ws://localhost:8100/connection/websocket',
   /** The API's `BETTER_AUTH_SECRET` on the load stack. The API refuses any secret holding `local-only` outside local. */

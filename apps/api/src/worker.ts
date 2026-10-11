@@ -30,13 +30,14 @@ const openDirect = (proveListen: boolean) =>
   openDirectConnection({ url: env.DATABASE_URL_DIRECT, applicationName: 'crm-worker-direct', proveListen });
 
 // Refuse to start on a role that can bypass row level security, on either URL (the direct one is the relay's,
-// and reads and marks rows under row level security like the pool), or a direct URL that is really a pooler (a
-// NOTIFY must arrive). The relay opens its own connections from here on.
+// and reads and marks rows under row level security like the pool), a direct login outside crm_worker (spec 0008:
+// the group that alone reaches the queue and lists workspaces), or a direct URL that is really a pooler (a NOTIFY
+// must arrive). The relay opens its own connections from here on.
 try {
   await db.assertAppRole();
   const proof = await openDirect(true);
   try {
-    await assertAppConnection(proof, 'DATABASE_URL_DIRECT');
+    await assertAppConnection(proof, 'DATABASE_URL_DIRECT', 'crm_worker');
   } finally {
     await proof.end();
   }

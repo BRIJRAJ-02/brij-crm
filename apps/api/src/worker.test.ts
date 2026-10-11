@@ -1,6 +1,7 @@
 // The worker entrypoint refuses to start (spec 0005) when either of its URLs
 // is a role that could bypass row level security: the pool's, or the direct
-// connection the relay reads and marks rows on.
+// connection the relay reads and marks rows on; and (spec 0008) when the
+// direct login isn't in crm_worker, the group that alone reaches the queue.
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, inject, it } from 'vitest';
@@ -34,6 +35,18 @@ describe('the worker at startup', () => {
     });
     expect(code).toBe(1);
     expect(output).toContain('Refusing to start');
-    expect(output).toContain('can bypass row level security. Point DATABASE_URL_DIRECT at the app login role');
+    expect(output).toContain('can bypass row level security. Point DATABASE_URL_DIRECT at the worker login role');
+  });
+
+  it('refuses a direct URL that is the app login, which is not in crm_worker', async () => {
+    const { code, output } = await runWorker({
+      APP_ENV: 'local',
+      DATABASE_URL: appUrl,
+      DATABASE_URL_DIRECT: appUrl,
+      WORKER_PORT: '3999',
+    });
+    expect(code).toBe(1);
+    expect(output).toContain('Refusing to start');
+    expect(output).toContain('is not a member of crm_worker');
   });
 });
