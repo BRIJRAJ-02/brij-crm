@@ -25,7 +25,7 @@ afterAll(async () => {
 
 describe('attributes.list', () => {
   it("answers a live object's attributes in position order, system ones first and marked", async () => {
-    const { attributes } = await memberWithWorkspace(app);
+    const { attributes, people } = await memberWithWorkspace(app);
     expect(attributes.slice(0, 6).map((each) => [each.apiSlug, each.isSystem])).toEqual([
       ['record_id', true],
       ['created_at', true],
@@ -47,6 +47,10 @@ describe('attributes.list', () => {
       isSystem: false,
       config: {},
       position: expect.any(Number) as number,
+      // Spec 0012's widened definition.
+      objectId: people.id,
+      isPrimary: false,
+      isArchived: false,
     });
   });
 
@@ -85,6 +89,9 @@ describe('attributes.create', () => {
       isSystem: false,
       config: { display: 'plain' },
       position: expect.any(Number) as number,
+      objectId: people.id,
+      isPrimary: false,
+      isArchived: false,
     });
     const listed = await client.attributes.list({ workspace: slug, objectId: people.id });
     expect(listed.at(-1)).toEqual(made);

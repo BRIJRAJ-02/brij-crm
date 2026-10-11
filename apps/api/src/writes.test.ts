@@ -35,6 +35,7 @@ const READS: ReadonlySet<string> = new Set([
   'realtime.catchUp',
   'jobs.list',
   'jobs.get',
+  'usage.get',
 ]);
 
 let db: Database;
@@ -195,6 +196,30 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'records.setValuesBatch': 3,
   'jobs.cancel': 2,
   'jobs.confirm': 2,
+  // Object writes (spec 0012): one definitions row naming the object, no attributes (the object itself changed).
+  'objects.create': async (m, mutationId) => {
+    const made = await m.client.objects.create({
+      workspace: m.slug,
+      id: newId(),
+      singularName: 'Project',
+      pluralName: 'Projects',
+      icon: 'folder',
+      hue: 'blue',
+      mutationId,
+    });
+    return [{ kind: 'definitions', object_id: made.id, attribute_ids: [], mutation_id: mutationId }];
+  'objects.update': async (m, mutationId) => {
+    await m.client.objects.update({ workspace: m.slug, objectId: m.people.id, pluralName: 'Contacts', mutationId });
+    return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [], mutation_id: mutationId }];
+  'objects.reorder': async (m, mutationId) => {
+    await m.client.objects.reorder({ workspace: m.slug, objectId: m.people.id, position: 2, mutationId });
+    return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [], mutation_id: mutationId }];
+  'objects.archive': async (m, mutationId) => {
+    await m.client.objects.archive({ workspace: m.slug, objectId: m.people.id, mutationId });
+    return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [], mutation_id: mutationId }];
+  'objects.restore': async (m, mutationId) => {
+    await m.client.objects.restore({ workspace: m.slug, objectId: m.people.id, mutationId });
+    return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [], mutation_id: mutationId }];
 };
 
 describe('the one write path', () => {

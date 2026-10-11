@@ -5,7 +5,9 @@ import { member } from '../../orpc.ts';
 
 // Inside a workspace: the door has let in an active member, and `context.scope` is theirs.
 export const attributesRouter = member.attributes.router({
-  list: member.attributes.list.handler(({ context, input }) => listObjectAttributes(context.scope, input.objectId)),
+  list: member.attributes.list.handler(({ context, input }) =>
+    listObjectAttributes(context.scope, input.objectId, { includeArchived: input.includeArchived === true }),
+  ),
   create: member.attributes.create.handler(async ({ context, input }) => {
     try {
       return await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
