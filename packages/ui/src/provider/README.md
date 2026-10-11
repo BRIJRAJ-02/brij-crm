@@ -31,7 +31,7 @@ const toasts = createToasts(); // once, in main.tsx; also handed to the data lay
 ## Toasts
 
 - A 36px confirmation at the bottom right: an icon, one sentence and Dismiss.
-- Confirmations leave after 5 seconds, paused while hovered or focused. Errors, and toasts with an action (Undo), stay until dismissed. At most three show at once; the rest wait their turn.
+- Confirmations leave after 5 seconds and errors after 8, paused while hovered or focused. Toasts with an action (Undo, Retry, Use mine) stay until dismissed. Only the toasts take part in their view transition: the page is never captured and the transition's overlay passes every click through, so nothing freezes while a toast moves. At most three show at once; the rest wait their turn.
 - Success is past tense and specific: "Record added successfully", "12 people imported". Errors say what failed and what to do next.
 - Toasts never carry the only copy of important information.
 - React Aria's toast is still `UNSTABLE_` in 1.21, so only `toasts.tsx` imports it.

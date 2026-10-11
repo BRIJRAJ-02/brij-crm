@@ -35,7 +35,7 @@ export const strings = {
   noAccessText: 'Ask a workspace admin to share it with you.',
   notLoaded: 'Scroll to load these rows first.',
   copied: (count: string) => (count === '1' ? 'Copied 1 cell' : `Copied ${count} cells`),
-  pasted: (count: string) => (count === '1' ? 'Pasted 1 cell' : `Pasted ${count} cells`),
+  pasted: (count: string) => (count === '1' ? 'Pasted 1 cell.' : `Pasted ${count} cells.`),
   /** A paste that left some cells: how many, then each cause. */
   notPasted: (count: string, causes: string) =>
     count === '1' ? `1 cell wasn’t pasted. ${causes}` : `${count} cells weren’t pasted. ${causes}`,
@@ -54,4 +54,17 @@ export const strings = {
   notResolved: 'Couldn’t select those rows. Try again.',
   rowsSelected: (count: string) => (count === '1' ? '1 row selected' : `${count} rows selected`),
   rangeSize: (rows: string, columns: string) => `${rows} by ${columns} cells`,
+  /** The grid's keys in the shortcut list (`GRID_SHORTCUTS`). */
+  shortcutsTitle: 'In the table',
+  shortcutMove: 'Move between cells',
+  shortcutEdit: 'Edit the cell, or save and move down',
+  shortcutCancel: 'Cancel the edit',
+  shortcutClear: 'Clear the cell or range',
+  shortcutTick: 'Select the row (on its checkbox)',
+  shortcutRange: 'Select a range of cells',
+  shortcutAll: 'Select the rows on screen',
+  shortcutCopy: 'Copy',
+  shortcutPaste: 'Paste',
+  shortcutLink: 'Follow the link in the cell',
+  shortcutMenu: 'Open the column menu (on a header)',
 } as const;

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, waitFor } from 'storybook/test';
+import { GRID_SHORTCUTS } from '../DataGrid/shortcuts.ts';
 import { ShortcutHelp } from './ShortcutHelp.tsx';
 
 const meta = {
@@ -16,14 +17,7 @@ const meta = {
           { label: 'Keyboard shortcuts', keys: ['?'] },
         ],
       },
-      {
-        title: 'In a table',
-        shortcuts: [
-          { label: 'Edit the cell', keys: ['↵'] },
-          { label: 'Select the rows on screen', keys: ['⌘', 'A'] },
-          { label: 'Copy', keys: ['⌘', 'C'] },
-        ],
-      },
+      GRID_SHORTCUTS,
     ],
   },
 } satisfies Meta<typeof ShortcutHelp>;

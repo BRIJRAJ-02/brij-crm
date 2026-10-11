@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, 
 import { Form as AriaForm } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
+import { useKeyboardPlatform } from '../../provider/context.ts';
 import { Callout } from '../Callout/Callout.tsx';
 import styles from './Form.module.css';
 
@@ -284,6 +285,31 @@ export function Form<R extends FormRefusal = FormRefusal>({
     setAttempt((count) => count + 1);
     onSubmit(values);
   };
+
+  // ⌘↵ (Ctrl+Enter elsewhere) submits from anywhere in the form, a list or a long text included, as the
+  // submit's keycap says. The field in use commits on blur first, so the value just typed is sent.
+  // React Aria's Form takes no key handler, so it listens on the element.
+  const platform = useKeyboardPlatform();
+  useEffect(() => {
+    const form = formRef.current;
+    if (form === null) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const mod = platform === 'mac' ? event.metaKey : event.ctrlKey;
+      if (!mod || event.key !== 'Enter' || event.isComposing) return;
+      event.preventDefault();
+      const active = form.ownerDocument.activeElement;
+      if (active instanceof HTMLElement) active.blur();
+      timer = setTimeout(() => {
+        form.requestSubmit();
+      }, 0);
+    };
+    form.addEventListener('keydown', onKeyDown);
+    return () => {
+      form.removeEventListener('keydown', onKeyDown);
+      clearTimeout(timer);
+    };
+  }, [platform]);
 
   return (
     <AriaForm

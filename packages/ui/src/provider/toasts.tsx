@@ -15,8 +15,11 @@ import '../lib/custom-properties.ts';
 import { strings } from './strings.ts';
 import styles from './Toast.module.css';
 
-/** How long a confirmation stays. Errors and toasts with an action stay until dismissed. */
+/** How long a confirmation stays. Toasts with an action stay until dismissed. */
 export const TOAST_TIMEOUT_MS = 5_000;
+
+/** How long an error with no action stays: longer than a confirmation, since it asks to be read. */
+export const ERROR_TOAST_TIMEOUT_MS = 8_000;
 
 /** At most this many toasts show at once; the rest wait their turn. */
 export const MAX_VISIBLE_TOASTS = 3;
@@ -47,9 +50,14 @@ export interface Toasts {
   readonly queue: ToastQueue<ToastContent>;
 }
 
-/** How long a toast stays: confirmations 5 seconds, errors and toasts with an action until dismissed. */
+/**
+ * How long a toast stays: confirmations 5 seconds, errors 8, both paused while
+ * hovered or focused; a toast with an action (Undo, Retry, Use mine) until
+ * dismissed, so its action can't vanish before it is reached.
+ */
 export function toastTimeout(content: ToastContent): number | undefined {
-  return content.tone === 'danger' || content.action !== undefined ? undefined : TOAST_TIMEOUT_MS;
+  if (content.action !== undefined) return undefined;
+  return content.tone === 'danger' ? ERROR_TOAST_TIMEOUT_MS : TOAST_TIMEOUT_MS;
 }
 
 /**

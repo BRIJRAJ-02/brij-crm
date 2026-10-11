@@ -59,8 +59,11 @@ export interface ModalProps {
 
 /**
  * A dialog over the page, which waits for an answer: a confirm, a short form,
- * a larger task. It grows from the centre over a scrim; opened from the
- * keyboard it appears at once. Focus stays inside until it closes, then goes
+ * a larger task. Its title bar holds the title and a close button (an alert
+ * asks with its buttons only). It sits at a fixed distance from the top, so a
+ * line added inside (an error) grows it downwards and never moves it. It
+ * grows from the centre over a scrim; opened from the keyboard it appears at
+ * once. Focus stays inside until it closes, then goes
  * back to its trigger. Esc closes it, and so does a click outside unless it
  * asks before something destructive.
  */
@@ -110,7 +113,8 @@ export function Modal({
               </Heading>
             )}
             {context !== undefined && <span className={styles.context}>{context}</span>}
-            {variant === 'window' && (
+            {/* Every dialog but the palette and an alert has the close button in its title bar. */}
+            {variant !== 'palette' && !isAlert && (
               <span className={styles.close}>
                 <Button slot="close" variant="ghost" icon="x" label={strings.close} />
               </span>

@@ -18,7 +18,9 @@ New. The core loop (#10) needs one place that lists the shortcuts the screens an
 
 - Write keys with Mac symbols (⌘, ⇧, ⌥); other keyboards see Ctrl, Shift and Alt.
 - One keycap per key pressed together.
-- The screen opens it, conventionally with ?.
+- The screen opens it, conventionally with ?. Its title bar has the Modal's close button.
+- `GRID_SHORTCUTS` (from `@crm/ui`, plain data kept beside the DataGrid so the list and the grid's keys change together) is the "In the table" group; a screen with a table lists it.
+- On a touch only device (no hover, a coarse pointer), shortcuts held with a modifier (⌘, ⌥, ⇧) are left out, and a group left empty goes too.
 
 ## States
 

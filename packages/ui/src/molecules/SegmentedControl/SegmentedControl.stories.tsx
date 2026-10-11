@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn } from 'storybook/test';
+import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { fakeThemeController } from '../../workbench/theme.ts';
 import { SegmentedControl, ThemeSwitch } from './SegmentedControl.tsx';
@@ -106,6 +107,11 @@ export const ThemeVertical: Story = {
     await expect(system).toBeChecked();
     await userEvent.keyboard('{ArrowUp}');
     await expect(dark).toBeChecked();
+    // An icon alone names itself on hover.
+    const icon = light.closest('label')?.querySelector('svg')?.parentElement;
+    if (icon === null || icon === undefined) throw new Error('the Light icon is missing');
+    await hoverFresh(userEvent, icon);
+    await expect(await shownTooltip()).toHaveTextContent('Light');
   },
 };
 

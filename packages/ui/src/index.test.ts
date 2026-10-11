@@ -50,6 +50,7 @@ describe('@crm/ui', () => {
       'FilterBuilder',
       'FilterChip',
       'Form',
+      'GRID_SHORTCUTS',
       'HUES',
       'HuePicker',
       'Icon',

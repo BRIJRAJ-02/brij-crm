@@ -180,7 +180,10 @@ export const InModal: Story = {
       return found;
     });
     const inDialog = within(dialog);
-    await expect(inDialog.getAllByRole('button').map((button) => button.textContent)).toEqual(['Cancel', 'Add person']);
+    // The title bar's close button, then the footer: Cancel first, the submit last.
+    await expect(
+      inDialog.getAllByRole('button').map((button) => button.getAttribute('aria-label') ?? button.textContent),
+    ).toEqual(['Close', 'Cancel', 'Add person']);
     await userEvent.click(inDialog.getByRole('button', { name: 'Add person' }));
     await expect(args.onSubmit).toHaveBeenCalledWith({ name: 'Maya Patel', email: 'maya@halcyonlabs.io' });
   },

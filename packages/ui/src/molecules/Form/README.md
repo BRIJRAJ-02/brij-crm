@@ -64,6 +64,8 @@ Idle, field refused (on the field, in its hint's place, which reads as invalid, 
 
 ## Keyboard
 
+- ⌘↵ (Ctrl+Enter elsewhere) submits from anywhere in the form, a list or a long text included, after the field in use commits on blur: what a dialog's primary keycap (`kbd="⌘↵"`) promises.
+
 Enter in a single line field submits, in a Modal too (the footer's submit names the form). Tab goes through the fields, then the submit, then any `actions`. When a new answer brings refusals, focus moves to the first refused field, whose description reads the refusal; if focus is already there (the person pressed Enter in it), the refusal is announced instead.
 
 ## Differences from the artifact

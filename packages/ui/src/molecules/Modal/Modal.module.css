@@ -1,22 +1,26 @@
 /* Modal: a 480px dialog (a 780px window) on surface-raised with radius-xl
-   and shadow-lg, centred over the scrim. It grows from the centre over
-   duration-modal and leaves in duration-exit; opened from the keyboard it
-   appears at once. The footer sits on surface-subtle under a hairline. */
+   and shadow-lg, at a fixed distance from the top of the scrim (never
+   centred, so an error line grows it downwards without moving it). A title
+   bar over a hairline holds the title and the close button. It grows from the
+   centre over duration-modal and leaves in duration-exit; opened from the
+   keyboard it appears at once. The footer sits on surface-subtle under a
+   hairline. */
 @layer components {
   .scrim {
     position: fixed;
     inset: 0;
     z-index: var(--z-modal);
     display: grid;
-    place-items: center;
+    place-items: start center;
     padding: var(--space-16);
+    padding-block-start: calc(2 * var(--size-bar));
     background: var(--scrim);
   }
 
   .root {
     box-sizing: border-box;
     inline-size: min(100%, var(--size-dialog));
-    max-block-size: calc(100dvh - 2 * var(--space-16));
+    max-block-size: calc(100dvh - 2 * var(--size-bar) - var(--space-16));
     overflow: hidden;
     border-radius: var(--radius-xl);
     background: var(--surface-raised);
@@ -36,16 +40,12 @@
     outline: none;
   }
 
+  /* The title bar: the title, then the close button at the end, over a hairline. */
   .head {
     display: flex;
     flex: none;
     align-items: center;
     gap: var(--space-8);
-    padding-block: var(--space-16) 0;
-    padding-inline: var(--space-16);
-  }
-
-  .root[data-variant='window'] .head {
     min-block-size: var(--size-bar);
     padding-block: 0;
     padding-inline: var(--space-16) var(--space-8);
@@ -103,18 +103,15 @@
     background: var(--surface-subtle);
   }
 
-  /* The palette: near the top, flush, its title for screen readers only. */
-  .scrim[data-variant='palette'] {
-    place-items: start center;
-    padding-block-start: calc(2 * var(--size-bar));
-  }
-
+  /* The palette: flush, its title for screen readers only. */
   .root[data-variant='palette'] {
     inline-size: min(100%, var(--size-palette));
   }
 
   .root[data-variant='palette'] .head {
+    min-block-size: 0;
     padding: 0;
+    border: none;
   }
 
   .root[data-variant='palette'] .body {

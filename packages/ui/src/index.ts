@@ -175,6 +175,7 @@ export {
   type ShortcutGroup,
   type ShortcutHelpProps,
 } from './modules/ShortcutHelp/ShortcutHelp.tsx';
+export { GRID_SHORTCUTS } from './modules/DataGrid/shortcuts.ts';
 export {
   NavItem,
   NavSection,

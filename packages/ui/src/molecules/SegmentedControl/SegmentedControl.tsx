@@ -3,6 +3,7 @@ import { useFocusVisible } from 'react-aria';
 import { RadioButton, RadioField, RadioGroup, SelectionIndicator } from 'react-aria-components';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
+import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { ThemeChoice, ThemeController } from '../../theme/theme.ts';
 import styles from './SegmentedControl.module.css';
@@ -69,11 +70,19 @@ export function SegmentedControl({
         <RadioField key={segment.value} value={segment.value} className={styles.field}>
           <RadioButton className={styles.segment}>
             <SelectionIndicator className={styles.thumb} />
-            {segment.icon !== undefined && (
-              <span className={styles.icon}>
-                <Icon name={segment.icon} size="sm" />
-              </span>
-            )}
+            {segment.icon !== undefined &&
+              (segment.isIconOnly === true ? (
+                // An icon alone says its name on hover too, beside the rail when stacked.
+                <Tooltip content={segment.label} isTextTrigger placement={orientation === 'vertical' ? 'end' : 'top'}>
+                  <span className={styles.icon}>
+                    <Icon name={segment.icon} size="sm" />
+                  </span>
+                </Tooltip>
+              ) : (
+                <span className={styles.icon}>
+                  <Icon name={segment.icon} size="sm" />
+                </span>
+              ))}
             {segment.isIconOnly === true ? (
               <VisuallyHidden>{segment.label}</VisuallyHidden>
             ) : (

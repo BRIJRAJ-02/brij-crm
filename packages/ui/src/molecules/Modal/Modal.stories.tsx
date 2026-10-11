@@ -1,9 +1,12 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { Field } from '../Field/Field.tsx';
+import { Form } from '../Form/Form.tsx';
 import { Modal, ModalTrigger } from './Modal.tsx';
 
 const meta = {
@@ -121,5 +124,59 @@ export const Window: Story = {
     const dialog = await openDialog();
     await expect(dialog).toHaveAccessibleName('Export');
     await expect(dialog.querySelector('button[aria-label="Close"]')).not.toBeNull();
+  },
+};
+
+/** A short form: a title bar with the close button, Cancel with its Esc keycap, Create with ⌘↵. */
+function NewPersonDialog() {
+  const [error, setError] = useState<string | undefined>(undefined);
+  return (
+    <Modal
+      title="New person"
+      actions={
+        <>
+          <Button slot="close" kbd="ESC">
+            Cancel
+          </Button>
+          <Button variant="primary" type="submit" form="new-person" kbd="⌘↵">
+            Create
+          </Button>
+        </>
+      }
+    >
+      <Form
+        id="new-person"
+        label="New person"
+        onSubmit={() => {
+          setError('Name the person.');
+        }}
+      >
+        <Field label="Name" {...(error === undefined ? {} : { error })} />
+      </Form>
+    </Modal>
+  );
+}
+
+/** A form dialog sits at a fixed distance from the top: an error line grows it downwards and never moves it. */
+export const FormDialog: Story = {
+  render: () => (
+    <Stage>
+      <ModalTrigger defaultOpen>
+        <Button icon="plus">New person</Button>
+        <NewPersonDialog />
+      </ModalTrigger>
+    </Stage>
+  ),
+  play: async ({ userEvent }) => {
+    const dialog = await openDialog();
+    await expect(dialog.querySelector('button[aria-label="Close"]')).not.toBeNull();
+    // Settled after its entrance, then measured.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    const top = dialog.getBoundingClientRect().top;
+    const create = [...dialog.querySelectorAll('button')].find((button) => button.textContent.includes('Create'));
+    if (create === undefined) throw new globalThis.Error('no Create button');
+    await userEvent.click(create);
+    await waitFor(() => expect(dialog.querySelector('[aria-invalid="true"]')).not.toBeNull());
+    await expect(dialog.getBoundingClientRect().top).toBe(top);
   },
 };
