@@ -54,7 +54,7 @@
   }
 
   .root[data-focus-visible] .box {
-    border-color: var(--accent);
+    border-color: var(--accent-line);
     box-shadow: var(--shadow-focus);
   }
 

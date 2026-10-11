@@ -1,5 +1,6 @@
-/* Field: an 11px text-secondary label over a 30px box with a border-subtle
-   hairline; focus adds the accent border and the focus ring, an error turns
+/* Field: an 11px text-secondary label over a 30px box with a control-border
+   hairline (3:1 on every surface, WCAG 1.4.11); focus turns it accent-line
+   and adds the faint focus halo, an error turns
    the border danger. Read only fills the box with surface-subtle and shows a
    lock; disabled fades it. The search variant is rounded with an icon. */
 @layer components {
@@ -23,7 +24,7 @@
     box-sizing: border-box;
     block-size: var(--size-input);
     padding-inline: var(--space-8);
-    border: var(--border-width-hairline) solid var(--border-subtle);
+    border: var(--border-width-hairline) solid var(--control-border);
     border-radius: var(--radius-md);
     background: var(--surface-raised);
     color: var(--text);
@@ -33,14 +34,8 @@
       background-color var(--duration-hover) var(--ease-hover);
   }
 
-  @media (hover: hover) and (pointer: fine) {
-    .box:hover {
-      border-color: var(--border);
-    }
-  }
-
   .box:focus-within {
-    border-color: var(--accent);
+    border-color: var(--accent-line);
     box-shadow: var(--shadow-focus);
   }
 

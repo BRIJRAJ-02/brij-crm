@@ -30,7 +30,7 @@
   }
 
   .box[data-focus-within] {
-    border-color: var(--accent);
+    border-color: var(--accent-line);
     box-shadow: var(--shadow-focus);
   }
 

@@ -37,7 +37,7 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only); `ico
 
 - **Hover**: `surface-hover` (the primary darkens to `accent-hover`), only on devices that can hover.
 - **Pressed**: scales to 0.97 (`scale-press`, `duration-press`, `ease-out`), so a click is felt before anything else happens. Reduced motion drops the scale.
-- **Focus**: from the keyboard only, a 1px `accent` border plus `shadow-focus`. In forced colours, a 2px `Highlight` outline.
+- **Focus**: from the keyboard only, a 1px `accent-line` border (3:1 on every surface) plus the faint `shadow-focus` halo. In forced colours, a 2px `Highlight` outline.
 - **Disabled**: at `opacity-disabled`, skipped by Tab, never pressed. When a line beside it says why or until when, `aria-describedby` ties that line to it.
 - **Pending** (`isPending`): a spinner in place of the icon, presses ignored, still focusable, at `opacity-busy`. Screen readers hear the change. Change the label to the ongoing verb ("Saving").
 - **Selected** (`ToggleButton`): `accent-soft` with an `accent` edge, which holds 3:1 against the surface (the artifact marks a pressed day with the accent too). It keeps that look while hovered. `aria-pressed` tells screen readers.

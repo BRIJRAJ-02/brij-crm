@@ -51,7 +51,7 @@
   }
 
   .root[data-focus-within] .box[data-next] {
-    border-color: var(--accent);
+    border-color: var(--accent-line);
     box-shadow: var(--shadow-focus);
   }
 

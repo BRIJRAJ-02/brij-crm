@@ -91,7 +91,7 @@
   }
 
   .radio[data-focus-visible] .circle {
-    border-color: var(--accent);
+    border-color: var(--accent-line);
     box-shadow: var(--shadow-focus);
   }
 

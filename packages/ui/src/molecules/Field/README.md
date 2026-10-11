@@ -1,6 +1,6 @@
 # Field
 
-The one field design: an 11px label above a 30px input with a hairline outline, and a hint or an error below.
+The one field design: an 11px label above a 30px input with a hairline `control-border` outline (3:1 on every surface), and a hint or an error below.
 
 ## Why it exists
 
@@ -32,7 +32,7 @@ Ported from the artifact's Field card. Every text, number and link attribute is 
 
 ## States
 
-Empty (placeholder), filled, hover (pointer only), focus (accent border and ring), invalid (danger border and message, in place of the hint), read only (filled, lock, reason), disabled (faded, reason). The `cell` variant has none of these looks of its own: its grid cell draws focus and the refusal, and the message floats under the cell on a raised surface.
+Empty (placeholder), filled, focus (a 1px `accent-line` border and the faint halo), invalid (danger border and message, in place of the hint), read only (filled, lock, reason), disabled (faded, reason). The `cell` variant has none of these looks of its own: its grid cell draws focus and the refusal, and the message floats under the cell on a raised surface.
 
 ## Keyboard
 

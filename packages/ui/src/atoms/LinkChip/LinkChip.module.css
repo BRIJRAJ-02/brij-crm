@@ -38,7 +38,7 @@
   }
 
   .root:focus-visible {
-    border-color: var(--accent);
+    border-color: var(--accent-line);
     box-shadow: var(--shadow-focus);
     outline: none;
   }

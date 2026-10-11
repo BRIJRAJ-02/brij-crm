@@ -88,7 +88,7 @@
   }
 
   .sort[data-focus-visible] {
-    border-color: var(--accent);
+    border-color: var(--accent-line);
     box-shadow: var(--shadow-focus);
   }
 
