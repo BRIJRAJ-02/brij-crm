@@ -74,6 +74,8 @@ describe('an unexpected error in a procedure', () => {
       },
     });
     expect(events[0]?.exception?.values?.[0]?.value).toMatch(/^A bug inside a workspace procedure/);
+    // Named like its trace (AC-170), so the error and the request time chart say the same procedure.
+    expect(events[0]?.transaction).toBe('rpc faults.crash');
     // The user by id only: never the email they signed in with.
     expect(Object.keys(events[0]?.user ?? {})).toEqual(['id']);
     expect(transport.envelopes.join('\n')).not.toContain(member.email);

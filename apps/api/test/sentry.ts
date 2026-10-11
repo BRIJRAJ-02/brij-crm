@@ -8,6 +8,8 @@ export interface SentEvent {
   readonly message?: string;
   readonly environment?: string;
   readonly release?: string;
+  /** The request's name, as `nameRequest` set it (`rpc records.query`). */
+  readonly transaction?: string;
   readonly tags?: Readonly<Record<string, string>>;
   readonly user?: Readonly<Record<string, unknown>>;
   readonly exception?: { readonly values?: readonly { readonly type?: string; readonly value?: string }[] };
