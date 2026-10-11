@@ -162,12 +162,23 @@ describe('scrubText on long and hostile text', () => {
     ['dotted labels', 'a.'],
     ['at signs', 'a@'],
     ['a path then a query', '/a?b'],
+    ['local part characters', 'a'],
+    ['local part characters then an at sign', 'aaaaaaa@'],
   ])('scrubs a megabyte of %s in well under a frame', (_name, unit) => {
     const text = unit.repeat(MEGABYTE / unit.length);
     const started = performance.now();
     const scrubbed = scrubText(text);
     expect(performance.now() - started).toBeLessThan(50);
     expect(scrubbed.length).toBeLessThanOrEqual(MAX_TEXT + '[cut]'.length);
+  });
+
+  it('scrubs a text at its longest with no @, or one at the end, in well under a millisecond each', () => {
+    // Up to 64 steps a character for a regex tried at every position; one scan here.
+    const texts = ['a'.repeat(MAX_TEXT + 1024), `${'a'.repeat(MAX_TEXT)}@example.com`];
+    for (const text of texts) scrubText(text);
+    const started = performance.now();
+    for (let round = 0; round < 10; round += 1) for (const text of texts) scrubText(text);
+    expect((performance.now() - started) / 20).toBeLessThan(1);
   });
 
   it('cuts a query however long what comes before it', () => {
@@ -208,6 +219,10 @@ describe('scrubText', () => {
       'Failed query: select "id" from "sessions" where "token" = $1\nparams: tok_secret,ada@example.com',
       'Failed query: select "id" from "sessions" where "token" = $1',
     ],
+    ['a@b.co,c@d.org', `${EMAIL_MARK},${EMAIL_MARK}`],
+    [`${'x'.repeat(70)}@example.com`, `${'x'.repeat(6)}${EMAIL_MARK}`],
+    ['two@@example.com and @example.com and a@b', 'two@@example.com and @example.com and a@b'],
+    ['ADA@EXAMPLE.COM', EMAIL_MARK],
   ])('turns %s into %s', (text, expected) => {
     expect(scrubText(text)).toBe(expected);
   });

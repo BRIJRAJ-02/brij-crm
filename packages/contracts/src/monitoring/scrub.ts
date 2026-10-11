@@ -11,9 +11,36 @@ export const EMAIL_MARK = '[email]';
 /** The only request headers that may leave: neither names nor holds a person. */
 export const KEPT_HEADERS: ReadonlySet<string> = new Set(['content-type', 'x-request-id']);
 
-// Anything shaped like an email address, wherever it sits in a text. Every quantifier is bounded (a local
-// part of at most 64, labels of at most 63, at most 8 of them), so no text makes the match slow.
-const EMAIL = /[\w.%+-]{1,64}@[a-z\d-]{1,63}(?:\.[a-z\d-]{1,63}){0,8}\.[a-z]{2,24}/giu;
+// Anything shaped like an email address, wherever it sits in a text: a local part of 1 to 64 of these characters,
+// an `@`, then a domain of at most 9 labels of at most 63 and a top level of 2 to 24 letters. Found from each `@`
+// (a text without one costs a single scan), so a long text of local part characters never makes it slow: a regex
+// tried at every position would cost up to 64 steps a character before failing.
+const LOCAL_CHAR = /^[\w.%+-]$/u;
+const LOCAL_MAX = 64;
+const DOMAIN = /[a-z\d-]{1,63}(?:\.[a-z\d-]{1,63}){0,8}\.[a-z]{2,24}/iuy;
+
+/** `text` with every email marked `[email]`: for each `@`, the local part before it (back to the last mark) and the domain after it. */
+function markEmails(text: string): string {
+  if (!text.includes('@')) return text;
+  const parts: string[] = [];
+  // Everything before `copied` is already in `parts`.
+  let copied = 0;
+  let at = text.indexOf('@');
+  while (at !== -1) {
+    let start = at;
+    while (start > copied && at - start < LOCAL_MAX && LOCAL_CHAR.test(text.charAt(start - 1))) start -= 1;
+    DOMAIN.lastIndex = at + 1;
+    if (start < at && DOMAIN.exec(text) !== null) {
+      parts.push(text.slice(copied, start), EMAIL_MARK);
+      copied = DOMAIN.lastIndex;
+      at = text.indexOf('@', copied);
+    } else {
+      at = text.indexOf('@', at + 1);
+    }
+  }
+  parts.push(text.slice(copied));
+  return parts.join('');
+}
 
 // A URL or a path, then its query and fragment: sign in codes, Google's `code`
 // and `state`, a search. The URL keeps everything before `?` or `#`.
@@ -64,7 +91,7 @@ function withinLimit(text: string): string {
  */
 export function scrubText(text: string): string {
   // Scrubbed with a margin past the cut, so an email or a query that straddles it is caught whole, then cut.
-  const scrubbed = withinLimit(text).replace(QUERY_PARAMS, '').replace(EMAIL, EMAIL_MARK).replace(QUERY, '');
+  const scrubbed = markEmails(withinLimit(text).replace(QUERY_PARAMS, '')).replace(QUERY, '');
   const cut = scrubbed.length > MAX_TEXT || text.length > MAX_TEXT + SCRUB_MARGIN;
   return cut ? `${scrubbed.slice(0, MAX_TEXT)}[cut]` : scrubbed;
 }
