@@ -7,7 +7,11 @@
     "./system": "./src/system.ts",
     "./testing": "./src/testing.ts",
     "./scale-budget": "./scripts/scale-budget.ts",
-    "./load-sessions": "./scripts/load-sessions.ts"
+    "./load-sessions": "./scripts/load-sessions.ts",
+    "./load-local": "./scripts/load-local.ts",
+    "./load-files": "./scripts/load-files.ts",
+    "./load-stack": "./scripts/load-stack.ts",
+    "./load-reset": "./scripts/load-reset.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

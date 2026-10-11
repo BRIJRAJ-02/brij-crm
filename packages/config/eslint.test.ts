@@ -371,6 +371,29 @@ describe('the load harness’s scripts (spec 0011)', () => {
     expect(rulesFor(messages, 'scripts/load-seed.ts')).not.toContain('no-restricted-imports');
   });
 
+  it('refuses the setup scripts’ entries in app code, as the minting one', async () => {
+    const root = createWorkspace({
+      'src/guards.ts':
+        "import { assertLocalUrls } from '@crm/core/load-local';\nexport const guard = assertLocalUrls;\n",
+    });
+    const app = await lintWorkspace(root, server({ root }));
+    expect(messagesFor(app, 'src/guards.ts').join('\n')).toContain('they mint sessions');
+  }, 60_000);
+
+  it('lets the harness (packages/load) import the setup scripts’ guards and files, but never minting', async () => {
+    const root = createWorkspace({
+      'src/guards.ts':
+        "import { assertLocalUrls } from '@crm/core/load-local';\nimport { readManifest } from '@crm/core/load-files';\nexport const both = [assertLocalUrls, readManifest];\n",
+      'src/mint.ts': "import { mintSessions } from '@crm/core/load-sessions';\nexport const mint = mintSessions;\n",
+      'src/system.ts': "import { systemScope } from '@crm/core/system';\nexport const scope = systemScope;\n",
+    });
+    const harness = await lintWorkspace(root, server({ root, loadHarness: true }));
+    expect(rulesFor(harness, 'src/guards.ts')).not.toContain('no-restricted-imports');
+    expect(messagesFor(harness, 'src/mint.ts').join('\n')).toContain('only load:seed and load:sessions mint them');
+    // System power stays where it was.
+    expect(messagesFor(harness, 'src/system.ts').join('\n')).toContain('System power is for the worker');
+  }, 60_000);
+
   it('refuses them in packages/db too, which opens connections', async () => {
     const root = createWorkspace({
       'src/mint.ts': "import { mintSessions } from '@crm/core/load-sessions';\nexport const mint = mintSessions;\n",

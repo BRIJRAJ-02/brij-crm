@@ -26,7 +26,7 @@ import {
   type LoadUrls,
 } from './load-local.ts';
 import { LOAD_AUTH_SECRET, mintSessions } from './load-sessions.ts';
-import { isLoadStackUp, startLoadStack } from './load-stack.ts';
+import { isLoadStackUp, prepareStatements, startLoadStack } from './load-stack.ts';
 import { refuseSeeded, seedCrm } from './seed-crm.ts';
 
 const DB_SCRIPTS = fileURLToPath(new URL('../../db/scripts/', import.meta.url));
@@ -73,6 +73,8 @@ async function main(): Promise<void> {
     // Before the migrations and logins touch anything: a seeded database is refused as it stands.
     await refuseSeeded(db);
     setUpDatabase(urls);
+    // The statements `pnpm load:run` reports (spec 0011, AC-204): only on the load stack, whose Postgres preloads it.
+    if (onStack) prepareStatements();
     log('migrations and logins');
     log(`seeding the ${profile.data} profile`);
     const manifest = await seedCrm({ db, identity, log }, { profile: profile.data });

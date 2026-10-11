@@ -33,8 +33,20 @@ const databaseDrivers = ['pg', 'pg-pool', 'postgres', 'drizzle-orm/node-postgres
 // a package that sets `no-restricted-imports` itself (packages/db).
 /** The load harness's scripts, refused outside scripts and tests: they mint sessions and seed directly. */
 export const loadScriptImports = {
-  regex: '^@crm/core/load-sessions$|(^|/)scripts/load-[^/]+$',
+  regex: '^@crm/core/load-[^/]+$|(^|/)scripts/load-[^/]+$',
   message: 'Only the load harness (packages/core/scripts) and tests import its scripts: they mint sessions.',
+};
+
+/**
+ * What the load harness itself (packages/load, `loadHarness: true`) may still
+ * not import: session minting. It reads the minted cookies from
+ * `.load/sessions.json`, and its setup scripts' guards and files from
+ * `@crm/core/load-local`, `load-files` and `load-stack`.
+ */
+const loadMintingImports = {
+  regex: '^@crm/core/load-sessions$|(^|/)scripts/load-sessions(\\.ts)?$',
+  message:
+    'The load harness reads minted sessions from .load/sessions.json; only load:seed and load:sessions mint them.',
 };
 
 // House rule: screens get data only through the client data layer.
@@ -323,30 +335,35 @@ function serverImports(databaseDriver, allow = []) {
   const patterns = [
     ...(allow.includes('system') ? [] : [systemEntry]),
     ...(allow.includes('testing') ? [] : [testingEntry]),
-    // Spec 0011: the load harness's scripts, only from tests and scripts (the testing importers).
-    ...(allow.includes('load') ? [] : [loadScriptImports]),
+    // Spec 0011: the load harness's scripts, only from tests and scripts (the testing importers), and from the
+    // harness itself (`harness`), which still may not mint.
+    ...(allow.includes('load') ? [] : allow.includes('harness') ? [loadMintingImports] : [loadScriptImports]),
   ];
   return { rules: { 'no-restricted-imports': ['error', { paths: databaseDriver ? [] : databaseDrivers, patterns }] } };
 }
 
 /**
- * Server code: apps/api, packages/core, packages/contracts and packages/db.
- * Pass `databaseDriver: true` only for packages/db. `vendorWrappers` names
+ * Server code: apps/api, packages/core, packages/contracts, packages/db and
+ * packages/load. Pass `databaseDriver: true` only for packages/db, and
+ * `loadHarness: true` only for packages/load. `vendorWrappers` names
  * each vendor's one wrapper module and the entries it may import (`{ files:
  * ['src/monitoring/sentry.ts'], allow: ['@sentry/node'] }`).
  *
  * @param {{
  *   root: string,
  *   databaseDriver?: boolean,
+ *   loadHarness?: boolean,
  *   vendorWrappers?: { files: string[], allow: string[] }[],
  * }} options
  */
-export function server({ root, databaseDriver = false, vendorWrappers = [] }) {
+export function server({ root, databaseDriver = false, loadHarness = false, vendorWrappers = [] }) {
+  // packages/load alone passes `loadHarness: true`: it may import the load scripts' guards and files, never minting.
+  const harness = loadHarness ? ['harness'] : [];
   return defineConfig(
     base(root),
     { languageOptions: { globals: globals.node } },
-    serverImports(databaseDriver),
-    { files: SYSTEM_IMPORTERS, ...serverImports(databaseDriver, ['system']) },
+    serverImports(databaseDriver, harness),
+    { files: SYSTEM_IMPORTERS, ...serverImports(databaseDriver, ['system', ...harness]) },
     { files: TESTING_IMPORTERS, ...serverImports(databaseDriver, ['testing', 'load']) },
     { files: BOTH_IMPORTERS, ...serverImports(databaseDriver, ['system', 'testing', 'load']) },
     restrictSyntax([syntax.defaultExport, ...syntax.classes, ...syntax.extensions]),

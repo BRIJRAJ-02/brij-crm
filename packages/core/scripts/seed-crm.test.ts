@@ -6,7 +6,10 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { parseAttributeValue, type AttributeType } from '@crm/contracts/values';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
-import { readRecordsById } from '../src/index.ts';
+import { createRecord, newId, readRecordsById } from '../src/index.ts';
+import { systemScope } from '../src/system.ts';
+import { freeRecordSlots, harnessRecords, resetLoadWorkspace } from './load-reset.ts';
+import { SCALE_BUDGET } from './scale-budget.ts';
 import { testScope } from '../src/testing.ts';
 import { LoadManifest } from './load-files.ts';
 import { isLoadRefusal } from './load-local.ts';
@@ -253,5 +256,35 @@ describe('the test profile', () => {
     // The same check load:seed makes before its migrations and logins touch the database.
     const before: unknown = await refuseSeeded(db).catch((error: unknown) => error);
     expect(isLoadRefusal(before) && before.exitCode === 3).toBe(true);
+  });
+});
+
+describe('pnpm load:reset (spec 0011, AC-209)', () => {
+  it('erases every record made after the seed, through the engine, and gives the slots back', async () => {
+    const before = await freeRecordSlots(db, manifest.workspaceId);
+    const live = Object.values(manifest.counts).reduce((sum, count) => sum + count.live, 0);
+    expect(before).toEqual({ live, free: SCALE_BUDGET.recordsPerWorkspace - live });
+    const scope = systemScope(db, manifest.workspaceId);
+    const objectId = manifest.objects.companies ?? '';
+    const made = [newId(), newId(), newId()];
+    for (const id of made) {
+      await createRecord(scope, {
+        objectId,
+        id,
+        values: { [manifest.attributes['companies.name'] ?? '']: `Load company ${id}` },
+      });
+    }
+    expect([...(await harnessRecords(db, manifest))].sort()).toEqual([...made].sort());
+    expect((await freeRecordSlots(db, manifest.workspaceId)).free).toBe(before.free - 3);
+    const reset = await resetLoadWorkspace(db, manifest);
+    expect(reset).toEqual({ erased: 3, ...before });
+    expect(await harnessRecords(db, manifest)).toEqual([]);
+    const { gone } = await one(`select count(*)::int as gone from records where id = any($1::uuid[])`, [made]);
+    expect(gone).toBe(0);
+    // Seeded records stay: the counts are the manifest's.
+    const { stored } = await one(`select count(*)::int as stored from records where workspace_id = $1`, [
+      manifest.workspaceId,
+    ]);
+    expect(stored).toBe(Object.values(manifest.counts).reduce((sum, count) => sum + count.stored, 0));
   });
 });

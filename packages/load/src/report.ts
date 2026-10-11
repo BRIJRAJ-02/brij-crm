@@ -1,0 +1,333 @@
+// The report (spec 0011, AC-199, AC-201, AC-203, AC-204): the measured
+// window's samples and server samples become one table of lines, each with
+// its target, p50, p95, p99, max, count and verdict; the run judges its own
+// validity; and the exit code follows: 0 every judged line passes, 1 a budget
+// miss in a gate scenario, 2 an invalid run. Every target comes from
+// `SCALE_BUDGET`, and from nowhere else.
+import type { ScaleBudget } from '@crm/core/scale-budget';
+import type { LoadResult, ReportLine, RunValidity, Verdict } from './result.ts';
+import { summarize, type Summary } from './stats.ts';
+import type { Metric, Sample } from './user.ts';
+
+/** The run's exit codes. */
+export const EXIT = { pass: 0, miss: 1, invalid: 2, refused: 3 } as const;
+
+/** The longest the harness's own event loop may stall at p99 before a run is invalid, in milliseconds. */
+export const MAX_LOOP_DELAY_P99_MS = 50;
+/** The least share of planned actions a valid run sends on time. */
+export const MIN_SENT_SHARE = 0.95;
+
+/** What the lines are made from: the measured samples, and the server's own samples. */
+export interface ReportInput {
+  readonly budget: ScaleBudget;
+  /** Measured samples only. */
+  readonly samples: readonly Sample[];
+  /** PgBouncer's `maxwait` every 5 seconds, in milliseconds, or undefined when it couldn't be read. */
+  readonly poolerWaitMs: readonly number[] | undefined;
+  /** Postgres's CPU every 5 seconds as a share of its cap (0 to 1), or undefined off the load stack. */
+  readonly postgresCpuShares: readonly number[] | undefined;
+}
+
+const round = (value: number) => Math.round(value * 10) / 10;
+
+function rounded(summary: Summary | undefined): Summary | undefined {
+  if (summary === undefined) return undefined;
+  return {
+    count: summary.count,
+    p50: round(summary.p50),
+    p95: round(summary.p95),
+    p99: round(summary.p99),
+    max: round(summary.max),
+  };
+}
+
+/** A judged line: p95 at or under `target` passes. */
+function judged(metric: string, values: readonly number[], target: number, unit: 'ms' | '%'): ReportLine {
+  const summary = rounded(summarize(values));
+  const verdict: Verdict = summary === undefined ? 'no samples' : summary.p95 <= target ? 'pass' : 'miss';
+  return {
+    metric,
+    target: `p95 ≤ ${String(target)}${unit === 'ms' ? ' ms' : '%'}`,
+    unit,
+    ...(summary === undefined ? {} : { summary }),
+    verdict,
+    judged: true,
+  };
+}
+
+/** A reported line: numbers, no verdict. */
+function reported(metric: string, values: readonly number[], unit: 'ms' | 'count' = 'ms', note?: string): ReportLine {
+  const summary = rounded(summarize(values));
+  return {
+    metric,
+    unit,
+    ...(summary === undefined ? {} : { summary }),
+    verdict: summary === undefined ? 'no samples' : 'reported',
+    judged: false,
+    ...(note === undefined ? {} : { note }),
+  };
+}
+
+/** A line with no number yet, saying why. */
+function without(metric: string, verdict: 'not measured' | 'not built yet', note: string, target?: string) {
+  return { metric, ...(target === undefined ? {} : { target }), unit: 'ms' as const, verdict, judged: false, note };
+}
+
+/** How long a sample took: from its scheduled moment to its answer (never from when it was sent). */
+export const durationOf = (sample: Sample): number => sample.answeredAt - sample.scheduledAt;
+
+const okTimes = (samples: readonly Sample[], metric: Metric, filter: (sample: Sample) => boolean = () => true) =>
+  samples.filter((sample) => sample.metric === metric && sample.outcome === 'ok' && filter(sample)).map(durationOf);
+
+/** The report's lines (AC-199, AC-201). */
+export function reportLines(input: ReportInput): readonly ReportLine[] {
+  const { budget, samples } = input;
+  const p95 = budget.p95Ms;
+  const poolMs = samples.flatMap((sample) => sample.poolMs);
+  const cpu = input.postgresCpuShares?.map((share) => share * 100);
+  return [
+    judged('read (scroll, filter or sort windows)', okTimes(samples, 'read'), p95.read, 'ms'),
+    judged('open a record', okTimes(samples, 'open'), p95.open, 'ms'),
+    judged('edit', okTimes(samples, 'edit'), p95.edit, 'ms'),
+    judged('create', okTimes(samples, 'create'), p95.create, 'ms'),
+    reported(
+      'read by position',
+      okTimes(samples, 'read', (sample) => sample.mode === 'position'),
+    ),
+    reported(
+      'read by cursor',
+      okTimes(samples, 'read', (sample) => sample.mode === 'cursor'),
+    ),
+    reported('count', okTimes(samples, 'count'), 'ms', 'not judged'),
+    without(
+      'live delivery',
+      'not built yet',
+      'milestone 3: Centrifugo clients',
+      `p95 ≤ ${String(p95.liveDelivery)} ms`,
+    ),
+    poolMs.length > 0
+      ? judged('API pool wait', poolMs, p95.poolWait, 'ms')
+      : without('API pool wait', 'not measured', 'no Server-Timing header: is LOAD_TIMING=on?'),
+    input.poolerWaitMs === undefined
+      ? without('pooler wait (PgBouncer maxwait)', 'not measured', 'SHOW POOLS could not be read')
+      : judged('pooler wait (PgBouncer maxwait)', input.poolerWaitMs, p95.poolWait, 'ms'),
+    cpu === undefined
+      ? without('Postgres CPU', 'not measured', 'off the load stack: no container to sample')
+      : judged('Postgres CPU', cpu, budget.postgresCpuP95Share * 100, '%'),
+    without(
+      'relay lag',
+      'not built yet',
+      'milestone 3: the relay on the load stack',
+      `p95 ≤ ${String(p95.relayLag)} ms`,
+    ),
+  ];
+}
+
+/** Counts of the measured window's answers by class and reason. */
+export function errorCounts(samples: readonly Sample[]) {
+  // Every action and every count it ran, but a count the harness aborted itself, which is neither.
+  const actions = samples.filter((sample) => sample.outcome !== 'aborted');
+  const unexpected = actions.filter((sample) => sample.outcome === 'unexpected');
+  const byReason: Record<string, number> = {};
+  for (const sample of unexpected) {
+    const reason = sample.reason ?? 'unknown';
+    byReason[reason] = (byReason[reason] ?? 0) + 1;
+  }
+  return {
+    actions: actions.length,
+    unexpected: unexpected.length,
+    expected: actions.filter((sample) => sample.outcome === 'expected').length,
+    tooMany: samples.filter((sample) => sample.reason?.startsWith('429') === true).length,
+    abortedCounts: samples.filter((sample) => sample.metric === 'count' && sample.outcome === 'aborted').length,
+    byReason,
+  };
+}
+
+/** The error lines: unexpected (judged by validity), expected refusals and 429s (reported). */
+export function errorLines(samples: readonly Sample[], budget: ScaleBudget): readonly ReportLine[] {
+  const counts = errorCounts(samples);
+  const share = counts.actions === 0 ? 0 : counts.unexpected / counts.actions;
+  const limit = budget.unexpectedErrorShare * 100;
+  const count = (value: number) => ({ count: value, p50: value, p95: value, p99: value, max: value });
+  return [
+    {
+      metric: 'unexpected errors',
+      target: `≤ ${String(limit)}% of actions`,
+      unit: 'count',
+      summary: count(counts.unexpected),
+      verdict: share <= budget.unexpectedErrorShare ? 'pass' : 'miss',
+      judged: false,
+      note: `${(share * 100).toFixed(3)}% of ${String(counts.actions)} actions; over the limit the run is invalid`,
+    },
+    {
+      metric: 'expected refusals (409, 422)',
+      unit: 'count',
+      summary: count(counts.expected),
+      verdict: 'reported',
+      judged: false,
+    },
+    {
+      metric: '429 too many requests',
+      unit: 'count',
+      summary: count(counts.tooMany),
+      verdict: 'reported',
+      judged: false,
+      note: 'unexpected: a person would see this refusal',
+    },
+    {
+      metric: 'counts aborted by a newer view',
+      unit: 'count',
+      summary: count(counts.abortedCounts),
+      verdict: 'reported',
+      judged: false,
+    },
+  ];
+}
+
+/** What validity is judged on. */
+export interface ValidityInput {
+  readonly budget: ScaleBudget;
+  readonly samples: readonly Sample[];
+  readonly plannedActions: number;
+  readonly sentActions: number;
+  /** Each thread's event loop delay p99 over the measured window, main thread included. */
+  readonly eventLoopDelayP99Ms: readonly number[];
+}
+
+/** Whether the run counts (AC-203): the harness kept up, and unexpected errors stayed under the budget's share. */
+export function judgeValidity(input: ValidityInput): RunValidity {
+  const reasons: string[] = [];
+  const worstLoop = Math.max(0, ...input.eventLoopDelayP99Ms);
+  if (worstLoop > MAX_LOOP_DELAY_P99_MS) {
+    reasons.push(
+      `the harness couldn't keep up: an event loop stalled ${worstLoop.toFixed(1)} ms at p99 (limit ${String(MAX_LOOP_DELAY_P99_MS)} ms)`,
+    );
+  }
+  const sentShare = input.plannedActions === 0 ? 1 : input.sentActions / input.plannedActions;
+  if (sentShare < MIN_SENT_SHARE) {
+    reasons.push(
+      `the harness couldn't keep up: it sent ${String(input.sentActions)} of ${String(input.plannedActions)} planned actions on time (${(sentShare * 100).toFixed(1)}%, needs ${String(MIN_SENT_SHARE * 100)}%)`,
+    );
+  }
+  const counts = errorCounts(input.samples);
+  const unexpectedShare = counts.actions === 0 ? 0 : counts.unexpected / counts.actions;
+  if (unexpectedShare > input.budget.unexpectedErrorShare) {
+    const reasons_ = Object.entries(counts.byReason)
+      .sort((left, right) => right[1] - left[1])
+      .map(([reason, count]) => `${reason} ×${String(count)}`)
+      .join(', ');
+    reasons.push(
+      `unexpected errors were ${(unexpectedShare * 100).toFixed(3)}% of actions (limit ${String(input.budget.unexpectedErrorShare * 100)}%): ${reasons_}`,
+    );
+  }
+  return {
+    valid: reasons.length === 0,
+    reasons,
+    plannedActions: input.plannedActions,
+    sentActions: input.sentActions,
+    eventLoopDelayP99Ms: input.eventLoopDelayP99Ms.map(round),
+    unexpectedShare,
+  };
+}
+
+/** The exit code (AC-203): invalid 2; a judged miss in a gate scenario 1; otherwise 0. */
+export function exitCodeOf(validity: RunValidity, lines: readonly ReportLine[], gate: boolean): number {
+  if (!validity.valid) return EXIT.invalid;
+  if (gate && lines.some((line) => line.judged && line.verdict === 'miss')) return EXIT.miss;
+  return EXIT.pass;
+}
+
+const pad = (text: string, width: number) => text.padEnd(width);
+const padStart = (text: string, width: number) => text.padStart(width);
+
+function number(value: number | undefined, unit: ReportLine['unit']): string {
+  if (value === undefined) return '';
+  if (unit === 'count') return String(value);
+  return value.toFixed(1);
+}
+
+/** The printed table (AC-204): metric, target, p50, p95, p99, max, count, verdict, then the run's facts. */
+export function formatReport(result: LoadResult): string {
+  const rows = result.lines.map((line) => {
+    const s = line.summary;
+    const showPercentiles = line.unit !== 'count';
+    return [
+      line.metric,
+      line.target ?? '',
+      showPercentiles ? number(s?.p50, line.unit) : '',
+      showPercentiles ? number(s?.p95, line.unit) : '',
+      showPercentiles ? number(s?.p99, line.unit) : '',
+      showPercentiles ? number(s?.max, line.unit) : '',
+      s === undefined ? '' : String(s.count),
+      line.verdict.toUpperCase() + (line.note === undefined ? '' : `  (${line.note})`),
+    ];
+  });
+  const header = ['metric', 'target', 'p50', 'p95', 'p99', 'max', 'count', 'verdict'];
+  const widths = header.map((title, index) =>
+    Math.max(title.length, ...rows.map((row) => (index === 7 ? 0 : (row[index] ?? '').length))),
+  );
+  const line = (row: readonly string[]) =>
+    row
+      .map((cell, index) =>
+        index === 7
+          ? cell
+          : index >= 2 && index <= 6
+            ? padStart(cell, widths[index] ?? 0)
+            : pad(cell, widths[index] ?? 0),
+      )
+      .join('  ');
+  const facts = result.facts;
+  const gb = (bytes: number | undefined) => (bytes === undefined ? '?' : `${(bytes / 1024 ** 3).toFixed(1)} GB`);
+  const caps = Object.entries(facts.stackCaps)
+    .map(
+      ([service, cap]) =>
+        `${service} ${cap.cpus === 0 ? 'uncapped' : `${String(cap.cpus)} CPU`}/${gb(cap.memoryBytes)}`,
+    )
+    .join(', ');
+  const counts = Object.entries(facts.manifestCounts)
+    .map(([key, count]) => `${key} ${count.live.toLocaleString('en')} live of ${count.stored.toLocaleString('en')}`)
+    .join(', ');
+  const mix = Object.entries(result.mix.achieved)
+    .map(([action, share]) => `${action} ${(share * 100).toFixed(1)}%`)
+    .join(', ');
+  const out = [
+    '',
+    line(header),
+    line(header.map((_, index) => '-'.repeat(index === 7 ? 7 : (widths[index] ?? 0)))),
+    ...rows.map(line),
+    '',
+    `scenario ${result.scenario} (${result.gate ? 'gate' : 'reported, exits by validity only'}), ${String(result.users)} users, ${String(result.minutes)} measured minutes after ${String(result.warmupSeconds)} s of warm up, seed ${String(result.seed)}`,
+    `run ${result.startedAt} to ${result.endedAt}, git ${facts.gitCommit}, API ${facts.apiUrl}, ${String(facts.threads)} thread(s)`,
+    `host ${facts.hostModel}, ${String(facts.hostCores)} cores, ${gb(facts.hostMemoryBytes)}; Docker ${facts.dockerCpus === undefined ? '?' : String(facts.dockerCpus)} CPUs, ${gb(facts.dockerMemoryBytes)}`,
+    `stack caps: ${caps === '' ? 'not on the load stack' : caps}`,
+    `database clock offset: ${facts.databaseClockOffsetMs === undefined ? '?' : `${facts.databaseClockOffsetMs.toFixed(1)} ms`}`,
+    `manifest (${facts.manifestProfile}): ${counts}`,
+    `mix achieved: ${mix} (largest gap ${(result.mix.deviationPoints * 100).toFixed(2)} points)`,
+    `actions: ${String(result.validity.sentActions)} sent of ${String(result.validity.plannedActions)} planned; event loop p99 ${result.validity.eventLoopDelayP99Ms.map((ms) => `${ms.toFixed(1)} ms`).join(', ')}`,
+    `WAL written: ${result.walBytes === undefined ? 'not measured' : `${(result.walBytes / 1024 ** 2).toFixed(1)} MB`}`,
+  ];
+  if (Object.keys(result.errors).length > 0) {
+    out.push(
+      `unexpected errors: ${Object.entries(result.errors)
+        .map(([reason, count]) => `${reason} ×${String(count)}`)
+        .join(', ')}`,
+    );
+  }
+  if (result.topStatements === undefined) {
+    out.push('top statements: not measured (pg_stat_statements is not on)');
+  } else {
+    out.push('top statements by total time:');
+    for (const statement of result.topStatements) {
+      const text = statement.query.replace(/\s+/g, ' ').slice(0, 160);
+      out.push(
+        `  ${statement.totalMs.toFixed(0).padStart(8)} ms  ${String(statement.calls).padStart(7)} calls  ${statement.meanMs.toFixed(2).padStart(8)} ms mean  ${text}`,
+      );
+    }
+  }
+  out.push(
+    result.validity.valid
+      ? `VALID. Exit ${String(result.exitCode)}${result.exitCode === EXIT.miss ? ': a budget miss in a gate scenario' : ''}.`
+      : `INVALID (exit ${String(result.exitCode)}): ${result.validity.reasons.join('; ')}.`,
+  );
+  return out.join('\n');
+}

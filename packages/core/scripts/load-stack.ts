@@ -95,6 +95,37 @@ export function startLoadStack(apps: boolean | 'when-ready'): void {
   console.log(`The load stack is up: the API on ${LOAD_STACK.apiUrl}.`);
 }
 
+/**
+ * Turns on `pg_stat_statements` in the load database (spec 0011, AC-204), as
+ * its superuser inside the container: the extension (its library is preloaded
+ * by `infra/postgres/load.conf`), and for the owner login the right to read
+ * every login's statements and to reset them, so `pnpm load:run` reads the
+ * statements with the most time in its measured window. Idempotent; the load
+ * stack only.
+ */
+export function prepareStatements(): void {
+  const result = compose(
+    [
+      'exec',
+      '-T',
+      'postgres',
+      'psql',
+      '-U',
+      'postgres',
+      '-d',
+      'crm',
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-qc',
+      'create extension if not exists pg_stat_statements; ' +
+        'grant pg_read_all_stats to crm_owner; ' +
+        'grant execute on function pg_stat_statements_reset(oid, oid, bigint, boolean) to crm_owner;',
+    ],
+    true,
+  );
+  must(result, 'Turning on pg_stat_statements');
+}
+
 /** Whether the load stack's Postgres is running and healthy. */
 export function isLoadStackUp(): boolean {
   const result = compose(['ps', '--status', 'running', '--format', '{{.Service}} {{.Health}}'], true);

@@ -84,6 +84,26 @@ export function writeSessions(dir: string, sessions: LoadSessions): Promise<stri
   return writeJson(dir, SESSIONS, LoadSessions.parse(sessions));
 }
 
+/**
+ * Reads `.load/sessions.json` in `dir`, refusing (exit 3) when there is none
+ * (naming `pnpm load:sessions`). The caller checks its `apiUrl` with
+ * `assertLocalUrls` before sending a cookie anywhere: the file can be edited
+ * by hand.
+ */
+export async function readSessions(dir: string): Promise<LoadSessions> {
+  let text: string;
+  try {
+    text = await readFile(join(dir, SESSIONS), 'utf8');
+  } catch {
+    throw loadRefusal(`There is no ${join(dir, SESSIONS)}. Mint the sessions: \`pnpm load:sessions\`.`);
+  }
+  const parsed = LoadSessions.safeParse(JSON.parse(text));
+  if (!parsed.success) {
+    throw loadRefusal(`${join(dir, SESSIONS)} isn't a sessions file. Mint them again: \`pnpm load:sessions\`.`);
+  }
+  return parsed.data;
+}
+
 /** Reads `.load/manifest.json` in `dir`, refusing (exit 3) when there is none, naming `pnpm load:seed`. */
 export async function readManifest(dir: string): Promise<LoadManifest> {
   let text: string;
