@@ -190,6 +190,13 @@
       "when": 1791753021211,
       "tag": "0026_people_name_required",
       "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1791754772364,
+      "tag": "0030_workspace_milestones",
+      "breakpoints": true
     }
   ]
 }

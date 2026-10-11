@@ -660,3 +660,80 @@ describe('the auth schema: global identity, outside row level security (spec 000
     await add(randomUUID());
   });
 });
+
+describe('workspace milestones (spec 0010, AC-177)', () => {
+  /** One statement as the app, inside the workspace. */
+  const inside = <Row extends Record<string, unknown>>(workspaceId: string, statement: ReturnType<typeof sql>) =>
+    db.withWorkspace(workspaceId, (tx) => tx.execute<Row>(statement));
+  const reach = (workspaceId: string, milestone: string, into: string = workspaceId) =>
+    inside<{ milestone: string }>(
+      workspaceId,
+      sql`insert into workspace_milestones (workspace_id, milestone) values (${into}, ${milestone}) on conflict do nothing returning milestone`,
+    );
+
+  it('lets the app read and insert milestones, and no other role anything', async () => {
+    const table = await owner.query<{ privileges: string }>(`
+      select string_agg(p.privilege, ',' order by p.privilege) as privileges
+      from unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) p(privilege)
+      where has_table_privilege('crm_app', 'public.workspace_milestones', p.privilege)
+    `);
+    expect(table.rows).toEqual([{ privileges: 'INSERT,SELECT' }]);
+    const others = await owner.query<{ grantee: string }>(`
+      select coalesce(pg_get_userbyid(nullif(a.grantee, 0)), 'PUBLIC') as grantee
+      from pg_class c, aclexplode(c.relacl) a
+      where c.oid = 'public.workspace_milestones'::regclass and a.grantee not in (c.relowner, 'crm_app'::regrole)
+    `);
+    expect(others.rows).toEqual([]);
+  });
+
+  it('stores a milestone once: the insert returns its row the first time only', async () => {
+    const { workspaceId } = await workspaceWithMember('milestone-once');
+    expect((await reach(workspaceId, 'first_record_created')).rows).toEqual([{ milestone: 'first_record_created' }]);
+    expect((await reach(workspaceId, 'first_record_created')).rows).toEqual([]);
+    await expect(reach(workspaceId, 'first_login')).rejects.toMatchObject({
+      cause: { code: '23514', constraint: 'workspace_milestones_milestone' },
+    });
+  });
+
+  it('never lets the app change or remove a milestone', async () => {
+    const { workspaceId } = await workspaceWithMember('milestone-fixed');
+    await reach(workspaceId, 'workspace_created');
+    for (const statement of [
+      sql`update workspace_milestones set reached_at = now() - interval '1 day'`,
+      sql`delete from workspace_milestones`,
+    ]) {
+      await expect(inside(workspaceId, statement)).rejects.toMatchObject({ cause: { code: '42501' } });
+    }
+    expect((await inside(workspaceId, sql`select milestone from workspace_milestones`)).rows).toEqual([
+      { milestone: 'workspace_created' },
+    ]);
+  });
+
+  it("reads none of another workspace's milestones, even with no filter, nor writes one into it", async () => {
+    const a = await workspaceWithMember('milestone-iso-a');
+    const b = await workspaceWithMember('milestone-iso-b');
+    await reach(a.workspaceId, 'workspace_created');
+    await reach(b.workspaceId, 'workspace_created');
+    const seenFromA = await inside<{ workspace_id: string }>(
+      a.workspaceId,
+      sql`select workspace_id from workspace_milestones`,
+    );
+    expect(seenFromA.rows).toEqual([{ workspace_id: a.workspaceId }]);
+    await expect(reach(a.workspaceId, 'first_record_created', b.workspaceId)).rejects.toMatchObject({
+      cause: { code: '42501' },
+    });
+    const pool = new pg.Pool({ connectionString: appUrl });
+    try {
+      expect((await pool.query('select 1 from workspace_milestones')).rowCount).toBe(0);
+    } finally {
+      await pool.end();
+    }
+  });
+
+  it('goes with its workspace (on delete cascade)', async () => {
+    const key = await owner.query<{ action: string }>(
+      `select confdeltype as action from pg_constraint where conname = 'workspace_milestones_workspace'`,
+    );
+    expect(key.rows).toEqual([{ action: 'c' }]);
+  });
+});

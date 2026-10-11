@@ -8,3 +8,4 @@ export { attributes, lists, objects, relationshipCardinality, relationships } fr
 export { attributeOptions, optionOutcome } from './options.ts';
 export { outbox, outboxKind } from './outbox.ts';
 export { listEntries, recordLinks, records, sortKeys, values } from './records.ts';
+export { workspaceMilestones } from './milestones.ts';
