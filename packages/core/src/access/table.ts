@@ -28,6 +28,13 @@ export const ACCESS_TABLE = {
   defineObject: { permission: 'schema.manage' },
   updateObject: { permission: 'schema.manage' },
   setObjectArchived: { permission: 'schema.manage' },
+  reorderObject: { permission: 'schema.manage' },
+  // Settings' object writes (spec 0012).
+  createObject: { permission: 'schema.manage' },
+  editObject: { permission: 'schema.manage' },
+  moveObject: { permission: 'schema.manage' },
+  archiveObject: { permission: 'schema.manage' },
+  restoreObject: { permission: 'schema.manage' },
   defineAttribute: { permission: 'schema.manage' },
   addAttribute: { permission: 'schema.manage' },
   updateAttribute: { permission: 'schema.manage' },
@@ -45,6 +52,8 @@ export const ACCESS_TABLE = {
   removeMember: { ownerRules: true },
   listMembers: { anyMember: true },
   getMyAccess: { anyMember: true },
+  // The limits' usage (spec 0012, AC-243): any member, filtered by their access inside.
+  getUsage: { anyMember: true },
   // Change events (spec 0007): the head, and catch up through the caller's own audience.
   workspaceHead: { anyMember: true },
   catchUp: { anyMember: true },

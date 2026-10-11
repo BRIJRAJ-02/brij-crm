@@ -12,6 +12,14 @@ export function refuse(code: EngineRefusalCode, message: string, attributeId?: s
   return refuseAll([refusal]);
 }
 
+/**
+ * Builds the error for one refusal about a field of the caller's input (a
+ * definition write's `pluralName`, say), so a form shows it on that field.
+ */
+export function refuseOn(code: EngineRefusalCode, message: string, field: string): RefusalError {
+  return refuseAll([{ code, message, field }]);
+}
+
 /** Builds one error for several refusals; its `refusal` is the first. */
 export function refuseAll(refusals: readonly [EngineRefusal, ...EngineRefusal[]]): RefusalError {
   const [first] = refusals;

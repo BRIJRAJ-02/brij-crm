@@ -6,6 +6,7 @@ export {
   defineAttribute,
   defineObject,
   listAttributes,
+  reorderObject,
   restoreAttribute,
   setObjectArchived,
   updateAttribute,

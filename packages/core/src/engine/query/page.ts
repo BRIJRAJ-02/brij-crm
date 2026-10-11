@@ -13,7 +13,7 @@ import { readRecords, type RecordView } from '../records.ts';
 import { inputInvalid, postgresError, refuse } from '../refusals.ts';
 import { loadRelationships } from '../relationships.ts';
 import type { EngineScope } from '../scope.ts';
-import { loadAttributes, loadAttributesById, loadListAttributes, type AttributeDef } from '../values.ts';
+import { isArchivedNow, loadAttributes, loadAttributesById, loadListAttributes, type AttributeDef } from '../values.ts';
 import { isAborted, withCancel } from './cancel.ts';
 import { isOpen } from '../../access/policy.ts';
 import { attributeVisible, checkList, checkObject } from '../../access/visibility.ts';
@@ -216,9 +216,13 @@ async function prepare(
   const catalog = new Map([...own, ...(await loadAttributesById(tx, named))]);
   // Only what the principal may see: a filter or sort naming a hidden attribute, at any hop, is refused as an
   // unknown one, and a contains on it never reaches the search function (spec 0009, AC-141).
-  const attributes = isOpen(access)
-    ? catalog
-    : new Map([...catalog].filter(([, attribute]) => attributeVisible(access, attribute)));
+  // An archived attribute (its own row, or a reference whose far object is archived, spec 0012) has left every
+  // filter and sort: naming one is refused as an unknown attribute.
+  const attributes = new Map(
+    [...catalog].filter(
+      ([, attribute]) => !isArchivedNow(attribute) && (isOpen(access) || attributeVisible(access, attribute)),
+    ),
+  );
   const relationshipIds = [...attributes.values()].flatMap((attribute) =>
     attribute.type === 'record_reference' && attribute.relationshipId !== null ? [attribute.relationshipId] : [],
   );

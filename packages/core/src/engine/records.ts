@@ -21,6 +21,7 @@ import {
   checkWriter,
   currentItems,
   holdDefinitions,
+  isArchivedNow,
   ITEM_COLUMNS,
   loadAttributes,
   loadListAttributes,
@@ -310,7 +311,7 @@ export async function initialValues(
   );
   const defaulted = new Set<string>();
   for (const attribute of attributes.values()) {
-    if (attribute.isSystem || attribute.archivedAt !== null || Object.hasOwn(given, attribute.id)) continue;
+    if (attribute.isSystem || isArchivedNow(attribute) || Object.hasOwn(given, attribute.id)) continue;
     const value = await defaultFor(tx, scope, attribute, timeZone);
     if (value === undefined) continue;
     inputs[attribute.id] = { value };
@@ -321,7 +322,7 @@ export async function initialValues(
       (attribute) =>
         attribute.isRequired &&
         !attribute.isSystem &&
-        attribute.archivedAt === null &&
+        !isArchivedNow(attribute) &&
         attribute.type !== 'checkbox' &&
         !Object.hasOwn(inputs, attribute.id),
     )

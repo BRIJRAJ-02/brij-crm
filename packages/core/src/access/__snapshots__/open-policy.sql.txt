@@ -12,7 +12,16 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -147,7 +156,16 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -282,7 +300,16 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -322,7 +349,16 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -383,10 +419,28 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."id" in ($1)
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."id" in ($1)
   ["<id 3>"]
 
 
@@ -521,7 +575,16 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -722,10 +785,28 @@ set local statement_timeout = '10s'
 select "object_id" from "lists" where "lists"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
   ["<id 3>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."list_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."list_id" = $1
   ["<id 2>"]
 
 
@@ -846,7 +927,16 @@ select "position", "text_value", "number_value"::text, "date_value"::text, to_ch
 select "list_entries"."id", "list_entries"."list_id", "list_entries"."record_id", "list_entries"."created_at", "list_entries"."created_by_type", "list_entries"."created_by_id", "list_entries"."updated_at", "list_entries"."updated_by_type", "list_entries"."updated_by_id" from "list_entries" inner join "records" on ("records"."workspace_id" = "list_entries"."workspace_id" and "records"."id" = "list_entries"."record_id" and "records"."deleted_at" is null) where ("list_entries"."deleted_at" is null and "list_entries"."id" in ($1)) order by "list_entries"."id" asc
   ["<id 10>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."list_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."list_id" = $1
   ["<id 2>"]
 
 select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1) and "values"."active_until" is null and "values"."is_cleared" = $2)
@@ -869,7 +959,16 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -987,7 +1086,16 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -1107,7 +1215,16 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -1270,7 +1387,16 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -1399,7 +1525,16 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -1507,7 +1642,16 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -1541,7 +1685,16 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -1596,10 +1749,28 @@ set local statement_timeout = '10s'
 select "object_id" from "lists" where "lists"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
   ["<id 3>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."list_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."list_id" = $1
   ["<id 2>"]
 
 
@@ -1639,7 +1810,16 @@ set local statement_timeout = '10s'
 select "id" from "objects" where "objects"."id" = $1
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -1745,7 +1925,16 @@ select "workspace_id", "id", "object_id", "deleted_at", "deleted_by_type", "dele
 select "workspace_id", "id", "api_slug", "singular_name", "plural_name", "icon", "hue", "is_standard", "standard_key", "template_version", "primary_attribute_id", "position", "archived_at", "created_at", "created_by_type", "created_by_id", "created_by_member_id", "updated_at", "updated_by_type", "updated_by_id", "updated_by_member_id" from "objects" where "objects"."id" in ($1)
   ["<id 2>"]
 
-select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1, $2, $3, $4) and "values"."active_until" is null)

@@ -48,7 +48,17 @@ export {
   type StartWorkspaceDeps,
 } from './account/account.ts';
 export { milestoneHook, type ReachedMilestone } from './milestones/milestones.ts';
-export { listObjects } from './objects/objects.ts';
+export {
+  archiveObject,
+  createObject,
+  editObject,
+  listObjects,
+  moveObject,
+  restoreObject,
+  type CreateObjectInput,
+  type EditObjectInput,
+} from './objects/objects.ts';
+export { getUsage } from './objects/usage.ts';
 export { addAttribute, listObjectAttributes, type AddAttributeInput } from './attributes/attributes.ts';
 export {
   addRecord,

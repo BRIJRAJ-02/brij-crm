@@ -1,23 +1,26 @@
 // Defining objects and attributes (spec 0004). Standard objects come from the
 // template through these same functions, so they are ordinary rows. Renames,
 // archives and setting changes touch definition rows only, never records.
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import {
+  API_SLUG_PATTERN,
   AttributeConfig,
   AttributeDefault,
   defaultKindsFor,
   HUES,
+  isReservedSlug,
   OBJECT_ICONS,
   parseAttributeValue,
+  type ApiSlugKind,
   type AttributeType,
 } from '@crm/contracts/values';
-import { checkId, isUuid } from './ids.ts';
+import { checkId, isUuid, isUuidV7, uuidArray } from './ids.ts';
 import { checkAttributeRoom, takeCustomObject, type AttributeParent } from './limits.ts';
-import { postgresError, refuse } from './refusals.ts';
+import { isRefusal, postgresError, refuse, refuseOn } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
 import { clearUniqueKeys, fillUniqueKeys, UNIQUE_TYPES } from './unique.ts';
-import { loadAttribute, type AttributeDef } from './values.ts';
+import { ARCHIVED_BY, loadAttribute, type AttributeDef } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
 import { requirePermission } from '../access/check.ts';
@@ -26,10 +29,16 @@ import { objectLevel, type Access } from '../access/policy.ts';
 
 const { attributes, objects, workspaceCounters } = schema;
 
-const SLUG = /^[a-z][a-z0-9_]{0,62}$/;
+/** The longest description an attribute may have (spec 0012). */
+const MAX_DESCRIPTION = 500;
 
 /** What a new object needs. Its primary attribute (the record's name) is created with it. */
 export interface ObjectInput {
+  /**
+   * A UUID v7 the client minted (spec 0012, AC-244): the retry key. The same
+   * create again answers the object already made and writes nothing.
+   */
+  readonly id?: string;
   readonly apiSlug: string;
   readonly singularName: string;
   readonly pluralName: string;
@@ -93,25 +102,82 @@ const SYSTEM_ATTRIBUTES = [
   { apiSlug: 'updated_by', title: 'Updated by', type: 'actor_reference', systemColumn: 'updated_by' },
 ] as const;
 
-/** Refuses an API name that isn't lowercase letters, digits and underscores, starting with a letter. */
-export function checkSlug(slug: string): void {
-  if (!SLUG.test(slug)) {
-    throw refuse('CONFIG_INVALID', 'Use lowercase letters, digits and underscores, starting with a letter.');
+/** A refusal on `field` of the input when one is named, else a plain one. */
+const refuseAt = (code: 'CONFIG_INVALID', message: string, field: string | undefined) =>
+  field === undefined ? refuse(code, message) : refuseOn(code, message, field);
+
+/**
+ * Refuses an API name that isn't lowercase letters, digits and underscores,
+ * starting with a letter, and an object API name on the reserved list
+ * (`RESERVED_SLUGS`, route segments beside `$object`; spec 0012, AC-245),
+ * on `field` of the input when one is named.
+ */
+export function checkSlug(slug: string, kind: ApiSlugKind = 'attribute', field?: string): void {
+  if (!API_SLUG_PATTERN.test(slug)) {
+    throw refuseAt('CONFIG_INVALID', 'Use lowercase letters, digits and underscores, starting with a letter.', field);
+  }
+  if (kind === 'object' && isReservedSlug(slug)) {
+    throw refuseAt('CONFIG_INVALID', 'That API name is reserved. Pick another.', field);
   }
 }
 
-/** Refuses a name that is empty or longer than 100 characters. */
-export function checkName(name: string, what: string): void {
+/** Refuses a name that is empty or longer than 100 characters, on `field` of the input when one is named. */
+export function checkName(name: string, what: string, field?: string): void {
   if (name.trim() === '' || name.length > 100)
-    throw refuse('CONFIG_INVALID', `Give the ${what} in 1 to 100 characters.`);
+    throw refuseAt('CONFIG_INVALID', `Give the ${what} in 1 to 100 characters.`, field);
+}
+
+/** Refuses a description longer than 500 characters (spec 0012). */
+export function checkDescription(description: string | null | undefined): void {
+  if (typeof description === 'string' && description.length > MAX_DESCRIPTION) {
+    throw refuseOn('CONFIG_INVALID', `Keep the description to ${String(MAX_DESCRIPTION)} characters.`, 'description');
+  }
 }
 
 function checkLook(icon: string | undefined, hue: string | undefined): void {
   if (icon !== undefined && !(OBJECT_ICONS as readonly string[]).includes(icon)) {
-    throw refuse('CONFIG_INVALID', 'Pick an icon from the object icon set.');
+    throw refuseOn('CONFIG_INVALID', 'Pick an icon from the object icon set.', 'icon');
   }
   if (hue !== undefined && !(HUES as readonly string[]).includes(hue)) {
-    throw refuse('CONFIG_INVALID', `Pick one of the hues: ${HUES.join(', ')}.`);
+    throw refuseOn('CONFIG_INVALID', `Pick one of the hues: ${HUES.join(', ')}.`, 'hue');
+  }
+}
+
+/**
+ * `definitionGuard` for an object's own row: a taken API name refuses on
+ * `apiSlug`, a name another object holds (ignoring case, archived ones
+ * included) `NAME_TAKEN` on the name it names (spec 0012, AC-224), and an id
+ * another object holds `ID_TAKEN`.
+ */
+async function objectGuard<T>(
+  names: { readonly singularName?: string | undefined; readonly pluralName?: string | undefined },
+  work: () => Promise<T>,
+): Promise<T> {
+  try {
+    return await definitionGuard(work);
+  } catch (error) {
+    if (isRefusal(error) && error.refusal.code === 'SLUG_TAKEN' && error.refusal.field === undefined) {
+      throw refuseOn('SLUG_TAKEN', 'An object already uses this API name. Pick another.', 'apiSlug');
+    }
+    const pg = postgresError(error);
+    if (pg?.code === '23505' && pg.constraint === 'objects_singular_name') {
+      throw refuseOn(
+        'NAME_TAKEN',
+        `An object called ${names.singularName?.trim() ?? 'that'} already exists.`,
+        'singularName',
+      );
+    }
+    if (pg?.code === '23505' && pg.constraint === 'objects_plural_name') {
+      throw refuseOn(
+        'NAME_TAKEN',
+        `An object called ${names.pluralName?.trim() ?? 'that'} already exists.`,
+        'pluralName',
+      );
+    }
+    if (pg?.code === '23505' && pg.constraint === 'objects_pkey') {
+      throw refuse('ID_TAKEN', 'An object with that id already exists.');
+    }
+    throw error;
   }
 }
 
@@ -177,18 +243,23 @@ function parseDefault(type: AttributeType, isMulti: boolean, input: unknown): At
   return result.data;
 }
 
-/**
- * The position after the workspace's last object, read under the workspace
- * counters row's lock (taken here, held to the end of the write), so
- * concurrent creates queue and each lands at the end.
- */
-async function nextObjectPosition(tx: WorkspaceTx, scope: EngineScope): Promise<number> {
+/** Takes the workspace counters row's lock for the rest of the write: object creates and moves take turns on it. */
+async function lockCounters(tx: WorkspaceTx, scope: EngineScope): Promise<void> {
   const [locked] = await tx
     .select({ workspaceId: workspaceCounters.workspaceId })
     .from(workspaceCounters)
     .where(eq(workspaceCounters.workspaceId, scope.workspaceId))
     .for('update');
   if (locked === undefined) throw new Error('The workspace has no counters row.');
+}
+
+/**
+ * The position after the workspace's last object, read under the workspace
+ * counters row's lock (taken here, held to the end of the write), so
+ * concurrent creates queue and each lands at the end.
+ */
+async function nextObjectPosition(tx: WorkspaceTx, scope: EngineScope): Promise<number> {
+  await lockCounters(tx, scope);
   const [next] = await tx
     .execute<{ position: number }>(
       sql`select coalesce(max(${objects.position}) + 1, 0)::int as position from ${objects} where ${objects.workspaceId} = ${scope.workspaceId}`,
@@ -197,25 +268,61 @@ async function nextObjectPosition(tx: WorkspaceTx, scope: EngineScope): Promise<
   return next?.position ?? 0;
 }
 
+/** What inserting an object made: its id and primary attribute, and whether it was already made by an earlier try. */
+export interface InsertedObject {
+  readonly objectId: string;
+  readonly primaryAttributeId: string;
+  /** The same create came again after a lost answer: nothing was written this time. */
+  readonly replayed: boolean;
+}
+
+/**
+ * The object an earlier try of the same create made (spec 0012, AC-244):
+ * undefined when no object holds the id, the object when this actor made it,
+ * else `ID_TAKEN`. Read under the counters row's lock, so a concurrent try
+ * with the same id has committed or not started.
+ */
+async function earlierObject(tx: WorkspaceTx, scope: EngineScope, id: string): Promise<InsertedObject | undefined> {
+  const [row] = await tx
+    .select({
+      id: objects.id,
+      primaryAttributeId: objects.primaryAttributeId,
+      createdByType: objects.createdByType,
+      createdById: objects.createdById,
+    })
+    .from(objects)
+    .where(eq(objects.id, id));
+  if (row === undefined) return undefined;
+  const isOwnTry = row.createdByType === scope.actor.type && row.createdById === scope.actor.id;
+  if (!isOwnTry || row.primaryAttributeId === null) throw refuse('ID_TAKEN', 'An object with that id already exists.');
+  return { objectId: row.id, primaryAttributeId: row.primaryAttributeId, replayed: true };
+}
+
 /** Inserts an object, its system attributes and its primary attribute, inside a write. */
-export async function insertObject(
-  context: WriteContext,
-  input: ObjectInput,
-): Promise<{ objectId: string; primaryAttributeId: string }> {
+export async function insertObject(context: WriteContext, input: ObjectInput): Promise<InsertedObject> {
   const { tx, scope } = context;
-  checkSlug(input.apiSlug);
-  checkName(input.singularName, 'singular name');
-  checkName(input.pluralName, 'plural name');
+  if (input.id !== undefined && !isUuidV7(input.id)) {
+    throw refuse('CONFIG_INVALID', 'The object id must be a UUID v7.');
+  }
+  checkSlug(input.apiSlug, 'object', 'apiSlug');
+  checkName(input.singularName, 'singular name', 'singularName');
+  checkName(input.pluralName, 'plural name', 'pluralName');
   checkLook(input.icon, input.hue);
   const primary = input.primaryAttribute ?? { apiSlug: 'name', title: 'Name', type: 'text' };
   checkSlug(primary.apiSlug);
   // The workspace counters row first, as every object create takes it in the same order: the new object's place
   // (the end of the workspace's order) is read under it, so two creates never take one position (spec 0012).
   const position = await nextObjectPosition(tx, scope);
-  const created = await definitionGuard(async () => {
+  const id = input.id?.toLowerCase();
+  if (id !== undefined) {
+    const earlier = await earlierObject(tx, scope, id);
+    if (earlier !== undefined) return earlier;
+  }
+  const created = await objectGuard(input, async () => {
     const [object] = await tx
       .insert(objects)
       .values({
+        ...(id === undefined ? {} : { id }),
         position,
         workspaceId: scope.workspaceId,
         apiSlug: input.apiSlug,
@@ -255,7 +362,7 @@ export async function insertObject(
       .returning({ id: attributes.id });
     if (name === undefined) throw new Error('The primary attribute was not created.');
     await tx.update(objects).set({ primaryAttributeId: name.id }).where(eq(objects.id, object.id));
-    return { objectId: object.id, primaryAttributeId: name.id };
+    return { objectId: object.id, primaryAttributeId: name.id, replayed: false };
   });
   // The custom object slot (the counters row is already held): a full workspace refuses here and the refusal
   // rolls the object back.
@@ -285,6 +392,7 @@ export async function insertAttribute(
   const parent = parentOf(input);
   checkSlug(input.apiSlug);
   checkName(input.title, 'title');
+  checkDescription(input.description);
   if (input.type === 'record_reference' && (internal.reference !== true || 'listId' in parent)) {
     throw refuse('CONFIG_INVALID', 'Add a record reference by defining a relationship.');
   }
@@ -374,6 +482,7 @@ export async function updateAttribute(scope: EngineScope, input: AttributeUpdate
       const { tx } = context;
       const attribute = await editable(tx, context.scope.access, input.attributeId);
       if (input.title !== undefined) checkName(input.title, 'title');
+      checkDescription(input.description);
       if (input.isUnique === true && !UNIQUE_TYPES.includes(attribute.type)) {
         throw refuse('CONFIG_INVALID', 'Only text, email, domain, URL, phone and number attributes can be unique.');
       }
@@ -459,20 +568,22 @@ export async function updateObject(scope: EngineScope, input: ObjectUpdate, hook
   await runWrite(
     scope,
     async ({ tx, ...context }) => {
-      if (input.singularName !== undefined) checkName(input.singularName, 'singular name');
-      if (input.pluralName !== undefined) checkName(input.pluralName, 'plural name');
+      if (input.singularName !== undefined) checkName(input.singularName, 'singular name', 'singularName');
+      if (input.pluralName !== undefined) checkName(input.pluralName, 'plural name', 'pluralName');
       checkLook(input.icon, input.hue);
-      const updated = await tx
-        .update(objects)
-        .set({
-          ...(input.singularName === undefined ? {} : { singularName: input.singularName.trim() }),
-          ...(input.pluralName === undefined ? {} : { pluralName: input.pluralName.trim() }),
-          ...(input.icon === undefined ? {} : { icon: input.icon }),
-          ...(input.hue === undefined ? {} : { hue: input.hue }),
-          ...touched(scope),
-        })
-        .where(eq(objects.id, input.objectId))
-        .returning({ id: objects.id });
+      const updated = await objectGuard(input, () =>
+        tx
+          .update(objects)
+          .set({
+            ...(input.singularName === undefined ? {} : { singularName: input.singularName.trim() }),
+            ...(input.pluralName === undefined ? {} : { pluralName: input.pluralName.trim() }),
+            ...(input.icon === undefined ? {} : { icon: input.icon }),
+            ...(input.hue === undefined ? {} : { hue: input.hue }),
+            ...touched(scope),
+          })
+          .where(eq(objects.id, input.objectId))
+          .returning({ id: objects.id }),
+      );
       const [object] = updated;
       if (object === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
       context.record({ definitions: [{ objectId: object.id, attributeIds: [] }] });
@@ -511,16 +622,75 @@ export async function setObjectArchived(
 /**
  * The live attributes of an object, as definitions, in position order: only
  * those the principal may see (spec 0009, AC-141), so none for an object they
- * can't see. None for a malformed id.
+ * can't see. None for a malformed id. A record reference whose far object is
+ * archived is archived too (spec 0012): left out unless `includeArchived`,
+ * as the ones archived themselves are; `archivedBy` names that object.
  */
-export async function listAttributes(scope: EngineScope, objectId: string) {
+export async function listAttributes(
+  scope: EngineScope,
+  objectId: string,
+  options: { readonly includeArchived?: boolean } = {},
+) {
   if (!isUuid(objectId)) return [];
   const rows = await inWorkspace(scope, (tx) =>
     tx
-      .select()
+      .select({ attribute: attributes, archivedBy: ARCHIVED_BY })
       .from(attributes)
-      .where(and(eq(attributes.objectId, objectId), isNull(attributes.archivedAt)))
+      .where(
+        options.includeArchived === true
+          ? eq(attributes.objectId, objectId)
+          : and(eq(attributes.objectId, objectId), isNull(attributes.archivedAt)),
+      )
       .orderBy(attributes.position),
   );
-  return rows.filter((row) => attributeVisible(scope.access, row));
+  return rows.flatMap(({ attribute, archivedBy }) =>
+    attributeVisible(scope.access, attribute) && (options.includeArchived === true || archivedBy === null)
+      ? [{ ...attribute, archivedBy }]
+      : [],
+  );
+}
+
+/**
+ * Moves an object to `position` in the workspace's order (spec 0012, AC-225):
+ * the others close up around it, archived ones included, so a restored object
+ * comes back where it was. Renumbers in one statement under the counters
+ * row's lock, the one every object create takes, so a create and a move never
+ * interleave. Records only the moved object's change.
+ */
+export async function reorderObject(
+  scope: EngineScope,
+  input: { readonly objectId: string; readonly position: number },
+  hooks: readonly AfterWrite[] = [],
+): Promise<void> {
+  requirePermission(scope, 'schema.manage');
+  const objectId = checkId(input.objectId, 'That object does not exist.');
+  if (objectLevel(scope.access, objectId) === 'none') throw refuse('NOT_FOUND', 'That object does not exist.');
+  if (!Number.isInteger(input.position) || input.position < 0) {
+    throw refuseOn('CONFIG_INVALID', 'Give the position as a whole number from 0.', 'position');
+  }
+  await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      await lockCounters(tx, context.scope);
+      const order = await tx
+        .select({ id: objects.id })
+        .from(objects)
+        .where(eq(objects.workspaceId, context.scope.workspaceId))
+        .orderBy(asc(objects.position), asc(objects.createdAt), asc(objects.id));
+      const ids = order.map((row) => row.id);
+      const from = ids.indexOf(objectId);
+      if (from === -1) throw refuse('NOT_FOUND', 'That object does not exist.');
+      const rest = ids.filter((id) => id !== objectId);
+      const to = Math.min(input.position, rest.length);
+      const next = [...rest.slice(0, to), objectId, ...rest.slice(to)];
+      const list = uuidArray(next);
+      await tx.execute(sql`
+        update ${objects} set position = array_position(${list}, id) - 1
+        where id = any(${list}) and position is distinct from array_position(${list}, id) - 1
+      `);
+      context.record({ definitions: [{ objectId, attributeIds: [] }] });
+    },
+    hooks,
+  );
 }

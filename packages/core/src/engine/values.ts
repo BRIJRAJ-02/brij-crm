@@ -30,12 +30,46 @@ export interface AttributeDef {
   readonly isSystem: boolean;
   readonly systemColumn: 'id' | 'created_at' | 'created_by' | 'updated_at' | 'updated_by' | null;
   readonly archivedAt: Date | null;
+  /**
+   * For a record reference: the far end's object, while that object is
+   * archived (spec 0012, AC-226), else null. The attribute then behaves
+   * exactly as an archived one (`isArchivedNow`) without its row changing.
+   */
+  readonly archivedBy: string | null;
   /** Type specific settings, already parsed by `AttributeConfig[type]` when stored. */
   readonly config: unknown;
   /** The stored `AttributeDefault`, or null. */
   readonly defaultValue: unknown;
   /** For a record reference: the relationship it is one end of. */
   readonly relationshipId: string | null;
+}
+
+/**
+ * The archived by object rule as SQL (spec 0012): for a record reference, the
+ * object at its relationship's far end when that object is archived (for a
+ * one way reference, its first target once every target is archived), else
+ * null. Nothing is looked up for an attribute with no relationship. It names
+ * the outer table as `attributes`, so it is selected only from that table
+ * unaliased (drizzle leaves single table columns unqualified).
+ */
+export const ARCHIVED_BY = sql<string | null>`(case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end)`;
+
+/**
+ * The one archived rule (spec 0012): an attribute is archived when its own
+ * row is, or when it is a record reference whose far object is archived.
+ * Tables, dialogs, filters, the write parser and defaults all ask this.
+ */
+export function isArchivedNow(attribute: Pick<AttributeDef, 'archivedAt' | 'archivedBy'>): boolean {
+  return attribute.archivedAt !== null || attribute.archivedBy !== null;
 }
 
 /** The columns `AttributeDef` reads. */
@@ -52,6 +86,7 @@ const DEF_COLUMNS = {
   isSystem: attributes.isSystem,
   systemColumn: attributes.systemColumn,
   archivedAt: attributes.archivedAt,
+  archivedBy: ARCHIVED_BY,
   config: attributes.config,
   defaultValue: attributes.defaultValue,
   relationshipId: attributes.relationshipId,
@@ -253,6 +288,13 @@ export function parseFor(attribute: AttributeDef, input: unknown): unknown {
   }
   if (attribute.archivedAt !== null) {
     throw refuse('ATTRIBUTE_READ_ONLY', `${attribute.title} is archived. Restore it to change it.`, attribute.id);
+  }
+  if (attribute.archivedBy !== null) {
+    throw refuse(
+      'ATTRIBUTE_READ_ONLY',
+      `${attribute.title} links to an archived object. Restore that object to change it.`,
+      attribute.id,
+    );
   }
   const parsed = parseAttributeValue(attribute.type, input, { allowMultiple: attribute.isMulti });
   if (!parsed.ok) throw refuse(parsed.error.code, parsed.error.message, attribute.id);

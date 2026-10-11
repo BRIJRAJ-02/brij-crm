@@ -159,3 +159,38 @@ export async function checkOptionRoom(tx: WorkspaceTx, scope: EngineScope, attri
     throw refuse('LIMIT_REACHED', `An attribute holds at most ${String(limit)} options.`);
   }
 }
+
+/**
+ * The workspace's custom objects as the limit counts them (archived ones keep
+ * their slot), read from the counters row `takeCustomObject` moves, so a
+ * meter shows exactly what the next create is checked against (spec 0012,
+ * AC-243).
+ */
+export async function countCustomObjects(tx: WorkspaceTx, scope: EngineScope): Promise<number> {
+  const [row] = await tx
+    .select({ customObjects: workspaceCounters.customObjects })
+    .from(workspaceCounters)
+    .where(eq(workspaceCounters.workspaceId, scope.workspaceId));
+  return row?.customObjects ?? 0;
+}
+
+/**
+ * Each object's attributes as `checkAttributeRoom` counts them (non system,
+ * archived included), one row per attribute, so a caller can count only the
+ * ones its principal may see (spec 0012, AC-243).
+ */
+export function objectAttributeRows(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+): Promise<{ readonly id: string; readonly objectId: string | null }[]> {
+  return tx
+    .select({ id: attributes.id, objectId: attributes.objectId })
+    .from(attributes)
+    .where(
+      and(
+        eq(attributes.workspaceId, scope.workspaceId),
+        sql`${attributes.objectId} is not null`,
+        eq(attributes.isSystem, false),
+      ),
+    );
+}
