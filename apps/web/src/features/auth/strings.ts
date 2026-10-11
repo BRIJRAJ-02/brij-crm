@@ -32,5 +32,6 @@ export const strings = {
   googleSignUpClosed:
     'There’s no account for that Google email, and sign up isn’t open yet. Try another account, or use your email.',
   googleCancelled: 'Google sign in was cancelled. Try again, or use your email.',
+  googleUnverified: 'Google hasn’t verified that account’s email, so it can’t sign you in. Use your email instead.',
   googleFailed: 'Couldn’t sign in with Google. Try again, or use your email.',
 } as const;

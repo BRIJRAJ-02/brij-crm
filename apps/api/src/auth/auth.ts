@@ -251,6 +251,14 @@ function signupClosed(): APIError {
   return new APIError('FORBIDDEN', { code: 'SIGNUP_CLOSED', message: "Sign up isn't open yet." });
 }
 
+/** An account whose email nobody has proven (Google saying it isn't verified) is never made. */
+function emailUnverified(): APIError {
+  return new APIError('FORBIDDEN', {
+    code: 'EMAIL_UNVERIFIED',
+    message: 'That email isn’t verified. Sign in with a code sent to it instead.',
+  });
+}
+
 /**
  * Better Auth's own log lines, its message only (its arguments can carry
  * request data), scrubbed: it logs a failed query's raw message, which ends
@@ -349,6 +357,10 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS }: 
           // Every way an account is made (a code, Google) passes here.
           before: (user) => {
             if (!allowlist.allows(user.email)) throw signupClosed();
+            // Every account starts from a proven email: a code proves it, and Google only when it says verified.
+            // An unverified one could be someone else's address, waiting for its owner to sign in by code
+            // (pre registration takeover), so it makes no account.
+            if (!user.emailVerified) throw emailUnverified();
             return Promise.resolve();
           },
           // Once the account is written (Better Auth runs this after its transaction commits), and only for a new

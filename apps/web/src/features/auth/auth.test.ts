@@ -195,6 +195,10 @@ describe('what a refused step says', () => {
     expect(googleRefusal('access_denied')).toBe(strings.googleCancelled);
     expect(googleRefusal('unable_to_create_user')).toBe(strings.googleSignUpClosed);
     expect(googleRefusal('<script>')).toBe(strings.googleFailed);
+    // An email Google hasn't verified: no account is made (EMAIL_UNVERIFIED) and none is joined (account_not_linked).
+    expect(googleRefusal('EMAIL_UNVERIFIED')).toBe(strings.googleUnverified);
+    expect(googleRefusal('account_not_linked')).toBe(strings.googleUnverified);
+    expect(googleRefusal('SIGNUP_CLOSED')).toBe(strings.googleSignUpClosed);
   });
 
   it('writes waits in whole units, rounded up', () => {

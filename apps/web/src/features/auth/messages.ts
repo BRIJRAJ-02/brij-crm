@@ -62,10 +62,14 @@ export function verifyRefusal(
 /** Google's refusal codes (`/sign-in?error=`, lowercase from Better Auth) that mean sign up is closed. */
 const GOOGLE_SIGN_UP_CLOSED = new Set(['signup_closed', 'signup_disabled', 'unable_to_create_user']);
 
+/** Google's refusal codes for an email Google hasn't verified: it makes no account and joins none. */
+const GOOGLE_UNVERIFIED = new Set(['email_unverified', 'account_not_linked']);
+
 /** What a refused Google sign in says on `/sign-in`, from the `?error=` code it came back with; never the code itself. */
 export function googleRefusal(code: string): string {
   const known = code.toLowerCase();
   if (GOOGLE_SIGN_UP_CLOSED.has(known)) return strings.googleSignUpClosed;
   if (known === 'access_denied') return strings.googleCancelled;
+  if (GOOGLE_UNVERIFIED.has(known)) return strings.googleUnverified;
   return strings.googleFailed;
 }
