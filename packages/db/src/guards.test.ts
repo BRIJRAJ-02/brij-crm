@@ -11,7 +11,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from './client.ts';
 import * as tenantSchema from './schema/index.ts';
 
-const { appUrl, identityUrl, ownerUrl } = inject('testDatabase');
+const { appUrl, identityUrl, ownerUrl, workerUrl } = inject('testDatabase');
 
 /** Tables that are not tenant data: drizzle's own bookkeeping lives in its own schema. */
 const NOT_TENANT = new Set<string>();
@@ -125,7 +125,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005)', () => {
-  it('has exactly three security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly four security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -134,6 +134,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       order by 1
     `);
     expect(definers.rows).toEqual([
+      { name: 'crm_enqueue_job', owner: 'crm_queue' },
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
       { name: 'crm_search_text', owner: 'crm_search' },
@@ -150,16 +151,22 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     expect(bypass.rows.map((row) => row.role)).toEqual(['crm_relay', 'crm_search']);
   });
 
+  // Each owner role, its functions, their signatures, and who calls each: the app (and so the worker, which
+  // inherits it), or the worker alone (spec 0008: listing workspaces reaches across them, so the API never may).
   it.each([
-    ['crm_search', ['crm_search_text'], ['crm_search_text(uuid, text, integer)']],
+    ['crm_search', ['crm_search_text'], ['crm_search_text(uuid, text, integer)'], ['app']],
     [
       'crm_relay',
       ['crm_outbox_workspaces', 'crm_outbox_prune'],
       ['crm_outbox_workspaces(integer, uuid)', 'crm_outbox_prune(integer)'],
+      ['worker', 'app'],
     ],
-  ])('keeps %s unable to log in, owning only %s, and out of the app’s reach', async (name, fns, signatures) => {
-    const role = await owner.query<{ login: boolean; owned: number; members: number; app: boolean }>(
-      `
+    ['crm_queue', ['crm_enqueue_job'], ['crm_enqueue_job(uuid, timestamp with time zone)'], ['app']],
+  ])(
+    'keeps %s unable to log in, owning only %s, and out of the app’s reach',
+    async (name, fns, signatures, callers) => {
+      const role = await owner.query<{ login: boolean; owned: number; members: number; app: boolean }>(
+        `
       select r.rolcanlogin as login,
         (select count(*)::int from pg_class c where c.relowner = r.oid)
           + (select count(*)::int from pg_proc p where p.proowner = r.oid and p.proname <> all($2))
@@ -171,27 +178,29 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         pg_has_role('crm_app', r.oid, 'MEMBER') as app
       from pg_roles r where r.rolname = $1
     `,
-      [name, fns],
-    );
-    expect(role.rows).toEqual([{ login: false, owned: 0, members: 0, app: false }]);
-    // The app can call each, and nobody else by default.
-    for (const [index, signature] of signatures.entries()) {
-      const grants = await owner.query<{ app: boolean; anyone: boolean }>(
-        `
+        [name, fns],
+      );
+      expect(role.rows).toEqual([{ login: false, owned: 0, members: 0, app: false }]);
+      // The app (or the worker alone) can call each, and nobody else by default.
+      for (const [index, signature] of signatures.entries()) {
+        const grants = await owner.query<{ app: boolean; worker: boolean; anyone: boolean }>(
+          `
         select has_function_privilege('crm_app', $1, 'EXECUTE') as app,
+          has_function_privilege('crm_worker', $1, 'EXECUTE') as worker,
           exists (select 1 from aclexplode((select proacl from pg_proc where proname = $2)) where grantee = 0) as anyone
       `,
-        [signature, fns[index]],
-      );
-      expect(grants.rows, signature).toEqual([{ app: true, anyone: false }]);
-    }
-    // And an app login can't become it.
-    await expect(
-      db.withWorkspace(randomUUID(), (tx) => tx.execute(sql.raw(`set local role ${name}`))),
-    ).rejects.toMatchObject({
-      cause: { code: '42501' },
-    });
-  });
+          [signature, fns[index]],
+        );
+        expect(grants.rows, signature).toEqual([{ app: callers[index] === 'app', worker: true, anyone: false }]);
+      }
+      // And an app login can't become it.
+      await expect(
+        db.withWorkspace(randomUUID(), (tx) => tx.execute(sql.raw(`set local role ${name}`))),
+      ).rejects.toMatchObject({
+        cause: { code: '42501' },
+      });
+    },
+  );
 
   it('gives crm_relay select and delete on the outbox and nothing else', async () => {
     // From the catalog (information_schema hides grants the reader can't see), by every route.
@@ -254,8 +263,9 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     await event(b.workspaceId, 1, false);
     await event(done.workspaceId, 1, true);
 
-    // The app, outside any workspace: the function sees past row level security, and hands back ids only.
-    const app = new pg.Client({ connectionString: appUrl });
+    // The worker (the function is its alone, spec 0008), outside any workspace: the function sees past row level
+    // security, and hands back ids only.
+    const app = new pg.Client({ connectionString: workerUrl });
     await app.connect();
     try {
       const all = await app.query<Record<string, unknown>>('select * from crm_outbox_workspaces(500, null)');
@@ -291,7 +301,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
         ),
       );
     }
-    const app = new pg.Client({ connectionString: appUrl });
+    const app = new pg.Client({ connectionString: workerUrl });
     await app.connect();
     try {
       const ours = async (after: string | null) => {

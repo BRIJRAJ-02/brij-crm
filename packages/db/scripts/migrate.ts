@@ -1,23 +1,14 @@
-// Applies committed SQL migrations as the owner role, over the direct connection.
-// Runs as the api service's pre deploy step, before the new version starts.
-import { fileURLToPath } from 'node:url';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
-import pg from 'pg';
+// Applies every migration as the owner role, over the direct connection:
+// Graphile Worker's own first, then ours, then the rights on Graphile's schema
+// (`applyMigrations`, spec 0008). Runs as the api service's pre deploy step,
+// before the new version starts.
 import * as z from 'zod';
 import { assertDirectUrl } from '../src/direct.ts';
+import { applyMigrations } from '../src/migrations.ts';
 import { scriptEnv } from './env.ts';
 
 const env = scriptEnv({ DATABASE_URL_OWNER: z.url() });
 assertDirectUrl(env.DATABASE_URL_OWNER, 'DATABASE_URL_OWNER');
 
-const client = new pg.Client({ connectionString: env.DATABASE_URL_OWNER, application_name: 'crm-migrate' });
-await client.connect();
-try {
-  await migrate(drizzle({ client }), {
-    migrationsFolder: fileURLToPath(new URL('../migrations', import.meta.url)),
-  });
-  console.log('Migrations applied.');
-} finally {
-  await client.end();
-}
+await applyMigrations(env.DATABASE_URL_OWNER, 'crm-migrate');
+console.log('Migrations applied.');

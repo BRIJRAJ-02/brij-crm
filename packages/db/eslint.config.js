@@ -2,7 +2,12 @@ import { loadScriptImports, server } from '@crm/config/eslint';
 
 // The one package allowed to open database connections.
 export default [
-  ...server({ root: import.meta.dirname, databaseDriver: true }),
+  ...server({
+    root: import.meta.dirname,
+    databaseDriver: true,
+    // Graphile Worker's schema migrations run with ours (spec 0008); its runners live in apps/api/src/jobs/.
+    vendorWrappers: [{ files: ['src/migrations.ts'], allow: ['graphile-worker'] }],
+  }),
   // Spec 0005: the `auth` schema (global identity, no row level security) is
   // reached only through the identity store, so only src/identity/ imports it.
   {

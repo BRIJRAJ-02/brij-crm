@@ -98,6 +98,10 @@ const vendorSdks = {
         'better-auth',
         'better-auth/*',
         '@better-auth/*',
+        // The job queue (spec 0008): only apps/api/src/jobs/graphile.ts (the runners) and
+        // packages/db/src/migrations.ts (its schema migrations).
+        'graphile-worker',
+        'graphile-worker/*',
         // Icons: only packages/ui's Icon registry (src/atoms/Icon/icons.ts).
         'lucide-react',
         'lucide-react/*',

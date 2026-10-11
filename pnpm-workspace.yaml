@@ -42,6 +42,7 @@ catalog:
   eslint-plugin-jsx-a11y-x: 0.2.0
   eslint-plugin-react-hooks: 7.1.1
   globals: 17.13.0
+  graphile-worker: 0.18.0
   hono: 4.13.12
   lefthook: 2.1.15
   libphonenumber-js: 1.13.14

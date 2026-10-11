@@ -1,0 +1,263 @@
+// The queue's guard tests (spec 0008, AC-102, AC-115): Graphile Worker's
+// tables are the one place outside row level security, so the app can't read
+// or change them and reaches them only through `crm_enqueue_job`, which builds
+// the queue row itself (ids only) for a runnable job of the caller's own
+// workspace. `crm_queue` and `crm_worker` hold exactly the rights listed for
+// the pinned Graphile 0.18.0, so an upgrade that renames a table fails here
+// first.
+import { randomUUID } from 'node:crypto';
+import { sql } from 'drizzle-orm';
+import pg from 'pg';
+import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { createDatabase, type Database } from './client.ts';
+import { QUEUE_ROLE_RIGHTS, QUEUE_SCHEMA } from './migrations.ts';
+
+const { appUrl, ownerUrl, workerUrl } = inject('testDatabase');
+
+let owner: pg.Client;
+let db: Database;
+
+beforeAll(async () => {
+  owner = new pg.Client({ connectionString: ownerUrl });
+  await owner.connect();
+  db = createDatabase({ url: appUrl, applicationName: 'crm-queue-tests' });
+});
+
+afterAll(async () => {
+  await owner.end();
+  await db.close();
+});
+
+/** A workspace with its owner member, made inside `withWorkspace` as the app makes them. */
+async function workspaceWithMember(name: string) {
+  const workspaceId = randomUUID();
+  const memberId = randomUUID();
+  await db.withWorkspace(workspaceId, async (tx) => {
+    await tx.execute(
+      sql`insert into workspaces (id, name, slug, created_by_type, updated_by_type) values (${workspaceId}, ${name}, ${`${name}-${workspaceId}`}, 'system', 'system')`,
+    );
+    await tx.execute(
+      sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type) values (${workspaceId}, ${memberId}, ${name}, ${`${name}@example.com`}, 'owner', 'system', 'system')`,
+    );
+  });
+  return { workspaceId, memberId };
+}
+
+/** A job row in `status`, as the app writes one. */
+async function jobIn(
+  workspaceId: string,
+  memberId: string,
+  status: string,
+  lane: 'heavy' | 'light' = 'heavy',
+): Promise<string> {
+  const id = randomUUID();
+  const finished = ['succeeded', 'failed', 'cancelled'].includes(status);
+  await db.withWorkspace(workspaceId, (tx) =>
+    tx.execute(sql`
+      insert into jobs (workspace_id, id, kind, lane, status, params, priority, created_by_type, created_by_id,
+        created_by_member_id, finished_at)
+      values (${workspaceId}, ${id}, 'dev.simulate', ${lane}, ${status}, '{}'::jsonb, 0, 'member', ${memberId},
+        ${memberId}, ${finished ? sql`now()` : null})
+    `),
+  );
+  return id;
+}
+
+/** The queue rows for a job's key, as the owner sees them. */
+async function queueRows(jobId: string) {
+  const result = await owner.query<{
+    task: string;
+    queue: string | null;
+    payload: unknown;
+    priority: number;
+    max_attempts: number;
+  }>(
+    `select task_identifier as task, queue_name as queue, j.payload, j.priority, j.max_attempts
+     from ${QUEUE_SCHEMA}.jobs v join ${QUEUE_SCHEMA}._private_jobs j on j.id = v.id where v.key = $1`,
+    [`crm-job:${jobId}`],
+  );
+  return result.rows;
+}
+
+const enqueue = (workspaceId: string, jobId: string) =>
+  db.withWorkspace(workspaceId, async (tx) => {
+    const result = await tx.execute<{ queued: boolean }>(sql`select crm_enqueue_job(${jobId}::uuid) as queued`);
+    return result.rows[0]?.queued;
+  });
+
+describe('crm_enqueue_job', () => {
+  it('queues a runnable job of the caller’s workspace, ids only, on its lane, under its key', async () => {
+    const { workspaceId, memberId } = await workspaceWithMember('queue-heavy');
+    const heavy = await jobIn(workspaceId, memberId, 'queued');
+    const light = await jobIn(workspaceId, memberId, 'running', 'light');
+    expect(await enqueue(workspaceId, heavy)).toBe(true);
+    expect(await enqueue(workspaceId, light)).toBe(true);
+    expect(await queueRows(heavy)).toEqual([
+      {
+        task: 'crm_job_heavy',
+        queue: `heavy:${workspaceId}`,
+        payload: { workspaceId, jobId: heavy },
+        priority: 0,
+        max_attempts: 25,
+      },
+    ]);
+    expect(await queueRows(light)).toEqual([
+      { task: 'crm_job_light', queue: null, payload: { workspaceId, jobId: light }, priority: 0, max_attempts: 25 },
+    ]);
+  });
+
+  it('replaces a waiting row rather than adding a second one', async () => {
+    const { workspaceId, memberId } = await workspaceWithMember('queue-replace');
+    const job = await jobIn(workspaceId, memberId, 'queued');
+    await enqueue(workspaceId, job);
+    await enqueue(workspaceId, job);
+    expect(await queueRows(job)).toHaveLength(1);
+  });
+
+  it('refuses another workspace’s job, a finished one, and one outside any workspace', async () => {
+    const a = await workspaceWithMember('queue-a');
+    const b = await workspaceWithMember('queue-b');
+    const theirs = await jobIn(b.workspaceId, b.memberId, 'queued');
+    expect(await enqueue(a.workspaceId, theirs)).toBe(false);
+    for (const status of ['succeeded', 'failed', 'cancelled', 'ready']) {
+      const job = await jobIn(a.workspaceId, a.memberId, status);
+      expect(await enqueue(a.workspaceId, job), status).toBe(false);
+      expect(await queueRows(job), status).toEqual([]);
+    }
+    const app = new pg.Client({ connectionString: appUrl });
+    await app.connect();
+    try {
+      const outside = await app.query<{ queued: boolean }>('select crm_enqueue_job($1) as queued', [theirs]);
+      expect(outside.rows).toEqual([{ queued: false }]);
+    } finally {
+      await app.end();
+    }
+    expect(await queueRows(theirs)).toEqual([]);
+  });
+});
+
+describe('the queue tables', () => {
+  it('are closed to the app: no select, insert, update or delete, nor the schema', async () => {
+    const app = new pg.Client({ connectionString: appUrl });
+    await app.connect();
+    try {
+      for (const statement of [
+        `select * from ${QUEUE_SCHEMA}._private_jobs`,
+        `select * from ${QUEUE_SCHEMA}.jobs`,
+        `update ${QUEUE_SCHEMA}._private_jobs set run_at = now()`,
+        `delete from ${QUEUE_SCHEMA}._private_jobs`,
+        `select ${QUEUE_SCHEMA}.add_job('crm_job_heavy')`,
+        `select ${QUEUE_SCHEMA}.force_unlock_workers(array['x'])`,
+      ]) {
+        await expect(app.query(statement), statement).rejects.toMatchObject({ code: '42501' });
+      }
+    } finally {
+      await app.end();
+    }
+    const reach = await owner.query<{ usage: boolean }>(
+      `select has_schema_privilege('crm_app', '${QUEUE_SCHEMA}', 'USAGE') as usage`,
+    );
+    expect(reach.rows).toEqual([{ usage: false }]);
+  });
+
+  it('give crm_queue exactly what add_job needs in 0.18.0', async () => {
+    const tables = await owner.query<{ table: string; privileges: string }>(`
+      select c.relname as table, string_agg(p.privilege, ',' order by p.privilege) as privileges
+      from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      cross join unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) p(privilege)
+      where c.relkind in ('r', 'p', 'v', 'm', 'f', 'S') and n.nspname not in ('pg_catalog', 'information_schema')
+        and n.nspname not like 'pg\\_toast%' and has_table_privilege('crm_queue', c.oid, p.privilege)
+      group by 1 order by 1
+    `);
+    const expected = Object.entries(QUEUE_ROLE_RIGHTS.tables)
+      .map(([table, rights]) => ({ table, privileges: [...rights].sort().join(',') }))
+      .sort((x, y) => (x.table < y.table ? -1 : 1));
+    // The five columns of `jobs` the function reads, and Graphile's three tables.
+    const columns = await owner.query<{ column: string }>(`
+      select att.attname as column from pg_attribute att cross join lateral aclexplode(att.attacl) a
+      where a.grantee = 'crm_queue'::regrole and att.attrelid = 'public.jobs'::regclass and a.privilege_type = 'SELECT'
+      order by 1
+    `);
+    expect(tables.rows).toEqual(expected);
+    expect(columns.rows.map((row) => row.column)).toEqual(['id', 'lane', 'priority', 'status', 'workspace_id']);
+    const functions = await owner.query<{ name: string }>(`
+      select p.proname as name from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = '${QUEUE_SCHEMA}' and has_function_privilege('crm_queue', p.oid, 'EXECUTE') order by 1
+    `);
+    expect(functions.rows.map((row) => row.name)).toEqual([...QUEUE_ROLE_RIGHTS.functions]);
+    const sequences = await owner.query(`
+      select 1 from pg_class c cross join lateral aclexplode(c.relacl) a
+      where c.relkind = 'S' and a.grantee = 'crm_queue'::regrole
+    `);
+    expect(sequences.rowCount).toBe(0);
+    // Graphile turns row level security on for its tables with no policy (only the owner reads them); the one
+    // policy added lets crm_worker and crm_queue through, their grants above deciding what each may do.
+    const policies = await owner.query<{ table: string; roles: string; check: string }>(`
+      select tablename as table, array_to_string(roles, ',') as roles, coalesce(qual, '') || '/' || coalesce(with_check, '') as check
+      from pg_policies where schemaname = '${QUEUE_SCHEMA}' order by 1
+    `);
+    expect(policies.rows).toEqual(
+      ['_private_job_queues', '_private_jobs', '_private_known_crontabs', '_private_tasks'].map((table) => ({
+        table,
+        roles: 'crm_queue,crm_worker',
+        check: 'true/true',
+      })),
+    );
+    const memberOf = await owner.query(`select 1 from pg_auth_members where member = 'crm_queue'::regrole`);
+    expect(memberOf.rowCount).toBe(0);
+  });
+
+  it('give crm_worker every right on the schema but create, and nothing more than the app elsewhere', async () => {
+    const missing = await owner.query<{ name: string }>(`
+      select c.relname as name from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      where n.nspname = '${QUEUE_SCHEMA}' and (
+        (c.relkind = 'r' and not (has_table_privilege('crm_worker', c.oid, 'SELECT')
+          and has_table_privilege('crm_worker', c.oid, 'INSERT') and has_table_privilege('crm_worker', c.oid, 'UPDATE')
+          and has_table_privilege('crm_worker', c.oid, 'DELETE')))
+        or (c.relkind = 'v' and not has_table_privilege('crm_worker', c.oid, 'SELECT')))
+      union all
+      select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where n.nspname = '${QUEUE_SCHEMA}' and not has_function_privilege('crm_worker', p.oid, 'EXECUTE')
+    `);
+    expect(missing.rows).toEqual([]);
+    const schema = await owner.query<{ usage: boolean; create: boolean }>(
+      `select has_schema_privilege('crm_worker', '${QUEUE_SCHEMA}', 'USAGE') as usage,
+         has_schema_privilege('crm_worker', '${QUEUE_SCHEMA}', 'CREATE') as create`,
+    );
+    expect(schema.rows).toEqual([{ usage: true, create: false }]);
+    // Outside the queue, the worker's table rights are exactly the app's.
+    const beyond = await owner.query<{ name: string }>(`
+      select c.relname as name from pg_class c join pg_namespace n on n.oid = c.relnamespace
+      cross join unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) p(privilege)
+      where c.relkind in ('r', 'p', 'v', 'm', 'f') and n.nspname not in ('pg_catalog', 'information_schema', '${QUEUE_SCHEMA}')
+        and n.nspname not like 'pg\\_toast%'
+        and has_table_privilege('crm_worker', c.oid, p.privilege) <> has_table_privilege('crm_app', c.oid, p.privilege)
+    `);
+    expect(beyond.rows).toEqual([]);
+    const roles = await owner.query<{ role: string; login: boolean; bypass: boolean; groups: string }>(`
+      select r.rolname as role, r.rolcanlogin as login, r.rolbypassrls as bypass,
+        coalesce((select string_agg(g.rolname, ',' order by g.rolname) from pg_auth_members m
+          join pg_roles g on g.oid = m.roleid where m.member = r.oid), '') as groups
+      from pg_roles r where r.rolname in ('crm_worker', 'crm_queue') order by 1
+    `);
+    expect(roles.rows).toEqual([
+      { role: 'crm_queue', login: false, bypass: false, groups: '' },
+      { role: 'crm_worker', login: false, bypass: false, groups: 'crm_app' },
+    ]);
+  });
+
+  it('let the worker login read and change the queue, as Graphile’s runners do', async () => {
+    const worker = new pg.Client({ connectionString: workerUrl });
+    await worker.connect();
+    try {
+      await worker.query(`select count(*) from ${QUEUE_SCHEMA}._private_jobs`);
+      await worker.query(`select ${QUEUE_SCHEMA}.force_unlock_workers(array['nobody'])`);
+      // And it can't create there.
+      await expect(worker.query(`create table ${QUEUE_SCHEMA}.stray (id int)`)).rejects.toMatchObject({
+        code: '42501',
+      });
+    } finally {
+      await worker.end();
+    }
+  });
+});

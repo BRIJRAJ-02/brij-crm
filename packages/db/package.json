@@ -13,6 +13,7 @@
     "migrate": "node --env-file-if-exists=../../.env scripts/migrate.ts",
     "app-login": "node --env-file-if-exists=../../.env scripts/app-login.ts",
     "identity-login": "node --env-file-if-exists=../../.env scripts/identity-login.ts",
+    "worker-login": "node --env-file-if-exists=../../.env scripts/worker-login.ts",
     "reconcile:sort-keys": "node --env-file-if-exists=../../.env scripts/reconcile-sort-keys.ts",
     "check:journal": "node scripts/journal.ts",
     "lint": "eslint .",
@@ -22,6 +23,7 @@
     "@crm/contracts": "workspace:*",
     "better-auth": "catalog:",
     "drizzle-orm": "catalog:",
+    "graphile-worker": "catalog:",
     "pg": "catalog:",
     "zod": "catalog:"
   },

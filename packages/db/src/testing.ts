@@ -6,15 +6,15 @@
 // `crm_identity`, as the identity store does.
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { drizzle } from 'drizzle-orm/node-postgres';
-import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import pg from 'pg';
+import { applyMigrations } from './migrations.ts';
 
 /** The local Docker Postgres (`pnpm dev`) as its superuser, unless `TEST_DATABASE_ADMIN_URL` says otherwise. */
 const DEFAULT_ADMIN_URL = 'postgres://postgres:postgres@localhost:5433/postgres';
 const OWNER = { role: 'crm_owner', password: 'crm_owner_local' } as const;
 const APP = { role: 'crm_test_app', password: 'crm_test_app_local' } as const;
 const IDENTITY = { role: 'crm_test_identity', password: 'crm_test_identity_local' } as const;
+const WORKER = { role: 'crm_test_worker', password: 'crm_test_worker_local' } as const;
 /** A login role's options: no way around row level security, and nothing else either. */
 const LOGIN_OPTIONS = 'nosuperuser nobypassrls nocreatedb nocreaterole';
 /** The advisory lock that takes turns between packages setting up at once. */
@@ -26,6 +26,11 @@ export interface TestDatabase {
   readonly appUrl: string;
   /** The identity login role (a member of `crm_identity`): the only one that reads and writes schema `auth`. */
   readonly identityUrl: string;
+  /**
+   * The worker login role (a member of `crm_worker`, which inherits `crm_app`):
+   * the relay's and Graphile Worker's direct connection (spec 0008).
+   */
+  readonly workerUrl: string;
   /** The owner role, for checks that read the catalog or set up data across workspaces. */
   readonly ownerUrl: string;
   /**
@@ -80,16 +85,17 @@ export async function prepareTestDatabase(
     await admin.query(`drop database if exists ${admin.escapeIdentifier(name)} with (force)`);
     await admin.query(`create database ${admin.escapeIdentifier(name)} owner ${admin.escapeIdentifier(OWNER.role)}`);
 
+    // Graphile Worker's migrations, ours, then the queue rights, as `pnpm db:migrate` runs them.
+    await applyMigrations(ownerUrl, 'crm-test-migrate');
     const owner = new pg.Client({ connectionString: ownerUrl, application_name: 'crm-test-migrate' });
     await owner.connect();
     try {
-      await migrate(drizzle({ client: owner }), {
-        migrationsFolder: fileURLToPath(new URL('../migrations', import.meta.url)),
-      });
       await ensureRole(owner, APP.role, APP.password, LOGIN_OPTIONS);
       await owner.query(`grant crm_app to ${owner.escapeIdentifier(APP.role)}`);
       await ensureRole(owner, IDENTITY.role, IDENTITY.password, LOGIN_OPTIONS);
       await owner.query(`grant crm_identity to ${owner.escapeIdentifier(IDENTITY.role)}`);
+      await ensureRole(owner, WORKER.role, WORKER.password, LOGIN_OPTIONS);
+      await owner.query(`grant crm_worker to ${owner.escapeIdentifier(WORKER.role)}`);
     } finally {
       await owner.end();
     }
@@ -100,6 +106,7 @@ export async function prepareTestDatabase(
   return {
     appUrl: withCredentials(adminUrl, APP.role, APP.password, name),
     identityUrl: withCredentials(adminUrl, IDENTITY.role, IDENTITY.password, name),
+    workerUrl: withCredentials(adminUrl, WORKER.role, WORKER.password, name),
     ownerUrl,
     adminUrl: onDatabase(adminUrl, name),
   };

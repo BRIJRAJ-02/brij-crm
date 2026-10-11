@@ -15,7 +15,7 @@ import { testQuery } from '@crm/db/testing';
 import { createCentrifugoPublisher } from './centrifugo.ts';
 import { createRelay, type Relay, type RelayDeps } from './relay.ts';
 
-const { appUrl, ownerUrl, adminUrl } = inject('testDatabase');
+const { appUrl, ownerUrl, adminUrl, workerUrl } = inject('testDatabase');
 const API_KEY = 'test-centrifugo-key';
 
 interface Publication {
@@ -151,7 +151,7 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
     connect: async () => {
       connects += 1;
       const reader = createOutboxReader(
-        await openDirectConnection({ url: appUrl, applicationName, proveListen: false }),
+        await openDirectConnection({ url: workerUrl, applicationName, proveListen: false }),
       );
       return options.wrap?.(reader) ?? reader;
     },

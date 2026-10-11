@@ -11,7 +11,7 @@ import { openDirectConnection } from './direct.ts';
 import { createOutboxReader, type OutboxReader } from './outbox.ts';
 import { OUTBOX_RETENTION } from './schema/outbox.ts';
 
-const { appUrl, adminUrl } = inject('testDatabase');
+const { appUrl, adminUrl, workerUrl } = inject('testDatabase');
 
 let db: Database;
 const readers: OutboxReader[] = [];
@@ -26,7 +26,7 @@ afterAll(async () => {
 });
 
 async function reader(applicationName = 'crm-outbox-reader-tests'): Promise<OutboxReader> {
-  const opened = createOutboxReader(await openDirectConnection({ url: appUrl, applicationName }));
+  const opened = createOutboxReader(await openDirectConnection({ url: workerUrl, applicationName }));
   readers.push(opened);
   return opened;
 }
@@ -88,7 +88,7 @@ describe('the outbox reader', () => {
   });
 
   it('marks the last batch and reads the next in one round trip, scoped to the workspace, leaving no setting behind', async () => {
-    const direct = await openDirectConnection({ url: appUrl, applicationName: 'crm-outbox-reader-tests' });
+    const direct = await openDirectConnection({ url: workerUrl, applicationName: 'crm-outbox-reader-tests' });
     const queries: string[] = [];
     const query = direct.query.bind(direct) as (text: string, ...rest: unknown[]) => Promise<unknown>;
     // Count what reaches the client: each call is one round trip.
