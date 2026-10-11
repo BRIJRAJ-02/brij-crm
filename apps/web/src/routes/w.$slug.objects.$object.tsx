@@ -9,9 +9,14 @@ import { useWorkspaceName, WorkspacePage } from '../features/workspace/Workspace
 // One object's page, by its address (`people`). Object URLs are generic, so
 // custom objects (#13) reuse this route. The loader warms the object's view
 // (its count and first block, newest first, reading only the columns the
-// table shows) after its attributes and beside the workspace's members, all
+// table shows, waiting at most OPEN_GRACE_MS for its first rows, so a slow load
+// draws the table loading in place) after its attributes and beside the
+// workspace's members, all
 // through the data layer; the table reads the view itself and loads with this
 // route's component, so the grid stays out of the first load.
+/** How long the route waits for the first rows before showing the table loading in place. */
+const OPEN_GRACE_MS = 300;
+
 export const Route = createFileRoute('/w/$slug/objects/$object')({
   loader: async ({ context, params }) => {
     const objects = await context.data.objects.list(params.slug).catch((error: unknown) => {
@@ -28,7 +33,8 @@ export const Route = createFileRoute('/w/$slug/objects/$object')({
     const columns = readAttributeIds(object, attributes);
     const [members, view] = await Promise.all([
       membersLoading,
-      context.data.records.view(params.slug, object.id, queryOf(sort), columns),
+      // A quick load arrives with its rows; a slow one shows the table's own loading rows under its header.
+      context.data.records.open(params.slug, object.id, queryOf(sort), columns, OPEN_GRACE_MS),
     ]);
     return { table: { object, attributes, members, view, sort } };
   },

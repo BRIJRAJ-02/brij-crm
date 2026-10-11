@@ -862,6 +862,33 @@ export function createDataLayer({
         await view.ready();
         return view;
       },
+      /**
+       * The same view, answered as soon as it exists, settled or not, after
+       * waiting at most `graceMs` for it to settle: a quick load arrives with
+       * its rows, and a slow one hands the screen a loading view at once, so
+       * the table draws its header and loading rows in place rather than a
+       * page sized placeholder that jumps when the rows come.
+       */
+      async open(
+        workspace: string,
+        objectId: string,
+        query: ViewQuery = {},
+        attributeIds: readonly string[] = [],
+        graceMs = 0,
+      ): Promise<RecordsView> {
+        const view = (await recordsLayer()).view(workspace, objectId, query, attributeIds);
+        if (graceMs > 0) {
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          await Promise.race([
+            view.ready(),
+            new Promise<void>((resolve) => {
+              timer = setTimeout(resolve, graceMs);
+            }),
+          ]);
+          clearTimeout(timer);
+        }
+        return view;
+      },
       /** A new record's id: mint it once per form, and send the same one on every try, so nothing is made twice. */
       newId: () => mintId(),
       /**

@@ -520,6 +520,19 @@ describe('records', () => {
     expect(await data.records.view('acme', PEOPLE.id)).toBe(view);
   });
 
+  it('opens a view without waiting for it to settle, so a slow load can show the table loading in place', async () => {
+    const api = fakeApi({ query: () => [personRow(0)] });
+    const { data } = layer(api);
+    // No grace: answered before its first rows are in, still loading.
+    const view = await data.records.open('acme', PEOPLE.id);
+    expect(view.getSnapshot().status).toBe('loading');
+    await view.ready();
+    expect(view.getSnapshot().status).toBe('ready');
+    // The same view as `view` answers, settled; and a grace a quick load fits in answers it settled.
+    expect(await data.records.view('acme', PEOPLE.id)).toBe(view);
+    expect((await data.records.open('acme', PEOPLE.id, {}, [], 1_000)).getSnapshot().status).toBe('ready');
+  });
+
   it('waits the answer’s Retry-After when the workspace has too many reads in flight, then reads again', async () => {
     let busy = true;
     const api = fakeApi({
