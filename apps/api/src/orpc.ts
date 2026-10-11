@@ -10,7 +10,7 @@
 // `context.db` nor `context.identity`, so the door is its only way to the data. The contract walking
 // test fails if a procedure outside the bootstrap list isn't built on `member`.
 import { type AppEnvironment, contract, WorkspaceScoped } from '@crm/contracts';
-import { enterWorkspace, type RuleSource } from '@crm/core';
+import { enterWorkspace, type JobRegistry, type RuleSource } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import { implement, os } from '@orpc/server';
 import type { ResponseHeadersPluginContext } from '@orpc/server/plugins';
@@ -52,6 +52,8 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   realtime: RealtimeTokens | undefined;
   /** Where the door reads the workspace's rules: absent (none) outside tests until #24 (spec 0009). */
   rules?: RuleSource;
+  /** The job kinds this API knows (spec 0008): the test kind only locally and in previews. */
+  jobs: JobRegistry;
 }
 
 /** What `authed` adds: the signed in person. */

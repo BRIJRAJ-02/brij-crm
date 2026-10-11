@@ -1,7 +1,7 @@
 // Test helpers for the api's own suites: an app wired to a test router, a
 // database that is never reached, and a way to read the log lines it writes.
 import { ENGINE_REFUSAL_CODES, type EngineRefusal } from '@crm/contracts';
-import type { RuleSource } from '@crm/core';
+import type { JobRegistry, RuleSource } from '@crm/core';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
 import { ORPCError, os } from '@orpc/server';
 import { vi } from 'vitest';
@@ -71,6 +71,7 @@ export function testServices(
     wakeRelay?: WakeRelay;
     rules?: RuleSource;
     analytics?: Analytics;
+    jobs?: JobRegistry;
   } = {},
 ): AppServices {
   const db = options.db ?? unreachableDatabase();
@@ -88,6 +89,7 @@ export function testServices(
     wakeRelay: options.wakeRelay ?? NO_WAKE,
     ...(options.rules === undefined ? {} : { rules: options.rules }),
     ...(options.analytics === undefined ? {} : { analytics: options.analytics }),
+    ...(options.jobs === undefined ? {} : { jobs: options.jobs }),
   };
 }
 

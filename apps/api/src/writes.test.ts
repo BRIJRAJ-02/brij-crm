@@ -33,6 +33,8 @@ const READS: ReadonlySet<string> = new Set([
   'realtime.connectionToken',
   'realtime.subscriptionToken',
   'realtime.catchUp',
+  'jobs.list',
+  'jobs.get',
 ]);
 
 let db: Database;
@@ -61,13 +63,14 @@ interface OutboxRow {
   readonly object_id: string;
   readonly record_ids: string[];
   readonly attribute_ids: string[];
+  readonly item_ids: string[];
   readonly mutation_id: string | null;
 }
 
 async function outboxOf(workspaceId: string): Promise<OutboxRow[]> {
   return testQuery<OutboxRow & Record<string, unknown>>(
     ownerUrl,
-    'select kind, object_id, record_ids, attribute_ids, mutation_id from outbox where workspace_id = $1 order by seq',
+    'select kind, object_id, record_ids, attribute_ids, item_ids, mutation_id from outbox where workspace_id = $1 order by seq',
     [workspaceId],
   );
 }
@@ -157,6 +160,41 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     });
     return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [made.id], mutation_id: mutationId }];
   },
+  // Background jobs (spec 0008): one jobs row per write, naming the job.
+  'jobs.startTest': async (m, mutationId) => {
+    const job = await m.client.jobs.startTest({ workspace: m.slug, id: newId(), items: 3, mutationId });
+    return [{ kind: 'jobs', item_ids: [job.id], mutation_id: mutationId }];
+  },
+  'jobs.cancel': async (m, mutationId) => {
+    const job = await m.client.jobs.startTest({ workspace: m.slug, id: newId(), items: 3, mutationId: newId() });
+    await m.client.jobs.cancel({ workspace: m.slug, jobId: job.id, mutationId });
+    return [
+      { kind: 'jobs', item_ids: [job.id] },
+      { kind: 'jobs', item_ids: [job.id], mutation_id: mutationId },
+    ];
+  },
+  'jobs.confirm': async (m, mutationId) => {
+    const job = await m.client.jobs.startTest({ workspace: m.slug, id: newId(), items: 3, mutationId: newId() });
+    // Milestone 2 makes a ready job (a snapshot that waits for a confirm); here one is set by hand.
+    await testQuery(
+      ownerUrl,
+      "update jobs set status = 'ready', expires_at = now() + interval '1 hour' where id = $1",
+      [job.id],
+    );
+    await m.client.jobs.confirm({ workspace: m.slug, jobId: job.id, mutationId });
+    return [
+      { kind: 'jobs', item_ids: [job.id] },
+      { kind: 'jobs', item_ids: [job.id], mutation_id: mutationId },
+    ];
+  },
+};
+
+/** How many writes (each one poke) a case in WRITES makes before and with its own. */
+const WRITES_MADE: Readonly<Record<string, number>> = {
+  'records.setValues': 2,
+  'records.setValuesBatch': 3,
+  'jobs.cancel': 2,
+  'jobs.confirm': 2,
 };
 
 describe('the one write path', () => {
@@ -187,7 +225,7 @@ describe('the one write path', () => {
       const before = pokes;
       const expected = await write(m, mutationId);
       // One poke per write the case made (setValues makes its record first).
-      expect(pokes - before).toBe(path === 'records.setValues' ? 2 : path === 'records.setValuesBatch' ? 3 : 1);
+      expect(pokes - before).toBe(WRITES_MADE[path] ?? 1);
       const rows = await outboxOf(m.workspace.id);
       expect(rows).toHaveLength(expected.length);
       expected.forEach((row, index) => expect(rows[index]).toMatchObject(row));

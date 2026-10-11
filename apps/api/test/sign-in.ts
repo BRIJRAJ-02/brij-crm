@@ -2,7 +2,7 @@
 // sent to Mailpit and read back through its API (`GET /api/v1/messages`, then
 // `GET /api/v1/message/{id}`), and an oRPC client carrying the session cookie.
 import { randomInt, randomUUID } from 'node:crypto';
-import type { RuleSource } from '@crm/core';
+import type { JobRegistry, RuleSource } from '@crm/core';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
@@ -54,6 +54,7 @@ export function signInApp(
     wakeRelay?: WakeRelay;
     rules?: RuleSource;
     analytics?: Analytics;
+    jobs?: JobRegistry;
   } = {},
 ) {
   const env = testEnv(overrides);
@@ -64,6 +65,7 @@ export function signInApp(
     ...(options.wakeRelay ? { wakeRelay: options.wakeRelay } : {}),
     ...(options.rules ? { rules: options.rules } : {}),
     ...(options.analytics ? { analytics: options.analytics } : {}),
+    ...(options.jobs ? { jobs: options.jobs } : {}),
   });
   return { app: createApp({ services, env, ...(options.router ? { router: options.router } : {}) }), services };
 }

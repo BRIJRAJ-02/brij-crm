@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { type ErrorCode, errorStatus } from '@crm/contracts';
-import type { RuleSource } from '@crm/core';
+import { jobKinds, type JobRegistry, type RuleSource } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import type { AnyRouter } from '@orpc/server';
 import { Hono, type Context } from 'hono';
@@ -83,6 +83,8 @@ export interface AppServices {
    * set, else none. Absent (tests that don't look at events), nothing is sent.
    */
   readonly analytics?: Analytics;
+  /** The job kinds this API knows (spec 0008): the environment's (`jobKinds`) unless a test passes its own. */
+  readonly jobs?: JobRegistry;
 }
 
 /** The API. `router` is the app's own unless a test passes one. */
@@ -96,6 +98,8 @@ export function createApp({
   router?: AnyRouter;
 }) {
   const { db, identity, auth, wakeRelay, rules, timing, analytics = NO_ANALYTICS } = services;
+  // The job kinds (spec 0008): the test kind only locally and in previews.
+  const jobs = services.jobs ?? jobKinds({ environment: env.APP_ENV });
   const rpc = createRpcHandler(router);
   const edge = createEdgeGuard({ secret: env.EDGE_SECRET, environment: env.APP_ENV });
   const allowedOrigins = new Set([new URL(env.APP_URL).origin, ...(env.TRUSTED_ORIGINS ?? [])]);
@@ -185,6 +189,7 @@ export function createApp({
         readGate,
         realtime,
         testFault,
+        jobs,
         ...(rules === undefined ? {} : { rules }),
       },
     });
