@@ -16,6 +16,7 @@ import { insertOption } from './options.ts';
 import { isRefusal, postgresError, refuse } from './refusals.ts';
 import { insertRelationship } from './relationships.ts';
 import { systemScope } from '../access/door.ts';
+import { reachMilestone, type ReachedMilestone } from '../milestones/milestones.ts';
 import { inWorkspace } from '../access/run.ts';
 import type { EngineScope } from './scope.ts';
 import { runWrite, type AfterWrite } from './write.ts';
@@ -148,13 +149,20 @@ export interface UserWorkspace {
   readonly memberId: string;
   /** True when an earlier request with this id already made it (a dropped response, retried). */
   readonly replayed: boolean;
+  /**
+   * What this request reached (spec 0010, AC-175): `workspace_created` when
+   * it made the workspace, stored in the same transaction; none on a replay.
+   * The api sends its product event once this returns.
+   */
+  readonly milestones: readonly ReachedMilestone[];
 }
 
 /**
  * Creates a signed in user's workspace (spec 0005, AC-30): the workspace, its
  * counters, the standard template, the user's member row, and the directory
- * and membership rows, all in one transaction (the directory rows are written
- * by an after write step, before any `hooks` given). The system is the actor,
+ * and membership rows, and its `workspace_created` milestone, all in one
+ * transaction (the directory rows and the milestone are written by after
+ * write steps, before any `hooks` given). The system is the actor,
  * and the scope is built here; no outbox row is stored, since nobody can be
  * subscribed to a workspace that didn't exist.
  *
@@ -184,9 +192,15 @@ export async function createUserWorkspace(
       userId: input.firstMember.userId,
       memberId,
     });
+  // Set, never added to: a write tried again after a deadlock runs its steps again, and the last run committed.
+  let milestones: readonly ReachedMilestone[] = [];
+  const reached: AfterWrite = async (_change, tx) => {
+    const reachedAt = await reachMilestone(tx, input.id, 'workspace_created');
+    milestones = reachedAt === undefined ? [] : [{ milestone: 'workspace_created', workspaceId: input.id, reachedAt }];
+  };
   try {
-    await insertWorkspace(db, input, { workspaceId: input.id, memberId }, [directory, ...hooks]);
-    return { workspace: { id: input.id, slug: input.slug, name }, memberId, replayed: false };
+    await insertWorkspace(db, input, { workspaceId: input.id, memberId }, [directory, reached, ...hooks]);
+    return { workspace: { id: input.id, slug: input.slug, name }, memberId, replayed: false, milestones };
   } catch (error) {
     const pg = postgresError(error);
     const keyClash = pg?.code === '23505' && pg.constraint === WORKSPACE_KEY;
@@ -194,7 +208,9 @@ export async function createUserWorkspace(
     if (!keyClash && !slugClash) throw error;
     // A repeat clashes on the id or the slug (whichever index Postgres checks first), so either looks for it.
     const earlier = await findUserWorkspace(db, input.id, input.firstMember.userId);
-    if (earlier.kind === 'mine') return { workspace: earlier.workspace, memberId: earlier.memberId, replayed: true };
+    if (earlier.kind === 'mine') {
+      return { workspace: earlier.workspace, memberId: earlier.memberId, replayed: true, milestones: [] };
+    }
     if (earlier.kind === 'taken' || keyClash) throw refuse('ID_TAKEN', 'A workspace with that id already exists.');
     throw error;
   }

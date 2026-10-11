@@ -65,6 +65,8 @@ describe('a signed in user creates a workspace', () => {
       workspace: { id: given.id, slug: given.slug, name: 'Acme' },
       memberId: expect.any(String) as string,
       replayed: false,
+      // Reached in the same transaction (spec 0010, AC-175).
+      milestones: [{ milestone: 'workspace_created', workspaceId: given.id, reachedAt: expect.any(String) as string }],
     });
     const state = await inside(given.id);
     expect(state.workspaces).toEqual([{ id: given.id }]);
@@ -97,10 +99,11 @@ describe('a signed in user creates a workspace', () => {
     const given = await input();
     const first = await createUserWorkspace(db, given);
     const again = await createUserWorkspace(db, given);
-    expect(again).toEqual({ ...first, replayed: true });
+    // A repeat reaches nothing: the milestone was reached by the first.
+    expect(again).toEqual({ ...first, replayed: true, milestones: [] });
     // Even with a different name and slug, the id is what makes it the same request.
     const renamed = await createUserWorkspace(db, { ...given, name: 'Other', slug: `other-${tag()}` });
-    expect(renamed).toEqual({ ...first, replayed: true });
+    expect(renamed).toEqual({ ...first, replayed: true, milestones: [] });
     expect((await inside(given.id)).members).toHaveLength(1);
     expect(await identity.workspacesOf(given.firstMember.userId)).toEqual([first.workspace]);
   });
@@ -109,6 +112,7 @@ describe('a signed in user creates a workspace', () => {
     const given = await input();
     const results = await Promise.all([createUserWorkspace(db, given), createUserWorkspace(db, given)]);
     expect(results.map((result) => result.replayed).sort()).toEqual([false, true]);
+    expect(results.map((result) => result.milestones.length).sort()).toEqual([0, 1]);
     expect(results[0].memberId).toBe(results[1].memberId);
     expect((await inside(given.id)).members).toHaveLength(1);
   });

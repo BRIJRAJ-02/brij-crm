@@ -5,6 +5,7 @@
 // API sees only `Auth`.
 import { isIP } from 'node:net';
 import { EmailValue, emailDomain, errorStatus, type SignInProviders } from '@crm/contracts';
+import type { SignUpMethod } from '@crm/contracts/events';
 import type { IdentityStore } from '@crm/db';
 import { betterAuth, type DBAdapter } from 'better-auth';
 import { APIError, createAuthMiddleware } from 'better-auth/api';
@@ -13,6 +14,7 @@ import * as z from 'zod';
 import type { ApiEnv } from '../env.ts';
 import { log } from '../log.ts';
 import type { Mailer } from '../mail/mailer.ts';
+import { type Analytics, NO_ANALYTICS } from '../monitoring/posthog.ts';
 import { captureFault } from '../monitoring/sentry.ts';
 import { scrubText } from '@crm/contracts/monitoring';
 import { SIGN_IN_CODE_MINUTES, signInCodeEmail } from '../mail/sign-in-code.ts';
@@ -140,6 +142,20 @@ export interface AuthDeps {
   readonly env: ApiEnv;
   readonly identity: IdentityStore;
   readonly mailer: Mailer;
+  /** Where `user_signed_up` goes (spec 0010, AC-174); absent, nothing is sent. */
+  readonly analytics?: Analytics;
+}
+
+/**
+ * How a new account was made, from the route that made it (spec 0010,
+ * AC-174): the email code sign in, or Google (its callback, or a sign in
+ * with Google's id token). Any other route makes no account today, so it
+ * names no method and sends no event.
+ */
+export function signUpMethod(route: string | undefined): SignUpMethod | undefined {
+  if (route === SIGN_IN_CODE_PATH) return 'email_code';
+  if (route === '/callback/:id' || route === '/callback/google' || route === '/sign-in/social') return 'google';
+  return undefined;
 }
 
 /**
@@ -253,7 +269,7 @@ function libraryDetail(message: unknown): string {
 }
 
 /** Builds sign in for this environment. */
-export function createAuth({ env, identity, mailer }: AuthDeps): Auth {
+export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS }: AuthDeps): Auth {
   const local = env.APP_ENV === 'local';
   const allowlist = createAllowlist(env.APP_ENV, env.SIGNUP_ALLOWLIST);
   const google =
@@ -330,6 +346,17 @@ export function createAuth({ env, identity, mailer }: AuthDeps): Auth {
           // Every way an account is made (a code, Google) passes here.
           before: (user) => {
             if (!allowlist.allows(user.email)) throw signupClosed();
+            return Promise.resolve();
+          },
+          // Once the account is written (Better Auth runs this after its transaction commits), and only for a new
+          // one: signing in again creates no user. The user id only, never the email or name (AC-174).
+          after: (user, context) => {
+            const method = signUpMethod(context?.path);
+            if (method === undefined) {
+              log.warn('Sign up by a route that names no method; no product event', { analytics: 'skipped' });
+            } else {
+              analytics.capture({ event: 'user_signed_up', distinctId: user.id, properties: { method } });
+            }
             return Promise.resolve();
           },
         },

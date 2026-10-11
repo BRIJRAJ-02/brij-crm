@@ -10,6 +10,7 @@ import { type AppServices, createApp } from './app.ts';
 import { createAuth } from './auth/auth.ts';
 import type { ApiEnv } from './env.ts';
 import type { MailMessage, Mailer } from './mail/mailer.ts';
+import type { Analytics } from './monitoring/posthog.ts';
 import { NO_WAKE, type WakeRelay } from './realtime/wake.ts';
 import type { RequestContext } from './orpc.ts';
 
@@ -58,12 +59,19 @@ export function memoryMailer(): Mailer & { readonly sent: MailMessage[] } {
 }
 
 /**
- * The app's services on `db` and `identity` (both unreachable unless given), with sign in on `mailer`, and a
- * relay poke that does nothing unless `wakeRelay` is given.
+ * The app's services on `db` and `identity` (both unreachable unless given), with sign in on `mailer`, a
+ * relay poke that does nothing unless `wakeRelay` is given, and product events to `analytics` (none unless given).
  */
 export function testServices(
   env: ApiEnv,
-  options: { db?: Database; identity?: IdentityStore; mailer?: Mailer; wakeRelay?: WakeRelay; rules?: RuleSource } = {},
+  options: {
+    db?: Database;
+    identity?: IdentityStore;
+    mailer?: Mailer;
+    wakeRelay?: WakeRelay;
+    rules?: RuleSource;
+    analytics?: Analytics;
+  } = {},
 ): AppServices {
   const db = options.db ?? unreachableDatabase();
   const identity =
@@ -71,9 +79,15 @@ export function testServices(
   return {
     db,
     identity,
-    auth: createAuth({ env, identity, mailer: options.mailer ?? memoryMailer() }),
+    auth: createAuth({
+      env,
+      identity,
+      mailer: options.mailer ?? memoryMailer(),
+      ...(options.analytics === undefined ? {} : { analytics: options.analytics }),
+    }),
     wakeRelay: options.wakeRelay ?? NO_WAKE,
     ...(options.rules === undefined ? {} : { rules: options.rules }),
+    ...(options.analytics === undefined ? {} : { analytics: options.analytics }),
   };
 }
 

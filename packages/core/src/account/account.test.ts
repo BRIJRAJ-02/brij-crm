@@ -36,12 +36,18 @@ describe('the account', () => {
 
     const input = { id: newId(), name: 'Acme', slug: `acme-${tag()}`, memberName: ' Ada Lovelace ' };
     const created = await startWorkspace({ db, identity }, user, input);
-    expect(created).toEqual({ workspace: { id: input.id, slug: input.slug, name: 'Acme' } });
+    expect(created).toEqual({
+      workspace: { id: input.id, slug: input.slug, name: 'Acme' },
+      milestones: [{ milestone: 'workspace_created', workspaceId: input.id, reachedAt: expect.any(String) as string }],
+    });
     expect((await identity.getUser(user.id))?.name).toBe('Ada Lovelace');
     expect((await getMe({ identity }, user)).workspaces).toEqual([created.workspace]);
 
     // The same request again returns the same workspace, and keeps the name.
-    expect(await startWorkspace({ db, identity }, user, { ...input, memberName: 'Someone' })).toEqual(created);
+    expect(await startWorkspace({ db, identity }, user, { ...input, memberName: 'Someone' })).toEqual({
+      workspace: created.workspace,
+      milestones: [],
+    });
     expect((await identity.getUser(user.id))?.name).toBe('Ada Lovelace');
   });
 

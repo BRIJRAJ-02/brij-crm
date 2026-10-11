@@ -13,6 +13,7 @@ import { createApp } from '../src/app.ts';
 import type { ApiEnv } from '../src/env.ts';
 import { createMailpitMailer } from '../src/mail/mailpit.ts';
 import type { Mailer } from '../src/mail/mailer.ts';
+import type { Analytics } from '../src/monitoring/posthog.ts';
 import type { WakeRelay } from '../src/realtime/wake.ts';
 import type { router } from '../src/router.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from '../src/edge.ts';
@@ -47,7 +48,13 @@ export function testConnections(): { db: Database; identity: IdentityStore } {
 export function signInApp(
   connections: { db: Database; identity: IdentityStore },
   overrides: Partial<ApiEnv> = {},
-  options: { mailer?: Mailer; router?: AnyRouter; wakeRelay?: WakeRelay; rules?: RuleSource } = {},
+  options: {
+    mailer?: Mailer;
+    router?: AnyRouter;
+    wakeRelay?: WakeRelay;
+    rules?: RuleSource;
+    analytics?: Analytics;
+  } = {},
 ) {
   const env = testEnv(overrides);
   const mailer = options.mailer ?? createMailpitMailer({ url: MAILPIT_URL, from: env.MAIL_FROM });
@@ -56,6 +63,7 @@ export function signInApp(
     mailer,
     ...(options.wakeRelay ? { wakeRelay: options.wakeRelay } : {}),
     ...(options.rules ? { rules: options.rules } : {}),
+    ...(options.analytics ? { analytics: options.analytics } : {}),
   });
   return { app: createApp({ services, env, ...(options.router ? { router: options.router } : {}) }), services };
 }

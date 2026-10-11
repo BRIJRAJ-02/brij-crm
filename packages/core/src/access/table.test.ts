@@ -51,6 +51,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'cappedHook',
   'outboxHook',
   'outboxEvents',
+  // The first record milestone's hook (spec 0010, AC-176): it runs inside the write, after the door let it in.
+  'milestoneHook',
   // Change events as pure data (spec 0007): rows to events, the stub, the wire shape, catch up's collapse, and
   // the caller as an audience of one.
   'outboxEvent',

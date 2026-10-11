@@ -4,9 +4,15 @@
 // published even while the relay is dormant (`realtime/wake.ts`). No procedure
 // builds hooks of its own or pokes by hand, so none can forget either; a test
 // (`writes.test.ts`) calls every write procedure and fails if one doesn't come
-// through here. The audit log (#36) joins the hooks here.
-import { outboxHook, type AfterWrite } from '@crm/core';
+// through here. The audit log (#36) joins the hooks here. So does the first
+// record milestone (spec 0010, AC-176): stored in the write's transaction, its
+// product event queued only once the write has committed.
+import { milestoneHook, outboxHook, type AfterWrite, type ReachedMilestone } from '@crm/core';
+import { type MilestoneSender, sendMilestones } from './monitoring/milestones.ts';
 import type { RequestContext } from './orpc.ts';
+
+/** What a write needs from its request: the relay's poke, and what sending a milestone's event needs. */
+export type WriteRequest = Pick<RequestContext, 'wakeRelay'> & MilestoneSender;
 
 /** What a write procedure says about its write: the uuid the browser minted for it. */
 export interface WriteMeta {
@@ -18,10 +24,16 @@ export interface WriteMeta {
  * The hooks one write runs in its transaction, after its change lands: the
  * outbox hook (spec 0005, task 15), storing one outbox row per object the
  * write touched with `mutationId`, so a refused write stores none, and
- * telling `onStored` how many.
+ * telling `onStored` how many; then the milestone hook (spec 0010, AC-176),
+ * storing `first_record_created` the first time a member's write creates a
+ * record, and telling `onReached`.
  */
-function writeHooks(meta: WriteMeta, onStored: (count: number) => void): readonly AfterWrite[] {
-  return [outboxHook({ mutationId: meta.mutationId, onStored })];
+function writeHooks(
+  meta: WriteMeta,
+  onStored: (count: number) => void,
+  onReached: (reached: readonly ReachedMilestone[]) => void,
+): readonly AfterWrite[] {
+  return [outboxHook({ mutationId: meta.mutationId, onStored }), milestoneHook(onReached)];
 }
 
 /**
@@ -31,7 +43,7 @@ function writeHooks(meta: WriteMeta, onStored: (count: number) => void): readonl
  * can be subscribed to a workspace that didn't exist) and takes no hooks.
  */
 export async function commitWrite<T>(
-  context: Pick<RequestContext, 'wakeRelay'>,
+  context: WriteRequest,
   meta: WriteMeta | undefined,
   write: (hooks: readonly AfterWrite[]) => Promise<T>,
 ): Promise<T> {
@@ -42,22 +54,31 @@ export async function commitWrite<T>(
  * `commitWrite`, also answering `echoes`: how many outbox rows (so change
  * events carrying the write's `mutationId`) the committed write stored, one
  * per object it touched, 0 when it changed nothing (spec 0006, AC-60). The
- * browser skips exactly that many of its own echoes.
+ * browser skips exactly that many of its own echoes. Once the write has
+ * committed, the events for the milestones it reached are queued too.
  */
 export async function commitCounted<T>(
-  context: Pick<RequestContext, 'wakeRelay'>,
+  context: WriteRequest,
   meta: WriteMeta | undefined,
   write: (hooks: readonly AfterWrite[]) => Promise<T>,
 ): Promise<{ readonly result: T; readonly echoes: number }> {
   // Set, never added to: a write tried again after a deadlock runs its hooks again, and the last run committed.
   let echoes = 0;
+  let reached: readonly ReachedMilestone[] = [];
   const hooks =
     meta === undefined
       ? []
-      : writeHooks(meta, (count) => {
-          echoes = count;
-        });
+      : writeHooks(
+          meta,
+          (count) => {
+            echoes = count;
+          },
+          (milestones) => {
+            reached = milestones;
+          },
+        );
   const result = await write(hooks);
   context.wakeRelay();
+  sendMilestones(context, reached);
   return { result, echoes };
 }

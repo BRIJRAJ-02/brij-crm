@@ -5,6 +5,7 @@
 import type { CreateWorkspaceInput, CreatedWorkspace, Me } from '@crm/contracts';
 import type { Database, IdentityStore } from '@crm/db';
 import { createUserWorkspace } from '../engine/workspaces.ts';
+import type { ReachedMilestone } from '../milestones/milestones.ts';
 
 /** The signed in person, as the session knows them. */
 export interface AccountUser {
@@ -31,19 +32,25 @@ export interface StartWorkspaceDeps {
   readonly identity: Pick<IdentityStore, 'setUserNameIfEmpty'>;
 }
 
+/** The workspace as the contract answers it, and the milestones its creation reached (none on a replay). */
+export interface StartedWorkspace extends CreatedWorkspace {
+  readonly milestones: readonly ReachedMilestone[];
+}
+
 /**
  * Creates the signed in person's workspace (spec 0005, AC-30): the workspace,
  * its template, their member row named `memberName`, and the directory rows,
  * in one transaction, then saves `memberName` as their account's name if it is
  * still empty. Repeating it with the same `id` returns the same workspace.
  * Refuses `SLUG_TAKEN`, `ID_TAKEN` and `CONFIG_INVALID` as the engine does.
- * The caller checks the session and that the email is verified.
+ * The caller checks the session and that the email is verified, answers only
+ * `workspace`, and sends the milestones' product events (spec 0010, AC-175).
  */
 export async function startWorkspace(
   deps: StartWorkspaceDeps,
   user: AccountUser,
   input: CreateWorkspaceInput,
-): Promise<CreatedWorkspace> {
+): Promise<StartedWorkspace> {
   const created = await createUserWorkspace(deps.db, {
     id: input.id,
     name: input.name,
@@ -51,5 +58,5 @@ export async function startWorkspace(
     firstMember: { userId: user.id, name: input.memberName, email: user.email },
   });
   await deps.identity.setUserNameIfEmpty(user.id, input.memberName);
-  return { workspace: created.workspace };
+  return { workspace: created.workspace, milestones: created.milestones };
 }

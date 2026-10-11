@@ -40,7 +40,14 @@ export {
   type Principal,
   type RecordRule,
 } from './access/policy.ts';
-export { getMe, startWorkspace, type AccountUser, type StartWorkspaceDeps } from './account/account.ts';
+export {
+  getMe,
+  startWorkspace,
+  type AccountUser,
+  type StartedWorkspace,
+  type StartWorkspaceDeps,
+} from './account/account.ts';
+export { milestoneHook, type ReachedMilestone } from './milestones/milestones.ts';
 export { listObjects } from './objects/objects.ts';
 export { addAttribute, listObjectAttributes, type AddAttributeInput } from './attributes/attributes.ts';
 export {

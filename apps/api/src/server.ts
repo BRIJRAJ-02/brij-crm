@@ -54,7 +54,7 @@ const analytics = createAnalytics({
   log,
 });
 log.info(`Product analytics ${analytics.enabled ? 'on' : 'off'}`, { analytics: analytics.enabled ? 'on' : 'off' });
-const auth = createAuth({ env, identity, mailer });
+const auth = createAuth({ env, identity, mailer, analytics });
 // What sign in offers and where codes go, never a key or an address.
 log.info('Sign in ready', {
   mail: mailer.transport,
