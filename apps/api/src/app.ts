@@ -10,6 +10,7 @@ import { createEdgeGuard } from './edge.ts';
 import type { ApiEnv } from './env.ts';
 import { createReadGate } from './gate.ts';
 import { errorFields, log } from './log.ts';
+import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { createRealtimeTokens } from './realtime/tokens.ts';
 import type { WakeRelay } from './realtime/wake.ts';
@@ -77,6 +78,11 @@ export interface AppServices {
    * `/api/rpc` answer then carries `Server-Timing`. Absent, none is sent.
    */
   readonly timing?: RequestTiming;
+  /**
+   * Product events (spec 0010, milestone 3): PostHog where `POSTHOG_KEY` is
+   * set, else none. Absent (tests that don't look at events), nothing is sent.
+   */
+  readonly analytics?: Analytics;
 }
 
 /** The API. `router` is the app's own unless a test passes one. */
@@ -89,7 +95,7 @@ export function createApp({
   env: ApiEnv;
   router?: AnyRouter;
 }) {
-  const { db, identity, auth, wakeRelay, rules, timing } = services;
+  const { db, identity, auth, wakeRelay, rules, timing, analytics = NO_ANALYTICS } = services;
   const rpc = createRpcHandler(router);
   const edge = createEdgeGuard({ secret: env.EDGE_SECRET, environment: env.APP_ENV });
   const allowedOrigins = new Set([new URL(env.APP_URL).origin, ...(env.TRUSTED_ORIGINS ?? [])]);
@@ -171,6 +177,7 @@ export function createApp({
         identity,
         auth,
         wakeRelay,
+        analytics,
         environment: env.APP_ENV,
         requestId: c.get('requestId'),
         clientIp: c.get('clientIp'),

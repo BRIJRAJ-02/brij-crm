@@ -20,6 +20,7 @@
     "@sentry/node": "catalog:",
     "better-auth": "catalog:",
     "hono": "catalog:",
+    "posthog-node": "catalog:",
     "react": "catalog:",
     "react-dom": "catalog:",
     "react-email": "catalog:",

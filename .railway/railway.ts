@@ -54,6 +54,10 @@ export default defineRailway(() => {
       SENTRY_DSN_SERVER: preserve(),
       // `on` opens system.testFault to prove an error report in production; leave it unset otherwise.
       MONITORING_TEST_FAULT: preserve(),
+      // Product events (spec 0010, milestone 3): the PostHog EU project's key, production only. Unset means off;
+      // POSTHOG_HOST defaults to https://eu.i.posthog.com.
+      POSTHOG_KEY: preserve(),
+      POSTHOG_HOST: preserve(),
     },
   });
 

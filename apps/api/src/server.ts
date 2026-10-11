@@ -7,6 +7,7 @@ import { isEdgeGuardEnforced } from './edge.ts';
 import { ApiEnv, loadEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
 import { createMailer } from './mail/mailer.ts';
+import { createAnalytics, POSTHOG_EU_HOST } from './monitoring/posthog.ts';
 import { captureFault, flush, MONITORING_FLUSH_MS } from './monitoring/sentry.ts';
 import { createRelayWake, NO_WAKE } from './realtime/wake.ts';
 import { onShutdown } from './shutdown.ts';
@@ -45,6 +46,14 @@ const edgeGuard = isEdgeGuardEnforced({ environment: env.APP_ENV }) ? 'on' : 'of
 log.info(`Edge guard ${edgeGuard}`, { edgeGuard, ...(edgeGuard === 'off' ? { reason: 'local' } : {}) });
 
 const mailer = createMailer(env);
+// Product events (spec 0010, milestone 3): sent only where POSTHOG_KEY is set, else a no op.
+const analytics = createAnalytics({
+  key: env.POSTHOG_KEY,
+  host: env.POSTHOG_HOST ?? POSTHOG_EU_HOST,
+  environment: env.APP_ENV,
+  log,
+});
+log.info(`Product analytics ${analytics.enabled ? 'on' : 'off'}`, { analytics: analytics.enabled ? 'on' : 'off' });
 const auth = createAuth({ env, identity, mailer });
 // What sign in offers and where codes go, never a key or an address.
 log.info('Sign in ready', {
@@ -71,8 +80,10 @@ if (timing !== undefined) log.info('Load timing on: every /api/rpc answer carrie
 
 const server = serve(
   {
-    fetch: createApp({ services: { db, identity, auth, wakeRelay, ...(timing === undefined ? {} : { timing }) }, env })
-      .fetch,
+    fetch: createApp({
+      services: { db, identity, auth, wakeRelay, analytics, ...(timing === undefined ? {} : { timing }) },
+      env,
+    }).fetch,
     port: env.PORT,
     hostname: '::',
   },
@@ -82,6 +93,6 @@ const server = serve(
 onShutdown(async () => {
   await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   await Promise.all([db.close(), identity.close()]);
-  // What monitoring still holds goes out, within the shutdown window.
-  await flush(MONITORING_FLUSH_MS);
+  // What monitoring and analytics still hold goes out, both at once, within the shutdown window.
+  await Promise.all([flush(MONITORING_FLUSH_MS), analytics.shutdown(MONITORING_FLUSH_MS)]);
 });

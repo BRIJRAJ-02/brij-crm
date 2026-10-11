@@ -130,6 +130,12 @@ export const ApiEnv = z
     // Monitoring (spec 0010): `on` opens system.testFault, which fails on purpose to prove error reports in
     // production; unset or `off` answers NOT_FOUND, as if it didn't exist. Switch it off again after the proof.
     MONITORING_TEST_FAULT: optional(z.enum(['on', 'off'])),
+    // Product analytics (spec 0010, milestone 3): the PostHog EU project's key. Unset means nothing is sent, which
+    // is how local, tests and previews run; production has it. The host defaults to PostHog's EU ingest.
+    POSTHOG_KEY: optional(
+      z.string().regex(/^phc_[A-Za-z0-9_-]{1,200}$/, 'POSTHOG_KEY is the project key, the one starting phc_.'),
+    ),
+    POSTHOG_HOST: optional(z.url({ protocol: /^https$/, error: 'POSTHOG_HOST must be an https URL.' })),
     // The load harness's timing header (spec 0011, AC-202): `on` adds `Server-Timing` (pool wait, database and
     // handler time) to every /api/rpc answer. Local only: it exposes internal timings, so it is refused elsewhere.
     LOAD_TIMING: optional(z.enum(['on', 'off'])),

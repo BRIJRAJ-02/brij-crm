@@ -1,7 +1,8 @@
 // Each monitoring vendor is imported in exactly one wrapper (spec 0010,
 // AC-184), as this workspace's real ESLint config enforces it: the api's
-// Sentry wrapper may import @sentry/node and nothing else of any vendor, and
-// instrument.ts or any other file may import none.
+// Sentry wrapper may import @sentry/node and the PostHog wrapper posthog-node,
+// each nothing else of any vendor, and instrument.ts or any other file may
+// import none.
 import path from 'node:path';
 import { ESLint } from 'eslint';
 import { describe, expect, it } from 'vitest';
@@ -24,6 +25,10 @@ describe('monitoring vendors in apps/api', () => {
     expect(await vendorProblems('src/monitoring/sentry.ts', importing('@sentry/node'))).toEqual([]);
   });
 
+  it('lets the PostHog wrapper import posthog-node', async () => {
+    expect(await vendorProblems('src/monitoring/posthog.ts', importing('posthog-node'))).toEqual([]);
+  });
+
   it.each([
     ['src/monitoring/sentry.ts', 'posthog-node'],
     ['src/monitoring/sentry.ts', '@sentry/react'],
@@ -31,6 +36,10 @@ describe('monitoring vendors in apps/api', () => {
     ['src/monitoring/config.ts', '@sentry/node'],
     ['src/app.ts', '@sentry/node'],
     ['src/worker.ts', 'posthog-node'],
+    ['src/monitoring/posthog.ts', '@sentry/node'],
+    ['src/monitoring/posthog.ts', 'posthog-js'],
+    ['src/hooks.ts', 'posthog-node'],
+    ['src/auth/auth.ts', 'posthog-node'],
   ])('refuses %s importing %s', async (file, entry) => {
     expect((await vendorProblems(file, importing(entry))).join()).toMatch(/one wrapper module/);
   });

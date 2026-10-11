@@ -18,6 +18,7 @@ import type { Auth, SessionUser } from './auth/auth.ts';
 import { apiError } from './errors.ts';
 import { log } from './log.ts';
 import type { ReadGate } from './gate.ts';
+import type { Analytics } from './monitoring/posthog.ts';
 import { setRequestScope } from './monitoring/sentry.ts';
 import type { RealtimeTokens } from './realtime/tokens.ts';
 import type { WakeRelay } from './realtime/wake.ts';
@@ -34,6 +35,8 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * engine call has resolved, so the write committed: see `realtime/wake.ts`.
    */
   wakeRelay: WakeRelay;
+  /** Product events (spec 0010): a write sends the milestones it reached once it commits (`hooks.ts`). */
+  analytics: Analytics;
   environment: AppEnvironment;
   /** Whether `system.testFault` is switched on (`MONITORING_TEST_FAULT=on`, spec 0010). */
   testFault: boolean;
