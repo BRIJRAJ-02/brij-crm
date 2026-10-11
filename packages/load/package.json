@@ -22,8 +22,11 @@
   "devDependencies": {
     "@crm/config": "workspace:*",
     "@types/node": "catalog:",
+    "@types/ws": "catalog:",
+    "centrifuge": "catalog:",
     "eslint": "catalog:",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "ws": "catalog:"
   }
 }

@@ -19,6 +19,7 @@
 // in tests), and each action's time runs from its scheduled moment.
 import type {
   CountRecordsInput,
+  FilterGroup,
   CreateRecordInput,
   GetRecordsInput,
   QueryRecordsInput,
@@ -28,7 +29,7 @@ import type {
   SetValuesInput,
 } from '@crm/contracts';
 import type { LoadAction } from '@crm/core/scale-budget';
-import { outcomeOfError, REQUEST_TIMEOUT_MS, type Outcome } from './outcome.ts';
+import type { Outcome } from './outcome.ts';
 import type { Random } from './random.ts';
 import {
   createValues,
@@ -38,7 +39,10 @@ import {
   type ShapeAttribute,
   type ViewShape,
 } from './shapes.ts';
+import { createTally, type Answered, type Call, type TallyCall } from './tally.ts';
 import { newValue } from './values.ts';
+
+export type { Call } from './tally.ts';
 
 /** Rows in a window, as the People table reads them. */
 export const WINDOW_ROWS = 100;
@@ -49,14 +53,32 @@ export const NEAR_TOP_SHARE = 0.7;
 /** The rows near the top, for `steady`'s jumps. */
 export const NEAR_TOP_ROWS = 2_000;
 
-/** What a sample measures: the four judged kinds, and counts (reported). */
-export type Metric = 'read' | 'open' | 'edit' | 'create' | 'count';
+/**
+ * What a sample measures: the four judged kinds of action, counts (reported),
+ * and what live updates cost (milestone 3): a holder's refetch after an event
+ * (`delivery`), a window settling after a create, delete or reorder
+ * (`settle`), and the live connection's own calls and drops (`live`).
+ */
+export type Metric = 'read' | 'open' | 'edit' | 'create' | 'count' | 'delivery' | 'settle' | 'live';
+
+/** The metrics of the mix's actions: the denominator of the unexpected error share. */
+export const ACTION_METRICS: ReadonlySet<Metric> = new Set(['read', 'open', 'edit', 'create']);
+
+/** How an event reached a holder: live, replayed by Centrifugo's recovery, or read through `realtime.catchUp`. */
+export type Via = 'live' | 'recovered' | 'catchUp';
 
 /** One measured thing a user did: when it was scheduled, when it answered, and how. */
 export interface Sample {
   readonly user: number;
-  readonly action: LoadAction | 'join';
+  readonly action: LoadAction | 'join' | 'live';
   readonly metric: Metric;
+  /** A storm burst's edit (AC-207), kept off the mix and the edit line. */
+  readonly burst?: boolean;
+  /** A write's `mutationId`, joining it to its holders' refetches (scheduled to visible, AC-200). */
+  readonly mutationId?: string;
+  /** A delivery: how the event came, and its commit time `at` on the database's clock (ms since the epoch). */
+  readonly via?: Via;
+  readonly atMs?: number;
   readonly mode?: 'position' | 'cursor';
   readonly scheduledAt: number;
   readonly answeredAt: number;
@@ -69,13 +91,6 @@ export interface Sample {
   readonly poolMs: readonly number[];
   /** The API's own handler time of each such request (`app` in `Server-Timing`). */
   readonly appMs: readonly number[];
-}
-
-/** One call's extras: the signal that aborts it, and where the client notes the API's pool wait. */
-export interface Call {
-  readonly signal: AbortSignal;
-  readonly poolMs: number[];
-  readonly appMs: number[];
 }
 
 /** The calls a user makes, as the contract names them. */
@@ -146,12 +161,39 @@ export interface UserSnapshot {
   readonly checkpoints: readonly number[];
 }
 
+/**
+ * What the live client asks of the user it rides with (milestone 3, AC-200):
+ * what it holds now, and the reads a live change makes, each answering its
+ * tally rather than recording a sample (the live client records it, with the
+ * event's commit time).
+ */
+export interface Holder {
+  readonly objectId: string;
+  /** The columns a window reads (`attributeIds`): a refetch asks only for the changed ones among them. */
+  readonly columns: ReadonlySet<string>;
+  /** The ids in the window on screen. */
+  readonly windowIds: () => ReadonlySet<string>;
+  /** The attributes the view filters or sorts on: a change to one may reorder the window. */
+  readonly viewAttributeIds: () => ReadonlySet<string>;
+  /** `records.get` of held ids, with only `attributeIds`. */
+  readonly refetch: (ids: readonly string[], attributeIds: readonly string[]) => Promise<Answered>;
+  /** Reads the window on screen and the view's count again (a coarse event's reload, or a settle). */
+  readonly reread: () => Promise<Answered>;
+}
+
 /** One simulated user. Neither method ever rejects: every failure becomes a sample. */
 export interface LoadUser {
   /** Opens the object's plain view: its first window and its count. */
   readonly join: (scheduledAt: number, measured: boolean) => Promise<void>;
   /** One arrival of the mix. */
   readonly act: (action: LoadAction, scheduledAt: number, measured: boolean) => Promise<void>;
+  /**
+   * A storm burst's edit (AC-207): every online user edits a different
+   * record in the same second, so user `slot` takes row `slot` of its window
+   * (or a sample, before a window lands).
+   */
+  readonly burst: (scheduledAt: number, measured: boolean, slot: number) => Promise<void>;
+  readonly holder: Holder;
   readonly snapshot: () => UserSnapshot;
 }
 
@@ -171,15 +213,6 @@ interface ViewState {
   loading: Promise<void>;
 }
 
-type Answer<T> =
-  { readonly ok: true; readonly value: T } | { readonly ok: false; readonly outcome: Outcome; readonly reason: string };
-
-/** The worse of two outcomes for one action: unexpected, then expected, then ok. */
-function worse(left: Outcome, right: Outcome): Outcome {
-  const rank: Record<Outcome, number> = { ok: 0, aborted: 1, expected: 2, unexpected: 3 };
-  return rank[right] > rank[left] ? right : left;
-}
-
 /** Makes one user. */
 export function createLoadUser(options: UserOptions): LoadUser {
   const { api, model, random, behaviour } = options;
@@ -192,48 +225,26 @@ export function createLoadUser(options: UserOptions): LoadUser {
 
   /** One action's tally: its requests, their worst outcome, and their pool waits. */
   function tally() {
-    let requests = 0;
-    let outcome: Outcome = 'ok';
-    let reason: string | undefined;
-    const poolMs: number[] = [];
-    const appMs: number[] = [];
-    async function call<T>(run: (call: Call) => Promise<T>, abort?: AbortSignal): Promise<Answer<T>> {
-      requests += 1;
-      const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
-      const signal = abort === undefined ? timeout : AbortSignal.any([timeout, abort]);
-      try {
-        return { ok: true, value: await run({ signal, poolMs, appMs }) };
-      } catch (error) {
-        const failed = outcomeOfError(error, abort?.aborted === true && !timeout.aborted);
-        if (worse(outcome, failed.outcome) !== outcome) {
-          outcome = failed.outcome;
-          reason = failed.reason;
-        }
-        return { ok: false, ...failed };
-      }
-    }
+    const { call, answered } = createTally(options.now);
     const finish = (
       metric: Metric,
       action: LoadAction | 'join',
       scheduledAt: number,
       measured: boolean,
       mode?: 'position' | 'cursor',
+      extras: Pick<Sample, 'burst' | 'mutationId'> = {},
     ) =>
       options.record({
         user: options.user,
         action,
         metric,
         ...(mode === undefined ? {} : { mode }),
+        ...extras,
         scheduledAt,
-        answeredAt: options.now(),
-        outcome,
-        ...(reason === undefined ? {} : { reason }),
         measured,
-        requests,
-        poolMs,
-        appMs,
+        ...answered(),
       });
-    return { call, finish };
+    return { call, finish, answered };
   }
 
   const base = () => ({ workspace: options.workspace, objectId: model.objectId });
@@ -358,7 +369,7 @@ export function createLoadUser(options: UserOptions): LoadUser {
    * in calls of 200 rows until the window holding block `target` is loaded
    * (or the list ends), noting each checkpoint on the way.
    */
-  async function readForward(state: ViewState, target: number, call: ReturnType<typeof tally>['call']) {
+  async function readForward(state: ViewState, target: number, call: TallyCall) {
     let from = target;
     while (from > 0 && !state.checkpoints.has(from)) from -= 1;
     for (;;) {
@@ -421,10 +432,11 @@ export function createLoadUser(options: UserOptions): LoadUser {
     reading.finish('open', 'open', scheduledAt, measured);
   }
 
-  async function edit(scheduledAt: number, measured: boolean) {
+  async function edit(scheduledAt: number, measured: boolean, slot?: number) {
     const writing = tally();
-    const record = pickRecord();
+    const record = slot === undefined ? pickRecord() : slotRecord(slot);
     const attribute = random.pick(editable);
+    const mutationId = options.mutationId();
     const value = newValue(attribute, record.view?.values[attribute.id], random);
     const version = record.view?.versions[attribute.id];
     const change =
@@ -435,12 +447,23 @@ export function createLoadUser(options: UserOptions): LoadUser {
           workspace: options.workspace,
           recordId: record.id,
           values: { [attribute.id]: change },
-          mutationId: options.mutationId(),
+          mutationId,
         },
         call,
       ),
     );
-    writing.finish('edit', 'edit', scheduledAt, measured);
+    writing.finish('edit', 'edit', scheduledAt, measured, undefined, {
+      mutationId,
+      ...(slot === undefined ? {} : { burst: true }),
+    });
+  }
+
+  /** A burst's record: row `slot` of the window, so users holding the same window edit different records. */
+  function slotRecord(slot: number): { id: string; view?: RecordView } {
+    const window = view?.window ?? [];
+    const record = window[slot % Math.max(window.length, 1)];
+    if (record !== undefined) return { id: record.id, view: record };
+    return { id: model.samples[slot % Math.max(model.samples.length, 1)] ?? random.pick(model.samples) };
   }
 
   async function create(scheduledAt: number, measured: boolean) {
@@ -451,10 +474,9 @@ export function createLoadUser(options: UserOptions): LoadUser {
       memberIds: options.memberIds,
       memberId: options.memberId,
     });
-    await writing.call((call) =>
-      api.create({ ...base(), id, values: { ...values }, mutationId: options.mutationId() }, call),
-    );
-    writing.finish('create', 'create', scheduledAt, measured);
+    const mutationId = options.mutationId();
+    await writing.call((call) => api.create({ ...base(), id, values: { ...values }, mutationId }, call));
+    writing.finish('create', 'create', scheduledAt, measured, undefined, { mutationId });
   }
 
   async function act(action: LoadAction, scheduledAt: number, measured: boolean): Promise<void> {
@@ -497,9 +519,95 @@ export function createLoadUser(options: UserOptions): LoadUser {
     return shape;
   }
 
+  /** The view's filter and sort attributes. */
+  function viewAttributeIds(): ReadonlySet<string> {
+    const shape = view?.shape;
+    const ids = new Set<string>();
+    for (const sort of shape?.sorts ?? []) ids.add(sort.attributeId);
+    const visit = (group: FilterGroup | undefined) => {
+      for (const condition of group?.conditions ?? []) {
+        if ('conjunction' in condition) visit(condition);
+        else if ('attributeId' in condition) ids.add(condition.attributeId);
+        else if (condition.path[0] !== undefined) ids.add(condition.path[0]);
+      }
+    };
+    visit(shape?.filter);
+    return ids;
+  }
+
+  /** Reads the window on screen again, and the count beside it, as a reload or a settle does (spec 0006, AC-56). */
+  async function reread(): Promise<Answered> {
+    const reading = tally();
+    const state = view;
+    if (state === undefined) return reading.answered();
+    const counted = reading
+      .call(
+        (call) =>
+          api.count({ ...base(), ...(state.shape.filter === undefined ? {} : { filter: state.shape.filter }) }, call),
+        state.countAbort.signal,
+      )
+      .then((answer) => {
+        if (answer.ok && current(state)) state.total = answer.value.count;
+      });
+    const block = state.block;
+    const cursor = state.checkpoints.get(block);
+    if (state.position || block === 0 || cursor !== undefined) {
+      const page = await reading.call((call) =>
+        api.query(
+          {
+            ...base(),
+            ...shapeInput(state.shape),
+            limit: WINDOW_ROWS,
+            ...(state.position ? { position: block * WINDOW_ROWS } : cursor === undefined ? {} : { cursor }),
+          },
+          call,
+        ),
+      );
+      if (page.ok && current(state) && state.block === block) state.window = page.value.records;
+    } else {
+      // The window is the second half of a 200 row read: read on from the nearest checkpoint, as windows.ts does.
+      await readForward(state, block, reading.call);
+    }
+    await counted;
+    return reading.answered();
+  }
+
+  const columns: ReadonlySet<string> = new Set(model.columns);
+  const holder: Holder = {
+    objectId: model.objectId,
+    columns,
+    windowIds: () => new Set((view?.window ?? []).map((record) => record.id)),
+    viewAttributeIds,
+    refetch: async (ids, attributeIds) => {
+      const reading = tally();
+      const state = view;
+      const answer = await reading.call((call) =>
+        api.get({ workspace: options.workspace, ids: [...ids], attributeIds: [...attributeIds] }, call),
+      );
+      // The refetched rows replace their copies in the window, as the store's revision rule would let them.
+      if (answer.ok && state !== undefined && current(state)) {
+        const fresh = new Map(answer.value.map((record) => [record.id, record]));
+        state.window = state.window.map((record) => {
+          const got = fresh.get(record.id);
+          return got === undefined
+            ? record
+            : {
+                ...record,
+                values: { ...record.values, ...got.values },
+                versions: { ...record.versions, ...got.versions },
+              };
+        });
+      }
+      return reading.answered();
+    },
+    reread,
+  };
+
   return {
     join: (scheduledAt, measured) => open(firstShape(), 'join', scheduledAt, measured),
     act,
+    burst: (scheduledAt, measured, slot) => edit(scheduledAt, measured, slot),
+    holder,
     snapshot: () => ({
       view: view?.shape.name ?? '',
       mode: view?.position === false ? 'cursor' : 'position',

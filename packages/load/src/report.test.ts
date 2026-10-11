@@ -4,7 +4,18 @@
 // during the stall, even though the harness sent each one on time.
 import { describe, expect, it } from 'vitest';
 import { SCALE_BUDGET } from '@crm/core/scale-budget';
-import { durationOf, errorCounts, exitCodeOf, formatReport, judgeValidity, reportLines } from './report.ts';
+import {
+  deliveryLines,
+  durationOf,
+  errorCounts,
+  exitCodeOf,
+  formatReport,
+  judgeValidity,
+  relayLine,
+  reportLines,
+  streamLines,
+  type LiveInput,
+} from './report.ts';
 import type { LoadResult } from './result.ts';
 import { percentile, summarize } from './stats.ts';
 import type { Sample } from './user.ts';
@@ -113,8 +124,8 @@ describe('reportLines', () => {
     expect(line('API pool wait')?.verdict).toBe('pass');
     expect(line('pooler wait')?.verdict).toBe('miss');
     expect(line('Postgres CPU')).toMatchObject({ verdict: 'pass', target: 'p95 ≤ 70%' });
-    expect(line('live delivery')?.verdict).toBe('not built yet');
-    expect(line('relay lag')?.verdict).toBe('not built yet');
+    expect(line('live delivery')?.verdict).toBe('not measured');
+    expect(line('relay lag')?.verdict).toBe('not measured');
   });
 
   it('says why a server line has no number', () => {
@@ -234,8 +245,94 @@ describe('formatReport', () => {
     expect(text).toMatch(
       /read \(scroll, filter or sort windows\)\s+p95 ≤ 300 ms\s+120\.0\s+120\.0\s+120\.0\s+120\.0\s+1\s+PASS/,
     );
-    expect(text).toContain('NOT BUILT YET');
+    expect(text).toContain('NOT MEASURED');
     expect(text).toContain('postgres 2 CPU/8.0 GB');
     expect(text).toContain('VALID. Exit 0');
+  });
+});
+
+describe('the live lines (milestone 3)', () => {
+  const tally = {
+    applied: 10,
+    recovered: 0,
+    caughtUp: 1,
+    missed: 0,
+    catchUpCalls: 2,
+    resets: 0,
+    ownEchoes: 2,
+    stubs: 0,
+    recordsEvents: 6,
+    discarded: 2,
+    otherKinds: 0,
+  };
+  const live = (overrides: Partial<LiveInput> = {}): LiveInput => ({
+    // The database's clock runs 30 ms ahead of ours.
+    clockOffsetMs: 30,
+    arrivalsRawMs: [100, 200],
+    users: [{ user: 0, tally, snapshot: { watermark: 10, accounted: [] } }],
+    relay: { lagsMs: [20, 40], unpublished: 0 },
+    heads: { start: 0, end: 10 },
+    ...overrides,
+  });
+  // A writer scheduled at 1,000 on our clock; its commit `at` reads 1,130 on the database's (1,100 on ours); two
+  // holders' refetches answer at 1,300 and 1,500.
+  const writer = sample({ metric: 'edit', action: 'edit', scheduledAt: 1_000, answeredAt: 1_120, mutationId: 'm1' });
+  const holders = [1_300, 1_500].map((answeredAt) =>
+    sample({
+      metric: 'delivery',
+      action: 'live',
+      scheduledAt: 1_250,
+      answeredAt,
+      via: 'live',
+      atMs: 1_130,
+      mutationId: 'm1',
+    }),
+  );
+  const recovered = sample({
+    metric: 'delivery',
+    action: 'live',
+    scheduledAt: 0,
+    answeredAt: 9_100,
+    via: 'recovered',
+    atMs: 130,
+  });
+
+  it('joins each refetch to the commit (offset applied) and to its writer, and reports recovery apart', () => {
+    const lines = deliveryLines(SCALE_BUDGET, [writer, ...holders, recovered], live());
+    const line = (name: string) => lines.find((each) => each.metric.startsWith(name));
+    expect(line('live delivery')).toMatchObject({ judged: true, verdict: 'pass', summary: { count: 2, max: 400 } });
+    expect(line('live delivery')?.summary?.p50).toBe(200);
+    expect(line('scheduled to visible')?.summary).toMatchObject({ count: 2, p50: 300, max: 500 });
+    expect(line('event arrival')?.summary).toMatchObject({ p50: 130, max: 230 });
+    expect(line('delivery after recovery')?.summary).toMatchObject({ count: 1, max: 9_000 });
+  });
+
+  it('judges missed seqs (a gate must miss none), counting seqs never heard of by the end', () => {
+    expect(streamLines(live())[0]).toMatchObject({ metric: 'missed seqs', verdict: 'pass', judged: true });
+    const behind = streamLines(live({ heads: { start: 0, end: 13 } }))[0];
+    expect(behind).toMatchObject({ verdict: 'miss', summary: { count: 3 } });
+    expect(behind?.note).toContain('3 never heard of');
+    expect(streamLines(live())[3]?.note).toContain('2 of another object discarded (25.0% of records events)');
+  });
+
+  it('judges relay lag, and an unpublished row is a miss', () => {
+    expect(relayLine(SCALE_BUDGET, { lagsMs: [20, 40], unpublished: 0 })).toMatchObject({ verdict: 'pass' });
+    expect(relayLine(SCALE_BUDGET, { lagsMs: [20], unpublished: 1 })).toMatchObject({ verdict: 'miss' });
+    expect(relayLine(SCALE_BUDGET, undefined)).toMatchObject({ verdict: 'not measured' });
+  });
+
+  it('counts a failed live call or refetch as unexpected, but only actions in the share', () => {
+    const counts = errorCounts([
+      sample({ metric: 'read', scheduledAt: 0, answeredAt: 1 }),
+      sample({
+        metric: 'live',
+        action: 'live',
+        scheduledAt: 0,
+        answeredAt: 0,
+        outcome: 'unexpected',
+        reason: 'websocket dropped',
+      }),
+    ]);
+    expect(counts).toMatchObject({ actions: 1, unexpected: 1, byReason: { 'websocket dropped': 1 } });
   });
 });

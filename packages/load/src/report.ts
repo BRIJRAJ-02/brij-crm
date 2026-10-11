@@ -1,13 +1,16 @@
-// The report (spec 0011, AC-199, AC-201, AC-203, AC-204): the measured
+// The report (spec 0011, AC-199 to AC-201, AC-203, AC-204): the measured
 // window's samples and server samples become one table of lines, each with
 // its target, p50, p95, p99, max, count and verdict; the run judges its own
 // validity; and the exit code follows: 0 every judged line passes, 1 a budget
 // miss in a gate scenario, 2 an invalid run. Every target comes from
 // `SCALE_BUDGET`, and from nowhere else.
 import type { ScaleBudget } from '@crm/core/scale-budget';
+import type { LiveOutput } from './drive.ts';
+import { trailingMisses } from './live/stream.ts';
+import type { RelayLags } from './outbox.ts';
 import type { LoadResult, ReportLine, RunValidity, Verdict } from './result.ts';
 import { summarize, type Summary } from './stats.ts';
-import type { Metric, Sample } from './user.ts';
+import { ACTION_METRICS, type Metric, type Sample } from './user.ts';
 
 /** The run's exit codes. */
 export const EXIT = { pass: 0, miss: 1, invalid: 2, refused: 3 } as const;
@@ -28,6 +31,25 @@ export interface ReportInput {
   readonly postgresCpuShares: readonly number[] | undefined;
   /** The API container's CPU the same way, reported beside Postgres's; undefined off the load stack. */
   readonly apiCpuShares?: readonly number[] | undefined;
+  /** What the live clients and the outbox said (milestone 3); undefined when the run had no live clients. */
+  readonly live?: LiveInput;
+}
+
+/** What the live lines are made from (AC-200, AC-201). */
+export interface LiveInput {
+  /** The database's clock minus ours: joins `at` and `created_at` to the harness's clock. */
+  readonly clockOffsetMs: number;
+  /** Each measured event arrival, raw: our arrival time minus `at` on the database's clock. */
+  readonly arrivalsRawMs: readonly number[];
+  readonly users: readonly LiveOutput[];
+  /** The relay lag of every outbox row committed in the window, or undefined when the outbox couldn't be read. */
+  readonly relay: RelayLags | undefined;
+  /**
+   * The workspace's head when the window opened, and its last seq committed
+   * at least 10 seconds before the window closed: the seqs every subscriber
+   * must have heard of by then.
+   */
+  readonly heads: { readonly start: number; readonly end: number } | undefined;
 }
 
 /** Below this many samples a line's p95 rests on its few slowest: its verdict carries a note saying so. */
@@ -80,6 +102,126 @@ function without(metric: string, verdict: 'not measured' | 'not built yet', note
   return { metric, ...(target === undefined ? {} : { target }), unit: 'ms' as const, verdict, judged: false, note };
 }
 
+/** A line that is one number. */
+const countSummary = (value: number) => ({ count: value, p50: value, p95: value, p99: value, max: value });
+
+/** The successful samples of a live metric that made a request. */
+const liveOk = (samples: readonly Sample[], metric: Metric) =>
+  samples.filter((sample) => sample.metric === metric && sample.outcome === 'ok' && sample.requests > 0);
+
+/**
+ * Live delivery (AC-200): each holder's refetch, from the write's commit
+ * (`at`, moved to our clock) to the refetch's answer, for events that came
+ * live; those Centrifugo's recovery replayed or a catch up answered are
+ * reported apart. Scheduled to visible joins each refetch to its writer's
+ * scheduled moment by `mutationId`; arrival is every subscriber's commit to
+ * arrival time.
+ */
+export function deliveryLines(budget: ScaleBudget, samples: readonly Sample[], live: LiveInput): readonly ReportLine[] {
+  const offset = live.clockOffsetMs;
+  const deliveries = liveOk(samples, 'delivery').filter((sample) => sample.atMs !== undefined);
+  const visible = (sample: Sample) => sample.answeredAt - (sample.atMs ?? 0) + offset;
+  const writers = new Map<string, number>();
+  for (const sample of samples) {
+    if (sample.mutationId !== undefined && sample.metric !== 'delivery')
+      writers.set(sample.mutationId, sample.scheduledAt);
+  }
+  const scheduledToVisible = deliveries.flatMap((sample) => {
+    const scheduledAt = sample.mutationId === undefined ? undefined : writers.get(sample.mutationId);
+    return scheduledAt === undefined ? [] : [sample.answeredAt - scheduledAt];
+  });
+  return [
+    judged(
+      'live delivery (commit to visible)',
+      deliveries.filter((sample) => sample.via === 'live').map(visible),
+      budget.p95Ms.liveDelivery,
+      'ms',
+    ),
+    reported(
+      'scheduled to visible',
+      scheduledToVisible,
+      'ms',
+      "from the writer's scheduled moment to each holder's refetch",
+    ),
+    reported(
+      'event arrival (commit to each subscriber)',
+      live.arrivalsRawMs.map((raw) => raw + offset),
+    ),
+    reported(
+      'delivery after recovery or catch up',
+      deliveries.filter((sample) => sample.via !== 'live').map(visible),
+      'ms',
+      'not judged: the gap is the point',
+    ),
+    reported(
+      'settle (window and count reread)',
+      liveOk(samples, 'settle').map(durationOf),
+      'ms',
+      'after a create, delete or reorder of the view',
+    ),
+  ];
+}
+
+/** Relay lag (AC-201): `published_at` minus `created_at` of every outbox row committed in the window. */
+export function relayLine(budget: ScaleBudget, relay: RelayLags | undefined): ReportLine {
+  if (relay === undefined) return without('relay lag', 'not measured', 'the outbox could not be read');
+  const line = judged('relay lag', relay.lagsMs, budget.p95Ms.relayLag, 'ms');
+  if (relay.unpublished === 0) return line;
+  const note = `${String(relay.unpublished)} rows never published`;
+  return { ...line, verdict: 'miss', note: line.note === undefined ? note : `${line.note}; ${note}` };
+}
+
+/**
+ * The live streams' books (AC-200): missed seqs (judged: a gate must miss
+ * none), seqs caught up and recovered, and the events each user applied, with
+ * the share it discarded as another object's (spec 0007's AC-91).
+ */
+export function streamLines(live: LiveInput): readonly ReportLine[] {
+  const sum = (pick: (output: LiveOutput) => number) => live.users.reduce((total, output) => total + pick(output), 0);
+  const trailing =
+    live.heads === undefined
+      ? 0
+      : sum((output) => trailingMisses(output.snapshot, live.heads?.end ?? 0, live.heads?.start ?? 0));
+  const missed = sum((output) => output.tally.missed) + trailing;
+  const records = sum((output) => output.tally.recordsEvents);
+  const discarded = sum((output) => output.tally.discarded);
+  const share = records + discarded === 0 ? 0 : discarded / (records + discarded);
+  return [
+    {
+      metric: 'missed seqs',
+      target: '0',
+      unit: 'count',
+      summary: countSummary(missed),
+      verdict: missed === 0 ? 'pass' : 'miss',
+      judged: true,
+      note: `no event, stub or catch up within 10 s${trailing > 0 ? `; ${String(trailing)} never heard of by the end` : ''}`,
+    },
+    {
+      metric: 'seqs caught up (realtime.catchUp)',
+      unit: 'count',
+      summary: countSummary(sum((output) => output.tally.caughtUp)),
+      verdict: 'reported',
+      judged: false,
+      note: `${String(sum((output) => output.tally.catchUpCalls))} catch up calls, ${String(sum((output) => output.tally.resets))} answered reset`,
+    },
+    {
+      metric: 'seqs recovered by Centrifugo',
+      unit: 'count',
+      summary: countSummary(sum((output) => output.tally.recovered)),
+      verdict: 'reported',
+      judged: false,
+    },
+    {
+      metric: 'events applied',
+      unit: 'count',
+      summary: countSummary(sum((output) => output.tally.applied)),
+      verdict: 'reported',
+      judged: false,
+      note: `${String(sum((output) => output.tally.ownEchoes))} own echoes skipped, ${String(sum((output) => output.tally.stubs))} stubs, ${String(discarded)} of another object discarded (${(share * 100).toFixed(1)}% of records events)`,
+    },
+  ];
+}
+
 /** How long a sample took: from its scheduled moment to its answer (never from when it was sent). */
 export const durationOf = (sample: Sample): number => sample.answeredAt - sample.scheduledAt;
 
@@ -100,7 +242,12 @@ export function reportLines(input: ReportInput): readonly ReportLine[] {
   return [
     judged('read (scroll, filter or sort windows)', okTimes(samples, 'read'), p95.read, 'ms'),
     judged('open a record', okTimes(samples, 'open'), p95.open, 'ms'),
-    judged('edit', okTimes(samples, 'edit'), p95.edit, 'ms'),
+    judged(
+      'edit',
+      okTimes(samples, 'edit', (sample) => sample.burst !== true),
+      p95.edit,
+      'ms',
+    ),
     judged('create', okTimes(samples, 'create'), p95.create, 'ms'),
     reported(
       'read by position',
@@ -112,12 +259,16 @@ export function reportLines(input: ReportInput): readonly ReportLine[] {
     ),
     reported('count', okTimes(samples, 'count'), 'ms', 'not judged'),
     reported('API handler time per request', appMs, 'ms', 'Server-Timing app: the server side of every request'),
-    without(
-      'live delivery',
-      'not built yet',
-      'milestone 3: Centrifugo clients',
-      `p95 ≤ ${String(p95.liveDelivery)} ms`,
-    ),
+    ...(input.live === undefined
+      ? [
+          without(
+            'live delivery (commit to visible)',
+            'not measured',
+            'no live clients',
+            `p95 ≤ ${String(p95.liveDelivery)} ms`,
+          ),
+        ]
+      : deliveryLines(budget, samples, input.live)),
     poolMs.length > 0
       ? judged('API pool wait', poolMs, p95.poolWait, 'ms')
       : without('API pool wait', 'not measured', 'no Server-Timing header: is LOAD_TIMING=on?'),
@@ -128,20 +279,19 @@ export function reportLines(input: ReportInput): readonly ReportLine[] {
       ? without('Postgres CPU', 'not measured', 'off the load stack: no container to sample')
       : judged('Postgres CPU', cpu, budget.postgresCpuP95Share * 100, '%'),
     ...(apiCpu === undefined ? [] : [{ ...reported('API CPU', apiCpu), unit: '%' as const }]),
-    without(
-      'relay lag',
-      'not built yet',
-      'milestone 3: the relay on the load stack',
-      `p95 ≤ ${String(p95.relayLag)} ms`,
-    ),
+    input.live === undefined
+      ? without('relay lag', 'not measured', 'no live clients', `p95 ≤ ${String(p95.relayLag)} ms`)
+      : relayLine(budget, input.live.relay),
+    ...(input.live === undefined ? [] : streamLines(input.live)),
   ];
 }
 
 /** Counts of the measured window's answers by class and reason. */
 export function errorCounts(samples: readonly Sample[]) {
-  // The share is of actions; a count that failed unexpectedly counts as an error too, and one the harness aborted
-  // itself (a newer view replaced it) is neither.
-  const actions = samples.filter((sample) => sample.metric !== 'count');
+  // The share is of actions; a count, a live refetch or a live call (a token, a catch up, a dropped connection)
+  // that failed unexpectedly counts as an error too, and a count the harness aborted itself (a newer view replaced
+  // it) is neither.
+  const actions = samples.filter((sample) => ACTION_METRICS.has(sample.metric));
   const unexpected = samples.filter((sample) => sample.outcome === 'unexpected');
   const byReason: Record<string, number> = {};
   for (const sample of unexpected) {

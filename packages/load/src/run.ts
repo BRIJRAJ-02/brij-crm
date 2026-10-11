@@ -4,8 +4,9 @@
 // still signs in, the free record slots hold the run's creates), learns the
 // seeded objects the way a browser does (`objects.list`, `attributes.list` as
 // user 1; option ids from the owner login, as setup may), plans every
-// arrival, drives the users in worker threads while it samples the server,
-// and prints and writes the report.
+// arrival, drives the users (each with its live connection) in worker threads
+// while it samples the server, reads the window's relay lags and heads from
+// the outbox afterwards, and prints and writes the report.
 import { mkdir, writeFile, chmod } from 'node:fs/promises';
 import { join } from 'node:path';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
@@ -30,12 +31,14 @@ import { createLoadClient } from './client.ts';
 import { cpuShare, hostFacts, poolerWait, sampleEvery, stackContainers } from './collectors.ts';
 import type { DriveInput, DriveOutput, ThreadUser } from './drive.ts';
 import { wallClock } from './drive.ts';
+import { headAt, relayLags } from './outbox.ts';
 import { achievedMix, mixDeviation, planArrivals, type ArrivalPlan } from './plan.ts';
 import { errorCounts, errorLines, exitCodeOf, formatReport, judgeValidity, reportLines } from './report.ts';
 import { LoadResult, type StatementLine } from './result.ts';
 import { SCENARIOS, WARMUP_SECONDS, type Scenario, type ScenarioName } from './scenarios.ts';
 import { columnsOnScreen, OBJECT_SHARES, viewShapes, type ObjectKey, type ShapeAttribute } from './shapes.ts';
-import type { ObjectModel } from './user.ts';
+import { ACTION_METRICS, type ObjectModel } from './user.ts';
+import { MISS_AFTER_MS } from './live/stream.ts';
 
 /** What a run is asked for. */
 export interface RunOptions {
@@ -315,6 +318,7 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
           users: mine,
           joins: plan.joins.filter((join) => indexes.has(join.user)),
           arrivals: plan.arrivals.filter((arrival) => indexes.has(arrival.user)),
+          live: { url: urls.LOAD_CENTRIFUGO_URL, origin: new URL(urls.LOAD_API_URL).origin },
           ...(options.blockLoopMs === undefined ? {} : { blockLoopMs: options.blockLoopMs }),
         });
       }),
@@ -349,6 +353,19 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
     const outputs = await driving;
     offsets.push(await clockOffset(stats));
     const endedAt = new Date();
+    const clockOffsetMs = offsets.reduce((sum, offset) => sum + offset, 0) / offsets.length;
+
+    // The outbox through the owner login: the window's relay lags, and the heads the miss rule needs.
+    const windowStartDb = runStartMs + warmupMs + clockOffsetMs;
+    const windowEndDb = windowStartDb + measuredMs;
+    const relay = await relayLags(owner, manifest.workspaceId, windowStartDb, windowEndDb).catch(() => undefined);
+    const heads = await Promise.all([
+      headAt(owner, manifest.workspaceId, windowStartDb),
+      headAt(owner, manifest.workspaceId, windowEndDb - MISS_AFTER_MS),
+    ]).then(
+      ([start, end]) => ({ start, end }),
+      () => undefined,
+    );
 
     const samples = outputs.flatMap((output) => output.samples);
     const lines = [
@@ -358,6 +375,13 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
         poolerWaitMs: poolerWaits,
         postgresCpuShares: cpuShares,
         apiCpuShares,
+        live: {
+          clockOffsetMs,
+          arrivalsRawMs: outputs.flatMap((output) => output.arrivalsRawMs),
+          users: outputs.flatMap((output) => output.live),
+          relay,
+          heads,
+        },
       }),
       ...errorLines(samples, SCALE_BUDGET),
     ];
@@ -373,7 +397,9 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
     });
     // The mix the measured window really sent: one sample per action (its count apart), never the plan's.
     const sentActions = samples.flatMap((sample) =>
-      sample.metric === 'count' || sample.action === 'join' ? [] : [sample.action],
+      ACTION_METRICS.has(sample.metric) && sample.action !== 'join' && sample.action !== 'live' && sample.burst !== true
+        ? [sample.action]
+        : [],
     );
     const achieved = achievedMix(sentActions);
     const statements: StatementLine[] | undefined = top?.map((statement) => ({ ...statement }));
@@ -389,7 +415,7 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
       facts: {
         ...facts,
         stackCaps: Object.fromEntries([...containers].map(([service, container]) => [service, container.cap])),
-        databaseClockOffsetMs: offsets.reduce((sum, offset) => sum + offset, 0) / offsets.length,
+        databaseClockOffsetMs: clockOffsetMs,
         manifestCounts: manifest.counts,
         manifestProfile: manifest.profile,
         apiUrl: urls.LOAD_API_URL,

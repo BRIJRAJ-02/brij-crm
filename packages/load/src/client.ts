@@ -8,6 +8,7 @@ import type { contract } from '@crm/contracts';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
+import type { LiveApi } from './live/user.ts';
 import type { LoadApi } from './user.ts';
 
 /** What each call carries to the client's fetch: where to note the API's pool wait and handler time. */
@@ -58,5 +59,23 @@ export function loadApiOf(client: LoadClient): LoadApi {
       client.records.setValues(input, { context: { poolMs: call.poolMs, appMs: call.appMs }, signal: call.signal }),
     create: (input, call) =>
       client.records.create(input, { context: { poolMs: call.poolMs, appMs: call.appMs }, signal: call.signal }),
+  };
+}
+
+/** The live calls a simulated user makes (milestone 3, AC-200), on `client`: the same doors as a browser's. */
+export function liveApiOf(client: LoadClient): LiveApi {
+  return {
+    connectionToken: (call) =>
+      client.realtime.connectionToken(undefined, {
+        context: { poolMs: call.poolMs, appMs: call.appMs },
+        signal: call.signal,
+      }),
+    subscriptionToken: (input, call) =>
+      client.realtime.subscriptionToken(input, {
+        context: { poolMs: call.poolMs, appMs: call.appMs },
+        signal: call.signal,
+      }),
+    catchUp: (input, call) =>
+      client.realtime.catchUp(input, { context: { poolMs: call.poolMs, appMs: call.appMs }, signal: call.signal }),
   };
 }

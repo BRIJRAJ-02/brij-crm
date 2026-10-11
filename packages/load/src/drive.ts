@@ -1,13 +1,18 @@
-// One thread's share of a run (spec 0011, AC-197, AC-203): its users, each
-// with its own client and minted cookie, and their planned joins and
-// arrivals, dispatched at their planned moments without waiting for earlier
-// answers (the open model). It keeps the measured window's samples, how many
-// of its planned actions it sent on time, and its own event loop delay, so a
-// harness that can't keep up makes the run invalid rather than slow.
+// One thread's share of a run (spec 0011, AC-197, AC-200, AC-203): its
+// users, each with its own client, minted cookie and live connection, and
+// their planned joins and arrivals, dispatched at their planned moments
+// without waiting for earlier answers (the open model). It keeps the measured
+// window's samples, each event's commit to arrival time, what each user's
+// live stream counted and knew when the window closed, how many of its
+// planned actions it sent on time, and its own event loop delay, so a harness
+// that can't keep up makes the run invalid rather than slow.
 import { randomUUID } from 'node:crypto';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { newId } from '@crm/core';
-import { createLoadClient, loadApiOf } from './client.ts';
+import { createLoadClient, liveApiOf, loadApiOf } from './client.ts';
+import { openLiveConnection } from './live/centrifuge.ts';
+import type { StreamSnapshot } from './live/stream.ts';
+import { createLiveUser, type LiveTally, type LiveUser, type Reconnected } from './live/user.ts';
 import type { Arrival, Join } from './plan.ts';
 import type { LoadAction } from '@crm/core/scale-budget';
 import { createRandom } from './random.ts';
@@ -46,6 +51,8 @@ export interface DriveInput {
   /** This thread's users' joins and arrivals, in time order. */
   readonly joins: readonly Join[];
   readonly arrivals: readonly Arrival[];
+  /** Centrifugo's WebSocket endpoint and the `Origin` its handshake carries (the API's), or undefined for no live. */
+  readonly live?: { readonly url: string; readonly origin: string };
   /**
    * A test flag (`LOAD_TEST_BLOCK_LOOP_MS`): block this thread's event loop
    * this long every 100 ms, so a harness that can't keep up is shown to make
@@ -54,9 +61,20 @@ export interface DriveInput {
   readonly blockLoopMs?: number;
 }
 
+/** One user's live books when the window closed. */
+export interface LiveOutput {
+  readonly user: number;
+  readonly tally: LiveTally;
+  readonly snapshot: StreamSnapshot;
+  readonly reconnected?: Reconnected;
+}
+
 /** What a thread hands back. */
 export interface DriveOutput {
   readonly samples: readonly Sample[];
+  /** Each measured event arrival: our arrival time minus its `at` on the database's clock (the offset joins later). */
+  readonly arrivalsRawMs: readonly number[];
+  readonly live: readonly LiveOutput[];
   readonly planned: number;
   readonly sent: number;
   readonly loopDelayP99Ms: number;
@@ -76,28 +94,67 @@ export const wallClock = (): number => performance.timeOrigin + performance.now(
 
 type Event = { readonly kind: 'join'; readonly join: Join } | { readonly kind: 'arrival'; readonly arrival: Arrival };
 
+/** A timer that never keeps the thread alive on its own. */
+const schedule = (ms: number, run: () => void) => {
+  setTimeout(run, Math.max(0, ms)).unref();
+};
+
 /** Plays this thread's users through the run, and answers when every action has answered (or the drain ran out). */
 export async function drive(input: DriveInput): Promise<DriveOutput> {
   const samples: Sample[] = [];
+  const arrivalsRawMs: number[] = [];
+  const measuredStart = input.runStartMs + input.warmupMs;
+  const measuredEnd = measuredStart + input.measuredMs;
+  const measured = (at: number) => at >= measuredStart && at <= measuredEnd;
+  const record = (sample: Sample) => {
+    if (sample.measured) samples.push(sample);
+  };
+  const lives = new Map<number, LiveUser>();
   const users = new Map(
     input.users.map((user) => {
       const model = input.models[user.object];
+      const client = createLoadClient(input.apiUrl, user.cookie);
+      // This user's writes, until their echo comes back (or never: a refused write stores no event).
+      const ownMutations = new Set<string>();
       const loadUser = createLoadUser({
         user: user.index,
         workspace: input.workspace,
         memberId: user.memberId,
         memberIds: input.memberIds,
         model,
-        api: loadApiOf(createLoadClient(input.apiUrl, user.cookie)),
+        api: loadApiOf(client),
         random: createRandom(input.seed, `user:${String(user.index)}`),
         behaviour: input.behaviour,
         now: wallClock,
         newId,
-        mutationId: randomUUID,
-        record: (sample) => {
-          if (sample.measured) samples.push(sample);
+        mutationId: () => {
+          const mutationId = randomUUID();
+          ownMutations.add(mutationId);
+          return mutationId;
         },
+        record,
       });
+      if (input.live !== undefined) {
+        lives.set(
+          user.index,
+          createLiveUser({
+            user: user.index,
+            workspace: input.workspace,
+            api: liveApiOf(client),
+            holder: loadUser.holder,
+            open: openLiveConnection,
+            url: input.live.url,
+            origin: input.live.origin,
+            ownMutations,
+            now: wallClock,
+            schedule,
+            random: createRandom(input.seed, `live:${String(user.index)}`).next,
+            measured,
+            record,
+            arrival: (rawMs) => arrivalsRawMs.push(rawMs),
+          }),
+        );
+      }
       return [user.index, loadUser] as const;
     }),
   );
@@ -107,8 +164,6 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
   ].sort((left, right) => atOf(left) - atOf(right));
 
   const loop = monitorEventLoopDelay({ resolution: 10 });
-  const measuredStart = input.runStartMs + input.warmupMs;
-  const measuredEnd = measuredStart + input.measuredMs;
   const startLoop = setTimeout(() => loop.enable(), Math.max(0, measuredStart - wallClock()));
   const blocking =
     input.blockLoopMs === undefined
@@ -128,6 +183,8 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
     const due = input.runStartMs + atOf(event);
     const user = users.get(event.kind === 'join' ? event.join.user : event.arrival.user);
     if (user === undefined) return;
+    // A user connects as it joins, as a browser does before its first read; the connection isn't an action.
+    if (event.kind === 'join') void lives.get(event.join.user)?.start();
     const work =
       event.kind === 'join'
         ? user.join(due, due >= measuredStart)
@@ -172,8 +229,9 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
     };
     tick();
   });
-  // The window's end, then its stragglers.
+  // The window's end: what each live user counted and knew then. Then the stragglers.
   await new Promise((resolve) => setTimeout(resolve, Math.max(0, measuredEnd - wallClock())));
+  const live: LiveOutput[] = [...lives].map(([user, liveUser]) => ({ user, ...liveUser.freeze() }));
   clearTimeout(startLoop);
   clearInterval(blocking);
   loop.disable();
@@ -182,7 +240,15 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
   // What still hasn't answered never will in this run: an unexpected error, not a silence.
   const now = wallClock();
   for (const sample of pending.values()) if (sample.measured) samples.push({ ...sample, answeredAt: now });
-  return { samples, planned, sent, loopDelayP99Ms: loop.count === 0 ? 0 : loop.percentile(99) / 1e6 };
+  for (const liveUser of lives.values()) liveUser.stop();
+  return {
+    samples,
+    arrivalsRawMs,
+    live,
+    planned,
+    sent,
+    loopDelayP99Ms: loop.count === 0 ? 0 : loop.percentile(99) / 1e6,
+  };
 }
 
 function atOf(event: Event): number {
