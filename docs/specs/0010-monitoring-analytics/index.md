@@ -248,6 +248,25 @@ Tracer Bullet: each milestone ends with something you can see in production, in 
 - The api and worker start with `--import`.
 - Spec 0001's `SENTRY_RELEASE` goes; `SENTRY_DSN_WEB` gains the `VITE_` prefix.
 
+## Calls made building milestone 3 (pending owner confirmation)
+
+Each took the recommended default where the spec left it open (12 October 2026):
+- **`posthog-node` 5.54.1**, pinned in the catalog: a release over two weeks old (25 September), not the newest (5.55.2, 11 October).
+- **The catalog is server only, at `@crm/contracts/events`.** It derives UUID v5 ids with `node:crypto`, and the browser never contacts PostHog, so it stays out of `@crm/contracts/monitoring`, which the browser's Sentry chunk shares.
+- **Event shape.** Each event is `{ event, distinctId, properties }`; the two milestone events also carry `id` (`milestoneEventId`) and `at` (`reached_at`, ISO 8601), sent as PostHog's `uuid` and `timestamp`. Every schema is strict and holds uuids and closed lists only, so no free text fits. `user_signed_up` has no fixed id: Better Auth runs its after hook once per new account.
+- **`milestoneEventId`** is the UUID v5 of `<workspace id, lower case>:<milestone>` in a fixed namespace (`1ef35e3c-cdf3-4e47-b3e7-ab308901e0e6`, in `events.ts`; never to change).
+- **Two checks before anything leaves.** `capture` parses against the catalog (a refusal logs the event's name only); the SDK's own `before_send` then drops any event outside the catalog and runs `scrub` on the properties, so a future SDK feature can't send its own events.
+- **What the wrapper adds:** `environment`, `$process_person_profile: false` and `disableGeoip: true`, plus the SDK's `$lib`, `$lib_version` and `$is_server`. No person profiles, no location. `createAnalytics` also answers `enabled`, for the startup log line.
+- **Sending:** batches of 20 or every 10 seconds, a 5 second request timeout, 2 retries, all off the request path. On shutdown PostHog and Sentry flush side by side, each for at most 2 seconds.
+- **Configuration:** `POSTHOG_KEY` must start `phc_` (the project key); `POSTHOG_HOST` must be https and defaults to `https://eu.i.posthog.com` in code. Both are declared on the api in `.railway/railway.ts` with `preserve()`; the worker sends no product events and gets neither.
+- **Sign up method by route:** `/sign-in/email-otp` is `email_code`; `/callback/google` (and Better Auth's `/callback/:id`) and `/sign-in/social` are `google`. Any other route sends nothing and logs a warning; today no other route can make an account.
+- **`first_record_created` hook:** it joins `writeHooks` in `apps/api/src/hooks.ts`, after the outbox hook, so every write procedure that passes a `mutationId` runs it. It reaches the milestone only for a `write` (never an erasure) by a member actor that created at least one record; `object_kind` is the object of the first record the change lists. Like the outbox hook, it reports on every run, so a write retried after a deadlock reports its committed run only.
+- **`workspace_created`** is stored by `createUserWorkspace` only (a signed in user's workspace). `createWorkspace` (seeds, tests) stores none.
+- **`reached_at` is `now()`**, the reaching transaction's start, and is the event's timestamp.
+- **A write that commits and then fails in the same procedure** (a create whose read back finds the record already trashed) keeps its milestone row and sends no event. The row is the source of truth, so the count can be rebuilt from it; resending is left to #39 or a backfill.
+- **The api's other vendor wrappers** (Better Auth, Resend, React Email) moved from the rule switched off to exact `vendorWrappers` allows, so no wrapper can import another vendor (AC-184).
+- **The migration** sets a 5 second lock timeout for the foreign key on `workspaces` and ends with a check that only the owner and `crm_app` (select, insert) hold privileges on the table. It is numbered 0030 to stay clear of other lanes, for renumbering at landing.
+
 ## Follow-up
 
 - [ ] **Owner**: create the Sentry (EU) and PostHog (EU) accounts on your own email, never the work org; accept both data processing terms.
