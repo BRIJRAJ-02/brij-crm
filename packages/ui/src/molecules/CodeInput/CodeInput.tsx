@@ -1,4 +1,4 @@
-import type { Ref } from 'react';
+import { useState, type Ref } from 'react';
 import { FieldError, Input, Label, TextField } from 'react-aria-components';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import styles from './CodeInput.module.css';
@@ -43,6 +43,8 @@ export function CodeInput({
   errorRef,
 }: CodeInputProps) {
   const boxes = Array.from({ length }, (_, index) => value[index] ?? '');
+  // React Aria's TextField says nothing of focus on its root, so the field tracks its one input itself.
+  const [isFocused, setFocused] = useState(false);
   return (
     <TextField
       className={styles.root}
@@ -59,8 +61,17 @@ export function CodeInput({
       }}
     >
       <Label className={styles.label}>{label}</Label>
-      <span className={styles.boxes}>
-        <Input ref={ref} className={styles.input} />
+      <span className={styles.boxes} data-focused={isFocused || undefined}>
+        <Input
+          ref={ref}
+          className={styles.input}
+          onFocus={() => {
+            setFocused(true);
+          }}
+          onBlur={() => {
+            setFocused(false);
+          }}
+        />
         {boxes.map((character, index) => (
           <span
             key={index}

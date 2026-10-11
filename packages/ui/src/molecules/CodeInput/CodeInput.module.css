@@ -1,6 +1,9 @@
-/* CodeInput: one transparent input over a row of 30px boxes, so a paste or
-   the phone's suggestion fills them all. The next box to fill takes the
-   accent ring while the field is focused. */
+/* CodeInput: one transparent input over a row of boxes outlined in
+   control-border, so a paste or the phone's suggestion fills them all. While
+   the field is focused, the next box to fill takes the 1px accent-line border
+   and the faint focus halo, with a blinking caret bar where the next
+   character goes (steady under reduced motion); once all are filled, the
+   last box keeps the ring. */
 @layer components {
   .root {
     display: flex;
@@ -40,7 +43,7 @@
     place-items: center;
     inline-size: var(--size-input);
     block-size: calc(var(--size-input) + var(--space-8));
-    border: var(--border-width-hairline) solid var(--border);
+    border: var(--border-width-hairline) solid var(--control-border);
     border-radius: var(--radius-md);
     background: var(--surface-raised);
     box-shadow: var(--shadow-control);
@@ -50,9 +53,37 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .root[data-focus-within] .box[data-next] {
+  .boxes[data-focused] .box[data-next] {
     border-color: var(--accent-line);
     box-shadow: var(--shadow-focus);
+  }
+
+  /* Where the next character goes: a caret bar in the next empty box. */
+  .boxes[data-focused] .box[data-next]:not([data-filled])::after {
+    inline-size: var(--border-width-thick);
+    block-size: var(--size-icon);
+    background: var(--text);
+    animation: caret-blink var(--duration-pulse) var(--ease-in-out) infinite;
+    content: '';
+  }
+
+  /* On for half the cycle, off for the other half: the keyframes hold each, so the curve never shows. */
+  @keyframes caret-blink {
+    0%,
+    49% {
+      opacity: 1;
+    }
+
+    50%,
+    100% {
+      opacity: 0;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .boxes[data-focused] .box[data-next]:not([data-filled])::after {
+      animation: none;
+    }
   }
 
   .root[data-invalid] .box {
@@ -91,8 +122,12 @@
       border-color: CanvasText;
     }
 
-    .root[data-focus-within] .box[data-next] {
+    .boxes[data-focused] .box[data-next] {
       outline: var(--border-width-thick) solid Highlight;
+    }
+
+    .boxes[data-focused] .box[data-next]:not([data-filled])::after {
+      background: CanvasText;
     }
   }
 }
