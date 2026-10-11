@@ -11,6 +11,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from './client.ts';
 import { QUEUE_ROLE_RIGHTS, QUEUE_SCHEMA } from './migrations.ts';
+import { openQueueConnection } from './queue.ts';
 
 const { appUrl, ownerUrl, workerUrl } = inject('testDatabase');
 
@@ -49,8 +50,8 @@ async function jobIn(
   memberId: string,
   status: string,
   lane: 'heavy' | 'light' = 'heavy',
+  id: string = randomUUID(),
 ): Promise<string> {
-  const id = randomUUID();
   const finished = ['succeeded', 'failed', 'cancelled'].includes(status);
   await db.withWorkspace(workspaceId, (tx) =>
     tx.execute(sql`
@@ -63,18 +64,20 @@ async function jobIn(
   return id;
 }
 
-/** The queue rows for a job's key, as the owner sees them. */
-async function queueRows(jobId: string) {
+/** The queue rows of a job (by its workspace and id, as the payload names them), as the owner sees them. */
+async function queueRows(workspaceId: string, jobId: string) {
   const result = await owner.query<{
+    key: string;
     task: string;
     queue: string | null;
     payload: unknown;
     priority: number;
     max_attempts: number;
   }>(
-    `select task_identifier as task, queue_name as queue, j.payload, j.priority, j.max_attempts
-     from ${QUEUE_SCHEMA}.jobs v join ${QUEUE_SCHEMA}._private_jobs j on j.id = v.id where v.key = $1`,
-    [`crm-job:${jobId}`],
+    `select v.key, task_identifier as task, queue_name as queue, j.payload, j.priority, j.max_attempts
+     from ${QUEUE_SCHEMA}.jobs v join ${QUEUE_SCHEMA}._private_jobs j on j.id = v.id
+     where j.payload->>'workspaceId' = $1 and j.payload->>'jobId' = $2`,
+    [workspaceId, jobId],
   );
   return result.rows;
 }
@@ -92,8 +95,9 @@ describe('crm_enqueue_job', () => {
     const light = await jobIn(workspaceId, memberId, 'running', 'light');
     expect(await enqueue(workspaceId, heavy)).toBe(true);
     expect(await enqueue(workspaceId, light)).toBe(true);
-    expect(await queueRows(heavy)).toEqual([
+    expect(await queueRows(workspaceId, heavy)).toEqual([
       {
+        key: `crm-job:${workspaceId}:${heavy}`,
         task: 'crm_job_heavy',
         queue: `heavy:${workspaceId}`,
         payload: { workspaceId, jobId: heavy },
@@ -101,8 +105,15 @@ describe('crm_enqueue_job', () => {
         max_attempts: 25,
       },
     ]);
-    expect(await queueRows(light)).toEqual([
-      { task: 'crm_job_light', queue: null, payload: { workspaceId, jobId: light }, priority: 0, max_attempts: 25 },
+    expect(await queueRows(workspaceId, light)).toEqual([
+      {
+        key: `crm-job:${workspaceId}:${light}`,
+        task: 'crm_job_light',
+        queue: null,
+        payload: { workspaceId, jobId: light },
+        priority: 0,
+        max_attempts: 25,
+      },
     ]);
   });
 
@@ -111,7 +122,19 @@ describe('crm_enqueue_job', () => {
     const job = await jobIn(workspaceId, memberId, 'queued');
     await enqueue(workspaceId, job);
     await enqueue(workspaceId, job);
-    expect(await queueRows(job)).toHaveLength(1);
+    expect(await queueRows(workspaceId, job)).toHaveLength(1);
+  });
+
+  it('keeps two workspaces’ jobs with the same id apart: each keeps its own row', async () => {
+    const a = await workspaceWithMember('queue-same-a');
+    const b = await workspaceWithMember('queue-same-b');
+    const id = randomUUID();
+    await jobIn(a.workspaceId, a.memberId, 'queued', 'heavy', id);
+    await jobIn(b.workspaceId, b.memberId, 'queued', 'heavy', id);
+    expect(await enqueue(a.workspaceId, id)).toBe(true);
+    expect(await enqueue(b.workspaceId, id)).toBe(true);
+    expect(await queueRows(a.workspaceId, id)).toHaveLength(1);
+    expect(await queueRows(b.workspaceId, id)).toHaveLength(1);
   });
 
   it('refuses another workspace’s job, a finished one, and one outside any workspace', async () => {
@@ -122,7 +145,7 @@ describe('crm_enqueue_job', () => {
     for (const status of ['succeeded', 'failed', 'cancelled', 'ready']) {
       const job = await jobIn(a.workspaceId, a.memberId, status);
       expect(await enqueue(a.workspaceId, job), status).toBe(false);
-      expect(await queueRows(job), status).toEqual([]);
+      expect(await queueRows(a.workspaceId, job), status).toEqual([]);
     }
     const app = new pg.Client({ connectionString: appUrl });
     await app.connect();
@@ -132,7 +155,7 @@ describe('crm_enqueue_job', () => {
     } finally {
       await app.end();
     }
-    expect(await queueRows(theirs)).toEqual([]);
+    expect(await queueRows(b.workspaceId, theirs)).toEqual([]);
   });
 });
 
@@ -211,15 +234,22 @@ describe('the queue tables', () => {
     const missing = await owner.query<{ name: string }>(`
       select c.relname as name from pg_class c join pg_namespace n on n.oid = c.relnamespace
       where n.nspname = '${QUEUE_SCHEMA}' and (
-        (c.relkind = 'r' and not (has_table_privilege('crm_worker', c.oid, 'SELECT')
+        (c.relkind = 'r' and c.relname <> 'migrations' and not (has_table_privilege('crm_worker', c.oid, 'SELECT')
           and has_table_privilege('crm_worker', c.oid, 'INSERT') and has_table_privilege('crm_worker', c.oid, 'UPDATE')
           and has_table_privilege('crm_worker', c.oid, 'DELETE')))
-        or (c.relkind = 'v' and not has_table_privilege('crm_worker', c.oid, 'SELECT')))
+        or ((c.relkind = 'v' or c.relname = 'migrations') and not has_table_privilege('crm_worker', c.oid, 'SELECT')))
       union all
       select p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
       where n.nspname = '${QUEUE_SCHEMA}' and not has_function_privilege('crm_worker', p.oid, 'EXECUTE')
     `);
     expect(missing.rows).toEqual([]);
+    // Graphile's migrations table: read at start, never written (only the owner migrates).
+    const migrations = await owner.query<{ write: boolean }>(
+      `select has_table_privilege('crm_worker', '${QUEUE_SCHEMA}.migrations', 'INSERT')
+         or has_table_privilege('crm_worker', '${QUEUE_SCHEMA}.migrations', 'UPDATE')
+         or has_table_privilege('crm_worker', '${QUEUE_SCHEMA}.migrations', 'DELETE') as write`,
+    );
+    expect(migrations.rows).toEqual([{ write: false }]);
     const schema = await owner.query<{ usage: boolean; create: boolean }>(
       `select has_schema_privilege('crm_worker', '${QUEUE_SCHEMA}', 'USAGE') as usage,
          has_schema_privilege('crm_worker', '${QUEUE_SCHEMA}', 'CREATE') as create`,
@@ -258,6 +288,42 @@ describe('the queue tables', () => {
       });
     } finally {
       await worker.end();
+    }
+  });
+});
+
+describe('the stale lock release', () => {
+  it('frees a worker whose every lock is old, and leaves a worker with a newer lock alone', async () => {
+    const { workspaceId, memberId } = await workspaceWithMember('queue-stale');
+    const dead = await jobIn(workspaceId, memberId, 'queued');
+    const aliveOld = await jobIn(workspaceId, memberId, 'queued');
+    const aliveNew = await jobIn(workspaceId, memberId, 'queued');
+    for (const job of [dead, aliveOld, aliveNew]) await enqueue(workspaceId, job);
+    const lock = (jobId: string, worker: string, age: string) =>
+      owner.query(
+        `update ${QUEUE_SCHEMA}._private_jobs set locked_by = $1, locked_at = now() - $2::interval
+         where payload->>'jobId' = $3`,
+        [worker, age, jobId],
+      );
+    const deadWorker = `dead-${randomUUID()}`;
+    const liveWorker = `live-${randomUUID()}`;
+    await lock(dead, deadWorker, '10 minutes');
+    await lock(aliveOld, liveWorker, '10 minutes');
+    await lock(aliveNew, liveWorker, '5 seconds');
+    const queue = openQueueConnection({ url: workerUrl, applicationName: 'crm-queue-tests', max: 1 });
+    try {
+      expect(await queue.releaseStaleLocks()).toBeGreaterThanOrEqual(1);
+      const held = await owner.query<{ job: string; locked: boolean }>(
+        `select payload->>'jobId' as job, locked_at is not null as locked from ${QUEUE_SCHEMA}._private_jobs
+         where payload->>'jobId' = any($1) order by 1`,
+        [[dead, aliveOld, aliveNew]],
+      );
+      const locked = Object.fromEntries(held.rows.map((row) => [row.job, row.locked]));
+      expect(locked).toEqual({ [dead]: false, [aliveOld]: true, [aliveNew]: true });
+      const backlog = await queue.backlog();
+      expect(backlog.waiting).toBeGreaterThanOrEqual(1);
+    } finally {
+      await queue.close();
     }
   });
 });

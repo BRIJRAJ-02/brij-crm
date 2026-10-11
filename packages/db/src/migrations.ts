@@ -42,9 +42,10 @@ export const QUEUE_ROLE_RIGHTS = {
 /**
  * The rights on Graphile's schema, granted as the owner after its migrations
  * and ours. PUBLIC loses everything Postgres gives it by default (execute on
- * functions); `crm_worker` gets usage, every table right but `create`
- * (select, insert, update and delete on tables, select on views) and execute
- * on every function; `crm_queue` gets exactly `QUEUE_ROLE_RIGHTS`. Idempotent.
+ * functions); `crm_worker` gets usage, select, insert, update and delete on
+ * the queue's tables, select on the view and on Graphile's `migrations`
+ * table (only the owner migrates), execute on every function, and never
+ * `create`; `crm_queue` gets exactly `QUEUE_ROLE_RIGHTS`. Idempotent.
  */
 export async function grantQueueRights(client: pg.ClientBase): Promise<void> {
   const tables = Object.entries(QUEUE_ROLE_RIGHTS.tables).map(
@@ -55,6 +56,10 @@ export async function grantQueueRights(client: pg.ClientBase): Promise<void> {
     revoke all on all tables in schema ${QUEUE_SCHEMA} from public;
     revoke all on all functions in schema ${QUEUE_SCHEMA} from public;
     revoke all on all sequences in schema ${QUEUE_SCHEMA} from public;
+    -- Taken away and given again on every run, so the rights are exactly these whatever an earlier run gave.
+    revoke all on all tables in schema ${QUEUE_SCHEMA} from crm_worker, crm_queue;
+    revoke all on all functions in schema ${QUEUE_SCHEMA} from crm_worker, crm_queue;
+    revoke all on all sequences in schema ${QUEUE_SCHEMA} from crm_worker, crm_queue;
     grant usage on schema ${QUEUE_SCHEMA} to crm_worker, crm_queue;
     do $$
     declare
@@ -64,7 +69,9 @@ export async function grantQueueRights(client: pg.ClientBase): Promise<void> {
         select c.relname, c.relkind, c.relrowsecurity from pg_class c join pg_namespace n on n.oid = c.relnamespace
         where n.nspname = '${QUEUE_SCHEMA}' and c.relkind in ('r', 'p', 'v')
       loop
-        if relation.relkind = 'v' then
+        -- Graphile's runners only read its migrations table at start (the owner runs its migrations before
+        -- deploy), so the worker reads it and nothing more.
+        if relation.relkind = 'v' or relation.relname = 'migrations' then
           execute format('grant select on %I.%I to crm_worker', '${QUEUE_SCHEMA}', relation.relname);
         else
           execute format('grant select, insert, update, delete on %I.%I to crm_worker', '${QUEUE_SCHEMA}', relation.relname);

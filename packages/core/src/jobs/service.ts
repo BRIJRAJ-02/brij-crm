@@ -129,7 +129,8 @@ export interface StartJobInput {
  * member kind needs a member in the scope (a programming error otherwise); a
  * system kind is the system's whoever starts it (AC-125). Refusals: 422
  * CONFIG_INVALID (params), 422 JOB_TOO_LARGE (over a million items), 409
- * LIMIT_REACHED (the workspace's 21st unfinished member job).
+ * LIMIT_REACHED (the workspace's 21st unfinished member job), 409 ID_TAKEN
+ * (the id names someone else's job, or one of another kind).
  */
 export async function startJob(
   context: WriteContext,
@@ -154,12 +155,10 @@ export async function startJob(
   const jobId = input.id ?? randomUUID();
   if (!isUuid(jobId)) throw new Error('A job id is a uuid.');
 
-  // The idempotent replay: the job this id already made.
-  const [existing] = await tx
-    .select({ id: jobs.id })
-    .from(jobs)
-    .where(and(eq(jobs.workspaceId, scope.workspaceId), eq(jobs.id, jobId)));
-  if (existing !== undefined) return { jobId, merged: false };
+  // The idempotent replay: the job this id already made, of this kind, by this starter. Anyone else's job with
+  // the id (another member's, another kind) is refused rather than handed back as if this start had made it.
+  const existing = await sameStart(tx, scope.workspaceId, jobId);
+  if (existing !== undefined) return replayOf(existing, kind.kind, starter, jobId);
 
   if (starter !== undefined) {
     // The limit, counted under the counter row's lock (which every write takes last), so two starts take turns.
@@ -204,8 +203,12 @@ export async function startJob(
     })
     .onConflictDoNothing()
     .returning({ id: jobs.id });
-  // A concurrent start with the same id won: answer its job.
-  if (inserted.length === 0) return { jobId, merged: false };
+  // A concurrent start with the same id won: answer its job, if it is this same start.
+  if (inserted.length === 0) {
+    const winner = await sameStart(tx, scope.workspaceId, jobId);
+    if (winner === undefined) throw new Error('A job with this id went away under its start.');
+    return replayOf(winner, kind.kind, starter, jobId);
+  }
 
   for (let offset = 0; offset < items.length; offset += ITEM_CHUNK) {
     const chunk = items.slice(offset, offset + ITEM_CHUNK);
@@ -221,9 +224,34 @@ export async function startJob(
   return { jobId, merged: false };
 }
 
+/** A job already made with an id: its kind and starter, to tell a replay from someone else's job. */
+async function sameStart(tx: WorkspaceTx, workspaceId: string, jobId: string) {
+  const [row] = await tx
+    .select({ kind: jobs.kind, createdByType: jobs.createdByType, createdByMemberId: jobs.createdByMemberId })
+    .from(jobs)
+    .where(and(eq(jobs.workspaceId, workspaceId), eq(jobs.id, jobId)));
+  return row;
+}
+
+/** The replay's answer when the job with this id is this same start (kind and starter); 409 ID_TAKEN otherwise. */
+function replayOf(
+  row: { readonly kind: string; readonly createdByType: string; readonly createdByMemberId: string | null },
+  kind: string,
+  starter: string | undefined,
+  jobId: string,
+): { readonly jobId: string; readonly merged: boolean } {
+  const same =
+    row.kind === kind &&
+    (starter === undefined
+      ? row.createdByType === 'system'
+      : row.createdByType === 'member' && row.createdByMemberId === starter);
+  if (!same) throw refuse('ID_TAKEN', 'That job id is already in use. Start the job again with a new id.');
+  return { jobId, merged: false };
+}
+
 /**
  * Puts a job on Graphile's queue through `crm_enqueue_job` (job key
- * `crm-job:<id>`, `replace`), at `runAt` or now. The function refuses (and
+ * `crm-job:<workspace>:<id>`, `replace`), at `runAt` or now. The function refuses (and
  * this throws, a programming error) for a job that isn't runnable or isn't
  * in the transaction's workspace.
  */

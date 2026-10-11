@@ -181,8 +181,11 @@ export function createRunner(deps: RunnerDeps): Runner {
   }
 
   /** The scope a slice works under (step 2), or why the job can't run. */
-  async function enter(row: JobRow): Promise<EngineScope | 'ACTOR_REMOVED'> {
-    if (row.createdByType !== 'member' || row.createdByMemberId === null) return deps.systemScope(row.workspaceId);
+  async function enter(row: JobRow): Promise<EngineScope | 'ACTOR_REMOVED' | 'JOB_INVALID'> {
+    // System power only for a job the system started; a key's or an automation's job (none exist yet) never
+    // borrows it, and can't run until its own door does (#34): fail closed.
+    if (row.createdByType === 'system') return deps.systemScope(row.workspaceId);
+    if (row.createdByType !== 'member' || row.createdByMemberId === null) return 'JOB_INVALID';
     try {
       return await deps.enterAsActor({
         workspaceId: row.workspaceId,
@@ -392,8 +395,8 @@ export function createRunner(deps: RunnerDeps): Runner {
         return finish('failed');
       }
       const scope = await enter(row);
-      if (scope === 'ACTOR_REMOVED') {
-        await end(row, 'failed', 'ACTOR_REMOVED', true);
+      if (scope === 'ACTOR_REMOVED' || scope === 'JOB_INVALID') {
+        await end(row, 'failed', scope, true);
         return finish('failed');
       }
       let batches = 0;

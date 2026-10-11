@@ -68,9 +68,12 @@ function sliceTask(options: JobRunnersOptions, shutdown: AbortSignal): Task {
 }
 
 /**
- * Starts the two runners on the queue pool. Graphile's migrations ran before
- * deploy (as the owner), so the runners only check them. Stale locks are
- * released first.
+ * Starts the two runners on the queue pool. Graphile's `run()` calls its
+ * migrate step; its migrations ran before deploy (as the owner), so here that
+ * step only reads Graphile's `migrations` table, the one right `crm_worker`
+ * holds on it. A Graphile newer than the database's schema would try to
+ * migrate and be refused, so the worker fails to start rather than migrate
+ * as itself. Stale locks are released first.
  */
 export async function startJobRunners(options: JobRunnersOptions): Promise<JobRunners> {
   const { queue, log } = options;

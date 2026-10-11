@@ -209,6 +209,7 @@ export async function assertAppConnection(
     reaches_bypass: boolean;
     reaches_all_data: string | null;
     is_app_member: boolean;
+    reaches_worker: boolean;
   }>(
     `
       select
@@ -233,7 +234,11 @@ export async function assertAppConnection(
           from pg_auth_members m
           join pg_roles g on g.oid = m.roleid
           where g.rolname = $1 and m.member = r.oid
-        ) as is_app_member
+        ) as is_app_member,
+        -- The worker's group reaches the queue (spec 0008): only the worker's own login may be in it.
+        exists (
+          select 1 from pg_roles w where w.rolname = 'crm_worker' and pg_has_role(r.oid, w.oid, 'MEMBER')
+        ) as reaches_worker
       from pg_roles r
       cross join pg_database d
       where r.rolname = current_user and d.datname = current_database()
@@ -254,6 +259,12 @@ export async function assertAppConnection(
     throw new Error(
       `The app is connected as "${row.role}", a member of ${row.reaches_all_data}, which reads or writes every table. ` +
         `Point ${variable} at the ${label} (see \`pnpm ${script}\`).`,
+    );
+  }
+  if (group === 'crm_app' && row.reaches_worker) {
+    throw new Error(
+      `The app is connected as "${row.role}", a member of crm_worker, which reaches the job queue. ` +
+        `Point ${variable} at the app login role (see \`pnpm db:app-login\`).`,
     );
   }
   if (!row.is_app_member) {

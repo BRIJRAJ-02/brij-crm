@@ -128,6 +128,13 @@ describe('the app login check', () => {
     }
   });
 
+  it(
+    'refuses an app login that is also in crm_worker, which reaches the job queue (spec 0008)',
+    apart(async () => {
+      await expect(appCheck(await login(['crm_app', 'crm_worker']))).rejects.toThrow(/reaches the job queue/);
+    }),
+  );
+
   it('names the variable to fix: DATABASE_URL for the pool, DATABASE_URL_DIRECT for the worker', async () => {
     const direct = new pg.Client({ connectionString: adminUrl, application_name: 'crm-roles-tests' });
     await direct.connect();

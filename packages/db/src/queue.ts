@@ -15,9 +15,10 @@ export interface QueueConnection {
   /** The pool Graphile's runners share (LISTEN included): at most `max` connections. */
   readonly pool: pg.Pool;
   /**
-   * Releases the queue and job locks older than `olderThanSeconds` (2
-   * minutes): no live runner call is that old, so only a dead process holds
-   * them. Answers how many workers' locks were released.
+   * Releases the locks of workers whose every queue and job lock is older
+   * than `olderThanSeconds` (2 minutes): no live runner call is that old, so
+   * only a dead process holds them, and a worker with any newer lock is left
+   * alone. Answers how many workers' locks were released.
    */
   releaseStaleLocks(olderThanSeconds?: number): Promise<number>;
   /** How many queue rows are due and unlocked, and how long the oldest has waited, in seconds. */
@@ -49,12 +50,16 @@ export function openQueueConnection(options: {
     pool,
     async releaseStaleLocks(olderThanSeconds = STALE_LOCK_SECONDS) {
       const result = await pool.query<{ released: number }>(
-        `with stale as (
-           select locked_by from ${QUEUE_SCHEMA}._private_jobs
-           where locked_at < now() - make_interval(secs => $1) and locked_by is not null
-           union
-           select locked_by from ${QUEUE_SCHEMA}._private_job_queues
-           where locked_at < now() - make_interval(secs => $1) and locked_by is not null
+        `with locks as (
+           select locked_by, locked_at from ${QUEUE_SCHEMA}._private_jobs where locked_by is not null
+           union all
+           select locked_by, locked_at from ${QUEUE_SCHEMA}._private_job_queues where locked_by is not null
+         ),
+         -- A worker counts as dead only when every lock it holds is old: force_unlock_workers releases all of a
+         -- worker's locks, so one still taking new ones (alive) is never touched.
+         stale as (
+           select locked_by from locks group by locked_by
+           having max(locked_at) < now() - make_interval(secs => $1)
          ), ids as (select array_agg(locked_by) as workers from stale)
          select coalesce(array_length(workers, 1), 0)::int as released,
            ${QUEUE_SCHEMA}.force_unlock_workers(coalesce(workers, '{}'::text[]))

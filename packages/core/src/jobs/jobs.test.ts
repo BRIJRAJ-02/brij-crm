@@ -148,8 +148,8 @@ async function refusalOf(call: Promise<unknown>) {
 const queueRows = (jobId: string) =>
   testQuery<{ key: string; locked: boolean }>(
     ownerUrl,
-    'select key, locked_at is not null as locked from graphile_worker.jobs where key = $1',
-    [`crm-job:${jobId}`],
+    "select v.key, v.locked_at is not null as locked from graphile_worker.jobs v join graphile_worker._private_jobs j on j.id = v.id where j.payload->>'jobId' = $1",
+    [jobId],
   );
 
 const jobEvents = (workspaceId: string) =>
@@ -190,7 +190,7 @@ describe('starting a job (AC-102, AC-116, AC-125)', () => {
     await runWrite(t.member, (context) =>
       startJob(context, registry, { id: kept, kind: 'dev.simulate', params: { batchMillis: 0 }, items: [newId()] }),
     );
-    expect(await queueRows(kept)).toEqual([{ key: `crm-job:${kept}`, locked: false }]);
+    expect(await queueRows(kept)).toEqual([{ key: `crm-job:${t.workspaceId}:${kept}`, locked: false }]);
     const lost = newId();
     await expect(
       runWrite(t.member, async (context) => {
@@ -211,6 +211,11 @@ describe('starting a job (AC-102, AC-116, AC-125)', () => {
     expect(again.id).toBe(first.id);
     expect(again.total).toBe(3);
     expect((await listJobs(t.owner, registry, { scope: 'all' })).jobs).toHaveLength(1);
+    // Someone else's start with that id, or another kind's, is refused rather than handed this job.
+    const other = runWrite(t.admin, (context) =>
+      startJob(context, registry, { id: first.id, kind: 'dev.simulate', params: { batchMillis: 0 } }),
+    );
+    expect(await refusalOf(other)).toMatchObject({ code: 'ID_TAKEN' });
     // One event, from the first start, under its starter.
     const events = await jobEvents(t.workspaceId);
     expect(events).toHaveLength(1);
@@ -440,6 +445,22 @@ describe('the runner (AC-103 to AC-107, AC-113, AC-120)', () => {
     expect(await getJob(t.owner, system, result.jobId)).toMatchObject({ done: 1, result: { phase: 'done' } });
   });
 
+  it('never lends system power to a job no member or the system started: it ends JOB_INVALID', async () => {
+    const t = await team();
+    const registry = jobKinds({ environment: 'local' });
+    const id = newId();
+    await db.withWorkspace(t.workspaceId, (tx) =>
+      tx.execute(sql`
+        insert into jobs (workspace_id, id, kind, lane, status, params, priority, total, created_by_type, created_by_id)
+        values (${t.workspaceId}, ${id}, 'dev.simulate', 'heavy', 'queued', '{"batchMillis":0}'::jsonb, 0, 0,
+          'api_key', ${newId()})
+      `),
+    );
+    expect(await runnerFor(registry).runner.runSlice({ workspaceId: t.workspaceId, jobId: id })).toBe('failed');
+    const [row] = await testQuery<{ error_code: string }>(ownerUrl, 'select error_code from jobs where id = $1', [id]);
+    expect(row).toEqual({ error_code: 'JOB_INVALID' });
+  });
+
   it('leaves a job another runner holds alone, queueing it again for when the lease ends', async () => {
     const t = await team();
     const registry = jobKinds({ environment: 'local' });
@@ -485,7 +506,7 @@ describe('the shared kind contract (AC-122)', () => {
       const [queued] = await testQuery<{ payload: unknown }>(
         ownerUrl,
         'select payload from graphile_worker._private_jobs where key = $1',
-        [`crm-job:${result.jobId}`],
+        [`crm-job:${t.workspaceId}:${result.jobId}`],
       );
       expect(queued?.payload).toEqual({ workspaceId: t.workspaceId, jobId: result.jobId });
       // One batch commits; its progress is rolled back to before it; the batch runs again and changes nothing.

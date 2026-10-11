@@ -14,7 +14,7 @@ A feature declares a kind (a type of job): its params schema, its lane, and one 
 | `packages/core/src/jobs/runner.ts` | `createRunner(deps)`: one slice of one job (pure; the clock, the database, the hooks, the scope makers from `@crm/core/system`, the `queue` reader, the log and the shutdown signal come in as arguments) |
 | `packages/core/src/jobs/kinds/` | One file per kind: `dev-simulate.ts`, `maintenance-daily.ts`, and later each feature's own |
 | `@crm/core/system` (spec 0009) | `enterAsActor` and `systemScope`, the only ways a slice gets a scope; nothing is added to the door here |
-| `packages/db/src/queue.ts` | `createQueueReader(direct)`: `rows(workspaceId, jobIds)` (which jobs have a queue row, by key `crm-job:<id>`), `deleteDead()` (unlocked rows whose attempts are used up, through `graphile_worker.complete_jobs`); built on the worker's `crm_worker` connection |
+| `packages/db/src/queue.ts` | `createQueueReader(direct)`: `rows(workspaceId, jobIds)` (which jobs have a queue row, by key `crm-job:<workspace_id>:<id>`), `deleteDead()` (unlocked rows whose attempts are used up, through `graphile_worker.complete_jobs`); built on the worker's `crm_worker` connection |
 | `apps/api/src/jobs/graphile.ts` | The only file in `apps/api` that imports `graphile-worker`: the two runners, the tasks, the cron, stale lock release |
 | `apps/api/src/jobs/lifecycle.ts` | Awake and asleep (see [0008-worker-sleep.md](0008-worker-sleep.md)) |
 | `apps/api/src/modules/jobs/router.ts` | The thin `jobs.*` handlers |
@@ -135,7 +135,7 @@ Each item is checked again in its batch (the step reads the record under its loc
 
 Pinned: `graphile-worker` 0.18.0, the latest release on 8 October 2026 (not yet in the catalog or `node_modules`). Its schema (migrations 000001 to 000020) keeps the queue in `graphile_worker._private_jobs`, with `_private_job_queues`, `_private_tasks`, `_private_known_crontabs` and `migrations` beside it, and a view `graphile_worker.jobs`. `add_job` is `plpgsql` running with its caller's rights; it calls `add_jobs`, which inserts missing task and queue names, clears the key of any row with the same key that is not available (locked, or its attempts used up) and sets that row's attempts to its maximum, then inserts the new row or, on a key clash with an available row, replaces it.
 
-Every enqueue goes through `crm_enqueue_job` with job key `crm-job:<id>` and `job_key_mode` `'replace'`, named explicitly:
+Every enqueue goes through `crm_enqueue_job` with job key `crm-job:<workspace_id>:<id>` and `job_key_mode` `'replace'`, named explicitly:
 
 | Path | Queue state when it runs | What `replace` does | Why not `preserve_run_at` |
 |---|---|---|---|

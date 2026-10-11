@@ -138,7 +138,9 @@ grant select (workspace_id, id, lane, priority, status) on jobs to crm_queue;
 -- so the caller chooses no task, payload or queue: task crm_job_heavy or crm_job_light by the job's lane, payload
 -- the workspace and job ids alone, queue heavy:<workspace> for heavy jobs (one heavy slice per workspace at a time)
 -- and none for light ones, the job's priority, run_at (now when null), 25 attempts as Graphile's backstop, job key
--- crm-job:<id> and job_key_mode 'replace', named on every call (spec 0008, Queue keys). Answers whether it queued.
+-- crm-job:<workspace_id>:<id> (a job id is unique per workspace only, and the key is global: two workspaces' jobs
+-- with one id must never replace each other's row) and job_key_mode 'replace', named on every call (spec 0008,
+-- Queue keys). Answers whether it queued.
 --
 -- A quoted language sql body, so it is bound when it runs: a Graphile upgrade that drops and recreates add_job
 -- never fails on it. The parameters are qualified with the function's name, so no column can shadow them; every
@@ -165,7 +167,7 @@ as $function$
       queue_name => case when job.lane = 'heavy' then 'heavy:' || job.workspace_id::text end,
       run_at => coalesce(crm_enqueue_job.run_at, pg_catalog.now()),
       max_attempts => 25,
-      job_key => 'crm-job:' || job.id::text,
+      job_key => 'crm-job:' || job.workspace_id::text || ':' || job.id::text,
       priority => job.priority::integer,
       job_key_mode => 'replace'
     ) as queued
