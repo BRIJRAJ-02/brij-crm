@@ -47,16 +47,25 @@ export function timePool(pool: pg.Pool, timing: PoolTiming): void {
       sink.waited(at - started);
       holding.set(client, { sink, at });
     };
+    // A checkout that fails (a connect error, a timeout) waited too, and a starved pool is when that matters.
+    const failed = () => sink.waited(performance.now() - started);
     if (callback !== undefined) {
       return connect((error, client, done) => {
         if (error === undefined && client !== undefined) got(client);
+        else failed();
         callback(error, client, done);
       });
     }
-    return (connect() ?? Promise.reject(new Error('The pool did not answer the checkout.'))).then((client) => {
-      got(client);
-      return client;
-    });
+    return (connect() ?? Promise.reject(new Error('The pool did not answer the checkout.'))).then(
+      (client) => {
+        got(client);
+        return client;
+      },
+      (error: unknown) => {
+        failed();
+        throw error;
+      },
+    );
   };
   // The pool is this module's caller's own, made a line before; only its checkout is wrapped.
   Object.assign(pool, { connect: timed as unknown as Connect });

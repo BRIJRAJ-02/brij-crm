@@ -2,7 +2,8 @@
 // AC-201, AC-204): its clock, the WAL it has written, the statements with the
 // most time (`pg_stat_statements`), and PgBouncer's waits (`SHOW POOLS`). None
 // of it reads tenant data. The harness opens it on the load stack's owner
-// login and its pooler; nothing in the API or the worker uses it.
+// login and its pooler; nothing in the API or the worker uses it. Its own entry,
+// `@crm/db/stats`, which lint refuses outside packages/load and tests.
 import pg from 'pg';
 
 /** One statement from `pg_stat_statements`: its normalised text (constants as `$n`) and its totals. */

@@ -9,6 +9,7 @@ import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { newId } from '@crm/core';
 import { createLoadClient, loadApiOf } from './client.ts';
 import type { Arrival, Join } from './plan.ts';
+import type { LoadAction } from '@crm/core/scale-budget';
 import { createRandom } from './random.ts';
 import type { ObjectKey } from './shapes.ts';
 import { createLoadUser, type Behaviour, type ObjectModel, type Sample } from './user.ts';
@@ -61,6 +62,15 @@ export interface DriveOutput {
   readonly loopDelayP99Ms: number;
 }
 
+/** What each action of the mix is measured as. */
+const METRIC_OF: Readonly<Record<LoadAction, Sample['metric']>> = {
+  scroll: 'read',
+  filterSort: 'read',
+  open: 'open',
+  edit: 'edit',
+  create: 'create',
+};
+
 /** Milliseconds since the epoch, on a clock every thread shares. */
 export const wallClock = (): number => performance.timeOrigin + performance.now();
 
@@ -109,7 +119,8 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
             // Busy on purpose: the test flag stalls this thread.
           }
         }, 100);
-  const pending = new Set<Promise<void>>();
+  // Each action in flight, with what an unfinished one is recorded as when the drain runs out.
+  const pending = new Map<Promise<void>, Sample>();
   let planned = 0;
   let sent = 0;
 
@@ -125,7 +136,20 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
       planned += 1;
       if (now - due <= ON_TIME_MS) sent += 1;
     }
-    pending.add(work);
+    const unfinished: Sample = {
+      user: event.kind === 'join' ? event.join.user : event.arrival.user,
+      action: event.kind === 'join' ? 'join' : event.arrival.action,
+      metric: event.kind === 'join' ? 'read' : METRIC_OF[event.arrival.action],
+      scheduledAt: due,
+      answeredAt: due,
+      outcome: 'unexpected',
+      reason: 'unfinished',
+      measured: event.kind === 'join' ? due >= measuredStart : event.arrival.measured,
+      requests: 0,
+      poolMs: [],
+      appMs: [],
+    };
+    pending.set(work, unfinished);
     void work.finally(() => pending.delete(work));
   };
 
@@ -153,8 +177,11 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
   clearTimeout(startLoop);
   clearInterval(blocking);
   loop.disable();
-  const drained = Promise.allSettled([...pending]);
+  const drained = Promise.allSettled([...pending.keys()]);
   await Promise.race([drained, new Promise((resolve) => setTimeout(resolve, DRAIN_MS))]);
+  // What still hasn't answered never will in this run: an unexpected error, not a silence.
+  const now = wallClock();
+  for (const sample of pending.values()) if (sample.measured) samples.push({ ...sample, answeredAt: now });
   return { samples, planned, sent, loopDelayP99Ms: loop.count === 0 ? 0 : loop.percentile(99) / 1e6 };
 }
 

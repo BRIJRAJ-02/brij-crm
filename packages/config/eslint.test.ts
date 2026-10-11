@@ -386,12 +386,27 @@ describe('the load harness’s scripts (spec 0011)', () => {
         "import { assertLocalUrls } from '@crm/core/load-local';\nimport { readManifest } from '@crm/core/load-files';\nexport const both = [assertLocalUrls, readManifest];\n",
       'src/mint.ts': "import { mintSessions } from '@crm/core/load-sessions';\nexport const mint = mintSessions;\n",
       'src/system.ts': "import { systemScope } from '@crm/core/system';\nexport const scope = systemScope;\n",
+      'src/reset.ts':
+        "import { resetLoadWorkspace } from '@crm/core/load-reset';\nexport const reset = resetLoadWorkspace;\n",
+      'src/stats.ts': "import { openServerStats } from '@crm/db/stats';\nexport const stats = openServerStats;\n",
     });
     const harness = await lintWorkspace(root, server({ root, loadHarness: true }));
     expect(rulesFor(harness, 'src/guards.ts')).not.toContain('no-restricted-imports');
     expect(messagesFor(harness, 'src/mint.ts').join('\n')).toContain('only load:seed and load:sessions mint them');
-    // System power stays where it was.
+    // System power stays where it was, and so does the reset's erase as the system actor.
     expect(messagesFor(harness, 'src/system.ts').join('\n')).toContain('System power is for the worker');
+    expect(messagesFor(harness, 'src/reset.ts').join('\n')).toContain('never erases');
+    expect(rulesFor(harness, 'src/stats.ts')).not.toContain('no-restricted-imports');
+  }, 60_000);
+
+  it('refuses the server statistics connections outside the harness and tests', async () => {
+    const root = createWorkspace({
+      'src/stats.ts': "import { openServerStats } from '@crm/db/stats';\nexport const stats = openServerStats;\n",
+      'src/stats.test.ts': "import { openServerStats } from '@crm/db/stats';\nexport const stats = openServerStats;\n",
+    });
+    const app = await lintWorkspace(root, server({ root }));
+    expect(messagesFor(app, 'src/stats.ts').join('\n')).toContain('Server statistics open raw connections');
+    expect(rulesFor(app, 'src/stats.test.ts')).not.toContain('no-restricted-imports');
   }, 60_000);
 
   it('refuses them in packages/db too, which opens connections', async () => {

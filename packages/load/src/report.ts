@@ -26,7 +26,12 @@ export interface ReportInput {
   readonly poolerWaitMs: readonly number[] | undefined;
   /** Postgres's CPU every 5 seconds as a share of its cap (0 to 1), or undefined off the load stack. */
   readonly postgresCpuShares: readonly number[] | undefined;
+  /** The API container's CPU the same way, reported beside Postgres's; undefined off the load stack. */
+  readonly apiCpuShares?: readonly number[] | undefined;
 }
+
+/** Below this many samples a line's p95 rests on its few slowest: its verdict carries a note saying so. */
+export const FEW_SAMPLES = 100;
 
 const round = (value: number) => Math.round(value * 10) / 10;
 
@@ -45,6 +50,7 @@ function rounded(summary: Summary | undefined): Summary | undefined {
 function judged(metric: string, values: readonly number[], target: number, unit: 'ms' | '%'): ReportLine {
   const summary = rounded(summarize(values));
   const verdict: Verdict = summary === undefined ? 'no samples' : summary.p95 <= target ? 'pass' : 'miss';
+  const few = summary !== undefined && summary.count < FEW_SAMPLES;
   return {
     metric,
     target: `p95 ≤ ${String(target)}${unit === 'ms' ? ' ms' : '%'}`,
@@ -52,6 +58,7 @@ function judged(metric: string, values: readonly number[], target: number, unit:
     ...(summary === undefined ? {} : { summary }),
     verdict,
     judged: true,
+    ...(few ? { note: `only ${String(summary.count)} samples: a direction, not a measure` } : {}),
   };
 }
 
@@ -76,15 +83,20 @@ function without(metric: string, verdict: 'not measured' | 'not built yet', note
 /** How long a sample took: from its scheduled moment to its answer (never from when it was sent). */
 export const durationOf = (sample: Sample): number => sample.answeredAt - sample.scheduledAt;
 
+/** The times of a metric's successful samples; one that sent no request (nothing to wait for) isn't a time. */
 const okTimes = (samples: readonly Sample[], metric: Metric, filter: (sample: Sample) => boolean = () => true) =>
-  samples.filter((sample) => sample.metric === metric && sample.outcome === 'ok' && filter(sample)).map(durationOf);
+  samples
+    .filter((sample) => sample.metric === metric && sample.outcome === 'ok' && sample.requests > 0 && filter(sample))
+    .map(durationOf);
 
 /** The report's lines (AC-199, AC-201). */
 export function reportLines(input: ReportInput): readonly ReportLine[] {
   const { budget, samples } = input;
   const p95 = budget.p95Ms;
   const poolMs = samples.flatMap((sample) => sample.poolMs);
+  const appMs = samples.flatMap((sample) => sample.appMs);
   const cpu = input.postgresCpuShares?.map((share) => share * 100);
+  const apiCpu = input.apiCpuShares?.map((share) => share * 100);
   return [
     judged('read (scroll, filter or sort windows)', okTimes(samples, 'read'), p95.read, 'ms'),
     judged('open a record', okTimes(samples, 'open'), p95.open, 'ms'),
@@ -99,6 +111,7 @@ export function reportLines(input: ReportInput): readonly ReportLine[] {
       okTimes(samples, 'read', (sample) => sample.mode === 'cursor'),
     ),
     reported('count', okTimes(samples, 'count'), 'ms', 'not judged'),
+    reported('API handler time per request', appMs, 'ms', 'Server-Timing app: the server side of every request'),
     without(
       'live delivery',
       'not built yet',
@@ -114,6 +127,7 @@ export function reportLines(input: ReportInput): readonly ReportLine[] {
     cpu === undefined
       ? without('Postgres CPU', 'not measured', 'off the load stack: no container to sample')
       : judged('Postgres CPU', cpu, budget.postgresCpuP95Share * 100, '%'),
+    ...(apiCpu === undefined ? [] : [{ ...reported('API CPU', apiCpu), unit: '%' as const }]),
     without(
       'relay lag',
       'not built yet',
@@ -125,9 +139,10 @@ export function reportLines(input: ReportInput): readonly ReportLine[] {
 
 /** Counts of the measured window's answers by class and reason. */
 export function errorCounts(samples: readonly Sample[]) {
-  // Every action and every count it ran, but a count the harness aborted itself, which is neither.
-  const actions = samples.filter((sample) => sample.outcome !== 'aborted');
-  const unexpected = actions.filter((sample) => sample.outcome === 'unexpected');
+  // The share is of actions; a count that failed unexpectedly counts as an error too, and one the harness aborted
+  // itself (a newer view replaced it) is neither.
+  const actions = samples.filter((sample) => sample.metric !== 'count');
+  const unexpected = samples.filter((sample) => sample.outcome === 'unexpected');
   const byReason: Record<string, number> = {};
   for (const sample of unexpected) {
     const reason = sample.reason ?? 'unknown';

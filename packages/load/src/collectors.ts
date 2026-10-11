@@ -9,7 +9,7 @@ import { readFile } from 'node:fs/promises';
 import os from 'node:os';
 import { promisify } from 'node:util';
 import { LOAD_STACK, REPO_ROOT } from '@crm/core/load-local';
-import { readPoolerPools } from '@crm/db';
+import { readPoolerPools } from '@crm/db/stats';
 
 const run = promisify(execFile);
 

@@ -39,14 +39,21 @@ export const loadScriptImports = {
 
 /**
  * What the load harness itself (packages/load, `loadHarness: true`) may still
- * not import: session minting. It reads the minted cookies from
- * `.load/sessions.json`, and its setup scripts' guards and files from
- * `@crm/core/load-local`, `load-files` and `load-stack`.
+ * not import: session minting, and `load:reset`'s erase as the system actor.
+ * It reads the minted cookies from `.load/sessions.json`, and its setup
+ * scripts' guards, files and slot count from `@crm/core/load-local`,
+ * `load-files`, `load-stack` and `load-slots`.
  */
 const loadMintingImports = {
-  regex: '^@crm/core/load-sessions$|(^|/)scripts/load-sessions(\\.ts)?$',
+  regex: '^@crm/core/load-(sessions|reset)$|(^|/)scripts/load-(sessions|reset)(\\.ts)?$',
   message:
-    'The load harness reads minted sessions from .load/sessions.json; only load:seed and load:sessions mint them.',
+    'The load harness reads minted sessions from .load/sessions.json and never erases; only load:seed and load:sessions mint them, and load:reset erases.',
+};
+
+/** The database server's raw statistics connections (spec 0011): for the load harness and tests only. */
+const serverStatsImports = {
+  group: ['@crm/db/stats'],
+  message: 'Server statistics open raw connections: only the load harness (packages/load) and tests read them.',
 };
 
 // House rule: screens get data only through the client data layer.
@@ -338,6 +345,7 @@ function serverImports(databaseDriver, allow = []) {
     // Spec 0011: the load harness's scripts, only from tests and scripts (the testing importers), and from the
     // harness itself (`harness`), which still may not mint.
     ...(allow.includes('load') ? [] : allow.includes('harness') ? [loadMintingImports] : [loadScriptImports]),
+    ...(allow.includes('load') || allow.includes('harness') ? [] : [serverStatsImports]),
   ];
   return { rules: { 'no-restricted-imports': ['error', { paths: databaseDriver ? [] : databaseDrivers, patterns }] } };
 }

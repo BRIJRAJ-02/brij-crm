@@ -11,7 +11,7 @@
     "./load-local": "./scripts/load-local.ts",
     "./load-files": "./scripts/load-files.ts",
     "./load-stack": "./scripts/load-stack.ts",
-    "./load-reset": "./scripts/load-reset.ts"
+    "./load-slots": "./scripts/load-slots.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

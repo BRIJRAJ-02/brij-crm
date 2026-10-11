@@ -65,7 +65,7 @@ const record = (n: number): RecordView => ({
 });
 
 /** A fake API over `ROWS` records (a filtered view matches every other one), logging every call. */
-function fakeApi(options: { countDelayMs?: number; failWith?: () => Error } = {}) {
+function fakeApi(options: { countDelayMs?: number; queryDelayMs?: number; failWith?: () => Error } = {}) {
   const calls: { procedure: string; input: unknown }[] = [];
   const page = (input: QueryRecordsInput): RecordPage => {
     const filtered = input.filter !== undefined;
@@ -86,6 +86,10 @@ function fakeApi(options: { countDelayMs?: number; failWith?: () => Error } = {}
     query: (input) => {
       calls.push({ procedure: 'query', input });
       if (options.failWith) return Promise.reject(options.failWith());
+      if (options.queryDelayMs !== undefined) {
+        const delay = options.queryDelayMs;
+        return new Promise((resolve) => setTimeout(() => resolve(page(input)), delay));
+      }
       return Promise.resolve(page(input));
     },
     count: (input, call: Call) => {
@@ -143,6 +147,23 @@ function user(api: LoadApi, options: { behaviour?: Behaviour; seed?: number } = 
 const queries = (calls: { procedure: string; input: unknown }[]) =>
   calls.filter((call) => call.procedure === 'query').map((call) => call.input as QueryRecordsInput);
 
+/** A user switched to the job title view, which pages by cursor. */
+async function filtered(behaviour: Behaviour, seed = 11) {
+  const fake = fakeApi();
+  const made = user(fake.api, { behaviour, seed });
+  await made.loadUser.join(0, false);
+  // Filter or sort until the view is the job title one (by cursor).
+  for (
+    let tries = 0;
+    tries < 50 && made.loadUser.snapshot().view !== 'job title contains manager, by name';
+    tries += 1
+  ) {
+    await made.loadUser.act('filterSort', tries, true);
+  }
+  expect(made.loadUser.snapshot()).toMatchObject({ view: 'job title contains manager, by name', mode: 'cursor' });
+  return { ...fake, ...made };
+}
+
 describe('a view canJump admits', () => {
   it('joins on its first window by position with its count, and scrolls by position', async () => {
     const { api, calls } = fakeApi();
@@ -186,22 +207,6 @@ describe('a view canJump admits', () => {
 });
 
 describe('a filtered view', () => {
-  async function filtered(behaviour: Behaviour) {
-    const fake = fakeApi();
-    const made = user(fake.api, { behaviour, seed: 11 });
-    await made.loadUser.join(0, false);
-    // Filter or sort until the view is the job title one (by cursor).
-    for (
-      let tries = 0;
-      tries < 50 && made.loadUser.snapshot().view !== 'job title contains manager, by name';
-      tries += 1
-    ) {
-      await made.loadUser.act('filterSort', tries, true);
-    }
-    expect(made.loadUser.snapshot()).toMatchObject({ view: 'job title contains manager, by name', mode: 'cursor' });
-    return { ...fake, ...made };
-  }
-
   it('reads its first window and its count together, and scrolls by following nextCursor', async () => {
     const { calls, loadUser } = await filtered({ ...steady, jumpShare: 0 });
     const before = calls.length;
@@ -239,6 +244,36 @@ describe('a filtered view', () => {
     const second = queries(calls.slice(again));
     const target = loadUser.snapshot().block;
     if (target >= 2) expect(second[0]?.cursor).toBeDefined();
+  });
+});
+
+describe('a scroll after a jump lands on the first half of a 200 row read', () => {
+  it('reads on from the nearest checkpoint instead of standing still: every scroll sends a request', async () => {
+    const { loadUser, samples } = await filtered({ jumps: 'even', picks: 'window', jumpShare: 0.5 }, 5);
+    let stuck = 0;
+    for (let step = 0; step < 300; step += 1) {
+      const before = loadUser.snapshot();
+      await loadUser.act('scroll', step, true);
+      const after = loadUser.snapshot();
+      if (before.block === after.block && after.block > 0 && before.block % 2 === 0) stuck += 1;
+    }
+    const scrolls = samples.filter((each) => each.action === 'scroll');
+    expect(scrolls).toHaveLength(300);
+    expect(scrolls.every((each) => each.requests >= 1)).toBe(true);
+    // A move may land where it started (a jump to the same block), but never for want of a checkpoint every time.
+    expect(stuck).toBeLessThan(30);
+  });
+});
+
+describe('a scroll while the first window loads', () => {
+  it('waits for it rather than opening the view again', async () => {
+    const { api, calls } = fakeApi({ queryDelayMs: 50 });
+    const { loadUser } = user(api, { behaviour: { ...steady, jumpShare: 0 } });
+    const joining = loadUser.join(0, true);
+    await loadUser.act('scroll', 10, true);
+    await joining;
+    expect(calls.filter((call) => call.procedure === 'count')).toHaveLength(1);
+    expect(loadUser.snapshot().block).toBeGreaterThan(0);
   });
 });
 

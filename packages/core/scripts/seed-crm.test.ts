@@ -8,7 +8,8 @@ import { createDatabase, createIdentityStore, type Database, type IdentityStore 
 import { testQuery } from '@crm/db/testing';
 import { createRecord, newId, readRecordsById } from '../src/index.ts';
 import { systemScope } from '../src/system.ts';
-import { freeRecordSlots, harnessRecords, resetLoadWorkspace } from './load-reset.ts';
+import { harnessRecords, resetLoadWorkspace } from './load-reset.ts';
+import { freeRecordSlots } from './load-slots.ts';
 import { SCALE_BUDGET } from './scale-budget.ts';
 import { testScope } from '../src/testing.ts';
 import { LoadManifest } from './load-files.ts';
@@ -184,17 +185,15 @@ describe('the test profile', () => {
   it('makes every user a verified, active member with its directory rows', async () => {
     const { users, verified, members, active, memberships, directory } = await one(
       `select
-         -- Only this workspace's people: load-sessions.test.ts makes load-user accounts of its own in the same database.
-         (select count(*) from auth."user" u where u.email like 'load-user-%@example.com'
-           and exists (select 1 from members m where m.workspace_id = $1 and m.user_id = u.id)) as users,
-         (select count(*) from auth."user" u where u.email like 'load-user-%@example.com' and u.email_verified
-           and exists (select 1 from members m where m.workspace_id = $1 and m.user_id = u.id)) as verified,
+         (select count(*) from auth."user" where id = any($2::uuid[]) and email like 'load-user-%@example.com') as users,
+         (select count(*) from auth."user" where id = any($2::uuid[]) and email_verified) as verified,
          (select count(*) from members where workspace_id = $1) as members,
          (select count(*) from members m join auth."user" u on u.id = m.user_id
            where m.workspace_id = $1 and m.status = 'active' and m.email = u.email) as active,
          (select count(*) from auth.workspace_membership where workspace_id = $1) as memberships,
          (select count(*) from auth.workspace_directory where workspace_id = $1 and slug = 'load') as directory`,
-      [manifest.workspaceId],
+      // The manifest's users: the sessions suite makes load users of its own in this database at the same time.
+      [manifest.workspaceId, manifest.users.map((user) => user.userId)],
     );
     expect({ users, verified, members, active, memberships, directory }).toEqual({
       users: profile.users,
@@ -286,5 +285,16 @@ describe('pnpm load:reset (spec 0011, AC-209)', () => {
       manifest.workspaceId,
     ]);
     expect(stored).toBe(Object.values(manifest.counts).reduce((sum, count) => sum + count.stored, 0));
+  });
+
+  it('refuses (exit 3) a manifest whose workspace this database does not hold under its slug', async () => {
+    const elsewhere = await resetLoadWorkspace(db, { ...manifest, slug: 'not-the-seeded-one' }).catch(
+      (error: unknown) => error,
+    );
+    expect(isLoadRefusal(elsewhere) && elsewhere.exitCode === 3).toBe(true);
+    const unknown = await resetLoadWorkspace(db, { ...manifest, workspaceId: newId() }).catch(
+      (error: unknown) => error,
+    );
+    expect(isLoadRefusal(unknown) && unknown.message.includes('LOAD_DATABASE_URL_OWNER')).toBe(true);
   });
 });

@@ -21,10 +21,11 @@ import {
   loadUrls,
   type LoadUrls,
 } from '@crm/core/load-local';
-import { freeRecordSlots } from '@crm/core/load-reset';
+import { freeRecordSlots } from '@crm/core/load-slots';
 import { prepareStatements } from '@crm/core/load-stack';
 import { SCALE_BUDGET } from '@crm/core/scale-budget';
-import { createDatabase, openServerStats, type Database, type ServerStats } from '@crm/db';
+import { createDatabase, type Database } from '@crm/db';
+import { openServerStats, type ServerStats } from '@crm/db/stats';
 import { createLoadClient } from './client.ts';
 import { cpuShare, hostFacts, poolerWait, sampleEvery, stackContainers } from './collectors.ts';
 import type { DriveInput, DriveOutput, ThreadUser } from './drive.ts';
@@ -209,6 +210,7 @@ async function clockOffset(stats: ServerStats): Promise<number> {
 async function writeResult(result: LoadResult): Promise<string> {
   const dir = join(LOAD_DIR, 'results');
   await mkdir(dir, { recursive: true, mode: 0o700 });
+  await chmod(dir, 0o700);
   const path = join(dir, `${result.scenario}-${result.startedAt.replaceAll(':', '-')}.json`);
   await writeFile(path, `${JSON.stringify(LoadResult.parse(result), null, 2)}\n`, { mode: 0o600 });
   await chmod(path, 0o600);
@@ -327,6 +329,8 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
     const walBefore = await stats.walBytes();
     const postgres = containers.get('postgres');
     const cpu = postgres === undefined ? undefined : sampleEvery(() => cpuShare(postgres.id, postgres.cap.cpus));
+    const api = containers.get('api');
+    const apiCpu = api === undefined ? undefined : sampleEvery(() => cpuShare(api.id, api.cap.cpus));
     const database = new URL(urls.LOAD_PGBOUNCER_URL).pathname.slice(1);
     const pooler = sampleEvery(() => poolerWait(urls.LOAD_PGBOUNCER_URL, database));
     const progress = setInterval(() => {
@@ -338,6 +342,7 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
     mainLoop.disable();
     const walAfter = await stats.walBytes();
     const cpuShares = await cpu?.stop();
+    const apiCpuShares = await apiCpu?.stop();
     const poolerWaits = await pooler.stop();
     const top = statementsOn ? await stats.topStatements(10) : undefined;
     log('window closed: waiting for the last answers');
@@ -347,7 +352,13 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
 
     const samples = outputs.flatMap((output) => output.samples);
     const lines = [
-      ...reportLines({ budget: SCALE_BUDGET, samples, poolerWaitMs: poolerWaits, postgresCpuShares: cpuShares }),
+      ...reportLines({
+        budget: SCALE_BUDGET,
+        samples,
+        poolerWaitMs: poolerWaits,
+        postgresCpuShares: cpuShares,
+        apiCpuShares,
+      }),
       ...errorLines(samples, SCALE_BUDGET),
     ];
     const validity = judgeValidity({
@@ -360,8 +371,11 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
         ...outputs.map((output) => output.loopDelayP99Ms),
       ],
     });
-    const measuredActions = plan.arrivals.filter((arrival) => arrival.measured).map((arrival) => arrival.action);
-    const achieved = achievedMix(measuredActions);
+    // The mix the measured window really sent: one sample per action (its count apart), never the plan's.
+    const sentActions = samples.flatMap((sample) =>
+      sample.metric === 'count' || sample.action === 'join' ? [] : [sample.action],
+    );
+    const achieved = achievedMix(sentActions);
     const statements: StatementLine[] | undefined = top?.map((statement) => ({ ...statement }));
     const result: LoadResult = {
       scenario: options.scenario,

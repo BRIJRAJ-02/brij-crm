@@ -16,6 +16,7 @@ const sample = (overrides: Partial<Sample> & Pick<Sample, 'metric' | 'scheduledA
   measured: true,
   requests: 1,
   poolMs: [],
+  appMs: [],
   ...overrides,
 });
 
@@ -87,6 +88,18 @@ describe('reportLines', () => {
     expect(line('edit')?.verdict).toBe('pass');
     expect(line('edit')?.summary?.count).toBe(1);
     expect(line('create')?.verdict).toBe('no samples');
+  });
+
+  it('notes a judged line resting on few samples, and never times a read that sent no request', () => {
+    expect(line('open')?.note).toContain('only 1 samples');
+    expect(line('read (')?.note).toContain('only 20 samples');
+    const idle = reportLines({
+      budget: SCALE_BUDGET,
+      samples: [sample({ metric: 'read', scheduledAt: 0, answeredAt: 1, requests: 0 })],
+      poolerWaitMs: [],
+      postgresCpuShares: [],
+    });
+    expect(idle[0]?.verdict).toBe('no samples');
   });
 
   it('reports counts, and reads by mode, without judging them', () => {

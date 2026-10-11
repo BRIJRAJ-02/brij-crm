@@ -18,6 +18,24 @@ function recorder() {
 }
 
 describe('a timed pool', () => {
+  it('counts a failed checkout’s wait too', async () => {
+    const failed = recorder();
+    const db = createDatabase({
+      url: 'postgres://nobody:nothing@127.0.0.1:1/none',
+      applicationName: 'crm-timing-tests',
+      timing: () => failed.sink,
+      onPoolError: () => undefined,
+    });
+    try {
+      await expect(db.checkHealth()).rejects.toThrow();
+      await expect(db.withWorkspace('00000000-0000-7000-8000-000000000000', () => Promise.resolve())).rejects.toThrow();
+      expect(failed.waits).toHaveLength(2);
+      expect(failed.holds).toHaveLength(0);
+    } finally {
+      await db.close();
+    }
+  });
+
   it('reports each checkout’s wait and hold to the sink current when it started', async () => {
     const first = recorder();
     const second = recorder();

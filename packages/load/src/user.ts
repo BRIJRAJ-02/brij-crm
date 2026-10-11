@@ -67,12 +67,15 @@ export interface Sample {
   readonly requests: number;
   /** The API's pool wait of each request that answered with a timing header. */
   readonly poolMs: readonly number[];
+  /** The API's own handler time of each such request (`app` in `Server-Timing`). */
+  readonly appMs: readonly number[];
 }
 
 /** One call's extras: the signal that aborts it, and where the client notes the API's pool wait. */
 export interface Call {
   readonly signal: AbortSignal;
   readonly poolMs: number[];
+  readonly appMs: number[];
 }
 
 /** The calls a user makes, as the contract names them. */
@@ -164,6 +167,8 @@ interface ViewState {
   /** Cursor mode: the window holds the last rows. */
   atEnd: boolean;
   readonly countAbort: AbortController;
+  /** Settles when the view's first window has answered (or failed): a scroll meanwhile waits for it. */
+  loading: Promise<void>;
 }
 
 type Answer<T> =
@@ -191,12 +196,13 @@ export function createLoadUser(options: UserOptions): LoadUser {
     let outcome: Outcome = 'ok';
     let reason: string | undefined;
     const poolMs: number[] = [];
+    const appMs: number[] = [];
     async function call<T>(run: (call: Call) => Promise<T>, abort?: AbortSignal): Promise<Answer<T>> {
       requests += 1;
       const timeout = AbortSignal.timeout(REQUEST_TIMEOUT_MS);
       const signal = abort === undefined ? timeout : AbortSignal.any([timeout, abort]);
       try {
-        return { ok: true, value: await run({ signal, poolMs }) };
+        return { ok: true, value: await run({ signal, poolMs, appMs }) };
       } catch (error) {
         const failed = outcomeOfError(error, abort?.aborted === true && !timeout.aborted);
         if (worse(outcome, failed.outcome) !== outcome) {
@@ -225,6 +231,7 @@ export function createLoadUser(options: UserOptions): LoadUser {
         measured,
         requests,
         poolMs,
+        appMs,
       });
     return { call, finish };
   }
@@ -253,6 +260,7 @@ export function createLoadUser(options: UserOptions): LoadUser {
       checkpoints: new Map(),
       atEnd: false,
       countAbort: new AbortController(),
+      loading: Promise.resolve(),
     };
     view = state;
     const counting = tally();
@@ -265,17 +273,20 @@ export function createLoadUser(options: UserOptions): LoadUser {
       counting.finish('count', action, scheduledAt, measured, modeOf(state));
     })();
     const reading = tally();
-    const first = await reading.call((call) =>
-      api.query(
-        { ...base(), ...shapeInput(shape), limit: WINDOW_ROWS, ...(state.position ? { position: 0 } : {}) },
-        call,
-      ),
-    );
-    if (first.ok && current(state)) {
-      state.window = first.value.records;
-      if (!state.position) remember(state, 0, WINDOW_ROWS, first.value);
-    }
-    reading.finish('read', action, scheduledAt, measured, modeOf(state));
+    state.loading = (async () => {
+      const first = await reading.call((call) =>
+        api.query(
+          { ...base(), ...shapeInput(shape), limit: WINDOW_ROWS, ...(state.position ? { position: 0 } : {}) },
+          call,
+        ),
+      );
+      if (first.ok && current(state)) {
+        state.window = first.value.records;
+        if (!state.position) remember(state, 0, WINDOW_ROWS, first.value);
+      }
+      reading.finish('read', action, scheduledAt, measured, modeOf(state));
+    })();
+    await state.loading;
     await counted;
   }
 
@@ -322,7 +333,12 @@ export function createLoadUser(options: UserOptions): LoadUser {
     } else if (forward && canForward) {
       for (let moved = 0; moved < windows && !state.atEnd && current(state); moved += 1) {
         const cursor = state.checkpoints.get(state.block + 1);
-        if (cursor === undefined) break;
+        if (cursor === undefined) {
+          // The window is the first half of a 200 row read, whose cursor names the block after the next: read on
+          // from the nearest checkpoint, as the People table's windows do.
+          await readForward(state, state.block + 1, reading.call);
+          continue;
+        }
         const page = await reading.call((call) =>
           api.query({ ...base(), ...shapeInput(state.shape), cursor, limit: WINDOW_ROWS }, call),
         );
@@ -444,15 +460,20 @@ export function createLoadUser(options: UserOptions): LoadUser {
   async function act(action: LoadAction, scheduledAt: number, measured: boolean): Promise<void> {
     const state = view;
     switch (action) {
-      case 'scroll':
-        if (state === undefined || state.window.length === 0) {
-          await open(state?.shape ?? firstShape(), 'scroll', scheduledAt, measured);
+      case 'scroll': {
+        // A scroll while the view's first window is still loading waits for it, as the screen does, rather than
+        // asking again; then it scrolls whatever view the user holds by then.
+        if (view !== undefined && view.window.length === 0) await view.loading;
+        const held = view;
+        if (held === undefined || held.window.length === 0) {
+          await open(held?.shape ?? firstShape(), 'scroll', scheduledAt, measured);
         } else if (random.chance(behaviour.jumpShare)) {
-          await jump(state, scheduledAt, measured);
+          await jump(held, scheduledAt, measured);
         } else {
-          await scroll(state, scheduledAt, measured);
+          await scroll(held, scheduledAt, measured);
         }
         return;
+      }
       case 'filterSort': {
         const others = model.shapes.filter((shape) => shape.name !== state?.shape.name);
         await open(random.pick(others.length > 0 ? others : model.shapes), 'filterSort', scheduledAt, measured);

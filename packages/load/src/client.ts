@@ -10,20 +10,19 @@ import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import type { LoadApi } from './user.ts';
 
-/** What each call carries to the client's fetch: where to note the API's pool wait. */
+/** What each call carries to the client's fetch: where to note the API's pool wait and handler time. */
 interface CallContext {
   readonly poolMs?: number[];
+  readonly appMs?: number[];
 }
 
 /** The contract as one simulated user calls it. */
 export type LoadClient = ContractRouterClient<typeof contract, CallContext>;
 
-const POOL = /(?:^|,)\s*pool;dur=([\d.]+)/;
-
-/** The `pool` duration of a `Server-Timing` header, in milliseconds, or undefined without one. */
-export function poolWaitOf(header: string | null): number | undefined {
+/** One named duration of a `Server-Timing` header (`pool`, `db` or `app`), in milliseconds, or undefined without it. */
+export function serverTimingOf(header: string | null, name: 'pool' | 'db' | 'app'): number | undefined {
   if (header === null) return undefined;
-  const match = POOL.exec(header);
+  const match = new RegExp(`(?:^|,)\\s*${name};dur=([\\d.]+)`).exec(header);
   return match?.[1] === undefined ? undefined : Number(match[1]);
 }
 
@@ -35,8 +34,11 @@ export function createLoadClient(apiUrl: string, cookie: string): LoadClient {
       headers: { cookie, origin: new URL(apiUrl).origin },
       fetch: async (request, init, { context }) => {
         const response = await fetch(request, init);
-        const pool = poolWaitOf(response.headers.get('server-timing'));
+        const header = response.headers.get('server-timing');
+        const pool = serverTimingOf(header, 'pool');
+        const app = serverTimingOf(header, 'app');
         if (pool !== undefined) context.poolMs?.push(pool);
+        if (app !== undefined) context.appMs?.push(app);
         return response;
       },
     }),
@@ -46,11 +48,15 @@ export function createLoadClient(apiUrl: string, cookie: string): LoadClient {
 /** The calls a simulated user makes, on `client`. */
 export function loadApiOf(client: LoadClient): LoadApi {
   return {
-    query: (input, call) => client.records.query(input, { context: { poolMs: call.poolMs }, signal: call.signal }),
-    count: (input, call) => client.records.count(input, { context: { poolMs: call.poolMs }, signal: call.signal }),
-    get: (input, call) => client.records.get(input, { context: { poolMs: call.poolMs }, signal: call.signal }),
+    query: (input, call) =>
+      client.records.query(input, { context: { poolMs: call.poolMs, appMs: call.appMs }, signal: call.signal }),
+    count: (input, call) =>
+      client.records.count(input, { context: { poolMs: call.poolMs, appMs: call.appMs }, signal: call.signal }),
+    get: (input, call) =>
+      client.records.get(input, { context: { poolMs: call.poolMs, appMs: call.appMs }, signal: call.signal }),
     setValues: (input, call) =>
-      client.records.setValues(input, { context: { poolMs: call.poolMs }, signal: call.signal }),
-    create: (input, call) => client.records.create(input, { context: { poolMs: call.poolMs }, signal: call.signal }),
+      client.records.setValues(input, { context: { poolMs: call.poolMs, appMs: call.appMs }, signal: call.signal }),
+    create: (input, call) =>
+      client.records.create(input, { context: { poolMs: call.poolMs, appMs: call.appMs }, signal: call.signal }),
   };
 }
