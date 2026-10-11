@@ -55,21 +55,6 @@ const CELL_OVERHEAD_BYTES = 120;
 const SPREAD_MS = 2000;
 /** How long a changed id is remembered, so a block that was loading when it changed fetches it again, in ms. */
 const RECENT_MS = 10_000;
-/** How far a record id's mint time may be from now for a change to it to count as its create, in ms. */
-const NEW_ID_MS = 10 * 60_000;
-
-/**
- * Whether a change to a record may be its create: a UUID v7 (ids carry their
- * mint time) minted within 10 minutes of now. Anything else (not a v7) may be
- * new too. Change events don't say which ids were made (spec 0007), so a
- * window doesn't settle for an edit to an older record it doesn't show.
- */
-export function mayBeNew(id: string, now: number): boolean {
-  if (id.length !== 36 || id[14] !== '7') return true;
-  const minted = Number.parseInt(`${id.slice(0, 8)}${id.slice(9, 13)}`, 16);
-  return Number.isNaN(minted) || Math.abs(now - minted) <= NEW_ID_MS;
-}
-
 /** How long a window waits after the last change in it before it settles order and membership, in ms (AC-56). */
 export const SETTLE_MS = 1500;
 /** The longest a window waits after the first change that dirtied it, so steady traffic never starves a settle, in ms. */
@@ -434,6 +419,15 @@ const chunks = <T>(items: readonly T[], size: number): T[][] =>
 interface Gathered {
   readonly ids: Set<string>;
   readonly attributes: Set<string> | 'all';
+  /** Records the writes made, deleted or restored: a window's count and membership move (settle). */
+  readonly lifecycle: Set<string>;
+}
+
+/** The records a change event names as made, deleted and restored (spec 0007; owner decision pending). */
+export interface Lifecycle {
+  readonly createdIds?: readonly string[];
+  readonly deletedIds?: readonly string[];
+  readonly restoredIds?: readonly string[];
 }
 
 /** The records layer: one store for the app, a view per object, and the writes that change them. */
@@ -1686,11 +1680,9 @@ export function createRecordsLayer({
             change.attributes.size === 0 ||
             order.any ||
             [...change.attributes].some((id) => order.ids.has(id));
-          // An id the window doesn't show, in an event naming only attributes its order ignores, moves it only if the
-          // record was just made (a delete or restore names no attributes, so `touches` covers it). Without this, an
-          // edit to any record out of sight would dirty every tab's window at once.
-          const time = now();
-          if (touches || ids.some((id) => !entry.shows(id) && mayBeNew(id, time))) entry.markDirty();
+          // A record the event names as made, deleted or restored moves the count and maybe the rows; an edit to a
+          // record out of sight, naming only attributes the order ignores, moves nothing, so no tab rereads for it.
+          if (touches || change.lifecycle.size > 0) entry.markDirty();
         }
       }
     }
@@ -1822,22 +1814,40 @@ export function createRecordsLayer({
      * event naming `attributeIds`). Gathered for one frame, then: the ones
      * held are fetched again in place, with only the changed attributes the
      * windows read (none when the event names only others); and every window
-     * a change may reorder (its filter or sort attributes, or an id it doesn't
-     * show, which may be a record made elsewhere) settles 1.5 s later.
+     * a change may reorder (its filter or sort attributes, or a record the
+     * event names as made, deleted or restored, which moves its count)
+     * settles 1.5 s later.
      */
-    changed: (workspace: string, objectId: string, ids: readonly string[], attributeIds?: readonly string[]): void => {
+    changed: (
+      workspace: string,
+      objectId: string,
+      ids: readonly string[],
+      attributeIds?: readonly string[],
+      lifecycle: Lifecycle = {},
+    ): void => {
       if (ids.length === 0) return;
       remember(workspace, ids);
       const objects = incoming.get(workspace) ?? new Map<string, Gathered>();
       incoming.set(workspace, objects);
-      const gathered = objects.get(objectId) ?? { ids: new Set<string>(), attributes: new Set<string>() };
+      const gathered = objects.get(objectId) ?? {
+        ids: new Set<string>(),
+        attributes: new Set<string>(),
+        lifecycle: new Set<string>(),
+      };
       for (const id of ids) gathered.ids.add(id);
+      for (const id of [
+        ...(lifecycle.createdIds ?? []),
+        ...(lifecycle.deletedIds ?? []),
+        ...(lifecycle.restoredIds ?? []),
+      ]) {
+        gathered.lifecycle.add(id);
+      }
       // An event that doesn't say which attributes changed reads everything the windows show.
       const attributes =
         attributeIds === undefined || gathered.attributes === 'all'
           ? 'all'
           : new Set([...gathered.attributes, ...attributeIds]);
-      objects.set(objectId, { ids: gathered.ids, attributes });
+      objects.set(objectId, { ids: gathered.ids, attributes, lifecycle: gathered.lifecycle });
       if (isGathering) return;
       isGathering = true;
       schedule(applyIncoming);

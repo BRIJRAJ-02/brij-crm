@@ -507,9 +507,9 @@ describe('windows keyed by their question (spec 0006, AC-51 to AC-53)', () => {
     expect(counts[0]?.input.now).toBe(at(30));
     queries[1]?.answer({ records: block(100, 100), nextCursor: 'after-199' });
     await settle();
-    // Someone made a record elsewhere (an id minted just now): 1.5 s later the window settles, on a clock taken then.
-    const minted = Date.parse(at(30)).toString(16).padStart(12, '0');
-    layer.changed(WS, PEOPLE, [`${minted.slice(0, 8)}-${minted.slice(8, 12)}-7000-8000-000000000002`], [NAME]);
+    // Someone made a record elsewhere (the event names it created): 1.5 s later the window settles, on a clock
+    // taken then.
+    layer.changed(WS, PEOPLE, [idAt(4002)], [NAME], { createdIds: [idAt(4002)] });
     frame();
     tick(1000);
     expect(queries).toHaveLength(2);
@@ -639,22 +639,33 @@ describe('settle (spec 0006, AC-56)', () => {
     expect(view.getSnapshot().source.getItem(2)?.id).toBe(idAt(0));
   });
 
-  it('settles for a record just made out of sight, never for an edit to an older one (no herd of rereads)', async () => {
+  it('settles for a record the event names made, deleted or restored, never for an edit out of sight (no herd of rereads)', async () => {
     const { layer, queries, tick, frame } = await sortedView(byCity);
-    // An older record (idAt mints long ago), out of sight, and an attribute the sort ignores: nothing moves.
+    // A record out of sight, edited on an attribute the sort ignores: nothing moves, whatever its id says.
     layer.changed(WS, PEOPLE, [idAt(4000)], [NAME]);
     frame();
     tick(5000);
     await settle();
     expect(queries).toHaveLength(1);
-    // A record minted just now, out of sight: it may be new, so the window settles.
-    const minted = Date.parse(at(30)).toString(16).padStart(12, '0');
-    layer.changed(WS, PEOPLE, [`${minted.slice(0, 8)}-${minted.slice(8, 12)}-7000-8000-000000000001`], [NAME]);
+    // The event names it made: the count moves, so the window settles.
+    layer.changed(WS, PEOPLE, [idAt(4001)], [NAME], { createdIds: [idAt(4001)] });
     frame();
     tick(1500);
     await settle();
     expect(queries).toHaveLength(2);
   });
+
+  it.each([{ deletedIds: [idAt(4001)] }, { restoredIds: [idAt(4001)] }])(
+    'settles for a record out of sight the event names deleted or restored (%o)',
+    async (lifecycle) => {
+      const { layer, queries, tick, frame } = await sortedView(byCity);
+      layer.changed(WS, PEOPLE, [idAt(4001)], [NAME], lifecycle);
+      frame();
+      tick(1500);
+      await settle();
+      expect(queries).toHaveLength(2);
+    },
+  );
 
   it('keeps a row the member edited where they see it, and notes one that no longer matches the filter', async () => {
     const { layer, view, edits, queries, counts, tick, frame } = await sortedView(inLondon);

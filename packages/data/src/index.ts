@@ -481,25 +481,75 @@ export function createDataLayer({
     return live;
   };
 
-  // The stores' handlers: records refetch the named rows (or everything held of the object when coarse),
-  // definitions an object's attributes (or, naming neither object nor list, the workspace's objects), and a
-  // resync everything held of the workspace.
+  /**
+   * Reads a cached per workspace list again when one is held (nothing when
+   * not: the next read loads it fresh), and runs `onDefinitionsChange` when
+   * it came back different, so the app reloads its pages only for a real
+   * change.
+   */
+  const refreshHeld = <T>(cache: Map<string, Promise<T>>, workspace: string, load: () => Promise<T>): void => {
+    const before = cache.get(workspace);
+    if (before === undefined) return;
+    cache.delete(workspace);
+    void Promise.all([before.catch(() => undefined), load()]).then(
+      ([old, next]) => {
+        if (JSON.stringify(old) !== JSON.stringify(next)) onDefinitionsChange();
+      },
+      // Unreadable now: dropped from the cache, so the next read asks again.
+      () => undefined,
+    );
+  };
+  const readMembers = (workspace: string) =>
+    cached(members, workspace, () => call((options) => api.members.list({ workspace }, options)));
+  const readAccess = (workspace: string) =>
+    cached(access, workspace, () => call((options) => api.access.mine({ workspace }, options)));
+  /** Whether `memberIds` names the person, by the access this tab holds (unknown counts as named). */
+  const namesMe = async (workspace: string, memberIds: readonly string[]): Promise<boolean> => {
+    const mine = await access.get(workspace)?.catch(() => undefined);
+    return mine === undefined || memberIds.includes(mine.memberId);
+  };
+
+  // The stores' handlers (spec 0007, milestone 2): records refetch the named rows (or everything held of the
+  // object when coarse) and settle on the ones made, deleted or restored; definitions an object's attributes,
+  // and the workspace's objects when the object itself changed or none is named; members the member list (and
+  // the person's own access when it names them); access, naming the person, everything held; and a resync
+  // everything held of the workspace. Entries have no store yet: no screen shows lists.
   router.on('records', (workspace, event) => {
     void records?.then((layer) => {
       if (event.coarse === true) layer.reload(workspace, event.objectId);
-      else layer.changed(workspace, event.objectId, event.recordIds, event.attributeIds);
+      else layer.changed(workspace, event.objectId, event.recordIds, event.attributeIds, event);
       // What the write replaced (spec 0006): a notice for the values this tab wrote.
       if (event.replaced !== undefined) layer.replaced(workspace, event);
     });
   });
   router.on('definitions', (workspace, event) => {
+    // A list's own definitions: no screen holds lists yet.
+    if (event.listId !== undefined) return;
     if (event.objectId !== undefined) {
       refreshAttributes(workspace, event.objectId);
-    } else if (event.listId === undefined) {
+      // The object itself was made, renamed, archived or restored: the workspace's objects too.
+      if (event.attributeIds === undefined) refreshHeld(objects, workspace, () => listObjects(workspace));
+    } else {
       objects.delete(workspace);
       refreshAttributes(workspace);
       onDefinitionsChange();
     }
+  });
+  router.on('members', (workspace, event) => {
+    refreshHeld(members, workspace, () => readMembers(workspace));
+    // A role changed may be the person's own: their access is read again (the server checks every call anyway).
+    void namesMe(workspace, event.memberIds).then((named) => {
+      if (named) refreshHeld(access, workspace, () => readAccess(workspace));
+    });
+  });
+  router.on('access', (workspace, event) => {
+    // The person's access changed: everything held is read again under it (spec 0009, AC-146; milestone 4 adds
+    // the new channel and the 4500 disconnect).
+    void namesMe(workspace, event.memberIds).then((named) => {
+      if (!named) return;
+      refreshHeld(access, workspace, () => readAccess(workspace));
+      router.resync(workspace);
+    });
   });
   router.onResync((workspace) => {
     void records?.then((layer) => {

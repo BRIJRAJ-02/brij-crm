@@ -11,7 +11,7 @@ const ID = '0199a6f2-0000-7000-8000-00000000000a';
 
 /** One valid event of each kind, as the server sends it. */
 const SAMPLES: Readonly<Record<ChangeEvent['kind'], ChangeEvent>> = {
-  records: { seq: 1, at: AT, kind: 'records', objectId: ID, recordIds: [ID], attributeIds: [] },
+  records: { seq: 1, at: AT, kind: 'records', objectId: ID, recordIds: [ID], attributeIds: [], createdIds: [ID] },
   entries: { seq: 1, at: AT, kind: 'entries', listId: ID, entryIds: [ID], recordIds: [ID], attributeIds: [] },
   definitions: { seq: 1, at: AT, kind: 'definitions', listId: ID },
   views: { seq: 1, at: AT, kind: 'views', objectId: ID, viewIds: [ID] },

@@ -733,6 +733,64 @@ describe('live updates', () => {
     expect(count(api.calls, '/api/rpc/attributes/list')).toBe(3);
   });
 
+  it('reads the objects again when an object itself changed, and nothing for a list (spec 0007, AC-81)', async () => {
+    let reads = 0;
+    const { api, client, data, definitionChanges } = await liveLayer({
+      objects: () => {
+        reads += 1;
+        return reads >= 2 ? [{ ...PEOPLE, pluralName: 'Contacts' }] : [PEOPLE];
+      },
+    });
+    await data.objects.list('acme');
+    const before = count(api.calls, '/api/rpc/objects/list');
+    // A list's own definitions: no screen holds lists, nothing is read.
+    client.channel().onPublication({ seq: 1, at: AT, kind: 'definitions', listId: TITLE.id, objectId: PEOPLE.id });
+    await settled();
+    expect(count(api.calls, '/api/rpc/objects/list')).toBe(before);
+    // People renamed: an event naming the object and no attributes reads the objects again, and they differ.
+    client.channel().onPublication({ seq: 2, at: AT, kind: 'definitions', objectId: PEOPLE.id });
+    await settled();
+    expect(count(api.calls, '/api/rpc/objects/list')).toBe(before + 1);
+    expect(definitionChanges()).toBe(1);
+    expect((await data.objects.list('acme'))[0]?.pluralName).toBe('Contacts');
+  });
+
+  it('reads the members again on a members change, and the person’s own access when it names them (AC-82)', async () => {
+    const BEA: MemberSummary = { id: '0199a6f2-0000-7000-8000-0000000000b0', name: 'Bea', email: 'bea@example.com' };
+    let memberReads = 0;
+    const { api, client, data, definitionChanges } = await liveLayer({
+      members: () => (memberReads++ === 0 ? [ADA_MEMBER] : [ADA_MEMBER, BEA]),
+    });
+    await data.members.list('acme');
+    await data.access.mine('acme');
+    const accessReads = count(api.calls, '/api/rpc/access/mine');
+    // Bea joined: the list is read again and differs; the event doesn't name the person, so access stays.
+    client.channel().onPublication({ seq: 1, at: AT, kind: 'members', memberIds: [BEA.id] });
+    await settled();
+    expect(await data.members.list('acme')).toEqual([ADA_MEMBER, BEA]);
+    expect(definitionChanges()).toBe(1);
+    expect(count(api.calls, '/api/rpc/access/mine')).toBe(accessReads);
+    // The person's own role changed: their access is read again.
+    client.channel().onPublication({ seq: 2, at: AT, kind: 'members', memberIds: [ADA_MEMBER.id] });
+    await settled();
+    expect(count(api.calls, '/api/rpc/access/mine')).toBe(accessReads + 1);
+  });
+
+  it('reads everything held again on an access change naming the person, and nothing for someone else’s', async () => {
+    const { api, client, data } = await liveLayer();
+    await data.access.mine('acme');
+    const counts = () => count(api.calls, '/api/rpc/records/count');
+    const before = counts();
+    client
+      .channel()
+      .onPublication({ seq: 1, at: AT, kind: 'access', memberIds: ['0199a6f2-0000-7000-8000-0000000000b0'] });
+    await settled();
+    expect(counts()).toBe(before);
+    client.channel().onPublication({ seq: 2, at: AT, kind: 'access', memberIds: [ADA_MEMBER.id] });
+    await settled();
+    expect(counts()).toBeGreaterThan(before);
+  });
+
   it('says paused while the subscription is down, and stops listening on sign out', async () => {
     const { client, data } = await liveLayer();
     const heard: string[] = [];

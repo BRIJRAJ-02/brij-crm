@@ -195,7 +195,13 @@ interface Shape {
 }
 
 const SHAPES: Readonly<Record<ChangeEventKind, Shape>> = {
-  records: { refs: ['objectId'], lists: ['recordIds', 'attributeIds'], coarse: true },
+  records: {
+    refs: ['objectId'],
+    lists: ['recordIds', 'attributeIds'],
+    // Which records the write made, deleted and restored: what counts and windows settle on.
+    optionalLists: ['createdIds', 'deletedIds', 'restoredIds'],
+    coarse: true,
+  },
   entries: {
     refs: ['listId'],
     optionalRefs: ['objectId'],
