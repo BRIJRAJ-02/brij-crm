@@ -639,7 +639,24 @@ describe('records', () => {
     // The last person's records leave the browser with their session; nothing shows the edit.
     expect(view.getSnapshot().source.getItem(0)).toBeUndefined();
     expect(signedOut).toEqual(['/w/acme/objects/people?view=all']);
-    expect(notices.map((notice) => notice.message)).toEqual(['You were signed out. Sign in again to carry on.']);
+    // The edit was on its way, so the notice says it wasn't saved.
+    expect(notices.map((notice) => notice.message)).toEqual([
+      'You were signed out, so your last change wasn’t saved. Sign in again to carry on.',
+    ]);
+  });
+
+  it('says a new column wasn’t saved when the session ended while it was on its way', async () => {
+    const api = fakeApi({
+      addAttribute: () => {
+        throw unauthenticated();
+      },
+    });
+    const { data, signedOut, notices } = layer(api);
+    await failure(data.attributes.create('acme', { objectId: PEOPLE.id, title: 'Nickname', type: 'text' }));
+    expect(signedOut).toHaveLength(1);
+    expect(notices.map((notice) => notice.message)).toEqual([
+      'You were signed out, so your last change wasn’t saved. Sign in again to carry on.',
+    ]);
   });
 });
 

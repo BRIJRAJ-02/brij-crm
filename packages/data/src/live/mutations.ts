@@ -28,6 +28,8 @@ export interface MutationLog {
    * once; the id goes once every echo the answer named has come.
    */
   readonly echoed: (mutationId: string | undefined, seq?: number) => boolean;
+  /** Whether a write went out and has no answer yet (the session ending now loses it). */
+  readonly unanswered: () => boolean;
   /** How many ids are kept now (for tests). */
   readonly size: () => number;
   readonly clear: () => void;
@@ -80,6 +82,10 @@ export function createMutationLog(now: () => number = () => Date.now()): Mutatio
       entry.seen.add(seq ?? -entry.seen.size - 1);
       settleIfDone(mutationId, entry);
       return true;
+    },
+    unanswered: () => {
+      prune();
+      return [...due.values()].some((entry) => entry.answeredAt === undefined);
     },
     size: () => due.size,
     clear: () => {

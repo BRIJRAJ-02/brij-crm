@@ -63,6 +63,19 @@ describe('the mutation log', () => {
     expect(log.echoed('slow', 1)).toBe(false);
   });
 
+  it('says whether a write is out with no answer yet, so a session ending can say what it lost', () => {
+    const log = createMutationLog();
+    expect(log.unanswered()).toBe(false);
+    log.sent('a');
+    expect(log.unanswered()).toBe(true);
+    // Answered, its echoes still due: nothing is lost if the session ends now.
+    log.answered('a', 1);
+    expect(log.unanswered()).toBe(false);
+    log.sent('b');
+    log.forget('b');
+    expect(log.unanswered()).toBe(false);
+  });
+
   it('forgets a refused write, and every write on clear', () => {
     const log = createMutationLog();
     log.sent('a');

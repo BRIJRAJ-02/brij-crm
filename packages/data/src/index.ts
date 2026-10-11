@@ -401,8 +401,11 @@ export function createDataLayer({
       const failure = toDataError(error);
       if (failure.code === 'UNAUTHENTICATED' && !ended) {
         ended = true;
+        // A write still waiting for its answer is lost with the session (its layer leaves with the records), so
+        // the notice says so; read before forget() clears the log.
+        const unsaved = mutations.unanswered();
         forget();
-        notify({ tone: 'danger', message: ERROR_MESSAGES.signedOut });
+        notify({ tone: 'danger', message: unsaved ? ERROR_MESSAGES.signedOutUnsaved : ERROR_MESSAGES.signedOut });
         // Off to sign in first, then the app drops the last person's pages.
         onSignedOut(currentPath());
         onSessionChange();
