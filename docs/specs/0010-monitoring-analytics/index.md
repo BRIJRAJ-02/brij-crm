@@ -31,7 +31,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 - **AC-169**: The first load stays under the 250 kB budget. The browser SDK loads in its own chunk, started at boot and never awaited. Errors that happen before it is ready (up to 20) are kept and sent once it starts.
 
 *Request time (milestone 2)*
-- **AC-170**: Every `/api/rpc` request is a trace named after its procedure (`rpc records.query`), and every sign in route after its route (`auth /sign-in/email-otp`), with database queries as child spans. Traces are sampled at 0 for health checks, 0.2 in production and 1.0 in previews. The worker sends no traces at all (sample rate 0): errors, metrics and cron check ins only. Request time p50 and p95 per procedure is charted in Sentry, and a screenshot goes in `verify.md`.
+- **AC-170**: Every `/api/rpc` request is a trace named after its procedure (`rpc records.query`), and every sign in route after its route (`auth /sign-in/email-otp`), with database queries as child spans. Traces are sampled at 0 for health checks, 0.2 in production and 1.0 in previews. The worker sends no traces at all (tracing off, no sample rate set, so no span is even recorded): errors, metrics and cron check ins only. Request time p50 and p95 per procedure is charted in Sentry, and a screenshot goes in `verify.md`.
 - **AC-171**: A Sentry uptime monitor calls `https://brij-crm-phi.vercel.app/api/health` every 5 minutes, through Vercel and the edge guard. Two failures in a row email the owner.
 - **AC-172**: A new or regressed issue in production, in either project, emails the owner. Both projects auto resolve an issue after 2 hours without events, so a problem that comes back later (a second `RELAY_LAGGING` episode, AC-182) regresses and emails again.
 
@@ -106,7 +106,7 @@ No change to `outbox`: `created_at` and `published_at` already exist (spec 0005)
 | Module | Exports | Rules |
 |---|---|---|
 | `apps/api/src/monitoring/instrument.ts` | none (side effect) | Loaded with `node --import` before anything else in the api and worker. Parses its own small env schema (`SENTRY_DSN_SERVER`, `APP_ENV`, `RAILWAY_GIT_COMMIT_SHA`, `SERVICE`) and, only when the DSN is set, calls `startSentry` imported from `./sentry.ts`. It imports no vendor package. |
-| `apps/api/src/monitoring/sentry.ts` (`@sentry/node`) | `startSentry(config)`, `captureFault(error, context)`, `nameRequest(name)`, `setRequestScope({ requestId, userId?, workspaceId? })`, `metrics.distribution/gauge`, `heartbeat()`, `raiseIssue(code, data)`, `flush(ms)` | `sendDefaultPii: false`, `includeLocalVariables: false`, `httpIntegration({ maxIncomingRequestBodySize: 'none' })`, `enableLogs: false`; `beforeSend`, `beforeSendTransaction` and `beforeBreadcrumb` all run `scrub`, and `beforeBreadcrumb` drops `console` breadcrumbs. `tracesSampler` by `APP_ENV` and path for the api; `tracesSampleRate: 0` for the worker. Every function is a no op when Sentry isn't started. |
+| `apps/api/src/monitoring/sentry.ts` (`@sentry/node`) | `startSentry(config)`, `captureFault(error, context)`, `nameRequest(name)`, `setRequestScope({ requestId, userId?, workspaceId? })`, `metrics.distribution/gauge`, `heartbeat()`, `raiseIssue(code, data)`, `flush(ms)` | `sendDefaultPii: false`, `includeLocalVariables: false`, `httpIntegration({ maxIncomingRequestBodySize: 'none' })`, `enableLogs: false`; `beforeSend` and `beforeBreadcrumb` run `scrub`, and `beforeBreadcrumb` drops `console` breadcrumbs; spans stream (`traceLifecycle: 'stream'`, SDK v11), so `beforeSendSpan` runs `keepSpan` (`tracing.ts`, the span side of `scrub`, failing closed), with `beforeSendTransaction` running `scrub` only as a backstop. `tracesSampler` by `APP_ENV` and path for the api; tracing off for the worker (no rate set). Every function is a no op when Sentry isn't started. |
 | `apps/api/src/monitoring/stats.ts` | `createStatsReporter({ sources, metrics, heartbeat, isAwake, log })` → `{ start(), stop() }` | No vendor import (takes the wrapper's functions). A one minute timer while the process lives: records `worker.awake`, asks each source for its in memory numbers while awake (`relayStats()` first), records them as gauges, checks `RELAY_LAGGING`, then calls `heartbeat()`. Never touches the database. |
 | `apps/api/src/monitoring/posthog.ts` (`posthog-node`) | `createAnalytics({ key?, host, environment, log })` → `{ capture(event), shutdown(ms) }` | `capture` takes a catalog event only, parses it, adds `environment` and `$process_person_profile: false`, sets `disableGeoip: true`, and never throws or awaits the network. Without a key it returns a no op. |
 | `apps/web/src/monitoring/sentry.ts` (`@sentry/react`) | `startSentry(config, buffered)`, `reportFault(fault)` | Errors only (no tracing, no replay). `sendDefaultPii: false`; `beforeSend` and `beforeBreadcrumb` run `scrub`; `console` and `ui.input` breadcrumbs dropped; `fetch` breadcrumbs keep the path only. Passed to React 19's `createRoot` error options. |
@@ -134,7 +134,7 @@ No change to `outbox`: `created_at` and `published_at` already exist (spec 0005)
 | any web event | request id of a failed call | the `x-request-id` answer header, read in the data layer's fetch wrapper and passed in `DataFault` |
 | which errors are sent | expected or not | `toApiError(…).expected` on the server; on the web, a `DataError` with a known code is expected, and only `report` calls and uncaught errors are sent |
 | trace | span name | `rpc <procedure>` or `auth <route>`, set by `nameRequest` |
-| trace | sample rate | api: `APP_ENV` (production 0.2, preview 1.0, local 0) and any `/api/health*` path 0; worker: always 0 (`SERVICE=worker`) |
+| trace | sample rate | api: `APP_ENV` (production 0.2, preview 1.0, local 0) and any `/api/health*` path 0; worker: tracing off (`SERVICE=worker`) |
 | CSP | Sentry ingest host | the host part of the owner's web DSN (`o<id>.ingest.de.sentry.io`), written into `vercel.json` once the project exists |
 | `user_signed_up` | distinct id | `auth.user.id`, from Better Auth's `databaseHooks.user.create.after` |
 | `user_signed_up` | `method` | the hook context's path: the email code route → `email_code`, the Google callback → `google` |
@@ -209,7 +209,7 @@ Tracer Bullet: each milestone ends with something you can see in production, in 
 7. Deploy; prove AC-162 in production with the test fault, then switch it off; `security-access-reviewer` before it lands, satisfies **AC-162**, **AC-168**, **AC-183**
 
 **Milestone 2: request time, charted, and the app watched**
-8. Tracing on the api: `nameRequest` per procedure and sign in route, the sampler by environment and path, database child spans; the worker at sample rate 0, satisfies **AC-170**
+8. Tracing on the api: `nameRequest` per procedure and sign in route, the sampler by environment and path, database child spans; the worker with tracing off, satisfies **AC-170**
 9. The request time view in Sentry (p50 and p95 per procedure), the uptime monitor on `/api/health`, the alert check; screenshots in `verify.md`, satisfies **AC-170**, **AC-171**, **AC-172**
 
 **Milestone 3: product counts** (after 0005 milestone 3)
