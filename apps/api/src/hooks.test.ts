@@ -26,7 +26,8 @@ describe('commitWrite', () => {
       firstMember: { name: 'Ada', email: 'ada@example.com' },
     });
     const scope = testScope({ db, workspaceId: created.workspaceId, actor: { type: 'member', id: created.memberId } });
-    const people = created.objects.people ?? '';
+    // Companies: a record with no values is a valid one there (a person needs a name).
+    const companies = created.objects.companies ?? '';
     const stored = () =>
       testQuery<{ seq: number; record_ids: string[]; mutation_id: string }>(
         ownerUrl,
@@ -44,7 +45,7 @@ describe('commitWrite', () => {
     };
     const mutationId = newId();
     const { recordId } = await commitWrite(context, { mutationId }, (hooks) =>
-      createRecord(scope, { objectId: people }, hooks),
+      createRecord(scope, { objectId: companies }, hooks),
     );
     await expect(
       commitWrite(context, { mutationId: newId() }, (hooks) => createRecord(scope, { objectId: newId() }, hooks)),

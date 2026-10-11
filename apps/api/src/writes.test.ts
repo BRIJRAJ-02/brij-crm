@@ -103,7 +103,13 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
   },
   'records.setValues': async (m, mutationId) => {
     const id = newId();
-    await m.client.records.create({ workspace: m.slug, objectId: m.people.id, id, mutationId: newId() });
+    await m.client.records.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      id,
+      values: { [m.attribute('name')]: { firstName: 'Ada' } },
+      mutationId: newId(),
+    });
     const before = (await outboxOf(m.workspace.id)).length;
     await m.client.records.setValues({
       workspace: m.slug,
@@ -121,7 +127,13 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
   'records.setValuesBatch': async (m, mutationId) => {
     const ids = [newId(), newId()];
     for (const id of ids) {
-      await m.client.records.create({ workspace: m.slug, objectId: m.people.id, id, mutationId: newId() });
+      await m.client.records.create({
+        workspace: m.slug,
+        objectId: m.people.id,
+        id,
+        values: { [m.attribute('name')]: { firstName: 'Ada' } },
+        mutationId: newId(),
+      });
     }
     await m.client.records.setValuesBatch({
       workspace: m.slug,

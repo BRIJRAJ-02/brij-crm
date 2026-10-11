@@ -132,7 +132,13 @@ describe('records.create', () => {
     const m = await memberWithWorkspace(app);
     const minutes = 60_000;
     const create = (id: string) =>
-      m.client.records.create({ workspace: m.slug, objectId: m.people.id, id, mutationId: newId() });
+      m.client.records.create({
+        workspace: m.slug,
+        objectId: m.people.id,
+        id,
+        values: { [m.attribute('name')]: { firstName: 'Ada' } },
+        mutationId: newId(),
+      });
     for (const skew of [-11 * minutes, 11 * minutes]) {
       const error = await failure(() => create(newId(Date.now() + skew)));
       expect({ code: error.code, status: error.status, message: error.message }).toEqual({
@@ -171,7 +177,13 @@ describe('records.create', () => {
       return id;
     };
     const create = (id: string) =>
-      m.client.records.create({ workspace: m.slug, objectId: m.people.id, id, mutationId: newId() });
+      m.client.records.create({
+        workspace: m.slug,
+        objectId: m.people.id,
+        id,
+        values: { [m.attribute('name')]: { firstName: 'Ada' } },
+        mutationId: newId(),
+      });
 
     const mine = await madeEarlier(memberId);
     const replayed = await create(mine);
@@ -650,7 +662,14 @@ describe('the door on every record procedure', () => {
       () => client.records.query({ workspace: a.slug, objectId: a.people.id }),
       () => client.records.count({ workspace: a.slug, objectId: a.people.id }),
       () => client.records.get({ workspace: a.slug, ids: [person.id] }),
-      () => client.records.create({ workspace: a.slug, objectId: a.people.id, id: newId(), mutationId: newId() }),
+      () =>
+        client.records.create({
+          workspace: a.slug,
+          objectId: a.people.id,
+          id: newId(),
+          values: { [a.attribute('name')]: { firstName: 'Ada' } },
+          mutationId: newId(),
+        }),
       () =>
         client.records.setValues({
           workspace: a.slug,
@@ -755,7 +774,7 @@ describe("another workspace's ids, sent from inside your own", () => {
             ...own,
             objectId: b.people.id,
             id: newId(),
-            values: { [a.attribute('job_title')]: 'Mole' },
+            values: { [b.attribute('name')]: { firstName: 'Bea' }, [a.attribute('job_title')]: 'Mole' },
             mutationId: newId(),
           }),
         // An attribute of another workspace is no attribute here, as an unknown id is.

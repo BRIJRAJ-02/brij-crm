@@ -156,7 +156,16 @@ describe('catch up', () => {
     if (people === undefined) throw new Error('A new workspace has People.');
     const ids = [newId(), newId()];
     for (const id of ids) {
-      await client.records.create({ workspace: workspace.slug, objectId: people.id, id, mutationId: newId() });
+      // A person is named (the name is required).
+      await client.records.create({
+        workspace: workspace.slug,
+        objectId: people.id,
+        id,
+        ...(people.primaryAttributeId === undefined
+          ? {}
+          : { values: { [people.primaryAttributeId]: { firstName: 'Ada' } } }),
+        mutationId: newId(),
+      });
     }
     const after = await client.realtime.subscriptionToken({ workspace: workspace.slug });
     expect(after.head).toBe(before.head + 2);
@@ -172,7 +181,8 @@ describe('catch up', () => {
           kind: 'records',
           objectId: people.id,
           recordIds: ids,
-          attributeIds: [],
+          // The creates wrote each person's name.
+          attributeIds: people.primaryAttributeId === undefined ? [] : [people.primaryAttributeId],
           // Both made in the range (spec 0007 milestone 2, owner decision pending).
           createdIds: ids,
         },
