@@ -42,6 +42,23 @@ export const Several: Story = {
   ),
 };
 
+/**
+ * A linked record's name on its way (the data layer reads it by id): a skeleton chip, read as "Loading";
+ * and one with no display at all, which says "Unknown".
+ */
+export const NameLoading: Story = {
+  render: () => (
+    <FieldSurfaces
+      attribute={sample.attribute}
+      value={sample.value}
+      display={{ ...(sample.display as object), name: '' }}
+    />
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByText('Loading').length).toBeGreaterThan(0);
+  },
+};
+
 /** The one editor, in a form: what it commits parses with the type's schema (AC-5). */
 export const Editor: Story = {
   args: {

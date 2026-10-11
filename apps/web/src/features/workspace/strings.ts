@@ -43,7 +43,7 @@ export const strings = {
   /** A failure the server didn't explain. */
   somethingWrong: 'Something went wrong. Try again in a moment.',
   /** Above the table while the live connection is down (AC-38). */
-  livePaused: 'Live updates paused',
+  livePaused: 'Live updates paused, reconnecting',
   /** A row with no name ("Unnamed person"), muted in its row header. */
   unnamed: (singularName: string) => `Unnamed ${singularName.toLowerCase()}`,
   /** A linked record this person can't see, or that was deleted. */

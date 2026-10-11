@@ -424,6 +424,19 @@ export const ManyColumns: Story = {
     await press(['{End}'], '0:20');
     await press(['{Home}'], '0:0');
     for (let col = 1; col <= 16; col += 1) await press(['{ArrowRight}'], `0:${String(col)}`);
+    // Scrolled sideways, the pinned name column casts its edge over the columns under it.
+    await waitFor(() => expect(canvas.getByRole('grid')).toHaveAttribute('data-scrolled-x'));
+  },
+};
+
+/** Scrolled sideways: the pinned name column's edge (`shadow-pinned-edge`) over the columns passing under it. */
+export const PinnedEdge: Story = {
+  args: { columnCount: 20 },
+  play: async ({ canvas }) => {
+    const grid = canvas.getByRole('grid');
+    grid.scrollLeft = 400;
+    grid.dispatchEvent(new Event('scroll'));
+    await waitFor(() => expect(grid).toHaveAttribute('data-scrolled-x'));
   },
 };
 
@@ -765,6 +778,38 @@ export const EveryType: Story = {
   render: () => (
     <EveryTypeGrid cellErrors={new Map([['row-0:email', 'Another person already has this email address.']])} />
   ),
+};
+
+/** A column of several emails, at a column's usual width: whole chips, then "+N" for the rest. */
+function FoldedChipsGrid() {
+  const emails = FIELD_SAMPLES.email.several;
+  const [rows] = useState<readonly SampleRow[]>(() => [
+    { id: 'row-0', values: { name: 'Northwind', emails: emails?.value ?? null }, displays: {} },
+  ]);
+  const columns: readonly GridColumn[] = [
+    sampleColumn(attributeOf('text', 'Name', { isRequired: true })),
+    { ...sampleColumn({ ...(emails?.attribute ?? FIELD_SAMPLES.email.attribute), id: 'emails' }) },
+  ];
+  return (
+    <Stage height="grid">
+      <DataGrid<SampleRow>
+        label="Folded chips"
+        columns={columns}
+        pinnedCount={1}
+        rows={arraySource(rows, (row) => row.id)}
+        getValue={(row, id) => row.values[id] ?? null}
+        rowHeader="name"
+      />
+    </Stage>
+  );
+}
+
+/** Several values fold into "+N" at what fits the column (measured once per value and width), never squashed. */
+export const FoldedChips: Story = {
+  render: () => <FoldedChipsGrid />,
+  play: async ({ canvasElement }) => {
+    await waitFor(() => expect(canvasElement.querySelector('button[aria-label^="Show"]')).not.toBeNull());
+  },
 };
 
 /** Arrows from the first row's name to the EveryType column `id`, then Enter edits it. */
