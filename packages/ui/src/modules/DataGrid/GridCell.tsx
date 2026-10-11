@@ -71,6 +71,8 @@ export interface GridCellProps {
   /** The focused cell while the grid holds focus, by pointer or keyboard: it carries the ring. */
   readonly isActive?: boolean;
   readonly isInRange: boolean;
+  /** In a range: which of its outline's sides this cell draws (`top bottom start end`). */
+  readonly rangeEdges?: string;
   /** The id of the cell's reason, its description; the grid's shared tooltip shows it too. */
   readonly tipId: string;
   readonly editing?: { readonly startText?: string };
@@ -112,6 +114,7 @@ export function GridCell({
   isFocused,
   isActive = false,
   isInRange,
+  rangeEdges,
   tipId,
   editing,
   error,
@@ -196,6 +199,7 @@ export function GridCell({
       data-focused={isFocused || undefined}
       data-active={isActive || undefined}
       data-in-range={isInRange || undefined}
+      data-range-edge={rangeEdges === undefined || rangeEdges === '' ? undefined : rangeEdges}
       data-editing={mode}
       data-invalid={error === undefined ? undefined : ''}
       data-sticky={place.stickyOffset === undefined ? undefined : ''}

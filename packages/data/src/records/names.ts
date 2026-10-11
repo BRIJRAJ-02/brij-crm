@@ -29,7 +29,13 @@ export interface ReferenceNamesOptions {
   readonly onNames: (workspace: string) => void;
   /** A record the store holds already knows its own name. */
   readonly held?: (recordId: string) => RecordRefDisplay | undefined;
+  /** Runs `run` after `ms`: a failed read's next try. A timer by default; tests pass their own. */
+  readonly later?: (run: () => void, ms: number) => void;
 }
+
+/** How many times a name is read before it shows as unknown, and the first wait between tries (doubling). */
+const NAME_TRIES = 3;
+const NAME_RETRY_MS = 1_000;
 
 /** What a reference reads as while its name is on its way, or when it can't be read (hidden or gone). */
 export type NameState = RecordRefDisplay | 'loading' | 'unknown';
@@ -53,12 +59,17 @@ export function createReferenceNames({
   schedule,
   onNames,
   held = () => undefined,
+  later = (run, ms) => {
+    setTimeout(run, ms);
+  },
 }: ReferenceNamesOptions): ReferenceNames {
   // By workspace, then record id: a name, or 'unknown' once a read left it out.
   let known = new Map<string, Map<string, RecordRefDisplay | 'unknown'>>();
   // Asked for and not read yet, by workspace; and the ids a read is out for.
   let wanted = new Map<string, Set<string>>();
   let reading = new Map<string, Set<string>>();
+  // Failed reads by workspace and id: tried again after a wait, then said unknown.
+  let failures = new Map<string, number>();
   let isScheduled = false;
   // Bumped by clear(), so a read that lands after it changes nothing.
   let generation = 0;
@@ -100,8 +111,26 @@ export function createReferenceNames({
           },
           () => {
             if (at !== generation) return;
-            // A failed read is asked again by the next render that needs it.
-            for (const id of part) out.delete(id);
+            // A failed read tries again after a wait (the views render, which asks again), twice, then the
+            // names show as unknown rather than loading for ever.
+            const names = knownIn(workspace);
+            let tries = 0;
+            for (const id of part) {
+              out.delete(id);
+              const key = `${workspace}\u0000${id}`;
+              tries = (failures.get(key) ?? 0) + 1;
+              failures.set(key, tries);
+              if (tries >= NAME_TRIES) names.set(id, 'unknown');
+            }
+            if (tries >= NAME_TRIES) onNames(workspace);
+            else {
+              later(
+                () => {
+                  if (at === generation) onNames(workspace);
+                },
+                NAME_RETRY_MS * 2 ** (tries - 1),
+              );
+            }
           },
         );
       }
@@ -140,6 +169,7 @@ export function createReferenceNames({
       known = new Map();
       wanted = new Map();
       reading = new Map();
+      failures = new Map();
     },
   };
 }

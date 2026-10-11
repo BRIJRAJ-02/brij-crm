@@ -492,6 +492,9 @@ export function createRecordsLayer({
       for (const entry of viewsOf(workspace)) entry.invalidate();
     },
     held: (recordId) => store.get(recordId)?.display,
+    later: (run, ms) => {
+      later(run, ms);
+    },
   });
   // The versions this tab wrote (the last 500), its undo stack, and the undoable writes still out, by workspace.
   const own = createOwnVersions();

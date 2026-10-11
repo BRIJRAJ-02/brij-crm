@@ -63,6 +63,35 @@ describe('reference names', () => {
     expect(reader.displaysOf('ws', [ACME])).toEqual([display('acme', 'Acme Corp')]);
   });
 
+  it('tries a failed read again after a wait, twice, then says unknown rather than loading for ever', async () => {
+    const frames: (() => void)[] = [];
+    const waits: (() => void)[] = [];
+    const read = vi.fn(() => Promise.reject(new Error('offline')));
+    const onNames = vi.fn();
+    const reader = createReferenceNames({
+      read,
+      onNames,
+      schedule: (flush) => frames.push(flush),
+      later: (run) => waits.push(run),
+    });
+    const round = async () => {
+      reader.displaysOf('ws', [ACME]);
+      for (const flush of frames.splice(0)) flush();
+      await Promise.resolve();
+      await Promise.resolve();
+    };
+    await round();
+    expect(waits).toHaveLength(1);
+    waits.splice(0).forEach((run) => {
+      run();
+    });
+    expect(onNames).toHaveBeenCalledTimes(1);
+    await round();
+    await round();
+    expect(read).toHaveBeenCalledTimes(3);
+    expect(reader.displaysOf('ws', [ACME])).toEqual(['unknown']);
+  });
+
   it('keeps each workspace apart, and forgets everything on clear', async () => {
     const { reader, read, frame } = setup();
     reader.displaysOf('ws', [ACME]);

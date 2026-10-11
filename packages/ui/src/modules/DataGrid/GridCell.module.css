@@ -13,6 +13,7 @@
     --col-width: var(--size-column);
     --col-offset: 0;
 
+    position: relative;
     display: flex;
     flex: none;
     align-items: center;
@@ -44,9 +45,34 @@
     box-shadow: var(--pinned-edge, 0 0 transparent);
   }
 
-  /* A range reads apart from selected rows, which take accent-soft. */
+  /* A range reads apart from selected rows (accent-soft) and from hover (surface-hover): surface-selected
+     inside, and a hairline accent-line outline around the whole range, drawn by its edge cells. */
   .root[data-in-range] {
     background: var(--surface-selected);
+  }
+
+  .root[data-range-edge]::after {
+    position: absolute;
+    inset: 0;
+    border: 0 solid var(--accent-line);
+    pointer-events: none;
+    content: '';
+  }
+
+  .root[data-range-edge~='top']::after {
+    border-block-start-width: var(--border-width-hairline);
+  }
+
+  .root[data-range-edge~='bottom']::after {
+    border-block-end-width: var(--border-width-hairline);
+  }
+
+  .root[data-range-edge~='start']::after {
+    border-inline-start-width: var(--border-width-hairline);
+  }
+
+  .root[data-range-edge~='end']::after {
+    border-inline-end-width: var(--border-width-hairline);
   }
 
   /* The active cell: ringed while the grid holds focus, however it got there.

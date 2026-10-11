@@ -313,6 +313,8 @@ export function DataGrid<Row>({
   );
   const pendingFocus = useRef(false);
   const shiftPressed = useRef(false);
+  // The last press's pointer: a row's checkbox ticks on a mouse's press but on a touch's tap.
+  const pressedBy = useRef('mouse');
   const within = useRef(false);
 
   // Only the rows on screen, plus the overscan, draw; and the focused and edited
@@ -553,6 +555,33 @@ export function DataGrid<Row>({
     clearTimeout(hoverTimer.current);
     setTip(undefined);
   };
+  // A value the data layer refused is said where it happened, once: read out, and its reason shown under its
+  // cell when the cell is drawn (focus has usually moved on by the time the answer comes, so the cell's own
+  // tip would wait for a hover). No toast says it again.
+  const knownRefusals = useRef<ReadonlyMap<string, string>>(cellErrors ?? new Map());
+  useEffect(() => {
+    const before = knownRefusals.current;
+    const now = cellErrors ?? new Map<string, string>();
+    knownRefusals.current = now;
+    const fresh = [...now].filter(([key, message]) => before.get(key) !== message);
+    const last = fresh.at(-1);
+    if (last === undefined) return;
+    const [key, message] = last;
+    setAnnouncement(message);
+    const at = key.lastIndexOf(':');
+    const rowId = key.slice(0, at);
+    const columnId = key.slice(at + 1);
+    const col = placed.findIndex((each) => each.column.id === columnId) + 1;
+    const row = items.find((item) => {
+      const data = rows.getItem(item.index);
+      return data !== undefined && rows.getKey(data) === rowId;
+    })?.index;
+    if (col < 1 || row === undefined) return;
+    const cell = scrollRef.current?.querySelector<HTMLElement>(`[data-cell="${keyOf(row, col)}"]`);
+    if (cell !== null && cell !== undefined) showTip(cell, 'hover');
+    // Only a new refusal speaks; the rows and columns are read as they are when it arrives.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cellErrors]);
   // Rows recycle their elements, and focusing a row gives it an element of its own, so the element a tip was
   // anchored to can come to draw another row. After each render the tip finds its cell again, by its place,
   // and opens afresh there; a cell that has gone, or has nothing to say now, closes it. Every render, since
@@ -967,6 +996,7 @@ export function DataGrid<Row>({
   };
   const onPointerDown = (event: PointerEvent<HTMLDivElement>) => {
     shiftPressed.current = event.shiftKey;
+    pressedBy.current = event.pointerType;
     if (resizing !== undefined) setResizing(undefined);
     if (!event.shiftKey) return;
     const position = cellAt((event.target as HTMLElement).closest<HTMLElement>('[data-cell]')?.dataset.cell);
@@ -1258,12 +1288,13 @@ export function DataGrid<Row>({
           // A press ticks the row as it lands: focusing a row gives it an element of its own, so the
           // press and its release meet different elements and a click would never fire.
           onPointerDown={(event) => {
-            if (event.button !== 0) return;
+            // A touch may be the start of a scroll: it ticks on its tap (the click) instead.
+            if (event.button !== 0 || event.pointerType === 'touch') return;
             toggleRowAt(row, event.shiftKey);
           }}
-          // A click with no pointer behind it (a screen reader's, `detail` 0) ticks it too.
+          // A tap, or a click with no pointer behind it (a screen reader's, `detail` 0), ticks it there.
           onClick={(event) => {
-            if (event.detail === 0) toggleRowAt(row, event.shiftKey);
+            if (event.detail === 0 || pressedBy.current === 'touch') toggleRowAt(row, event.shiftKey);
           }}
         >
           {rowData !== undefined && <CheckboxMark label={strings.selectRow(name)} isSelected={isSelected} />}
@@ -1296,6 +1327,9 @@ export function DataGrid<Row>({
               isFocused={isFocusedAt(row, place.col)}
               isActive={isWithin && isFocusedAt(row, place.col)}
               isInRange={isInRange(range, row, place.col)}
+              {...(isInRange(range, row, place.col) && range !== undefined
+                ? { rangeEdges: edgesOf(rangeEdges(range), row, place.col) }
+                : {})}
               tipId={`${gridId}-tip-${keyOf(row, place.col)}`}
               editorProps={editorProps?.(each.column) ?? NO_EDITOR_PROPS}
               onCommit={(next) => {
@@ -1488,6 +1522,22 @@ export function DataGrid<Row>({
       </div>
     </SharedTooltipContext>
   );
+}
+
+/** Which sides of a range's outline a cell draws: the range's own edges that pass along it. */
+function edgesOf(
+  edges: { readonly top: number; readonly bottom: number; readonly left: number; readonly right: number },
+  row: number,
+  col: number,
+): string {
+  return [
+    row === edges.top ? 'top' : '',
+    row === edges.bottom ? 'bottom' : '',
+    col === edges.left ? 'start' : '',
+    col === edges.right ? 'end' : '',
+  ]
+    .filter((side) => side !== '')
+    .join(' ');
 }
 
 /** Where a column's cells sit: its drawn column, width, and offset when pinned. */

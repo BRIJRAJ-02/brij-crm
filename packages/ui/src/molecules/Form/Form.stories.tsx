@@ -166,6 +166,60 @@ function NewPerson({ onSubmit }: { readonly onSubmit: (values: FormValues) => vo
   );
 }
 
+function ShortcutPerson({ onSubmit }: { readonly onSubmit: (values: FormValues) => void }) {
+  return (
+    <Stage>
+      <ModalTrigger defaultOpen>
+        <Button icon="plus">New person</Button>
+        <Modal
+          title="New person"
+          actions={
+            <>
+              <Button slot="close" kbd="ESC">
+                Cancel
+              </Button>
+              <Button variant="primary" type="submit" form="shortcut-person" kbd="⌘↵">
+                Add person
+              </Button>
+            </>
+          }
+        >
+          <Form id="shortcut-person" onSubmit={onSubmit} focusesFirstField>
+            <Field label="Name" name="name" defaultValue="Maya Patel" />
+            <Field label="Notes" name="notes" isMultiline />
+          </Form>
+        </Modal>
+      </ModalTrigger>
+    </Stage>
+  );
+}
+
+/**
+ * Opens in its first field (`focusesFirstField`), and ⌘↵ (Ctrl+Enter elsewhere) sends it from any field, a long
+ * text included, and from the dialog's own buttons, as the primary's keycap says.
+ */
+export const ShortcutSubmit: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <ShortcutPerson onSubmit={args.onSubmit} />,
+  play: async ({ args, userEvent }) => {
+    const dialog = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>('[role="dialog"]');
+      if (found === null) throw new Error('the modal did not open');
+      return found;
+    });
+    const name = within(dialog).getByRole('textbox', { name: 'Name' });
+    await waitFor(() => expect(name).toHaveFocus());
+    // Stories show a Mac keyboard (the preview's platform), so ⌘ is Meta.
+    const mod = 'Meta';
+    await userEvent.click(within(dialog).getByRole('textbox', { name: 'Notes' }));
+    await userEvent.keyboard(`{${mod}>}{Enter}{/${mod}}`);
+    await waitFor(() => expect(args.onSubmit).toHaveBeenCalledTimes(1));
+    within(dialog).getByRole('button', { name: 'Cancel' }).focus();
+    await userEvent.keyboard(`{${mod}>}{Enter}{/${mod}}`);
+    await waitFor(() => expect(args.onSubmit).toHaveBeenCalledTimes(2));
+  },
+};
+
 /**
  * In a Modal: the form has no submit of its own. The primary in Modal's
  * `actions` is a Button with `type="submit"` and `form` set to the Form's

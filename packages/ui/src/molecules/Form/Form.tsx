@@ -302,7 +302,7 @@ export function Form<R extends FormRefusal = FormRefusal>({
     formRef.current?.querySelector<HTMLElement>('input:not([type="hidden"]), textarea, select')?.focus();
   }, []);
 
-  // React Aria's Form takes no key handler, so it listens on the element.
+  // React Aria's Form takes no key handler, so it listens on the document, for the form and its dialog.
   const platform = useKeyboardPlatform();
   useEffect(() => {
     const form = formRef.current;
@@ -311,16 +311,23 @@ export function Form<R extends FormRefusal = FormRefusal>({
     const onKeyDown = (event: KeyboardEvent) => {
       const mod = platform === 'mac' ? event.metaKey : event.ctrlKey;
       if (!mod || event.key !== 'Enter' || event.isComposing) return;
+      // From the form, or from anywhere in the dialog that holds it (its footer's Cancel and Create sit outside it).
+      const target = event.target instanceof Element ? event.target : null;
+      const dialog = target?.closest('[role="dialog"], [role="alertdialog"]');
+      if (target === null || !(form.contains(target) || dialog?.contains(form) === true)) return;
+      // Taken before the control in focus sees it: on Cancel, Enter would otherwise press Cancel.
       event.preventDefault();
+      event.stopPropagation();
       const active = form.ownerDocument.activeElement;
       if (active instanceof HTMLElement) active.blur();
       timer = setTimeout(() => {
         form.requestSubmit();
       }, 0);
     };
-    form.addEventListener('keydown', onKeyDown);
+    const doc = form.ownerDocument;
+    doc.addEventListener('keydown', onKeyDown, true);
     return () => {
-      form.removeEventListener('keydown', onKeyDown);
+      doc.removeEventListener('keydown', onKeyDown, true);
       clearTimeout(timer);
     };
   }, [platform]);
