@@ -34,11 +34,15 @@ function pathOf({ attributes, normalizedRequest }: SamplingInput): string | unde
   return new URL(url, 'http://api').pathname;
 }
 
-/** Whether the request carries `header`, in its headers or as a span attribute (`http.request.header.<name>`). */
+/**
+ * Whether the request carries `header` (lower case), in its headers or as a span attribute
+ * (`http.request.header.<name>`). Node lower cases every incoming header name, so this is one lookup each, however
+ * many headers a caller sends.
+ */
 function hasHeader({ attributes, normalizedRequest }: SamplingInput, header: string): boolean {
-  if (attributes?.[`http.request.header.${header}`] !== undefined) return true;
-  const headers = normalizedRequest?.headers ?? {};
-  return Object.keys(headers).some((name) => name.toLowerCase() === header);
+  if (attributes !== undefined && Object.hasOwn(attributes, `http.request.header.${header}`)) return true;
+  const headers = normalizedRequest?.headers;
+  return headers !== undefined && Object.hasOwn(headers, header);
 }
 
 function sampleRate(environment: AppEnvironment, input: SamplingInput): number {
@@ -48,7 +52,9 @@ function sampleRate(environment: AppEnvironment, input: SamplingInput): number {
   const routed = path.replace(/\/{2,}/g, '/');
   if (!TRACED_PATHS.some((prefix) => routed.startsWith(prefix))) return 0;
   if (TRACE_HEADERS.some((header) => hasHeader(input, header))) return 0;
-  // Outside a laptop every real request came through Vercel's middleware, which adds the edge header.
+  // Outside a laptop every real request came through Vercel's middleware, which adds the edge header. Its presence
+  // only: a caller who calls the API directly with a made up one can spend trace quota (the edge guard still refuses
+  // the request, and its span carries nothing of theirs), never steer a trace.
   if (environment !== 'local' && !hasHeader(input, EDGE_HEADER)) return 0;
   return TRACE_RATES[environment];
 }
@@ -84,9 +90,12 @@ export const MAX_SPAN_TEXT = 1024;
 /** The longest SQL statement a span keeps. */
 export const MAX_SPAN_SQL = 2048;
 
+// How far past its keep a statement is shaped, so `scrubText` still sees an email that straddles the cut whole.
+const SQL_MARGIN = 1024;
+
 /** A statement with every literal replaced by `?`: the work it does, never a value it carried. */
 export function sqlShape(text: string): string {
-  return text.slice(0, MAX_SPAN_SQL).replace(SQL_LITERALS, '?');
+  return text.slice(0, MAX_SPAN_SQL + SQL_MARGIN).replace(SQL_LITERALS, '?');
 }
 
 // Attributes that name the person or their machine, or carry what they sent.
@@ -97,6 +106,7 @@ const DROPPED_ATTRIBUTES: ReadonlySet<string> = new Set([
   'network.peer.port',
   'http.client_ip',
   'url.query',
+  'url.fragment',
   'http.query',
   'http.request.body',
   'http.response.body',
@@ -128,9 +138,9 @@ function keptAttribute(key: string): boolean {
   return !DROPPED_PREFIXES.some((prefix) => key.startsWith(prefix));
 }
 
-/** A text cut, then shaped (for SQL) and scrubbed. */
+/** A text shaped (for SQL), then scrubbed and cut: `scrubText` cuts only after marking, so no email is split. */
 function keptText(text: string, sql: boolean): string {
-  return scrubText(sql ? sqlShape(text) : text.slice(0, MAX_SPAN_TEXT));
+  return sql ? scrubText(sqlShape(text), MAX_SPAN_SQL) : scrubText(text, MAX_SPAN_TEXT);
 }
 
 /** A value with every text cut and scrubbed (and shaped, for SQL), whether bare or in its `{ value, unit }` box. */
@@ -147,7 +157,6 @@ function keptValue(value: unknown, sql: boolean): unknown {
 export interface SpanLike {
   readonly name: string;
   readonly attributes: Readonly<Record<string, unknown>>;
-  readonly links?: unknown;
 }
 
 /** The value of an attribute, bare or boxed. */
@@ -156,11 +165,35 @@ function attributeValue(attributes: Readonly<Record<string, unknown>>, key: stri
   return typeof value === 'object' && value !== null && 'value' in value ? value.value : value;
 }
 
+// The only fields of a span besides its name and attributes that ever leave: those that place it in its trace.
+const PLACING_FIELDS: readonly string[] = [
+  'trace_id',
+  'span_id',
+  'parent_span_id',
+  'start_timestamp',
+  'end_timestamp',
+  'status',
+  'is_segment',
+];
+
+/** A span's placing fields, each read on its own: one missing or that throws is left out. */
+function placingFields(span: object): Record<string, unknown> {
+  const placed = PLACING_FIELDS.filter((key) => Object.hasOwn(span, key)).flatMap((key): [string, unknown][] => {
+    try {
+      return [[key, (span as Readonly<Record<string, unknown>>)[key]]];
+    } catch {
+      return [];
+    }
+  });
+  return Object.fromEntries(placed);
+}
+
 /**
  * A copy of a span that is safe to send: no user agent, client or server
  * address, full URL, query, body, bound parameter, status message, database
  * location or login, header beyond `content-type` and `x-request-id`, user
- * field beyond the id, or link to another span; every text cut to
+ * field beyond the id, link to another span, or top level field beyond those
+ * that place it in its trace (`PLACING_FIELDS`); every text cut to
  * `MAX_SPAN_TEXT` (SQL to `MAX_SPAN_SQL`) and scrubbed (emails marked, URL
  * queries cut); and SQL, in a database span's name, statement and summary,
  * reduced to its shape. The span is never changed.
@@ -173,12 +206,8 @@ export function keepSpan<T extends SpanLike>(span: T): T {
       .filter(([key]) => keptAttribute(key))
       .map(([key, value]) => [key, keptValue(value, SQL_ATTRIBUTES.has(key))]),
   );
-  const { links: _links, ...rest } = span;
-  return { ...rest, name: keptText(span.name, database), attributes } as T;
+  return { ...placingFields(span), name: keptText(span.name, database), attributes } as unknown as T;
 }
-
-// What a span that can't be read leaves without.
-const BLANKED_FIELDS: ReadonlySet<string> = new Set(['name', 'attributes', 'links']);
 
 /**
  * `keepSpan`, failing closed: a span it can't read leaves with nothing but a
@@ -188,16 +217,6 @@ export function keepSpanOrBlank<T extends SpanLike>(span: T): T {
   try {
     return keepSpan(span);
   } catch {
-    // Only the fields that place it in its trace, each read on its own: one that throws is left out too.
-    const placed = Object.keys(span)
-      .filter((key) => !BLANKED_FIELDS.has(key))
-      .flatMap((key): [string, unknown][] => {
-        try {
-          return [[key, (span as Readonly<Record<string, unknown>>)[key]]];
-        } catch {
-          return [];
-        }
-      });
-    return { ...Object.fromEntries(placed), name: 'span', attributes: {} } as unknown as T;
+    return { ...placingFields(span), name: 'span', attributes: {} } as unknown as T;
   }
 }

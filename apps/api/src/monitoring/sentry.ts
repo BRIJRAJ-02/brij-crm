@@ -103,6 +103,20 @@ export function withoutQueryValues(event: ErrorEvent, original: unknown): ErrorE
 }
 
 /**
+ * A whole transaction, should spans ever stop streaming (`traceLifecycle:
+ * 'static'`, where the SDK skips `keepSpan`): it leaves with its name, timing
+ * and request as `scrub` keeps them, and none of its spans or trace data, so
+ * nothing `keepSpan` would have dropped goes out unread.
+ */
+export function transactionBackstop<T extends { spans?: unknown; contexts?: { trace?: object } }>(event: T): T {
+  const { spans: _spans, ...rest } = scrub(event);
+  const trace = rest.contexts?.trace;
+  if (trace === undefined) return rest as T;
+  const { data: _data, ...placed } = trace as { data?: unknown };
+  return { ...rest, contexts: { ...rest.contexts, trace: placed } } as T;
+}
+
+/**
  * How the process traces (AC-170): the api samples each request by its
  * environment and path (`requestSampleRate`); the worker doesn't trace at all
  * (no rate set, so no span is even recorded: errors only). Spans stream
@@ -160,8 +174,7 @@ export function sentryOptions(config: SentryConfig): NodeOptions {
     beforeSend: (event, hint) => scrub(withoutQueryValues(event, hint.originalException)),
     beforeBreadcrumb: keepBreadcrumb,
     beforeSendSpan: keepSpanOrBlank,
-    // Only ever called if spans stop streaming; then a whole transaction passes the same scrub as an error.
-    beforeSendTransaction: (event) => scrub(event),
+    beforeSendTransaction: transactionBackstop,
     ...(deliver === undefined
       ? {}
       : {

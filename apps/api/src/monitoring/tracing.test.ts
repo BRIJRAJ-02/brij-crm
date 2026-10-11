@@ -56,7 +56,7 @@ describe('the sampler (AC-170)', () => {
   it('reads the path from the request when the span has none', () => {
     const context = {
       attributes: { 'sentry.op': 'http.server' },
-      normalizedRequest: { url: 'http://x/api/rpc/a?b=c', headers: { 'X-Crm-Edge': 'secret' } },
+      normalizedRequest: { url: 'http://x/api/rpc/a?b=c', headers: { 'x-crm-edge': 'secret' } },
     };
     expect(requestSampleRate('production', context)).toBe(0.2);
   });
@@ -109,7 +109,7 @@ describe('the options (AC-170)', () => {
     }
   });
 
-  it('scrubs a whole transaction too, should spans ever stop streaming', async () => {
+  it('sends a whole transaction, should spans ever stop streaming, scrubbed and without its spans', async () => {
     // eslint-disable-next-line @typescript-eslint/no-deprecated -- the backstop is the point: it runs only if spans stop streaming.
     const { beforeSendTransaction } = sentryOptions(CONFIG);
     if (beforeSendTransaction === undefined) throw new Error('No beforeSendTransaction.');
@@ -118,10 +118,15 @@ describe('the options (AC-170)', () => {
       transaction: 'rpc me.get',
       request: { url: '/api/rpc/me/get?email=ada@example.com', cookies: { session: 'secret' } },
       user: { id: 'user-1', email: 'ada@example.com' },
+      contexts: { trace: { trace_id: 't', span_id: 's', data: { 'client.address': '203.0.113.9' } } },
+      spans: [{ data: { 'db.query.parameter.0': 'Ada Lovelace', 'sentry.status.message': 'Ada Lovelace' } }],
     } as unknown as Parameters<typeof beforeSendTransaction>[0];
-    const sent = JSON.stringify(await beforeSendTransaction(transaction, {}));
-    expect(sent).not.toContain('ada@example.com');
-    expect(sent).not.toContain('secret');
+    const sent = await beforeSendTransaction(transaction, {});
+    const text = JSON.stringify(sent);
+    for (const secret of ['ada@example.com', 'secret', 'Ada Lovelace', '203.0.113.9'])
+      expect(text).not.toContain(secret);
+    expect(sent).toMatchObject({ transaction: 'rpc me.get', contexts: { trace: { trace_id: 't', span_id: 's' } } });
+    expect(sent).not.toHaveProperty('spans');
   });
 
   it('sends a span it can’t read as a blank, never as it came', () => {
@@ -138,7 +143,23 @@ describe('the options (AC-170)', () => {
         throw new Error('unreadable');
       },
     } as unknown as Parameters<typeof beforeSendSpan>[0];
-    expect(beforeSendSpan(span)).toMatchObject({ name: 'span', attributes: {}, trace_id: 't' });
+    expect(beforeSendSpan(span)).toEqual({
+      trace_id: 't',
+      span_id: 's',
+      start_timestamp: 0,
+      status: 'ok',
+      is_segment: false,
+      name: 'span',
+      attributes: {},
+    });
+    // A field outside the ones that place a span in its trace never passes, known or not.
+    const extra = {
+      ...{ trace_id: 't', name: 'x', note: 'ada@example.com' },
+      get attributes(): never {
+        throw new Error('unreadable');
+      },
+    };
+    expect(JSON.stringify(keepSpanOrBlank(extra))).not.toContain('ada@example.com');
     expect(keepSpanOrBlank).toBeTypeOf('function');
   });
 });
@@ -151,6 +172,7 @@ describe('keepSpan (AC-165)', () => {
         'sentry.op': 'http.server',
         'url.full': { value: 'https://app.test/api/rpc/records/query?search=ada@example.com', type: 'string' },
         'url.query': 'search=ada',
+        'url.fragment': 'token=secret',
         'user_agent.original': 'Firefox',
         'client.address': '203.0.113.9',
         'network.peer.address': '203.0.113.9',
@@ -172,8 +194,11 @@ describe('keepSpan (AC-165)', () => {
       },
       links: [{ trace_id: 'other', span_id: 'x', attributes: { 'user.email': 'ada@example.com' } }],
     };
-    const kept = keepSpan(span);
+    const kept = keepSpan({ ...span, trace_id: 't', is_segment: true, note: 'ada@example.com' });
     expect(kept).not.toHaveProperty('links');
+    // Top level, only the fields that place a span in its trace pass.
+    expect(kept).toMatchObject({ trace_id: 't', is_segment: true });
+    expect(kept).not.toHaveProperty('note');
     expect(kept.attributes).toEqual({
       'sentry.op': 'http.server',
       'url.path': '/api/rpc/records/query',
@@ -201,6 +226,20 @@ describe('keepSpan (AC-165)', () => {
     expect(kept.attributes['db.query.text']).toBe('insert into x values (?, ?)');
     const summary = keepSpan({ name: 'q', attributes: { 'sentry.op': 'db', 'db.query.summary': `select 'Ada'` } });
     expect(summary.attributes['db.query.summary']).toBe('select ?');
+  });
+
+  it('never leaves part of an email the cut splits', () => {
+    for (const at of [1000, 1015, 1020, 1024]) {
+      const path = `/${'p'.repeat(at)}/ada@example.com/more`;
+      const kept = keepSpan({ name: path, attributes: { 'url.path': path } });
+      for (const sent of [kept.name, kept.attributes['url.path']]) {
+        expect(sent).not.toMatch(/ada@|@example/);
+        expect(sent.length).toBeLessThanOrEqual(1024 + '[cut]'.length);
+      }
+    }
+    const sql = `select 1 /* ${'x'.repeat(2030)} ada@example.com */`;
+    const shaped = keepSpan({ name: 'q', attributes: { 'sentry.op': 'db', 'db.query.text': sql } });
+    expect(shaped.attributes['db.query.text']).not.toMatch(/ada@|@example/);
   });
 
   it('costs well under a millisecond for a root span with 9 KB in its path and headers (AC-166)', () => {

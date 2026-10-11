@@ -223,6 +223,8 @@ describe('scrubText', () => {
     [`${'x'.repeat(70)}@example.com`, `${'x'.repeat(6)}${EMAIL_MARK}`],
     ['two@@example.com and @example.com and a@b', 'two@@example.com and @example.com and a@b'],
     ['ADA@EXAMPLE.COM', EMAIL_MARK],
+    ['ada.\u017fmith@example.com', EMAIL_MARK],
+    ['\u212aate@example.com', EMAIL_MARK],
   ])('turns %s into %s', (text, expected) => {
     expect(scrubText(text)).toBe(expected);
   });

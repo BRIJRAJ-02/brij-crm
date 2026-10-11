@@ -15,7 +15,8 @@ export const KEPT_HEADERS: ReadonlySet<string> = new Set(['content-type', 'x-req
 // an `@`, then a domain of at most 9 labels of at most 63 and a top level of 2 to 24 letters. Found from each `@`
 // (a text without one costs a single scan), so a long text of local part characters never makes it slow: a regex
 // tried at every position would cost up to 64 steps a character before failing.
-const LOCAL_CHAR = /^[\w.%+-]$/u;
+// Case insensitive like the domain: under `iu`, `\w` also takes `ſ` and the Kelvin sign, which fold to letters.
+const LOCAL_CHAR = /^[\w.%+-]$/iu;
 const LOCAL_MAX = 64;
 const DOMAIN = /[a-z\d-]{1,63}(?:\.[a-z\d-]{1,63}){0,8}\.[a-z]{2,24}/iuy;
 
@@ -72,28 +73,30 @@ const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
 const QUERY_PARAMS = /\nparams:[\s\S]*$/u;
 
 /**
- * The text scrubbed: all of it when it is short, else its first `MAX_TEXT +
+ * The text scrubbed: all of it when it is short, else its first `max +
  * SCRUB_MARGIN` characters less the unfinished last word, so an email the
  * slice cut in two (too short to match) never leaves its first part. When
  * emails before it are marked, the text shrinks and that part could otherwise
  * move inside the final cut.
  */
-function withinLimit(text: string): string {
-  if (text.length <= MAX_TEXT + SCRUB_MARGIN) return text;
-  const slice = text.slice(0, MAX_TEXT + SCRUB_MARGIN);
+function withinLimit(text: string, max: number): string {
+  if (text.length <= max + SCRUB_MARGIN) return text;
+  const slice = text.slice(0, max + SCRUB_MARGIN);
   const lastSpace = Math.max(...[' ', '\n', '\t', '\r'].map((space) => slice.lastIndexOf(space)));
   return lastSpace < 0 ? '' : slice.slice(0, lastSpace + 1);
 }
 
 /**
- * A text cut to `MAX_TEXT`, with a failed query's values cut, every email
- * marked and every URL's query and fragment cut.
+ * A text cut to `max` (`MAX_TEXT` unless a caller keeps less, as a span
+ * does), with a failed query's values cut, every email marked and every URL's
+ * query and fragment cut. Never cut before it is scrubbed: an email the cut
+ * splits would no longer look like one.
  */
-export function scrubText(text: string): string {
+export function scrubText(text: string, max: number = MAX_TEXT): string {
   // Scrubbed with a margin past the cut, so an email or a query that straddles it is caught whole, then cut.
-  const scrubbed = markEmails(withinLimit(text).replace(QUERY_PARAMS, '')).replace(QUERY, '');
-  const cut = scrubbed.length > MAX_TEXT || text.length > MAX_TEXT + SCRUB_MARGIN;
-  return cut ? `${scrubbed.slice(0, MAX_TEXT)}[cut]` : scrubbed;
+  const scrubbed = markEmails(withinLimit(text, max).replace(QUERY_PARAMS, '')).replace(QUERY, '');
+  const cut = scrubbed.length > max || text.length > max + SCRUB_MARGIN;
+  return cut ? `${scrubbed.slice(0, max)}[cut]` : scrubbed;
 }
 
 /** Only the headers in `KEPT_HEADERS`, whatever their case. */
