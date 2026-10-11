@@ -199,8 +199,12 @@ async function dataWorld() {
   const stage = (
     await core.defineAttribute(owner, { objectId: people, apiSlug: 'stage', title: 'Stage', type: 'status' })
   ).attributeId;
-  const recordId = (await core.createRecord(owner, { objectId: people, values: { [attribute('job_title')]: 'Pilot' } }))
-    .recordId;
+  const recordId = (
+    await core.createRecord(owner, {
+      objectId: people,
+      values: { [attribute('name')]: { firstName: 'Pilot' }, [attribute('job_title')]: 'Pilot' },
+    })
+  ).recordId;
   const { listId } = await core.defineList(owner, { objectId: people, apiSlug: 'crew', name: 'Crew' });
   const { entryId } = await core.addEntry(owner, { listId, recordId });
   const member = memberScope.actor;

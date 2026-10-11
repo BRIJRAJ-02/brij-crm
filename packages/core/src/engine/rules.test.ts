@@ -316,8 +316,14 @@ describe('unique', () => {
     const people = await slugs(scope, id(objects.people));
     const email = id(people.email_addresses);
     const results = await Promise.allSettled([
-      createRecord(scope, { objectId: id(objects.people), values: { [email]: ['same@example.com'] } }),
-      createRecord(scope, { objectId: id(objects.people), values: { [email]: ['SAME@example.com'] } }),
+      createRecord(scope, {
+        objectId: id(objects.people),
+        values: { [id(people.name)]: { firstName: 'Ada' }, [email]: ['same@example.com'] },
+      }),
+      createRecord(scope, {
+        objectId: id(objects.people),
+        values: { [id(people.name)]: { firstName: 'Ada' }, [email]: ['SAME@example.com'] },
+      }),
     ]);
     const rejected = results.filter((result) => result.status === 'rejected');
     expect(rejected).toHaveLength(1);
@@ -704,7 +710,9 @@ describe('batches', () => {
     const people = await slugs(scope, id(objects.people));
     const email = id(people.email_addresses);
     const ids = await Promise.all(
-      Array.from({ length: 5 }, () => createRecord(scope, { objectId: id(objects.people) })),
+      Array.from({ length: 5 }, () =>
+        createRecord(scope, { objectId: id(objects.people), values: { [id(people.name)]: { firstName: 'Ada' } } }),
+      ),
     );
     const seen: Change[] = [];
     const watch: AfterWrite = (change) => {

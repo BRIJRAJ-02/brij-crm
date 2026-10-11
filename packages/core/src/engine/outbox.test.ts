@@ -160,7 +160,7 @@ describe('the outbox hook', () => {
     expect(await rowsOf(scope)).toEqual([]);
     expect(await counterOf(scope)).toBe(0);
     // The next write still gets 1: no gap.
-    await createRecord(scope, { objectId: people }, [outboxHook()]);
+    await createRecord(scope, { objectId: people, values: { [name]: person('Ada') } }, [outboxHook()]);
     expect((await rowsOf(scope)).map((row) => row.seq)).toEqual([1]);
   });
 
@@ -172,14 +172,18 @@ describe('the outbox hook', () => {
   });
 
   it('numbers concurrent writes consecutively, with no gaps or repeats', async () => {
-    const { scope, people } = await workspace();
+    const { scope, people, name } = await workspace();
     const writes = 20;
-    await Promise.all(Array.from({ length: writes }, () => createRecord(scope, { objectId: people }, [outboxHook()])));
+    await Promise.all(
+      Array.from({ length: writes }, () =>
+        createRecord(scope, { objectId: people, values: { [name]: person('Ada') } }, [outboxHook()]),
+      ),
+    );
     expect((await rowsOf(scope)).map((row) => row.seq)).toEqual(Array.from({ length: writes }, (_, i) => i + 1));
   });
 
   it('numbers in commit order: a write waits at the counter row until the one before it commits', async () => {
-    const { scope, people } = await workspace();
+    const { scope, people, name } = await workspace();
     let reached = (): void => undefined;
     const atGate = new Promise<void>((resolve) => {
       reached = resolve;
@@ -192,13 +196,15 @@ describe('the outbox hook', () => {
       reached();
       await gate;
     };
-    const first = createRecord(scope, { objectId: people }, [outboxHook(), holding]);
+    const first = createRecord(scope, { objectId: people, values: { [name]: person('Ada') } }, [outboxHook(), holding]);
     await atGate;
     let secondDone = false;
-    const second = createRecord(scope, { objectId: people }, [outboxHook()]).then((result) => {
-      secondDone = true;
-      return result;
-    });
+    const second = createRecord(scope, { objectId: people, values: { [name]: person('Ada') } }, [outboxHook()]).then(
+      (result) => {
+        secondDone = true;
+        return result;
+      },
+    );
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(secondDone).toBe(false);
     open();
@@ -279,7 +285,7 @@ describe('the outbox hook', () => {
       await expect(
         createRecord(scope, { objectId: people, values: { [name]: { firstName: 42 } } }, [outboxHook()]),
       ).rejects.toSatisfy(isRefusal);
-      await createRecord(scope, { objectId: people }, [outboxHook()]);
+      await createRecord(scope, { objectId: people, values: { [name]: person('Ada') } }, [outboxHook()]);
       await expect.poll(() => heard.filter((id) => id === scope.workspaceId).length).toBe(1);
     } finally {
       await reader.close();
@@ -287,7 +293,7 @@ describe('the outbox hook', () => {
   });
 
   it('takes the counter, stores the rows and notifies in one statement', async () => {
-    const { scope, people } = await workspace();
+    const { scope, people, name } = await workspace();
     const calls: string[] = [];
     const hook = outboxHook();
     const counting: AfterWrite = (change, tx) =>
@@ -305,21 +311,21 @@ describe('the outbox hook', () => {
           },
         }),
       );
-    await createRecord(scope, { objectId: people }, [counting]);
+    await createRecord(scope, { objectId: people, values: { [name]: person('Ada') } }, [counting]);
     expect(calls).toEqual(['execute']);
     expect((await rowsOf(scope)).map((row) => row.seq)).toEqual([1]);
     expect(await counterOf(scope)).toBe(1);
   });
 
   it('stamps created_at when the row is written, not when the transaction began', async () => {
-    const { scope, people } = await workspace();
+    const { scope, people, name } = await workspace();
     let began = '';
     const slow: AfterWrite = async (_change, tx) => {
       const result = await tx.execute<{ began: string }>(sql`select now()::text as began`);
       began = result.rows[0]?.began ?? '';
       await new Promise((resolve) => setTimeout(resolve, 300));
     };
-    await createRecord(scope, { objectId: people }, [slow, outboxHook()]);
+    await createRecord(scope, { objectId: people, values: { [name]: person('Ada') } }, [slow, outboxHook()]);
     const result = await db.withWorkspace(scope.workspaceId, (tx) =>
       tx.execute<{ late: number }>(
         sql`select extract(epoch from created_at - ${began}::timestamptz) * 1000 as late from outbox`,
@@ -329,10 +335,10 @@ describe('the outbox hook', () => {
   });
 
   it('names the member whose write stored the row, and nobody for the system (spec 0007, AC-77)', async () => {
-    const { scope, people, memberId } = await workspace();
-    await createRecord(scope, { objectId: people }, [outboxHook()]);
+    const { scope, people, memberId, name } = await workspace();
+    await createRecord(scope, { objectId: people, values: { [name]: person('Ada') } }, [outboxHook()]);
     const system = testScope({ db, workspaceId: scope.workspaceId, actor: { type: 'system', id: null } });
-    await createRecord(system, { objectId: people }, [outboxHook()]);
+    await createRecord(system, { objectId: people, values: { [name]: person('Ada') } }, [outboxHook()]);
     const result = await db.withWorkspace(scope.workspaceId, (tx) =>
       tx.execute<{ seq: number; actor: string | null; list: string | null; items: string[] }>(
         sql`select seq::int as seq, actor_member_id as actor, list_id as list, item_ids as items from outbox order by seq`,

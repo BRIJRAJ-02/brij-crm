@@ -61,10 +61,10 @@ const person = (name: string) => ({ firstName: name, lastName: 'Test' });
 
 describe('catch up', () => {
   it('answers the head and nothing else when the caller is up to date', async () => {
-    const { scope, people } = await workspace();
+    const { scope, people, name } = await workspace();
     expect(await workspaceHead(scope)).toBe(0);
     expect(await catchUp(scope, { after: 0 })).toEqual({ head: 0, reset: false, events: [] });
-    await createRecord(scope, { objectId: people }, [outboxHook()]);
+    await createRecord(scope, { objectId: people, values: { [name]: person('Ada') } }, [outboxHook()]);
     expect(await workspaceHead(scope)).toBe(1);
     expect(await catchUp(scope, { after: 1 })).toEqual({ head: 1, reset: false, events: [] });
   });
@@ -80,7 +80,9 @@ describe('catch up', () => {
       { objectId: people, apiSlug: 'nickname', title: 'Nickname', type: 'text' },
       [outboxHook()],
     );
-    const { recordId: grace } = await createRecord(scope, { objectId: people }, [outboxHook()]);
+    const { recordId: grace } = await createRecord(scope, { objectId: people, values: { [name]: person('Ada') } }, [
+      outboxHook(),
+    ]);
     await setValues(scope, { recordId: ada, values: { [name]: { value: person('Augusta') } } }, [outboxHook()]);
 
     const missed = await catchUp(scope, { after: 0 });
@@ -136,9 +138,9 @@ describe('catch up', () => {
   });
 
   it('leaves out every row the caller’s audience may read nothing of, with no stub (AC-88)', async () => {
-    const { scope, people, memberId, workspaceId, objects } = await workspace();
+    const { scope, people, memberId, workspaceId, objects, name } = await workspace();
     const companies = objects.companies ?? '';
-    await createRecord(scope, { objectId: people }, [outboxHook()]);
+    await createRecord(scope, { objectId: people, values: { [name]: person('Ada') } }, [outboxHook()]);
     await createRecord(scope, { objectId: companies }, [outboxHook()]);
     const rules: AccessRules = {
       levels: [

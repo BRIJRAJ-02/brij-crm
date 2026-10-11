@@ -64,8 +64,9 @@ async function people(database: Database) {
     workspaceId: created.workspaceId,
     actor: { type: 'member', id: created.memberId },
   });
-  const objectId = created.objects.people;
-  if (objectId === undefined) throw new Error('No People object.');
+  // Companies: a record with no values is a valid one there (a person needs a name).
+  const objectId = created.objects.companies;
+  if (objectId === undefined) throw new Error('No Companies object.');
   return { scope, objectId };
 }
 

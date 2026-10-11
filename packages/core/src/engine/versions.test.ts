@@ -242,7 +242,10 @@ describe('the precondition and the access door (spec 0006, AC-49; spec 0009)', (
     const { scope, people, person } = await workspace();
     const name = must(person.name);
     const jobTitle = must(person.job_title);
-    const { recordId } = await createRecord(scope, { objectId: people, values: { [jobTitle]: 'Spy' } });
+    const { recordId } = await createRecord(scope, {
+      objectId: people,
+      values: { [name]: { firstName: 'Kim' }, [jobTitle]: 'Spy' },
+    });
     const hidden = rescope(scope, {
       role: 'member',
       rules: {

@@ -129,7 +129,7 @@ describe('records and values', () => {
     const email = ids.email_addresses ?? '';
     const { recordId } = await createRecord(scope, {
       objectId: objects.people ?? '',
-      values: { [email]: ['ADA@example.com', 'ada@work.example.com'] },
+      values: { [ids.name ?? '']: { firstName: 'Ada' }, [email]: ['ADA@example.com', 'ada@work.example.com'] },
     });
     await setValues(scope, { recordId, values: { [email]: { value: ['ada@work.example.com'] } } });
     const unchanged = await setValues(scope, { recordId, values: { [email]: { value: ['ada@work.example.com'] } } });
@@ -260,10 +260,14 @@ describe('records and values', () => {
   it('refuses a client id that is not a UUID v7, and one that is taken', async () => {
     const { scope, objects } = await workspace();
     const peopleId = objects.people ?? '';
-    expect((await refusalOf(createRecord(scope, { objectId: peopleId, id: crypto.randomUUID() })))[0]?.code).toBe(
-      'CONFIG_INVALID',
+    // A person is named (the name is required).
+    const named = { [(await attributeIds(scope, peopleId)).name ?? '']: { firstName: 'Ada' } };
+    expect(
+      (await refusalOf(createRecord(scope, { objectId: peopleId, id: crypto.randomUUID(), values: named })))[0]?.code,
+    ).toBe('CONFIG_INVALID');
+    const { recordId } = await createRecord(scope, { objectId: peopleId, values: named });
+    expect((await refusalOf(createRecord(scope, { objectId: peopleId, id: recordId, values: named })))[0]?.code).toBe(
+      'ID_TAKEN',
     );
-    const { recordId } = await createRecord(scope, { objectId: peopleId });
-    expect((await refusalOf(createRecord(scope, { objectId: peopleId, id: recordId })))[0]?.code).toBe('ID_TAKEN');
   });
 });
