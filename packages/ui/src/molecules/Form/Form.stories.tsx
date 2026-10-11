@@ -217,6 +217,9 @@ export const ShortcutSubmit: Story = {
     within(dialog).getByRole('button', { name: 'Cancel' }).focus();
     await userEvent.keyboard(`{${mod}>}{Enter}{/${mod}}`);
     await waitFor(() => expect(args.onSubmit).toHaveBeenCalledTimes(2));
+    // Closed, and gone, before the next story: a dialog still fading out would be measured with it.
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
   },
 };
 
