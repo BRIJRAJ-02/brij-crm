@@ -8,6 +8,8 @@
     "./values": "./src/values/index.ts",
     "./codes": "./src/codes.ts",
     "./jump": "./src/values/jump.ts",
+    "./slugs": "./src/values/slugs.ts",
+    "./picker": "./src/values/picker.ts",
     "./monitoring": "./src/monitoring/index.ts",
     "./events": "./src/monitoring/events.ts"
   },

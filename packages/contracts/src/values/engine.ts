@@ -15,6 +15,8 @@ export const ENGINE_REFUSAL_CODES = [
   'ATTRIBUTE_READ_ONLY',
   'LIMIT_REACHED',
   'SLUG_TAKEN',
+  // An object name another object of the workspace holds, ignoring case, archived ones included (spec 0012).
+  'NAME_TAKEN',
   'CONFIG_INVALID',
   'NOT_FOUND',
   'ID_TAKEN',
@@ -34,9 +36,14 @@ export const ENGINE_REFUSAL_CODES = [
 /** One of the engine's refusal codes. */
 export type EngineRefusalCode = (typeof ENGINE_REFUSAL_CODES)[number];
 
-/** Why a write or a query was refused: the code, how to fix it, and the attribute it's about, when there is one. */
+/**
+ * Why a write or a query was refused: the code, how to fix it, and the
+ * attribute it's about, or the field of the caller's input it's about (a
+ * definition write's `pluralName` or `apiSlug`), when there is one.
+ */
 export interface EngineRefusal {
   readonly code: EngineRefusalCode;
   readonly message: string;
   readonly attributeId?: string;
+  readonly field?: string;
 }

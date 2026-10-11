@@ -38,6 +38,8 @@ export const ERROR_MAP = {
   FORBIDDEN: { status: 403 },
   NOT_FOUND: { status: 404 },
   SLUG_TAKEN: CONFLICT,
+  // An object name already held in the workspace, ignoring case, archived objects included (spec 0012, AC-224).
+  NAME_TAKEN: CONFLICT,
   UNIQUE_CONFLICT: CONFLICT,
   UNIQUE_HAS_DUPLICATES: CONFLICT,
   ID_TAKEN: CONFLICT,

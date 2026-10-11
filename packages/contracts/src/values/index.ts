@@ -73,3 +73,20 @@ export {
   type DisplayFor,
   type DisplayMap,
 } from './options.ts';
+export {
+  API_SLUG_PATTERN,
+  isReservedSlug,
+  MAX_API_SLUG,
+  RESERVED_SLUGS,
+  toApiSlug,
+  type ApiSlugKind,
+} from './slugs.ts';
+export {
+  freeHue,
+  nextHue,
+  PICKER_TYPES,
+  STARTER_STAGES,
+  type PickerType,
+  type StageOutcome,
+  type StarterStage,
+} from './picker.ts';
