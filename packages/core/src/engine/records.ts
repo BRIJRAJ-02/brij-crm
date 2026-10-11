@@ -227,12 +227,18 @@ async function writeOne(
   return change === undefined ? [] : [change];
 }
 
-/** Writes parsed inputs to one record or entry, returning each attribute's result. Record references write links. */
+/**
+ * Writes parsed inputs to one record or entry, returning each attribute's
+ * result. Record references write links. `versionId`, when given, is the
+ * version every row carries (a create's record id, spec 0017); otherwise each
+ * attribute's write mints its own.
+ */
 export async function writeAll(
   context: WriteContext,
   ownerKind: 'record' | 'entry',
   ownerId: string,
   parsed: readonly { attribute: AttributeDef; input: ValueInput }[],
+  versionId?: string,
 ): Promise<Record<string, AttributeResult>> {
   const results: Record<string, AttributeResult> = {};
   const changes: ValueChange[] = [];
@@ -251,6 +257,7 @@ export async function writeAll(
         ? {}
         : { baseVersionId: input.baseVersionId === null ? null : canonicalId(input.baseVersionId) }),
       ...(input.ifVersionId === undefined ? {} : { ifVersionId: input.ifVersionId }),
+      ...(versionId === undefined ? {} : { versionId }),
     };
     const landed = await writeOne(context, write, holdDefinition);
     const [change, ...far] = landed;
@@ -357,6 +364,7 @@ export async function insertRecord(context: WriteContext, input: RecordInput) {
   const parsed = await initialValues(tx, scope, attributes, input.values ?? {}, input.timeZone ?? 'UTC');
   const by = actorRow(scope.actor);
   let recordId: string;
+  let stampable: boolean;
   try {
     const [row] = await tx
       .insert(records)
@@ -371,15 +379,25 @@ export async function insertRecord(context: WriteContext, input: RecordInput) {
         updatedById: by.id,
         updatedByMemberId: by.memberId,
       })
-      .returning({ id: records.id });
+      .returning({
+        id: records.id,
+        // Whether the id's time isn't past the database's clock, so it can stand as the version of the values
+        // the create writes (spec 0017): every later write mints a uuid v7 from that clock, which then sorts after.
+        stampable: sql<boolean | null>`uuid_extract_timestamp(${records.id}) <= clock_timestamp()`,
+      });
     if (row === undefined) throw new Error('The record was not created.');
     recordId = row.id;
+    stampable = row.stampable === true;
   } catch (error) {
     if (postgresError(error)?.code === '23505') throw refuse('ID_TAKEN', 'A record with that id already exists.');
     throw error;
   }
   context.record({ createdRecords: [{ recordId, objectId }] });
-  const versions = await writeAll(context, 'record', recordId, parsed);
+  // The creation fold (spec 0017): every value and link the create writes carries the record's id as its version,
+  // so the timeline folds exactly these into "created this record". An id from a device whose clock runs ahead
+  // (up to 10 minutes is let through) would sort after later writes' versions, so those creates mint as any write
+  // does, and their first values show as entries of their own.
+  const versions = await writeAll(context, 'record', recordId, parsed, stampable ? recordId : undefined);
   await takeRecordSlots(tx, scope, 1);
   // The object's attributes go back too, so a read back after the write doesn't load them again.
   return { recordId, versions, objectId, attributes };

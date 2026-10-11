@@ -467,6 +467,8 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
   const [first] = stamp.rows;
   if (first === undefined) throw new Error('Could not stamp the new version.');
   const at = sql`${first.t}::timestamptz`;
+  // A create's links carry its record's id as their version (spec 0017), like its values.
+  const version = write.versionId ?? first.version;
   const by = actorRow(scope.actor);
 
   const ended = { activeUntil: at, endedByType: by.type, endedById: by.id, endedByMemberId: by.memberId };
@@ -514,7 +516,7 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
         sql`(select coalesce(max(${end.farPosition}) + 1, 0) from ${recordLinks} where ${recordLinks.relationshipId} = ${relationship.id} and ${end.far} = ${farId} and ${recordLinks.activeUntil} is null)`;
       return {
         workspaceId: scope.workspaceId,
-        versionId: first.version,
+        versionId: version,
         relationshipId: relationship.id,
         fromRecordId: end.isFrom ? ownerId : farId,
         toRecordId: end.isFrom ? farId : ownerId,
@@ -574,7 +576,7 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
       ownerKind: 'record',
       objectId: attribute.objectId,
       attributeId: attribute.id,
-      versionId: first.version,
+      versionId: version,
       ...(replaced === undefined ? {} : { replaced }),
     },
   ];
@@ -596,7 +598,7 @@ export async function writeLinks(context: WriteContext, write: AttributeWrite): 
         ownerKind: 'record',
         objectId,
         attributeId: farAttributeId,
-        versionId: first.version,
+        versionId: version,
       });
     }
   }

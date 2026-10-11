@@ -266,6 +266,13 @@ export interface AttributeWrite {
    * reference by `writeLinks`, against the links it ends.
    */
   readonly ifVersionId?: string;
+  /**
+   * The version id every row this write makes carries. A create stamps its
+   * new record's id here (spec 0017), so the activity reader folds exactly
+   * the create's versions into the creation entry; every other write leaves
+   * it out and mints a new uuid v7.
+   */
+  readonly versionId?: string;
 }
 
 /**
@@ -494,6 +501,7 @@ export async function writeAttribute(
   const [first] = stamp.rows;
   if (first === undefined) throw new Error('Could not stamp the new version.');
   const at = sql`${first.t}::timestamptz`;
+  const version = write.versionId ?? first.version;
 
   if (current.length > 0) {
     await tx
@@ -506,7 +514,7 @@ export async function writeAttribute(
   const owner = write.ownerKind === 'record' ? { recordId: ownerId } : { entryId: ownerId };
   const base = {
     workspaceId: scope.workspaceId,
-    versionId: first.version,
+    versionId: version,
     attributeId: attribute.id,
     ownerId,
     ...owner,
@@ -548,7 +556,7 @@ export async function writeAttribute(
     ownerId,
     ...ownerPart(write),
     attributeId: attribute.id,
-    versionId: first.version,
+    versionId: version,
     ...(replaced === undefined ? {} : { replaced }),
   };
 }
