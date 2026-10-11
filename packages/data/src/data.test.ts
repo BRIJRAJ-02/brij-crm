@@ -610,6 +610,8 @@ describe('live updates', () => {
     const { data } = layer(api, '/w/acme/objects/people', {
       ...more,
       realtimeUrl: 'ws://centrifugo.test/connection/websocket',
+      // No spread before a reread: the tests wait on real time.
+      random: () => 0,
       onDefinitionsChange: () => {
         definitionChanges += 1;
       },

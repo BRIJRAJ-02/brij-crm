@@ -142,6 +142,8 @@ interface CallOptions {
 
 /** How long a read waits for the workspace's head before going ahead without it (spec 0007: the token call is usually beside `me.get`). */
 const HEAD_WAIT_MS = 5_000;
+/** The longest spread before a reread every tab of a workspace makes at once (a members or access event), in ms. */
+const SPREAD_MS = 2_000;
 
 /** How long the token read with the head may be handed to the live layer as its first token. */
 const FIRST_TOKEN_MS = 60_000;
@@ -198,6 +200,8 @@ export interface DataLayerOptions {
    * being offline, a cancelled call or a refusal. It must not throw.
    */
   readonly report?: (fault: DataFault) => void;
+  /** A number from 0 to 1 that spreads rereads every tab makes at once. `Math.random` by default; tests pass 0. */
+  readonly random?: () => number;
 }
 
 /**
@@ -220,6 +224,7 @@ export function createDataLayer({
   onReplaced = () => undefined,
   loadLive = () => import('./live/live.ts'),
   report = () => undefined,
+  random = Math.random,
 }: DataLayerOptions) {
   const api: ApiClient = createORPCClient(
     new RPCLink<CallContext>({
@@ -362,7 +367,7 @@ export function createDataLayer({
    * object is named), and runs `onDefinitionsChange` once when any list came
    * back different, so the app reloads its pages only for a real change.
    */
-  const refreshAttributes = (workspace: string, objectId?: string): void => {
+  const refreshAttributes = (workspace: string, objectId?: string): Promise<boolean> => {
     const prefix = `${workspace}/`;
     const held = [...attributes.entries()].filter(([key]) =>
       objectId === undefined ? key.startsWith(prefix) : key === objectKey(workspace, objectId),
@@ -375,13 +380,18 @@ export function createDataLayer({
       const [old, next] = await Promise.all([before.catch(() => undefined), fresh]);
       return JSON.stringify(old) !== JSON.stringify(next);
     });
-    void Promise.all(compared).then(
-      (changes) => {
-        if (changes.includes(true)) onDefinitionsChange();
-      },
+    return Promise.all(compared).then(
+      (changes) => changes.includes(true),
       // Unreadable now: dropped from the cache, so the next page load asks again.
-      () => undefined,
+      () => false,
     );
+  };
+
+  /** Runs `onDefinitionsChange` once when any of the comparisons found a list that came back different. */
+  const reloadIfChanged = (comparisons: readonly Promise<boolean>[]): void => {
+    void Promise.all(comparisons).then((changes) => {
+      if (changes.includes(true)) onDefinitionsChange();
+    });
   };
 
   /**
@@ -487,16 +497,33 @@ export function createDataLayer({
    * it came back different, so the app reloads its pages only for a real
    * change.
    */
-  const refreshHeld = <T>(cache: Map<string, Promise<T>>, workspace: string, load: () => Promise<T>): void => {
+  const refreshHeld = <T>(
+    cache: Map<string, Promise<T>>,
+    workspace: string,
+    load: () => Promise<T>,
+  ): Promise<boolean> => {
     const before = cache.get(workspace);
-    if (before === undefined) return;
+    if (before === undefined) return Promise.resolve(false);
     cache.delete(workspace);
-    void Promise.all([before.catch(() => undefined), load()]).then(
-      ([old, next]) => {
-        if (JSON.stringify(old) !== JSON.stringify(next)) onDefinitionsChange();
-      },
+    return Promise.all([before.catch(() => undefined), load()]).then(
+      ([old, next]) => JSON.stringify(old) !== JSON.stringify(next),
       // Unreadable now: dropped from the cache, so the next read asks again.
-      () => undefined,
+      () => false,
+    );
+  };
+
+  // Rereads waiting out their spread, by what they reread: a burst of events costs one read, and every tab of a
+  // workspace doesn't ask at the same moment (a role change reaches every member at once).
+  const spreading = new Set<string>();
+  const spread = (key: string, work: () => void): void => {
+    if (spreading.has(key)) return;
+    spreading.add(key);
+    setTimeout(
+      () => {
+        spreading.delete(key);
+        work();
+      },
+      Math.round(random() * SPREAD_MS),
     );
   };
   const readMembers = (workspace: string) =>
@@ -526,20 +553,30 @@ export function createDataLayer({
     // A list's own definitions: no screen holds lists yet.
     if (event.listId !== undefined) return;
     if (event.objectId !== undefined) {
-      refreshAttributes(workspace, event.objectId);
-      // The object itself was made, renamed, archived or restored: the workspace's objects too.
-      if (event.attributeIds === undefined) refreshHeld(objects, workspace, () => listObjects(workspace));
+      // The object itself was made, renamed, archived or restored: the workspace's objects too. One reload at most.
+      reloadIfChanged([
+        refreshAttributes(workspace, event.objectId),
+        event.attributeIds === undefined
+          ? refreshHeld(objects, workspace, () => listObjects(workspace))
+          : Promise.resolve(false),
+      ]);
     } else {
       objects.delete(workspace);
-      refreshAttributes(workspace);
+      void refreshAttributes(workspace);
       onDefinitionsChange();
     }
   });
   router.on('members', (workspace, event) => {
-    refreshHeld(members, workspace, () => readMembers(workspace));
+    // Every member's tab hears a role change at once: spread, and one read for a burst.
+    spread(`members ${workspace}`, () => {
+      reloadIfChanged([refreshHeld(members, workspace, () => readMembers(workspace))]);
+    });
     // A role changed may be the person's own: their access is read again (the server checks every call anyway).
     void namesMe(workspace, event.memberIds).then((named) => {
-      if (named) refreshHeld(access, workspace, () => readAccess(workspace));
+      if (!named) return;
+      spread(`access ${workspace}`, () => {
+        reloadIfChanged([refreshHeld(access, workspace, () => readAccess(workspace))]);
+      });
     });
   });
   router.on('access', (workspace, event) => {
@@ -547,15 +584,17 @@ export function createDataLayer({
     // the new channel and the 4500 disconnect).
     void namesMe(workspace, event.memberIds).then((named) => {
       if (!named) return;
-      refreshHeld(access, workspace, () => readAccess(workspace));
-      router.resync(workspace);
+      spread(`resync ${workspace}`, () => {
+        access.delete(workspace);
+        router.resync(workspace);
+      });
     });
   });
   router.onResync((workspace) => {
     void records?.then((layer) => {
       layer.reload(workspace);
     });
-    refreshAttributes(workspace);
+    void refreshAttributes(workspace);
     // The workspace's objects and members are read again on the next page load, which a resync asks for.
     objects.delete(workspace);
     members.delete(workspace);

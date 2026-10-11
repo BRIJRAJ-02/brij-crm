@@ -149,8 +149,14 @@ function cutRecords<
     if (left.length !== ids.length) lifecycleCut = true;
     lifecycle[name] = left;
   }
+  // An entry list emptied, or the event made coarse, changed it too: no mutation id (AC-87).
+  const extraBefore = extraIds === undefined ? undefined : (row as Record<string, unknown>)[extraIds];
+  const extraAfter = extraIds === undefined ? undefined : (extra as Record<string, unknown>)[extraIds];
+  const extraCut = Array.isArray(extraBefore) && Array.isArray(extraAfter) && extraBefore.length !== extraAfter.length;
   const removed =
     lifecycleCut ||
+    extraCut ||
+    coarse !== (row.coarse === true) ||
     !sameList(attributeIds, row.attributeIds) ||
     !sameList(recordIds, row.recordIds) ||
     (row.replaced !== undefined && (replaced === undefined || !sameList(replaced.cells, row.replaced.cells)));

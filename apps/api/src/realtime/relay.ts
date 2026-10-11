@@ -70,7 +70,7 @@
 // read again. One channel per workspace until milestone 4: a workspace with
 // more than one audience fails its turn rather than share one copy.
 import { type ChangeEvent, workspaceChannel } from '@crm/contracts';
-import { workspaceEvent, type Audience } from '@crm/core';
+import { AUDIENCES_NEED_CHANNELS, isAudiencesNeedChannels, workspaceEvent, type Audience } from '@crm/core';
 import type { OutboxReader, OutboxRow } from '@crm/db';
 import { errorFields } from '../log.ts';
 import type { PublishBatch } from './centrifugo.ts';
@@ -233,7 +233,19 @@ export function createRelay(deps: RelayDeps): Relay {
   // Each workspace's audiences, for the awake period (AC-85): loaded at its first turn, dropped after a `members`
   // or `access` row and when the relay goes dormant. A load that fails is forgotten, so the next turn asks again.
   const audienceCache = new Map<string, Promise<readonly Audience[]>>();
+  // Workspaces already reported as needing a channel per audience in this awake period.
+  const splitWarned = new Set<string>();
+  // When each workspace last took a turn: one quiet for a whole quiet spell lets go of its audiences, so a busy
+  // worker that never goes dormant holds only the workspaces that write.
+  const audienceUsed = new Map<string, number>();
   function audiencesOf(workspaceId: string): Promise<readonly Audience[]> {
+    const now = Date.now();
+    for (const [id, at] of audienceUsed) {
+      if (now - at < dormantAfterMs) continue;
+      audienceUsed.delete(id);
+      audienceCache.delete(id);
+    }
+    audienceUsed.set(workspaceId, now);
     const held = audienceCache.get(workspaceId);
     if (held !== undefined) return held;
     const loading = deps.audiences(workspaceId);
@@ -391,6 +403,14 @@ export function createRelay(deps: RelayDeps): Relay {
           const rows = await turn(reader, workspaceId, held);
           if (rows !== undefined) more.set(workspaceId, rows);
         } catch (error) {
+          // Access rules split the workspace before it has a channel per audience: say so, once per awake period.
+          if (isAudiencesNeedChannels(error) && !splitWarned.has(workspaceId)) {
+            splitWarned.add(workspaceId);
+            log.error('A workspace has more than one audience; live updates wait for a channel per audience', {
+              workspaceId,
+              code: AUDIENCES_NEED_CHANNELS,
+            });
+          }
           failed(workspaceId, held?.[0]?.seq, error, 'database');
         }
       }
@@ -549,6 +569,8 @@ export function createRelay(deps: RelayDeps): Relay {
       if (dormant) {
         // The awake period is over: the audiences are read again at the next wake (AC-85).
         audienceCache.clear();
+        audienceUsed.clear();
+        splitWarned.clear();
         log.info('Relay dormant: no database calls until a write wakes it', { quietMs: dormantAfterMs });
         current = 'dormant';
         continue;

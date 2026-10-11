@@ -949,6 +949,43 @@ describe('the relay plans each row for its workspace’s audience (spec 0007, mi
     expect(JSON.stringify(centrifugo.published)).not.toContain(bea);
   });
 
+  it('lets go of a workspace’s audiences after a quiet spell with no turn, while other workspaces keep it awake', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const quiet = await workspace();
+    const busy = await workspace();
+    await events(quiet, [1]);
+    const { relay } = relayTo(centrifugo.url, { pollScheduleMs: [50], dormantAfterMs: 600 });
+    await expect.poll(() => centrifugo.seqs(quiet), WAIT).toEqual([1]);
+    // Busy keeps writing for longer than the quiet spell: the relay never sleeps, and drops quiet's audiences.
+    for (let seq = 1; seq <= 8; seq += 1) {
+      await events(busy, [seq]);
+      await testQuery(ownerUrl, `select pg_notify('crm_outbox', $1)`, [busy]);
+      await sleep(150);
+    }
+    await expect.poll(() => centrifugo.seqs(busy).length, WAIT).toBe(8);
+    expect(relay.mode()).toBe('active');
+    expect(relay.cachedAudiences()).toBe(1);
+  });
+
+  it('reports a workspace with more than one audience as such, once, and publishes none of it', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const workspaceId = await workspace();
+    await events(workspaceId, [1]);
+    // Two audiences, as #24's rules would make: the relay refuses before it reads either policy.
+    const one = { key: 'open', policy: {}, members: [] } as unknown as Audience;
+    const two = { ...one, key: 'other' };
+    const { warnings } = relayTo(centrifugo.url, { audiences: () => Promise.resolve([one, two]) });
+    await expect
+      .poll(() => warnings.filter((line) => line.message.includes('more than one audience')).length, WAIT)
+      .toBe(1);
+    await sleep(300);
+    expect(warnings.filter((line) => line.message.includes('more than one audience'))).toHaveLength(1);
+    expect(centrifugo.seqs(workspaceId)).toEqual([]);
+    expect(await unpublished(workspaceId)).toEqual([1]);
+  });
+
   it('fails the turn of a workspace whose audiences fail to load, and publishes it once they load', async () => {
     const centrifugo = await fakeCentrifugo();
     servers.push(centrifugo);

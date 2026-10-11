@@ -83,10 +83,11 @@ export const FAR_LIMIT = CHANGE_CAP + 1;
  * record shows this one through when it is the from end (`via_to`, if the
  * to end has an attribute) and when it is the to end (`via_from`, a two way
  * end on its object or a one way reference naming it). Each end reads at most
- * `FAR_LIMIT` live far records (spec 0007, AC-83), each one primary key probe,
- * so a record with 200,000 links costs one end's worth of probes up to the
- * limit, never all of them; `end_key` names the end, so the caller knows
- * which ones were cut short.
+ * `FAR_LIMIT` live far records (spec 0007, AC-83), each one primary key probe:
+ * the limit counts live records, so links to records in the trash are probed
+ * and skipped until it is reached (memory stays bounded; time grows with the
+ * trashed far records, and runs before the counter row is taken). `end_key`
+ * names the end, so the caller knows which ones were cut short.
  */
 export function farReferencesQuery(recordId: string, objectId: string): SQL {
   return sql`

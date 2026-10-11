@@ -54,14 +54,26 @@ export function planDelivery(
   });
 }
 
+/** The code `workspaceEvent` throws with for a workspace of several audiences before milestone 4. */
+export const AUDIENCES_NEED_CHANNELS = 'AUDIENCES_NEED_CHANNELS';
+
+/** Whether `error` is `workspaceEvent`'s refusal of a workspace with several audiences. */
+export function isAudiencesNeedChannels(error: unknown): boolean {
+  return error instanceof Error && (error as Error & { code?: unknown }).code === AUDIENCES_NEED_CHANNELS;
+}
+
 /**
  * What `workspace:<id>` carries for `row` until milestone 4: the one
- * audience's copy. Throws when the workspace has more than one audience,
- * which needs milestone 4's channel per audience (no copy fits everyone).
+ * audience's copy. Throws (code `AUDIENCES_NEED_CHANNELS`) when the workspace
+ * has more than one audience, which needs milestone 4's channel per audience
+ * (no copy fits everyone).
  */
 export function workspaceEvent(row: OutboxRow, audiences: readonly Audience[], facts: EventFacts = {}): ChangeEvent {
   if (audiences.length > 1) {
-    throw new Error('A workspace with more than one audience needs a channel per audience (spec 0007, milestone 4).');
+    throw Object.assign(
+      new Error('A workspace with more than one audience needs a channel per audience (spec 0007, milestone 4).'),
+      { code: AUDIENCES_NEED_CHANNELS },
+    );
   }
   const [delivery] = planDelivery(row, audiences, facts);
   if (delivery === undefined) throw new Error('A plan has one delivery per audience.');

@@ -10,7 +10,9 @@ import { sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { Role } from '@crm/contracts';
 import { createDatabase, createIdentityStore } from '@crm/db';
-import { newId } from '../src/index.ts';
+import { newId, outboxHook } from '../src/index.ts';
+import { runWrite } from '../src/engine/write.ts';
+import { systemScope } from '../src/system.ts';
 import { refuseRemote } from './local-only.ts';
 
 const env = z.object({ DATABASE_URL_OWNER: z.url(), IDENTITY_DATABASE_URL: z.url() }).parse(process.env);
@@ -43,37 +45,45 @@ try {
     process.exitCode = 1;
   } else {
     const name = input.name ?? input.email.split('@')[0] ?? input.email;
-    const outcome = await db.withWorkspace(workspace.id, async (tx) => {
-      // The owner role reads schema auth and bypasses row level security, as on Neon.
-      const users = await tx.execute<{ id: string }>(
-        sql`insert into auth."user" (email, name, email_verified) values (${input.email}, ${name}, true)
+    // Through runWrite with the outbox hook, so open tabs and the relay's audiences hear of the member (spec 0007,
+    // AC-82, AC-85): a member added with no `members` row would leave the relay planning without them.
+    const written = await runWrite(
+      systemScope(db, workspace.id),
+      async ({ tx, ...context }) => {
+        // The owner role reads schema auth and bypasses row level security, as on Neon.
+        const users = await tx.execute<{ id: string }>(
+          sql`insert into auth."user" (email, name, email_verified) values (${input.email}, ${name}, true)
             on conflict (email) do update set email = excluded.email returning id`,
-      );
-      const userId = users.rows[0]?.id;
-      if (userId === undefined) throw new Error('The account could not be found or made.');
-      const existing = await tx.execute<{ id: string }>(
-        sql`select id from members where workspace_id = ${workspace.id} and user_id = ${userId} and status = 'active'`,
-      );
-      const memberId = existing.rows[0]?.id;
-      if (memberId !== undefined) {
-        await tx.execute(
-          sql`update members set role = ${input.role}::member_role, updated_at = now(), updated_by_type = 'system'
-              where workspace_id = ${workspace.id} and id = ${memberId}`,
         );
-        return `Made ${input.email} ${input.role} in ${input.workspace}.`;
-      }
-      const id = newId();
-      await tx.execute(
-        sql`insert into members (workspace_id, id, user_id, name, email, role, created_by_type, updated_by_type)
+        const userId = users.rows[0]?.id;
+        if (userId === undefined) throw new Error('The account could not be found or made.');
+        const existing = await tx.execute<{ id: string }>(
+          sql`select id from members where workspace_id = ${workspace.id} and user_id = ${userId} and status = 'active'`,
+        );
+        const memberId = existing.rows[0]?.id;
+        if (memberId !== undefined) {
+          await tx.execute(
+            sql`update members set role = ${input.role}::member_role, updated_at = now(), updated_by_type = 'system'
+              where workspace_id = ${workspace.id} and id = ${memberId}`,
+          );
+          context.record({ members: [memberId] });
+          return `Made ${input.email} ${input.role} in ${input.workspace}.`;
+        }
+        const id = newId();
+        await tx.execute(
+          sql`insert into members (workspace_id, id, user_id, name, email, role, created_by_type, updated_by_type)
             values (${workspace.id}, ${id}, ${userId}, ${name}, ${input.email}, ${input.role}::member_role, 'system', 'system')`,
-      );
-      await tx.execute(
-        sql`insert into auth.workspace_membership (user_id, workspace_id, member_id) values (${userId}, ${workspace.id}, ${id})
+        );
+        await tx.execute(
+          sql`insert into auth.workspace_membership (user_id, workspace_id, member_id) values (${userId}, ${workspace.id}, ${id})
             on conflict (user_id, workspace_id) do update set member_id = excluded.member_id`,
-      );
-      return `Added ${input.email} to ${input.workspace} as ${input.role}. They sign in with a code sent to that email.`;
-    });
-    console.log(outcome);
+        );
+        context.record({ members: [id] });
+        return `Added ${input.email} to ${input.workspace} as ${input.role}. They sign in with a code sent to that email.`;
+      },
+      [outboxHook()],
+    );
+    console.log(written.result);
   }
 } finally {
   await identity.close();

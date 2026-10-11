@@ -56,6 +56,7 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'outboxEvent',
   'planDelivery',
   'workspaceEvent',
+  'isAudiencesNeedChannels',
   'stubEvent',
   'wireEvent',
   'createCollapse',

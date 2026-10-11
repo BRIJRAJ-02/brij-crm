@@ -173,6 +173,8 @@ describe('catch up', () => {
           objectId: people.id,
           recordIds: ids,
           attributeIds: [],
+          // Both made in the range (spec 0007 milestone 2, owner decision pending).
+          createdIds: ids,
         },
       ],
     });

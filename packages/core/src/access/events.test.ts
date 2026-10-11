@@ -184,6 +184,13 @@ describe('entries, definitions, views and notes', () => {
     mutationId: 'm2',
   };
 
+  it('entries: drops the mutation id when a record rule empties entry ids, even with no record ids (AC-87)', () => {
+    const onlyEntries: EventRow = { ...entries, recordIds: [] };
+    const cut = filterEvent(ownRecords, onlyEntries);
+    expect(cut).toMatchObject({ entryIds: [], coarse: true });
+    expect(cut).not.toHaveProperty('mutationId');
+  });
+
   it('entries: nothing when the parent object is hidden; coarse with no ids under its record rule', () => {
     expect(filterEvent(open, entries)).toEqual(entries);
     expect(filterEvent(hiddenObject, entries)).toBeUndefined();

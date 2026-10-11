@@ -9,6 +9,7 @@
 -- still can't update anything but published_at.
 set local lock_timeout = '5s';
 --> statement-breakpoint
-ALTER TABLE "outbox" ADD COLUMN "created_ids" uuid[] DEFAULT '{}'::uuid[] NOT NULL;--> statement-breakpoint
-ALTER TABLE "outbox" ADD COLUMN "deleted_ids" uuid[] DEFAULT '{}'::uuid[] NOT NULL;--> statement-breakpoint
-ALTER TABLE "outbox" ADD COLUMN "restored_ids" uuid[] DEFAULT '{}'::uuid[] NOT NULL;
+ALTER TABLE "outbox"
+  ADD COLUMN "created_ids" uuid[] DEFAULT '{}'::uuid[] NOT NULL,
+  ADD COLUMN "deleted_ids" uuid[] DEFAULT '{}'::uuid[] NOT NULL,
+  ADD COLUMN "restored_ids" uuid[] DEFAULT '{}'::uuid[] NOT NULL;

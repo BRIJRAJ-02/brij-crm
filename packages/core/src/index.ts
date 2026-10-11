@@ -55,5 +55,11 @@ export {
 } from './records/records.ts';
 export { getMyAccess, listMembers, removeMember, setMemberRole, type MemberWithRole } from './members/members.ts';
 export { outboxEvent, stubEvent, wireEvent } from './realtime/events.ts';
-export { planDelivery, workspaceEvent, type Delivery } from './realtime/plan.ts';
+export {
+  AUDIENCES_NEED_CHANNELS,
+  isAudiencesNeedChannels,
+  planDelivery,
+  workspaceEvent,
+  type Delivery,
+} from './realtime/plan.ts';
 export { audienceOf, catchUp, CATCH_UP_MAX_ROWS, createCollapse, workspaceHead } from './realtime/catch-up.ts';

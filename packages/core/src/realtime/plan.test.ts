@@ -6,7 +6,7 @@ import type { OutboxRow } from '@crm/db';
 import { describe, expect, it } from 'vitest';
 import type { Audience } from '../access/events.ts';
 import { roleAccess, type AccessRules } from '../access/policy.ts';
-import { planDelivery, workspaceEvent } from './plan.ts';
+import { isAudiencesNeedChannels, planDelivery, workspaceEvent } from './plan.ts';
 
 const id = (n: number) => `00000000-0000-7000-8000-${n.toString(16).padStart(12, '0')}`;
 const OBJECT = id(0xa);
@@ -128,6 +128,15 @@ describe('workspaceEvent, the one channel until milestone 4', () => {
   });
 
   it('refuses a workspace with more than one audience rather than send one copy to all', () => {
-    expect(() => workspaceEvent(row({}), [everyone, hiddenField])).toThrow(/channel per audience/);
+    let thrown: unknown;
+    try {
+      workspaceEvent(row({}), [everyone, hiddenField]);
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown).toBeInstanceOf(Error);
+    // Its own code, so the relay reports it as what it is, not as a database failure.
+    expect(isAudiencesNeedChannels(thrown)).toBe(true);
+    expect(isAudiencesNeedChannels(new Error('The pool is down.'))).toBe(false);
   });
 });
