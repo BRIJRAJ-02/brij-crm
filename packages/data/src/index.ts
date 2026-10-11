@@ -60,6 +60,7 @@ export type {
   MyAccess,
   ObjectSummary,
   Permission,
+  RecordRefDisplay,
   RecordView,
   SignedInUser,
   SystemStatus,
@@ -95,6 +96,7 @@ export type {
   ViewStatus,
 } from './records/layer.ts';
 export type { RowNote } from './records/view.ts';
+export type { NameState, RecordRef } from './records/names.ts';
 export type { WindowCount, WindowMode } from './records/windows.ts';
 export type { FilterGroup, SortRule, SortRules } from '@crm/contracts/values';
 
@@ -724,7 +726,7 @@ export function createDataLayer({
     const primary = list.find((object) => object.id === objectId)?.primaryAttributeId ?? undefined;
     return {
       ...(primary === undefined ? {} : { primaryAttributeId: primary }),
-      attributes: defined.map(({ id, type, isSystem, apiSlug }) => ({ id, type, isSystem, apiSlug })),
+      attributes: defined.map(({ id, type, isSystem, apiSlug, title }) => ({ id, type, isSystem, apiSlug, title })),
     };
   };
 

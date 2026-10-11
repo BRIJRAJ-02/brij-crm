@@ -23,6 +23,7 @@ import type { FilterGroup, SortRules } from '@crm/contracts/values';
 import { dataError, refusalFor, refusalSummary, toDataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
 import { createOwnVersions, createUndoStack, type UndoCell, type UndoKind } from './history.ts';
+import { createReferenceNames, type NameState, type RecordRef } from './names.ts';
 import { createPlainStore, sameData } from './plain-store.ts';
 import type { Layer } from './store.ts';
 
@@ -73,8 +74,21 @@ export interface ViewQuery {
 /** What a window needs to know of its object: the primary attribute (always read) and each attribute's kind (its mode). */
 export interface ObjectShape {
   readonly primaryAttributeId?: string;
-  readonly attributes: readonly (JumpAttribute & { readonly id: string })[];
+  /** Each attribute's kind, and its title when known (a refusal's toast names the field). */
+  readonly attributes: readonly (JumpAttribute & { readonly id: string; readonly title?: string })[];
 }
+
+/**
+ * Refusals that may pass if sent again unchanged: the server busy, failing or
+ * out of reach. Only these offer Retry; a refused value would only be refused
+ * again, so its cell says why instead.
+ */
+const TEMPORARY_CODES: ReadonlySet<string> = new Set([
+  'INTERNAL',
+  'API_UNAVAILABLE',
+  'RATE_LIMITED',
+  'TOO_MANY_REQUESTS',
+]);
 
 /** `value` as JSON with every object's keys in order and nothing undefined, so two spellings of one query match. */
 export function canonicalJson(value: unknown): string {
@@ -268,6 +282,14 @@ export interface ViewState {
   readonly mode: WindowMode;
   /** Notes on the member's own rows (spec 0006, AC-56): made here, or no longer matching the view. */
   readonly rowNotes: ReadonlyMap<string, RowNote>;
+  /**
+   * How the records a cell links to show (a person's Company): each one's
+   * display, `loading` while its name is read (in the next frame, batched,
+   * once per record for the app load), or `unknown` when it can't be read
+   * (hidden from this person, or deleted). The view renders again when names
+   * arrive, and a live change to a named record reads it again.
+   */
+  readonly referenceDisplays: (refs: readonly RecordRef[]) => readonly NameState[];
 }
 
 /** One screen reading a view: the columns it shows (`columns`), and `release` when it goes. */
@@ -350,8 +372,12 @@ export const RECORD_WORDS = {
   columnNotRead: 'Couldn’t load that column’s values.',
   recordGone: 'That record was deleted, so the change wasn’t saved.',
   notSaved: (count: number) => `${String(count)} changes weren’t saved.`,
+  /** One cell that failed for a passing reason, by its field: "Couldn’t save City. Something went wrong…". */
+  notSavedNamed: (title: string, reason: string) => `Couldn’t save ${title}. ${reason}`,
+  /** Refused values on several records: each cell already says why, so this only counts them. */
+  notSavedMarked: (count: number) => `${String(count)} changes weren’t saved. Each cell says why.`,
   /** A refused undo, sent again from its toast's Retry. */
-  undoRetried: (count: number) => (count === 1 ? 'Undid 1 change' : `Undid ${String(count)} changes`),
+  undoRetried: (count: number) => (count === 1 ? 'Undid 1 change.' : `Undid ${String(count)} changes.`),
   kept: (count: number) =>
     count === 1
       ? '1 cell was changed since, so it was kept.'
@@ -455,6 +481,18 @@ export function createRecordsLayer({
   },
 }: RecordsLayerOptions) {
   const store = createPlainStore<RecordView>({ now, later });
+  // The names of linked records, read by id with the primary attribute only; arriving names redraw that workspace's views.
+  const names = createReferenceNames({
+    read: async (workspace, ids) => {
+      const rows = await whenFree(() => api.get({ workspace, ids, attributeIds: [] }));
+      return rows.map((row) => ({ id: row.id, display: row.display }));
+    },
+    schedule,
+    onNames: (workspace) => {
+      for (const entry of viewsOf(workspace)) entry.invalidate();
+    },
+    held: (recordId) => store.get(recordId)?.display,
+  });
   // The versions this tab wrote (the last 500), its undo stack, and the undoable writes still out, by workspace.
   const own = createOwnVersions();
   const undo = createUndoStack();
@@ -805,6 +843,7 @@ export function createRecordsLayer({
       if (isMarked()) scheduleSettle();
     }
 
+    const referenceDisplays = (refs: readonly RecordRef[]) => names.displaysOf(workspace, refs);
     let lastSource: RecordSource<RecordView> | undefined;
     let lastErrors = cellErrors;
     let lastStatus: ViewStatus = status;
@@ -826,6 +865,7 @@ export function createRecordsLayer({
             count: windows.told(),
             mode,
             rowNotes: rowNotesOf(),
+            referenceDisplays,
             ...(error === undefined ? {} : { error }),
           };
         }
@@ -1286,26 +1326,65 @@ export function createRecordsLayer({
     return outcome;
   }
 
+  /** An attribute's title from the object's shape, or undefined when it can't be read. */
+  async function titleOf(workspace: string, objectId: string | undefined, attributeId: string) {
+    if (objectId === undefined) return undefined;
+    const shape = await describe(workspace, objectId).catch(() => undefined);
+    return shape?.attributes.find((attribute) => attribute.id === attributeId)?.title;
+  }
+
   /**
-   * One toast for an action's refusals: a gone record says so, the rest are
-   * summed up with Retry, which sends their cells again (`retry`): an edit as
-   * a new edit, an undo as the same undo, still checked by its versions.
+   * What an action's refusals say, said once. A gone record says so. A
+   * passing failure (the server busy or out of reach) offers Retry, which
+   * sends the cells again (`retry`: an edit as a new edit, an undo as the
+   * same undo, still checked by its versions); one cell names its field. A
+   * refused value would only be refused again: on an edit its cell already
+   * says why (marked, with its tooltip), so one such refusal raises nothing
+   * and several are counted with no Retry; an undo, which may act out of
+   * sight, says it in the toast.
    */
-  function tellRefusals(outcomes: readonly RecordOutcome[], retry: (refused: readonly RecordOutcome[]) => void) {
+  function tellRefusals(
+    where: { readonly workspace: string; readonly objectId: string | undefined; readonly cellsShow: boolean },
+    outcomes: readonly RecordOutcome[],
+    retry: (refused: readonly RecordOutcome[]) => void,
+  ) {
     if (outcomes.some((outcome) => outcome.gone === true)) notify({ tone: 'danger', message: RECORD_WORDS.recordGone });
     const refusedOnes = outcomes.filter((outcome) => outcome.failure !== undefined && outcome.gone !== true);
-    const [first] = refusedOnes;
-    if (first?.failure === undefined) return;
-    notify({
-      tone: 'danger',
-      message: refusedOnes.length === 1 ? refusalSummary(first.failure) : RECORD_WORDS.notSaved(refusedOnes.length),
-      action: {
+    const passing = refusedOnes.filter((outcome) => TEMPORARY_CODES.has(outcome.failure?.code ?? ''));
+    const lasting = refusedOnes.filter((outcome) => !TEMPORARY_CODES.has(outcome.failure?.code ?? ''));
+    const [first] = passing;
+    if (first?.failure !== undefined) {
+      const failure = first.failure;
+      const action = {
         label: RECORD_WORDS.retry,
         onAction: () => {
-          retry(refusedOnes);
+          retry(passing);
         },
-      },
-    });
+      };
+      const [cell] = first.cells;
+      if (passing.length === 1 && first.cells.length === 1 && cell !== undefined) {
+        void titleOf(where.workspace, where.objectId, cell.attributeId).then((title) => {
+          const reason = refusalSummary(failure);
+          notify({
+            tone: 'danger',
+            message: title === undefined ? reason : RECORD_WORDS.notSavedNamed(title, reason),
+            action,
+          });
+        });
+      } else {
+        notify({ tone: 'danger', message: RECORD_WORDS.notSaved(passing.length), action });
+      }
+    }
+    const [firstLasting] = lasting;
+    if (firstLasting?.failure === undefined) return;
+    if (!where.cellsShow) {
+      notify({
+        tone: 'danger',
+        message: lasting.length === 1 ? refusalSummary(firstLasting.failure) : RECORD_WORDS.notSaved(lasting.length),
+      });
+      return;
+    }
+    if (lasting.length > 1) notify({ tone: 'danger', message: RECORD_WORDS.notSavedMarked(lasting.length) });
   }
 
   /** Roughly how many bytes a write of these cells sends: their values in UTF-8, and each cell's ids and version. */
@@ -1342,7 +1421,7 @@ export function createRecordsLayer({
       [...byRecord].map(([recordId, cells]) => ({ recordId, cells })),
       { undo: kind, mutationId },
     );
-    tellRefusals(outcomes, (refusedOnes) => {
+    tellRefusals({ workspace, objectId: object, cellsShow: true }, outcomes, (refusedOnes) => {
       const again = refusedOnes.flatMap((outcome) =>
         outcome.cells.map((cell) => ({ rowId: outcome.recordId, columnId: cell.attributeId, value: cell.value })),
       );
@@ -1460,7 +1539,7 @@ export function createRecordsLayer({
     );
     const failed = settled.filter((outcome) => outcome.failure !== undefined);
     // Retry sends the same undo again, after any undo still running, still checked by the versions its action wrote.
-    tellRefusals(failed, (refusedOnes) => {
+    tellRefusals({ workspace, objectId, cellsShow: false }, failed, (refusedOnes) => {
       const ids = new Set(
         refusedOnes.flatMap((outcome) => outcome.cells.map((cell) => `${outcome.recordId}:${cell.attributeId}`)),
       );
@@ -1827,6 +1906,8 @@ export function createRecordsLayer({
     ): void => {
       if (ids.length === 0) return;
       remember(workspace, ids);
+      // A renamed record shows its new name wherever a cell links to it.
+      names.forget(workspace, ids);
       const objects = incoming.get(workspace) ?? new Map<string, Gathered>();
       incoming.set(workspace, objects);
       const gathered = objects.get(objectId) ?? {
@@ -1871,6 +1952,7 @@ export function createRecordsLayer({
       creating.clear();
       sending.clear();
       store.clear();
+      names.clear();
       cellErrors = new Map();
       own.clear();
       undo.clear();

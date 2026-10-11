@@ -195,6 +195,11 @@ describe('the edge cases the editors rely on', () => {
     expect(UrlValue.parse('http://Ada@Example.com:8080/A')).toBe('http://Ada@example.com:8080/A');
     expect(UrlValue.safeParse('example.com').success).toBe(false);
     expect(UrlValue.safeParse(`https://x.com/${'a'.repeat(2050)}`).success).toBe(false);
+    // A bare word is no address: the editor turns "notalink" into https://notalink, which is refused.
+    expect(UrlValue.safeParse('https://notalink').success).toBe(false);
+    expect(UrlValue.safeParse('https://.com').success).toBe(false);
+    expect(UrlValue.safeParse('https://example.com.').success).toBe(true);
+    expect(UrlValue.safeParse('http://[::1]:8080/').success).toBe(true);
   });
 
   it('names: the full name defaults to first and last joined', () => {

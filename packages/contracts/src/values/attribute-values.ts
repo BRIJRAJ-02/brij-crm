@@ -210,10 +210,18 @@ function canonicalUrl(input: string): string {
   return `${scheme.toLowerCase()}${host}${rest}`;
 }
 
+/**
+ * A web address a person can open: `http` or `https`, and a host with a dot
+ * between two non empty labels ("example.com"), or an IPv6 address. A bare
+ * word ("https://notalink", which the editor makes of "notalink") is refused.
+ */
 function isWebUrl(input: string): boolean {
   try {
     const url = new URL(input);
-    return url.protocol === 'http:' || url.protocol === 'https:';
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
+    if (url.hostname.startsWith('[')) return true;
+    const labels = url.hostname.replace(/\.$/, '').split('.');
+    return labels.length >= 2 && labels.every((label) => label !== '');
   } catch {
     return false;
   }

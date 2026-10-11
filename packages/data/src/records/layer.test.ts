@@ -705,7 +705,7 @@ describe('editing a cell', () => {
     expect(view.getSnapshot().source.getItem(1)?.versions[CITY]).toBe(version(2));
   });
 
-  it('rolls back a refusal, marks the cell and raises a toast with Retry that sends it again', async () => {
+  it('rolls back a refused value and marks its cell, which says why: no toast, and no Retry that would be refused again', async () => {
     const { layer, view, edits, frame, notices } = await readyView();
     void layer.setValues(WS, [change('Paris')]);
     await settle();
@@ -719,8 +719,19 @@ describe('editing a cell', () => {
     const state = view.getSnapshot();
     expect(state.source.getItem(1)?.values[CITY]).toBe('London');
     expect(state.cellErrors.get(`${idAt(1)}:${CITY}`)).toBe('Another person has this city.');
+    expect(notices).toEqual([]);
+  });
+
+  it('rolls back an edit the server failed, and raises a toast with Retry that sends it again', async () => {
+    const { layer, view, edits, frame, notices } = await readyView();
+    void layer.setValues(WS, [change('Paris')]);
+    await settle();
+    edits[0]?.fail(dataError('INTERNAL', 'Something went wrong. Try again in a moment.'));
+    await settle();
+    frame();
+    expect(view.getSnapshot().source.getItem(1)?.values[CITY]).toBe('London');
     expect(notices).toHaveLength(1);
-    expect(notices[0]?.message).toBe('Another person has this city.');
+    expect(notices[0]?.message).toMatch(/Something went wrong\. Try again in a moment\.$/);
     expect(notices[0]?.action?.label).toBe(RECORD_WORDS.retry);
     notices[0]?.action?.onAction();
     await settle();
@@ -854,9 +865,8 @@ describe('a paste or a range clear (spec 0006, AC-50)', () => {
     expect(state.source.getItem(0)?.values[CITY]).toBe('A');
     expect(state.source.getItem(2)?.values[CITY]).toBe('London');
     expect(state.cellErrors.get(`${idAt(2)}:${CITY}`)).toBe('Not a city.');
-    expect(notices.map((notice) => [notice.message, notice.action?.label])).toEqual([
-      ['Not a city.', RECORD_WORDS.retry],
-    ]);
+    // The refused cell says why itself: one refused value raises no toast.
+    expect(notices).toEqual([]);
     expect(mutationLog).toEqual([`sent ${input?.mutationId ?? ''}`, `answered ${input?.mutationId ?? ''} 1`]);
   });
 
