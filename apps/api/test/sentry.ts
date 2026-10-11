@@ -1,6 +1,6 @@
 // Test helpers for monitoring (spec 0010): a fake Sentry transport that keeps
-// every envelope the SDK would have sent, and a reader for the error events in
-// them. Nothing here imports the vendor; the wrapper's `deliver` option is the
+// every envelope the SDK would have sent, and readers for the error events and
+// spans in them. Nothing here imports the vendor; the wrapper's `deliver` option is the
 // seam.
 
 /** One error event as Sentry receives it, the fields the tests read. */
@@ -29,6 +29,27 @@ export function eventsIn(envelope: string): SentEvent[] {
   return events;
 }
 
+/** One span as Sentry receives it (span streaming, `span.v2`), the fields the tests read. */
+export interface SentSpan {
+  readonly name: string;
+  readonly trace_id: string;
+  readonly span_id: string;
+  readonly parent_span_id?: string;
+  readonly is_segment: boolean;
+  readonly attributes: Readonly<Record<string, { readonly value: unknown }>>;
+}
+
+/** The spans in an envelope: each `span` item's payload holds a list of them. */
+export function spansIn(envelope: string): SentSpan[] {
+  const lines = envelope.split('\n').filter((line) => line.trim() !== '');
+  const spans: SentSpan[] = [];
+  for (let index = 1; index < lines.length - 1; index += 2) {
+    const header = JSON.parse(lines[index] ?? '{}') as { type?: string };
+    if (header.type === 'span') spans.push(...(JSON.parse(lines[index + 1] ?? '{}') as { items: SentSpan[] }).items);
+  }
+  return spans;
+}
+
 /** A transport that keeps what it is handed: every envelope as text, and the error events in them. */
 export function memoryTransport() {
   const envelopes: string[] = [];
@@ -39,6 +60,7 @@ export function memoryTransport() {
       return Promise.resolve();
     },
     events: (): SentEvent[] => envelopes.flatMap(eventsIn),
+    spans: (): SentSpan[] => envelopes.flatMap(spansIn),
     clear: () => {
       envelopes.length = 0;
     },

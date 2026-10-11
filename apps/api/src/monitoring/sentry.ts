@@ -1,6 +1,8 @@
 // Sentry for the api and the worker (spec 0010): the one module that imports
-// `@sentry/node` (AC-184). It sends unexpected errors only, each with the
-// request it belongs to, and nothing personal: no request bodies, cookies,
+// `@sentry/node` (AC-184). It sends unexpected errors, each with the request it
+// belongs to, and the api's request traces (AC-170: named per procedure and
+// sign in route, sampled by environment, never a health check; the worker
+// traces nothing), and nothing personal: no request bodies, cookies,
 // headers beyond two, query strings, local variables or user fields beyond the
 // id, and `scrub` runs in every send hook (AC-165). Every export is a no op
 // until `startSentry` runs, which `instrument.ts` does only when a DSN is set,
@@ -13,18 +15,23 @@ import {
   createTransport,
   type ErrorEvent,
   flush as flushEvents,
+  getActiveSpan,
   getClient,
   getGlobalScope,
   getIsolationScope,
+  getRootSpan,
   init,
   isInitialized,
   type NodeOptions,
   Scope,
   onUnhandledRejectionIntegration,
+  updateSpanName,
+  withActiveSpan,
   withIsolationScope,
   withScope,
 } from '@sentry/node';
 import { queryFailure, safeError } from '../query-errors.ts';
+import { keepSpan, requestSampleRate } from './tracing.ts';
 
 /** Which process is sending: the api or the worker (one Sentry project, tagged by service). */
 export type Service = 'api' | 'worker';
@@ -57,8 +64,15 @@ const decoder = new TextDecoder();
 // Breadcrumbs that are never kept: a log line can quote a value.
 const DROPPED_BREADCRUMBS: ReadonlySet<string> = new Set(['console']);
 
-// Default integrations left out (the rejection handler is replaced, in strict mode).
-const DROPPED_INTEGRATIONS: ReadonlySet<string> = new Set(['ProcessSession', 'Console', 'OnUnhandledRejection']);
+// Default integrations left out (the rejection handler is replaced, in strict mode). Hono's would rename each
+// trace after its route pattern (`POST /api/rpc/*`, over `nameRequest`'s procedure) and send each error `app.ts`
+// answers a second time, around `captureFault`.
+const DROPPED_INTEGRATIONS: ReadonlySet<string> = new Set([
+  'ProcessSession',
+  'Console',
+  'OnUnhandledRejection',
+  'Hono',
+]);
 
 /** A breadcrumb fit to send, or null to drop it. */
 export function keepBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb | null {
@@ -89,12 +103,27 @@ export function withoutQueryValues(event: ErrorEvent, original: unknown): ErrorE
 }
 
 /**
- * The SDK's options: errors only, nothing personal collected, and `scrub` in
- * every send hook. Exported so tests can read them; `startSentry` uses them.
+ * How the process traces (AC-170): the api samples each request by its
+ * environment and path (`requestSampleRate`); the worker samples nothing (a
+ * rate of 0: errors only). Trace headers go to no outgoing call (Resend,
+ * Google, Centrifugo, the worker's poke), and an incoming trace is continued
+ * only from this Sentry organization.
+ */
+function tracingOptions(config: SentryConfig): NodeOptions {
+  const shared = { tracePropagationTargets: [], strictTraceContinuation: true } satisfies NodeOptions;
+  if (config.service === 'worker') return { ...shared, tracesSampleRate: 0 };
+  return { ...shared, tracesSampler: (context) => requestSampleRate(config.environment, context) };
+}
+
+/**
+ * The SDK's options: errors and the api's request traces, nothing personal
+ * collected, and `scrub` in every send hook (`keepSpan` for spans). Exported
+ * so tests can read them; `startSentry` uses them.
  */
 export function sentryOptions(config: SentryConfig): NodeOptions {
   const { deliver } = config;
   return {
+    ...tracingOptions(config),
     dsn: config.dsn,
     environment: config.environment,
     release: config.release,
@@ -125,6 +154,7 @@ export function sentryOptions(config: SentryConfig): NodeOptions {
     enhanceFetchErrorMessages: 'report-only',
     beforeSend: (event, hint) => scrub(withoutQueryValues(event, hint.originalException)),
     beforeBreadcrumb: keepBreadcrumb,
+    beforeSendSpan: keepSpan,
     ...(deliver === undefined
       ? {}
       : {
@@ -174,18 +204,34 @@ export function captureFault(error: unknown, context: FaultContext = {}): void {
     return;
   }
   // Nothing of a request this fault may have inherited: no user, workspace, request id, request data,
-  // breadcrumbs or trace. Fresh scopes on the same client; the service tag lives on the global scope.
+  // breadcrumbs or trace. Fresh scopes on the same client, and no active span (with tracing on, the request's
+  // span would otherwise lend the event its trace); the service tag lives on the global scope.
   const client = getClient();
   const fresh = () => {
     const scope = new Scope();
     scope.setClient(client);
     return scope;
   };
-  withIsolationScope(fresh(), () =>
-    withScope(fresh(), () => {
-      captureException(safe, { tags });
-    }),
+  withActiveSpan(null, () =>
+    withIsolationScope(fresh(), () =>
+      withScope(fresh(), () => {
+        captureException(safe, { tags });
+      }),
+    ),
   );
+}
+
+/**
+ * Names the current request's trace, and the errors it sends (AC-170): `rpc
+ * records.query` for a procedure, `auth /sign-in/email-otp` for a sign in
+ * route. Called once the request is known to be one of those, so a name never
+ * comes from a path a caller made up.
+ */
+export function nameRequest(name: string): void {
+  if (!isInitialized()) return;
+  getIsolationScope().setTransactionName(name);
+  const active = getActiveSpan();
+  if (active !== undefined) updateSpanName(getRootSpan(active), name);
 }
 
 /**

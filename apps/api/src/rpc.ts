@@ -15,7 +15,8 @@ import { RPCHandler } from '@orpc/server/fetch';
 import { ResponseHeadersPlugin } from '@orpc/server/plugins';
 import { apiError, toApiError } from './errors.ts';
 import { errorFields, log } from './log.ts';
-import { captureFault } from './monitoring/sentry.ts';
+import { captureFault, nameRequest } from './monitoring/sentry.ts';
+import { procedureTraceName } from './monitoring/tracing.ts';
 import type { RequestContext } from './orpc.ts';
 
 // The error's name and where it was thrown, without its message: a parse
@@ -33,6 +34,8 @@ export function createRpcHandler(router: AnyRouter): RPCHandler<RequestContext> 
     clientInterceptors: [
       async (options) => {
         const { context, path } = options;
+        // The request's trace, by the procedure the router matched (spec 0010, AC-170).
+        nameRequest(procedureTraceName(path.join('.')));
         try {
           return await options.next();
         } catch (thrown) {

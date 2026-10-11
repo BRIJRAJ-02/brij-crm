@@ -10,7 +10,7 @@ import { createEdgeGuard } from './edge.ts';
 import type { ApiEnv } from './env.ts';
 import { createReadGate } from './gate.ts';
 import { errorFields, log } from './log.ts';
-import { captureFault, withRequestScope } from './monitoring/sentry.ts';
+import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { createRealtimeTokens } from './realtime/tokens.ts';
 import type { WakeRelay } from './realtime/wake.ts';
 import { router as appRouter } from './router.ts';
@@ -189,6 +189,8 @@ export function createApp({
   app.use('/auth/*', async (c, next) => {
     const route = new URL(c.req.url).pathname.slice(AUTH_BASE_PATH.length);
     if (!AUTH_ROUTES.has(route)) return errorResponse('NOT_FOUND', 'There is nothing at this address.');
+    // The request's trace, by its sign in route (spec 0010, AC-170): one we listed, never a path as sent.
+    nameRequest(routeOf(`${AUTH_BASE_PATH}${route}`));
     return next();
   });
 
