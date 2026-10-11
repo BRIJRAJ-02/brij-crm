@@ -114,6 +114,7 @@ export {
   type Change,
   type DefinitionChange,
   type EntryRef,
+  type JobChange,
   type RecordRef,
   type ReferenceChange,
   type ValueChange,

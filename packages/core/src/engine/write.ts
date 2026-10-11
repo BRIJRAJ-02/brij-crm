@@ -63,6 +63,16 @@ export interface DefinitionChange {
 }
 
 /**
+ * A background job a write started, changed or ended (spec 0008): the job,
+ * and its starter's member id (null for a system job), so the outbox stores
+ * its `jobs` row under the starter, even when an admin cancels it.
+ */
+export interface JobChange {
+  readonly jobId: string;
+  readonly startedBy: string | null;
+}
+
+/**
  * Everything one write landed or made visible or invisible, as the hooks see
  * it. Records and entries that only appear or disappear (a record's entries
  * on its delete, the reference values pointing at it) are listed too, so a
@@ -107,6 +117,8 @@ export interface Change {
   readonly definitions: readonly DefinitionChange[];
   /** Members a write outside the engine changed (spec 0007, AC-82): a role changed, or removed. */
   readonly members: readonly string[];
+  /** Background jobs the write started, moved on or ended (spec 0008), each with its starter. */
+  readonly jobs: readonly JobChange[];
 }
 
 /** Marks a change `capChange` made: a type only brand, nothing at run time. */
@@ -236,6 +248,7 @@ const LIST_KEYS = [
   'coarseObjects',
   'definitions',
   'members',
+  'jobs',
 ] as const satisfies readonly (keyof ChangeLists)[];
 
 /**
@@ -340,6 +353,7 @@ export async function runWrite<T>(
           coarseObjects: [] as string[],
           definitions: [] as DefinitionChange[],
           members: [] as string[],
+          jobs: [] as JobChange[],
         };
         const context: WriteContext = {
           tx,
@@ -364,6 +378,7 @@ export async function runWrite<T>(
             append(collected.coarseObjects, part.coarseObjects);
             append(collected.definitions, part.definitions);
             append(collected.members, part.members);
+            append(collected.jobs, part.jobs);
           },
           async perRecord(step) {
             const marks = LIST_KEYS.map((key) => collected[key].length);
@@ -401,6 +416,8 @@ export async function runWrite<T>(
           coarseObjects: [...new Set(collected.coarseObjects)],
           definitions: [...collected.definitions],
           members: [...new Set(collected.members)],
+          // One entry per job: a slice's batches name the same job again.
+          jobs: [...new Map(collected.jobs.map((job) => [job.jobId, job])).values()],
         };
         for (const hook of hooks) await hook(change, tx);
         return { result, change };

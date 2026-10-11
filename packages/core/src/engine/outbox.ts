@@ -51,7 +51,7 @@ export const LIFECYCLE_CAP = MAX_LIFECYCLE_IDS;
 
 /** One outbox row before it gets its number. */
 export interface OutboxEvent {
-  readonly kind: 'records' | 'entries' | 'definitions' | 'members';
+  readonly kind: 'records' | 'entries' | 'definitions' | 'members' | 'jobs';
   /** The object: a `records` row's, an `entries` row's list's parent, a `definitions` row's when it names one. */
   readonly objectId?: string;
   /** The list: an `entries` row's, a `definitions` row's when it names one. */
@@ -67,6 +67,12 @@ export interface OutboxEvent {
   readonly coarse: boolean;
   /** On a `records` row: what the write replaced, when it replaced some cells and no more than `REPLACED_CAP`. */
   readonly replaced?: ReplacedValues;
+  /**
+   * On a `jobs` row: the jobs' starter (a member id, or null for system
+   * jobs), stored as the row's `actor_member_id` in place of the write's
+   * actor, so an admin's cancel still names the member who started the job.
+   */
+  readonly starter?: string | null;
 }
 
 /** What the outbox hook needs from the request. */
@@ -284,10 +290,27 @@ function definitionRows(change: CappedChange): OutboxEvent[] {
   });
 }
 
-/** One row per kind a write outside the engine recorded (AC-82): `members` today. */
+/**
+ * One row per kind a write outside the engine recorded (AC-82): `members`,
+ * and (spec 0008) one `jobs` row per starter, its job ids in `itemIds`.
+ */
 function kindRows(change: CappedChange): OutboxEvent[] {
-  if (change.members.length === 0) return [];
-  return [{ kind: 'members', ...NO_IDS, itemIds: [...change.members].sort(byId), coarse: false }];
+  const rows: OutboxEvent[] = [];
+  if (change.members.length > 0) {
+    rows.push({ kind: 'members', ...NO_IDS, itemIds: [...change.members].sort(byId), coarse: false });
+  }
+  const byStarter = new Map<string | null, string[]>();
+  for (const job of change.jobs) {
+    const ids = byStarter.get(job.startedBy) ?? [];
+    ids.push(job.jobId);
+    byStarter.set(job.startedBy, ids);
+  }
+  // The system's row first, then each member's by id: a stable order.
+  const starters = [...byStarter.keys()].sort((a, b) => (a === null ? -1 : b === null ? 1 : byId(a, b)));
+  for (const starter of starters) {
+    rows.push({ kind: 'jobs', ...NO_IDS, itemIds: (byStarter.get(starter) ?? []).sort(byId), coarse: false, starter });
+  }
+  return rows;
 }
 
 /**
@@ -320,7 +343,7 @@ export function outboxHook(options: OutboxHookOptions = {}): AfterWrite {
     const events = outboxEvents(change);
     if (events.length === 0) return;
     const count = events.length;
-    // The member who wrote, never published: spec 0009's access filter reads it for `jobs`.
+    // The member who wrote, never published: spec 0009's access filter reads it (a `jobs` row carries its starter).
     const actorMemberId = change.actor.type === 'member' ? change.actor.id : null;
     const json = JSON.stringify(events);
     // Arrays come out of the json in their own order (with ordinality), so ids keep the order the hook gave them.
@@ -353,7 +376,8 @@ export function outboxHook(options: OutboxHookOptions = {}): AfterWrite {
           ${ids('restoredIds')},
           (e.value ->> 'coarse')::boolean,
           ${mutationId ?? null}::uuid,
-          ${actorMemberId}::uuid,
+          -- A jobs row names its jobs' starter; every other row the write's member.
+          case when e.value ? 'starter' then (e.value ->> 'starter')::uuid else ${actorMemberId}::uuid end,
           clock_timestamp(),
           e.value -> 'replaced'
         from counter, jsonb_array_elements(${json}::jsonb) with ordinality as e(value, ord)

@@ -70,3 +70,37 @@ export {
   type Delivery,
 } from './realtime/plan.ts';
 export { audienceOf, catchUp, CATCH_UP_MAX_ROWS, createCollapse, workspaceHead } from './realtime/catch-up.ts';
+export {
+  cancelJob,
+  confirmJob,
+  getJob,
+  listJobs,
+  startJob,
+  startTestJob,
+  toJobView,
+  type StartJobInput,
+  type TestJobInput,
+} from './jobs/service.ts';
+export {
+  createRegistry,
+  defineKind,
+  kindContractProblems,
+  MAX_ATTEMPTS,
+  MAX_BATCH_SIZE,
+  type AnyKind,
+  type ItemOutcome,
+  type JobRegistry,
+  type KindDefinition,
+  type StepInput,
+  type StepOutcome,
+} from './jobs/registry.ts';
+export { jobKinds, type JobKindsOptions } from './jobs/kinds/index.ts';
+export { SIMULATED_REFUSAL } from './jobs/kinds/dev-simulate.ts';
+export {
+  createRunner,
+  retryDelayMs,
+  type Runner,
+  type RunnerDeps,
+  type RunnerLog,
+  type SliceOutcome,
+} from './jobs/runner.ts';

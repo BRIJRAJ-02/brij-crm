@@ -18,6 +18,10 @@ export const LIMITS = {
   liveRecords: 1_000_000,
   lists: 500,
   entriesPerList: 1_000_000,
+  /** Unfinished jobs members started, of kinds that count (spec 0008, AC-116). System jobs never count. */
+  unfinishedJobs: 20,
+  /** Items in one job (AC-116). */
+  jobItems: 1_000_000,
 } as const;
 
 /** One set of limits. */
@@ -26,7 +30,8 @@ export type Limits = { readonly [K in keyof typeof LIMITS]: number };
 /** How long a deleted record can be restored before the purge removes it. */
 export const RESTORE_WINDOW = '30 days';
 
-function limitsOf(scope: EngineScope): Limits {
+/** The scope's limits: the defaults, lowered by the scope's own (tests; later the workspace's plan). */
+export function limitsOf(scope: EngineScope): Limits {
   return { ...LIMITS, ...scope.limits };
 }
 
