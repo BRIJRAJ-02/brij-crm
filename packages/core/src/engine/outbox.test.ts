@@ -513,9 +513,9 @@ describe('every kind of change (spec 0007, milestone 2)', () => {
   });
 
   it('names the records a write created, deleted and restored, and goes coarse past the cap (owner decision pending)', async () => {
-    const { scope, people } = await workspace();
+    const { scope, people, name } = await workspace();
     const hook = [outboxHook()];
-    const { recordId } = await createRecord(scope, { objectId: people }, hook);
+    const { recordId } = await createRecord(scope, { objectId: people, values: { [name]: person('Ada') } }, hook);
     await deleteRecord(scope, { recordId }, hook);
     await restoreRecord(scope, { recordId }, hook);
     const lifecycle = (row: Details | undefined) => [row?.created_ids, row?.deleted_ids, row?.restored_ids];
