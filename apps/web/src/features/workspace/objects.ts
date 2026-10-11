@@ -11,3 +11,6 @@ export function navObjects(objects: readonly ObjectSummary[]): readonly ObjectSu
 /** The page of one object in a workspace. */
 export const objectHref = (slug: string, object: Pick<ObjectSummary, 'apiSlug'>) =>
   `/w/${slug}/objects/${object.apiSlug}`;
+
+/** Settings, Background jobs (spec 0008). */
+export const jobsHref = (slug: string) => `/w/${slug}/settings/jobs`;

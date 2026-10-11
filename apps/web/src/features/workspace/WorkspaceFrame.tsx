@@ -19,7 +19,7 @@ import {
 import type { ThemeController } from '@crm/ui/theme';
 import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useState, type ReactNode } from 'react';
-import { navObjects, objectHref } from './objects.ts';
+import { jobsHref, navObjects, objectHref } from './objects.ts';
 import { strings } from './strings.ts';
 import { UNDO_KEYS } from './undo.ts';
 import { useUndoShortcut } from './useUndoShortcut.ts';
@@ -41,6 +41,8 @@ export interface WorkspaceFrameProps {
   readonly isMissing?: boolean;
   /** The `apiSlug` of the object whose page is open. */
   readonly currentObject?: string;
+  /** The settings page that is open (`jobs`: Background jobs). */
+  readonly currentPage?: 'jobs';
   /** The page's TopBar. */
   readonly topBar?: ReactNode;
   /** The view's ViewBar, on an object's page. */
@@ -63,6 +65,7 @@ export function WorkspaceFrame({
   objects,
   isMissing = false,
   currentObject,
+  currentPage,
   topBar,
   viewBar,
   children,
@@ -144,6 +147,13 @@ export function WorkspaceFrame({
                   {object.pluralName}
                 </NavItem>
               ))}
+            </NavSection>
+          )}
+          {!isMissing && (
+            <NavSection title={strings.settings}>
+              <NavItem icon="list-checks" href={jobsHref(slug)} isCurrent={currentPage === 'jobs'}>
+                {strings.backgroundJobs}
+              </NavItem>
             </NavSection>
           )}
         </Sidebar>

@@ -6,6 +6,9 @@ export const strings = {
   signingOut: 'Signing out',
   signOutFailed: 'Couldn’t sign out. Check your connection, then try again.',
   records: 'Records',
+  /** The sidebar's settings section and its pages (spec 0008: Background jobs). */
+  settings: 'Settings',
+  backgroundJobs: 'Background jobs',
   noObjects: 'No objects yet',
   noObjectsText: 'This workspace has no records to show yet.',
   loadingTitle: 'Loading',

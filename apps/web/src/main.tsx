@@ -12,6 +12,8 @@ import { createRoot } from 'react-dom/client';
 import { signInHref } from './features/auth/redirect.ts';
 import { focusFirstLoad, focusPage } from './features/navigation/focus.ts';
 import { followPageTitle } from './features/navigation/title.ts';
+import { jobFinishedToast } from './features/settings/toast.ts';
+import { jobsHref } from './features/workspace/objects.ts';
 import { replacedToast } from './features/workspace/undo.ts';
 import { startMonitoring } from './monitoring/index.ts';
 import { routeTree } from './routeTree.gen.ts';
@@ -74,6 +76,14 @@ const data = createDataLayer({
   // Someone else's later save replaced a value this tab saved (spec 0006): say so, with Use mine.
   onReplaced: (replaced) => {
     toasts.toast(replacedToast(replaced));
+  },
+  // A job this browser started ended (spec 0008, AC-119): say how, with a way to the Background jobs page.
+  onJobFinished: (workspace, job) => {
+    toasts.toast(
+      jobFinishedToast(job, () => {
+        void router.navigate({ href: jobsHref(workspace) });
+      }),
+    );
   },
   // Faults the server never saw: an answer without one of our codes, or one thrown inside the layer.
   report: monitor.report,

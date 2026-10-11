@@ -17,6 +17,7 @@ import { Route as WelcomeRouteImport } from './routes/welcome.tsx'
 import { Route as WSlugRouteImport } from './routes/w.$slug.tsx'
 import { Route as WSlugIndexRouteImport } from './routes/w.$slug.index.tsx'
 import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects.$object.tsx'
+import { Route as WSlugSettingsJobsRouteImport } from './routes/w.$slug.settings.jobs.tsx'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -58,6 +59,11 @@ const WSlugObjectsObjectRoute = WSlugObjectsObjectRouteImport.update({
   path: '/objects/$object',
   getParentRoute: () => WSlugRoute,
 } as any)
+const WSlugSettingsJobsRoute = WSlugSettingsJobsRouteImport.update({
+  id: '/settings/jobs',
+  path: '/settings/jobs',
+  getParentRoute: () => WSlugRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -68,6 +74,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug': typeof WSlugRouteWithChildren
   '/w/$slug/': typeof WSlugIndexRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -77,6 +84,7 @@ export interface FileRoutesByTo {
   '/welcome': typeof WelcomeRoute
   '/w/$slug': typeof WSlugIndexRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -88,6 +96,7 @@ export interface FileRoutesById {
   '/w/$slug': typeof WSlugRouteWithChildren
   '/w/$slug/': typeof WSlugIndexRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -100,6 +109,7 @@ export interface FileRouteTypes {
     | '/w/$slug'
     | '/w/$slug/'
     | '/w/$slug/objects/$object'
+    | '/w/$slug/settings/jobs'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -109,6 +119,7 @@ export interface FileRouteTypes {
     | '/welcome'
     | '/w/$slug'
     | '/w/$slug/objects/$object'
+    | '/w/$slug/settings/jobs'
   id:
     | '__root__'
     | '/'
@@ -119,6 +130,7 @@ export interface FileRouteTypes {
     | '/w/$slug'
     | '/w/$slug/'
     | '/w/$slug/objects/$object'
+    | '/w/$slug/settings/jobs'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -188,17 +200,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugObjectsObjectRouteImport
       parentRoute: typeof WSlugRoute
     }
+    '/w/$slug/settings/jobs': {
+      id: '/w/$slug/settings/jobs'
+      path: '/settings/jobs'
+      fullPath: '/w/$slug/settings/jobs'
+      preLoaderRoute: typeof WSlugSettingsJobsRouteImport
+      parentRoute: typeof WSlugRoute
+    }
   }
 }
 
 interface WSlugRouteChildren {
   WSlugIndexRoute: typeof WSlugIndexRoute
   WSlugObjectsObjectRoute: typeof WSlugObjectsObjectRoute
+  WSlugSettingsJobsRoute: typeof WSlugSettingsJobsRoute
 }
 
 const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugIndexRoute: WSlugIndexRoute,
   WSlugObjectsObjectRoute: WSlugObjectsObjectRoute,
+  WSlugSettingsJobsRoute: WSlugSettingsJobsRoute,
 }
 
 const WSlugRouteWithChildren = WSlugRoute._addFileChildren(WSlugRouteChildren)
