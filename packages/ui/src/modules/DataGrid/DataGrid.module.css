@@ -1,8 +1,9 @@
 /* DataGrid: a scrolling area on surface with a sticky header, rows placed by
    their offset (--row-offset) at size-row each, the checkbox column and the
    pinned run sticky at the start edge, and a sticky footer. A selected row
-   takes surface-selected, and keeps it under the pointer; any other hovered
-   row takes surface-hover. */
+   takes accent-soft, and keeps it under the pointer; any other hovered row
+   takes surface-hover. Scrolled sideways, the grid sets --pinned-edge, the
+   shadow the last pinned header and cells cast over the columns under them. */
 /* A row's place changes on every scroll step; not inherited, so moving a row
    restyles the row alone, not everything in it. */
 @property --row-offset {
@@ -45,6 +46,11 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
+  /* Read by the last pinned header and cells (an inherited custom property): an edge over what scrolls under them. */
+  .root[data-scrolled-x] {
+    --pinned-edge: var(--space-2) 0 var(--space-4) calc(-1 * var(--space-2)) var(--scrim);
+  }
+
   .header {
     position: sticky;
     inset-block-start: 0;
@@ -74,7 +80,7 @@
   }
 
   .row[data-selected] {
-    background: var(--surface-selected);
+    background: var(--accent-soft);
   }
 
   /* An open editor's error floats over the rows below, so this row doesn't clip it. */
@@ -110,6 +116,7 @@
   }
 
   .check:focus-visible,
+  .check[data-active],
   .check[data-focused]:focus-within,
   .total[data-focused]:focus-visible {
     box-shadow: var(--shadow-focus-inset);
@@ -157,12 +164,27 @@
     inset-inline-start: var(--col-offset);
   }
 
+  /* A loading row: the checkbox column, then one skeleton per column, at the
+     columns' own widths, so the rows that arrive take their place with no jump. */
   .skeletonRow {
     display: flex;
-    align-items: center;
+    inline-size: var(--grid-width);
     block-size: var(--size-row);
-    padding-inline: var(--space-16);
+  }
+
+  .skeletonCell {
+    display: flex;
+    flex: none;
+    align-items: center;
+    inline-size: var(--col-width);
+    block-size: var(--size-row);
+    padding-inline: var(--space-8);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .skeletonRow > .check {
+    cursor: default;
   }
 
   /* With no rows the grid is only its header, and the empty state sits under it. */

@@ -1,6 +1,9 @@
 /* GridCell: a size-row tall cell, as wide as its column, on the row's
-   background. Pinned cells stick to the start edge; the focused cell carries
-   the inset ring, a selected range takes surface-selected, a refused value an
+   background. Pinned cells stick to the start edge, and the last one casts
+   the grid's --pinned-edge shadow while the grid is scrolled sideways; the
+   focused cell carries the 1px inset ring whenever the grid holds focus
+   (pointer or keyboard), a range takes surface-selected (selected rows take
+   accent-soft), a refused value an
    inset danger edge. On the row header the name is a click target, and on a
    checkbox value the mark. Cells take no text selection, so a shift click
    draws a range, not a highlight; an editor in the cell takes it back. */
@@ -38,19 +41,33 @@
 
   .root[data-last-pinned] {
     border-inline-end-color: var(--border);
+    box-shadow: var(--pinned-edge, 0 0 transparent);
   }
 
-  /* A range reads apart from selected rows, which take surface-selected. */
+  /* A range reads apart from selected rows, which take accent-soft. */
   .root[data-in-range] {
-    background: var(--accent-soft);
+    background: var(--surface-selected);
   }
 
-  /* A list or popover editor keeps the ring on the cell it edits, so the panel reads as that cell's. */
+  /* The active cell: ringed while the grid holds focus, however it got there.
+     A list or popover editor keeps the ring on the cell it edits, so the panel
+     reads as that cell's. */
+  .root[data-active],
   .root[data-focused]:focus-visible,
   .root[data-focused]:focus-within,
   .root[data-editing='list'],
   .root[data-editing='popover'] {
     box-shadow: var(--shadow-focus-inset);
+  }
+
+  .root[data-last-pinned]:is(
+      [data-active],
+      [data-focused]:focus-visible,
+      [data-focused]:focus-within,
+      [data-editing='list'],
+      [data-editing='popover']
+    ) {
+    box-shadow: var(--shadow-focus-inset), var(--pinned-edge, 0 0 transparent);
   }
 
   /* A refused value, from the data layer or the editor's own check, takes the
@@ -61,7 +78,7 @@
     outline-offset: calc(-1 * var(--border-width-thick));
   }
 
-  .root[data-focused][data-invalid]:is(:focus-visible, :focus-within),
+  .root[data-focused][data-invalid]:is(:focus-visible, :focus-within, [data-active]),
   .root[data-focused][data-editing]:has([aria-invalid='true']):focus-within {
     box-shadow: none;
   }
@@ -72,6 +89,13 @@
     overflow: visible;
     padding-inline: 0;
     user-select: text;
+  }
+
+  /* A row header with no name: what the row is called, in the placeholder's colour. */
+  .placeholder {
+    overflow: hidden;
+    color: var(--text-tertiary);
+    text-overflow: ellipsis;
   }
 
   .hit {

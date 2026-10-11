@@ -11,7 +11,7 @@ The field set gives every attribute type exactly one display and one editor (spe
 Screens never import it; they render values through `AttributeDisplay` and `AttributeEditor` with a `FieldAttribute` of this type.
 
 - **Display**: the full name on one line (the record header adds the avatar beside it).
-- **Editor**: first and last name Fields side by side; the full name is made from them. Focus leaving the group commits. The grid edits it in a popover.
+- **Editor**: first and last name Fields side by side; the full name is made from them. Focus leaving the group commits. The grid edits it in a popover. A refusal ("Name is required.", "Name the person.") is about the whole name, so it marks the first name field, where the name starts, in every layout.
 - **Text out / in** (copy, paste, CSV, the import preview): the full name / "Last, First", or split at the first space.
 - **Filter operators**: contains, first name is, last name is, then is empty and is not empty.
 

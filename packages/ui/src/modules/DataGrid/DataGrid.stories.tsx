@@ -519,6 +519,35 @@ export const HeaderCheckbox: Story = {
   },
 };
 
+/**
+ * By pointer: a click on the checkbox of a row that isn't focused ticks it (focusing the row gives it an element
+ * of its own, so the grid ticks on the press), a second click clears it, and a clicked cell carries the ring.
+ */
+export const PointerSelection: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const box = (row: number) =>
+      cell(canvasElement, row, 0)?.querySelector('[class*="box"]') ?? cell(canvasElement, row, 0);
+    const third = box(3);
+    if (third === null) throw new globalThis.Error('No checkbox on row 3');
+    await userEvent.click(third);
+    await waitFor(() => expect(canvas.getAllByRole('row', { selected: true })).toHaveLength(1));
+    const fifth = box(5);
+    if (fifth === null) throw new globalThis.Error('No checkbox on row 5');
+    await userEvent.click(fifth);
+    await waitFor(() => expect(canvas.getAllByRole('row', { selected: true })).toHaveLength(2));
+    const again = box(5);
+    if (again === null) throw new globalThis.Error('No checkbox on row 5');
+    await userEvent.click(again);
+    await waitFor(() => expect(canvas.getAllByRole('row', { selected: true })).toHaveLength(1));
+    // A clicked cell is the active one, ringed while the grid holds focus.
+    const target = cell(canvasElement, 2, 3);
+    if (target === null) throw new globalThis.Error('No cell 2:3');
+    await userEvent.click(target);
+    await waitFor(() => expect(cell(canvasElement, 2, 3)).toHaveAttribute('data-active'));
+  },
+};
+
 /** A select or a status edits as its list, open at once: Enter, then the arrows and Enter choose; Esc leaves the value (AC-8). */
 export const ListEditors: Story = {
   parameters: { crm: { screenshot: false } },

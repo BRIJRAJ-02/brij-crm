@@ -33,15 +33,16 @@ export function PersonalNameEditor({ attribute, value, onCommit, error }: Editor
     <fieldset className={styles.root} {...focusWithinProps}>
       <legend className={styles.legend}>{attribute.name}</legend>
       <span className={styles.row}>
-        <Field label={strings.first} value={first} onChange={setFirst} onSubmit={commit} autoComplete="given-name" />
+        {/* A refusal is about the whole name: it marks the first field, where the name starts, in every layout. */}
         <Field
-          label={strings.last}
-          value={last}
-          onChange={setLast}
+          label={strings.first}
+          value={first}
+          onChange={setFirst}
           onSubmit={commit}
-          autoComplete="family-name"
+          autoComplete="given-name"
           {...(shown === undefined ? {} : { error: shown })}
         />
+        <Field label={strings.last} value={last} onChange={setLast} onSubmit={commit} autoComplete="family-name" />
       </span>
     </fieldset>
   );

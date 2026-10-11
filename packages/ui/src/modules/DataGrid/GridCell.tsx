@@ -10,12 +10,17 @@ import { SharedTooltipContext } from '../../atoms/TruncatedText/TruncatedText.ts
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
 import { AttributeEditor } from '../../fields/AttributeEditor.tsx';
+import { ChipFitContext } from '../../fields/parts.tsx';
 import { fieldTypeOf, readOnlyReasonOf } from '../../fields/registry.ts';
 import { MULTIPLE_VALUE_TYPES, type AttributeType } from '@crm/contracts/values';
 import type { EditorProps, FieldAttribute } from '../../fields/types.ts';
 import { Popover } from '../../molecules/Popover/Popover.tsx';
+import { spaceToken } from '../../lib/token-values.ts';
 import styles from './GridCell.module.css';
 import { strings } from './strings.ts';
+
+/** The cell's padding on each side (`space-8`, as GridCell.module.css draws it). */
+const CELL_PADDING = spaceToken('space-8');
 
 /** What reference and file editors need from the screen: search, uploads and the signed in member. */
 export type GridEditorProps = Pick<EditorProps<AttributeType>, 'onSearch' | 'onUpload' | 'me'>;
@@ -62,6 +67,8 @@ export interface GridCellProps {
   readonly isLoaded: boolean;
   readonly isRowHeader: boolean;
   readonly isFocused: boolean;
+  /** The focused cell while the grid holds focus, by pointer or keyboard: it carries the ring. */
+  readonly isActive?: boolean;
   readonly isInRange: boolean;
   /** The id of the cell's reason, its description; the grid's shared tooltip shows it too. */
   readonly tipId: string;
@@ -80,6 +87,8 @@ export interface GridCellProps {
   readonly onToggle?: () => void;
   /** On the row header: the row's note (spec 0006, AC-56), drawn after the value and read with it. */
   readonly note?: 'new' | 'no-longer-matches';
+  /** On a row header with no name: what to call it ("Unnamed person"), drawn muted in place of the empty value. */
+  readonly placeholder?: string;
 }
 
 /**
@@ -98,6 +107,7 @@ export function GridCell({
   isLoaded,
   isRowHeader,
   isFocused,
+  isActive = false,
   isInRange,
   tipId,
   editing,
@@ -110,6 +120,7 @@ export function GridCell({
   onOpen,
   onToggle,
   note,
+  placeholder,
 }: GridCellProps) {
   const ref = useRef<HTMLDivElement>(null);
   const definition = fieldTypeOf(attribute.type);
@@ -129,18 +140,22 @@ export function GridCell({
       {...(editing?.startText === undefined ? {} : { startText: editing.startText })}
     />
   );
+  // Several values fold into "+N" at what fits: the column's width less the cell's padding.
   const shown = (
-    <AttributeDisplay
-      attribute={attribute}
-      value={value ?? null}
-      surface="cell"
-      {...(display === undefined ? {} : { display: display as never })}
-    />
+    <ChipFitContext value={place.width - 2 * CELL_PADDING}>
+      <AttributeDisplay
+        attribute={attribute}
+        value={value ?? null}
+        surface="cell"
+        {...(display === undefined ? {} : { display: display as never })}
+      />
+    </ChipFitContext>
   );
   // What a click acts on: the name on the row header, the mark on a checkbox.
   const toggle = reason === undefined ? onToggle : undefined;
   const action = editing === undefined ? (toggle ?? onOpen) : undefined;
-  let content: ReactNode = shown;
+  let content: ReactNode =
+    placeholder === undefined ? shown : <span className={styles.placeholder}>{placeholder}</span>;
   if (!isLoaded) {
     content = (
       <>
@@ -175,6 +190,7 @@ export function GridCell({
       data-cell={`${String(row)}:${String(place.col)}`}
       data-align={definition.align}
       data-focused={isFocused || undefined}
+      data-active={isActive || undefined}
       data-in-range={isInRange || undefined}
       data-editing={mode}
       data-invalid={error === undefined ? undefined : ''}

@@ -27,7 +27,7 @@ Ported from the artifact's Menu card. Every dropdown of actions or choices in th
 </MenuTrigger>
 ```
 
-- **Items**: `MenuItem` takes a label, and optionally an `icon` (or any `leading` piece: an Avatar, a Tag, a StatusDot), a `description`, a `meta` count, a `kbd` shortcut, `isDanger` and `href`. With `isLabelInLeading` the leading piece shows the label itself (a select option's Tag), so the label is kept for screen readers and typing only and never drawn twice.
+- **Items**: `MenuItem` takes a label, and optionally an `icon` (or any `leading` piece: an Avatar, a Tag, a StatusDot), a `description`, a `meta` count, a `kbd` shortcut, `isDanger`, `href` and `isChecked` (a check at the end, read as "Current", for what is in effect now in a menu of actions: a column's current sort). With `isLabelInLeading` the leading piece shows the label itself (a select option's Tag), so the label is kept for screen readers and typing only and never drawn twice.
 - **Groups**: `MenuSection` with a `label`, and `MenuSeparator` between groups.
 - **Choices**: `selectionMode="single"` or `"multiple"` shows checks; `selectedKeys` and `onSelectionChange` hold the choice.
 - **Search**: `search={{ label: 'Search attributes' }}` puts a field above the items and filters them here. With `onSearch`, the caller searches (async) and sends back new items.

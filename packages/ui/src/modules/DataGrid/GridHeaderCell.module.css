@@ -1,5 +1,5 @@
 /* GridHeaderCell: a size-table-header tall header in text-secondary and
-   label-strong, with the type icon, the name, the menu button and a resize
+   body-strong (13px medium), with the type icon, the name, the menu button and a resize
    edge. Pinned headers stick to the start edge like their cells. */
 @layer components {
   .root {
@@ -20,8 +20,8 @@
     border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
     background: var(--surface);
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
     white-space: nowrap;
     outline: none;
   }
@@ -34,6 +34,7 @@
 
   .root[data-last-pinned] {
     border-inline-end-color: var(--border);
+    box-shadow: var(--pinned-edge, 0 0 transparent);
   }
 
   .root[data-dragging] {
@@ -61,6 +62,10 @@
   .root[data-focused]:focus-visible,
   .root[data-resizing] {
     box-shadow: var(--shadow-focus-inset);
+  }
+
+  .root[data-last-pinned]:is([data-focused]:focus-visible, [data-resizing]) {
+    box-shadow: var(--shadow-focus-inset), var(--pinned-edge, 0 0 transparent);
   }
 
   .name {

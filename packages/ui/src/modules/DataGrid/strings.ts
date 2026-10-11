@@ -18,6 +18,8 @@ export const strings = {
   resizing: (name: string, width: string) => `${name}, ${width} pixels wide.`,
   computedColumn: 'Worked out by the system',
   aiColumn: 'Filled by AI',
+  /** On the header of a column whose cells can't be changed here. */
+  readOnlyColumn: 'Read only',
   loading: 'Loading rows',
   loadingRow: 'Loading',
   /** A row's note (spec 0006, AC-56): a record just made here, and an edited row that left the view's filter. */
@@ -28,7 +30,7 @@ export const strings = {
   empty: 'No records yet',
   emptyText: 'Records you add or import show here.',
   failed: 'Couldn’t load these records',
-  failedText: 'Check your connection, then try again.',
+  failedText: 'Something went wrong. Try again in a moment.',
   noAccess: 'You don’t have access to this view',
   noAccessText: 'Ask a workspace admin to share it with you.',
   notLoaded: 'Scroll to load these rows first.',

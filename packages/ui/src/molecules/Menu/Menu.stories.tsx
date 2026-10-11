@@ -28,7 +28,7 @@ function openMenu() {
 function ColumnOptions({ onAction }: { readonly onAction?: (key: string | number) => void }) {
   return (
     <Menu label="Column options" {...(onAction === undefined ? {} : { onAction })}>
-      <MenuItem id="asc" icon="chevron-up">
+      <MenuItem id="asc" icon="chevron-up" isChecked>
         Sort ascending
       </MenuItem>
       <MenuItem id="desc" icon="chevron-down">
@@ -98,6 +98,8 @@ export const Open: Story = {
     const menu = await openMenu();
     await expect(menu).toHaveAccessibleName('Column options');
     await expect(menu.querySelector('[data-danger]')).toHaveTextContent('Delete attribute');
+    // The sort in effect carries a check, named for screen readers.
+    await expect(menu.querySelector('[aria-label="Current"]')).not.toBeNull();
   },
 };
 

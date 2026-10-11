@@ -27,7 +27,7 @@ Each type's folder has its display, its editor, its `type.ts` registry entry, it
 
 ## States
 
-Empty (nothing in a cell, a dash elsewhere, "Empty" for screen readers), a value, several values ("+N" past `maxVisible`), read only, and each editor's own.
+Empty (nothing in a cell, a dash elsewhere, "Empty" for screen readers), a value, several values ("+N" past `maxVisible`; in a grid cell, with no `maxVisible`, the row measures its chips once per value and column width and shows as many whole chips as fit, only the last one truncating, through `ChipFitContext`, which GridCell provides), read only, and each editor's own.
 
 ## Keyboard
 

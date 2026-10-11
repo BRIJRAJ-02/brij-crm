@@ -318,6 +318,12 @@ export interface MenuItemProps {
   readonly href?: string;
   readonly onAction?: () => void;
   readonly isDisabled?: boolean;
+  /**
+   * What is in effect now, in a menu of actions (a column's current sort): a
+   * check at the end, named for screen readers. A menu of choices uses
+   * `selectionMode` instead.
+   */
+  readonly isChecked?: boolean;
 }
 
 interface ItemState {
@@ -340,7 +346,7 @@ function itemProps({ id, children, isDanger = false, href, onAction, isDisabled 
 }
 
 function ItemFace({ look, state }: { readonly look: Omit<MenuItemProps, 'id'>; readonly state: ItemState }) {
-  const { children, icon, leading, isLabelInLeading = false, description, meta, kbd } = look;
+  const { children, icon, leading, isLabelInLeading = false, description, meta, kbd, isChecked = false } = look;
   return (
     <>
       {state.selectionMode !== 'none' && (
@@ -363,6 +369,7 @@ function ItemFace({ look, state }: { readonly look: Omit<MenuItemProps, 'id'>; r
           <Kbd tone="soft">{kbd}</Kbd>
         </span>
       )}
+      {isChecked && <Icon name="check" size="sm" label={strings.current} />}
       {state.hasSubmenu && <Icon name="chevron-right" size="sm" tone="muted" />}
     </>
   );

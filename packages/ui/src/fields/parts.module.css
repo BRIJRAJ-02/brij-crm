@@ -14,9 +14,28 @@
     overflow: hidden;
   }
 
+  /* Chips keep their width; only the last one shown gives way, so a row never squashes every value. */
   .chip {
     display: inline-flex;
+    flex: none;
     min-inline-size: 0;
+  }
+
+  .chip[data-last] {
+    flex: 0 1 auto;
+  }
+
+  /* While a row measures what fits (one frame, before paint), nothing in it shows. */
+  .row[data-measuring] {
+    visibility: hidden;
+  }
+
+  .row[data-measuring] > .chip {
+    flex: none;
+  }
+
+  .more[data-more-probe] {
+    position: absolute;
   }
 
   .more {

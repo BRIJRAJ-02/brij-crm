@@ -8,7 +8,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
-import { fieldTypeOf } from '../../fields/registry.ts';
+import { fieldTypeOf, readOnlyReasonOf } from '../../fields/registry.ts';
 import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import type { CellPlace } from './GridCell.tsx';
 import type { GridColumn } from './grid-columns.ts';
@@ -179,10 +179,16 @@ export function GridHeaderCell({
         <Icon name="square-function" size="sm" tone="muted" label={strings.computedColumn} />
       )}
       {attribute.ai !== undefined && <Icon name="sparkles" size="sm" tone="ai" label={strings.aiColumn} />}
+      {/* Its cells never open: said once here, so the column doesn't look editable. */}
+      {readOnlyReasonOf(attribute) !== undefined && (
+        <Icon name="lock" size="xs" tone="muted" label={strings.readOnlyColumn} />
+      )}
       <MenuTrigger isOpen={isMenuOpen} onOpenChange={onMenuOpenChange}>
         <Button variant="ghost" icon="chevron-down" label={strings.columnOptions(attribute.name)} />
         <Menu<object>
           label={strings.columnOptions(attribute.name)}
+          // Its end on the chevron's, so the menu sits under this column, not over the next.
+          placement="bottom end"
           onAction={(key) => {
             onAction(key as MenuAction);
           }}
@@ -216,12 +222,12 @@ export function GridHeaderCell({
           </MenuItem>
           {(actions.onSort !== undefined || actions.onFilter !== undefined) && <MenuSeparator />}
           {actions.onSort !== undefined && (
-            <MenuItem id="ascending" icon="arrow-up-narrow-wide">
+            <MenuItem id="ascending" icon="arrow-up-narrow-wide" isChecked={sorted === 'ascending'}>
               {strings.sortAscending}
             </MenuItem>
           )}
           {actions.onSort !== undefined && (
-            <MenuItem id="descending" icon="arrow-down-wide-narrow">
+            <MenuItem id="descending" icon="arrow-down-wide-narrow" isChecked={sorted === 'descending'}>
               {strings.sortDescending}
             </MenuItem>
           )}

@@ -8,7 +8,8 @@
     inline-size: 100%;
     block-size: var(--space-8);
     border-radius: var(--radius-xs);
-    background: var(--surface-hover);
+    /* border, not surface-hover: surface-hover is 1.1:1 on surface and all but vanishes. */
+    background: var(--border);
     animation: pulse var(--duration-pulse) var(--ease-in-out) infinite;
   }
 

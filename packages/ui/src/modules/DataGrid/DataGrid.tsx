@@ -88,6 +88,11 @@ export interface DataGridProps<Row> {
   readonly getDisplay?: (row: Row, columnId: string) => unknown;
   /** The column that names a row; always first. */
   readonly rowHeader: string;
+  /**
+   * What a row with no name is called ("Unnamed person"): drawn muted in its
+   * row header, and read as its name. "Untitled" when absent.
+   */
+  readonly untitled?: string;
   readonly selection?: GridSelection;
   readonly onSelectionChange?: (selection: GridSelection) => void;
   /** Column order, widths, pins and hiding, on release or key press, never mid drag. */
@@ -108,6 +113,12 @@ export interface DataGridProps<Row> {
   readonly footer?: Readonly<Record<string, ReactNode>>;
   readonly status?: GridStatus;
   readonly onRetry?: () => void;
+  /**
+   * What went wrong, in the screen's words, under the error state's title:
+   * "Can't reach the CRM" only when the network failed, never for a server
+   * fault. A plain "try again" when absent.
+   */
+  readonly errorText?: string;
   readonly emptyState?: ReactNode;
   readonly onRowOpen?: (rowId: string) => void;
   /** Adds Sort to the column menu. */
@@ -216,6 +227,7 @@ export function DataGrid<Row>({
   getValue,
   getDisplay,
   rowHeader,
+  untitled = strings.untitled,
   selection,
   onSelectionChange,
   onColumnsChange,
@@ -226,6 +238,7 @@ export function DataGrid<Row>({
   footer,
   status = 'ready',
   onRetry,
+  errorText,
   emptyState,
   onRowOpen,
   onSort,
@@ -1157,12 +1170,13 @@ export function DataGrid<Row>({
   );
 
   const headerColumn = placed.find((each) => each.column.id === rowHeader)?.column;
-  const nameOf = (rowData: Row) => {
+  /** A row's name as text, or undefined when it has none. */
+  const nameOf = (rowData: Row): string | undefined => {
     const value = getValue(rowData, rowHeader);
-    if (headerColumn === undefined || value === null || value === undefined) return strings.untitled;
+    if (headerColumn === undefined || value === null || value === undefined) return undefined;
     const display = getDisplay?.(rowData, rowHeader);
     const text = fieldTypeOf(headerColumn.attribute.type).toText(value, textContext(headerColumn.attribute, display));
-    return text === '' ? strings.untitled : text;
+    return text.trim() === '' ? undefined : text;
   };
 
   // Rows recycle by place on screen: the nth row drawn is always the same
@@ -1184,7 +1198,10 @@ export function DataGrid<Row>({
     const rowData = rows.getItem(row);
     const id = rowData === undefined ? undefined : rows.getKey(rowData);
     const isSelected = id !== undefined && isRowSelected(currentSelection, id);
-    const name = rowData === undefined ? strings.loadingRow : nameOf(rowData);
+    const named = rowData === undefined ? undefined : nameOf(rowData);
+    const name = rowData === undefined ? strings.loadingRow : (named ?? untitled);
+    // A known row header with no name says so, muted, in place of an empty cell.
+    const isUnnamed = rowData !== undefined && named === undefined && isCellKnown?.(rowData, rowHeader) !== false;
     return (
       <div
         key={rowKeys[drawnAt]}
@@ -1203,9 +1220,17 @@ export function DataGrid<Row>({
           className={styles.check}
           data-cell={keyOf(row, 0)}
           data-focused={isFocusedAt(row, 0) || undefined}
+          data-active={(isWithin && isFocusedAt(row, 0)) || undefined}
           tabIndex={isFocusedAt(row, 0) ? 0 : -1}
-          onClick={(event) => {
+          // A press ticks the row as it lands: focusing a row gives it an element of its own, so the
+          // press and its release meet different elements and a click would never fire.
+          onPointerDown={(event) => {
+            if (event.button !== 0) return;
             toggleRowAt(row, event.shiftKey);
+          }}
+          // A click with no pointer behind it (a screen reader's, `detail` 0) ticks it too.
+          onClick={(event) => {
+            if (event.detail === 0) toggleRowAt(row, event.shiftKey);
           }}
         >
           {rowData !== undefined && <CheckboxMark label={strings.selectRow(name)} isSelected={isSelected} />}
@@ -1228,10 +1253,12 @@ export function DataGrid<Row>({
               display={display}
               isLoaded={isKnown}
               isRowHeader={each.column.id === rowHeader}
+              {...(each.column.id === rowHeader && isUnnamed ? { placeholder: untitled } : {})}
               {...(each.column.id === rowHeader && id !== undefined && rowNotes?.get(id) !== undefined
                 ? { note: rowNotes.get(id) }
                 : {})}
               isFocused={isFocusedAt(row, place.col)}
+              isActive={isWithin && isFocusedAt(row, place.col)}
               isInRange={isInRange(range, row, place.col)}
               tipId={`${gridId}-tip-${keyOf(row, place.col)}`}
               editorProps={editorProps?.(each.column) ?? NO_EDITOR_PROPS}
@@ -1330,7 +1357,7 @@ export function DataGrid<Row>({
         <div className={styles.state}>
           {status === 'error' && (
             <EmptyState tone="error" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })}>
-              {strings.failedText}
+              {errorText ?? strings.failedText}
             </EmptyState>
           )}
           {status === 'no-access' && (
@@ -1364,7 +1391,11 @@ export function DataGrid<Row>({
           onPointerDown={onPointerDown}
           onPointerOver={onPointerOver}
           onPointerLeave={onPointerLeave}
-          onScroll={tip === undefined ? undefined : closeTip}
+          onScroll={(event) => {
+            // The last pinned column casts its edge only while columns scroll under it (no render: one attribute).
+            event.currentTarget.toggleAttribute('data-scrolled-x', event.currentTarget.scrollLeft > 0);
+            if (tip !== undefined) closeTip();
+          }}
           onCopy={onCopy}
           onPaste={onPaste}
           style={{ '--grid-width': `${String(gridWidth)}px` }}
@@ -1372,12 +1403,21 @@ export function DataGrid<Row>({
           {header}
           {status === 'loading' ? (
             <div role="rowgroup" aria-hidden="true">
-              {showSkeleton &&
-                Array.from({ length: LOADING_ROWS }, (_, index) => (
-                  <div key={index} className={styles.skeletonRow}>
-                    <Skeleton width="full" />
-                  </div>
-                ))}
+              {/* Drawn from the first frame, at the columns' widths, so the rows arrive in place. The bars wait for the delay. */}
+              {Array.from({ length: LOADING_ROWS }, (_, index) => (
+                <div key={index} className={styles.skeletonRow}>
+                  <div className={styles.check} />
+                  {drawn.map((each) => (
+                    <div
+                      key={each.column.id}
+                      className={styles.skeletonCell}
+                      style={{ '--col-width': `${String(each.column.width)}px` }}
+                    >
+                      {showSkeleton && <Skeleton width={index % 3 === 0 ? 'medium' : 'long'} />}
+                    </div>
+                  ))}
+                </div>
+              ))}
             </div>
           ) : (
             count > 0 && (
@@ -1398,6 +1438,8 @@ export function DataGrid<Row>({
           <AnchoredTooltip
             key={tip.key}
             content={tip.text}
+            // Under the cell, so it never covers the column's header.
+            placement="bottom"
             triggerRef={tipAnchor}
             onOpenChange={(isOpen) => {
               if (!isOpen) closeTip();

@@ -4,4 +4,6 @@ export const strings = {
   /** A row still loading, for screen readers. */
   loadingItem: 'Loading',
   searchPlaceholder: (label: string) => `${label}…`,
+  /** The check on an item that is in effect now (`isChecked`), for screen readers. */
+  current: 'Current',
 } as const;
