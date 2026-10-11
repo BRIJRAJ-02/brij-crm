@@ -34,7 +34,11 @@ export const States: Story = {
       'aria-valuenow',
       '40',
     );
-    await userEvent.click(canvas.getByRole('button', { name: 'Remove Q4 deck.pdf' }));
+    const remove = canvas.getByRole('button', { name: 'Remove Q4 deck.pdf' });
+    await userEvent.click(remove);
     await expect(args.onRemove).toHaveBeenCalled();
+    // Leave the button at rest, so the screenshot never catches its hover or press mid transition.
+    await userEvent.unhover(remove);
+    remove.blur();
   },
 };
