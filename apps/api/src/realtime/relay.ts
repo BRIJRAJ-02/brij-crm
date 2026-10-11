@@ -61,8 +61,16 @@
 // only beside a poll it was making anyway, the relay deletes up to 1,000 rows
 // published more than `OUTBOX_RETENTION` (24 hours) ago, and again on the
 // next poll while it keeps finding a full batch. Dormant, it prunes nothing.
+//
+// Audiences (spec 0007, milestone 2, AC-85): each row is planned through spec
+// 0009's `filterEvent` for its workspace's audience (`workspaceEvent` in
+// `@crm/core`). The relay reads a workspace's audiences at its first turn and
+// keeps them until it goes dormant; a batch stops after a `members` or
+// `access` row, which drops them, so the rows after it are planned with them
+// read again. One channel per workspace until milestone 4: a workspace with
+// more than one audience fails its turn rather than share one copy.
 import { type ChangeEvent, workspaceChannel } from '@crm/contracts';
-import { liveEvent } from '@crm/core';
+import { workspaceEvent, type Audience } from '@crm/core';
 import type { OutboxReader, OutboxRow } from '@crm/db';
 import { errorFields } from '../log.ts';
 import type { PublishBatch } from './centrifugo.ts';
@@ -80,6 +88,12 @@ export interface RelayLog {
 export interface RelayDeps {
   /** Opens a fresh direct connection as an outbox reader; called again after one drops or the relay wakes. */
   readonly connect: () => Promise<OutboxReader>;
+  /**
+   * A workspace's audiences (spec 0009's `audiences`, read with the relay's
+   * system scope). Loaded once per workspace while the relay is awake, and
+   * again after a `members` or `access` row (AC-85).
+   */
+  readonly audiences: (workspaceId: string) => Promise<readonly Audience[]>;
   readonly publishBatch: PublishBatch;
   readonly log: RelayLog;
   /**
@@ -129,6 +143,8 @@ export interface Relay {
   mode(): RelayMode;
   /** The delivery numbers over the last 5 minutes, from memory (the worker's `/health`). */
   stats(): RelayStatsSnapshot;
+  /** How many workspaces' audiences the relay holds now (for tests and #12's measurements). */
+  cachedAudiences(): number;
   /** Stops after the publish in flight, closes the connection (letting go of the lock) and waits for the loop. */
   stop(): Promise<void>;
 }
@@ -143,16 +159,20 @@ export const DORMANT_AFTER_MS = 180_000;
 const PRUNE_BATCH = 1_000;
 
 /**
- * The event for one outbox row (spec 0007's `ChangeEvent`, by kind): ids
- * only, with its commit time `at`, `mutationId` and `coarse` only when set,
- * through spec 0009's `filterEvent` for the workspace's one audience (so a
- * job's or a private view's id never goes to everyone), and never the job
- * starter. A malformed row, or one that leaves nothing, goes out as the stub,
- * so the channel's `seq`s stay gap free (`liveEvent` in `@crm/core`).
+ * The event for one outbox row on `workspace:<id>` (spec 0007's
+ * `ChangeEvent`, by kind): ids only, with its commit time `at`, `mutationId`
+ * and `coarse` only when set, planned through spec 0009's `filterEvent` for
+ * the workspace's audience (so a job's or a private view's id goes only to an
+ * audience whose every member may read it), and never the job starter. A
+ * malformed row, or one that leaves nothing, goes out as the stub, so the
+ * channel's `seq`s stay gap free (`workspaceEvent` in `@crm/core`).
  */
-export function changeEvent(row: OutboxRow): ChangeEvent {
-  return liveEvent(row);
+export function changeEvent(row: OutboxRow, audiences: readonly Audience[]): ChangeEvent {
+  return workspaceEvent(row, audiences);
 }
+
+/** A row after which the workspace's audiences may differ: the cache drops them before the next row (AC-85). */
+const changesAudiences = (row: OutboxRow): boolean => row.kind === 'members' || row.kind === 'access';
 
 /** The least time between two warnings about one workspace's failed publishes. */
 const WARN_EVERY_MS = 60_000;
@@ -210,6 +230,19 @@ export function createRelay(deps: RelayDeps): Relay {
   // Workspaces waiting after failed publishes, and when each was last warned about.
   const retries = new Map<string, Retry>();
   const warnedAt = new Map<string, number>();
+  // Each workspace's audiences, for the awake period (AC-85): loaded at its first turn, dropped after a `members`
+  // or `access` row and when the relay goes dormant. A load that fails is forgotten, so the next turn asks again.
+  const audienceCache = new Map<string, Promise<readonly Audience[]>>();
+  function audiencesOf(workspaceId: string): Promise<readonly Audience[]> {
+    const held = audienceCache.get(workspaceId);
+    if (held !== undefined) return held;
+    const loading = deps.audiences(workspaceId);
+    audienceCache.set(workspaceId, loading);
+    loading.catch(() => {
+      if (audienceCache.get(workspaceId) === loading) audienceCache.delete(workspaceId);
+    });
+    return loading;
+  }
 
   /** Waits `ms` (forever when undefined), or until something calls `interrupt`. */
   function sleep(ms: number | undefined): Promise<void> {
@@ -283,7 +316,11 @@ export function createRelay(deps: RelayDeps): Relay {
     workspaceId: string,
     held: readonly OutboxRow[] | undefined,
   ): Promise<readonly OutboxRow[] | undefined> {
-    const rows = held ?? (await reader.pending(workspaceId, batch));
+    const read = held ?? (await reader.pending(workspaceId, batch));
+    // Up to and including the first row that may change who is in which audience: the rows after it are planned
+    // with the audiences loaded again (AC-85), from the next batch the mark reads.
+    const cut = read.findIndex(changesAudiences);
+    const rows = cut === -1 ? read : read.slice(0, cut + 1);
     if (rows.length === 0) {
       retries.delete(workspaceId);
       stats.pending(workspaceId, 0);
@@ -293,9 +330,16 @@ export function createRelay(deps: RelayDeps): Relay {
     const retrying = retries.has(workspaceId);
     if (!retrying) sawWork();
     const channel = workspaceChannel(workspaceId);
+    const audiences = await audiencesOf(workspaceId);
     const outcome = await deps.publishBatch(
-      rows.map((row) => ({ channel, data: changeEvent(row), idempotencyKey: `${workspaceId}:${String(row.seq)}` })),
+      rows.map((row) => ({
+        channel,
+        data: changeEvent(row, audiences),
+        idempotencyKey: `${workspaceId}:${String(row.seq)}`,
+      })),
     );
+    // The row that may change the audiences went out: the next one is planned with them read again.
+    if (cut !== -1 && outcome.published > cut) audienceCache.delete(workspaceId);
     const landed = rows[outcome.published - 1];
     if (outcome.error !== undefined) {
       failed(workspaceId, rows[outcome.published]?.seq, outcome.error, 'publish');
@@ -503,6 +547,8 @@ export function createRelay(deps: RelayDeps): Relay {
         );
       }
       if (dormant) {
+        // The awake period is over: the audiences are read again at the next wake (AC-85).
+        audienceCache.clear();
         log.info('Relay dormant: no database calls until a write wakes it', { quietMs: dormantAfterMs });
         current = 'dormant';
         continue;
@@ -534,6 +580,7 @@ export function createRelay(deps: RelayDeps): Relay {
     },
     mode: () => current,
     stats: () => stats.snapshot(),
+    cachedAudiences: () => audienceCache.size,
     async stop() {
       stopped = true;
       interrupt();

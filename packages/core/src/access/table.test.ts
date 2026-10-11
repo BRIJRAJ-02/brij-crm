@@ -54,7 +54,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // Change events as pure data (spec 0007): rows to events, the stub, the wire shape, catch up's collapse, and
   // the caller as an audience of one.
   'outboxEvent',
-  'liveEvent',
+  'planDelivery',
+  'workspaceEvent',
   'stubEvent',
   'wireEvent',
   'createCollapse',

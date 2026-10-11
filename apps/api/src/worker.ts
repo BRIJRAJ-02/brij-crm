@@ -2,6 +2,7 @@
 // relay (spec 0005) on its own direct Postgres connection, and later the
 // background jobs (#8). Its one HTTP port answers Railway's health check and
 // the api's poke, which wakes the relay when it is dormant (`realtime/wake.ts`).
+import { audiences, systemScope } from '@crm/core/system';
 import { assertAppConnection, createDatabase, createOutboxReader, openDirectConnection } from '@crm/db';
 import { loadEnv, WorkerEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
@@ -61,6 +62,8 @@ const relay =
     ? undefined
     : createRelay({
         connect: async () => createOutboxReader(await openDirect(false)),
+        // Spec 0009's audiences, read on the pool with the relay's system scope; only while the relay is awake.
+        audiences: (workspaceId) => audiences(systemScope(db, workspaceId)),
         publishBatch: createCentrifugoPublisher(env.centrifugo).publishBatch,
         log: reportingLog,
       });

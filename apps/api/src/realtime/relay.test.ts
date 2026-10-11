@@ -7,8 +7,10 @@
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { afterEach, describe, expect, inject, it } from 'vitest';
-import { createOutboxReader, openDirectConnection, type OutboxReader } from '@crm/db';
+import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
+import type { Audience } from '@crm/core';
+import { audiences, systemScope } from '@crm/core/system';
+import { createDatabase, createOutboxReader, openDirectConnection, type Database, type OutboxReader } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { createCentrifugoPublisher } from './centrifugo.ts';
 import { createRelay, type Relay, type RelayDeps } from './relay.ts';
@@ -99,6 +101,18 @@ async function fakeCentrifugo(options: FakeOptions = {}) {
 const started: Relay[] = [];
 const servers: { close(): Promise<void> }[] = [];
 
+// The pool the relay reads audiences on, as the worker does.
+let db: Database;
+beforeAll(() => {
+  db = createDatabase({ url: appUrl, applicationName: 'crm-relay-tests-pool' });
+});
+afterAll(async () => {
+  await db.close();
+});
+
+/** The worker's audience loader (spec 0009's `audiences` with the system scope). */
+const loadAudiences = (workspaceId: string): Promise<readonly Audience[]> => audiences(systemScope(db, workspaceId));
+
 afterEach(async () => {
   for (const relay of started.splice(0)) await relay.stop();
   for (const server of servers.splice(0)) await server.close();
@@ -123,6 +137,8 @@ interface RelayOptions extends Partial<
   readonly applicationName?: string;
   /** Sees each reader the relay opens, to count or time its calls. */
   readonly wrap?: (reader: OutboxReader) => OutboxReader;
+  /** The audience loader (the worker's by default). */
+  readonly audiences?: RelayDeps['audiences'];
 }
 
 function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
@@ -139,6 +155,7 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
       );
       return options.wrap?.(reader) ?? reader;
     },
+    audiences: options.audiences ?? loadAudiences,
     publishBatch: createCentrifugoPublisher({ apiUrl: centrifugoUrl, apiKey: API_KEY, timeoutMs: 2_000 }).publishBatch,
     log: {
       info: (message, fields = {}) => {
@@ -815,5 +832,136 @@ describe('the relay', () => {
     const snapshot = relay.stats();
     expect(snapshot.published).toBeGreaterThanOrEqual(3);
     expect(snapshot.lagMs?.max).toBeGreaterThanOrEqual(2_000);
+  });
+});
+
+describe('the relay plans each row for its workspace’s audience (spec 0007, milestone 2)', () => {
+  /** Adds an active member to a workspace, as the owner. */
+  async function member(workspaceId: string, role: 'owner' | 'admin' | 'member' = 'member'): Promise<string> {
+    const id = randomUUID();
+    await testQuery(
+      ownerUrl,
+      `insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type)
+       values ($1, $2, 'Ada', $3, $4, 'system', 'system')`,
+      [workspaceId, id, `${id}@example.com`, role],
+    );
+    return id;
+  }
+
+  /** A row of another kind, as a write outside the engine would store it. */
+  async function row(
+    workspaceId: string,
+    seq: number,
+    kind: 'members' | 'jobs',
+    itemIds: readonly string[],
+    actorMemberId?: string,
+  ): Promise<void> {
+    await testQuery(
+      ownerUrl,
+      `insert into outbox (workspace_id, seq, kind, item_ids, actor_member_id) values ($1, $2, $3, $4::uuid[], $5)`,
+      [workspaceId, seq, kind, `{${itemIds.join(',')}}`, actorMemberId ?? null],
+    );
+  }
+
+  /** The worker's loader, counting its loads per workspace. */
+  function counting() {
+    const loads = new Map<string, number>();
+    return {
+      loads: (workspaceId: string) => loads.get(workspaceId) ?? 0,
+      audiences: (workspaceId: string) => {
+        loads.set(workspaceId, (loads.get(workspaceId) ?? 0) + 1);
+        return loadAudiences(workspaceId);
+      },
+    };
+  }
+
+  it('loads a workspace’s audiences once while awake, and again after a members row, before the next row (AC-85)', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const workspaceId = await workspace();
+    const ada = await member(workspaceId);
+    await events(workspaceId, [1, 2]);
+    await row(workspaceId, 3, 'members', [ada]);
+    await events(workspaceId, [4, 5]);
+    const loader = counting();
+    const { relay } = relayTo(centrifugo.url, { audiences: loader.audiences });
+    await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1, 2, 3, 4, 5]);
+    // One load for rows 1 to 3, the batch ending at the members row; one more for rows 4 and 5.
+    expect(loader.loads(workspaceId)).toBe(2);
+    const sizes = centrifugo.calls
+      .filter((call) => call.channel === `workspace:${workspaceId}`)
+      .map((call) => call.size);
+    expect(sizes).toEqual([3, 2]);
+    expect(centrifugo.published.find((item) => item.data.seq === 3)?.data).toMatchObject({
+      kind: 'members',
+      memberIds: [ada],
+    });
+
+    // Later rows reuse what it holds: no load.
+    await events(workspaceId, [6]);
+    await testQuery(ownerUrl, `select pg_notify('crm_outbox', $1)`, [workspaceId]);
+    await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(loader.loads(workspaceId)).toBe(2);
+    expect(relay.cachedAudiences()).toBeGreaterThanOrEqual(1);
+  });
+
+  it('forgets the audiences when it goes dormant, and reads them again after the wake', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const workspaceId = await workspace();
+    await member(workspaceId);
+    await events(workspaceId, [1]);
+    const loader = counting();
+    const { relay } = relayTo(centrifugo.url, {
+      audiences: loader.audiences,
+      pollScheduleMs: [50, 100],
+      dormantAfterMs: 500,
+    });
+    await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1]);
+    await expect.poll(() => relay.mode(), WAIT).toBe('dormant');
+    expect(relay.cachedAudiences()).toBe(0);
+    await events(workspaceId, [2]);
+    relay.wake();
+    await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1, 2]);
+    expect(loader.loads(workspaceId)).toBe(2);
+  });
+
+  it('names a job only when every member of the audience may read it, and never its starter (AC-87)', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const alone = await workspace();
+    const ada = await member(alone);
+    const shared = await workspace();
+    const bea = await member(shared);
+    await member(shared);
+    const job = randomUUID();
+    await row(alone, 1, 'jobs', [job], ada);
+    await row(shared, 1, 'jobs', [job], bea);
+    relayTo(centrifugo.url);
+    await expect.poll(() => [...centrifugo.seqs(alone), ...centrifugo.seqs(shared)], WAIT).toEqual([1, 1]);
+    const sent = (workspaceId: string) =>
+      centrifugo.published.find((item) => item.channel === `workspace:${workspaceId}`)?.data;
+    // Ada started it and is the workspace's only member: she gets its id.
+    expect(sent(alone)).toMatchObject({ kind: 'jobs', jobIds: [job] });
+    // Bea started it, but another member who may not manage jobs shares the channel: coarse, no id.
+    expect(sent(shared)).toMatchObject({ kind: 'jobs', jobIds: [], coarse: true });
+    expect(JSON.stringify(centrifugo.published)).not.toContain(ada);
+    expect(JSON.stringify(centrifugo.published)).not.toContain(bea);
+  });
+
+  it('fails the turn of a workspace whose audiences fail to load, and publishes it once they load', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const workspaceId = await workspace();
+    await events(workspaceId, [1, 2]);
+    let failing = true;
+    const { warnings } = relayTo(centrifugo.url, {
+      audiences: (id) => (failing ? Promise.reject(new Error('The pool is down.')) : loadAudiences(id)),
+    });
+    await expect.poll(() => warnings.length, WAIT).toBeGreaterThan(0);
+    expect(centrifugo.seqs(workspaceId)).toEqual([]);
+    expect(await unpublished(workspaceId)).toEqual([1, 2]);
+    failing = false;
+    await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1, 2]);
   });
 });
