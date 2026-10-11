@@ -10,6 +10,7 @@ import type {
   CreatableAttributeType,
   CreateWorkspaceInput,
   contract,
+  JobView,
   Me,
   MemberSummary,
   MyAccess,
@@ -29,6 +30,7 @@ import {
   withRetryAfter,
 } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
+import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
 import { createLiveRouter } from './live/router.ts';
@@ -55,6 +57,8 @@ export type {
   CreatedWorkspace,
   CreateWorkspaceInput,
   InputIssue,
+  JobStatus,
+  JobView,
   Me,
   MemberSummary,
   MyAccess,
@@ -81,6 +85,7 @@ export {
   type SignInCode,
 } from './errors.ts';
 export type { FetchLike } from './fetch.ts';
+export type { JobsScope, JobsSnapshot, JobsView, TestJobSettings } from './jobs/store.ts';
 export { isEditableHere, toActorDisplays, toFieldAttribute, type FieldAttributeShape } from './fields.ts';
 export { createIdMinter, type IdSources } from './ids.ts';
 export type { LiveStatus } from './live/live.ts';
@@ -193,6 +198,12 @@ export interface DataLayerOptions {
    * 0006, AC-46): the app raises the notice in its own words, with "Use mine".
    */
   readonly onReplaced?: (replaced: ReplacedValue) => void;
+  /**
+   * A background job this browser started has ended while the app is open
+   * (spec 0008, AC-119): the app raises its toast ("Done", "Done, 6
+   * refused", "Failed", "Cancelled") with a link to the job.
+   */
+  readonly onJobFinished?: (workspace: string, job: JobView) => void;
   /** Loads live updates. `./live/live.ts` by default; tests pass one on a fake transport. */
   readonly loadLive?: () => Promise<{ readonly createLive: typeof createLive }>;
   /**
@@ -224,6 +235,7 @@ export function createDataLayer({
   realtimeUrl,
   onDefinitionsChange = () => undefined,
   onReplaced = () => undefined,
+  onJobFinished = () => undefined,
   loadLive = () => import('./live/live.ts'),
   report = () => undefined,
   random = Math.random,
@@ -291,6 +303,7 @@ export function createDataLayer({
     void records?.then((layer) => {
       layer.clear();
     });
+    jobs.clear();
   };
   const reset = () => {
     forget();
@@ -592,7 +605,11 @@ export function createDataLayer({
       });
     });
   });
+  router.on('jobs', (workspace, event) => {
+    jobs.changed(workspace, event);
+  });
   router.onResync((workspace) => {
+    jobs.resync(workspace);
     void records?.then((layer) => {
       layer.reload(workspace);
     });
@@ -638,6 +655,39 @@ export function createDataLayer({
       release?.();
     };
   };
+
+  // Background jobs (spec 0008): one store for the app, its views per workspace and scope.
+  const jobs = createJobsStore({
+    api: {
+      list: (input) =>
+        beforeRead(input.workspace).then(() =>
+          call((options) =>
+            api.jobs.list(
+              {
+                workspace: input.workspace,
+                scope: input.scope,
+                ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+              },
+              options,
+            ),
+          ),
+        ),
+      get: (input) => call((options) => api.jobs.get(input, options)),
+      cancel: (input) => call((options) => api.jobs.cancel(input, options)),
+      startTest: (input) => call((options) => api.jobs.startTest(input, options)),
+    },
+    mintId,
+    mutations,
+    notify,
+    watch,
+    memberOf: (workspace) =>
+      readAccess(workspace).then(
+        (mine) => mine.memberId,
+        () => undefined,
+      ),
+    spread,
+    onFinished: onJobFinished,
+  });
 
   const recordsApi: RecordsApi = {
     query: (input, signal) =>
@@ -932,6 +982,25 @@ export function createDataLayer({
           attributeTitle: await attributeTitle(workspace, outcome.objectId, outcome.first.attributeId),
         };
       },
+    },
+    jobs: {
+      /**
+       * A workspace's background jobs for `scope` (`mine`, or `all` for
+       * holders of `jobs.manage`), the same view for every screen that asks:
+       * unfinished first, then the newest, 50 at a time, live while a screen
+       * retains it (`useJobs`).
+       */
+      view: (workspace: string, scope: JobsScope): JobsView => jobs.view(workspace, scope),
+      /** A new job id: mint it once per form, and send the same one on a retry. */
+      newId: () => jobs.newId(),
+      /**
+       * Starts a test job (local and previews only; production answers
+       * NOT_FOUND). Its end raises `onJobFinished` while the app is open.
+       */
+      startTest: (workspace: string, id: string, settings: TestJobSettings): Promise<JobView> =>
+        jobs.startTest(workspace, id, settings),
+      /** Cancels a job at once on screen; a refusal puts it back with a toast. Answers whether it landed. */
+      cancel: (workspace: string, jobId: string): Promise<boolean> => jobs.cancel(workspace, jobId),
     },
     live: {
       /**

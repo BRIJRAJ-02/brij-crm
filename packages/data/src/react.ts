@@ -2,6 +2,7 @@
 // a view and the live status through it, so they never subscribe to the store
 // themselves.
 import { useEffect, useRef, useSyncExternalStore } from 'react';
+import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { LiveStatus } from './live/live.ts';
 import type { RecordsView, ViewReader, ViewState } from './records/layer.ts';
 
@@ -45,4 +46,13 @@ export interface LiveSource {
 /** Whether other people's changes are arriving (`live`, `paused` or `off`), re-rendering when it changes. */
 export function useLiveStatus(live: LiveSource): LiveStatus {
   return useSyncExternalStore(live.subscribe, live.status);
+}
+
+/**
+ * A view of a workspace's jobs (spec 0008), re-rendering when it changes.
+ * While the screen is mounted it holds the view, so its jobs update live.
+ */
+export function useJobs(view: JobsView): JobsSnapshot {
+  useEffect(() => view.retain(), [view]);
+  return useSyncExternalStore(view.subscribe, view.getSnapshot);
 }

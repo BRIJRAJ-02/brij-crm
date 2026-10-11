@@ -6,6 +6,7 @@ import {
   contract,
   type AttributeDefinition,
   type ChangeEvent,
+  type JobView,
   type Me,
   type MemberSummary,
   type MyAccess,
@@ -99,6 +100,11 @@ interface Behaviour {
   head: () => number;
   /** What `realtime.catchUp` answers from `after`. */
   catchUp: (after: number) => { head: number; reset: boolean; events: ChangeEvent[] };
+  /** Background jobs: the list's pages, one job, a cancel's answer, a test job's answer. */
+  jobsList: (cursor: string | undefined) => { jobs: JobView[]; nextCursor?: string };
+  jobGet: (jobId: string) => JobView;
+  jobCancel: (jobId: string) => JobView;
+  jobStartTest: (id: string) => JobView;
 }
 
 const unauthenticated = () => new ORPCError('UNAUTHENTICATED', { status: 401, message: 'Sign in to continue.' });
@@ -125,6 +131,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     get: () => [],
     head: () => 0,
     catchUp: () => ({ head: behaviour.head(), reset: false, events: [] }),
+    jobsList: () => ({ jobs: [] }),
+    jobGet: notServed,
+    jobCancel: notServed,
+    jobStartTest: notServed,
     ...overrides,
   };
   const calls: string[] = [];
@@ -175,6 +185,19 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         head: behaviour.head(),
       })),
       catchUp: os.realtime.catchUp.handler(({ input }) => behaviour.catchUp(input.after)),
+    },
+    jobs: {
+      list: os.jobs.list.handler(({ input }) => behaviour.jobsList(input.cursor)),
+      get: os.jobs.get.handler(({ input }) => behaviour.jobGet(input.jobId)),
+      cancel: os.jobs.cancel.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        return behaviour.jobCancel(input.jobId);
+      }),
+      confirm: os.jobs.confirm.handler(notServed),
+      startTest: os.jobs.startTest.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        return behaviour.jobStartTest(input.id);
+      }),
     },
   });
   const handler = new RPCHandler(router);
@@ -1219,5 +1242,77 @@ describe('the layer has no state at module level', () => {
     await layer(two).data.me.get();
     expect(count(one.calls, '/api/rpc/me/get')).toBe(1);
     expect(count(two.calls, '/api/rpc/me/get')).toBe(1);
+  });
+});
+
+describe('jobs', () => {
+  const job = (status: JobView['status'], done = 0): JobView => ({
+    id: '0199a6f2-0000-7000-8000-0000000000aa',
+    kind: 'dev.simulate',
+    label: 'Test job',
+    status,
+    total: 10,
+    done,
+    refused: 0,
+    skipped: 0,
+    startedBy: { type: 'member', memberId: ADA_MEMBER.id },
+    createdAt: '2026-10-12T09:00:00.000Z',
+    cancellable: status === 'queued' || status === 'running',
+  });
+
+  it('starts a test job with one id per try, and shows it in the workspace’s list', async () => {
+    const api = fakeApi({ jobStartTest: () => job('queued'), jobsList: () => ({ jobs: [] }) });
+    const { data } = layer(api);
+    const view = data.jobs.view('acme', 'mine');
+    await view.ready();
+    expect(view.getSnapshot()).toMatchObject({ status: 'ready', jobs: [] });
+    const id = data.jobs.newId();
+    await data.jobs.startTest('acme', id, { items: 10 });
+    await expect.poll(() => view.getSnapshot().jobs.map((each) => each.id)).toEqual([job('queued').id]);
+    expect(api.mutationIds).toHaveLength(1);
+  });
+
+  it('cancels at once on screen, and puts the job back with a toast when refused', async () => {
+    const running = job('running', 4);
+    const refused = fakeApi({
+      jobsList: () => ({ jobs: [running] }),
+      jobCancel: () => {
+        throw new ORPCError('JOB_FINISHED', { status: 409, message: 'That job has already finished.' });
+      },
+      jobGet: () => job('succeeded', 10),
+    });
+    const { data, notices } = layer(refused);
+    const view = data.jobs.view('acme', 'all');
+    await view.ready();
+    const cancelling = data.jobs.cancel('acme', running.id);
+    // Shown at once, before the answer.
+    expect(view.getSnapshot().jobs[0]?.status).toBe('cancelling');
+    expect(await cancelling).toBe(false);
+    expect(notices.at(-1)).toEqual({ tone: 'danger', message: 'That job has already finished.' });
+    // Read again: it had finished meanwhile.
+    await expect.poll(() => view.getSnapshot().jobs[0]?.status).toBe('succeeded');
+
+    const accepted = fakeApi({ jobsList: () => ({ jobs: [running] }), jobCancel: () => job('cancelling', 4) });
+    const second = layer(accepted).data;
+    const other = second.jobs.view('acme', 'all');
+    await other.ready();
+    expect(await second.jobs.cancel('acme', running.id)).toBe(true);
+    expect(other.getSnapshot().jobs[0]?.status).toBe('cancelling');
+  });
+
+  it('says why the first page failed, and reads it again on reload', async () => {
+    let fail = true;
+    const api = fakeApi({
+      jobsList: () => {
+        if (fail) throw new ORPCError('FORBIDDEN', { status: 403, message: 'Only owners and admins.' });
+        return { jobs: [job('queued')] };
+      },
+    });
+    const view = layer(api).data.jobs.view('acme', 'all');
+    await view.ready();
+    expect(view.getSnapshot()).toMatchObject({ status: 'error', error: { code: 'FORBIDDEN' } });
+    fail = false;
+    await view.reload();
+    expect(view.getSnapshot()).toMatchObject({ status: 'ready', jobs: [{ status: 'queued' }] });
   });
 });
