@@ -58,10 +58,12 @@ export function listedAttributes(
   const opening = openingOf(object);
   const own = attributes.filter((attribute) => !attribute.isSystem).sort((a, b) => a.position - b.position);
   const rank = (attribute: AttributeDefinition) => {
+    // The record's name always leads: it is the row header, pinned first.
+    if (attribute.id === object?.primaryAttributeId) return -1;
     const at = opening?.first.indexOf(attribute.apiSlug) ?? -1;
     return at === -1 ? Number.POSITIVE_INFINITY : at;
   };
-  // A stable sort: the opening columns lead in their order, the rest keep their positions.
+  // A stable sort: the name, then the opening columns in their order; the rest keep their positions.
   const ordered = [...own].sort((a, b) => rank(a) - rank(b));
   const createdAt = createdAtOf(attributes);
   const all = createdAt === undefined ? ordered : [...ordered, createdAt];
