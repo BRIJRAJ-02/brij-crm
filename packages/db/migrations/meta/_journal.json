@@ -183,6 +183,13 @@
       "when": 1791751579833,
       "tag": "0025_outbox_lifecycle",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1791753021211,
+      "tag": "0026_people_name_required",
+      "breakpoints": true
     }
   ]
 }

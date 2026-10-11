@@ -57,7 +57,8 @@ export const STANDARD_OBJECTS: readonly StandardObject[] = [
       pluralName: 'People',
       icon: 'user',
       hue: 'blue',
-      primaryAttribute: { apiSlug: 'name', title: 'Name', type: 'personal_name' },
+      // A person is named (owner decision, 8 Oct 2026): clearing the name is refused, as for a deal's.
+      primaryAttribute: { apiSlug: 'name', title: 'Name', type: 'personal_name', isRequired: true },
     },
     attributes: [
       { apiSlug: 'email_addresses', title: 'Email addresses', type: 'email', isMulti: true, isUnique: true },
