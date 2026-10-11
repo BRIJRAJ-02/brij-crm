@@ -20,6 +20,13 @@ export const EDGE_HEADER = 'x-crm-edge';
  */
 export const ORIGIN_HEADER = 'x-crm-origin';
 
+/**
+ * Headers that would continue a caller's own trace in the API's monitoring
+ * (spec 0010): its sampling decision and trace id. The browser sends none, so
+ * any that arrive are dropped, never passed on.
+ */
+export const TRACE_HEADERS: readonly string[] = ['sentry-trace', 'baggage', 'traceparent'];
+
 /** What an edge secret must look like: 32 or more printable ASCII characters, no spaces. */
 const EDGE_SECRET_FORMAT = /^[\x21-\x7e]{32,}$/;
 
@@ -71,6 +78,7 @@ export default function middleware(request: Request): Response {
   const appOrigin = request.headers.get('origin');
   if (vouching && appOrigin !== null) headers.set(ORIGIN_HEADER, appOrigin);
   else headers.delete(ORIGIN_HEADER);
+  for (const header of TRACE_HEADERS) headers.delete(header);
 
   return rewrite(new URL(url.pathname + url.search, origin), { request: { headers } });
 }

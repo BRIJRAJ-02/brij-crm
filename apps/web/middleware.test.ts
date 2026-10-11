@@ -2,7 +2,7 @@
 // the API is told about the caller. Vercel reads the rewrite and the upstream
 // request headers from the response's x-middleware-* headers.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import middleware, { config, EDGE_HEADER, ORIGIN_HEADER } from './middleware.ts';
+import middleware, { config, EDGE_HEADER, ORIGIN_HEADER, TRACE_HEADERS } from './middleware.ts';
 
 const API = 'https://api-production.up.railway.app';
 
@@ -45,6 +45,21 @@ describe('api proxy middleware', () => {
     vi.stubEnv('API_ORIGIN_INTERNAL', API);
     const response = call('/api/health', { 'x-forwarded-for': '6.6.6.6', 'x-real-ip': '203.0.113.7' });
     expect(upstreamHeader(response, 'x-forwarded-for')).toBe('203.0.113.7');
+  });
+
+  it('drops a caller’s trace headers, so no caller picks the API’s sampling or trace id', () => {
+    vi.stubEnv('API_ORIGIN_INTERNAL', API);
+    const response = call('/api/rpc/records/query', {
+      'sentry-trace': '0123456789abcdef0123456789abcdef-0123456789abcdef-1',
+      baggage: 'sentry-sampled=true,sentry-org_id=1',
+      traceparent: '00-0123456789abcdef0123456789abcdef-0123456789abcdef-01',
+    });
+    expect(TRACE_HEADERS).toEqual(['sentry-trace', 'baggage', 'traceparent']);
+    const kept = response.headers.get('x-middleware-override-headers')?.split(',') ?? [];
+    for (const header of TRACE_HEADERS) {
+      expect(upstreamHeader(response, header)).toBeNull();
+      expect(kept).not.toContain(header);
+    }
   });
 
   it('drops x-forwarded-for when Vercel gave no client IP, rather than passing the client’s', () => {
