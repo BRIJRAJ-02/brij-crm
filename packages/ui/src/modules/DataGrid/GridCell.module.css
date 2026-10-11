@@ -91,6 +91,13 @@
     user-select: text;
   }
 
+  /* The row's picture before its name on the row header: decorative, the name says who. */
+  .avatar {
+    display: inline-flex;
+    flex: none;
+    margin-inline-end: var(--space-6);
+  }
+
   /* A row header with no name: what the row is called, in the placeholder's colour. */
   .placeholder {
     overflow: hidden;

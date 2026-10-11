@@ -17,7 +17,7 @@ Screens never import it; they render values through `AttributeDisplay` and `Attr
 
 ## States
 
-Empty (nothing in a cell, a dash elsewhere, "Empty" for screen readers), a value, and in the editor its own states.
+Empty (nothing in a cell, a dash elsewhere, "Empty" for screen readers), a value, and in the editor its own states. A linked record whose display has no name yet (the data layer reads the names of linked records by id) draws a skeleton chip, read as "Loading"; one with no display at all says "Unknown".
 
 ## Keyboard
 

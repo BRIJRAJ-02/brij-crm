@@ -21,6 +21,8 @@ export const strings = {
   addAnotherPlaceholder: 'Add another…',
   me: 'Me',
   unknown: 'Unknown',
+  /** A linked record whose name the data layer is still reading, for screen readers. */
+  loadingName: 'Loading',
   /** Each attribute type's name, as a type picker lists it ("Add attribute"). */
   types: {
     text: 'Text',

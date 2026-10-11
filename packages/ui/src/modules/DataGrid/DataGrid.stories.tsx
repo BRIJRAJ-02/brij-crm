@@ -32,6 +32,10 @@ interface SampleGridProps {
   /** Columns not read yet for these rows (a column just shown): their cells draw skeletons. */
   readonly unknown?: { readonly rows: readonly string[]; readonly column: string };
   readonly sort?: { readonly columnId: string; readonly direction: 'ascending' | 'descending' };
+  /** Each row header shows the row's picture (initials here). */
+  readonly withAvatars?: boolean;
+  /** Rows with no name: their row header says `untitled`, muted. */
+  readonly unnamed?: readonly string[];
 }
 
 /** A grid over sample companies that keeps its own edits, columns and selection, as a screen would. */
@@ -48,8 +52,14 @@ function SampleGrid({
   rowNotes,
   unknown,
   sort,
+  withAvatars = false,
+  unnamed = [],
 }: SampleGridProps) {
-  const [data, setData] = useState(() => sampleRows(count));
+  const [data, setData] = useState(() =>
+    sampleRows(count).map((row) =>
+      unnamed.includes(row.id) ? { ...row, values: { ...row.values, name: null } } : row,
+    ),
+  );
   const [layout, setLayout] = useState(() => ({ columns: sampleColumns(columnCount), pinnedCount: 1 }));
   const [selection, setSelection] = useState<GridSelection>(() => withRows(noRows(), selected, true));
   const apply = (changes: readonly CellChange[]) => {
@@ -117,6 +127,7 @@ function SampleGrid({
         {...(confirmsPaste === undefined ? {} : { confirmsPaste })}
         {...(rowNotes === undefined ? {} : { rowNotes })}
         {...(sort === undefined ? {} : { sort, onSort: () => undefined })}
+        {...(withAvatars ? { rowAvatar: () => undefined, untitled: 'Unnamed company' } : {})}
         {...(unknown === undefined
           ? {}
           : {
@@ -442,6 +453,15 @@ export const Error: Story = {
 /** The viewer can't see this view. */
 export const NoAccess: Story = {
   args: { status: 'no-access' },
+};
+
+/** Row headers with each row's picture before its name, and a row with no name, which says so, muted. */
+export const RowPicturesAndUnnamed: Story = {
+  args: { withAvatars: true, unnamed: ['company-1'] },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Unnamed company')).toBeVisible();
+    await expect(canvas.getByRole('row', { name: /Unnamed company/ })).toBeInTheDocument();
+  },
 };
 
 /** Some rows selected, a refused value from the data layer, and a read only column. */

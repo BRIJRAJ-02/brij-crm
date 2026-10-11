@@ -33,6 +33,7 @@ import { DataGrid } from '@crm/ui/grid';
 - Values leave already valid: `onCellChange` and `onCellsChange` receive values their type's schema accepts. A refusal from the data layer comes back through `cellErrors` and shows as the cell's error.
 - Columns are `{ id, attribute, width, isHidden? }`. Widths hold inside `size-column-min` and `size-column-max`; start a new column at `columnWidthFor(attribute)`, its type's tier as pixels. The first `pinnedCount` columns are pinned, and `rowHeader` is always first. A computed column shows the function mark in its header, an AI one the sparkle.
 - `untitled` ("Unnamed person") is what a row with no name is called: drawn muted in its row header in place of the empty value, and read as its name. "Untitled" when absent.
+- `rowAvatar(row)` gives the row header the row's picture, an Avatar before its name (the image address, or undefined for initials): People's photo sits in the Name cell, never in a column of its own.
 - `errorText` is the error state's sentence, in the screen's words: "Can't reach the CRM" only when the network failed, never for a server fault. A plain "try again" when absent.
 - `footer` draws calculations the screen worked out; the grid never computes over loaded rows.
 - `editorProps(column)` gives a column's reference or file editor its search, uploads and the signed in member.

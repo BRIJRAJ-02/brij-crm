@@ -4,6 +4,7 @@
 // refused, which the grid's one shared tooltip shows.
 import { useRef, type MouseEvent, type ReactNode } from 'react';
 import { FocusScope } from 'react-aria';
+import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { SharedTooltipContext } from '../../atoms/TruncatedText/TruncatedText.tsx';
@@ -89,6 +90,8 @@ export interface GridCellProps {
   readonly note?: 'new' | 'no-longer-matches';
   /** On a row header with no name: what to call it ("Unnamed person"), drawn muted in place of the empty value. */
   readonly placeholder?: string;
+  /** On the row header: the row's picture, before its name (initials from `name` while `src` is absent). */
+  readonly avatar?: { readonly name: string; readonly id: string; readonly src: string | undefined };
 }
 
 /**
@@ -121,6 +124,7 @@ export function GridCell({
   onToggle,
   note,
   placeholder,
+  avatar,
 }: GridCellProps) {
   const ref = useRef<HTMLDivElement>(null);
   const definition = fieldTypeOf(attribute.type);
@@ -201,6 +205,17 @@ export function GridCell({
       {...(action === undefined ? {} : { onClick })}
       style={{ '--col-width': `${String(place.width)}px`, '--col-offset': `${String(place.stickyOffset ?? 0)}px` }}
     >
+      {avatar !== undefined && isLoaded && mode !== 'cell' && (
+        <span className={styles.avatar}>
+          <Avatar
+            name={avatar.name}
+            id={avatar.id}
+            size="xs"
+            isDecorative
+            {...(avatar.src === undefined ? {} : { src: avatar.src })}
+          />
+        </span>
+      )}
       {content}
       {note !== undefined && isLoaded && mode === undefined && (
         <span className={styles.note}>

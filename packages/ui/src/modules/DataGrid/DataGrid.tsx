@@ -93,6 +93,12 @@ export interface DataGridProps<Row> {
    * row header, and read as its name. "Untitled" when absent.
    */
   readonly untitled?: string;
+  /**
+   * The row's picture, drawn as an Avatar before the name in the row header
+   * (a person's photo, initials while there is none): its image address, or
+   * undefined for initials. No picture at all when absent.
+   */
+  readonly rowAvatar?: (row: Row) => string | undefined;
   readonly selection?: GridSelection;
   readonly onSelectionChange?: (selection: GridSelection) => void;
   /** Column order, widths, pins and hiding, on release or key press, never mid drag. */
@@ -228,6 +234,7 @@ export function DataGrid<Row>({
   getDisplay,
   rowHeader,
   untitled = strings.untitled,
+  rowAvatar,
   selection,
   onSelectionChange,
   onColumnsChange,
@@ -1254,6 +1261,9 @@ export function DataGrid<Row>({
               isLoaded={isKnown}
               isRowHeader={each.column.id === rowHeader}
               {...(each.column.id === rowHeader && isUnnamed ? { placeholder: untitled } : {})}
+              {...(each.column.id === rowHeader && rowAvatar !== undefined && rowData !== undefined
+                ? { avatar: { name: named ?? '', id: id ?? '', src: rowAvatar(rowData) } }
+                : {})}
               {...(each.column.id === rowHeader && id !== undefined && rowNotes?.get(id) !== undefined
                 ? { note: rowNotes.get(id) }
                 : {})}
