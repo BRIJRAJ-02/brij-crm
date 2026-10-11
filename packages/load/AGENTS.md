@@ -39,7 +39,8 @@ pnpm --filter @crm/load test
 
 ## Gotchas
 
-- Imports from `@crm/core/load-local`, `load-files`, `load-stack` and `load-reset` are allowed here only (`server({ loadHarness: true })`); minting (`@crm/core/load-sessions`) stays refused.
+- Imports from `@crm/core/load-local`, `load-files`, `load-stack` and `load-slots`, and the server statistics in `@crm/db/stats`, are allowed here only (`server({ loadHarness: true })`); minting (`@crm/core/load-sessions`) and the reset's erase (`@crm/core/load-reset`) stay refused.
+- 429s count as unexpected (AC-203) though the browser's data layer retries them; verify.md asks the owner which it should be.
 - Windows read the columns on screen (`columnsOnScreen`), as the People table does; an open reads the whole record.
 - `LOAD_TEST_BLOCK_LOOP_MS` is a test flag that stalls every harness thread, to prove such a run is invalid. Never set it otherwise.
 
