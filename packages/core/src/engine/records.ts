@@ -1,7 +1,7 @@
 // Creating records, setting their values and reading them back (spec 0004).
 // Every write goes through runWrite and the value write protocol; every read
 // runs inside withWorkspace().
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import {
   AttributeDefault,
@@ -741,6 +741,12 @@ export interface ReadOptions {
    * isn't checked again. Values and far records are still cut to the policy.
    */
   readonly visibleAlready?: true;
+  /**
+   * Read records in the trash instead of live ones (spec 0017, a trashed
+   * record's read only page). Their links are hidden until a restore, so
+   * their reference cells read empty, with no version and no total.
+   */
+  readonly trashed?: true;
 }
 
 /**
@@ -784,10 +790,13 @@ export async function readRecords(
   if (ids.length === 0) return [];
   const input = { ids, attributeIds: options.attributeIds };
   const open = isOpen(access);
+  const trashed = options.trashed === true;
   const found = await tx
     .select()
     .from(records)
-    .where(and(inArray(records.id, [...input.ids]), isNull(records.deletedAt)));
+    .where(
+      and(inArray(records.id, [...input.ids]), trashed ? isNotNull(records.deletedAt) : isNull(records.deletedAt)),
+    );
   // Hidden is absent (spec 0009, AC-140, AC-143): records on a hidden object, and outside a record rule, are left out.
   const seen =
     open || options.visibleAlready === true
@@ -818,11 +827,15 @@ export async function readRecords(
   );
   // The attributes a read returns: those asked for and the primary (spec 0006, AC-55), or every one.
   const returned = wanted === undefined ? undefined : new Set(wanted);
-  const references = [...attributesByObject.values()].flatMap((byId) =>
-    [...byId.values()].filter(
-      (attribute) => attribute.type === 'record_reference' && (returned === undefined || returned.has(attribute.id)),
-    ),
-  );
+  // A record in the trash reads no links: they come back with a restore.
+  const references = trashed
+    ? []
+    : [...attributesByObject.values()].flatMap((byId) =>
+        [...byId.values()].filter(
+          (attribute) =>
+            attribute.type === 'record_reference' && (returned === undefined || returned.has(attribute.id)),
+        ),
+      );
   const links = await linkValues(
     tx,
     access,

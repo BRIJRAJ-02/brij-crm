@@ -234,6 +234,10 @@ async function dataWorld() {
       values: { [attribute('name')]: { firstName: 'Pilot' }, [attribute('job_title')]: 'Pilot' },
     })
   ).recordId;
+  const trashedId = (
+    await core.createRecord(owner, { objectId: people, values: { [attribute('name')]: { firstName: 'Gone' } } })
+  ).recordId;
+  await core.deleteRecord(owner, { recordId: trashedId });
   const { listId } = await core.defineList(owner, { objectId: people, apiSlug: 'crew', name: 'Crew' });
   const { entryId } = await core.addEntry(owner, { listId, recordId });
   const member = memberScope.actor;
@@ -265,6 +269,7 @@ async function dataWorld() {
     jobTitle: attribute('job_title'),
     stage,
     recordId,
+    trashedId,
     listId,
     entryId,
   };
@@ -341,6 +346,8 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   ),
   getEntries: empty((scope, world) => core.getEntries(scope, { ids: [world.entryId] })),
   getRecordEntries: empty((scope, world) => core.getRecordEntries(scope, { recordId: world.recordId })),
+  getActivity: refused('NOT_FOUND', (scope, world) => core.getActivity(scope, { recordId: world.recordId })),
+  readTrashedRecord: refused('NOT_FOUND', (scope, world) => core.readTrashedRecord(scope, world.trashedId)),
   // Writes, by a principal who may only read People and its list: 403.
   createRecord: refused('FORBIDDEN', (scope, world) => core.createRecord(scope, { objectId: world.people })),
   addRecord: refused('FORBIDDEN', (scope, world) =>

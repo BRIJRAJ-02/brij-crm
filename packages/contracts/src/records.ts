@@ -3,6 +3,7 @@
 // through), creating one, and setting its values.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
+import { RecordActivity, RecordActivityInput } from './activity.ts';
 import { ApiRefusal } from './errors.ts';
 import { ActorReferenceValue, Timestamp } from './values/attribute-values.ts';
 import { FilterGroup } from './values/filters.ts';
@@ -262,6 +263,26 @@ export const BatchResults = z.object({
 /** A batch's outcomes. */
 export type BatchResults = z.infer<typeof BatchResults>;
 
+/** A record in the trash, by id (spec 0017). */
+export const GetTrashedInput = WorkspaceScoped.extend({
+  recordId: z.uuid(),
+});
+/** A record in the trash, by id. */
+export type GetTrashedInput = z.infer<typeof GetTrashedInput>;
+
+/**
+ * A record in the trash the reader may see (spec 0017): its values as a read
+ * gives them, its links hidden until it is restored (its reference cells are
+ * empty), and when and by whom it was deleted.
+ */
+export const TrashedRecord = z.object({
+  record: RecordView,
+  deletedAt: Timestamp,
+  deletedBy: ActorReferenceValue,
+});
+/** A record in the trash. */
+export type TrashedRecord = z.infer<typeof TrashedRecord>;
+
 /**
  * An object's records. `query` refuses a bad cursor or filter with
  * `FILTER_INVALID` and a statement past its time with `QUERY_CANCELLED`;
@@ -282,6 +303,13 @@ export type BatchResults = z.infer<typeof BatchResults>;
  * `ifVersionId` the cell has moved on from is 409 `VERSION_CHANGED`.
  * `setValuesBatch` answers 200 with each record's outcome; only a malformed
  * or oversized batch is refused whole. Every write answers `echoes`.
+ *
+ * Spec 0017: `activity` answers a page of a record's timeline, newest first,
+ * for a live record or one in the trash the reader may see; a missing or
+ * hidden record is 404 `NOT_FOUND`, the same answer for both, and a cursor
+ * that doesn't decode is 400 `INPUT_INVALID` on `cursor` (start again from
+ * the top). `getTrashed` answers a record in the trash; a live, missing or
+ * hidden one is `NOT_FOUND`.
  */
 export const recordsContract = {
   query: oc.input(QueryRecordsInput).output(RecordPage),
@@ -290,4 +318,6 @@ export const recordsContract = {
   create: oc.input(CreateRecordInput).output(WrittenRecord),
   setValues: oc.input(SetValuesInput).output(WrittenRecord),
   setValuesBatch: oc.input(SetValuesBatchInput).output(BatchResults),
+  activity: oc.input(RecordActivityInput).output(RecordActivity),
+  getTrashed: oc.input(GetTrashedInput).output(TrashedRecord),
 };

@@ -2,15 +2,16 @@
 // rows, creating a record with a browser minted id (and answering a retry of
 // it), and setting values, each write answering the fresh record. Every read
 // and write goes through the scope the access door made.
-import { eq } from 'drizzle-orm';
-import type { BatchRecordResult, RecordPage, RecordView } from '@crm/contracts';
+import { and, eq, isNotNull } from 'drizzle-orm';
+import type { BatchRecordResult, RecordPage, RecordView, TrashedRecord } from '@crm/contracts';
 import type { FilterGroup, SortRules } from '@crm/contracts/values';
 import { schema } from '@crm/db';
-import { canonicalId, isUuidV7, uuidV7Time } from '../engine/ids.ts';
+import { canonicalId, checkId, isUuidV7, uuidV7Time } from '../engine/ids.ts';
 import { queryPage } from '../engine/query/page.ts';
 import {
   createRecord,
   getRecords,
+  readRecords,
   setRecordValues,
   setRecordValuesBatch,
   type AttributeResult,
@@ -21,6 +22,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import type { AttributeDef } from '../engine/values.ts';
 import type { AfterWrite } from '../engine/write.ts';
 import { inWorkspace } from '../access/run.ts';
+import { checkObject, UNKNOWN_RECORD } from '../access/visibility.ts';
 
 const { records } = schema;
 
@@ -81,6 +83,40 @@ export async function readRecordsById(
   attributeIds?: readonly string[],
 ): Promise<RecordView[]> {
   return [...(await getRecords(scope, { ids, ...(attributeIds === undefined ? {} : { attributeIds }) }))];
+}
+
+/**
+ * A record in the trash the principal may see (spec 0017): its values as a
+ * read gives them, its links hidden until a restore, and when and by whom it
+ * was deleted. A live, missing or hidden record is `NOT_FOUND`, the same
+ * answer for each: a record the principal couldn't see live is absent from
+ * the trash too.
+ */
+export async function readTrashedRecord(scope: EngineScope, recordId: string): Promise<TrashedRecord> {
+  const id = checkId(recordId, UNKNOWN_RECORD);
+  return inWorkspace(scope, async (tx) => {
+    const [row] = await tx
+      .select({
+        objectId: records.objectId,
+        deletedAt: records.deletedAt,
+        deletedByType: records.deletedByType,
+        deletedById: records.deletedById,
+      })
+      .from(records)
+      .where(and(eq(records.id, id), isNotNull(records.deletedAt)));
+    if (row?.deletedAt === null || row?.deletedAt === undefined || row.deletedByType === null) {
+      throw refuse('NOT_FOUND', UNKNOWN_RECORD);
+    }
+    // A hidden object answers as a missing record; `readRecords` applies the record rule and the field rules.
+    await checkObject(tx, scope.access, row.objectId, 'read', UNKNOWN_RECORD);
+    const [record] = await readRecords(tx, scope.access, [id], { trashed: true });
+    if (record === undefined) throw refuse('NOT_FOUND', UNKNOWN_RECORD);
+    return {
+      record,
+      deletedAt: row.deletedAt.toISOString(),
+      deletedBy: { type: row.deletedByType, id: row.deletedById },
+    };
+  });
 }
 
 /**

@@ -72,6 +72,9 @@ export const ACCESS_TABLE = {
   getTimeInStages: { data: 'read' },
   getEntries: { data: 'read' },
   getRecordEntries: { data: 'read' },
+  // The record page (spec 0017): its timeline and a record in the trash.
+  getActivity: { data: 'read' },
+  readTrashedRecord: { data: 'read' },
   // Record and entry writes.
   createRecord: { data: 'write' },
   addRecord: { data: 'write' },

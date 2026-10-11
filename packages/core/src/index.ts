@@ -66,6 +66,7 @@ export {
   editRecords,
   queryRecords,
   readRecordsById,
+  readTrashedRecord,
   type AddRecordInput,
   type EditRecordInput,
   type RecordWindow,

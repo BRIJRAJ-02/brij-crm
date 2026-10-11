@@ -11,6 +11,7 @@ import { usageContract } from './usage.ts';
 import { workspacesContract } from './workspaces.ts';
 
 export * from './access.ts';
+export * from './activity.ts';
 export * from './attributes.ts';
 export * from './change-event.ts';
 export * from './errors.ts';

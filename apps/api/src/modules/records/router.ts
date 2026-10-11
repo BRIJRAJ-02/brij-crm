@@ -1,4 +1,13 @@
-import { addRecord, countMatches, editRecord, editRecords, queryRecords, readRecordsById } from '@crm/core';
+import {
+  addRecord,
+  countMatches,
+  editRecord,
+  editRecords,
+  getActivity,
+  queryRecords,
+  readRecordsById,
+  readTrashedRecord,
+} from '@crm/core';
 import { withInputFields } from '../../errors.ts';
 import { commitCounted } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
@@ -42,6 +51,20 @@ export const recordsRouter = member.records.router({
   ),
   get: member.records.get.handler(({ context, input }) =>
     readRecordsById(context.scope, input.ids, input.attributeIds),
+  ),
+  // The record page (spec 0017): a page of its timeline, and a record in the trash, which opens read only.
+  activity: member.records.activity.handler(async ({ context, input }) => {
+    const page = await getActivity(context.scope, {
+      recordId: input.recordId,
+      ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+      ...(input.limit === undefined ? {} : { limit: input.limit }),
+    });
+    return page.nextCursor === undefined
+      ? { entries: [...page.entries] }
+      : { entries: [...page.entries], nextCursor: page.nextCursor };
+  }),
+  getTrashed: member.records.getTrashed.handler(({ context, input }) =>
+    readTrashedRecord(context.scope, input.recordId),
   ),
   // Every write answers `echoes` (spec 0006): how many change events carry its mutation id, so its tab skips them.
   create: member.records.create.handler(async ({ context, input }) => {

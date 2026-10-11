@@ -653,6 +653,51 @@ describe('records.get', () => {
   });
 });
 
+describe('records.activity and records.getTrashed (spec 0017)', () => {
+  it('answers a new record’s creation entry, the same for a trashed one, and its trashed read', async () => {
+    const m = await memberWithWorkspace(app);
+    const ada = await createPerson(m, 'Ada');
+    const page = await m.client.records.activity({ workspace: m.slug, recordId: ada.id });
+    expect(page.nextCursor).toBeUndefined();
+    expect(page.entries).toEqual([
+      expect.objectContaining({ id: `created:${ada.id}`, kind: 'created', actor: ada.createdBy, at: ada.createdAt }),
+    ]);
+    expect(await refusal(() => m.client.records.getTrashed({ workspace: m.slug, recordId: ada.id }))).toMatchObject({
+      code: 'NOT_FOUND',
+      status: 404,
+    });
+    await trash(m, ada.id);
+    expect((await m.client.records.activity({ workspace: m.slug, recordId: ada.id })).entries).toHaveLength(1);
+    const trashed = await m.client.records.getTrashed({ workspace: m.slug, recordId: ada.id });
+    expect(trashed.record.display.name).toBe('Ada Lovelace');
+    expect(trashed.deletedBy).toEqual(ada.createdBy);
+  });
+
+  it('answers a missing record and another workspace’s the same 404, and a tampered cursor 400 on cursor', async () => {
+    const a = await memberWithWorkspace(app);
+    const b = await memberWithWorkspace(app);
+    const theirs = await createPerson(a, 'Ada');
+    const missing = await refusal(() => b.client.records.activity({ workspace: b.slug, recordId: newId() }));
+    const other = await refusal(() => b.client.records.activity({ workspace: b.slug, recordId: theirs.id }));
+    expect(missing).toEqual({ code: 'NOT_FOUND', status: 404, message: 'That record does not exist.' });
+    expect(other).toEqual(missing);
+    const bad = await failure(() =>
+      a.client.records.activity({ workspace: a.slug, recordId: theirs.id, cursor: 'eyJub3QiOiJpdCJ9' }),
+    );
+    expect({ code: bad.code, status: bad.status }).toEqual({ code: 'INPUT_INVALID', status: 400 });
+    expect(JSON.stringify(bad.data)).toContain('cursor');
+    expect(
+      await refusal(() => a.client.records.activity({ workspace: a.slug, recordId: theirs.id, limit: 51 })),
+    ).toMatchObject({ code: 'INPUT_INVALID', status: 400 });
+    expect(await refusal(() => b.client.records.activity({ workspace: a.slug, recordId: theirs.id }))).toEqual(
+      NOT_A_MEMBER,
+    );
+    expect(await refusal(() => b.client.records.getTrashed({ workspace: a.slug, recordId: theirs.id }))).toEqual(
+      NOT_A_MEMBER,
+    );
+  });
+});
+
 describe('the door on every record procedure', () => {
   it('answers a non member the same NOT_FOUND as an unknown address, and no session 401', async () => {
     const a = await memberWithWorkspace(app);
