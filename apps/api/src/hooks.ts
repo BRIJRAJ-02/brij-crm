@@ -37,6 +37,16 @@ function writeHooks(
 }
 
 /**
+ * The hooks a background job's batch runs (spec 0008): the same outbox hook
+ * a request's write runs, with no mutation id (no browser made the write).
+ * The worker's runner takes them as a dependency, so packages/core never
+ * imports this app.
+ */
+export function backgroundHooks(): readonly AfterWrite[] {
+  return [outboxHook()];
+}
+
+/**
  * Runs one write procedure's engine call with the write's hooks, then pokes
  * the relay once it resolves; a refused or failed write pokes nothing. `meta`
  * is undefined only for `workspaces.create`, which stores no events (nobody

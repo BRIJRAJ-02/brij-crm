@@ -11,9 +11,9 @@ import { drizzle } from 'drizzle-orm/node-postgres';
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { Logger, runMigrations } from 'graphile-worker';
 import pg from 'pg';
+import { QUEUE_SCHEMA } from './queue.ts';
 
-/** The schema Graphile Worker keeps its queue in. */
-export const QUEUE_SCHEMA = 'graphile_worker';
+export { QUEUE_SCHEMA };
 
 /** The one policy on Graphile's tables, letting `crm_worker` and `crm_queue` past its row level security. */
 const QUEUE_POLICY = 'crm_queue_roles';

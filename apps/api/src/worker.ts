@@ -1,9 +1,19 @@
 // The worker entrypoint, from the same image as the api. It runs the outbox
-// relay (spec 0005) on its own direct Postgres connection, and later the
-// background jobs (#8). Its one HTTP port answers Railway's health check and
-// the api's poke, which wakes the relay when it is dormant (`realtime/wake.ts`).
-import { audiences, systemScope } from '@crm/core/system';
-import { assertAppConnection, createDatabase, createOutboxReader, openDirectConnection } from '@crm/db';
+// relay (spec 0005) and the background jobs' runners (spec 0008) on its own
+// direct Postgres login (`crm_worker_user`), with the jobs' tenant work on the
+// pooled app login. Its one HTTP port answers Railway's health check and the
+// api's poke, which wakes the relay when it is dormant (`realtime/wake.ts`).
+import { createRunner, jobKinds } from '@crm/core';
+import { audiences, enterAsActor, systemScope } from '@crm/core/system';
+import {
+  assertAppConnection,
+  createDatabase,
+  createOutboxReader,
+  openDirectConnection,
+  openQueueConnection,
+} from '@crm/db';
+import { backgroundHooks } from './hooks.ts';
+import { startJobRunners } from './jobs/graphile.ts';
 import { loadEnv, WorkerEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
 import { captureFault, flush, MONITORING_FLUSH_MS } from './monitoring/sentry.ts';
@@ -17,7 +27,8 @@ const env = loadEnv(WorkerEnv);
 const db = createDatabase({
   url: env.DATABASE_URL,
   applicationName: 'crm-worker',
-  maxConnections: 5,
+  // Six job slices at once (two heavy, four light), and two spare for the relay's audiences and the claims.
+  maxConnections: 8,
   onPoolError: (error) => {
     log.error('Idle database client failed', errorFields(error));
     captureFault(error, { task: 'database pool' });
@@ -74,16 +85,50 @@ if (relay === undefined) {
   relay.start();
 }
 
+// The background jobs (spec 0008): the core runner does each slice on the pool, as the job's member (entered again
+// at every slice) or the system; Graphile's two runners, on the queue pool, only wake it and order the slices.
+const queue = openQueueConnection({
+  url: env.DATABASE_URL_DIRECT,
+  applicationName: 'crm-worker-queue',
+  max: 4,
+  onError: (error) => {
+    log.error('Idle queue client failed', errorFields(error));
+    captureFault(error, { task: 'queue pool' });
+  },
+});
+const jobs = await startJobRunners({
+  queue,
+  runner: createRunner({
+    db,
+    registry: jobKinds({ environment: env.APP_ENV }),
+    enterAsActor: (input) => enterAsActor({ db, log }, input),
+    systemScope: (workspaceId) => systemScope(db, workspaceId),
+    hooks: backgroundHooks,
+    // A batch stored a change event: the relay publishes it, even if it had gone dormant.
+    onStored: () => relay?.wake(),
+    log,
+  }),
+  log,
+  onFault: (error) => captureFault(error, { task: 'jobs' }),
+});
+
 const health = createWorkerServer({
   wakeSecret: env.WORKER_WAKE_SECRET,
   onWake: () => relay?.wake(),
-  health: () => (relay === undefined ? { relay: 'off' } : { relay: { mode: relay.mode(), ...relay.stats() } }),
+  // From memory only: the jobs' runners are awake for as long as the process runs (sleep comes with milestone 3).
+  health: () => ({
+    state: 'awake',
+    ...(relay === undefined ? { relay: 'off' } : { relay: { mode: relay.mode(), ...relay.stats() } }),
+  }),
 });
 health.listen(env.WORKER_PORT, '::', () =>
   log.info('Worker ready', { port: env.WORKER_PORT, environment: env.APP_ENV, relay: relay !== undefined }),
 );
 
 onShutdown(async () => {
+  // The slices in hand finish their batch and hand their jobs back to the queue first.
+  await jobs.stop();
+  await queue.close();
   await relay?.stop();
   await new Promise<void>((resolve) => health.close(() => resolve()));
   await db.close();

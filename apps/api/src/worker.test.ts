@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, inject, it } from 'vitest';
 
-const { appUrl, ownerUrl } = inject('testDatabase');
+const { appUrl, ownerUrl, workerUrl } = inject('testDatabase');
 
 /** Runs the worker with `env` until it exits (or 20 seconds pass), and returns its exit code and output. */
 function runWorker(env: Record<string, string>): Promise<{ code: number | null; output: string }> {
@@ -48,5 +48,36 @@ describe('the worker at startup', () => {
     expect(code).toBe(1);
     expect(output).toContain('Refusing to start');
     expect(output).toContain('is not a member of crm_worker');
+  });
+
+  it('boots on the worker login with the job runners, answers /health awake, and stops cleanly', async () => {
+    const child = spawn(process.execPath, [fileURLToPath(new URL('./worker.ts', import.meta.url))], {
+      env: {
+        PATH: process.env.PATH ?? '',
+        APP_ENV: 'local',
+        DATABASE_URL: appUrl,
+        DATABASE_URL_DIRECT: workerUrl,
+        WORKER_PORT: '3998',
+      },
+    });
+    let output = '';
+    child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString('utf8')));
+    child.stderr.on('data', (chunk: Buffer) => (output += chunk.toString('utf8')));
+    const exited = new Promise<number | null>((resolve) => child.on('exit', resolve));
+    try {
+      await expect
+        .poll(
+          async () => {
+            const response = await fetch('http://127.0.0.1:3998/health').catch(() => undefined);
+            return response?.ok === true ? ((await response.json()) as Record<string, unknown>) : undefined;
+          },
+          { timeout: 20_000, interval: 200 },
+        )
+        .toMatchObject({ status: 'ok', state: 'awake' });
+      expect(output).toContain('jobs.runners.started');
+    } finally {
+      child.kill('SIGTERM');
+    }
+    expect(await exited).toBe(0);
   });
 });
