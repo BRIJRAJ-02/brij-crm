@@ -229,7 +229,7 @@ describe('once started', () => {
       try {
         const { port } = server.address() as AddressInfo;
         const answer = await fetch(`http://127.0.0.1:${String(port)}/api/rpc/records/query?search=ada`, {
-          headers: { 'x-request-id': 'req-88' },
+          headers: { 'x-request-id': 'req-88', 'x-crm-edge': 'present' },
         });
         expect(await answer.text()).toBe('ok');
       } finally {

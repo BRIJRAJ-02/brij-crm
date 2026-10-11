@@ -31,7 +31,7 @@ import {
   withScope,
 } from '@sentry/node';
 import { queryFailure, safeError } from '../query-errors.ts';
-import { keepSpan, requestSampleRate } from './tracing.ts';
+import { keepSpanOrBlank, requestSampleRate } from './tracing.ts';
 
 /** Which process is sending: the api or the worker (one Sentry project, tagged by service). */
 export type Service = 'api' | 'worker';
@@ -104,14 +104,19 @@ export function withoutQueryValues(event: ErrorEvent, original: unknown): ErrorE
 
 /**
  * How the process traces (AC-170): the api samples each request by its
- * environment and path (`requestSampleRate`); the worker samples nothing (a
- * rate of 0: errors only). Trace headers go to no outgoing call (Resend,
- * Google, Centrifugo, the worker's poke), and an incoming trace is continued
- * only from this Sentry organization.
+ * environment and path (`requestSampleRate`); the worker doesn't trace at all
+ * (no rate set, so no span is even recorded: errors only). Spans stream
+ * (`traceLifecycle: 'stream'`, so every one passes `beforeSendSpan`). Trace
+ * headers go to no outgoing call (Resend, Google, Centrifugo, the worker's
+ * poke), and a request that brings its own trace is never sampled.
  */
 function tracingOptions(config: SentryConfig): NodeOptions {
-  const shared = { tracePropagationTargets: [], strictTraceContinuation: true } satisfies NodeOptions;
-  if (config.service === 'worker') return { ...shared, tracesSampleRate: 0 };
+  const shared = {
+    tracePropagationTargets: [],
+    strictTraceContinuation: true,
+    traceLifecycle: 'stream',
+  } satisfies NodeOptions;
+  if (config.service === 'worker') return shared;
   return { ...shared, tracesSampler: (context) => requestSampleRate(config.environment, context) };
 }
 
@@ -154,7 +159,9 @@ export function sentryOptions(config: SentryConfig): NodeOptions {
     enhanceFetchErrorMessages: 'report-only',
     beforeSend: (event, hint) => scrub(withoutQueryValues(event, hint.originalException)),
     beforeBreadcrumb: keepBreadcrumb,
-    beforeSendSpan: keepSpan,
+    beforeSendSpan: keepSpanOrBlank,
+    // Only ever called if spans stop streaming; then a whole transaction passes the same scrub as an error.
+    beforeSendTransaction: (event) => scrub(event),
     ...(deliver === undefined
       ? {}
       : {

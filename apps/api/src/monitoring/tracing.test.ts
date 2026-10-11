@@ -13,7 +13,7 @@ import { memoryTransport, type SentSpan, spansIn } from '../../test/sentry.ts';
 import { newEmail } from '../../test/sign-in.ts';
 import { APP_URL, createTestApp } from '../testing.ts';
 import { flush, type SentryConfig, sentryOptions, startSentry } from './sentry.ts';
-import { keepSpan, requestSampleRate, sqlShape, TRACE_RATES } from './tracing.ts';
+import { keepSpan, keepSpanOrBlank, requestSampleRate, sqlShape, TRACE_RATES } from './tracing.ts';
 
 const run = promisify(execFile);
 const TRACED_API = fileURLToPath(new URL('../../test/traced-api.ts', import.meta.url));
@@ -24,8 +24,11 @@ const CONFIG: SentryConfig = {
   service: 'api',
 };
 
-/** The sampling context the SDK hands the sampler for an incoming request to `path`. */
-const incoming = (path: string) => ({ attributes: { 'sentry.op': 'http.server', 'url.path': path } });
+/** The sampling context the SDK hands the sampler for a request to `path` through Vercel's middleware (`headers` more). */
+const incoming = (path: string, headers: Record<string, string> = {}) => ({
+  attributes: { 'sentry.op': 'http.server', 'url.path': path },
+  normalizedRequest: { headers: { 'x-crm-edge': 'secret', ...headers } },
+});
 
 const segments = (spans: readonly SentSpan[]) => spans.filter((span) => span.is_segment);
 const attribute = (span: SentSpan | undefined, key: string) => span?.attributes[key]?.value;
@@ -53,28 +56,90 @@ describe('the sampler (AC-170)', () => {
   it('reads the path from the request when the span has none', () => {
     const context = {
       attributes: { 'sentry.op': 'http.server' },
-      normalizedRequest: { url: 'http://x/api/rpc/a?b=c' },
+      normalizedRequest: { url: 'http://x/api/rpc/a?b=c', headers: { 'X-Crm-Edge': 'secret' } },
     };
     expect(requestSampleRate('production', context)).toBe(0.2);
+  });
+
+  it('never traces a request that brings its own trace, so no caller picks the rate or the trace id', () => {
+    for (const header of ['sentry-trace', 'baggage', 'traceparent']) {
+      expect(requestSampleRate('preview', incoming('/api/rpc/records/query', { [header]: 'x' }))).toBe(0);
+      const asAttribute = {
+        attributes: { 'sentry.op': 'http.server', 'url.path': '/api/rpc/a', [`http.request.header.${header}`]: ['x'] },
+        normalizedRequest: { headers: { 'x-crm-edge': 'secret' } },
+      };
+      expect(requestSampleRate('preview', asAttribute)).toBe(0);
+    }
+  });
+
+  it('never traces a request that skipped the edge, outside a laptop', () => {
+    const direct = { attributes: { 'sentry.op': 'http.server', 'url.path': '/api/rpc/records/query' } };
+    expect(requestSampleRate('production', direct)).toBe(0);
+    expect(requestSampleRate('preview', direct)).toBe(0);
+  });
+
+  it('never traces an overlong path, and never throws', () => {
+    expect(requestSampleRate('preview', incoming(`/api/rpc/${'a'.repeat(500)}`))).toBe(0);
+    const hostile = {
+      get attributes(): Record<string, unknown> {
+        throw new Error('unreadable');
+      },
+    };
+    expect(requestSampleRate('preview', hostile)).toBe(0);
   });
 });
 
 describe('the options (AC-170)', () => {
-  it('samples the api by request, and the worker at 0', () => {
+  it('samples the api by request, and leaves tracing off in the worker', () => {
     const api = sentryOptions(CONFIG);
     expect(api.tracesSampler).toBeTypeOf('function');
     expect(api.tracesSampleRate).toBeUndefined();
     const worker = sentryOptions({ ...CONFIG, service: 'worker' });
-    expect(worker.tracesSampleRate).toBe(0);
+    // Neither set: the SDK records no span at all.
+    expect(worker.tracesSampleRate).toBeUndefined();
     expect(worker.tracesSampler).toBeUndefined();
   });
 
-  it('sends trace headers to no outgoing call, and continues only our own traces', () => {
+  it('streams spans, so each passes beforeSendSpan, and sends trace headers to no outgoing call', () => {
     for (const service of ['api', 'worker'] as const) {
       const options = sentryOptions({ ...CONFIG, service });
+      expect(options.traceLifecycle).toBe('stream');
       expect(options.tracePropagationTargets).toEqual([]);
       expect(options.strictTraceContinuation).toBe(true);
     }
+  });
+
+  it('scrubs a whole transaction too, should spans ever stop streaming', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-deprecated -- the backstop is the point: it runs only if spans stop streaming.
+    const { beforeSendTransaction } = sentryOptions(CONFIG);
+    if (beforeSendTransaction === undefined) throw new Error('No beforeSendTransaction.');
+    const transaction = {
+      type: 'transaction',
+      transaction: 'rpc me.get',
+      request: { url: '/api/rpc/me/get?email=ada@example.com', cookies: { session: 'secret' } },
+      user: { id: 'user-1', email: 'ada@example.com' },
+    } as unknown as Parameters<typeof beforeSendTransaction>[0];
+    const sent = JSON.stringify(await beforeSendTransaction(transaction, {}));
+    expect(sent).not.toContain('ada@example.com');
+    expect(sent).not.toContain('secret');
+  });
+
+  it('sends a span it can’t read as a blank, never as it came', () => {
+    const { beforeSendSpan } = sentryOptions(CONFIG);
+    if (beforeSendSpan === undefined) throw new Error('No beforeSendSpan.');
+    const span = {
+      trace_id: 't',
+      span_id: 's',
+      name: 'select ada@example.com',
+      start_timestamp: 0,
+      status: 'ok',
+      is_segment: false,
+      get attributes(): Record<string, unknown> {
+        throw new Error('unreadable');
+      },
+    } as unknown as Parameters<typeof beforeSendSpan>[0];
+    expect(beforeSendSpan(span)).toMatchObject({ name: 'span', attributes: {}, trace_id: 't' });
+    expect(keepSpanOrBlank).toBeTypeOf('function');
   });
 });
 
@@ -97,13 +162,21 @@ describe('keepSpan (AC-165)', () => {
         'db.query.parameter.0': 'ada@example.com',
         'db.connection_string': 'postgresql://neon.host:5432/crm',
         'db.user': 'crm_app_login',
+        'db.namespace': 'crm',
+        'server.address': 'api.railway.internal',
+        'server.port': 3000,
+        'network.local.address': '10.0.0.2',
+        'sentry.status.message': 'invalid input syntax for type integer: "Ada Lovelace"',
+        'url.path': '/api/rpc/records/query',
         'http.response.status_code': 200,
       },
+      links: [{ trace_id: 'other', span_id: 'x', attributes: { 'user.email': 'ada@example.com' } }],
     };
     const kept = keepSpan(span);
+    expect(kept).not.toHaveProperty('links');
     expect(kept.attributes).toEqual({
       'sentry.op': 'http.server',
-      'url.full': { value: 'https://app.test/api/rpc/records/query', type: 'string' },
+      'url.path': '/api/rpc/records/query',
       'http.request.header.x-request-id': ['req-1'],
       'http.request.header.content-type': ['application/json'],
       'user.id': 'user-1',
@@ -126,6 +199,26 @@ describe('keepSpan (AC-165)', () => {
     });
     expect(kept.name).toBe('select set_config(?, ?, true)');
     expect(kept.attributes['db.query.text']).toBe('insert into x values (?, ?)');
+    const summary = keepSpan({ name: 'q', attributes: { 'sentry.op': 'db', 'db.query.summary': `select 'Ada'` } });
+    expect(summary.attributes['db.query.summary']).toBe('select ?');
+  });
+
+  it('costs well under a millisecond for a root span with 9 KB in its path and headers (AC-166)', () => {
+    const long = 'a'.repeat(9 * 1024);
+    const span = {
+      name: 'POST',
+      attributes: {
+        'sentry.op': 'http.server',
+        'url.path': `/api/rpc/${long}`,
+        'url.full': `https://app.test/api/rpc/${long}`,
+        'http.request.header.content-type': [long],
+      },
+    };
+    keepSpan(span);
+    const started = performance.now();
+    for (let round = 0; round < 20; round += 1) keepSpan(span);
+    expect((performance.now() - started) / 20).toBeLessThan(1);
+    expect(keepSpan(span).attributes['url.path'].length).toBeLessThanOrEqual(1024);
   });
 });
 
@@ -148,7 +241,12 @@ describe('a traced request, in this process', () => {
       const apiPort = (api.address() as AddressInfo).port;
       const answer = await fetch(`http://127.0.0.1:${String(apiPort)}/api/rpc/echo?q=ada@example.com`, {
         method: 'POST',
-        headers: { origin: APP_URL, 'content-type': 'application/json', 'user-agent': 'TraceTestBrowser/1.0' },
+        headers: {
+          origin: APP_URL,
+          'content-type': 'application/json',
+          'user-agent': 'TraceTestBrowser/1.0',
+          'x-crm-edge': 'present',
+        },
         body: JSON.stringify({ json: { name: 'Ada', tags: [] } }),
       });
       expect(answer.status).toBe(200);
@@ -199,6 +297,7 @@ describe('a traced api process, on a real Postgres', () => {
       'auth /email-otp/send-verification-otp',
       'auth /sign-in/email-otp',
       'rpc me.get',
+      'rpc trace.failingQuery',
     ]);
     // Each has its database queries beneath it.
     for (const root of roots) {
@@ -211,7 +310,15 @@ describe('a traced api process, on a real Postgres', () => {
       [],
     );
     const sent = envelopes.join('\n');
-    for (const secret of [email, 'TraceTestBrowser', '203.0.113.77', 'search=ada', 'better-auth.session_token']) {
+    // The failing query's bound value, which Postgres quotes in its message (the span's status message).
+    for (const secret of [
+      email,
+      'TraceTestBrowser',
+      '203.0.113.77',
+      'search=ada',
+      'better-auth.session_token',
+      'Ada Lovelace',
+    ]) {
       expect(sent).not.toContain(secret);
     }
   });

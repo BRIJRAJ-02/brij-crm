@@ -3,15 +3,17 @@
 // queries to become spans, as `instrument.ts` does in production, so this runs
 // as its own Node process: it starts Sentry with a transport that prints each
 // envelope (`ENVELOPE <json>` per line), then loads the app on the test
-// database, serves it on a free port, signs in by code, calls a procedure, asks
+// database, serves it on a free port, signs in by code, calls a procedure, runs
+// a parameterised query that fails (its value must never reach Sentry), asks
 // for both health checks, flushes and exits. No Vitest here: it runs on Node.
 //
 // Env: TRACE_DATABASE_URL, TRACE_IDENTITY_URL (the test database's two logins),
 // TRACE_EMAIL (who signs in), TRACE_ENVIRONMENT (`preview` traces everything).
+import { randomUUID } from 'node:crypto';
 import type { AddressInfo } from 'node:net';
 import { AppEnvironment } from '@crm/contracts';
 import * as z from 'zod';
-import { flush, startSentry } from '../src/monitoring/sentry.ts';
+import { flush, nameRequest, startSentry } from '../src/monitoring/sentry.ts';
 
 const Env = z.object({
   TRACE_DATABASE_URL: z.url(),
@@ -34,6 +36,7 @@ startSentry({
 
 // Only now, with Sentry watching, does anything load `pg`.
 const { createDatabase, createIdentityStore } = await import('@crm/db');
+const { sql } = await import('drizzle-orm');
 const { serve } = await import('@hono/node-server');
 const { createApp } = await import('../src/app.ts');
 const { createAuth } = await import('../src/auth/auth.ts');
@@ -67,13 +70,33 @@ const mailer = {
 const auth = createAuth({ env: apiEnv, identity, mailer });
 const app = createApp({ services: { db, identity, auth, wakeRelay: NO_WAKE }, env: apiEnv });
 
-const server = serve({ port: 0, hostname: '127.0.0.1', fetch: app.fetch });
+/** The value the failing query is bound with: Postgres quotes it in its error, which must stay here. */
+const FAILING_VALUE = 'Ada Lovelace';
+const FAILING_PATH = '/api/rpc/trace/failingQuery';
+
+// One extra address beside the app: a traced request whose query fails with a bound value in Postgres's message.
+const server = serve({
+  port: 0,
+  hostname: '127.0.0.1',
+  fetch: async (request) => {
+    if (new URL(request.url).pathname !== FAILING_PATH) return app.fetch(request);
+    nameRequest('rpc trace.failingQuery');
+    const failed = await db
+      .withWorkspace(randomUUID(), (tx) => tx.execute(sql`select ${FAILING_VALUE}::int`))
+      .then(
+        () => false,
+        () => true,
+      );
+    return new Response(failed ? 'failed' : 'ran', { status: failed ? 500 : 200 });
+  },
+});
 await new Promise((resolve) => server.once('listening', resolve));
 const { port } = server.address() as AddressInfo;
 const base = `http://127.0.0.1:${String(port)}/api`;
-// What a browser sends, with a user agent and an address that must not reach Sentry.
+// What a browser sends through Vercel's middleware, with a user agent and an address that must not reach Sentry.
 const headers = {
   origin: APP_URL,
+  'x-crm-edge': 'the-edge-header-is-only-checked-for-presence-by-the-sampler',
   'content-type': 'application/json',
   'user-agent': 'TraceTestBrowser/1.0',
   'x-forwarded-for': '203.0.113.77',
@@ -92,6 +115,8 @@ try {
     .join('; ');
   const me = await post('/rpc/me/get?search=ada', { json: {} }, { cookie });
   if (me.status !== 200) throw new Error(`me.get answered ${String(me.status)}.`);
+  const failing = await post('/rpc/trace/failingQuery', { json: {} });
+  if (failing.status !== 500) throw new Error(`The failing query answered ${String(failing.status)}.`);
   await fetch(`${base}/health`, { headers });
   await fetch(`${base}/health/ready`, { headers });
 } finally {
