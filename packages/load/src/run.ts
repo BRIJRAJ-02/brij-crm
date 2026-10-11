@@ -32,7 +32,7 @@ import { cpuShare, hostFacts, poolerWait, sampleEvery, stackContainers } from '.
 import type { DriveInput, DriveOutput, ThreadUser } from './drive.ts';
 import { wallClock } from './drive.ts';
 import { headAt, relayLags } from './outbox.ts';
-import { achievedMix, mixDeviation, planArrivals, type ArrivalPlan } from './plan.ts';
+import { achievedMix, mixDeviation, planArrivals, planStorm, type ArrivalPlan } from './plan.ts';
 import { errorCounts, errorLines, exitCodeOf, formatReport, judgeValidity, reportLines } from './report.ts';
 import { LoadResult, type StatementLine } from './result.ts';
 import { SCENARIOS, WARMUP_SECONDS, type Scenario, type ScenarioName } from './scenarios.ts';
@@ -286,6 +286,10 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
       mix: SCALE_BUDGET.load.mix,
       seed,
     });
+    const storm =
+      scenario.storm === undefined
+        ? undefined
+        : planStorm({ users, warmupMs, measuredMs, everyMs: scenario.storm.burstEveryMs, seed });
     const threadUsers: ThreadUser[][] = Array.from({ length: threads }, () => []);
     cookies.forEach((user, index) => {
       threadUsers[index % threads]?.push({
@@ -319,6 +323,12 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
           joins: plan.joins.filter((join) => indexes.has(join.user)),
           arrivals: plan.arrivals.filter((arrival) => indexes.has(arrival.user)),
           live: { url: urls.LOAD_CENTRIFUGO_URL, origin: new URL(urls.LOAD_API_URL).origin },
+          ...(storm === undefined
+            ? {}
+            : {
+                bursts: storm.bursts.filter((burst) => indexes.has(burst.user)),
+                reconnectAt: storm.reconnectAt,
+              }),
           ...(options.blockLoopMs === undefined ? {} : { blockLoopMs: options.blockLoopMs }),
         });
       }),
@@ -382,6 +392,7 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
           relay,
           heads,
         },
+        storm: storm !== undefined,
       }),
       ...errorLines(samples, SCALE_BUDGET),
     ];

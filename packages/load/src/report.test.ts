@@ -13,9 +13,11 @@ import {
   judgeValidity,
   relayLine,
   reportLines,
+  stormLines,
   streamLines,
   type LiveInput,
 } from './report.ts';
+import type { LiveOutput } from './drive.ts';
 import type { LoadResult } from './result.ts';
 import { percentile, summarize } from './stats.ts';
 import type { Sample } from './user.ts';
@@ -319,6 +321,42 @@ describe('the live lines (milestone 3)', () => {
     expect(relayLine(SCALE_BUDGET, { lagsMs: [20, 40], unpublished: 0 })).toMatchObject({ verdict: 'pass' });
     expect(relayLine(SCALE_BUDGET, { lagsMs: [20], unpublished: 1 })).toMatchObject({ verdict: 'miss' });
     expect(relayLine(SCALE_BUDGET, undefined)).toMatchObject({ verdict: 'not measured' });
+  });
+
+  it("adds the storm's lines: edits inside bursts apart from the edit line, and the reconnect", () => {
+    const edits = [
+      sample({ metric: 'edit', action: 'edit', scheduledAt: 0, answeredAt: 100 }),
+      sample({ metric: 'edit', action: 'edit', scheduledAt: 0, answeredAt: 900, burst: true }),
+    ];
+    const users = [
+      {
+        user: 0,
+        tally,
+        snapshot: { watermark: 10, accounted: [] },
+        reconnected: { droppedAt: 0, backAt: 300, how: 'recovered' as const },
+      },
+      {
+        user: 1,
+        tally,
+        snapshot: { watermark: 10, accounted: [] },
+        reconnected: { droppedAt: 0, backAt: 2_100, how: 'caughtUp' as const },
+      },
+    ];
+    const lines = reportLines({
+      budget: SCALE_BUDGET,
+      samples: edits,
+      poolerWaitMs: [],
+      postgresCpuShares: [],
+      live: live({ users }),
+      storm: true,
+    });
+    const line = (name: string) => lines.find((each) => each.metric.startsWith(name));
+    expect(line('edit')?.summary).toMatchObject({ count: 1, max: 100 });
+    expect(line('edit inside bursts')).toMatchObject({ verdict: 'miss', summary: { count: 1, max: 900 } });
+    expect(line('reconnect')).toMatchObject({ verdict: 'reported', summary: { max: 2_100 } });
+    expect(line('reconnect')?.note).toBe('2 dropped: 1 recovered by Centrifugo, 1 caught up, 0 reset, 0 never back');
+    const never = stormLines(SCALE_BUDGET, [], [{ ...users[0], reconnected: { droppedAt: 0 } }] as LiveOutput[]);
+    expect(never[1]?.verdict).toBe('miss');
   });
 
   it('counts a failed live call or refetch as unexpected, but only actions in the share', () => {

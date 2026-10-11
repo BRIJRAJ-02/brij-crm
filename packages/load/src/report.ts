@@ -33,6 +33,8 @@ export interface ReportInput {
   readonly apiCpuShares?: readonly number[] | undefined;
   /** What the live clients and the outbox said (milestone 3); undefined when the run had no live clients. */
   readonly live?: LiveInput;
+  /** The storm's extra lines (AC-207): edits inside bursts and the reconnect. */
+  readonly storm?: boolean;
 }
 
 /** What the live lines are made from (AC-200, AC-201). */
@@ -283,6 +285,42 @@ export function reportLines(input: ReportInput): readonly ReportLine[] {
       ? without('relay lag', 'not measured', 'no live clients', `p95 ≤ ${String(p95.relayLag)} ms`)
       : relayLine(budget, input.live.relay),
     ...(input.live === undefined ? [] : streamLines(input.live)),
+    ...(input.storm === true ? stormLines(budget, samples, input.live?.users ?? []) : []),
+  ];
+}
+
+/**
+ * The storm's lines (AC-207): the edits sent inside bursts, judged at p95
+ * against the edit target (the storm exits by validity only, so the verdict
+ * is for #41), and the reconnect: from the moment every connection dropped to
+ * the last user back, recovered by Centrifugo or caught up through the API.
+ * Missed seqs (which must be 0) are the stream's own line.
+ */
+export function stormLines(
+  budget: ScaleBudget,
+  samples: readonly Sample[],
+  users: readonly LiveOutput[],
+): readonly ReportLine[] {
+  const reconnects = users.flatMap((output) => (output.reconnected === undefined ? [] : [output.reconnected]));
+  const back = reconnects.flatMap((each) => (each.backAt === undefined ? [] : [each.backAt - each.droppedAt]));
+  const how = (name: string) => reconnects.filter((each) => each.how === name).length;
+  const never = reconnects.length - back.length;
+  const summary = rounded(summarize(back));
+  return [
+    judged(
+      'edit inside bursts',
+      okTimes(samples, 'edit', (sample) => sample.burst === true),
+      budget.p95Ms.edit,
+      'ms',
+    ),
+    {
+      metric: 'reconnect: drop to back (max: every user back)',
+      unit: 'ms',
+      ...(summary === undefined ? {} : { summary }),
+      verdict: never > 0 ? 'miss' : summary === undefined ? 'no samples' : 'reported',
+      judged: false,
+      note: `${String(reconnects.length)} dropped: ${String(how('recovered'))} recovered by Centrifugo, ${String(how('caughtUp'))} caught up, ${String(how('reset'))} reset, ${String(never)} never back`,
+    },
   ];
 }
 

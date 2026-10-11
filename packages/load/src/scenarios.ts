@@ -1,14 +1,19 @@
-// The scenarios `pnpm load:run` plays (spec 0011, AC-197, AC-205, AC-208):
-// their users, minutes, whether a miss fails them, and how their users jump
-// and pick records. Users and minutes default from here and `SCALE_BUDGET`,
-// and `--users` and `--minutes` override them. `hub`, `storm` and `thousand`
-// arrive with milestones 3 and 4.
+// The scenarios `pnpm load:run` plays (spec 0011, AC-197, AC-205, AC-207,
+// AC-208): their users, minutes, whether a miss fails them, how their users
+// jump and pick records, and the storm's extras. Users and minutes default
+// from here and `SCALE_BUDGET`, and `--users` and `--minutes` override them.
+// `hub` and `thousand` arrive with milestone 4.
 import { SCALE_BUDGET } from '@crm/core/scale-budget';
 import type { Behaviour } from './user.ts';
 
 /** The scenarios' names. */
 export const SCENARIO_NAMES = ['steady', 'spread', 'hub', 'storm', 'thousand'] as const;
 export type ScenarioName = (typeof SCENARIO_NAMES)[number];
+
+/** The storm's extras (AC-207): a burst every `burstEveryMs`, and every live connection dropped mid window. */
+export interface Storm {
+  readonly burstEveryMs: number;
+}
 
 /** A scenario this milestone runs. */
 export interface Scenario {
@@ -18,6 +23,7 @@ export interface Scenario {
   readonly users: number;
   readonly minutes: number;
   readonly behaviour: Behaviour;
+  readonly storm?: Storm;
 }
 
 /** A scenario a later milestone builds. */
@@ -36,6 +42,11 @@ export const WARMUP_SECONDS = 60;
  */
 export const JUMP_SHARE = 0.2;
 
+/** How often the storm's bursts come (AC-207). */
+export const BURST_EVERY_MS = 10_000;
+
+const steadyBehaviour: Behaviour = { jumps: 'near-top', picks: 'window', jumpShare: JUMP_SHARE };
+
 /** Every scenario. */
 export const SCENARIOS: Readonly<Record<ScenarioName, Scenario | LaterScenario>> = {
   steady: {
@@ -43,7 +54,7 @@ export const SCENARIOS: Readonly<Record<ScenarioName, Scenario | LaterScenario>>
     gate: true,
     users: SCALE_BUDGET.online.gate,
     minutes: 10,
-    behaviour: { jumps: 'near-top', picks: 'window', jumpShare: JUMP_SHARE },
+    behaviour: steadyBehaviour,
   },
   // Cold cache reads over the whole million: every jump, open and edit drawn evenly over the object (AC-205).
   spread: {
@@ -54,6 +65,15 @@ export const SCENARIOS: Readonly<Record<ScenarioName, Scenario | LaterScenario>>
     behaviour: { jumps: 'even', picks: 'samples', jumpShare: JUMP_SHARE },
   },
   hub: { built: false, milestone: 4 },
-  storm: { built: false, milestone: 3 },
+  // The steady mix, a burst of edits every 10 seconds, and every live connection dropped at once mid window
+  // (AC-207). Reported, not judged: #41 judges it.
+  storm: {
+    built: true,
+    gate: false,
+    users: SCALE_BUDGET.online.gate,
+    minutes: 10,
+    behaviour: steadyBehaviour,
+    storm: { burstEveryMs: BURST_EVERY_MS },
+  },
   thousand: { built: false, milestone: 4 },
 };

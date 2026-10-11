@@ -13,7 +13,7 @@ import { createLoadClient, liveApiOf, loadApiOf } from './client.ts';
 import { openLiveConnection } from './live/centrifuge.ts';
 import type { StreamSnapshot } from './live/stream.ts';
 import { createLiveUser, type LiveTally, type LiveUser, type Reconnected } from './live/user.ts';
-import type { Arrival, Join } from './plan.ts';
+import type { Arrival, Burst, Join } from './plan.ts';
 import type { LoadAction } from '@crm/core/scale-budget';
 import { createRandom } from './random.ts';
 import type { ObjectKey } from './shapes.ts';
@@ -53,6 +53,9 @@ export interface DriveInput {
   readonly arrivals: readonly Arrival[];
   /** Centrifugo's WebSocket endpoint and the `Origin` its handshake carries (the API's), or undefined for no live. */
   readonly live?: { readonly url: string; readonly origin: string };
+  /** The storm (AC-207): this thread's users' burst edits, and when every live connection drops (ms from the start). */
+  readonly bursts?: readonly Burst[];
+  readonly reconnectAt?: number;
   /**
    * A test flag (`LOAD_TEST_BLOCK_LOOP_MS`): block this thread's event loop
    * this long every 100 ms, so a harness that can't keep up is shown to make
@@ -92,7 +95,12 @@ const METRIC_OF: Readonly<Record<LoadAction, Sample['metric']>> = {
 /** Milliseconds since the epoch, on a clock every thread shares. */
 export const wallClock = (): number => performance.timeOrigin + performance.now();
 
-type Event = { readonly kind: 'join'; readonly join: Join } | { readonly kind: 'arrival'; readonly arrival: Arrival };
+/** What happens at a planned moment: a user joins, acts, edits in a burst, or drops its live connection. */
+type Event =
+  | { readonly kind: 'join'; readonly user: number; readonly at: number }
+  | { readonly kind: 'arrival'; readonly user: number; readonly at: number; readonly arrival: Arrival }
+  | { readonly kind: 'burst'; readonly user: number; readonly at: number; readonly slot: number }
+  | { readonly kind: 'reconnect'; readonly user: number; readonly at: number };
 
 /** A timer that never keeps the thread alive on its own. */
 const schedule = (ms: number, run: () => void) => {
@@ -158,10 +166,15 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
       return [user.index, loadUser] as const;
     }),
   );
+  const reconnectAt = input.reconnectAt;
   const events: Event[] = [
-    ...input.joins.map((join) => ({ kind: 'join' as const, join })),
-    ...input.arrivals.map((arrival) => ({ kind: 'arrival' as const, arrival })),
-  ].sort((left, right) => atOf(left) - atOf(right));
+    ...input.joins.map((join: Join) => ({ kind: 'join' as const, user: join.user, at: join.at })),
+    ...input.arrivals.map((arrival) => ({ kind: 'arrival' as const, user: arrival.user, at: arrival.at, arrival })),
+    ...(input.bursts ?? []).map((burst) => ({ kind: 'burst' as const, ...burst })),
+    ...(reconnectAt === undefined
+      ? []
+      : input.users.map((user) => ({ kind: 'reconnect' as const, user: user.index, at: reconnectAt }))),
+  ].sort((left, right) => left.at - right.at);
 
   const loop = monitorEventLoopDelay({ resolution: 10 });
   const startLoop = setTimeout(() => loop.enable(), Math.max(0, measuredStart - wallClock()));
@@ -180,28 +193,38 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
   let sent = 0;
 
   const dispatch = (event: Event, now: number) => {
-    const due = input.runStartMs + atOf(event);
-    const user = users.get(event.kind === 'join' ? event.join.user : event.arrival.user);
+    const due = input.runStartMs + event.at;
+    const user = users.get(event.user);
     if (user === undefined) return;
+    // The storm's drop: the connection, not an action, so nothing waits for it.
+    if (event.kind === 'reconnect') {
+      void lives.get(event.user)?.reconnect();
+      return;
+    }
     // A user connects as it joins, as a browser does before its first read; the connection isn't an action.
-    if (event.kind === 'join') void lives.get(event.join.user)?.start();
+    if (event.kind === 'join') void lives.get(event.user)?.start();
+    const isMeasured =
+      event.kind === 'join' ? due >= measuredStart : event.kind === 'arrival' ? event.arrival.measured : measured(due);
     const work =
       event.kind === 'join'
-        ? user.join(due, due >= measuredStart)
-        : user.act(event.arrival.action, due, event.arrival.measured);
-    if (event.kind === 'arrival' && event.arrival.measured) {
+        ? user.join(due, isMeasured)
+        : event.kind === 'arrival'
+          ? user.act(event.arrival.action, due, isMeasured)
+          : user.burst(due, isMeasured, event.slot);
+    if (event.kind !== 'join' && isMeasured) {
       planned += 1;
       if (now - due <= ON_TIME_MS) sent += 1;
     }
     const unfinished: Sample = {
-      user: event.kind === 'join' ? event.join.user : event.arrival.user,
-      action: event.kind === 'join' ? 'join' : event.arrival.action,
-      metric: event.kind === 'join' ? 'read' : METRIC_OF[event.arrival.action],
+      user: event.user,
+      action: event.kind === 'join' ? 'join' : event.kind === 'arrival' ? event.arrival.action : 'edit',
+      metric: event.kind === 'join' ? 'read' : event.kind === 'arrival' ? METRIC_OF[event.arrival.action] : 'edit',
+      ...(event.kind === 'burst' ? { burst: true } : {}),
       scheduledAt: due,
       answeredAt: due,
       outcome: 'unexpected',
       reason: 'unfinished',
-      measured: event.kind === 'join' ? due >= measuredStart : event.arrival.measured,
+      measured: isMeasured,
       requests: 0,
       poolMs: [],
       appMs: [],
@@ -216,7 +239,7 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
       const now = wallClock();
       while (next < events.length) {
         const event = events[next];
-        if (event === undefined || input.runStartMs + atOf(event) > now) break;
+        if (event === undefined || input.runStartMs + event.at > now) break;
         dispatch(event, now);
         next += 1;
       }
@@ -225,7 +248,7 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
         resolve();
         return;
       }
-      setTimeout(tick, Math.max(0, input.runStartMs + atOf(upcoming) - wallClock()));
+      setTimeout(tick, Math.max(0, input.runStartMs + upcoming.at - wallClock()));
     };
     tick();
   });
@@ -249,8 +272,4 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
     sent,
     loopDelayP99Ms: loop.count === 0 ? 0 : loop.percentile(99) / 1e6,
   };
-}
-
-function atOf(event: Event): number {
-  return event.kind === 'join' ? event.join.at : event.arrival.at;
 }

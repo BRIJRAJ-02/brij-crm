@@ -321,6 +321,44 @@ describe('open, edit and create', () => {
     }
   });
 
+  it("edits row `slot` of its window in a storm burst, marked a burst and carrying the write's mutation id", async () => {
+    const { api, calls } = fakeApi();
+    const { loadUser, samples } = user(api);
+    await loadUser.join(0, false);
+    const window = loadUser.snapshot().windowIds;
+    await loadUser.burst(10, true, 7);
+    await loadUser.burst(11, true, 107);
+    const edited = calls
+      .filter((call) => call.procedure === 'setValues')
+      .map((call) => (call.input as { recordId: string; mutationId: string }).recordId);
+    expect(edited).toEqual([window[7], window[7]]);
+    const bursts = samples.filter((sample) => sample.burst === true);
+    expect(bursts).toHaveLength(2);
+    expect(bursts.every((sample) => sample.metric === 'edit' && sample.mutationId !== undefined)).toBe(true);
+  });
+
+  it('lets the live client see what it holds, refetch held records and reread its window', async () => {
+    const { api, calls } = fakeApi();
+    const { loadUser } = user(api);
+    await loadUser.join(0, false);
+    const { holder } = loadUser;
+    expect(holder.objectId).toBe(model.objectId);
+    expect([...holder.windowIds()]).toEqual(loadUser.snapshot().windowIds);
+    expect(holder.viewAttributeIds().size).toBe(0);
+    const refetched = await holder.refetch([id(1)], [id(900_001)]);
+    expect(refetched).toMatchObject({ outcome: 'ok', requests: 1 });
+    expect(calls.at(-1)).toMatchObject({ procedure: 'get', input: { ids: [id(1)], attributeIds: [id(900_001)] } });
+    const before = calls.length;
+    const reread = await holder.reread();
+    expect(reread).toMatchObject({ outcome: 'ok', requests: 2 });
+    expect(
+      calls
+        .slice(before)
+        .map((call) => call.procedure)
+        .sort(),
+    ).toEqual(['count', 'query']);
+  });
+
   it('opens and edits the manifest’s samples in spread', async () => {
     const { api, calls } = fakeApi();
     const { loadUser } = user(api, { behaviour: { jumps: 'even', picks: 'samples', jumpShare: 0.2 } });

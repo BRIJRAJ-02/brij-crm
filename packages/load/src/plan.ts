@@ -102,6 +102,46 @@ export function achievedMix(actions: readonly LoadAction[]): Record<LoadAction, 
   >;
 }
 
+/** A storm burst's edit (AC-207): which user, when, and the row of its window it edits. */
+export interface Burst {
+  readonly user: number;
+  readonly at: number;
+  /** The row the user edits, so users holding the same window edit different records. */
+  readonly slot: number;
+}
+
+/** The storm's extras: a burst every `everyMs`, and the moment every live connection drops. */
+export interface StormPlan {
+  readonly bursts: readonly Burst[];
+  readonly reconnectAt: number;
+}
+
+/**
+ * Plans the storm (AC-207): from `everyMs` into the measured window, every
+ * `everyMs`, every online user edits once at a random moment within the same
+ * second; and at the middle of the window every live connection drops and
+ * reconnects.
+ */
+export function planStorm(input: {
+  readonly users: number;
+  readonly warmupMs: number;
+  readonly measuredMs: number;
+  readonly everyMs: number;
+  readonly seed: number;
+}): StormPlan {
+  const random = createRandom(input.seed, 'storm');
+  const end = input.warmupMs + input.measuredMs;
+  const bursts: Burst[] = [];
+  for (let start = input.warmupMs + input.everyMs; start < end; start += input.everyMs) {
+    for (let user = 0; user < input.users; user += 1) {
+      const at = start + random.next() * 1_000;
+      if (at < end) bursts.push({ user, at, slot: user });
+    }
+  }
+  bursts.sort((left, right) => left.at - right.at);
+  return { bursts, reconnectAt: input.warmupMs + input.measuredMs / 2 };
+}
+
 /** The largest gap, in points (0.01 = one point), between an achieved mix and the budget's. */
 export function mixDeviation(achieved: Readonly<Record<LoadAction, number>>, mix: Mix): number {
   return Math.max(...MIX_ACTIONS.map((action) => Math.abs(achieved[action] - mix[action])));

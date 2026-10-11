@@ -33,9 +33,9 @@ describe('load:run', () => {
   });
 
   it('refuses a scenario a later milestone builds, and a missing one', () => {
-    const later = command(RUN, ['storm'], {});
+    const later = command(RUN, ['hub'], {});
     expect(later.status).toBe(3);
-    expect(later.output).toContain('arrives with milestone 3');
+    expect(later.output).toContain('arrives with milestone 4');
     const none = command(RUN, [], {});
     expect(none.status).toBe(3);
     expect(none.output).toContain('Name a scenario');

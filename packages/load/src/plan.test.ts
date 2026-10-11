@@ -4,8 +4,25 @@
 // mix holds within a point even on a short run, and a seed plays a run again.
 import { describe, expect, it } from 'vitest';
 import { SCALE_BUDGET } from '@crm/core/scale-budget';
-import { achievedMix, actionAt, mixDeviation, planArrivals, type PlanInput } from './plan.ts';
+import { achievedMix, actionAt, mixDeviation, planArrivals, planStorm, type PlanInput } from './plan.ts';
 import { createRandom, hash32 } from './random.ts';
+
+describe('the storm (AC-207)', () => {
+  it('has every user edit once in the same second every 10 seconds, and drops every connection mid window', () => {
+    const storm = planStorm({ users: 100, warmupMs: 60_000, measuredMs: 120_000, everyMs: 10_000, seed: 5 });
+    // Bursts at 70, 80, ... 170 seconds: 11 of them, 100 edits each, all inside their second.
+    expect(storm.bursts).toHaveLength(11 * 100);
+    const seconds = new Set(storm.bursts.map((burst) => Math.floor(burst.at / 1_000)));
+    expect([...seconds].sort((left, right) => left - right)).toEqual(
+      Array.from({ length: 11 }, (_, index) => 70 + index * 10),
+    );
+    const first = storm.bursts.filter((burst) => burst.at < 71_000);
+    expect(new Set(first.map((burst) => burst.user)).size).toBe(100);
+    expect(new Set(first.map((burst) => burst.slot)).size).toBe(100);
+    expect(storm.reconnectAt).toBe(120_000);
+    expect(planStorm({ users: 100, warmupMs: 60_000, measuredMs: 120_000, everyMs: 10_000, seed: 5 })).toEqual(storm);
+  });
+});
 
 const steady: PlanInput = {
   users: 100,
