@@ -5,7 +5,7 @@
 import type { DataLayer, JobsView, JobView, MemberSummary } from '@crm/data';
 import { useJobs } from '@crm/data/react';
 import { Badge, Button, EmptyState, Modal, ProgressBar, RelativeTime, Table, TopBar, type TableColumn } from '@crm/ui';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { strings } from './strings.ts';
 
@@ -46,17 +46,19 @@ function starterName(job: JobView, members: readonly MemberSummary[]): string {
   return members.find((member) => member.id === job.startedBy.memberId)?.name ?? strings.removedMember;
 }
 
-/** The progress cell: the bar (indeterminate while the size isn't known), then "done of total". */
+/**
+ * The progress cell: the bar and "done of total". Without a total, a running
+ * job's bar is indeterminate, and any other job says only how many so far
+ * (a sliding bar would say work is going on).
+ */
 function Progress({ job }: { readonly job: JobView }) {
   const handled = job.done + job.refused + job.skipped;
-  const label =
-    job.total === undefined
-      ? strings.progressUnknown(format(handled))
-      : strings.progress(format(handled), format(job.total));
-  return job.total === undefined || job.total === 0 ? (
-    <ProgressBar label={label} />
-  ) : (
-    <ProgressBar label={label} value={handled} maxValue={job.total} />
+  if (job.total === undefined || job.total === 0) {
+    const label = strings.progressUnknown(format(handled));
+    return job.status === 'running' ? <ProgressBar label={label} /> : <>{label}</>;
+  }
+  return (
+    <ProgressBar label={strings.progress(format(handled), format(job.total))} value={handled} maxValue={job.total} />
   );
 }
 
@@ -83,11 +85,38 @@ function Result({ job }: { readonly job: JobView }) {
 }
 
 /** Settings, Background jobs (AC-118): a live table of jobs, Cancel with a confirm, and "Show more". */
-export function JobsScreen({ data, slug, view, isAll, members, canRunTest }: JobsScreenProps) {
+export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTest }: JobsScreenProps) {
   const snapshot = useJobs(view);
   const [confirming, setConfirming] = useState<JobView | undefined>(undefined);
   const [isStarting, setStarting] = useState(false);
-  // One id per click of "Run a test job", sent again if the same start is retried.
+  const [members, setMembers] = useState(loaded);
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  // A starter the member list doesn't hold may have joined since it loaded: read it again (the layer keeps it
+  // fresh on members events) before calling them "A removed member". Once per set of unknown starters.
+  const unknown = snapshot.jobs
+    .flatMap((job) =>
+      job.startedBy.memberId !== undefined && !members.some((member) => member.id === job.startedBy.memberId)
+        ? [job.startedBy.memberId]
+        : [],
+    )
+    .sort()
+    .join(',');
+  useEffect(() => {
+    if (unknown === '') return;
+    let isCurrent = true;
+    data.members.list(slug).then(
+      (fresh) => {
+        if (isCurrent && fresh.length !== members.length) setMembers(fresh);
+      },
+      () => undefined,
+    );
+    return () => {
+      isCurrent = false;
+    };
+    // Only a new set of unknown starters asks again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unknown]);
+  // Each click mints its own id; the layer says why when the start is refused.
   const runTest = () => {
     if (isStarting) return;
     setStarting(true);
@@ -99,6 +128,9 @@ export function JobsScreen({ data, slug, view, isAll, members, canRunTest }: Job
   const cancel = (job: JobView) => {
     setConfirming(undefined);
     void data.jobs.cancel(slug, job.id);
+    // A job not yet running is cancelled at once and its Cancel goes: focus moves to the page's title rather
+    // than being lost. A running one keeps a pending button in its row (below) to come back to.
+    if (job.status !== 'running') requestAnimationFrame(() => titleRef.current?.focus());
   };
 
   const renderCell = (job: JobView, column: string) => {
@@ -108,12 +140,7 @@ export function JobsScreen({ data, slug, view, isAll, members, canRunTest }: Job
       case 'startedBy':
         return starterName(job, members);
       case 'status':
-        return (
-          <Badge
-            text={strings.status[job.status]}
-            tone={job.status === 'running' || job.status === 'cancelling' ? 'accent' : 'neutral'}
-          />
-        );
+        return <Badge text={strings.status[job.status]} />;
       case 'progress':
         return <Progress job={job} />;
       case 'started':
@@ -123,6 +150,13 @@ export function JobsScreen({ data, slug, view, isAll, members, canRunTest }: Job
       case 'result':
         return <Result job={job} />;
       default:
+        if (job.status === 'cancelling') {
+          return (
+            <Button variant="ghost" isPending>
+              {strings.cancelling}
+            </Button>
+          );
+        }
         return job.cancellable ? (
           <Button variant="ghost" onPress={() => setConfirming(job)}>
             {strings.cancel}
@@ -134,7 +168,7 @@ export function JobsScreen({ data, slug, view, isAll, members, canRunTest }: Job
   const body =
     snapshot.status === 'error' ? (
       <EmptyState tone="error" title={strings.failedTitle} onRetry={() => void view.reload()}>
-        {snapshot.error?.message ?? strings.failedText}
+        {strings.failedText}
       </EmptyState>
     ) : (
       <>
@@ -165,7 +199,7 @@ export function JobsScreen({ data, slug, view, isAll, members, canRunTest }: Job
           }}
           actions={
             <>
-              <Button slot="close">{strings.keepRunning}</Button>
+              <Button slot="close">{strings.dontCancel}</Button>
               <Button
                 variant="danger"
                 onPress={() => {
@@ -177,7 +211,7 @@ export function JobsScreen({ data, slug, view, isAll, members, canRunTest }: Job
             </>
           }
         >
-          {strings.cancelText}
+          {strings.cancelText(confirming?.label ?? '')}
         </Modal>
       </>
     );
@@ -187,7 +221,7 @@ export function JobsScreen({ data, slug, view, isAll, members, canRunTest }: Job
       currentPage="jobs"
       page={{
         topBar: (
-          <TopBar title={strings.title} icon="list-checks">
+          <TopBar title={strings.title} icon="list-checks" titleRef={titleRef}>
             {canRunTest && (
               <Button icon="flask-conical" onPress={runTest} isPending={isStarting}>
                 {strings.runTest}

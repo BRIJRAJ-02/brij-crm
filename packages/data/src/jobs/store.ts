@@ -322,7 +322,8 @@ export function createJobsStore(deps: JobsDeps) {
     /**
      * Starts a test job (`dev.simulate`, local and previews only) with the
      * id from `newId`. Waits for the server (it is refused in production),
-     * then shows it in every view; its end raises `onFinished`.
+     * then shows it in every view; its end raises `onFinished`. A refusal
+     * raises a toast saying why, and rejects.
      */
     async startTest(workspace: string, id: string, settings: TestJobSettings): Promise<JobView> {
       const mutationId = deps.mintId();
@@ -338,6 +339,8 @@ export function createJobsStore(deps: JobsDeps) {
         return job;
       } catch (error) {
         deps.mutations.forget(mutationId);
+        // Say why (production has no test job; a member may not run one); the screen only stops its spinner.
+        deps.notify({ tone: 'danger', message: refusalSummary(toDataError(error)) });
         throw error;
       }
     },

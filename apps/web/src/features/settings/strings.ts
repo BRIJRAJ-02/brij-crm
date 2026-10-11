@@ -17,7 +17,7 @@ export const strings = {
   },
   status: {
     preparing: 'Preparing',
-    ready: 'Waiting for a confirm',
+    ready: 'Needs confirm',
     queued: 'Queued',
     running: 'Running',
     cancelling: 'Cancelling',
@@ -39,8 +39,10 @@ export const strings = {
   notYet: 'Not yet',
   cancel: 'Cancel',
   cancelTitle: 'Cancel this job?',
-  cancelText: 'It stops before its next batch. What it already did stays done.',
-  keepRunning: 'Keep it running',
+  /** The confirm's body, naming the job ("Test job"). */
+  cancelText: (label: string) => `${label} stops before its next batch. What it already did stays done.`,
+  dontCancel: 'Don’t cancel',
+  cancelling: 'Cancelling',
   cancelJob: 'Cancel job',
   showMore: 'Show more',
   emptyTitle: 'No background jobs yet',
