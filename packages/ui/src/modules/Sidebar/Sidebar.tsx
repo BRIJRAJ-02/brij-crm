@@ -33,6 +33,11 @@ export interface SidebarState {
 export interface SidebarProps {
   /** The workspace's name, at the top. */
   readonly workspace: string;
+  /**
+   * The workspace isn't known yet (the frame is loading): its mark and name
+   * are skeletons, with no menu, so no stand in name flashes before the real one.
+   */
+  readonly isWorkspaceLoading?: boolean;
   /** The workspace switcher: a `Menu` the name opens. Without it the name is plain. */
   readonly workspaceMenu?: ReactElement;
   /**
@@ -68,6 +73,7 @@ export interface SidebarProps {
  */
 export function Sidebar({
   workspace,
+  isWorkspaceLoading = false,
   workspaceMenu,
   isWorkspaceBusy = false,
   workspaceBusyLabel,
@@ -99,7 +105,13 @@ export function Sidebar({
     <SidebarContext value={{ isCollapsed }}>
       <nav className={styles.root} aria-label={label} data-collapsed={isCollapsed || undefined}>
         <div className={styles.head}>
-          {workspaceMenu === undefined ? (
+          {isWorkspaceLoading ? (
+            <span className={styles.workspace} aria-busy="true">
+              <Skeleton shape="tile" />
+              {!isCollapsed && <Skeleton width="medium" />}
+              <VisuallyHidden>{strings.loadingWorkspace}</VisuallyHidden>
+            </span>
+          ) : workspaceMenu === undefined ? (
             <span className={styles.workspace}>
               {mark}
               {name}

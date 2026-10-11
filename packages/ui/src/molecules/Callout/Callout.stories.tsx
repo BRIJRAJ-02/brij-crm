@@ -37,6 +37,21 @@ export const Tones: Story = {
   },
 };
 
+/** One line inside a bar, at a control's height: it comes and goes without moving the view under it. */
+export const InABar: Story = {
+  render: () => (
+    <Stage>
+      <Callout placement="bar" isAnnounced>
+        Live updates paused
+      </Callout>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const status = await canvas.findByRole('status', undefined, { timeout: 5_000 });
+    await waitFor(() => expect(status).toHaveTextContent('Live updates paused'), { timeout: 5_000 });
+  },
+};
+
 /**
  * Full width under a view's bars, for a state of the whole view: square, a
  * hairline below, and announced politely as it appears.

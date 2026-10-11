@@ -14,6 +14,8 @@ interface SampleSidebarProps {
   readonly isLoading?: boolean;
   readonly hasLists?: boolean;
   readonly onQuickActions?: () => void;
+  /** The workspace's name isn't known yet. */
+  readonly isWorkspaceLoading?: boolean;
 }
 
 /** The sidebar as the app draws it: the fixed destinations, then Favorites, Records and Lists. */
@@ -23,6 +25,7 @@ function SampleSidebar({
   isLoading = false,
   hasLists = true,
   onQuickActions,
+  isWorkspaceLoading = false,
 }: SampleSidebarProps) {
   const [collapsed, setCollapsed] = useState(isCollapsed);
   const [theme] = useState(fakeThemeController);
@@ -30,6 +33,7 @@ function SampleSidebar({
     <Stage height="page">
       <Sidebar
         workspace="Brightline"
+        isWorkspaceLoading={isWorkspaceLoading}
         isWorkspaceBusy={isWorkspaceBusy}
         workspaceBusyLabel="Signing out"
         workspaceMenu={
@@ -46,7 +50,7 @@ function SampleSidebar({
             <NavItem icon="user-plus" onPress={() => undefined}>
               Invite teammates
             </NavItem>
-            <ThemeSwitch controller={theme} isCompact orientation={isRail ? 'vertical' : 'horizontal'} />
+            <ThemeSwitch controller={theme} isCompact={isRail} orientation={isRail ? 'vertical' : 'horizontal'} />
           </>
         )}
       >
@@ -145,11 +149,13 @@ export const Collapsed: Story = {
   },
 };
 
-/** Records and lists still loading: skeleton rows under their labels. */
+/** Records and lists still loading: skeleton rows under their labels, and the workspace's place too, so no stand in name flashes. */
 export const Loading: Story = {
-  args: { isLoading: true },
+  args: { isLoading: true, isWorkspaceLoading: true },
   play: async ({ canvas }) => {
     await waitFor(() => expect(canvas.getAllByText('Loading').length).toBeGreaterThan(0));
+    await expect(canvas.getByText('Loading workspace')).toBeInTheDocument();
+    await expect(canvas.queryByText('Brightline')).toBeNull();
   },
 };
 

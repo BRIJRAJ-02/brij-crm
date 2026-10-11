@@ -43,6 +43,11 @@ interface FormBase<R extends FormRefusal> {
   readonly fieldFor?: (refusal: R) => string | undefined;
   /** Names the form for screen readers when no heading near it does. */
   readonly label?: string;
+  /**
+   * Focuses the first field as the form mounts: a dialog that opens to be
+   * filled in (New person). The dialog keeps that focus rather than its own.
+   */
+  readonly focusesFirstField?: boolean;
 }
 
 /** The submit under the fields, filling the width, as on a sign in page. */
@@ -169,6 +174,7 @@ export function Form<R extends FormRefusal = FormRefusal>({
   submitDescribedBy,
   id,
   label,
+  focusesFirstField = false,
 }: FormProps<R>) {
   const formRef = useRef<HTMLFormElement>(null);
   const spokenRef = useRef<HTMLSpanElement>(null);
@@ -288,6 +294,14 @@ export function Form<R extends FormRefusal = FormRefusal>({
 
   // ⌘↵ (Ctrl+Enter elsewhere) submits from anywhere in the form, a list or a long text included, as the
   // submit's keycap says. The field in use commits on blur first, so the value just typed is sent.
+  // The first field takes focus as the form mounts, before its dialog would focus itself.
+  const shouldFocusFirst = useRef(focusesFirstField);
+  useEffect(() => {
+    if (!shouldFocusFirst.current) return;
+    shouldFocusFirst.current = false;
+    formRef.current?.querySelector<HTMLElement>('input:not([type="hidden"]), textarea, select')?.focus();
+  }, []);
+
   // React Aria's Form takes no key handler, so it listens on the element.
   const platform = useKeyboardPlatform();
   useEffect(() => {

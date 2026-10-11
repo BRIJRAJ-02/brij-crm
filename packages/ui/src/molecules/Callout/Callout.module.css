@@ -24,6 +24,17 @@
     border-radius: 0;
   }
 
+  /* In a bar: one line at a control's height, so it fits beside the bar's buttons and never moves the view. */
+  .root[data-placement='bar'] {
+    align-items: center;
+    gap: var(--space-6);
+    box-sizing: border-box;
+    block-size: var(--size-control);
+    padding-block: 0;
+    padding-inline: var(--space-8);
+    white-space: nowrap;
+  }
+
   .root[data-tone='info'] {
     border-color: var(--tag-blue-border);
     background: var(--tag-blue-bg);
@@ -52,6 +63,10 @@
     display: inline-flex;
     flex: none;
     padding-block-start: var(--space-2);
+  }
+
+  .root[data-placement='bar'] .icon {
+    padding-block-start: 0;
   }
 
   .body {

@@ -8,10 +8,12 @@ export type CalloutTone = 'info' | 'success' | 'warning' | 'danger';
 
 /**
  * `inline` (the default): a bordered box inside a padded region. `banner`: full
- * width under a view's bars, for a state of the whole view (live updates
- * paused): square, with only a hairline below, its content in line with the bars'.
+ * width under a view's bars, for a state of the whole view: square, with only
+ * a hairline below, its content in line with the bars'. `bar`: one short line
+ * inside a bar, a control's height, for a state that must not push the view
+ * down when it comes and goes (live updates paused, in the view bar).
  */
-export type CalloutPlacement = 'inline' | 'banner';
+export type CalloutPlacement = 'inline' | 'banner' | 'bar';
 
 /** Props for Callout. */
 export interface CalloutProps {
