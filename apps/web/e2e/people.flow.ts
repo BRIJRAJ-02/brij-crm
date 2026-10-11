@@ -64,7 +64,8 @@ test.describe('the People table', () => {
     await page.getByRole('button', { name: 'New person' }).first().click();
     const blank = page.getByRole('dialog', { name: 'New person' });
     await blank.getByRole('button', { name: 'Create' }).click();
-    await expect(blank.getByText('Name the person.')).toBeVisible();
+    await expect(blank.getByText('Name is required.')).toBeVisible();
+    await expect(blank.getByLabel('First name')).toHaveAttribute('aria-invalid', 'true');
     await blank.getByRole('button', { name: 'Cancel' }).click();
     await expect(blank).toBeHidden();
 
@@ -73,7 +74,7 @@ test.describe('the People table', () => {
     const newDialog = page.getByRole('dialog', { name: 'New person' });
     await newDialog.getByLabel('First name').fill('Grace');
     await newDialog.getByRole('button', { name: /Add more fields/ }).click();
-    await newDialog.getByLabel('Email address').fill(`grace-${tag}@example.com`);
+    await newDialog.getByLabel('Email address', { exact: true }).fill(`grace-${tag}@example.com`);
     await newDialog.getByRole('button', { name: 'Create' }).click();
     await expect(newDialog.getByText('Another record already has this value for Email addresses.')).toBeVisible();
     await checkScreen(page, '4-new-person-refused');
@@ -93,7 +94,8 @@ test.describe('the People table', () => {
     await expect(nickname).toContainText('Prof');
     await checkScreen(page, '5-people-edited');
 
-    // A refused edit rolls back, marks the cell and raises a toast with Retry: Alan, first, takes Grace's email.
+    // A refused edit rolls back and marks the cell with why, said once in the status line (spec 0006: a refused
+    // value raises no toast and no Retry, which only a passing failure offers). Alan, first, takes Grace's email.
     const email = await cellAt(page, 0, 'Email addresses');
     await email.click();
     await page.keyboard.press('Enter');
@@ -104,11 +106,11 @@ test.describe('the People table', () => {
     await editor.fill(`grace-${tag}@example.com`);
     await page.keyboard.press('Enter');
     await page.keyboard.press('Escape');
-    await expect(page.getByRole('button', { name: 'Retry' })).toBeVisible();
-    // The toast says why (the cell carries the same reason, shown on focus or hover).
+    await expect(email).toHaveAttribute('aria-invalid', 'true');
     await expect(
-      page.getByText('Another record already has this value for Email addresses.').filter({ visible: true }).first(),
-    ).toBeVisible();
+      page.getByRole('status').filter({ hasText: 'Another record already has this value for Email addresses.' }),
+    ).toHaveCount(1);
+    await expect(page.getByRole('button', { name: 'Retry' })).toHaveCount(0);
     await expect(email).not.toContainText(`grace-${tag}@example.com`);
     await checkScreen(page, '6-edit-refused');
 

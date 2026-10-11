@@ -13,6 +13,9 @@ import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { codeFor } from './mailpit.ts';
 
+/** Making a workspace writes its standard objects in one transaction; on a busy machine that takes a while. */
+const WORKSPACE_MADE_MS = 30_000;
+
 const SHOTS = process.env.FLOW_SCREENSHOTS;
 const AXE = createRequire(import.meta.url).resolve('axe-core/axe.min.js');
 
@@ -59,7 +62,14 @@ async function checkScreen(page: Page, name: string): Promise<void> {
   for (const scheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: scheme });
     // Colours ease between themes; wait until they settle, so contrast is measured on the real colours.
-    await page.waitForFunction(() => document.getAnimations().every((animation) => animation.playState !== 'running'));
+    // A looping animation (the code boxes' caret, a spinner) never ends, so only those that do are waited for.
+    await page.waitForFunction(() =>
+      document
+        .getAnimations()
+        .every(
+          (animation) => animation.playState !== 'running' || animation.effect?.getTiming().iterations === Infinity,
+        ),
+    );
     expect(await violations(page), `${name} in ${scheme}`).toEqual([]);
     if (SHOTS !== undefined) {
       await page.screenshot({ path: path.join(SHOTS, `${test.info().project.name}-${name}-${scheme}.png`) });
@@ -94,7 +104,7 @@ async function newWorkspace(page: Page, email: string, name: string, slug: strin
   await page.getByLabel('Workspace name').fill(name);
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people$`));
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people$`), { timeout: WORKSPACE_MADE_MS });
 }
 
 /** Signs out from the workspace menu, by keyboard, and waits for /sign-in. */
@@ -158,7 +168,7 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
 
   // Create workspace lands on the empty People page, with focus on its title.
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people$`));
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people$`), { timeout: WORKSPACE_MADE_MS });
   const title = page.getByRole('heading', { level: 1, name: 'People' });
   await expect(title).toBeVisible();
   await expect(title).toBeFocused();
@@ -247,7 +257,7 @@ test('drops each refusal as its field changes, so one press sends the fixed welc
   // The hint comes back in the refusal's place.
   await expect(page.getByText(`Opens at /w/${taken}-two`)).toBeVisible();
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${taken}-two/objects/people$`));
+  await expect(page).toHaveURL(new RegExp(`/w/${taken}-two/objects/people$`), { timeout: WORKSPACE_MADE_MS });
 });
 
 test('a refused resend says why under its button and waits as long as the server asks', async ({ page }) => {

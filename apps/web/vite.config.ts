@@ -8,7 +8,9 @@ import { defineConfig, type Plugin } from 'vite';
 import { contentSecurityPolicy, directiveSources, sentryDsnProblem } from './csp.ts';
 import { realtimeCspProblem } from './realtime-csp.ts';
 
-const API_DEV_ORIGIN = 'http://localhost:3000';
+// The api the dev server and `vite preview` proxy /api to. API_DEV_ORIGIN moves it, so a second stack (another
+// worktree's flows) runs beside the first; the web port moves with `--port`.
+const API_DEV_ORIGIN = process.env.API_DEV_ORIGIN ?? 'http://localhost:3000';
 
 /** The Content-Security-Policy vercel.json sends with every page. */
 function deployedCsp(): string {

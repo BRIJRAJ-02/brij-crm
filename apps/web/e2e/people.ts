@@ -7,6 +7,9 @@ import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import { codeFor } from './mailpit.ts';
 
+/** Making a workspace writes its standard objects in one transaction; on a busy machine that takes a while. */
+const WORKSPACE_MADE_MS = 30_000;
+
 const SHOTS = process.env.FLOW_SCREENSHOTS;
 const AXE = createRequire(import.meta.url).resolve('axe-core/axe.min.js');
 
@@ -37,7 +40,14 @@ async function violations(page: Page): Promise<string[]> {
 export async function checkScreen(page: Page, name: string): Promise<void> {
   for (const scheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme: scheme });
-    await page.waitForFunction(() => document.getAnimations().every((animation) => animation.playState !== 'running'));
+    // A looping animation (the code boxes' caret, a spinner) never ends, so only those that do are waited for.
+    await page.waitForFunction(() =>
+      document
+        .getAnimations()
+        .every(
+          (animation) => animation.playState !== 'running' || animation.effect?.getTiming().iterations === Infinity,
+        ),
+    );
     expect(await violations(page), `${name} in ${scheme}`).toEqual([]);
     if (SHOTS !== undefined) {
       await page.screenshot({ path: path.join(SHOTS, `${test.info().project.name}-${name}-${scheme}.png`) });
@@ -58,7 +68,7 @@ export async function newWorkspace(page: Page, email: string, slug: string): Pro
   await page.getByLabel('Your name').fill('Ada Lovelace');
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people$`));
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people$`), { timeout: WORKSPACE_MADE_MS });
   return code;
 }
 
@@ -111,7 +121,7 @@ export async function addPerson(page: Page, first: string, last: string, email: 
   await dialog.getByLabel('Last name').fill(last);
   // Email isn't required, so it waits behind "Add more fields" (spec 0012, AC-240).
   await dialog.getByRole('button', { name: /Add more fields/ }).click();
-  await dialog.getByLabel('Email address').fill(email);
+  await dialog.getByLabel('Email address', { exact: true }).fill(email);
   await dialog.getByRole('button', { name: 'Create' }).click();
   await expect(dialog).toBeHidden();
 }
