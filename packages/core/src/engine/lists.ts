@@ -81,6 +81,7 @@ export async function insertList(context: WriteContext, input: ListInput): Promi
   });
   // The list slot last, as every write takes the workspace counter row; a full workspace rolls the list back.
   await takeList(tx, scope);
+  context.record({ definitions: [{ listId: created.listId, objectId: input.objectId, attributeIds: [] }] });
   return created;
 }
 
@@ -152,7 +153,7 @@ export async function addEntry(
         .values({ workspaceId: scope.workspaceId, listId, recordId, ...audit(scope) })
         .returning({ id: listEntries.id });
       if (row === undefined) throw new Error('The entry was not created.');
-      context.record({ createdEntries: [row.id] });
+      context.record({ createdEntries: [{ entryId: row.id, listId, recordId, objectId: list.objectId }] });
       const versions = await writeAll(context, 'entry', row.id, parsed);
       return { entryId: row.id, versions };
     },
@@ -161,12 +162,19 @@ export async function addEntry(
   return result;
 }
 
-/** An entry's list and record, unlocked: neither ever changes, so a write can lock them first. */
-async function entryParents(tx: WorkspaceTx, entryId: string): Promise<{ listId: string; recordId: string }> {
+/**
+ * An entry's list, record and the list's object, unlocked: none of them ever
+ * changes, so a write can lock them first.
+ */
+async function entryParents(
+  tx: WorkspaceTx,
+  entryId: string,
+): Promise<{ listId: string; recordId: string; objectId: string }> {
   checkId(entryId, 'That entry does not exist.');
   const [entry] = await tx
-    .select({ listId: listEntries.listId, recordId: listEntries.recordId })
+    .select({ listId: listEntries.listId, recordId: listEntries.recordId, objectId: lists.objectId })
     .from(listEntries)
+    .innerJoin(lists, and(eq(lists.workspaceId, listEntries.workspaceId), eq(lists.id, listEntries.listId)))
     .where(eq(listEntries.id, entryId));
   if (entry === undefined) throw refuse('NOT_FOUND', 'That entry does not exist.');
   return entry;
@@ -208,7 +216,7 @@ export async function removeEntry(
     scope,
     async (context) => {
       const { tx } = context;
-      const { listId, recordId } = await entryParents(tx, entryId);
+      const { listId, recordId, objectId } = await entryParents(tx, entryId);
       await checkEntryAccess(tx, scope.access, { listId, recordId }, 'write');
       // The list, then the record (share, as lockEntry takes it), then the entry: a restore of the record
       // waits for this removal or this one for it, so neither leaves the entry's keys or unique values showing.
@@ -229,7 +237,7 @@ export async function removeEntry(
       await holdUniqueKeys(tx, [entryId]);
       await setEntryKeysLive(tx, entryId, false);
       await takeEntrySlots(tx, scope, listId, -1);
-      context.record({ removedEntries: [entryId] });
+      context.record({ removedEntries: [{ entryId, listId, recordId, objectId }] });
     },
     hooks,
   );
@@ -246,7 +254,7 @@ export async function restoreEntry(
     scope,
     async (context) => {
       const { tx } = context;
-      const { listId, recordId } = await entryParents(tx, entryId);
+      const { listId, recordId, objectId } = await entryParents(tx, entryId);
       await checkEntryAccess(tx, scope.access, { listId, recordId }, 'write');
       // The same lock order as addEntry: the list, then the record, then the entry.
       const list = await lockList(tx, listId);
@@ -268,7 +276,7 @@ export async function restoreEntry(
         .set({ deletedAt: null, deletedByType: null, deletedById: null, deletedByMemberId: null, ...touched(scope) })
         .where(eq(listEntries.id, entryId));
       await setEntryKeysLive(tx, entryId, true);
-      context.record({ restoredEntries: [entryId] });
+      context.record({ restoredEntries: [{ entryId, listId, recordId, objectId }] });
     },
     hooks,
   );

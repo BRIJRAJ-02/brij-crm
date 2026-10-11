@@ -104,7 +104,7 @@ export async function lockEntry(
   tx: WorkspaceTx,
   entryId: string,
   access: Access,
-): Promise<{ listId: string; recordId: string }> {
+): Promise<{ listId: string; recordId: string; objectId: string }> {
   checkId(entryId, 'That entry does not exist.');
   const [parents] = await tx
     .select({ recordId: listEntries.recordId, listId: listEntries.listId })
@@ -113,7 +113,7 @@ export async function lockEntry(
   if (parents === undefined) throw refuse('NOT_FOUND', 'That entry does not exist.');
   await checkEntryAccess(tx, access, parents, 'write');
   const [record] = await tx
-    .select({ deletedAt: records.deletedAt })
+    .select({ deletedAt: records.deletedAt, objectId: records.objectId })
     .from(records)
     .where(eq(records.id, parents.recordId))
     .for('share');
@@ -126,7 +126,7 @@ export async function lockEntry(
   if (row.deletedAt !== null) throw refuse('RECORD_DELETED', 'That entry was removed from its list. Restore it first.');
   if (record?.deletedAt !== null)
     throw refuse('RECORD_DELETED', "That entry's record is in the trash. Restore it first.");
-  return { listId: row.listId, recordId: row.recordId };
+  return { listId: row.listId, recordId: row.recordId, objectId: record.objectId };
 }
 
 /**

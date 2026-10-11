@@ -32,6 +32,10 @@ export function outboxEvent(row: OutboxRow): EventRow | undefined {
         objectId: row.objectId,
         recordIds: copy(row.recordIds),
         attributeIds: copy(row.attributeIds),
+        // Which records were made, deleted or restored (owner decision pending, 12 Oct 2026), only when any were.
+        ...(row.createdIds.length === 0 ? {} : { createdIds: copy(row.createdIds) }),
+        ...(row.deletedIds.length === 0 ? {} : { deletedIds: copy(row.deletedIds) }),
+        ...(row.restoredIds.length === 0 ? {} : { restoredIds: copy(row.restoredIds) }),
         ...coarse,
         // What the write replaced (spec 0006), copied, so the event shares nothing with its row.
         ...(row.replaced === undefined

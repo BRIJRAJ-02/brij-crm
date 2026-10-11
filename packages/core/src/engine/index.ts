@@ -113,6 +113,7 @@ export {
   type CappedStep,
   type Change,
   type DefinitionChange,
+  type EntryRef,
   type RecordRef,
   type ReferenceChange,
   type ValueChange,

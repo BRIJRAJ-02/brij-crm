@@ -44,6 +44,10 @@ export interface OutboxRow {
   readonly attributeIds: readonly string[];
   /** The row's own items: entry, view, note, task, member or job ids, by kind. */
   readonly itemIds: readonly string[];
+  /** On a `records` row: the records the write created, deleted and restored (empty for the rest). */
+  readonly createdIds: readonly string[];
+  readonly deletedIds: readonly string[];
+  readonly restoredIds: readonly string[];
   /** Too many records changed to list: refetch what you hold of the object. */
   readonly coarse: boolean;
   readonly mutationId: string | undefined;
@@ -227,6 +231,9 @@ export interface RawOutboxRow {
   readonly record_ids: string[];
   readonly attribute_ids: string[];
   readonly item_ids: string[];
+  readonly created_ids: string[];
+  readonly deleted_ids: string[];
+  readonly restored_ids: string[];
   readonly coarse: boolean;
   readonly mutation_id: string | null;
   readonly actor_member_id: string | null;
@@ -237,8 +244,9 @@ export interface RawOutboxRow {
 }
 
 /** The columns an `OutboxRow` is read from, in SQL, for `outboxRowOf`. */
-export const OUTBOX_ROW_COLUMNS = `seq, kind, object_id, list_id, record_ids, attribute_ids, item_ids, coarse, mutation_id,
-  actor_member_id, to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as at, replaced`;
+export const OUTBOX_ROW_COLUMNS = `seq, kind, object_id, list_id, record_ids, attribute_ids, item_ids, created_ids, deleted_ids,
+  restored_ids, coarse, mutation_id, actor_member_id,
+  to_char(created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as at, replaced`;
 
 /**
  * Runs `statements` (already checked, see the header) after setting
@@ -288,6 +296,9 @@ export function outboxRowOf(row: RawOutboxRow): OutboxRow {
     recordIds: row.record_ids,
     attributeIds: row.attribute_ids,
     itemIds: row.item_ids,
+    createdIds: row.created_ids,
+    deletedIds: row.deleted_ids,
+    restoredIds: row.restored_ids,
     coarse: row.coarse,
     mutationId: row.mutation_id ?? undefined,
     actorMemberId: row.actor_member_id ?? undefined,

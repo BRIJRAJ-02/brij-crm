@@ -134,6 +134,36 @@ describe('records', () => {
     });
   });
 
+  it('names made, deleted and restored ids only among the records it keeps (spec 0007, owner decision pending)', () => {
+    const lifecycle: EventRow = {
+      ...records,
+      replaced: undefined,
+      createdIds: ['r1'],
+      deletedIds: ['r2'],
+    };
+    expect(filterEvent(open, lifecycle)).toEqual(lifecycle);
+    // Under a record rule: no ids at all, coarse, and no mutation id.
+    const ruled = filterEvent(ownRecords, lifecycle);
+    expect(ruled).toMatchObject({ recordIds: [], coarse: true });
+    expect(ruled).not.toHaveProperty('createdIds');
+    expect(ruled).not.toHaveProperty('deletedIds');
+    expect(ruled).not.toHaveProperty('mutationId');
+  });
+
+  it('keeps a record made with only hidden fields, so counts still move, and names no hidden field', () => {
+    const made: EventRow = { ...records, replaced: undefined, attributeIds: [HIDDEN], createdIds: ['r1'] };
+    expect(filterEvent(hiddenField, made)).toEqual({
+      seq: 41,
+      at,
+      kind: 'records',
+      objectId: OBJECT,
+      recordIds: ['r1'],
+      attributeIds: [],
+      createdIds: ['r1'],
+      coarse: false,
+    });
+  });
+
   it('keeps a coarse event coarse for anyone who sees the object', () => {
     const coarse: EventRow = { ...records, recordIds: [], attributeIds: [], coarse: true, replaced: undefined };
     expect(filterEvent(hiddenField, coarse)).toEqual(coarse);

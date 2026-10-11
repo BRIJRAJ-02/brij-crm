@@ -12,7 +12,7 @@
 // `seq` (pruned, or never retained) answers `reset`, as does a watermark more
 // than `CATCH_UP_MAX_ROWS` behind, or ahead of the head (a watermark from
 // another history).
-import type { CatchUp } from '@crm/contracts';
+import { MAX_LIFECYCLE_IDS, type CatchUp } from '@crm/contracts';
 import { OUTBOX_ROW_COLUMNS, outboxRowOf, schema, type RawOutboxRow, type WorkspaceTx } from '@crm/db';
 import { eq, sql } from 'drizzle-orm';
 import { filterEvent, type Audience, type AudienceEvent } from '../access/events.ts';
@@ -38,11 +38,25 @@ const STATEMENT_TIMEOUT_MS = 5_000;
 const { workspaceCounters } = schema;
 
 type Kind = AudienceEvent['kind'];
-type IdField = 'recordIds' | 'attributeIds' | 'entryIds' | 'viewIds' | 'noteIds' | 'taskIds' | 'memberIds' | 'jobIds';
+type IdField =
+  | 'recordIds'
+  | 'attributeIds'
+  | 'createdIds'
+  | 'deletedIds'
+  | 'restoredIds'
+  | 'entryIds'
+  | 'viewIds'
+  | 'noteIds'
+  | 'taskIds'
+  | 'memberIds'
+  | 'jobIds';
+
+/** A records event's made, deleted and restored ids: together at most `MAX_LIFECYCLE_IDS`, else the event goes coarse. */
+const LIFECYCLE: readonly IdField[] = ['createdIds', 'deletedIds', 'restoredIds'];
 
 /** The id lists each kind merges. */
 const MERGED: Readonly<Record<Kind, readonly IdField[]>> = {
-  records: ['recordIds', 'attributeIds'],
+  records: ['recordIds', 'attributeIds', ...LIFECYCLE],
   entries: ['entryIds', 'recordIds', 'attributeIds'],
   definitions: ['attributeIds'],
   views: ['viewIds'],
@@ -55,7 +69,7 @@ const MERGED: Readonly<Record<Kind, readonly IdField[]>> = {
 
 /** The id lists a coarse event empties (past `CHANGE_CAP`, or a coarse row merged in); kinds with none never go coarse. */
 const CAPPED: Readonly<Record<Kind, readonly IdField[]>> = {
-  records: ['recordIds'],
+  records: ['recordIds', ...LIFECYCLE],
   entries: ['entryIds', 'recordIds'],
   definitions: [],
   views: ['viewIds'],
@@ -127,13 +141,20 @@ export function createCollapse() {
         for (const id of incoming) if (typeof id === 'string') ids.add(id);
         if (capped && ids.size > CHANGE_CAP) makeCoarse(group);
       }
+      const named = LIFECYCLE.reduce((total, name) => total + (group.ids.get(name)?.size ?? 0), 0);
+      if (named > MAX_LIFECYCLE_IDS && !group.coarse) makeCoarse(group);
     },
     /** The collapsed events, by the `seq` of the last change each covers. */
     events(): AudienceEvent[] {
       return [...groups.values()]
         .sort((a, b) => a.seq - b.seq)
         .map((group) => {
-          const lists = Object.fromEntries([...group.ids].map(([name, ids]) => [name, [...ids]]));
+          // The made, deleted and restored lists only when they name something, as the relay sends them.
+          const lists = Object.fromEntries(
+            [...group.ids]
+              .filter(([name, ids]) => !LIFECYCLE.includes(name) || ids.size > 0)
+              .map(([name, ids]) => [name, [...ids]]),
+          );
           if (group.kind === 'definitions' && group.whole) delete lists.attributeIds;
           return {
             seq: group.seq,

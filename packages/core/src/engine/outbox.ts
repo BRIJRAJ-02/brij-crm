@@ -1,22 +1,25 @@
-// The outbox hook (spec 0005, change events, AC-39): every write that changes
-// something stores its events in the same transaction, so an event can never
-// describe a change that rolled back, nor miss one that committed. One row per
-// object whose records changed (`records`) and one per object whose attributes
-// changed (`definitions`), ids only, numbered per workspace from
+// The outbox hook (spec 0005, change events, AC-39; spec 0007, AC-80 to
+// AC-82): every write that changes something stores its events in the same
+// transaction, so an event can never describe a change that rolled back, nor
+// miss one that committed. `outboxHook` is the one outbox writer: one row per
+// object whose records changed (`records`), one per list whose entries changed
+// (`entries`), one per object, list or workspace whose definitions changed
+// (`definitions`), and one per kind for what writes outside the engine record
+// in the `Change` (`members` today; views, notes, tasks, access and jobs as
+// their features land). Ids only, numbered per workspace from
 // `workspace_counters.outbox_seq` under that row's lock, so the numbers have no
 // gaps and follow commit order. Then `pg_notify`, delivered on commit, wakes
 // the relay. The counter, the rows and the notify are one statement, so the
 // hook costs the write one round trip while it holds the counter row. Each row
 // also names the member whose write stored it (`actor_member_id`, spec 0007,
 // never published) and its commit time (`created_at`, taken after the counter
-// row, so it follows `seq` order). Entry changes aren't published yet: no
-// screen shows lists (spec 0007, milestone 2).
+// row, so it follows `seq` order).
 import { sql } from 'drizzle-orm';
-import { MAX_REPLACED_CELLS } from '@crm/contracts';
+import { MAX_LIFECYCLE_IDS, MAX_REPLACED_CELLS } from '@crm/contracts';
 import { OUTBOX_CHANNEL } from '@crm/db';
 import { isUuid } from './ids.ts';
 import type { Actor } from './scope.ts';
-import { cappedHook, type AfterWrite, type CappedChange } from './write.ts';
+import { cappedHook, type AfterWrite, type CappedChange, type EntryRef } from './write.ts';
 
 /** One cell a write replaced that its author never saw (spec 0006, AC-46): ids only. */
 export interface ReplacedCell {
@@ -39,12 +42,28 @@ export interface ReplacedValues {
  */
 export const REPLACED_CAP = MAX_REPLACED_CELLS;
 
+/**
+ * The most record ids one `records` row names as created, deleted and
+ * restored together (`MAX_LIFECYCLE_IDS` in the contract; owner decision
+ * pending, 12 Oct 2026); past it the row is coarse.
+ */
+export const LIFECYCLE_CAP = MAX_LIFECYCLE_IDS;
+
 /** One outbox row before it gets its number. */
 export interface OutboxEvent {
-  readonly kind: 'records' | 'definitions';
-  readonly objectId: string;
+  readonly kind: 'records' | 'entries' | 'definitions' | 'members';
+  /** The object: a `records` row's, an `entries` row's list's parent, a `definitions` row's when it names one. */
+  readonly objectId?: string;
+  /** The list: an `entries` row's, a `definitions` row's when it names one. */
+  readonly listId?: string;
   readonly recordIds: readonly string[];
   readonly attributeIds: readonly string[];
+  /** The row's own items: entry ids for `entries`, member ids for `members`. */
+  readonly itemIds: readonly string[];
+  /** On a `records` row: the records the write created, deleted and restored, at most `LIFECYCLE_CAP` together. */
+  readonly createdIds: readonly string[];
+  readonly deletedIds: readonly string[];
+  readonly restoredIds: readonly string[];
   readonly coarse: boolean;
   /** On a `records` row: what the write replaced, when it replaced some cells and no more than `REPLACED_CAP`. */
   readonly replaced?: ReplacedValues;
@@ -63,27 +82,57 @@ export interface OutboxHookOptions {
   readonly onStored?: (count: number) => void;
 }
 
-/**
- * The events a capped change publishes, in a stable order: each object's
- * records row (its record ids merged across every record list, the
- * references and the record values, or `coarse` with none past the cap),
- * then each object's definitions row. Nothing for an empty change, or one
- * that only touched list entries.
- */
-export function outboxEvents(change: CappedChange): readonly OutboxEvent[] {
+const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
+
+/** An empty set of the lists every row carries, for a kind that names only some. */
+const NO_IDS = {
+  recordIds: [],
+  attributeIds: [],
+  itemIds: [],
+  createdIds: [],
+  deletedIds: [],
+  restoredIds: [],
+} as const;
+
+/** Each object's `records` row: record ids merged across every record list, the references and the record values. */
+function recordRows(change: CappedChange): OutboxEvent[] {
   const records = new Map<
     string,
-    { readonly recordIds: Set<string>; readonly attributeIds: Set<string>; readonly replaced: ReplacedCell[] }
+    {
+      readonly recordIds: Set<string>;
+      readonly attributeIds: Set<string>;
+      readonly created: Set<string>;
+      readonly deleted: Set<string>;
+      readonly restored: Set<string>;
+      readonly replaced: ReplacedCell[];
+    }
   >();
   const touch = (objectId: string) => {
     const found = records.get(objectId);
     if (found !== undefined) return found;
-    const created = { recordIds: new Set<string>(), attributeIds: new Set<string>(), replaced: [] as ReplacedCell[] };
+    const created = {
+      recordIds: new Set<string>(),
+      attributeIds: new Set<string>(),
+      created: new Set<string>(),
+      deleted: new Set<string>(),
+      restored: new Set<string>(),
+      replaced: [] as ReplacedCell[],
+    };
     records.set(objectId, created);
     return created;
   };
-  for (const list of [change.createdRecords, change.deletedRecords, change.restoredRecords, change.purgedRecords]) {
-    for (const ref of list) touch(ref.objectId).recordIds.add(ref.recordId);
+  const lifecycle = [
+    [change.createdRecords, 'created'],
+    [change.deletedRecords, 'deleted'],
+    [change.restoredRecords, 'restored'],
+    [change.purgedRecords, undefined],
+  ] as const;
+  for (const [list, named] of lifecycle) {
+    for (const ref of list) {
+      const object = touch(ref.objectId);
+      object.recordIds.add(ref.recordId);
+      if (named !== undefined) object[named].add(ref.recordId);
+    }
   }
   for (const reference of change.references) {
     const object = touch(reference.objectId);
@@ -107,39 +156,150 @@ export function outboxEvents(change: CappedChange): readonly OutboxEvent[] {
   const coarse = new Set(change.coarse.map((item) => item.objectId));
   for (const objectId of coarse) touch(objectId);
 
-  const definitions = new Map<string, Set<string>>();
-  for (const definition of change.definitions) {
-    const ids = definitions.get(definition.objectId) ?? new Set<string>();
-    for (const attributeId of definition.attributeIds) ids.add(attributeId);
-    definitions.set(definition.objectId, ids);
-  }
-
-  const byId = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
-  return [
-    ...[...records.keys()].sort(byId).map((objectId): OutboxEvent => {
-      const object = touch(objectId);
-      const isCoarse = coarse.has(objectId);
-      const replaced = isCoarse || object.replaced.length > REPLACED_CAP ? [] : object.replaced;
-      return {
-        kind: 'records',
-        objectId,
-        recordIds: isCoarse ? [] : [...object.recordIds],
-        attributeIds: [...object.attributeIds],
-        coarse: isCoarse,
-        // The write's actor replaced every cell, so it is named once.
-        ...(replaced.length === 0
-          ? {}
-          : { replaced: { by: { type: change.actor.type, id: change.actor.id }, cells: replaced } }),
-      };
-    }),
-    ...[...definitions.keys()].sort(byId).map((objectId): OutboxEvent => ({
-      kind: 'definitions',
+  return [...records.keys()].sort(byId).map((objectId): OutboxEvent => {
+    const object = touch(objectId);
+    // Past the lifecycle cap the row goes coarse: screens reread their windows and counts (owner decision pending).
+    const isCoarse =
+      coarse.has(objectId) || object.created.size + object.deleted.size + object.restored.size > LIFECYCLE_CAP;
+    const replaced = isCoarse || object.replaced.length > REPLACED_CAP ? [] : object.replaced;
+    return {
+      kind: 'records',
       objectId,
-      recordIds: [],
-      attributeIds: [...(definitions.get(objectId) ?? [])],
+      ...NO_IDS,
+      recordIds: isCoarse ? [] : [...object.recordIds],
+      attributeIds: [...object.attributeIds],
+      createdIds: isCoarse ? [] : [...object.created],
+      deletedIds: isCoarse ? [] : [...object.deleted],
+      restoredIds: isCoarse ? [] : [...object.restored],
+      coarse: isCoarse,
+      // The write's actor replaced every cell, so it is named once.
+      ...(replaced.length === 0
+        ? {}
+        : { replaced: { by: { type: change.actor.type, id: change.actor.id }, cells: replaced } }),
+    };
+  });
+}
+
+/** The entry lists that put an entry on its list's row. */
+const ENTRY_LISTS = [
+  'createdEntries',
+  'removedEntries',
+  'restoredEntries',
+  'hiddenEntries',
+  'shownEntries',
+  'purgedEntries',
+  'changedEntries',
+] as const satisfies readonly (keyof CappedChange)[];
+
+/** Each list's `entries` row (AC-80): entry ids, their records, the entry attributes changed, or coarse past the cap. */
+function entryRows(change: CappedChange): OutboxEvent[] {
+  const lists = new Map<
+    string,
+    {
+      objectId: string | undefined;
+      readonly entryIds: Set<string>;
+      readonly recordIds: Set<string>;
+      readonly attributeIds: Set<string>;
+    }
+  >();
+  const touch = (listId: string) => {
+    const found = lists.get(listId);
+    if (found !== undefined) return found;
+    const created = {
+      objectId: undefined as string | undefined,
+      entryIds: new Set<string>(),
+      recordIds: new Set<string>(),
+      attributeIds: new Set<string>(),
+    };
+    lists.set(listId, created);
+    return created;
+  };
+  const note = (ref: EntryRef) => {
+    const list = touch(ref.listId);
+    list.objectId ??= ref.objectId;
+    list.entryIds.add(ref.entryId);
+    list.recordIds.add(ref.recordId);
+  };
+  for (const key of ENTRY_LISTS) for (const ref of change[key]) note(ref);
+  for (const value of change.values) {
+    if (value.ownerKind !== 'entry') continue;
+    const list = touch(value.listId);
+    list.entryIds.add(value.ownerId);
+    list.attributeIds.add(value.attributeId);
+  }
+  const coarse = new Set(change.coarseLists.map((item) => item.listId));
+  for (const listId of coarse) touch(listId);
+  return [...lists.keys()].sort(byId).map((listId): OutboxEvent => {
+    const list = touch(listId);
+    const isCoarse = coarse.has(listId);
+    return {
+      kind: 'entries',
+      listId,
+      ...(list.objectId === undefined ? {} : { objectId: list.objectId }),
+      ...NO_IDS,
+      itemIds: isCoarse ? [] : [...list.entryIds],
+      recordIds: isCoarse ? [] : [...list.recordIds],
+      attributeIds: [...list.attributeIds],
+      coarse: isCoarse,
+    };
+  });
+}
+
+/**
+ * One `definitions` row per object, list or the workspace's object list
+ * (AC-81). Its attribute ids are merged; one change naming none (the object
+ * or list itself changed) makes the row name none, so screens read the whole
+ * set again.
+ */
+function definitionRows(change: CappedChange): OutboxEvent[] {
+  const rows = new Map<
+    string,
+    { readonly objectId?: string; readonly listId?: string; ids: Set<string>; whole: boolean }
+  >();
+  for (const definition of change.definitions) {
+    // A list's row is keyed by the list alone: its parent object rides along when a change named it.
+    const key = definition.listId === undefined ? `object:${definition.objectId ?? ''}` : `list:${definition.listId}`;
+    const row = rows.get(key) ?? {
+      ...(definition.listId === undefined ? {} : { listId: definition.listId }),
+      ...(definition.objectId === undefined ? {} : { objectId: definition.objectId }),
+      ids: new Set<string>(),
+      whole: false,
+    };
+    const merged =
+      row.objectId === undefined && definition.objectId !== undefined ? { ...row, objectId: definition.objectId } : row;
+    if (definition.attributeIds.length === 0) merged.whole = true;
+    for (const attributeId of definition.attributeIds) merged.ids.add(attributeId);
+    rows.set(key, merged);
+  }
+  return [...rows.keys()].sort(byId).map((key): OutboxEvent => {
+    const row = rows.get(key);
+    return {
+      kind: 'definitions',
+      ...(row?.objectId === undefined ? {} : { objectId: row.objectId }),
+      ...(row?.listId === undefined ? {} : { listId: row.listId }),
+      ...NO_IDS,
+      attributeIds: row === undefined || row.whole ? [] : [...row.ids],
       coarse: false,
-    })),
-  ];
+    };
+  });
+}
+
+/** One row per kind a write outside the engine recorded (AC-82): `members` today. */
+function kindRows(change: CappedChange): OutboxEvent[] {
+  if (change.members.length === 0) return [];
+  return [{ kind: 'members', ...NO_IDS, itemIds: [...change.members].sort(byId), coarse: false }];
+}
+
+/**
+ * The events a capped change publishes, in a stable order: each object's
+ * records row (its record ids merged across every record list, the
+ * references and the record values, with the ones created, deleted and
+ * restored named, or `coarse` with none past a cap), each list's entries
+ * row, each definitions row, then one row per kind recorded outside the
+ * engine. Nothing for an empty change.
+ */
+export function outboxEvents(change: CappedChange): readonly OutboxEvent[] {
+  return [...recordRows(change), ...entryRows(change), ...definitionRows(change), ...kindRows(change)];
 }
 
 /**
@@ -164,6 +324,10 @@ export function outboxHook(options: OutboxHookOptions = {}): AfterWrite {
     const actorMemberId = change.actor.type === 'member' ? change.actor.id : null;
     const json = JSON.stringify(events);
     // Arrays come out of the json in their own order (with ordinality), so ids keep the order the hook gave them.
+    const ids = (name: string) =>
+      sql.raw(
+        `array(select x.id::uuid from jsonb_array_elements_text(e.value -> '${name}') with ordinality as x(id, i) order by x.i)`,
+      );
     const result = await tx.execute<{ stored: number }>(sql`
       with counter as (
         update workspace_counters set outbox_seq = outbox_seq + ${count}::bigint
@@ -172,16 +336,21 @@ export function outboxHook(options: OutboxHookOptions = {}): AfterWrite {
       ),
       stored as (
         insert into outbox (
-          workspace_id, seq, kind, object_id, record_ids, attribute_ids, coarse, mutation_id, actor_member_id, created_at,
-          replaced
+          workspace_id, seq, kind, object_id, list_id, record_ids, attribute_ids, item_ids, created_ids, deleted_ids,
+          restored_ids, coarse, mutation_id, actor_member_id, created_at, replaced
         )
         select
           ${change.workspaceId}::uuid,
           counter.base + e.ord,
           (e.value ->> 'kind')::outbox_kind,
           (e.value ->> 'objectId')::uuid,
-          array(select r.id::uuid from jsonb_array_elements_text(e.value -> 'recordIds') with ordinality as r(id, i) order by r.i),
-          array(select a.id::uuid from jsonb_array_elements_text(e.value -> 'attributeIds') with ordinality as a(id, i) order by a.i),
+          (e.value ->> 'listId')::uuid,
+          ${ids('recordIds')},
+          ${ids('attributeIds')},
+          ${ids('itemIds')},
+          ${ids('createdIds')},
+          ${ids('deletedIds')},
+          ${ids('restoredIds')},
           (e.value ->> 'coarse')::boolean,
           ${mutationId ?? null}::uuid,
           ${actorMemberId}::uuid,
@@ -190,7 +359,7 @@ export function outboxHook(options: OutboxHookOptions = {}): AfterWrite {
         from counter, jsonb_array_elements(${json}::jsonb) with ordinality as e(value, ord)
         returning 1
       )
-      select (select count(*)::int from stored) as stored, pg_notify(${OUTBOX_CHANNEL}, ${change.workspaceId}::text)
+      select (select count(*)::int as n from stored) as stored, pg_notify(${OUTBOX_CHANNEL}, ${change.workspaceId}::text)
     `);
     // No counters row means nothing was stored; the error rolls the write (and the notify) back.
     if (result.rows[0]?.stored !== count) throw new Error('The workspace has no counters row.');

@@ -4,7 +4,7 @@
 import { asc, eq, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { HUES } from '@crm/contracts/values';
-import { audit, touched } from './definitions.ts';
+import { audit, recordDefinition, touched } from './definitions.ts';
 import { checkId, isUuid } from './ids.ts';
 import { checkOptionRoom } from './limits.ts';
 import { postgresError, refuse } from './refusals.ts';
@@ -108,6 +108,8 @@ export async function insertOption(context: WriteContext, input: OptionInput): P
       })
       .returning({ id: attributeOptions.id });
     if (row === undefined) throw new Error('The option was not created.');
+    // The attribute's options changed: its object's (or list's) screens read its definition again.
+    recordDefinition(context, attribute);
     return { optionId: row.id };
   });
 }
@@ -146,18 +148,21 @@ export async function updateOption(scope: EngineScope, input: OptionUpdate, hook
   checkId(input.optionId, 'That option does not exist.');
   await runWrite(
     scope,
-    async ({ tx }) => {
+    async (context) => {
+      const { tx } = context;
       const [option] = await tx
         .select()
         .from(attributeOptions)
         .where(eq(attributeOptions.id, input.optionId))
         .for('update');
       if (option === undefined) throw refuse('NOT_FOUND', 'That option does not exist.');
+      const owner = await loadAttribute(tx, option.attributeId);
       // An option of an attribute the actor can't see answers as an unknown option (spec 0009, AC-141).
-      if (!isOpen(scope.access)) {
-        const owner = await loadAttribute(tx, option.attributeId);
-        if (!attributeVisible(scope.access, owner)) throw refuse('NOT_FOUND', 'That option does not exist.');
+      if (!isOpen(scope.access) && !attributeVisible(scope.access, owner)) {
+        throw refuse('NOT_FOUND', 'That option does not exist.');
       }
+      // Renamed, recoloured, reordered, archived or restored: its object's (or list's) screens read it again.
+      recordDefinition(context, owner);
       if (input.label !== undefined) checkLabel(input.label);
       if (input.hue !== undefined) checkHue(input.hue);
       checkTarget(input.targetTimeInStage);

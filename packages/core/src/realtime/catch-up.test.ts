@@ -14,7 +14,8 @@ import { createRecord, setValues } from '../engine/records.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { CHANGE_CAP } from '../engine/write.ts';
 import { testScope } from '../testing.ts';
-import { catchUp, CATCH_UP_MAX_ROWS, workspaceHead } from './catch-up.ts';
+import { MAX_LIFECYCLE_IDS } from '@crm/contracts';
+import { catchUp, CATCH_UP_MAX_ROWS, createCollapse, workspaceHead } from './catch-up.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
@@ -94,6 +95,8 @@ describe('catch up', () => {
         objectId: people,
         recordIds: [ada, grace],
         attributeIds: [name],
+        // Both were made in the range: a screen settles its counts on them (owner decision pending).
+        createdIds: [ada, grace],
       },
     ]);
     // From part way: only what came after.
@@ -250,5 +253,72 @@ describe('catch up through a restricted audience (spec 0009 rules on the whole p
       expect(JSON.stringify(answer)).not.toContain('actorMemberId');
     }
     expect(JSON.stringify(theirs)).not.toContain(job);
+  });
+});
+
+describe('the collapse of made, deleted and restored ids (owner decision pending)', () => {
+  const OBJECT = '00000000-0000-7000-8000-00000000000a';
+  const at = '2026-10-12T09:00:00.000Z';
+  const id = (n: number) => `00000000-0000-7000-8000-${n.toString(16).padStart(12, '0')}`;
+
+  it('merges them per object, named only when some were', () => {
+    const collapse = createCollapse();
+    collapse.add({
+      seq: 1,
+      at,
+      kind: 'records',
+      objectId: OBJECT,
+      recordIds: [id(1)],
+      attributeIds: [],
+      createdIds: [id(1)],
+    });
+    collapse.add({ seq: 2, at, kind: 'records', objectId: OBJECT, recordIds: [id(2)], attributeIds: [] });
+    collapse.add({
+      seq: 3,
+      at,
+      kind: 'records',
+      objectId: OBJECT,
+      recordIds: [id(1)],
+      attributeIds: [],
+      deletedIds: [id(1)],
+    });
+    expect(collapse.events()).toEqual([
+      {
+        seq: 3,
+        at,
+        kind: 'records',
+        objectId: OBJECT,
+        recordIds: [id(1), id(2)],
+        attributeIds: [],
+        createdIds: [id(1)],
+        deletedIds: [id(1)],
+      },
+    ]);
+  });
+
+  it('goes coarse past the cap across the three lists, naming none', () => {
+    const collapse = createCollapse();
+    for (let seq = 1; seq <= MAX_LIFECYCLE_IDS + 1; seq += 1) {
+      collapse.add({
+        seq,
+        at,
+        kind: 'records',
+        objectId: OBJECT,
+        recordIds: [id(seq)],
+        attributeIds: [],
+        createdIds: [id(seq)],
+      });
+    }
+    expect(collapse.events()).toEqual([
+      {
+        seq: MAX_LIFECYCLE_IDS + 1,
+        at,
+        kind: 'records',
+        objectId: OBJECT,
+        recordIds: [],
+        attributeIds: [],
+        coarse: true,
+      },
+    ]);
   });
 });

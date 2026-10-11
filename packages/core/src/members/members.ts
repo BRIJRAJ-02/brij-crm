@@ -197,7 +197,8 @@ export async function setMemberRole(
   checkManages(scope, actingRole(scope), memberId);
   const { result } = await runWrite(
     scope,
-    async ({ tx }) => {
+    async (context) => {
+      const { tx } = context;
       const { target, acting } = await lockTarget(tx, scope, memberId);
       checkChangesRoles(acting.role);
       checkOwnerRules(scope, acting, target, role);
@@ -207,6 +208,8 @@ export async function setMemberRole(
         .update(members)
         .set({ role, ...touched(scope) })
         .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, target.id)));
+      // Everyone's member list reads them again, and the relay drops the workspace's audiences (spec 0007, AC-82).
+      context.record({ members: [target.id] });
       return { id: target.id, name: target.name, email: target.email, role };
     },
     hooks,
@@ -231,7 +234,8 @@ export async function removeMember(
   checkManages(scope, actingRole(scope), memberId);
   await runWrite(
     scope,
-    async ({ tx }) => {
+    async (context) => {
+      const { tx } = context;
       const { target, acting } = await lockTarget(tx, scope, memberId);
       // Leaving is always yours to do; the last owner guard still holds.
       if (!isSelf(scope, target.id)) checkOwnerRules(scope, acting, target);
@@ -240,6 +244,8 @@ export async function removeMember(
         .update(members)
         .set({ status: 'removed', ...touched(scope) })
         .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, target.id)));
+      // The `access` row that disconnects them comes with spec 0009 milestone 3; the member list changes now.
+      context.record({ members: [target.id] });
     },
     hooks,
   );

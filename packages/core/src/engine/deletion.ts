@@ -21,7 +21,7 @@ import { refuse } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
 import { deleteSortKeys, setRecordKeysLive } from './sort-keys.ts';
 import { holdUniqueKeys, releaseUniqueKeys } from './unique.ts';
-import { runWrite, type AfterWrite, type RecordRef, type ReferenceChange } from './write.ts';
+import { CHANGE_CAP, runWrite, type AfterWrite, type EntryRef, type RecordRef, type ReferenceChange } from './write.ts';
 import { requirePermission } from '../access/check.ts';
 import type { Access } from '../access/policy.ts';
 import { checkObject, checkRecordVisible, UNKNOWN_RECORD } from '../access/visibility.ts';
@@ -58,20 +58,35 @@ async function lockedRecord(tx: WorkspaceTx, recordId: string) {
   return row;
 }
 
-/** The ids of a record's entries still in their lists: their unique keys go with the record's. */
-async function liveEntryIds(tx: WorkspaceTx, recordId: string): Promise<readonly string[]> {
-  const result = await tx.execute<{ id: string }>(
-    sql`select id::text from list_entries where record_id = ${recordId} and deleted_at is null`,
+/** A record's entries still in their lists: their unique keys go with the record's. */
+async function liveEntries(tx: WorkspaceTx, record: RecordRef): Promise<readonly EntryRef[]> {
+  const result = await tx.execute<{ id: string; list_id: string }>(
+    sql`select id::text, list_id::text from list_entries where record_id = ${record.recordId} and deleted_at is null`,
   );
-  return result.rows.map((row) => row.id);
+  return result.rows.map((row) => ({
+    entryId: row.id,
+    listId: row.list_id,
+    recordId: record.recordId,
+    objectId: record.objectId,
+  }));
 }
+
+/**
+ * The most far records `farReferences` collects through one relationship end:
+ * one past the cap, enough to know the object goes coarse (spec 0007, AC-83).
+ */
+export const FAR_LIMIT = CHANGE_CAP + 1;
 
 /**
  * The statement behind `farReferences`, exported for the plan test. `ends`
  * holds, per relationship with an end on the object, the attribute the far
  * record shows this one through when it is the from end (`via_to`, if the
  * to end has an attribute) and when it is the to end (`via_from`, a two way
- * end on its object or a one way reference naming it).
+ * end on its object or a one way reference naming it). Each end reads at most
+ * `FAR_LIMIT` live far records (spec 0007, AC-83), each one primary key probe,
+ * so a record with 200,000 links costs one end's worth of probes up to the
+ * limit, never all of them; `end_key` names the end, so the caller knows
+ * which ones were cut short.
  */
 export function farReferencesQuery(recordId: string, objectId: string): SQL {
   return sql`
@@ -85,37 +100,52 @@ export function farReferencesQuery(recordId: string, objectId: string): SQL {
       left join attributes ta on ta.workspace_id = rel.workspace_id and ta.id = rel.to_attribute_id
       where fa.object_id = ${objectId}::uuid or ta.object_id = ${objectId}::uuid
         or ${objectId}::uuid = any(rel.target_object_ids)
-    ),
-    hits as (
-      select l.workspace_id, l.to_record_id as far_id, e.via_to as attribute_id
-      from ends e
-      join record_links l on l.workspace_id = e.workspace_id and l.relationship_id = e.relationship_id
-        and l.from_record_id = ${recordId}::uuid and l.active_until is null
-      where e.via_to is not null
-      union all
-      select l.workspace_id, l.from_record_id, e.via_from
-      from ends e
-      join record_links l on l.workspace_id = e.workspace_id and l.relationship_id = e.relationship_id
-        and l.to_record_id = ${recordId}::uuid and l.active_until is null
-      where e.via_from is not null
     )
-    select far.id::text as record_id, far.object_id::text as object_id, hits.attribute_id::text as attribute_id
-    from hits
+    select far.id::text as record_id, far.object_id::text as object_id, e.via_to::text as attribute_id,
+      e.relationship_id::text || ':to' as end_key
+    from ends e
     cross join lateral (
-      select r.id, r.object_id from records r
-      where r.workspace_id = hits.workspace_id and r.id = hits.far_id and r.deleted_at is null
-      -- Keeps the lookup its own subquery: one primary key probe per link, never a hash join over all of records.
-      offset 0
+      select r.id, r.object_id
+      from record_links l
+      cross join lateral (
+        select r.id, r.object_id from records r
+        where r.workspace_id = l.workspace_id and r.id = l.to_record_id and r.deleted_at is null
+        -- Keeps the lookup its own subquery: one primary key probe per link, never a hash join over all of records.
+        offset 0
+      ) r
+      where l.workspace_id = e.workspace_id and l.relationship_id = e.relationship_id
+        and l.from_record_id = ${recordId}::uuid and l.active_until is null
+      limit ${FAR_LIMIT}
     ) far
+    where e.via_to is not null
+    union all
+    select far.id::text, far.object_id::text, e.via_from::text, e.relationship_id::text || ':from'
+    from ends e
+    cross join lateral (
+      select r.id, r.object_id
+      from record_links l
+      cross join lateral (
+        select r.id, r.object_id from records r
+        where r.workspace_id = l.workspace_id and r.id = l.from_record_id and r.deleted_at is null
+        offset 0
+      ) r
+      where l.workspace_id = e.workspace_id and l.relationship_id = e.relationship_id
+        and l.to_record_id = ${recordId}::uuid and l.active_until is null
+      limit ${FAR_LIMIT}
+    ) far
+    where e.via_from is not null
   `;
 }
 
 /**
  * The reference values on live records that show this record: the far end of
  * each of its current links, where that end has an attribute. A delete, a
- * restore or an erasure of the record changes them with no new version, and
- * the hooks get every one (the audit log names them all; the outbox hook caps
- * its own copy). The read goes per object: first the ends of the
+ * restore or an erasure of the record changes them with no new version. At
+ * most `FAR_LIMIT` far records per relationship end (spec 0007, AC-83): an end
+ * cut short names its object in `coarseObjects`, so the outbox names the
+ * object coarse and no hook ever holds every link of a record with 200,000
+ * (the audit log, #36, names the record and its link count instead). The
+ * read goes per object: first the ends of the
  * relationships on the record's object, worked out once and materialised (a
  * handful of rows), then each end's current links looked up by relationship
  * and record (`record_links_from` and `record_links_to` lead with both), so a
@@ -131,21 +161,32 @@ export function farReferencesQuery(recordId: string, objectId: string): SQL {
  */
 async function farReferences(
   tx: WorkspaceTx,
-  record: { readonly recordId: string; readonly objectId: string },
-): Promise<readonly ReferenceChange[]> {
+  record: RecordRef,
+): Promise<{ readonly references: readonly ReferenceChange[]; readonly coarseObjects: readonly string[] }> {
   const { recordId, objectId } = record;
-  const result = await tx.execute<{ record_id: string; object_id: string; attribute_id: string }>(
+  const result = await tx.execute<{ record_id: string; object_id: string; attribute_id: string; end_key: string }>(
     farReferencesQuery(recordId, objectId),
   );
+  // An end that came back full was cut short: its object goes coarse.
+  const perEnd = new Map<string, { count: number; objectId: string }>();
+  for (const row of result.rows) {
+    const end = perEnd.get(row.end_key) ?? { count: 0, objectId: row.object_id };
+    end.count += 1;
+    perEnd.set(row.end_key, end);
+  }
+  const coarseObjects = [
+    ...new Set([...perEnd.values()].flatMap((end) => (end.count >= FAR_LIMIT ? [end.objectId] : []))),
+  ];
   // By object, record, then attribute, as the hooks have always seen them. Ids are lower case uuids, so
   // comparing the text compares them as Postgres would.
   const compare = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
-  return result.rows
+  const references = result.rows
     .map((row) => ({ recordId: row.record_id, objectId: row.object_id, attributeId: row.attribute_id }))
     .sort(
       (a, b) =>
         compare(a.objectId, b.objectId) || compare(a.recordId, b.recordId) || compare(a.attributeId, b.attributeId),
     );
+  return { references, coarseObjects };
 }
 
 /**
@@ -178,17 +219,14 @@ export async function deleteRecord(
           revision: sql`${records.revision} + 1`,
         })
         .where(eq(records.id, recordId));
-      const entryIds = await liveEntryIds(tx, recordId);
-      const references = await farReferences(tx, { recordId, objectId: record.objectId });
-      await holdUniqueKeys(tx, [recordId, ...entryIds]);
+      const ref = { recordId, objectId: record.objectId };
+      const entries = await liveEntries(tx, ref);
+      const far = await farReferences(tx, ref);
+      await holdUniqueKeys(tx, [recordId, ...entries.map((entry) => entry.entryId)]);
       await setRecordKeysLive(tx, recordId, false);
       // Last, as every write takes the counter row.
       await takeRecordSlots(tx, scope, -1);
-      context.record({
-        deletedRecords: [{ recordId, objectId: record.objectId }],
-        hiddenEntries: entryIds,
-        references,
-      });
+      context.record({ deletedRecords: [ref], hiddenEntries: entries, ...far });
       return { recordId, state: 'deleted' as const };
     },
     hooks,
@@ -214,9 +252,10 @@ export async function restoreRecord(
       const record = await lockAnyRecord(tx, recordId, scope.access);
       if (record.deletedAt === null) return { recordId, state: 'live' as const };
       if (record.expired) throw refuse('NOT_FOUND', 'That record was deleted more than 30 days ago.');
-      const entryIds = await liveEntryIds(tx, recordId);
-      const references = await farReferences(tx, { recordId, objectId: record.objectId });
-      await releaseUniqueKeys(tx, scope.access, [recordId, ...entryIds]);
+      const ref = { recordId, objectId: record.objectId };
+      const entries = await liveEntries(tx, ref);
+      const far = await farReferences(tx, ref);
+      await releaseUniqueKeys(tx, scope.access, [recordId, ...entries.map((entry) => entry.entryId)]);
       await tx
         .update(records)
         .set({
@@ -231,11 +270,7 @@ export async function restoreRecord(
       // Last, as every write takes the counter row (a create checks its slot after its values too). A full
       // workspace refuses here, and the refusal rolls back everything above.
       await takeRecordSlots(tx, scope, 1);
-      context.record({
-        restoredRecords: [{ recordId, objectId: record.objectId }],
-        shownEntries: entryIds,
-        references,
-      });
+      context.record({ restoredRecords: [ref], shownEntries: entries, ...far });
       return { recordId, state: 'live' as const };
     },
     hooks,
@@ -266,7 +301,19 @@ function add(a: RemovedCounts, b: RemovedCounts): RemovedCounts {
 interface Removed {
   readonly counts: RemovedCounts;
   readonly records: readonly RecordRef[];
-  readonly entryIds: readonly string[];
+  readonly entries: readonly EntryRef[];
+}
+
+/** Entries a delete returned (`id`, `list_id`, `record_id`, `object_id`), as refs. */
+function entryRefs(
+  rows: readonly { id: string; list_id: string; record_id: string; object_id: string }[],
+): readonly EntryRef[] {
+  return rows.map((row) => ({
+    entryId: row.id,
+    listId: row.list_id,
+    recordId: row.record_id,
+    objectId: row.object_id,
+  }));
 }
 
 /**
@@ -299,7 +346,7 @@ export function deleteEntryValues(entryIds: readonly string[]): SQL {
  * record.
  */
 async function removeRecords(tx: WorkspaceTx, recordIds: readonly string[]): Promise<Removed> {
-  if (recordIds.length === 0) return { counts: NONE, records: [], entryIds: [] };
+  if (recordIds.length === 0) return { counts: NONE, records: [], entries: [] };
   const ids = uuidArray(recordIds);
   await tx.execute(sql`
     select 1 from lists
@@ -319,9 +366,11 @@ async function removeRecords(tx: WorkspaceTx, recordIds: readonly string[]): Pro
   const links = await tx.execute(
     sql`delete from record_links where from_record_id = any(${ids}) or to_record_id = any(${ids})`,
   );
-  const entries = await tx.execute<{ id: string }>(
-    sql`delete from list_entries where record_id = any(${ids}) returning id::text`,
-  );
+  const entries = await tx.execute<{ id: string; list_id: string; record_id: string; object_id: string }>(sql`
+    delete from list_entries e using records r
+    where e.record_id = any(${ids}) and r.workspace_id = e.workspace_id and r.id = e.record_id
+    returning e.id::text, e.list_id::text, e.record_id::text, r.object_id::text
+  `);
   const removed = await tx.execute<{ id: string; object_id: string }>(
     sql`delete from records where id = any(${ids}) returning id::text, object_id::text`,
   );
@@ -333,7 +382,7 @@ async function removeRecords(tx: WorkspaceTx, recordIds: readonly string[]): Pro
       links: links.rowCount ?? 0,
     },
     records: removed.rows.map((row) => ({ recordId: row.id, objectId: row.object_id })),
-    entryIds: entries.rows.map((row) => row.id),
+    entries: entryRefs(entries.rows),
   };
 }
 
@@ -382,12 +431,14 @@ export async function purgeDeleted(
         const entryIds = removedEntries.rows.map((row) => row.id);
         await deleteSortKeys(tx, { entryIds });
         const entryValues = await tx.execute(deleteEntryValues(entryIds));
-        const entries = await tx.execute<{ id: string }>(
-          sql`delete from list_entries where id = any(${uuidArray(entryIds)}) returning id::text`,
-        );
+        const entries = await tx.execute<{ id: string; list_id: string; record_id: string; object_id: string }>(sql`
+          delete from list_entries e using records r
+          where e.id = any(${uuidArray(entryIds)}) and r.workspace_id = e.workspace_id and r.id = e.record_id
+          returning e.id::text, e.list_id::text, e.record_id::text, r.object_id::text
+        `);
         context.record({
           purgedRecords: gone.records,
-          purgedEntries: [...gone.entryIds, ...entries.rows.map((row) => row.id)],
+          purgedEntries: [...gone.entries, ...entryRefs(entries.rows)],
         });
         const full = doomed.rows.length === batchSize || removedEntries.rows.length === batchSize;
         return {
@@ -436,14 +487,14 @@ export async function eraseRecord(
       const live = record.deletedAt === null;
       // A live record disappears from every read here, like a delete; a trashed one already had.
       if (live) {
-        const hiddenEntries = await liveEntryIds(tx, recordId);
-        const references = await farReferences(tx, ref);
-        context.record({ deletedRecords: [ref], hiddenEntries, references });
+        const hiddenEntries = await liveEntries(tx, ref);
+        const far = await farReferences(tx, ref);
+        context.record({ deletedRecords: [ref], hiddenEntries, ...far });
       }
       const gone = await removeRecords(tx, [recordId]);
       // Last, after the heavy deletes, as every write takes the counter row.
       if (live) await takeRecordSlots(tx, scope, -1);
-      context.record({ purgedRecords: gone.records, purgedEntries: gone.entryIds });
+      context.record({ purgedRecords: gone.records, purgedEntries: gone.entries });
       return gone.counts;
     },
     hooks,

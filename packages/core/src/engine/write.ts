@@ -37,12 +37,28 @@ export interface ReferenceChange {
 }
 
 /**
- * An object's attributes that a write added, changed, archived or restored
- * (spec 0005): a screen showing the object reads its attributes again.
- * Attributes on a list aren't listed (no screen shows lists yet).
+ * A list entry a write touched (spec 0007, AC-80): the entry, its list, its
+ * record, and that record's object (the list's parent), so the outbox stores
+ * one `entries` row per list and the access filter can judge it by object.
+ */
+export interface EntryRef {
+  readonly entryId: string;
+  readonly listId: string;
+  readonly recordId: string;
+  readonly objectId: string;
+}
+
+/**
+ * Definitions a write added, changed, archived, restored or reordered (spec
+ * 0007, AC-81): an object's attributes (`objectId`), a list's (`listId`, with
+ * its parent object), or neither, the workspace's object list (an object
+ * made). `attributeIds` names the attributes the write knew; empty means the
+ * object or list itself changed (its names, its archived state), so a screen
+ * reads its attributes and the workspace's objects again.
  */
 export interface DefinitionChange {
-  readonly objectId: string;
+  readonly objectId?: string;
+  readonly listId?: string;
   readonly attributeIds: readonly string[];
 }
 
@@ -62,20 +78,35 @@ export interface Change {
   readonly restoredRecords: readonly RecordRef[];
   /** Records removed for good, by the purge or an erasure. */
   readonly purgedRecords: readonly RecordRef[];
-  readonly createdEntries: readonly string[];
-  readonly removedEntries: readonly string[];
-  readonly restoredEntries: readonly string[];
+  readonly createdEntries: readonly EntryRef[];
+  readonly removedEntries: readonly EntryRef[];
+  readonly restoredEntries: readonly EntryRef[];
   /** Entries still in their lists whose record went to the trash (or was erased): they leave every read. */
-  readonly hiddenEntries: readonly string[];
+  readonly hiddenEntries: readonly EntryRef[];
   /** Entries in their lists whose record came back from the trash. */
-  readonly shownEntries: readonly string[];
+  readonly shownEntries: readonly EntryRef[];
   /** Entries removed for good, by the purge or an erasure. */
-  readonly purgedEntries: readonly string[];
+  readonly purgedEntries: readonly EntryRef[];
+  /** Entries whose own values changed (the attributes are in `values`). */
+  readonly changedEntries: readonly EntryRef[];
   readonly values: readonly ValueChange[];
-  /** Reference values on other records that a delete, restore or erasure changed without a new version. */
+  /**
+   * Reference values on other records that a delete, restore or erasure
+   * changed without a new version: at most `CHANGE_CAP + 1` far records per
+   * relationship end (spec 0007, AC-83); an object past that is in
+   * `coarseObjects`, so no hook ever gets an unbounded list.
+   */
   readonly references: readonly ReferenceChange[];
-  /** Object attributes the write added, changed, archived or restored. */
+  /**
+   * Objects whose far references a delete, restore or erasure stopped
+   * collecting past `CHANGE_CAP` (spec 0007, AC-83): `capChange` names them
+   * coarse, so screens refetch what they hold of them.
+   */
+  readonly coarseObjects: readonly string[];
+  /** Definitions the write added, changed, archived, restored or reordered. */
   readonly definitions: readonly DefinitionChange[];
+  /** Members a write outside the engine changed (spec 0007, AC-82): a role changed, or removed. */
+  readonly members: readonly string[];
 }
 
 /** Marks a change `capChange` made: a type only brand, nothing at run time. */
@@ -95,6 +126,12 @@ export interface CappedChange extends Change {
    * record values, and a screen refetches whatever it holds of the object.
    */
   readonly coarse: readonly { readonly objectId: string }[];
+  /**
+   * Lists with more than `CHANGE_CAP` distinct entry ids across the change:
+   * their entries leave every entry list and the entry values, and a screen
+   * refetches whatever it holds of the list (spec 0007, AC-80).
+   */
+  readonly coarseLists: readonly { readonly listId: string }[];
 }
 
 /** The most record ids of one object a published event lists before it names the object coarse. */
@@ -103,13 +140,28 @@ export const CHANGE_CAP = 1_000;
 /** The record lists the cap merges: every list of records, and the reference values. */
 const CAPPED_KEYS = ['createdRecords', 'deletedRecords', 'restoredRecords', 'purgedRecords', 'references'] as const;
 
+/** The entry lists the cap merges, per list. */
+const ENTRY_KEYS = [
+  'createdEntries',
+  'removedEntries',
+  'restoredEntries',
+  'hiddenEntries',
+  'shownEntries',
+  'purgedEntries',
+  'changedEntries',
+] as const satisfies readonly (keyof Change)[];
+
 /**
- * Caps a change for the outbox hook (spec 0005): each object's record ids,
- * merged across the record lists, `references` and the record values, at
- * `CHANGE_CAP` distinct ids. An object past the cap goes into `coarse` and
- * its ids leave all of them, so a bulk delete or purge never becomes an event
- * the size of the table. `runWrite` never calls it: every hook receives the
- * full `Change`, since the audit log must name every record.
+ * Caps a change for the outbox hook (spec 0005; spec 0007, AC-80, AC-83):
+ * each object's record ids, merged across the record lists, `references` and
+ * the record values, at `CHANGE_CAP` distinct ids, and each list's entry ids,
+ * merged across the entry lists and the entry values, the same. An object
+ * past the cap, or one in `coarseObjects` (its far references were cut short),
+ * goes into `coarse` and its ids leave all of them; a list past it goes into
+ * `coarseLists` the same way. So a bulk delete or purge never becomes an
+ * event the size of the table. `runWrite` never calls it: the outbox hook
+ * does, through `cappedHook`. The audit log (#36) gets the change uncapped,
+ * but its far references bounded (spec 0007, AC-83).
  */
 export function capChange(change: Change): CappedChange {
   const idsByObject = new Map<string, Set<string>>();
@@ -119,11 +171,26 @@ export function capChange(change: Change): CappedChange {
   };
   for (const key of CAPPED_KEYS) for (const item of change[key]) note(item.objectId, item.recordId);
   for (const value of change.values) if (value.ownerKind === 'record') note(value.objectId, value.ownerId);
-  const coarse = [...idsByObject].flatMap(([objectId, ids]) => (ids.size > CHANGE_CAP ? [objectId] : []));
-  if (coarse.length === 0) return brand({ ...change, coarse: [] });
-  const isCoarse = new Set(coarse);
+  const isCoarse = new Set(change.coarseObjects);
+  for (const [objectId, ids] of idsByObject) if (ids.size > CHANGE_CAP) isCoarse.add(objectId);
+
+  const idsByList = new Map<string, Set<string>>();
+  const noteEntry = (listId: string, entryId: string) => {
+    const ids = idsByList.get(listId) ?? new Set<string>();
+    idsByList.set(listId, ids.add(entryId));
+  };
+  for (const key of ENTRY_KEYS) for (const item of change[key]) noteEntry(item.listId, item.entryId);
+  for (const value of change.values) if (value.ownerKind === 'entry') noteEntry(value.listId, value.ownerId);
+  const isCoarseList = new Set([...idsByList].flatMap(([listId, ids]) => (ids.size > CHANGE_CAP ? [listId] : [])));
+
+  const marks = {
+    coarse: [...isCoarse].sort().map((objectId) => ({ objectId })),
+    coarseLists: [...isCoarseList].sort().map((listId) => ({ listId })),
+  };
+  if (isCoarse.size === 0 && isCoarseList.size === 0) return brand({ ...change, ...marks });
   const fine = <T extends { readonly objectId: string }>(items: readonly T[]) =>
     items.filter((item) => !isCoarse.has(item.objectId));
+  const fineEntries = (items: readonly EntryRef[]) => items.filter((item) => !isCoarseList.has(item.listId));
   return brand({
     ...change,
     createdRecords: fine(change.createdRecords),
@@ -131,8 +198,17 @@ export function capChange(change: Change): CappedChange {
     restoredRecords: fine(change.restoredRecords),
     purgedRecords: fine(change.purgedRecords),
     references: fine(change.references),
-    values: change.values.filter((value) => value.ownerKind !== 'record' || !isCoarse.has(value.objectId)),
-    coarse: coarse.sort().map((objectId) => ({ objectId })),
+    createdEntries: fineEntries(change.createdEntries),
+    removedEntries: fineEntries(change.removedEntries),
+    restoredEntries: fineEntries(change.restoredEntries),
+    hiddenEntries: fineEntries(change.hiddenEntries),
+    shownEntries: fineEntries(change.shownEntries),
+    purgedEntries: fineEntries(change.purgedEntries),
+    changedEntries: fineEntries(change.changedEntries),
+    values: change.values.filter((value) =>
+      value.ownerKind === 'record' ? !isCoarse.has(value.objectId) : !isCoarseList.has(value.listId),
+    ),
+    ...marks,
   });
 }
 
@@ -154,9 +230,12 @@ const LIST_KEYS = [
   'hiddenEntries',
   'shownEntries',
   'purgedEntries',
+  'changedEntries',
   'values',
   'references',
+  'coarseObjects',
   'definitions',
+  'members',
 ] as const satisfies readonly (keyof ChangeLists)[];
 
 /**
@@ -249,15 +328,18 @@ export async function runWrite<T>(
           deletedRecords: [] as RecordRef[],
           restoredRecords: [] as RecordRef[],
           purgedRecords: [] as RecordRef[],
-          createdEntries: [] as string[],
-          removedEntries: [] as string[],
-          restoredEntries: [] as string[],
-          hiddenEntries: [] as string[],
-          shownEntries: [] as string[],
-          purgedEntries: [] as string[],
+          createdEntries: [] as EntryRef[],
+          removedEntries: [] as EntryRef[],
+          restoredEntries: [] as EntryRef[],
+          hiddenEntries: [] as EntryRef[],
+          shownEntries: [] as EntryRef[],
+          purgedEntries: [] as EntryRef[],
+          changedEntries: [] as EntryRef[],
           values: [] as ValueChange[],
           references: [] as ReferenceChange[],
+          coarseObjects: [] as string[],
           definitions: [] as DefinitionChange[],
+          members: [] as string[],
         };
         const context: WriteContext = {
           tx,
@@ -276,9 +358,12 @@ export async function runWrite<T>(
             append(collected.hiddenEntries, part.hiddenEntries);
             append(collected.shownEntries, part.shownEntries);
             append(collected.purgedEntries, part.purgedEntries);
+            append(collected.changedEntries, part.changedEntries);
             append(collected.values, part.values);
             append(collected.references, part.references);
+            append(collected.coarseObjects, part.coarseObjects);
             append(collected.definitions, part.definitions);
+            append(collected.members, part.members);
           },
           async perRecord(step) {
             const marks = LIST_KEYS.map((key) => collected[key].length);
@@ -310,9 +395,12 @@ export async function runWrite<T>(
           hiddenEntries: [...collected.hiddenEntries],
           shownEntries: [...collected.shownEntries],
           purgedEntries: [...collected.purgedEntries],
+          changedEntries: [...collected.changedEntries],
           values: [...collected.values],
           references: [...collected.references],
+          coarseObjects: [...new Set(collected.coarseObjects)],
           definitions: [...collected.definitions],
+          members: [...new Set(collected.members)],
         };
         for (const hook of hooks) await hook(change, tx);
         return { result, change };

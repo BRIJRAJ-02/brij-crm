@@ -32,7 +32,7 @@ import {
   type AttributeDef,
   type AttributeWrite,
 } from './values.ts';
-import { append, runWrite, type AfterWrite, type ValueChange, type WriteContext } from './write.ts';
+import { append, runWrite, type AfterWrite, type EntryRef, type ValueChange, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
 import { fieldReadOnlyReason, filterRecordView, isOpen, type Access } from '../access/policy.ts';
 import {
@@ -422,12 +422,19 @@ async function lockOwner(
   ownerId: string;
   /** The record's object; undefined for an entry, whose attributes sit on its list. */
   objectId?: string;
+  /** For an entry: its list, record and object, for the hooks. */
+  entry?: EntryRef;
   attributes: ReadonlyMap<string, AttributeDef>;
 }> {
   if ('entryId' in input) {
     const entryId = checkId(input.entryId, 'That entry does not exist.');
-    const { listId } = await lockEntry(tx, entryId, access);
-    return { ownerKind: 'entry', ownerId: entryId, attributes: await loadListAttributes(tx, listId) };
+    const parents = await lockEntry(tx, entryId, access);
+    return {
+      ownerKind: 'entry',
+      ownerId: entryId,
+      entry: { entryId, ...parents },
+      attributes: await loadListAttributes(tx, parents.listId),
+    };
   }
   const recordId = checkId(input.recordId, 'That record does not exist.');
   const { objectId } = await lockRecord(tx, recordId, access, visible);
@@ -451,13 +458,15 @@ async function updateOwner(
   attributes: ReadonlyMap<string, AttributeDef>;
 }> {
   const { tx } = context;
-  const { ownerKind, ownerId, objectId, attributes } = await lockOwner(tx, input, context.scope.access, visible);
+  const { ownerKind, ownerId, objectId, entry, attributes } = await lockOwner(tx, input, context.scope.access, visible);
   const parsed = parseAll(attributes, canonicalKeys(input.values), context.scope);
   // Under the owner's lock, before anything is written: a cell that moved on refuses the whole owner.
   await checkVersions(tx, context.scope.workspaceId, ownerId, parsed);
   const results = await writeAll(context, ownerKind, ownerId, parsed);
   if (Object.values(results).some((each) => each.versionId !== undefined)) {
     await touchOwner(context, ownerKind, ownerId);
+    // The entry's own values changed: its list's screens read it again (spec 0007, AC-80).
+    if (entry !== undefined) context.record({ changedEntries: [entry] });
   }
   return objectId === undefined ? { results, attributes } : { results, objectId, attributes };
 }

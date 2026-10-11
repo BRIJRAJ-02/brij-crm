@@ -236,6 +236,8 @@ export async function insertObject(
   // The custom object slot last, as every write takes the workspace counter row: a full workspace refuses
   // here and the refusal rolls the object back, and the row is never held while the slug's index waits.
   if (input.standard === undefined) await takeCustomObject(tx, scope);
+  // The object itself is new: screens read the workspace's objects again (spec 0007, AC-81).
+  context.record({ definitions: [{ objectId: created.objectId, attributeIds: [] }] });
   return created;
 }
 
@@ -295,15 +297,21 @@ export async function insertAttribute(
       })
       .returning({ id: attributes.id });
     if (row === undefined) throw new Error('The attribute was not created.');
-    if ('objectId' in parent) context.record({ definitions: [{ objectId: parent.objectId, attributeIds: [row.id] }] });
+    context.record({ definitions: [{ ...parent, attributeIds: [row.id] }] });
     return { attributeId: row.id };
   });
 }
 
-/** Notes an object attribute's change for the hooks (a list's attributes aren't published yet). */
-function recordDefinition(context: WriteContext, attribute: AttributeDef): void {
-  if (attribute.objectId === null) return;
-  context.record({ definitions: [{ objectId: attribute.objectId, attributeIds: [attribute.id] }] });
+/** Notes an attribute's change for the hooks: on its object, or on its list (spec 0007, AC-81). */
+export function recordDefinition(
+  context: Pick<WriteContext, 'record'>,
+  attribute: Pick<AttributeDef, 'id' | 'objectId' | 'listId'>,
+): void {
+  if (attribute.objectId !== null) {
+    context.record({ definitions: [{ objectId: attribute.objectId, attributeIds: [attribute.id] }] });
+  } else if (attribute.listId !== null) {
+    context.record({ definitions: [{ listId: attribute.listId, attributeIds: [attribute.id] }] });
+  }
 }
 
 /** Defines a custom object (AC-1, AC-16). */
@@ -426,7 +434,7 @@ export async function updateObject(scope: EngineScope, input: ObjectUpdate, hook
     throw refuse('NOT_FOUND', 'That object does not exist.');
   await runWrite(
     scope,
-    async ({ tx }) => {
+    async ({ tx, ...context }) => {
       if (input.singularName !== undefined) checkName(input.singularName, 'singular name');
       if (input.pluralName !== undefined) checkName(input.pluralName, 'plural name');
       checkLook(input.icon, input.hue);
@@ -441,7 +449,9 @@ export async function updateObject(scope: EngineScope, input: ObjectUpdate, hook
         })
         .where(eq(objects.id, input.objectId))
         .returning({ id: objects.id });
-      if (updated.length === 0) throw refuse('NOT_FOUND', 'That object does not exist.');
+      const [object] = updated;
+      if (object === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
+      context.record({ definitions: [{ objectId: object.id, attributeIds: [] }] });
     },
     hooks,
   );
@@ -460,13 +470,15 @@ export async function setObjectArchived(
     throw refuse('NOT_FOUND', 'That object does not exist.');
   await runWrite(
     scope,
-    async ({ tx }) => {
+    async ({ tx, ...context }) => {
       const updated = await tx
         .update(objects)
         .set({ archivedAt: input.archived ? sql`coalesce(${objects.archivedAt}, now())` : null, ...touched(scope) })
         .where(eq(objects.id, input.objectId))
         .returning({ id: objects.id });
-      if (updated.length === 0) throw refuse('NOT_FOUND', 'That object does not exist.');
+      const [object] = updated;
+      if (object === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
+      context.record({ definitions: [{ objectId: object.id, attributeIds: [] }] });
     },
     hooks,
   );

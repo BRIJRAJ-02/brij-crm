@@ -145,6 +145,9 @@ describe('the outbox reader', () => {
       recordIds: [],
       attributeIds: [],
       itemIds: [item],
+      createdIds: [],
+      deletedIds: [],
+      restoredIds: [],
       coarse: false,
       mutationId: undefined,
       actorMemberId: actor,
@@ -154,6 +157,20 @@ describe('the outbox reader', () => {
     expect(marked).toBe(1);
     expect(lagsMs[0]).toBeGreaterThanOrEqual(2_000);
     expect(lagsMs[0]).toBeLessThan(60_000);
+  });
+
+  it('reads the records a row names as made, deleted and restored (spec 0007, owner decision pending)', async () => {
+    const outbox = await reader();
+    const busy = await workspaceWithEvents([]);
+    const [made, gone, back] = [randomUUID(), randomUUID(), randomUUID()];
+    await db.withWorkspace(busy, (tx) =>
+      tx.execute(
+        sql`insert into outbox (workspace_id, seq, kind, created_ids, deleted_ids, restored_ids)
+            values (${busy}, 1, 'members', ${`{${made}}`}, ${`{${gone}}`}, ${`{${back}}`})`,
+      ),
+    );
+    const [row] = await outbox.pending(busy, 10);
+    expect(row).toMatchObject({ createdIds: [made], deletedIds: [gone], restoredIds: [back] });
   });
 
   it('reads a records row’s replaced as by once with its cells, and anything else as none (owner decision, 8 Oct 2026)', async () => {

@@ -12,6 +12,7 @@ import {
   deleteRecord,
   deleteRecordValues,
   eraseRecord,
+  FAR_LIMIT,
   farReferencesQuery,
   purgeDeleted,
   restoreRecord,
@@ -20,6 +21,7 @@ import {
 import { getHistory, getTimeInStages, getValuesAsOf } from './history.ts';
 import { addEntry, defineList, getEntries, getRecordEntries, removeEntry, restoreEntry } from './lists.ts';
 import { defineOption } from './options.ts';
+import { outboxHook } from './outbox.ts';
 import { createRecord, getRecords, setValues } from './records.ts';
 import { isRefusal, postgresError } from './refusals.ts';
 import { defineRelationship } from './relationships.ts';
@@ -1045,12 +1047,13 @@ describe('deletion', () => {
       return Promise.resolve();
     };
     const dealRef = { recordId: deal, objectId: world.deals };
+    const entryRef = { entryId, listId, recordId: deal, objectId: world.deals };
     const adaSees = [{ recordId: ada, objectId: world.people, attributeId: world.person('associated_deals') }];
 
     await deleteRecord(world.scope, { recordId: deal }, [hook]);
-    expect(seen[0]).toMatchObject({ deletedRecords: [dealRef], hiddenEntries: [entryId], references: adaSees });
+    expect(seen[0]).toMatchObject({ deletedRecords: [dealRef], hiddenEntries: [entryRef], references: adaSees });
     await restoreRecord(world.scope, { recordId: deal }, [hook]);
-    expect(seen[1]).toMatchObject({ restoredRecords: [dealRef], shownEntries: [entryId], references: adaSees });
+    expect(seen[1]).toMatchObject({ restoredRecords: [dealRef], shownEntries: [entryRef], references: adaSees });
 
     await deleteRecord(world.scope, { recordId: deal });
     await db.withWorkspace(world.scope.workspaceId, (tx) =>
@@ -1058,7 +1061,7 @@ describe('deletion', () => {
     );
     await purgeDeleted(world.scope, {}, [hook]);
     // Hidden since the delete: the purge removes them for good, and nothing on screen changes.
-    expect(seen[2]).toMatchObject({ purgedRecords: [dealRef], purgedEntries: [entryId], references: [] });
+    expect(seen[2]).toMatchObject({ purgedRecords: [dealRef], purgedEntries: [entryRef], references: [] });
 
     const other = await newDeal(world, 'Other deal');
     await setValues(world.scope, {
@@ -1143,6 +1146,40 @@ describe('deletion', () => {
     expect(cappedPurge.coarse).toEqual([{ objectId: world.people }]);
   });
 
+  it(
+    'collects at most 1,001 far records per object when a record with 200,000 links is deleted, restored or erased (spec 0007, AC-83)',
+    { timeout: 300_000 },
+    async () => {
+      const world = await workspace();
+      const acme = await newCompany(world, 'Acme');
+      await staff(world, acme, 200_000);
+      const seen: { change: Change; heapMb: number }[] = [];
+      let before = 0;
+      const hook: AfterWrite = (change) => {
+        seen.push({ change, heapMb: (process.memoryUsage().heapUsed - before) / 1_048_576 });
+        return Promise.resolve();
+      };
+      const outbox = async () =>
+        db.withWorkspace(world.scope.workspaceId, (tx) =>
+          tx.execute<{ kind: string; object_id: string; record_ids: string[]; coarse: boolean }>(
+            sql`select kind, object_id, record_ids, coarse from outbox order by seq desc limit 2`,
+          ),
+        );
+      for (const step of [deleteRecord, restoreRecord, eraseRecord]) {
+        before = process.memoryUsage().heapUsed;
+        await step(world.scope, { recordId: acme }, [hook, outboxHook()]);
+        const last = seen.at(-1);
+        expect(last?.change.references.length).toBeLessThanOrEqual(FAR_LIMIT);
+        expect(last?.change.coarseObjects).toEqual([world.people]);
+        // The write's extra memory stays under 50 MB: the far references are bounded, never 200,000 objects.
+        expect(last?.heapMb).toBeLessThan(50);
+        // Its event names People coarse, with no ids, beside the company's own row.
+        const rows = (await outbox()).rows;
+        expect(rows.find((row) => row.object_id === world.people)).toMatchObject({ record_ids: [], coarse: true });
+      }
+    },
+  );
+
   it('merges record lists, references and values per object when it caps (AC-17)', () => {
     const objectId = '0190f0f0-0000-7000-8000-000000000001';
     const other = '0190f0f0-0000-7000-8000-000000000002';
@@ -1162,6 +1199,9 @@ describe('deletion', () => {
       hiddenEntries: [],
       shownEntries: [],
       purgedEntries: [],
+      changedEntries: [],
+      coarseObjects: [],
+      members: [],
       values: ids.slice(half).map((ownerId) => ({
         ownerId,
         ownerKind: 'record' as const,
@@ -1490,14 +1530,15 @@ describe('deletion', () => {
     expect(seeks.some((condition) => condition.includes('from_record_id ='))).toBe(true);
     expect(seeks.some((condition) => condition.includes('to_record_id ='))).toBe(true);
 
-    // And the read itself: the 2,010 people (through their Company) and the parent (through its Subsidiaries).
+    // And the read itself: the parent (through its Subsidiaries), and of the 2,010 people (through their Company)
+    // only the first FAR_LIMIT, one past the cap, so the object goes coarse (spec 0007, AC-83).
     const rows = await db.withWorkspace(world.scope.workspaceId, (tx) =>
       tx.execute<{ record_id: string; attribute_id: string }>(farReferencesQuery(holding, world.companies)),
     );
     expect(
       rows.rows.filter((row) => row.attribute_id === world.company('subsidiaries')).map((row) => row.record_id),
     ).toEqual([parent]);
-    expect(rows.rows.filter((row) => row.attribute_id === world.person('company'))).toHaveLength(2_010);
+    expect(rows.rows.filter((row) => row.attribute_id === world.person('company'))).toHaveLength(FAR_LIMIT);
   });
 });
 

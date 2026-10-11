@@ -54,6 +54,21 @@ export const Replaced = z.object({
 /** The values a save replaced. */
 export type Replaced = z.infer<typeof Replaced>;
 
+/**
+ * The most record ids one records event names as created, deleted and
+ * restored together (owner decision pending, 12 Oct 2026, spec 0007); past
+ * it the write's event is coarse, so screens reread their windows and counts.
+ */
+export const MAX_LIFECYCLE_IDS = 200;
+
+/**
+ * Record ids a write created, moved to the trash or brought back, among the
+ * event's `recordIds`: a screen's counts and windows settle on these, never
+ * on a guess from the id. Absent means none. Never more than
+ * `MAX_LIFECYCLE_IDS` across the three.
+ */
+const lifecycle = ids.max(MAX_LIFECYCLE_IDS).optional();
+
 /** These records of the object changed (refetch the ones you hold), or, when `coarse`, too many to list. */
 export const RecordsEvent = z.object({
   ...place,
@@ -61,6 +76,12 @@ export const RecordsEvent = z.object({
   objectId: z.uuid(),
   recordIds: ids,
   attributeIds: ids,
+  /** Made by this write. */
+  createdIds: lifecycle,
+  /** Moved to the trash (or erased while live) by this write: they leave every read. */
+  deletedIds: lifecycle,
+  /** Brought back from the trash by this write. */
+  restoredIds: lifecycle,
   coarse,
   mutationId,
   replaced: Replaced.optional(),
@@ -83,7 +104,9 @@ export const EntriesEvent = z.object({
 /**
  * Definitions changed: the object's attributes (`objectId`), the list's
  * (`listId`), or, naming neither, the workspace's object list. `attributeIds`
- * names the attributes when the write knew them.
+ * names the attributes when the write knew them; without it the object or
+ * list itself changed (made, renamed, archived or restored), so a screen
+ * reads its attributes and the workspace's objects (or lists) again.
  */
 export const DefinitionsEvent = z.object({
   ...place,

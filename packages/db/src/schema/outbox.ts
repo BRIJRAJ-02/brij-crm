@@ -68,6 +68,25 @@ export const outbox = pgTable(
       .array()
       .notNull()
       .default(sql`'{}'::uuid[]`),
+    /**
+     * On a `records` row, the records the write created, moved to the trash
+     * (or erased while live), and brought back: at most 200 across the three
+     * (`MAX_LIFECYCLE_IDS`), else empty and the row coarse, so screens settle
+     * counts and windows on these rather than guess (owner decision pending,
+     * 12 Oct 2026, spec 0007). Empty for every other kind.
+     */
+    createdIds: uuid('created_ids')
+      .array()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
+    deletedIds: uuid('deleted_ids')
+      .array()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
+    restoredIds: uuid('restored_ids')
+      .array()
+      .notNull()
+      .default(sql`'{}'::uuid[]`),
     /** More than 1,000 records of the object changed: `record_ids` is empty, refetch what you hold of it. */
     coarse: boolean('coarse').notNull().default(false),
     /** The browser's id for the write, echoed so it can skip its own change. */

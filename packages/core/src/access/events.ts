@@ -89,6 +89,10 @@ function settle<T extends { readonly mutationId?: string }>(event: T, removed: b
 /** Filtering only ever removes, so equal lengths mean nothing was removed. */
 const sameList = (a: readonly unknown[], b: readonly unknown[]) => a.length === b.length;
 
+/** The record ids a records event names as made, deleted or restored (spec 0007; owner decision pending). */
+const LIFECYCLE_FIELDS = ['createdIds', 'deletedIds', 'restoredIds'] as const;
+type LifecycleField = (typeof LIFECYCLE_FIELDS)[number];
+
 /** True when a fact lookup holds `id` (records made with `Object.create(null)` or plain). */
 function factOf<V>(facts: Readonly<Record<string, V>> | undefined, id: string): V | undefined {
   return facts !== undefined && Object.hasOwn(facts, id) ? facts[id] : undefined;
@@ -97,8 +101,11 @@ function factOf<V>(facts: Readonly<Record<string, V>> | undefined, id: string): 
 /**
  * The records rule, shared by `records` and `entries`: hidden attribute ids
  * and their `replaced` entries removed; when every changed attribute is
- * hidden, the records drop out; under a record rule on `ruleObject`, record
- * (and entry) ids and `replaced` removed and the event made coarse.
+ * hidden, the records drop out, except those the write made, deleted or
+ * restored (the record itself is visible, only its fields are hidden, so a
+ * count still moves); under a record rule on `ruleObject`, record (and entry)
+ * ids, the made, deleted and restored ids and `replaced` removed and the
+ * event made coarse.
  */
 function cutRecords<
   T extends {
@@ -114,7 +121,9 @@ function cutRecords<
   );
   const onlyHidden = row.attributeIds.length > 0 && attributeIds.length === 0;
   const ruled = recordRule({ data: policy }, ruleObject) !== undefined;
-  const recordIds = ruled || onlyHidden ? [] : row.recordIds;
+  const named = row as { readonly [K in LifecycleField]?: readonly string[] };
+  const born = new Set(LIFECYCLE_FIELDS.flatMap((name) => named[name] ?? []));
+  const recordIds = ruled ? [] : onlyHidden ? row.recordIds.filter((id) => born.has(id)) : row.recordIds;
   const cells =
     row.replaced === undefined || ruled
       ? undefined
@@ -129,18 +138,38 @@ function cutRecords<
   const coarse = row.coarse === true || ruled;
   const extra =
     extraIds === undefined ? {} : { [extraIds]: ruled || onlyHidden ? [] : (row as Record<string, unknown>)[extraIds] };
+  // The records made, deleted or restored follow the record ids: none left, none named.
+  const kept = new Set(recordIds);
+  let lifecycleCut = false;
+  const lifecycle: Partial<Record<LifecycleField, string[]>> = {};
+  for (const name of LIFECYCLE_FIELDS) {
+    const ids = named[name];
+    if (ids === undefined) continue;
+    const left = ids.filter((id) => kept.has(id));
+    if (left.length !== ids.length) lifecycleCut = true;
+    lifecycle[name] = left;
+  }
   const removed =
+    lifecycleCut ||
     !sameList(attributeIds, row.attributeIds) ||
     !sameList(recordIds, row.recordIds) ||
     (row.replaced !== undefined && (replaced === undefined || !sameList(replaced.cells, row.replaced.cells)));
   // Nothing left: no record, no attribute, and not a coarse refetch.
   if (removed && recordIds.length === 0 && attributeIds.length === 0 && !coarse) return undefined;
-  if (onlyHidden && row.coarse !== true) return undefined;
-  const { replaced: _replaced, ...rest } = row;
+  if (onlyHidden && row.coarse !== true && recordIds.length === 0) return undefined;
+  const {
+    replaced: _replaced,
+    createdIds: _created,
+    deletedIds: _deleted,
+    restoredIds: _restored,
+    ...rest
+  } = row as T & { readonly [K in LifecycleField]?: readonly string[] };
+  const lifecycleLeft = Object.fromEntries(Object.entries(lifecycle).filter(([, ids]) => ids.length > 0));
   return settle(
     {
       ...rest,
       ...extra,
+      ...lifecycleLeft,
       recordIds,
       attributeIds,
       coarse,
