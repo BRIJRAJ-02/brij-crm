@@ -36,6 +36,8 @@ export const objects = pgTable(
     templateVersion: integer('template_version'),
     /** The text or personal name attribute a record's name comes from; set in the same transaction as that attribute. */
     primaryAttributeId: uuid('primary_attribute_id'),
+    /** The workspace's order (the sidebar's): a new object takes `max + 1` under the counters row lock (spec 0012). */
+    position: integer('position').notNull(),
     archivedAt: timestamptz('archived_at'),
     ...auditColumns(),
   },
@@ -48,6 +50,10 @@ export const objects = pgTable(
       foreignColumns: [attributes.workspaceId, attributes.id],
     }),
     uniqueIndex('objects_api_slug').on(t.workspaceId, t.apiSlug),
+    // Names are unique ignoring case, archived objects included, so a restore never collides (spec 0012, AC-224).
+    uniqueIndex('objects_singular_name').on(t.workspaceId, sql`lower(${t.singularName})`),
+    uniqueIndex('objects_plural_name').on(t.workspaceId, sql`lower(${t.pluralName})`),
+    index('objects_by_position').on(t.workspaceId, t.position),
     uniqueIndex('objects_standard_key')
       .on(t.workspaceId, t.standardKey)
       .where(sql`${t.standardKey} is not null`),

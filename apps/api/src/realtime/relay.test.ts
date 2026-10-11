@@ -210,8 +210,8 @@ async function workspace(): Promise<string> {
   // The object its events name (an outbox row names an object of its own workspace).
   await testQuery(
     ownerUrl,
-    `insert into objects (workspace_id, api_slug, singular_name, plural_name, icon, hue, created_by_type, updated_by_type)
-     values ($1, 'things', 'Thing', 'Things', 'box', 'gray', 'system', 'system')`,
+    `insert into objects (workspace_id, api_slug, singular_name, plural_name, icon, hue, position, created_by_type, updated_by_type)
+     values ($1, 'things', 'Thing', 'Things', 'box', 'gray', 0, 'system', 'system')`,
     [id],
   );
   return id;

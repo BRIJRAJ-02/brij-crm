@@ -50,7 +50,7 @@ async function objectIn(workspaceId: string): Promise<string> {
   const objectId = randomUUID();
   await db.withWorkspace(workspaceId, (tx) =>
     tx.execute(
-      sql`insert into objects (workspace_id, id, api_slug, singular_name, plural_name, icon, hue, created_by_type, updated_by_type) values (${workspaceId}, ${objectId}, ${`things-${objectId}`}, 'Thing', 'Things', 'box', 'gray', 'system', 'system')`,
+      sql`insert into objects (workspace_id, id, api_slug, singular_name, plural_name, icon, hue, position, created_by_type, updated_by_type) values (${workspaceId}, ${objectId}, ${`things-${objectId}`}, ${`Thing ${objectId}`}, ${`Things ${objectId}`}, 'box', 'gray', 0, 'system', 'system')`,
     ),
   );
   return objectId;
@@ -497,7 +497,7 @@ describe('isolation', () => {
     await expect(
       db.withWorkspace(a.workspaceId, async (tx) => {
         const object = await tx.execute<{ id: string }>(
-          sql`insert into objects (workspace_id, api_slug, singular_name, plural_name, icon, hue, created_by_type, updated_by_type) values (${a.workspaceId}, 'things', 'Thing', 'Things', 'box', 'gray', 'system', 'system') returning id`,
+          sql`insert into objects (workspace_id, api_slug, singular_name, plural_name, icon, hue, position, created_by_type, updated_by_type) values (${a.workspaceId}, 'things', 'Thing', 'Things', 'box', 'gray', 0, 'system', 'system') returning id`,
         );
         const objectId = object.rows[0]?.id;
         await tx.execute(

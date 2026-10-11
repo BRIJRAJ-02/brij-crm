@@ -39,7 +39,7 @@ async function workspaceWithEvents(events: readonly { seq: number; published?: b
     );
     const objectId = randomUUID();
     await tx.execute(
-      sql`insert into objects (workspace_id, id, api_slug, singular_name, plural_name, icon, hue, created_by_type, updated_by_type) values (${workspaceId}, ${objectId}, 'things', 'Thing', 'Things', 'box', 'gray', 'system', 'system')`,
+      sql`insert into objects (workspace_id, id, api_slug, singular_name, plural_name, icon, hue, position, created_by_type, updated_by_type) values (${workspaceId}, ${objectId}, 'things', 'Thing', 'Things', 'box', 'gray', 0, 'system', 'system')`,
     );
     for (const event of events) {
       await tx.execute(
@@ -189,7 +189,7 @@ describe('the outbox reader', () => {
     ];
     await db.withWorkspace(busy, async (tx) => {
       await tx.execute(
-        sql`insert into objects (workspace_id, id, api_slug, singular_name, plural_name, icon, hue, created_by_type, updated_by_type) values (${busy}, ${objectId}, 'others', 'Other', 'Others', 'box', 'gray', 'system', 'system')`,
+        sql`insert into objects (workspace_id, id, api_slug, singular_name, plural_name, icon, hue, position, created_by_type, updated_by_type) values (${busy}, ${objectId}, 'others', 'Other', 'Others', 'box', 'gray', 0, 'system', 'system')`,
       );
       for (const [index, replaced] of stored.entries()) {
         await tx.execute(

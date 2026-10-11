@@ -24,7 +24,7 @@ import { requirePermission } from '../access/check.ts';
 import { attributeVisible } from '../access/visibility.ts';
 import { objectLevel, type Access } from '../access/policy.ts';
 
-const { attributes, objects } = schema;
+const { attributes, objects, workspaceCounters } = schema;
 
 const SLUG = /^[a-z][a-z0-9_]{0,62}$/;
 
@@ -177,6 +177,26 @@ function parseDefault(type: AttributeType, isMulti: boolean, input: unknown): At
   return result.data;
 }
 
+/**
+ * The position after the workspace's last object, read under the workspace
+ * counters row's lock (taken here, held to the end of the write), so
+ * concurrent creates queue and each lands at the end.
+ */
+async function nextObjectPosition(tx: WorkspaceTx, scope: EngineScope): Promise<number> {
+  const [locked] = await tx
+    .select({ workspaceId: workspaceCounters.workspaceId })
+    .from(workspaceCounters)
+    .where(eq(workspaceCounters.workspaceId, scope.workspaceId))
+    .for('update');
+  if (locked === undefined) throw new Error('The workspace has no counters row.');
+  const [next] = await tx
+    .execute<{ position: number }>(
+      sql`select coalesce(max(${objects.position}) + 1, 0)::int as position from ${objects} where ${objects.workspaceId} = ${scope.workspaceId}`,
+    )
+    .then((result) => result.rows);
+  return next?.position ?? 0;
+}
+
 /** Inserts an object, its system attributes and its primary attribute, inside a write. */
 export async function insertObject(
   context: WriteContext,
@@ -189,10 +209,14 @@ export async function insertObject(
   checkLook(input.icon, input.hue);
   const primary = input.primaryAttribute ?? { apiSlug: 'name', title: 'Name', type: 'text' };
   checkSlug(primary.apiSlug);
+  // The workspace counters row first, as every object create takes it in the same order: the new object's place
+  // (the end of the workspace's order) is read under it, so two creates never take one position (spec 0012).
+  const position = await nextObjectPosition(tx, scope);
   const created = await definitionGuard(async () => {
     const [object] = await tx
       .insert(objects)
       .values({
+        position,
         workspaceId: scope.workspaceId,
         apiSlug: input.apiSlug,
         singularName: input.singularName.trim(),
@@ -233,8 +257,8 @@ export async function insertObject(
     await tx.update(objects).set({ primaryAttributeId: name.id }).where(eq(objects.id, object.id));
     return { objectId: object.id, primaryAttributeId: name.id };
   });
-  // The custom object slot last, as every write takes the workspace counter row: a full workspace refuses
-  // here and the refusal rolls the object back, and the row is never held while the slug's index waits.
+  // The custom object slot (the counters row is already held): a full workspace refuses here and the refusal
+  // rolls the object back.
   if (input.standard === undefined) await takeCustomObject(tx, scope);
   // The object itself is new: screens read the workspace's objects again (spec 0007, AC-81).
   context.record({ definitions: [{ objectId: created.objectId, attributeIds: [] }] });
