@@ -154,6 +154,18 @@ describe('docker-compose.load.yml', () => {
     expect(file).toContain(`${identity.username}:${identity.password}@postgres:5432/crm`);
   });
 
+  it('turns live delivery on: the API signs with the secret Centrifugo checks, and the relay holds its API key', () => {
+    const value = (name: string) => new RegExp(`^\\s+${name}: (\\S+)$`, 'm').exec(file)?.[1];
+    expect(value('CENTRIFUGO_TOKEN_SECRET')).toBeDefined();
+    expect(value('CENTRIFUGO_TOKEN_SECRET')).toBe(value('CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY'));
+    expect(value('CENTRIFUGO_API_KEY')).toBeDefined();
+    expect(value('CENTRIFUGO_API_KEY')).toBe(value('CENTRIFUGO_HTTP_API_KEY'));
+    // Inside the stack's own network, by service name (APP_ENV=local only, spec 0011 milestone 3).
+    expect(value('CENTRIFUGO_API_URL')).toBe('http://centrifugo:9000');
+    expect(value('WORKER_INTERNAL_URL')).toBe('http://worker:3101');
+    expect(value('CENTRIFUGO_CLIENT_ALLOWED_ORIGINS')).toBe(LOAD_STACK.apiUrl);
+  });
+
   it('binds every port the scripts use to this machine only', () => {
     const { ports } = LOAD_STACK;
     for (const port of [ports.postgres, ports.pgbouncer, ports.api, ports.worker, ports.centrifugo, ports.mailpit]) {

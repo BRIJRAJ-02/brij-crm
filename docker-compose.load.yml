@@ -78,10 +78,12 @@ services:
       MAILPIT_URL: http://mailpit:8025
       # The timing header (spec 0011, AC-202, milestone 2): local only.
       LOAD_TIMING: "on"
-      # The relay's wake (spec 0005). WORKER_INTERNAL_URL stays unset for now: the API refuses an http address
-      # that isn't localhost or *.railway.internal, so http://worker:3101 can't be named yet (spec 0011 milestone 3
-      # settles it); without it the relay keeps to its own timer.
+      # The relay's wake (spec 0005): each committed write pokes the worker, as in production. Plain http to a
+      # compose service name is taken with APP_ENV=local only (spec 0011, milestone 3).
+      WORKER_INTERNAL_URL: http://worker:3101
       WORKER_WAKE_SECRET: local-only-load-stack-worker-wake-secret
+      # Live updates (spec 0011, milestone 3): the realtime.* procedures sign tokens with Centrifugo's own secret.
+      CENTRIFUGO_TOKEN_SECRET: local-only-load-stack-centrifugo-token-secret
     ports:
       - "127.0.0.1:3100:3100"
     deploy:
@@ -113,8 +115,9 @@ services:
       DATABASE_URL_DIRECT: postgres://crm_worker_user:local-only-load-worker@postgres:5432/crm
       WORKER_WAKE_SECRET: local-only-load-stack-worker-wake-secret
       # WORKER_IDLE_SLEEP_SECONDS stays unset, so the worker never sleeps and runs measure it warm.
-      # CENTRIFUGO_API_URL and CENTRIFUGO_API_KEY stay unset for now (the relay off): the worker refuses
-      # http://centrifugo:9000 for the same reason as WORKER_INTERNAL_URL above; milestone 3 turns the relay on.
+      # The relay publishes to Centrifugo's internal port (spec 0011, milestone 3: live delivery is measured).
+      CENTRIFUGO_API_URL: http://centrifugo:9000
+      CENTRIFUGO_API_KEY: local-only-load-stack-centrifugo-api-key
     ports:
       - "127.0.0.1:3101:3101"
     deploy:
@@ -130,6 +133,8 @@ services:
     depends_on:
       pgbouncer:
         condition: service_started
+      centrifugo:
+        condition: service_healthy
 
   centrifugo:
     build:

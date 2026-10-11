@@ -131,6 +131,17 @@ describe("the relay's wake up call (spec 0005)", () => {
     expect(problems({ ...local, WORKER_INTERNAL_URL: 'http://localhost:3001' })).toEqual([]);
   });
 
+  it('takes a compose service name over plain http locally only (the load stack, spec 0011)', () => {
+    expect(problems({ ...local, WORKER_INTERNAL_URL: 'http://worker:3101' })).toEqual([]);
+    for (const APP_ENV of ['preview', 'production']) {
+      expect(problems({ ...production, APP_ENV, WORKER_INTERNAL_URL: 'http://worker:3101' })).toEqual([
+        'WORKER_INTERNAL_URL',
+      ]);
+    }
+    // A dotted name is a DNS name, never a compose service: still refused over http, locally too.
+    expect(problems({ ...local, WORKER_INTERNAL_URL: 'http://worker.example.com' })).toEqual(['WORKER_INTERNAL_URL']);
+  });
+
   it('refuses a short secret, or one with spaces, anywhere', () => {
     expect(problems({ ...local, WORKER_WAKE_SECRET: 'short' })).toEqual(['WORKER_WAKE_SECRET']);
     expect(problems({ ...production, WORKER_WAKE_SECRET: 'a wake secret with spaces in it, 32+ long' })).toEqual([
@@ -233,6 +244,17 @@ describe('the worker environment (spec 0005, the relay)', () => {
     APP_ENV: 'production',
     WORKER_WAKE_SECRET: 'a-wake-secret-of-at-least-32-characters',
   };
+
+  it('takes plain http to a compose service name locally only (the load stack, spec 0011)', () => {
+    const local = { ...worker, ...centrifugo, CENTRIFUGO_API_URL: 'http://centrifugo:9000' };
+    expect(workerProblems(local)).toEqual([]);
+    expect(workerProblems({ ...deployed, CENTRIFUGO_API_URL: 'http://centrifugo:9000' })).toEqual([
+      'CENTRIFUGO_API_URL',
+    ]);
+    expect(workerProblems({ ...local, CENTRIFUGO_API_URL: 'http://centrifugo.example.com:9000' })).toEqual([
+      'CENTRIFUGO_API_URL',
+    ]);
+  });
 
   it("refuses .env.example's Centrifugo key, or one shorter than 32 characters, outside local", () => {
     expect(workerProblems({ ...deployed, CENTRIFUGO_API_KEY: LOCAL_CENTRIFUGO_API_KEY })).toEqual([

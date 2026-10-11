@@ -51,10 +51,31 @@ export const LOCAL_CENTRIFUGO_API_KEY = 'local-centrifugo-api-key';
 export const LOCAL_CENTRIFUGO_TOKEN_SECRET = 'local-centrifugo-token-secret';
 
 /**
+ * A Docker Compose service name (`worker`, `centrifugo`): one label, no dots,
+ * so no public DNS name matches it and only a compose network resolves it.
+ */
+function isComposeService(host: string): boolean {
+  return /^[a-z][a-z0-9-]*$/.test(host) && host !== 'localhost';
+}
+
+/**
+ * True when `value` is plain http to a compose service name, which only
+ * `APP_ENV=local` takes: the load stack (spec 0011, milestone 3), where the
+ * api pokes `http://worker:3101` and the relay publishes to
+ * `http://centrifugo:9000` inside its own compose network.
+ */
+function isComposeServiceUrl(value: string | undefined): boolean {
+  if (value === undefined || !URL.canParse(value)) return false;
+  const url = new URL(value);
+  return url.protocol === 'http:' && isComposeService(url.hostname);
+}
+
+/**
  * An address on the private network or this machine, or else https: the
  * relay's key and the wake secret travel in its headers. Plain http only to a
- * Railway private host (`*.railway.internal`, which Railway encrypts) or
- * localhost.
+ * Railway private host (`*.railway.internal`, which Railway encrypts),
+ * localhost, or a compose service name, which the environment's own check
+ * then refuses outside `APP_ENV=local` (`composeOnlyLocally`).
  */
 function internalUrl(variable: string) {
   return z.url().refine(
@@ -66,12 +87,20 @@ function internalUrl(variable: string) {
       const host = url.hostname;
       return (
         url.protocol === 'http:' &&
-        (host.endsWith('.railway.internal') || host === 'localhost' || host === '127.0.0.1' || host === '[::1]')
+        (host.endsWith('.railway.internal') ||
+          host === 'localhost' ||
+          host === '127.0.0.1' ||
+          host === '[::1]' ||
+          isComposeService(host))
       );
     },
     { message: `${variable} must be https, or http to a *.railway.internal host or localhost.` },
   );
 }
+
+/** The refusal for plain http to a compose service name outside local. */
+const composeOnlyLocally = (variable: string, appEnv: string) =>
+  `${variable} names a compose service over plain http, which only APP_ENV=local takes (not ${appEnv}). Use https, a *.railway.internal host or localhost.`;
 
 // A sender: `address@domain`, or `Name <address@domain>`.
 const sender = z
@@ -151,6 +180,9 @@ export const ApiEnv = z
         'LOAD_TIMING',
         `LOAD_TIMING=on is refused in ${env.APP_ENV}: the timing header is for the local load stack only.`,
       );
+    }
+    if (env.APP_ENV !== 'local' && isComposeServiceUrl(env.WORKER_INTERNAL_URL)) {
+      missing('WORKER_INTERNAL_URL', composeOnlyLocally('WORKER_INTERNAL_URL', env.APP_ENV));
     }
     if ((env.GOOGLE_CLIENT_ID === undefined) !== (env.GOOGLE_CLIENT_SECRET === undefined)) {
       missing('GOOGLE_CLIENT_SECRET', 'Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET together, or neither.');
@@ -238,6 +270,9 @@ export const WorkerEnv = z
       missing('CENTRIFUGO_API_KEY', 'Set CENTRIFUGO_API_URL and CENTRIFUGO_API_KEY together, or neither.');
     if (env.APP_ENV !== 'local' && url) {
       missing('CENTRIFUGO_API_URL', `CENTRIFUGO_API_URL is required in ${env.APP_ENV}: the relay publishes there.`);
+    }
+    if (env.APP_ENV !== 'local' && isComposeServiceUrl(env.CENTRIFUGO_API_URL)) {
+      missing('CENTRIFUGO_API_URL', composeOnlyLocally('CENTRIFUGO_API_URL', env.APP_ENV));
     }
     if (env.APP_ENV === 'local') return;
     if (key) {
