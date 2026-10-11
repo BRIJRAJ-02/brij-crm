@@ -68,6 +68,14 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      # A migration stamped before one already deployed is skipped for good (packages/db/scripts/journal.ts), so
+      # every push checks its journal against the commit it replaced.
+      - name: Migrations stay in deploy order
+        env:
+          BEFORE: ${{ github.event.before }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BEFORE" || true
+          node packages/db/scripts/journal.ts "$BEFORE"
       - name: Read the Playwright version
         id: playwright
         run: echo "version=$(node -p "require('./packages/ui/node_modules/playwright/package.json').version")" >> "$GITHUB_OUTPUT"

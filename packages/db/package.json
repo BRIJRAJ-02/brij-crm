@@ -14,6 +14,7 @@
     "app-login": "node --env-file-if-exists=../../.env scripts/app-login.ts",
     "identity-login": "node --env-file-if-exists=../../.env scripts/identity-login.ts",
     "reconcile:sort-keys": "node --env-file-if-exists=../../.env scripts/reconcile-sort-keys.ts",
+    "check:journal": "node scripts/journal.ts",
     "lint": "eslint .",
     "test": "vitest run"
   },

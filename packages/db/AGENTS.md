@@ -36,6 +36,7 @@ pnpm db:setup       # all three, in order
 - The app never owns a table. Grants reach `crm_app` through default privileges, so a new table needs no grant of its own.
 - Migrations expand first and contract later: a destructive step ships only once no running code needs the old shape. Hand written SQL separates statements with `--> statement-breakpoint`.
 - Seeds stay separate from migrations, and never run in production.
+- A migration's journal `when` must be later than every migration already on main: Drizzle's migrator skips, with no error, a migration stamped before the last one a database applied. When lanes land in a different order than they generated, renumber the landing migration after main's last and stamp it with the time now. `pnpm --filter @crm/db check:journal [<base ref>]` (`scripts/journal.ts`) checks it, and CI runs it against the commit each push replaced.
 - On Neon, run `app-login` and `identity-login` with `--plain-password`: Neon's control plane refuses a precomputed SCRAM verifier (seen on production, 3 October 2026). Postgres still stores only its own hash.
 
 ## Gotchas
