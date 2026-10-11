@@ -181,8 +181,11 @@ describe('the test profile', () => {
   it('makes every user a verified, active member with its directory rows', async () => {
     const { users, verified, members, active, memberships, directory } = await one(
       `select
-         (select count(*) from auth."user" where email like 'load-user-%@example.com') as users,
-         (select count(*) from auth."user" where email like 'load-user-%@example.com' and email_verified) as verified,
+         -- Only this workspace's people: load-sessions.test.ts makes load-user accounts of its own in the same database.
+         (select count(*) from auth."user" u where u.email like 'load-user-%@example.com'
+           and exists (select 1 from members m where m.workspace_id = $1 and m.user_id = u.id)) as users,
+         (select count(*) from auth."user" u where u.email like 'load-user-%@example.com' and u.email_verified
+           and exists (select 1 from members m where m.workspace_id = $1 and m.user_id = u.id)) as verified,
          (select count(*) from members where workspace_id = $1) as members,
          (select count(*) from members m join auth."user" u on u.id = m.user_id
            where m.workspace_id = $1 and m.status = 'active' and m.email = u.email) as active,
