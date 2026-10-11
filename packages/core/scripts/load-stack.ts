@@ -117,7 +117,8 @@ export function prepareStatements(): void {
       '-v',
       'ON_ERROR_STOP=1',
       '-qc',
-      'create extension if not exists pg_stat_statements; ' +
+      'set client_min_messages = warning; ' +
+        'create extension if not exists pg_stat_statements; ' +
         'grant pg_read_all_stats to crm_owner; ' +
         'grant execute on function pg_stat_statements_reset(oid, oid, bigint, boolean) to crm_owner;',
     ],

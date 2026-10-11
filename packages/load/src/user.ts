@@ -96,6 +96,12 @@ export interface ObjectModel {
   readonly samples: readonly string[];
   /** Its live records when seeded: a position view's bounds until its count answers. */
   readonly liveCount: number;
+  /**
+   * The columns on screen, which window reads name (`attributeIds`, as the
+   * People table sends): `columnsOnScreen` picks them. An open reads the whole
+   * record, as a record page does.
+   */
+  readonly columns: readonly string[];
 }
 
 /** How a scenario's users jump and pick records. */
@@ -224,9 +230,11 @@ export function createLoadUser(options: UserOptions): LoadUser {
   }
 
   const base = () => ({ workspace: options.workspace, objectId: model.objectId });
+  // A window reads the columns on screen, as the People table does (spec 0006, AC-55).
   const shapeInput = (shape: ViewShape) => ({
     ...(shape.filter === undefined ? {} : { filter: shape.filter }),
     ...(shape.sorts === undefined ? {} : { sorts: shape.sorts }),
+    attributeIds: [...model.columns],
   });
   const current = (state: ViewState) => state.generation === generation;
   const modeOf = (state: ViewState) => (state.position ? 'position' : 'cursor');

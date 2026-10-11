@@ -32,6 +32,8 @@
     "load:stack:wipe": "node packages/core/scripts/load-stack.ts wipe",
     "load:seed": "node packages/core/scripts/load-seed.ts",
     "load:sessions": "node packages/core/scripts/load-sessions.ts",
+    "load:run": "node packages/load/scripts/run.ts",
+    "load:reset": "node packages/core/scripts/load-reset.ts",
     "boundaries": "turbo boundaries",
     "lint": "turbo run lint lint:root",
     "lint:root": "eslint .railway eslint.config.js stylelint.config.js",

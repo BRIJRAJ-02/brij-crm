@@ -47,6 +47,7 @@ const model: ObjectModel = {
   shapes: viewShapes('people', { attributes, memberIds: [member] }),
   samples: [id(4_000), id(4_001)],
   liveCount: ROWS,
+  columns: [id(900_001), id(900_002)],
 };
 
 const record = (n: number): RecordView => ({
@@ -156,6 +157,8 @@ describe('a view canJump admits', () => {
     const scrolled = queries(calls).slice(1);
     expect(scrolled.every((input) => input.position !== undefined && input.position % 100 === 0)).toBe(true);
     expect(scrolled.every((input) => input.cursor === undefined && input.limit === 100)).toBe(true);
+    // A window reads the columns on screen, as the People table does.
+    expect(queries(calls).every((input) => input.attributeIds?.length === 2)).toBe(true);
     // Each scroll read 1 to 3 windows and was timed once, from its schedule.
     const reads = samples.filter((each) => each.action === 'scroll');
     expect(reads).toHaveLength(20);

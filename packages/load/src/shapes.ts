@@ -176,3 +176,32 @@ export function createValues(
       };
   }
 }
+
+/** How many columns a screen shows at once, the first by position (a 1440 pixel wide table). */
+export const SCREEN_COLUMNS = 10;
+
+/**
+ * The attribute ids a window reads: the first `SCREEN_COLUMNS` attributes by
+ * position, then every editable one and every one a shape filters or sorts
+ * on, so an edit knows the value it changes. The primary attribute comes
+ * anyway.
+ */
+export function columnsOnScreen(
+  key: ObjectKey,
+  attributes: readonly (ShapeAttribute & { readonly position: number })[],
+  shapes: readonly ViewShape[],
+): readonly string[] {
+  const visible = [...attributes]
+    .filter((attribute) => !attribute.isSystem)
+    .sort((left, right) => left.position - right.position)
+    .slice(0, SCREEN_COLUMNS)
+    .map((attribute) => attribute.id);
+  const editable = attributes.filter((attribute) => EDITABLE[key].includes(attribute.apiSlug)).map((each) => each.id);
+  const named = shapes.flatMap((shape) => [
+    ...(shape.sorts ?? []).map((sort) => sort.attributeId),
+    ...(shape.filter?.conditions ?? []).flatMap((condition) =>
+      'attributeId' in condition ? [condition.attributeId] : [],
+    ),
+  ]);
+  return [...new Set([...visible, ...editable, ...named])];
+}
