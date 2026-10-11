@@ -262,3 +262,21 @@ describe('the worker environment (spec 0005, the relay)', () => {
     expect(workerProblems({ ...worker, WORKER_WAKE_SECRET: placeholder })).toEqual([]);
   });
 });
+
+describe("the load harness's timing header (spec 0011, AC-202)", () => {
+  it('is off unless set, and may be on locally', () => {
+    expect(ApiEnv.parse(local).LOAD_TIMING).toBeUndefined();
+    expect(ApiEnv.parse({ ...local, LOAD_TIMING: '' }).LOAD_TIMING).toBeUndefined();
+    expect(ApiEnv.parse({ ...local, LOAD_TIMING: 'on' }).LOAD_TIMING).toBe('on');
+  });
+
+  it('refuses LOAD_TIMING=on outside local, so the API will not boot with it there', () => {
+    expect(problems({ ...production, LOAD_TIMING: 'on' })).toEqual(['LOAD_TIMING']);
+    expect(problems({ ...production, APP_ENV: 'preview', LOAD_TIMING: 'on' })).toEqual(['LOAD_TIMING']);
+    expect(problems({ ...production, LOAD_TIMING: 'off' })).toEqual([]);
+  });
+
+  it('takes only on or off', () => {
+    expect(problems({ ...local, LOAD_TIMING: 'yes' })).toEqual(['LOAD_TIMING']);
+  });
+});

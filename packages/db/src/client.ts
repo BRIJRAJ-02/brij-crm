@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import * as schema from './schema/index.ts';
+import { timePool, type PoolTiming } from './timing.ts';
 
 /** Drizzle over this package's schema, on a pool or on one client. */
 export type Drizzle = NodePgDatabase<typeof schema>;
@@ -13,6 +14,12 @@ export interface DatabaseOptions {
   applicationName: string;
   maxConnections?: number;
   onPoolError?: (error: Error) => void;
+  /**
+   * Times each checkout for the sink it names (spec 0011, AC-202): the API's
+   * load timing header, with `LOAD_TIMING=on` on a laptop only. Absent, the
+   * pool is untouched.
+   */
+  timing?: PoolTiming;
 }
 
 /** The tables `vacuumAnalyze` may tidy: the big tenant tables bulk loads fill. */
@@ -115,6 +122,7 @@ export function createDatabase(options: DatabaseOptions): Database {
   });
   // An idle client can drop (a deploy, a Neon restart). Report it; the pool replaces it.
   pool.on('error', (error) => (options.onPoolError ?? console.error)(error));
+  if (options.timing !== undefined) timePool(pool, options.timing);
   cancelPool.on('error', (error) => (options.onPoolError ?? console.error)(error));
 
   const db = drizzle({ client: pool, schema });

@@ -3,7 +3,7 @@ import { type ErrorCode, errorStatus } from '@crm/contracts';
 import type { RuleSource } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import type { AnyRouter } from '@orpc/server';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { AUTH_BASE_PATH, AUTH_ROUTES, type Auth } from './auth/auth.ts';
 import { createEdgeGuard } from './edge.ts';
@@ -15,6 +15,7 @@ import { createRealtimeTokens } from './realtime/tokens.ts';
 import type { WakeRelay } from './realtime/wake.ts';
 import { router as appRouter } from './router.ts';
 import { createRpcHandler } from './rpc.ts';
+import type { RequestTiming } from './timing.ts';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -70,6 +71,12 @@ export interface AppServices {
    * server (`test/rules-server.ts`) inject some.
    */
   readonly rules?: RuleSource;
+  /**
+   * The load harness's request timing (spec 0011, AC-202), made by the server
+   * only with `LOAD_TIMING=on` (local only) and handed to its pools too: each
+   * `/api/rpc` answer then carries `Server-Timing`. Absent, none is sent.
+   */
+  readonly timing?: RequestTiming;
 }
 
 /** The API. `router` is the app's own unless a test passes one. */
@@ -82,7 +89,7 @@ export function createApp({
   env: ApiEnv;
   router?: AnyRouter;
 }) {
-  const { db, identity, auth, wakeRelay, rules } = services;
+  const { db, identity, auth, wakeRelay, rules, timing } = services;
   const rpc = createRpcHandler(router);
   const edge = createEdgeGuard({ secret: env.EDGE_SECRET, environment: env.APP_ENV });
   const allowedOrigins = new Set([new URL(env.APP_URL).origin, ...(env.TRUSTED_ORIGINS ?? [])]);
@@ -152,6 +159,11 @@ export function createApp({
 
   app.all('/rpc/*', async (c) => {
     if (!testFault && routedPath(c.req.path) === TEST_FAULT_PATH) return c.notFound();
+    if (timing === undefined) return answerRpc(c);
+    return timing.timed(() => answerRpc(c));
+  });
+
+  async function answerRpc(c: Context<{ Variables: AppVariables }>): Promise<Response> {
     const { matched, response } = await rpc.handle(c.req.raw, {
       prefix: '/api/rpc',
       context: {
@@ -170,7 +182,7 @@ export function createApp({
       },
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();
-  });
+  }
 
   // Better Auth's own routes: only the ones sign in uses (`AUTH_ROUTES`), matched on the path as sent, so
   // an encoded or padded path never reaches a route we didn't list.

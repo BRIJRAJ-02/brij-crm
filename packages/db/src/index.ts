@@ -33,3 +33,4 @@ export {
   type RateLimitRule,
 } from './identity/store.ts';
 export * as schema from './schema/index.ts';
+export { type PoolTiming, type PoolTimingSink } from './timing.ts';

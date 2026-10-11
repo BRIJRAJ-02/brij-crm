@@ -10,6 +10,7 @@ import { createMailer } from './mail/mailer.ts';
 import { captureFault, flush, MONITORING_FLUSH_MS } from './monitoring/sentry.ts';
 import { createRelayWake, NO_WAKE } from './realtime/wake.ts';
 import { onShutdown } from './shutdown.ts';
+import { createRequestTiming } from './timing.ts';
 
 const env = loadEnv(ApiEnv);
 
@@ -17,12 +18,16 @@ const onPoolError = (error: Error) => {
   log.error('Idle database client failed', errorFields(error));
   captureFault(error, { task: 'database pool' });
 };
-const db = createDatabase({ url: env.DATABASE_URL, applicationName: 'crm-api', onPoolError });
+// The load stack's timing header (spec 0011, AC-202): only with LOAD_TIMING=on, which ApiEnv allows only locally.
+const timing = env.LOAD_TIMING === 'on' ? createRequestTiming() : undefined;
+const timed = timing === undefined ? {} : { timing: timing.current };
+const db = createDatabase({ url: env.DATABASE_URL, applicationName: 'crm-api', onPoolError, ...timed });
 // Global identity on its own login (spec 0005): the only role that reads and writes schema `auth`.
 const identity = createIdentityStore({
   url: env.IDENTITY_DATABASE_URL,
   applicationName: 'crm-api-identity',
   onPoolError,
+  ...timed,
 });
 try {
   await db.assertAppRole();
@@ -62,9 +67,15 @@ const wakeRelay =
     ? NO_WAKE
     : createRelayWake({ url: env.WORKER_INTERNAL_URL, secret: env.WORKER_WAKE_SECRET, log });
 log.info(`Relay wake ${wakeRelay === NO_WAKE ? 'off' : 'on'}`);
+if (timing !== undefined) log.info('Load timing on: every /api/rpc answer carries Server-Timing');
 
 const server = serve(
-  { fetch: createApp({ services: { db, identity, auth, wakeRelay }, env }).fetch, port: env.PORT, hostname: '::' },
+  {
+    fetch: createApp({ services: { db, identity, auth, wakeRelay, ...(timing === undefined ? {} : { timing }) }, env })
+      .fetch,
+    port: env.PORT,
+    hostname: '::',
+  },
   (info) => log.info('API listening', { port: info.port, environment: env.APP_ENV }),
 );
 

@@ -12,6 +12,7 @@ import { and, asc, eq, sql } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import pg from 'pg';
 import type { DatabaseOptions } from '../client.ts';
+import { timePool } from '../timing.ts';
 import {
   account,
   rateLimit,
@@ -108,6 +109,8 @@ export function createIdentityStore(options: DatabaseOptions): IdentityStore {
     max: options.maxConnections ?? 5,
   });
   pool.on('error', (error) => (options.onPoolError ?? console.error)(error));
+  // The session check every request makes waits here too (spec 0011, AC-202).
+  if (options.timing !== undefined) timePool(pool, options.timing);
   const db = drizzle({ client: pool, schema: AUTH_MODELS });
 
   const directoryColumns = {

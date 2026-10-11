@@ -130,9 +130,18 @@ export const ApiEnv = z
     // Monitoring (spec 0010): `on` opens system.testFault, which fails on purpose to prove error reports in
     // production; unset or `off` answers NOT_FOUND, as if it didn't exist. Switch it off again after the proof.
     MONITORING_TEST_FAULT: optional(z.enum(['on', 'off'])),
+    // The load harness's timing header (spec 0011, AC-202): `on` adds `Server-Timing` (pool wait, database and
+    // handler time) to every /api/rpc answer. Local only: it exposes internal timings, so it is refused elsewhere.
+    LOAD_TIMING: optional(z.enum(['on', 'off'])),
   })
   .superRefine((env, issues) => {
     const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });
+    if (env.LOAD_TIMING === 'on' && env.APP_ENV !== 'local') {
+      missing(
+        'LOAD_TIMING',
+        `LOAD_TIMING=on is refused in ${env.APP_ENV}: the timing header is for the local load stack only.`,
+      );
+    }
     if ((env.GOOGLE_CLIENT_ID === undefined) !== (env.GOOGLE_CLIENT_SECRET === undefined)) {
       missing('GOOGLE_CLIENT_SECRET', 'Set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET together, or neither.');
     }
