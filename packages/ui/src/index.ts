@@ -145,7 +145,13 @@ export { Select, type SelectItem, type SelectOptionStyle, type SelectProps } fro
 export { Steps, type Step, type StepsProps } from './molecules/Steps/Steps.tsx';
 export { Table, type TableColumn, type TableProps } from './molecules/Table/Table.tsx';
 export { TabPanel, Tabs, type TabItem, type TabPanelProps, type TabsProps } from './molecules/Tabs/Tabs.tsx';
-export { ActivityFeed, type ActivityEntry, type ActivityFeedProps } from './modules/ActivityFeed/ActivityFeed.tsx';
+export {
+  ActivityFeed,
+  type ActivityEntry,
+  type ActivityFeedLayout,
+  type ActivityFeedProps,
+  type LinkedRecord,
+} from './modules/ActivityFeed/ActivityFeed.tsx';
 export { AppShell, AppShellContext, type AppShellProps } from './modules/AppShell/AppShell.tsx';
 export { AuthLayout, type AuthLayoutProps } from './modules/AuthLayout/AuthLayout.tsx';
 export {

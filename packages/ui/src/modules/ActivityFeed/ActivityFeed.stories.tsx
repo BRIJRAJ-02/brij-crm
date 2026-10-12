@@ -1,11 +1,13 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { arraySource, type ListSource } from '../../lib/list-source.ts';
 import { SAMPLE_STAGES } from '../../workbench/field-samples.ts';
-import { ADA, GRACE, SAMPLE_ACTIVITY, STAGE } from '../../workbench/record-samples.ts';
+import { ADA, GRACE, SAMPLE_ACTIVITY, SAMPLE_LINK_ACTIVITY, STAGE } from '../../workbench/record-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import type { LoadStatus } from '../../lib/load-status.ts';
-import { ActivityFeed, type ActivityEntry } from './ActivityFeed.tsx';
+import { ActivityFeed, type ActivityEntry, type ActivityFeedLayout } from './ActivityFeed.tsx';
 
 /** 10,000 entries, each made from its index, with every tenth one still loading. */
 function longSource(onRangeChange: (range: { start: number; end: number }) => void): ListSource<ActivityEntry> {
@@ -35,18 +37,76 @@ interface SampleProps {
   readonly onRetry?: () => void;
   readonly onRangeChange?: (range: { start: number; end: number }) => void;
   readonly isLong?: boolean;
+  readonly layout?: ActivityFeedLayout;
 }
 
-/** The feed in a fixed height slot, as the record page's Activity tab gives it. */
-function SampleFeed({ entries, status = 'ready', onRetry, onRangeChange, isLong = false }: SampleProps) {
+/** The feed in a fixed height slot, as the record page's Activity tab gives it; inline in a block of its own height. */
+function SampleFeed({
+  entries,
+  status = 'ready',
+  onRetry,
+  onRangeChange,
+  isLong = false,
+  layout = 'feed',
+}: SampleProps) {
   const source = isLong
     ? longSource(onRangeChange ?? (() => undefined))
     : (entries ?? arraySource(SAMPLE_ACTIVITY, (entry) => entry.id));
+  const feed = (
+    <ActivityFeed
+      label={layout === 'inline' ? 'Recent activity' : 'Activity'}
+      entries={source}
+      layout={layout}
+      status={status}
+      {...(onRetry === undefined ? {} : { onRetry })}
+    />
+  );
+  return layout === 'inline' ? <Stage width="narrow">{feed}</Stage> : <Stage height="grid">{feed}</Stage>;
+}
+
+/** Change entries made from their number, a minute apart, the newest first. */
+function numbered(from: number, to: number): ActivityEntry[] {
+  const start = Date.parse('2026-10-08T12:00:00.000Z');
+  return Array.from({ length: to - from }, (_, offset) => {
+    const n = to - 1 - offset;
+    return {
+      id: `n-${String(n)}`,
+      kind: 'change',
+      at: new Date(start + n * 60_000).toISOString(),
+      actor: n % 2 === 0 ? ADA : GRACE,
+      attribute: STAGE,
+      from: SAMPLE_STAGES[n % 3]?.id ?? null,
+      to: SAMPLE_STAGES[(n + 1) % 3]?.id ?? null,
+    };
+  });
+}
+
+/** A feed whose source gains newer entries above when "Add newer" is pressed, as a live refresh does. */
+function GrowingFeed() {
+  const [entries, setEntries] = useState(() => numbered(0, 60));
   return (
-    <Stage height="grid">
-      <ActivityFeed label="Activity" entries={source} status={status} {...(onRetry === undefined ? {} : { onRetry })} />
+    <Stage direction="column">
+      <Button
+        onPress={() => {
+          setEntries((held) => [...numbered(held.length, held.length + 5), ...held]);
+        }}
+      >
+        Add newer
+      </Button>
+      <Stage height="grid">
+        <ActivityFeed label="Activity" entries={arraySource(entries, (entry) => entry.id)} />
+      </Stage>
     </Stage>
   );
+}
+
+/** The article the feed shows first, below its top edge, and where it sits. */
+function firstOnScreen(feed: HTMLElement): { readonly index: number; readonly top: number } {
+  const edge = feed.getBoundingClientRect().top;
+  const shown = [...feed.querySelectorAll<HTMLElement>('[role="article"]')]
+    .sort((a, b) => a.getBoundingClientRect().top - b.getBoundingClientRect().top)
+    .find((article) => article.getBoundingClientRect().bottom > edge + 1);
+  return { index: Number(shown?.dataset.index ?? -1), top: shown?.getBoundingClientRect().top ?? 0 };
 }
 
 const meta = {
@@ -149,5 +209,92 @@ export const FocusOnLoading: Story = {
     await userEvent.tab();
     await expect(document.activeElement).toHaveAttribute('aria-posinset', '10000');
     await expect(canvas.getByRole('feed')).toContainElement(document.activeElement as HTMLElement);
+  },
+};
+
+/** Records linked and unlinked by one write: 3 names and "and 97 others", both ways in one entry, and a side that holds one record. */
+export const Links: Story = {
+  args: { entries: arraySource(SAMPLE_LINK_ACTIVITY, (entry) => entry.id) },
+  parameters: { crm: { preview: true } },
+  play: async ({ canvas }) => {
+    const [many, both, removed, moved] = canvas.getAllByRole('article');
+    // A chip is its own box, so browsers may put a space before the comma after it.
+    await expect(many).toHaveAccessibleName(
+      /^Ada Lovelace added Jane Doe ?, Ada Lovelace ?, Alan Turing and 97 others to Team$/,
+    );
+    await expect(both).toHaveAccessibleName(
+      /^Grace Hopper added Katherine Johnson and Margaret Hamilton to Team ?, and removed Edsger Dijkstra from Team$/,
+    );
+    await expect(removed).toHaveAccessibleName('Lead routing removed Barbara Liskov from Team');
+    await expect(moved).toHaveAccessibleName('Ada Lovelace changed Company');
+    // Each name links to its record.
+    await expect(canvas.getByRole('link', { name: 'Jane Doe' })).toHaveAttribute(
+      'href',
+      '/records/0199a3c0-0000-7000-8000-00000000c101',
+    );
+  },
+};
+
+/** Inline, as Overview's "Recent activity": the first entries drawn in place, with no scroll of their own. */
+export const Inline: Story = {
+  args: { layout: 'inline', entries: arraySource(SAMPLE_ACTIVITY.slice(0, 5), (entry) => entry.id) },
+  play: async ({ canvas }) => {
+    const feed = canvas.getByRole('feed', { name: 'Recent activity' });
+    await expect(canvas.getAllByRole('article')).toHaveLength(5);
+    await expect(feed.scrollHeight).toBe(feed.clientHeight);
+  },
+};
+
+/** Inline draws at most 10 entries, however many it is given, and End goes to the tenth. */
+export const InlineCapped: Story = {
+  args: { layout: 'inline', entries: arraySource(numbered(0, 30), (entry) => entry.id) },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getAllByRole('article')).toHaveLength(10);
+    await userEvent.tab();
+    await userEvent.keyboard('{End}');
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('aria-posinset', '10'));
+  },
+};
+
+/** Inline, while the first page is still coming. */
+export const InlineLoading: Story = {
+  args: { layout: 'inline', status: 'loading' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Loading activity')).toBeInTheDocument();
+  },
+};
+
+/** Newer entries arriving above keep the entry being read where it is on screen, and the tab stop on it. */
+export const KeepsReading: Story = {
+  render: () => <GrowingFeed />,
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const feed = canvas.getByRole('feed');
+    feed.scrollTop = 900;
+    // As a person's scroll does (headless WebKit can hold the event back past the next steps).
+    feed.dispatchEvent(new Event('scroll'));
+    await waitFor(() => expect(firstOnScreen(feed).index).toBeGreaterThan(3));
+    const before = firstOnScreen(feed);
+    await userEvent.click(canvas.getByRole('button', { name: 'Add newer' }));
+    await waitFor(() => expect(canvas.getAllByRole('article')[0]).toHaveAttribute('aria-setsize', '65'));
+    await waitFor(async () => {
+      const after = firstOnScreen(feed);
+      await expect(after.index).toBe(before.index + 5);
+      await expect(Math.abs(after.top - before.top)).toBeLessThan(2);
+    });
+  },
+};
+
+/** At the top, newer entries arriving show at the top. */
+export const NewerAtTop: Story = {
+  render: () => <GrowingFeed />,
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const feed = canvas.getByRole('feed');
+    await userEvent.click(canvas.getByRole('button', { name: 'Add newer' }));
+    await waitFor(() => expect(canvas.getAllByRole('article')[0]).toHaveAttribute('aria-setsize', '65'));
+    await expect(feed.scrollTop).toBe(0);
+    await expect(firstOnScreen(feed).index).toBe(0);
   },
 };
