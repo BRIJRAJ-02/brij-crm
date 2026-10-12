@@ -2,7 +2,7 @@
 // AC-208): their users, minutes, whether a miss fails them, how their users
 // jump and pick records, and the storm's extras. Users and minutes default
 // from here and `SCALE_BUDGET`, and `--users` and `--minutes` override them.
-// `hub` and `thousand` arrive with milestone 4.
+// `hub` arrives with milestone 4's next step.
 import { SCALE_BUDGET } from '@crm/core/scale-budget';
 import type { Behaviour } from './user.ts';
 
@@ -42,6 +42,16 @@ export const WARMUP_SECONDS = 60;
  */
 export const JUMP_SHARE = 0.2;
 
+/**
+ * Users per harness thread (spec 0011, task 20): a run spreads its users over
+ * this many per worker thread unless `--threads` says otherwise, so 1,000
+ * users take 4 threads, each with its own event loop check (AC-203).
+ */
+export const USERS_PER_THREAD = 250;
+
+/** The threads a run of `users` takes by default: one per 250 users. */
+export const threadsFor = (users: number): number => Math.max(1, Math.ceil(users / USERS_PER_THREAD));
+
 /** How often the storm's bursts come (AC-207). */
 export const BURST_EVERY_MS = 10_000;
 
@@ -75,5 +85,13 @@ export const SCENARIOS: Readonly<Record<ScenarioName, Scenario | LaterScenario>>
     behaviour: steadyBehaviour,
     storm: { burstEveryMs: BURST_EVERY_MS },
   },
-  thousand: { built: false, milestone: 4 },
+  // 1,000 users, each a different seeded member with its own session, on the steady mix for 5 measured minutes
+  // (AC-208). It prints every verdict but exits by validity only: the budget at 1,000 is judged in #41.
+  thousand: {
+    built: true,
+    gate: false,
+    users: SCALE_BUDGET.online.room,
+    minutes: 5,
+    behaviour: steadyBehaviour,
+  },
 };

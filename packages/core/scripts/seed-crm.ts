@@ -387,6 +387,12 @@ export interface SeedDeps {
 export interface SeedInput {
   readonly profile: SeedProfileName;
   readonly chunk?: number;
+  /**
+   * Members to make instead of the profile's (1 to 1,000, the budget's room):
+   * `thousand` needs 1,000 different people, which only `crm` makes, so the
+   * smaller seeds can take more (`pnpm load:seed --profile smoke --users 1000`).
+   */
+  readonly users?: number;
 }
 
 /**
@@ -423,7 +429,7 @@ export async function refuseSeeded(db: Database): Promise<void> {
  */
 export async function seedCrm(deps: SeedDeps, input: SeedInput): Promise<LoadManifest> {
   const { db, log } = deps;
-  const profile = SEED_PROFILES[input.profile];
+  const profile = { ...SEED_PROFILES[input.profile], ...(input.users === undefined ? {} : { users: input.users }) };
   const chunk = input.chunk ?? CHUNK;
   const workspaceId = newId();
   await refuseSeeded(db);

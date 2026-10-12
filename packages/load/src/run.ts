@@ -36,7 +36,7 @@ import { headAt, relayLags } from './outbox.ts';
 import { achievedMix, mixDeviation, planArrivals, planStorm, type ArrivalPlan } from './plan.ts';
 import { errorCounts, errorLines, exitCodeOf, formatReport, judgeValidity, reportLines } from './report.ts';
 import { LoadResult, type StatementLine } from './result.ts';
-import { SCENARIOS, WARMUP_SECONDS, type Scenario, type ScenarioName } from './scenarios.ts';
+import { SCENARIOS, threadsFor, WARMUP_SECONDS, type Scenario, type ScenarioName } from './scenarios.ts';
 import { columnsOnScreen, OBJECT_SHARES, viewShapes, type ObjectKey, type ShapeAttribute } from './shapes.ts';
 import { ACTION_METRICS, type ObjectModel } from './user.ts';
 import { MISS_AFTER_MS } from './live/stream.ts';
@@ -236,7 +236,8 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
   const users = options.users ?? scenario.users;
   const minutes = options.minutes ?? scenario.minutes;
   const seed = options.seed ?? Math.floor(Date.now() / 1000);
-  const threads = Math.max(1, Math.min(options.threads ?? 1, users));
+  // One thread per 250 users unless `--threads` says otherwise (never more threads than users).
+  const threads = Math.max(1, Math.min(Math.floor(options.threads ?? threadsFor(users)), users));
   if (!Number.isInteger(users) || users < 1) throw loadRefusal('Give --users as a whole number from 1.');
   if (!(minutes > 0)) throw loadRefusal('Give --minutes as a number above 0.');
 

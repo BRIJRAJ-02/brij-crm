@@ -170,6 +170,12 @@ describe('judgeValidity and exitCodeOf', () => {
     expect(judgeValidity({ ...base, samples: ok, eventLoopDelayP99Ms: [12, 80] }).reasons.join()).toContain(
       "couldn't keep up",
     );
+    // Each thread is checked on its own and named: one stalled thread of four is enough.
+    const four = judgeValidity({ ...base, samples: ok, eventLoopDelayP99Ms: [10, 12, 14, 61.25, 13] });
+    expect(four.valid).toBe(false);
+    expect(four.reasons).toEqual([
+      "the harness couldn't keep up: thread 3 stalled 61.3 ms at p99 on its event loop (limit 50 ms)",
+    ]);
     expect(judgeValidity({ ...base, samples: ok, sentActions: 1_800 }).valid).toBe(false);
   });
 

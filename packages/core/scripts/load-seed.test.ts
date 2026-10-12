@@ -4,6 +4,7 @@
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { seedUsers } from './load-seed.ts';
 
 function run(script: string, args: readonly string[], env: Readonly<Record<string, string>>) {
   const result = spawnSync(process.execPath, [fileURLToPath(new URL(script, import.meta.url)), ...args], {
@@ -41,6 +42,15 @@ describe('pnpm load:seed', () => {
     const { status, output } = run('./load-seed.ts', ['--profile', 'huge'], {});
     expect(status).toBe(3);
     expect(output).toContain('crm, smoke or test');
+  });
+
+  it('takes --users from 1 to the budget’s 1,000, and refuses anything else with exit 3', () => {
+    const { status, output } = run('./load-seed.ts', ['--profile', 'smoke', '--users', '1001'], {});
+    expect(status).toBe(3);
+    expect(output).toContain('from 1 to 1,000');
+    expect(seedUsers(undefined)).toBeUndefined();
+    expect(seedUsers('1000')).toBe(1_000);
+    for (const bad of ['0', '2.5', 'many']) expect(() => seedUsers(bad)).toThrow(/--users/);
   });
 });
 

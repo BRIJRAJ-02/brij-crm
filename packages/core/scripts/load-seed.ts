@@ -1,5 +1,7 @@
-// `pnpm load:seed [--profile crm|smoke|test]` (spec 0011, AC-195): one
-// command from nothing to a seeded load stack. It starts the stack's data
+// `pnpm load:seed [--profile crm|smoke|test] [--users N]` (spec 0011,
+// AC-195): one command from nothing to a seeded load stack. `--users` makes
+// that many members instead of the profile's (up to the budget's 1,000), so
+// a small seed can carry `thousand`'s 1,000 different people. It starts the stack's data
 // services when they're down, applies the migrations and creates the app and
 // identity logins on the load database (the same scripts as `pnpm db:setup`),
 // seeds the profile (`crm` by default), mints a session for every seeded
@@ -28,6 +30,7 @@ import {
 } from './load-local.ts';
 import { LOAD_AUTH_SECRET, mintSessions } from './load-sessions.ts';
 import { isLoadStackUp, prepareStatements, startLoadStack } from './load-stack.ts';
+import { SCALE_BUDGET } from './scale-budget.ts';
 import { refuseSeeded, seedCrm } from './seed-crm.ts';
 
 const DB_SCRIPTS = fileURLToPath(new URL('../../db/scripts/', import.meta.url));
@@ -64,14 +67,26 @@ function setUpDatabase(urls: LoadUrls): void {
   }
 }
 
+/** `--users`: a whole number from 1 to the budget's room (1,000), or undefined for the profile's own. */
+export function seedUsers(value: string | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  const users = Number(value);
+  const most = SCALE_BUDGET.online.room;
+  if (!Number.isInteger(users) || users < 1 || users > most) {
+    throw loadRefusal(`Give --users as a whole number from 1 to ${most.toLocaleString('en')} (got "${value}").`);
+  }
+  return users;
+}
+
 async function main(): Promise<void> {
   const started = Date.now();
   const log = (message: string) => {
     console.log(`${((Date.now() - started) / 1000).toFixed(1).padStart(8)}s  ${message}`);
   };
-  const { values } = parseArgs({ options: { profile: { type: 'string', default: 'crm' } } });
+  const { values } = parseArgs({ options: { profile: { type: 'string', default: 'crm' }, users: { type: 'string' } } });
   const profile = SeedProfileName.safeParse(values.profile);
   if (!profile.success) throw loadRefusal(`Unknown profile "${values.profile}": use crm, smoke or test.`);
+  const users = seedUsers(values.users);
   const urls = loadUrls(process.env);
   assertLoginsApart(process.env, urls);
   const onStack = isLoadStackDatabase(urls.LOAD_DATABASE_URL_OWNER);
@@ -89,7 +104,10 @@ async function main(): Promise<void> {
     if (onStack) prepareStatements();
     log('migrations and logins');
     log(`seeding the ${profile.data} profile`);
-    const manifest = await seedCrm({ db, identity, log }, { profile: profile.data });
+    const manifest = await seedCrm(
+      { db, identity, log },
+      { profile: profile.data, ...(users === undefined ? {} : { users }) },
+    );
     log(`manifest ${await writeManifest(LOAD_DIR, manifest)}`);
     const sessions = await mintSessions(db, {
       workspaceId: manifest.workspaceId,

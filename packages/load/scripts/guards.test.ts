@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { assertSessionsApi, objectOf, plannedCreates, scenarioOf } from '../src/run.ts';
+import { threadsFor } from '../src/scenarios.ts';
 
 const RUN = fileURLToPath(new URL('./run.ts', import.meta.url));
 const RESET = fileURLToPath(new URL('../../core/scripts/load-reset.ts', import.meta.url));
@@ -80,6 +81,13 @@ describe('the run’s plan', () => {
   it('runs the gates and refuses the rest for now', () => {
     expect(scenarioOf('steady').gate).toBe(true);
     expect(scenarioOf('spread').behaviour.jumps).toBe('even');
-    expect(() => scenarioOf('thousand')).toThrow(/milestone 4/);
+    expect(() => scenarioOf('hub')).toThrow(/milestone 4/);
+  });
+
+  it('plays 1,000 users for 5 minutes in thousand, by validity only, 250 users to a thread', () => {
+    expect(scenarioOf('thousand')).toMatchObject({ gate: false, users: 1_000, minutes: 5 });
+    expect(threadsFor(1_000)).toBe(4);
+    expect(threadsFor(100)).toBe(1);
+    expect(threadsFor(251)).toBe(2);
   });
 });

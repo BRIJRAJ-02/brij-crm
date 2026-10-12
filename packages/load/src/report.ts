@@ -422,25 +422,30 @@ export function errorLines(samples: readonly Sample[], budget: ScaleBudget): rea
   ];
 }
 
+/** The name of event loop `index` in `eventLoopDelayP99Ms`: the main thread first, then each harness thread. */
+export const threadName = (index: number): string => (index === 0 ? 'the main thread' : `thread ${String(index)}`);
+
 /** What validity is judged on. */
 export interface ValidityInput {
   readonly budget: ScaleBudget;
   readonly samples: readonly Sample[];
   readonly plannedActions: number;
   readonly sentActions: number;
-  /** Each thread's event loop delay p99 over the measured window, main thread included. */
+  /** Each thread's event loop delay p99 over the measured window: the main thread first, then each harness thread. */
   readonly eventLoopDelayP99Ms: readonly number[];
 }
 
 /** Whether the run counts (AC-203): the harness kept up, and unexpected errors stayed under the budget's share. */
 export function judgeValidity(input: ValidityInput): RunValidity {
   const reasons: string[] = [];
-  const worstLoop = Math.max(0, ...input.eventLoopDelayP99Ms);
-  if (worstLoop > MAX_LOOP_DELAY_P99_MS) {
-    reasons.push(
-      `the harness couldn't keep up: an event loop stalled ${worstLoop.toFixed(1)} ms at p99 (limit ${String(MAX_LOOP_DELAY_P99_MS)} ms)`,
-    );
-  }
+  // Every thread is checked on its own (AC-203): one stalled thread of four makes the run invalid.
+  input.eventLoopDelayP99Ms.forEach((p99, index) => {
+    if (p99 > MAX_LOOP_DELAY_P99_MS) {
+      reasons.push(
+        `the harness couldn't keep up: ${threadName(index)} stalled ${p99.toFixed(1)} ms at p99 on its event loop (limit ${String(MAX_LOOP_DELAY_P99_MS)} ms)`,
+      );
+    }
+  });
   const sentShare = input.plannedActions === 0 ? 1 : input.sentActions / input.plannedActions;
   if (sentShare < MIN_SENT_SHARE) {
     reasons.push(
@@ -541,7 +546,7 @@ export function formatReport(result: LoadResult): string {
     `database clock offset: ${facts.databaseClockOffsetMs === undefined ? '?' : `${facts.databaseClockOffsetMs.toFixed(1)} ms`}${facts.databaseClockDriftMs === undefined ? '' : ` (moved ${facts.databaseClockDriftMs.toFixed(1)} ms from start to end)`}`,
     `manifest (${facts.manifestProfile}): ${counts}`,
     `mix achieved: ${mix} (largest gap ${(result.mix.deviationPoints * 100).toFixed(2)} points)`,
-    `actions: ${String(result.validity.sentActions)} sent of ${String(result.validity.plannedActions)} planned; event loop p99 ${result.validity.eventLoopDelayP99Ms.map((ms) => `${ms.toFixed(1)} ms`).join(', ')}`,
+    `actions: ${String(result.validity.sentActions)} sent of ${String(result.validity.plannedActions)} planned; event loop p99: ${result.validity.eventLoopDelayP99Ms.map((ms, index) => `${threadName(index)} ${ms.toFixed(1)} ms`).join(', ')}`,
     `WAL written: ${result.walBytes === undefined ? 'not measured' : `${(result.walBytes / 1024 ** 2).toFixed(1)} MB`}`,
   ];
   if (Object.keys(result.errors).length > 0) {
