@@ -23,7 +23,19 @@ export const strings = {
     comment: 'commented',
     email: 'sent an email',
     meeting: 'had a meeting',
+    added: 'added',
+    removed: 'removed',
   },
+  /** Where linked records went: "added Jane Doe to Team", "removed Jane Doe from Team". */
+  linkedTo: 'to',
+  linkedFrom: 'from',
+  /** Between names: "Jane Doe, Ada Lovelace and Alan Turing". */
+  listSeparator: ',',
+  listLast: 'and',
+  /** The records a link entry doesn't name, the count already formatted: "and 97 others". */
+  others: (count: string, isOne: boolean) => (isOne ? `${count} other` : `${count} others`),
+  /** Between an entry's added and removed records. */
+  clauseSeparator: ', and',
   /** Between a change's old and new value, for screen readers. */
   to: 'to',
 } as const;
