@@ -109,11 +109,14 @@ Every run stayed under the 1 second p95. The create is the slowest change each t
 | `session.flow.ts` | The session ends mid edit: the edit rolls back, "You were signed out, so your last change wasn't saved." shows once, on the sign in form at `/sign-in?redirect=<the page>`, with nothing of the workspace behind it, and signing in again reads the page fresh; an idle session goes to sign in with no such notice; axe in both themes | 1280 | 1280 |
 | `keyboard.flow.ts` | The whole loop without the pointer: focus lands where it should at every stop and draws a ring (a primary's is a solid outline), ⌘↵ creates, Esc closes and returns focus, Tab enters the grid once; no browser error and no 401 but signed out `me.get` | 1280 | 1280 |
 | `live.flow.ts` | Two browsers: create, 20 edits and a new column within a second at p95, no echo fetches, the paused notice and recovery | 1280, reader in Chromium (or `FLOW_READER_BROWSER=webkit`) | 1280, reader in WebKit |
+| `record.flow.ts` (spec 0017's lane) | The record page: open, edit, Copy link, View all to Activity with focus on the tab | 1280 | 1280 |
 | `catch-up`, `settle`, `versions`, `scale`, `hidden` | Specs 0006, 0007 and 0009 | by hand | not run (long, or need seeded data) |
 
 CI runs the built app (`vite preview`), the api and the worker on the local ports against their own Postgres, Mailpit and Centrifugo services, with one retry; on failure it keeps the traces and the three logs. Locally, `API_DEV_ORIGIN` and `--port` move the stack, so a second worktree runs its own (`.env` with other ports, its own database and Centrifugo).
 
-Last local run (2026-10-12, `vite preview` on 5273 against a fresh database, machine load 8 to 50 from other agents): every flow above passed; the numbers are in the table at the end of this section.
+Last local run (2026-10-12 15:26 IST, on d55c6c3 plus this milestone, `vite preview` on 5273 against its own database and Centrifugo, machine load 6 to 12): all 25 flow tests above passed in both projects (the desktop only ones skip at 375). The live flow, reader in WebKit, 22 changes: p50 115 ms, p95 405 ms, edits p95 222 ms, max 4,119 ms.
+
+The max is the create, every run (3.8 and 4.1 s in two runs): since spec 0006 (AC-56) a record another browser makes reaches this one through the settle, 1.5 s after the last change plus a random 0 to 2 s, rather than at once. AC-38 still passes at p95 because the create is 1 of 22 changes, but "a created person within 1 second" no longer holds on its own. That is spec 0006's design, flagged for the owner, not changed here.
 
 ### Acceptance criteria to tests
 
