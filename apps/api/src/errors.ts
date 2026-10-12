@@ -53,6 +53,20 @@ export function withInputFields(error: unknown, fields: Readonly<Partial<Record<
   return first === undefined ? error : apiError(first.code, first.message, { refusals });
 }
 
+/**
+ * The sentence an answer leads with: its first refusal's, except that several
+ * failed rules read "<n> rules aren't met." (spec 0013, `VALIDATION_FAILED`).
+ */
+function summaryOf(refusals: readonly ApiRefusal[]): string {
+  const [first] = refusals;
+  if (first === undefined) return INTERNAL_MESSAGE;
+  const rules = refusals.filter((refusal) => refusal.code === 'VALIDATION_FAILED');
+  if (first.code === 'VALIDATION_FAILED' && rules.length > 1) {
+    return `${String(rules.length)} rules aren\u2019t met.`;
+  }
+  return first.message;
+}
+
 /** Turns anything thrown into the API's error shape. It never throws itself. */
 export function toApiError(error: unknown): MappedError {
   // A field only the server could check (a record id from a device with a wrong clock): one issue on it.
@@ -65,7 +79,7 @@ export function toApiError(error: unknown): MappedError {
     // The first refusal names the code; something only shaped like a refusal is a fault.
     const [first] = refusals.success ? refusals.data : [];
     if (refusals.success && first !== undefined) {
-      return { error: apiError(first.code, first.message, { refusals: refusals.data }), expected: true };
+      return { error: apiError(first.code, summaryOf(refusals.data), { refusals: refusals.data }), expected: true };
     }
     return { error: apiError('INTERNAL', INTERNAL_MESSAGE), expected: false };
   }

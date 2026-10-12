@@ -72,7 +72,12 @@ export const recordsRouter = member.records.router({
       const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
         addRecord(
           context.scope,
-          { objectId: input.objectId, id: input.id, ...(input.values === undefined ? {} : { values: input.values }) },
+          {
+            objectId: input.objectId,
+            id: input.id,
+            ...(input.values === undefined ? {} : { values: input.values }),
+            ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+          },
           hooks,
         ),
       );
@@ -83,14 +88,26 @@ export const recordsRouter = member.records.router({
   }),
   setValues: member.records.setValues.handler(async ({ context, input }) => {
     const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
-      editRecord(context.scope, { recordId: input.recordId, values: input.values }, hooks),
+      editRecord(
+        context.scope,
+        {
+          recordId: input.recordId,
+          values: input.values,
+          ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+        },
+        hooks,
+      ),
     );
     return { ...result.record, written: result.written, echoes };
   }),
   // One write for up to 500 records (spec 0006, AC-50): 200 with each record's outcome.
   setValuesBatch: member.records.setValuesBatch.handler(async ({ context, input }) => {
     const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
-      editRecords(context.scope, { items: input.items }, hooks),
+      editRecords(
+        context.scope,
+        { items: input.items, ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }) },
+        hooks,
+      ),
     );
     return { results: result, echoes };
   }),

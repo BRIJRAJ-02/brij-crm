@@ -235,7 +235,8 @@ describe('no scope is built in this app', () => {
     const offenders: string[] = [];
     for (const file of files) {
       const source = await readFile(join(root, file), 'utf8');
-      if (/\bRuleSource\b|\brules\s*[:,}]/.test(source)) offenders.push(file);
+      // An attribute's validation rules (spec 0013) pass through as `rules: input.rules`: not the door's.
+      if (/\bRuleSource\b|(?<!input\.)\brules\s*[:,}](?!\s*input\.rules\b)/.test(source)) offenders.push(file);
     }
     expect(offenders).toEqual([]);
   });

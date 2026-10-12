@@ -51,6 +51,8 @@ describe('attributes.list', () => {
       objectId: people.id,
       isPrimary: false,
       isArchived: false,
+      // Spec 0013: Required and rules, inline.
+      validation: { required: 'never', rules: [] },
     });
   });
 
@@ -96,6 +98,8 @@ describe('attributes.create (spec 0012, AC-229, AC-244)', () => {
       objectId: people.id,
       isPrimary: false,
       isArchived: false,
+      // Spec 0013: Required and rules, inline.
+      validation: { required: 'never', rules: [] },
     });
     const listed = await client.attributes.list({ workspace: slug, objectId: people.id });
     expect(listed.at(-1)).toEqual(made);
