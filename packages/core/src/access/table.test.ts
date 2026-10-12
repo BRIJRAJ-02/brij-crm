@@ -389,21 +389,28 @@ describe('schema writes (AC-135)', () => {
       .withWorkspace(workspaceId, (tx) => tx.execute<{ count: number }>(sql`select count(*)::int as count from outbox`))
       .then((result) => result.rows[0]?.count);
 
-  it('refuses a member’s Add attribute and writes no attribute and no outbox row; an admin’s succeeds', async () => {
+  it('refuses a member’s new attribute and writes no attribute and no outbox row; an admin’s succeeds', async () => {
     const asMember = await memberOf('member');
     const people = asMember.objects.people ?? '';
     const before = await attributeCount(asMember.workspaceId, people);
     const outboxBefore = await outboxCount(asMember.workspaceId);
     const hooks = [core.outboxHook({ mutationId: core.newId() })];
     expect(
-      await refusalOf(core.addAttribute(asMember.scope, { objectId: people, title: 'Nickname', type: 'text' }, hooks)),
+      await refusalOf(
+        core.createAttribute(
+          asMember.scope,
+          { objectId: people, id: core.newId(), title: 'Nickname', type: 'text' },
+          hooks,
+        ),
+      ),
     ).toEqual({ code: 'FORBIDDEN', message: 'Only workspace owners and admins can change objects and attributes.' });
     expect(await attributeCount(asMember.workspaceId, people)).toBe(before);
     expect(await outboxCount(asMember.workspaceId)).toBe(outboxBefore);
 
     const asAdmin = await memberOf('admin');
-    const made = await core.addAttribute(asAdmin.scope, {
+    const made = await core.createAttribute(asAdmin.scope, {
       objectId: asAdmin.objects.people ?? '',
+      id: core.newId(),
       title: 'Nickname',
       type: 'text',
     });

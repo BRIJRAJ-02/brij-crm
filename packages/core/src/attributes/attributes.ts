@@ -1,19 +1,21 @@
 // An object's attributes as the tables and settings read them (spec 0005;
 // spec 0012 widens them): the definitions behind the columns, with options
-// inline, and "Add attribute", whose API name is derived from the title here,
-// on the server. Reads and writes go through the scope the access door made.
+// inline, and the settings that create, edit, move, archive and restore
+// them. Reads and writes go through the scope the access door made.
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
-import {
-  attributeSlugFrom,
-  type AttributeDefinition,
-  type AttributeOption,
-  type CreatableAttributeType,
-} from '@crm/contracts';
-import { AttributeDefault, HUES, type Hue } from '@crm/contracts/values';
+import type { AttributeDefinition, AttributeOption, PickerAttributeType } from '@crm/contracts';
+import { AttributeDefault, HUES, toApiSlug, type Hue } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
-import { checkSlug, defineAttribute } from '../engine/definitions.ts';
+import {
+  archiveAttribute,
+  defineAttribute,
+  reorderAttribute,
+  restoreAttribute,
+  updateAttribute,
+  type AttributeRef,
+} from '../engine/definitions.ts';
 import { checkId } from '../engine/ids.ts';
-import { isRefusal, refuse } from '../engine/refusals.ts';
+import { refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { ARCHIVED_BY } from '../engine/values.ts';
 import type { AfterWrite } from '../engine/write.ts';
@@ -116,6 +118,7 @@ async function optionsOf(
 }
 
 const OBJECT_NOT_FOUND = 'That object does not exist.';
+const ATTRIBUTE_NOT_FOUND = 'That attribute does not exist.';
 
 /**
  * Refuses `NOT_FOUND` unless the object is live (not archived) in this
@@ -202,78 +205,174 @@ export async function listObjectAttributes(
   });
 }
 
-/** What "Add attribute" gives: the object, the title, and one of the core loop's types. */
-export interface AddAttributeInput {
-  readonly objectId: string;
-  readonly title: string;
-  readonly type: CreatableAttributeType;
+/**
+ * Some attributes' definitions, as the caller sees them, archived ones too,
+ * in the order asked: one read per object they sit on. An attribute the
+ * caller can't see (or one on a list) is left out.
+ */
+async function readDefinitions(scope: EngineScope, refs: readonly AttributeRef[]): Promise<AttributeDefinition[]> {
+  const objectIds = [...new Set(refs.flatMap((ref) => (ref.objectId === null ? [] : [ref.objectId])))];
+  const listed = await Promise.all(
+    objectIds.map((objectId) => listObjectAttributes(scope, objectId, { includeArchived: true })),
+  );
+  const byId = new Map(listed.flat().map((definition) => [definition.id, definition]));
+  return refs.flatMap((ref) => {
+    const definition = byId.get(ref.attributeId);
+    return definition === undefined ? [] : [definition];
+  });
 }
 
-/** The message when the derived API name is taken: said about the name, since people never see API names. */
-const NAME_TAKEN = "There's already an attribute with that name here. Pick another name.";
+/** The one attribute a write changed, read back, or an error: a write answers what it made. */
+async function readOne(scope: EngineScope, ref: AttributeRef): Promise<AttributeDefinition> {
+  const [made] = await readDefinitions(scope, [ref]);
+  if (made === undefined) throw new Error('The attribute just written could not be read.');
+  return made;
+}
+
+/** A new attribute, as settings and the table's "+" send it (spec 0012, AC-229). */
+export interface CreateAttributeInput {
+  readonly objectId: string;
+  /** The UUID v7 the browser minted: the retry key (AC-244). */
+  readonly id: string;
+  readonly title: string;
+  readonly type: PickerAttributeType;
+  /** Derived from the title (`toApiSlug`) when absent. */
+  readonly apiSlug?: string | undefined;
+  readonly description?: string | undefined;
+  readonly isMulti?: boolean | undefined;
+  readonly isRequired?: boolean | undefined;
+  readonly isUnique?: boolean | undefined;
+  readonly config?: Readonly<Record<string, unknown>> | undefined;
+  readonly defaultValue?: AttributeDefault | undefined;
+}
 
 /**
- * Adds an attribute to a live object (spec 0005, AC-37). Its API name comes
- * from the title (`attributeSlugFrom`, then the engine's `checkSlug`). A taken
- * name refuses `SLUG_TAKEN`, unless it is this request's own earlier try: a
- * live attribute with that API name, the same title and type, made by the
- * same actor answers as made (a retry after a lost response). The hooks run in
- * the write's transaction.
+ * Creates an attribute at the end of a live object's attributes (AC-229),
+ * and answers it. Its API name is the one given, else `toApiSlug` of the
+ * title. The same create again (same id, same object, same actor) answers
+ * the attribute already made and writes nothing (AC-244). Refuses
+ * `FORBIDDEN` without `schema.manage`, `NOT_FOUND` for an object that is
+ * missing, archived or hidden, `SLUG_TAKEN` and `CONFIG_INVALID` on their
+ * field, `LIMIT_REACHED` and `ID_TAKEN`.
  */
-export async function addAttribute(
+export async function createAttribute(
   scope: EngineScope,
-  input: AddAttributeInput,
+  input: CreateAttributeInput,
   hooks: readonly AfterWrite[] = [],
 ): Promise<AttributeDefinition> {
   requirePermission(scope, 'schema.manage');
   const objectId = checkId(input.objectId, OBJECT_NOT_FOUND);
+  // An object the caller can't see answers as an unknown one (spec 0009, AC-140).
+  if (objectLevel(scope.access, objectId) === 'none') throw refuse('NOT_FOUND', OBJECT_NOT_FOUND);
   const title = input.title.trim();
-  const apiSlug = attributeSlugFrom(title);
-  checkSlug(apiSlug);
-  let attributeId: string;
-  try {
-    ({ attributeId } = await defineAttribute(scope, { objectId, apiSlug, title, type: input.type }, hooks));
-  } catch (error) {
-    if (!isRefusal(error) || error.refusal.code !== 'SLUG_TAKEN') throw error;
-    const earlier = await earlierTry(scope, { objectId, apiSlug, title, type: input.type });
-    if (earlier === undefined) throw refuse('SLUG_TAKEN', NAME_TAKEN);
-    return earlier;
-  }
-  const made = await readDefinition(scope, objectId, attributeId);
-  if (made === undefined) throw new Error('The attribute just made could not be read.');
-  return made;
-}
-
-/** One attribute's definition by id, archived or not, as the caller sees it. */
-async function readDefinition(
-  scope: EngineScope,
-  objectId: string,
-  attributeId: string,
-): Promise<AttributeDefinition | undefined> {
-  const listed = await listObjectAttributes(scope, objectId, { includeArchived: true });
-  return listed.find((definition) => definition.id === attributeId);
-}
-
-/** The live attribute an earlier try of the same "Add attribute" made, if that is what holds the API name. */
-async function earlierTry(
-  scope: EngineScope,
-  wanted: { readonly objectId: string; readonly apiSlug: string; readonly title: string; readonly type: string },
-): Promise<AttributeDefinition | undefined> {
-  const [row] = await inWorkspace(scope, (tx) =>
-    tx
-      .select()
-      .from(attributes)
-      .where(
-        and(
-          eq(attributes.workspaceId, scope.workspaceId),
-          eq(attributes.objectId, wanted.objectId),
-          eq(attributes.apiSlug, wanted.apiSlug),
-          isNull(attributes.archivedAt),
-        ),
-      ),
+  const apiSlug =
+    input.apiSlug === undefined || input.apiSlug.trim() === '' ? toApiSlug(title, 'attribute') : input.apiSlug.trim();
+  const made = await defineAttribute(
+    scope,
+    {
+      id: input.id,
+      objectId,
+      apiSlug,
+      title,
+      type: input.type,
+      ...(input.description === undefined || input.description.trim() === '' ? {} : { description: input.description }),
+      ...(input.isMulti === undefined ? {} : { isMulti: input.isMulti }),
+      ...(input.isRequired === undefined ? {} : { isRequired: input.isRequired }),
+      ...(input.isUnique === undefined ? {} : { isUnique: input.isUnique }),
+      ...(input.config === undefined ? {} : { config: input.config }),
+      ...(input.defaultValue === undefined ? {} : { defaultValue: input.defaultValue }),
+    },
+    hooks,
   );
-  if (row === undefined) return undefined;
-  const sameAttribute = row.title === wanted.title && row.type === wanted.type && !row.isSystem;
-  const sameActor = row.createdByType === scope.actor.type && row.createdById === scope.actor.id;
-  return sameAttribute && sameActor ? readDefinition(scope, wanted.objectId, row.id) : undefined;
+  return readOne(scope, { attributeId: made.attributeId, objectId, listId: null });
+}
+
+/** What settings may change on an attribute (AC-231): never its type, multiple setting or API name. */
+export interface EditAttributeInput {
+  readonly attributeId: string;
+  readonly title?: string | undefined;
+  readonly description?: string | null | undefined;
+  readonly isRequired?: boolean | undefined;
+  readonly isUnique?: boolean | undefined;
+  readonly config?: Readonly<Record<string, unknown>> | undefined;
+  readonly defaultValue?: AttributeDefault | null | undefined;
+}
+
+/**
+ * Changes an attribute's title, description, Required, Unique, settings or
+ * default (AC-231, AC-234, AC-235), standard objects' included, and answers
+ * it. Refuses `FORBIDDEN`, `NOT_FOUND`, `ATTRIBUTE_READ_ONLY` (a system
+ * attribute), `UNIQUE_HAS_DUPLICATES` and `CONFIG_INVALID` on its field.
+ */
+export async function editAttribute(
+  scope: EngineScope,
+  input: EditAttributeInput,
+  hooks: readonly AfterWrite[] = [],
+): Promise<AttributeDefinition> {
+  requirePermission(scope, 'schema.manage');
+  const attributeId = checkId(input.attributeId, ATTRIBUTE_NOT_FOUND);
+  const changed = await updateAttribute(
+    scope,
+    {
+      attributeId,
+      ...(input.title === undefined ? {} : { title: input.title }),
+      ...(input.description === undefined ? {} : { description: input.description }),
+      ...(input.isRequired === undefined ? {} : { isRequired: input.isRequired }),
+      ...(input.isUnique === undefined ? {} : { isUnique: input.isUnique }),
+      ...(input.config === undefined ? {} : { config: input.config }),
+      ...(input.defaultValue === undefined ? {} : { defaultValue: input.defaultValue }),
+    },
+    hooks,
+  );
+  return readOne(scope, changed);
+}
+
+/**
+ * Moves an attribute to `position` among its object's own attributes
+ * (AC-232), every table's default column order, and answers the object's
+ * attributes, archived ones included, in the new order.
+ */
+export async function moveAttribute(
+  scope: EngineScope,
+  input: { readonly attributeId: string; readonly position: number },
+  hooks: readonly AfterWrite[] = [],
+): Promise<AttributeDefinition[]> {
+  requirePermission(scope, 'schema.manage');
+  const attributeId = checkId(input.attributeId, ATTRIBUTE_NOT_FOUND);
+  const moved = await reorderAttribute(scope, { attributeId, position: input.position }, hooks);
+  if (moved.objectId === null) return [];
+  return listObjectAttributes(scope, moved.objectId, { includeArchived: true });
+}
+
+/**
+ * Archives an attribute, standard ones included (AC-233): it leaves every
+ * table, dialog and filter; its values and history stay. A relationship's
+ * two ends archive together. Answers every definition it changed that the
+ * caller may see (one, or both ends).
+ */
+export async function archiveAttributes(
+  scope: EngineScope,
+  input: { readonly attributeId: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<AttributeDefinition[]> {
+  requirePermission(scope, 'schema.manage');
+  const attributeId = checkId(input.attributeId, ATTRIBUTE_NOT_FOUND);
+  return readDefinitions(scope, await archiveAttribute(scope, attributeId, hooks));
+}
+
+/**
+ * Restores an archived attribute at its old position (AC-233), both ends of
+ * a relationship together. Refuses `NOT_FOUND` ("Restore <Plural> first.")
+ * while the far end's object is archived, and `UNIQUE_HAS_DUPLICATES` when a
+ * unique attribute's values now repeat. Answers every definition it changed
+ * that the caller may see.
+ */
+export async function restoreAttributes(
+  scope: EngineScope,
+  input: { readonly attributeId: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<AttributeDefinition[]> {
+  requirePermission(scope, 'schema.manage');
+  const attributeId = checkId(input.attributeId, ATTRIBUTE_NOT_FOUND);
+  return readDefinitions(scope, await restoreAttribute(scope, attributeId, hooks));
 }

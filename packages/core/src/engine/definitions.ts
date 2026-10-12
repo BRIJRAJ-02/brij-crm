@@ -1,7 +1,7 @@
 // Defining objects and attributes (spec 0004). Standard objects come from the
 // template through these same functions, so they are ordinary rows. Renames,
 // archives and setting changes touch definition rows only, never records.
-import { and, asc, eq, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import {
   API_SLUG_PATTERN,
@@ -16,7 +16,7 @@ import {
   type AttributeType,
 } from '@crm/contracts/values';
 import { checkId, isUuid, isUuidV7, uuidArray } from './ids.ts';
-import { checkAttributeRoom, takeCustomObject, type AttributeParent } from './limits.ts';
+import { checkAttributeRoom, lockAttributeParent, takeCustomObject, type AttributeParent } from './limits.ts';
 import { isRefusal, postgresError, refuse, refuseOn } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
 import { clearUniqueKeys, fillUniqueKeys, UNIQUE_TYPES } from './unique.ts';
@@ -27,7 +27,7 @@ import { requirePermission } from '../access/check.ts';
 import { attributeVisible } from '../access/visibility.ts';
 import { objectLevel, type Access } from '../access/policy.ts';
 
-const { attributes, objects, workspaceCounters } = schema;
+const { attributes, objects, relationships, workspaceCounters } = schema;
 
 /** The longest description an attribute may have (spec 0012). */
 const MAX_DESCRIPTION = 500;
@@ -60,6 +60,12 @@ export interface ObjectInput {
  * values), exactly one. `config` and `defaultValue` are parsed by the type's schemas.
  */
 export interface AttributeInput {
+  /**
+   * A UUID v7 the client minted (spec 0012, AC-244): the retry key. The same
+   * create again (same parent, same actor) answers the attribute already made
+   * and writes nothing; anyone else's attribute with that id is `ID_TAKEN`.
+   */
+  readonly id?: string;
   readonly objectId?: string;
   readonly listId?: string;
   readonly apiSlug: string;
@@ -227,17 +233,23 @@ function parseConfig(type: AttributeType, input: unknown): unknown {
   return result.data;
 }
 
-/** A default, parsed and checked against the type, or `CONFIG_INVALID`. Null clears it. */
+/** A default, parsed and checked against the type, or `CONFIG_INVALID` on `defaultValue`. Null clears it. */
 function parseDefault(type: AttributeType, isMulti: boolean, input: unknown): AttributeDefault | null {
   if (input === null || input === undefined) return null;
   const result = AttributeDefault.safeParse(input);
-  if (!result.success) throw refuse('CONFIG_INVALID', result.error.issues[0]?.message ?? 'That default is not valid.');
+  if (!result.success) {
+    throw refuseOn('CONFIG_INVALID', result.error.issues[0]?.message ?? 'That default is not valid.', 'defaultValue');
+  }
   if (!defaultKindsFor(type).includes(result.data.kind)) {
-    throw refuse('CONFIG_INVALID', `A ${type.replaceAll('_', ' ')} attribute can't have that kind of default.`);
+    throw refuseOn(
+      'CONFIG_INVALID',
+      `A ${type.replaceAll('_', ' ')} attribute can't have that kind of default.`,
+      'defaultValue',
+    );
   }
   if (result.data.kind === 'static') {
     const value = parseAttributeValue(type, result.data.value, { allowMultiple: isMulti });
-    if (!value.ok) throw refuse('CONFIG_INVALID', value.error.message);
+    if (!value.ok) throw refuseOn('CONFIG_INVALID', value.error.message, 'defaultValue');
     return { kind: 'static', value: value.value };
   }
   return result.data;
@@ -379,31 +391,79 @@ function parentOf(input: AttributeInput): AttributeParent {
   throw refuse('CONFIG_INVALID', 'Put the attribute on one object or one list.');
 }
 
+/** What inserting an attribute made: its id, and whether an earlier try of the same create already made it. */
+export interface InsertedAttribute {
+  readonly attributeId: string;
+  /** The same create came again after a lost answer: nothing was written this time. */
+  readonly replayed: boolean;
+}
+
+/**
+ * The attribute an earlier try of the same create made (spec 0012, AC-244):
+ * undefined when no attribute holds the id, the attribute when this actor
+ * made it on the same parent, else `ID_TAKEN`. Read under the parent row's
+ * lock, so a concurrent try with the same id has committed or not started.
+ */
+async function earlierAttribute(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  id: string,
+  parent: AttributeParent,
+): Promise<InsertedAttribute | undefined> {
+  const [row] = await tx
+    .select({
+      id: attributes.id,
+      objectId: attributes.objectId,
+      listId: attributes.listId,
+      createdByType: attributes.createdByType,
+      createdById: attributes.createdById,
+    })
+    .from(attributes)
+    .where(eq(attributes.id, id));
+  if (row === undefined) return undefined;
+  const sameParent = 'objectId' in parent ? row.objectId === parent.objectId : row.listId === parent.listId;
+  const isOwnTry = row.createdByType === scope.actor.type && row.createdById === scope.actor.id;
+  if (!sameParent || !isOwnTry) throw refuse('ID_TAKEN', 'An attribute with that id already exists.');
+  return { attributeId: row.id, replayed: true };
+}
+
 /**
  * Inserts an attribute at the end of its object or list, inside a write.
- * Record references are made only through a relationship, which passes `reference`.
+ * Record references are made only through a relationship, which passes
+ * `reference`. With a client `id`, the same create again answers the
+ * attribute already made and writes nothing (spec 0012, AC-244).
  */
 export async function insertAttribute(
   context: WriteContext,
   input: AttributeInput,
   internal: { readonly reference?: boolean } = {},
-): Promise<{ attributeId: string }> {
+): Promise<InsertedAttribute> {
   const { tx, scope } = context;
   const parent = parentOf(input);
-  checkSlug(input.apiSlug);
-  checkName(input.title, 'title');
+  if (input.id !== undefined && !isUuidV7(input.id)) {
+    throw refuse('CONFIG_INVALID', 'The attribute id must be a UUID v7.');
+  }
+  checkSlug(input.apiSlug, 'attribute', 'apiSlug');
+  checkName(input.title, 'title', 'title');
   checkDescription(input.description);
   if (input.type === 'record_reference' && (internal.reference !== true || 'listId' in parent)) {
     throw refuse('CONFIG_INVALID', 'Add a record reference by defining a relationship.');
   }
   const config = parseConfig(input.type, input.config);
   const defaultValue = parseDefault(input.type, input.isMulti ?? false, input.defaultValue);
+  // The parent's row lock first: a replay is found under it, before the room check would count it twice.
+  await lockAttributeParent(tx, parent);
+  const id = input.id?.toLowerCase();
+  if (id !== undefined) {
+    const earlier = await earlierAttribute(tx, scope, id, parent);
+    if (earlier !== undefined) return earlier;
+  }
   await checkAttributeRoom(tx, scope, parent);
   const parentColumn =
     'objectId' in parent
       ? sql`${attributes.objectId} = ${parent.objectId}`
       : sql`${attributes.listId} = ${parent.listId}`;
-  return definitionGuard(async () => {
+  return attributeGuard(async () => {
     const [next] = await tx
       .execute<{ position: number }>(
         sql`select coalesce(max(${attributes.position}) + 1, 0)::int as position from ${attributes} where ${parentColumn}`,
@@ -412,6 +472,7 @@ export async function insertAttribute(
     const [row] = await tx
       .insert(attributes)
       .values({
+        ...(id === undefined ? {} : { id }),
         workspaceId: scope.workspaceId,
         objectId: 'objectId' in parent ? parent.objectId : null,
         listId: 'listId' in parent ? parent.listId : null,
@@ -430,8 +491,27 @@ export async function insertAttribute(
       .returning({ id: attributes.id });
     if (row === undefined) throw new Error('The attribute was not created.');
     context.record({ definitions: [{ ...parent, attributeIds: [row.id] }] });
-    return { attributeId: row.id };
+    return { attributeId: row.id, replayed: false };
   });
+}
+
+/**
+ * `definitionGuard` for an attribute's own row: a taken API name refuses on
+ * `apiSlug` (the dialog's field), and an id another attribute holds `ID_TAKEN`.
+ */
+async function attributeGuard<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await definitionGuard(work);
+  } catch (error) {
+    if (isRefusal(error) && error.refusal.code === 'SLUG_TAKEN' && error.refusal.field === undefined) {
+      throw refuseOn('SLUG_TAKEN', 'An attribute here already uses this API name. Pick another.', 'apiSlug');
+    }
+    const pg = postgresError(error);
+    if (pg?.code === '23505' && pg.constraint === 'attributes_pkey') {
+      throw refuse('ID_TAKEN', 'An attribute with that id already exists.');
+    }
+    throw error;
+  }
 }
 
 /** Notes an attribute's change for the hooks: on its object, or on its list (spec 0007, AC-81). */
@@ -473,18 +553,39 @@ async function editable(tx: WorkspaceTx, access: Access, attributeId: string): P
   return attribute;
 }
 
+/** One attribute a definition write changed, and where it sits: what a service reads back to answer. */
+export interface AttributeRef {
+  readonly attributeId: string;
+  readonly objectId: string | null;
+  readonly listId: string | null;
+}
+
+const refOf = (attribute: Pick<AttributeDef, 'id' | 'objectId' | 'listId'>): AttributeRef => ({
+  attributeId: attribute.id,
+  objectId: attribute.objectId,
+  listId: attribute.listId,
+});
+
 /** Changes an attribute's title, description, required, unique, settings or default (AC-10, AC-11). */
-export async function updateAttribute(scope: EngineScope, input: AttributeUpdate, hooks: readonly AfterWrite[] = []) {
+export async function updateAttribute(
+  scope: EngineScope,
+  input: AttributeUpdate,
+  hooks: readonly AfterWrite[] = [],
+): Promise<AttributeRef> {
   requirePermission(scope, 'schema.manage');
   const { result } = await runWrite(
     scope,
     async (context) => {
       const { tx } = context;
       const attribute = await editable(tx, context.scope.access, input.attributeId);
-      if (input.title !== undefined) checkName(input.title, 'title');
+      if (input.title !== undefined) checkName(input.title, 'title', 'title');
       checkDescription(input.description);
       if (input.isUnique === true && !UNIQUE_TYPES.includes(attribute.type)) {
-        throw refuse('CONFIG_INVALID', 'Only text, email, domain, URL, phone and number attributes can be unique.');
+        throw refuseOn(
+          'CONFIG_INVALID',
+          'Only text, email, domain, URL, phone and number attributes can be unique.',
+          'isUnique',
+        );
       }
       const turningOn = input.isUnique === true && !attribute.isUnique && attribute.archivedAt === null;
       const turningOff = input.isUnique === false && attribute.isUnique;
@@ -494,7 +595,11 @@ export async function updateAttribute(scope: EngineScope, input: AttributeUpdate
         .update(attributes)
         .set({
           ...(input.title === undefined ? {} : { title: input.title.trim() }),
-          ...(input.description === undefined ? {} : { description: input.description }),
+          ...(input.description === undefined
+            ? {}
+            : {
+                description: input.description === null || input.description.trim() === '' ? null : input.description,
+              }),
           ...(input.isRequired === undefined ? {} : { isRequired: input.isRequired }),
           ...(input.isUnique === undefined ? {} : { isUnique: input.isUnique }),
           ...(input.config === undefined ? {} : { config: parseConfig(attribute.type, input.config) }),
@@ -505,17 +610,47 @@ export async function updateAttribute(scope: EngineScope, input: AttributeUpdate
         })
         .where(eq(attributes.id, attribute.id));
       recordDefinition(context, attribute);
-      return { attributeId: attribute.id };
+      return refOf(attribute);
     },
     hooks,
   );
   return result;
 }
 
-/** Archives an attribute: its values stay, it stops taking writes, and a unique one frees its keys. */
-export async function archiveAttribute(scope: EngineScope, attributeId: string, hooks: readonly AfterWrite[] = []) {
+/**
+ * The other end of a record reference's relationship (spec 0012, AC-233),
+ * locked for the rest of the write; none for a one way reference or any
+ * other attribute.
+ */
+async function farEnd(tx: WorkspaceTx, attribute: AttributeDef): Promise<AttributeDef | undefined> {
+  if (attribute.relationshipId === null) return undefined;
+  const [relationship] = await tx
+    .select({ fromAttributeId: relationships.fromAttributeId, toAttributeId: relationships.toAttributeId })
+    .from(relationships)
+    .where(eq(relationships.id, attribute.relationshipId));
+  const farId =
+    relationship === undefined
+      ? null
+      : relationship.fromAttributeId === attribute.id
+        ? relationship.toAttributeId
+        : relationship.fromAttributeId;
+  return farId === null ? undefined : loadAttribute(tx, farId, true);
+}
+
+/**
+ * Archives an attribute (spec 0012, AC-233): its values stay, it stops taking
+ * writes, and a unique one frees its keys. A relationship's two ends archive
+ * together, in the same write, each recording its own object's change.
+ * Answers every end, archived now or already. The primary attribute and
+ * system attributes never archive.
+ */
+export async function archiveAttribute(
+  scope: EngineScope,
+  attributeId: string,
+  hooks: readonly AfterWrite[] = [],
+): Promise<readonly AttributeRef[]> {
   requirePermission(scope, 'schema.manage');
-  await runWrite(
+  const { result } = await runWrite(
     scope,
     async (context) => {
       const { tx } = context;
@@ -526,36 +661,139 @@ export async function archiveAttribute(scope: EngineScope, attributeId: string, 
         .where(eq(objects.primaryAttributeId, attribute.id));
       if (primary !== undefined)
         throw refuse('CONFIG_INVALID', "A record's name attribute can't be archived.", attribute.id);
-      if (attribute.archivedAt !== null) return;
-      if (attribute.isUnique) await clearUniqueKeys(tx, attribute.id);
-      await tx
-        .update(attributes)
-        .set({ archivedAt: sql`now()`, ...touched(scope) })
-        .where(eq(attributes.id, attribute.id));
-      recordDefinition(context, attribute);
+      const far = await farEnd(tx, attribute);
+      const ends = far === undefined ? [attribute] : [attribute, far];
+      const live = ends.filter((end) => end.archivedAt === null);
+      for (const end of live) if (end.isUnique) await clearUniqueKeys(tx, end.id);
+      if (live.length > 0) {
+        await tx
+          .update(attributes)
+          .set({ archivedAt: sql`now()`, ...touched(scope) })
+          .where(
+            inArray(
+              attributes.id,
+              live.map((end) => end.id),
+            ),
+          );
+      }
+      for (const end of live) recordDefinition(context, end);
+      return ends.map(refOf);
     },
     hooks,
   );
+  return result;
 }
 
-/** Restores an archived attribute; a unique one takes its keys back, refusing if duplicates appeared meanwhile. */
-export async function restoreAttribute(scope: EngineScope, attributeId: string, hooks: readonly AfterWrite[] = []) {
+/** The plural name of an object, for "Restore <Plural> first." */
+async function pluralOf(tx: WorkspaceTx, objectId: string): Promise<string | undefined> {
+  const [row] = await tx.select({ pluralName: objects.pluralName }).from(objects).where(eq(objects.id, objectId));
+  return row?.pluralName;
+}
+
+/**
+ * Restores an archived attribute (spec 0012, AC-233) at its old position; a
+ * unique one takes its keys back, refusing `UNIQUE_HAS_DUPLICATES` if
+ * duplicates appeared meanwhile. A relationship's two ends restore together.
+ * Refuses `NOT_FOUND` ("Restore <Plural> first.") while the far end's object
+ * is archived (for a one way reference, every object it points to). Answers
+ * every end.
+ */
+export async function restoreAttribute(
+  scope: EngineScope,
+  attributeId: string,
+  hooks: readonly AfterWrite[] = [],
+): Promise<readonly AttributeRef[]> {
   requirePermission(scope, 'schema.manage');
-  await runWrite(
+  const { result } = await runWrite(
     scope,
     async (context) => {
       const { tx } = context;
       const attribute = await editable(tx, context.scope.access, attributeId);
-      if (attribute.archivedAt === null) return;
-      if (attribute.isUnique) await fillUniqueKeys(tx, attribute, context.scope.access);
-      await tx
-        .update(attributes)
-        .set({ archivedAt: null, ...touched(scope) })
-        .where(eq(attributes.id, attribute.id));
-      recordDefinition(context, attribute);
+      if (attribute.archivedBy !== null) {
+        // Named only to someone who may see that object; anyone else hears it in general words.
+        const plural =
+          objectLevel(context.scope.access, attribute.archivedBy) === 'none'
+            ? undefined
+            : await pluralOf(tx, attribute.archivedBy);
+        throw refuse(
+          'NOT_FOUND',
+          plural === undefined
+            ? 'This links to an archived object. Restore that object first.'
+            : `Restore ${plural} first.`,
+          attribute.id,
+        );
+      }
+      const far = await farEnd(tx, attribute);
+      const ends = far === undefined ? [attribute] : [attribute, far];
+      const archived = ends.filter((end) => end.archivedAt !== null);
+      for (const end of archived) if (end.isUnique) await fillUniqueKeys(tx, end, context.scope.access);
+      if (archived.length > 0) {
+        await tx
+          .update(attributes)
+          .set({ archivedAt: null, ...touched(scope) })
+          .where(
+            inArray(
+              attributes.id,
+              archived.map((end) => end.id),
+            ),
+          );
+      }
+      for (const end of archived) recordDefinition(context, end);
+      return ends.map(refOf);
     },
     hooks,
   );
+  return result;
+}
+
+/**
+ * Moves an attribute to `position` among its object's (or list's) own
+ * attributes (spec 0012, AC-232): the others close up around it, archived
+ * ones included, so a restore lands where it was, all numbered after the
+ * system attributes, which never move. Renumbers in one statement under the
+ * parent row's lock, the one every attribute create takes, so a create and a
+ * move never interleave. Refuses `ATTRIBUTE_READ_ONLY` for a system
+ * attribute. Records only the moved attribute's change.
+ */
+export async function reorderAttribute(
+  scope: EngineScope,
+  input: { readonly attributeId: string; readonly position: number },
+  hooks: readonly AfterWrite[] = [],
+): Promise<AttributeRef> {
+  requirePermission(scope, 'schema.manage');
+  if (!Number.isInteger(input.position) || input.position < 0) {
+    throw refuseOn('CONFIG_INVALID', 'Give the position as a whole number from 0.', 'position');
+  }
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const attribute = await editable(tx, context.scope.access, input.attributeId);
+      const parent: AttributeParent =
+        attribute.objectId !== null ? { objectId: attribute.objectId } : { listId: attribute.listId ?? '' };
+      await lockAttributeParent(tx, parent);
+      const ofParent =
+        'objectId' in parent ? eq(attributes.objectId, parent.objectId) : eq(attributes.listId, parent.listId);
+      const order = await tx
+        .select({ id: attributes.id, isSystem: attributes.isSystem })
+        .from(attributes)
+        .where(ofParent)
+        .orderBy(asc(attributes.position), asc(attributes.createdAt), asc(attributes.id));
+      const system = order.filter((row) => row.isSystem).length;
+      const rest = order.filter((row) => !row.isSystem && row.id !== attribute.id).map((row) => row.id);
+      const to = Math.min(input.position, rest.length);
+      const next = [...rest.slice(0, to), attribute.id, ...rest.slice(to)];
+      const list = uuidArray(next);
+      await tx.execute(sql`
+        update ${attributes} set position = array_position(${list}, id) - 1 + ${system}::int
+        where id = any(${list}) and position is distinct from array_position(${list}, id) - 1 + ${system}::int
+      `);
+      recordDefinition(context, attribute);
+      return refOf(attribute);
+    },
+    hooks,
+  );
+  return result;
 }
 
 /** Changes an object's names, icon or hue. */

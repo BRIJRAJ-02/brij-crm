@@ -59,7 +59,16 @@ export {
   type EditObjectInput,
 } from './objects/objects.ts';
 export { getUsage } from './objects/usage.ts';
-export { addAttribute, listObjectAttributes, type AddAttributeInput } from './attributes/attributes.ts';
+export {
+  archiveAttributes,
+  createAttribute,
+  editAttribute,
+  listObjectAttributes,
+  moveAttribute,
+  restoreAttributes,
+  type CreateAttributeInput,
+  type EditAttributeInput,
+} from './attributes/attributes.ts';
 export {
   addRecord,
   editRecord,
