@@ -34,6 +34,8 @@ export const strings = {
   listLast: 'and',
   /** The records a link entry doesn't name, the count already formatted: "and 97 others". */
   others: (count: string, isOne: boolean) => (isOne ? `${count} other` : `${count} others`),
+  /** A link entry none of whose records could be named. */
+  records: (count: string, isOne: boolean) => (isOne ? `${count} record` : `${count} records`),
   /** Between an entry's added and removed records. */
   clauseSeparator: ', and',
   /** Between a change's old and new value, for screen readers. */

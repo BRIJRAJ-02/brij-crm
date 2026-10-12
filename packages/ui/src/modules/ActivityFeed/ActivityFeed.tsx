@@ -7,6 +7,7 @@ import type { ActorDisplay, RecordRefDisplay } from '@crm/contracts/values';
 import { defaultRangeExtractor, useVirtualizer, type Virtualizer } from '@tanstack/react-virtual';
 import {
   Fragment,
+  memo,
   useCallback,
   useEffect,
   useId,
@@ -230,6 +231,8 @@ export function ActivityFeed({ label, entries, layout = 'feed', status = 'ready'
   const showSkeleton = useDelayedLoading(status === 'loading');
   const scrollRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
+  // The tab stop, kept inside the entries there are: a feed read afresh with fewer keeps one.
+  const tabStop = Math.max(0, Math.min(active, (isInline ? Math.min(entries.count, INLINE_MAX) : entries.count) - 1));
   const pendingFocus = useRef(false);
   // Focus is on one of the feed's entries (or inside one).
   const holdsFocus = useRef(false);
@@ -254,7 +257,9 @@ export function ActivityFeed({ label, entries, layout = 'feed', status = 'ready'
     // The entry holding the tab stop stays drawn, so focus never drops to the page.
     rangeExtractor: (range) => {
       const indexes = defaultRangeExtractor(range);
-      return indexes.includes(active) || active >= entries.count ? indexes : [...indexes, active].sort((a, b) => a - b);
+      return indexes.includes(tabStop) || tabStop >= entries.count
+        ? indexes
+        : [...indexes, tabStop].sort((a, b) => a - b);
     },
   });
   const items = virtualizer.getVirtualItems();
@@ -269,7 +274,7 @@ export function ActivityFeed({ label, entries, layout = 'feed', status = 'ready'
   useEffect(() => {
     if (!pendingFocus.current) return;
     pendingFocus.current = false;
-    scrollRef.current?.querySelector<HTMLElement>(`[data-index="${String(active)}"]`)?.focus();
+    scrollRef.current?.querySelector<HTMLElement>(`[data-index="${String(tabStop)}"]`)?.focus();
   });
   // The focused entry was drawn again under its own key (it loaded) and the browser dropped focus without a
   // blur: it goes back to the entry holding the tab stop, so the next key still moves through the feed.
@@ -277,7 +282,7 @@ export function ActivityFeed({ label, entries, layout = 'feed', status = 'ready'
     if (!holdsFocus.current) return;
     const focused = document.activeElement;
     if (focused !== null && focused !== document.body) return;
-    scrollRef.current?.querySelector<HTMLElement>(`[data-index="${String(active)}"]`)?.focus();
+    scrollRef.current?.querySelector<HTMLElement>(`[data-index="${String(tabStop)}"]`)?.focus();
   });
   useKeepReading({
     entries,
@@ -335,6 +340,17 @@ export function ActivityFeed({ label, entries, layout = 'feed', status = 'ready'
     const from = Number(event.target.dataset.index);
     const step: Partial<Record<string, number>> = { ArrowDown: 1, PageDown: 1, ArrowUp: -1, PageUp: -1 };
     const by = step[event.key];
+    // The feed pattern's way out: Ctrl (or Cmd) with End or Home leaves for what comes after or before the feed,
+    // so a long feed's linked names never stand between the reader and the rest of the page.
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'Home' || event.key === 'End')) {
+      const root = scrollRef.current;
+      const target = root === null ? undefined : tabbableBeside(root, event.key === 'End' ? 'after' : 'before');
+      if (target !== undefined) {
+        event.preventDefault();
+        target.focus();
+      }
+      return;
+    }
     if (event.key === 'Home' || event.key === 'End') {
       event.preventDefault();
       moveTo(event.key === 'Home' ? 0 : shownCount - 1);
@@ -345,6 +361,10 @@ export function ActivityFeed({ label, entries, layout = 'feed', status = 'ready'
   };
 
   const busy = drawn.some((item) => entries.getItem(item.index) === undefined);
+  // The feed's last entry still loading: more pages wait past it.
+  const hasTail = !isInline && entries.count > 0 && entries.getItem(entries.count - 1) === undefined;
+  // Inline sits under its block's own heading (a Card's h3), so its periods are a level below.
+  const Heading = isInline ? 'h4' : 'h3';
   return (
     // The feed pattern: its articles take focus, and the feed moves it between them.
     // eslint-disable-next-line jsx-a11y-x/no-noninteractive-element-interactions
@@ -370,7 +390,7 @@ export function ActivityFeed({ label, entries, layout = 'feed', status = 'ready'
             holdsFocus.current = false;
             return;
           }
-          scrollRef.current?.querySelector<HTMLElement>(`[data-index="${String(active)}"]`)?.focus();
+          scrollRef.current?.querySelector<HTMLElement>(`[data-index="${String(tabStop)}"]`)?.focus();
         });
       }}
     >
@@ -396,16 +416,24 @@ export function ActivityFeed({ label, entries, layout = 'feed', status = 'ready'
               // Every entry is an article that takes the tab stop, loaded or not, so focus never lands nowhere.
               role="article"
               aria-posinset={item.index + 1}
-              aria-setsize={shownCount}
-              tabIndex={item.index === active ? 0 : -1}
+              // While the last one is still loading (more to come), how many in all isn't known yet.
+              aria-setsize={hasTail ? -1 : shownCount}
+              tabIndex={item.index === tabStop ? 0 : -1}
               onFocus={(event: FocusEvent<HTMLDivElement>) => {
                 if (event.target === event.currentTarget) setActive(item.index);
               }}
               {...(entry === undefined
                 ? { 'aria-busy': true, 'aria-label': strings.loadingEntry }
-                : { 'aria-labelledby': `${idBase}-${String(item.index)}` })}
+                : {
+                    'aria-labelledby': `${idBase}-${String(item.index)}`,
+                    // What changed and when: read after the line on focus.
+                    'aria-describedby': [
+                      `${idBase}-${String(item.index)}-time`,
+                      ...(hasDetail(entry) ? [`${idBase}-${String(item.index)}-detail`] : []),
+                    ].join(' '),
+                  })}
             >
-              {startsPeriod && <h3 className={styles.period}>{labelOf(period)}</h3>}
+              {startsPeriod && <Heading className={styles.period}>{labelOf(period)}</Heading>}
               {entry === undefined ? (
                 <SkeletonEntry />
               ) : (
@@ -448,6 +476,8 @@ function Names({ records, count }: NamesProps) {
   const { locale } = useFormatSettings();
   const others = Math.max(0, count - records.length);
   const formatted = memoIntl(`number:${locale}`, () => new Intl.NumberFormat(locale)).format(others);
+  // No name could be read (each went away meanwhile): the count alone, "3 records".
+  if (records.length === 0) return <span>{strings.records(formatted, others === 1)}</span>;
   return (
     <>
       {records.map((record, index) => {
@@ -514,8 +544,30 @@ function LinksLine({ entry }: { readonly entry: Extract<ActivityEntry, { kind: '
   );
 }
 
+/** What can take focus by Tab, for the feed's way out. */
+const TABBABLE =
+  'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+/** The first element Tab reaches after `feed` (or the last one before it), outside it; undefined when none. */
+function tabbableBeside(feed: HTMLElement, side: 'after' | 'before'): HTMLElement | undefined {
+  const all = [...feed.ownerDocument.querySelectorAll<HTMLElement>(TABBABLE)].filter(
+    (element) => !feed.contains(element) && element.getClientRects().length > 0,
+  );
+  const follows = (element: HTMLElement) =>
+    (feed.compareDocumentPosition(element) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+  return side === 'after' ? all.find(follows) : all.filter((element) => !follows(element)).at(-1);
+}
+
+/** Whether an entry draws a detail under its line: a change's values, or a note's or task's title and text. */
+function hasDetail(entry: ActivityEntry): boolean {
+  if (entry.kind === 'change') return !isEmptyValue(entry.from) || !isEmptyValue(entry.to);
+  if (entry.kind === 'created' || entry.kind === 'links') return false;
+  return entry.title !== undefined || entry.excerpt !== undefined;
+}
+
 /** One entry: its marker on the rail, the actor and verb, the time, and what changed or was added. */
-function Entry({ entry, lineId, isLast }: EntryProps) {
+/** Drawn again only when its entry changes, not with every scroll step of the feed. */
+const Entry = memo(function Entry({ entry, lineId, isLast }: EntryProps) {
   const icon =
     entry.kind === 'change' || entry.kind === 'links' ? fieldTypeOf(entry.attribute.type).icon : KIND_ICONS[entry.kind];
   let detail: ReactNode;
@@ -524,22 +576,24 @@ function Entry({ entry, lineId, isLast }: EntryProps) {
       <AttributeDisplay
         attribute={entry.attribute}
         value={value ?? null}
-        surface="panel"
+        // One line per value, chips flat as the names around them: a long text is cut, Details holds it whole.
+        surface="card"
         {...(display === undefined ? {} : { display: display as never })}
       />
     );
     const hasFrom = !isEmptyValue(entry.from);
     const hasTo = !isEmptyValue(entry.to);
     detail = (
-      <span className={styles.change}>
+      <span id={`${lineId}-detail`} className={styles.change}>
         {hasFrom && valueOf(entry.from, entry.fromDisplay)}
-        {hasFrom && hasTo && (
+        {hasFrom && (
           <>
             <Icon name="arrow-right" size="xs" tone="muted" />
             <VisuallyHidden>{strings.to}</VisuallyHidden>
           </>
         )}
-        {hasTo && valueOf(entry.to, entry.toDisplay)}
+        {/* A clear reads as the old value going to the empty mark, never as a value still held. */}
+        {(hasTo || hasFrom) && valueOf(hasTo ? entry.to : null, hasTo ? entry.toDisplay : undefined)}
       </span>
     );
   } else if (
@@ -548,7 +602,7 @@ function Entry({ entry, lineId, isLast }: EntryProps) {
     (entry.title !== undefined || entry.excerpt !== undefined)
   ) {
     detail = (
-      <span className={styles.card}>
+      <span id={`${lineId}-detail`} className={styles.card}>
         {entry.title !== undefined &&
           (entry.href === undefined ? (
             <span className={styles.title}>{entry.title}</span>
@@ -571,13 +625,14 @@ function Entry({ entry, lineId, isLast }: EntryProps) {
             {entry.kind === 'links' ? (
               <LinksLine entry={entry} />
             ) : (
-              <>
+              // The verb and the attribute stay on one line, so a narrow feed never splits "set Owner".
+              <span className={styles.phrase}>
                 <span>{verbOf(entry)}</span>
                 {entry.kind === 'change' && <span className={styles.attribute}>{entry.attribute.name}</span>}
-              </>
+              </span>
             )}
           </span>
-          <span className={styles.time}>
+          <span id={`${lineId}-time`} className={styles.time}>
             <RelativeTime value={entry.at} />
           </span>
         </span>
@@ -585,4 +640,4 @@ function Entry({ entry, lineId, isLast }: EntryProps) {
       </span>
     </div>
   );
-}
+});

@@ -2,6 +2,7 @@
 // language and time zone (AC-11). Pure functions; components get the settings
 // from `useFormatSettings()` and the time from `useNow()`.
 
+import { fromAbsolute, toCalendarDate } from '@internationalized/date';
 import { memoIntl } from './intl-memo.ts';
 
 /** A decimal string as `Intl` takes it: formatting a string is exact, where a number would round. */
@@ -73,8 +74,10 @@ const DAY = 24 * HOUR;
 
 /**
  * A relative time in the largest whole unit: "now" under a minute, then
- * minutes, hours and days ("3 hours ago", "yesterday"). Past 7 days it becomes
- * the date in the time zone.
+ * minutes, hours and days ("3 hours ago", "yesterday"). Days count calendar
+ * days in the time zone, as the timeline's headings do, so an entry under
+ * "Yesterday" never reads "2 days ago" and one from two dates back never
+ * reads "yesterday". Past 7 days it becomes the date in the time zone.
  */
 export function formatRelative(timestamp: string, now: number, locale: string, timeZone: string): string {
   const elapsed = new Date(timestamp).getTime() - now;
@@ -84,6 +87,11 @@ export function formatRelative(timestamp: string, now: number, locale: string, t
   if (size < MINUTE) return relative.format(0, 'second');
   if (size < HOUR) return relative.format(sign * Math.floor(size / MINUTE), 'minute');
   if (size < DAY) return relative.format(sign * Math.floor(size / HOUR), 'hour');
-  if (size <= 7 * DAY) return relative.format(sign * Math.floor(size / DAY), 'day');
+  if (size <= 7 * DAY) {
+    const days = toCalendarDate(fromAbsolute(now, timeZone)).compare(
+      toCalendarDate(fromAbsolute(new Date(timestamp).getTime(), timeZone)),
+    );
+    return relative.format(-days, 'day');
+  }
   return formatDay(timestamp, locale, timeZone);
 }

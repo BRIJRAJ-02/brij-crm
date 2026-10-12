@@ -217,7 +217,7 @@ export const Links: Story = {
   args: { entries: arraySource(SAMPLE_LINK_ACTIVITY, (entry) => entry.id) },
   parameters: { crm: { preview: true } },
   play: async ({ canvas }) => {
-    const [many, oneMore, both, removed, moved] = canvas.getAllByRole('article');
+    const [many, oneMore, both, removed, moved, cleared] = canvas.getAllByRole('article');
     // A chip is its own box, so browsers may put a space before the comma after it.
     await expect(many).toHaveAccessibleName(
       /^Ada Lovelace added Jane Doe ?, Ada Lovelace ?, Alan Turing and 97 others to Team$/,
@@ -230,6 +230,9 @@ export const Links: Story = {
     );
     await expect(removed).toHaveAccessibleName('Lead routing removed Barbara Liskov from Team');
     await expect(moved).toHaveAccessibleName('Ada Lovelace changed Company');
+    // A clear reads as the old value going to nothing, and the value and the time are read after the line.
+    await expect(cleared).toHaveAccessibleName('Grace Hopper cleared Job title');
+    await expect(cleared).toHaveAccessibleDescription(/Chief technology officer/);
     // Each name links to its record, and a record with no page names it with no link.
     await expect(canvas.getByRole('link', { name: 'Jane Doe' })).toHaveAttribute(
       'href',
@@ -314,5 +317,19 @@ export const NewerAtTop: Story = {
     await waitFor(() => expect(canvas.getAllByRole('article')[0]).toHaveAttribute('aria-setsize', '65'));
     await expect(feed.scrollTop).toBe(0);
     await expect(firstOnScreen(feed).index).toBe(0);
+  },
+};
+
+/** Ctrl with Home or End leaves the feed for what comes before or after it, past every linked name. */
+export const LeaveByKeyboard: Story = {
+  render: () => <GrowingFeed />,
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    await expect(canvas.getByRole('button', { name: 'Add newer' })).toHaveFocus();
+    await userEvent.tab();
+    await expect(canvas.getAllByRole('article')[0]).toHaveFocus();
+    await userEvent.keyboard('{Control>}{Home}{/Control}');
+    await expect(canvas.getByRole('button', { name: 'Add newer' })).toHaveFocus();
   },
 };

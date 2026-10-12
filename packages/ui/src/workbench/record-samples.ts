@@ -93,14 +93,15 @@ const person = (n: number, name: string): RecordRefDisplay => ({
 });
 const TEAM = attributeOf('record_reference', 'Team', { allowMultiple: true });
 const COMPANY = attributeOf('record_reference', 'Company');
+const JOB_TITLE = attributeOf('text', 'Job title');
 const linked = (display: RecordRefDisplay) => ({ display, href: `/records/${display.recordId}` });
 
 // The stories' clock is Thursday 8 October 2026, 14:30 in London.
 /**
  * Link entries (spec 0017): a write that added 100 people (3 named, "and 97
  * others"), one that added four ("and 1 other"), one that added two and
- * removed one, one that removed a record with no page to link to, and a side
- * that holds one record changed from one company to another.
+ * removed one, one that removed a record with no page to link to, a side
+ * that holds one record changed from one company to another, and a cleared value.
  */
 export const SAMPLE_LINK_ACTIVITY: readonly ActivityEntry[] = [
   {
@@ -162,6 +163,15 @@ export const SAMPLE_LINK_ACTIVITY: readonly ActivityEntry[] = [
     to: { objectId: GLOBEX.objectId, recordId: GLOBEX.recordId },
     fromDisplay: NORTHWIND,
     toDisplay: GLOBEX,
+  },
+  {
+    id: 'l4b',
+    kind: 'change',
+    at: '2026-10-06T11:00:00.000Z',
+    actor: GRACE,
+    attribute: JOB_TITLE,
+    from: 'Chief technology officer',
+    to: null,
   },
   { id: 'l5', kind: 'created', at: '2026-09-30T10:00:00.000Z', actor: ADA },
 ];
