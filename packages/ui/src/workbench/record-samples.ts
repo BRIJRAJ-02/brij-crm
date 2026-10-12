@@ -98,8 +98,9 @@ const linked = (display: RecordRefDisplay) => ({ display, href: `/records/${disp
 // The stories' clock is Thursday 8 October 2026, 14:30 in London.
 /**
  * Link entries (spec 0017): a write that added 100 people (3 named, "and 97
- * others"), one that added two and removed one, one that removed one, and a
- * side that holds one record changed from one company to another.
+ * others"), one that added four ("and 1 other"), one that added two and
+ * removed one, one that removed a record with no page to link to, and a side
+ * that holds one record changed from one company to another.
  */
 export const SAMPLE_LINK_ACTIVITY: readonly ActivityEntry[] = [
   {
@@ -110,6 +111,21 @@ export const SAMPLE_LINK_ACTIVITY: readonly ActivityEntry[] = [
     attribute: TEAM,
     added: [linked(person(1, 'Jane Doe')), linked(person(2, 'Ada Lovelace')), linked(person(3, 'Alan Turing'))],
     addedCount: 100,
+    removed: [],
+    removedCount: 0,
+  },
+  {
+    id: 'l1b',
+    kind: 'links',
+    at: '2026-10-08T12:40:00.000Z',
+    actor: GRACE,
+    attribute: TEAM,
+    added: [
+      linked(person(8, 'Annie Easley')),
+      linked(person(9, 'Dorothy Vaughan')),
+      linked(person(10, 'Mary Jackson')),
+    ],
+    addedCount: 4,
     removed: [],
     removedCount: 0,
   },
@@ -132,7 +148,8 @@ export const SAMPLE_LINK_ACTIVITY: readonly ActivityEntry[] = [
     attribute: TEAM,
     added: [],
     addedCount: 0,
-    removed: [linked(person(7, 'Barbara Liskov'))],
+    // A record on an object the reader can't open: its chip names it with no link.
+    removed: [{ display: person(7, 'Barbara Liskov') }],
     removedCount: 1,
   },
   {

@@ -170,6 +170,8 @@ function usePeriodLabel(): (period: Period) => string {
 interface KeepReadingInput {
   readonly entries: ListSource<ActivityEntry>;
   readonly isActive: boolean;
+  /** The feed scrolls in its slot: the entry being read is kept in place too (the inline layout only moves its tab stop). */
+  readonly isScrolling: boolean;
   readonly scrollRef: RefObject<HTMLDivElement | null>;
   readonly virtualizer: Virtualizer<HTMLDivElement, Element>;
   /** Entries arrived above: the tab stop moves down by as many, so it stays on the same entry. */
@@ -183,7 +185,7 @@ interface KeepReadingInput {
  * key moves down the list, the feed scrolls by the room the new ones take.
  * At the very top nothing moves, so the newest entries show.
  */
-function useKeepReading({ entries, isActive, scrollRef, virtualizer, onShift }: KeepReadingInput): void {
+function useKeepReading({ entries, isActive, isScrolling, scrollRef, virtualizer, onShift }: KeepReadingInput): void {
   // The newest entry's key at the last render.
   const firstKey = useRef<string | undefined>(undefined);
   useLayoutEffect(() => {
@@ -204,6 +206,7 @@ function useKeepReading({ entries, isActive, scrollRef, virtualizer, onShift }: 
     }
     if (added <= 0) return;
     onShift(added);
+    if (!isScrolling) return;
     // Sizes are kept by entry, so everything that was there moved down by exactly the new entries' room.
     const room = virtualizer.measurementsCache[added]?.start ?? 0;
     // Before paint, so the entry being read never visibly jumps; the scroll event that follows tells the virtualiser.
@@ -278,7 +281,8 @@ export function ActivityFeed({ label, entries, layout = 'feed', status = 'ready'
   });
   useKeepReading({
     entries,
-    isActive: !isInline && status === 'ready',
+    isActive: status === 'ready',
+    isScrolling: !isInline,
     scrollRef,
     virtualizer,
     onShift: (by) => {
@@ -453,7 +457,7 @@ function Names({ records, count }: NamesProps) {
         return (
           <Fragment key={record.display.recordId}>
             {isLastName && index > 0 && others === 0 && <span>{strings.listLast}</span>}
-            <span className={styles.name}>
+            <span className={styles.keep}>
               <RecordChip
                 display={record.display}
                 isFlat
@@ -492,7 +496,7 @@ function LinksLine({ entry }: { readonly entry: Extract<ActivityEntry, { kind: '
           <span>{strings.verbs.added}</span>
           <Names records={entry.added} count={entry.addedCount} />
           <span>{strings.linkedTo}</span>
-          <span className={styles.name}>
+          <span className={styles.keep}>
             <span className={styles.attribute}>{entry.attribute.name}</span>
             {hasRemoved && strings.clauseSeparator}
           </span>

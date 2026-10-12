@@ -4,7 +4,7 @@
 // Leaves out: notes, tasks (#19) and comments (#29), filters, and the record's own delete and restore (#36).
 import type { ActivityEntryShape, ActivityFeed as ActivityFeedSource, ActivityState } from '@crm/data';
 import { useActivity } from '@crm/data/react';
-import { ActivityFeed } from '@crm/ui';
+import { ActivityFeed, type ActivityFeedLayout } from '@crm/ui';
 import { useMemo, useState } from 'react';
 import { strings } from './strings.ts';
 import { linkedSource, type RecordLink } from './timeline.ts';
@@ -23,7 +23,7 @@ export interface ActivityTabProps {
   /** The feed's name: "Activity" on its tab, "Recent activity" on Overview. */
   readonly label?: string;
   /** `feed` fills its slot and scrolls inside it (the Activity tab); `inline` draws a few in place (Overview). */
-  readonly layout?: 'feed' | 'inline';
+  readonly layout?: ActivityFeedLayout;
 }
 
 /** A record's timeline, paging as it scrolls and live, with Try again when it fails. */

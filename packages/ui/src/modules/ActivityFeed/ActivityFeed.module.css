@@ -129,8 +129,8 @@
     font: var(--text-body-strong);
   }
 
-  /* A linked record's chip with the comma that follows it, kept together. */
-  .name {
+  /* Pieces of a links entry's line kept together: a chip and the comma after it, or the attribute and ", and". */
+  .keep {
     display: inline-flex;
     align-items: center;
     min-inline-size: 0;
