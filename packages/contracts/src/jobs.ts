@@ -11,11 +11,12 @@ import { WorkspaceScoped } from './workspaces.ts';
 /**
  * Each kind the screens may name, with its label, its lane and whether it can
  * be cancelled. The registry in `packages/core` declares the rest (its params,
- * its step) and checks it matches this. `dev.simulate` runs only locally and
- * in previews (AC-123).
+ * its step) and checks it matches this. `dev.simulate` and its light twin run
+ * only locally and in previews (AC-123).
  */
 export const JOB_KINDS = {
   'dev.simulate': { label: 'Test job', lane: 'heavy', cancellable: true },
+  'dev.simulate_light': { label: 'Light test job', lane: 'light', cancellable: true },
 } as const satisfies Record<
   string,
   { readonly label: string; readonly lane: 'heavy' | 'light'; readonly cancellable: boolean }

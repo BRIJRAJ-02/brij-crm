@@ -9,7 +9,7 @@
 // the same ones in the same order on every read, so it goes through
 // `preparing` and `ready` first (AC-109).
 import * as z from 'zod';
-import { defineKind, type KindDefinition } from '../registry.ts';
+import { defineKind, MAX_ATTEMPTS, type KindDefinition } from '../registry.ts';
 
 /** How the test kind waits: `setTimeout` by default, a stub in tests. */
 export type Sleep = (ms: number) => Promise<void>;
@@ -47,16 +47,23 @@ function syntheticNumber(id: string | undefined): number {
   return Number.parseInt(id.slice(-12), 16) || 0;
 }
 
-/** The test kind, waiting with `sleep`. */
-export function devSimulate(sleep: Sleep = realSleep): KindDefinition<DevSimulateParams> {
+/**
+ * The test kind, waiting with `sleep`: `dev.simulate` on the heavy lane, or
+ * `dev.simulate_light` on the light one (the fairness measurement's light job,
+ * AC-108), the same in every other way.
+ */
+export function devSimulate(
+  sleep: Sleep = realSleep,
+  lane: 'heavy' | 'light' = 'heavy',
+): KindDefinition<DevSimulateParams> {
   return defineKind<DevSimulateParams>({
-    kind: 'dev.simulate',
-    lane: 'heavy',
+    kind: lane === 'heavy' ? 'dev.simulate' : 'dev.simulate_light',
+    lane,
     actor: 'member',
     mode: 'items',
     params: DevSimulateParams,
     cancellable: true,
-    maxAttempts: 8,
+    maxAttempts: MAX_ATTEMPTS[lane],
     batchSize: 500,
     sample: { batchSize: 100, batchMillis: 0, refuseEvery: 7 },
     batchSizeOf: (params) => params.batchSize ?? 500,

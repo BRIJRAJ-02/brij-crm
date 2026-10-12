@@ -385,7 +385,7 @@ describe('the runner (AC-103 to AC-107, AC-113, AC-120)', () => {
 });
 
 describe('the shared kind contract (AC-122)', () => {
-  const kinds: readonly AnyKind[] = [devSimulate()];
+  const kinds: readonly AnyKind[] = [devSimulate(), devSimulate(undefined, 'light')] as AnyKind[];
 
   it.each(kinds.map((kind) => [kind.kind, kind] as const))(
     '%s: strict params with no secrets, ids only on the queue, an idempotent batch, a call under 30 seconds',

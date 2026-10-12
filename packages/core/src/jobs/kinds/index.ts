@@ -13,11 +13,12 @@ export interface JobKindsOptions {
 }
 
 /**
- * The kinds the api and the worker run: `dev.simulate` only locally and in
- * previews (AC-123), so production answers NOT_FOUND for it; later features
+ * The kinds the api and the worker run: `dev.simulate` (and its light twin,
+ * `dev.simulate_light`) only locally and in previews (AC-123), so production answers NOT_FOUND for it; later features
  * add theirs here.
  */
 export function jobKinds(options: JobKindsOptions): JobRegistry {
   const local = options.environment === 'local' || options.environment === 'preview';
-  return createRegistry([...(local ? [devSimulate(options.sleep) as AnyKind] : []), ...(options.extra ?? [])]);
+  const tests = local ? [devSimulate(options.sleep) as AnyKind, devSimulate(options.sleep, 'light') as AnyKind] : [];
+  return createRegistry([...tests, ...(options.extra ?? [])]);
 }
