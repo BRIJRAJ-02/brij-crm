@@ -23,6 +23,7 @@ New (spec 0012, pulled forward from spec 0003's milestone 4; in the inventory as
 ```
 
 - `nav` lists the settings pages, in order; `currentNavId` marks the one shown (`aria-current="page"`). The navigation is a `nav` landmark named by `navLabel` ("Settings").
+- `titleRef` reaches the visible title, which takes focus by script (never a tab stop) when the control in use went away with its change (an archived row, a cancelled job's Cancel); the TopBar's h1 is visually hidden under a trail, so focus there would show nothing.
 - `title` is the page's second level heading: the `TopBar` above holds the h1 (as the crumbs' current place), which takes focus after a route change, as on a record page.
 - `icon` with `hue` draws an object's tile before the title; `meta` sits beside the title (a "Standard" or "Custom" Badge).
 - `description` is one line under the title; `actions` sit at the end of the header. One primary at most, as everywhere.

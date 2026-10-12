@@ -125,6 +125,17 @@ export const ObjectPage: Story = {
   },
 };
 
+/** The title takes focus by script, for when the control in use went away with its change; it is no tab stop. */
+export const TitleFocus: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    const title = canvas.getByRole('heading', { level: 2, name: 'Objects' });
+    await expect(title).toHaveAttribute('tabindex', '-1');
+    title.focus();
+    await expect(title).toHaveFocus();
+  },
+};
+
 /** A member reads the page: no actions, and a quiet note in the body. */
 export const ReadOnly: Story = {
   args: { page: 'member' },

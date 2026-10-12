@@ -62,6 +62,7 @@
 
   .title {
     margin: 0;
+    outline: none;
     overflow: hidden;
     color: var(--text);
     font: var(--text-heading);

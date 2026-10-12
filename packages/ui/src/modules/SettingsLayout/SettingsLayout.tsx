@@ -2,7 +2,7 @@
 // milestone 4): the settings navigation beside the page, and the page's
 // header (its title, a tile, a badge, a line of description and its actions)
 // over its body. The body is the screen's: Tabs, Cards, Tables, EmptyState.
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
@@ -42,6 +42,12 @@ export interface SettingsLayoutProps {
   readonly actions?: ReactNode;
   /** The page's head is still coming: skeletons after the loading delay; the navigation stays usable. */
   readonly isLoading?: boolean;
+  /**
+   * The visible title, which takes focus by script (never a tab stop) when
+   * the control in use went away with its change (an archived row, a
+   * cancelled job's Cancel): the TopBar's h1 is visually hidden under a trail.
+   */
+  readonly titleRef?: Ref<HTMLHeadingElement>;
   /** The page's body. */
   readonly children: ReactNode;
 }
@@ -63,6 +69,7 @@ export function SettingsLayout({
   description,
   actions,
   isLoading = false,
+  titleRef,
   children,
 }: SettingsLayoutProps) {
   const showSkeleton = useDelayedLoading(isLoading);
@@ -95,7 +102,9 @@ export function SettingsLayout({
             {icon !== undefined && <Icon name={icon} tile={hue ?? 'gray'} />}
             <span className={styles.text}>
               <span className={styles.heading}>
-                <h2 className={styles.title}>{title}</h2>
+                <h2 className={styles.title} ref={titleRef} tabIndex={-1} data-settings-title>
+                  {title}
+                </h2>
                 {meta}
               </span>
               {description !== undefined && <span className={styles.description}>{description}</span>}
