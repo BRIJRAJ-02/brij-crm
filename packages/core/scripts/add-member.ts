@@ -50,13 +50,19 @@ try {
     const written = await runWrite(
       systemScope(db, workspace.id),
       async ({ tx, ...context }) => {
-        // The owner role reads schema auth and bypasses row level security, as on Neon.
+        // The owner role reads schema auth and bypasses row level security, as on Neon. An existing account whose
+        // email nobody has proven (an unverified Google sign up from before spec 0005 milestone 4) is never made a
+        // member: it may be someone else's, until its owner signs in by code, which proves the email.
         const users = await tx.execute<{ id: string }>(
           sql`insert into auth."user" (email, name, email_verified) values (${input.email}, ${name}, true)
-            on conflict (email) do update set email = excluded.email returning id`,
+            on conflict (email) do update set email = excluded.email where auth."user".email_verified returning id`,
         );
         const userId = users.rows[0]?.id;
-        if (userId === undefined) throw new Error('The account could not be found or made.');
+        if (userId === undefined) {
+          throw new Error(
+            `${input.email} has an account whose email isn't verified. Its owner signs in by code first.`,
+          );
+        }
         const existing = await tx.execute<{ id: string }>(
           sql`select id from members where workspace_id = ${workspace.id} and user_id = ${userId} and status = 'active'`,
         );

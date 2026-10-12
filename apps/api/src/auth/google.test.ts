@@ -4,7 +4,7 @@
 // code path runs without the owner's OAuth client. Better Auth reads the
 // person from the id token the token endpoint hands back, so the fake's
 // claims (email, email_verified) are what Google would say.
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it, vi } from 'vitest';
 import type { Database, IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
@@ -66,25 +66,37 @@ function idToken(person: GooglePerson): string {
   ].join('.');
 }
 
-/** Answers Google's token endpoint with `person`; every other address goes to the real fetch (Mailpit). */
-function fakeGoogle(person: GooglePerson): { readonly tokenCalls: () => number } {
+/** What the app sent Google's token endpoint: the code exchange's form fields. */
+type TokenRequest = URLSearchParams;
+
+/** Answers Google's token endpoint with `person`, keeping each request; every other address goes to the real fetch (Mailpit). */
+function fakeGoogle(person: GooglePerson): {
+  readonly tokenCalls: () => number;
+  readonly lastTokenRequest: () => TokenRequest | undefined;
+} {
   const real = globalThis.fetch;
-  let calls = 0;
-  vi.stubGlobal('fetch', (input: string | URL | Request, init?: RequestInit) => {
+  const requests: TokenRequest[] = [];
+  vi.stubGlobal('fetch', async (input: string | URL | Request, init?: RequestInit) => {
     const url = input instanceof Request ? input.url : String(input);
     if (!url.startsWith(TOKEN_ENDPOINT)) return real(input, init);
-    calls += 1;
-    return Promise.resolve(
-      Response.json({
-        access_token: `access-${randomUUID()}`,
-        id_token: idToken(person),
-        expires_in: 3599,
-        token_type: 'Bearer',
-        scope: 'openid email profile',
-      }),
-    );
+    const body = input instanceof Request ? await input.clone().text() : bodyText(init?.body);
+    requests.push(new URLSearchParams(body));
+    return Response.json({
+      access_token: `access-${randomUUID()}`,
+      id_token: idToken(person),
+      expires_in: 3599,
+      token_type: 'Bearer',
+      scope: 'openid email profile',
+    });
   });
-  return { tokenCalls: () => calls };
+  return { tokenCalls: () => requests.length, lastTokenRequest: () => requests.at(-1) };
+}
+
+/** A request body as text: the form Better Auth sends, as a string or as URLSearchParams. */
+function bodyText(body: RequestInit['body']): string {
+  if (typeof body === 'string') return body;
+  if (body instanceof URLSearchParams) return body.toString();
+  return '';
 }
 
 type App = ReturnType<typeof signInApp>['app'];
@@ -94,7 +106,11 @@ type App = ReturnType<typeof signInApp>['app'];
  * Google sending it back to the callback with a code and the state. Answers
  * the callback's redirect and the cookie it set.
  */
-async function googleRoundTrip(app: App, ip: string): Promise<{ location: string; cookie: string }> {
+async function googleRoundTrip(
+  app: App,
+  ip: string,
+  tamper: { readonly state?: string; readonly dropCookie?: boolean } = {},
+): Promise<{ location: string; cookie: string; authorize: URL }> {
   const started = await authPost(
     app,
     '/sign-in/social',
@@ -108,9 +124,9 @@ async function googleRoundTrip(app: App, ip: string): Promise<{ location: string
   const state = authorize.searchParams.get('state');
   expect(state).not.toBeNull();
   const callback = await app.fetch(
-    new Request(`${APP_URL}/api/auth/callback/google?code=fake-code&state=${String(state)}`, {
+    new Request(`${APP_URL}/api/auth/callback/google?code=fake-code&state=${tamper.state ?? String(state)}`, {
       headers: {
-        cookie: cookieFrom(started),
+        ...(tamper.dropCookie === true ? {} : { cookie: cookieFrom(started) }),
         'x-forwarded-for': ip,
         [EDGE_HEADER]: TEST_EDGE_SECRET,
         [ORIGIN_HEADER]: APP_URL,
@@ -118,7 +134,7 @@ async function googleRoundTrip(app: App, ip: string): Promise<{ location: string
     }),
   );
   expect(callback.status).toBe(302);
-  return { location: callback.headers.get('location') ?? '', cookie: cookieFrom(callback) };
+  return { location: callback.headers.get('location') ?? '', cookie: cookieFrom(callback), authorize };
 }
 
 /** The users and Google accounts stored for `email`. */
@@ -149,9 +165,19 @@ describe('Google sign in, against a fake Google (AC-28)', () => {
     const { app } = signInApp({ db, identity }, GOOGLE);
     const email = newEmail();
     const google = fakeGoogle({ sub: randomUUID(), email, emailVerified: true });
-    const { location, cookie } = await googleRoundTrip(app, newIp());
+    const { location, cookie, authorize } = await googleRoundTrip(app, newIp());
     expect(google.tokenCalls()).toBe(1);
     expect(location).toBe(`${APP_URL}/`);
+    // PKCE: the code goes back with the verifier whose S256 hash Google was shown, and the same callback address.
+    expect(authorize.searchParams.get('code_challenge_method')).toBe('S256');
+    const exchange = google.lastTokenRequest();
+    const verifier = exchange?.get('code_verifier') ?? '';
+    expect(verifier).not.toBe('');
+    expect(createHash('sha256').update(verifier).digest('base64url')).toBe(
+      authorize.searchParams.get('code_challenge'),
+    );
+    expect(exchange?.get('redirect_uri')).toBe(`${APP_URL}/api/auth/callback/google`);
+    expect(authorize.searchParams.get('redirect_uri')).toBe(`${APP_URL}/api/auth/callback/google`);
     expect((await rpcClient(app, cookie).me.get()).user).toMatchObject({ email });
     const { users, accounts } = await stored(email);
     expect(users).toEqual([{ id: expect.any(String) as string, email_verified: true }]);
@@ -211,6 +237,36 @@ describe('Google sign in, against a fake Google (AC-28)', () => {
     const admitted = await googleRoundTrip(app, newIp());
     expect(admitted.location).toBe(`${APP_URL}/`);
     expect((await stored(listed)).users).toHaveLength(1);
+  });
+
+  it('refuses a callback whose state was tampered with, or that comes back without the start cookie', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    for (const tamper of [{ state: 'not-the-state' }, { dropCookie: true }]) {
+      const email = newEmail();
+      const google = fakeGoogle({ sub: randomUUID(), email, emailVerified: true });
+      const { location, cookie } = await googleRoundTrip(app, newIp(), tamper);
+      expect(new URL(location).pathname).toBe('/sign-in');
+      expect(new URL(location).searchParams.get('error')).not.toBeNull();
+      expect(cookie).not.toContain('session_token');
+      // Refused before the code is exchanged: nothing reached Google's token endpoint, and no one was made.
+      expect(google.tokenCalls()).toBe(0);
+      expect((await stored(email)).users).toEqual([]);
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('refuses an id token handed straight to /sign-in/social: Google signs in only through its own page', async () => {
+    const { app } = signInApp({ db, identity }, GOOGLE);
+    const email = newEmail();
+    const refused = await authPost(
+      app,
+      '/sign-in/social',
+      { provider: 'google', idToken: { token: idToken({ sub: randomUUID(), email, emailVerified: true }) } },
+      { 'x-forwarded-for': newIp() },
+    );
+    expect(refused.status).toBe(400);
+    expect(await refused.json()).toMatchObject({ code: 'INPUT_INVALID' });
+    expect((await stored(email)).users).toEqual([]);
   });
 
   it('signs the same Google account in again to the same person', async () => {

@@ -226,6 +226,14 @@ function rateLimited(message: string, retryAfterSeconds: number): APIError {
   );
 }
 
+/** Better Auth's social sign in route, which also takes a provider's id token in its body. */
+const SOCIAL_SIGN_IN_PATH = '/sign-in/social';
+
+/** Whether a social sign in body carries an id token (`{ idToken: … }`), which this app never sends. */
+function hasIdToken(body: unknown): boolean {
+  return typeof body === 'object' && body !== null && 'idToken' in body && body.idToken !== undefined;
+}
+
 function inputInvalid(): APIError {
   return new APIError('BAD_REQUEST', { code: 'INPUT_INVALID', message: 'Send an email address.' });
 }
@@ -360,7 +368,9 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS }: 
             // Every account starts from a proven email: a code proves it, and Google only when it says verified.
             // An unverified one could be someone else's address, waiting for its owner to sign in by code
             // (pre registration takeover), so it makes no account.
-            if (!user.emailVerified) throw emailUnverified();
+            // Typed boolean, but a provider's profile could carry the string "false": only true passes.
+            const verified: unknown = user.emailVerified;
+            if (verified !== true) throw emailUnverified();
             return Promise.resolve();
           },
           // Once the account is written (Better Auth runs this after its transaction commits), and only for a new
@@ -379,6 +389,14 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS }: 
     },
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        // Google signs in only through its own page (the code flow, with state and PKCE). Better Auth would also
+        // take a Google id token posted here; the app never sends one, so nothing reaches that path.
+        if (ctx.path === SOCIAL_SIGN_IN_PATH && hasIdToken(ctx.body)) {
+          throw new APIError('BAD_REQUEST', {
+            code: 'INPUT_INVALID',
+            message: 'Sign in with Google from its own page.',
+          });
+        }
         if (ctx.path === SIGN_IN_CODE_PATH) {
           const body = SignInCodeBody.safeParse(ctx.body);
           // `handle` refused a request like this already; a call from our own code gets the same answer.
