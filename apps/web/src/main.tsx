@@ -128,14 +128,16 @@ router.subscribe('onRendered', (event) => {
     });
     return;
   }
-  // The same page again (a Retry, a reload in place) or another tab of it (spec 0017): focus stays where the
-  // person put it, unless it left with the old content, when the title takes it.
-  if (!event.pathChanged || isSamePage(event.fromLocation.pathname, pathname)) {
+  // The same page again (a Retry, a reload in place): focus stays where the person put it, unless it left with
+  // the old content, when the title takes it.
+  if (!event.pathChanged) {
     requestAnimationFrame(() => {
       focusRecovery.recover(pathname);
     });
     return;
   }
+  // Another tab of the same page (spec 0017): the record page puts focus on the tab chosen itself.
+  if (isSamePage(event.fromLocation.pathname, pathname)) return;
   requestAnimationFrame(() => {
     focusPage(document, pathname);
   });
