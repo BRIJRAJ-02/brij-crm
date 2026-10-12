@@ -1,10 +1,10 @@
 // A record's timeline, built on read (spec 0017, 0017-activity.md): never
 // stored, read from the history the engine already keeps. Each source answers
 // its newest entries past the cursor, at most `limit + 1`, in key order; the
-// service merges them and keeps the first `limit`. Milestone 1 registers the
-// creation source only; the value and link sources (milestone 2), notes and
-// tasks (#19) and comments (#29) join `ACTIVITY_SOURCES` with the same
-// contract, and nothing else changes.
+// service merges them and keeps the first `limit`. The creation, every value
+// version and every link moment (`activity-sources.ts`) are registered here;
+// notes and tasks (#19) and comments (#29) join `ACTIVITY_SOURCES` with the
+// same contract, and nothing else changes.
 import { sql } from 'drizzle-orm';
 import {
   ACTIVITY_PAGE,
@@ -22,7 +22,8 @@ import type { Actor, EngineScope } from './scope.ts';
 import { inWorkspace } from '../access/run.ts';
 import { isOpen } from '../access/policy.ts';
 import { attributeVisible, checkObject, checkRecordVisible, UNKNOWN_RECORD } from '../access/visibility.ts';
-import { loadAttributes } from './values.ts';
+import { linkSource, toMillis, valueSource } from './activity-sources.ts';
+import { isArchivedNow, loadAttributes, type AttributeDef } from './values.ts';
 
 /** What a cursor the server can't read answers, on the `cursor` field. */
 export const ACTIVITY_CURSOR_MESSAGE = 'That activity cursor is not valid here. Start again from the top.';
@@ -54,11 +55,20 @@ export interface ActivityRecord {
 /** Where the last page ended: its last entry's moment (with microseconds), rank and id. */
 export type ActivityBound = ActivityCursor;
 
-/** What a source reads with: the read's transaction and scope, the checked record, the bound and the page size. */
+/**
+ * What a source reads with: the read's transaction and scope, the checked
+ * record, the attributes the timeline may name, the bound and the page size.
+ */
 export interface ActivitySourceInput {
   readonly tx: WorkspaceTx;
   readonly scope: EngineScope;
   readonly record: ActivityRecord;
+  /**
+   * The record's object's attributes a timeline reads: live (not archived,
+   * nor a reference to an archived object), not system, and visible to the
+   * viewer. #16's computed attributes will be left out here too.
+   */
+  readonly attributes: readonly AttributeDef[];
   readonly after?: ActivityBound;
   readonly limit: number;
 }
@@ -81,9 +91,6 @@ export function isPastBound(
   return entry.id > after.id;
 }
 
-/** An instant with microseconds cut to the milliseconds `ActivityItem.at` carries. */
-const toMillis = (micros: string): string => `${micros.slice(0, 23)}Z`;
-
 /** The creation entry (`created`, rank 9): the record's own row, exactly one, the oldest. */
 const creationSource: ActivitySource = ({ record, after }) => {
   const id = `created:${record.id}`;
@@ -101,7 +108,7 @@ const creationSource: ActivitySource = ({ record, after }) => {
 };
 
 /** The timeline's sources, read in this order and merged by key. #19 and #29 add theirs here. */
-export const ACTIVITY_SOURCES: readonly ActivitySource[] = [creationSource];
+export const ACTIVITY_SOURCES: readonly ActivitySource[] = [creationSource, valueSource, linkSource];
 
 /** Encodes where a page ended as the opaque cursor: base64url JSON. */
 export function encodeActivityCursor(bound: ActivityBound): string {
@@ -137,7 +144,11 @@ interface CheckedRow extends Record<string, unknown> {
  * visible, and the record inside the viewer's record rule. Otherwise
  * `NOT_FOUND` "That record does not exist.", the same for missing and hidden.
  */
-async function checkedRecord(tx: WorkspaceTx, scope: EngineScope, recordId: string): Promise<ActivityRecord> {
+async function checkedRecord(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  recordId: string,
+): Promise<{ readonly record: ActivityRecord; readonly attributes: readonly AttributeDef[] }> {
   const result = await tx.execute<CheckedRow>(sql`
     select r.id::text as id, r.object_id::text as object_id,
       to_char(r.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as created_at,
@@ -149,17 +160,22 @@ async function checkedRecord(tx: WorkspaceTx, scope: EngineScope, recordId: stri
   if (row === undefined || row.object_archived) throw refuse('NOT_FOUND', UNKNOWN_RECORD);
   await checkObject(tx, scope.access, row.object_id, 'read', UNKNOWN_RECORD);
   await checkRecordVisible(tx, scope.access, { objectId: row.object_id, recordId: row.id });
+  const all = [...(await loadAttributes(tx, row.object_id)).values()];
   // Hidden is absent: a field rule hiding the object's Created by leaves the creation entry without its actor.
   const hidesCreator =
     !isOpen(scope.access) &&
-    [...(await loadAttributes(tx, row.object_id)).values()].some(
-      (attribute) => attribute.systemColumn === 'created_by' && !attributeVisible(scope.access, attribute),
-    );
+    all.some((attribute) => attribute.systemColumn === 'created_by' && !attributeVisible(scope.access, attribute));
+  const attributes = all.filter(
+    (attribute) => !attribute.isSystem && !isArchivedNow(attribute) && attributeVisible(scope.access, attribute),
+  );
   return {
-    id: row.id,
-    objectId: row.object_id,
-    createdAt: row.created_at,
-    ...(hidesCreator ? {} : { createdBy: { type: row.created_by_type, id: row.created_by_id } }),
+    record: {
+      id: row.id,
+      objectId: row.object_id,
+      createdAt: row.created_at,
+      ...(hidesCreator ? {} : { createdBy: { type: row.created_by_type, id: row.created_by_id } }),
+    },
+    attributes,
   };
 }
 
@@ -179,11 +195,12 @@ export async function getActivity(scope: EngineScope, input: ActivityQuery): Pro
   const after = input.cursor === undefined ? undefined : decodeActivityCursor(input.cursor);
   const recordId = checkId(input.recordId, UNKNOWN_RECORD);
   return inWorkspace(scope, async (tx) => {
-    const record = await checkedRecord(tx, scope, recordId);
+    const { record, attributes } = await checkedRecord(tx, scope, recordId);
     const found: ActivityItem[] = [];
     // One after another: the sources share the read's one transaction.
     for (const source of ACTIVITY_SOURCES) {
-      for (const entry of await source({ tx, scope, record, ...(after === undefined ? {} : { after }), limit })) {
+      const input = { tx, scope, record, attributes, ...(after === undefined ? {} : { after }), limit };
+      for (const entry of await source(input)) {
         found.push(entry);
       }
     }
