@@ -228,6 +228,8 @@ export function ActivityFeed({ label, entries, layout = 'feed', status = 'ready'
   const scrollRef = useRef<HTMLDivElement>(null);
   const [active, setActive] = useState(0);
   const pendingFocus = useRef(false);
+  // Focus is on one of the feed's entries (or inside one).
+  const holdsFocus = useRef(false);
   const idBase = useId();
   // Sizes are kept by entry, not by place, so entries arriving above keep every measured height. A new function
   // only with a new source, since the virtualiser measures everything again when it changes.
@@ -264,6 +266,14 @@ export function ActivityFeed({ label, entries, layout = 'feed', status = 'ready'
   useEffect(() => {
     if (!pendingFocus.current) return;
     pendingFocus.current = false;
+    scrollRef.current?.querySelector<HTMLElement>(`[data-index="${String(active)}"]`)?.focus();
+  });
+  // The focused entry was drawn again under its own key (it loaded) and the browser dropped focus without a
+  // blur: it goes back to the entry holding the tab stop, so the next key still moves through the feed.
+  useEffect(() => {
+    if (!holdsFocus.current) return;
+    const focused = document.activeElement;
+    if (focused !== null && focused !== document.body) return;
     scrollRef.current?.querySelector<HTMLElement>(`[data-index="${String(active)}"]`)?.focus();
   });
   useKeepReading({
@@ -342,12 +352,20 @@ export function ActivityFeed({ label, entries, layout = 'feed', status = 'ready'
       aria-label={label}
       aria-busy={busy || undefined}
       onKeyDown={onKeyDown}
+      onFocus={() => {
+        holdsFocus.current = true;
+      }}
       // An entry that loads while focused is drawn again under its own key; focus follows it.
       onBlur={(event) => {
         const lost = event.target;
+        const next = event.relatedTarget;
+        if (next instanceof Node && scrollRef.current?.contains(next) === true) return;
         queueMicrotask(() => {
           const focused = document.activeElement;
-          if (lost.isConnected || (focused !== null && focused !== document.body)) return;
+          if (lost.isConnected || (focused !== null && focused !== document.body)) {
+            holdsFocus.current = false;
+            return;
+          }
           scrollRef.current?.querySelector<HTMLElement>(`[data-index="${String(active)}"]`)?.focus();
         });
       }}
