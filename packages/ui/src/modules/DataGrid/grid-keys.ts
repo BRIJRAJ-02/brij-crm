@@ -13,6 +13,8 @@ export interface GridBounds {
   readonly rowCount: number;
   readonly colCount: number;
   readonly pageRows: number;
+  /** The header row's drawn columns, when it holds more than the rows (the "+" header after the last column). */
+  readonly headerColCount?: number;
 }
 
 /** The parts of a key press a move reads. `mod` is ⌘ on a Mac and Ctrl elsewhere. */
@@ -32,7 +34,11 @@ const clamp = (value: number, low: number, high: number) => Math.min(high, Math.
 export function moveFocus(from: CellPosition, { key, mod }: MoveKey, bounds: GridBounds): CellPosition | undefined {
   const lastRow = bounds.rowCount - 1;
   const lastCol = bounds.colCount - 1;
-  const at = (row: number, col: number) => ({ row: clamp(row, -1, lastRow), col: clamp(col, 0, lastCol) });
+  const lastHeaderCol = (bounds.headerColCount ?? bounds.colCount) - 1;
+  const at = (row: number, col: number) => {
+    const toRow = clamp(row, -1, lastRow);
+    return { row: toRow, col: clamp(col, 0, toRow === -1 ? lastHeaderCol : lastCol) };
+  };
   switch (key) {
     case 'ArrowUp':
       return at(from.row - 1, from.col);
@@ -45,7 +51,7 @@ export function moveFocus(from: CellPosition, { key, mod }: MoveKey, bounds: Gri
     case 'Home':
       return mod ? at(0, 0) : at(from.row, 0);
     case 'End':
-      return mod ? at(lastRow, lastCol) : at(from.row, lastCol);
+      return mod ? at(lastRow, lastCol) : at(from.row, from.row === -1 ? lastHeaderCol : lastCol);
     case 'PageUp':
       return at(from.row - bounds.pageRows, from.col);
     case 'PageDown':

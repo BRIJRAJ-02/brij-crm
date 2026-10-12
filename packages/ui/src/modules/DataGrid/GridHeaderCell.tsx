@@ -6,6 +6,7 @@ import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react'
 import { mergeProps, useDrag, useDrop } from 'react-aria';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
+import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { fieldTypeOf, readOnlyReasonOf } from '../../fields/registry.ts';
@@ -28,6 +29,20 @@ export interface ColumnActions {
   readonly onResize: (width: number, isDone: boolean) => void;
   /** A dropped column lands before or after this one, by which half of it the pointer is over. */
   readonly onDrop: (columnId: string, side: 'before' | 'after') => void;
+  /** The screen's own items, after the menu's (spec 0012: Edit attribute, Archive attribute). */
+  readonly extra?: readonly GridColumnAction[];
+}
+
+/**
+ * An item a screen adds to a column's menu (spec 0012), after the menu's own:
+ * its key, words, icon, whether it destroys (danger), and what it does.
+ */
+export interface GridColumnAction {
+  readonly id: string;
+  readonly label: string;
+  readonly icon: IconName;
+  readonly isDanger?: boolean;
+  readonly onAction: () => void;
 }
 
 /** Props for GridHeaderCell. */
@@ -48,8 +63,6 @@ export interface GridHeaderCellProps {
 }
 
 const COLUMN_TYPE = 'application/x-crm-grid-column';
-
-type MenuAction = 'left' | 'right' | 'pin' | 'unpin' | 'hide' | 'ascending' | 'descending' | 'filter' | 'resize';
 
 /** A column header with its menu, resize edge and drag to reorder. */
 export function GridHeaderCell({
@@ -107,7 +120,12 @@ export function GridHeaderCell({
   const { draggable, onDragStart, onDrag, onDragEnd } = dragProps;
   const pointerDrag = { draggable, onDragStart, onDrag, onDragEnd };
 
-  const onAction = (key: MenuAction) => {
+  const onAction = (key: string) => {
+    const extra = actions.extra?.find((item) => `extra:${item.id}` === key);
+    if (extra !== undefined) {
+      extra.onAction();
+      return;
+    }
     if (key === 'left') actions.onMove(-1);
     else if (key === 'right') actions.onMove(1);
     else if (key === 'pin') actions.onPin();
@@ -115,7 +133,7 @@ export function GridHeaderCell({
     else if (key === 'hide') actions.onHide();
     else if (key === 'ascending' || key === 'descending') actions.onSort?.(key);
     else if (key === 'filter') actions.onFilter?.();
-    else actions.onStartResize();
+    else if (key === 'resize') actions.onStartResize();
   };
 
   const startResize = (event: ReactPointerEvent<HTMLSpanElement>) => {
@@ -190,7 +208,7 @@ export function GridHeaderCell({
           // Its end on the chevron's, so the menu sits under this column, not over the next.
           placement="bottom end"
           onAction={(key) => {
-            onAction(key as MenuAction);
+            onAction(String(key));
           }}
           disabledKeys={[
             ...(canMoveLeft ? [] : ['left']),
@@ -236,6 +254,12 @@ export function GridHeaderCell({
               {strings.filter}
             </MenuItem>
           )}
+          {actions.extra !== undefined && actions.extra.length > 0 && <MenuSeparator />}
+          {actions.extra?.map((item) => (
+            <MenuItem key={item.id} id={`extra:${item.id}`} icon={item.icon} isDanger={item.isDanger === true}>
+              {item.label}
+            </MenuItem>
+          ))}
         </Menu>
       </MenuTrigger>
       <span className={styles.resize} aria-hidden="true" onPointerDown={startResize} />

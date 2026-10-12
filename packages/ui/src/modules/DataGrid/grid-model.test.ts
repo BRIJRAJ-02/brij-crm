@@ -84,6 +84,16 @@ describe('keyboard moves (AC-8)', () => {
     expect(move(5, 2, 'End', true)).toEqual({ row: 99, col: 4 });
   });
 
+  it('reaches the "+" header past the last column in the header row only (spec 0012)', () => {
+    const withAdd = { ...bounds, headerColCount: 6 };
+    const at = (row: number, col: number, key: string) => moveFocus({ row, col }, { key, mod: false }, withAdd);
+    expect(at(-1, 4, 'ArrowRight')).toEqual({ row: -1, col: 5 });
+    expect(at(-1, 2, 'End')).toEqual({ row: -1, col: 5 });
+    expect(at(-1, 5, 'ArrowDown')).toEqual({ row: 0, col: 4 });
+    expect(at(3, 4, 'ArrowRight')).toEqual({ row: 3, col: 4 });
+    expect(at(3, 2, 'End')).toEqual({ row: 3, col: 4 });
+  });
+
   it('moves a screen with Page Up and Page Down', () => {
     expect(move(5, 2, 'PageDown')).toEqual({ row: 25, col: 2 });
     expect(move(90, 2, 'PageDown')).toEqual({ row: 99, col: 2 });

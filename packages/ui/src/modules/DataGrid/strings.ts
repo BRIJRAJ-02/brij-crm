@@ -2,6 +2,8 @@
 export const strings = {
   selectRow: (name: string) => `Select ${name}`,
   selectOnScreen: 'Select the rows on screen',
+  /** The "+" header after the last column (spec 0012), when the screen gives none of its own. */
+  addColumn: 'Add attribute',
   untitled: 'Untitled',
   columnOptions: (name: string) => `${name} options`,
   moveLeft: 'Move left',

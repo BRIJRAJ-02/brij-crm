@@ -60,6 +60,28 @@
     background: var(--surface);
   }
 
+  /* With the "+" header (spec 0012) the header row runs one checkbox column past the last one. */
+  .header[data-add] {
+    inline-size: max(100%, calc(var(--grid-width) + var(--size-column-check)));
+  }
+
+  /* The "+" header: a checkbox column wide, its one ghost button centred, ringed like any header it focuses. */
+  .addColumn {
+    display: flex;
+    flex: none;
+    align-items: center;
+    justify-content: center;
+    inline-size: var(--size-column-check);
+    block-size: var(--size-table-header);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface);
+    outline: none;
+  }
+
+  .addColumn[data-focused]:focus-visible {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
   .body {
     position: relative;
     inline-size: var(--grid-width);

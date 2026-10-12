@@ -25,9 +25,10 @@ import {
 } from 'react';
 import { flushSync } from 'react-dom';
 import { useFocusVisible } from 'react-aria';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { CheckboxMark } from '../../atoms/Checkbox/Checkbox.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
-import { AnchoredTooltip, TOOLTIP_DELAY_MS } from '../../atoms/Tooltip/Tooltip.tsx';
+import { AnchoredTooltip, Tooltip, TOOLTIP_DELAY_MS } from '../../atoms/Tooltip/Tooltip.tsx';
 import { SharedTooltipContext } from '../../atoms/TruncatedText/TruncatedText.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { clearedValueOf, fieldTypeOf, readOnlyReasonOf } from '../../fields/registry.ts';
@@ -42,7 +43,7 @@ import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import type { ActorDisplay } from '@crm/contracts/values';
 import styles from './DataGrid.module.css';
 import { editModeOf, GridCell, type CellPlace, type GridEditorProps } from './GridCell.tsx';
-import { GridHeaderCell, type ColumnActions } from './GridHeaderCell.tsx';
+import { GridHeaderCell, type ColumnActions, type GridColumnAction } from './GridHeaderCell.tsx';
 import { fromTsv, planPaste, toTsv } from './grid-clipboard.ts';
 import {
   hideColumn,
@@ -156,6 +157,25 @@ export interface DataGridProps<Row> {
    * each time; the same object again does nothing.
    */
   readonly focusRow?: { readonly index: number };
+  /**
+   * Draws a "+" header after the last column (spec 0012, "Add attribute"):
+   * a click, or Enter on it, calls this. Nothing is drawn when absent.
+   */
+  readonly onAddColumn?: () => void;
+  /** The "+" header's name for screen readers and its tooltip ("Add attribute" when absent). */
+  readonly addColumnLabel?: string;
+  /**
+   * Items a column's menu adds after its own (spec 0012: Edit attribute,
+   * Archive attribute), per column; none for a column it answers none for.
+   * The menu has only its own items when absent.
+   */
+  readonly columnActions?: (columnId: string) => readonly GridColumnAction[];
+  /**
+   * Moves focus to this column's header once it is drawn and any closing
+   * overlay is gone: the column a screen just made. Pass a new object each
+   * time; the same object again does nothing.
+   */
+  readonly focusColumn?: { readonly id: string };
 }
 
 const ROW = sizeToken('size-row');
@@ -258,6 +278,10 @@ export function DataGrid<Row>({
   isCellKnown,
   rowNotes,
   onEditingChange,
+  onAddColumn,
+  addColumnLabel = strings.addColumn,
+  columnActions: columnActionsOf,
+  focusColumn,
 }: DataGridProps<Row>) {
   const { locale, timeZone } = useFormatSettings();
   const toasts = useToasts();
@@ -290,7 +314,13 @@ export function DataGrid<Row>({
 
   // Focus, ranges and editing come first: the focused and edited rows stay drawn.
   const [focusAt, setFocusAt] = useState<CellPosition>({ row: 0, col: 1 });
-  const focus = { row: Math.min(focusAt.row, rowCount - 1), col: Math.min(focusAt.col, colCount - 1) };
+  // The header row reaches one column more when it draws the "+" header (spec 0012).
+  const headerColCount = colCount + (onAddColumn === undefined ? 0 : 1);
+  const focusRowAt = Math.min(focusAt.row, rowCount - 1);
+  const focus = {
+    row: focusRowAt,
+    col: Math.min(focusAt.col, (focusRowAt === -1 ? headerColCount : colCount) - 1),
+  };
   const [range, setRange] = useState<CellRange | undefined>(undefined);
   const [editingAt, setEditing] = useState<Editing | undefined>(undefined);
   const [menuFor, setMenuFor] = useState<string | undefined>(undefined);
@@ -505,13 +535,18 @@ export function DataGrid<Row>({
 
   const scroller = () => scrollRef.current;
   const pageRows = () => Math.max(1, Math.floor(((scroller()?.clientHeight ?? 0) - HEADER) / ROW));
-  const bounds = () => ({ rowCount, colCount, pageRows: pageRows() });
+  const bounds = () => ({ rowCount, colCount, headerColCount, pageRows: pageRows() });
 
   /** Scrolls the cell into view past the sticky header and the pinned run. The footer is always in view. */
   const bringIntoView = (position: CellPosition) => {
     const element = scroller();
     if (element === null) return;
     if (position.row >= 0 && position.row < count) virtualizer.scrollToIndex(position.row, { align: 'auto' });
+    // The "+" header sits after the last column: the far end.
+    if (position.col >= colCount) {
+      element.scrollLeft = element.scrollWidth;
+      return;
+    }
     const column = position.col > 0 ? placed[position.col - 1] : undefined;
     if (column === undefined || column.isPinned) return;
     const start = column.offset;
@@ -559,6 +594,31 @@ export function DataGrid<Row>({
       cancelAnimationFrame(frame);
     };
   }, [focusRow]);
+
+  // A column the screen asks for (one it just made, spec 0012): its header takes focus once it is drawn
+  // (the screen's columns may arrive after the ask) and a closing dialog has handed focus back.
+  const focusedColumn = useRef<{ readonly id: string } | undefined>(undefined);
+  const columnIndex = focusColumn === undefined ? -1 : placed.findIndex((each) => each.column.id === focusColumn.id);
+  useEffect(() => {
+    if (focusColumn === undefined || columnIndex === -1 || focusedColumn.current === focusColumn) return;
+    let frames = 0;
+    let frame = 0;
+    const step = () => {
+      frames += 1;
+      if (frames < OVERLAY_WAIT_FRAMES && document.querySelector('[data-exiting]') !== null) {
+        frame = requestAnimationFrame(step);
+        return;
+      }
+      frame = requestAnimationFrame(() => {
+        focusedColumn.current = focusColumn;
+        goToLatest.current({ row: -1, col: columnIndex + 1 });
+      });
+    };
+    frame = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [focusColumn, columnIndex]);
 
   /** Shows `cell`'s tip, or closes the tooltip when it has none. */
   const showTip = (cell: HTMLElement, via: Tip['via']) => {
@@ -920,7 +980,8 @@ export function DataGrid<Row>({
     if (focus.row < 0) {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        if (column === undefined) toggleScreen();
+        if (focus.col >= colCount) onAddColumn?.();
+        else if (column === undefined) toggleScreen();
         else setMenuFor(column.id);
       }
       return;
@@ -1174,12 +1235,34 @@ export function DataGrid<Row>({
 
   // The header takes stable handlers that call the latest ones, so a scroll
   // step never redraws it.
-  const latestHeader = useRef({ toggleScreen, columnActions });
+  const latestHeader = useRef({ toggleScreen, columnActions, columnActionsOf });
   useLayoutEffect(() => {
-    latestHeader.current = { toggleScreen, columnActions };
+    latestHeader.current = { toggleScreen, columnActions, columnActionsOf };
   });
   const hasSort = onSort !== undefined;
   const hasFilter = onFilter !== undefined;
+  const hasExtras = columnActionsOf !== undefined;
+  // The "+" header (spec 0012): kept stable through a scroll, pressing the latest handler.
+  const latestAdd = useRef(onAddColumn);
+  useLayoutEffect(() => {
+    latestAdd.current = onAddColumn;
+  });
+  const hasAdd = onAddColumn !== undefined;
+  const isAddFocused = focus.row === -1 && focus.col === colCount;
+  const addColumn = useMemo(
+    () =>
+      hasAdd
+        ? {
+            col: colCount,
+            label: addColumnLabel,
+            isFocused: isAddFocused,
+            onPress: () => {
+              latestAdd.current?.();
+            },
+          }
+        : undefined,
+    [hasAdd, colCount, addColumnLabel, isAddFocused],
+  );
   const headerHandlers = useMemo<HeaderHandlers>(
     () => ({
       toggleScreen: () => {
@@ -1224,10 +1307,22 @@ export function DataGrid<Row>({
                 },
               }
             : {}),
+          // The screen's own items (spec 0012), read as the header draws; each runs the latest handler for its id.
+          ...(hasExtras
+            ? {
+                extra: (latestHeader.current.columnActionsOf?.(column.id) ?? []).map((item) => ({
+                  ...item,
+                  onAction: () => {
+                    const latest = latestHeader.current.columnActionsOf?.(column.id);
+                    latest?.find((each) => each.id === item.id)?.onAction();
+                  },
+                })),
+              }
+            : {}),
         };
       },
     }),
-    [hasSort, hasFilter],
+    [hasSort, hasFilter, hasExtras],
   );
 
   const header = (
@@ -1248,6 +1343,7 @@ export function DataGrid<Row>({
       handlers={headerHandlers}
       sortColumn={sort?.columnId}
       sortDirection={sort?.direction}
+      addColumn={addColumn}
     />
   );
 
@@ -1602,6 +1698,16 @@ interface GridHeaderProps {
   /** The column the rows are sorted by, and which way. */
   readonly sortColumn: string | undefined;
   readonly sortDirection: 'ascending' | 'descending' | undefined;
+  /** The "+" header after the last column (spec 0012): its drawn column, name, whether focus is on it, and its press. */
+  readonly addColumn: AddColumnHeader | undefined;
+}
+
+/** The "+" header after the last column. */
+interface AddColumnHeader {
+  readonly col: number;
+  readonly label: string;
+  readonly isFocused: boolean;
+  readonly onPress: () => void;
 }
 
 /** The header row: the checkbox for the rows on screen, then a header per drawn column. Memoised, so a scroll step skips it. */
@@ -1622,11 +1728,12 @@ const GridHeader = memo(function GridHeader({
   handlers,
   sortColumn,
   sortDirection,
+  addColumn,
 }: GridHeaderProps) {
   const runOf = (id: string) => layout.columns.findIndex((each) => each.id === id) < layout.pinnedCount;
   const canMove = (id: string, direction: -1 | 1) => moveColumn(layout, id, direction) !== layout;
   return (
-    <div role="row" aria-rowindex={1} className={styles.header}>
+    <div role="row" aria-rowindex={1} className={styles.header} data-add={addColumn === undefined ? undefined : ''}>
       {/* eslint-disable-next-line jsx-a11y-x/click-events-have-key-events -- the grid's one key handler toggles it with Space */}
       <div
         role="columnheader"
@@ -1668,6 +1775,20 @@ const GridHeader = memo(function GridHeader({
         ];
       })}
       <Spacer width={trailSpacer} />
+      {addColumn !== undefined && (
+        <div
+          role="columnheader"
+          aria-colindex={addColumn.col + 1}
+          className={styles.addColumn}
+          data-cell={keyOf(-1, addColumn.col)}
+          data-focused={addColumn.isFocused || undefined}
+          tabIndex={addColumn.isFocused ? 0 : -1}
+        >
+          <Tooltip content={addColumn.label}>
+            <Button variant="ghost" icon="plus" label={addColumn.label} onPress={addColumn.onPress} />
+          </Tooltip>
+        </div>
+      )}
     </div>
   );
 });

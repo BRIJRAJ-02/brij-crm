@@ -13,6 +13,7 @@ import { FIELD_SAMPLES, SAMPLE_COMPANIES, SAMPLE_MEMBERS } from '../../workbench
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { DataGrid, type GridStatus, type RowNote, type RowSource } from './DataGrid.tsx';
 import type { GridEditorProps } from './GridCell.tsx';
+import type { GridColumnAction } from './GridHeaderCell.tsx';
 import type { GridColumn } from './grid-columns.ts';
 import { noRows, withRows, type GridSelection } from './grid-selection.ts';
 
@@ -38,6 +39,10 @@ interface SampleGridProps {
   readonly unnamed?: readonly string[];
   /** Retry on the error state; does nothing unless given. */
   readonly onRetry?: () => void;
+  /** The "+" header after the last column (spec 0012). */
+  readonly onAddColumn?: () => void;
+  /** The screen's own column menu items (spec 0012). */
+  readonly columnActions?: (columnId: string) => readonly GridColumnAction[];
 }
 
 /** A grid over sample companies that keeps its own edits, columns and selection, as a screen would. */
@@ -57,6 +62,8 @@ function SampleGrid({
   withAvatars = false,
   unnamed = [],
   onRetry = () => undefined,
+  onAddColumn,
+  columnActions,
 }: SampleGridProps) {
   const [data, setData] = useState(() =>
     sampleRows(count).map((row) =>
@@ -131,6 +138,8 @@ function SampleGrid({
         {...(rowNotes === undefined ? {} : { rowNotes })}
         {...(sort === undefined ? {} : { sort, onSort: () => undefined })}
         {...(withAvatars ? { rowAvatar: () => undefined, untitled: 'Unnamed company' } : {})}
+        {...(onAddColumn === undefined ? {} : { onAddColumn })}
+        {...(columnActions === undefined ? {} : { columnActions })}
         {...(unknown === undefined
           ? {}
           : {
@@ -410,6 +419,54 @@ export const ColumnMenu: Story = {
     await press(['{ArrowDown}']);
     await press(['{Enter}']);
     await waitFor(() => expect(cell(canvasElement, -1, 3)).toHaveTextContent('Domain'));
+  },
+};
+
+const editAttribute = fn();
+const archiveAttribute = fn();
+
+/**
+ * For those who may change the schema (spec 0012): a "+" header after the
+ * last column (Add attribute), reached by End in the header row and pressed
+ * with Enter, and the screen's own items after the column menu's.
+ */
+export const SchemaActions: Story = {
+  args: {
+    onAddColumn: fn(),
+    columnActions: (columnId: string) =>
+      columnId === 'name'
+        ? [{ id: 'edit', label: 'Edit attribute', icon: 'settings', onAction: editAttribute }]
+        : [
+            { id: 'edit', label: 'Edit attribute', icon: 'settings', onAction: editAttribute },
+            { id: 'archive', label: 'Archive attribute', icon: 'archive', isDanger: true, onAction: archiveAttribute },
+          ],
+  },
+  play: async ({ args, canvas, canvasElement, userEvent }) => {
+    const press = presser((keys) => userEvent.keyboard(keys));
+    const columns = sampleColumns().length;
+    await expect(canvas.getByRole('button', { name: 'Add attribute' })).toBeInTheDocument();
+    await userEvent.tab();
+    await press(['{ArrowUp}'], '-1:1');
+    await press(['{End}'], `-1:${String(columns + 1)}`);
+    await press(['{Enter}']);
+    await waitFor(() => expect(args.onAddColumn).toHaveBeenCalledOnce());
+    // Down from the "+" lands on the last column's first cell.
+    await press(['{ArrowDown}'], `0:${String(columns)}`);
+    await press(['{ArrowUp}', '{Home}', '{ArrowRight}', '{ArrowRight}'], '-1:2');
+    await press(['{Enter}']);
+    const menu = await waitFor(() => {
+      const found = document.querySelector('[role="menu"]');
+      if (found === null) throw new globalThis.Error('No menu yet.');
+      return found;
+    });
+    await expect(menu).toHaveTextContent('Archive attribute');
+    const edit = menu.querySelector('[data-key="extra:edit"]');
+    if (!(edit instanceof HTMLElement)) throw new globalThis.Error('No Edit attribute item.');
+    await userEvent.click(edit);
+    await waitFor(() => expect(editAttribute).toHaveBeenCalledOnce());
+    // The menu has gone (its exit fade over) before the story ends.
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+    await expect(cell(canvasElement, -1, 2)).toBeInTheDocument();
   },
 };
 
