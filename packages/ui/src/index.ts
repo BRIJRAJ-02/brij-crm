@@ -186,6 +186,7 @@ export {
   type SidebarState,
 } from './modules/Sidebar/Sidebar.tsx';
 export { RecordHeader, type RecordHeaderProps } from './modules/RecordHeader/RecordHeader.tsx';
+export { RecordLayout, type RecordLayoutProps } from './modules/RecordLayout/RecordLayout.tsx';
 export { RecordPanel, type RecordPanelProps, type RecordPanelTab } from './modules/RecordPanel/RecordPanel.tsx';
 export {
   SettingsLayout,

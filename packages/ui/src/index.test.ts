@@ -80,6 +80,7 @@ describe('@crm/ui', () => {
       'Rating',
       'RecordChip',
       'RecordHeader',
+      'RecordLayout',
       'RecordPanel',
       'RelativeTime',
       'RemoteCursor',
