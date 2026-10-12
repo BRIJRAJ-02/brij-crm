@@ -1382,6 +1382,9 @@ describe('jobs', () => {
     fail = false;
     await view.reload();
     expect(view.getSnapshot()).toMatchObject({ status: 'ready', jobs: [{ status: 'queued' }] });
+  });
+});
+
 describe('objects in settings (spec 0012)', () => {
   const PROJECTS: ObjectSummary = {
     id: '0199a6f2-0000-7000-8000-0000000000c1',

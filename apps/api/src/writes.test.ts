@@ -161,6 +161,35 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     });
     return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [made.id], mutation_id: mutationId }];
   },
+  // Object writes (spec 0012): one definitions row naming the object, no attributes (the object itself changed).
+  'objects.create': async (m, mutationId) => {
+    const made = await m.client.objects.create({
+      workspace: m.slug,
+      id: newId(),
+      singularName: 'Project',
+      pluralName: 'Projects',
+      icon: 'folder',
+      hue: 'blue',
+      mutationId,
+    });
+    return [{ kind: 'definitions', object_id: made.id, attribute_ids: [], mutation_id: mutationId }];
+  },
+  'objects.update': async (m, mutationId) => {
+    await m.client.objects.update({ workspace: m.slug, objectId: m.people.id, pluralName: 'Contacts', mutationId });
+    return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [], mutation_id: mutationId }];
+  },
+  'objects.reorder': async (m, mutationId) => {
+    await m.client.objects.reorder({ workspace: m.slug, objectId: m.people.id, position: 2, mutationId });
+    return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [], mutation_id: mutationId }];
+  },
+  'objects.archive': async (m, mutationId) => {
+    await m.client.objects.archive({ workspace: m.slug, objectId: m.people.id, mutationId });
+    return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [], mutation_id: mutationId }];
+  },
+  'objects.restore': async (m, mutationId) => {
+    await m.client.objects.restore({ workspace: m.slug, objectId: m.people.id, mutationId });
+    return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [], mutation_id: mutationId }];
+  },
   // Background jobs (spec 0008): one jobs row per write, naming the job.
   'jobs.startTest': async (m, mutationId) => {
     const job = await m.client.jobs.startTest({ workspace: m.slug, id: newId(), items: 3, mutationId });
@@ -196,30 +225,6 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'records.setValuesBatch': 3,
   'jobs.cancel': 2,
   'jobs.confirm': 2,
-  // Object writes (spec 0012): one definitions row naming the object, no attributes (the object itself changed).
-  'objects.create': async (m, mutationId) => {
-    const made = await m.client.objects.create({
-      workspace: m.slug,
-      id: newId(),
-      singularName: 'Project',
-      pluralName: 'Projects',
-      icon: 'folder',
-      hue: 'blue',
-      mutationId,
-    });
-    return [{ kind: 'definitions', object_id: made.id, attribute_ids: [], mutation_id: mutationId }];
-  'objects.update': async (m, mutationId) => {
-    await m.client.objects.update({ workspace: m.slug, objectId: m.people.id, pluralName: 'Contacts', mutationId });
-    return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [], mutation_id: mutationId }];
-  'objects.reorder': async (m, mutationId) => {
-    await m.client.objects.reorder({ workspace: m.slug, objectId: m.people.id, position: 2, mutationId });
-    return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [], mutation_id: mutationId }];
-  'objects.archive': async (m, mutationId) => {
-    await m.client.objects.archive({ workspace: m.slug, objectId: m.people.id, mutationId });
-    return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [], mutation_id: mutationId }];
-  'objects.restore': async (m, mutationId) => {
-    await m.client.objects.restore({ workspace: m.slug, objectId: m.people.id, mutationId });
-    return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [], mutation_id: mutationId }];
 };
 
 describe('the one write path', () => {
