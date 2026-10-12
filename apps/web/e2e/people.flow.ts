@@ -64,7 +64,7 @@ test.describe('the People table', () => {
     await page.getByRole('button', { name: 'New person' }).first().click();
     const blank = page.getByRole('dialog', { name: 'New person' });
     await blank.getByRole('button', { name: 'Create' }).click();
-    await expect(blank.getByText('Name is required.')).toBeVisible();
+    await expect(blank.getByText('Name the person.')).toBeVisible();
     await expect(blank.getByLabel('First name')).toHaveAttribute('aria-invalid', 'true');
     await blank.getByRole('button', { name: 'Cancel' }).click();
     await expect(blank).toBeHidden();

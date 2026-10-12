@@ -112,7 +112,9 @@ async function signOut(page: Page): Promise<void> {
   const button = page.getByRole('button', { name: /workspace menu/ });
   await button.focus();
   await page.keyboard.press('Enter');
-  await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
+  // Settings comes first (spec 0012); Sign out is next.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/sign-in$/);
 }
@@ -201,6 +203,9 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await page.keyboard.press('Enter');
   await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
   await checkScreen(page, '7-workspace-menu');
+  // Settings comes first (spec 0012); Sign out is next.
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeFocused();
   await page.keyboard.press('Enter');
   await expect(page).toHaveURL(/\/sign-in$/);
   // A one field page: focus in the field, not on the heading.

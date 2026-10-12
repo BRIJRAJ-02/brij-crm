@@ -107,7 +107,11 @@ test.describe('the core loop by keyboard', () => {
     await page.keyboard.type('Grace');
     await page.keyboard.press('Tab');
     await page.keyboard.type('Hopper');
+    // Email waits behind "Add more fields" (spec 0012), the next stop; Enter opens it.
     await page.keyboard.press('Tab');
+    await focusedWithRing(page, dialog.getByRole('button', { name: /Add more fields/ }), 'Add more fields');
+    await page.keyboard.press('Enter');
+    await tabTo(page, dialog.getByLabel('Email address', { exact: true }), 6);
     await focusedWithRing(page, dialog.getByLabel('Email address', { exact: true }), 'Email address');
     await page.keyboard.type(`grace-${tag}@example.com`);
     await page.keyboard.press('ControlOrMeta+Enter');
@@ -154,6 +158,9 @@ test.describe('the core loop by keyboard', () => {
     await menu.focus();
     await focusedWithRing(page, menu, 'the workspace menu');
     await page.keyboard.press('Enter');
+    // Settings comes first (spec 0012); Down reaches Sign out.
+    await expect(page.getByRole('menuitem', { name: 'Settings' })).toBeFocused();
+    await page.keyboard.press('ArrowDown');
     await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeFocused();
     await page.keyboard.press('Enter');
     await expect(page).toHaveURL(/\/sign-in$/);
