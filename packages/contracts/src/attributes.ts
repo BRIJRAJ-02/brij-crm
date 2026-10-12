@@ -112,14 +112,47 @@ const AttributeTitle = z.string().trim().min(1, 'Name the attribute.').max(100, 
 /** An attribute's description: at most 500 characters (spec 0012). */
 const AttributeDescription = z.string().max(500, 'Keep the description to 500 characters.');
 
+/** An option's label: 1 to 100 characters, trimmed (spec 0012, AC-236). */
+export const OptionLabel = z.string().trim().min(1, 'Give the option a label.').max(100, 'Use at most 100 characters.');
+
+/** A status stage's outcome: still open, won or lost. */
+export const OptionOutcome = z.enum(['open', 'won', 'lost']);
+/** A status stage's outcome. */
+export type OptionOutcome = z.infer<typeof OptionOutcome>;
+
+/**
+ * A status stage's target time in stage, in whole days from 1 to 365, as an
+ * ISO 8601 duration (`P7D`), the one unit settings offer (spec 0012).
+ */
+export const TargetDays = z
+  .string()
+  .regex(/^P[1-9]\d{0,2}D$/, 'Give the target as whole days, from 1 to 365.')
+  .refine((value) => Number(value.slice(1, -1)) <= 365, 'Give the target as whole days, from 1 to 365.');
+
+/**
+ * One option a new select or status attribute starts with (spec 0012,
+ * AC-230): its client id (UUID v7), label and hue, and for a status stage its
+ * outcome and target time.
+ */
+export const NewAttributeOption = z.object({
+  id: z.uuid({ version: 'v7', message: 'An option id must be a UUID v7.' }),
+  label: OptionLabel,
+  hue: Hue,
+  outcome: OptionOutcome.optional(),
+  targetTimeInStage: TargetDays.optional(),
+});
+/** One option a new attribute starts with. */
+export type NewAttributeOption = z.infer<typeof NewAttributeOption>;
+
 /**
  * A new attribute (spec 0012, AC-229). `id` is a UUID v7 the browser mints
  * and the retry key: the same request again answers the attribute already
  * made. `apiSlug` is derived from `title` (`toApiSlug`) when absent; the
  * engine checks its shape (`CONFIG_INVALID` on `apiSlug`). `isMulti` makes a
  * Multi select, or allows several members, emails or phones. `config` and
- * `defaultValue` are checked by the type's own schemas. `mutationId` is the
- * write's own uuid, echoed in its event.
+ * `defaultValue` are checked by the type's own schemas. A select or status
+ * attribute takes its first `options` (at most 500 live, AC-237).
+ * `mutationId` is the write's own uuid, echoed in its event.
  */
 export const CreateAttributeInput = WorkspaceScoped.extend({
   objectId: z.uuid(),
@@ -133,6 +166,8 @@ export const CreateAttributeInput = WorkspaceScoped.extend({
   isUnique: z.boolean().optional(),
   config: z.record(z.string(), z.unknown()).optional(),
   defaultValue: AttributeDefault.optional(),
+  // Twice the limit, so a list a little over it still answers the engine's LIMIT_REACHED, and junk stops at parsing.
+  options: z.array(NewAttributeOption).max(1000, 'An attribute holds at most 500 options.').optional(),
   mutationId: z.uuid(),
 });
 /** A new attribute. */

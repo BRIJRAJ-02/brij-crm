@@ -180,7 +180,13 @@ export type CreateRecordInput = z.infer<typeof CreateRecordInput>;
  * and the change event names the version it replaced (spec 0006, AC-45,
  * AC-46). `ifVersionId` (undo, AC-49) lands the record's write only while the
  * cell is still at exactly that version: otherwise 409 `VERSION_CHANGED`,
- * naming the attribute, and nothing on the record is written.
+ * naming the attribute, and nothing on the record is written. In
+ * `setValues` (one record), a select or status value may be
+ * `{ newOption: { id, label } }`, and a multi select's list may hold one such
+ * item (spec 0012, AC-238): the option is made (the next hue; a status stage
+ * open) and set in the same transaction, or a live option with that label,
+ * ignoring case, is set instead. It needs `schema.manage` (403 `FORBIDDEN`,
+ * nothing written); a full attribute refuses `LIMIT_REACHED`.
  */
 export const ValueChangeInput = z.object({
   value: z.unknown(),

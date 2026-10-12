@@ -4,6 +4,7 @@ import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
 import { membersContract } from './members.ts';
 import { objectsContract } from './objects.ts';
+import { optionsContract } from './options.ts';
 import { realtimeContract } from './realtime.ts';
 import { recordsContract } from './records.ts';
 import { systemContract } from './system.ts';
@@ -19,6 +20,7 @@ export * from './jobs.ts';
 export * from './me.ts';
 export * from './members.ts';
 export * from './objects.ts';
+export * from './options.ts';
 export * from './realtime.ts';
 export * from './records.ts';
 export * from './system.ts';
@@ -38,6 +40,7 @@ export const contract = {
   workspaces: workspacesContract,
   objects: objectsContract,
   attributes: attributesContract,
+  options: optionsContract,
   records: recordsContract,
   members: membersContract,
   access: accessContract,
