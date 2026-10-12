@@ -19,6 +19,7 @@
     "test": "vitest run",
     "seed:scale": "node --env-file-if-exists=../../.env scripts/seed-scale.ts",
     "bench:scale": "node --env-file-if-exists=../../.env scripts/bench-scale.ts",
+    "bench:activity": "node --env-file-if-exists=../../.env scripts/bench-activity.ts",
     "member:add": "node --env-file-if-exists=../../.env scripts/add-member.ts"
   },
   "dependencies": {
