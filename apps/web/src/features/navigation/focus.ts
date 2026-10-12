@@ -46,3 +46,16 @@ export function focusPage(doc: Document, pathname: string): void {
     (field === undefined ? null : doc.querySelector<HTMLElement>(field)) ?? doc.querySelector<HTMLElement>('main h1');
   target?.focus();
 }
+
+/** A record page's address: its tab is the last segment (spec 0017). */
+const RECORD_PAGE = /^(\/w\/[^/]+\/objects\/[^/]+\/[^/]+)\/[^/]+\/?$/;
+
+/**
+ * Whether a route change is the same page showing another of its tabs (a
+ * record page's Overview to Activity), where focus stays on the tab the
+ * person chose rather than going back to the title.
+ */
+export function isSamePage(fromPath: string, toPath: string): boolean {
+  const from = RECORD_PAGE.exec(fromPath)?.[1];
+  return from !== undefined && from === RECORD_PAGE.exec(toPath)?.[1];
+}

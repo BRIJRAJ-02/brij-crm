@@ -19,7 +19,7 @@ import {
 import { useLiveStatus, useView } from '@crm/data/react';
 import { Badge, Button, Callout, EmptyState, isSystemOnly, Spinner, TopBar, useDelayedLoading, ViewBar } from '@crm/ui';
 import { columnWidthFor, DataGrid, type GridColumn } from '@crm/ui/grid';
-import { useRouteContext, useRouter } from '@tanstack/react-router';
+import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AddAttributeDialog } from './AddAttributeDialog.tsx';
 import { avatarAttribute, listedAttributes, queryOf } from './columns.ts';
@@ -128,6 +128,7 @@ function createEditors(
 export function RecordsScreen({ slug, object, attributes, members, view: warmed, sort: opening }: RecordsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const router = useRouter();
+  const navigate = useNavigate();
   // The column menu's sort, for this visit (spec 0006, AC-57): it replaces the order, and #20 saves it with a view.
   const [sort, setSort] = useState(opening);
   // The view for that sort: the warmed one until another sort's first rows are in, so the table never blanks.
@@ -300,6 +301,13 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
                 return refs.map((ref, index) => displayOf(ref, names[index] ?? 'loading'));
               }}
               rowHeader={rowHeader}
+              // A record's name opens its page (spec 0017); milestone 4 opens the side panel here instead.
+              onRowOpen={(recordId) => {
+                void navigate({
+                  to: '/w/$slug/objects/$object/$recordId/$tab',
+                  params: { slug, object: object.apiSlug, recordId, tab: 'overview' },
+                });
+              }}
               untitled={strings.unnamed(object.singularName)}
               {...(avatar === undefined
                 ? {}

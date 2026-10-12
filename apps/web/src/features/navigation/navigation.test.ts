@@ -2,7 +2,7 @@
 // against a stand in document: which element takes focus, and what the tab
 // is called.
 import { describe, expect, it } from 'vitest';
-import { focusFirstLoad, focusPage } from './focus.ts';
+import { focusFirstLoad, focusPage, isSamePage } from './focus.ts';
 import { documentTitle, followPageTitle } from './title.ts';
 
 /** A stand in document: the elements each selector finds, which record a focus, a title, and what has focus. */
@@ -135,5 +135,16 @@ describe('the document title', () => {
     expect(doc.title).toBe('Check your email · CRM');
     stop();
     expect(stopped).toBe(true);
+  });
+});
+
+describe('isSamePage', () => {
+  it('keeps focus when a record page shows another tab, and moves it for any other change', () => {
+    const page = '/w/acme/objects/people/0199a6f2-0000-7000-8000-000000000001';
+    const other = '/w/acme/objects/people/0199a6f2-0000-7000-8000-000000000002/overview';
+    expect(isSamePage(`${page}/overview`, `${page}/activity`)).toBe(true);
+    expect(isSamePage(`${page}/overview`, other)).toBe(false);
+    expect(isSamePage('/w/acme/objects/people', '/w/acme/objects/companies')).toBe(false);
+    expect(isSamePage(`${page}/overview`, '/w/acme/objects/people')).toBe(false);
   });
 });

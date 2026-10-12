@@ -10,7 +10,7 @@ import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { signInHref } from './features/auth/redirect.ts';
-import { focusFirstLoad, focusPage } from './features/navigation/focus.ts';
+import { focusFirstLoad, focusPage, isSamePage } from './features/navigation/focus.ts';
 import { followPageTitle } from './features/navigation/title.ts';
 import { jobFinishedToast } from './features/settings/toast.ts';
 import { jobsHref } from './features/workspace/objects.ts';
@@ -126,7 +126,8 @@ router.subscribe('onRendered', (event) => {
     });
     return;
   }
-  if (!event.pathChanged) return;
+  // Another tab of the same page keeps focus on the tab chosen (spec 0017).
+  if (!event.pathChanged || isSamePage(event.fromLocation.pathname, pathname)) return;
   requestAnimationFrame(() => {
     focusPage(document, pathname);
   });
