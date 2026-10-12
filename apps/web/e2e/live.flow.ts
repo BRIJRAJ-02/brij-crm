@@ -192,10 +192,10 @@ test.describe('live updates between two browsers', () => {
     const echoRefetches = writerRefetches;
     const columns = Number(await readerGrid.getAttribute('aria-colcount'));
     await writer.getByRole('button', { name: 'Add attribute' }).click();
-    const dialog = writer.getByRole('dialog', { name: 'Add attribute' });
-    await dialog.getByLabel('Name').fill(`Nickname ${tag}`);
+    const dialog = writer.getByRole('dialog', { name: 'New attribute' });
+    await dialog.getByLabel('Name', { exact: true }).fill(`Nickname ${tag}`);
     const addedAt = Date.now();
-    await dialog.getByRole('button', { name: 'Create' }).click();
+    await dialog.getByRole('button', { name: 'Create attribute' }).click();
     await reader.waitForFunction(
       ([count]) => Number(document.querySelector('[role="grid"]')?.getAttribute('aria-colcount')) > count,
       [columns] as const,

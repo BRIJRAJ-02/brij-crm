@@ -19,9 +19,11 @@ import {
 import { useLiveStatus, useView } from '@crm/data/react';
 import { Badge, Button, Callout, EmptyState, isSystemOnly, Spinner, TopBar, useDelayedLoading, ViewBar } from '@crm/ui';
 import { columnWidthFor, DataGrid, type GridColumn } from '@crm/ui/grid';
-import { useNavigate, useRouteContext, useRouter } from '@tanstack/react-router';
+import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AddAttributeDialog } from './AddAttributeDialog.tsx';
+import { ArchiveAttributeDialog } from '../settings/ArchiveAttributeDialog.tsx';
+import { AttributeDialog } from '../settings/AttributeDialog.tsx';
+import { strings as attributeStrings } from '../settings/attribute-strings.ts';
 import { avatarAttribute, listedAttributes, queryOf } from './columns.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
 import { strings } from './strings.ts';
@@ -127,7 +129,6 @@ function createEditors(
 /** One object's page: the TopBar with New <singular>, the ViewBar with Add attribute, and the table. */
 export function RecordsScreen({ slug, object, attributes, members, view: warmed, sort: opening }: RecordsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
-  const router = useRouter();
   const navigate = useNavigate();
   // The column menu's sort, for this visit (spec 0006, AC-57): it replaces the order, and #20 saves it with a view.
   const [sort, setSort] = useState(opening);
@@ -200,6 +201,11 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
   );
   const [isCreating, setCreating] = useState(false);
   const [isAdding, setAdding] = useState(false);
+  // The column menu's schema items (spec 0012): the attribute whose dialog or archive confirm is open.
+  const [editing, setEditing] = useState<AttributeDefinition | undefined>(undefined);
+  const [archiving, setArchiving] = useState<AttributeDefinition | undefined>(undefined);
+  // The column a create from the table just made: its header takes focus once it is drawn.
+  const [focusColumn, setFocusColumn] = useState<{ readonly id: string } | undefined>(undefined);
   // Only owners and admins change the schema (spec 0009, AC-136); the server refuses anyone else on its own.
   const canChangeSchema = useCan('schema.manage');
   const [focusRow, setFocusRow] = useState<{ readonly index: number } | undefined>(undefined);
@@ -367,6 +373,44 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
                 </EmptyState>
               }
               {...(focusRow === undefined ? {} : { focusRow })}
+              {...(focusColumn === undefined ? {} : { focusColumn })}
+              // The schema's entry points, for owners and admins only (spec 0012, AC-242): the "+" header and a
+              // column's Edit attribute and Archive attribute. System columns have none; the name never archives.
+              {...(canChangeSchema
+                ? {
+                    onAddColumn: () => {
+                      setAdding(true);
+                    },
+                    addColumnLabel: attributeStrings.addAttribute,
+                    columnActions: (columnId: string) => {
+                      const attribute = attributes.find((each) => each.id === columnId);
+                      if (attribute === undefined || attribute.isSystem) return [];
+                      return [
+                        {
+                          id: 'edit',
+                          label: attributeStrings.editAttribute,
+                          icon: 'pencil' as const,
+                          onAction: () => {
+                            setEditing(attribute);
+                          },
+                        },
+                        ...(attribute.isPrimary
+                          ? []
+                          : [
+                              {
+                                id: 'archive',
+                                label: attributeStrings.archiveAttribute,
+                                icon: 'archive' as const,
+                                isDanger: true,
+                                onAction: () => {
+                                  setArchiving(attribute);
+                                },
+                              },
+                            ]),
+                      ];
+                    },
+                  }
+                : {})}
             />
             <NewRecordDialog
               isOpen={isCreating}
@@ -384,14 +428,45 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
                 setFocusRow({ index });
               }}
             />
-            <AddAttributeDialog
-              isOpen={isAdding}
-              onOpenChange={setAdding}
-              onAdd={(input) => data.attributes.create(slug, { objectId: object.id, ...input })}
-              onAdded={(attribute) => {
+            {/* Add attribute, the "+" header and a column's Edit attribute: AttributeSettings (spec 0012). */}
+            <AttributeDialog
+              slug={slug}
+              objectId={object.id}
+              isOpen={isAdding || editing !== undefined}
+              attribute={isAdding ? undefined : editing}
+              members={members}
+              canManage={canChangeSchema}
+              onClose={() => {
                 setAdding(false);
-                toasts.toast({ tone: 'success', message: strings.attributeAdded(attribute.title) });
-                void router.invalidate();
+                setEditing(undefined);
+              }}
+              onSaved={(attribute, isNew) => {
+                setAdding(false);
+                setEditing(undefined);
+                toasts.toast({
+                  tone: 'success',
+                  message: isNew ? strings.attributeAdded(attribute.title) : attributeStrings.saved(attribute.title),
+                });
+                // The new column's header takes focus once the reloaded columns draw it.
+                if (isNew) setFocusColumn({ id: attribute.id });
+              }}
+            />
+            <ArchiveAttributeDialog
+              slug={slug}
+              attribute={archiving}
+              onClose={() => {
+                setArchiving(undefined);
+              }}
+              onArchived={(ends) => {
+                setArchiving(undefined);
+                const [first, second] = ends;
+                const titles =
+                  first === undefined
+                    ? ''
+                    : second === undefined
+                      ? first.title
+                      : attributeStrings.both(first.title, second.title);
+                toasts.toast({ tone: 'success', message: attributeStrings.archivedToast(titles) });
               }}
             />
           </>

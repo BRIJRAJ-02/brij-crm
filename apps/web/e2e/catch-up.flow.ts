@@ -168,6 +168,7 @@ test.describe('catch up after a long drop', () => {
     const nickname = (await rpc(writer, 'attributes/create', {
       workspace: slug,
       objectId: people.id,
+      id: uuidv7(),
       title: 'Nickname',
       type: 'text',
       mutationId: randomUUID(),

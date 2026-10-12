@@ -34,14 +34,9 @@ export const strings = {
   allRecords: (pluralName: string) => `All ${pluralName.toLowerCase()}`,
   /** The TopBar's action and the new record dialog's title ("New person"). */
   newRecord: (singularName: string) => `New ${singularName.toLowerCase()}`,
-  create: 'Create',
   creating: 'Creating',
   cancel: 'Cancel',
   addAttribute: 'Add attribute',
-  attributeName: 'Name',
-  attributeType: 'Type',
-  attributeNameMissing: 'Name the attribute.',
-  attributeNameTaken: 'An attribute with this name exists.',
   /** After Add attribute: the new column often lands off screen, so say it was added. */
   attributeAdded: (title: string) => `${title} added.`,
   /** New person with no name typed. */

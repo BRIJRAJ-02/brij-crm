@@ -23,26 +23,26 @@ test.describe('the People table', () => {
     await expect(page.getByRole('button', { name: 'New person' })).toHaveCount(2);
     await checkScreen(page, '1-people-empty');
 
-    // Add attribute: a name and a type; the column appears once the server agrees (AC-37).
+    // Add attribute (spec 0012, AttributeSettings): a name and a type; the column appears once the server agrees.
     const columnsBefore = Number(await grid.getAttribute('aria-colcount'));
     await page.getByRole('button', { name: 'Add attribute' }).click();
-    const addDialog = page.getByRole('dialog', { name: 'Add attribute' });
+    const addDialog = page.getByRole('dialog', { name: 'New attribute' });
     await expect(addDialog).toBeVisible();
-    await addDialog.getByLabel('Name').fill('Nickname');
+    await addDialog.getByLabel('Name', { exact: true }).fill('Nickname');
     await checkScreen(page, '2-add-attribute');
-    await addDialog.getByRole('button', { name: 'Create' }).click();
+    await addDialog.getByRole('button', { name: 'Create attribute' }).click();
     await expect(addDialog).toBeHidden();
     await expect.poll(async () => Number(await grid.getAttribute('aria-colcount'))).toBe(columnsBefore + 1);
     await expect(page.getByText('Nickname added.')).toBeVisible();
     await showColumn(page, 'Nickname');
 
-    // The same name again is refused inline, on the name field.
+    // The same name again takes the same API name, refused inline on that field.
     await page.getByRole('button', { name: 'Add attribute' }).click();
-    await addDialog.getByLabel('Name').fill('Nickname');
-    await addDialog.getByRole('button', { name: 'Type' }).click();
-    await page.getByRole('option', { name: 'Number' }).click();
-    await addDialog.getByRole('button', { name: 'Create' }).click();
-    await expect(addDialog.getByText('An attribute with this name exists.')).toBeVisible();
+    await addDialog.getByLabel('Name', { exact: true }).fill('Nickname');
+    await addDialog.getByRole('button', { name: /Type$/ }).click();
+    await page.getByRole('option', { name: 'Rating' }).click();
+    await addDialog.getByRole('button', { name: 'Create attribute' }).click();
+    await expect(addDialog.getByText('An attribute here already uses this API name. Pick another.')).toBeVisible();
     await checkScreen(page, '3-add-attribute-taken');
     await addDialog.getByRole('button', { name: 'Cancel' }).click();
     await expect(addDialog).toBeHidden();

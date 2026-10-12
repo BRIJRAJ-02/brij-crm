@@ -17,8 +17,30 @@ Spec 0012, milestone 1 (objects and attributes, #13), and spec 0008 (background 
 ## An object's settings (`/w/$slug/settings/objects/$object/$tab`, ObjectSettingsScreen)
 
 - **Purpose**: one object, standard or custom alike, under its tile, name and Standard or Custom badge, in two tabs.
-- **Main task**: read its attributes (Attributes), and rename, restyle, archive or restore it (Configuration).
-- **Leaves out**: adding, editing, reordering and archiving attributes (milestone 2), and changing the API name (never).
+- **Main task**: add, edit, move, archive and restore its attributes (Attributes), and rename, restyle, archive or restore it (Configuration).
+- **Leaves out**: types with setup and options (milestone 3), and changing the API name (never).
+
+## An object's attributes (the Attributes tab, AttributesTab)
+
+- **Purpose**: the object's attributes as every table of it shows them: its own by position, the system ones, the archived ones.
+- **Main task**: owners and admins add one (New attribute, in the page's header), open one to edit it (a row, or Edit in its menu; the address gains `?attribute=<id>`, so a link opens the same dialog), move one (drag its handle, or Move up and Move down), archive one (a confirm; not the name) and restore one from Archived.
+- **Leaves out**: options, type settings and the "Default archived" note (milestone 3), groups (#18) and the schema map (#56).
+
+A meter "Attributes, N of 250" for owners and admins (a skeleton until `usage.get` answers), then the own attributes' Table (type icon and title, the type, badges for Primary, Required, Unique and Default, and a row menu), the system ones in a sunken Card, read only (a row opens them read only), and an Archived Disclosure: Restore on each, or, for a relationship end whose other object is archived, "Links to <Plural>, which is archived" and no Restore of its own. A move says the new place in a toast. `?attribute=` naming nothing this person can open here is removed, and nothing opens.
+
+## The attribute dialog (AttributeDialog)
+
+- **Purpose**: create or edit one attribute, from settings, the table's "+" header, its column menu or the view bar's Add attribute.
+- **Main task**: name it, pick one of the ten types without setup (Text, Long text, Date, Checkbox, Rating, Email, Phone, Link, Location, Member), set Required, Unique and Allow multiple where the type takes them and a default, then Create attribute or Save.
+- **Leaves out**: Number, Currency, Select, Multi select and Status (milestone 3), Relationship (#15) and changing a type (#14).
+
+The library's AttributeSettings, connected: one id minted per opening (a retry sends the same one), the write through the data layer and server confirmed, refusals on the setting they name (a taken API name on API name), an edit sending only what changed. A system attribute, or anyone without `schema.manage`, sees it read only with Close.
+
+## Attribute archive confirm (ArchiveAttributeDialog)
+
+- **Purpose**: make archiving an attribute deliberate, standard objects' included.
+- **Main task**: read that its values are kept (and, for a relationship end, that the other end goes with it), then Archive <title> or Cancel.
+- **Leaves out**: deleting values; Restore in the Archived section brings it back at its old place.
 
 ## Archive confirm (ArchiveObjectDialog)
 
