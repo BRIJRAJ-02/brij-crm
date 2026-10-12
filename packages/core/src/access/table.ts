@@ -48,6 +48,12 @@ export const ACCESS_TABLE = {
   restoreAttributes: { permission: 'schema.manage' },
   defineOption: { permission: 'schema.manage' },
   updateOption: { permission: 'schema.manage' },
+  // Settings' option writes (spec 0012, milestone 3).
+  createOption: { permission: 'schema.manage' },
+  editOption: { permission: 'schema.manage' },
+  moveOption: { permission: 'schema.manage' },
+  archiveOption: { permission: 'schema.manage' },
+  restoreOption: { permission: 'schema.manage' },
   defineRelationship: { permission: 'schema.manage' },
   defineList: { permission: 'schema.manage' },
   // Removing records for good.

@@ -16,6 +16,7 @@ import { decodeValue, encodeValue, sameItems } from './columns.ts';
 import { canonicalId, canonicalKeys, checkId, isUuid, isUuidV7 } from './ids.ts';
 import { isRefusal, postgresError, refuse, refuseAll, versionChangedMessage } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
+import { resolveNewOptions } from './new-option.ts';
 import { LINK_CELL_CAP, linkValues, writeLinks } from './relationships.ts';
 import {
   checkWriter,
@@ -417,7 +418,7 @@ export async function setValues(
   input: RecordValues | EntryValues,
   hooks: readonly AfterWrite[] = [],
 ): Promise<Record<string, AttributeResult>> {
-  const { result } = await runWrite(scope, (context) => updateRecord(context, input), hooks);
+  const { result } = await runWrite(scope, (context) => updateRecord(context, input, undefined, true), hooks);
   return result;
 }
 
@@ -479,6 +480,8 @@ async function updateOwner(
   context: WriteContext,
   input: RecordValues | EntryValues,
   visible?: ReadonlySet<string>,
+  /** One record's write (`setValues`) may make an option from a cell (`newOption`, spec 0012, AC-238); a batch may not. */
+  takesNewOptions = false,
 ): Promise<{
   results: Record<string, AttributeResult>;
   objectId?: string;
@@ -486,7 +489,9 @@ async function updateOwner(
 }> {
   const { tx } = context;
   const { ownerKind, ownerId, objectId, entry, attributes } = await lockOwner(tx, input, context.scope.access, visible);
-  const parsed = parseAll(attributes, canonicalKeys(input.values), context.scope);
+  const given = canonicalKeys(input.values);
+  const values = takesNewOptions ? await resolveNewOptions(context, attributes, given) : given;
+  const parsed = parseAll(attributes, values, context.scope);
   // Under the owner's lock, before anything is written: a cell that moved on refuses the whole owner.
   await checkVersions(tx, context.scope.workspaceId, ownerId, parsed);
   const results = await writeAll(context, ownerKind, ownerId, parsed);
@@ -577,8 +582,9 @@ async function updateRecord(
   context: WriteContext,
   input: RecordValues | EntryValues,
   visible?: ReadonlySet<string>,
+  takesNewOptions = false,
 ): Promise<Record<string, AttributeResult>> {
-  return (await updateOwner(context, input, visible)).results;
+  return (await updateOwner(context, input, visible, takesNewOptions)).results;
 }
 
 /**
@@ -621,7 +627,7 @@ export async function setRecordValues(
   readonly results: Record<string, AttributeResult>;
   readonly attributesByObject: ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>;
 }> {
-  const { result } = await runWrite(scope, (context) => updateOwner(context, input), hooks);
+  const { result } = await runWrite(scope, (context) => updateOwner(context, input, undefined, true), hooks);
   const { objectId } = result;
   return {
     results: result.results,

@@ -229,8 +229,8 @@ async function readDefinitions(scope: EngineScope, refs: readonly AttributeRef[]
   });
 }
 
-/** The one attribute a write changed, read back, or an error: a write answers what it made. */
-async function readOne(scope: EngineScope, ref: AttributeRef): Promise<AttributeDefinition> {
+/** The one attribute a write changed, read back, or an error: a write answers what it made (its options too). */
+export async function readOne(scope: EngineScope, ref: AttributeRef): Promise<AttributeDefinition> {
   const [made] = await readDefinitions(scope, [ref]);
   // Hidden from the caller since it was made (a replay under new rules): unknown to them.
   if (made === undefined) throw refuse('NOT_FOUND', ATTRIBUTE_NOT_FOUND);
@@ -252,6 +252,17 @@ export interface CreateAttributeInput {
   readonly isUnique?: boolean | undefined;
   readonly config?: Readonly<Record<string, unknown>> | undefined;
   readonly defaultValue?: AttributeDefault | undefined;
+  /** A select's or status attribute's first options, in order (AC-230): each with its client id. */
+  readonly options?: readonly NewAttributeOption[] | undefined;
+}
+
+/** One option a new select or status attribute starts with (AC-230); a stage's target time is `P<N>D`. */
+export interface NewAttributeOption {
+  readonly id: string;
+  readonly label: string;
+  readonly hue: Hue;
+  readonly outcome?: 'open' | 'won' | 'lost' | undefined;
+  readonly targetTimeInStage?: string | undefined;
 }
 
 /**
@@ -261,7 +272,8 @@ export interface CreateAttributeInput {
  * the attribute already made and writes nothing (AC-244). Refuses
  * `FORBIDDEN` without `schema.manage`, `NOT_FOUND` for an object that is
  * missing, archived or hidden, `SLUG_TAKEN` and `CONFIG_INVALID` on their
- * field, `LIMIT_REACHED` and `ID_TAKEN`.
+ * field, `LIMIT_REACHED` and `ID_TAKEN`. A select or status attribute is
+ * made with its first options in the same write (AC-230).
  */
 export async function createAttribute(
   scope: EngineScope,
@@ -289,6 +301,17 @@ export async function createAttribute(
       ...(input.isUnique === undefined ? {} : { isUnique: input.isUnique }),
       ...(input.config === undefined ? {} : { config: input.config }),
       ...(input.defaultValue === undefined ? {} : { defaultValue: input.defaultValue }),
+      ...(input.options === undefined
+        ? {}
+        : {
+            options: input.options.map((option) => ({
+              id: option.id,
+              label: option.label,
+              hue: option.hue,
+              ...(option.outcome === undefined ? {} : { outcome: option.outcome }),
+              ...(option.targetTimeInStage === undefined ? {} : { targetTimeInStage: option.targetTimeInStage }),
+            })),
+          }),
     },
     hooks,
   );

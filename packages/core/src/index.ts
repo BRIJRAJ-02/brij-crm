@@ -68,7 +68,17 @@ export {
   restoreAttributes,
   type CreateAttributeInput,
   type EditAttributeInput,
+  type NewAttributeOption,
 } from './attributes/attributes.ts';
+export {
+  archiveOption,
+  createOption,
+  editOption,
+  moveOption,
+  restoreOption,
+  type CreateOptionInput,
+  type EditOptionInput,
+} from './attributes/options.ts';
 export {
   addRecord,
   editRecord,

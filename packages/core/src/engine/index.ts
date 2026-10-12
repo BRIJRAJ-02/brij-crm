@@ -15,6 +15,7 @@ export {
   updateObject,
   type AttributeInput,
   type AttributeRef,
+  type InitialOption,
   type AttributeUpdate,
   type ObjectInput,
   type ObjectUpdate,
@@ -45,8 +46,10 @@ export {
   defineOption,
   listOptions,
   updateOption,
+  type InsertedOption,
   type OptionInput,
   type OptionOutcome,
+  type OptionRef,
   type OptionUpdate,
 } from './options.ts';
 export { type QueryClock, type WeekStart } from './query/compile.ts';

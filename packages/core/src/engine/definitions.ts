@@ -16,7 +16,8 @@ import {
   type AttributeType,
 } from '@crm/contracts/values';
 import { checkId, isUuid, isUuidV7, uuidArray } from './ids.ts';
-import { checkAttributeRoom, lockAttributeParent, takeCustomObject, type AttributeParent } from './limits.ts';
+import { checkAttributeRoom, limitsOf, lockAttributeParent, takeCustomObject, type AttributeParent } from './limits.ts';
+import { checkHue, checkLabel, checkTarget, hasStageSettings, type OptionOutcome } from './option-rules.ts';
 import { isRefusal, postgresError, refuse, refuseOn } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
 import { clearUniqueKeys, fillUniqueKeys, UNIQUE_TYPES } from './unique.ts';
@@ -27,7 +28,7 @@ import { requirePermission } from '../access/check.ts';
 import { attributeVisible } from '../access/visibility.ts';
 import { objectLevel, type Access } from '../access/policy.ts';
 
-const { attributes, members, objects, relationships, workspaceCounters } = schema;
+const { attributeOptions, attributes, members, objects, relationships, workspaceCounters } = schema;
 
 /** The longest description an attribute may have (spec 0012). */
 const MAX_DESCRIPTION = 500;
@@ -77,6 +78,20 @@ export interface AttributeInput {
   readonly description?: string;
   readonly config?: unknown;
   readonly defaultValue?: unknown;
+  /**
+   * A select's or status attribute's first options, in order, made in the
+   * same write (spec 0012, AC-230), at most the options limit (AC-237).
+   */
+  readonly options?: readonly InitialOption[];
+}
+
+/** One option an attribute is created with: a client id (UUID v7), its label and hue, and for a status stage its outcome and target time. */
+export interface InitialOption {
+  readonly id?: string;
+  readonly label: string;
+  readonly hue: string;
+  readonly outcome?: OptionOutcome;
+  readonly targetTimeInStage?: string | null;
 }
 
 /** What an attribute's settings may change to. Its type and multi setting change through #14. */
@@ -495,6 +510,7 @@ export async function insertAttribute(
   }
   const config = parseConfig(input.type, input.config);
   const defaultValue = parseDefault(input.type, input.isMulti ?? false, input.defaultValue);
+  const options = checkInitialOptions(scope, input);
   // The parent's row lock first: a replay is found under it, before the room check would count it twice.
   await lockAttributeParent(tx, parent);
   const id = input.id?.toLowerCase();
@@ -535,9 +551,81 @@ export async function insertAttribute(
       })
       .returning({ id: attributes.id });
     if (row === undefined) throw new Error('The attribute was not created.');
+    if (options.length > 0) await insertInitialOptions(tx, scope, row.id, input.type, options);
     context.record({ definitions: [{ ...parent, attributeIds: [row.id] }] });
     return { attributeId: row.id, replayed: false };
   });
+}
+
+/**
+ * Checks the options an attribute is created with (spec 0012, AC-230): only a
+ * select or status takes them, at most the options limit (AC-237), each with
+ * a label, a hue and (a status stage only) an outcome and target time, no two
+ * labels the same ignoring case, ids UUID v7. Refusals land on `options`.
+ */
+function checkInitialOptions(scope: EngineScope, input: AttributeInput): readonly InitialOption[] {
+  const options = input.options ?? [];
+  if (options.length === 0) return [];
+  if (input.type !== 'select' && input.type !== 'status') {
+    throw refuseOn('CONFIG_INVALID', 'Only select and status attributes have options.', 'options');
+  }
+  const limit = limitsOf(scope).optionsPerAttribute;
+  if (options.length > limit) {
+    throw refuse('LIMIT_REACHED', `An attribute holds at most ${String(limit)} options.`);
+  }
+  const labels = new Set<string>();
+  for (const option of options) {
+    checkLabel(option.label, 'options');
+    checkHue(option.hue, 'options');
+    checkTarget(option.targetTimeInStage, 'options');
+    if (option.id !== undefined && !isUuidV7(option.id)) {
+      throw refuseOn('CONFIG_INVALID', 'Each option id must be a UUID v7.', 'options');
+    }
+    if (input.type !== 'status' && hasStageSettings(option)) {
+      throw refuseOn('CONFIG_INVALID', 'Only status stages have an outcome and a target time.', 'options');
+    }
+    const key = option.label.trim().toLowerCase();
+    if (labels.has(key)) {
+      throw refuseOn(
+        'CONFIG_INVALID',
+        `Two options are called ${option.label.trim()}. Give each its own label.`,
+        'options',
+      );
+    }
+    labels.add(key);
+  }
+  return options;
+}
+
+/** Inserts a new attribute's first options in one statement, in the order given; a status stage is open unless said otherwise. */
+async function insertInitialOptions(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  attributeId: string,
+  type: AttributeType,
+  options: readonly InitialOption[],
+): Promise<void> {
+  try {
+    await tx.insert(attributeOptions).values(
+      options.map((option, position) => ({
+        ...(option.id === undefined ? {} : { id: option.id.toLowerCase() }),
+        workspaceId: scope.workspaceId,
+        attributeId,
+        label: option.label.trim(),
+        hue: option.hue,
+        position,
+        outcome: type === 'status' ? (option.outcome ?? 'open') : null,
+        targetTimeInStage: option.targetTimeInStage ?? null,
+        ...audit(scope),
+      })),
+    );
+  } catch (error) {
+    const pg = postgresError(error);
+    if (pg?.code === '23505' && pg.constraint === 'attribute_options_pkey') {
+      throw refuse('ID_TAKEN', 'An option with that id already exists.');
+    }
+    throw error;
+  }
 }
 
 /**
