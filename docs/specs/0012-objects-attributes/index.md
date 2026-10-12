@@ -331,3 +331,38 @@ Tracer Bullet: each milestone ends with something you can click in production.
 ## Open questions for the owner
 
 None open. Decided by the owner's acceptance of the recommended defaults for #11 to #22 (3 October 2026): archived objects and attributes count against limits while archived options don't; no Relationship entry until #15; members see settings read only; object names are unique ignoring case, archived ones included; the three starter stages Not started, In progress and Done. Decided in the cross check (8 October 2026): relationship sides get derived API names, not editable ones; archive and restore are separate procedures; creating an option from a cell is one write.
+
+## Calls made building milestone 1 (pending owner confirmation)
+
+Technical calls the spec left open, each the recommended default. The milestone's migration is `0029_objects_position` (journal `when` 1791754036499); 0027 and 0028 are left for the other lanes, to renumber at landing.
+
+- **The definitions store stays the cached lists plus a page reload.** Spec 0006's `useDefinitions` store isn't built here. The data layer keeps one cached list per workspace of every object (archived ones too: `objects.list` gives the live ones, `objects.all` all of them), the usage, and each object's attributes, and `onDefinitionsChange` reloads the routes (`router.invalidate()`) when a list comes back different, as People's columns already did. Build the store when the first reader that isn't a route loader arrives (record chips by `objectId`, the command palette, the record page). Until then AC-241's chip clause is not met: chips don't yet draw an object's tile.
+- **Object writes record their own object, with no attribute ids** (spec 0007's widened row), not a row naming no object. A tab then reads the objects and that object's attributes again, and every other held attribute list only when the set of archived objects changed (a rename, restyle or move changes no attribute). A definitions event drops a held usage and reloads the pages once, so only a settings page reads it again.
+- **A move's position is an index in the whole order, archived objects included,** so a restored object comes back at its place. Positions are dense from 0; a move renumbers every object in one statement under the counters row lock, the lock every object create now takes first.
+- **The archived by object rule** (`ARCHIVED_BY` in SQL, `isArchivedNow` in code) also covers one way references: archived once every target object is. Filters and sorts refuse any archived attribute (its own row or by object) as an unknown one, `FILTER_INVALID`. `archivedBy` names the far object only to someone who may see it.
+- **`attributes.list` carries select and status options inline now** (spec 0006, AC-59's half), so any object's table draws its select and status cells. A status stage's target time comes back as whole days, `P<N>D`.
+- **Engine refusals carry an optional `field`,** so `NAME_TAKEN`, `SLUG_TAKEN` and `CONFIG_INVALID` land on the input field they name. When a create clashes on both, the API name's clash answers first.
+- **A replayed create** (same id, same actor) answers the object already made and writes nothing; anyone else's object with that id answers `ID_TAKEN`. The id must be a UUID v7.
+- **`usage.get` is any member's,** filtered inside: the custom object count only with `schema.manage`, each object's count only for objects the caller sees, counting only the attributes they see (one grouped query under the open policy, row by row under rules).
+- **`toApiSlug` drops accents first** ("Café orders" gives `cafe_orders`), as `attributeSlugFrom` does; anything else outside a to z and digits becomes `_`.
+- **Descriptions are capped at 500 characters** in the engine now (milestone 2 sends them).
+- **The Attributes tab is read only in this milestone**: the attributes by position, then the system ones. An archived object's tab says to restore it first (the client doesn't read archived attributes yet).
+- **The create dialog sends only what the person touched**; the server applies the defaults it prefills. Required is checked on Create rather than as focus leaves an empty field (a field attribute's new `isRequiredOnSubmit`), so nothing moves under the pointer.
+- **A move from the row menu says the new place in a toast** ("Projects moved to 2 of 4."), the live announcement the screens ask for.
+- **Library variants added** (each with a README reason and a story): Table `onReorder` with `getRowLabel` and `isInline` columns, HuePicker `isLabelShown` and `isReadOnly`, Disclosure `fields`, `SettingsStack`, and the `archive-restore` icon. SettingsLayout is new. None of it is published to the artifact yet.
+
+Known gaps for later steps: positions count hidden objects, so under #24's rules a member could infer a hidden object's place (the security review's low finding; send positions within the caller's own list then). A name, API name or id clash can confirm a hidden object exists to a `schema.manage` holder (comes with workspace wide unique names). An API key holding `schema.manage` but no data scope can create an object it then can't read (fails closed). Object writes are not yet in an audit log (#36). Definitions events aren't batched per frame yet.
+
+## Design calls for the owner
+
+The most conservative choice consistent with the existing screens, for each question the spec and the design system don't settle.
+
+- **Settings sits in the workspace frame.** The TopBar holds the trail (Settings, Objects, the object) and the page's h1; SettingsLayout repeats the title as the page's second level heading, as RecordHeader does under a record's TopBar. The settings navigation is a `size-menu` column beside the page; the page is capped at `size-dialog-wide`.
+- **The icon is picked from a ghost button at the start of the name field** (opening IconPicker in a popover), and the colour is a labelled HuePicker under the names.
+- **A new object's colour** is the first hue no live object uses, per the spec, which is usually gray.
+- **Objects table**: tile and plural name, a Standard or Custom badge, "N attributes" (the limit's count: non system attributes, archived included), and a row menu (Open, Move up, Move down, Archive). Archived objects sit in a closed Archived disclosure with Restore.
+- **Members** see the same pages with a quiet note, no meter, handles or Save, colours read only, and Open alone in the row menu.
+- **The archived object's page** is an EmptyState, "<Plural> is archived", with Restore as the primary for owners and admins and "Back to <first live object>" for everyone.
+- **The create dialog on People** asks for the name first; Email and the rest wait behind "Add more fields" (spec 0012's generic order replaces spec 0005's name and email). Its primary reads "Create <singular>".
+- **The danger zone** is a plain Card whose action is a danger Button; Card has no danger tone.
+- **System attributes** sit in a sunken Card titled System, under the object's own attributes.
