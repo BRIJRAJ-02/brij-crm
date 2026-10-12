@@ -81,6 +81,7 @@ describe('attributes.create needs schema.manage (AC-135)', () => {
         member.attributes.create({
           workspace: slug,
           objectId: people.id,
+          id: newId(),
           title: 'Nickname',
           type: 'text',
           mutationId: newId(),
@@ -97,6 +98,7 @@ describe('attributes.create needs schema.manage (AC-135)', () => {
     const made = await admin.attributes.create({
       workspace: slug,
       objectId: people.id,
+      id: newId(),
       title: 'Nickname',
       type: 'text',
       mutationId: newId(),

@@ -157,11 +157,48 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     const made = await m.client.attributes.create({
       workspace: m.slug,
       objectId: m.people.id,
+      id: newId(),
       title: 'Lead score',
       type: 'number',
       mutationId,
     });
     return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [made.id], mutation_id: mutationId }];
+  },
+  // Attribute writes (spec 0012, milestone 2): one definitions row per object, naming the attributes changed.
+  'attributes.update': async (m, mutationId) => {
+    const attributeId = m.attribute('job_title');
+    await m.client.attributes.update({ workspace: m.slug, attributeId, title: 'Role', mutationId });
+    return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [attributeId], mutation_id: mutationId }];
+  },
+  'attributes.reorder': async (m, mutationId) => {
+    const attributeId = m.attribute('job_title');
+    await m.client.attributes.reorder({ workspace: m.slug, attributeId, position: 0, mutationId });
+    return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [attributeId], mutation_id: mutationId }];
+  },
+  'attributes.archive': async (m, mutationId) => {
+    // A relationship's end: both ends archive, one row for each object.
+    const ends = await m.client.attributes.archive({
+      workspace: m.slug,
+      attributeId: m.attribute('company'),
+      mutationId,
+    });
+    return ends
+      .map((end) => ({
+        kind: 'definitions',
+        object_id: end.objectId,
+        attribute_ids: [end.id],
+        mutation_id: mutationId,
+      }))
+      .sort((a, b) => a.object_id.localeCompare(b.object_id));
+  },
+  'attributes.restore': async (m, mutationId) => {
+    const attributeId = m.attribute('job_title');
+    await m.client.attributes.archive({ workspace: m.slug, attributeId, mutationId: newId() });
+    await m.client.attributes.restore({ workspace: m.slug, attributeId, mutationId });
+    return [
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: [attributeId] },
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: [attributeId], mutation_id: mutationId },
+    ];
   },
   // Object writes (spec 0012): one definitions row naming the object, no attributes (the object itself changed).
   'objects.create': async (m, mutationId) => {
@@ -227,6 +264,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'records.setValuesBatch': 3,
   'jobs.cancel': 2,
   'jobs.confirm': 2,
+  'attributes.restore': 2,
 };
 
 describe('the one write path', () => {
@@ -274,6 +312,8 @@ describe('the one write path', () => {
       m.client.attributes.create({
         workspace: m.slug,
         objectId: m.people.id,
+        id: newId(),
+        apiSlug: 'name',
         title: 'Name',
         type: 'text',
         mutationId: newId(),

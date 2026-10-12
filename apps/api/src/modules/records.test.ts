@@ -778,6 +778,7 @@ describe("another workspace's ids, sent from inside your own", () => {
           b.client.attributes.create({
             ...own,
             objectId: a.people.id,
+            id: newId(),
             title: 'Mole',
             type: 'text',
             mutationId: newId(),
