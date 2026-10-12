@@ -3,6 +3,15 @@ export const strings = {
   product: 'CRM',
   workspaceMenu: 'Workspace',
   signOut: 'Sign out',
+  /** An archived object's address (spec 0012, AC-226). */
+  objectArchived: (plural: string) => `${plural} is archived`,
+  objectArchivedText: 'Its records are kept. Restore it to bring it back to the sidebar with everything it held.',
+  objectArchivedMemberText: 'Its records are kept. A workspace owner or admin can restore it.',
+  objectRestored: (plural: string) => `${plural} restored.`,
+  restore: 'Restore',
+  restoring: 'Restoring',
+  backTo: (plural: string) => `Back to ${plural}`,
+  openSettings: 'Open settings',
   signingOut: 'Signing out',
   signOutFailed: 'Couldn’t sign out. Check your connection, then try again.',
   records: 'Records',
@@ -38,6 +47,12 @@ export const strings = {
   attributeAdded: (title: string) => `${title} added.`,
   /** New person with no name typed. */
   recordNameMissing: (singularName: string) => `Name the ${singularName.toLowerCase()}.`,
+  /** A required field left empty in the create dialog (spec 0012, AC-240). */
+  valueMissing: (title: string) => `${title} is required. Give it a value.`,
+  /** The create dialog's primary ("Create person"). */
+  createRecord: (singularName: string) => `Create ${singularName.toLowerCase()}`,
+  /** The create dialog's way to the attributes that aren't asked for first. */
+  addMoreFields: 'Add more fields',
   /** While another order's first rows load (spec 0006, AC-57). */
   sorting: 'Sorting',
   retry: 'Retry',

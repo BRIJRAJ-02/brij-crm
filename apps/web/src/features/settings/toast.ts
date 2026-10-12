@@ -1,6 +1,6 @@
 // The toast a job this browser started raises when it ends (spec 0008, AC-119).
 import type { JobView, Notice } from '@crm/data';
-import { strings } from './strings.ts';
+import { strings } from './jobs-strings.ts';
 
 const number = new Intl.NumberFormat();
 

@@ -1,6 +1,6 @@
 // Brief
 // Purpose: the frame every page inside a workspace sits in: the sidebar beside the page.
-// Main task: move between the workspace's records (People in this loop), switch the theme and sign out; undo (⌘Z).
+// Main task: move between the workspace's objects, open Settings, switch the theme and sign out; undo (⌘Z).
 // Leaves out: switching or creating workspaces, Quick actions, favourites and lists (#23 and later).
 import type { DataLayer, ObjectSummary } from '@crm/data';
 import {
@@ -19,7 +19,7 @@ import {
 import type { ThemeController } from '@crm/ui/theme';
 import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useState, type ReactNode } from 'react';
-import { jobsHref, navObjects, objectHref } from './objects.ts';
+import { jobsHref, navObjects, objectHref, settingsHref } from './objects.ts';
 import { strings } from './strings.ts';
 import { UNDO_KEYS } from './undo.ts';
 import { useUndoShortcut } from './useUndoShortcut.ts';
@@ -112,10 +112,18 @@ export function WorkspaceFrame({
               }}
             >
               {roleLabel === undefined ? (
-                <MenuItem id="sign-out">{strings.signOut}</MenuItem>
+                <>
+                  <MenuItem id="settings" icon="settings" href={settingsHref(slug)}>
+                    {strings.settings}
+                  </MenuItem>
+                  <MenuItem id="sign-out">{strings.signOut}</MenuItem>
+                </>
               ) : (
-                // The person's role heads the menu (spec 0009, AC-136).
+                // The person's role heads the menu (spec 0009, AC-136); Settings sits above Sign out (spec 0012).
                 <MenuSection label={roleLabel}>
+                  <MenuItem id="settings" icon="settings" href={settingsHref(slug)}>
+                    {strings.settings}
+                  </MenuItem>
                   <MenuItem id="sign-out">{strings.signOut}</MenuItem>
                 </MenuSection>
               )}

@@ -3,9 +3,13 @@
 // without pulling the frame into the first load.
 import type { ObjectSummary } from '@crm/data';
 
-/** The objects the sidebar lists in this loop: People, the one object with a table so far (spec 0005). */
+/**
+ * The objects the sidebar lists: every live object, standard and custom, in
+ * the workspace's order (spec 0012, AC-225). The data layer already leaves
+ * out archived ones and the ones the person can't see.
+ */
 export function navObjects(objects: readonly ObjectSummary[]): readonly ObjectSummary[] {
-  return objects.filter((object) => object.standardKey === 'people');
+  return [...objects].filter((object) => !object.isArchived).sort((a, b) => a.position - b.position);
 }
 
 /** The page of one object in a workspace. */
@@ -14,3 +18,5 @@ export const objectHref = (slug: string, object: Pick<ObjectSummary, 'apiSlug'>)
 
 /** Settings, Background jobs (spec 0008). */
 export const jobsHref = (slug: string) => `/w/${slug}/settings/jobs`;
+/** Settings, Objects (spec 0012): where a workspace with no live object opens, and the workspace menu's Settings. */
+export const settingsHref = (slug: string) => `/w/${slug}/settings/objects`;

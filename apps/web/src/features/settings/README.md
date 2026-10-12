@@ -1,15 +1,47 @@
 # Settings
 
-## `/w/$slug/settings/jobs` (JobsScreen)
+Spec 0012, milestone 1 (objects and attributes, #13), and spec 0008 (background jobs, #8). Every settings page sits in the workspace frame through `SettingsPage`: the TopBar holds the trail and the page's h1, then the library's `SettingsLayout` holds the settings navigation (Objects and Background jobs; #23 and later add theirs) beside the page. Settings opens from the workspace menu, above Sign out, the one way in. The routes load lazily, outside the first load. Each page keeps its own copy: `strings.ts` for the objects pages, `jobs-strings.ts` for Background jobs.
+
+## Settings, Objects (`/w/$slug/settings/objects`, ObjectsScreen)
+
+- **Purpose**: every object, standard and custom, in the workspace's order (the sidebar's), and the archived ones.
+- **Main task**: owners and admins create an object, move one (drag its handle, or Move up and Move down in its row menu), archive one, restore one from Archived, or open one.
+- **Leaves out**: an object's own settings (its page), the schema map (#56) and usage beyond the custom object meter (#38).
+
+## New object (NewObjectDialog)
+
+- **Purpose**: make a custom object (Projects, Partners).
+- **Main task**: name one and many (the plural follows the singular plus "s" until edited), keep or change the API name (it follows the plural through the server's own `toApiSlug` until edited), pick an icon and a colour, then Create object; the object opens on its Attributes tab.
+- **Leaves out**: attributes: the object starts with its text Name and the five system attributes.
+
+## An object's settings (`/w/$slug/settings/objects/$object/$tab`, ObjectSettingsScreen)
+
+- **Purpose**: one object, standard or custom alike, under its tile, name and Standard or Custom badge, in two tabs.
+- **Main task**: read its attributes (Attributes), and rename, restyle, archive or restore it (Configuration).
+- **Leaves out**: adding, editing, reordering and archiving attributes (milestone 2), and changing the API name (never).
+
+## Archive confirm (ArchiveObjectDialog)
+
+- **Purpose**: make archiving an object a deliberate step, standard objects included.
+- **Main task**: read how many records it holds and that they stay, then Archive <plural> or Cancel.
+- **Leaves out**: deleting anything; it is restored from Archived, the Configuration tab or the object's own address.
+
+## Settings, Background jobs (`/w/$slug/settings/jobs`, JobsScreen)
 
 - **Purpose**: Settings, Background jobs (spec 0008, AC-118): the workspace's long work, with its progress, live.
 - **Main task**: see how a job is doing and cancel it, with a confirm. Owners and admins (`jobs.manage`) see every job, system ones included; members see their own.
-- **Leaves out**: confirming a prepared job and retry controls (spec 0008 milestone 2), the daily cleanup's details (milestone 3), and the rest of Settings (#13 brings `SettingsLayout`; until then the page sits in the workspace frame, with a Settings section in the sidebar).
+- **Leaves out**: confirming a prepared job and retry controls (spec 0008 milestone 2), the daily cleanup's details (milestone 3). It sits in `SettingsPage` beside Objects, its table and states inside SettingsLayout's body.
 
-Built from library parts only: TopBar, Table, Badge (the status), ProgressBar ("done of total", indeterminate when the size isn't known), RelativeTime, Button, Modal (the cancel confirm, `tone="danger"`) and EmptyState (loading, empty, and error with Try again). "Run a test job" shows for `jobs.manage` locally and in previews (AC-123): 20,000 synthetic items, every 50th refused, so the bar and the refusal summary both show.
+Built from library parts only: SettingsLayout (through `SettingsPage`), Table, Badge (the status), ProgressBar ("done of total", indeterminate when the size isn't known), RelativeTime, Button, Modal (the cancel confirm, `tone="danger"`) and EmptyState (loading, empty, and error with Try again). "Run a test job" shows for `jobs.manage` locally and in previews (AC-123): 20,000 synthetic items, every 50th refused, so the bar and the refusal summary both show.
 
 ## The finish toast (toast.ts)
 
 - **Purpose**: tell the person when a job they started in this browser ends while the app is open (AC-119).
 - **Main task**: say how it ended ("Test job: Done", "Test job: Done, 6 refused", "Failed", "Cancelled"), with View, which opens the Background jobs page.
 - **Leaves out**: jobs started elsewhere, and notifications that outlive the tab (#28).
+
+## Notes
+
+- Every write here waits for the server (definition writes are never optimistic): the button spins with its ongoing verb, a refusal lands on the field it names (`NAME_TAKEN` on the name, `SLUG_TAKEN` and a reserved API name on API name) or in the form's banner, and once a write lands the data layer reads the objects again and every page reloads, so the sidebar and this page show the change, as every other member's do.
+- Members open every page read only: no New object, meter, handles, Archive or Save, a quiet Callout saying only owners and admins can change objects, and the row menu holds Open alone. The server refuses them 403 anyway.
+- States: while a page loads its header and rows hold their places (skeletons); a failed read shows an EmptyState with Retry in place of the page's body, and the navigation stays usable. An unknown object or tab says so inside the frame, with the way back to Objects.

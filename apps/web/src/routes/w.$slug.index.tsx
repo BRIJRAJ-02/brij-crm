@@ -5,16 +5,18 @@ import { navObjects } from '../features/workspace/objects.ts';
 import { strings } from '../features/workspace/strings.ts';
 import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
-// A workspace opens on People (spec 0005): the object with the `people`
-// template key, by its address. The frame above says "not found" when the
-// workspace is missing, so this route only waits for it then. A workspace
-// with no objects to list says so plainly, with nowhere to loop back to.
+// A workspace opens on its first live object by the workspace's order (spec
+// 0012, AC-226), by its address, or on Settings, Objects when none is live.
+// The frame above says "not found" when the workspace is missing, so this
+// route only waits for it then (and shows the frame's own page).
 export const Route = createFileRoute('/w/$slug/')({
   loader: async ({ context, params }) => {
     const objects = await context.data.objects.list(params.slug).catch((error: unknown) => {
-      if (isDataError(error) && error.code === 'NOT_FOUND') return [];
+      if (isDataError(error) && error.code === 'NOT_FOUND') return undefined;
       throw error;
     });
+    // The frame shows "Workspace not found" for an unknown one.
+    if (objects === undefined) return;
     const [first] = navObjects(objects);
     if (first !== undefined) {
       throw redirect({
@@ -23,6 +25,7 @@ export const Route = createFileRoute('/w/$slug/')({
         replace: true,
       });
     }
+    throw redirect({ to: '/w/$slug/settings/objects', params: { slug: params.slug }, replace: true });
   },
   pendingComponent: () => <WorkspacePage page={pendingPage()} />,
   errorComponent: IndexError,

@@ -1,62 +1,99 @@
-import type { JobStatus } from '@crm/data';
-
-/** Settings, Background jobs: the page's copy (spec 0008, AC-118, AC-119). */
+/** Settings' copy (spec 0012): the frame, Objects, the new object dialog, an object's tabs and the archive confirm. */
 export const strings = {
-  /** The page's title, and its sidebar entry. */
-  title: 'Background jobs',
-  tableLabel: 'Background jobs',
-  columns: {
-    job: 'Job',
-    startedBy: 'Started by',
-    status: 'Status',
-    progress: 'Progress',
-    started: 'Started',
-    finished: 'Finished',
-    result: 'Result',
-    actions: 'Actions',
-  },
-  status: {
-    preparing: 'Preparing',
-    ready: 'Needs confirm',
-    queued: 'Queued',
-    running: 'Running',
-    cancelling: 'Cancelling',
-    succeeded: 'Done',
-    failed: 'Failed',
-    cancelled: 'Cancelled',
-  } satisfies Record<JobStatus, string>,
-  system: 'System',
-  removedMember: 'A removed member',
-  /** "250 of 1,000", the counts formatted in the browser's language. */
-  progress: (done: string, total: string) => `${done} of ${total}`,
-  /** A job whose size isn't known yet. */
-  progressUnknown: (done: string) => `${done} so far`,
-  refused: (count: string) => `${count} refused`,
-  skipped: (count: string) => `${count} skipped`,
-  /** One refusal group: "100 refused: SIMULATED_REFUSAL". */
-  refusalGroup: (count: string, code: string) => `${count} refused: ${code}`,
-  retrying: 'Retrying',
-  notYet: 'Not yet',
+  settings: 'Settings',
+  /** The settings navigation's entries. */
+  objects: 'Objects',
+  objectsDescription: 'Shape the records your workspace keeps.',
+  newObject: 'New object',
+  creatingObject: 'Creating object',
+  createObject: 'Create object',
   cancel: 'Cancel',
-  cancelTitle: 'Cancel this job?',
-  /** The confirm's body, naming the job ("Test job"). */
-  cancelText: (label: string) => `${label} stops before its next batch. What it already did stays done.`,
-  dontCancel: 'Don’t cancel',
-  cancelling: 'Cancelling',
-  cancelJob: 'Cancel job',
-  showMore: 'Show more',
-  emptyTitle: 'No background jobs yet',
-  emptyText: 'Long work, such as bulk changes, runs here, with its progress.',
-  emptyMineText: 'Jobs you start, such as bulk changes, run here, with their progress.',
-  failedTitle: 'Couldn’t load the background jobs',
-  failedText: 'Check your connection, then try again.',
-  /** Local and previews only (AC-123). */
-  runTest: 'Run a test job',
-  /** The toast when a job this browser started ends (AC-119): "Test job: Done, 6 refused". */
-  finished: (label: string, how: string) => `${label}: ${how}`,
-  finishedDone: 'Done',
-  finishedRefused: (count: string) => `Done, ${count} refused`,
-  finishedFailed: 'Failed',
-  finishedCancelled: 'Cancelled',
-  view: 'View',
+  save: 'Save',
+  saving: 'Saving',
+  retry: 'Retry',
+  /** The custom object meter (AC-222). */
+  customObjects: 'Custom objects',
+  /** The objects table. */
+  objectColumn: 'Object',
+  kindColumn: 'Type',
+  attributesColumn: 'Attributes',
+  actionsColumn: 'Actions',
+  standard: 'Standard',
+  custom: 'Custom',
+  attributeCount: (count: number, shown: string) => (count === 1 ? '1 attribute' : `${shown} attributes`),
+  rowActions: (plural: string) => `Actions for ${plural}`,
+  open: 'Open',
+  moveUp: 'Move up',
+  moveDown: 'Move down',
+  archive: 'Archive',
+  restore: 'Restore',
+  restoring: 'Restoring',
+  /** Said after a move from the row menu, so the new place is heard. */
+  moved: (plural: string, place: number, of: number) => `${plural} moved to ${String(place)} of ${String(of)}.`,
+  archived: 'Archived',
+  archivedObjects: 'Archived objects',
+  noLiveObjects: 'No live objects',
+  noLiveObjectsText: 'Restore one below or create a new one.',
+  noArchived: 'Nothing is archived.',
+  readOnlyNote: 'Only workspace owners and admins can change objects and attributes.',
+  loadFailed: 'Couldn’t load the objects',
+  loadFailedObject: 'Couldn’t load this object',
+  somethingWrong: 'Something went wrong. Try again in a moment.',
+  /** The new object dialog and the Configuration tab. */
+  singularName: 'Singular name',
+  pluralName: 'Plural name',
+  apiName: 'API name',
+  apiNameHint: 'Used in the API and in links. It can’t change once the object is made.',
+  apiNameLocked: 'API names never change, so links and integrations keep working.',
+  objectId: 'Object ID',
+  objectIdReason: 'Set by the system.',
+  copyApiName: 'Copy API name',
+  copyObjectId: 'Copy object ID',
+  icon: 'Icon',
+  changeIcon: (name: string) => `Icon: ${name}`,
+  iconPicker: 'Object icon',
+  colour: 'Colour',
+  nameMissing: 'Give a name.',
+  apiNameTaken: 'An object already uses this API name.',
+  apiNameReserved: 'That API name is reserved.',
+  /** What a Save in the Configuration tab says once it lands. */
+  saved: (plural: string) => `${plural} saved.`,
+  created: (plural: string) => `${plural} created.`,
+  /** An object's tabs. */
+  objectTabs: (plural: string) => `${plural} settings`,
+  attributesTab: 'Attributes',
+  configurationTab: 'Configuration',
+  system: 'System',
+  primary: 'Primary',
+  required: 'Required',
+  unique: 'Unique',
+  titleColumn: 'Title',
+  typeColumn: 'Type',
+  rulesColumn: 'Rules',
+  noAttributes: 'No attributes yet',
+  archivedObjectAttributes: (plural: string) => `${plural} is archived. Restore it to see its attributes here.`,
+  /** The danger zone. */
+  dangerZone: 'Archive',
+  dangerArchive: (plural: string) => `Archive ${plural}`,
+  dangerArchiveText: 'It leaves the sidebar and every picker. Its records, values and history are kept.',
+  dangerRestore: (plural: string) => `Restore ${plural}`,
+  dangerRestoreText: 'It comes back to the sidebar at its old place, with everything it held.',
+  /** The archive confirm (spec 0012, screens). */
+  confirmTitle: (plural: string) => `Archive ${plural}?`,
+  confirmText: (records: string, count: number) =>
+    count === 0
+      ? 'It leaves the sidebar. It holds no records yet. Relationship fields that point to it are hidden until you restore it.'
+      : count === 1
+        ? 'It leaves the sidebar and its 1 record is kept. Relationship fields that point to it are hidden until you restore it.'
+        : `It leaves the sidebar and its ${records} records are kept. Relationship fields that point to it are hidden until you restore it.`,
+  confirmCounting:
+    'It leaves the sidebar and its records are kept. Relationship fields that point to it are hidden until you restore it.',
+  archiving: 'Archiving',
+  archivedToast: (plural: string) => `${plural} archived.`,
+  restoredToast: (plural: string) => `${plural} restored.`,
+  /** An address in settings that names nothing. */
+  missingTitle: 'Page not found',
+  missingText: 'There’s no object or tab at this address.',
+  backToObjects: 'Back to objects',
+  checkAddress: 'Check the address for a typo, or go back to the objects.',
 } as const;

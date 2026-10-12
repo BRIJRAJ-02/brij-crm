@@ -3,7 +3,7 @@ import { createFileRoute, useRouter } from '@tanstack/react-router';
 import { EmptyState, TopBar } from '@crm/ui';
 import { failedPage, missingPage } from '../features/workspace/ObjectScreen.tsx';
 import { JobsScreen } from '../features/settings/JobsScreen.tsx';
-import { strings as settings } from '../features/settings/strings.ts';
+import { strings as settings } from '../features/settings/jobs-strings.ts';
 import { strings } from '../features/workspace/strings.ts';
 import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 

@@ -9,6 +9,9 @@ const attribute = (
   extra: Partial<AttributeDefinition> = {},
 ): AttributeDefinition => ({
   id: `id-${apiSlug}`,
+  objectId: 'people',
+  isPrimary: false,
+  isArchived: false,
   apiSlug,
   title: apiSlug,
   type: 'text',
@@ -43,6 +46,9 @@ const PEOPLE: ObjectSummary = {
   hue: 'blue',
   standardKey: 'people',
   primaryAttributeId: 'id-name',
+  position: 0,
+  isStandard: true,
+  isArchived: false,
   access: 'write',
 };
 

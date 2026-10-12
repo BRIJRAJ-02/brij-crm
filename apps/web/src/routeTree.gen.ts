@@ -17,7 +17,11 @@ import { Route as WelcomeRouteImport } from './routes/welcome.tsx'
 import { Route as WSlugRouteImport } from './routes/w.$slug.tsx'
 import { Route as WSlugIndexRouteImport } from './routes/w.$slug.index.tsx'
 import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects.$object.tsx'
+import { Route as WSlugSettingsIndexRouteImport } from './routes/w.$slug.settings.index.tsx'
 import { Route as WSlugSettingsJobsRouteImport } from './routes/w.$slug.settings.jobs.tsx'
+import { Route as WSlugSettingsObjectsIndexRouteImport } from './routes/w.$slug.settings.objects.index.tsx'
+import { Route as WSlugSettingsObjectsObjectIndexRouteImport } from './routes/w.$slug.settings.objects.$object.index.tsx'
+import { Route as WSlugSettingsObjectsObjectTabRouteImport } from './routes/w.$slug.settings.objects.$object.$tab.tsx'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -59,11 +63,34 @@ const WSlugObjectsObjectRoute = WSlugObjectsObjectRouteImport.update({
   path: '/objects/$object',
   getParentRoute: () => WSlugRoute,
 } as any)
+const WSlugSettingsIndexRoute = WSlugSettingsIndexRouteImport.update({
+  id: '/settings/',
+  path: '/settings/',
+  getParentRoute: () => WSlugRoute,
+} as any)
 const WSlugSettingsJobsRoute = WSlugSettingsJobsRouteImport.update({
   id: '/settings/jobs',
   path: '/settings/jobs',
   getParentRoute: () => WSlugRoute,
 } as any)
+const WSlugSettingsObjectsIndexRoute =
+  WSlugSettingsObjectsIndexRouteImport.update({
+    id: '/settings/objects/',
+    path: '/settings/objects/',
+    getParentRoute: () => WSlugRoute,
+  } as any)
+const WSlugSettingsObjectsObjectIndexRoute =
+  WSlugSettingsObjectsObjectIndexRouteImport.update({
+    id: '/settings/objects/$object/',
+    path: '/settings/objects/$object/',
+    getParentRoute: () => WSlugRoute,
+  } as any)
+const WSlugSettingsObjectsObjectTabRoute =
+  WSlugSettingsObjectsObjectTabRouteImport.update({
+    id: '/settings/objects/$object/$tab',
+    path: '/settings/objects/$object/$tab',
+    getParentRoute: () => WSlugRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -75,6 +102,10 @@ export interface FileRoutesByFullPath {
   '/w/$slug/': typeof WSlugIndexRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
+  '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
+  '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
+  '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
+  '/w/$slug/settings/objects/$object/': typeof WSlugSettingsObjectsObjectIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -85,6 +116,10 @@ export interface FileRoutesByTo {
   '/w/$slug': typeof WSlugIndexRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
+  '/w/$slug/settings': typeof WSlugSettingsIndexRoute
+  '/w/$slug/settings/objects': typeof WSlugSettingsObjectsIndexRoute
+  '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
+  '/w/$slug/settings/objects/$object': typeof WSlugSettingsObjectsObjectIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -97,6 +132,10 @@ export interface FileRoutesById {
   '/w/$slug/': typeof WSlugIndexRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
+  '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
+  '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
+  '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
+  '/w/$slug/settings/objects/$object/': typeof WSlugSettingsObjectsObjectIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -110,6 +149,10 @@ export interface FileRouteTypes {
     | '/w/$slug/'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/jobs'
+    | '/w/$slug/settings/'
+    | '/w/$slug/settings/objects/'
+    | '/w/$slug/settings/objects/$object/$tab'
+    | '/w/$slug/settings/objects/$object/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -120,6 +163,10 @@ export interface FileRouteTypes {
     | '/w/$slug'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/jobs'
+    | '/w/$slug/settings'
+    | '/w/$slug/settings/objects'
+    | '/w/$slug/settings/objects/$object/$tab'
+    | '/w/$slug/settings/objects/$object'
   id:
     | '__root__'
     | '/'
@@ -131,6 +178,10 @@ export interface FileRouteTypes {
     | '/w/$slug/'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/jobs'
+    | '/w/$slug/settings/'
+    | '/w/$slug/settings/objects/'
+    | '/w/$slug/settings/objects/$object/$tab'
+    | '/w/$slug/settings/objects/$object/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -200,11 +251,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugObjectsObjectRouteImport
       parentRoute: typeof WSlugRoute
     }
+    '/w/$slug/settings/': {
+      id: '/w/$slug/settings/'
+      path: '/settings'
+      fullPath: '/w/$slug/settings/'
+      preLoaderRoute: typeof WSlugSettingsIndexRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/settings/jobs': {
       id: '/w/$slug/settings/jobs'
       path: '/settings/jobs'
       fullPath: '/w/$slug/settings/jobs'
       preLoaderRoute: typeof WSlugSettingsJobsRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/settings/objects/': {
+      id: '/w/$slug/settings/objects/'
+      path: '/settings/objects'
+      fullPath: '/w/$slug/settings/objects/'
+      preLoaderRoute: typeof WSlugSettingsObjectsIndexRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/settings/objects/$object/': {
+      id: '/w/$slug/settings/objects/$object/'
+      path: '/settings/objects/$object'
+      fullPath: '/w/$slug/settings/objects/$object/'
+      preLoaderRoute: typeof WSlugSettingsObjectsObjectIndexRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/settings/objects/$object/$tab': {
+      id: '/w/$slug/settings/objects/$object/$tab'
+      path: '/settings/objects/$object/$tab'
+      fullPath: '/w/$slug/settings/objects/$object/$tab'
+      preLoaderRoute: typeof WSlugSettingsObjectsObjectTabRouteImport
       parentRoute: typeof WSlugRoute
     }
   }
@@ -214,12 +293,20 @@ interface WSlugRouteChildren {
   WSlugIndexRoute: typeof WSlugIndexRoute
   WSlugObjectsObjectRoute: typeof WSlugObjectsObjectRoute
   WSlugSettingsJobsRoute: typeof WSlugSettingsJobsRoute
+  WSlugSettingsIndexRoute: typeof WSlugSettingsIndexRoute
+  WSlugSettingsObjectsIndexRoute: typeof WSlugSettingsObjectsIndexRoute
+  WSlugSettingsObjectsObjectTabRoute: typeof WSlugSettingsObjectsObjectTabRoute
+  WSlugSettingsObjectsObjectIndexRoute: typeof WSlugSettingsObjectsObjectIndexRoute
 }
 
 const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugIndexRoute: WSlugIndexRoute,
   WSlugObjectsObjectRoute: WSlugObjectsObjectRoute,
   WSlugSettingsJobsRoute: WSlugSettingsJobsRoute,
+  WSlugSettingsIndexRoute: WSlugSettingsIndexRoute,
+  WSlugSettingsObjectsIndexRoute: WSlugSettingsObjectsIndexRoute,
+  WSlugSettingsObjectsObjectTabRoute: WSlugSettingsObjectsObjectTabRoute,
+  WSlugSettingsObjectsObjectIndexRoute: WSlugSettingsObjectsObjectIndexRoute,
 }
 
 const WSlugRouteWithChildren = WSlugRoute._addFileChildren(WSlugRouteChildren)

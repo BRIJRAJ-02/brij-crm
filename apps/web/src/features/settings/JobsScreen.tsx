@@ -7,7 +7,7 @@ import { useJobs } from '@crm/data/react';
 import { Badge, Button, EmptyState, Modal, ProgressBar, RelativeTime, Table, TopBar, type TableColumn } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { strings } from './strings.ts';
+import { strings } from './jobs-strings.ts';
 
 /** Props for the Background jobs screen: what its route loaded through the data layer. */
 export interface JobsScreenProps {
