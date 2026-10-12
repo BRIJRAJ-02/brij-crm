@@ -203,6 +203,17 @@ export const FocusedPrimary: Story = {
   },
 };
 
+/** A danger button focused from the keyboard: its edge stays red, so the 1px accent ring sits just outside it. */
+export const FocusedDanger: Story = {
+  args: { variant: 'danger', children: 'Delete record', icon: 'trash' },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    const button = canvas.getByRole('button', { name: 'Delete record' });
+    await expect(button).toHaveFocus();
+    await expect(getComputedStyle(button).outlineStyle).toBe('solid');
+  },
+};
+
 /** By keyboard alone: Tab moves between buttons and skips a disabled one, Enter and Space press. */
 export const Keyboard: Story = {
   parameters: { crm: { screenshot: false } },

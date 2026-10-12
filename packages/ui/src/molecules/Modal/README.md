@@ -42,7 +42,7 @@ Opening grows it from the centre over the scrim in `duration-modal`; closing fad
 
 ## Keyboard
 
-Focus moves into it when it opens and stays inside; Tab cycles. Esc closes it (unless the caller keeps it open) and focus returns to the trigger.
+Focus moves into it when it opens and stays inside; Tab cycles. The title bar and footer are plain boxes, never `header` and `footer`, so an open dialog adds no second banner or contentinfo landmark. Esc closes it (unless the caller keeps it open) and focus returns to the trigger.
 
 ## Differences from the artifact
 

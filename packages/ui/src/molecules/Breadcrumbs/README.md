@@ -20,7 +20,7 @@ New. Settings (#13, #23) and nested record pages show their place the same way. 
 
 ## States
 
-Link, hover (pointer only), focus, current.
+Link, hover (pointer only), focus (the 1px `accent-line` ring just outside, as Link), current.
 
 ## Keyboard
 

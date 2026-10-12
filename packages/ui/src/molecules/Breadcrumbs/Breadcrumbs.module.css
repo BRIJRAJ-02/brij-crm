@@ -42,8 +42,12 @@
     }
   }
 
+  /* As Link: the 1px accent ring just outside, with the faint halo, which
+     alone is under 3:1 (WCAG 1.4.11). */
   .link[data-focus-visible] {
     box-shadow: var(--shadow-focus);
+    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline-offset: var(--border-width-hairline);
   }
 
   .separator {
