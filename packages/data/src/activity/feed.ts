@@ -36,7 +36,8 @@ export interface ActivityEntryShape {
 export interface EntrySource {
   readonly count: number;
   readonly getItem: (index: number) => ActivityEntryShape | undefined;
-  readonly getKey: (entry: ActivityEntryShape) => string;
+  /** Any entry's key, its id (taking any entry with one, so the feed's wider entry type fits). */
+  readonly getKey: (entry: { readonly id: string }) => string;
 }
 
 /** Where a timeline stands: loading its first page, ready, failed (with Retry), or the record isn't available. */

@@ -14,6 +14,7 @@ import { AttributeEditor } from '../../fields/AttributeEditor.tsx';
 import { fieldTypeOf, readOnlyReasonOf } from '../../fields/registry.ts';
 import type { EditorProps, FieldAttribute } from '../../fields/types.ts';
 import { isEmptyValue } from '../../fields/values.ts';
+import { focusLater } from '../../lib/focus-later.ts';
 import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './AttributeList.module.css';
@@ -119,7 +120,10 @@ function Row({ item, onCommit, editorProps }: RowProps) {
   useEffect(() => {
     if (isEditing || !refocus.current) return;
     refocus.current = false;
-    pencil.current?.focus();
+    // After the key that committed is done: a commit whose save re-renders at once (a data layer's store, in the
+    // same event) runs this effect while Enter is still going down, and the browser would then press the pencil
+    // with it, opening the editor again.
+    focusLater(() => pencil.current);
   }, [isEditing]);
   const close = () => {
     refocus.current = true;
