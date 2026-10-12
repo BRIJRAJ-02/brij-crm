@@ -34,7 +34,7 @@ export interface KindDefinition<P> {
   readonly batchSize: number;             // 1 to 5,000; default 500
   readonly startDelayMs?: number;         // the coalescing window, for kinds started by writes
   readonly countsTowardLimit?: boolean;   // default true; false needs a dedupeKey on every start (AC-126)
-  readonly snapshot?: (tx: WorkspaceTx, params: P, after: string | undefined, limit: number) => Promise<readonly string[]>;
+  readonly snapshot?: (context: WriteContext, params: P, after: string | undefined, limit: number) => Promise<readonly string[]>; // reads through context.scope, the starter (milestone 2)
   readonly step: (context: WriteContext, input: StepInput<P>) => Promise<StepOutcome>;
   readonly onFailed?: (context: WriteContext, job: FailedJob<P>) => Promise<void>; // runs wherever the job ends failed (AC-124)
 }
@@ -99,7 +99,7 @@ The current queue row is removed only when the call returns, so a crash anywhere
 
 ## Snapshot
 
-A job started in `preparing` runs snapshot slices on the heavy lane: each batch calls the kind's `snapshot(tx, params, after, 5000)` (a keyset read, `created_at ≤ asOf` from the params), inserts the ids at the next positions, and saves `after` as the checkpoint. When a page comes back short, `total` is set and the job moves to `ready` (`expires_at` = now + 1 hour) when the start asked for a confirm, else to `queued`. `jobs.confirm` moves `ready` to `queued` and enqueues it. The daily cleanup and every `jobs.get` treat a `ready` job past `expires_at` as expired: it ends `cancelled` with `JOB_EXPIRED` and its items are deleted by the next cleanup.
+A job started in `preparing` runs snapshot slices on the heavy lane: each batch calls the kind's `snapshot(context, params, after, 5000)` (a keyset read through the slice's own scope, the starter, `created_at ≤ asOf` from the params), inserts the ids at the next positions, and saves `after` as the checkpoint. When a page comes back short, `total` is set and the job moves to `ready` (`expires_at` = now + 1 hour) when the start asked for a confirm, else to `queued`. `jobs.confirm` moves `ready` to `queued` and enqueues it. A queue row at `expires_at`, and the daily cleanup, treat a `ready` job past `expires_at` as expired (milestone 2: `jobs.get` never writes): it ends `cancelled` with `JOB_EXPIRED` and its items are deleted by the next cleanup.
 
 Each item is checked again in its batch (the step reads the record under its lock), so a record deleted or changed since the snapshot is skipped or refused with a code, never written blindly.
 
@@ -123,7 +123,7 @@ Each item is checked again in its batch (the step reads the record under its loc
 | Lane | Task | Queue name | Concurrency | Slice budget | Use |
 |---|---|---|---|---|---|
 | heavy | `crm_job_heavy` | `heavy:<workspace_id>` | 2 | 20 seconds | snapshots, bulk work, conversions, the daily cleanup |
-| light | `crm_job_light` | none | 4 | 20 seconds, and each call ends by 30 | recomputes, mail without secrets, reminders, small follow ups |
+| light | `crm_job_light` | none | 4 | 2 seconds (milestone 2), and each call ends by 30 | recomputes, mail without secrets, reminders, small follow ups |
 
 - Two Graphile runners in one process share one pool on the direct connection, logged in as `crm_worker_user` (max 4 connections: the LISTEN client plus short queue queries; the `queue` reader and `pruneOutbox` use it too). Graphile only hands a runner the tasks it knows, so the light runner never picks up heavy work.
 - Tenant work runs on the worker's pooled `DATABASE_URL`, the app login (raised to 8 connections: six slices, two spare). The relay keeps its own direct connection, also as `crm_worker_user` (spec 0005's outbox reader).

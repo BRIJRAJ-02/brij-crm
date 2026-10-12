@@ -33,19 +33,23 @@ Built 12 October 2026 (steps 11 to 15). No migration: the columns milestone 2 us
 
 Measured with `pnpm load:jobs` (`packages/core/scripts/jobs-fairness.ts`) on the load stack: the worker container capped at 1 vCPU and 512 MB, Postgres at 2 vCPU and 8 GB, the worker built from this branch. Docker Desktop had 8 CPUs and 7.7 GB, under the 11 GB `pnpm load:stack` asks for, so the data services and the worker were started with `docker compose -f docker-compose.load.yml -p crm-load up -d` directly, as spec 0011's runs were (the caps are ceilings; the worker used about 70 MB). Other build lanes were running their suites at the same time (load average 6 to 32 on 8 cores), so the times are pessimistic.
 
-The run fills both heavy slots first: A's job over 200,000 items and D's over 100,000 (batches of 500, 200 ms each), plus a second, 1,000 item heavy job in A. After 25 seconds, B's 1,000 item heavy job is queued, then a light job of 100 items in C every 3 seconds, 8 in all. "Queued" is the job's `created_at`, the start transaction's time; for A's and D's starts that includes inserting their items.
+The run fills both heavy slots first: A's job over 200,000 items and D's over 100,000 (batches of 500, 200 ms each), plus a second, 1,000 item heavy job in A. After 25 seconds, B's 1,000 item heavy job is queued; then E fills all four light slots with long light jobs (20,000 items each); then a light job of 100 items in C arrives every 3 seconds, 8 in all. "Queued" is the job's `created_at`, the start transaction's time; for A's and D's starts that includes inserting their items.
 
-| Measure | Run 1 | Run 2 | Target |
-|---|---|---|---|
-| B's heavy job (1,000 items): queued to started | 14.16 s | 15.07 s | under 30 s |
-| B's heavy job: started to finished | 0.45 s | 0.52 s | under 60 s |
-| A's second heavy job: queued to started (it waits behind A's own) | 16.62 s | 18.42 s | |
-| Light jobs in C: slowest queued to started (of 8) | 0.06 s | 0.03 s | under 2 s |
-| Most heavy slices at once, per workspace (sampled every 100 ms) | A 1, B 1, D 1 | A 1, B 1, D 1 | at most 1 |
-| A's big job, items done by the end of the run (about 70 s) | 91,000 | 82,500 | |
-| Queue rows left once every job ended | 0 | 0 | 0 (AC-121) |
+Runs 3 and 4 are after the reviews' fixes (light slices of 1 second, the heavy lane polling every half second); runs 1 and 2, before them, had no E and light slices of 20 seconds.
 
-B waited for one of the two heavy slices to end (A's and D's slices take 20 seconds each) and then went ahead of A's and D's next slices, as the hand over queues each next slice behind everything already waiting. Light jobs never waited on the heavy lane.
+| Measure | Run 3 | Run 4 | Runs 1, 2 | Target |
+|---|---|---|---|---|
+| B's heavy job (1,000 items): queued to started | 13.54 s | 9.65 s | 14.16 s, 15.07 s | under 30 s |
+| B's heavy job: started to finished | 0.96 s | 0.50 s | 0.45 s, 0.52 s | under 60 s |
+| A's second heavy job: queued to started (it waits behind A's own) | 17.02 s | 13.35 s | 16.62 s, 18.42 s | |
+| Light jobs in C: slowest queued to started (of 8) | 1.14 s (E holding every light slot) | 0.19 s (E holding every light slot) | 0.06 s, 0.03 s (light lane idle) | under 2 s |
+| Most heavy slices at once, per workspace (sampled every 100 ms) | A 1, B 1, D 1 | A 1, B 1, D 1 | the same | at most 1 |
+| A's big job, items done by the end of the run (about 70 s) | 89,000 | 104,000 | 91,000, 82,500 | |
+| Queue rows left once every job ended | not read | 0 | 0, 0 | 0 (AC-121) |
+
+B waited for one of the two heavy slices to end (A's and D's slices take 20 seconds each) and then went ahead of A's and D's next slices, as the hand over queues each next slice behind everything already waiting. A first run with light slices of 2 seconds had C's slowest light start at 2.59 s with E holding the lane, so light slices are 1 second. Light jobs never wait on the heavy lane.
+
+How long a heavy job waits grows with the workspaces ahead of it: with N workspaces each running heavy work, a newly queued heavy job waits about (N / 2) × 20 seconds for a slot (two heavy slots, 20 second slices). So past about 3 busy workspaces at once, AC-108's 30 seconds no longer holds on one worker; #12's load harness decides the heavy concurrency and when a second worker replica pays off.
 
 ### Restarts (AC-103, step 14)
 
@@ -78,5 +82,5 @@ Real worker processes (`apps/api/test/jobs-worker.ts`, the worker's own wiring t
 | Check | Result |
 |---|---|
 | db, core, contracts, api, data suites; web's node tests | pass (12 October 2026) |
-| Fairness on the load stack | pass, twice (above) |
-| Restart tests | pass, 3 runs in a row |
+| Fairness on the load stack | pass, 4 runs (above) |
+| Restart tests | pass, 3 runs in a row after the reviews' fixes; one earlier run timed out while the machine was loaded by other lanes (load average about 22), and passed on its own after |
