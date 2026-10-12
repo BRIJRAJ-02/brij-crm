@@ -80,6 +80,14 @@ export {
   type EditOptionInput,
 } from './attributes/options.ts';
 export {
+  createRelationship,
+  renameRelationship,
+  type CreateRelationshipInput,
+  type NewSide,
+  type RelationshipAnswer,
+  type RenameRelationshipInput,
+} from './relationships/relationships.ts';
+export {
   addRecord,
   editRecord,
   editRecords,

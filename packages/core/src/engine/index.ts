@@ -97,9 +97,13 @@ export {
 export {
   defineRelationship,
   LINK_CELL_CAP,
+  updateRelationship,
   type Cardinality,
+  type InsertedRelationship,
   type RelationshipEnd,
+  type RelationshipEnds,
   type RelationshipInput,
+  type RelationshipRename,
 } from './relationships.ts';
 // SYSTEM_ACTOR is exported only from `@crm/core/system` (spec 0009).
 export { type Actor, type EngineScope } from './scope.ts';

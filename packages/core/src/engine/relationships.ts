@@ -8,14 +8,15 @@ import { and, asc, eq, inArray, isNull, ne, sql, type SQL } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { MAX_CELL_LINKS } from '@crm/contracts';
 import type { RecordReferenceValue, ValueVersion } from '@crm/contracts/values';
-import { insertAttribute } from './definitions.ts';
-import { canonicalId, checkId, isUuid, uuidList } from './ids.ts';
-import { postgresError, refuse, versionChangedMessage, writeConflict } from './refusals.ts';
+import { checkName, insertAttribute, recordDefinition, touched } from './definitions.ts';
+import { canonicalId, checkId, isUuid, isUuidV7, uuidList } from './ids.ts';
+import { limitsOf, lockAttributeParent } from './limits.ts';
+import { isRefusal, postgresError, refuse, refuseOn, versionChangedMessage, writeConflict } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
-import { parseFor, type AttributeDef, type AttributeWrite } from './values.ts';
+import { loadAttribute, parseFor, type AttributeDef, type AttributeWrite } from './values.ts';
 import { runWrite, type AfterWrite, type ValueChange, type WriteContext } from './write.ts';
 import { requirePermission } from '../access/check.ts';
-import type { Access } from '../access/policy.ts';
+import { objectLevel, type Access } from '../access/policy.ts';
 import { attributeVisible, farVisibleSql, visibleRecords } from '../access/visibility.ts';
 
 const { attributes, objects, recordLinks, records, relationships } = schema;
@@ -37,6 +38,8 @@ export interface RelationshipEnd {
  * point to (no attribute on the other side).
  */
 export interface RelationshipInput {
+  /** A UUID v7 the client minted once per dialog (spec 0014): the retry key, on a two way relationship. */
+  readonly id?: string | undefined;
   readonly cardinality: Cardinality;
   readonly from: RelationshipEnd;
   readonly to?: RelationshipEnd;
@@ -46,6 +49,7 @@ export interface RelationshipInput {
 /** A relationship as the write and read paths use it. */
 export interface RelationshipDef {
   readonly id: string;
+  readonly cardinality: Cardinality;
   readonly fromAttributeId: string;
   readonly toAttributeId: string | null;
   readonly fromObjectId: string;
@@ -85,11 +89,139 @@ async function liveObjects(tx: WorkspaceTx, given: readonly string[]): Promise<r
   return ids;
 }
 
-/** Inserts a relationship and its end attributes, inside a write. */
+/** Which end of a relationship something is about: the defining end (`from`) or the other one (`to`). */
+export type RelationshipSide = 'from' | 'to';
+
+/** What inserting a relationship made, and whether an earlier try of the same create already made it. */
+export interface InsertedRelationship {
+  readonly relationshipId: string;
+  readonly fromAttributeId: string;
+  readonly toAttributeId?: string;
+  /** The same create came again after a lost answer (spec 0014, AC-284): nothing was written this time. */
+  readonly replayed: boolean;
+}
+
+/**
+ * The relationship an earlier try of the same create made (spec 0014,
+ * AC-284): undefined when no relationship holds the id; the relationship
+ * when this actor made it with the same cardinality and ends; else
+ * `ID_TAKEN`. Read under both objects' row locks, so a concurrent try with
+ * the same id has committed or not started.
+ */
+async function earlierRelationship(
+  context: WriteContext,
+  id: string,
+  input: RelationshipInput,
+  to: RelationshipEnd,
+): Promise<InsertedRelationship | undefined> {
+  const { tx, scope } = context;
+  const result = await tx.execute<{
+    cardinality: Cardinality;
+    from_attribute_id: string;
+    to_attribute_id: string | null;
+    from_object_id: string | null;
+    to_object_id: string | null;
+    created_by_type: string;
+    created_by_id: string | null;
+  }>(sql`
+    select rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id, t.object_id::text as to_object_id,
+      rel.created_by_type::text, rel.created_by_id::text
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id = ${id}::uuid
+  `);
+  const [row] = result.rows;
+  if (row === undefined) return undefined;
+  const isOwnTry = row.created_by_type === scope.actor.type && row.created_by_id === scope.actor.id;
+  const sameShape =
+    row.cardinality === input.cardinality &&
+    row.from_object_id === canonicalId(input.from.objectId) &&
+    row.to_object_id === canonicalId(to.objectId);
+  if (!isOwnTry || !sameShape || row.to_attribute_id === null) {
+    throw refuse('ID_TAKEN', 'A relationship with that id already exists.');
+  }
+  return {
+    relationshipId: id,
+    fromAttributeId: row.from_attribute_id,
+    toAttributeId: row.to_attribute_id,
+    replayed: true,
+  };
+}
+
+/**
+ * Inserts one end's attribute. A refusal about a field of the end (its
+ * title, API name or description) names the side (`to.apiSlug`), and a full
+ * object names the object, so a dialog shows each where it belongs.
+ */
+async function insertEnd(
+  context: WriteContext,
+  side: RelationshipSide,
+  end: RelationshipEnd,
+  single: boolean,
+): Promise<string> {
+  try {
+    const made = await insertAttribute(
+      context,
+      {
+        objectId: end.objectId,
+        apiSlug: end.apiSlug,
+        title: end.title,
+        type: 'record_reference',
+        isMulti: !single,
+        ...(end.description === undefined ? {} : { description: end.description }),
+      },
+      { reference: true },
+    );
+    return made.attributeId;
+  } catch (error) {
+    if (!isRefusal(error)) throw error;
+    const { refusal } = error;
+    if (refusal.field !== undefined) throw refuseOn(refusal.code, refusal.message, `${side}.${refusal.field}`);
+    if (refusal.code === 'LIMIT_REACHED') {
+      const [object] = await context.tx
+        .select({ pluralName: objects.pluralName })
+        .from(objects)
+        .where(eq(objects.id, canonicalId(end.objectId)));
+      const limit = limitsOf(context.scope).attributesPerParent;
+      throw refuse(
+        'LIMIT_REACHED',
+        object === undefined
+          ? refusal.message
+          : `${object.pluralName} already holds ${String(limit)} attributes, the most an object can.`,
+      );
+    }
+    throw error;
+  }
+}
+
+/** Turns a clash on the relationship's own id into `ID_TAKEN`. */
+async function relationshipGuard<T>(work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    const pg = postgresError(error);
+    if (pg?.code === '23505' && pg.constraint === 'relationships_pkey') {
+      throw refuse('ID_TAKEN', 'A relationship with that id already exists.');
+    }
+    throw error;
+  }
+}
+
+/**
+ * Inserts a relationship and its end attributes, inside a write. With a
+ * client `id` (a UUID v7, the retry key, spec 0014, AC-284), the same create
+ * again answers the relationship already made and writes nothing; anyone
+ * else's relationship with that id, or one with other ends, answers
+ * `ID_TAKEN`. A relationship from an object to itself needs two different
+ * names (`CONFIG_INVALID` on `to.title`). An object the caller can't see
+ * answers as one that doesn't exist.
+ */
 export async function insertRelationship(
   context: WriteContext,
   input: RelationshipInput,
-): Promise<{ relationshipId: string; fromAttributeId: string; toAttributeId?: string }> {
+): Promise<InsertedRelationship> {
   const { tx, scope } = context;
   // Canonical first, so two spellings of one object are one target.
   const targets = [...new Set((input.targetObjectIds ?? []).map(canonicalId))];
@@ -102,60 +234,175 @@ export async function insertRelationship(
   if (targets.length > MAX_TARGETS) {
     throw refuse('CONFIG_INVALID', `A one way reference may point to at most ${String(MAX_TARGETS)} objects.`);
   }
-  await liveObjects(tx, [input.from.objectId, ...(input.to === undefined ? targets : [input.to.objectId])]);
+  if (input.id !== undefined && (!isUuidV7(input.id) || input.to === undefined)) {
+    throw refuse('CONFIG_INVALID', 'The relationship id must be a UUID v7, on a relationship with two ends.');
+  }
+  const ends = await liveObjects(tx, [
+    input.from.objectId,
+    ...(input.to === undefined ? targets : [input.to.objectId]),
+  ]);
+  // An object the caller can't see answers as one that doesn't exist (spec 0009, AC-140).
+  if (ends.some((objectId) => objectLevel(scope.access, objectId) === 'none')) {
+    throw refuse('NOT_FOUND', 'That object does not exist.');
+  }
   const { fromSingle, toSingle } = singleEnds(input.cardinality);
-  const end = (side: RelationshipEnd, single: boolean) =>
-    insertAttribute(
-      context,
-      {
-        objectId: side.objectId,
-        apiSlug: side.apiSlug,
-        title: side.title,
-        type: 'record_reference',
-        isMulti: !single,
-        ...(side.description === undefined ? {} : { description: side.description }),
-      },
-      { reference: true },
-    );
-  const from = await end(input.from, fromSingle);
-  const to = input.to === undefined ? undefined : await end(input.to, toSingle);
+  const id = input.id?.toLowerCase();
+  if (input.to !== undefined) {
+    const to = input.to;
+    // Both objects' rows in id order before anything else: a replay is found under them, and two creates
+    // between the same two objects in opposite directions take turns rather than deadlock.
+    for (const objectId of [...new Set(ends)].sort()) await lockAttributeParent(tx, { objectId });
+    if (id !== undefined) {
+      const earlier = await earlierRelationship(context, id, input, to);
+      if (earlier !== undefined) return earlier;
+    }
+    if (ends[0] === ends[1] && input.from.title.trim().toLowerCase() === to.title.trim().toLowerCase()) {
+      throw refuseOn('CONFIG_INVALID', 'Give each side its own name.', 'to.title');
+    }
+  }
+  const fromAttributeId = await insertEnd(context, 'from', input.from, fromSingle);
+  const toAttributeId = input.to === undefined ? undefined : await insertEnd(context, 'to', input.to, toSingle);
   const by = actorRow(scope.actor);
-  const [row] = await tx
-    .insert(relationships)
-    .values({
-      workspaceId: scope.workspaceId,
-      cardinality: input.cardinality,
-      fromAttributeId: from.attributeId,
-      toAttributeId: to?.attributeId ?? null,
-      targetObjectIds: to === undefined ? targets : null,
-      createdByType: by.type,
-      createdById: by.id,
-      createdByMemberId: by.memberId,
-      updatedByType: by.type,
-      updatedById: by.id,
-      updatedByMemberId: by.memberId,
-    })
-    .returning({ id: relationships.id });
+  const [row] = await relationshipGuard(() =>
+    tx
+      .insert(relationships)
+      .values({
+        ...(id === undefined ? {} : { id }),
+        workspaceId: scope.workspaceId,
+        cardinality: input.cardinality,
+        fromAttributeId,
+        toAttributeId: toAttributeId ?? null,
+        targetObjectIds: toAttributeId === undefined ? targets : null,
+        createdByType: by.type,
+        createdById: by.id,
+        createdByMemberId: by.memberId,
+        updatedByType: by.type,
+        updatedById: by.id,
+        updatedByMemberId: by.memberId,
+      })
+      .returning({ id: relationships.id }),
+  );
   if (row === undefined) throw new Error('The relationship was not created.');
   await tx
     .update(attributes)
     .set({ relationshipId: row.id })
-    .where(inArray(attributes.id, to === undefined ? [from.attributeId] : [from.attributeId, to.attributeId]));
+    .where(inArray(attributes.id, toAttributeId === undefined ? [fromAttributeId] : [fromAttributeId, toAttributeId]));
   return {
     relationshipId: row.id,
-    fromAttributeId: from.attributeId,
-    ...(to === undefined ? {} : { toAttributeId: to.attributeId }),
+    fromAttributeId,
+    ...(toAttributeId === undefined ? {} : { toAttributeId }),
+    replayed: false,
   };
 }
 
-/** Defines a relationship between two objects (or one object and itself), or a one way reference (AC-5). */
+/**
+ * Defines a relationship between two objects (or one object and itself), or
+ * a one way reference (AC-5). With a client id, a repeated create answers
+ * the relationship already made (spec 0014, AC-284).
+ */
 export async function defineRelationship(
   scope: EngineScope,
   input: RelationshipInput,
   hooks: readonly AfterWrite[] = [],
-) {
+): Promise<InsertedRelationship> {
   requirePermission(scope, 'schema.manage');
   const { result } = await runWrite(scope, (context) => insertRelationship(context, input), hooks);
+  return result;
+}
+
+/** New names for one or both sides of a relationship (spec 0014, AC-307); API names never change. */
+export interface RelationshipRename {
+  readonly relationshipId: string;
+  readonly fromTitle?: string | undefined;
+  readonly toTitle?: string | undefined;
+}
+
+/** A relationship's shape and its two ends, as a write answers it. */
+export interface RelationshipEnds {
+  readonly relationshipId: string;
+  readonly cardinality: Cardinality;
+  readonly from: { readonly attributeId: string; readonly objectId: string };
+  readonly to: { readonly attributeId: string; readonly objectId: string };
+}
+
+const RELATIONSHIP_NOT_FOUND = 'That relationship does not exist.';
+
+/**
+ * Renames one or both sides of a two way relationship in one write (spec
+ * 0014, AC-307), under both end attributes' row locks (in id order). API
+ * names never change. A relationship from an object to itself keeps two
+ * different names (`CONFIG_INVALID`). Refuses `NOT_FOUND` for a relationship
+ * that is unknown, one way, hidden from the caller (either end) or archived
+ * (either end, or by its far object). Records one `definitions` change per
+ * object whose side changed; names already as asked write nothing.
+ */
+export async function updateRelationship(
+  scope: EngineScope,
+  input: RelationshipRename,
+  hooks: readonly AfterWrite[] = [],
+): Promise<RelationshipEnds> {
+  requirePermission(scope, 'schema.manage');
+  const relationshipId = checkId(input.relationshipId, RELATIONSHIP_NOT_FOUND);
+  if (input.fromTitle !== undefined) checkName(input.fromTitle, 'name', 'from.title');
+  if (input.toTitle !== undefined) checkName(input.toTitle, 'name', 'to.title');
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const [relationship] = await tx
+        .select({
+          cardinality: relationships.cardinality,
+          fromAttributeId: relationships.fromAttributeId,
+          toAttributeId: relationships.toAttributeId,
+        })
+        .from(relationships)
+        .where(eq(relationships.id, relationshipId));
+      const toAttributeId = relationship?.toAttributeId ?? null;
+      if (relationship === undefined || toAttributeId === null) throw refuse('NOT_FOUND', RELATIONSHIP_NOT_FOUND);
+      // Both end rows locked in id order, so two renames, or a rename and an archive, take turns.
+      await tx
+        .select({ id: attributes.id })
+        .from(attributes)
+        .where(inArray(attributes.id, [relationship.fromAttributeId, toAttributeId]))
+        .orderBy(asc(attributes.id))
+        .for('update');
+      const from = await loadAttribute(tx, relationship.fromAttributeId, true);
+      const to = await loadAttribute(tx, toAttributeId, true);
+      if (!attributeVisible(scope.access, from) || !attributeVisible(scope.access, to)) {
+        throw refuse('NOT_FOUND', RELATIONSHIP_NOT_FOUND);
+      }
+      if ([from, to].some((end) => end.archivedAt !== null || end.archivedBy !== null)) {
+        throw refuse('NOT_FOUND', 'That relationship is archived. Restore it first.');
+      }
+      const fromTitle = input.fromTitle?.trim() ?? from.title;
+      const toTitle = input.toTitle?.trim() ?? to.title;
+      if (from.objectId === to.objectId && fromTitle.toLowerCase() === toTitle.toLowerCase()) {
+        throw refuseOn(
+          'CONFIG_INVALID',
+          'Give each side its own name.',
+          input.toTitle === undefined ? 'from.title' : 'to.title',
+        );
+      }
+      const renames = [
+        { end: from, title: fromTitle },
+        { end: to, title: toTitle },
+      ].filter(({ end, title }) => end.title !== title);
+      for (const { end, title } of renames) {
+        await tx
+          .update(attributes)
+          .set({ title, ...touched(scope) })
+          .where(eq(attributes.id, end.id));
+        recordDefinition(context, end);
+      }
+      return {
+        relationshipId,
+        cardinality: relationship.cardinality,
+        from: { attributeId: from.id, objectId: from.objectId ?? '' },
+        to: { attributeId: to.id, objectId: to.objectId ?? '' },
+      };
+    },
+    hooks,
+  );
   return result;
 }
 
@@ -189,6 +436,7 @@ export async function loadRelationships(
       row.id,
       {
         id: row.id,
+        cardinality: row.cardinality,
         fromAttributeId: row.from_attribute_id,
         toAttributeId: row.to_attribute_id,
         fromObjectId: row.from_object_id,

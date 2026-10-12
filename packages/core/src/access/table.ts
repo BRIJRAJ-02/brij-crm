@@ -55,6 +55,10 @@ export const ACCESS_TABLE = {
   archiveOption: { permission: 'schema.manage' },
   restoreOption: { permission: 'schema.manage' },
   defineRelationship: { permission: 'schema.manage' },
+  // Relationships (spec 0014): create and rename, both sides in one write.
+  updateRelationship: { permission: 'schema.manage' },
+  createRelationship: { permission: 'schema.manage' },
+  renameRelationship: { permission: 'schema.manage' },
   defineList: { permission: 'schema.manage' },
   // Removing records for good.
   eraseRecord: { permission: 'records.purge' },

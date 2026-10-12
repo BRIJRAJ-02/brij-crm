@@ -81,6 +81,7 @@ export {
   toApiSlug,
   type ApiSlugKind,
 } from './slugs.ts';
+export { CARDINALITIES, flipCardinality, sidesHoldingOne, type CardinalityKey } from './cardinality.ts';
 export {
   freeHue,
   nextHue,

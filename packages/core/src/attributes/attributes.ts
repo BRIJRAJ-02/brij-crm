@@ -3,7 +3,7 @@
 // inline, and the settings that create, edit, move, archive and restore
 // them. Reads and writes go through the scope the access door made.
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
-import type { AttributeDefinition, AttributeOption, PickerAttributeType } from '@crm/contracts';
+import type { AttributeDefinition, AttributeOption, AttributeRelationship, PickerAttributeType } from '@crm/contracts';
 import { conditionAttributeIds } from '@crm/contracts/validation';
 import {
   AttributeDefault,
@@ -32,6 +32,7 @@ import type { AfterWrite } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
 import { inWorkspace } from '../access/run.ts';
 import { objectLevel, readOnlyReason, visibleAttributes } from '../access/policy.ts';
+import { relationshipBlocks } from '../relationships/blocks.ts';
 
 const { attributeOptions, attributes, objects, validationRules } = schema;
 
@@ -54,6 +55,14 @@ interface DefinitionContext {
   readonly rules: ReadonlyMap<string, readonly ValidationRuleView[]>;
   /** The far objects the caller may see, for `archivedBy`. */
   readonly canSeeObject: (objectId: string) => boolean;
+  /** Each record reference's relationship block (spec 0014), by attribute id. */
+  readonly relationships?: ReadonlyMap<string, AttributeRelationship>;
+}
+
+/** An attribute's relationship block, when it is a side of one (spec 0014). */
+function relationshipOf(id: string, context: DefinitionContext): { relationship?: AttributeRelationship } {
+  const relationship = context.relationships?.get(id);
+  return relationship === undefined ? {} : { relationship };
 }
 
 function definitionOf(row: AttributeRow, context: DefinitionContext, readOnly?: string): AttributeDefinition {
@@ -79,6 +88,7 @@ function definitionOf(row: AttributeRow, context: DefinitionContext, readOnly?: 
       ? { archivedBy: { objectId: row.archivedBy } }
       : {}),
     ...(OPTION_TYPES.includes(row.type) ? { options: [...(context.options.get(row.id) ?? [])] } : {}),
+    ...relationshipOf(row.id, context),
     ...(readOnly === undefined ? {} : { readOnly: { reason: readOnly } }),
     validation: validationOf(row, context.rules.get(row.id) ?? []),
   };
@@ -275,6 +285,7 @@ export async function listObjectAttributes(
       ),
       rules: anyRules ? await rulesOf(tx, id, (attributeId) => visibleIds.has(attributeId)) : new Map(),
       canSeeObject: (far) => objectLevel(scope.access, far) !== 'none',
+      relationships: await relationshipBlocks(tx, scope.access, listed),
     };
     return listed.map((row) =>
       definitionOf(

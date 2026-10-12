@@ -5,6 +5,7 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { AttributeDefault } from './values/attribute-config.ts';
 import { AttributeType } from './values/attribute-values.ts';
+import { AttributeRelationship } from './relationship-block.ts';
 import { Hue } from './values/hues.ts';
 import { AttributeValidation, ValidationRuleInput } from './values/validation-rules.ts';
 import { WorkspaceScoped } from './workspaces.ts';
@@ -75,6 +76,8 @@ export const AttributeDefinition = z.object({
    * whose condition names an attribute hidden from the reader left out.
    */
   validation: AttributeValidation.optional(),
+  /** A record reference's relationship (spec 0014). */
+  relationship: AttributeRelationship.optional(),
 });
 /** One attribute of an object. */
 export type AttributeDefinition = z.infer<typeof AttributeDefinition>;
