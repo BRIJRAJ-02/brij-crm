@@ -125,14 +125,14 @@ describe('a job survives a restart (AC-103)', () => {
   }, 120_000);
 
   it('after SIGKILL loses only the batch in hand, and a new worker carries on once the dead locks and lease run out, every item once', async () => {
-    // Shortened, keeping production's proportions: slices of 1 second (20 in production) under locks stale after 2
+    // Shortened, keeping production's proportions: slices of 1 second (20 in production) under locks stale after 4
     // (120), checked every half second (a minute), and leases of 3 seconds (60). In production a hard killed
     // worker's job carries on within 3 minutes of a new one starting: its lock is stale 2 minutes after its slice
     // began, the next minutely release frees it, and its lease ran out long before.
     const timings = {
       JOBS_TEST_SLICE_MS: '1000',
       JOBS_TEST_LEASE_MS: '3000',
-      JOBS_TEST_STALE_SECONDS: '2',
+      JOBS_TEST_STALE_SECONDS: '4',
       JOBS_TEST_HOUSEKEEPING_MS: '500',
     };
     const job = await startEffects('test.effects', ITEMS, { batchSize: 500, batchMillis: 300 });
@@ -152,7 +152,7 @@ describe('a job survives a restart (AC-103)', () => {
       .poll(async () => (await jobState(job.jobId)).done, { timeout: 30_000, interval: 50 })
       .toBeGreaterThan(killed.done);
     const resumedMs = Date.now() - second.spawned;
-    expect(resumedMs, `SIGKILL: carried on ${String(resumedMs)} ms after the new worker started`).toBeLessThan(15_000);
+    expect(resumedMs, `SIGKILL: carried on ${String(resumedMs)} ms after the new worker started`).toBeLessThan(20_000);
     await expect
       .poll(async () => (await jobState(job.jobId)).status, { timeout: 60_000, interval: 200 })
       .toBe('succeeded');

@@ -136,7 +136,14 @@ describe('the job runners on Graphile Worker', () => {
 
   it('end a job that keeps failing after Graphile’s backoff, recorded on the job and gone from the queue', async () => {
     const scope = await owner();
-    const runners = await startJobRunners({ queue, runner: coreRunner(20_000), log: quiet, pollInterval: 200 });
+    const lines: unknown[] = [];
+    const keep = (message: string, fields?: Record<string, unknown>) => lines.push({ message, ...fields });
+    const runners = await startJobRunners({
+      queue,
+      runner: coreRunner(20_000),
+      log: { info: keep, warn: keep, error: keep },
+      pollInterval: 200,
+    });
     try {
       const { jobId } = await startJobForTest(scope, registry, {
         kind: 'test.always_fails',
@@ -148,6 +155,9 @@ describe('the job runners on Graphile Worker', () => {
         .toBe('failed');
       expect(await getJob(scope, registry, jobId)).toMatchObject({ error: { code: 'JOB_FAILED' }, done: 0 });
       await expect.poll(async () => (await queueRows(jobId)).length, { timeout: 5_000 }).toBe(0);
+      // The thrown message (which could quote a value) reached neither the log nor the queue row.
+      expect(JSON.stringify(lines)).toContain('A job slice failed');
+      expect(JSON.stringify(lines)).not.toContain('always fails');
     } finally {
       await runners.stop();
     }

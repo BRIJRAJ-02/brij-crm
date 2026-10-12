@@ -16,8 +16,10 @@ import { errorFields } from '../log.ts';
 
 /** The two lanes: their task and how many slices each runs at once (AC-108). */
 export const LANES = {
-  heavy: { task: 'crm_job_heavy', concurrency: 2 },
-  light: { task: 'crm_job_light', concurrency: 4 },
+  // The heavy lane polls every half second: a slice's hand over lands while its own row still holds the
+  // workspace's queue, so the LISTEN wake finds nothing to take, and the next slice waits for a poll.
+  heavy: { task: 'crm_job_heavy', concurrency: 2, pollMs: 500 },
+  light: { task: 'crm_job_light', concurrency: 4, pollMs: 2_000 },
 } as const;
 
 /** How often stale locks are released and the backlog is logged, while the runners run. */
@@ -36,7 +38,7 @@ export interface JobRunnersOptions {
   readonly runner: Runner;
   readonly log: JobsLog;
   readonly onFault?: (error: unknown) => void;
-  /** Milliseconds between polls for scheduled rows (LISTEN wakes a runner at once for new ones). */
+  /** Milliseconds between polls for scheduled rows, both lanes (LISTEN wakes a runner at once for new ones); tests shorten it. */
   readonly pollInterval?: number;
   /** How old a dead worker's locks must be before they're released (120 seconds); the restart tests shorten it. */
   readonly staleLockSeconds?: number;
@@ -67,7 +69,14 @@ function sliceTask(options: JobRunnersOptions, shutdown: AbortSignal): Task {
       options.log.error('job.payload.invalid', { queueJobId: helpers.job.id });
       return;
     }
-    await options.runner.runSlice(parsed.data, AbortSignal.any([helpers.abortSignal, shutdown]));
+    try {
+      await options.runner.runSlice(parsed.data, AbortSignal.any([helpers.abortSignal, shutdown]));
+    } catch {
+      // Graphile logs a failed call's message and stack and keeps the message on its queue row, and a message
+      // may quote a value: it gets a plain one instead. The runner already logged the job id and the error's
+      // class (`job.batch.failed`, `job.onFailed.failed`); thrown on, Graphile tries again after its backoff.
+      throw new Error('A job slice failed; the worker log has its job id.');
+    }
   };
 }
 
@@ -103,7 +112,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
           concurrency: lane.concurrency,
           noHandleSignals: true,
           logger,
-          pollInterval: options.pollInterval ?? 2_000,
+          pollInterval: options.pollInterval ?? lane.pollMs,
           taskList: { [lane.task]: sliceTask(options, shutdown.signal) },
           // Completions and failures go through Graphile's batcher (with no wait), which a stop flushes before
           // the pool closes: unbatched, they're sent and not awaited, so a stop right after a slice handed its job
