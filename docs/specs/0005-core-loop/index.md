@@ -211,6 +211,20 @@ Tracer Bullet: each milestone ends with something you can click in production.
 20. Session expiry and edit rollback, focus moves on route change, keyboard and contrast passes in both themes, `dxe quick` and `ux-interaction-reviewer` on every screen, satisfies **AC-31**, **AC-41**
 21. The full Playwright flow in CI and against production; `verify.md` with results, satisfies **AC-27** to **AC-41**
 
+**Milestone 4 as built (2026-10-12)**: step 19's code path is proven against a fake Google in `apps/api` (the real OAuth client is still the owner's to create); step 20 and step 21 are done locally and in CI, with the production run written up in `verify.md` for the owner.
+
+### Calls made building milestone 4 (pending owner confirmation)
+
+Technical gaps, each taken at the recommended default:
+
+1. **No account from an email Google hasn't verified.** The spec asked that Google joins an existing account only on a verified email; Better Auth already refuses that link (`account_not_linked`). It would still have made a new account from an unverified Google email, which its owner could later reach by code while the Google account stayed attached (pre registration takeover). The user create hook now refuses any account whose email isn't verified (`EMAIL_UNVERIFIED`), and `/sign-in` says "Google hasn't verified that account's email, so it can't sign you in. Use your email instead."
+2. **The session ending under a change says so.** When a 401 arrives while a write is waiting for its answer, the one notice reads "You were signed out, so your last change wasn't saved. Sign in again to carry on."; otherwise it stays "You were signed out. Sign in again to carry on."
+3. **A focus ring that shows on filled and red edged controls.** The owner's 14% focus halo is about 1.2:1 on its own, so the primary and danger buttons, the theme switch's segments and links (whose edges can't turn accent) showed almost no focus. They now draw the same 1px `accent-line` ring: just outside a primary or danger button past a 1px gap, inside a segment, outside a link's text. The halo token is unchanged.
+4. **Dialogs add no landmarks.** The Modal's title bar and footer are plain boxes, so an open dialog no longer adds a second banner and contentinfo.
+5. **CI flows.** A `flows` job runs sign in, People, session, keyboard and live on every push: Chromium at 1280 and 375 wide, the live flow's reader in WebKit (two engines; Firefox won't start on the build Mac, so WebKit is the one proven locally), one retry, against the job's own services. Catch up, settle, versions, scale and hidden stay local: they are long or need seeded data.
+6. **The production live run starts from a saved browser state** (`FLOW_STATE`, `FLOW_SLUG`) and leaves one tagged person and one tagged column in the workspace per run.
+7. **`API_DEV_ORIGIN`** moves the dev and preview proxy, so a second stack (another worktree's flows) runs beside the first.
+
 ## Consequences
 
 **Positive**:

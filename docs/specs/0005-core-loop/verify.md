@@ -97,3 +97,52 @@ Every run stayed under the 1 second p95. The create is the slowest change each t
 - Vercel Production: `VITE_REALTIME_URL=wss://<Centrifugo's public domain>/connection/websocket`.
 - `apps/web/vercel.json`: `wss://<Centrifugo's public domain>` in the CSP's `connect-src` (the build refuses the deploy otherwise).
 - Previews: no `VITE_REALTIME_URL`, so live updates are off and nothing shows.
+
+## Milestone 4: finish and harden (2026-10-12)
+
+### What runs where
+
+| Flow (`apps/web/e2e/`) | What it proves | Locally | CI (`flows` job) |
+|---|---|---|---|
+| `sign-in.flow.ts` | Code by Mailpit, wrong code, resend wait and refusal, welcome and its refusals, sign out, deep link back, a refused Google sign in, a second person in the same tab, safe redirects, `/status`, not found; axe (WCAG A and AA, contrast) on every screen in light and dark | 1280 and 375 | 1280 and 375 |
+| `people.flow.ts` | Empty state, Add attribute (and a taken name inline), New person (row first and focused), a refused create on its field, cell edits that survive a reload, a refused edit marked in place; axe in both themes | 1280 | 1280 |
+| `session.flow.ts` | The session ends mid edit: the edit rolls back, "You were signed out, so your last change wasn't saved." shows on `/sign-in?redirect=<the page>` with nothing of the workspace behind it, and signing in again reads the page fresh; an idle session goes to sign in with no such notice; axe in both themes | 1280 | 1280 |
+| `keyboard.flow.ts` | The whole loop without the pointer: focus lands where it should at every stop and draws a ring (a primary's is a solid outline), ⌘↵ creates, Esc closes and returns focus, Tab enters the grid once; no browser error and no 401 but signed out `me.get` | 1280 | 1280 |
+| `live.flow.ts` | Two browsers: create, 20 edits and a new column within a second at p95, no echo fetches, the paused notice and recovery | 1280, reader in Chromium (or `FLOW_READER_BROWSER=webkit`) | 1280, reader in WebKit |
+| `catch-up`, `settle`, `versions`, `scale`, `hidden` | Specs 0006, 0007 and 0009 | by hand | not run (long, or need seeded data) |
+
+CI runs the built app (`vite preview`), the api and the worker on the local ports against their own Postgres, Mailpit and Centrifugo services, with one retry; on failure it keeps the traces and the three logs. Locally, `API_DEV_ORIGIN` and `--port` move the stack, so a second worktree runs its own (`.env` with other ports, its own database and Centrifugo).
+
+Last local run (2026-10-12, `vite preview` on 5273 against a fresh database, machine load 8 to 50 from other agents): every flow above passed; the numbers are in the table at the end of this section.
+
+### Acceptance criteria to tests
+
+| AC | Automated | Still by hand |
+|---|---|---|
+| AC-27 | `sign-in.flow.ts`; `apps/api/src/auth/auth.test.ts` (codes, wrong, expired, used, limits per email and IP) | Production: a real code by Resend (done in milestone 1) |
+| AC-28 | `apps/api/src/auth/google.test.ts` against a fake Google token endpoint: sign up with a verified email, the same account for a verified email that already has one, the same person on a second sign in, no account and no link for an unverified email, the allowlist; `sign-in.flow.ts` (a refused Google sign in); `apps/web/src/features/auth/auth.test.ts` (the refusal messages) | Real Google, locally and in production, once the OAuth client exists (owner step) |
+| AC-29 | `auth.test.ts` (allowlist), `google.test.ts` (allowlist for Google) | none |
+| AC-30 | `sign-in.flow.ts` (welcome, taken address, one press after a fix); `apps/api/src/modules/bootstrap.test.ts` | none |
+| AC-31 | `session.flow.ts`; `packages/data/src/data.test.ts` (one sign out per 401, the notice with and without a write in flight, records dropped); `live/mutations.test.ts`; `sign-in.flow.ts` (sign out) | none |
+| AC-32 | `apps/api/src/door.test.ts`, `modules/access.test.ts` | none |
+| AC-33 | `apps/api/src/edge.test.ts`, `auth.test.ts` (client IP) | none |
+| AC-34 to AC-37 | `people.flow.ts`, `keyboard.flow.ts`; `packages/data/src/records/layer.test.ts`; `apps/api/src/modules/records.test.ts`, `attributes.test.ts` | none |
+| AC-38 | `live.flow.ts` (two engines in CI) | Production timing, steps below |
+| AC-39 | `apps/api/src/writes.test.ts`, `packages/db/src/outbox.test.ts` | none |
+| AC-40 | The gate above | none |
+| AC-41 | axe in light and dark in every flow above, `keyboard.flow.ts`, `pnpm size` in CI | Production pass, steps below |
+
+### Keyboard and contrast pass
+
+- Every screen today (sign in, verify, welcome, the frame and its workspace menu, People empty and filled, both dialogs, the refused states, the paused notice, the session ended notice, workspace and page not found, `/status`) passes axe's WCAG A and AA rules, contrast included, in light and in dark.
+- axe doesn't judge focus rings. Measured from the tokens: the 1px `accent-line` ring is 5.4 to 5.7:1 on every light surface and 5.1 to 5.8:1 on every dark one. The faint `shadow-focus` halo on its own is about 1.2:1, so a control whose edge can't turn accent showed almost no focus: the primary button (its edge is already blue), the danger button (its edge stays red), the theme switch's segments and links. Each now draws the 1px ring (fixed in `9f2baeb`); the token stays as the owner set it.
+
+### Production run (for the owner; nothing here was run against production)
+
+1. Check the live update variables in "Production checklist" (AC-38 above) are set, and that `main` is deployed.
+2. Save a signed in browser state: `pnpm --filter @crm/web exec playwright open --save-storage="$HOME/crm-prod-state.json" https://brij-crm-phi.vercel.app/sign-in`. Sign in with your email and the code from your inbox, wait for the People page, then close the window. Keep the file out of the repo: it holds a live session.
+3. Note the workspace's address (`/w/<slug>/…`). The People table should fit on one screen (under about 20 people).
+4. Warm the database: open the People page once in a normal browser.
+5. Run the live flow: `FLOW_BASE_URL=https://brij-crm-phi.vercel.app FLOW_STATE="$HOME/crm-prod-state.json" FLOW_SLUG=<slug> FLOW_SCREENSHOTS=/tmp/crm-prod FLOW_READER_BROWSER=webkit pnpm --filter @crm/web test:flow e2e/live.flow.ts --project 1280`. It adds one person and one column named with the run's tag, edits that person's Job title 21 times, and drops the reader's socket once. Record p50, p95 and max from `/tmp/crm-prod/1280-live-timings.json` in the AC-38 table.
+6. AC-41 by hand, in light and in dark: Tab through sign in, verify (a real code), People, New person (⌘↵ to create, Esc to cancel), Add attribute and the workspace menu, checking the ring is visible at each stop. `pnpm size` already holds the first load budget in CI.
+7. Afterwards delete `$HOME/crm-prod-state.json`, or sign out in that browser state to end its session.
