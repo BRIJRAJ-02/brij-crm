@@ -31,7 +31,12 @@ export const strings = {
   codeWrongWaiting: 'That code isn’t right. Try again.',
   googleSignUpClosed:
     'There’s no account for that Google email, and sign up isn’t open yet. Try another account, or use your email.',
+  somethingWrong: 'Something went wrong. Try again in a moment.',
   googleCancelled: 'Google sign in was cancelled. Try again, or use your email.',
+  /** The session ended under the person (a 401 mid use), from `?signedOut=ended`. */
+  signedOutEnded: 'You were signed out. Sign in again to carry on.',
+  /** The same, with a change still on its way that was lost, from `?signedOut=unsaved`. */
+  signedOutUnsaved: 'You were signed out, so your last change wasn’t saved. Sign in again to carry on.',
   googleUnverified: 'Google hasn’t verified that account’s email, so it can’t sign you in. Use your email instead.',
   googleFailed: 'Couldn’t sign in with Google. Try again, or use your email.',
 } as const;

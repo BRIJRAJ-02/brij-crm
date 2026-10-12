@@ -48,6 +48,11 @@ describe('safeRedirect', () => {
     expect(signInHref('/w/acme/objects/people')).toBe('/sign-in?redirect=%2Fw%2Facme%2Fobjects%2Fpeople');
     expect(signInHref('/')).toBe('/sign-in');
     expect(signInHref('//evil.example')).toBe('/sign-in');
+    // Why the session ended rides along, so sign in can say it.
+    expect(signInHref('/w/acme/objects/people', 'unsaved')).toBe(
+      '/sign-in?redirect=%2Fw%2Facme%2Fobjects%2Fpeople&signedOut=unsaved',
+    );
+    expect(signInHref('/', 'ended')).toBe('/sign-in?signedOut=ended');
   });
 });
 
@@ -125,6 +130,10 @@ describe('redirectSearch', () => {
     });
     expect(redirectSearch({ redirect: 42, error: '' })).toEqual({});
     expect(redirectSearch({ error: 'x'.repeat(65) })).toEqual({});
+    expect(redirectSearch({ signedOut: 'unsaved' })).toEqual({ signedOut: 'unsaved' });
+    expect(redirectSearch({ signedOut: 'ended' })).toEqual({ signedOut: 'ended' });
+    // Only its two words: anything else is dropped, never shown.
+    expect(redirectSearch({ signedOut: '<script>' })).toEqual({});
   });
 });
 

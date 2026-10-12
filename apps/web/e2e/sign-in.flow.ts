@@ -319,6 +319,8 @@ test('a workspace that fails to load says so, with no Records section, and Try a
   await page.unroute('**/api/rpc/objects/list');
   await page.getByRole('button', { name: 'Try again' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'People' })).toBeVisible();
+  // Try again left with the failed page; focus goes to the new page's title, not the top of the document.
+  await expect(page.getByRole('heading', { level: 1, name: 'People' })).toBeFocused();
   await expect(nav.getByRole('link', { name: 'People' })).toBeVisible();
 
   // Failing before the person is known: the product names the page, and the failure is said once.
@@ -415,13 +417,16 @@ test('keeps the status screen at /status, open to anyone, and says plainly when 
   page,
 }) => {
   await page.goto('/status');
-  await expect(page.getByRole('heading', { level: 1, name: 'CRM' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'System status' })).toBeVisible();
+  await expect(page).toHaveTitle('System status · CRM');
   // A first load elsewhere leaves focus where the browser starts, not on the title.
-  await expect(page.getByRole('heading', { level: 1, name: 'CRM' })).not.toBeFocused();
+  await expect(page.getByRole('heading', { level: 1, name: 'System status' })).not.toBeFocused();
   await expect(page.getByText('Healthy')).toBeVisible();
   await checkScreen(page, '9-status');
   await page.goto('/nowhere');
   await expect(page.getByRole('heading', { level: 1, name: 'Page not found' })).toBeVisible();
   await expect(page).toHaveTitle('Page not found · CRM');
+  // Signed out, / leads to sign in, so the way back doesn't promise a workspace.
+  await expect(page.getByRole('link', { name: 'Back to the start' })).toBeVisible();
   await checkScreen(page, '10-not-found');
 });

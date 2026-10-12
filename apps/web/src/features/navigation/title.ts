@@ -2,6 +2,7 @@
 // every tab, history entry and bookmark says which page it is. It follows
 // the h1 as it changes (a route change, a pending page resolving, a page
 // that loads lazily), checked at most once a frame.
+import { pageHeading } from './focus.ts';
 
 /** The product's name, after the page's in every title. */
 export const PRODUCT = 'CRM';
@@ -26,7 +27,7 @@ export function followPageTitle({ doc, observe, nextFrame }: TitleHost): () => v
   let isQueued = false;
   const update = () => {
     isQueued = false;
-    const next = documentTitle(doc.querySelector('main h1')?.textContent ?? undefined);
+    const next = documentTitle(pageHeading(doc)?.textContent ?? undefined);
     if (doc.title !== next) doc.title = next;
   };
   update();

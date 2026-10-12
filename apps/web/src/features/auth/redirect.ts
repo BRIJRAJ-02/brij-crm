@@ -46,30 +46,47 @@ export function safeRedirect(value: unknown): string {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
-/** The sign in page, coming back to `redirectTo` afterwards (left off when it is `/`). */
-export function signInHref(redirectTo: string): string {
+/** Why the session ended under the person: `ended`, or `unsaved` when a change was lost with it. */
+export type SignedOut = 'ended' | 'unsaved';
+
+/**
+ * The sign in page, coming back to `redirectTo` afterwards (left off when it
+ * is `/`); with `signedOut`, the page says the session ended (and whether a
+ * change was lost) until the person acts.
+ */
+export function signInHref(redirectTo: string, signedOut?: SignedOut): string {
   const target = safeRedirect(redirectTo);
-  return target === '/' ? '/sign-in' : `/sign-in?${new URLSearchParams({ redirect: target }).toString()}`;
+  const search = new URLSearchParams({
+    ...(target === '/' ? {} : { redirect: target }),
+    ...(signedOut === undefined ? {} : { signedOut }),
+  }).toString();
+  return search === '' ? '/sign-in' : `/sign-in?${search}`;
 }
 
 /** The longest `?error=` kept: sign in errors are short codes. */
 const ERROR_MAX = 64;
 
-/** The sign in pages' search: where to go afterwards, and the code a refused Google sign in came back with. */
+/**
+ * The sign in pages' search: where to go afterwards, the code a refused
+ * Google sign in came back with, and why the session ended under the person.
+ */
 export interface SignInSearch {
   readonly redirect?: string;
   readonly error?: string;
+  readonly signedOut?: SignedOut;
 }
 
 /**
- * A sign in route's search: `redirect` kept when it is a string, and `error`
+ * A sign in route's search: `redirect` kept when it is a string, `signedOut`
+ * when it is one of its two words, and `error`
  * (Better Auth's code after a refused Google sign in) when it is a short
  * string. The page maps the code to its own words and never shows it as given.
  */
 export function redirectSearch(search: Record<string, unknown>): SignInSearch {
-  const { redirect, error } = search;
+  const { redirect, error, signedOut } = search;
   return {
     ...(typeof redirect === 'string' ? { redirect } : {}),
     ...(typeof error === 'string' && error !== '' && error.length <= ERROR_MAX ? { error } : {}),
+    ...(signedOut === 'ended' || signedOut === 'unsaved' ? { signedOut } : {}),
   };
 }

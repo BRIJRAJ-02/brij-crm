@@ -41,7 +41,9 @@ test.describe('the session ending', () => {
 
     // Off to sign in, keeping the page, with the notice saying the change was lost.
     await expect(page).toHaveURL(new RegExp(`/sign-in\\?redirect=${encodeURIComponent(people)}$`));
-    await expect(page.getByText(UNSAVED)).toBeVisible();
+    // Said once, on the sign in form itself (not a toast that leaves): the address has already dropped why.
+    await expect(page.getByRole('main').getByText(UNSAVED)).toBeVisible();
+    await expect(page.getByText(UNSAVED)).toHaveCount(1);
     await expect(page.getByLabel('Email')).toBeFocused();
     // Nothing of the workspace stays on screen behind sign in.
     await expect(page.getByRole('heading', { level: 1, name: 'Sign in' })).toBeVisible();

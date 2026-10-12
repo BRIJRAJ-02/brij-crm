@@ -8,6 +8,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { googleRefusal, isAboutAddress, sendRefusal } from './messages.ts';
 import { savePending, sessionStore } from './pending.ts';
+import type { SignedOut } from './redirect.ts';
 import { strings } from './strings.ts';
 
 /** Props for the sign in screen. */
@@ -21,29 +22,34 @@ export interface SignInScreenProps {
   readonly returnTo: string;
   /** The `?error=` a refused Google sign in came back with. */
   readonly googleError?: string | undefined;
+  /** The `?signedOut=` a session that ended under the person came with: said above the form. */
+  readonly signedOut?: SignedOut | undefined;
   /** The address to start with: the one used last, back from "Use another email". */
   readonly email?: string | undefined;
 }
 
 /** The sign in page: AuthLayout and SignInForm, sending the code through the data layer. */
-export function SignInScreen({ data, google, redirect, returnTo, googleError, email }: SignInScreenProps) {
+export function SignInScreen({ data, google, redirect, returnTo, googleError, signedOut, email }: SignInScreenProps) {
   const navigate = useNavigate();
   const [status, setStatus] = useState<SignInStatus>('idle');
   // A refused send about the address (not one) shows on the field; any other
   // refusal (sign up closed, too many tries, a refused Google sign in) is
   // about signing in, so it shows above the form.
   const [error, setError] = useState<string | undefined>(undefined);
-  const [notice, setNotice] = useState<string | undefined>(() =>
-    googleError === undefined ? undefined : googleRefusal(googleError),
-  );
+  const [notice, setNotice] = useState<string | undefined>(() => {
+    if (googleError !== undefined) return googleRefusal(googleError);
+    if (signedOut === undefined) return undefined;
+    return signedOut === 'unsaved' ? strings.signedOutUnsaved : strings.signedOutEnded;
+  });
 
-  // The refused Google sign in is said once: the address drops `?error=`
-  // (keeping `?redirect=`), so a reload or a return to this entry doesn't say
-  // it again. The notice was read from it as the page started, and stays.
+  // A refused Google sign in or an ended session is said once: the address
+  // drops `?error=` and `?signedOut=` (keeping `?redirect=`), so a reload or a
+  // return to this entry doesn't say it again. The notice was read from them
+  // as the page started, and stays until the person acts.
   useEffect(() => {
-    if (googleError === undefined) return;
+    if (googleError === undefined && signedOut === undefined) return;
     void navigate({ to: '/sign-in', search: redirect === undefined ? {} : { redirect }, replace: true });
-  }, [googleError, redirect, navigate]);
+  }, [googleError, signedOut, redirect, navigate]);
 
   // Back from Google with the browser's back button, the page comes out of
   // the back/forward cache as it was left: "Opening Google". Start over.

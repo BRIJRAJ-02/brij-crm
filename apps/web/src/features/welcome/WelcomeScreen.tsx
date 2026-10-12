@@ -20,7 +20,7 @@ const FIELDS = { memberName: 'memberName', name: 'name', slug: 'slug' } as const
 
 /** The server's refusals and input problems as this form's refusals; anything else above the fields. */
 function refusalsOf(error: unknown): WelcomeRefusal[] {
-  if (!isDataError(error)) return [{ code: 'INTERNAL', message: String(error) }];
+  if (!isDataError(error)) return [{ code: 'INTERNAL', message: strings.somethingWrong }];
   const refusals = (error.data?.refusals ?? []).map((refusal) => ({
     code: refusal.code,
     message: refusal.message,

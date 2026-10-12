@@ -1,5 +1,6 @@
 /** The welcome screen's copy. */
 export const strings = {
+  somethingWrong: 'Something went wrong. Try again in a moment.',
   product: 'CRM',
   title: 'Name your workspace',
   description: 'Your records live in a workspace.',

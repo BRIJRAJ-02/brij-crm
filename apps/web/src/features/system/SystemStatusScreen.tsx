@@ -27,7 +27,7 @@ export function SystemStatusScreen({ status }: { status: SystemStatus }) {
   return (
     <Card
       placement="page"
-      title={strings.product}
+      title={strings.title}
       description={strings.answering}
       actions={<StatusDot hue="green">{strings.healthy}</StatusDot>}
       footer={<ThemeFooter />}
@@ -47,7 +47,7 @@ export function SystemStatusScreen({ status }: { status: SystemStatus }) {
 /** The loaded card's shape, with its labels, while the check runs. */
 export function SystemStatusPending() {
   return (
-    <Card placement="page" title={strings.product} description={strings.checking} footer={<ThemeFooter />} isBusy>
+    <Card placement="page" title={strings.title} description={strings.checking} footer={<ThemeFooter />} isBusy>
       <DescriptionList items={TERMS.map((term) => ({ term, description: <Skeleton width="short" /> }))} />
     </Card>
   );
@@ -56,7 +56,7 @@ export function SystemStatusPending() {
 export function SystemStatusError() {
   const router = useRouter();
   return (
-    <Card placement="page" title={strings.product} footer={<ThemeFooter />}>
+    <Card placement="page" title={strings.title} footer={<ThemeFooter />}>
       <EmptyState tone="error" title={strings.failedTitle} onRetry={() => void router.invalidate()}>
         {strings.failedText}
       </EmptyState>

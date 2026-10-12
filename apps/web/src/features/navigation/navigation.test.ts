@@ -2,7 +2,7 @@
 // against a stand in document: which element takes focus, and what the tab
 // is called.
 import { describe, expect, it } from 'vitest';
-import { focusFirstLoad, focusPage, isSamePage } from './focus.ts';
+import { createFocusRecovery, focusFirstLoad, focusPage, isSamePage, pageHeading } from './focus.ts';
 import { documentTitle, followPageTitle } from './title.ts';
 
 /** A stand in document: the elements each selector finds, which record a focus, a title, and what has focus. */
@@ -25,6 +25,10 @@ function fakeDocument(
           focused.push(selector);
         },
       };
+    },
+    querySelectorAll: (selector: string) => {
+      const element = doc.querySelector(selector);
+      return element === null ? [] : [element];
     },
   };
   return { doc, focused, asDocument: doc as unknown as Document };
@@ -146,5 +150,64 @@ describe('isSamePage', () => {
     expect(isSamePage(`${page}/overview`, other)).toBe(false);
     expect(isSamePage('/w/acme/objects/people', '/w/acme/objects/companies')).toBe(false);
     expect(isSamePage(`${page}/overview`, '/w/acme/objects/people')).toBe(false);
+  });
+});
+
+describe('pageHeading', () => {
+  it('is the first drawn h1, so a hidden old page left in the document during a slow change is never the title', () => {
+    const hidden = { textContent: 'People', checkVisibility: () => false };
+    const shown = { textContent: 'Settings', checkVisibility: () => true };
+    const doc = { querySelectorAll: () => [hidden, shown] } as unknown as Document;
+    expect(pageHeading(doc)?.textContent).toBe('Settings');
+  });
+
+  it('falls back to the first h1 when none says it is drawn, and to nothing without one', () => {
+    const only = { textContent: 'People', checkVisibility: () => false };
+    expect(pageHeading({ querySelectorAll: () => [only] } as unknown as Document)?.textContent).toBe('People');
+    expect(pageHeading({ querySelectorAll: () => [] } as unknown as Document)).toBeNull();
+  });
+});
+
+describe('createFocusRecovery', () => {
+  /** A stand in document whose focusin listener the test drives, with a title that records its focus. */
+  function recoveryDocument() {
+    let onFocusIn: (event: { target: unknown }) => void = () => undefined;
+    const focused: string[] = [];
+    const body = {};
+    const title = { focus: () => focused.push('main h1') };
+    const doc = {
+      body,
+      activeElement: body as unknown,
+      addEventListener: (_type: string, listener: (event: { target: unknown }) => void) => {
+        onFocusIn = listener;
+      },
+      querySelector: () => null,
+      querySelectorAll: () => [title],
+    };
+    const focusOn = (element: unknown) => {
+      onFocusIn({ target: element });
+    };
+    return { doc, focused, focusOn, recovery: createFocusRecovery(doc as unknown as Document) };
+  }
+  /** An element, in the document or gone from it. */
+  const element = (isConnected: boolean) => ({ isConnected });
+
+  it('moves focus to the title when the focused control left with the old content (a Retry)', () => {
+    const { focused, focusOn, recovery } = recoveryDocument();
+    focusOn(element(false));
+    recovery.recover('/w/acme/objects/people');
+    expect(focused).toEqual(['main h1']);
+  });
+
+  it('leaves focus alone when the control is still there, or focus went somewhere else', () => {
+    const still = recoveryDocument();
+    still.focusOn(element(true));
+    still.recovery.recover('/w/acme/objects/people');
+    expect(still.focused).toEqual([]);
+    const moved = recoveryDocument();
+    moved.focusOn(element(false));
+    moved.doc.activeElement = {};
+    moved.recovery.recover('/w/acme/objects/people');
+    expect(moved.focused).toEqual([]);
   });
 });

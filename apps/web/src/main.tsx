@@ -10,7 +10,7 @@ import { createRouter, RouterProvider } from '@tanstack/react-router';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { signInHref } from './features/auth/redirect.ts';
-import { focusFirstLoad, focusPage, isSamePage } from './features/navigation/focus.ts';
+import { createFocusRecovery, focusFirstLoad, focusPage, isSamePage } from './features/navigation/focus.ts';
 import { followPageTitle } from './features/navigation/title.ts';
 import { jobFinishedToast } from './features/settings/toast.ts';
 import { jobsHref } from './features/workspace/objects.ts';
@@ -66,8 +66,9 @@ const data = createDataLayer({
       crypto.getRandomValues(bytes);
     },
   }),
-  onSignedOut: (redirectTo) => {
-    goTo(signInHref(redirectTo));
+  // The session ended under the person: sign in says so, and whether a change was lost with it.
+  onSignedOut: (redirectTo, { unsaved }) => {
+    goTo(signInHref(redirectTo, unsaved ? 'unsaved' : 'ended'));
   },
   onSessionChange: forgetPages,
   currentPath: () => `${window.location.pathname}${window.location.search}`,
@@ -118,6 +119,7 @@ const router = createRouter({
 // a screen reader starts there and Tab continues from the top of the page;
 // on /sign-in and /verify, to their one field (focus.ts). On the first load,
 // only those one field pages move focus, into their field.
+const focusRecovery = createFocusRecovery(document);
 router.subscribe('onRendered', (event) => {
   const { pathname } = event.toLocation;
   if (event.fromLocation === undefined) {
@@ -126,8 +128,14 @@ router.subscribe('onRendered', (event) => {
     });
     return;
   }
-  // Another tab of the same page keeps focus on the tab chosen (spec 0017).
-  if (!event.pathChanged || isSamePage(event.fromLocation.pathname, pathname)) return;
+  // The same page again (a Retry, a reload in place) or another tab of it (spec 0017): focus stays where the
+  // person put it, unless it left with the old content, when the title takes it.
+  if (!event.pathChanged || isSamePage(event.fromLocation.pathname, pathname)) {
+    requestAnimationFrame(() => {
+      focusRecovery.recover(pathname);
+    });
+    return;
+  }
   requestAnimationFrame(() => {
     focusPage(document, pathname);
   });

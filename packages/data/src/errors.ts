@@ -112,8 +112,6 @@ export const ERROR_MESSAGES = {
   offline: "Can't reach the CRM. Check your connection, then try again.",
   internal: 'Something went wrong. Try again in a moment.',
   signedOut: 'You were signed out. Sign in again to carry on.',
-  /** Signed out while a write was on its way: it never landed, and the screen has dropped it. */
-  signedOutUnsaved: 'You were signed out, so your last change wasn’t saved. Sign in again to carry on.',
   rateLimited: 'Too many tries. Wait a moment, then try again.',
 } as const;
 

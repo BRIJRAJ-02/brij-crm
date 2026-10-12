@@ -6,8 +6,8 @@
 import { isDataError } from '@crm/data';
 import { strings } from './strings.ts';
 
-/** A refusal's sentence: the DataError's message, or the thrown value as text. */
-const messageOf = (error: unknown): string => (isDataError(error) ? error.message : String(error));
+/** A refusal's sentence: the DataError's message, or a plain one for anything else (never the thrown value). */
+const messageOf = (error: unknown): string => (isDataError(error) ? error.message : strings.somethingWrong);
 
 /** Why sending a code was refused (Continue on `/sign-in`, and Google failing to start). */
 export function sendRefusal(error: unknown): string {

@@ -280,6 +280,7 @@ function layer(
 ) {
   const notices: Notice[] = [];
   const signedOut: string[] = [];
+  const endings: boolean[] = [];
   // Sign outs and session changes, in the order they ran.
   const events: string[] = [];
   // What the layer handed monitoring.
@@ -288,8 +289,9 @@ function layer(
     origin: ORIGIN,
     notify: (notice) => notices.push(notice),
     mintId: createIdMinter({ now: () => 1_759_482_000_000, fill: (bytes) => bytes.fill(171) }),
-    onSignedOut: (redirectTo) => {
+    onSignedOut: (redirectTo, ending) => {
       signedOut.push(redirectTo);
+      endings.push(ending.unsaved);
       events.push('signed out');
     },
     onSessionChange: () => events.push('session changed'),
@@ -298,7 +300,7 @@ function layer(
     report: (fault) => faults.push(fault),
     ...more,
   });
-  return { data, notices, signedOut, events, faults };
+  return { data, notices, signedOut, endings, events, faults };
 }
 
 async function failure(promise: Promise<unknown>): Promise<DataError> {
@@ -398,14 +400,16 @@ describe('objects.list', () => {
         throw unauthenticated();
       },
     });
-    const { data, signedOut, notices } = layer(api);
+    const { data, signedOut, endings, notices } = layer(api);
     await data.me.get();
     session = false;
     const [first, second] = await Promise.all([failure(data.objects.list('acme')), failure(data.objects.list('beta'))]);
     expect(first.code).toBe('UNAUTHENTICATED');
     expect(second.code).toBe('UNAUTHENTICATED');
     expect(signedOut).toEqual(['/w/acme/objects/people?view=all']);
-    expect(notices).toEqual([{ tone: 'danger', message: 'You were signed out. Sign in again to carry on.' }]);
+    // Nothing was being written: sign in says only that the session ended, and the layer raises no toast.
+    expect(endings).toEqual([false]);
+    expect(notices).toEqual([]);
     expect(await data.me.get()).toBeUndefined();
   });
 
@@ -631,7 +635,7 @@ describe('records', () => {
         throw unauthenticated();
       },
     });
-    const { data, signedOut, notices } = layer(api);
+    const { data, signedOut, endings, notices } = layer(api);
     const view = await data.records.view('acme', PEOPLE.id);
     const row = view.getSnapshot().source.getItem(0);
     data.records.setValue('acme', { rowId: row?.id ?? '', columnId: TITLE.id, value: 'Lead' });
@@ -639,24 +643,22 @@ describe('records', () => {
     // The last person's records leave the browser with their session; nothing shows the edit.
     expect(view.getSnapshot().source.getItem(0)).toBeUndefined();
     expect(signedOut).toEqual(['/w/acme/objects/people?view=all']);
-    // The edit was on its way, so the notice says it wasn't saved.
-    expect(notices.map((notice) => notice.message)).toEqual([
-      'You were signed out, so your last change wasn’t saved. Sign in again to carry on.',
-    ]);
+    // The edit was on its way, so sign in is told it wasn't saved; no toast besides.
+    expect(endings).toEqual([true]);
+    expect(notices).toEqual([]);
   });
 
-  it('says a new column wasn’t saved when the session ended while it was on its way', async () => {
+  it('tells sign in a new column wasn’t saved when the session ended while it was on its way', async () => {
     const api = fakeApi({
       addAttribute: () => {
         throw unauthenticated();
       },
     });
-    const { data, signedOut, notices } = layer(api);
+    const { data, signedOut, endings, notices } = layer(api);
     await failure(data.attributes.create('acme', { objectId: PEOPLE.id, title: 'Nickname', type: 'text' }));
     expect(signedOut).toHaveLength(1);
-    expect(notices.map((notice) => notice.message)).toEqual([
-      'You were signed out, so your last change wasn’t saved. Sign in again to carry on.',
-    ]);
+    expect(endings).toEqual([true]);
+    expect(notices).toEqual([]);
   });
 });
 

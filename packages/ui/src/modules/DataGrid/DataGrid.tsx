@@ -305,6 +305,21 @@ export function DataGrid<Row>({
   const tipAnchor = useRef<HTMLElement | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const hoveredCell = useRef<string | undefined>(undefined);
+  // Retry leaves with the error state it sits in. When the grid comes back and
+  // focus fell to the page with it, the grid takes focus, so the keyboard
+  // carries on from here rather than from the top of the document.
+  const wasFailed = useRef(false);
+  useEffect(() => {
+    if (status === 'error') {
+      wasFailed.current = true;
+      return;
+    }
+    if (!wasFailed.current) return;
+    wasFailed.current = false;
+    const grid = scrollRef.current;
+    const active = grid?.ownerDocument.activeElement;
+    if (grid !== null && (active === null || active === grid.ownerDocument.body)) grid.focus();
+  }, [status]);
   useEffect(
     () => () => {
       clearTimeout(hoverTimer.current);

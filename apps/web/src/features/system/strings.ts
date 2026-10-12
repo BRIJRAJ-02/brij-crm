@@ -1,6 +1,7 @@
 /** The status screen's copy. */
 export const strings = {
-  product: 'CRM',
+  /** The page's title, and so its tab's ("System status · CRM"). */
+  title: 'System status',
   answering: 'The API and the database are answering.',
   healthy: 'Healthy',
   environment: 'Environment',
@@ -14,5 +15,6 @@ export const strings = {
   notFoundTitle: 'Page not found',
   notFoundText: 'There’s nothing at this address.',
   notFoundHint: 'Check the address for a typo.',
-  home: 'Open your workspace',
+  /** `/` opens the workspace when signed in and sign in when not, so the link names neither. */
+  home: 'Back to the start',
 } as const;

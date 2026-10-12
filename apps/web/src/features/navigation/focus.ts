@@ -42,9 +42,48 @@ function isInTabList(doc: Document): boolean {
 export function focusPage(doc: Document, pathname: string): void {
   if (isInTabList(doc)) return;
   const field = FIRST_FIELD[pathname];
-  const target =
-    (field === undefined ? null : doc.querySelector<HTMLElement>(field)) ?? doc.querySelector<HTMLElement>('main h1');
+  const target = (field === undefined ? null : doc.querySelector<HTMLElement>(field)) ?? pageHeading(doc);
   target?.focus();
+}
+
+/** Whether an element is drawn: `checkVisibility` where the browser has it, else taken as drawn. */
+function isDrawn(element: Element): boolean {
+  return !('checkVisibility' in element) || typeof element.checkVisibility !== 'function' || element.checkVisibility();
+}
+
+/**
+ * The page's title: the first h1 in a main landmark that is drawn, else the
+ * first at all. While a slow route change resolves, the old page can stay in
+ * the document, hidden, ahead of the new one; its h1 is never the title.
+ */
+export function pageHeading(doc: Document): HTMLElement | null {
+  const headings = [...doc.querySelectorAll<HTMLElement>('main h1')];
+  return headings.find(isDrawn) ?? headings[0] ?? null;
+}
+
+/**
+ * Notices focus lost with the content it sat in: a Retry that leaves with
+ * its error state, a button whose page loaded again in place. It remembers
+ * the element that last took focus; `recover`, run after the page renders
+ * again, moves focus to the page's title when that element has left the
+ * document and focus fell to the body. Focus the person put anywhere else
+ * (a click on the page's background included) stays where it is.
+ */
+export function createFocusRecovery(doc: Document): { readonly recover: (pathname: string) => void } {
+  // Only whether it is still in the document matters (a Node's `isConnected`).
+  let last: { readonly isConnected: boolean } | undefined;
+  doc.addEventListener('focusin', (event) => {
+    const { target } = event;
+    last = typeof target === 'object' && target !== null && 'isConnected' in target ? (target as Node) : undefined;
+  });
+  return {
+    recover: (pathname) => {
+      const active = doc.activeElement;
+      if (last === undefined || last.isConnected || (active !== null && active !== doc.body)) return;
+      last = undefined;
+      focusPage(doc, pathname);
+    },
+  };
 }
 
 /** A record page's address: its tab is the last segment (spec 0017). */

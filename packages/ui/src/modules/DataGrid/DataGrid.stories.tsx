@@ -36,6 +36,8 @@ interface SampleGridProps {
   readonly withAvatars?: boolean;
   /** Rows with no name: their row header says `untitled`, muted. */
   readonly unnamed?: readonly string[];
+  /** Retry on the error state; does nothing unless given. */
+  readonly onRetry?: () => void;
 }
 
 /** A grid over sample companies that keeps its own edits, columns and selection, as a screen would. */
@@ -54,6 +56,7 @@ function SampleGrid({
   sort,
   withAvatars = false,
   unnamed = [],
+  onRetry = () => undefined,
 }: SampleGridProps) {
   const [data, setData] = useState(() =>
     sampleRows(count).map((row) =>
@@ -120,7 +123,7 @@ function SampleGrid({
         status={status}
         members={SAMPLE_MEMBERS}
         editorProps={editorProps}
-        onRetry={() => undefined}
+        onRetry={onRetry}
         {...(footer === undefined ? {} : { footer })}
         {...(cellErrors === undefined ? {} : { cellErrors })}
         {...(onRowOpen === undefined ? {} : { onRowOpen })}
@@ -461,6 +464,31 @@ export const Empty: Story = {
 /** The load failed, with a retry. */
 export const Error: Story = {
   args: { status: 'error' },
+};
+
+/** A failed load whose Retry brings the rows back, as a screen's would. */
+function RetryingGrid() {
+  const [status, setStatus] = useState<GridStatus>('error');
+  return (
+    <SampleGrid
+      status={status}
+      onRetry={() => {
+        setStatus('ready');
+      }}
+    />
+  );
+}
+
+/** Retry leaves with the error state; the grid that comes back takes focus, so the keyboard carries on there. */
+export const RetryKeepsFocus: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <RetryingGrid />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
+    const grid = canvas.getByRole('grid', { name: 'Companies' });
+    // The grid, or the cell it hands focus to.
+    await waitFor(() => expect(grid.contains(grid.ownerDocument.activeElement)).toBe(true));
+  },
 };
 
 /** The viewer can't see this view. */

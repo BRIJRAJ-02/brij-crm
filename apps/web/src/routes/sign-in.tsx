@@ -8,7 +8,8 @@ import { strings } from '../features/auth/strings.ts';
 // Signed out only: someone already signed in goes straight on. Google shows
 // only where the API says it is set up; if the status check fails, the email
 // code still works, so the page shows without it. `?error=` is a refused
-// Google sign in, said on the form in the page's own words.
+// Google sign in, said on the form in the page's own words; `?signedOut=` is
+// a session that ended under the person, said the same way.
 export const Route = createFileRoute('/sign-in')({
   validateSearch: redirectSearch,
   loaderDeps: ({ search }) => ({ redirect: search.redirect }),
@@ -28,7 +29,7 @@ export const Route = createFileRoute('/sign-in')({
 
 function SignInRoute() {
   const { google, email } = Route.useLoaderData();
-  const { redirect: target, error } = Route.useSearch();
+  const { redirect: target, error, signedOut } = Route.useSearch();
   const { data } = Route.useRouteContext();
   return (
     <SignInScreen
@@ -37,6 +38,7 @@ function SignInRoute() {
       redirect={target}
       returnTo={safeRedirect(target)}
       googleError={error}
+      signedOut={signedOut}
       email={email}
     />
   );

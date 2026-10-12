@@ -24,14 +24,7 @@ import type { ContractRouterClient } from '@orpc/contract';
 import type { ActivityFeed, ActivityFeeds } from './activity/feed.ts';
 import { createAuth } from './auth/auth.ts';
 import { createTrashedLookups, type TrashedSource } from './records/trashed.ts';
-import {
-  type DataFault,
-  ERROR_MESSAGES,
-  isUnseenFault,
-  parseRetryAfter,
-  toDataError,
-  withRetryAfter,
-} from './errors.ts';
+import { type DataFault, isUnseenFault, parseRetryAfter, toDataError, withRetryAfter } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
@@ -157,6 +150,12 @@ interface CallContext {
 
 type ApiClient = ContractRouterClient<typeof contract, CallContext>;
 
+/** How a session ended under the person (`onSignedOut`): whether a change was lost with it. */
+export interface SessionEnding {
+  /** A write was still waiting for its answer, so it never landed and the screen dropped it. */
+  readonly unsaved: boolean;
+}
+
 /** One API call's options: the context, and the signal that cancels it. */
 interface CallOptions {
   readonly context: CallContext;
@@ -204,9 +203,12 @@ export interface DataLayerOptions {
   /**
    * The session ended while in use (a call answered 401): the app goes to
    * sign in, coming back to `redirectTo` (the path and query the person was
-   * on) afterwards.
+   * on) afterwards, and says so there. `ending.unsaved` is true when a write
+   * was still waiting for its answer: that change is lost, and the sign in
+   * page says it wasn't saved. The layer raises no toast of its own, so the
+   * person hears it once, on the page that stays.
    */
-  readonly onSignedOut: (redirectTo: string) => void;
+  readonly onSignedOut: (redirectTo: string, ending: SessionEnding) => void;
   /** The path and query the person is on now, for `onSignedOut`. */
   readonly currentPath: () => string;
   /**
@@ -402,12 +404,11 @@ export function createDataLayer({
       if (failure.code === 'UNAUTHENTICATED' && !ended) {
         ended = true;
         // A write still waiting for its answer is lost with the session (its layer leaves with the records), so
-        // the notice says so; read before forget() clears the log.
+        // sign in says so; read before forget() clears the log.
         const unsaved = mutations.unanswered();
         forget();
-        notify({ tone: 'danger', message: unsaved ? ERROR_MESSAGES.signedOutUnsaved : ERROR_MESSAGES.signedOut });
         // Off to sign in first, then the app drops the last person's pages.
-        onSignedOut(currentPath());
+        onSignedOut(currentPath(), { unsaved });
         onSessionChange();
       }
       throw failure;
