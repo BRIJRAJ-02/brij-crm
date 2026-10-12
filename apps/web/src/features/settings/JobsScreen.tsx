@@ -7,6 +7,7 @@ import { useJobs } from '@crm/data/react';
 import { Badge, Button, EmptyState, Modal, ProgressBar, RelativeTime, Table, type TableColumn } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
 import { useParams } from '@tanstack/react-router';
+import { useCan } from '../workspace/WorkspacePage.tsx';
 import { settingsCrumbs, SettingsPage } from './SettingsPage.tsx';
 import { strings } from './jobs-strings.ts';
 
@@ -26,6 +27,9 @@ export interface JobsScreenProps {
 
 /** The test job "Run a test job" starts: 20,000 synthetic items, every 50th refused, so progress and the refusal summary show. */
 const TEST_JOB = { items: 20_000, batchSize: 500, batchMillis: 200, refuseEvery: 50 } as const;
+
+/** A little past the confirm's exit (the dialog's `duration-exit`, 120 ms), when its focus restore has run. */
+const CONFIRM_EXIT_MS = 200;
 
 const COLUMNS: readonly TableColumn[] = [
   { id: 'job', label: strings.columns.job, isRowHeader: true },
@@ -131,7 +135,14 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
     void data.jobs.cancel(slug, job.id);
     // A job not yet running is cancelled at once and its Cancel goes: focus moves to the page's title rather
     // than being lost. A running one keeps a pending button in its row (below) to come back to.
-    if (job.status !== 'running') requestAnimationFrame(() => titleRef.current?.focus());
+    if (job.status !== 'running') {
+      requestAnimationFrame(() => titleRef.current?.focus());
+      // The confirm restores focus to its trigger as its exit ends; that trigger went with the cancel, so focus
+      // could fall to the document: the title takes it again once the dialog is gone.
+      setTimeout(() => {
+        if (document.activeElement === document.body) titleRef.current?.focus();
+      }, CONFIRM_EXIT_MS);
+    }
   };
 
   const renderCell = (job: JobView, column: string) => {
@@ -169,21 +180,21 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
   const body =
     snapshot.status === 'error' ? (
       <EmptyState tone="error" title={strings.failedTitle} onRetry={() => void view.reload()}>
-        {strings.failedText}
+        {snapshot.error?.message ?? strings.failedText}
       </EmptyState>
     ) : (
       <>
         <Table
           label={strings.tableLabel}
-          columns={COLUMNS}
+          // A member sees only their own jobs, so "Started by" would always name them.
+          columns={isAll ? COLUMNS : COLUMNS.filter((column) => column.id !== 'startedBy')}
           rows={snapshot.jobs}
           getRowId={(job) => job.id}
           renderCell={renderCell}
           isLoading={snapshot.status === 'loading'}
           emptyState={
-            <EmptyState icon="list-checks" title={strings.emptyTitle}>
-              {isAll ? strings.emptyText : strings.emptyMineText}
-            </EmptyState>
+            // The page's description already says what runs here.
+            <EmptyState icon="list-checks" title={strings.emptyTitle} />
           }
         />
         {snapshot.hasMore && (
@@ -242,11 +253,18 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
 /** Settings, Background jobs while it loads: the frame, the header and skeleton rows in their places. */
 export function JobsPending() {
   const { slug = '' } = useParams({ strict: false });
+  // The description the page arrives with, so the table doesn't move down when it does.
+  const isAll = useCan('jobs.manage');
   return (
-    <SettingsPage title={strings.title} crumbs={settingsCrumbs(slug, 'objects')} current="jobs">
+    <SettingsPage
+      title={strings.title}
+      crumbs={settingsCrumbs(slug, 'objects')}
+      description={isAll ? strings.description : strings.descriptionMine}
+      current="jobs"
+    >
       <Table
         label={strings.tableLabel}
-        columns={COLUMNS}
+        columns={isAll ? COLUMNS : COLUMNS.filter((column) => column.id !== 'startedBy')}
         rows={[]}
         getRowId={() => ''}
         renderCell={() => null}

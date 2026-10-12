@@ -102,7 +102,7 @@ export const strings = {
   restoredToast: (plural: string) => `${plural} restored.`,
   /** An address in settings that names nothing. */
   missingTitle: 'Page not found',
-  missingText: 'There’s no object or tab at this address.',
-  backToObjects: 'Back to objects',
-  checkAddress: 'Check the address for a typo, or go back to the objects.',
+  missingText: 'There’s nothing at this address.',
+  checkAddress: 'Check the address for a typo, or go back to settings.',
+  backToSettings: 'Back to settings',
 } as const;

@@ -25,7 +25,7 @@ export interface SettingsPageProps {
   readonly isLoading?: boolean;
   /** Which settings page this is, marked current in the navigation (Objects by default). */
   readonly current?: SettingsPageId;
-  /** The h1, for a page that moves focus to its title itself (a cancelled job's Cancel goes away). */
+  /** The visible title, for a page that moves focus to it itself (a cancelled job's Cancel goes away). */
   readonly titleRef?: Ref<HTMLHeadingElement>;
   readonly children: ReactNode;
 }
@@ -55,7 +55,6 @@ export function SettingsPage({
             {...(crumbs === undefined ? {} : { crumbs })}
             {...(icon === undefined ? {} : { icon })}
             {...(hue === undefined ? {} : { hue })}
-            {...(titleRef === undefined ? {} : { titleRef })}
           />
         ),
         body: (
@@ -65,6 +64,7 @@ export function SettingsPage({
             navLabel={strings.settings}
             title={title}
             isLoading={isLoading}
+            {...(titleRef === undefined ? {} : { titleRef })}
             {...(icon === undefined ? {} : { icon })}
             {...(hue === undefined ? {} : { hue })}
             {...(meta === undefined ? {} : { meta })}
@@ -95,7 +95,7 @@ export function SettingsMissing({ current = 'objects' }: { readonly current?: Se
       <EmptyState
         icon="search"
         title={strings.missingText}
-        actions={<Link href={objectsSettingsHref(slug)}>{strings.backToObjects}</Link>}
+        actions={<Link href={objectsSettingsHref(slug)}>{strings.backToSettings}</Link>}
       >
         {strings.checkAddress}
       </EmptyState>

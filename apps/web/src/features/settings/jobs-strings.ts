@@ -6,8 +6,8 @@ export const strings = {
   /** The page's title, and its entry in the settings navigation. */
   title: 'Background jobs',
   /** Under the title: every job for owners and admins, the person's own for everyone else. */
-  description: 'Long work in this workspace, such as bulk changes, with its progress.',
-  descriptionMine: 'Long work you started, such as bulk changes, with its progress.',
+  description: 'Follow long work in this workspace, such as bulk changes, as it runs.',
+  descriptionMine: 'Follow long work you started, such as bulk changes, as it runs.',
   tableLabel: 'Background jobs',
   columns: {
     job: 'Job',
@@ -50,10 +50,8 @@ export const strings = {
   cancelJob: 'Cancel job',
   showMore: 'Show more',
   emptyTitle: 'No background jobs yet',
-  emptyText: 'Long work, such as bulk changes, runs here, with its progress.',
-  emptyMineText: 'Jobs you start, such as bulk changes, run here, with their progress.',
   failedTitle: 'Couldn’t load the background jobs',
-  failedText: 'Check your connection, then try again.',
+  failedText: 'Something went wrong. Try again in a moment.',
   /** Local and previews only (AC-123). */
   runTest: 'Run a test job',
   /** The toast when a job this browser started ends (AC-119): "Test job: Done, 6 refused". */
