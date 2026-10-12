@@ -36,6 +36,7 @@
     "load:run": "node packages/load/scripts/run.ts",
     "load:reset": "node packages/core/scripts/load-reset.ts",
     "load:jobs": "node packages/core/scripts/jobs-fairness.ts",
+    "load:bench-hub-clear": "node packages/core/scripts/bench-hub-clear.ts",
     "boundaries": "turbo boundaries",
     "lint": "turbo run lint lint:root",
     "lint:root": "eslint .railway eslint.config.js stylelint.config.js",

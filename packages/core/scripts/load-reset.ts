@@ -59,10 +59,10 @@ export interface MovedPerson {
 
 /**
  * The live seeded people whose Company now differs from the one they held
- * when the seed finished (`seededAt`), with the hub on either side: the people
- * the `hub` scenario and the hub clear bench moved off the hub or onto it. A
+ * when the seed finished (`seededAt`): the people the `hub` scenario moved
+ * off the hub and not back, and those the hub clear bench moved anywhere. A
  * link's history keeps its ended versions, so the seeded one is the version
- * current at `seededAt`.
+ * current at `seededAt`. Nothing else the harness does writes a Company.
  */
 export async function movedPeople(db: Database, manifest: LoadManifest): Promise<readonly MovedPerson[]> {
   const companyAttributeId = manifest.attributes['people.company'];
@@ -91,7 +91,6 @@ export async function movedPeople(db: Database, manifest: LoadManifest): Promise
       where r.workspace_id = ${manifest.workspaceId} and r.object_id = ${peopleObjectId} and r.deleted_at is null
         and r.created_at <= ${manifest.seededAt}::timestamptz
         and s.company is distinct from n.company
-        and (s.company = ${manifest.hubCompanyId} or n.company = ${manifest.hubCompanyId})
       order by r.id
     `);
     return result.rows.map((row) => ({ id: row.id, seeded: row.seeded ?? undefined }));

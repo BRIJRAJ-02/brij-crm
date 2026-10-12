@@ -8,6 +8,7 @@ import { createDatabase, createIdentityStore, type Database, type IdentityStore 
 import { testQuery } from '@crm/db/testing';
 import { createRecord, newId, readRecordsById, setValues } from '../src/index.ts';
 import { systemScope } from '../src/system.ts';
+import { benchHubClear } from './bench-hub-clear.ts';
 import { harnessRecords, movedPeople, resetLoadWorkspace } from './load-reset.ts';
 import { freeRecordSlots } from './load-slots.ts';
 import { SCALE_BUDGET } from './scale-budget.ts';
@@ -350,5 +351,53 @@ describe('pnpm load:reset (spec 0011, AC-209)', () => {
       (error: unknown) => error,
     );
     expect(isLoadRefusal(unknown) && unknown.message.includes('LOAD_DATABASE_URL_OWNER')).toBe(true);
+  });
+});
+
+describe('pnpm load:bench-hub-clear (spec 0011, AC-214)', () => {
+  it("clears the hub's Team in one write while writers link people, then writes it back", async () => {
+    const result = await benchHubClear(db, manifest, () => undefined, {
+      writers: 4,
+      perSecond: 10,
+      pool: 10,
+      peoplePerWriter: 3,
+      beforeMs: 400,
+      afterMs: 400,
+    });
+    // The live ones: the 1% in the trash keep their links (a restore brings them back), and the clear leaves them.
+    expect(result.team).toBeLessThanOrEqual(profile.hubTeam);
+    expect(result.team).toBeGreaterThan(profile.hubTeam * 0.95);
+    expect(result.clearMs).toBeGreaterThan(0);
+    expect(result.writes?.count ?? 0).toBeGreaterThan(5);
+    expect(result.walBytes).toBeGreaterThan(0);
+    // Every cleared person came back, plus whoever the writers moved.
+    expect(result.restored).toBeGreaterThanOrEqual(result.team);
+    expect(await movedPeople(db, manifest)).toEqual([]);
+    const { team } = await one(
+      `select count(*)::int as team from record_links l join attributes a on a.workspace_id = l.workspace_id
+         and a.relationship_id = l.relationship_id
+       where l.workspace_id = $1 and a.id = $2 and l.to_record_id = $3 and l.active_until is null`,
+      [manifest.workspaceId, manifest.hubTeamAttributeId, manifest.hubCompanyId],
+    );
+    expect(team).toBe(profile.hubTeam);
+  }, 60_000);
+
+  it("refuses (exit 3) while the hub's Team isn't as seeded", async () => {
+    const scope = systemScope(db, manifest.workspaceId);
+    const [person] = await testQuery<{ id: string }>(
+      ownerUrl,
+      `select l.from_record_id::text as id from record_links l join attributes a on a.workspace_id = l.workspace_id
+         and a.relationship_id = l.relationship_id
+       join records p on p.workspace_id = l.workspace_id and p.id = l.from_record_id and p.deleted_at is null
+       where l.workspace_id = $1 and a.id = $2 and l.to_record_id = $3 and l.active_until is null limit 1`,
+      [manifest.workspaceId, manifest.hubTeamAttributeId, manifest.hubCompanyId],
+    );
+    await setValues(scope, {
+      recordId: person?.id ?? '',
+      values: { [manifest.attributes['people.company'] ?? '']: { value: null } },
+    });
+    const refused: unknown = await benchHubClear(db, manifest).catch((error: unknown) => error);
+    expect(isLoadRefusal(refused) && refused.message.includes('pnpm load:reset')).toBe(true);
+    expect((await resetLoadWorkspace(db, manifest)).restored).toBe(1);
   });
 });
