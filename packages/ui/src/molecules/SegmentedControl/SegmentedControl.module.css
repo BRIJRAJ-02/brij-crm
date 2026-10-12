@@ -67,8 +67,10 @@
     }
   }
 
+  /* The 1px accent ring inside the segment, as on other items in a track
+     (tabs, sidebar items): the faint halo alone is under 3:1 (WCAG 1.4.11). */
   .segment[data-focus-visible] {
-    box-shadow: var(--shadow-focus);
+    box-shadow: var(--shadow-focus-inset);
   }
 
   .segment[data-disabled] {
@@ -104,6 +106,11 @@
 
     .thumb {
       border-color: Highlight;
+    }
+
+    .segment[data-focus-visible] {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: calc(-1 * var(--border-width-thick));
     }
   }
 }

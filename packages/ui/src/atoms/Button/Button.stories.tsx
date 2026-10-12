@@ -188,6 +188,21 @@ export const Focused: Story = {
   },
 };
 
+/**
+ * A primary focused from the keyboard: its edge is already blue, so the 1px
+ * accent ring sits just outside it, past a 1px gap (danger does the same).
+ */
+export const FocusedPrimary: Story = {
+  args: { variant: 'primary', children: 'Create', icon: undefined, kbd: '⌘↵' },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    const button = canvas.getByRole('button', { name: 'Create' });
+    await expect(button).toHaveFocus();
+    await expect(getComputedStyle(button).outlineStyle).toBe('solid');
+    await expect(getComputedStyle(button).outlineOffset).not.toBe('0px');
+  },
+};
+
 /** By keyboard alone: Tab moves between buttons and skips a disabled one, Enter and Space press. */
 export const Keyboard: Story = {
   parameters: { crm: { screenshot: false } },

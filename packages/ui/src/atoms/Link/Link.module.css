@@ -17,9 +17,13 @@
     }
   }
 
+  /* The 1px accent ring just outside the text, with the faint halo: the halo
+     alone is under 3:1 (WCAG 1.4.11). */
   .root[data-focus-visible] {
     text-decoration-color: currentColor;
     box-shadow: var(--shadow-focus);
+    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline-offset: var(--border-width-hairline);
   }
 
   .text {

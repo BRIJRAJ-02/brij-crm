@@ -95,7 +95,9 @@ export function Modal({
         data-opened-by={isFocusVisible ? 'keyboard' : 'pointer'}
       >
         <Dialog className={styles.dialog} role={isAlert ? 'alertdialog' : 'dialog'}>
-          <header className={styles.head}>
+          {/* Plain boxes, not header and footer: inside a dialog those read as a second banner and
+              contentinfo landmark beside the page's own. */}
+          <div className={styles.head}>
             {isAlert ? (
               <span className={styles.alert}>
                 <Icon name="triangle-alert" size="md" />
@@ -119,9 +121,9 @@ export function Modal({
                 <Button slot="close" variant="ghost" icon="x" label={strings.close} />
               </span>
             )}
-          </header>
+          </div>
           <div className={styles.body}>{children}</div>
-          {actions !== undefined && <footer className={styles.foot}>{actions}</footer>}
+          {actions !== undefined && <div className={styles.foot}>{actions}</div>}
         </Dialog>
       </AriaModal>
     </ModalOverlay>

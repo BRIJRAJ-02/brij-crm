@@ -146,6 +146,16 @@
     box-shadow: var(--shadow-primary), var(--shadow-focus);
   }
 
+  /* A filled or red edged button can't show focus by turning its edge accent
+     (the primary's edge is already blue, the danger's stays red), and the
+     faint halo alone is under 3:1 (WCAG 1.4.11). So the 1px accent ring sits
+     just outside, past a 1px gap of the surface. */
+  .root[data-variant='primary'][data-focus-visible],
+  .root[data-variant='danger'][data-focus-visible] {
+    outline: var(--border-width-hairline) solid var(--accent-line);
+    outline-offset: var(--border-width-hairline);
+  }
+
   .root[data-disabled] {
     opacity: var(--opacity-disabled);
     cursor: default;
@@ -194,7 +204,9 @@
       border-color: ButtonText;
     }
 
-    .root[data-focus-visible] {
+    .root[data-focus-visible],
+    .root[data-variant='primary'][data-focus-visible],
+    .root[data-variant='danger'][data-focus-visible] {
       outline: var(--border-width-thick) solid Highlight;
       outline-offset: var(--border-width-hairline);
     }

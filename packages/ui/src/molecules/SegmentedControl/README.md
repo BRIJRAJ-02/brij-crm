@@ -21,7 +21,7 @@ Ported from the artifact's SegmentedControl card (version 8). Table or Board (#2
 
 ## States
 
-Chosen (raised thumb), hover (pointer only), focus, disabled; horizontal or vertical. The thumb slides with `ease-in-out` over `duration-move` for a pointer, and jumps for the keyboard and under reduced motion.
+Chosen (raised thumb), hover (pointer only), focus (the 1px `accent-line` ring inside the segment), disabled; horizontal or vertical. The thumb slides with `ease-in-out` over `duration-move` for a pointer, and jumps for the keyboard and under reduced motion.
 
 ## Keyboard
 
