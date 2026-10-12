@@ -7,6 +7,7 @@ import { objectsRouter } from './modules/objects/router.ts';
 import { optionsRouter } from './modules/options/router.ts';
 import { realtimeRouter } from './modules/realtime/router.ts';
 import { recordsRouter } from './modules/records/router.ts';
+import { relationshipsRouter } from './modules/relationships/router.ts';
 import { systemRouter } from './modules/system/router.ts';
 import { usageRouter } from './modules/usage/router.ts';
 import { workspacesRouter } from './modules/workspaces/router.ts';
@@ -21,6 +22,7 @@ export const router = base.router({
   attributes: attributesRouter,
   options: optionsRouter,
   records: recordsRouter,
+  relationships: relationshipsRouter,
   members: membersRouter,
   access: accessRouter,
   realtime: realtimeRouter,

@@ -218,6 +218,47 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'definitions', object_id: m.people.id, attribute_ids: [attributeId], mutation_id: mutationId },
     ];
   },
+  // Relationship writes (spec 0014): one definitions row for each object, naming its side.
+  'relationships.create': async (m, mutationId) => {
+    const made = await m.client.relationships.create({
+      workspace: m.slug,
+      id: newId(),
+      cardinality: 'many_to_many',
+      from: { objectId: m.people.id, title: 'Investments' },
+      to: { objectId: m.companies.id, title: 'Investors' },
+      mutationId,
+    });
+    return [made.from, made.to]
+      .map((end) => ({
+        kind: 'definitions',
+        object_id: end.objectId,
+        attribute_ids: [end.id],
+        mutation_id: mutationId,
+      }))
+      .sort((a, b) => a.object_id.localeCompare(b.object_id));
+  },
+  'relationships.update': async (m, mutationId) => {
+    const made = await m.client.relationships.create({
+      workspace: m.slug,
+      id: newId(),
+      cardinality: 'many_to_one',
+      from: { objectId: m.people.id, title: 'Manager' },
+      to: { objectId: m.people.id, title: 'Reports' },
+      mutationId: newId(),
+    });
+    await m.client.relationships.update({
+      workspace: m.slug,
+      relationshipId: made.relationshipId,
+      from: { title: 'Lead' },
+      to: { title: 'Team members' },
+      mutationId,
+    });
+    const both = [made.from.id, made.to.id].sort();
+    return [
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: both },
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: both, mutation_id: mutationId },
+    ];
+  },
   // Option writes (spec 0012, milestone 3): one definitions row for the attribute's object, naming the attribute.
   'options.create': async (m, mutationId) => {
     const tier = await tierOn(m);
@@ -327,6 +368,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'jobs.cancel': 2,
   'jobs.confirm': 2,
   'attributes.restore': 2,
+  'relationships.update': 2,
   'options.create': 2,
   'options.update': 2,
   'options.reorder': 2,
