@@ -1,14 +1,23 @@
 // A record's timeline in the browser (spec 0017): `records.activity` pages,
 // ordered and merged by each entry's key, mapped to the shapes the library's
-// ActivityFeed draws, with who did it named from the workspace's members.
-// One feed per record, shared by the Activity tab and Overview's "Recent
-// activity" (its first five), so both read the first page once. Milestone 1
-// reads the first page only; paging as the feed scrolls and the live head
-// refetch come with milestone 2. Loaded with the first record page, so it
-// stays out of the first load.
-import type { ActivityItem, ActorDisplay, MemberSummary, RecordActivity } from '@crm/contracts';
+// ActivityFeed draws, with who did it named from the workspace's members and
+// each attribute from the object's definitions. One feed per record, shared
+// by the Activity tab and Overview's "Recent activity" (its first five), so
+// both read the first page once. It pages as the feed scrolls, and keeps
+// itself live by reading the first page again (`refresh`) when a change names
+// the record, at most twice a second, merging by key. Loaded with the first
+// record page, so it stays out of the first load.
+import type {
+  ActivityItem,
+  ActorDisplay,
+  AttributeDefinition,
+  MemberSummary,
+  RecordActivity,
+  RecordRefDisplay,
+} from '@crm/contracts';
 import { ACTIVITY_PAGE, ACTIVITY_RECENT, compareActivityKeys } from '@crm/contracts/activity-keys';
 import { toDataError, type DataError } from '../errors.ts';
+import { toFieldAttribute, type FieldAttributeShape } from '../fields.ts';
 
 /** Who did something when the members list can't name them. */
 export const ACTOR_WORDS = {
@@ -23,26 +32,62 @@ export const ACTOR_WORDS = {
 /** How long a members list read again for an unknown actor stays good enough, in ms: a minute. */
 const MEMBERS_FRESH_MS = 60_000;
 
-/**
- * One entry as the library's ActivityFeed draws it (structurally its
- * `ActivityEntry`): who did it, when, and what. Milestone 1 maps the creation
- * entry; changes and link entries join with milestone 2, and a kind with no
- * mapping is left out.
- */
-export interface ActivityEntryShape {
+/** The least time between two reads of a feed's first page, in ms (spec 0017): at most two a second. */
+export const ACTIVITY_REFRESH_MS = 500;
+
+/** How close to the last loaded entry the screen gets before the next page is asked for. */
+const LOAD_AHEAD = 10;
+
+/** How long after a failed page the next scroll may ask again, in ms. */
+const MORE_RETRY_MS = 2_000;
+
+interface EntryBase {
   readonly id: string;
   /** When it happened, ISO 8601 in UTC (milliseconds), for display. */
   readonly at: string;
   readonly actor: ActorDisplay;
-  readonly kind: 'created';
 }
+
+/** A record a link entry names, as the library's `LinkedRecord` (the screen adds its page's `href`). */
+export interface LinkedRecordShape {
+  readonly display: RecordRefDisplay;
+  readonly href?: string;
+}
+
+/**
+ * One entry as the library's ActivityFeed draws it (structurally its
+ * `ActivityEntry`): the creation, a value's change (a side that holds one
+ * record too, with the records' displays), or what one write linked and
+ * unlinked on a side that holds many. A kind with no mapping is left out.
+ */
+export type ActivityEntryShape =
+  | (EntryBase & { readonly kind: 'created' })
+  | (EntryBase & {
+      readonly kind: 'change';
+      readonly attribute: FieldAttributeShape;
+      readonly from: unknown;
+      readonly to: unknown;
+      readonly fromDisplay?: unknown;
+      readonly toDisplay?: unknown;
+    })
+  | (EntryBase & {
+      readonly kind: 'links';
+      readonly attribute: FieldAttributeShape;
+      readonly added: readonly LinkedRecordShape[];
+      readonly addedCount: number;
+      readonly removed: readonly LinkedRecordShape[];
+      readonly removedCount: number;
+    });
 
 /** Entries from outside, as the library's `ListSource` reads them. */
 export interface EntrySource {
+  /** The entries loaded, and one still loading past them while there are more. */
   readonly count: number;
   readonly getItem: (index: number) => ActivityEntryShape | undefined;
   /** Any entry's key, its id (taking any entry with one, so the feed's wider entry type fits). */
   readonly getKey: (entry: { readonly id: string }) => string;
+  /** The range on screen: near the end, the next page is read. */
+  readonly onRangeChange?: (range: { readonly start: number; readonly end: number }) => void;
 }
 
 /** Where a timeline stands: loading its first page, ready, failed (with Retry), or the record isn't available. */
@@ -79,6 +124,8 @@ export interface ActivityFeedsOptions {
   readonly page: (workspace: string, recordId: string, cursor?: string) => Promise<RecordActivity>;
   /** The workspace's members, cached; `fresh` reads them again (someone who joined since). */
   readonly members: (workspace: string, fresh: boolean) => Promise<readonly MemberSummary[]>;
+  /** An object's live attributes, cached (the definitions store), to name and draw each change. */
+  readonly attributes: (workspace: string, objectId: string) => Promise<readonly AttributeDefinition[]>;
   /** Runs `run` after `ms`, answering a cancel. */
   readonly later?: (run: () => void, ms: number) => () => void;
   /** How long a timeline nobody shows is kept, in ms: 30 seconds. */
@@ -107,22 +154,93 @@ export function actorDisplay(
   return { type: 'system', id: null, name: ACTOR_WORDS.system };
 }
 
-/** An item as the feed draws it, or undefined for a kind this client has no mapping for yet. */
-export function toActivityEntry(
-  item: ActivityItem,
-  members: readonly MemberSummary[] | undefined,
-): ActivityEntryShape | undefined {
-  if (item.kind !== 'created') return undefined;
-  return { id: item.id, at: item.at, actor: actorDisplay(item.actor, members), kind: 'created' };
+/** What mapping an item needs: the members (undefined when they couldn't be read) and the object's attributes. */
+export interface EntryContext {
+  readonly members: readonly MemberSummary[] | undefined;
+  readonly attributes: ReadonlyMap<string, AttributeDefinition>;
 }
 
-const EMPTY: readonly ActivityEntryShape[] = [];
+/** A member or actor value as the field set's display: the member by name, or the actor's kind. */
+function actorValueDisplay(value: unknown, members: readonly MemberSummary[] | undefined): ActorDisplay | undefined {
+  if (typeof value !== 'object' || value === null || !('type' in value)) return undefined;
+  const type = (value as { readonly type: unknown }).type;
+  const id = 'id' in value ? (value as { readonly id: unknown }).id : null;
+  if (type !== 'member' && type !== 'api_key' && type !== 'automation' && type !== 'system') return undefined;
+  return actorDisplay({ type, id: typeof id === 'string' ? id : null }, members);
+}
 
-const sourceOf = (entries: readonly ActivityEntryShape[]): EntrySource => ({
-  count: entries.length,
-  getItem: (index) => entries[index],
-  getKey: (entry) => entry.id,
-});
+/**
+ * An item as the feed draws it, or undefined for a kind this client has no
+ * mapping for yet, or a change to an attribute the definitions don't hold
+ * (archived or hidden since: a definitions change reads the feed again).
+ */
+export function toActivityEntry(item: ActivityItem, context: EntryContext): ActivityEntryShape | undefined {
+  const base = { id: item.id, at: item.at, actor: actorDisplay(item.actor, context.members) };
+  if (item.kind === 'created') return { ...base, kind: 'created' };
+  if (item.kind !== 'change' && item.kind !== 'links') return undefined;
+  const definition = item.attributeId === undefined ? undefined : context.attributes.get(item.attributeId);
+  if (definition === undefined) return undefined;
+  const attribute = toFieldAttribute(definition);
+  if (item.kind === 'links') {
+    return {
+      ...base,
+      kind: 'links',
+      attribute,
+      added: (item.added ?? []).map((display) => ({ display })),
+      addedCount: item.addedCount ?? 0,
+      removed: (item.removed ?? []).map((display) => ({ display })),
+      removedCount: item.removedCount ?? 0,
+    };
+  }
+  const displayOf = (value: unknown, refs: ActivityItem['fromRefs']): unknown => {
+    if (definition.type === 'record_reference') return refs?.[0];
+    if (definition.type === 'actor_reference') {
+      return Array.isArray(value)
+        ? value.map((each) => actorValueDisplay(each, context.members))
+        : actorValueDisplay(value, context.members);
+    }
+    return undefined;
+  };
+  const fromDisplay = displayOf(item.from, item.fromRefs);
+  const toDisplay = displayOf(item.to, item.toRefs);
+  return {
+    ...base,
+    kind: 'change',
+    attribute,
+    from: item.from ?? null,
+    to: item.to ?? null,
+    ...(fromDisplay === undefined ? {} : { fromDisplay }),
+    ...(toDisplay === undefined ? {} : { toDisplay }),
+  };
+}
+
+/** An entry held by a feed: the server's key (its order) and how the feed draws it. */
+interface Held {
+  readonly key: string;
+  readonly entry: ActivityEntryShape;
+}
+
+/**
+ * The first page merged into what a feed holds (0017-activity.md): the page
+ * is the truth from the newest entry down to its last one, so held entries
+ * in that range take the page's content or leave; older held entries stay
+ * behind it with their cursor. When everything held is older than the page
+ * (more than a page arrived), there may be a gap: only the page stays.
+ */
+export function mergeHead(
+  held: readonly Held[],
+  heldCursor: string | undefined,
+  page: readonly Held[],
+  pageCursor: string | undefined,
+): { readonly held: readonly Held[]; readonly cursor: string | undefined } {
+  const last = page.at(-1);
+  if (pageCursor === undefined || last === undefined) return { held: page, cursor: pageCursor };
+  const newest = held[0];
+  if (newest !== undefined && compareActivityKeys(newest.key, last.key) > 0) return { held: page, cursor: pageCursor };
+  const older = held.filter((each) => compareActivityKeys(each.key, last.key) > 0);
+  if (older.length === 0) return { held: page, cursor: pageCursor };
+  return { held: [...page, ...older], cursor: heldCursor };
+}
 
 const timeout = (run: () => void, ms: number) => {
   const id = setTimeout(run, ms);
@@ -131,46 +249,77 @@ const timeout = (run: () => void, ms: number) => {
   };
 };
 
+const keyOf = (workspace: string, recordId: string) => `${workspace}\u0000${recordId}`;
+
 /** The timelines of one data layer, one per workspace and record. */
 export function createActivityFeeds({
   page,
   members,
+  attributes,
   later = timeout,
   keepUnusedMs = 30_000,
   now = () => Date.now(),
 }: ActivityFeedsOptions) {
   interface Feed {
+    readonly workspace: string;
+    readonly recordId: string;
+    readonly objectId: string | undefined;
     readonly full: ActivityFeed;
     readonly recent: ActivityFeed;
+    /** Reads the first page again and merges it, coalesced (a change named the record). */
+    readonly refresh: () => void;
+    /** Reads the first page again and keeps only it (definitions changed, or a resync). */
+    readonly reset: () => void;
     readonly dispose: () => void;
   }
   const feeds = new Map<string, Feed>();
   // When each workspace's members were last read again for an actor the list didn't hold: at most once a minute,
   // so records made by people who have left don't reread the list (shared with every screen) on each open.
   const membersReadAt = new Map<string, number>();
-  const keyOf = (workspace: string, recordId: string) => `${workspace}\u0000${recordId}`;
 
-  function open(workspace: string, recordId: string): Feed {
+  function open(workspace: string, recordId: string, objectId: string | undefined): Feed {
     const key = keyOf(workspace, recordId);
     const listeners = new Set<() => void>();
     let status: ActivityStatus = 'loading';
     let error: DataError | undefined;
-    let entries: readonly ActivityEntryShape[] = EMPTY;
-    let nextCursor: string | undefined;
+    let held: readonly Held[] = [];
+    let cursor: string | undefined;
     let retains = 0;
     let cancelUnused: (() => void) | undefined;
+    // Each first page read starts an epoch: a later page answering from an older one is dropped.
+    let epoch = 0;
+    let loadingMore = false;
+    let moreFailedAt: number | undefined;
+    // The head refresh: one in flight, one waiting, and the cool down after each start.
+    let refreshing = false;
+    let refreshWaiting = false;
+    let coolingDown: (() => void) | undefined;
+    // A change arrived while nobody showed the feed: read it again when someone does.
+    let stale = false;
     let settleReady: () => void = () => undefined;
     const readyPromise = new Promise<void>((resolve) => {
       settleReady = resolve;
     });
 
+    const isCurrent = () => feeds.get(key) === feed;
+    const onRangeChange = (range: { readonly start: number; readonly end: number }) => {
+      if (range.end >= held.length - LOAD_AHEAD) loadMore();
+    };
     const stateOf = (cut?: number): ActivityState => {
-      const shown = cut === undefined ? entries : entries.slice(0, cut);
+      const shown = (cut === undefined ? held : held.slice(0, cut)).map((each) => each.entry);
+      const more = cut === undefined ? cursor !== undefined : held.length > cut || cursor !== undefined;
+      // The full feed draws one entry still loading past the loaded ones while there are more.
+      const tail = cut === undefined && cursor !== undefined ? 1 : 0;
       return {
         status,
         entries: shown,
-        source: sourceOf(shown),
-        hasMore: cut === undefined ? nextCursor !== undefined : entries.length > cut || nextCursor !== undefined,
+        source: {
+          count: shown.length + tail,
+          getItem: (index) => shown[index],
+          getKey: (entry) => entry.id,
+          ...(cut === undefined ? { onRangeChange } : {}),
+        },
+        hasMore: more,
         ...(error === undefined ? {} : { error }),
       };
     };
@@ -182,56 +331,172 @@ export function createActivityFeeds({
       for (const listener of listeners) listener();
     };
 
-    /** Names each item's actor, reading the members again once when one isn't listed (someone who joined since). */
-    const named = async (loaded: readonly ActivityItem[]): Promise<readonly ActivityEntryShape[]> => {
-      let known = await members(workspace, false).catch(() => undefined);
+    /** The members, read again once when an actor isn't listed (someone who joined since). */
+    const namesFor = async (loaded: readonly ActivityItem[]): Promise<readonly MemberSummary[] | undefined> => {
+      const known = await members(workspace, false).catch(() => undefined);
       const unknown =
         known !== undefined &&
-        loaded.some((item) => item.actor?.type === 'member' && !known?.some((member) => member.id === item.actor?.id));
+        loaded.some((item) => item.actor?.type === 'member' && !known.some((member) => member.id === item.actor?.id));
       const readAt = membersReadAt.get(workspace);
       if (unknown && (readAt === undefined || now() - readAt > MEMBERS_FRESH_MS)) {
         membersReadAt.set(workspace, now());
-        known = await members(workspace, true).catch(() => known);
+        return members(workspace, true).catch(() => known);
       }
-      return loaded.flatMap((item) => {
-        const entry = toActivityEntry(item, known);
-        return entry === undefined ? [] : [entry];
+      return known;
+    };
+
+    /** A page's items in key order, mapped to entries (a kind or attribute this client can't draw is left out). */
+    const mapped = async (answer: RecordActivity): Promise<readonly Held[]> => {
+      const sorted = [...answer.entries].sort((a, b) => compareActivityKeys(a.key, b.key)).slice(0, ACTIVITY_PAGE);
+      const [known, defined] = await Promise.all([
+        namesFor(sorted),
+        objectId === undefined || !sorted.some((item) => item.attributeId !== undefined)
+          ? Promise.resolve<readonly AttributeDefinition[]>([])
+          : attributes(workspace, objectId).catch((): readonly AttributeDefinition[] => []),
+      ]);
+      const context = { members: known, attributes: new Map(defined.map((each) => [each.id, each])) };
+      return sorted.flatMap((item) => {
+        const entry = toActivityEntry(item, context);
+        return entry === undefined ? [] : [{ key: item.key, entry }];
       });
     };
 
-    const load = () => {
-      if (status !== 'loading') {
+    /** The first page, read again with nothing kept (the first load, a retry, a definitions change, a resync). */
+    const loadFirst = () => {
+      epoch += 1;
+      const mine = epoch;
+      loadingMore = false;
+      // A feed already showing entries keeps them until the new page lands, so nothing flashes.
+      if (held.length === 0 && status !== 'loading') {
         status = 'loading';
         error = undefined;
         announce();
       }
-      page(workspace, recordId).then(
-        async (answer) => {
-          const sorted = [...answer.entries].sort((a, b) => compareActivityKeys(a.key, b.key)).slice(0, ACTIVITY_PAGE);
-          const mapped = await named(sorted);
-          if (feeds.get(key) !== feed) return;
-          entries = mapped;
-          nextCursor = answer.nextCursor;
-          status = 'ready';
-          announce();
-          settleReady();
-        },
-        (failure: unknown) => {
-          if (feeds.get(key) !== feed) return;
-          const dataFailure = toDataError(failure);
-          // Missing or hidden: the page says the record isn't available, the same for both.
-          status = dataFailure.code === 'NOT_FOUND' ? 'unavailable' : 'error';
-          error = dataFailure;
-          announce();
-          settleReady();
-        },
-      );
+      page(workspace, recordId)
+        .then(async (answer) => ({ answer, rows: await mapped(answer) }))
+        .then(
+          ({ answer, rows }) => {
+            if (!isCurrent() || mine !== epoch) return;
+            held = rows;
+            cursor = answer.nextCursor;
+            status = 'ready';
+            error = undefined;
+            announce();
+            settleReady();
+          },
+          (failure: unknown) => {
+            if (!isCurrent() || mine !== epoch) return;
+            settleReady();
+            // A feed already showing entries stays as it is (a record deleted while open keeps its feed).
+            if (held.length > 0) return;
+            const dataFailure = toDataError(failure);
+            // Missing or hidden: the page says the record isn't available, the same for both.
+            status = dataFailure.code === 'NOT_FOUND' ? 'unavailable' : 'error';
+            error = dataFailure;
+            announce();
+          },
+        );
+    };
+
+    /** The next page past the last loaded entry, appended (an entry already held is not added twice). */
+    function loadMore() {
+      if (loadingMore || cursor === undefined || status !== 'ready') return;
+      if (moreFailedAt !== undefined && now() - moreFailedAt < MORE_RETRY_MS) return;
+      loadingMore = true;
+      const mine = epoch;
+      const after = cursor;
+      page(workspace, recordId, after)
+        .then(async (answer) => ({ answer, rows: await mapped(answer) }))
+        .then(
+          ({ answer, rows }) => {
+            if (!isCurrent() || mine !== epoch) return;
+            loadingMore = false;
+            moreFailedAt = undefined;
+            // The page a head refresh moved past is no longer the tail.
+            if (cursor !== after) return;
+            const ids = new Set(held.map((each) => each.entry.id));
+            held = [...held, ...rows.filter((each) => !ids.has(each.entry.id))];
+            cursor = answer.nextCursor;
+            announce();
+          },
+          () => {
+            if (!isCurrent() || mine !== epoch) return;
+            loadingMore = false;
+            moreFailedAt = now();
+          },
+        );
+    }
+
+    /** One head read: the first page, merged by key into what the feed holds. */
+    const readHead = () => {
+      refreshing = true;
+      const mine = epoch;
+      coolingDown = later(() => {
+        coolingDown = undefined;
+        if (refreshWaiting && !refreshing) {
+          refreshWaiting = false;
+          readHead();
+        }
+      }, ACTIVITY_REFRESH_MS);
+      const finish = () => {
+        refreshing = false;
+        if (refreshWaiting && coolingDown === undefined) {
+          refreshWaiting = false;
+          readHead();
+        }
+      };
+      page(workspace, recordId)
+        .then(async (answer) => ({ answer, rows: await mapped(answer) }))
+        .then(
+          ({ answer, rows }) => {
+            if (!isCurrent()) return;
+            if (mine === epoch) {
+              const merged = mergeHead(held, cursor, rows, answer.nextCursor);
+              held = merged.held;
+              cursor = merged.cursor;
+              if (status !== 'ready') {
+                status = 'ready';
+                error = undefined;
+                settleReady();
+              }
+              announce();
+            }
+            finish();
+          },
+          () => {
+            // A failed refresh keeps the feed as it is; the next change reads it again.
+            finish();
+          },
+        );
+    };
+
+    /**
+     * Reads the first page again for a change (0017-activity.md): at once when
+     * none is in flight, and at most once more `ACTIVITY_REFRESH_MS` after, so
+     * a burst costs at most two reads a second. A feed nobody shows waits until
+     * one does.
+     */
+    const refresh = () => {
+      if (!isCurrent()) return;
+      if (retains === 0) {
+        stale = true;
+        return;
+      }
+      if (refreshing || coolingDown !== undefined) {
+        refreshWaiting = true;
+        return;
+      }
+      readHead();
     };
 
     const retain = () => {
       retains += 1;
       cancelUnused?.();
       cancelUnused = undefined;
+      if (stale) {
+        stale = false;
+        refresh();
+      }
       let released = false;
       return () => {
         if (released) return;
@@ -248,31 +513,84 @@ export function createActivityFeeds({
         };
       },
       getSnapshot: snapshot,
-      retry: load,
+      retry: loadFirst,
       ready: () => readyPromise,
       retain,
     });
     const dispose = () => {
       cancelUnused?.();
       cancelUnused = undefined;
-      if (feeds.get(key) === feed) feeds.delete(key);
+      coolingDown?.();
+      coolingDown = undefined;
+      if (isCurrent()) feeds.delete(key);
     };
-    const feed: Feed = { full: handle(() => full), recent: handle(() => recent), dispose };
+    const feed: Feed = {
+      workspace,
+      recordId,
+      objectId,
+      full: handle(() => full),
+      recent: handle(() => recent),
+      refresh,
+      reset: () => {
+        if (retains === 0) {
+          // Nobody shows it: forgotten, and read afresh by whoever opens it next.
+          dispose();
+          return;
+        }
+        loadFirst();
+      },
+      dispose,
+    };
     feeds.set(key, feed);
     // Nobody shows it yet: forgotten after the same wait, unless a screen retains it first.
     cancelUnused = later(dispose, keepUnusedMs);
-    load();
+    loadFirst();
     return feed;
   }
 
-  const feedOf = (workspace: string, recordId: string): Feed =>
-    feeds.get(keyOf(workspace, recordId)) ?? open(workspace, recordId);
+  const feedOf = (workspace: string, recordId: string, objectId: string | undefined): Feed =>
+    feeds.get(keyOf(workspace, recordId)) ?? open(workspace, recordId, objectId);
+  const inWorkspace = (workspace: string) => [...feeds.values()].filter((feed) => feed.workspace === workspace);
 
   return {
-    /** A record's whole timeline, newest first (the Activity tab). */
-    forRecord: (workspace: string, recordId: string): ActivityFeed => feedOf(workspace, recordId).full,
+    /** A record's whole timeline, newest first (the Activity tab); `objectId` names its attributes. */
+    forRecord: (workspace: string, recordId: string, objectId?: string): ActivityFeed =>
+      feedOf(workspace, recordId, objectId).full,
     /** Its newest five entries (Overview's "Recent activity"), sharing the first page with `forRecord`. */
-    recent: (workspace: string, recordId: string): ActivityFeed => feedOf(workspace, recordId).recent,
+    recent: (workspace: string, recordId: string, objectId?: string): ActivityFeed =>
+      feedOf(workspace, recordId, objectId).recent,
+    /**
+     * A live `records` event (0017-activity.md): a feed whose record it names
+     * reads its first page again, and so does every feed of its object when
+     * the event is coarse.
+     */
+    changed: (
+      workspace: string,
+      event: { readonly objectId: string; readonly recordIds: readonly string[]; readonly coarse?: boolean },
+    ): void => {
+      const named = new Set(event.recordIds);
+      for (const feed of inWorkspace(workspace)) {
+        if (named.has(feed.recordId) || (event.coarse === true && feed.objectId === event.objectId)) feed.refresh();
+      }
+    },
+    /**
+     * This tab's own write landed (its echo never comes back live): every
+     * feed of the workspace a screen shows reads its first page again, since
+     * a link written here changes the far records' timelines too.
+     */
+    ownWrite: (workspace: string): void => {
+      for (const feed of inWorkspace(workspace)) feed.refresh();
+    },
+    /** An object's definitions changed (an attribute archived, hidden or renamed): its feeds start again. */
+    definitionsChanged: (workspace: string, objectId?: string): void => {
+      for (const feed of inWorkspace(workspace)) {
+        if (objectId === undefined || feed.objectId === undefined || feed.objectId === objectId) feed.reset();
+      }
+    },
+    /** A full catch up or a reset (spec 0006, 0007): every feed of the workspace starts again. */
+    resync: (workspace: string): void => {
+      for (const feed of inWorkspace(workspace)) feed.reset();
+    },
     /** Forgets every timeline (sign out). */
     clear: (): void => {
       for (const feed of [...feeds.values()]) feed.dispose();
