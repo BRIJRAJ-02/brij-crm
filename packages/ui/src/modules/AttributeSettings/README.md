@@ -4,7 +4,7 @@ The one dialog that creates and edits an attribute (spec 0012): its name, type, 
 
 ## Why it exists
 
-New (from the inventory, `0003-inventory.md`, pulled forward from spec 0003's milestone 4 by spec 0012). Settings' Attributes tab, the grid's "+" header, a column's "Edit attribute" and the table's "Add attribute" all create or edit attributes, and each type's settings must be right in one place. No existing component held a type picker, the rules and a default drawn by the type's own editor; a Form in a Modal is what it is made of, so it composes Modal, Form, Field, Select, Checkbox, SegmentedControl and the field set's AttributeEditor rather than adding a variant to any one of them.
+New (from the inventory, `0003-inventory.md`, pulled forward from spec 0003's milestone 4 by spec 0012). Settings' Attributes tab, the grid's "+" header, a column's "Edit attribute" and the table's "Add attribute" all create or edit attributes, and each type's settings must be right in one place. No existing component held a type picker, the rules and a default drawn by the type's own editor; a Form in a Modal is what it is made of, so it composes Modal, Form, Field, Select, Checkbox, RadioGroup and the field set's AttributeEditor rather than adding a variant to any one of them.
 
 ## Use
 
@@ -27,7 +27,7 @@ New (from the inventory, `0003-inventory.md`, pulled forward from spec 0003's mi
 - With `attribute` it edits: the type and Allow multiple read only ("Changing the type comes later."), the API name read only with a copy button, the rest as they are, and Save.
 - `readOnlyReason` shows every setting read only with that reason and Close alone (a system attribute, or a member who can't change the schema).
 - `relationshipEntry` (`{ label, onChoose }`, #15) adds "Relationship" last to the picker; choosing it calls `onChoose`, so the screen swaps in its own settings in the same place. Without it there is no entry and no placeholder.
-- The default is drawn by the type's own form editor (`AttributeEditor`, `surface="form"`), so it looks and edits as the value does everywhere. A date also offers "Today plus days" (0 to 3,650, refused locally otherwise) and a member "Current user", as a choice above the editor (None, then the kinds). `members` feeds the member picker. An empty editor, or an unticked checkbox, means no default.
+- The default is drawn by the type's own form editor (`AttributeEditor`, `surface="form"`), so it looks and edits as the value does everywhere. A date also offers "Today plus days" (0 to 3,650, refused locally otherwise) and a member "Current user", as a RadioGroup labelled "Default value" above the editor (None, then the kinds): a saved setting, which SegmentedControl, made for switching views, is not. `members` feeds the member picker. An empty editor, or an unticked checkbox, means no default.
 - Refusals land on the setting they name by `attributeId` (`title`, `apiSlug`, `description`, `type`, `isUnique`, `defaultValue`, `offsetDays`); anything else shows above the settings. An empty name is refused before anything is sent.
 - Not yet (spec 0012, milestone 3): the type settings (Number's display, Currency's code, Status's starter stages), the options editor, and the "Default archived" note.
 

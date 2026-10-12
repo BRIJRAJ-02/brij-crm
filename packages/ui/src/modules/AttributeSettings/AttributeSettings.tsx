@@ -17,6 +17,7 @@ import { useId, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
+import { Radio, RadioGroup } from '../../atoms/Radio/Radio.tsx';
 import { AttributeEditor, type AttributeEditorProps } from '../../fields/AttributeEditor.tsx';
 import { fieldTypeOf, typeLabelOf } from '../../fields/registry.ts';
 import type { FieldAttribute } from '../../fields/types.ts';
@@ -24,7 +25,6 @@ import { arraySource } from '../../lib/list-source.ts';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Form, type FormRefusal } from '../../molecules/Form/Form.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
-import { SegmentedControl } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import { Select, type SelectItem } from '../../molecules/Select/Select.tsx';
 import { strings } from './strings.ts';
 
@@ -475,7 +475,7 @@ interface DefaultSettingProps {
 
 /**
  * The default (AC-234), through the type's own form editor. A date also
- * offers "Today plus days", a member "Current user", as a choice above the
+ * offers "Today plus days", a member "Current user", as a choice (RadioGroup) above the
  * editor.
  */
 function DefaultSetting({ type, isMulti, draft, members, readOnlyReason, error, onChange }: DefaultSettingProps) {
@@ -525,7 +525,7 @@ function DefaultSetting({ type, isMulti, draft, members, readOnlyReason, error, 
   // Most types: the editor alone; empty means no default.
   if (!kinds.includes('offset') && !kinds.includes('current_user')) return editorFor(strings.defaultValue);
   const isDate = kinds.includes('offset');
-  const segments = isDate
+  const choices = isDate
     ? [
         { value: 'none', label: strings.noDefault },
         { value: 'static', label: strings.fixedDate },
@@ -538,17 +538,24 @@ function DefaultSetting({ type, isMulti, draft, members, readOnlyReason, error, 
       ];
   return (
     <>
-      <SegmentedControl
+      {/* A saved setting, so a RadioGroup (SegmentedControl switches views): its label is the section's. */}
+      <RadioGroup
         label={strings.defaultValue}
-        segments={segments}
+        orientation="horizontal"
         value={draft.kind}
-        isDisabled={isReadOnly}
+        isReadOnly={isReadOnly}
         onChange={(next) => {
           if (next === 'none' || next === 'static' || next === 'current_user' || next === 'offset') {
             onChange({ ...draft, kind: next, value: next === draft.kind ? draft.value : null });
           }
         }}
-      />
+      >
+        {choices.map((segment) => (
+          <Radio key={segment.value} value={segment.value}>
+            {segment.label}
+          </Radio>
+        ))}
+      </RadioGroup>
       {draft.kind === 'static' && editorFor(isDate ? strings.defaultDate : strings.defaultMember)}
       {draft.kind === 'offset' && (
         <Field
