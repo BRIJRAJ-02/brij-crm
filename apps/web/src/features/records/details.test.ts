@@ -6,6 +6,9 @@ import { detailAttributes, isRecordId, isRecordTab, recordHref, recordName, refs
 
 const attribute = (overrides: Partial<AttributeDefinition>): AttributeDefinition => ({
   id: '0199a6f2-0000-7000-8000-000000000001',
+  objectId: '0199a6f2-0000-7000-8000-00000000000a',
+  isPrimary: false,
+  isArchived: false,
   apiSlug: 'a',
   title: 'A',
   type: 'text',
@@ -27,6 +30,9 @@ const PEOPLE: ObjectSummary = {
   hue: 'blue',
   primaryAttributeId: 'name',
   access: 'write',
+  position: 0,
+  isStandard: true,
+  isArchived: false,
 };
 
 const record = (values: Record<string, unknown>, name = 'Grace Hopper'): RecordView => ({
