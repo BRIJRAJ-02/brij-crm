@@ -63,10 +63,13 @@
 // after a publish pass, so publishing never waits behind more than one batch.
 // A pass is a loop turn that already reached Postgres (a poll, or a round with
 // a workspace in it), so the prune never wakes the database, and it isn't
-// work, so it never keeps the relay awake. A round starts after the first pass
-// of an awake period, and then at most every `PRUNE_EVERY_MS` (10 minutes); it
-// goes on, a batch a pass, while batches come back full, and ends with a
-// short one (or a failure, logged). Dormant, it prunes nothing; spec 0008's
+// work, so it never keeps the relay awake. A round is due from the start of an
+// awake period, and then `PRUNE_EVERY_MS` (10 minutes) after the last ended;
+// it starts on a quiet pass (nothing to publish), so a write that woke the
+// worker goes out before any prune on a cold cache, or on any pass once it has
+// been due for another 10 minutes. It goes on, a batch a pass, while batches
+// come back full, and ends with a short one, a slow one (over 250 ms) or a
+// failure (logged). Dormant, it prunes nothing; spec 0008's
 // daily cleanup calls the same `pruneOutbox`. Only a relay on the worker's
 // login (`crm_worker`) may prune: on any other the worker turns it off.
 //
@@ -123,10 +126,11 @@ export interface RelayDeps {
   /** How many workspaces' batches run at once (default 4). Each workspace's own batches never overlap. */
   readonly concurrency?: number;
   /**
-   * Whether the relay prunes the outbox (default true). False on a direct
-   * login outside `crm_worker`, which may not run `crm_outbox_prune`.
+   * Whether the relay prunes the outbox: true only on a direct login in
+   * `crm_worker`, the one group that may run `crm_outbox_prune`. Required,
+   * so no caller prunes on a login it hasn't checked.
    */
-  readonly prune?: boolean;
+  readonly prune: boolean;
   /** The least time from the end of one prune round to the start of the next while awake (default 10 minutes). */
   readonly pruneEveryMs?: number;
   /** The most rows one prune batch deletes (default `PRUNE_BATCH`, 10,000); a full batch carries the round on. */
@@ -174,6 +178,13 @@ export const DORMANT_AFTER_MS = 180_000;
 export const PRUNE_EVERY_MS = 600_000;
 
 /**
+ * A prune batch slower than this ends its round even when full (measured: 45 to 80 ms for 10,000 rows locally,
+ * on outboxes of 200,000 and 1.2 million rows), so a slow database costs publishing one batch a round, not a
+ * round of them. AC-78's relay lag target is 250 ms at p95.
+ */
+const PRUNE_SLOW_MS = 250;
+
+/**
  * The event for one outbox row on `workspace:<id>` (spec 0007's
  * `ChangeEvent`, by kind): ids only, with its commit time `at`, `mutationId`
  * and `coarse` only when set, planned through spec 0009's `filterEvent` for
@@ -217,7 +228,7 @@ export function createRelay(deps: RelayDeps): Relay {
   const healthyMs = deps.healthyMs ?? 30_000;
   const batch = deps.batch ?? 100;
   const concurrency = Math.max(1, deps.concurrency ?? 4);
-  const pruning = deps.prune ?? true;
+  const pruning = deps.prune;
   const pruneEveryMs = deps.pruneEveryMs ?? PRUNE_EVERY_MS;
   const pruneBatch = Math.min(Math.max(1, deps.pruneBatch ?? PRUNE_BATCH), PRUNE_BATCH);
   const workspacesPerPoll = deps.workspacesPerPoll ?? 500;
@@ -252,12 +263,12 @@ export function createRelay(deps: RelayDeps): Relay {
   const audienceCache = new Map<string, Promise<readonly Audience[]>>();
   // Workspaces already reported as needing a channel per audience in this awake period.
   const splitWarned = new Set<string>();
-  // The prune's rounds in this awake period (AC-89): when the last one ended (none yet, so the first pass starts
-  // one), and the round still open after a full batch, with what it has deleted so far.
+  // The prune's rounds in this awake period (AC-89): when the next may start (the awake period's start, then
+  // `pruneEveryMs` after the last ended), and the round still open after a full batch, with what it has deleted.
   let pruneRound: {
-    readonly ended: number | undefined;
+    readonly dueAt: number;
     readonly open: { readonly pruned: number; readonly batches: number } | undefined;
-  } = { ended: undefined, open: undefined };
+  } = { dueAt: Date.now(), open: undefined };
   // When each workspace last took a turn: one quiet for a whole quiet spell lets go of its audiences, so a busy
   // worker that never goes dormant holds only the workspaces that write.
   const audienceUsed = new Map<string, number>();
@@ -444,34 +455,41 @@ export function createRelay(deps: RelayDeps): Relay {
 
   /**
    * After a publish pass: one prune batch, when a round is open (the last
-   * batch was full) or due (none yet in this awake period, or the last ended
-   * `pruneEveryMs` ago). A short batch or a failure ends the round, and the
-   * round's total is logged once.
+   * batch was full), or when one is due (from the start of the awake period,
+   * or `pruneEveryMs` after the last ended) and this pass was quiet (nothing
+   * to publish), or due for another `pruneEveryMs` already, so a relay that
+   * never has a quiet pass still prunes. A short batch or a failure ends the
+   * round, and the round's total is logged once.
    */
-  async function pruneAfterPass(reader: OutboxReader): Promise<void> {
+  async function pruneAfterPass(reader: OutboxReader, quietPass: boolean): Promise<void> {
     if (!pruning) return;
     const round = pruneRound;
-    if (round.open === undefined && round.ended !== undefined && Date.now() - round.ended < pruneEveryMs) return;
+    const now = Date.now();
+    if (round.open === undefined && (now < round.dueAt || (!quietPass && now < round.dueAt + pruneEveryMs))) return;
     const before = round.open ?? { pruned: 0, batches: 0 };
     let full = false;
     let pruned = 0;
     let failure: unknown;
+    const started = Date.now();
     try {
       pruned = await reader.prune(pruneBatch);
       full = pruned >= pruneBatch;
     } catch (error) {
       failure = error;
     }
+    // A batch slower than PRUNE_SLOW_MS (dead index entries a long snapshot keeps, a cold cache) ends the round
+    // even when full, so publishing waits behind at most one slow batch each round.
+    const slow = Date.now() - started > PRUNE_SLOW_MS;
     const sofar = { pruned: before.pruned + pruned, batches: before.batches + 1 };
-    if (full) {
-      pruneRound = { ended: round.ended, open: sofar };
+    if (full && !slow) {
+      pruneRound = { dueAt: round.dueAt, open: sofar };
       return;
     }
-    pruneRound = { ended: Date.now(), open: undefined };
+    pruneRound = { dueAt: Date.now() + pruneEveryMs, open: undefined };
     if (failure !== undefined) {
       log.warn('Pruning the outbox failed; the next round tries again', { ...sofar, ...errorFields(failure) });
     } else if (sofar.pruned > 0) {
-      log.info('relay.prune', sofar);
+      log.info('relay.prune', { ...sofar, ...(full ? { slow: true } : {}) });
     }
   }
 
@@ -537,8 +555,9 @@ export function createRelay(deps: RelayDeps): Relay {
             for (const workspaceId of waiting) add(workspaceId);
           }
           leftover = await round(reader, workspaces);
-          // After a pass only (a poll, or a round with a workspace in it), so pruning never wakes the database.
-          if ((due || workspaces.size > 0) && !halted()) await pruneAfterPass(reader);
+          // After a pass only (a poll, or a round with a workspace in it), so pruning never wakes the database; a
+          // pass with nothing to publish is quiet, where a new round prefers to start.
+          if ((due || workspaces.size > 0) && !halted()) await pruneAfterPass(reader, workspaces.size === 0);
           // From memory: the line costs no query, and only the publishing relay writes it.
           if (Date.now() - lastStats >= statsEveryMs) {
             lastStats = Date.now();
@@ -579,6 +598,8 @@ export function createRelay(deps: RelayDeps): Relay {
         // The workspaces it went dormant with are due at once.
         const now = Date.now();
         for (const [workspaceId, retry] of retries) retries.set(workspaceId, { ...retry, at: now });
+        // A new awake period: a prune round is due from now.
+        pruneRound = { dueAt: now, open: undefined };
         log.info('Relay woken');
       }
       let reader: OutboxReader | undefined;
@@ -610,9 +631,9 @@ export function createRelay(deps: RelayDeps): Relay {
         audienceCache.clear();
         audienceUsed.clear();
         splitWarned.clear();
-        // A round left open waits for the next awake period, whose first pass starts one.
+        // A round left open waits for the next awake period, which starts one of its own.
         if (pruneRound.open !== undefined) log.info('relay.prune', { ...pruneRound.open, unfinished: true });
-        pruneRound = { ended: undefined, open: undefined };
+        pruneRound = { dueAt: Number.POSITIVE_INFINITY, open: undefined };
         log.info('Relay dormant: no database calls until a write wakes it', { quietMs: dormantAfterMs });
         current = 'dormant';
         continue;
@@ -634,6 +655,7 @@ export function createRelay(deps: RelayDeps): Relay {
       if (running !== undefined) return;
       stopped = false;
       current = 'active';
+      pruneRound = { dueAt: Date.now(), open: undefined };
       running = run();
     },
     wake() {

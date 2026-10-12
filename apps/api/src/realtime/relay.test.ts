@@ -176,7 +176,8 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
     pollScheduleMs: options.pollScheduleMs ?? [100],
     dormantAfterMs: options.dormantAfterMs ?? 60_000,
     ...(options.pruneEveryMs === undefined ? {} : { pruneEveryMs: options.pruneEveryMs }),
-    ...(options.prune === undefined ? {} : { prune: options.prune }),
+    // The test login is in crm_worker.
+    prune: options.prune ?? true,
     ...(options.pruneBatch === undefined ? {} : { pruneBatch: options.pruneBatch }),
     ...(options.batch === undefined ? {} : { batch: options.batch }),
     ...(options.concurrency === undefined ? {} : { concurrency: options.concurrency }),
@@ -673,6 +674,9 @@ describe('the relay', () => {
       const round = prunes();
       expect(round.length).toBeGreaterThanOrEqual(3);
       expect(round.slice(0, -1).every((call) => call.pruned === 10)).toBe(true);
+      // The round waited for a quiet pass: the row waiting at the start went out first.
+      const firstPrune = calls.findIndex((call) => call.name === 'prune');
+      expect(firstPrune).toBeGreaterThan(calls.findIndex((call) => call.name === 'advance'));
       // Each prune comes after a call of its own pass, never first and never straight after another prune.
       for (const [index, call] of calls.entries()) {
         if (call.name !== 'prune') continue;
@@ -714,6 +718,63 @@ describe('the relay', () => {
       // A new awake period: its first pass starts a round at once.
       relay.wake();
       await expect.poll(() => prunes().length, { timeout: 300, interval: 10 }).toBe(whileAwake + 1);
+    });
+
+    it('starts a round on a busy pass once it has been due for another pruneEveryMs with no quiet pass', async () => {
+      const centrifugo = await fakeCentrifugo();
+      servers.push(centrifugo);
+      const old = await workspace();
+      await pastRetention(old, 1, 2);
+      const busy = await workspace();
+      // A row to publish at every poll, so no pass is quiet.
+      const writing = { on: true };
+      let seq = 0;
+      const writer = (async () => {
+        while (writing.on) {
+          seq += 1;
+          await events(busy, [seq]);
+          await sleep(5);
+        }
+      })();
+      await expect.poll(() => seq, WAIT).toBeGreaterThan(3);
+      const { wrap, prunes, calls } = recorder();
+      const startedAt = Date.now();
+      relayTo(centrifugo.url, { pollScheduleMs: [50], pruneEveryMs: 300, wrap });
+      try {
+        await expect.poll(() => left(old), WAIT).toEqual([]);
+      } finally {
+        writing.on = false;
+        await writer;
+      }
+      const [first] = prunes();
+      if (first === undefined) throw new Error('A prune was seen.');
+      // Due from the start, then another 300 ms with every pass busy.
+      expect(first.start - startedAt).toBeGreaterThanOrEqual(300);
+      expect(calls.filter((call) => call.name === 'advance' && call.end <= first.start).length).toBeGreaterThan(2);
+    });
+
+    it('ends a round at a slow batch, even a full one, so publishing waits behind one slow batch a round', async () => {
+      const centrifugo = await fakeCentrifugo();
+      servers.push(centrifugo);
+      let prunes = 0;
+      // A database that answers a full batch, slowly (over 250 ms).
+      const slow = (reader: OutboxReader): OutboxReader => ({
+        ...reader,
+        prune: async (max) => {
+          prunes += 1;
+          await sleep(300);
+          return max;
+        },
+      });
+      const { infos } = relayTo(centrifugo.url, { pollScheduleMs: [50], pruneEveryMs: 60_000, wrap: slow });
+      await expect.poll(() => infos.some((line) => line.message === 'relay.prune'), WAIT).toBe(true);
+      await sleep(500);
+      expect(prunes).toBe(1);
+      expect(infos.find((line) => line.message === 'relay.prune')?.fields).toEqual({
+        pruned: 10_000,
+        batches: 1,
+        slow: true,
+      });
     });
 
     it('never prunes when told not to (a direct login outside crm_worker)', async () => {

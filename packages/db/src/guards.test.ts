@@ -137,6 +137,20 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
       { name: 'crm_search_text', owner: 'crm_search' },
     ]);
+    // Each hardened: a fixed search path (the prune also waits at most a second for a lock), and a standard SQL body (begin atomic, bound when it was made), but
+    // crm_enqueue_job's, which is quoted so a Graphile upgrade that recreates add_job never fails on it.
+    const hardening = await owner.query<{ name: string; config: string[] | null; atomic: boolean }>(`
+      select p.proname as name, p.proconfig as config, p.prosqlbody is not null as atomic
+      from pg_proc p join pg_namespace n on n.oid = p.pronamespace
+      where p.prosecdef and n.nspname = 'public'
+      order by 1
+    `);
+    expect(hardening.rows).toEqual([
+      { name: 'crm_enqueue_job', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
+      { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_search_text', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+    ]);
   });
 
   it('lets no role but crm_relay, crm_search and the owner bypass it, outside the superusers', async () => {
@@ -396,17 +410,23 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       expect(await left(clean)).toEqual([4]);
     });
 
-    it('keeps rows made after the cutoff it is given, and deletes nothing for a null cutoff', async () => {
+    it('keeps rows made after the cutoff it is given, deletes nothing for a null cutoff, and never the last hour', async () => {
       const workspaceId = await outboxOf('prune-cutoff', [
         { age: '24 hours 1 minute', published: true },
         { age: '23 hours 59 minutes', published: true },
+        { age: '61 minutes', published: true },
+        { age: '59 minutes', published: true },
       ]);
       await asWorker(async (worker) => {
         expect(await prune(worker, null, 10_000)).toBe(0);
-        expect(await left(workspaceId)).toEqual([1, 2]);
+        expect(await left(workspaceId)).toEqual([1, 2, 3, 4]);
         await prune(worker, '24 hours', 10_000);
+        expect(await left(workspaceId)).toEqual([2, 3, 4]);
+        // A cutoff of now, or in the future, still keeps the last hour: the function's floor.
+        await prune(worker, '0 seconds', 10_000);
+        await prune(worker, '-1 day', 10_000);
       });
-      expect(await left(workspaceId)).toEqual([2]);
+      expect(await left(workspaceId)).toEqual([4]);
     });
 
     it('deletes at most max rows a call, clamped to 1 to 10,000', async () => {

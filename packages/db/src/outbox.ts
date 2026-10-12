@@ -226,16 +226,20 @@ export function createOutboxReader(direct: pg.Client): OutboxReader {
  * workspace's oldest `seq` up, stopping at its first row that is unpublished
  * or newer, so an unpublished row is never deleted and what a workspace keeps
  * is one unbroken run of `seq` up to its head (catch up answers `reset` below
- * it). Returns how many went: fewer than `max` means nothing past retention
+ * it). The function never deletes a row made in the last hour, whatever the
+ * cutoff. Returns how many went: fewer than `max` means nothing past retention
  * is left, so a caller that wants everything gone calls again while it
  * answers `max`.
  *
  * Runs `crm_outbox_prune`, which only the worker's login (`crm_worker`) may
  * execute: pass the worker's direct connection (the relay's, after a publish
  * pass, or spec 0008's daily cleanup), never the app's pool, where it is
- * refused (42501). One statement, so it is its own transaction unless the
- * caller has one open. It writes nothing but the delete, and returns a count
- * only.
+ * refused (42501). Call it outside any transaction, one batch per call: it
+ * is then its own short transaction, so a batch's row locks last only that
+ * batch. Holding a transaction around several calls would keep the relay's
+ * prune (which waits at most a second for a lock, then fails) and the other
+ * caller's batches blocking each other. It writes nothing but the delete,
+ * and returns a count only.
  */
 export async function pruneOutbox(connection: pg.ClientBase | pg.Pool, max: number = PRUNE_BATCH): Promise<number> {
   const result = await connection.query<{ pruned: number }>(
