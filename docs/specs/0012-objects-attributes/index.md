@@ -366,3 +366,42 @@ The most conservative choice consistent with the existing screens, for each ques
 - **The create dialog on People** asks for the name first; Email and the rest wait behind "Add more fields" (spec 0012's generic order replaces spec 0005's name and email). Its primary reads "Create <singular>".
 - **The danger zone** is a plain Card whose action is a danger Button; Card has no danger tone.
 - **System attributes** sit in a sunken Card titled System, under the object's own attributes.
+
+## Calls made building milestone 2 (pending owner confirmation)
+
+Technical calls the spec left open, each the recommended default. No migration: everything sits in spec 0004's tables and milestone 1's columns.
+
+- **An attribute create replays by its client id**, found under the parent row's lock before the room check, so a replay at the limit still answers the attribute already made and writes nothing. The same id on another object or by another actor answers `ID_TAKEN`. Spec 0005's replay by derived API name and `attributeSlugFrom` are gone: API names come from `toApiSlug` (a title starting with a digit now gives `x_2027_goals`, not `attribute_2027_goals`).
+- **A taken API name refuses on `apiSlug`** ("An attribute here already uses this API name. Pick another."), not on the title: the dialog shows the API name. Title, API name, description, Unique and default refusals carry their `field`.
+- **`attributes.create` takes all fourteen picker types already**; the screens offer the ten without setup (`typeKeys` on AttributeSettings) until milestone 3 brings their settings and options.
+- **A move's position is an index among the object's own attributes, archived ones included**, renumbered densely after the system ones; `attributes.reorder` answers the object's whole list (archived too), which the data layer keeps as the settings list, so the page reloads without a read.
+- **Archive and restore act on the far end even when the caller can't see it**; the answer leaves out definitions the caller can't see, and "Restore <Plural> first." names the far object only to someone who may see it ("Restore that object first." otherwise). A one way reference has one end and is refused a restore while every object it points to is archived.
+- **An attribute write's echoes are counted per object its answer names**, so a relationship archive skips both of its events; a far end hidden from the writer costs at most the 60 second echo wait.
+- **Settings read `attributes.all`** (archived ones too), cached apart from the tables' live list; a live `definitions` event drops a held settings list rather than reading it again, and the pages reload.
+- **An edit sends only the settings the person changed**; an emptied description or a cleared default goes as `null`.
+- **A date's "Today plus days" is whole days from 0 to 3,650** (`P<N>D`), checked in the dialog. The engine still takes any ISO 8601 duration (spec 0004) but refuses one past 3,650 days (a year counted as 366, a month as 31) on `defaultValue`, since past that "now plus the offset" left the dates Postgres holds and every record create failed; one stored before refuses the create as `CONFIG_INVALID` instead of failing. An existing non day offset shows as 0 days in the dialog until changed.
+- **A static Member default must name active members of this workspace** (refused on `defaultValue`), so a create that leaves the attribute out never fails on its default.
+- **A failed `usage.get` or `members.list` no longer fails the Attributes tab**: the meter stays a skeleton and the Member default offers no members. The loader still waits for `usage.get` (as Settings, Objects does), so the meter's skeleton shows only while the page is pending or after a failure.
+- **A table sorted by a column that leaves it** (archived here or by another admin) goes back to its opening order and warmed view before the refused sort is read again. The dialogs hold the attribute's id and read it from the live list, so a change elsewhere shows and an archive closes them.
+- **A checkbox default left unticked is no default**, and an empty editor clears the default.
+- **The member default's "A member" searches the workspace's members in memory** (they are already loaded for the page).
+- **`PICKER_TYPES` entries carry `allowsUnique`**, and `pickerTypeOf(type, isMulti)` finds the entry an attribute was made from (contracts).
+- **`?attribute=` takes text up to 64 characters**; an id that names no live or system attribute of this object (unknown, hidden, archived, another object's) is replaced away and nothing opens. Archived rows offer Restore only.
+- **DataGrid gained `focusColumn`** besides `onAddColumn` and `columnActions`, so a column made from the table takes focus on its header once drawn, and after an archive from a column menu focus goes to the name's header.
+
+Known gaps for later: the "+" header and the schema items show for the whole object; field rules (#24) would hide only some attributes. Under rules, attribute positions count hidden attributes (as object positions do, milestone 1). Turning Unique on and restoring a unique attribute still read every value into the request (`fillUniqueKeys`); the dialog now reaches them, so #8 or a SQL duplicate check is due before large objects (load harness: Unique on an email attribute of a 1M record object). Every tab of an object rereads its attributes in the same frame after a definitions event (no 0 to 2 second spread, unlike coarse records events); measure with 100 readers before adding one. The echo count can be off by one when a write changes only one end or a far end is hidden (a 60 second wait, or one extra reload). At 375 px the settings Table clips its Rules and row menu columns and toasts can cover a dialog's footer (library work: a narrow Table variant and the toast region). The relationship confirm and the far end's title wait for the definition to carry its pair. `e2e/people.flow.ts` still expects a toast with Retry for a refused unique email, which spec 0006 replaced with the cell's own reason; it fails at that step, which this milestone doesn't change. A relationship end's confirm can't name the far attribute (the client doesn't hold relationship pairs); the toast names both ends after. Not built here: the live second browser check and the production Playwright run (step 14), and the artifact publish.
+
+## Design calls for the owner (milestone 2)
+
+- **The attribute dialog asks for the name first, then the type** (the spec put the type first), as the object and record dialogs do, so the first focused field is the one to type in.
+- **Required, Unique and Allow multiple are Checkboxes with a one line hint each**, not switches: they are saved with the form, and the Switch takes effect at once (its README).
+- **A date's or member's default kind is a horizontal RadioGroup labelled "Default value"** (None, A date, Today plus days; None, Current user, A member), not a SegmentedControl, which switches views; the editor or the days field follows it.
+- **Titles and primaries**: "New attribute" with "Create attribute", "Edit attribute" with "Save", and "Attribute settings" with Close alone when read only.
+- **The settings table's Type column uses the field set's names** (URL, Phone number) while the picker says Link and Phone (AC-228).
+- **The "+" header** is a checkbox column wide ghost "+" after the last header, with nothing under it in the rows; its tooltip and name are "Add attribute". The view bar's Add attribute stays.
+- **The column menu** adds Edit attribute and Archive attribute after a separator, at the end; system columns get neither, and the name gets no Archive.
+- **Members** open rows read only (Close only, "Only workspace owners and admins can change attributes."), and the row menu offers View alone. System rows open read only for everyone.
+- **A move's spinner** sits in the page header beside New attribute, as on Settings, Objects, so the table never shifts.
+- **A read only dialog says its reason once**, in a Callout above the settings; the fields show only their lock.
+- **Opening and closing an attribute's dialog replaces the history entry**, so Back leaves the page rather than reopening a dialog.
+- **After an archive or restore in settings focus goes to the page title** (milestone 1's pattern); after an archive from a column menu, to the name's header. A new attribute's column takes focus whichever entry point made it.
