@@ -10,6 +10,12 @@
 // FLOW_READER_BROWSER=webkit (or firefox) opens the reader in that engine,
 // so the change crosses two browser engines (CI uses WebKit; the writer
 // stays in the project's Chromium).
+//
+// Against production (verify.md, AC-38): FLOW_STATE names a saved signed in
+// browser state and FLOW_SLUG its workspace; both browsers start from that
+// state instead of signing in through Mailpit, and the person and the column
+// carry the run's tag, so runs never clash. Use a workspace whose People
+// table fits on one screen.
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -23,6 +29,9 @@ const BUDGET_MS = 1000;
 const EDITS = 20;
 /** The reader's browser: the project's own (another context), or Firefox. */
 const READER_BROWSER = process.env.FLOW_READER_BROWSER;
+/** A saved signed in state and its workspace, for a run against a deployed app (no Mailpit there). */
+const STATE = process.env.FLOW_STATE;
+const STATE_SLUG = process.env.FLOW_SLUG;
 
 /** The browser the reader opens in: WebKit or Firefox when FLOW_READER_BROWSER names one, else the writer's own. */
 async function readerBrowser(
@@ -101,6 +110,8 @@ async function realtimeSwitch(page: Page) {
 
 test.describe('live updates between two browsers', () => {
   test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'The table flow runs at desktop width.');
+  if ((STATE === undefined) !== (STATE_SLUG === undefined)) throw new Error('Set FLOW_STATE and FLOW_SLUG together.');
+  if (STATE !== undefined) test.use({ storageState: STATE });
 
   test("shows the other browser's create, edits and new column within a second, and says when it is paused", async ({
     browser,
@@ -110,20 +121,26 @@ test.describe('live updates between two browsers', () => {
     if (SHOTS !== undefined) mkdirSync(SHOTS, { recursive: true });
     const tag = randomUUID().slice(0, 8);
     const email = `live-${tag}@example.com`;
-    const slug = `live-${tag}`;
+    const slug = STATE_SLUG ?? `live-${tag}`;
     const people = `/w/${slug}/objects/people`;
+    const lastName = `Hopper ${tag}`;
+    const fullName = `Grace ${lastName}`;
 
-    // The writer makes the workspace; the reader is the same person in another browser.
-    const firstCode = await newWorkspace(writer, email, slug);
+    // The writer makes the workspace (or opens the saved one); the reader is the same person in another browser.
+    const firstCode = STATE === undefined ? await newWorkspace(writer, email, slug) : undefined;
+    if (STATE !== undefined) await writer.goto(people);
     const second = await readerBrowser(browser);
     const readerContext = await second.browser.newContext({
       baseURL: testInfo.project.use.baseURL,
       viewport: testInfo.project.use.viewport ?? null,
+      ...(STATE === undefined ? {} : { storageState: STATE }),
     });
     const reader = await readerContext.newPage();
     const realtime = await realtimeSwitch(reader);
-    await signInAgain(reader, email, people, [firstCode]);
-    await expect(reader.getByText('No people yet')).toBeVisible();
+    if (firstCode === undefined) await reader.goto(people);
+    else await signInAgain(reader, email, people, [firstCode]);
+    await expect(reader.getByRole('grid', { name: 'People' })).toBeVisible();
+    if (STATE === undefined) await expect(reader.getByText('No people yet')).toBeVisible();
     await expect.poll(() => realtime.subscribes(), { message: "the reader's live subscription" }).toBeGreaterThan(0);
     // Live: nothing says otherwise.
     await expect(reader.getByText('Live updates paused')).toHaveCount(0);
@@ -139,18 +156,21 @@ test.describe('live updates between two browsers', () => {
     const readerGrid = reader.getByRole('grid', { name: 'People' });
     const nameColumn = await showColumn(reader, 'Name');
     const createdAt = Date.now();
-    await addPerson(writer, 'Grace', 'Hopper', `grace-${tag}@example.com`);
-    timings.push({
-      change: 'create',
-      ms: (await seen(reader, `[data-cell="0:${String(nameColumn)}"]`, 'Grace Hopper')) - createdAt,
-    });
-    await expect(readerGrid).toHaveAttribute('aria-rowcount', '2');
+    await addPerson(writer, 'Grace', lastName, `grace-${tag}@example.com`);
+    timings.push({ change: 'create', ms: (await seen(reader, '[role="grid"]', fullName)) - createdAt });
+    if (STATE === undefined) await expect(readerGrid).toHaveAttribute('aria-rowcount', '2');
+    // Where the reader shows the new person (first in an empty table; somewhere on screen in a deployed one).
+    const readerRow = await reader
+      .locator(`[data-cell$=":${String(nameColumn)}"]`, { hasText: fullName })
+      .first()
+      .getAttribute('data-cell')
+      .then((cell) => Number(cell?.split(':')[0]));
     await picture(writer, '1-writer-created');
     await picture(reader, '1-reader-created');
 
     // One warm up write, then 20 timed edits of one cell.
     const titleColumn = await showColumn(reader, 'Job title');
-    const titleCell = `[data-cell="0:${String(titleColumn)}"]`;
+    const titleCell = `[data-cell="${String(readerRow)}:${String(titleColumn)}"]`;
     const edit = async (value: string): Promise<number> => {
       const cell = await cellAt(writer, 0, 'Job title');
       await cell.click();
@@ -173,7 +193,7 @@ test.describe('live updates between two browsers', () => {
     const columns = Number(await readerGrid.getAttribute('aria-colcount'));
     await writer.getByRole('button', { name: 'Add attribute' }).click();
     const dialog = writer.getByRole('dialog', { name: 'Add attribute' });
-    await dialog.getByLabel('Name').fill('Nickname');
+    await dialog.getByLabel('Name').fill(`Nickname ${tag}`);
     const addedAt = Date.now();
     await dialog.getByRole('button', { name: 'Create' }).click();
     await reader.waitForFunction(
@@ -182,7 +202,7 @@ test.describe('live updates between two browsers', () => {
       { polling: 'raf', timeout: 10_000 },
     );
     timings.push({ change: 'add column', ms: Date.now() - addedAt });
-    await showColumn(reader, 'Nickname');
+    await showColumn(reader, `Nickname ${tag}`);
     await picture(reader, '3-reader-column-added');
 
     // Within a second at p95 (AC-38), and nothing the writer did came back to it.
@@ -203,7 +223,7 @@ test.describe('live updates between two browsers', () => {
     expect(writerRefetches).toBeLessThanOrEqual(1);
 
     // The reader's connection drops: its table says live updates are paused.
-    const readerTitle = await cellAt(reader, 0, 'Job title');
+    const readerTitle = await cellAt(reader, readerRow, 'Job title');
     const subscribesBefore = realtime.subscribes();
     await realtime.drop();
     await expect(reader.getByText('Live updates paused')).toBeVisible();
