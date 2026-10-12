@@ -50,7 +50,11 @@ export interface RunnerDeps {
   readonly log: RunnerLog;
   /** The clock, in milliseconds; tests pass one they move. */
   readonly now?: () => number;
-  /** Who holds the lease: `<hostname>:<pid>:<start time>` by default. */
+  /**
+   * Who holds the lease: `<hostname>:<pid>:<start time>` by default, and each
+   * slice adds its own number, so two queue rows of one job never run at once
+   * even in one process (a light job has no queue of its own).
+   */
   readonly leaseOwner?: string;
   /** How long a slice runs batches before it hands the job back (20 seconds). */
   readonly sliceMs?: number;
@@ -144,7 +148,9 @@ type JobRow = typeof jobs.$inferSelect;
 /** Makes the runner. */
 export function createRunner(deps: RunnerDeps): Runner {
   const now = deps.now ?? Date.now;
-  const leaseOwner = deps.leaseOwner ?? `${hostname()}:${String(process.pid)}:${String(Date.now())}`;
+  const worker = deps.leaseOwner ?? `${hostname()}:${String(process.pid)}:${String(Date.now())}`;
+  // How many slices this runner started: each one's lease names it.
+  let slicesStarted = 0;
   const sliceMs = deps.sliceMs ?? SLICE_MS;
   const leaseMs = deps.leaseMs ?? LEASE_MS;
   const progressMs = deps.progressMs ?? PROGRESS_MS;
@@ -252,8 +258,8 @@ export function createRunner(deps: RunnerDeps): Runner {
     | { readonly kind: 'expired'; readonly row: JobRow }
     | { readonly kind: 'gone' | 'finished-already' | 'waiting' | 'leased-elsewhere' };
 
-  /** Claims the job (step 1): the row under lock, its lease, `running`, one more slice. */
-  async function claim(payload: QueuePayload): Promise<Claim> {
+  /** Claims the job (step 1) for the slice `leaseOwner`: the row under lock, its lease, `running`, one more slice. */
+  async function claim(payload: QueuePayload, leaseOwner: string): Promise<Claim> {
     const scope = deps.systemScope(payload.workspaceId);
     return inWorkspace(scope, async (tx): Promise<Claim> => {
       const [found] = await tx
@@ -271,7 +277,7 @@ export function createRunner(deps: RunnerDeps): Runner {
       if (isFinishedJob(row.status)) return { kind: 'finished-already' };
       // A prepared job waits for its confirm; the queue row at its expiry ends it (AC-109).
       if (row.status === 'ready') return found.expired ? { kind: 'expired', row } : { kind: 'waiting' };
-      if (row.leaseUntil !== null && row.leaseUntil.getTime() > now() && row.leaseOwner !== leaseOwner) {
+      if (row.leaseUntil !== null && row.leaseUntil.getTime() > now()) {
         // Another runner holds it (a deploy overlap, a stale lock released): come back when its lease ends.
         await enqueue(tx, row.id, sql`${row.leaseUntil.toISOString()}::timestamptz`);
         return { kind: 'leased-elsewhere' };
@@ -608,10 +614,120 @@ export function createRunner(deps: RunnerDeps): Runner {
     return 'failed';
   }
 
+  /** The slice once claimed (steps 2 to 5): who, the batches, the hand over. */
+  async function work(
+    claimed: Extract<Claim, { kind: 'claimed' }>,
+    leaseOwner: string,
+    started: number,
+    signal: AbortSignal | undefined,
+  ): Promise<SliceOutcome> {
+    const { row } = claimed;
+    const fields = { jobId: row.id, kind: row.kind, workspaceId: row.workspaceId, slice: row.slices };
+    deps.log.info('job.slice.start', fields);
+    const finish = (outcome: SliceOutcome, extra: Record<string, unknown> = {}) => {
+      deps.log.info('job.slice.end', { ...fields, ...extra, outcome, durationMs: now() - started });
+      return outcome;
+    };
+    if (claimed.workspaceGone) {
+      await end(row, 'cancelled', 'WORKSPACE_GONE', { event: false });
+      return finish('cancelled');
+    }
+    // The params are checked again at every slice (AC-116): a deploy may have changed the kind, or removed it.
+    const kind = deps.registry.get(row.kind);
+    const parsed = kind?.params.safeParse(row.params);
+    if (kind === undefined || parsed?.success !== true) {
+      await end(row, 'failed', 'JOB_INVALID', { event: true, kind });
+      return finish('failed');
+    }
+    const params = parsed.data;
+    // Its tries were used up and its ending rolled back (the hook threw): end it again, before any work.
+    if (row.attempts >= kind.maxAttempts) {
+      await end(row, 'failed', 'JOB_FAILED', { event: true, kind, params });
+      return finish('failed');
+    }
+    const scope = await enter(row);
+    if (scope === 'ACTOR_REMOVED' || scope === 'JOB_INVALID') {
+      await end(row, 'failed', scope, { event: true, kind, params });
+      return finish('failed');
+    }
+    let batches = 0;
+    const total = { done: 0, refused: 0, skipped: 0 };
+    try {
+      const preparing = row.status === 'preparing';
+      for (;;) {
+        if (preparing) {
+          const outcome = await snapshotBatch(scope, kind, params, row.id);
+          batches += 1;
+          if (outcome === 'ended') return finish('finished-already', { batches });
+          if (outcome === 'cancelled') return finish('cancelled', { batches });
+          if (outcome === 'too-large') {
+            await end(row, 'failed', 'JOB_TOO_LARGE', { event: true, kind, params });
+            return finish('failed', { batches });
+          }
+          if (outcome === 'ready') return finish('ready', { batches });
+          // The snapshot is done and the job queued: the next slice works through its items.
+          if (outcome === 'queued') break;
+        } else {
+          const outcome = await batch(scope, kind, params, row.id);
+          batches += 1;
+          if (outcome.kind === 'ended') return finish('finished-already', { batches, ...total });
+          if (outcome.kind === 'cancelled') return finish('cancelled', { batches, ...total });
+          total.done += outcome.counts.done;
+          total.refused += outcome.counts.refused;
+          total.skipped += outcome.counts.skipped;
+          if (outcome.kind === 'failed') {
+            lastSent.delete(row.id);
+            return finish('failed', { batches, ...total });
+          }
+          if (outcome.finished) {
+            lastSent.delete(row.id);
+            return finish('succeeded', { batches, ...total });
+          }
+        }
+        if (signal?.aborted === true || now() - started >= sliceMs) break;
+      }
+    } catch (error) {
+      deps.log.warn('job.batch.failed', {
+        ...fields,
+        batches,
+        attempt: row.attempts + 1,
+        // The error's class and code only: a message may quote a value.
+        error: error instanceof Error ? error.name : 'unknown',
+      });
+      const ended = await failedTry(row, kind, params);
+      if (ended === 'failed') return finish('failed', { batches, ...total });
+      // Thrown on, so Graphile tries again after its backoff; the batch that failed rolled back whole.
+      finish('retrying', { batches, ...total });
+      throw error;
+    }
+    // Hand over (step 4): the next slice queues behind every row already waiting. A job ended meanwhile (a
+    // cancel that landed at once) is queued no more.
+    await inWorkspace(deps.systemScope(row.workspaceId), async (tx) => {
+      await tx
+        .update(jobs)
+        .set({ leaseOwner: null, leaseUntil: null, updatedAt: sql`now()` })
+        .where(and(eq(jobs.workspaceId, row.workspaceId), eq(jobs.id, row.id), eq(jobs.leaseOwner, leaseOwner)));
+      await tryEnqueue(tx, row.id);
+    });
+    return finish(signal?.aborted === true ? 'stopped' : 'handed-over', { batches, ...total });
+  }
+
+  /** Lets go of a slice's lease when it threw, so Graphile's retry can claim the job again at once. */
+  async function release(row: JobRow, leaseOwner: string): Promise<void> {
+    await inWorkspace(deps.systemScope(row.workspaceId), (tx) =>
+      tx
+        .update(jobs)
+        .set({ leaseOwner: null, leaseUntil: null, updatedAt: sql`now()` })
+        .where(and(eq(jobs.workspaceId, row.workspaceId), eq(jobs.id, row.id), eq(jobs.leaseOwner, leaseOwner))),
+    );
+  }
+
   return {
     async runSlice(payload, signal) {
       const started = now();
-      const claimed = await claim(payload);
+      slicesStarted += 1;
+      const leaseOwner = `${worker}:${String(slicesStarted)}`;
+      const claimed = await claim(payload, leaseOwner);
       if (claimed.kind === 'expired') {
         await end(claimed.row, 'cancelled', 'JOB_EXPIRED', { event: true });
         deps.log.info('job.expired', {
@@ -621,96 +737,18 @@ export function createRunner(deps: RunnerDeps): Runner {
         });
         return 'cancelled';
       }
+      if (claimed.kind === 'leased-elsewhere') {
+        // A second queue row of a job another slice holds (a deploy overlap, a stale lock released): it waits.
+        deps.log.info('job.leased-elsewhere', { jobId: payload.jobId, workspaceId: payload.workspaceId });
+      }
       if (claimed.kind !== 'claimed') return claimed.kind;
-      const { row } = claimed;
-      const fields = { jobId: row.id, kind: row.kind, workspaceId: row.workspaceId, slice: row.slices };
-      deps.log.info('job.slice.start', fields);
-      const finish = (outcome: SliceOutcome, extra: Record<string, unknown> = {}) => {
-        deps.log.info('job.slice.end', { ...fields, ...extra, outcome, durationMs: now() - started });
-        return outcome;
-      };
-      if (claimed.workspaceGone) {
-        await end(row, 'cancelled', 'WORKSPACE_GONE', { event: false });
-        return finish('cancelled');
-      }
-      // The params are checked again at every slice (AC-116): a deploy may have changed the kind, or removed it.
-      const kind = deps.registry.get(row.kind);
-      const parsed = kind?.params.safeParse(row.params);
-      if (kind === undefined || parsed?.success !== true) {
-        await end(row, 'failed', 'JOB_INVALID', { event: true, kind });
-        return finish('failed');
-      }
-      const params = parsed.data;
-      // Its tries were used up and its ending rolled back (the hook threw): end it again, before any work.
-      if (row.attempts >= kind.maxAttempts) {
-        await end(row, 'failed', 'JOB_FAILED', { event: true, kind, params });
-        return finish('failed');
-      }
-      const scope = await enter(row);
-      if (scope === 'ACTOR_REMOVED' || scope === 'JOB_INVALID') {
-        await end(row, 'failed', scope, { event: true, kind, params });
-        return finish('failed');
-      }
-      let batches = 0;
-      const total = { done: 0, refused: 0, skipped: 0 };
       try {
-        const preparing = row.status === 'preparing';
-        for (;;) {
-          if (preparing) {
-            const outcome = await snapshotBatch(scope, kind, params, row.id);
-            batches += 1;
-            if (outcome === 'ended') return finish('finished-already', { batches });
-            if (outcome === 'cancelled') return finish('cancelled', { batches });
-            if (outcome === 'too-large') {
-              await end(row, 'failed', 'JOB_TOO_LARGE', { event: true, kind, params });
-              return finish('failed', { batches });
-            }
-            if (outcome === 'ready') return finish('ready', { batches });
-            // The snapshot is done and the job queued: the next slice works through its items.
-            if (outcome === 'queued') break;
-          } else {
-            const outcome = await batch(scope, kind, params, row.id);
-            batches += 1;
-            if (outcome.kind === 'ended') return finish('finished-already', { batches, ...total });
-            if (outcome.kind === 'cancelled') return finish('cancelled', { batches, ...total });
-            total.done += outcome.counts.done;
-            total.refused += outcome.counts.refused;
-            total.skipped += outcome.counts.skipped;
-            if (outcome.kind === 'failed') {
-              lastSent.delete(row.id);
-              return finish('failed', { batches, ...total });
-            }
-            if (outcome.finished) {
-              lastSent.delete(row.id);
-              return finish('succeeded', { batches, ...total });
-            }
-          }
-          if (signal?.aborted === true || now() - started >= sliceMs) break;
-        }
+        return await work(claimed, leaseOwner, started, signal);
       } catch (error) {
-        deps.log.warn('job.batch.failed', {
-          ...fields,
-          batches,
-          attempt: row.attempts + 1,
-          // The error's class and code only: a message may quote a value.
-          error: error instanceof Error ? error.name : 'unknown',
-        });
-        const ended = await failedTry(row, kind, params);
-        if (ended === 'failed') return finish('failed', { batches, ...total });
-        // Thrown on, so Graphile tries again after its backoff; the batch that failed rolled back whole.
-        finish('retrying', { batches, ...total });
+        // Whatever threw, its lease goes with it (a failed try already let go of it).
+        await release(claimed.row, leaseOwner).catch(() => undefined);
         throw error;
       }
-      // Hand over (step 4): the next slice queues behind every row already waiting. A job ended meanwhile (a
-      // cancel that landed at once) is queued no more.
-      await inWorkspace(deps.systemScope(row.workspaceId), async (tx) => {
-        await tx
-          .update(jobs)
-          .set({ leaseOwner: null, leaseUntil: null, updatedAt: sql`now()` })
-          .where(and(eq(jobs.workspaceId, row.workspaceId), eq(jobs.id, row.id), eq(jobs.leaseOwner, leaseOwner)));
-        await tryEnqueue(tx, row.id);
-      });
-      return finish(signal?.aborted === true ? 'stopped' : 'handed-over', { batches, ...total });
     },
   };
 }

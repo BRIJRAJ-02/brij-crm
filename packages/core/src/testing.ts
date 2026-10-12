@@ -7,6 +7,9 @@ import { mintScope, type EngineScope } from './access/mint.ts';
 import { keyAccess, NO_RULES, roleAccess, SYSTEM_ACCESS, type Access, type AccessRules } from './access/policy.ts';
 import type { Limits } from './engine/limits.ts';
 import type { Actor } from './engine/scope.ts';
+import { runWrite, type AfterWrite } from './engine/write.ts';
+import type { JobRegistry } from './jobs/registry.ts';
+import { startJob, type StartJobInput } from './jobs/service.ts';
 
 /** What a test scope is made of. */
 export interface TestScopeInput {
@@ -70,4 +73,25 @@ export function testScope(input: TestScopeInput): EngineScope {
     access: accessOf(input),
     ...(input.limits === undefined ? {} : { limits: input.limits }),
   });
+}
+
+/**
+ * The jobs tests' own tables (`test_job_effects`, `test_job_hooks`,
+ * `test_job_targets`), made once per test database as the owner, so a test
+ * kind can count its effects exactly once (spec 0008, AC-103).
+ */
+export { ensureTestTables } from './jobs/test-kit.ts';
+
+/**
+ * Starts a job of any kind `registry` holds, in a write of its own, for tests
+ * and scripts: in the product a feature's own write starts it (spec 0008).
+ */
+export async function startJobForTest(
+  scope: EngineScope,
+  registry: JobRegistry,
+  input: StartJobInput,
+  hooks: readonly AfterWrite[] = [],
+): Promise<{ readonly jobId: string; readonly merged: boolean }> {
+  const { result } = await runWrite(scope, (context) => startJob(context, registry, input), hooks);
+  return result;
 }

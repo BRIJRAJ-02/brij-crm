@@ -346,6 +346,27 @@ describe('the runner (AC-103 to AC-107, AC-113, AC-120)', () => {
     const run = runnerFor(registry);
     expect(await run.runner.runSlice({ workspaceId: t.workspaceId, jobId: job.id })).toBe('leased-elsewhere');
     expect((await getJob(t.owner, registry, job.id)).done).toBe(0);
+    // Its one waiting row now runs when the lease ends (the queue key test, AC-103).
+    const [lease] = await testQuery<{ lease_until: Date }>(ownerUrl, 'select lease_until from jobs where id = $1', [
+      job.id,
+    ]);
+    expect((await queueRows(job.id)).map((row) => row.run_at.getTime())).toEqual([lease?.lease_until.getTime()]);
+    expect(run.lines.some((line) => line.message === 'job.leased-elsewhere')).toBe(true);
+  });
+
+  it('keeps two slices of one job apart in one process too: each slice holds its own lease', async () => {
+    const t = await team();
+    const clock = fakeClock();
+    const registry = jobKinds({ environment: 'local', sleep: clock.sleep });
+    const job = await startTestJob(t.owner, registry, { id: newId(), items: 50, batchSize: 10, batchMillis: 100 });
+    const run = runnerFor(registry, clock);
+    // A slice of this same runner holds the lease (it was killed mid slice, or a second row runs beside it).
+    await db.withWorkspace(t.workspaceId, (tx) =>
+      tx.execute(
+        sql`update jobs set lease_owner = 'test-runner:999', lease_until = now() + interval '1 minute' where id = ${job.id}`,
+      ),
+    );
+    expect(await run.runner.runSlice({ workspaceId: t.workspaceId, jobId: job.id })).toBe('leased-elsewhere');
   });
 
   it('cancels the job of a deleted workspace WORKSPACE_GONE', async () => {
