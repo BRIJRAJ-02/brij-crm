@@ -42,7 +42,8 @@ export const ActivityItem = z.object({
   id: z.string().min(1),
   key: z.string().min(1),
   at: Timestamp,
-  actor: ActorReferenceValue,
+  /** Who did it; absent when a field rule hides it from the reader (the creation's Created by). */
+  actor: ActorReferenceValue.optional(),
   kind: ActivityKind,
   attributeId: z.uuid().optional(),
   from: z.unknown().optional(),

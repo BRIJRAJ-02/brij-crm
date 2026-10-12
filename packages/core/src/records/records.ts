@@ -24,7 +24,7 @@ import type { AfterWrite } from '../engine/write.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkObject, UNKNOWN_RECORD } from '../access/visibility.ts';
 
-const { records } = schema;
+const { objects, records } = schema;
 
 /** One window of an object's records: from a position, or after a cursor. */
 export interface RecordWindow {
@@ -101,10 +101,18 @@ export async function readTrashedRecord(scope: EngineScope, recordId: string): P
         deletedAt: records.deletedAt,
         deletedByType: records.deletedByType,
         deletedById: records.deletedById,
+        objectArchivedAt: objects.archivedAt,
       })
       .from(records)
+      .innerJoin(objects, and(eq(objects.workspaceId, records.workspaceId), eq(objects.id, records.objectId)))
       .where(and(eq(records.id, id), isNotNull(records.deletedAt)));
-    if (row?.deletedAt === null || row?.deletedAt === undefined || row.deletedByType === null) {
+    // An archived object's records answer as missing, as `records.activity` does (#13 shows its archived page).
+    if (
+      row?.deletedAt === null ||
+      row?.deletedAt === undefined ||
+      row.deletedByType === null ||
+      row.objectArchivedAt !== null
+    ) {
       throw refuse('NOT_FOUND', UNKNOWN_RECORD);
     }
     // A hidden object answers as a missing record; `readRecords` applies the record rule and the field rules.

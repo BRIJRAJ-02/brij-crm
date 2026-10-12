@@ -20,7 +20,9 @@ import { checkId } from './ids.ts';
 import { inputInvalid, refuse } from './refusals.ts';
 import type { Actor, EngineScope } from './scope.ts';
 import { inWorkspace } from '../access/run.ts';
-import { checkObject, checkRecordVisible, UNKNOWN_RECORD } from '../access/visibility.ts';
+import { isOpen } from '../access/policy.ts';
+import { attributeVisible, checkObject, checkRecordVisible, UNKNOWN_RECORD } from '../access/visibility.ts';
+import { loadAttributes } from './values.ts';
 
 /** What a cursor the server can't read answers, on the `cursor` field. */
 export const ACTIVITY_CURSOR_MESSAGE = 'That activity cursor is not valid here. Start again from the top.';
@@ -45,7 +47,8 @@ export interface ActivityRecord {
   readonly objectId: string;
   /** Its creation moment, ISO in UTC with microseconds. */
   readonly createdAt: string;
-  readonly createdBy: Actor;
+  /** Who made it; absent when a field rule hides the object's Created by from the viewer. */
+  readonly createdBy?: Actor;
 }
 
 /** Where the last page ended: its last entry's moment (with microseconds), rank and id. */
@@ -87,7 +90,13 @@ const creationSource: ActivitySource = ({ record, after }) => {
   const parts = { at: record.createdAt, rank: ACTIVITY_RANKS.created, id };
   if (!isPastBound(parts, after)) return Promise.resolve([]);
   return Promise.resolve([
-    { id, key: activityKey(parts), at: toMillis(record.createdAt), actor: record.createdBy, kind: 'created' },
+    {
+      id,
+      key: activityKey(parts),
+      at: toMillis(record.createdAt),
+      ...(record.createdBy === undefined ? {} : { actor: record.createdBy }),
+      kind: 'created',
+    },
   ]);
 };
 
@@ -140,11 +149,17 @@ async function checkedRecord(tx: WorkspaceTx, scope: EngineScope, recordId: stri
   if (row === undefined || row.object_archived) throw refuse('NOT_FOUND', UNKNOWN_RECORD);
   await checkObject(tx, scope.access, row.object_id, 'read', UNKNOWN_RECORD);
   await checkRecordVisible(tx, scope.access, { objectId: row.object_id, recordId: row.id });
+  // Hidden is absent: a field rule hiding the object's Created by leaves the creation entry without its actor.
+  const hidesCreator =
+    !isOpen(scope.access) &&
+    [...(await loadAttributes(tx, row.object_id)).values()].some(
+      (attribute) => attribute.systemColumn === 'created_by' && !attributeVisible(scope.access, attribute),
+    );
   return {
     id: row.id,
     objectId: row.object_id,
     createdAt: row.created_at,
-    createdBy: { type: row.created_by_type, id: row.created_by_id },
+    ...(hidesCreator ? {} : { createdBy: { type: row.created_by_type, id: row.created_by_id } }),
   };
 }
 

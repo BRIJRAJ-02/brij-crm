@@ -681,6 +681,10 @@ describe('records.activity and records.getTrashed (spec 0017)', () => {
     const other = await refusal(() => b.client.records.activity({ workspace: b.slug, recordId: theirs.id }));
     expect(missing).toEqual({ code: 'NOT_FOUND', status: 404, message: 'That record does not exist.' });
     expect(other).toEqual(missing);
+    await trash(a, theirs.id);
+    expect(await refusal(() => b.client.records.getTrashed({ workspace: b.slug, recordId: theirs.id }))).toEqual(
+      missing,
+    );
     const bad = await failure(() =>
       a.client.records.activity({ workspace: a.slug, recordId: theirs.id, cursor: 'eyJub3QiOiJpdCJ9' }),
     );

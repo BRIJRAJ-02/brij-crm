@@ -205,6 +205,35 @@ describe('the record check (spec 0017, AC-376, AC-382, AC-387)', () => {
   });
 });
 
+describe('hidden is absent in the creation entry (spec 0017, AC-382)', () => {
+  it('leaves the actor out when a field rule hides Created by', async () => {
+    const world = await workspace();
+    const { recordId } = await createRecord(world.scope, {
+      objectId: world.companies,
+      values: { [world.id('companies.name')]: 'Acme' },
+    });
+    const hidesCreator = rescope(world.scope, {
+      actor: { type: 'member', id: world.memberId },
+      role: 'member',
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'member' },
+            target: { type: 'attribute', objectId: world.companies, attributeId: world.id('companies.created_by') },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+    const [entry] = (await getActivity(hidesCreator, { recordId })).entries;
+    expect(entry?.kind).toBe('created');
+    expect(entry).not.toHaveProperty('actor');
+    const [asOwner] = (await getActivity(world.scope, { recordId })).entries;
+    expect(asOwner?.actor).toEqual({ type: 'member', id: world.ownerId });
+  });
+});
+
 describe('a record in the trash (spec 0017, AC-376)', () => {
   it('reads its values, no links, and who deleted it and when', async () => {
     const world = await workspace();
@@ -248,5 +277,50 @@ describe('a record in the trash (spec 0017, AC-376)', () => {
       message: 'That record does not exist.',
     });
     expect(await refusalOf(readTrashedRecord(world.scope, newId()))).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('applies the record rule and field rules to a record in the trash, and answers an archived object as missing', async () => {
+    const world = await workspace();
+    const { recordId } = await createRecord(world.scope, {
+      objectId: world.people,
+      values: { [world.id('people.name')]: { firstName: 'Gone' }, [world.id('people.job_title')]: 'CTO' },
+    });
+    await deleteRecord(world.scope, { recordId });
+    const member = (rules: Parameters<typeof rescope>[1]['rules']) =>
+      rescope(world.scope, {
+        actor: { type: 'member', id: world.memberId },
+        role: 'member',
+        ...(rules === undefined ? {} : { rules }),
+      });
+    // Owner is empty, so a rule on the member's own records leaves this one out.
+    const ruled = member({
+      levels: [],
+      records: [
+        {
+          subject: { type: 'role', role: 'member' },
+          objectId: world.people,
+          kind: 'own',
+          attributeId: world.id('people.owner'),
+        },
+      ],
+    });
+    expect(await refusalOf(readTrashedRecord(ruled, recordId))).toEqual({
+      code: 'NOT_FOUND',
+      message: 'That record does not exist.',
+    });
+    const hidesTitle = member({
+      levels: [
+        {
+          subject: { type: 'role', role: 'member' },
+          target: { type: 'attribute', objectId: world.people, attributeId: world.id('people.job_title') },
+          level: 'hidden',
+        },
+      ],
+      records: [],
+    });
+    const trashed = await readTrashedRecord(hidesTitle, recordId);
+    expect(Object.hasOwn(trashed.record.values, world.id('people.job_title'))).toBe(false);
+    await setObjectArchived(world.scope, { objectId: world.people, archived: true });
+    expect(await refusalOf(readTrashedRecord(world.scope, recordId))).toMatchObject({ code: 'NOT_FOUND' });
   });
 });
