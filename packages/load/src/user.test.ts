@@ -11,7 +11,7 @@ import { createRandom } from './random.ts';
 import { viewShapes, type ShapeAttribute } from './shapes.ts';
 import {
   createLoadUser,
-  HUB_NAMES,
+  hubName,
   type Behaviour,
   type Call,
   type HubUser,
@@ -399,10 +399,37 @@ describe('open, edit and create', () => {
     expect(hubOpens.every((call) => (call.input as { attributeIds?: unknown }).attributeIds === undefined)).toBe(true);
     expect(samples.filter((sample) => sample.hub === 'open' && sample.metric === 'open')).toHaveLength(hubOpens.length);
 
-    // The renames swap between two names, on the hub itself.
+    // Each rename writes a name of its own, on the hub itself.
     const renames = writes.filter((write) => write.recordId === hub.model.companyId);
-    expect(renames.map((write) => write.values[hub.model.nameAttributeId]?.value)).toEqual([...HUB_NAMES]);
+    expect(renames.map((write) => write.values[hub.model.nameAttributeId]?.value)).toEqual([hubName(0), hubName(1)]);
+    expect(hubName(0)).not.toBe(hubName(1));
     expect(samples.filter((sample) => sample.hub === 'edit')).toHaveLength(2);
+  });
+
+  it("stops moving a person whose move failed, since it may have landed and its place isn't known", async () => {
+    const person = id(3_101);
+    const hub: HubUser = {
+      model: {
+        companyId: id(500_001),
+        companiesObjectId: id(700_002),
+        companyAttributeId: id(900_101),
+        nameAttributeId: id(900_102),
+        elsewhere: [id(500_002)],
+      },
+      people: [person],
+    };
+    const fake = fakeApi();
+    const api: LoadApi = {
+      ...fake.api,
+      setValues: (input, call) =>
+        input.recordId === person ? Promise.reject(new Error('dropped')) : fake.api.setValues(input, call),
+    };
+    const { loadUser, samples } = user(api, { hub });
+    await loadUser.join(0, false);
+    for (let step = 0; step < 40; step += 1) await loadUser.act('edit', step, true);
+    const moves = samples.filter((sample) => sample.hub === 'move');
+    expect(moves).toHaveLength(1);
+    expect(moves[0]?.outcome).toBe('unexpected');
   });
 
   it('lets the live client see what it holds, refetch held records and reread its window', async () => {

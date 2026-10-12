@@ -10,6 +10,7 @@
 // load:reset` does. Reported, not judged. It refuses (exit 3) any database
 // that isn't this machine's, a database without the manifest's workspace, and
 // a hub whose Team isn't as seeded (naming `pnpm load:reset`).
+import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { sql } from 'drizzle-orm';
 import { createDatabase, type Database } from '@crm/db';
 import { isRefusal, outboxHook, setValues } from '../src/index.ts';
@@ -77,6 +78,12 @@ export interface BenchResult {
   readonly failed: Readonly<Record<string, number>>;
   /** WAL from the clear's start to its end, the writers' share included. */
   readonly walBytes: number;
+  /**
+   * This process's event loop delay while the clear ran, p99 and max in ms:
+   * the clear's own work holds up the writers' timers in the same process,
+   * so a large stall here is the bench's, not the database's.
+   */
+  readonly clearLoopMs: { readonly p99: number; readonly max: number };
   readonly restoreMs: number;
   readonly restored: number;
 }
@@ -202,11 +209,14 @@ export async function benchHubClear(
   const writers = Array.from({ length: options.writers }, (_, index) => writer(index));
   let clear = { start: 0, end: 0 };
   let walBytes = 0;
+  let clearLoopMs = { p99: 0, max: 0 };
   let failure: Error | undefined;
   try {
     await sleep(options.beforeMs);
     log("clearing the hub's Team in one write");
     const walBefore = await walAt(db, manifest.workspaceId);
+    const loop = monitorEventLoopDelay({ resolution: 10 });
+    loop.enable();
     const start = performance.now();
     await setValues(
       scope,
@@ -214,6 +224,8 @@ export async function benchHubClear(
       [outboxHook()],
     );
     clear = { start, end: performance.now() };
+    loop.disable();
+    clearLoopMs = loop.count === 0 ? { p99: 0, max: 0 } : { p99: loop.percentile(99) / 1e6, max: loop.max / 1e6 };
     walBytes = (await walAt(db, manifest.workspaceId)) - walBefore;
     log(`cleared in ${(clear.end - clear.start).toFixed(0)} ms; the writers go on for ${String(options.afterMs)} ms`);
     await sleep(options.afterMs);
@@ -229,12 +241,16 @@ export async function benchHubClear(
   const restoreStart = performance.now();
   const restored = await restoreHubTeam(db, manifest, log);
   const restoreMs = performance.now() - restoreStart;
+  // The clear and the write back churn the link rows: vacuumed now, as the reset does, so autovacuum doesn't land
+  // in the next run's measured window.
+  await db.vacuumAnalyze(['records', 'values', 'record_links', 'sort_keys']);
   if (failure !== undefined) throw failure;
   return {
     team,
     clearMs: clear.end - clear.start,
     ...summarizeWrites(writes, clear),
     walBytes,
+    clearLoopMs,
     restoreMs,
     restored,
   };
@@ -257,6 +273,8 @@ export function formatBench(result: BenchResult): string {
     `${'other writes (ms)'.padEnd(34)}${'p50'.padStart(8)}${'p95'.padStart(8)}${'p99'.padStart(8)}${'max'.padStart(8)}${'count'.padStart(7)}`,
     line('all, from their scheduled moment', result.writes),
     line('beside the clear', result.beside),
+    `(the writers move people outside the hub, so beside the clear they meet the pool, CPU and WAL, not its row locks;`,
+    ` this process's event loop stalled up to ${result.clearLoopMs.max.toFixed(1)} ms (p99 ${result.clearLoopMs.p99.toFixed(1)} ms) during the clear, and that delays the writers too)`,
     '',
     `out of retries (runWrite): ${String(result.outOfRetries)}`,
     `writes that failed: ${failed === '' ? 'none' : failed}`,

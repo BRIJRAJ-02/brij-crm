@@ -276,7 +276,7 @@ A 20 user, 2 minute storm on the first build (other lanes busy on the machine) g
 ### What was built
 
 - **Task 20, 1,000 users (AC-203, AC-208).** A run spreads its users over worker threads, 250 to a thread unless `--threads` says otherwise (`threadsFor`), and checks each thread's event loop on its own, naming the one that stalled (`the main thread`, `thread 1` and so on). `thousand` plays 1,000 seeded members, each with its own minted session, on the steady mix for 5 measured minutes, prints every verdict and exits by validity only. `pnpm load:seed` takes `--users N` (1 to 1,000), so a small seed can carry 1,000 different people.
-- **Task 21, the hub (AC-206, AC-209).** `hub` plays 100 users on the steady mix where half the edits move one of the user's own people to or from the hub (from the person's Company) and a fifth of the opens read the hub whole (its Team as the first 20 links and the total), while user 1 renames the hub every 10 seconds between `Hub Company (renamed)` and `Hub Company`. The report adds `hub renames`, `hub moves`, `hub moves while a rename ran`, `hub open` and `writes out of retries (runWrite)`; the WAL line was already on every report. `pnpm load:reset` now also puts back every seeded person's Company that moved since `seededAt` (so the hub's Team is the seeded one again), through the engine's batch write as the system actor, 5,000 people a batch in engine calls of 500, and the hub's name.
+- **Task 21, the hub (AC-206, AC-209).** `hub` plays 100 users on the steady mix where half the edits move one of the user's own people to or from the hub (from the person's Company) and a fifth of the opens read the hub whole (its Team as the first 20 links and the total), while user 1 renames the hub every 10 seconds (`Hub Company (renamed 1)`, `(renamed 2)` and so on, after the reviews; the runs below swapped between two names). The report adds `hub renames`, `hub moves`, `hub moves while a rename ran`, `hub open` and `writes out of retries (runWrite)`; the WAL line was already on every report. `pnpm load:reset` now also puts back every seeded person's Company that moved since `seededAt` (so the hub's Team is the seeded one again), through the engine's batch write as the system actor, 5,000 people a batch in engine calls of 500, and the hub's name.
 - **Task 22, the hub clear bench (AC-214).** `pnpm load:bench-hub-clear` (`packages/core/scripts/bench-hub-clear.ts`) clears the hub's Team in one whole value write as the system actor while 100 engine level writers link other people to the hub and to other companies at 0.2 a second each, through one pool of 10 connections, then writes the Team back the way the reset does, whatever happened.
 - **Task 23, the weekly smoke (AC-211).** `.github/workflows/load-smoke.yml` runs on Mondays at 06:00 UTC and on demand, never on a push. It seeds the smoke profile on the runner's own load stack, plays `steady --users 20 --minutes 2`, judges the result with `packages/load/scripts/smoke.ts` (a warning per judged miss, a failure for an invalid run or a crash, the table on the run's summary page), uploads `.load/results/` (never the sessions file) and wipes the throwaway stack. It needs no secrets and touches no deployed environment. `actionlint` 1.7.7 (its Docker image) passes it with no findings.
 - **Task 24.** `packages/load/AGENTS.md` names the new commands, scenarios and report lines; the runs are below.
@@ -461,6 +461,26 @@ Team written back: 7,784 people in 100.5 s
 Reported, not judged (#41 judges it).
 ```
 
+After the reviews the bench also measures its own event loop during the clear and vacuums after the write back. Run again (13:29 UTC, the host's load average 32 on 8 cores):
+
+```
+clear of the hub's Team (7,419 links, one write): 260 ms
+
+other writes (ms)                      p50     p95     p99     max  count
+all, from their scheduled moment      28.9   167.1   730.3  1116.4    410
+beside the clear                      43.6    65.0    65.0    65.0      4
+(the writers move people outside the hub, so beside the clear they meet the pool, CPU and WAL, not its row locks;
+ this process's event loop stalled up to 21.3 ms (p99 21.3 ms) during the clear, and that delays the writers too)
+
+out of retries (runWrite): 0
+writes that failed: none
+WAL written during the clear (the writers' share included): 7.8 MB
+Team written back: 7,792 people in 150.5 s
+Reported, not judged (#41 judges it).
+```
+
+At 7,419 links the clear holds the bench's own event loop for at most 21 ms, so the writes beside it measure the database. At 150,000 the clear's read of every link into the process will hold it longer, which this line will now show.
+
 ### The weekly smoke's steps, run here
 
 `pnpm load:run steady --users 20 --minutes 2` (seed 407), then `node packages/load/scripts/smoke.ts 2` with `GITHUB_STEP_SUMMARY` set. With 20 users on the oversubscribed host: read p95 2.1 s, open 3.7 s, edit 3.1 s, create 9.1 s (15 samples), live delivery p95 1.2 s (23 samples), Postgres CPU p95 92% and API CPU p95 137%, 0 missed seqs, 108 × 429 (read 53, count 14, settle 41). The run was invalid on the 429s, and the script printed `::error title=Load smoke invalid::unexpected errors were 20.971%25 of actions (limit 0.1%25): 429 TOO_MANY_REQUESTS ×108`, wrote the table to the summary file and exited 2, as the workflow's step would. A valid run (exit 0 or 1) prints a warning per judged miss and exits 0 (`src/smoke.test.ts`).
@@ -486,7 +506,8 @@ Reported, not judged (#41 judges it).
 3. **`thousand` is invalid on two counts:** the API (above), and the harness's own threads, which stalled at p99 330 to 534 ms once every request timed out; 250 users fit one thread while the server answers. Plan (#41): run `thousand` with more API replicas, on a machine where Docker's caps and the harness's 4 threads fit the cores (the spec's "larger machine with the same caps"), and only then judge the budget at 1,000.
 4. **Putting the Team back is slow:** 7,784 people in 100.5 s through the engine's batch write (13 ms a person: a savepoint, a link write and its share of the change event each), so the `crm` seed's 150,000 would take about 32 minutes after a bench. It is correct and goes through the engine as the spec asks. Plan (#41, only if it matters): a set based restore inside one engine write.
 5. **The hub's Team holds 7,500 here, not 150,000** (the waived million seed), so the clear (239 ms, 5.1 MB of WAL with the writers') and the hub open's link total (31 ms a call) are smoke sized. A `crm` seed run of `hub` and the bench is the first thing #41 does once Docker has 12 GB.
-6. **A shared load stack mixes lanes' numbers.** Plan: run one lane's load work at a time (now in `packages/load/AGENTS.md`); if lanes keep overlapping, a per lane project name and port offset is a small change to `docker-compose.load.yml` and `LOAD_STACK`.
+6. **The weekly smoke's stack caps add up to 5 CPUs on a 4 CPU runner** (Postgres 2, api, worker and Centrifugo 1 each), before PgBouncer and the harness, so a harness thread's event loop can also make it invalid for reasons outside the product. Plan: watch the first runs; if the loop stalls, run the smoke at `--users 10` or on a larger runner.
+7. **A shared load stack mixes lanes' numbers.** Plan: run one lane's load work at a time (now in `packages/load/AGENTS.md`); if lanes keep overlapping, a per lane project name and port offset is a small change to `docker-compose.load.yml` and `LOAD_STACK`.
 
 ### Calls made in this milestone
 
@@ -495,8 +516,10 @@ Reported, not judged (#41 judges it).
 - **Hub moves come from each user's own 20 people of the Team**, dealt out by a hash so no two users move the same person; each starts in the hub, so moves alternate off and back and split about evenly each way. Every user moves people whatever object its view holds (the move is the edit; the view stays the user's). The people are read through the owner login as setup, like the option ids; every measured action goes through the API.
 - **A move off the hub goes to a live sampled company,** and every move is written from the person's Company: `links.add` and `links.remove` (#15) don't exist yet, and neither does the key share lock on the hub from a stored sort key (#15, #8), so `hub` measures the renames against the moves as the engine stands today.
 - **The renames are kept off the mix and the edit line** (like the storm's bursts) and judged on their own line against the edit target; the moves are edits and stay on the edit line; the hub's opens stay off the open line (AC-199). A move "ran while a rename did" when their spans, from the scheduled moment to the answer, overlap. Like the storm's lines, these verdicts are for #41: `hub` exits by validity only.
+- **Each rename writes a name of its own** (`Hub Company (renamed 1)`, `(renamed 2)`, ...) rather than swapping between two as AC-206 words it: after a failed round, swapping would write the name the hub already holds, a no op that reads as a fast rename. The reset puts the seed's name back either way. For the same reason a user stops moving a person whose move failed or is still in flight (it may have landed after the timeout).
 - **Writes out of retries** are writes answered 503 `QUERY_CANCELLED`, which is what `runWrite` refuses with after its last attempt; they are unexpected errors too.
 - **The reset puts back any seeded person's Company that moved,** not only those touching the hub, since the bench's writers also move people between other companies. Link history keeps every ended version, so the Company at `seededAt` is known exactly; nothing else the harness does writes a Company. It uses the engine's batch write (500 records, its limit) in groups of 5,000, and renames the hub back only when its name moved.
+- **The reset and the bench check the manifest's ids first:** the workspace and its slug, and that the hub and every sampled company are Companies records in it, since the owner login bypasses row level security.
 - **The bench runs as the system actor through the engine, without the access door,** like the reset (engine level, AC-214). It refuses while the Team isn't as seeded, lets the writers run alone 10 seconds before the clear and 10 after, picks seeded people outside the hub whose company is live (so the reset can link them back), and writes the Team back even when the clear fails.
 - **The weekly smoke wipes its throwaway stack at the end** and uploads only `.load/results/`; a crash or a refused setup fails it with that exit code, and so does a missing result file.
 - **The hub open reads the whole record** (`records.get` with no `attributeIds`), which is what a record page reads.
@@ -510,3 +533,16 @@ Reported, not judged (#41 judges it).
 ### Owner steps
 
 - Decide miss 1 (the weekly smoke and 429s) before the first Monday run, or expect it to fail as invalid until #41 changes the read gate.
+
+### Reviews (milestone 4)
+
+`security-access-reviewer` and `state-performance-reviewer` on b7cefb0..203073a. Fixed in the commit after it:
+
+- **Security, low:** the owner login bypasses row level security, and the manifest's `hubCompanyId` and sampled companies were never checked against the workspace. `assertSeededWorkspace` now refuses (exit 3) unless every one is a Companies record in the seeded workspace; tested. A stronger step, running the reset's and the bench's engine writes through a login without `bypassrls`, is left for #41 (the erase already ran this way before this milestone).
+- **Security, low:** the smoke's checkout kept the token on disk; it now sets `persist-credentials: false` (the other workflows do the same as before; a repo wide change, not this one).
+- **Performance, medium:** the bench's writes beside the clear could hide the bench's own event loop stall; the clear now measures it and the bench prints it, with a note that the writers meet the pool, CPU and WAL, not the cleared rows' locks.
+- **Performance, medium low:** the bench left its link churn unvacuumed; it now vacuums after the write back, as the reset does.
+- **Performance, low:** the moves beside a rename only overlap in time today (no shared lock until #15's and #8's key share lock); the line's note says so. A failed or in flight move no longer leaves a person to be moved again into a no op, and each rename writes a new name.
+- **Performance, low:** `writes out of retries` now says it counts 503 `QUERY_CANCELLED` on a write, mostly `runWrite`'s; an empty exit code reaching `smoke.ts` is a crash, never a clean exit.
+
+Not changed: the weekly smoke failing on 429s (miss 1, the owner's call); the sent on time share judged over all threads together (AC-203 reads one share, and each thread's loop is judged on its own); `movedPeople`'s full pass over People's Company links (a few seconds at the million, once per reset).

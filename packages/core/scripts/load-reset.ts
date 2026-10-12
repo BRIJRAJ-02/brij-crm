@@ -33,20 +33,34 @@ export async function harnessRecords(db: Database, manifest: LoadManifest): Prom
 
 /**
  * Refuses (exit 3) unless the database holds the manifest's workspace under
- * its seeded slug: a manifest from another database must never pick records
- * there to erase.
+ * its seeded slug, and the hub and the sampled companies the manifest names
+ * are Companies records in it: a manifest from another database, or one
+ * edited by hand, must never pick records there to erase or write. The owner
+ * login bypasses row level security, so this check stands in for it.
  */
 export async function assertSeededWorkspace(db: Database, manifest: LoadManifest): Promise<void> {
-  const slug = await db.withWorkspace(manifest.workspaceId, async (tx) => {
-    const result = await tx.execute<{ slug: string }>(
-      sql`select slug from workspaces where id = ${manifest.workspaceId}`,
-    );
-    return result.rows[0]?.slug;
+  const companies = [manifest.hubCompanyId, ...(manifest.samples.companies ?? [])];
+  const found = await db.withWorkspace(manifest.workspaceId, async (tx) => {
+    const result = await tx.execute<{ slug: string; companies: number }>(sql`
+      select w.slug, (
+        select count(*)::int from records r
+        where r.workspace_id = w.id and r.object_id = ${manifest.objects.companies ?? null}::uuid
+          and r.id = any(${`{${companies.join(',')}}`}::uuid[])
+      ) as companies
+      from workspaces w where w.id = ${manifest.workspaceId}
+    `);
+    return result.rows[0];
   });
-  if (slug !== manifest.slug) {
+  if (found?.slug !== manifest.slug) {
     throw loadRefusal(
       `This database has no workspace ${manifest.workspaceId} named "${manifest.slug}", the manifest's seeded one. ` +
         'Point LOAD_DATABASE_URL_OWNER at the database `pnpm load:seed` filled.',
+    );
+  }
+  if (found.companies !== new Set(companies).size) {
+    throw loadRefusal(
+      `The manifest's hub or sampled companies aren't all Companies records in workspace "${manifest.slug}". ` +
+        'Seed again: `pnpm load:seed`.',
     );
   }
 }

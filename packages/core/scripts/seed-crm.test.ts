@@ -351,6 +351,17 @@ describe('pnpm load:reset (spec 0011, AC-209)', () => {
       (error: unknown) => error,
     );
     expect(isLoadRefusal(unknown) && unknown.message.includes('LOAD_DATABASE_URL_OWNER')).toBe(true);
+    // A hub or a sampled company that isn't a Companies record in the workspace: refused before any write.
+    const strayHub = await resetLoadWorkspace(db, { ...manifest, hubCompanyId: newId() }).catch(
+      (error: unknown) => error,
+    );
+    expect(isLoadRefusal(strayHub) && strayHub.message.includes('hub or sampled companies')).toBe(true);
+    const person = manifest.samples.people?.[0] ?? newId();
+    const strayCompany = await resetLoadWorkspace(db, {
+      ...manifest,
+      samples: { ...manifest.samples, companies: [person] },
+    }).catch((error: unknown) => error);
+    expect(isLoadRefusal(strayCompany) && strayCompany.exitCode === 3).toBe(true);
   });
 });
 

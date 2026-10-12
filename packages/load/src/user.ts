@@ -146,8 +146,8 @@ export interface Behaviour {
 export const HUB_MOVE_SHARE = 0.5;
 /** The share of a hub user's opens that read the hub itself (AC-206). */
 export const HUB_OPEN_SHARE = 0.2;
-/** The names the hub's renames swap between (AC-206): the seed's, and one beside it. `pnpm load:reset` puts the first back. */
-export const HUB_NAMES = ['Hub Company (renamed)', 'Hub Company'] as const;
+/** The hub's name after rename `round` (AC-206): a new one each round. `pnpm load:reset` puts the seed's back. */
+export const hubName = (round: number): string => `Hub Company (renamed ${String(round + 1)})`;
 
 /** The hub as the `hub` scenario's users see it (AC-206). */
 export interface HubModel {
@@ -231,7 +231,7 @@ export interface LoadUser {
    * samples (the manifest's ids spread over the whole object).
    */
   readonly burst: (scheduledAt: number, measured: boolean, slot: number) => Promise<void>;
-  /** The hub's rename number `round` (AC-206): it swaps between `HUB_NAMES`. Only in `hub`. */
+  /** The hub's rename number `round` (AC-206), to `hubName(round)`. Only in `hub`. */
   readonly hubEdit: (scheduledAt: number, measured: boolean, round: number) => Promise<void>;
   readonly holder: Holder;
   readonly snapshot: () => UserSnapshot;
@@ -505,20 +505,25 @@ export function createLoadUser(options: UserOptions): LoadUser {
     return shown === undefined ? { id } : { id, view: shown };
   }
 
-  // The hub's people this user moves, and whether each is in the hub now (all are when the run starts).
+  // The hub's people this user moves, and whether each is in the hub now (all are when the run starts). A person
+  // whose move is in flight, or whose move failed (it may have landed after the timeout), is left out: moving it
+  // again could write what it already holds, a no op that would read as a fast move.
   const inHub = new Map((options.hub?.people ?? []).map((id) => [id, true]));
 
   /**
    * Moves one of the user's people to or from the hub (AC-206): half the
    * moves each way, written from the person's Company. A person moved off
-   * goes to another company; a move back links it to the hub again.
+   * goes to another company; a move back links it to the hub again. Only
+   * people whose place the user knows are moved.
    */
   async function hubMove(hub: HubUser, scheduledAt: number, measured: boolean) {
     const writing = tally();
     const toHub = random.chance(0.5);
-    const ready = hub.people.filter((id) => inHub.get(id) !== toHub);
-    const person = random.pick(ready.length > 0 ? ready : hub.people);
+    const known = [...inHub.keys()];
+    const ready = known.filter((id) => inHub.get(id) !== toHub);
+    const person = random.pick(ready.length > 0 ? ready : known);
     const goesToHub = inHub.get(person) !== true;
+    inHub.delete(person);
     const target = goesToHub ? hub.model.companyId : random.pick(hub.model.elsewhere);
     const mutationId = options.mutationId();
     const answer = await writing.call((call) =>
@@ -545,7 +550,11 @@ export function createLoadUser(options: UserOptions): LoadUser {
     reading.finish('open', 'open', scheduledAt, measured, undefined, { hub: 'open' });
   }
 
-  /** Renames the hub (AC-206): round 0 to `HUB_NAMES[0]`, round 1 back to the seed's name, and so on. */
+  /**
+   * Renames the hub (AC-206), each round to a name of its own, so a round
+   * after a failed one never writes the name the hub already holds (a no op
+   * that would read as a fast rename). `pnpm load:reset` puts the seed's back.
+   */
   async function hubEdit(scheduledAt: number, measured: boolean, round: number) {
     const hub = options.hub;
     if (hub === undefined) return;
@@ -556,7 +565,7 @@ export function createLoadUser(options: UserOptions): LoadUser {
         {
           workspace: options.workspace,
           recordId: hub.model.companyId,
-          values: { [hub.model.nameAttributeId]: { value: HUB_NAMES[round % HUB_NAMES.length] } },
+          values: { [hub.model.nameAttributeId]: { value: hubName(round) } },
           mutationId,
         },
         call,
@@ -606,7 +615,7 @@ export function createLoadUser(options: UserOptions): LoadUser {
         else await openRecord(scheduledAt, measured);
         return;
       case 'edit':
-        if (options.hub !== undefined && options.hub.people.length > 0 && random.chance(HUB_MOVE_SHARE)) {
+        if (options.hub !== undefined && inHub.size > 0 && random.chance(HUB_MOVE_SHARE)) {
           await hubMove(options.hub, scheduledAt, measured);
         } else {
           await edit(scheduledAt, measured);

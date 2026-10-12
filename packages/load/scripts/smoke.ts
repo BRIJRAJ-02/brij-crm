@@ -21,9 +21,11 @@ async function newestResult(): Promise<LoadResult | undefined> {
   return LoadResult.parse(JSON.parse(await readFile(newest.path, 'utf8')));
 }
 
-const runExit = Number(process.argv[2]);
+// An empty or missing exit code means the run step died before it wrote one: a crash, never a clean exit.
+const given = process.argv[2] ?? '';
+const runExit = /^\d+$/.test(given) ? Number(given) : 1;
 const result = await newestResult();
-const verdict = smokeVerdict(Number.isInteger(runExit) ? runExit : 1, result);
+const verdict = smokeVerdict(runExit, result);
 for (const annotation of verdict.annotations) console.log(annotation);
 const summaryFile = process.env.GITHUB_STEP_SUMMARY;
 if (result !== undefined && summaryFile !== undefined && summaryFile !== '') {

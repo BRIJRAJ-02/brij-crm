@@ -355,7 +355,12 @@ export function hubLines(budget: ScaleBudget, samples: readonly Sample[]): reado
       'ms',
       "written from the person's Company",
     ),
-    judged('hub moves while a rename ran', beside.map(durationOf), budget.p95Ms.edit, 'ms'),
+    {
+      ...judged('hub moves while a rename ran', beside.map(durationOf), budget.p95Ms.edit, 'ms'),
+      note: `overlap in time only: no shared lock until #15's and #8's key share lock on the hub${
+        beside.length < FEW_SAMPLES ? `; only ${String(beside.length)} samples` : ''
+      }`,
+    },
     reported(
       'hub open (first 20 Team links and the total)',
       okTimes(samples, 'open', (sample) => sample.hub === 'open'),
@@ -368,7 +373,7 @@ export function hubLines(budget: ScaleBudget, samples: readonly Sample[]): reado
       summary: countSummary(outOfRetries),
       verdict: 'reported',
       judged: false,
-      note: `answered ${OUT_OF_RETRIES}, of ${String(writes.length)} writes; unexpected, so in the error share`,
+      note: `${OUT_OF_RETRIES} on a write (mostly runWrite out of retries), of ${String(writes.length)} writes; unexpected, so in the error share`,
     },
   ];
 }

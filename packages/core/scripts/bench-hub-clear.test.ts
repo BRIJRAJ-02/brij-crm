@@ -37,11 +37,13 @@ describe('summarizeWrites', () => {
       clearMs: 812,
       ...summary,
       walBytes: 3 * 1024 ** 2,
+      clearLoopMs: { p99: 12.5, max: 40 },
       restoreMs: 4_000,
       restored: 7_431,
     });
     expect(printed).toContain("clear of the hub's Team (7,425 links, one write): 812 ms");
     expect(printed).toContain('out of retries (runWrite): 1');
+    expect(printed).toContain('stalled up to 40.0 ms (p99 12.5 ms) during the clear');
     expect(printed).toContain('QUERY_CANCELLED ×1, error ×1');
   });
 });
