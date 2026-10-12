@@ -158,9 +158,13 @@ export async function takeEntrySlots(
     .where(eq(lists.id, listId));
 }
 
-/** Refuses a new option when its attribute is full. Locks the attribute row, so concurrent adds take turns. */
+/**
+ * Refuses a new option when its attribute is full. Locks the attribute row
+ * (`no key update`, so value writes' foreign key checks never wait on it), so
+ * concurrent adds and restores take turns.
+ */
 export async function checkOptionRoom(tx: WorkspaceTx, scope: EngineScope, attributeId: string): Promise<void> {
-  await tx.select({ id: attributes.id }).from(attributes).where(eq(attributes.id, attributeId)).for('update');
+  await tx.select({ id: attributes.id }).from(attributes).where(eq(attributes.id, attributeId)).for('no key update');
   const [row] = await tx
     .select({ n: count() })
     .from(attributeOptions)

@@ -88,9 +88,16 @@ async function optionGuard<T>(work: () => Promise<T>): Promise<T> {
   }
 }
 
-/** Locks an attribute's row for the rest of the write, so option creates, restores and moves on it take turns. */
+/**
+ * Locks an attribute's row for the rest of the write, so option creates,
+ * restores and moves on it take turns. `no key update`, never `update`: every
+ * value write holds `key share` on the attribute row through its foreign keys,
+ * and a record write that makes an option (a cell's `newOption`) already holds
+ * its record, so `update` here could deadlock with a batch edit of the same
+ * attribute (the security review, milestone 3).
+ */
 export async function lockOptionParent(tx: WorkspaceTx, attributeId: string): Promise<void> {
-  await tx.select({ id: attributes.id }).from(attributes).where(eq(attributes.id, attributeId)).for('update');
+  await tx.select({ id: attributes.id }).from(attributes).where(eq(attributes.id, attributeId)).for('no key update');
 }
 
 /** The hues of an attribute's options in its order, archived ones included: what `nextHue` reads. */
@@ -295,6 +302,12 @@ export async function updateOption(
       if (option.outcome === null && hasStageSettings(input)) {
         throw refuse('CONFIG_INVALID', 'Only status stages have an outcome and a target time.');
       }
+      const ref = { optionId: option.id, attributeId: owner.id, objectId: owner.objectId, listId: owner.listId };
+      // Archiving an archived option, or restoring a live one, and nothing else: nothing changes, nothing is told.
+      const onlyArchived = Object.entries(input).every(([key, value]) =>
+        key === 'optionId' || key === 'archived' ? true : value === undefined,
+      );
+      if (onlyArchived && input.archived !== undefined && input.archived === (option.archivedAt !== null)) return ref;
       // A restore needs room among the live options (AC-237); an archived one doesn't count until then.
       if (input.archived === false && option.archivedAt !== null) await checkOptionRoom(tx, scope, owner.id);
       // Renamed, recoloured, reordered, archived or restored: its object's (or list's) screens read it again.
@@ -315,7 +328,7 @@ export async function updateOption(
           })
           .where(eq(attributeOptions.id, option.id)),
       );
-      return { optionId: option.id, attributeId: owner.id, objectId: owner.objectId, listId: owner.listId };
+      return ref;
     },
     hooks,
   );

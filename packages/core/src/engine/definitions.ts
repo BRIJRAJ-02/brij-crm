@@ -624,6 +624,10 @@ async function insertInitialOptions(
     if (pg?.code === '23505' && pg.constraint === 'attribute_options_pkey') {
       throw refuse('ID_TAKEN', 'An option with that id already exists.');
     }
+    // Postgres' lower() and JavaScript's may differ on some letter: two labels alike after all.
+    if (pg?.code === '23505' && pg.constraint === 'attribute_options_label') {
+      throw refuseOn('CONFIG_INVALID', 'Two options share a label. Give each its own label.', 'options');
+    }
     throw error;
   }
 }

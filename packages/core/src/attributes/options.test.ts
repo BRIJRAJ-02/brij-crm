@@ -247,13 +247,13 @@ describe('creating an option (AC-236, AC-244)', () => {
     const before = (await outboxRows(scope)).length;
     const optionId = tier.options?.[0]?.id ?? '';
     for (const call of [
-      createOption(member, { attributeId: tier.id, id: newId(), label: 'Gold' }, hooks()),
-      editOption(member, { optionId, label: 'Gold' }, hooks()),
-      moveOption(member, { optionId, position: 0 }, hooks()),
-      archiveOption(member, { optionId }, hooks()),
-      restoreOption(member, { optionId }, hooks()),
+      () => createOption(member, { attributeId: tier.id, id: newId(), label: 'Gold' }, hooks()),
+      () => editOption(member, { optionId, label: 'Gold' }, hooks()),
+      () => moveOption(member, { optionId, position: 0 }, hooks()),
+      () => archiveOption(member, { optionId }, hooks()),
+      () => restoreOption(member, { optionId }, hooks()),
     ]) {
-      expect(await refusalOf(call)).toMatchObject({ code: 'FORBIDDEN' });
+      expect(await refusalOf(call())).toMatchObject({ code: 'FORBIDDEN' });
     }
     expect((await outboxRows(scope)).length).toBe(before);
     expect(await optionCount(scope, tier.id)).toBe(1);
@@ -482,5 +482,90 @@ describe('creating an option from a cell (AC-238)', () => {
       message: 'Give the new Tier option a label of 1 to 100 characters.',
       attributeId: tier.id,
     });
+  });
+
+  it('refuses more than one new option in a multi select’s list', async () => {
+    const { scope, projects } = await workspace();
+    const tags = await createAttribute(scope, {
+      objectId: projects,
+      id: newId(),
+      title: 'Tags',
+      type: 'select',
+      isMulti: true,
+    });
+    const { recordId } = await createRecord(scope, { objectId: projects });
+    const two = [{ newOption: { id: newId(), label: 'A' } }, { newOption: { id: newId(), label: 'B' } }];
+    expect(await refusalOf(setRecordValues(scope, { recordId, values: { [tags.id]: { value: two } } }))).toEqual({
+      code: 'ATTRIBUTE_VALUE_INVALID',
+      message: 'Create one new Tags option at a time.',
+      attributeId: tags.id,
+    });
+    expect(await optionCount(scope, tags.id)).toBe(0);
+  });
+});
+
+describe('options under field rules: hidden means absent (spec 0009, AC-141)', () => {
+  /** An admin (schema.manage) whose rules hide one select and leave another read only, on Projects. */
+  async function ruled() {
+    const { scope, projects } = await workspace();
+    const secret = await selectWith(scope, projects, ['Silver']);
+    const level = await createAttribute(scope, {
+      objectId: projects,
+      id: newId(),
+      title: 'Level',
+      type: 'select',
+      options: [{ id: newId(), label: 'One', hue: 'gray' }],
+    });
+    const admin = await memberIn(scope, 'admin');
+    const rule = (attributeId: string, field: 'hidden' | 'read') => ({
+      subject: { type: 'role' as const, role: 'admin' },
+      target: { type: 'attribute' as const, objectId: projects, attributeId },
+      level: field,
+    });
+    const limited = rescope(admin, {
+      rules: { levels: [rule(secret.id, 'hidden'), rule(level.id, 'read')], records: [] },
+    });
+    return { scope, projects, secret, level, limited };
+  }
+
+  it('answers every option write on a hidden attribute NOT_FOUND, writing nothing', async () => {
+    const { scope, secret, limited } = await ruled();
+    const optionId = secret.options?.[0]?.id ?? '';
+    const before = (await outboxRows(scope)).length;
+    for (const call of [
+      () => createOption(limited, { attributeId: secret.id, id: newId(), label: 'Gold' }, hooks()),
+      () => editOption(limited, { optionId, label: 'Gold' }, hooks()),
+      () => moveOption(limited, { optionId, position: 0 }, hooks()),
+      () => archiveOption(limited, { optionId }, hooks()),
+      () => restoreOption(limited, { optionId }, hooks()),
+    ]) {
+      expect(await refusalOf(call())).toMatchObject({ code: 'NOT_FOUND' });
+    }
+    expect((await outboxRows(scope)).length).toBe(before);
+    expect(await optionCount(scope, secret.id)).toBe(1);
+  });
+
+  it('leaves no option behind for a new option on a hidden or read only field', async () => {
+    const { scope, projects, secret, level, limited } = await ruled();
+    const { recordId } = await createRecord(scope, { objectId: projects });
+    const make = (attributeId: string, label: string) =>
+      setRecordValues(limited, {
+        recordId,
+        values: { [attributeId]: { value: { newOption: { id: newId(), label } } } },
+      });
+    expect(await refusalOf(make(secret.id, 'Gold'))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(make(level.id, 'Two'))).toMatchObject({ code: 'ATTRIBUTE_READ_ONLY' });
+    expect(await optionCount(scope, secret.id)).toBe(1);
+    expect(await optionCount(scope, level.id)).toBe(1);
+  });
+
+  it('stores no definitions row for archiving an archived option', async () => {
+    const { scope, projects } = await workspace();
+    const tier = await selectWith(scope, projects, ['Silver']);
+    const optionId = tier.options?.[0]?.id ?? '';
+    await archiveOption(scope, { optionId }, hooks());
+    const before = (await outboxRows(scope)).length;
+    await archiveOption(scope, { optionId }, hooks());
+    expect((await outboxRows(scope)).length).toBe(before);
   });
 });

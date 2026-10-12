@@ -80,7 +80,8 @@ export async function resolveNewOptions(
   // Asked for at all: a member's request is refused whole, whatever the cell showed.
   requirePermission(context.scope, 'schema.manage');
   const resolved = Object.create(null) as Record<string, ValueInput>;
-  for (const [attributeId, input] of entries) {
+  // In attribute id order, so two writes making options on the same attributes lock them in the same order.
+  for (const [attributeId, input] of entries.toSorted(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))) {
     resolved[attributeId] = input;
     const attribute = attributes.get(attributeId);
     if (attribute === undefined || !namesNewOption(input.value)) continue;
@@ -90,6 +91,9 @@ export async function resolveNewOptions(
     if (Array.isArray(input.value)) {
       // A list only for a multi select; anything else stays for the parser to refuse.
       if (!attribute.isMulti) continue;
+      if ((input.value as readonly unknown[]).filter(isNewOptionItem).length > 1) {
+        throw refuse('ATTRIBUTE_VALUE_INVALID', `Create one new ${attribute.title} option at a time.`, attribute.id);
+      }
       const items: unknown[] = [];
       for (const item of input.value as readonly unknown[]) {
         items.push(isNewOptionItem(item) ? await resolveOne(context, attribute, newOptionOf(attribute, item)) : item);

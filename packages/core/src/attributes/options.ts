@@ -3,7 +3,7 @@
 // outcome and target time, move, archive and restore. Every write needs
 // `schema.manage`, stores one definitions row for the attribute's object, and
 // answers what it changed, read back through the access door.
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { AttributeOption } from '@crm/contracts';
 import type { Hue } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
@@ -25,23 +25,24 @@ const OPTION_NOT_FOUND = 'That option does not exist.';
 type Outcome = 'open' | 'won' | 'lost';
 
 /** The object an attribute sits on, or `NOT_FOUND`: options here are an object's attribute's (a list's have no screens). */
-async function objectOfAttribute(tx: WorkspaceTx, attributeId: string): Promise<string> {
+async function objectOfAttribute(tx: WorkspaceTx, scope: EngineScope, attributeId: string): Promise<string> {
+  // Row level security keeps the read to this workspace; the filter says so too (house style).
   const [row] = await tx
     .select({ objectId: attributes.objectId })
     .from(attributes)
-    .where(eq(attributes.id, attributeId));
+    .where(and(eq(attributes.workspaceId, scope.workspaceId), eq(attributes.id, attributeId)));
   if (row?.objectId === undefined || row.objectId === null) throw refuse('NOT_FOUND', ATTRIBUTE_NOT_FOUND);
   return row.objectId;
 }
 
 /** The attribute and object an option belongs to, or `NOT_FOUND`. */
-async function ownerOfOption(tx: WorkspaceTx, optionId: string): Promise<string> {
+async function ownerOfOption(tx: WorkspaceTx, scope: EngineScope, optionId: string): Promise<string> {
   const [row] = await tx
     .select({ attributeId: attributeOptions.attributeId })
     .from(attributeOptions)
-    .where(eq(attributeOptions.id, optionId));
+    .where(and(eq(attributeOptions.workspaceId, scope.workspaceId), eq(attributeOptions.id, optionId)));
   if (row === undefined) throw refuse('NOT_FOUND', OPTION_NOT_FOUND);
-  await objectOfAttribute(tx, row.attributeId).catch(() => {
+  await objectOfAttribute(tx, scope, row.attributeId).catch(() => {
     throw refuse('NOT_FOUND', OPTION_NOT_FOUND);
   });
   return row.attributeId;
@@ -88,7 +89,7 @@ export async function createOption(
 ): Promise<AttributeOption> {
   requirePermission(scope, 'schema.manage');
   const attributeId = checkId(input.attributeId, ATTRIBUTE_NOT_FOUND);
-  const objectId = await inWorkspace(scope, (tx) => objectOfAttribute(tx, attributeId));
+  const objectId = await inWorkspace(scope, (tx) => objectOfAttribute(tx, scope, attributeId));
   const made = await defineOption(
     scope,
     {
@@ -125,7 +126,7 @@ export async function editOption(
 ): Promise<AttributeOption> {
   requirePermission(scope, 'schema.manage');
   const optionId = checkId(input.optionId, OPTION_NOT_FOUND);
-  await inWorkspace(scope, (tx) => ownerOfOption(tx, optionId));
+  await inWorkspace(scope, (tx) => ownerOfOption(tx, scope, optionId));
   const ref = await updateOption(
     scope,
     {
@@ -151,7 +152,7 @@ export async function moveOption(
 ): Promise<AttributeOption[]> {
   requirePermission(scope, 'schema.manage');
   const optionId = checkId(input.optionId, OPTION_NOT_FOUND);
-  await inWorkspace(scope, (tx) => ownerOfOption(tx, optionId));
+  await inWorkspace(scope, (tx) => ownerOfOption(tx, scope, optionId));
   return optionsAfter(scope, await updateOption(scope, { optionId, position: input.position }, hooks));
 }
 
@@ -167,7 +168,7 @@ export async function archiveOption(
 ): Promise<AttributeOption> {
   requirePermission(scope, 'schema.manage');
   const optionId = checkId(input.optionId, OPTION_NOT_FOUND);
-  await inWorkspace(scope, (tx) => ownerOfOption(tx, optionId));
+  await inWorkspace(scope, (tx) => ownerOfOption(tx, scope, optionId));
   return optionAfter(scope, await updateOption(scope, { optionId, archived: true }, hooks));
 }
 
@@ -183,6 +184,6 @@ export async function restoreOption(
 ): Promise<AttributeOption> {
   requirePermission(scope, 'schema.manage');
   const optionId = checkId(input.optionId, OPTION_NOT_FOUND);
-  await inWorkspace(scope, (tx) => ownerOfOption(tx, optionId));
+  await inWorkspace(scope, (tx) => ownerOfOption(tx, scope, optionId));
   return optionAfter(scope, await updateOption(scope, { optionId, archived: false }, hooks));
 }
