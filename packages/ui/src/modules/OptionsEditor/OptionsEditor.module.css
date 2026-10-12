@@ -32,19 +32,10 @@
   }
 
   .empty {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
     margin: 0;
     color: var(--text-secondary);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
-  }
-
-  .emptyTitle {
-    color: var(--text);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
   }
 
   .list {
@@ -54,9 +45,11 @@
     outline: none;
   }
 
+  /* In a slot narrower than the dialog, a stage's outcome and days wrap under its label. */
   .row {
     display: flex;
-    gap: var(--space-8);
+    flex-wrap: wrap;
+    gap: var(--space-4) var(--space-8);
     align-items: center;
     min-block-size: var(--size-input);
     padding-inline: var(--space-4);
@@ -76,11 +69,23 @@
     box-shadow: var(--shadow-focus-inset);
   }
 
-  /* A grid, so the field inside stretches to the row's free width. */
+  /* A grid, so the field inside stretches to the row's free width; a read only Tag keeps its own width. */
   .label {
     display: grid;
     flex: 1;
     min-inline-size: calc(5 * var(--size-chip));
+  }
+
+  .label[data-static] {
+    justify-items: start;
+  }
+
+  /* The spinner's place, held whether or not a write is out, so the fields never move. */
+  .pending {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--size-icon);
   }
 
   .outcome {

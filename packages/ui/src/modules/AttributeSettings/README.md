@@ -35,7 +35,7 @@ New (from the inventory, `0003-inventory.md`, pulled forward from spec 0003's mi
 
 ## States
 
-Create, edit, read only, busy, a type's settings, options (draft before create, written as they change after), a default naming an archived option (the primary spins with its ongoing verb, Cancel is off, and the dialog stays), refused (on the setting, or above them), and each default kind.
+Create, edit, read only, busy (the primary spins with its ongoing verb, Cancel is off, and the dialog stays), a type's settings, options (draft before create, written as they change after), a default naming an archived option, refused (on the setting, or above them), and each default kind.
 
 ## Keyboard
 

@@ -61,6 +61,7 @@ export const Editor: Story = {
 /** For someone who may shape the schema: a label no live option has is offered as "Create"; one it has (any case) is not (spec 0012, AC-238). */
 export const CreateOption: Story = {
   args: { onCreateOption: fn() },
+  parameters: { crm: { screenshot: false } },
   render: (args) => (
     <Stage width="narrow">
       <AttributeEditor {...args} />
@@ -69,7 +70,7 @@ export const CreateOption: Story = {
   play: async ({ args, userEvent }) => {
     await userEvent.tab();
     await userEvent.keyboard('{ArrowDown}');
-    const search = await screen.findByRole('textbox', { name: 'Search' });
+    const search = await screen.findByRole('textbox', { name: /^Search/ });
     await waitFor(() => expect(search).toHaveFocus());
     await userEvent.keyboard('saas');
     await expect(screen.queryByRole('option', { name: /^Create/ })).toBeNull();
@@ -101,5 +102,23 @@ export const CreateOptionSeveral: Story = {
     await userEvent.keyboard('Robotics');
     await userEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Create "Robotics"' }));
     await expect(args.onCreateOption).toHaveBeenCalledWith('Robotics');
+  },
+};
+
+/** The offer itself: what is typed matches no option, so "Create" shows last, with its plus (kept open for its picture). */
+export const CreateOffered: Story = {
+  args: { onCreateOption: fn() },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ userEvent }) => {
+    await userEvent.tab();
+    await userEvent.keyboard('{ArrowDown}');
+    const search = await screen.findByRole('textbox', { name: /^Search/ });
+    await waitFor(() => expect(search).toHaveFocus());
+    await userEvent.keyboard('Hot');
+    await expect(await screen.findByRole('option', { name: 'Create "Hot"' })).toBeVisible();
   },
 };

@@ -227,7 +227,11 @@ export function Select({
       {...(value === undefined ? {} : { value })}
       {...(defaultValue === undefined ? {} : { defaultValue })}
       {...(defaultOpen === undefined ? {} : { defaultOpen })}
-      {...(onOpenChange === undefined ? {} : { onOpenChange })}
+      // Each opening searches afresh (from the key that opened a cell's list, when one did).
+      onOpenChange={(isOpen) => {
+        if (!isOpen) setQuery(defaultSearch ?? '');
+        onOpenChange?.(isOpen);
+      }}
       onChange={(next) => {
         if (next === CREATE) {
           if (canCreate) onCreate(typed);
@@ -262,7 +266,13 @@ export function Select({
       <Popover width={variant === 'cell' ? 'menu' : 'trigger'}>
         {hasSearch ? (
           <div className={styles.searchable}>
-            <Autocomplete filter={contains} inputValue={query} onInputChange={setQuery}>
+            <Autocomplete
+              filter={contains}
+              inputValue={query}
+              onInputChange={setQuery}
+              // Create alone in the list waits for an arrow: one Enter on a typo never makes an option.
+              disableAutoFocusFirst={canCreate && !items.some((item) => contains(item.label, typed))}
+            >
               <div className={styles.search}>
                 {/* A search over a list opens with its field focused, the pattern React Aria expects. */}
                 {/* eslint-disable-next-line jsx-a11y-x/no-autofocus */}

@@ -15,7 +15,7 @@ import {
   type AttributeType,
   type PickerType,
 } from '@crm/contracts/values';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
@@ -23,6 +23,7 @@ import { Radio, RadioGroup } from '../../atoms/Radio/Radio.tsx';
 import { AttributeEditor, type AttributeEditorProps } from '../../fields/AttributeEditor.tsx';
 import { fieldTypeOf, typeLabelOf } from '../../fields/registry.ts';
 import type { FieldAttribute } from '../../fields/types.ts';
+import { memoIntl } from '../../lib/intl-memo.ts';
 import { arraySource } from '../../lib/list-source.ts';
 import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
@@ -313,6 +314,8 @@ function AttributeForm({
     attribute === undefined && entry?.type === 'status' ? starterStages(newOptionId) : [],
   );
   const [changed, setChanged] = useState<ReadonlySet<AttributeSettingsField>>(new Set());
+  // An option row refused what was typed (a label taken): the create waits until it is fixed.
+  const [areOptionsInvalid, setOptionsInvalid] = useState(false);
   const [local, setLocal] = useState<readonly FormRefusal[]>([]);
   const touch = (field: AttributeSettingsField) => {
     setChanged((before) => (before.has(field) ? before : new Set([...before, field])));
@@ -358,6 +361,9 @@ function AttributeForm({
       ...(name.trim() === '' ? [{ code: 'INPUT_INVALID', message: strings.nameMissing, attributeId: 'title' }] : []),
       ...(draft.kind === 'offset' && daysOf(draft.days) === undefined
         ? [{ code: 'INPUT_INVALID', message: strings.daysInvalid, attributeId: 'offsetDays' }]
+        : []),
+      ...(isCreating && (type === 'select' || type === 'status') && areOptionsInvalid
+        ? [{ code: 'INPUT_INVALID', message: strings.optionsInvalid, attributeId: 'options' }]
         : []),
     ];
     setLocal(problems);
@@ -472,6 +478,7 @@ function AttributeForm({
             setDrafts(next);
             touch('options');
           }}
+          onInvalidChange={setOptionsInvalid}
         />
       )}
       {isCreating ? (
@@ -557,6 +564,7 @@ function AttributeForm({
           draft={draft}
           members={members}
           options={options}
+          config={config}
           isRequired={isRequired}
           readOnlyReason={readOnlyReason}
           error={errorOf('defaultValue')}
@@ -578,6 +586,8 @@ interface DefaultSettingProps {
   readonly members: readonly ActorDisplay[];
   /** A select's options or a status's stages, for the default's editor and its archived note. */
   readonly options: readonly OptionsEditorOption[];
+  /** The type's settings as chosen above: the default's editor shows a percent sign or starts in the chosen currency. */
+  readonly config: Readonly<Record<string, unknown>>;
   readonly isRequired: boolean;
   readonly readOnlyReason: string | undefined;
   readonly error: string | undefined;
@@ -595,6 +605,7 @@ function DefaultSetting({
   draft,
   members,
   options,
+  config,
   isRequired,
   readOnlyReason,
   error,
@@ -612,6 +623,11 @@ function DefaultSetting({
       isRequired: false,
       isUnique: false,
       isReadOnly,
+      // The default is drawn as the value will be: a percent number with its sign, an amount in the chosen currency.
+      ...(type === 'number' && config.display === 'percent' ? { isPercent: true } : {}),
+      ...(type === 'currency' && typeof config.defaultCurrency === 'string'
+        ? { defaultCurrency: config.defaultCurrency }
+        : {}),
       ...(takesOptions
         ? {
             options: options.map((option) => ({
@@ -806,7 +822,7 @@ function TypeSettings({ type, config, isReadOnly, error, onChange }: TypeSetting
     );
   }
   if (type !== 'currency') return null;
-  const names = new Intl.DisplayNames(locale, { type: 'currency' });
+  const names = memoIntl(`currency-names:${locale}`, () => new Intl.DisplayNames(locale, { type: 'currency' }));
   const code = typeof config.defaultCurrency === 'string' ? config.defaultCurrency : DEFAULT_CURRENCY;
   return (
     <Select
@@ -837,6 +853,7 @@ interface OptionsSettingProps {
   readonly error: string | undefined;
   readonly writes: AttributeSettingsOptionWrites | undefined;
   readonly onDrafts: (options: readonly OptionsEditorOption[]) => void;
+  readonly onInvalidChange: (isInvalid: boolean) => void;
 }
 
 /** A draft option with a change applied; `targetDays: null` takes its target away. */
@@ -863,13 +880,21 @@ function OptionsSetting({
   error,
   writes,
   onDrafts,
+  onInvalidChange,
 }: OptionsSettingProps) {
+  // Without the screen's ids (a story), a counter, so a removed option's id is never handed out again.
+  const made = useRef(0);
+  const fallbackId = () => {
+    made.current += 1;
+    return `option-${String(made.current)}`;
+  };
   const common = {
     label: kind === 'status' ? strings.stages : strings.options,
     kind,
     options,
-    newId: newId ?? (() => `option-${String(options.length)}`),
+    newId: newId ?? fallbackId,
     isReadOnly,
+    onInvalidChange,
     ...(limit === undefined ? {} : { limit }),
   };
   if (!isCreating && writes !== undefined) {

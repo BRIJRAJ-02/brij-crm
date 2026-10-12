@@ -109,6 +109,8 @@ export interface MenuSearch {
   readonly onSearch?: (query: string) => void;
   /** What the field starts with: the key that opened a grid cell's editor. */
   readonly defaultQuery?: string;
+  /** Leaves the first item unfocused while typing (a lone "Create" item, which one Enter shouldn't choose). */
+  readonly isFirstUnfocused?: boolean;
 }
 
 interface MenuLook {
@@ -272,6 +274,7 @@ export function Menu<T extends object>(props: MenuProps<T>) {
         <Autocomplete
           {...(search.onSearch === undefined ? { filter: contains } : { onInputChange: search.onSearch })}
           {...(search.defaultQuery === undefined ? {} : { defaultInputValue: search.defaultQuery })}
+          {...(search.isFirstUnfocused === true ? { disableAutoFocusFirst: true } : {})}
         >
           {/* A search menu opens with its field focused, the pattern React Aria expects. */}
           {/* eslint-disable-next-line jsx-a11y-x/no-autofocus */}

@@ -9,6 +9,8 @@ export const strings = {
   outcomeOf: (label: string) => `${label === '' ? 'New stage' : label} outcome`,
   daysOf: (label: string) => `${label === '' ? 'New stage' : label} target days`,
   daysUnit: 'days',
+  /** Under a status's stages: what the days field is. */
+  daysNote: 'Days: how long a record should sit in a stage before it counts as stuck. Leave empty for none.',
   /** A stage's target, read only, after its outcome. */
   targetShown: (days: number) => `, ${String(days)} ${days === 1 ? 'day' : 'days'} target`,
   daysInvalid: 'Give whole days from 1 to 365, or leave it empty.',
@@ -22,17 +24,13 @@ export const strings = {
   archive: 'Archive',
   remove: 'Remove',
   restore: 'Restore',
-  restoreNamed: (label: string) => `Restore ${label}`,
   addOption: 'Add option',
   addStage: 'Add stage',
   archived: 'Archived',
   noOptions: 'No options yet',
-  noOptionsText: 'Add the choices people pick from.',
   noStages: 'No stages yet',
-  noStagesText: 'Add the stages records move through.',
   usage: (used: number, limit: number) => `${String(used)} of ${String(limit)}`,
   full: (limit: number) => `An attribute holds at most ${String(limit)} options. Archive one to add another.`,
-  labelMissing: 'Give the option a label.',
   labelTaken: 'An option with that label already exists. Pick another label.',
   saving: 'Saving',
   /** Said after a move, to screen readers. */

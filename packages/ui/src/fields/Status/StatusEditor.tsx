@@ -41,7 +41,11 @@ export function StatusEditor({
       value={typeof value === 'string' ? value : null}
       {...(onCreateOption === undefined
         ? {}
-        : { onCreate: onCreateOption, ...(startText === undefined ? {} : { defaultSearch: startText }) })}
+        : {
+            onCreate: onCreateOption,
+            searchLabel: strings.search(attribute.name),
+            ...(startText === undefined ? {} : { defaultSearch: startText }),
+          })}
       items={(attribute.options ?? []).map((option) => ({
         id: option.id,
         label: option.label,

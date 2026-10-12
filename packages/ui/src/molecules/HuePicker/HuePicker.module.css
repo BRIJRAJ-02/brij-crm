@@ -102,6 +102,11 @@
     outline-offset: var(--border-width-thick);
   }
 
+  /* The compact picker's one swatch stands alone: a control's outline (3.5:1), where the full group's tag edge sufficed. */
+  .swatch[data-compact] {
+    border-color: var(--control-border);
+  }
+
   /* The compact picker read only: the hue, with nothing to press. */
   .swatch[data-static] {
     cursor: default;

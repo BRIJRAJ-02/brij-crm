@@ -81,6 +81,12 @@ export interface OptionsEditorProps {
   readonly startsWithBlank?: boolean;
   /** A line under the group's label: how changes are kept ("Changes to options save as you make them."). */
   readonly hint?: string;
+  /**
+   * Told whenever a row's own check refuses what was typed or clears it (a
+   * label taken, days out of range): a dialog keeps its submit back while
+   * one is refused, so a create never goes without an option the person typed.
+   */
+  readonly onInvalidChange?: (isInvalid: boolean) => void;
 }
 
 /** The row being added: its id, the label typed so far, and the hue it will take. */
@@ -132,6 +138,7 @@ export function OptionsEditor({
   isReadOnly = false,
   startsWithBlank = false,
   hint,
+  onInvalidChange,
 }: OptionsEditorProps) {
   const isStatus = kind === 'status';
   const rootRef = useRef<HTMLDivElement>(null);
@@ -163,12 +170,13 @@ export function OptionsEditor({
     });
   };
 
-  /** Sets or clears a refusal made here (a label taken, days out of range), by key. */
+  /** Sets or clears a refusal made here (a label taken, days out of range), by key, and says whether any is left. */
   const setOne = (key: string, message: string | undefined) => {
-    setLocal((before) => {
-      const { [key]: _gone, ...rest } = before;
-      return message === undefined ? rest : { ...rest, [key]: message };
-    });
+    if (local[key] === message) return;
+    const { [key]: _gone, ...rest } = local;
+    const next = message === undefined ? rest : { ...rest, [key]: message };
+    setLocal(next);
+    onInvalidChange?.(Object.keys(next).length > 0);
   };
 
   /** Whether a live option other than `except` holds `text` as its label, ignoring case. */
@@ -190,7 +198,11 @@ export function OptionsEditor({
     });
   };
 
-  /** Adds the draft when its label is given and free; `again` opens the next blank row (Enter). */
+  /**
+   * Adds the draft when its label is given and free. On Enter (`again`) the
+   * next blank row opens, or at the limit focus goes to Add option; as focus
+   * leaves (a blur) it stays wherever the person put it.
+   */
   const commitDraft = (again: boolean) => {
     if (draft === undefined) return;
     const text = draft.label.trim();
@@ -214,7 +226,7 @@ export function OptionsEditor({
     if (again && !(limit !== undefined && live.length + 1 >= limit)) startDraft(draft.hue);
     else {
       setDraft(undefined);
-      focusIn((root) => root.querySelector<HTMLElement>('[data-adder] button'));
+      if (again) focusIn((root) => root.querySelector<HTMLElement>('[data-adder] button'));
     }
   };
 
@@ -293,12 +305,8 @@ export function OptionsEditor({
         )}
       </div>
       {hint !== undefined && !isReadOnly && <span className={styles.note}>{hint}</span>}
-      {rows.length === 0 && (
-        <p className={styles.empty}>
-          <span className={styles.emptyTitle}>{isStatus ? strings.noStages : strings.noOptions}</span>
-          {!isReadOnly && <span>{isStatus ? strings.noStagesText : strings.noOptionsText}</span>}
-        </p>
-      )}
+      {isStatus && !isReadOnly && <span className={styles.note}>{strings.daysNote}</span>}
+      {rows.length === 0 && <p className={styles.empty}>{isStatus ? strings.noStages : strings.noOptions}</p>}
       {rows.length > 0 && (
         <GridList
           aria-label={label}
@@ -362,7 +370,7 @@ export function OptionsEditor({
                     if (hue !== option.hue) onChange(option.id, { hue });
                   }}
                 />
-                <span className={styles.label}>
+                <span className={styles.label} data-static={isReadOnly || undefined}>
                   {isReadOnly ? (
                     <Tag hue={option.hue}>{name}</Tag>
                   ) : (
@@ -452,7 +460,9 @@ export function OptionsEditor({
                       </span>
                     </>
                   ))}
-                {isPending && <Spinner label={strings.saving} />}
+                {!isReadOnly && (
+                  <span className={styles.pending}>{isPending && <Spinner label={strings.saving} />}</span>
+                )}
                 {!isReadOnly && (
                   <MenuTrigger>
                     <Button variant="ghost" icon="ellipsis" label={strings.actionsFor(name)} />
@@ -515,13 +525,19 @@ export function OptionsEditor({
             {isStatus ? strings.addStage : strings.addOption}
           </Button>
           {isFull && <span className={styles.note}>{strings.full(limit)}</span>}
+          {/* A refused add (its row gone with it) says why here, unless a blank row is open to show it. */}
+          {draft === undefined && errors.new !== undefined && (
+            <span className={styles.error} role="alert">
+              {errors.new}
+            </span>
+          )}
         </span>
       )}
       {archived.length > 0 && (
         <Disclosure title={strings.archived} count={archived.length}>
           <ul className={styles.archived}>
             {archived.map((option) => (
-              <li key={option.id} className={styles.archivedRow}>
+              <li key={option.id} className={styles.archivedRow} data-archived={option.id}>
                 <Tag hue={option.hue} isArchived>
                   {option.label}
                 </Tag>
@@ -534,6 +550,14 @@ export function OptionsEditor({
                     isDisabled={isFull}
                     onPress={() => {
                       onRestore(option.id);
+                      // Its button leaves with it: focus goes to the next archived option's, else Add option.
+                      const at = archived.findIndex((each) => each.id === option.id);
+                      const next = archived[at + 1] ?? archived[at - 1];
+                      focusIn((root) =>
+                        next === undefined
+                          ? root.querySelector<HTMLElement>('[data-adder] button')
+                          : root.querySelector<HTMLElement>(`[data-archived="${CSS.escape(next.id)}"] button`),
+                      );
                     }}
                   >
                     {strings.restore}

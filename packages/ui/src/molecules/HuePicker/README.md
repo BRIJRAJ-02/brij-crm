@@ -18,7 +18,7 @@ New. A select option's colour and an object's tile (#13) are picked from the sam
 
 ## States
 
-Compact: the swatch (hover, focus, pressed), the popover open, read only. Full: chosen (a tick and a ring), hover tooltip, focus (accent outline), pressed, disabled, read only (`isReadOnly`: the chosen hue stays at full contrast and the group is reachable by keyboard, but nothing changes; for a member in settings).
+Compact: the swatch (focus, pressed, disabled; a control's outline, since it stands alone), the popover open, read only. Its name says the hue, so it has no tooltip. Full: chosen (a tick and a ring), hover tooltip, focus (accent outline), pressed, disabled, read only (`isReadOnly`: the chosen hue stays at full contrast and the group is reachable by keyboard, but nothing changes; for a member in settings).
 
 ## Keyboard
 

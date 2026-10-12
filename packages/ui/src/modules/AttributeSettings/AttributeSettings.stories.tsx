@@ -492,3 +492,19 @@ export const ReadOnlyStages: Story = {
     await waitFor(() => expect(document.querySelector('[data-entering]')).toBeNull());
   },
 };
+
+/** A typed option refused on its row (a label taken) keeps Create back, saying why, until it is fixed. */
+export const OptionRefusedKeepsCreate: Story = {
+  args: { typeKeys: undefined, newOptionId: optionIds() },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, userEvent }) => {
+    const dialog = await openDialog();
+    await userEvent.keyboard('Tier');
+    await chooseType(dialog, 'Select', userEvent);
+    await userEvent.click(within(dialog).getByRole('textbox', { name: 'New option' }));
+    await userEvent.keyboard('Gold{Enter}gold');
+    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
+    await waitFor(() => expect(dialog).toHaveTextContent('Fix the options marked above, then create the attribute.'));
+    await expect(args.onSubmit).not.toHaveBeenCalled();
+  },
+};

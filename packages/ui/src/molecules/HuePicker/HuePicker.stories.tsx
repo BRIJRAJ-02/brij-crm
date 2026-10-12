@@ -45,6 +45,7 @@ export const LabelShown: Story = {
 /** Compact, in a row with no room for nine: one swatch, named with its hue, opens the nine and closes on a choice. */
 export const Compact: Story = {
   args: { label: 'Gold colour', defaultValue: 'yellow', isCompact: true },
+  parameters: { crm: { screenshot: false } },
   render: (args) => (
     <Stage>
       <HuePicker {...args} />
@@ -71,5 +72,19 @@ export const CompactReadOnly: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('img', { name: 'Gold colour: Yellow' })).toBeInTheDocument();
     await expect(canvas.queryByRole('button')).toBeNull();
+  },
+};
+
+/** Compact, open: the nine in a popover from the one swatch, the chosen one ticked (kept open for its picture). */
+export const CompactOpen: Story = {
+  args: { label: 'Gold colour', defaultValue: 'yellow', isCompact: true },
+  render: (args) => (
+    <Stage>
+      <HuePicker {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Gold colour: Yellow' }));
+    await expect(await screen.findByRole('radio', { name: 'Yellow' })).toBeChecked();
   },
 };

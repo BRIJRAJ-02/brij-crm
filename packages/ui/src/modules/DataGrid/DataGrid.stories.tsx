@@ -699,7 +699,7 @@ export const CreateOptionInCell: Story = {
     await userEvent.tab();
     await press(['{ArrowRight}', '{ArrowRight}', '{ArrowRight}', '{ArrowRight}'], '0:5');
     await press(['{Enter}']);
-    const search = await screen.findByRole('textbox', { name: 'Search' });
+    const search = await screen.findByRole('textbox', { name: /^Search/ });
     await waitFor(() => expect(search).toHaveFocus());
     await userEvent.keyboard('Robotics');
     await userEvent.click(await screen.findByRole('option', { name: 'Create "Robotics"' }));

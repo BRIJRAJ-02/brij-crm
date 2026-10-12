@@ -290,3 +290,22 @@ export const ReadOnly: Story = {
     await expect(canvas.getByText('Open, 14 days target')).toBeInTheDocument();
   },
 };
+
+/** A refused add whose row is gone says why beside Add option, naming what was typed. */
+export const AddRefused: Story = {
+  args: { errors: { new: 'Couldn’t add “Gold”. An attribute holds at most 500 options.' } },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('alert')).toHaveTextContent('Couldn’t add “Gold”.');
+  },
+};
+
+/** Restore moves focus to the next archived option's Restore, else to Add option, as its button leaves. */
+export const RestoreKeepsFocus: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Archived/ }));
+    await userEvent.click(canvas.getByRole('button', { name: 'Restore' }));
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Add option' })).toHaveFocus());
+  },
+};

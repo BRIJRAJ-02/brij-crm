@@ -49,6 +49,7 @@ export const Editor: Story = {
 /** For someone who may shape the schema: a stage typed that no live stage is called is offered as "Create" (spec 0012, AC-238). */
 export const CreateOption: Story = {
   args: { onCreateOption: fn() },
+  parameters: { crm: { screenshot: false } },
   render: (args) => (
     <Stage width="narrow">
       <AttributeEditor {...args} />
@@ -57,7 +58,7 @@ export const CreateOption: Story = {
   play: async ({ args, userEvent }) => {
     await userEvent.tab();
     await userEvent.keyboard('{ArrowDown}');
-    const search = await screen.findByRole('textbox', { name: 'Search' });
+    const search = await screen.findByRole('textbox', { name: /^Search/ });
     await waitFor(() => expect(search).toHaveFocus());
     await userEvent.keyboard('Negotiation');
     await userEvent.click(await screen.findByRole('option', { name: 'Create "Negotiation"' }));

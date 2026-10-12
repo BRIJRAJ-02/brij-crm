@@ -55,6 +55,8 @@ export const strings = {
   stages: 'Stages',
   /** Under an existing attribute's options: they don't wait for Save. */
   optionsSaveAtOnce: 'Changes to options save as you make them.',
+  /** Create pressed while an option row refuses what was typed. */
+  optionsInvalid: 'Fix the options marked above, then create the attribute.',
   /** Under the default when it names an archived option (AC-236). */
   archivedDefaultFirst: (label: string) => `This option is archived. New records get ${label}.`,
   archivedDefaultNone: 'This option is archived. New records get no value.',

@@ -72,7 +72,11 @@ export function SelectEditor({
         onChange={commit}
         {...(onCreateOption === undefined
           ? {}
-          : { onCreate: onCreateOption, ...(startText === undefined ? {} : { defaultSearch: startText }) })}
+          : {
+              onCreate: onCreateOption,
+              searchLabel: strings.search(attribute.name),
+              ...(startText === undefined ? {} : { defaultSearch: startText }),
+            })}
       />
     );
   }
@@ -99,6 +103,8 @@ export function SelectEditor({
         label: strings.search(attribute.name),
         ...(startText === undefined ? {} : { defaultQuery: startText }),
         ...(onCreateOption === undefined ? {} : { onSearch: setQuery }),
+        // Create alone in the list waits for an arrow: one Enter on a typo never makes an option.
+        ...(canCreate && shown.length === 0 ? { isFirstUnfocused: true } : {}),
       }}
       selectionMode={attribute.allowMultiple ? 'multiple' : 'single'}
       selectedKeys={chosen}

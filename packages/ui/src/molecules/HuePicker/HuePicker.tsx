@@ -95,11 +95,13 @@ function HueButton({
   const [isOpen, setOpen] = useState(false);
   const name = strings.chosen(label, strings[hue]);
   if (isReadOnly) {
-    return <span className={styles.swatch} data-hue={hue} data-static="" role="img" aria-label={name} />;
+    return (
+      <span className={styles.swatch} data-hue={hue} data-compact="" data-static="" role="img" aria-label={name} />
+    );
   }
   return (
     <DialogTrigger isOpen={isOpen} onOpenChange={setOpen}>
-      <AriaButton className={styles.swatch} data-hue={hue} aria-label={name} isDisabled={isDisabled} />
+      <AriaButton className={styles.swatch} data-hue={hue} data-compact="" aria-label={name} isDisabled={isDisabled} />
       <Popover label={label}>
         <HuePicker
           label={label}
