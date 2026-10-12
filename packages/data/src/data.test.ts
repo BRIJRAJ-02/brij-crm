@@ -1875,6 +1875,108 @@ describe('options (spec 0012, milestone 3)', () => {
     );
   });
 
+  it('keeps the label through a Retry after a passing failure, and reads the attributes once it lands', async () => {
+    let tries = 0;
+    const api = fakeApi({
+      attributes: () => [TITLE, TIER],
+      setValues: () => {
+        tries += 1;
+        if (tries === 1) throw new ORPCError('INTERNAL', { status: 500, message: 'Something went wrong.' });
+        return personRow(0);
+      },
+    });
+    const { data, notices } = layer(api);
+    const view = await data.records.view('acme', PEOPLE.id, {}, [TIER.id]);
+    const row = view.getSnapshot().source.getItem(0);
+    const first = await data.records.createOption('acme', {
+      objectId: PEOPLE.id,
+      recordId: row?.id ?? '',
+      attributeId: TIER.id,
+      label: 'Gold',
+    });
+    expect(first).toMatchObject({ landed: 0 });
+    await settled();
+    // Rolled back, its label gone with it; the toast offers Retry.
+    expect(data.options.pending.getSnapshot().size).toBe(0);
+    const retry = notices.at(-1)?.action;
+    expect(retry?.label).toBe('Retry');
+    const before = count(api.calls, '/api/rpc/attributes/list');
+    retry?.onAction();
+    await settled();
+    // The same new option went again, and once it landed the object's attributes were read again.
+    expect(api.sent.at(-1)).toMatchObject({ [TIER.id]: { value: { newOption: { label: 'Gold' } } } });
+    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(before + 1);
+    expect(
+      data.options.pending
+        .getSnapshot()
+        .get(`acme/${TIER.id}`)
+        ?.map((each) => each.label),
+    ).toEqual(['Gold']);
+  });
+
+  it('follows the option the server set when it reused a live one with that label: no phantom option', async () => {
+    const api = fakeApi({
+      attributes: () => [TITLE, TIER],
+      // Someone made "Silver" meanwhile, ignoring case: the server set it rather than making another.
+      setValues: () => ({ ...personRow(0), values: { ...personRow(0).values, [TIER.id]: SILVER.id } }),
+    });
+    const { data } = layer(api);
+    const view = await data.records.view('acme', PEOPLE.id, {}, [TIER.id]);
+    const row = view.getSnapshot().source.getItem(0);
+    await data.records.createOption('acme', {
+      objectId: PEOPLE.id,
+      recordId: row?.id ?? '',
+      attributeId: TIER.id,
+      label: 'silver',
+    });
+    await settled();
+    expect(view.getSnapshot().source.getItem(0)?.values[TIER.id]).toBe(SILVER.id);
+    // The label sits under the id the server set, which the attribute already lists: nothing extra in the column.
+    const field = toFieldAttribute(TIER);
+    expect(withPendingOptions(field, 'acme', data.options.pending.getSnapshot()).options).toHaveLength(1);
+  });
+
+  it('waits for a new option before another row sets it, and sends the id the server set', async () => {
+    let answer: () => void = () => undefined;
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const made: { id?: string } = {};
+    const api = fakeApi({
+      attributes: () => [TITLE, TIER],
+      setValues: async () => {
+        if (made.id === undefined) {
+          await answered;
+          return { ...personRow(0), values: { ...personRow(0).values, [TIER.id]: SILVER.id } };
+        }
+        return personRow(1);
+      },
+    });
+    const { data } = layer(api);
+    const view = await data.records.view('acme', PEOPLE.id, {}, [TIER.id]);
+    const [first, second] = [view.getSnapshot().source.getItem(0), view.getSnapshot().source.getItem(1)];
+    const making = data.records.createOption('acme', {
+      objectId: PEOPLE.id,
+      recordId: first?.id ?? '',
+      attributeId: TIER.id,
+      label: 'silver',
+    });
+    await settled();
+    const [pending] = data.options.pending.getSnapshot().get(`acme/${TIER.id}`) ?? [];
+    // Chosen on the second row while it is being made: held back until the first answers.
+    const setting = data.records.setValues('acme', [
+      { rowId: second?.id ?? '', columnId: TIER.id, value: pending?.id },
+    ]);
+    await settled();
+    expect(api.sent).toHaveLength(1);
+    made.id = 'answered';
+    answer();
+    await making;
+    await setting;
+    // It went with the id the server set (the reused Silver), not the minted one.
+    expect(api.sent.at(-1)).toMatchObject({ [TIER.id]: { value: SILVER.id } });
+  });
+
   it('adds a cell made option to its column until the attribute lists it', () => {
     const field = toFieldAttribute(TIER);
     const pending = new Map([

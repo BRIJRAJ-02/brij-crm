@@ -46,6 +46,8 @@ export function createPendingOptions() {
   return {
     add: (workspace: string, option: PendingOption): void => {
       const key = keyOf(workspace, option.attributeId);
+      // Asked again (a Retry): it is already there.
+      if ((snapshot.get(key) ?? []).some((each) => each.id === option.id)) return;
       let next: PendingOptions = new Map([...snapshot, [key, [...(snapshot.get(key) ?? []), option]]]);
       order = [...order, { key, id: option.id }];
       while (order.length > MAX_PENDING_OPTIONS) {
@@ -57,8 +59,33 @@ export function createPendingOptions() {
     },
     remove: (workspace: string, attributeId: string, optionId: string): void => {
       const key = keyOf(workspace, attributeId);
+      if (!(snapshot.get(key) ?? []).some((each) => each.id === optionId)) return;
       order = order.filter((each) => !(each.key === key && each.id === optionId));
       publish(without(snapshot, key, optionId));
+    },
+    /**
+     * The server set another id for it (a live option with that label
+     * appeared meanwhile): the label stays under that id until the attribute
+     * lists it, and no phantom option is left behind.
+     */
+    resolve: (workspace: string, attributeId: string, optionId: string, resolvedId: string): void => {
+      if (resolvedId === optionId) return;
+      const key = keyOf(workspace, attributeId);
+      const held = snapshot.get(key) ?? [];
+      if (!held.some((each) => each.id === optionId)) return;
+      order = order.map((each) => (each.key === key && each.id === optionId ? { key, id: resolvedId } : each));
+      const next = new Map(snapshot);
+      next.set(
+        key,
+        held.flatMap((each) =>
+          each.id !== optionId
+            ? [each]
+            : held.some((other) => other.id === resolvedId)
+              ? []
+              : [{ ...each, id: resolvedId }],
+        ),
+      );
+      publish(next);
     },
     clear: (): void => {
       order = [];

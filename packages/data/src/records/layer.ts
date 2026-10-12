@@ -19,7 +19,7 @@ import type {
   WrittenRecord,
 } from '@crm/contracts';
 import { canJump, type JumpAttribute } from '@crm/contracts/jump';
-import type { FilterGroup, SortRules } from '@crm/contracts/values';
+import type { FilterGroup, Hue, SortRules } from '@crm/contracts/values';
 import { dataError, refusalFor, refusalSummary, toDataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
 import { createOwnVersions, createUndoStack, type UndoCell, type UndoKind } from './history.ts';
@@ -270,8 +270,30 @@ export interface CellChange {
   readonly rowId: string;
   readonly columnId: string;
   readonly value: unknown;
-  /** What goes to the server when it differs from `value` (a cell's new option). */
+}
+
+/** A change as the layer writes it: what goes to the server when it differs from `value` (a cell's new option, only ever made here). */
+interface SentChange extends CellChange {
   readonly sent?: unknown;
+}
+
+/** A new option a cell's write sends (`{ newOption: { id, label } }`), alone or in a multi select's list. */
+interface NewOptionSent {
+  readonly id: string;
+  readonly label: string;
+}
+
+/** The new option a cell's sent value names, if any (spec 0012, AC-238). */
+function newOptionOf(sent: unknown): NewOptionSent | undefined {
+  const items: readonly unknown[] = Array.isArray(sent) ? (sent as readonly unknown[]) : [sent];
+  for (const item of items) {
+    if (typeof item !== 'object' || item === null || !('newOption' in item)) continue;
+    const option = (item as { readonly newOption: unknown }).newOption;
+    if (typeof option !== 'object' || option === null) continue;
+    const { id, label } = option as { readonly id?: unknown; readonly label?: unknown };
+    if (typeof id === 'string' && typeof label === 'string') return { id, label };
+  }
+  return undefined;
 }
 
 /** Where a view stands: loading its count and first rows, ready, or failed (with Retry). */
@@ -372,12 +394,32 @@ export interface RecordsLayerOptions {
   readonly timeZone?: () => string;
   /** Runs `run` after `ms`, answering a cancel: settle's timer. A timer by default; tests pass their own. */
   readonly later?: (run: () => void, ms: number) => () => void;
+  /**
+   * A cell's new option (spec 0012, AC-238) as its write goes: `asked` as it
+   * goes out (again on a Retry), `refused` when it rolls back, and `made`
+   * once it lands, with the id the server set (a live option with that label
+   * when one appeared meanwhile, else the minted one).
+   */
+  readonly cellOptions?: {
+    readonly asked: (
+      workspace: string,
+      option: { readonly attributeId: string; readonly id: string; readonly label: string; readonly hue: Hue },
+    ) => void;
+    readonly refused: (workspace: string, attributeId: string, id: string) => void;
+    readonly made: (
+      workspace: string,
+      objectId: string,
+      made: { readonly attributeId: string; readonly id: string; readonly resolvedId: string },
+    ) => void;
+  };
 }
 
 /** The words the records layer raises itself. */
 export const RECORD_WORDS = {
   retry: 'Retry',
   draftRefused: 'That record wasn’t created, so the change to it wasn’t saved.',
+  /** A multi select's new option on a cell whose values haven't loaded yet: sending it would replace them. */
+  optionNotReady: 'That cell is still loading. Try again in a moment.',
   /** A column just shown whose values couldn't be read for the rows on screen (spec 0006, AC-55). */
   columnNotRead: 'Couldn’t load that column’s values.',
   recordGone: 'That record was deleted, so the change wasn’t saved.',
@@ -489,7 +531,89 @@ export function createRecordsLayer({
       clearTimeout(id);
     };
   },
+  cellOptions = { asked: () => undefined, refused: () => undefined, made: () => undefined },
 }: RecordsLayerOptions) {
+  // New options from cells (spec 0012, AC-238): each minted id's label and hue, and what it resolved to once its
+  // write answered (the id the server set, or undefined when refused), so a write naming it waits for that.
+  const optionLooks = new Map<string, { readonly label: string; readonly hue: Hue }>();
+  const madeOptions = new Map<
+    string,
+    { readonly promise: Promise<string | undefined>; readonly settle: (id: string | undefined) => void; done: boolean }
+  >();
+  /** The made option's entry for a minted id, a fresh one when there is none or the last one settled (a Retry). */
+  const madeEntry = (id: string) => {
+    const held = madeOptions.get(id);
+    if (held !== undefined && !held.done) return held;
+    let settle: (resolved: string | undefined) => void = () => undefined;
+    const promise = new Promise<string | undefined>((resolve) => {
+      settle = resolve;
+    });
+    const entry = {
+      promise,
+      settle: (resolved: string | undefined) => {
+        entry.done = true;
+        settle(resolved);
+      },
+      done: false,
+    };
+    madeOptions.set(id, entry);
+    return entry;
+  };
+  /** Settles a cell's new option, if it names one: the id the server set, or undefined when refused. */
+  const settleOptions = (
+    workspace: string,
+    objectId: string | undefined,
+    cells: readonly CellWrite[],
+    row?: RecordView,
+  ) => {
+    for (const cell of cells) {
+      const option = newOptionOf(cell.sent);
+      if (option === undefined) continue;
+      if (row === undefined || objectId === undefined) {
+        madeEntry(option.id).settle(undefined);
+        cellOptions.refused(workspace, cell.attributeId, option.id);
+        continue;
+      }
+      const held = row.values[cell.attributeId];
+      const sentIds = new Set(
+        (Array.isArray(cell.sent) ? (cell.sent as readonly unknown[]) : []).filter(
+          (item): item is string => typeof item === 'string',
+        ),
+      );
+      const resolvedId =
+        typeof held === 'string'
+          ? held
+          : Array.isArray(held)
+            ? ((held as readonly unknown[]).find(
+                (item): item is string => typeof item === 'string' && !sentIds.has(item),
+              ) ?? option.id)
+            : option.id;
+      madeEntry(option.id).settle(resolvedId);
+      cellOptions.made(workspace, objectId, { attributeId: cell.attributeId, id: option.id, resolvedId });
+    }
+  };
+  /**
+   * The ids a write names that are new options still on their way (made by
+   * another cell's write), waited for and mapped to the ids the server set; a
+   * refused one leaves a list, and a single value as it is (the server
+   * refuses it on the cell).
+   */
+  const resolveMade = async (value: unknown): Promise<unknown> => {
+    const ids: readonly unknown[] = Array.isArray(value) ? (value as readonly unknown[]) : [value];
+    const waiting = ids.filter((id): id is string => typeof id === 'string' && madeOptions.has(id));
+    if (waiting.length === 0) return value;
+    const resolved = new Map(
+      await Promise.all(
+        waiting.map(async (id) => [id, await (madeOptions.get(id)?.promise ?? Promise.resolve(id))] as const),
+      ),
+    );
+    if (!Array.isArray(value)) return typeof value === 'string' ? (resolved.get(value) ?? value) : value;
+    return (value as readonly unknown[]).flatMap((id) => {
+      if (typeof id !== 'string' || !resolved.has(id)) return [id];
+      const to = resolved.get(id);
+      return to === undefined ? [] : [to];
+    });
+  };
   const store = createPlainStore<RecordView>({ now, later });
   // The names of linked records, read by id with the primary attribute only; arriving names redraw that workspace's views.
   const names = createReferenceNames({
@@ -1102,6 +1226,20 @@ export function createRecordsLayer({
     options: WriteOptions = {},
   ): Promise<readonly RecordOutcome[]> {
     const mutationId = options.mutationId ?? mintId();
+    // A cell's new option shows by its label from now until it lands or rolls back (again on a Retry).
+    for (const each of writes) {
+      for (const cell of each.cells) {
+        const option = newOptionOf(cell.sent);
+        if (option === undefined) continue;
+        madeEntry(option.id);
+        cellOptions.asked(workspace, {
+          attributeId: cell.attributeId,
+          id: option.id,
+          label: option.label,
+          hue: optionLooks.get(option.id)?.hue ?? 'gray',
+        });
+      }
+    }
     // Every cell's old refusal goes in one change, so a big paste invalidates the views once.
     setCellErrors(
       writes.flatMap((each) => each.cells.map((cell) => [`${each.recordId}:${cell.attributeId}`, undefined] as const)),
@@ -1222,6 +1360,7 @@ export function createRecordsLayer({
       if (pendingCreate !== undefined && !(await pendingCreate)) {
         // The create was refused, and the draft went with this edit on it.
         notify({ tone: 'danger', message: RECORD_WORDS.draftRefused });
+        settleOptions(workspace, undefined, each.cells);
         outcomes.push({ recordId: each.recordId, cells: each.cells });
         continue;
       }
@@ -1233,6 +1372,13 @@ export function createRecordsLayer({
     }
     // After the record's turn: the base now holds the record's last confirmed write, which this one replaces.
     const sentFrom = new Map(live.map((each) => [each.recordId, versionsNow(each)]));
+    // Options other cells are making, named here (chosen on another row, or kept in a list): their real ids.
+    const resolvedValues = new Map<string, unknown>();
+    for (const each of live) {
+      for (const cell of each.cells) {
+        resolvedValues.set(`${each.recordId}:${cell.attributeId}`, await resolveMade(cell.sent ?? cell.value));
+      }
+    }
     const itemOf = (each: Prepared) => {
       // A draft's edit names the base its create answered.
       const bases = each.bases.size > 0 ? each.bases : baseVersionsOf(store.base(each.recordId), each.cells);
@@ -1244,7 +1390,7 @@ export function createRecordsLayer({
             return [
               cell.attributeId,
               {
-                value: cell.sent ?? cell.value,
+                value: resolvedValues.get(`${each.recordId}:${cell.attributeId}`) ?? cell.sent ?? cell.value,
                 ...(cell.ifVersionId !== undefined
                   ? { ifVersionId: cell.ifVersionId }
                   : base === undefined
@@ -1280,13 +1426,13 @@ export function createRecordsLayer({
           first === undefined
             ? dataError('INTERNAL', RECORD_WORDS.notSaved(1))
             : dataError(first.code, first.message, { refusals: result?.refusals ?? [] });
-        outcomes.push(refused(each, failure, options));
+        outcomes.push(refused(workspace, each, failure, options));
       }
       return outcomes;
     } catch (error) {
       const failure = toDataError(error);
       mutations.forget(mutationId);
-      return [...outcomes, ...live.map((each) => refused(each, failure, options))];
+      return [...outcomes, ...live.map((each) => refused(workspace, each, failure, options))];
     }
   }
 
@@ -1303,6 +1449,7 @@ export function createRecordsLayer({
     sentFrom: ReadonlyMap<string, string> | undefined,
   ): RecordOutcome {
     each.layer.confirm(row);
+    settleOptions(workspace, row.objectId, each.cells, row);
     for (const cell of each.cells) {
       const versionId = written[cell.attributeId];
       if (versionId === undefined) continue;
@@ -1311,7 +1458,8 @@ export function createRecordsLayer({
         objectId: row.objectId,
         recordId: row.id,
         attributeId: cell.attributeId,
-        value: cell.value,
+        // A new option's cell holds the id the server set (a reused option's, maybe), never the minted one.
+        value: cell.sent === undefined ? cell.value : (row.values[cell.attributeId] ?? null),
         recordName: row.display.name,
       });
     }
@@ -1325,8 +1473,9 @@ export function createRecordsLayer({
   }
 
   /** A record's part was refused: its cells roll back, marked with why unless the code is quiet. */
-  function refused(each: Prepared, failure: DataError, options: WriteOptions): RecordOutcome {
+  function refused(workspace: string, each: Prepared, failure: DataError, options: WriteOptions): RecordOutcome {
     each.layer.refuse();
+    settleOptions(workspace, undefined, each.cells);
     const outcome = { recordId: each.recordId, cells: each.cells, failure };
     // Signed out: the layer already said so, and sign in comes next.
     if (failure.code === 'UNAUTHENTICATED') return { recordId: each.recordId, cells: each.cells };
@@ -1403,7 +1552,7 @@ export function createRecordsLayer({
   }
 
   /** Roughly how many bytes a write of these cells sends: their values in UTF-8, and each cell's ids and version. */
-  const encodedSize = (changes: readonly CellChange[]): number =>
+  const encodedSize = (changes: readonly SentChange[]): number =>
     changes.reduce((sum, change) => sum + cellBytes(change.value), 0);
 
   /**
@@ -1416,7 +1565,7 @@ export function createRecordsLayer({
   async function edit(
     workspace: string,
     objectId: string | undefined,
-    changes: readonly CellChange[],
+    changes: readonly SentChange[],
     kind: UndoKind,
   ): Promise<EditOutcome> {
     const byRecord = new Map<string, CellWrite[]>();
@@ -1926,22 +2075,31 @@ export function createRecordsLayer({
      * transaction, or rolls back with the cell marked. One action on the undo
      * stack, like any cell edit.
      */
-    createOption: (
+    createOption: async (
       workspace: string,
       change: {
+        readonly objectId: string;
         readonly recordId: string;
         readonly attributeId: string;
         readonly optionId: string;
         readonly label: string;
+        readonly hue: Hue;
         readonly isMulti: boolean;
       },
     ): Promise<EditOutcome> => {
       const newOption = { newOption: { id: change.optionId, label: change.label } };
-      const held = store.get(change.recordId)?.values[change.attributeId];
+      const body = store.get(change.recordId);
+      // A multi select keeps what it holds: one whose values haven't loaded would be replaced by the new option alone.
+      if (change.isMulti && (body === undefined || !Object.hasOwn(body.values, change.attributeId))) {
+        notify({ tone: 'danger', message: RECORD_WORDS.optionNotReady });
+        return { kind: 'done', cells: 1, landed: 0 };
+      }
+      const held = body?.values[change.attributeId];
       const kept = Array.isArray(held) ? (held as readonly unknown[]).filter((id) => typeof id === 'string') : [];
+      optionLooks.set(change.optionId, { label: change.label, hue: change.hue });
       return edit(
         workspace,
-        undefined,
+        change.objectId,
         [
           {
             rowId: change.recordId,
@@ -2054,6 +2212,8 @@ export function createRecordsLayer({
       undo.clear();
       inflight.clear();
       undoing.clear();
+      optionLooks.clear();
+      madeOptions.clear();
     },
 
     /** How many record bodies the store holds now (for tests and the gate). */

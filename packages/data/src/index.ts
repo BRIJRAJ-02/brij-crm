@@ -247,6 +247,9 @@ export interface OptionChanges {
   readonly targetDays?: number | null;
 }
 
+/** What a cell's Create says when its attribute changed under it (archived, or no longer a select). */
+const OPTION_GONE = 'That attribute changed, so the option wasn’t created. Try again.';
+
 /** A stage's target in whole days as the API takes it (`P7D`). */
 const targetOf = (days: number): string => `P${String(days)}D`;
 
@@ -1098,30 +1101,21 @@ export function createDataLayer({
     ]);
     const definition = list.find((attribute) => attribute.id === change.attributeId);
     if (definition === undefined || label === '' || (definition.type !== 'select' && definition.type !== 'status')) {
+      // Archived or changed meanwhile: said, rather than doing nothing.
+      notify({ tone: 'danger', message: OPTION_GONE });
       return { kind: 'done', cells: 1, landed: 0 };
     }
-    const optionId = mintId();
-    pendingOptions.add(workspace, {
-      attributeId: definition.id,
-      id: optionId,
-      label,
-      hue: nextHue(definition.options ?? []),
-    });
-    const outcome = await layer.createOption(workspace, {
+    // The next hue after every option it holds or is making now, as the server will pick it.
+    const waiting = pendingOptions.getSnapshot().get(`${workspace}/${definition.id}`) ?? [];
+    return layer.createOption(workspace, {
+      objectId: change.objectId,
       recordId: change.recordId,
       attributeId: definition.id,
-      optionId,
+      optionId: mintId(),
       label,
+      hue: nextHue([...(definition.options ?? []), ...waiting]),
       isMulti: definition.isMulti,
     });
-    if (outcome.kind === 'done' && outcome.landed > 0) {
-      usage.delete(workspace);
-      dropAllAttributes(workspace, change.objectId);
-      reloadIfChanged([refreshAttributes(workspace, change.objectId)]);
-    } else {
-      pendingOptions.remove(workspace, definition.id, optionId);
-    }
-    return outcome;
   };
 
   /** An object's primary attribute and its attributes' kinds, for a window's mode (spec 0006, from the cached lists). */
@@ -1176,6 +1170,22 @@ export function createDataLayer({
           void tellReplaced(notice);
         },
         describe: describeObject,
+        // A cell's new option (spec 0012, AC-238): its label shows while it is made, on every try. Landed, the
+        // object's attributes are read again (its own definitions echo is skipped) and the pages reload.
+        cellOptions: {
+          asked: (workspace, option) => {
+            pendingOptions.add(workspace, option);
+          },
+          refused: (workspace, attributeId, id) => {
+            pendingOptions.remove(workspace, attributeId, id);
+          },
+          made: (workspace, objectId, made) => {
+            pendingOptions.resolve(workspace, made.attributeId, made.id, made.resolvedId);
+            usage.delete(workspace);
+            dropAllAttributes(workspace, objectId);
+            reloadIfChanged([refreshAttributes(workspace, objectId)]);
+          },
+        },
       }),
     );
     return records;
