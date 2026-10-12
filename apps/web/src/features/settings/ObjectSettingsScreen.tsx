@@ -3,7 +3,18 @@
 // Main task: add, edit, move, archive and restore its attributes, and rename, restyle, archive or restore it.
 // Leaves out: types with setup and options (spec 0012, milestone 3), and the schema map (#56).
 import type { AttributeDefinition, MemberSummary, ObjectSummary, Usage } from '@crm/data';
-import { Badge, Button, Callout, Skeleton, TabPanel, Tabs, Table, type TableColumn, SettingsStack } from '@crm/ui';
+import {
+  Badge,
+  Button,
+  Callout,
+  Skeleton,
+  Spinner,
+  TabPanel,
+  Tabs,
+  Table,
+  type TableColumn,
+  SettingsStack,
+} from '@crm/ui';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useCan } from '../workspace/WorkspacePage.tsx';
@@ -17,7 +28,8 @@ import { strings } from './strings.ts';
 /** What the Attributes tab loaded: every attribute (archived ones too), the usage and the members. */
 export interface AttributesPage {
   readonly attributes: readonly AttributeDefinition[];
-  readonly usage: Usage;
+  /** The usage, or undefined when it could not be read (the meter stays a skeleton). */
+  readonly usage: Usage | undefined;
   readonly members: readonly MemberSummary[];
 }
 
@@ -58,6 +70,7 @@ export function ObjectSettingsScreen({
   const navigate = useNavigate();
   const canManage = useCan('schema.manage');
   const [isCreating, setCreating] = useState(false);
+  const [isMoving, setMoving] = useState(false);
   const showsNew = canManage && tab === 'attributes' && attributesPage !== undefined;
   return (
     <SettingsPage
@@ -69,9 +82,13 @@ export function ObjectSettingsScreen({
       {...(showsNew
         ? {
             actions: (
-              <Button variant="primary" icon="plus" onPress={() => setCreating(true)}>
-                {attributeStrings.newAttribute}
-              </Button>
+              <>
+                {/* A move waits for the server (definition writes are never optimistic): say it is under way. */}
+                {isMoving && <Spinner label={attributeStrings.moving} />}
+                <Button variant="primary" icon="plus" onPress={() => setCreating(true)}>
+                  {attributeStrings.newAttribute}
+                </Button>
+              </>
             ),
           }
         : {})}
@@ -104,6 +121,7 @@ export function ObjectSettingsScreen({
                 onSelect={onSelectAttribute}
                 isCreating={isCreating}
                 onCreatingChange={setCreating}
+                onMovingChange={setMoving}
               />
             ))}
         </TabPanel>

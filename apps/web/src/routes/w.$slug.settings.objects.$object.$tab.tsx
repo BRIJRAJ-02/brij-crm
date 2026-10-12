@@ -37,8 +37,10 @@ export const Route = createFileRoute('/w/$slug/settings/objects/$object/$tab')({
       params.tab === 'attributes' && !object.isArchived
         ? await Promise.all([
             context.data.attributes.all(params.slug, object.id),
-            context.data.usage.get(params.slug),
-            context.data.members.list(params.slug),
+            // The meter and a Member default are extras: their failure leaves a skeleton and no member choice,
+            // never the whole tab failed (AC-247).
+            context.data.usage.get(params.slug).catch(() => undefined),
+            context.data.members.list(params.slug).catch(() => []),
           ]).then(([attributes, usage, members]) => ({ attributes, usage, members }))
         : undefined;
     return { page: { object, objects, tab: params.tab, attributesPage } };
@@ -54,9 +56,10 @@ function ObjectSettingsRoute() {
   const { attribute } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
   // Opening a row sets the param, so the dialog has an address; closing it (or a param naming nothing) removes it.
+  // Both replace the entry, so Back leaves the page rather than reopening a dialog.
   const select = useCallback(
-    (attributeId: string | undefined, replace = false) => {
-      void navigate({ search: attributeId === undefined ? {} : { attribute: attributeId }, replace });
+    (attributeId: string | undefined) => {
+      void navigate({ search: attributeId === undefined ? {} : { attribute: attributeId }, replace: true });
     },
     [navigate],
   );

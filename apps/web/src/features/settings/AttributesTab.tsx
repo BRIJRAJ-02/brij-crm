@@ -19,7 +19,6 @@ import {
   Meter,
   SettingsStack,
   Skeleton,
-  Spinner,
   Table,
   typeLabelOf,
   type TableColumn,
@@ -40,7 +39,8 @@ export interface AttributesTabProps {
   readonly attributes: readonly AttributeDefinition[];
   /** Every object the person can see (archived ones too), for an archived reference's reason. */
   readonly objects: readonly ObjectSummary[];
-  readonly usage: Usage;
+  /** The usage, or undefined when it could not be read (the meter stays a skeleton). */
+  readonly usage: Usage | undefined;
   readonly members: readonly MemberSummary[];
   /** `?attribute=<id>`: the attribute whose dialog is open (AC-231). */
   readonly selectedId: string | undefined;
@@ -49,6 +49,8 @@ export interface AttributesTabProps {
   /** New attribute, from the page's header. */
   readonly isCreating: boolean;
   readonly onCreatingChange: (isCreating: boolean) => void;
+  /** A move waits for the server (definition writes are never optimistic): the page's header says so. */
+  readonly onMovingChange: (isMoving: boolean) => void;
 }
 
 const COLUMNS: readonly TableColumn[] = [
@@ -56,6 +58,12 @@ const COLUMNS: readonly TableColumn[] = [
   { id: 'type', label: strings.typeColumn },
   { id: 'rules', label: strings.rulesColumn, isInline: true },
   { id: 'actions', label: strings.actionsColumn, isLabelHidden: true, align: 'end' },
+];
+
+/** The system attributes have no rules or actions: their name and type alone. */
+const SYSTEM_COLUMNS: readonly TableColumn[] = [
+  { id: 'title', label: strings.titleColumn, isRowHeader: true, isInline: true },
+  { id: 'type', label: strings.typeColumn },
 ];
 
 /** The server's words for a failure, or the plain fallback. */
@@ -107,6 +115,7 @@ export function AttributesTab({
   onSelect,
   isCreating,
   onCreatingChange,
+  onMovingChange,
 }: AttributesTabProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   // Only owners and admins change the schema (spec 0009, AC-136); the server refuses anyone else on its own.
@@ -121,9 +130,16 @@ export function AttributesTab({
       system: ordered.filter((attribute) => attribute.isSystem),
     };
   }, [attributes]);
-  const [archiving, setArchiving] = useState<AttributeDefinition | undefined>(undefined);
+  // By id, read from the attributes held: one archived or changed elsewhere meanwhile shows as it is now.
+  const [archivingId, setArchiving] = useState<string | undefined>(undefined);
+  const archiving = live.find((attribute) => attribute.id === archivingId);
   const [restoring, setRestoring] = useState<string | undefined>(undefined);
-  const [isMoving, setMoving] = useState(false);
+  const [isMoving, setMovingHere] = useState(false);
+  // The page's header says a move is under way, so nothing above the table shifts while it waits.
+  const setMoving = (moving: boolean) => {
+    setMovingHere(moving);
+    onMovingChange(moving);
+  };
 
   // `?attribute=<id>`: an attribute of this object the person can see, live or system, opens its dialog; anything
   // else clears the param and opens nothing (AC-231).
@@ -181,6 +197,8 @@ export function AttributesTab({
       case 'rules':
         return <AttributeRules attribute={attribute} />;
       default: {
+        // Members get the row and its badges only; the row opens the attribute read only (spec 0012, screens).
+        if (!canManage) return null;
         const at = live.indexOf(attribute);
         return (
           <MenuTrigger>
@@ -191,29 +209,25 @@ export function AttributesTab({
                 if (key === 'edit') onSelect(attribute.id);
                 if (key === 'up') step(attribute, -1);
                 if (key === 'down') step(attribute, 1);
-                if (key === 'archive') setArchiving(attribute);
+                if (key === 'archive') setArchiving(attribute.id);
               }}
             >
-              <MenuItem id="edit" icon={canManage ? 'pencil' : 'arrow-right'}>
-                {canManage ? strings.edit : strings.view}
+              <MenuItem id="edit" icon="pencil">
+                {strings.edit}
               </MenuItem>
-              {canManage && (
+              <MenuItem id="up" icon="chevron-up" isDisabled={at <= 0 || isMoving}>
+                {strings.moveUp}
+              </MenuItem>
+              <MenuItem id="down" icon="chevron-down" isDisabled={at >= live.length - 1 || isMoving}>
+                {strings.moveDown}
+              </MenuItem>
+              {/* The name every record goes by never archives. */}
+              {!attribute.isPrimary && (
                 <>
-                  <MenuItem id="up" icon="chevron-up" isDisabled={at <= 0 || isMoving}>
-                    {strings.moveUp}
+                  <MenuSeparator />
+                  <MenuItem id="archive" icon="archive" isDanger>
+                    {strings.archive}
                   </MenuItem>
-                  <MenuItem id="down" icon="chevron-down" isDisabled={at >= live.length - 1 || isMoving}>
-                    {strings.moveDown}
-                  </MenuItem>
-                  {/* The name every record goes by never archives. */}
-                  {!attribute.isPrimary && (
-                    <>
-                      <MenuSeparator />
-                      <MenuItem id="archive" icon="archive" isDanger>
-                        {strings.archive}
-                      </MenuItem>
-                    </>
-                  )}
                 </>
               )}
             </Menu>
@@ -280,7 +294,7 @@ export function AttributesTab({
       </EmptyState>
     ),
   };
-  const meter = usage.attributes[object.id];
+  const meter = usage?.attributes[object.id];
   return (
     <SettingsStack>
       {canManage &&
@@ -290,8 +304,6 @@ export function AttributesTab({
           <Meter label={strings.attributeLimit} value={meter.used} maxValue={meter.limit} />
         ))}
       {!canManage && <Callout>{strings.readOnlyNote}</Callout>}
-      {/* A move waits for the server (definition writes are never optimistic): say it is under way. */}
-      {isMoving && <Spinner label={strings.moving} />}
       {canManage ? (
         <Table
           {...liveTable}
@@ -310,7 +322,7 @@ export function AttributesTab({
       <Card title={strings.system} tone="sunken">
         <Table
           label={strings.system}
-          columns={COLUMNS}
+          columns={SYSTEM_COLUMNS}
           rows={system}
           getRowId={(attribute) => attribute.id}
           renderCell={systemCell}

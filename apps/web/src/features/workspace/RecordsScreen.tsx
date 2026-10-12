@@ -134,6 +134,14 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
   const [sort, setSort] = useState(opening);
   // The view for that sort: the warmed one until another sort's first rows are in, so the table never blanks.
   const [shown, setShown] = useState({ key: sortKey(opening), view: warmed, sort: opening });
+  // A column the rows are sorted by left the object (archived here or by someone else, spec 0012): its sort is
+  // refused now, so the table goes back to its opening order and the warmed view, before any read asks again.
+  const isSortGone = (rule: SortRule | undefined) =>
+    rule !== undefined && !attributes.some((attribute) => attribute.id === rule.attributeId);
+  if (!isSortGone(opening) && (isSortGone(sort) || isSortGone(shown.sort))) {
+    setSort(opening);
+    setShown({ key: sortKey(opening), view: warmed, sort: opening });
+  }
   const wanted = sortKey(sort);
   const [layout, setLayout] = useState<{ readonly columns: readonly GridColumn[]; readonly pinnedCount: number }>({
     columns: [],
@@ -202,8 +210,11 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
   const [isCreating, setCreating] = useState(false);
   const [isAdding, setAdding] = useState(false);
   // The column menu's schema items (spec 0012): the attribute whose dialog or archive confirm is open.
-  const [editing, setEditing] = useState<AttributeDefinition | undefined>(undefined);
-  const [archiving, setArchiving] = useState<AttributeDefinition | undefined>(undefined);
+  // By id, read from the live attributes: an attribute changed or archived elsewhere shows as it is, or closes.
+  const [editingId, setEditing] = useState<string | undefined>(undefined);
+  const [archivingId, setArchiving] = useState<string | undefined>(undefined);
+  const editing = attributes.find((attribute) => attribute.id === editingId);
+  const archiving = attributes.find((attribute) => attribute.id === archivingId);
   // The column a create from the table just made: its header takes focus once it is drawn.
   const [focusColumn, setFocusColumn] = useState<{ readonly id: string } | undefined>(undefined);
   // Only owners and admins change the schema (spec 0009, AC-136); the server refuses anyone else on its own.
@@ -391,7 +402,7 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
                           label: attributeStrings.editAttribute,
                           icon: 'pencil' as const,
                           onAction: () => {
-                            setEditing(attribute);
+                            setEditing(attribute.id);
                           },
                         },
                         ...(attribute.isPrimary
@@ -403,7 +414,7 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
                                 icon: 'archive' as const,
                                 isDanger: true,
                                 onAction: () => {
-                                  setArchiving(attribute);
+                                  setArchiving(attribute.id);
                                 },
                               },
                             ]),
@@ -467,6 +478,8 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
                       ? first.title
                       : attributeStrings.both(first.title, second.title);
                 toasts.toast({ tone: 'success', message: attributeStrings.archivedToast(titles) });
+                // The chevron that opened the confirm left with its column: focus goes to the name's header.
+                setFocusColumn({ id: rowHeader });
               }}
             />
           </>
