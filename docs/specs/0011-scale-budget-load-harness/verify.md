@@ -143,3 +143,130 @@ The first pair (steady seed 2, spread seed 3, same shape) gave steady: read p95 
 ### Owner steps
 
 - None. The owner waived the million record gate run (12 October 2026): no Docker 12 GB step, and the `smoke` seed runs above stand as this milestone's proof.
+
+## Milestone 3: live delivery (12 October 2026)
+
+### Where it ran
+
+The same machine and stack as milestone 2 (Docker at 7.75 GB; the owner waived the million record gate run on 12 October 2026), on the `smoke` seed (50,000 records, 50 users), with the load stack's relay and tokens now on: the API pokes `http://worker:3101` and signs Centrifugo tokens, the worker publishes to `http://centrifugo:9000`, and every simulated user holds a Centrifugo connection and the workspace channel. The worker runs spec 0008's jobs too (`crm_worker_user`, `JOBS_RUNNER` on, its local default). Before these runs the seeded database took the migrations that landed since it was seeded and the worker login, by hand (`packages/load/AGENTS.md`). Other build lanes were idle this time. 50 users for 3 measured minutes (steady) and 2 (storm), not the gate's 100 for 10.
+
+The re-review's fixes landed after these runs (a connect still retrying gives up when the storm reconnects, a failed token call counts once, arrivals bucket with the start's clock offset, scheduled refetches hold the drain); none changes a measured path these runs took (both offsets were under 2 ms, no token call failed, no coarse event came), so the runs stand.
+
+Step 16 needed no change to the hook: spec 0007 had landed, so `created_at` is already `clock_timestamp()` and every event carries `at`.
+
+### steady, 50 users, 3 minutes, smoke seed (after the review's fixes)
+
+```
+metric                                     target              p50    p95    p99     max  count  verdict
+-----------------------------------------  -----------------  ----  -----  -----  ------  -----  -------
+read (scroll, filter or sort windows)      p95 ≤ 300 ms       40.6  135.2  251.7  2270.5   1371  PASS
+open a record                              p95 ≤ 200 ms       18.0   39.8   80.0   117.1    184  PASS
+edit                                       p95 ≤ 250 ms       26.3   79.6  124.5   182.1    222  PASS
+create                                     p95 ≤ 300 ms       32.6   86.0  176.1   176.1     56  PASS  (only 56 samples: a direction, not a measure)
+read by position                                              33.2   67.9  105.5   137.1    551  REPORTED
+read by cursor                                                50.6  165.1  365.4  2270.5    820  REPORTED
+count                                                         22.9   69.9  110.9   127.3    275  REPORTED  (not judged)
+API handler time per request                                  26.6   65.5  116.8   239.6   5663  REPORTED  (Server-Timing app: the server side of every request)
+live delivery (commit to visible)          p95 ≤ 1000 ms      34.9   73.9   77.5    90.0    176  PASS
+scheduled to visible                                          53.1  124.8  140.2   171.6    176  REPORTED  (from the writer's scheduled moment to each holder's refetch)
+event arrival (commit to each subscriber)                      5.7   15.7   20.7    78.7  13900  REPORTED  (live events only, in 1 ms buckets)
+delivery after recovery or catch up                                                              NO SAMPLES  (not judged: the gap is the point)
+settle (window and count reread)                              34.9   81.5  146.2   233.9   1228  REPORTED  (after a create, delete or reorder of the view)
+API pool wait                              p95 ≤ 50 ms         0.0    0.1    0.1    82.4   5663  PASS
+pooler wait (PgBouncer maxwait)            p95 ≤ 50 ms         0.0    0.0    0.0     0.0     36  PASS  (only 36 samples: a direction, not a measure)
+Postgres CPU                               p95 ≤ 70%          19.3   48.9   60.2    60.2     36  PASS  (only 36 samples: a direction, not a measure)
+API CPU                                                       29.5   81.2   84.8    84.8     36  REPORTED
+relay lag                                  p95 ≤ 250 ms        3.7    7.3   13.0    70.3    278  PASS
+missed seqs                                0                                                  0  PASS  (no event, stub or catch up within 10 s)
+seqs caught up (realtime.catchUp)                                                             0  REPORTED  (50 catch up calls, 0 answered reset)
+seqs recovered by Centrifugo                                                                  0  REPORTED
+events applied                                                                            13900  REPORTED  (278 own echoes skipped, 0 stubs, 8292 of another object discarded (60.9% of records events))
+unexpected errors                          ≤ 0.1% of actions                                 32  MISS  (1.734% of 1845 actions; over the limit the run is invalid)
+expected refusals (409, 422)                                                                  0  REPORTED
+429 too many requests                                                                        32  REPORTED  (unexpected: a person would see this refusal; by what sent it: read 12, count 2, settle 18)
+counts aborted by a newer view                                                                0  REPORTED
+
+scenario steady (gate), 50 users, 3 measured minutes after 60 s of warm up, seed 62
+run 2026-10-12T11:20:51.053Z to 2026-10-12T11:24:54.103Z, git 621e74d56097cf9690691b3c0f687c46f3df0400, API http://localhost:3100, 1 thread(s)
+host MacBookPro18,3, 8 cores, 16.0 GB; Docker 8 CPUs, 7.7 GB
+stack caps: api 1 CPU/1.0 GB, centrifugo 1 CPU/0.5 GB, mailpit uncapped/0.0 GB, pgbouncer uncapped/0.0 GB, postgres 2 CPU/8.0 GB, worker 1 CPU/0.5 GB
+database clock offset: -0.3 ms (moved 0.4 ms from start to end)
+manifest (smoke): deals 12,374 live of 12,500, companies 7,424 live of 7,500, people 29,683 live of 30,000
+mix achieved: scroll 60.0%, filterSort 15.0%, open 10.0%, edit 12.0%, create 3.0% (largest gap 0.04 points)
+actions: 1845 sent of 1845 planned; event loop p99 11.9 ms, 12.9 ms
+WAL written: 15.8 MB
+unexpected errors: 429 TOO_MANY_REQUESTS ×32
+top statements by total time: (in the result JSON)
+INVALID (exit 2): unexpected errors were 1.734% of actions (limit 0.1%): 429 TOO_MANY_REQUESTS ×32.
+```
+
+### storm, 50 users, 2 minutes, smoke seed (after the review's fixes)
+
+```
+metric                                          target               p50    p95    p99     max  count  verdict
+----------------------------------------------  -----------------  -----  -----  -----  ------  -----  -------
+read (scroll, filter or sort windows)           p95 ≤ 300 ms        45.6  156.7  328.1  1945.1    877  PASS
+open a record                                   p95 ≤ 200 ms        18.4   58.4  101.6   122.1    116  PASS
+edit                                            p95 ≤ 250 ms        27.3   63.0  101.1   189.6    140  PASS
+create                                          p95 ≤ 300 ms        36.3  157.4  160.7   160.7     36  PASS  (only 36 samples: a direction, not a measure)
+read by position                                                    34.8   82.2  131.6   348.5    355  REPORTED
+read by cursor                                                      57.3  180.0  402.0  1945.1    522  REPORTED
+count                                                               25.3   72.2  111.0   128.1    175  REPORTED  (not judged)
+API handler time per request                                        29.1   89.6  161.4   253.7   4268  REPORTED  (Server-Timing app: the server side of every request)
+live delivery (commit to visible)               p95 ≤ 1000 ms       33.4   79.5  102.1   196.8    161  PASS
+scheduled to visible                                                51.8  103.3  240.9   274.5    161  REPORTED  (from the writer's scheduled moment to each holder's refetch)
+event arrival (commit to each subscriber)                            5.6   11.6   21.6    81.6  32700  REPORTED  (live events only, in 1 ms buckets)
+delivery after recovery or catch up                                                                    NO SAMPLES  (not judged: the gap is the point)
+settle (window and count reread)                                    42.5  102.5  202.3   381.5    810  REPORTED  (after a create, delete or reorder of the view)
+API pool wait                                   p95 ≤ 50 ms          0.0    0.1   20.5    97.5   4268  PASS
+pooler wait (PgBouncer maxwait)                 p95 ≤ 50 ms          0.0    0.0    0.0     0.0     24  PASS  (only 24 samples: a direction, not a measure)
+Postgres CPU                                    p95 ≤ 70%           28.9   52.3   54.8    54.8     24  PASS  (only 24 samples: a direction, not a measure)
+API CPU                                                             26.6   44.8   46.5    46.5     24  REPORTED
+relay lag                                       p95 ≤ 250 ms         3.3    9.2   16.5    76.7    656  PASS
+missed seqs                                     0                                                   0  PASS  (no event, stub or catch up within 10 s)
+seqs caught up (realtime.catchUp)                                                                   0  REPORTED  (50 catch up calls, 0 answered reset)
+seqs recovered by Centrifugo                                                                      100  REPORTED
+events applied                                                                                  32800  REPORTED  (656 own echoes skipped, 0 stubs, 20160 of another object discarded (62.7% of records events))
+edit inside bursts                              p95 ≤ 250 ms        28.9  159.2  261.6   395.9    550  PASS
+reconnect: drop to back (max: every user back)                     231.2  325.0  338.2   338.2     50  REPORTED  (50 dropped: 50 recovered by Centrifugo, 0 caught up, 0 reset, 0 never back)
+unexpected errors                               ≤ 0.1% of actions                                  17  MISS  (0.988% of 1721 actions; over the limit the run is invalid)
+expected refusals (409, 422)                                                                        0  REPORTED
+429 too many requests                                                                              17  REPORTED  (unexpected: a person would see this refusal; by what sent it: read 2, count 2, settle 13)
+counts aborted by a newer view                                                                      0  REPORTED
+
+scenario storm (reported, exits by validity only), 50 users, 2 measured minutes after 60 s of warm up, seed 63
+run 2026-10-12T11:25:06.891Z to 2026-10-12T11:28:09.938Z, git 621e74d56097cf9690691b3c0f687c46f3df0400, API http://localhost:3100, 1 thread(s)
+host MacBookPro18,3, 8 cores, 16.0 GB; Docker 8 CPUs, 7.7 GB
+stack caps: api 1 CPU/1.0 GB, centrifugo 1 CPU/0.5 GB, mailpit uncapped/0.0 GB, pgbouncer uncapped/0.0 GB, postgres 2 CPU/8.0 GB, worker 1 CPU/0.5 GB
+database clock offset: -0.4 ms (moved 1.5 ms from start to end)
+manifest (smoke): deals 12,374 live of 12,500, companies 7,424 live of 7,500, people 29,683 live of 30,000
+mix achieved: scroll 59.9%, filterSort 15.1%, open 9.9%, edit 12.0%, create 3.1% (largest gap 0.12 points)
+actions: 1721 sent of 1721 planned; event loop p99 13.8 ms, 14.1 ms
+WAL written: 36.0 MB
+unexpected errors: 429 TOO_MANY_REQUESTS ×17
+top statements by total time: (in the result JSON)
+INVALID (exit 2): unexpected errors were 0.988% of actions (limit 0.1%): 429 TOO_MANY_REQUESTS ×17.
+```
+
+### What the runs say
+
+- **Live delivery holds with room:** commit to visible p95 74 ms in steady and 80 ms in storm against 1 second; relay lag p95 7 ms and 9 ms against 250 ms; commit to arrival p95 16 ms and 12 ms at every subscriber (13,900 and 32,700 arrivals). No seq was missed in either run.
+- **The reconnect storm recovers through Centrifugo:** all 50 users came back by recovery from the position they reached (100 seqs replayed, no catch up, no reset), the last 338 ms after the drop. A Centrifugo restart (history lost) would send them through `realtime.catchUp` instead; that path is proven by the unit tests, not by a run yet.
+- **Bursts:** 550 burst edits, p95 159 ms, while the mix's own edits stayed at 63 ms.
+- **Both runs are invalid on 429s, as in milestone 2** (the owner kept AC-203 as written): 32 in steady and 17 in storm. Most now come from the live client's settles (18 of 32, 13 of 17): every create, delete or restore in an object, and every change to an attribute a view sorts or filters on, rereads the window and count of every user holding that object 1.5 to 7 seconds later, as the browser does (1,228 settle rereads in steady's 3 minutes, beside 1,845 actions).
+- **The discarded share is about 61 to 63%:** that share of records events reached a user holding another object (spec 0007's AC-91 number; with three objects and one view each it is what one channel per workspace costs).
+
+### Earlier run, before the review's fixes
+
+A 20 user, 2 minute storm on the first build (other lanes busy on the machine) gave live delivery p95 1.5 s with the API at 117% of its CPU cap and 145 429s; every user came back by recovery in about a second. Its burst edits used the window's rows (users on the same view could collide); the fixes moved them to the object's samples.
+
+### Misses and their plans
+
+1. **429s, now mostly from settles.** The live client adds the browser's settle rereads to the read gate's 6 in flight. Plan (#41): with the owner's call standing, decide between spreading the settle wider (or letting a create in another user's view settle only when the view shows the count change), raising the gate for live rereads, or a short queue instead of a refusal; the harness's 429 line now says what sent each.
+2. **The holder is smaller than a browser's** (a known underestimate of refetch load): the harness holds the 100 rows on screen; the browser keeps blocks within 5 of the screen and an open record page. Refetches don't fetch `updated_at` and `updated_by` either (response bytes only).
+3. **`storm` exits by validity only** (spec: `hub`, `storm` and `thousand` are judged in #41), so missed seqs above 0 would show as a miss on its line without failing the run. Both runs missed none.
+4. **The reconnect is the worst case on purpose:** every user drops and asks for new tokens in the same millisecond, where browsers would spread their reconnects with backoff jitter.
+
+### Owner steps
+
+- None. The million record gate run stays waived; milestone 4 (`thousand`, `hub`, the bench and the weekly smoke) is next.
