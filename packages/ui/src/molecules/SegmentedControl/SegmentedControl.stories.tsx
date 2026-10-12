@@ -41,9 +41,13 @@ export const Default: Story = {
       />
     </Stage>
   ),
-  play: async ({ canvas, args, userEvent }) => {
+  play: async ({ canvas, canvasElement, args, userEvent }) => {
+    // The chosen segment's thumb covers the segment, so focus turns the thumb's own edge accent.
+    const thumb = canvasElement.querySelector('[class*="thumb"]');
+    const resting = thumb === null ? '' : getComputedStyle(thumb).borderColor;
     await userEvent.tab();
     await expect(canvas.getByRole('radio', { name: 'Table' })).toHaveFocus();
+    await expect(thumb === null ? '' : getComputedStyle(thumb).borderColor).not.toBe(resting);
     await userEvent.keyboard('{ArrowRight}');
     await expect(canvas.getByRole('radio', { name: 'Board' })).toBeChecked();
     await expect(args.onChange).toHaveBeenCalledWith('board');

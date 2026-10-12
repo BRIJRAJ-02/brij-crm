@@ -75,6 +75,14 @@ export function SignInForm({
   const refusal: FormRefusal | undefined =
     error === undefined || error === dismissed ? undefined : { code: 'REFUSED', message: error };
   const shown = problem ?? refusal;
+  // The notice is about how the person got here (a refused Google sign in, a
+  // session that ended); once they submit, even an address that doesn't look
+  // like one, it has been read, so it steps aside rather than being announced
+  // again beside the field's own refusal. A notice the screen clears and sets
+  // again (the next refusal) shows again.
+  const [readNotice, setReadNotice] = useState<string | undefined>(undefined);
+  if (notice === undefined && readNotice !== undefined) setReadNotice(undefined);
+  const shownNotice = notice === readNotice ? undefined : notice;
   // The reason shows under the field; it describes both buttons as well, so
   // each says why it is off.
   const reasonId = useId();
@@ -89,7 +97,7 @@ export function SignInForm({
         refusals={[
           ...(shown === undefined ? [] : [shown]),
           // Through the Form's banner: about the sign in, not the address.
-          ...(notice === undefined ? [] : [{ code: NOTICE, message: notice }]),
+          ...(shownNotice === undefined ? [] : [{ code: NOTICE, message: shownNotice }]),
         ]}
         fieldFor={fieldOf}
         {...(hasReason ? { submitDescribedBy: reasonId } : {})}
@@ -97,6 +105,7 @@ export function SignInForm({
           const typed = email.trim();
           const found = problemWith(typed);
           setProblem(found);
+          setReadNotice(notice);
           if (found !== undefined) return;
           setDismissed(undefined);
           onContinue(typed);

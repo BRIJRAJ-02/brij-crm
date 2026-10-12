@@ -76,6 +76,10 @@ export function createFocusRecovery(doc: Document): { readonly recover: (pathnam
     const { target } = event;
     last = typeof target === 'object' && target !== null && 'isConnected' in target ? (target as Node) : undefined;
   });
+  // A press anywhere is the person choosing where they are: an older focus that left is no longer theirs to lose.
+  doc.addEventListener('pointerdown', () => {
+    last = undefined;
+  });
   return {
     recover: (pathname) => {
       const active = doc.activeElement;

@@ -68,6 +68,21 @@ export const GoogleRefused: Story = {
   },
 };
 
+/**
+ * The notice says how the person got here; once they submit (here an address
+ * that isn't one), it steps aside, so only the field's own refusal is
+ * announced.
+ */
+export const NoticeStepsAside: Story = {
+  ...GoogleRefused,
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.type(canvas.getByRole('textbox', { name: 'Email' }), 'not an address{Enter}');
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Email' })).toHaveAttribute('aria-invalid', 'true'));
+    await expect(canvas.queryByText(/Google sign in was cancelled/)).toBeNull();
+  },
+};
+
 /** Changing the address clears the refusal. */
 export const RefusalClears: Story = {
   ...Refused,

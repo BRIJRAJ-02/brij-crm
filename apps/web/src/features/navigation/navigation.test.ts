@@ -171,23 +171,26 @@ describe('pageHeading', () => {
 describe('createFocusRecovery', () => {
   /** A stand in document whose focusin listener the test drives, with a title that records its focus. */
   function recoveryDocument() {
-    let onFocusIn: (event: { target: unknown }) => void = () => undefined;
+    const listeners = new Map<string, (event: { target: unknown }) => void>();
     const focused: string[] = [];
     const body = {};
     const title = { focus: () => focused.push('main h1') };
     const doc = {
       body,
       activeElement: body as unknown,
-      addEventListener: (_type: string, listener: (event: { target: unknown }) => void) => {
-        onFocusIn = listener;
+      addEventListener: (type: string, listener: (event: { target: unknown }) => void) => {
+        listeners.set(type, listener);
       },
       querySelector: () => null,
       querySelectorAll: () => [title],
     };
     const focusOn = (element: unknown) => {
-      onFocusIn({ target: element });
+      listeners.get('focusin')?.({ target: element });
     };
-    return { doc, focused, focusOn, recovery: createFocusRecovery(doc as unknown as Document) };
+    const press = () => {
+      listeners.get('pointerdown')?.({ target: body });
+    };
+    return { doc, focused, focusOn, press, recovery: createFocusRecovery(doc as unknown as Document) };
   }
   /** An element, in the document or gone from it. */
   const element = (isConnected: boolean) => ({ isConnected });
@@ -209,5 +212,13 @@ describe('createFocusRecovery', () => {
     moved.doc.activeElement = {};
     moved.recovery.recover('/w/acme/objects/people');
     expect(moved.focused).toEqual([]);
+  });
+
+  it('forgets a lost focus once the person presses somewhere, so a later reload in place moves nothing', () => {
+    const pressed = recoveryDocument();
+    pressed.focusOn(element(false));
+    pressed.press();
+    pressed.recovery.recover('/w/acme/objects/people');
+    expect(pressed.focused).toEqual([]);
   });
 });

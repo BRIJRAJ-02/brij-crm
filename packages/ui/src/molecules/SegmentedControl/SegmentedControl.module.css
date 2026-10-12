@@ -68,7 +68,9 @@
   }
 
   /* The 1px accent ring inside the segment, as on other items in a track
-     (tabs, sidebar items): the faint halo alone is under 3:1 (WCAG 1.4.11). */
+     (tabs, sidebar items): the faint halo alone is under 3:1 (WCAG 1.4.11).
+     On the chosen segment, where focus usually is, the thumb covers the
+     segment, so the thumb's own edge turns accent instead. */
   .segment[data-focus-visible] {
     box-shadow: var(--shadow-focus-inset);
   }
@@ -93,6 +95,11 @@
     transition: none;
   }
 
+  /* Focus on the chosen segment: the thumb covers the segment's inset ring. */
+  .segment[data-focus-visible] .thumb {
+    border-color: var(--accent-line);
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .thumb {
       transition: none;
@@ -111,6 +118,11 @@
     .segment[data-focus-visible] {
       outline: var(--border-width-thick) solid Highlight;
       outline-offset: calc(-1 * var(--border-width-thick));
+    }
+
+    /* Under the thumb the outline can't show: the chosen segment's edge thickens. */
+    .segment[data-focus-visible] .thumb {
+      border-width: var(--border-width-thick);
     }
   }
 }

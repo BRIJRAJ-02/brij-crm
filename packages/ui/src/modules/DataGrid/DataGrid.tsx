@@ -305,17 +305,21 @@ export function DataGrid<Row>({
   const tipAnchor = useRef<HTMLElement | null>(null);
   const hoverTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const hoveredCell = useRef<string | undefined>(undefined);
-  // Retry leaves with the error state it sits in. When the grid comes back and
-  // focus fell to the page with it, the grid takes focus, so the keyboard
-  // carries on from here rather than from the top of the document.
-  const wasFailed = useRef(false);
+  // Retry leaves with the error state it sits in. When the grid comes back
+  // after a Retry press and focus fell to the page with it, the grid takes
+  // focus, so the keyboard carries on from here rather than from the top of
+  // the document. An error that clears on its own (a reload) moves nothing.
+  const retried = useRef(false);
+  const retry =
+    onRetry === undefined
+      ? undefined
+      : () => {
+          retried.current = true;
+          onRetry();
+        };
   useEffect(() => {
-    if (status === 'error') {
-      wasFailed.current = true;
-      return;
-    }
-    if (!wasFailed.current) return;
-    wasFailed.current = false;
+    if (status === 'error' || !retried.current) return;
+    retried.current = false;
     const grid = scrollRef.current;
     const active = grid?.ownerDocument.activeElement;
     if (grid !== null && (active === null || active === grid.ownerDocument.body)) grid.focus();
@@ -1441,7 +1445,7 @@ export function DataGrid<Row>({
       <div className={styles.frame}>
         <div className={styles.state}>
           {status === 'error' && (
-            <EmptyState tone="error" title={strings.failed} {...(onRetry === undefined ? {} : { onRetry })}>
+            <EmptyState tone="error" title={strings.failed} {...(retry === undefined ? {} : { onRetry: retry })}>
               {errorText ?? strings.failedText}
             </EmptyState>
           )}
