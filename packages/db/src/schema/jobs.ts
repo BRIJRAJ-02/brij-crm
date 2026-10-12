@@ -158,9 +158,9 @@ export const jobItems = pgTable(
     }).onDelete('cascade'),
     // A merged item is never added twice.
     uniqueIndex('job_items_item').on(t.workspaceId, t.jobId, t.itemId),
-    // The refusal summary: refused items grouped by code.
+    // The refusal summary: refused items counted by code, and each code's first ids by position read in order.
     index('job_items_refused')
-      .on(t.workspaceId, t.jobId, t.code)
+      .on(t.workspaceId, t.jobId, t.code, t.position)
       .where(sql`${t.state} = 'refused'`),
   ],
 );
