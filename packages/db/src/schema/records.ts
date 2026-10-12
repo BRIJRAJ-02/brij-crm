@@ -220,6 +220,13 @@ export const recordLinks = pgTable(
     // History, as of reads, and finding every link of a record (purge, erasure).
     index('record_links_from_history').on(t.workspaceId, t.fromRecordId, t.relationshipId, t.activeFrom),
     index('record_links_to_history').on(t.workspaceId, t.toRecordId, t.relationshipId, t.activeFrom),
+    // A record's timeline (spec 0017): the links each side ended, newest first. Ended links are a small share.
+    index('record_links_from_ended')
+      .on(t.workspaceId, t.fromRecordId, t.relationshipId, t.activeUntil)
+      .where(sql`${t.activeUntil} is not null`),
+    index('record_links_to_ended')
+      .on(t.workspaceId, t.toRecordId, t.relationshipId, t.activeUntil)
+      .where(sql`${t.activeUntil} is not null`),
     ...actorConstraints('record_links', 'set_by', t.workspaceId, {
       type: t.setByType,
       id: t.setById,

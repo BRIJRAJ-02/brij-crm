@@ -225,6 +225,13 @@
       "when": 1791812652119,
       "tag": "0031_outbox_prune",
       "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1791862144795,
+      "tag": "0032_record_links_ended",
+      "breakpoints": true
     }
   ]
 }
