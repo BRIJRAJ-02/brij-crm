@@ -10,6 +10,7 @@ import { randomUUID } from 'node:crypto';
 import { monitorEventLoopDelay } from 'node:perf_hooks';
 import { newId } from '@crm/core';
 import { createLoadClient, liveApiOf, loadApiOf } from './client.ts';
+import { addTo, createHistogram, type Histogram } from './histogram.ts';
 import { openLiveConnection } from './live/centrifuge.ts';
 import type { StreamSnapshot } from './live/stream.ts';
 import { createLiveUser, type LiveTally, type LiveUser, type Reconnected } from './live/user.ts';
@@ -23,6 +24,8 @@ import { createLoadUser, type Behaviour, type ObjectModel, type Sample } from '.
 export const ON_TIME_MS = 1_000;
 /** How long a thread waits for its last answers after the window ends (a cursor jump can take many calls). */
 export const DRAIN_MS = 60_000;
+/** How long a write's mutation id waits for its echo before it is forgotten (the browser's `ECHO_TTL_MS` and more). */
+export const ECHO_WAIT_MS = 5 * 60_000;
 
 /** One user a thread drives. */
 export interface ThreadUser {
@@ -75,8 +78,12 @@ export interface LiveOutput {
 /** What a thread hands back. */
 export interface DriveOutput {
   readonly samples: readonly Sample[];
-  /** Each measured event arrival: our arrival time minus its `at` on the database's clock (the offset joins later). */
-  readonly arrivalsRawMs: readonly number[];
+  /**
+   * Each measured live event's arrival at each subscriber, raw (our arrival
+   * time minus its `at` on the database's clock; the offset joins later), as
+   * a histogram.
+   */
+  readonly arrivals: Histogram;
   readonly live: readonly LiveOutput[];
   readonly planned: number;
   readonly sent: number;
@@ -110,7 +117,13 @@ const schedule = (ms: number, run: () => void) => {
 /** Plays this thread's users through the run, and answers when every action has answered (or the drain ran out). */
 export async function drive(input: DriveInput): Promise<DriveOutput> {
   const samples: Sample[] = [];
-  const arrivalsRawMs: number[] = [];
+  const arrivals = createHistogram();
+  // Live work in flight (refetches, rereads, token and catch up calls), so the drain waits for it too.
+  const liveWork = new Set<Promise<unknown>>();
+  const track = (work: Promise<unknown>) => {
+    liveWork.add(work);
+    void work.finally(() => liveWork.delete(work)).catch(() => undefined);
+  };
   const measuredStart = input.runStartMs + input.warmupMs;
   const measuredEnd = measuredStart + input.measuredMs;
   const measured = (at: number) => at >= measuredStart && at <= measuredEnd;
@@ -122,8 +135,9 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
     input.users.map((user) => {
       const model = input.models[user.object];
       const client = createLoadClient(input.apiUrl, user.cookie);
-      // This user's writes, until their echo comes back (or never: a refused write stores no event).
-      const ownMutations = new Set<string>();
+      // This user's writes by when they were sent, until their echo comes back; a refused write stores no event, so
+      // ids older than ECHO_WAIT_MS are forgotten as new ones are added.
+      const ownMutations = new Map<string, number>();
       const loadUser = createLoadUser({
         user: user.index,
         workspace: input.workspace,
@@ -137,7 +151,12 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
         newId,
         mutationId: () => {
           const mutationId = randomUUID();
-          ownMutations.add(mutationId);
+          const sentAt = wallClock();
+          for (const [old, at] of ownMutations) {
+            if (sentAt - at < ECHO_WAIT_MS) break;
+            ownMutations.delete(old);
+          }
+          ownMutations.set(mutationId, sentAt);
           return mutationId;
         },
         record,
@@ -153,13 +172,14 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
             open: openLiveConnection,
             url: input.live.url,
             origin: input.live.origin,
-            ownMutations,
+            ownEcho: (mutationId) => ownMutations.delete(mutationId),
             now: wallClock,
             schedule,
             random: createRandom(input.seed, `live:${String(user.index)}`).next,
             measured,
             record,
-            arrival: (rawMs) => arrivalsRawMs.push(rawMs),
+            arrival: (rawMs) => addTo(arrivals, rawMs),
+            track,
           }),
         );
       }
@@ -258,7 +278,11 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
   clearTimeout(startLoop);
   clearInterval(blocking);
   loop.disable();
-  const drained = Promise.allSettled([...pending.keys()]);
+  const drained = (async () => {
+    await Promise.allSettled([...pending.keys()]);
+    // Live work started meanwhile (a refetch an action's echo caused) is waited for too.
+    while (liveWork.size > 0) await Promise.allSettled([...liveWork]);
+  })();
   await Promise.race([drained, new Promise((resolve) => setTimeout(resolve, DRAIN_MS))]);
   // What still hasn't answered never will in this run: an unexpected error, not a silence.
   const now = wallClock();
@@ -266,7 +290,7 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
   for (const liveUser of lives.values()) liveUser.stop();
   return {
     samples,
-    arrivalsRawMs,
+    arrivals,
     live,
     planned,
     sent,

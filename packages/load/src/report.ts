@@ -7,6 +7,7 @@
 import type { ScaleBudget } from '@crm/core/scale-budget';
 import type { LiveOutput } from './drive.ts';
 import { trailingMisses } from './live/stream.ts';
+import { summarizeHistogram, type Histogram } from './histogram.ts';
 import type { RelayLags } from './outbox.ts';
 import type { LoadResult, ReportLine, RunValidity, Verdict } from './result.ts';
 import { summarize, type Summary } from './stats.ts';
@@ -41,8 +42,8 @@ export interface ReportInput {
 export interface LiveInput {
   /** The database's clock minus ours: joins `at` and `created_at` to the harness's clock. */
   readonly clockOffsetMs: number;
-  /** Each measured event arrival, raw: our arrival time minus `at` on the database's clock. */
-  readonly arrivalsRawMs: readonly number[];
+  /** Each measured live event arrival, raw (our arrival time minus `at` on the database's clock), as a histogram. */
+  readonly arrivals: Histogram;
   readonly users: readonly LiveOutput[];
   /** The relay lag of every outbox row committed in the window, or undefined when the outbox couldn't be read. */
   readonly relay: RelayLags | undefined;
@@ -104,6 +105,19 @@ function without(metric: string, verdict: 'not measured' | 'not built yet', note
   return { metric, ...(target === undefined ? {} : { target }), unit: 'ms' as const, verdict, judged: false, note };
 }
 
+/** A reported line from a summary already made (a histogram's). */
+function fromSummary(metric: string, summary: Summary | undefined, note: string): ReportLine {
+  const shown = rounded(summary);
+  return {
+    metric,
+    unit: 'ms',
+    ...(shown === undefined ? {} : { summary: shown }),
+    verdict: shown === undefined ? 'no samples' : 'reported',
+    judged: false,
+    note,
+  };
+}
+
 /** A line that is one number. */
 const countSummary = (value: number) => ({ count: value, p50: value, p95: value, p99: value, max: value });
 
@@ -128,7 +142,9 @@ export function deliveryLines(budget: ScaleBudget, samples: readonly Sample[], l
     if (sample.mutationId !== undefined && sample.metric !== 'delivery')
       writers.set(sample.mutationId, sample.scheduledAt);
   }
+  // Live deliveries only: a recovered replay's or a catch up's wait is the gap, reported on its own line.
   const scheduledToVisible = deliveries.flatMap((sample) => {
+    if (sample.via !== 'live') return [];
     const scheduledAt = sample.mutationId === undefined ? undefined : writers.get(sample.mutationId);
     return scheduledAt === undefined ? [] : [sample.answeredAt - scheduledAt];
   });
@@ -145,9 +161,10 @@ export function deliveryLines(budget: ScaleBudget, samples: readonly Sample[], l
       'ms',
       "from the writer's scheduled moment to each holder's refetch",
     ),
-    reported(
+    fromSummary(
       'event arrival (commit to each subscriber)',
-      live.arrivalsRawMs.map((raw) => raw + offset),
+      summarizeHistogram(live.arrivals, offset),
+      'live events only, in 1 ms buckets',
     ),
     reported(
       'delivery after recovery or catch up',
@@ -341,6 +358,14 @@ export function errorCounts(samples: readonly Sample[]) {
     unexpected: unexpected.length,
     expected: actions.filter((sample) => sample.outcome === 'expected').length,
     tooMany: samples.filter((sample) => sample.reason?.startsWith('429') === true).length,
+    tooManyByMetric: Object.fromEntries(
+      [...ACTION_METRICS, 'count', 'delivery', 'settle', 'live'].flatMap((metric) => {
+        const n = samples.filter(
+          (sample) => sample.metric === metric && sample.reason?.startsWith('429') === true,
+        ).length;
+        return n === 0 ? [] : [[metric, n]];
+      }),
+    ),
     abortedCounts: samples.filter((sample) => sample.metric === 'count' && sample.outcome === 'aborted').length,
     byReason,
   };
@@ -375,7 +400,13 @@ export function errorLines(samples: readonly Sample[], budget: ScaleBudget): rea
       summary: count(counts.tooMany),
       verdict: 'reported',
       judged: false,
-      note: 'unexpected: a person would see this refusal',
+      note: `unexpected: a person would see this refusal${
+        Object.keys(counts.tooManyByMetric).length === 0
+          ? ''
+          : `; by what sent it: ${Object.entries(counts.tooManyByMetric)
+              .map(([metric, n]) => `${metric} ${String(n)}`)
+              .join(', ')}`
+      }`,
     },
     {
       metric: 'counts aborted by a newer view',
@@ -503,7 +534,7 @@ export function formatReport(result: LoadResult): string {
     `run ${result.startedAt} to ${result.endedAt}, git ${facts.gitCommit}, API ${facts.apiUrl}, ${String(facts.threads)} thread(s)`,
     `host ${facts.hostModel}, ${String(facts.hostCores)} cores, ${gb(facts.hostMemoryBytes)}; Docker ${facts.dockerCpus === undefined ? '?' : String(facts.dockerCpus)} CPUs, ${gb(facts.dockerMemoryBytes)}`,
     `stack caps: ${caps === '' ? 'not on the load stack' : caps}`,
-    `database clock offset: ${facts.databaseClockOffsetMs === undefined ? '?' : `${facts.databaseClockOffsetMs.toFixed(1)} ms`}`,
+    `database clock offset: ${facts.databaseClockOffsetMs === undefined ? '?' : `${facts.databaseClockOffsetMs.toFixed(1)} ms`}${facts.databaseClockDriftMs === undefined ? '' : ` (moved ${facts.databaseClockDriftMs.toFixed(1)} ms from start to end)`}`,
     `manifest (${facts.manifestProfile}): ${counts}`,
     `mix achieved: ${mix} (largest gap ${(result.mix.deviationPoints * 100).toFixed(2)} points)`,
     `actions: ${String(result.validity.sentActions)} sent of ${String(result.validity.plannedActions)} planned; event loop p99 ${result.validity.eventLoopDelayP99Ms.map((ms) => `${ms.toFixed(1)} ms`).join(', ')}`,

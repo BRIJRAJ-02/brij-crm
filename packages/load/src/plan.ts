@@ -102,11 +102,11 @@ export function achievedMix(actions: readonly LoadAction[]): Record<LoadAction, 
   >;
 }
 
-/** A storm burst's edit (AC-207): which user, when, and the row of its window it edits. */
+/** A storm burst's edit (AC-207): which user, when, and which of its object's samples it edits. */
 export interface Burst {
   readonly user: number;
   readonly at: number;
-  /** The row the user edits, so users holding the same window edit different records. */
+  /** Which of its object's samples the user edits: distinct for every user in a burst, and from burst to burst. */
   readonly slot: number;
 }
 
@@ -132,10 +132,10 @@ export function planStorm(input: {
   const random = createRandom(input.seed, 'storm');
   const end = input.warmupMs + input.measuredMs;
   const bursts: Burst[] = [];
-  for (let start = input.warmupMs + input.everyMs; start < end; start += input.everyMs) {
+  for (let start = input.warmupMs + input.everyMs, round = 0; start < end; start += input.everyMs, round += 1) {
     for (let user = 0; user < input.users; user += 1) {
       const at = start + random.next() * 1_000;
-      if (at < end) bursts.push({ user, at, slot: user });
+      if (at < end) bursts.push({ user, at, slot: round * input.users + user });
     }
   }
   bursts.sort((left, right) => left.at - right.at);

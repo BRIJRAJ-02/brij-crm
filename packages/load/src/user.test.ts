@@ -321,17 +321,17 @@ describe('open, edit and create', () => {
     }
   });
 
-  it("edits row `slot` of its window in a storm burst, marked a burst and carrying the write's mutation id", async () => {
+  it("edits sample `slot` of its object in a storm burst, marked a burst and carrying the write's mutation id", async () => {
     const { api, calls } = fakeApi();
     const { loadUser, samples } = user(api);
     await loadUser.join(0, false);
-    const window = loadUser.snapshot().windowIds;
-    await loadUser.burst(10, true, 7);
-    await loadUser.burst(11, true, 107);
+    await loadUser.burst(10, true, 0);
+    await loadUser.burst(11, true, 1);
     const edited = calls
       .filter((call) => call.procedure === 'setValues')
       .map((call) => (call.input as { recordId: string; mutationId: string }).recordId);
-    expect(edited).toEqual([window[7], window[7]]);
+    // Distinct slots, distinct records: no two users in a burst edit the same one.
+    expect(edited).toEqual([model.samples[0], model.samples[1]]);
     const bursts = samples.filter((sample) => sample.burst === true);
     expect(bursts).toHaveLength(2);
     expect(bursts.every((sample) => sample.metric === 'edit' && sample.mutationId !== undefined)).toBe(true);

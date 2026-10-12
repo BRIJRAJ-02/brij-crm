@@ -18,6 +18,14 @@ import {
   type LiveInput,
 } from './report.ts';
 import type { LiveOutput } from './drive.ts';
+import { addTo, createHistogram } from './histogram.ts';
+
+/** A histogram of `values`. */
+function histogramOf(values: readonly number[]) {
+  const histogram = createHistogram();
+  for (const value of values) addTo(histogram, value);
+  return histogram;
+}
 import type { LoadResult } from './result.ts';
 import { percentile, summarize } from './stats.ts';
 import type { Sample } from './user.ts';
@@ -270,7 +278,7 @@ describe('the live lines (milestone 3)', () => {
   const live = (overrides: Partial<LiveInput> = {}): LiveInput => ({
     // The database's clock runs 30 ms ahead of ours.
     clockOffsetMs: 30,
-    arrivalsRawMs: [100, 200],
+    arrivals: histogramOf([100, 200]),
     users: [{ user: 0, tally, snapshot: { watermark: 10, accounted: [] } }],
     relay: { lagsMs: [20, 40], unpublished: 0 },
     heads: { start: 0, end: 10 },

@@ -31,6 +31,7 @@ import { createLoadClient } from './client.ts';
 import { cpuShare, hostFacts, poolerWait, sampleEvery, stackContainers } from './collectors.ts';
 import type { DriveInput, DriveOutput, ThreadUser } from './drive.ts';
 import { wallClock } from './drive.ts';
+import { mergeHistograms } from './histogram.ts';
 import { headAt, relayLags } from './outbox.ts';
 import { achievedMix, mixDeviation, planArrivals, planStorm, type ArrivalPlan } from './plan.ts';
 import { errorCounts, errorLines, exitCodeOf, formatReport, judgeValidity, reportLines } from './report.ts';
@@ -202,11 +203,19 @@ function inThread(input: DriveInput): Promise<DriveOutput> {
   });
 }
 
-/** The database's clock minus ours, from the midpoint of one round trip. */
+/** Round trips per clock offset reading: the fastest one gives the tightest midpoint. */
+const CLOCK_SAMPLES = 5;
+
+/** The database's clock minus ours, from the midpoint of the fastest of a few round trips. */
 async function clockOffset(stats: ServerStats): Promise<number> {
-  const sent = wallClock();
-  const database = await stats.clock();
-  return database - (sent + wallClock()) / 2;
+  let best: { rtt: number; offset: number } | undefined;
+  for (let sample = 0; sample < CLOCK_SAMPLES; sample += 1) {
+    const sent = wallClock();
+    const database = await stats.clock();
+    const back = wallClock();
+    if (best === undefined || back - sent < best.rtt) best = { rtt: back - sent, offset: database - (sent + back) / 2 };
+  }
+  return best?.offset ?? 0;
 }
 
 /** Writes the result to `.load/results/<scenario>-<time>.json`, readable by this user only. */
@@ -387,7 +396,7 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
         apiCpuShares,
         live: {
           clockOffsetMs,
-          arrivalsRawMs: outputs.flatMap((output) => output.arrivalsRawMs),
+          arrivals: mergeHistograms(outputs.map((output) => output.arrivals)),
           users: outputs.flatMap((output) => output.live),
           relay,
           heads,
@@ -427,6 +436,7 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
         ...facts,
         stackCaps: Object.fromEntries([...containers].map(([service, container]) => [service, container.cap])),
         databaseClockOffsetMs: clockOffsetMs,
+        databaseClockDriftMs: (offsets[1] ?? 0) - (offsets[0] ?? 0),
         manifestCounts: manifest.counts,
         manifestProfile: manifest.profile,
         apiUrl: urls.LOAD_API_URL,

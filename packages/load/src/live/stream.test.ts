@@ -37,7 +37,7 @@ function stream(
     schedule: timers.schedule,
     random: () => 0.5,
     measured: options.measured ?? (() => true),
-    apply: (delivery) => applied.push({ seq: delivery.seq, via: delivery.via }),
+    apply: (delivery) => applied.push({ seq: delivery.event.seq, via: delivery.via }),
     applyCaughtUp: (caught) => caughtUp.push(caught.seq),
     catchUp:
       options.catchUp ??
@@ -165,6 +165,49 @@ describe('the watermark', () => {
     const { made, applied } = stream();
     made.publication(event(40));
     expect(applied.map((each) => each.seq)).toEqual([40]);
+  });
+});
+
+describe('a resubscription', () => {
+  it('makes what was committed while away a gap: caught up within 10 s it is a catch up', async () => {
+    const { made, timers, back } = stream({
+      catchUp: () => Promise.resolve({ head: 9, reset: false, events: [] }),
+    });
+    made.start(4);
+    made.start(9);
+    made.subscribed({ first: false, wasRecovering: true, recovered: false });
+    await timers.advance(MISS_AFTER_MS * 2);
+    expect(made.tally()).toMatchObject({ caughtUp: 5, missed: 0 });
+    expect(made.watermark()).toBe(9);
+    expect(back).toEqual(['caughtUp']);
+  });
+
+  it('and missed when the catch up comes too late', async () => {
+    let answers = 0;
+    const { made, timers } = stream({
+      // Four tries fail (at 1, 2.5, 5.5 and 11.5 seconds); the fifth answers after the 10 seconds have run out.
+      catchUp: () => {
+        answers += 1;
+        return Promise.resolve(answers < 5 ? undefined : { head: 9, reset: false, events: [] });
+      },
+    });
+    made.start(4);
+    made.start(9);
+    made.subscribed({ first: false, wasRecovering: true, recovered: false });
+    await timers.advance(MISS_AFTER_MS * 3);
+    expect(made.tally()).toMatchObject({ caughtUp: 0, missed: 5 });
+    expect(made.watermark()).toBe(9);
+  });
+
+  it('and a recovered replay closes those gaps at once', async () => {
+    const { made, timers } = stream();
+    made.start(4);
+    made.start(6);
+    made.subscribed({ first: false, wasRecovering: true, recovered: true });
+    made.publication(event(5));
+    made.publication(event(6));
+    await timers.advance(MISS_AFTER_MS * 2);
+    expect(made.tally()).toMatchObject({ recovered: 2, missed: 0, caughtUp: 0 });
   });
 });
 

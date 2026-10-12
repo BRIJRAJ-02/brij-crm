@@ -54,6 +54,8 @@ export const RunFacts = z.object({
   stackCaps: z.record(z.string(), z.object({ cpus: z.number(), memoryBytes: z.number() })),
   /** The database's clock minus ours, in milliseconds, averaged over the start and the end. */
   databaseClockOffsetMs: z.number().optional(),
+  /** How far the offset moved from the start to the end, in milliseconds: a drifting clock shows here. */
+  databaseClockDriftMs: z.number().optional(),
   /** The manifest's records per object: stored and live. */
   manifestCounts: z.record(z.string(), z.object({ stored: z.number(), live: z.number() })),
   manifestProfile: z.string(),

@@ -2,30 +2,34 @@
 // browser's live layer does them (`packages/data/src/live/live.ts` and the
 // records layer's `changed`):
 // - it connects with `realtime.connectionToken` and subscribes with
-//   `realtime.subscriptionToken`, whose `head` is the first watermark;
+//   `realtime.subscriptionToken`, whose `head` is the first watermark; a
+//   failed token call tries again with backoff, as the browser does;
 // - it skips an event carrying its own `mutationId`, and a stub only moves
 //   the watermark;
-// - a records event of its object refetches the records it holds
-//   (`records.get` with only the changed attributes the window reads,
-//   nothing when the event names none of them); a coarse one rereads the
-//   window and its count after a random 0 to 2 seconds;
+// - records events of its object are gathered for a frame (16 ms), as the
+//   browser's store does, then the records it holds are refetched in one
+//   `records.get` with only the changed attributes the window reads (nothing
+//   when the events name none of them);
+// - a coarse event rereads the window and its count once, after a random 0
+//   to 2 seconds, however many arrive meanwhile;
 // - a records event that creates, deletes or restores records, names no
 //   attributes, or changes one the view filters or sorts on marks the window
 //   dirty: it settles (rereads the window and the count) 1.5 seconds after
 //   the last such change, at most 5 seconds after the first, then a random 0
-//   to 2 seconds on;
+//   to 2 seconds on; a catch up answered `reset` rereads too;
 // - a records event of another object is discarded (spec 0007's AC-91 share).
-// Each refetch is a `delivery` sample carrying the event's commit time `at`,
+// Each event's refetch is a `delivery` sample carrying its commit time `at`,
 // so the report joins live delivery (commit to visible) after the run; each
-// arrival's commit to arrival time is kept too. The storm's `reconnect` drops
-// the connection and opens a new one with new tokens, recovering from the
-// position the old one reached.
-import type { ChangeEvent } from '@crm/contracts';
-
+// live arrival's commit to arrival time goes to the thread's histogram. The
+// storm's `reconnect` drops the connection and opens a new one with new
+// tokens, recovering from the position the old one reached. Every call in
+// flight is tracked, so the thread's drain waits for it.
 import { createTally, type Answered, type Call } from '../tally.ts';
 import type { Holder, Sample, Via } from '../user.ts';
 import type { LiveConnection, OpenLiveConnection, StreamPosition } from './centrifuge.ts';
+import type { LiveEvent, LiveRecordsEvent } from './event.ts';
 import {
+  backoffMs,
   CATCH_UP_JITTER_MS,
   createStream,
   type BackHow,
@@ -39,6 +43,8 @@ import {
 export const SETTLE_MS = 1_500;
 /** The longest a dirty window waits from its first change (`SETTLE_MAX_MS`). */
 export const SETTLE_MAX_MS = 5_000;
+/** How long a user gathers records events before refetching (the browser's frame). */
+export const FRAME_MS = 16;
 
 /** The live calls a user makes, as the contract names them. */
 export interface LiveApi {
@@ -62,16 +68,18 @@ export interface LiveUserOptions {
   readonly open: OpenLiveConnection;
   readonly url: string;
   readonly origin: string;
-  /** This user's own writes' mutation ids, still waiting for their echo. */
-  readonly ownMutations: Set<string>;
+  /** Whether this user wrote a write by its mutation id (and forgets it): its own echo is skipped. */
+  readonly ownEcho: (mutationId: string) => boolean;
   readonly now: () => number;
   readonly schedule: (ms: number, run: () => void) => void;
   readonly random: () => number;
   /** Whether a moment falls in the measured window. */
   readonly measured: (at: number) => boolean;
   readonly record: (sample: Sample) => void;
-  /** An event's commit to arrival, raw: arrival on our clock minus `at` on the database's (the offset joins later). */
+  /** A live event's commit to arrival, raw: arrival on our clock minus `at` on the database's (the offset joins later). */
   readonly arrival: (rawMs: number) => void;
+  /** Hands the thread a call in flight, so its drain waits for it. */
+  readonly track: (work: Promise<unknown>) => void;
 }
 
 /** What a live user counted, beside its stream's books. */
@@ -94,11 +102,12 @@ export interface Reconnected {
   readonly how?: BackHow;
 }
 
-/** A records event. */
-type RecordsEvent = Extract<ChangeEvent, { kind: 'records' }>;
-
-/** Records ids of a records event the user can't hold yet: the ones the write made. */
-const createdOf = (event: RecordsEvent) => new Set(event.createdIds ?? []);
+/** One gathered event: when it arrived and how, for its delivery sample. */
+interface Gathered {
+  readonly event: LiveRecordsEvent;
+  readonly receivedAt: number;
+  readonly via: Via;
+}
 
 /** One user's live updates. */
 export function createLiveUser(options: LiveUserOptions) {
@@ -109,12 +118,19 @@ export function createLiveUser(options: LiveUserOptions) {
   let subscribedOnce = false;
   let stopped = false;
   let reconnected: Reconnected | undefined;
+  const isStopped = () => stopped;
+
+  /** Starts a call and hands it to the thread's drain. */
+  function tracked<T>(work: Promise<T>): Promise<T> {
+    options.track(work);
+    return work;
+  }
 
   /** One live call outside any action (a token, a catch up); a failure is a `live` sample, an unexpected error. */
   async function liveCall<T>(name: string, run: (call: Call) => Promise<T>): Promise<T | undefined> {
     const startedAt = now();
     const tally = createTally(now);
-    const answer = await tally.call(run);
+    const answer = await tracked(tally.call(run));
     if (answer.ok) return answer.value;
     const answered = tally.answered();
     options.record({
@@ -124,7 +140,8 @@ export function createLiveUser(options: LiveUserOptions) {
       scheduledAt: startedAt,
       measured: options.measured(startedAt),
       ...answered,
-      reason: `${name}: ${answered.reason ?? 'failed'}`,
+      // The status first, so the report's 429 line counts it; the call after.
+      reason: `${answered.reason ?? 'failed'} (${name})`,
     });
     return undefined;
   }
@@ -160,6 +177,13 @@ export function createLiveUser(options: LiveUserOptions) {
     });
   }
 
+  /** The delivery sample's extras for one event. */
+  const extrasOf = (gathered: Gathered): Partial<Sample> => ({
+    via: gathered.via,
+    atMs: gathered.event.atMs,
+    ...(gathered.event.mutationId === undefined ? {} : { mutationId: gathered.event.mutationId }),
+  });
+
   // A dirty window's settle (spec 0006, AC-56): 1.5 s after the last change, at most 5 s after the first, then a
   // random 0 to 2 s more.
   let dirtySince: number | undefined;
@@ -184,26 +208,65 @@ export function createLiveUser(options: LiveUserOptions) {
       schedule(random() * CATCH_UP_JITTER_MS, () => {
         if (stopped) return;
         const startedAt = now();
-        void holder.reread().then((answered) => delivered('settle', startedAt, answered, {}));
+        void tracked(holder.reread()).then((answered) => delivered('settle', startedAt, answered, {}));
       });
     };
     schedule(settleAt() - at, check);
   }
 
-  /** A records event of this user's object: refetch what it holds, reload on coarse, settle on a reorder. */
-  function onRecords(event: RecordsEvent, receivedAt: number, via: Via) {
-    const atMs = Date.parse(event.at);
-    const extras = { via, atMs, ...(event.mutationId === undefined ? {} : { mutationId: event.mutationId }) };
-    if (event.coarse === true) {
-      // Once per object however many arrive meanwhile would be the browser's; one user holds one object.
-      schedule(random() * CATCH_UP_JITTER_MS, () => {
-        if (stopped) return;
-        void holder.reread().then((answered) => delivered('delivery', receivedAt, answered, extras));
-      });
+  // Coarse events: one reread after the spread however many arrive meanwhile, each event timed to its answer.
+  let coarse: Gathered[] | undefined;
+  function onCoarse(gathered: Gathered) {
+    if (coarse !== undefined) {
+      coarse.push(gathered);
       return;
     }
-    const lifecycle =
-      (event.createdIds?.length ?? 0) + (event.deletedIds?.length ?? 0) + (event.restoredIds?.length ?? 0) > 0;
+    coarse = [gathered];
+    schedule(random() * CATCH_UP_JITTER_MS, () => {
+      const waiting = coarse ?? [];
+      coarse = undefined;
+      if (stopped) return;
+      void tracked(holder.reread()).then((answered) => {
+        for (const each of waiting) delivered('delivery', each.receivedAt, answered, extrasOf(each));
+      });
+    });
+  }
+
+  // A frame's records events, refetched together.
+  let frame: Gathered[] | undefined;
+  function flushFrame() {
+    const events = frame ?? [];
+    frame = undefined;
+    if (stopped || events.length === 0) return;
+    const window = holder.windowIds();
+    const ids = new Set<string>();
+    const attributes = new Set<string>();
+    const waiting: Gathered[] = [];
+    for (const gathered of events) {
+      const { event } = gathered;
+      const created = new Set(event.createdIds);
+      const held = event.recordIds.filter((id) => window.has(id) && !created.has(id));
+      // Only the changed attributes the window reads; an event naming none it reads fetches nothing.
+      const wanted = event.attributeIds.filter((attributeId) => holder.columns.has(attributeId));
+      if (held.length === 0 || wanted.length === 0) continue;
+      for (const id of held) ids.add(id);
+      for (const attributeId of wanted) attributes.add(attributeId);
+      waiting.push(gathered);
+    }
+    if (waiting.length === 0) return;
+    void tracked(holder.refetch([...ids], [...attributes])).then((answered) => {
+      for (const each of waiting) delivered('delivery', each.receivedAt, answered, extrasOf(each));
+    });
+  }
+
+  /** A records event of this user's object: settle on a reorder, reload on coarse, refetch what it holds. */
+  function onRecords(event: LiveRecordsEvent, receivedAt: number, via: Via) {
+    const gathered: Gathered = { event, receivedAt, via };
+    if (event.coarse) {
+      onCoarse(gathered);
+      return;
+    }
+    const lifecycle = event.createdIds.length + event.deletedIds.length + event.restoredIds.length > 0;
     const viewAttributes = holder.viewAttributeIds();
     if (
       lifecycle ||
@@ -212,17 +275,12 @@ export function createLiveUser(options: LiveUserOptions) {
     ) {
       markDirty();
     }
-    const window = holder.windowIds();
-    const created = createdOf(event);
-    const held = event.recordIds.filter((id) => window.has(id) && !created.has(id));
-    if (held.length === 0) return;
-    // Only the changed attributes the window reads; an event naming none it reads fetches nothing.
-    const attributeIds =
-      event.attributeIds.length === 0
-        ? [...holder.columns]
-        : event.attributeIds.filter((attributeId) => holder.columns.has(attributeId));
-    if (attributeIds.length === 0) return;
-    void holder.refetch(held, attributeIds).then((answered) => delivered('delivery', receivedAt, answered, extras));
+    if (frame !== undefined) {
+      frame.push(gathered);
+      return;
+    }
+    frame = [gathered];
+    schedule(FRAME_MS, flushFrame);
   }
 
   /** Counts what arrived in the measured window only. */
@@ -230,13 +288,12 @@ export function createLiveUser(options: LiveUserOptions) {
     if (options.measured(at)) counts[name] += 1;
   };
 
-  function onEvent(event: ChangeEvent | undefined, receivedAt: number, via: Via) {
-    if (event === undefined) return;
+  function onEvent(event: LiveEvent, receivedAt: number, via: Via) {
     if (event.kind === 'restricted') {
       count('stubs', receivedAt);
       return;
     }
-    if (event.kind !== 'records') {
+    if (event.kind === 'other') {
       count('otherKinds', receivedAt);
       return;
     }
@@ -248,6 +305,15 @@ export function createLiveUser(options: LiveUserOptions) {
     onRecords(event, receivedAt, via);
   }
 
+  /** Rereads the window after a spread: a catch up answered `reset`, so what it shows may be stale. */
+  function resync() {
+    schedule(random() * CATCH_UP_JITTER_MS, () => {
+      if (stopped) return;
+      const startedAt = now();
+      void tracked(holder.reread()).then((answered) => delivered('settle', startedAt, answered, {}));
+    });
+  }
+
   const stream = createStream({
     now,
     schedule,
@@ -255,23 +321,26 @@ export function createLiveUser(options: LiveUserOptions) {
     measured: options.measured,
     apply: (delivery: StreamDelivery) => {
       const { event } = delivery;
-      if (event !== undefined && options.measured(delivery.receivedAt)) {
-        options.arrival(delivery.receivedAt - Date.parse(event.at));
+      // Commit to arrival, for live events only: a recovered replay's arrival is the drop's length.
+      if (delivery.via === 'live' && options.measured(delivery.receivedAt)) {
+        options.arrival(delivery.receivedAt - event.atMs);
       }
       // This user's own write coming back: its answer already showed it.
-      const mutationId = event !== undefined && 'mutationId' in event ? event.mutationId : undefined;
-      if (mutationId !== undefined && options.ownMutations.delete(mutationId)) {
+      const mutationId = event.kind === 'restricted' ? undefined : event.mutationId;
+      if (mutationId !== undefined && options.ownEcho(mutationId)) {
         count('ownEchoes', delivery.receivedAt);
         return;
       }
       onEvent(event, delivery.receivedAt, delivery.via);
     },
     applyCaughtUp: (event, receivedAt) => onEvent(event, receivedAt, 'catchUp'),
+    onReset: resync,
     catchUp: (after) =>
       liveCall('realtime.catchUp', (call) => options.api.catchUp({ workspace: options.workspace, after }, call)),
     onBack: (how, at) => {
-      if (reconnected !== undefined && reconnected.backAt === undefined)
+      if (reconnected !== undefined && reconnected.backAt === undefined) {
         reconnected = { ...reconnected, backAt: at, how };
+      }
     },
   });
 
@@ -285,46 +354,60 @@ export function createLiveUser(options: LiveUserOptions) {
       options.api.subscriptionToken({ workspace: options.workspace }, call),
     );
 
-  /** Subscribes with a fresh subscription token (its head is the first watermark), recovering from `since`. */
+  /**
+   * Subscribes with a fresh subscription token (its head is the first
+   * watermark, or how far the workspace got while away), recovering from
+   * `since`. A refused token call tries again with backoff until the run
+   * stops, as the browser does.
+   */
   async function connect(since?: StreamPosition) {
-    const granted = await subscriptionToken();
-    if (granted === undefined || stopped) return;
-    stream.start(granted.head);
-    channel = granted.channel;
-    connection = options.open({
-      url: options.url,
-      origin: options.origin,
-      connectionToken,
-      channel: granted.channel,
-      token: granted.token,
-      renew: async () => {
-        const fresh = await subscriptionToken();
-        if (fresh === undefined) throw new Error('No subscription token.');
-        return fresh.token;
-      },
-      ...(since === undefined ? {} : { since }),
-      handlers: {
-        publication: (data) => stream.publication(data),
-        subscribed: (info) => {
-          const first = !subscribedOnce;
-          subscribedOnce = true;
-          stream.subscribed({ first, ...info });
+    for (let failures = 0; !isStopped(); failures += 1) {
+      const granted = await subscriptionToken();
+      if (isStopped()) return;
+      if (granted === undefined) {
+        await new Promise<void>((resolve) => {
+          schedule(backoffMs(failures, random), resolve);
+        });
+        continue;
+      }
+      stream.start(granted.head);
+      channel = granted.channel;
+      connection = options.open({
+        url: options.url,
+        origin: options.origin,
+        connectionToken,
+        channel: granted.channel,
+        token: granted.token,
+        renew: async () => {
+          const fresh = await subscriptionToken();
+          if (fresh === undefined) throw new Error('No subscription token.');
+          return fresh.token;
         },
-        trouble,
-      },
-    });
+        ...(since === undefined ? {} : { since }),
+        handlers: {
+          publication: (data) => stream.publication(data),
+          subscribed: (info) => {
+            const first = !subscribedOnce;
+            subscribedOnce = true;
+            stream.subscribed({ first, ...info });
+          },
+          trouble,
+        },
+      });
+      return;
+    }
   }
 
   return {
     /** Connects and subscribes, as a browser does before its first read. */
-    start: () => connect(),
+    start: () => tracked(connect()),
     /** The storm's reconnect (AC-207): drop the connection, then open a new one with new tokens, recovering. */
-    reconnect: async () => {
+    reconnect: () => {
       const since = connection?.position();
       connection?.close();
       connection = undefined;
       reconnected = { droppedAt: now() };
-      await connect(since);
+      return tracked(connect(since));
     },
     /** The window ended: the books, and what the user knew. */
     freeze: (): { tally: LiveTally; snapshot: StreamSnapshot; reconnected?: Reconnected } => ({

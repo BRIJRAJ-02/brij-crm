@@ -8,13 +8,16 @@
 // - at or below `W`: a repeat, dropped;
 // - `W + 1`: applied (handed to `apply`), and becomes `W`, with any held
 //   after it;
-// - past `W + 1`: held, and every seq between opens a gap; a catch up from
-//   `W` runs after a random 0 to 2 seconds (a late seq that closes the gap
-//   first costs no call), and what arrived meanwhile follows in order.
-// A first subscription catches up from `W` at once; a resubscription that
-// Centrifugo recovered replays what was missed (applied as `recovered`); one
-// it couldn't recover catches up after a random 0 to 2 seconds. A failed
-// catch up tries again with backoff (1 second doubling to 30, spread).
+// - past `W + 1`: held (5,000 at most, as the browser), and every seq between
+//   opens a gap; a catch up from `W` runs after a random 0 to 2 seconds (a
+//   late seq that closes the gap first costs no call), and what arrived
+//   meanwhile follows in order.
+// A first subscription catches up from `W` at once. A resubscription opens a
+// gap for every seq up to the head its new token carried (the seqs committed
+// while it was away); Centrifugo's recovery replays them at once (applied as
+// `recovered`), or else a catch up fills them after a random 0 to 2 seconds.
+// A failed catch up tries again with backoff (1 second doubling to 30,
+// spread); one answered `reset` asks the user to reread what it shows.
 //
 // The miss rule (AC-200): a gap's seq that no event, stub or catch up covers
 // within 10 seconds of the gap opening is missed (once, even if it lands
@@ -22,22 +25,27 @@
 // arrives late by itself within the 10 seconds is simply delivered. A seq the
 // user never hears of at all (nothing after it arrived) is found after the run
 // from its snapshot and the workspace's head (`trailingMisses`).
-import { ChangeEvent } from '@crm/contracts';
+import { parseLiveEvent, type LiveEvent } from './event.ts';
 
 /** A gap's seq not covered within this long is missed. */
 export const MISS_AFTER_MS = 10_000;
 /** The longest spread before a catch up that many users would make at once. */
 export const CATCH_UP_JITTER_MS = 2_000;
-/** The longest wait between tries at a failed catch up. */
-const MAX_RETRY_MS = 30_000;
+/** The longest wait between tries at a failed call (a catch up, a token). */
+export const MAX_RETRY_MS = 30_000;
+/** The most deliveries held while waiting for a catch up (the browser's `MAX_HELD`); the catch up covers the rest. */
+export const MAX_HELD = 5_000;
+
+/** The wait before try `failures + 1` of a failed call: 1 second doubling to 30, spread by `random`. */
+export const backoffMs = (failures: number, random: () => number) =>
+  Math.min(MAX_RETRY_MS, 1_000 * 2 ** failures) * (1 + random());
 
 /** How a seq reached the user: live, replayed by Centrifugo's recovery, or through `realtime.catchUp`. */
 export type StreamVia = 'live' | 'recovered' | 'catchUp';
 
-/** One applied seq: the event when its kind parses (undefined for a kind this harness doesn't know). */
+/** One applied seq and its event. */
 export interface StreamDelivery {
-  readonly seq: number;
-  readonly event: ChangeEvent | undefined;
+  readonly event: LiveEvent;
   readonly receivedAt: number;
   readonly via: Exclude<StreamVia, 'catchUp'>;
 }
@@ -61,10 +69,12 @@ export interface StreamOptions {
   readonly random: () => number;
   /** Whether a moment falls in the measured window: only gaps opened then can be missed. */
   readonly measured: (at: number) => boolean;
-  /** A seq applied in order, live or recovered (the stub and unknown kinds too). */
+  /** A seq applied in order, live or recovered (the stub and other kinds too). */
   readonly apply: (delivery: StreamDelivery) => void;
   /** An event a catch up answered (collapsed, with no `mutationId`). */
-  readonly applyCaughtUp: (event: ChangeEvent, receivedAt: number) => void;
+  readonly applyCaughtUp: (event: LiveEvent, receivedAt: number) => void;
+  /** A catch up answered `reset`: reread everything shown, after a spread. */
+  readonly onReset?: () => void;
   /** `realtime.catchUp` from `after`; undefined when the call failed. */
   readonly catchUp: (after: number) => Promise<CaughtUpAnswer | undefined>;
   /** A resubscription is whole again (the storm's recovery time, AC-207). */
@@ -73,13 +83,13 @@ export interface StreamOptions {
 
 /** The stream's books, for the report. */
 export interface StreamTally {
-  /** Seqs applied in order, live or recovered. */
+  /** Seqs applied in order, live or recovered, that arrived in the window. */
   readonly applied: number;
   /** Of those, Centrifugo's recovery replayed. */
   readonly recovered: number;
-  /** Gap seqs a catch up covered (measured window). */
+  /** Gap seqs a catch up covered (gaps opened in the window). */
   readonly caughtUp: number;
-  /** Gap seqs nothing covered within 10 seconds (measured window). */
+  /** Gap seqs nothing covered within 10 seconds (gaps opened in the window). */
   readonly missed: number;
   /** `realtime.catchUp` calls, failed ones included. */
   readonly catchUpCalls: number;
@@ -93,21 +103,14 @@ export interface StreamSnapshot {
   readonly accounted: readonly number[];
 }
 
-/** Parses a publication: its seq, and its event when its kind is one this harness knows. */
-export function parseDelivery(data: unknown): { seq: number; event: ChangeEvent | undefined } | undefined {
-  if (typeof data !== 'object' || data === null) return undefined;
-  const seq = (data as { seq?: unknown }).seq;
-  if (typeof seq !== 'number' || !Number.isSafeInteger(seq) || seq < 1) return undefined;
-  const parsed = ChangeEvent.safeParse(data);
-  return { seq, event: parsed.success ? parsed.data : undefined };
-}
-
 /** A new stream; `start(head)` sets its first watermark. */
 export function createStream(options: StreamOptions) {
   const { now, schedule, random } = options;
   let watermark: number | undefined;
-  /** The highest seq heard of (applied, held or caught up), so each gap seq opens once. */
+  /** The highest seq heard of (applied, held, caught up or known committed), so each gap seq opens once. */
   let highest = 0;
+  /** The head a resubscription's new token carried, until it subscribes. */
+  let resubscribedHead: number | undefined;
   const held = new Map<number, StreamDelivery>();
   /** Open gap seqs, by when they opened. */
   const gaps = new Map<number, number>();
@@ -144,20 +147,27 @@ export function createStream(options: StreamOptions) {
     return held.size > 0;
   };
 
-  /** Opens a gap for every seq after the highest heard of and before `seq`, each checked 10 seconds on. */
-  const openGaps = (seq: number, at: number) => {
+  /** Opens a gap for every seq after the highest heard of up to `last`, all checked once, 10 seconds on. */
+  const openGapsThrough = (last: number, at: number) => {
     const from = Math.max(highest, watermark ?? 0) + 1;
-    for (let gap = from; gap < seq; gap += 1) {
+    highest = Math.max(highest, last);
+    if (from > last) return;
+    const opened: number[] = [];
+    for (let gap = from; gap <= last; gap += 1) {
       if (held.has(gap) || gaps.has(gap) || missedSeqs.has(gap)) continue;
       gaps.set(gap, at);
-      schedule(MISS_AFTER_MS, () => {
-        if (stopped || frozen || !gaps.has(gap)) return;
+      opened.push(gap);
+    }
+    if (opened.length === 0) return;
+    schedule(MISS_AFTER_MS, () => {
+      if (stopped || frozen) return;
+      for (const gap of opened) {
+        if (!gaps.has(gap)) continue;
         gaps.delete(gap);
         missedSeqs.add(gap);
         if (options.measured(at)) tally.missed += 1;
-      });
-    }
-    highest = Math.max(highest, seq);
+      }
+    });
   };
 
   /** Catches up after a random 0 to 2 seconds, once however many gaps open meanwhile. */
@@ -167,7 +177,7 @@ export function createStream(options: StreamOptions) {
     schedule(random() * CATCH_UP_JITTER_MS, () => {
       dueCatchUp = false;
       if (stopped) return;
-      if (awaitingBack || drain()) void fill();
+      if (awaitingBack || drain() || gaps.size > 0) void fill();
     });
   };
 
@@ -188,7 +198,7 @@ export function createStream(options: StreamOptions) {
         if (isStopped()) return;
         if (answer === undefined) {
           await new Promise<void>((resolve) => {
-            schedule(Math.min(MAX_RETRY_MS, 1_000 * 2 ** failures) * (1 + random()), resolve);
+            schedule(backoffMs(failures, random), resolve);
           });
           failures += 1;
           continue;
@@ -197,10 +207,11 @@ export function createStream(options: StreamOptions) {
         const at = now();
         if (answer.reset) {
           tally.resets += 1;
+          options.onReset?.();
         } else {
           for (const data of answer.events) {
-            const parsed = ChangeEvent.safeParse(data);
-            if (parsed.success) options.applyCaughtUp(parsed.data, at);
+            const event = parseLiveEvent(data);
+            if (event !== undefined) options.applyCaughtUp(event, at);
           }
         }
         // Every gap the answer reaches is covered: a catch up, not a miss.
@@ -217,7 +228,7 @@ export function createStream(options: StreamOptions) {
           options.onBack?.(answer.reset ? 'reset' : 'caughtUp', at);
         }
         if (askedAgain()) continue;
-        if (gap) catchUpLater();
+        if (gap || gaps.size > 0) catchUpLater();
         return;
       }
     } finally {
@@ -226,10 +237,17 @@ export function createStream(options: StreamOptions) {
   };
 
   return {
-    /** The first watermark: the head the subscription token carried. */
+    /**
+     * The head a subscription token carried: the first watermark, or, on a
+     * resubscription, how far the workspace got while the user was away.
+     */
     start: (head: number) => {
-      watermark ??= head;
-      highest = Math.max(highest, head);
+      if (watermark === undefined) {
+        watermark = head;
+        highest = Math.max(highest, head);
+      } else {
+        resubscribedHead = head;
+      }
     },
     /** Subscribed: the first time, catch up from `W` at once; after a drop, as Centrifugo recovered it or not. */
     subscribed: (info: { readonly first: boolean; readonly wasRecovering: boolean; readonly recovered: boolean }) => {
@@ -238,6 +256,9 @@ export function createStream(options: StreamOptions) {
         void fill();
         return;
       }
+      // What was committed while away is a gap until a replay or a catch up covers it.
+      if (resubscribedHead !== undefined) openGapsThrough(resubscribedHead, now());
+      resubscribedHead = undefined;
       if (info.wasRecovering && info.recovered) {
         // The missed publications follow in the same task: they are recovered, not live.
         replaying = true;
@@ -253,17 +274,20 @@ export function createStream(options: StreamOptions) {
     /** A publication on the channel. */
     publication: (data: unknown) => {
       if (stopped) return;
-      const parsed = parseDelivery(data);
-      if (parsed === undefined) return;
+      const event = parseLiveEvent(data);
+      if (event === undefined) return;
       const receivedAt = now();
-      if (watermark !== undefined && parsed.seq <= watermark) return;
-      // No watermark at all (the token call failed): this event starts the count.
-      watermark ??= parsed.seq - 1;
-      gaps.delete(parsed.seq);
-      openGaps(parsed.seq, receivedAt);
-      held.set(parsed.seq, { ...parsed, receivedAt, via: replaying ? 'recovered' : 'live' });
+      if (watermark !== undefined && event.seq <= watermark) return;
+      // No watermark at all: this event starts the count.
+      watermark ??= event.seq - 1;
+      gaps.delete(event.seq);
+      openGapsThrough(event.seq - 1, receivedAt);
+      highest = Math.max(highest, event.seq);
+      // Past the cap only while a catch up is due or running, which reads to the head and covers them.
+      if (held.size >= MAX_HELD) held.clear();
+      held.set(event.seq, { event, receivedAt, via: replaying ? 'recovered' : 'live' });
       if (catching) return;
-      if (drain()) catchUpLater();
+      if (drain() || gaps.size > 0) catchUpLater();
     },
     /** The books so far. */
     tally: (): StreamTally => ({ ...tally }),

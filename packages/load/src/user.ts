@@ -189,8 +189,8 @@ export interface LoadUser {
   readonly act: (action: LoadAction, scheduledAt: number, measured: boolean) => Promise<void>;
   /**
    * A storm burst's edit (AC-207): every online user edits a different
-   * record in the same second, so user `slot` takes row `slot` of its window
-   * (or a sample, before a window lands).
+   * record in the same second, so each takes its own `slot` of the object's
+   * samples (the manifest's ids spread over the whole object).
    */
   readonly burst: (scheduledAt: number, measured: boolean, slot: number) => Promise<void>;
   readonly holder: Holder;
@@ -458,12 +458,11 @@ export function createLoadUser(options: UserOptions): LoadUser {
     });
   }
 
-  /** A burst's record: row `slot` of the window, so users holding the same window edit different records. */
+  /** A burst's record: sample `slot` of the object, so no two users edit the same record in one burst. */
   function slotRecord(slot: number): { id: string; view?: RecordView } {
-    const window = view?.window ?? [];
-    const record = window[slot % Math.max(window.length, 1)];
-    if (record !== undefined) return { id: record.id, view: record };
-    return { id: model.samples[slot % Math.max(model.samples.length, 1)] ?? random.pick(model.samples) };
+    const id = model.samples[slot % Math.max(model.samples.length, 1)] ?? random.pick(model.samples);
+    const shown = (view?.window ?? []).find((record) => record.id === id);
+    return shown === undefined ? { id } : { id, view: shown };
   }
 
   async function create(scheduledAt: number, measured: boolean) {
@@ -573,10 +572,16 @@ export function createLoadUser(options: UserOptions): LoadUser {
   }
 
   const columns: ReadonlySet<string> = new Set(model.columns);
+  // The window's ids, made again only when the window changes: every live event asks for them.
+  let windowIdsOf: { window: readonly RecordView[]; ids: ReadonlySet<string> } = { window: [], ids: new Set() };
   const holder: Holder = {
     objectId: model.objectId,
     columns,
-    windowIds: () => new Set((view?.window ?? []).map((record) => record.id)),
+    windowIds: () => {
+      const window = view?.window ?? [];
+      if (window !== windowIdsOf.window) windowIdsOf = { window, ids: new Set(window.map((record) => record.id)) };
+      return windowIdsOf.ids;
+    },
     viewAttributeIds,
     refetch: async (ids, attributeIds) => {
       const reading = tally();

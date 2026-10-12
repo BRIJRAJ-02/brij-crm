@@ -67,8 +67,12 @@ export const openLiveConnection: OpenLiveConnection = (options) => {
   let connected = false;
   let epoch = options.since?.epoch;
   let offset = options.since?.offset;
+  // One trouble per outage: a drop fires the connection's `connecting` and its `error` together, and counts once.
+  let down = false;
   const trouble = (reason: string) => {
-    if (!closed) options.handlers.trouble(reason);
+    if (closed || down) return;
+    down = true;
+    options.handlers.trouble(reason);
   };
   const subscription = client.newSubscription(options.channel, {
     token: options.token,
@@ -84,11 +88,13 @@ export const openLiveConnection: OpenLiveConnection = (options) => {
       epoch = context.streamPosition.epoch;
       offset ??= context.streamPosition.offset;
     }
+    down = false;
     options.handlers.subscribed({ wasRecovering: context.wasRecovering, recovered: context.recovered });
   });
   subscription.on('error', (context) => trouble(`subscription ${context.type}`));
   client.on('connected', () => {
     connected = true;
+    down = false;
   });
   // Connecting again after being connected: the connection dropped.
   client.on('connecting', () => {
