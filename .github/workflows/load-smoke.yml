@@ -1,0 +1,72 @@
+# The weekly load smoke (spec 0011, AC-211): on Mondays and on demand, never
+# on a push. It starts the load stack (docker-compose.load.yml) on the runner
+# itself, seeds the smoke profile (50,000 made up records, 50 users), plays
+# `steady` with 20 users for 2 measured minutes, and keeps the result JSON.
+# Shared runners don't give times worth judging, so it fails only on an
+# invalid run or a crash; a budget miss shows as a warning. Everything runs
+# on localhost on the runner: no secrets, no deployed environment, no Neon.
+name: Load smoke
+
+on:
+  schedule:
+    # Mondays at 06:00 UTC.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: load-smoke
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    # Seeding takes a few minutes and the run about 4 (60 s warm up, 2 measured minutes, the drain).
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Starts the load stack (it refuses under 11 GB of Docker memory), migrates it, creates its logins, seeds,
+      # mints the sessions and starts the api and the worker.
+      - name: Seed the smoke profile on the load stack
+        run: pnpm load:seed --profile smoke
+      - name: Play steady, 20 users for 2 minutes
+        id: run
+        run: |
+          set +e
+          pnpm load:run steady --users 20 --minutes 2
+          echo "exit=$?" >> "$GITHUB_OUTPUT"
+      # Warnings for budget misses; fails on an invalid run (exit 2) or a crash or refused setup.
+      - name: Judge the run
+        env:
+          RUN_EXIT: ${{ steps.run.outputs.exit }}
+        run: node packages/load/scripts/smoke.ts "$RUN_EXIT"
+      - name: Keep the result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: load-smoke-result
+          # The results only: .load/sessions.json (cookies for this runner's throwaway stack) stays behind.
+          path: .load/results/
+          include-hidden-files: true
+          if-no-files-found: warn
+      - name: Keep the stack's logs
+        if: failure()
+        run: docker compose -f docker-compose.load.yml -p crm-load logs --no-color --timestamps > load-stack.log 2>&1 || true
+      - name: Upload the stack's logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: load-stack-logs
+          path: load-stack.log
+          if-no-files-found: ignore
+      - name: Stop the load stack
+        if: always()
+        run: pnpm load:stack:wipe
