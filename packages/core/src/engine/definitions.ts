@@ -27,7 +27,7 @@ import { requirePermission } from '../access/check.ts';
 import { attributeVisible } from '../access/visibility.ts';
 import { objectLevel, type Access } from '../access/policy.ts';
 
-const { attributes, objects, relationships, workspaceCounters } = schema;
+const { attributes, members, objects, relationships, workspaceCounters } = schema;
 
 /** The longest description an attribute may have (spec 0012). */
 const MAX_DESCRIPTION = 500;
@@ -252,7 +252,51 @@ function parseDefault(type: AttributeType, isMulti: boolean, input: unknown): At
     if (!value.ok) throw refuseOn('CONFIG_INVALID', value.error.message, 'defaultValue');
     return { kind: 'static', value: value.value };
   }
+  if (result.data.kind === 'offset' && offsetDays(result.data.duration) > MAX_OFFSET_DAYS) {
+    // Past this, "now plus the offset" can leave the dates Postgres holds, and every record create would fail.
+    throw refuseOn('CONFIG_INVALID', 'Keep the offset within 3,650 days (10 years).', 'defaultValue');
+  }
   return result.data;
+}
+
+/** The furthest an offset default reaches (spec 0012, AC-234: "Today + N days", N up to 3,650). */
+const MAX_OFFSET_DAYS = 3650;
+
+/** An ISO 8601 duration's length in days, counting a year as 366 and a month as 31 (an upper bound). */
+function offsetDays(duration: string): number {
+  const part = (unit: string, inTime = false) => {
+    const pattern = inTime ? new RegExp(`T.*?(\\d+)${unit}`) : new RegExp(`^P[^T]*?(\\d+)${unit}`);
+    return Number(pattern.exec(duration)?.[1] ?? 0);
+  };
+  return part('Y') * 366 + part('M') * 31 + part('W') * 7 + part('D') + part('H', true) / 24 + part('M', true) / 1440;
+}
+
+/**
+ * Refuses a static Member default naming anyone but an active member of this
+ * workspace (on `defaultValue`), so a record create that leaves the attribute
+ * out never fails on its default.
+ */
+async function checkDefaultMembers(tx: WorkspaceTx, type: AttributeType, fallback: AttributeDefault | null) {
+  if (type !== 'actor_reference' || fallback?.kind !== 'static') return;
+  const named: readonly unknown[] = Array.isArray(fallback.value)
+    ? (fallback.value as readonly unknown[])
+    : [fallback.value];
+  const ids = named.flatMap((each) =>
+    typeof each === 'object' && each !== null && 'id' in each && typeof each.id === 'string' && isUuid(each.id)
+      ? [each.id.toLowerCase()]
+      : [],
+  );
+  const unique = [...new Set(ids)];
+  const found =
+    unique.length === 0
+      ? []
+      : await tx
+          .select({ id: members.id })
+          .from(members)
+          .where(and(inArray(members.id, unique), eq(members.status, 'active')));
+  if (found.length < unique.length || ids.length < named.length) {
+    throw refuseOn('CONFIG_INVALID', 'Pick a member of this workspace as the default.', 'defaultValue');
+  }
 }
 
 /** Takes the workspace counters row's lock for the rest of the write: object creates and moves take turns on it. */
@@ -459,6 +503,7 @@ export async function insertAttribute(
     if (earlier !== undefined) return earlier;
   }
   await checkAttributeRoom(tx, scope, parent);
+  await checkDefaultMembers(tx, input.type, defaultValue);
   const parentColumn =
     'objectId' in parent
       ? sql`${attributes.objectId} = ${parent.objectId}`
@@ -587,6 +632,11 @@ export async function updateAttribute(
           'isUnique',
         );
       }
+      const defaultValue =
+        input.defaultValue === undefined
+          ? undefined
+          : parseDefault(attribute.type, attribute.isMulti, input.defaultValue);
+      if (defaultValue !== undefined) await checkDefaultMembers(tx, attribute.type, defaultValue);
       const turningOn = input.isUnique === true && !attribute.isUnique && attribute.archivedAt === null;
       const turningOff = input.isUnique === false && attribute.isUnique;
       if (turningOn) await fillUniqueKeys(tx, attribute, context.scope.access);
@@ -603,9 +653,7 @@ export async function updateAttribute(
           ...(input.isRequired === undefined ? {} : { isRequired: input.isRequired }),
           ...(input.isUnique === undefined ? {} : { isUnique: input.isUnique }),
           ...(input.config === undefined ? {} : { config: parseConfig(attribute.type, input.config) }),
-          ...(input.defaultValue === undefined
-            ? {}
-            : { defaultValue: parseDefault(attribute.type, attribute.isMulti, input.defaultValue) }),
+          ...(defaultValue === undefined ? {} : { defaultValue }),
           ...touched(scope),
         })
         .where(eq(attributes.id, attribute.id));

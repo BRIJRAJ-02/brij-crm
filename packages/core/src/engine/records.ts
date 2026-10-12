@@ -111,6 +111,14 @@ async function defaultFor(
     return result.rows[0]?.value;
   } catch (error) {
     if (postgresError(error)?.code === '22023') throw refuse('CONFIG_INVALID', 'That time zone is not known.');
+    // An offset stored before spec 0012 bounded it, past the dates Postgres holds.
+    if (postgresError(error)?.code === '22008') {
+      throw refuse(
+        'CONFIG_INVALID',
+        `${attribute.title}'s default is out of range. Change it in settings.`,
+        attribute.id,
+      );
+    }
     throw error;
   }
 }

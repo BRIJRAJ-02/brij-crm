@@ -211,7 +211,14 @@ export async function listObjectAttributes(
  * caller can't see (or one on a list) is left out.
  */
 async function readDefinitions(scope: EngineScope, refs: readonly AttributeRef[]): Promise<AttributeDefinition[]> {
-  const objectIds = [...new Set(refs.flatMap((ref) => (ref.objectId === null ? [] : [ref.objectId])))];
+  // An end on an object the caller can't see is left out, object and all (spec 0009, AC-140).
+  const objectIds = [
+    ...new Set(
+      refs.flatMap((ref) =>
+        ref.objectId === null || objectLevel(scope.access, ref.objectId) === 'none' ? [] : [ref.objectId],
+      ),
+    ),
+  ];
   const listed = await Promise.all(
     objectIds.map((objectId) => listObjectAttributes(scope, objectId, { includeArchived: true })),
   );
@@ -225,7 +232,8 @@ async function readDefinitions(scope: EngineScope, refs: readonly AttributeRef[]
 /** The one attribute a write changed, read back, or an error: a write answers what it made. */
 async function readOne(scope: EngineScope, ref: AttributeRef): Promise<AttributeDefinition> {
   const [made] = await readDefinitions(scope, [ref]);
-  if (made === undefined) throw new Error('The attribute just written could not be read.');
+  // Hidden from the caller since it was made (a replay under new rules): unknown to them.
+  if (made === undefined) throw refuse('NOT_FOUND', ATTRIBUTE_NOT_FOUND);
   return made;
 }
 

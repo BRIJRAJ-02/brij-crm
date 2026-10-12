@@ -363,6 +363,71 @@ describe('archiving and restoring (AC-233)', () => {
   });
 });
 
+describe('under rules that hide an object (spec 0009, AC-140)', () => {
+  it('archives and restores an end whose far object is hidden, answering only the end the caller sees', async () => {
+    const { scope, people, companies } = await workspace();
+    const admin = await memberIn(scope, 'admin');
+    const hiding = rescope(admin, {
+      rules: {
+        levels: [
+          { subject: { type: 'role', role: 'admin' }, target: { type: 'object', objectId: companies }, level: 'none' },
+        ],
+        records: [],
+      },
+    });
+    const company = (await listObjectAttributes(scope, people)).find((each) => each.apiSlug === 'company');
+    const archived = await archiveAttributes(hiding, { attributeId: company?.id ?? '' });
+    expect(archived.map((each) => [each.id, each.isArchived])).toEqual([[company?.id, true]]);
+    const restored = await restoreAttributes(hiding, { attributeId: company?.id ?? '' });
+    expect(restored.map((each) => [each.id, each.isArchived])).toEqual([[company?.id, false]]);
+    // Both ends moved together all the same.
+    const team = (await listObjectAttributes(scope, companies)).find((each) => each.apiSlug === 'team');
+    expect(team?.isArchived).toBe(false);
+  });
+});
+
+describe('defaults that would break record creation', () => {
+  it('refuses an offset past 3,650 days and a member default naming no member here', async () => {
+    const { scope, projects } = await workspace();
+    expect(
+      await refusalOf(
+        createAttribute(scope, {
+          objectId: projects,
+          id: newId(),
+          title: 'Far',
+          type: 'date',
+          defaultValue: { kind: 'offset', duration: 'P999999Y' },
+        }),
+      ),
+    ).toMatchObject({ code: 'CONFIG_INVALID', field: 'defaultValue' });
+    expect(
+      await refusalOf(
+        createAttribute(scope, {
+          objectId: projects,
+          id: newId(),
+          title: 'Lead',
+          type: 'actor_reference',
+          defaultValue: { kind: 'static', value: { type: 'member', id: newId() } },
+        }),
+      ),
+    ).toMatchObject({ code: 'CONFIG_INVALID', field: 'defaultValue' });
+    const lead = await createAttribute(scope, {
+      objectId: projects,
+      id: newId(),
+      title: 'Lead',
+      type: 'actor_reference',
+    });
+    expect(
+      await refusalOf(
+        editAttribute(scope, {
+          attributeId: lead.id,
+          defaultValue: { kind: 'static', value: { type: 'member', id: newId() } },
+        }),
+      ),
+    ).toMatchObject({ code: 'CONFIG_INVALID', field: 'defaultValue' });
+  });
+});
+
 describe('permission (AC-242)', () => {
   it('refuses every write to a member, writing no row and no outbox row', async () => {
     const { scope, people } = await workspace();
