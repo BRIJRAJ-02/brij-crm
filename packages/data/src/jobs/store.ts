@@ -168,6 +168,28 @@ export function createJobsStore(deps: JobsDeps) {
     startedHere.get(workspace)?.delete(jobId);
   };
 
+  /**
+   * Undoes an optimistic change the server refused: a job it no longer shows
+   * (NOT_FOUND) is dropped; otherwise the copy from before goes back, but only
+   * while the optimistic copy is still the one held, so a newer read that
+   * landed meanwhile is never overwritten.
+   */
+  const rollBack = (
+    workspace: string,
+    jobId: string,
+    shown: JobView | undefined,
+    before: JobView | undefined,
+    failure: DataError,
+  ) => {
+    if (failure.code === 'NOT_FOUND') {
+      drop(workspace, jobId);
+      return;
+    }
+    if (before !== undefined && shown !== undefined && jobsOf(workspace).get(jobId) === shown) {
+      put(workspace, before, true);
+    }
+  };
+
   /** Reads one job again; NOT_FOUND drops it (gone, or no longer visible). One read per job at a time. */
   const refetch = (workspace: string, jobId: string) => {
     const key = `${workspace}\u0000${jobId}`;
@@ -356,13 +378,11 @@ export function createJobsStore(deps: JobsDeps) {
      */
     async cancel(workspace: string, jobId: string): Promise<boolean> {
       const before = jobsOf(workspace).get(jobId);
-      if (before !== undefined) {
-        put(
-          workspace,
-          { ...before, status: before.status === 'running' ? 'cancelling' : 'cancelled', cancellable: false },
-          true,
-        );
-      }
+      const shown: JobView | undefined =
+        before === undefined
+          ? undefined
+          : { ...before, status: before.status === 'running' ? 'cancelling' : 'cancelled', cancellable: false };
+      if (shown !== undefined) put(workspace, shown, true);
       const mutationId = deps.mintId();
       deps.mutations.sent(mutationId);
       try {
@@ -372,8 +392,8 @@ export function createJobsStore(deps: JobsDeps) {
         return true;
       } catch (error) {
         deps.mutations.forget(mutationId);
-        if (before !== undefined) put(workspace, before, true);
         const failure = toDataError(error);
+        rollBack(workspace, jobId, shown, before, failure);
         // Finished meanwhile: read it again, so the row shows how it ended.
         if (failure.code === 'JOB_FINISHED') refetch(workspace, jobId);
         deps.notify({ tone: 'danger', message: refusalSummary(failure) });
@@ -388,9 +408,11 @@ export function createJobsStore(deps: JobsDeps) {
      */
     async confirm(workspace: string, jobId: string): Promise<boolean> {
       const before = jobsOf(workspace).get(jobId);
+      let shown: JobView | undefined;
       if (before !== undefined && before.status === 'ready') {
         const { expiresAt: _expiresAt, ...rest } = before;
-        put(workspace, { ...rest, status: 'queued' }, true);
+        shown = { ...rest, status: 'queued' };
+        put(workspace, shown, true);
       }
       const mutationId = deps.mintId();
       deps.mutations.sent(mutationId);
@@ -401,8 +423,8 @@ export function createJobsStore(deps: JobsDeps) {
         return true;
       } catch (error) {
         deps.mutations.forget(mutationId);
-        if (before !== undefined) put(workspace, before, true);
         const failure = toDataError(error);
+        rollBack(workspace, jobId, shown, before, failure);
         if (failure.code !== 'NOT_FOUND') refetch(workspace, jobId);
         deps.notify({ tone: 'danger', message: refusalSummary(failure) });
         return false;
