@@ -1,7 +1,7 @@
 // Brief
 // Purpose: Settings, Background jobs: the workspace's long work, with its progress, live.
 // Main task: see how a job is doing, and cancel it (with a confirm); owners and admins see every job, members their own.
-// Leaves out: confirming a prepared job and retry controls (milestone 2), and the daily cleanup's details (milestone 3).
+// Leaves out: retry controls, settings for the test job, and the daily cleanup's details (milestone 3).
 import type { DataLayer, JobsView, JobView, MemberSummary } from '@crm/data';
 import { useJobs } from '@crm/data/react';
 import { Badge, Button, EmptyState, Modal, ProgressBar, RelativeTime, Table, type TableColumn } from '@crm/ui';
@@ -67,9 +67,16 @@ function Progress({ job }: { readonly job: JobView }) {
   );
 }
 
-/** The result cell: why it failed, when it retries, or its refusals and skips by code. */
+/** The result cell: why it failed, when it retries or expires, or its refusals and skips by code. */
 function Result({ job }: { readonly job: JobView }) {
   if (job.error !== undefined) return <>{job.error.message}</>;
+  if (job.status === 'ready' && job.expiresAt !== undefined) {
+    return (
+      <>
+        {strings.expires} <RelativeTime value={job.expiresAt} />
+      </>
+    );
+  }
   if (job.retryAt !== undefined) {
     return (
       <>
@@ -130,6 +137,8 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
       () => setStarting(false),
     );
   };
+  // Confirmed at once on screen; the layer puts it back with a toast when refused.
+  const confirm = (job: JobView) => void data.jobs.confirm(slug, job.id);
   const cancel = (job: JobView) => {
     setConfirming(undefined);
     void data.jobs.cancel(slug, job.id);
@@ -169,11 +178,20 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
             </Button>
           );
         }
-        return job.cancellable ? (
-          <Button variant="ghost" onPress={() => setConfirming(job)}>
-            {strings.cancel}
-          </Button>
-        ) : null;
+        return (
+          <>
+            {job.status === 'ready' && (
+              <Button variant="primary" onPress={() => confirm(job)}>
+                {strings.confirm}
+              </Button>
+            )}
+            {job.cancellable && (
+              <Button variant="ghost" onPress={() => setConfirming(job)}>
+                {strings.cancel}
+              </Button>
+            )}
+          </>
+        );
     }
   };
 

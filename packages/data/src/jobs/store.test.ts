@@ -31,6 +31,7 @@ function setup(server: Map<string, JobView>, listed: readonly JobView[] = [...se
   const finished: JobView[] = [];
   const watches = { open: 0, opened: 0 };
   const spreads: (() => void)[] = [];
+  const notices: string[] = [];
   const api: JobsApi = {
     list: () => Promise.resolve({ jobs: [...listed] }),
     get: ({ jobId }) => {
@@ -41,6 +42,18 @@ function setup(server: Map<string, JobView>, listed: readonly JobView[] = [...se
         : Promise.resolve(found);
     },
     cancel: () => Promise.reject(new Error('not used')),
+    confirm: ({ jobId }) => {
+      const found = server.get(jobId);
+      if (found?.status !== 'ready') {
+        return Promise.reject(
+          Object.assign(new Error('That job waited too long.'), { name: 'DataError', code: 'JOB_EXPIRED' }),
+        );
+      }
+      const { expiresAt: _expiresAt, ...rest } = found;
+      const confirmed: JobView = { ...rest, status: 'queued' };
+      server.set(jobId, confirmed);
+      return Promise.resolve(confirmed);
+    },
     startTest: ({ id }) => {
       const made = { ...job(99, 'queued'), id };
       server.set(id, made);
@@ -52,7 +65,7 @@ function setup(server: Map<string, JobView>, listed: readonly JobView[] = [...se
     api,
     mintId: () => `0199a6f2-0000-7000-8000-${String((minted += 1)).padStart(12, '0')}`,
     mutations: createMutationLog(),
-    notify: () => undefined,
+    notify: (notice) => notices.push(notice.message),
     watch: () => {
       watches.open += 1;
       watches.opened += 1;
@@ -64,7 +77,7 @@ function setup(server: Map<string, JobView>, listed: readonly JobView[] = [...se
     spread: (_key, work) => spreads.push(work),
     onFinished: (_workspace, ended) => finished.push(ended),
   });
-  return { store, gets, finished, watches, spreads };
+  return { store, gets, finished, watches, spreads, notices };
 }
 
 const event = (jobIds: readonly string[], coarse = false) => ({
@@ -158,5 +171,31 @@ describe('the jobs store', () => {
     store.changed('acme', event([one.id]));
     await flush();
     expect(view.getSnapshot().jobs).toEqual([]);
+  });
+
+  it('confirms a waiting job at once, and puts it back with a toast and a fresh read when refused (AC-109)', async () => {
+    const waiting: JobView = { ...job(7, 'ready'), expiresAt: '2026-10-12T10:00:00.000Z' };
+    const late: JobView = { ...job(8, 'ready'), expiresAt: '2026-10-12T09:00:30.000Z' };
+    const server = new Map([
+      [waiting.id, waiting],
+      [late.id, late],
+    ]);
+    const { store, gets, notices } = setup(server);
+    const view = store.view('acme', 'all');
+    view.retain();
+    await view.ready();
+    const landing = store.confirm('acme', waiting.id);
+    // Shown queued before the server answers.
+    expect(view.getSnapshot().jobs.find((shown) => shown.id === waiting.id)?.status).toBe('queued');
+    expect(await landing).toBe(true);
+    expect(view.getSnapshot().jobs.find((shown) => shown.id === waiting.id)).not.toHaveProperty('expiresAt');
+
+    // The server ended it meanwhile: the confirm is refused, the row goes back and is read again.
+    server.set(late.id, { ...late, status: 'cancelled', error: { code: 'JOB_EXPIRED', message: 'Expired.' } });
+    expect(await store.confirm('acme', late.id)).toBe(false);
+    expect(notices).toEqual(['That job waited too long.']);
+    await flush();
+    expect(gets).toContain(late.id);
+    expect(view.getSnapshot().jobs.find((shown) => shown.id === late.id)?.status).toBe('cancelled');
   });
 });

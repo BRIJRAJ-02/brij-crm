@@ -866,6 +866,7 @@ export function createDataLayer({
         ),
       get: (input) => call((options) => api.jobs.get(input, options)),
       cancel: (input) => call((options) => api.jobs.cancel(input, options)),
+      confirm: (input) => call((options) => api.jobs.confirm(input, options)),
       startTest: (input) => call((options) => api.jobs.startTest(input, options)),
     },
     mintId,
@@ -1636,6 +1637,12 @@ export function createDataLayer({
         jobs.startTest(workspace, id, settings),
       /** Cancels a job at once on screen; a refusal puts it back with a toast. Answers whether it landed. */
       cancel: (workspace: string, jobId: string): Promise<boolean> => jobs.cancel(workspace, jobId),
+      /**
+       * Confirms a job waiting in `ready`: it shows queued at once; a refusal
+       * (it expired, or finished) puts it back with a toast and reads it again.
+       * Answers whether it landed.
+       */
+      confirm: (workspace: string, jobId: string): Promise<boolean> => jobs.confirm(workspace, jobId),
     },
     live: {
       /**

@@ -42,6 +42,11 @@ export interface JobsApi {
     readonly jobId: string;
     readonly mutationId: string;
   }) => Promise<JobView>;
+  readonly confirm: (input: {
+    readonly workspace: string;
+    readonly jobId: string;
+    readonly mutationId: string;
+  }) => Promise<JobView>;
   readonly startTest: (
     input: TestJobSettings & { readonly workspace: string; readonly id: string; readonly mutationId: string },
   ) => Promise<JobView>;
@@ -371,6 +376,34 @@ export function createJobsStore(deps: JobsDeps) {
         const failure = toDataError(error);
         // Finished meanwhile: read it again, so the row shows how it ended.
         if (failure.code === 'JOB_FINISHED') refetch(workspace, jobId);
+        deps.notify({ tone: 'danger', message: refusalSummary(failure) });
+        return false;
+      }
+    },
+    /**
+     * Confirms a job waiting in `ready` (AC-109): it shows `queued` at once; a
+     * refusal (expired, finished, or not ready) puts it back, says why, and
+     * reads it again so the row shows where it really is. Answers whether the
+     * confirm landed.
+     */
+    async confirm(workspace: string, jobId: string): Promise<boolean> {
+      const before = jobsOf(workspace).get(jobId);
+      if (before !== undefined && before.status === 'ready') {
+        const { expiresAt: _expiresAt, ...rest } = before;
+        put(workspace, { ...rest, status: 'queued' }, true);
+      }
+      const mutationId = deps.mintId();
+      deps.mutations.sent(mutationId);
+      try {
+        const answer = await deps.api.confirm({ workspace, jobId, mutationId });
+        deps.mutations.answered(mutationId, 1);
+        put(workspace, answer, true);
+        return true;
+      } catch (error) {
+        deps.mutations.forget(mutationId);
+        if (before !== undefined) put(workspace, before, true);
+        const failure = toDataError(error);
+        if (failure.code !== 'NOT_FOUND') refetch(workspace, jobId);
         deps.notify({ tone: 'danger', message: refusalSummary(failure) });
         return false;
       }

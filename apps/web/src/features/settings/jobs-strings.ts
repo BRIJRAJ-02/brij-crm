@@ -40,6 +40,10 @@ export const strings = {
   /** One refusal group: "100 refused: SIMULATED_REFUSAL". */
   refusalGroup: (count: string, code: string) => `${count} refused: ${code}`,
   retrying: 'Retrying',
+  /** A prepared job waiting for its confirm: "Expires in 59 minutes" (AC-109). */
+  expires: 'Expires',
+  /** Runs a prepared job (`ready`) on exactly the items it counted. */
+  confirm: 'Confirm',
   notYet: 'Not yet',
   cancel: 'Cancel',
   cancelTitle: 'Cancel this job?',
