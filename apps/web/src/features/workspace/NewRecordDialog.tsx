@@ -1,7 +1,7 @@
 // Brief
-// Purpose: add one record (a person) without leaving the table.
-// Main task: type the name and email, then Create; the row shows in the table at once and takes focus.
-// Leaves out: every other attribute (edit those in the table), duplicates checks and templates.
+// Purpose: add one record of any object (a person, a project) without leaving the table.
+// Main task: fill the name and every required field, open "Add more fields" for the rest, then Create; the row shows at once.
+// Leaves out: references and members (edited in the table), duplicate checks and templates.
 import {
   isDataError,
   refusalFor,
@@ -10,7 +10,7 @@ import {
   type AttributeDefinition,
   type RecordView,
 } from '@crm/data';
-import { AttributeEditor, Button, Form, Modal, type FormRefusal } from '@crm/ui';
+import { AttributeEditor, Button, Disclosure, Form, Modal, type FormRefusal } from '@crm/ui';
 import { useId, useRef, useState } from 'react';
 import { strings } from './strings.ts';
 
@@ -20,9 +20,11 @@ export interface NewRecordDialogProps {
   readonly onOpenChange: (isOpen: boolean) => void;
   /** "New person". */
   readonly title: string;
-  /** The attributes the dialog asks for, each through its one editor (the name, the email). */
-  readonly editors: readonly AttributeDefinition[];
-  /** The object's name for one record ("Person"), for the dialog's own messages. */
+  /** The editors asked for first: the primary attribute, then every required one, by position (AC-240). */
+  readonly first: readonly AttributeDefinition[];
+  /** The rest, by position, behind "Add more fields". */
+  readonly more: readonly AttributeDefinition[];
+  /** The object's name for one record ("Person"), for the dialog's own messages and its Create. */
   readonly singularName: string;
   /** Mints the new record's id, once per opening: a second press after a lost answer sends the same one. */
   readonly newId: () => string;
@@ -32,16 +34,53 @@ export interface NewRecordDialogProps {
   readonly onCreated: (record: RecordView) => void;
 }
 
+/** The types whose editor is a list of chips: one value here (more are added in the table). */
+const LIST_TYPES: readonly string[] = ['email', 'phone', 'url', 'domain'];
+
 /**
- * An attribute as the dialog asks for it: one value, even where the attribute
- * holds several (the first email; more are added in the table). The type's
- * one editor either way, and its single field never grows under the pointer
- * on its way to Create, as the list's chips did when a blur added one.
+ * An attribute as the dialog asks for it, through its one editor, its
+ * required check left to Create. A list
+ * type asks for one value even where it holds several (its single field
+ * never grows under the pointer on its way to Create, as the chips did when
+ * a blur added one), and its label says one ("Email address").
  */
 function askedFor(definition: AttributeDefinition) {
-  const attribute = { ...toFieldAttribute(definition), allowMultiple: false };
-  // One field asks for one address, so its label says one ("Email address", not "Email addresses").
-  return definition.type === 'email' && definition.isMulti ? { ...attribute, name: strings.emailAddress } : attribute;
+  // Required is checked on Create, never as focus leaves an empty field: a message appearing on blur pushed
+  // "Add more fields" and Create down under the pointer on their way to being pressed.
+  const attribute = { ...toFieldAttribute(definition), isRequired: false };
+  if (!LIST_TYPES.includes(definition.type)) return attribute;
+  const single = { ...attribute, allowMultiple: false };
+  return definition.type === 'email' && definition.isMulti ? { ...single, name: strings.emailAddress } : single;
+}
+
+/** "YYYY-MM-DD" for today plus `days`, in the browser's time zone (a date default's "Today + N days"). */
+function dayFromToday(days: number): string {
+  const day = new Date();
+  day.setDate(day.getDate() + days);
+  const pad = (value: number) => String(value).padStart(2, '0');
+  return `${String(day.getFullYear())}-${pad(day.getMonth() + 1)}-${pad(day.getDate())}`;
+}
+
+/**
+ * What an editor shows before anything is typed (AC-240, value sourcing): a
+ * static default as it is, a date offset as the day it resolves to, and a
+ * default naming an archived option as the first live option when the
+ * attribute is required, else nothing, as the engine resolves it. A new
+ * record left with these gets the same from the server.
+ */
+function prefillOf(definition: AttributeDefinition): unknown {
+  const fallback = definition.defaultValue;
+  if (fallback === undefined) return null;
+  if (fallback.kind === 'offset') {
+    const days = /^P(\d+)D$/.exec(fallback.duration);
+    return definition.type === 'date' && days?.[1] !== undefined ? dayFromToday(Number(days[1])) : null;
+  }
+  if (fallback.kind !== 'static') return null;
+  const options = definition.options;
+  if (options === undefined || typeof fallback.value !== 'string') return fallback.value;
+  const named = options.find((option) => option.id === fallback.value);
+  if (named === undefined || !named.isArchived) return fallback.value;
+  return definition.isRequired ? (options.find((option) => !option.isArchived)?.id ?? null) : null;
 }
 
 /**
@@ -75,20 +114,21 @@ function refusalsOf(
   return { byAttribute: new Map(own), other };
 }
 
-/** "New person": a Modal with a Form of the record's first editors; Create waits for the server, the row shows at once. */
+/** "New person": a Modal with the record's first editors and "Add more fields"; Create waits, the row shows at once. */
 export function NewRecordDialog({
   isOpen,
   onOpenChange,
   title,
   singularName,
-  editors,
+  first,
+  more,
   newId,
   onCreate,
   onCreated,
 }: NewRecordDialogProps) {
   const formId = useId();
   const [isBusy, setBusy] = useState(false);
-  // Each opening starts idle; the fields start empty because the Modal mounts them afresh.
+  // Each opening starts idle; the fields start afresh because the Modal mounts them afresh.
   const [wasOpen, setWasOpen] = useState(isOpen);
   if (isOpen !== wasOpen) {
     setWasOpen(isOpen);
@@ -109,7 +149,7 @@ export function NewRecordDialog({
             {strings.cancel}
           </Button>
           <Button variant="primary" type="submit" form={formId} isPending={isBusy} kbd="⌘↵">
-            {isBusy ? strings.creating : strings.create}
+            {isBusy ? strings.creating : strings.createRecord(singularName)}
           </Button>
         </>
       }
@@ -119,7 +159,8 @@ export function NewRecordDialog({
         label={title}
         singularName={singularName}
         newId={newId}
-        editors={editors}
+        first={first}
+        more={more}
         isBusy={isBusy}
         onBusyChange={setBusy}
         onCreate={onCreate}
@@ -132,7 +173,7 @@ export function NewRecordDialog({
 /** Props for the dialog's form. */
 interface NewRecordFormProps extends Pick<
   NewRecordDialogProps,
-  'editors' | 'onCreate' | 'onCreated' | 'singularName' | 'newId'
+  'first' | 'more' | 'onCreate' | 'onCreated' | 'singularName' | 'newId'
 > {
   readonly formId: string;
   readonly label: string;
@@ -146,30 +187,45 @@ function NewRecordForm({
   label,
   singularName,
   newId,
-  editors,
+  first,
+  more,
   isBusy,
   onBusyChange,
   onCreate,
   onCreated,
 }: NewRecordFormProps) {
+  const editors = [...first, ...more];
   // One id per opening (the Modal mounts this afresh), sent again on every press.
   const [id] = useState(newId);
-  // What each editor last committed. A ref as well as state, so a submit that a blur's commit runs just before sees it.
-  const committed = useRef<Record<string, unknown>>({});
-  // The same values in the shape the attribute takes: an attribute that holds several gets a list.
+  // What each editor shows: its default until the person commits a value (AC-240).
+  const [values, setValues] = useState<Readonly<Record<string, unknown>>>(() =>
+    Object.fromEntries(editors.map((editor) => [editor.id, prefillOf(editor)])),
+  );
+  // What the person committed, in the shape the attribute takes: a ref as well, so a submit that a blur's commit
+  // runs just before sees it. Untouched fields are left out, so the server applies their defaults itself.
   const sending = useRef<Record<string, unknown>>({});
-  const [values, setValues] = useState<Readonly<Record<string, unknown>>>({});
   const [fieldErrors, setFieldErrors] = useState<ReadonlyMap<string, string>>(new Map());
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
+  // A refusal or a typed value in a hidden field opens "Add more fields", so nothing is out of sight.
+  const [isMoreOpen, setMoreOpen] = useState(false);
 
   const create = () => {
     if (isBusy) return;
     const sent = Object.fromEntries(Object.entries(sending.current).filter(([, value]) => value !== null));
-    // A person needs a name: nothing typed in it is refused here, before a blank row is made.
-    const name = editors.find((editor) => editor.type === 'personal_name');
-    if (name !== undefined && sent[name.id] === undefined) {
+    // A required attribute with nothing typed and no default is refused here, before a blank row is made.
+    const missing = first.filter(
+      (editor) => editor.isRequired && sent[editor.id] === undefined && editor.defaultValue === undefined,
+    );
+    if (missing.length > 0) {
       setRefusals([]);
-      setFieldErrors(new Map([[name.id, strings.recordNameMissing(singularName)]]));
+      setFieldErrors(
+        new Map(
+          missing.map((editor) => [
+            editor.id,
+            editor.isPrimary ? strings.recordNameMissing(singularName) : strings.valueMissing(editor.title),
+          ]),
+        ),
+      );
       return;
     }
     onBusyChange(true);
@@ -185,35 +241,48 @@ function NewRecordForm({
         const { byAttribute, other } = refusalsOf(error, editors);
         setFieldErrors(byAttribute);
         setRefusals(other);
+        if (more.some((editor) => byAttribute.has(editor.id))) setMoreOpen(true);
       },
+    );
+  };
+
+  const editorFor = (definition: AttributeDefinition) => {
+    const error = fieldErrors.get(definition.id);
+    return (
+      <AttributeEditor
+        key={definition.id}
+        attribute={askedFor(definition)}
+        value={values[definition.id] ?? null}
+        surface="form"
+        onCommit={(value) => {
+          sending.current = {
+            ...sending.current,
+            [definition.id]: definition.isMulti && value !== null && !Array.isArray(value) ? [value] : value,
+          };
+          setValues((shown) => ({ ...shown, [definition.id]: value }));
+          if (fieldErrors.has(definition.id)) {
+            setFieldErrors(new Map([...fieldErrors].filter(([key]) => key !== definition.id)));
+          }
+        }}
+        {...(error === undefined ? {} : { error })}
+      />
     );
   };
 
   return (
     <Form id={formId} isBusy={isBusy} refusals={refusals} onSubmit={create} label={label} focusesFirstField>
-      {editors.map((definition) => {
-        const error = fieldErrors.get(definition.id);
-        return (
-          <AttributeEditor
-            key={definition.id}
-            attribute={askedFor(definition)}
-            value={values[definition.id] ?? null}
-            surface="form"
-            onCommit={(value) => {
-              committed.current = { ...committed.current, [definition.id]: value };
-              sending.current = {
-                ...sending.current,
-                [definition.id]: definition.isMulti && value !== null && !Array.isArray(value) ? [value] : value,
-              };
-              setValues(committed.current);
-              if (fieldErrors.has(definition.id)) {
-                setFieldErrors(new Map([...fieldErrors].filter(([id]) => id !== definition.id)));
-              }
-            }}
-            {...(error === undefined ? {} : { error })}
-          />
-        );
-      })}
+      {first.map(editorFor)}
+      {more.length > 0 && (
+        <Disclosure
+          variant="fields"
+          title={strings.addMoreFields}
+          count={more.length}
+          isExpanded={isMoreOpen}
+          onExpandedChange={setMoreOpen}
+        >
+          {more.map(editorFor)}
+        </Disclosure>
+      )}
     </Form>
   );
 }

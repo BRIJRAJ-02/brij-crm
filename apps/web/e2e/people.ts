@@ -109,7 +109,9 @@ export async function addPerson(page: Page, first: string, last: string, email: 
   await expect(dialog).toBeVisible();
   await dialog.getByLabel('First name').fill(first);
   await dialog.getByLabel('Last name').fill(last);
-  await dialog.getByLabel('Email addresses').fill(email);
+  // Email isn't required, so it waits behind "Add more fields" (spec 0012, AC-240).
+  await dialog.getByRole('button', { name: /Add more fields/ }).click();
+  await dialog.getByLabel('Email address').fill(email);
   await dialog.getByRole('button', { name: 'Create' }).click();
   await expect(dialog).toBeHidden();
 }

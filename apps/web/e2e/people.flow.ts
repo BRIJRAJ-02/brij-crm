@@ -72,7 +72,8 @@ test.describe('the People table', () => {
     await page.getByRole('button', { name: 'New person' }).first().click();
     const newDialog = page.getByRole('dialog', { name: 'New person' });
     await newDialog.getByLabel('First name').fill('Grace');
-    await newDialog.getByLabel('Email addresses').fill(`grace-${tag}@example.com`);
+    await newDialog.getByRole('button', { name: /Add more fields/ }).click();
+    await newDialog.getByLabel('Email address').fill(`grace-${tag}@example.com`);
     await newDialog.getByRole('button', { name: 'Create' }).click();
     await expect(newDialog.getByText('Another record already has this value for Email addresses.')).toBeVisible();
     await checkScreen(page, '4-new-person-refused');

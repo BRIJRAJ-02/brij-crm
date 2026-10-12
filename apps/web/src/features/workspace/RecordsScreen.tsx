@@ -1,7 +1,7 @@
 // Brief
-// Purpose: one object's records (People in this loop) as a fast table, under the object's name and colour tile.
-// Main task: read and edit people in place (a paste or clear is one change, undone with ⌘Z), sort a column, add a person and a column, live.
-// Leaves out: filters, saved views and sorts that last past the visit, other objects' tables and presence (#7, #20).
+// Purpose: any live object's records (People, Companies, a custom Projects) as a fast table, under its name and tile.
+// Main task: read and edit records in place (a paste or clear is one change, undone with ⌘Z), sort a column, add a record and a column, live.
+// Leaves out: filters, saved views and sorts that last past the visit, and presence (#7, #20).
 import {
   isEditableHere,
   toActorDisplays,
@@ -17,7 +17,7 @@ import {
   type SortRule,
 } from '@crm/data';
 import { useLiveStatus, useView } from '@crm/data/react';
-import { Badge, Button, Callout, EmptyState, Spinner, TopBar, useDelayedLoading, ViewBar } from '@crm/ui';
+import { Badge, Button, Callout, EmptyState, isSystemOnly, Spinner, TopBar, useDelayedLoading, ViewBar } from '@crm/ui';
 import { columnWidthFor, DataGrid, type GridColumn } from '@crm/ui/grid';
 import { useRouteContext, useRouter } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -97,7 +97,34 @@ function columnsFor(
   return at === -1 ? [...kept, ...added] : [...kept.slice(0, at), ...added, ...kept.slice(at)];
 }
 
-/** One object's page: the TopBar with New person, the ViewBar with Add attribute, and the table. */
+/**
+ * The create dialog's editors for an object (spec 0012, AC-240): the primary
+ * attribute, then the required ones, then the rest, each by position, and
+ * only those the field set edits in a form here (no system values, and no
+ * references or members yet, #15).
+ */
+function createEditors(
+  object: ObjectSummary,
+  attributes: readonly AttributeDefinition[],
+): { readonly first: readonly AttributeDefinition[]; readonly more: readonly AttributeDefinition[] } {
+  const editable = attributes
+    .filter(
+      (attribute) =>
+        isEditableHere(attribute) &&
+        !attribute.isArchived &&
+        !isSystemOnly(attribute.type) &&
+        // Files arrive with #32's uploads.
+        attribute.type !== 'file',
+    )
+    .sort((a, b) => a.position - b.position);
+  const isFirst = (attribute: AttributeDefinition) =>
+    attribute.id === object.primaryAttributeId || attribute.isRequired;
+  const primary = editable.filter((attribute) => attribute.id === object.primaryAttributeId);
+  const required = editable.filter((attribute) => attribute.id !== object.primaryAttributeId && attribute.isRequired);
+  return { first: [...primary, ...required], more: editable.filter((attribute) => !isFirst(attribute)) };
+}
+
+/** One object's page: the TopBar with New <singular>, the ViewBar with Add attribute, and the table. */
 export function RecordsScreen({ slug, object, attributes, members, view: warmed, sort: opening }: RecordsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const router = useRouter();
@@ -175,12 +202,10 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
   // Only owners and admins change the schema (spec 0009, AC-136); the server refuses anyone else on its own.
   const canChangeSchema = useCan('schema.manage');
   const [focusRow, setFocusRow] = useState<{ readonly index: number } | undefined>(undefined);
-  const nameAttribute = attributes.find((attribute) => attribute.id === object.primaryAttributeId);
-  const emailAttribute = attributes.find(
-    (attribute) => attribute.type === 'email' && attribute.apiSlug === 'email_addresses',
-  );
-  const editors = [nameAttribute, emailAttribute].filter(
-    (attribute): attribute is AttributeDefinition => attribute !== undefined && isEditableHere(attribute),
+  // The create dialog (spec 0012, AC-240): the primary attribute, then every required one, then the rest by position.
+  const { first: firstEditors, more: moreEditors } = useMemo(
+    () => createEditors(object, attributes),
+    [object, attributes],
   );
   const rowHeader = object.primaryAttributeId ?? columns[0]?.id ?? '';
   const newRecord = strings.newRecord(object.singularName);
@@ -339,7 +364,8 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
               isOpen={isCreating}
               onOpenChange={setCreating}
               title={newRecord}
-              editors={editors}
+              first={firstEditors}
+              more={moreEditors}
               newId={data.records.newId}
               onCreate={(id, values) => data.records.create(slug, object.id, id, values)}
               singularName={object.singularName}
