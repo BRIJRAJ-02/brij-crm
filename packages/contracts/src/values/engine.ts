@@ -31,6 +31,8 @@ export const ENGINE_REFUSAL_CODES = [
   'JOB_NOT_READY',
   'JOB_EXPIRED',
   'JOB_TOO_LARGE',
+  // A write that breaks an attribute's rules (spec 0013, AC-254): one refusal per failing rule, each with its ruleId.
+  'VALIDATION_FAILED',
 ] as const;
 
 /** One of the engine's refusal codes. */
@@ -46,4 +48,6 @@ export interface EngineRefusal {
   readonly message: string;
   readonly attributeId?: string;
   readonly field?: string;
+  /** The rule a `VALIDATION_FAILED` refusal is about (spec 0013). */
+  readonly ruleId?: string;
 }

@@ -48,6 +48,13 @@ const QueryClock = {
   timeZone: z.string().min(1).max(64).optional(),
 };
 
+/**
+ * The writer's time zone (IANA, the browser's), so a rule's relative dates
+ * ("today", "in the last 7 days") resolve where the person is (spec 0013).
+ * UTC when absent; an unknown zone reads as UTC.
+ */
+const WriteTimeZone = z.string().min(1).max(64).optional();
+
 /** The most records one `records.setValuesBatch` changes (spec 0006, AC-50); more is refused 422 `CONFIG_INVALID`. */
 export const MAX_BATCH_RECORDS = 500;
 
@@ -169,6 +176,7 @@ export const CreateRecordInput = WorkspaceScoped.extend({
   objectId: z.uuid(),
   id: z.uuid({ version: 'v7', message: 'The record id must be a UUID v7.' }),
   values: ValuesById.optional(),
+  timeZone: WriteTimeZone,
   mutationId: z.uuid(),
 });
 /** A new record. */
@@ -201,6 +209,7 @@ export type ValueChangeInput = z.infer<typeof ValueChangeInput>;
 export const SetValuesInput = WorkspaceScoped.extend({
   recordId: z.uuid(),
   values: z.record(z.uuid(), ValueChangeInput),
+  timeZone: WriteTimeZone,
   mutationId: z.uuid(),
 });
 /** New values for one record. */
@@ -241,6 +250,7 @@ export type BatchItem = z.infer<typeof BatchItem>;
 export const SetValuesBatchInput = WorkspaceScoped.extend({
   // Twice the cap, so a batch a little over it still answers the engine's CONFIG_INVALID, and junk stops at parsing.
   items: z.array(BatchItem).max(MAX_BATCH_RECORDS * 2, `Change at most ${String(MAX_BATCH_RECORDS)} records at once.`),
+  timeZone: WriteTimeZone,
   mutationId: z.uuid(),
 });
 /** New values for many records. */

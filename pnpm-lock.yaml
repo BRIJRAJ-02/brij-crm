@@ -150,6 +150,9 @@ catalogs:
     railway:
       specifier: 3.12.0
       version: 3.12.0
+    re2js:
+      specifier: 2.8.6
+      version: 2.8.6
     react:
       specifier: 19.3.0
       version: 19.3.0
@@ -483,6 +486,9 @@ importers:
       drizzle-orm:
         specifier: 'catalog:'
         version: 0.45.3(@cloudflare/workers-types@5.20260930.2)(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.1)
+      re2js:
+        specifier: 'catalog:'
+        version: 2.8.6
       zod:
         specifier: 'catalog:'
         version: 4.6.5
@@ -520,6 +526,9 @@ importers:
       centrifuge:
         specifier: 'catalog:'
         version: 5.7.4
+      re2js:
+        specifier: 'catalog:'
+        version: 2.8.6
       react:
         specifier: 'catalog:'
         version: 19.3.0
@@ -5001,6 +5010,10 @@ packages:
     resolution: {integrity: sha512-a6th+76NE3fZ8QMTOtEIe15sPTjObWOJYx0pCHCR/rd00r++I2rZHLKTn2R1qmPAwvGdAj6vY45GDVJs0AzOXA==}
     engines: {node: '>=22'}
     hasBin: true
+
+  re2js@2.8.6:
+    resolution: {integrity: sha512-xLgQil4kIUCrAzVk9fRSkxkFNwmygLFjVxXrLc65aE1F0+Zsb8rxumFBy4XKyvgMCTL6kilDq3EZ0piE2dP/Dg==}
+    engines: {node: '>=18.0.0'}
 
   react-aria-components@1.21.1:
     resolution: {integrity: sha512-J88WflYY0z+EhLX0ce+GjFlQ3ag3ubIgfUTjpKSrBQBu92Xtl4Ub9o118HItUddtbk1Ido0jzyPy94/klZy1hg==}
@@ -9711,6 +9724,8 @@ snapshots:
       '@graphql-typed-document-node/core': 3.2.0(graphql@16.14.2)
       graphql: 16.14.2
       tsx: 4.23.15
+
+  re2js@2.8.6: {}
 
   react-aria-components@1.21.1(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
     dependencies:

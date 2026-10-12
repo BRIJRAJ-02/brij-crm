@@ -66,6 +66,8 @@ export const ERROR_MAP = {
   FILTER_INVALID: UNPROCESSABLE,
   // A job past a million items (spec 0008, AC-116).
   JOB_TOO_LARGE: UNPROCESSABLE,
+  // A write that breaks an attribute's rules (spec 0013, AC-254): every failing rule, with its ruleId.
+  VALIDATION_FAILED: UNPROCESSABLE,
   // The fallback wait when the limiter gives none of its own.
   RATE_LIMITED: { status: 429, retryAfterSeconds: 60 },
   // Too many heavy reads in flight for one workspace at once; one finishing frees a place.
@@ -87,6 +89,8 @@ export const ApiRefusal = z.object({
   message: z.string(),
   attributeId: z.string().optional(),
   field: z.string().optional(),
+  /** The rule a `VALIDATION_FAILED` refusal is about (spec 0013). */
+  ruleId: z.string().optional(),
 });
 /** One engine refusal inside an error's data. */
 export type ApiRefusal = z.infer<typeof ApiRefusal>;

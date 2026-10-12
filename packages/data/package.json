@@ -18,6 +18,7 @@
     "@orpc/contract": "catalog:",
     "better-auth": "catalog:",
     "centrifuge": "catalog:",
+    "re2js": "catalog:",
     "react": "catalog:"
   },
   "devDependencies": {

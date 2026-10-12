@@ -6,6 +6,7 @@ import * as z from 'zod';
 import { AttributeDefault } from './values/attribute-config.ts';
 import { AttributeType } from './values/attribute-values.ts';
 import { Hue } from './values/hues.ts';
+import { AttributeValidation, ValidationRuleInput } from './values/validation-rules.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 
 /**
@@ -68,6 +69,12 @@ export const AttributeDefinition = z.object({
   archivedBy: z.object({ objectId: z.uuid() }).optional(),
   options: z.array(AttributeOption).optional(),
   readOnly: AttributeReadOnly.optional(),
+  /**
+   * Its validation (spec 0013): Required (never, always, or when; `isRequired`
+   * is exactly `required === 'always'`) and its rules, in order, each rule
+   * whose condition names an attribute hidden from the reader left out.
+   */
+  validation: AttributeValidation.optional(),
 });
 /** One attribute of an object. */
 export type AttributeDefinition = z.infer<typeof AttributeDefinition>;
@@ -105,6 +112,9 @@ export const PickerAttributeType = z.enum([
 ]);
 /** An attribute type the picker makes. */
 export type PickerAttributeType = z.infer<typeof PickerAttributeType>;
+
+/** An attribute's rules as sent: twice the limit, so a list a little over it still answers the engine's `LIMIT_REACHED`. */
+const AttributeRules = z.array(ValidationRuleInput).max(40, 'An attribute holds at most 20 rules.');
 
 /** An attribute's title: 1 to 100 characters, trimmed. */
 const AttributeTitle = z.string().trim().min(1, 'Name the attribute.').max(100, 'Use at most 100 characters.');
@@ -168,6 +178,8 @@ export const CreateAttributeInput = WorkspaceScoped.extend({
   defaultValue: AttributeDefault.optional(),
   // Twice the limit, so a list a little over it still answers the engine's LIMIT_REACHED, and junk stops at parsing.
   options: z.array(NewAttributeOption).max(1000, 'An attribute holds at most 500 options.').optional(),
+  /** Its rules, in order (spec 0013, AC-252); at most 20 (`LIMIT_REACHED`). */
+  rules: AttributeRules.optional(),
   mutationId: z.uuid(),
 });
 /** A new attribute. */
@@ -186,6 +198,11 @@ export const UpdateAttributeInput = WorkspaceScoped.extend({
   isUnique: z.boolean().optional(),
   config: z.record(z.string(), z.unknown()).optional(),
   defaultValue: AttributeDefault.nullable().optional(),
+  /**
+   * Its rules, in order (spec 0013, AC-252): the list replaces the
+   * attribute's own rules (one left out is deleted); at most 20.
+   */
+  rules: AttributeRules.optional(),
   mutationId: z.uuid(),
 });
 /** An attribute's settings, changed. */
