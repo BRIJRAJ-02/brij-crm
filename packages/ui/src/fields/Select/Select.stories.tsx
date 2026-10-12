@@ -4,7 +4,7 @@ import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
 import { SAMPLE_IDS } from '../../workbench/sample-ids.ts';
 import { AttributeEditor } from '../AttributeEditor.tsx';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, screen, waitFor } from 'storybook/test';
 
 const sample = FIELD_SAMPLES.select;
 
@@ -55,5 +55,51 @@ export const Editor: Story = {
     await waitFor(() => expect(document.querySelector('[role="listbox"]')).not.toBeNull());
     await userEvent.keyboard('{ArrowDown}{Enter}');
     await expect(args.onCommit).toHaveBeenCalledWith(SAMPLE_IDS.tag.fintech);
+  },
+};
+
+/** For someone who may shape the schema: a label no live option has is offered as "Create"; one it has (any case) is not (spec 0012, AC-238). */
+export const CreateOption: Story = {
+  args: { onCreateOption: fn() },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ args, userEvent }) => {
+    await userEvent.tab();
+    await userEvent.keyboard('{ArrowDown}');
+    const search = await screen.findByRole('textbox', { name: 'Search' });
+    await waitFor(() => expect(search).toHaveFocus());
+    await userEvent.keyboard('saas');
+    await expect(screen.queryByRole('option', { name: /^Create/ })).toBeNull();
+    await userEvent.clear(search);
+    await userEvent.keyboard('Hot');
+    await userEvent.click(await screen.findByRole('option', { name: 'Create "Hot"' }));
+    await expect(args.onCreateOption).toHaveBeenCalledWith('Hot');
+    // The list closes (its exit fades it): checked once it has gone.
+    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+  },
+};
+
+/** Several values: the menu's search offers "Create" last, too. */
+export const CreateOptionSeveral: Story = {
+  args: {
+    attribute: sample.several?.attribute ?? sample.attribute,
+    onCreateOption: fn(),
+  },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button'));
+    const search = await screen.findByRole('searchbox');
+    await waitFor(() => expect(search).toHaveFocus());
+    await userEvent.keyboard('Robotics');
+    await userEvent.click(await screen.findByRole('menuitemcheckbox', { name: 'Create "Robotics"' }));
+    await expect(args.onCreateOption).toHaveBeenCalledWith('Robotics');
   },
 };

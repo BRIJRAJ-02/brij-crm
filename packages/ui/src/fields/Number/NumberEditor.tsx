@@ -17,6 +17,7 @@ export function NumberEditor(props: EditorProps<'number'>) {
       initial={initial}
       inputMode="decimal"
       align="end"
+      {...(props.attribute.isPercent === true ? { suffix: strings.percentSign } : {})}
       hint={props.surface === 'cell' ? undefined : strings.hint(example)}
       check={(draft) => {
         if (draft.trim() === '') return toCommittable<'number'>(props.attribute, null);

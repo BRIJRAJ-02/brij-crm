@@ -72,6 +72,7 @@ describe('@crm/ui', () => {
       'ModalTrigger',
       'NavItem',
       'NavSection',
+      'OptionsEditor',
       'Panel',
       'Path',
       'Popover',

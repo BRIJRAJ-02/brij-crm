@@ -265,3 +265,230 @@ export const RelationshipEntry: Story = {
     await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
   },
 };
+
+/** Ids for new options in the stories: the screen mints UUIDs v7; here they only need to differ. */
+const optionIds = () => {
+  const made = { count: 0 };
+  return () => {
+    made.count += 1;
+    return `0199a6f2-0000-7000-8000-${String(made.count).padStart(12, '0')}`;
+  };
+};
+
+/** Picks a type by its picker label. */
+async function chooseType(
+  dialog: HTMLElement,
+  label: string,
+  userEvent: { click: (element: Element) => Promise<void> },
+) {
+  const type = dialog.querySelector<HTMLElement>('button[aria-haspopup="listbox"]');
+  if (type === null) throw new globalThis.Error('No type picker.');
+  await userEvent.click(type);
+  const option = await waitFor(() => {
+    const found = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+      (each) => each.textContent === label,
+    );
+    if (found === undefined) throw new globalThis.Error(`No ${label} option.`);
+    return found;
+  });
+  await userEvent.click(option);
+  await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
+  // Focus is back on the picker, so ⌘↵ submits from there.
+  await waitFor(() => expect(type).toHaveFocus());
+}
+
+/**
+ * A new select (AC-230): its options typed in one go in the blank row it
+ * opens with, each the next hue; Create sends them with the attribute.
+ */
+export const CreateSelect: Story = {
+  args: { typeKeys: undefined, newOptionId: optionIds(), optionsLimit: 500 },
+  play: async ({ args, userEvent }) => {
+    const dialog = await openDialog();
+    await userEvent.keyboard('Tier');
+    await chooseType(dialog, 'Select', userEvent);
+    await expect(dialog).toHaveTextContent('0 of 500');
+    await userEvent.click(within(dialog).getByRole('textbox', { name: 'New option' }));
+    await userEvent.keyboard('Gold{Enter}');
+    await waitFor(() => expect(within(dialog).getByRole('textbox', { name: 'New option' })).toHaveFocus());
+    await userEvent.keyboard('Silver{Enter}{Escape}');
+    await expect(dialog).toHaveTextContent('2 of 500');
+    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
+    await waitFor(() =>
+      expect(args.onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'select',
+          isMulti: false,
+          options: [
+            expect.objectContaining({ label: 'Gold', hue: 'gray', isArchived: false }),
+            expect.objectContaining({ label: 'Silver', hue: 'red', isArchived: false }),
+          ],
+        }),
+      ),
+    );
+  },
+};
+
+/** A new status starts with its three stages, Not started, In progress (open) and Done (won), editable before create. */
+export const CreateStatus: Story = {
+  args: { typeKeys: undefined, newOptionId: optionIds() },
+  play: async ({ args, userEvent }) => {
+    const dialog = await openDialog();
+    await userEvent.keyboard('Stage');
+    await chooseType(dialog, 'Status', userEvent);
+    const stages = within(dialog).getByRole('grid', { name: 'Stages' });
+    await expect(within(stages).getAllByRole('row')).toHaveLength(3);
+    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
+    await waitFor(() =>
+      expect(args.onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'status',
+          options: [
+            expect.objectContaining({ label: 'Not started', hue: 'gray', outcome: 'open' }),
+            expect.objectContaining({ label: 'In progress', hue: 'blue', outcome: 'open' }),
+            expect.objectContaining({ label: 'Done', hue: 'green', outcome: 'won' }),
+          ],
+        }),
+      ),
+    );
+  },
+};
+
+/** A number shows plain or as a percent; a currency needs its default code (USD until changed). */
+export const TypeSettings: Story = {
+  args: { typeKeys: undefined },
+  play: async ({ args, userEvent }) => {
+    const dialog = await openDialog();
+    await userEvent.keyboard('Margin');
+    await chooseType(dialog, 'Number', userEvent);
+    await userEvent.click(within(dialog).getByRole('radio', { name: 'Percent' }));
+    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
+    await waitFor(() =>
+      expect(args.onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: 'number',
+          config: { display: 'percent' },
+          changed: expect.arrayContaining(['config']) as unknown,
+        }),
+      ),
+    );
+  },
+};
+
+/** A currency's default code: a searchable list, starting at USD. */
+export const CurrencySettings: Story = {
+  args: { typeKeys: undefined },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, userEvent }) => {
+    const dialog = await openDialog();
+    await userEvent.keyboard('Deal value');
+    await chooseType(dialog, 'Currency', userEvent);
+    await expect(dialog).toHaveTextContent('USD');
+    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
+    await waitFor(() =>
+      expect(args.onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'currency', config: { defaultCurrency: 'USD' } }),
+      ),
+    );
+  },
+};
+
+const TIER_OPTIONS = [
+  { id: '0199a6f2-0000-7000-8000-00000000b001', label: 'Silver', hue: 'gray' as const, isArchived: false },
+  { id: '0199a6f2-0000-7000-8000-00000000b002', label: 'Gold', hue: 'yellow' as const, isArchived: true },
+  { id: '0199a6f2-0000-7000-8000-00000000b003', label: 'Platinum', hue: 'sky' as const, isArchived: false },
+];
+
+const optionWrites = {
+  onAdd: fn(),
+  onChange: fn(),
+  onMove: fn(),
+  onArchive: fn(),
+  onRestore: fn(),
+};
+
+/**
+ * Editing a select: its options save as they change (the hint says so), Save
+ * keeps the rest. A required default naming an archived option says what new
+ * records get meanwhile (AC-236): the first live option.
+ */
+export const EditOptions: Story = {
+  args: {
+    attribute: {
+      type: 'select',
+      isMulti: false,
+      title: 'Tier',
+      apiSlug: 'tier',
+      isRequired: true,
+      isUnique: false,
+      defaultValue: { kind: 'static', value: '0199a6f2-0000-7000-8000-00000000b002' },
+      options: TIER_OPTIONS,
+    },
+    optionsLimit: 500,
+    newOptionId: optionIds(),
+    optionWrites,
+  },
+  play: async ({ userEvent }) => {
+    const dialog = await openDialog();
+    await expect(dialog).toHaveTextContent('Changes to options save as you make them.');
+    await expect(dialog).toHaveTextContent('This option is archived. New records get Silver.');
+    const silver = within(dialog).getByRole('textbox', { name: 'Option 1' });
+    await userEvent.tripleClick(silver);
+    await userEvent.keyboard('Steel{Enter}');
+    await expect(optionWrites.onChange).toHaveBeenCalledWith('0199a6f2-0000-7000-8000-00000000b001', {
+      label: 'Steel',
+    });
+    // Checked at rest: the dialog in, and the pointer off every control.
+    await userEvent.unhover(silver);
+    await waitFor(() => expect(document.querySelector('[data-entering]')).toBeNull());
+  },
+};
+
+/** An optional default naming an archived option: new records get no value meanwhile. */
+export const ArchivedDefault: Story = {
+  args: {
+    attribute: {
+      type: 'select',
+      isMulti: false,
+      title: 'Tier',
+      apiSlug: 'tier',
+      isRequired: false,
+      isUnique: false,
+      defaultValue: { kind: 'static', value: '0199a6f2-0000-7000-8000-00000000b002' },
+      options: TIER_OPTIONS,
+    },
+    optionWrites,
+  },
+  parameters: { crm: { screenshot: false } },
+  play: async () => {
+    const dialog = await openDialog();
+    await expect(dialog).toHaveTextContent('This option is archived. New records get no value.');
+    await waitFor(() => expect(document.querySelector('[data-entering]')).toBeNull());
+  },
+};
+
+/** A member reads a status's stages: tags, outcomes as words, nothing to change. */
+export const ReadOnlyStages: Story = {
+  args: {
+    readOnlyReason: 'Only workspace owners and admins can change attributes.',
+    attribute: {
+      type: 'status',
+      isMulti: false,
+      title: 'Stage',
+      apiSlug: 'stage',
+      isRequired: false,
+      isUnique: false,
+      options: [
+        { id: 'a', label: 'Lead', hue: 'gray', isArchived: false, outcome: 'open', targetDays: 7 },
+        { id: 'b', label: 'Won', hue: 'green', isArchived: false, outcome: 'won' },
+      ],
+    },
+  },
+  parameters: { crm: { screenshot: false } },
+  play: async () => {
+    const dialog = await openDialog();
+    await expect(within(dialog).queryByRole('button', { name: 'Add stage' })).toBeNull();
+    await expect(dialog).toHaveTextContent('Open, 7 days target');
+    await waitFor(() => expect(document.querySelector('[data-entering]')).toBeNull());
+  },
+};

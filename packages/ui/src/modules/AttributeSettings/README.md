@@ -1,6 +1,6 @@
 # AttributeSettings
 
-The one dialog that creates and edits an attribute (spec 0012): its name, type, API name, description, rules and default.
+The one dialog that creates and edits an attribute (spec 0012): its name, type, the type's settings and options, API name, description, rules and default.
 
 ## Why it exists
 
@@ -29,11 +29,13 @@ New (from the inventory, `0003-inventory.md`, pulled forward from spec 0003's mi
 - `relationshipEntry` (`{ label, onChoose }`, #15) adds "Relationship" last to the picker; choosing it calls `onChoose`, so the screen swaps in its own settings in the same place. Without it there is no entry and no placeholder.
 - The default is drawn by the type's own form editor (`AttributeEditor`, `surface="form"`), so it looks and edits as the value does everywhere. A date also offers "Today plus days" (0 to 3,650, refused locally otherwise) and a member "Current user", as a RadioGroup labelled "Default value" above the editor (None, then the kinds): a saved setting, which SegmentedControl, made for switching views, is not. `members` feeds the member picker. An empty editor, or an unticked checkbox, means no default.
 - Refusals land on the setting they name by `attributeId` (`title`, `apiSlug`, `description`, `type`, `isUnique`, `defaultValue`, `offsetDays`); anything else shows above the settings. An empty name is refused before anything is sent.
-- Not yet (spec 0012, milestone 3): the type settings (Number's display, Currency's code, Status's starter stages), the options editor, and the "Default archived" note.
+- **Type settings** (milestone 3, AC-230), right under the type: a Number's Display (Plain or Percent, a RadioGroup, as the default's kind is: a saved setting, not a view switch), a Currency's default code (a searchable Select, USD until changed; one is always set). They go out as `values.config`, and on an edit `changed` names `config` once touched.
+- **Options** (AC-230, AC-236): a Select, Multi select or Status draws the OptionsEditor under the type. On create the dialog keeps them as a draft: a new select opens with one blank row to type in (it waits for Tab, so focus stays on the type picker), a new status starts with the starter stages (`STARTER_STAGES`: Not started and In progress open, Done won), and Create sends them as `values.options`, each with an id from `newOptionId`. Switching between Select and Multi select keeps them. On an edit the options come in as `attribute.options` and each change goes out at once through `optionWrites` (`onAdd`, `onChange`, `onMove`, `onArchive`, `onRestore`, with `pending` and `errors` back), which the editor's hint says ("Changes to options save as you make them."); Save keeps the rest. Without `optionWrites` an existing attribute's options are read only. `optionsLimit` shows "N of 500".
+- **The default of a select or status** offers the options being edited. When it names an archived option, a Callout under it says what new records get meanwhile (AC-236): "This option is archived. New records get <first live option>." for a required attribute, "… New records get no value." otherwise. A draft option removed before create takes a default naming it with it.
 
 ## States
 
-Create, edit, read only, busy (the primary spins with its ongoing verb, Cancel is off, and the dialog stays), refused (on the setting, or above them), and each default kind.
+Create, edit, read only, busy, a type's settings, options (draft before create, written as they change after), a default naming an archived option (the primary spins with its ongoing verb, Cancel is off, and the dialog stays), refused (on the setting, or above them), and each default kind.
 
 ## Keyboard
 
@@ -41,4 +43,4 @@ Focus starts in the name. Tab moves through the settings in order. ⌘↵ (Ctrl+
 
 ## Differences from the artifact
 
-Not in the artifact. Rules are Checkboxes, not Switches: they are saved with the form, and the Switch takes effect at once (its README). The name comes before the type, as the object and record dialogs ask for the name first, so the first focused field is the one to type in.
+Not in the artifact. A Number's Display is a RadioGroup, not the SegmentedControl spec 0012's screens name, for the reason the default's kind is one. Rules are Checkboxes, not Switches: they are saved with the form, and the Switch takes effect at once (its README). The name comes before the type, as the object and record dialogs ask for the name first, so the first focused field is the one to type in.

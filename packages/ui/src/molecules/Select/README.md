@@ -21,10 +21,11 @@ Ported from the artifact's Select card (version 8). It is the editor for select 
 - `isReadOnly` shows the value in a filled box with a lock, and `readOnlyReason` says why.
 - `onChange` gets the chosen id, or `null` when cleared.
 - `isSearchable` puts a search field over the options (it takes focus as the list opens, and typing narrows them), for long lists such as countries; `searchLabel` names it.
+- `onCreate(label)` adds "Create "<typed>"" (a plus) last in that search when what is typed matches no live option's label, ignoring case; choosing it hands the label over and closes the list. It turns the search on; `defaultSearch` starts it with the key that opened a grid cell. Why a variant: a select or status cell offers it to someone who may shape the schema (spec 0012, AC-238), in the same list the person was already choosing from, rather than a second control.
 
 ## States
 
-Placeholder, chosen, focus and open (a 1px `accent-line` border and the faint halo), outlined in `control-border` at rest like a Field (3:1 on every surface), invalid, read only, disabled. The list opens from the keyboard at once and grows from the trigger for a pointer.
+Placeholder, chosen, searching, offering Create, focus and open (a 1px `accent-line` border and the faint halo), outlined in `control-border` at rest like a Field (3:1 on every surface), invalid, read only, disabled. The list opens from the keyboard at once and grows from the trigger for a pointer.
 
 ## Keyboard
 

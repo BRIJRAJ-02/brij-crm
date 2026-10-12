@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState, type ReactNode } from 'react';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, screen, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import type { CellChange } from '../../fields/types.ts';
 import { arraySource } from '../../lib/list-source.ts';
@@ -43,6 +43,8 @@ interface SampleGridProps {
   readonly onAddColumn?: () => void;
   /** The screen's own column menu items (spec 0012). */
   readonly columnActions?: (columnId: string) => readonly GridColumnAction[];
+  /** "Create" in a select or status cell's list (spec 0012, AC-238). */
+  readonly onCreateOption?: (rowId: string, columnId: string, label: string) => void;
 }
 
 /** A grid over sample companies that keeps its own edits, columns and selection, as a screen would. */
@@ -64,6 +66,7 @@ function SampleGrid({
   onRetry = () => undefined,
   onAddColumn,
   columnActions,
+  onCreateOption,
 }: SampleGridProps) {
   const [data, setData] = useState(() =>
     sampleRows(count).map((row) =>
@@ -140,6 +143,7 @@ function SampleGrid({
         {...(withAvatars ? { rowAvatar: () => undefined, untitled: 'Unnamed company' } : {})}
         {...(onAddColumn === undefined ? {} : { onAddColumn })}
         {...(columnActions === undefined ? {} : { columnActions })}
+        {...(onCreateOption === undefined ? {} : { onCreateOption })}
         {...(unknown === undefined
           ? {}
           : {
@@ -683,6 +687,25 @@ export const ListEditors: Story = {
     await waitFor(() => expect(inList()).not.toBeNull());
     await press(['{Escape}'], '0:6');
     await expect(cell(canvasElement, 0, 6)).toHaveTextContent('Lead');
+  },
+};
+
+/** For someone who may shape the schema, a select cell's list searches and offers "Create" for a label it lacks; choosing it ends the edit (spec 0012, AC-238). */
+export const CreateOptionInCell: Story = {
+  args: { onCreateOption: fn() },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvasElement, userEvent }) => {
+    const press = presser((keys) => userEvent.keyboard(keys));
+    await userEvent.tab();
+    await press(['{ArrowRight}', '{ArrowRight}', '{ArrowRight}', '{ArrowRight}'], '0:5');
+    await press(['{Enter}']);
+    const search = await screen.findByRole('textbox', { name: 'Search' });
+    await waitFor(() => expect(search).toHaveFocus());
+    await userEvent.keyboard('Robotics');
+    await userEvent.click(await screen.findByRole('option', { name: 'Create "Robotics"' }));
+    await expect(args.onCreateOption).toHaveBeenCalledWith(expect.any(String), expect.any(String), 'Robotics');
+    await waitFor(() => expect(screen.queryByRole('listbox')).toBeNull());
+    await waitFor(() => expect(cell(canvasElement, 0, 5)).toHaveAttribute('data-active'));
   },
 };
 

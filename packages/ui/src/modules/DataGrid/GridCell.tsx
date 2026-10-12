@@ -80,6 +80,8 @@ export interface GridCellProps {
   /** What reference and file editors need from the screen. */
   readonly editorProps: GridEditorProps;
   readonly onCommit: (value: unknown) => void;
+  /** A select or status cell's "Create" (spec 0012, AC-238), while it is edited; absent when not offered. */
+  readonly onCreateOption?: (label: string) => void;
   readonly onCancel: () => void;
   readonly onPopoverClose: () => void;
   /** A double click opens the editor. */
@@ -120,6 +122,7 @@ export function GridCell({
   error,
   editorProps,
   onCommit,
+  onCreateOption,
   onCancel,
   onPopoverClose,
   onDoubleClick,
@@ -145,6 +148,9 @@ export function GridCell({
       {...(display === undefined ? {} : { display: display as never })}
       {...(error === undefined ? {} : { error })}
       {...(editing?.startText === undefined ? {} : { startText: editing.startText })}
+      {...(onCreateOption !== undefined && (attribute.type === 'select' || attribute.type === 'status')
+        ? { onCreateOption }
+        : {})}
     />
   );
   // Several values fold into "+N" at what fits: the column's width less the cell's padding.

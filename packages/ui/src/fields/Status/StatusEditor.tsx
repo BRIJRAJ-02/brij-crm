@@ -3,7 +3,11 @@ import type { EditorProps } from '../types.ts';
 import { isCompactSurface, toCommittable } from '../values.ts';
 import { strings } from './strings.ts';
 
-/** Status: a Select with dot options; archived statuses can't be chosen. Always one value. */
+/**
+ * Status: a Select with dot options; archived statuses can't be chosen.
+ * Always one value. With `onCreateOption`, the list searches and offers
+ * "Create "<typed>"" for a stage it doesn't have.
+ */
 export function StatusEditor({
   attribute,
   value,
@@ -11,6 +15,8 @@ export function StatusEditor({
   onCommit,
   onCancel,
   autoOpen = false,
+  startText,
+  onCreateOption,
 }: EditorProps<'status'>) {
   const isCompact = isCompactSurface(surface);
   return (
@@ -33,6 +39,9 @@ export function StatusEditor({
       isRequired={attribute.isRequired}
       isClearable={!attribute.isRequired}
       value={typeof value === 'string' ? value : null}
+      {...(onCreateOption === undefined
+        ? {}
+        : { onCreate: onCreateOption, ...(startText === undefined ? {} : { defaultSearch: startText }) })}
       items={(attribute.options ?? []).map((option) => ({
         id: option.id,
         label: option.label,

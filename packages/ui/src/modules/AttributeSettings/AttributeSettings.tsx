@@ -4,9 +4,11 @@
 // come in as props, what the person chose goes out through `onSubmit`, and
 // the screen talks to the data layer.
 import {
+  CURRENCY_CODES,
   defaultKindsFor,
   PICKER_TYPES,
   pickerTypeOf,
+  STARTER_STAGES,
   toApiSlug,
   type ActorDisplay,
   type AttributeDefault,
@@ -27,6 +29,8 @@ import { Field } from '../../molecules/Field/Field.tsx';
 import { Form, type FormRefusal } from '../../molecules/Form/Form.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
 import { Select, type SelectItem } from '../../molecules/Select/Select.tsx';
+import { useFormatSettings } from '../../provider/context.ts';
+import { OptionsEditor, type OptionsEditorChange, type OptionsEditorOption } from '../OptionsEditor/OptionsEditor.tsx';
 import { strings } from './strings.ts';
 
 /** An existing attribute as the dialog edits it. */
@@ -39,11 +43,39 @@ export interface AttributeSettingsAttribute {
   readonly isRequired: boolean;
   readonly isUnique: boolean;
   readonly defaultValue?: AttributeDefault;
+  /** The type's settings: a number's `display`, a currency's `defaultCurrency`. */
+  readonly config?: Readonly<Record<string, unknown>>;
+  /** A select's options or a status attribute's stages, in order, archived ones included. */
+  readonly options?: readonly OptionsEditorOption[];
 }
 
 /** A setting the dialog shows, by the name the server's refusals give it. */
 export type AttributeSettingsField =
-  'type' | 'title' | 'apiSlug' | 'description' | 'isRequired' | 'isUnique' | 'isMulti' | 'defaultValue';
+  | 'type'
+  | 'title'
+  | 'apiSlug'
+  | 'description'
+  | 'isRequired'
+  | 'isUnique'
+  | 'isMulti'
+  | 'defaultValue'
+  | 'config'
+  | 'options';
+
+/**
+ * An existing attribute's options, written as they change (spec 0012,
+ * AC-236): the screen sends each to the server and passes back what is still
+ * with it (`pending`) and what was refused (`errors`, by option id).
+ */
+export interface AttributeSettingsOptionWrites {
+  readonly onAdd: (option: OptionsEditorOption) => void;
+  readonly onChange: (id: string, change: OptionsEditorChange) => void;
+  readonly onMove: (id: string, position: number) => void;
+  readonly onArchive: (id: string) => void;
+  readonly onRestore: (id: string) => void;
+  readonly pending?: ReadonlySet<string>;
+  readonly errors?: Readonly<Partial<Record<string, string>>>;
+}
 
 /** What the person chose, and which settings they changed (an edit sends only those). */
 export interface AttributeSettingsValues {
@@ -57,6 +89,10 @@ export interface AttributeSettingsValues {
   readonly isUnique: boolean;
   /** The default, or undefined for none. */
   readonly defaultValue: AttributeDefault | undefined;
+  /** The type's settings (a number's display, a currency's code); `{}` for a type that takes none. */
+  readonly config: Readonly<Record<string, unknown>>;
+  /** On create, a select's or status attribute's first options, in order; empty for any other type. */
+  readonly options: readonly OptionsEditorOption[];
   readonly changed: readonly AttributeSettingsField[];
 }
 
@@ -82,6 +118,12 @@ export interface AttributeSettingsProps {
   readonly onSubmit: (values: AttributeSettingsValues) => void;
   /** Shown read only, with this reason on every setting, and Close alone (a system attribute, or a member). */
   readonly readOnlyReason?: string;
+  /** A new option's id (a UUID v7 the screen mints): a new select's options and a new status's stages need one each. */
+  readonly newOptionId?: () => string;
+  /** The live options an attribute may hold (`usage.get`'s `optionsPerAttribute`): "N of 500". */
+  readonly optionsLimit?: number;
+  /** Editing: the options' writes, each sent as it is made. Without it an existing attribute's options are read only. */
+  readonly optionWrites?: AttributeSettingsOptionWrites;
 }
 
 /** What the member editor's search answers (its list type is the field set's union of display shapes). */
@@ -158,6 +200,9 @@ export function AttributeSettings({
   refusals = [],
   onSubmit,
   readOnlyReason,
+  newOptionId,
+  optionsLimit,
+  optionWrites,
 }: AttributeSettingsProps) {
   const formId = useId();
   const isReadOnly = readOnlyReason !== undefined;
@@ -205,6 +250,9 @@ export function AttributeSettings({
         refusals={refusals}
         onSubmit={onSubmit}
         readOnlyReason={readOnlyReason}
+        newOptionId={newOptionId}
+        optionsLimit={optionsLimit}
+        optionWrites={optionWrites}
       />
     </Modal>
   );
@@ -222,6 +270,9 @@ interface AttributeFormProps {
   readonly refusals: readonly FormRefusal[];
   readonly onSubmit: (values: AttributeSettingsValues) => void;
   readonly readOnlyReason: string | undefined;
+  readonly newOptionId: (() => string) | undefined;
+  readonly optionsLimit: number | undefined;
+  readonly optionWrites: AttributeSettingsOptionWrites | undefined;
 }
 
 function AttributeForm({
@@ -235,6 +286,9 @@ function AttributeForm({
   refusals,
   onSubmit,
   readOnlyReason,
+  newOptionId,
+  optionsLimit,
+  optionWrites,
 }: AttributeFormProps) {
   const isCreating = attribute === undefined;
   const isReadOnly = readOnlyReason !== undefined;
@@ -253,6 +307,11 @@ function AttributeForm({
   const [isUnique, setUnique] = useState(attribute?.isUnique ?? false);
   const [isMulti, setMulti] = useState(attribute?.isMulti ?? entry?.isMulti ?? false);
   const [draft, setDraft] = useState<DefaultDraft>(() => draftOf(attribute?.defaultValue));
+  const [config, setConfig] = useState<Readonly<Record<string, unknown>>>(() => attribute?.config ?? {});
+  // A new select's options and a new status's stages, kept here until create sends them (AC-230).
+  const [drafts, setDrafts] = useState<readonly OptionsEditorOption[]>(() =>
+    attribute === undefined && entry?.type === 'status' ? starterStages(newOptionId) : [],
+  );
   const [changed, setChanged] = useState<ReadonlySet<AttributeSettingsField>>(new Set());
   const [local, setLocal] = useState<readonly FormRefusal[]>([]);
   const touch = (field: AttributeSettingsField) => {
@@ -265,6 +324,8 @@ function AttributeForm({
   const allowsMultiple = entry?.allowsMultiple ?? attribute?.isMulti ?? false;
   const allowsUnique = entry?.allowsUnique ?? attribute?.isUnique ?? false;
   const hasDefault = defaultKindsFor(type).length > 0;
+  const takesOptions = type === 'select' || type === 'status';
+  const options = isCreating ? drafts : (attribute.options ?? []);
 
   // A refusal typed locally wins until the next answer; each lands on its setting, the rest above them.
   const shown = local.length > 0 ? local : refusals;
@@ -279,10 +340,15 @@ function AttributeForm({
     const next = PICKER_TYPES.find((each) => each.key === key);
     if (next === undefined) return;
     setTypeKey(key);
-    // A new type starts its own settings: its default, Unique and Allow multiple.
+    // A new type starts its own settings: its default, Unique, Allow multiple, its settings and options.
     setDraft(NO_DEFAULT);
     setUnique(false);
     setMulti(next.isMulti);
+    setConfig(next.type === 'currency' ? { defaultCurrency: DEFAULT_CURRENCY } : {});
+    // A select keeps its options between Select and Multi select; a status starts from the starter stages.
+    setDrafts((before) =>
+      next.type === 'status' ? starterStages(newOptionId) : next.type === 'select' && type === 'select' ? before : [],
+    );
     touch('type');
   };
 
@@ -296,6 +362,7 @@ function AttributeForm({
     ];
     setLocal(problems);
     if (problems.length > 0) return;
+    const fallback = hasDefault ? defaultOf(draft, type) : undefined;
     onSubmit({
       type,
       isMulti,
@@ -304,7 +371,10 @@ function AttributeForm({
       description: description.trim(),
       isRequired,
       isUnique: allowsUnique && isUnique,
-      defaultValue: hasDefault ? defaultOf(draft, type) : undefined,
+      // A default naming an option removed before create names nothing: it goes.
+      defaultValue: isCreating && takesOptions ? withinOptions(fallback, drafts) : fallback,
+      config: configFor(type, config),
+      options: isCreating && takesOptions ? drafts : [],
       changed: [...changed],
     });
   };
@@ -331,7 +401,14 @@ function AttributeForm({
     ((!kinds.includes('offset') && !kinds.includes('current_user')) ||
       draft.kind === 'static' ||
       draft.kind === 'offset');
-  const ownErrors = ['type', 'isRequired', 'isUnique', ...(hasDefaultEditor ? ['defaultValue'] : [])];
+  const ownErrors = [
+    'type',
+    'isRequired',
+    'isUnique',
+    'config',
+    ...(takesOptions ? ['options'] : []),
+    ...(hasDefaultEditor ? ['defaultValue'] : []),
+  ];
   const formRefusals = shown.filter(
     (refusal) => refusal.attributeId === undefined || !ownErrors.includes(refusal.attributeId),
   );
@@ -371,6 +448,32 @@ function AttributeForm({
         {...(isCreating ? {} : { isReadOnly: true, readOnlyReason: strings.typeLater })}
         {...(errorOf('type') === undefined ? {} : { error: errorOf('type') })}
       />
+      <TypeSettings
+        type={type}
+        config={config}
+        isReadOnly={isReadOnly}
+        error={errorOf('config')}
+        onChange={(next) => {
+          setConfig(next);
+          touch('config');
+        }}
+      />
+      {takesOptions && (
+        <OptionsSetting
+          isCreating={isCreating}
+          kind={type === 'status' ? 'status' : 'select'}
+          options={options}
+          limit={optionsLimit}
+          newId={newOptionId}
+          isReadOnly={isReadOnly || (!isCreating && optionWrites === undefined)}
+          error={errorOf('options')}
+          writes={optionWrites}
+          onDrafts={(next) => {
+            setDrafts(next);
+            touch('options');
+          }}
+        />
+      )}
       {isCreating ? (
         <Field
           label={strings.apiName}
@@ -453,6 +556,8 @@ function AttributeForm({
           isMulti={isMulti}
           draft={draft}
           members={members}
+          options={options}
+          isRequired={isRequired}
           readOnlyReason={readOnlyReason}
           error={errorOf('defaultValue')}
           onChange={(next) => {
@@ -471,6 +576,9 @@ interface DefaultSettingProps {
   readonly isMulti: boolean;
   readonly draft: DefaultDraft;
   readonly members: readonly ActorDisplay[];
+  /** A select's options or a status's stages, for the default's editor and its archived note. */
+  readonly options: readonly OptionsEditorOption[];
+  readonly isRequired: boolean;
   readonly readOnlyReason: string | undefined;
   readonly error: string | undefined;
   readonly onChange: (draft: DefaultDraft) => void;
@@ -481,9 +589,20 @@ interface DefaultSettingProps {
  * offers "Today plus days", a member "Current user", as a choice (RadioGroup) above the
  * editor.
  */
-function DefaultSetting({ type, isMulti, draft, members, readOnlyReason, error, onChange }: DefaultSettingProps) {
+function DefaultSetting({
+  type,
+  isMulti,
+  draft,
+  members,
+  options,
+  isRequired,
+  readOnlyReason,
+  error,
+  onChange,
+}: DefaultSettingProps) {
   const isReadOnly = readOnlyReason !== undefined;
   const kinds = defaultKindsFor(type);
+  const takesOptions = type === 'select' || type === 'status';
   const editorFor = (name: string) => {
     const attribute: FieldAttribute = {
       id: 'defaultValue',
@@ -493,6 +612,16 @@ function DefaultSetting({ type, isMulti, draft, members, readOnlyReason, error, 
       isRequired: false,
       isUnique: false,
       isReadOnly,
+      ...(takesOptions
+        ? {
+            options: options.map((option) => ({
+              id: option.id,
+              label: option.label,
+              hue: option.hue,
+              archived: option.isArchived,
+            })),
+          }
+        : {}),
     };
     const chosen = draft.kind === 'static' ? draft.value : null;
     const listed: readonly unknown[] = Array.isArray(chosen) ? (chosen as readonly unknown[]) : [chosen];
@@ -524,8 +653,17 @@ function DefaultSetting({ type, isMulti, draft, members, readOnlyReason, error, 
       />
     );
   };
-  // Most types: the editor alone; empty means no default.
-  if (!kinds.includes('offset') && !kinds.includes('current_user')) return editorFor(strings.defaultValue);
+  // Most types: the editor alone; empty means no default. A default naming an archived option says what new
+  // records get meanwhile (AC-236): the engine keeps the default and stands the first live option in, or nothing.
+  if (!kinds.includes('offset') && !kinds.includes('current_user')) {
+    const note = takesOptions ? archivedDefaultNote(draft, options, isRequired) : undefined;
+    return (
+      <>
+        {editorFor(strings.defaultValue)}
+        {note !== undefined && <Callout>{note}</Callout>}
+      </>
+    );
+  }
   const isDate = kinds.includes('offset');
   const choices = isDate
     ? [
@@ -574,6 +712,204 @@ function DefaultSetting({ type, isMulti, draft, members, readOnlyReason, error, 
           {...(error === undefined ? {} : { error })}
         />
       )}
+    </>
+  );
+}
+
+/** The currency a new currency attribute starts with (changeable; one is required). */
+const DEFAULT_CURRENCY = 'USD';
+
+/** The starter stages of a new status (AC-230), each with its own id. */
+function starterStages(newOptionId: (() => string) | undefined): readonly OptionsEditorOption[] {
+  return STARTER_STAGES.map((stage, index) => ({
+    id: newOptionId?.() ?? `stage-${String(index)}`,
+    label: stage.label,
+    hue: stage.hue,
+    isArchived: false,
+    outcome: stage.outcome,
+  }));
+}
+
+/** The settings a type takes: a number's display, a currency's default code; `{}` for the rest. */
+function configFor(type: AttributeType, config: Readonly<Record<string, unknown>>): Readonly<Record<string, unknown>> {
+  if (type === 'number') return { display: config.display === 'percent' ? 'percent' : 'plain' };
+  if (type === 'currency') {
+    return { defaultCurrency: typeof config.defaultCurrency === 'string' ? config.defaultCurrency : DEFAULT_CURRENCY };
+  }
+  return {};
+}
+
+/** A select or status default with any option no longer among `options` dropped (a draft option removed). */
+function withinOptions(
+  fallback: AttributeDefault | undefined,
+  options: readonly OptionsEditorOption[],
+): AttributeDefault | undefined {
+  if (fallback?.kind !== 'static') return fallback;
+  const ids = new Set(options.map((option) => option.id));
+  if (Array.isArray(fallback.value)) {
+    const kept = (fallback.value as readonly unknown[]).filter((id) => typeof id === 'string' && ids.has(id));
+    return kept.length === 0 ? undefined : { kind: 'static', value: kept };
+  }
+  return typeof fallback.value === 'string' && ids.has(fallback.value) ? fallback : undefined;
+}
+
+/**
+ * What new records get while the default names an archived option (AC-236):
+ * the first live option when the attribute is required, else nothing. None
+ * when the default names no archived option.
+ */
+function archivedDefaultNote(
+  draft: DefaultDraft,
+  options: readonly OptionsEditorOption[],
+  isRequired: boolean,
+): string | undefined {
+  if (draft.kind !== 'static') return undefined;
+  const named: readonly unknown[] = Array.isArray(draft.value) ? (draft.value as readonly unknown[]) : [draft.value];
+  const archived = options.filter((option) => option.isArchived && named.includes(option.id));
+  if (archived.length === 0) return undefined;
+  // A multi default keeps its live options; only a single one stands in or empties.
+  if (Array.isArray(draft.value)) return strings.archivedDefaultSome;
+  const first = options.find((option) => !option.isArchived);
+  return isRequired && first !== undefined ? strings.archivedDefaultFirst(first.label) : strings.archivedDefaultNone;
+}
+
+/** Props for the type's own settings. */
+interface TypeSettingsProps {
+  readonly type: AttributeType;
+  readonly config: Readonly<Record<string, unknown>>;
+  readonly isReadOnly: boolean;
+  readonly error: string | undefined;
+  readonly onChange: (config: Readonly<Record<string, unknown>>) => void;
+}
+
+/**
+ * The type's settings (AC-230): a number shows plain or as a percent (a
+ * RadioGroup, a saved setting), a currency needs its default code (a
+ * searchable Select). Nothing for the other types.
+ */
+function TypeSettings({ type, config, isReadOnly, error, onChange }: TypeSettingsProps) {
+  const { locale } = useFormatSettings();
+  if (type === 'number') {
+    return (
+      <RadioGroup
+        label={strings.numberDisplay}
+        orientation="horizontal"
+        value={config.display === 'percent' ? 'percent' : 'plain'}
+        isReadOnly={isReadOnly}
+        onChange={(next) => {
+          onChange({ ...config, display: next === 'percent' ? 'percent' : 'plain' });
+        }}
+      >
+        <Radio value="plain">{strings.plain}</Radio>
+        <Radio value="percent">{strings.percent}</Radio>
+      </RadioGroup>
+    );
+  }
+  if (type !== 'currency') return null;
+  const names = new Intl.DisplayNames(locale, { type: 'currency' });
+  const code = typeof config.defaultCurrency === 'string' ? config.defaultCurrency : DEFAULT_CURRENCY;
+  return (
+    <Select
+      label={strings.defaultCurrency}
+      hint={strings.defaultCurrencyHint}
+      isRequired
+      isSearchable
+      searchLabel={strings.searchCurrencies}
+      items={CURRENCY_CODES.map((each) => ({ id: each, label: strings.currencyItem(each, names.of(each) ?? each) }))}
+      value={code}
+      onChange={(next) => {
+        if (next !== null) onChange({ ...config, defaultCurrency: next });
+      }}
+      {...(isReadOnly ? { isReadOnly } : {})}
+      {...(error === undefined ? {} : { error })}
+    />
+  );
+}
+
+/** Props for the options setting. */
+interface OptionsSettingProps {
+  readonly isCreating: boolean;
+  readonly kind: 'select' | 'status';
+  readonly options: readonly OptionsEditorOption[];
+  readonly limit: number | undefined;
+  readonly newId: (() => string) | undefined;
+  readonly isReadOnly: boolean;
+  readonly error: string | undefined;
+  readonly writes: AttributeSettingsOptionWrites | undefined;
+  readonly onDrafts: (options: readonly OptionsEditorOption[]) => void;
+}
+
+/** A draft option with a change applied; `targetDays: null` takes its target away. */
+function changedOption(option: OptionsEditorOption, change: OptionsEditorChange): OptionsEditorOption {
+  const { targetDays, ...rest } = change;
+  if (targetDays === undefined) return { ...option, ...rest };
+  if (targetDays !== null) return { ...option, ...rest, targetDays };
+  const { targetDays: _gone, ...without } = option;
+  return { ...without, ...rest };
+}
+
+/**
+ * The options (AC-230, AC-236): before create a draft the dialog keeps (Remove
+ * takes one out), after create each change written as it is made (Archive and
+ * Restore), which its hint says.
+ */
+function OptionsSetting({
+  isCreating,
+  kind,
+  options,
+  limit,
+  newId,
+  isReadOnly,
+  error,
+  writes,
+  onDrafts,
+}: OptionsSettingProps) {
+  const common = {
+    label: kind === 'status' ? strings.stages : strings.options,
+    kind,
+    options,
+    newId: newId ?? (() => `option-${String(options.length)}`),
+    isReadOnly,
+    ...(limit === undefined ? {} : { limit }),
+  };
+  if (!isCreating && writes !== undefined) {
+    return (
+      <OptionsEditor
+        {...common}
+        hint={strings.optionsSaveAtOnce}
+        onAdd={writes.onAdd}
+        onChange={writes.onChange}
+        onMove={writes.onMove}
+        onArchive={writes.onArchive}
+        onRestore={writes.onRestore}
+        {...(writes.pending === undefined ? {} : { pending: writes.pending })}
+        {...(writes.errors === undefined ? {} : { errors: writes.errors })}
+      />
+    );
+  }
+  return (
+    <>
+      <OptionsEditor
+        {...common}
+        // A new select opens with a blank row to type in; a new status starts with its stages (AC-230).
+        startsWithBlank={isCreating && kind === 'select' && options.length === 0}
+        onAdd={(option) => {
+          onDrafts([...options, option]);
+        }}
+        onChange={(id, change) => {
+          onDrafts(options.map((option) => (option.id === id ? changedOption(option, change) : option)));
+        }}
+        onMove={(id, position) => {
+          const moving = options.find((option) => option.id === id);
+          if (moving === undefined) return;
+          const rest = options.filter((option) => option.id !== id);
+          onDrafts([...rest.slice(0, position), moving, ...rest.slice(position)]);
+        }}
+        onRemove={(id) => {
+          onDrafts(options.filter((option) => option.id !== id));
+        }}
+      />
+      {error !== undefined && <Callout tone="danger">{error}</Callout>}
     </>
   );
 }

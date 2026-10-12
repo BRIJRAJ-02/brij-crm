@@ -10,7 +10,7 @@ The field set gives every attribute type exactly one display and one editor (spe
 
 Screens never import it; they render values through `AttributeDisplay` and `AttributeEditor` with a `FieldAttribute` of this type.
 
-- **Display**: tabular figures in the language's grouping, end aligned in cells. The stored decimal string is formatted exactly, with up to 4 decimals and no float rounding.
+- **Display**: tabular figures in the language's grouping, end aligned in cells. The stored decimal string is formatted exactly, with up to 4 decimals and no float rounding. An attribute shown as a percent (`isPercent`, its Display setting, spec 0012) adds the sign to the number as typed: 12.5 shows "12.5%", and the editor shows "%" after the field.
 - **Editor**: a Field with a decimal keyboard. Typing is read in the language's format (`1.234,5` in German), falling back to the canonical form, by the library's own decimal parser, never a JS number. Five decimals or a word is refused with "Enter a number like 1,234.5, with up to 4 decimals."
 - **Text out / in** (copy, paste, CSV, the import preview): canonical decimal / the language's format or canonical.
 - **Filter operators**: =, ≠, >, ≥, <, ≤, between, is empty, is not empty.

@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn } from 'storybook/test';
+import { expect, fn, screen, waitFor } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { HuePicker } from './HuePicker.tsx';
 
@@ -39,5 +39,37 @@ export const LabelShown: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Colour')).toBeVisible();
     await expect(canvas.getByRole('radiogroup', { name: 'Colour' })).toBeInTheDocument();
+  },
+};
+
+/** Compact, in a row with no room for nine: one swatch, named with its hue, opens the nine and closes on a choice. */
+export const Compact: Story = {
+  args: { label: 'Gold colour', defaultValue: 'yellow', isCompact: true },
+  render: (args) => (
+    <Stage>
+      <HuePicker {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Gold colour: Yellow' }));
+    const sky = await screen.findByRole('radio', { name: 'Sky' });
+    await userEvent.click(sky);
+    await expect(args.onChange).toHaveBeenCalledWith('sky');
+    await waitFor(() => expect(screen.queryByRole('radiogroup')).toBeNull());
+  },
+};
+
+/** Compact and read only: the swatch names its hue, with nothing to open. */
+export const CompactReadOnly: Story = {
+  args: { label: 'Gold colour', defaultValue: 'yellow', isCompact: true, isReadOnly: true },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage>
+      <HuePicker {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('img', { name: 'Gold colour: Yellow' })).toBeInTheDocument();
+    await expect(canvas.queryByRole('button')).toBeNull();
   },
 };

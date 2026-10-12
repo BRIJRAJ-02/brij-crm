@@ -20,6 +20,8 @@ export interface TextLikeEditorProps<T extends AttributeType> extends EditorProp
   readonly type?: FieldProps['type'];
   readonly hint?: string;
   readonly prefix?: ReactNode;
+  /** A unit after the text: a percent number's sign. */
+  readonly suffix?: ReactNode;
   readonly isMultiline?: boolean;
   readonly maxLength?: number;
   /** Where the typed text sits in a cell: `end` for numbers and amounts, as their display does. */
@@ -39,6 +41,7 @@ export function TextLikeEditor<T extends AttributeType>({
   type,
   hint,
   prefix,
+  suffix,
   isMultiline = false,
   maxLength,
   startText,
@@ -72,6 +75,7 @@ export function TextLikeEditor<T extends AttributeType>({
       {...(type === undefined ? {} : { type })}
       {...(hint === undefined ? {} : { hint })}
       {...(prefix === undefined ? {} : { prefix })}
+      {...(suffix === undefined ? {} : { suffix })}
       {...(maxLength === undefined ? {} : { maxLength })}
     />
   );

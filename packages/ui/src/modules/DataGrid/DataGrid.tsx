@@ -176,6 +176,14 @@ export interface DataGridProps<Row> {
    * time; the same object again does nothing.
    */
   readonly focusColumn?: { readonly id: string };
+  /**
+   * Offers "Create "<typed>"" in a select or status cell's list when what is
+   * typed matches no live option (spec 0012, AC-238): the screen passes it
+   * only to someone who may shape the schema. Choosing it ends the edit and
+   * calls this with the row, the column and the label. Nothing is offered
+   * when absent.
+   */
+  readonly onCreateOption?: (rowId: string, columnId: string, label: string) => void;
 }
 
 const ROW = sizeToken('size-row');
@@ -274,6 +282,7 @@ export function DataGrid<Row>({
   members,
   phone,
   editorProps,
+  onCreateOption,
   focusRow,
   isCellKnown,
   rowNotes,
@@ -1479,6 +1488,14 @@ export function DataGrid<Row>({
                 ? { editing: editing.startText === undefined ? {} : { startText: editing.startText } }
                 : {})}
               {...(error === undefined ? {} : { error })}
+              {...(isEditing && onCreateOption !== undefined && id !== undefined
+                ? {
+                    onCreateOption: (label: string) => {
+                      stopEditing();
+                      onCreateOption(id, each.column.id, label);
+                    },
+                  }
+                : {})}
             />,
           ];
         })}

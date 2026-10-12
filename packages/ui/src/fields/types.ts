@@ -25,6 +25,8 @@ export interface FieldAttribute {
   readonly options?: readonly SelectOption[];
   /** Currency: the code new amounts start in. */
   readonly defaultCurrency?: string;
+  /** Number: shown as a percent (spec 0012, AC-230): "12.5%", the number as typed with a percent sign. */
+  readonly isPercent?: boolean;
   /** Phone: the country numbers without a code are read in. */
   readonly defaultCountry?: string;
   /** Record reference: whether it holds one record or several. */
@@ -85,6 +87,13 @@ export interface EditorProps<T extends AttributeType> {
   readonly startText?: string;
   /** The grid started the edit: a list, menu or search opens at once, so one key reaches the choices. */
   readonly autoOpen?: boolean;
+  /**
+   * Selects and statuses: offers "Create "<typed>"" when what is typed in the
+   * search matches no live option, and hands the label over (spec 0012,
+   * AC-238). Only for someone who may shape the schema; nothing is offered
+   * when absent.
+   */
+  readonly onCreateOption?: (label: string) => void;
 }
 
 /** A pasted or imported text the type can't take, and why ("No option called 'Hot'"). */

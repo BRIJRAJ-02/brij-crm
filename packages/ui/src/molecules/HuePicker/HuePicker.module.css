@@ -102,6 +102,11 @@
     outline-offset: var(--border-width-thick);
   }
 
+  /* The compact picker read only: the hue, with nothing to press. */
+  .swatch[data-static] {
+    cursor: default;
+  }
+
   .swatch[data-disabled] {
     opacity: var(--opacity-disabled);
     cursor: default;

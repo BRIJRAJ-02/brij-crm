@@ -1,4 +1,4 @@
-/** HuePicker's built in copy: the hues' names. */
+/** HuePicker's built in copy: the hues' names, and the compact swatch's name. */
 export const strings = {
   gray: 'Gray',
   red: 'Red',
@@ -9,4 +9,6 @@ export const strings = {
   sky: 'Sky',
   blue: 'Blue',
   purple: 'Purple',
+  /** The compact picker's swatch: what it is for and the hue chosen ("Gold colour: Yellow"). */
+  chosen: (label: string, hue: string) => `${label}: ${hue}`,
 } as const;

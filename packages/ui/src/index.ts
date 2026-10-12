@@ -177,6 +177,13 @@ export {
 } from './modules/FilterBuilder/FilterBuilder.tsx';
 export { completeFilters, countFilters } from './modules/FilterBuilder/filter-model.ts';
 export {
+  OptionsEditor,
+  type OptionOutcome,
+  type OptionsEditorChange,
+  type OptionsEditorOption,
+  type OptionsEditorProps,
+} from './modules/OptionsEditor/OptionsEditor.tsx';
+export {
   ShortcutHelp,
   type Shortcut,
   type ShortcutGroup,

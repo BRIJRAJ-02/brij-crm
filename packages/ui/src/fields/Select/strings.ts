@@ -4,6 +4,8 @@ export const strings = {
   choose: (name: string) => `Set ${name}…`,
   search: (name: string) => `Search ${name}`,
   clear: 'Clear',
+  /** The last item when what is typed is no option yet (spec 0012, AC-238). */
+  create: (label: string) => `Create "${label}"`,
   /** Between the chosen options on the menu's button: "Proposal, Won". */
   listJoin: ', ',
 } as const;

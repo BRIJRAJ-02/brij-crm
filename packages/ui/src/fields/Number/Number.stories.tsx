@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FieldSurfaces } from '../../workbench/FieldSurfaces/FieldSurfaces.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
+import { AttributeDisplay } from '../AttributeDisplay.tsx';
 import { AttributeEditor } from '../AttributeEditor.tsx';
 import { expect, fn } from 'storybook/test';
 
@@ -59,5 +60,20 @@ export const Invalid: Story = {
     await userEvent.tab();
     await expect(canvas.getByText(/with up to 4 decimals/)).toBeInTheDocument();
     await expect(args.onCommit).not.toHaveBeenCalled();
+  },
+};
+
+/** Shown as a percent (its Display setting, spec 0012): the number as typed with its sign, and "%" after the field. */
+export const Percent: Story = {
+  args: { attribute: { ...sample.attribute, name: 'Margin', isPercent: true }, value: '12.5' },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeDisplay attribute={args.attribute} value={args.value} surface="panel" />
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('12.5%')).toBeInTheDocument();
+    await expect(canvas.getByText('%')).toBeInTheDocument();
   },
 };

@@ -43,4 +43,20 @@ export const strings = {
   days: 'Days from today',
   daysHint: 'From 0 to 3,650. New records get today’s date plus this many days.',
   daysInvalid: 'Give a whole number of days from 0 to 3,650.',
+  /** The type's settings (AC-230). */
+  numberDisplay: 'Display',
+  plain: 'Plain',
+  percent: 'Percent',
+  defaultCurrency: 'Default currency',
+  defaultCurrencyHint: 'New amounts start in this currency; each value keeps its own.',
+  searchCurrencies: 'Search currencies',
+  currencyItem: (code: string, name: string) => `${code} · ${name}`,
+  options: 'Options',
+  stages: 'Stages',
+  /** Under an existing attribute's options: they don't wait for Save. */
+  optionsSaveAtOnce: 'Changes to options save as you make them.',
+  /** Under the default when it names an archived option (AC-236). */
+  archivedDefaultFirst: (label: string) => `This option is archived. New records get ${label}.`,
+  archivedDefaultNone: 'This option is archived. New records get no value.',
+  archivedDefaultSome: 'Some of these options are archived. New records get the others.',
 } as const;

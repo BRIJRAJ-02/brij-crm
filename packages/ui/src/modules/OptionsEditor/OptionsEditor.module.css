@@ -1,0 +1,148 @@
+/* OptionsEditor: the group's label and its "N of 500" over a list of
+   size-input tall rows, space-4 apart: the drag handle, the colour, the
+   label (and for a stage its outcome and target days), the row's menu.
+   A row being dragged fades; the drop target takes the inset ring. Add
+   option sits under the list; archived options under it, muted. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+
+  .head {
+    display: flex;
+    gap: var(--space-8);
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .title {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .usage {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .empty {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .emptyTitle {
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    outline: none;
+  }
+
+  .row {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    min-block-size: var(--size-input);
+    padding-inline: var(--space-4);
+    border-radius: var(--radius-sm);
+    outline: none;
+  }
+
+  .row[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .row[data-dragging] {
+    opacity: var(--opacity-busy);
+  }
+
+  .row[data-drop-target] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  /* A grid, so the field inside stretches to the row's free width. */
+  .label {
+    display: grid;
+    flex: 1;
+    min-inline-size: 0;
+  }
+
+  .outcome {
+    display: grid;
+    flex: none;
+    inline-size: var(--size-column-narrow);
+  }
+
+  .days {
+    display: grid;
+    flex: none;
+    inline-size: calc(2 * var(--size-chip) + var(--size-control));
+  }
+
+  .meta {
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    white-space: nowrap;
+  }
+
+  .adder {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    align-items: center;
+  }
+
+  .note,
+  .error {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .error {
+    color: var(--danger);
+  }
+
+  .archived {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .archivedRow {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    justify-content: space-between;
+    min-block-size: var(--size-input);
+    padding-inline: var(--space-4);
+  }
+
+  @media (forced-colors: active) {
+    .row[data-focus-visible],
+    .row[data-drop-target] {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: calc(-1 * var(--border-width-thick));
+    }
+  }
+}

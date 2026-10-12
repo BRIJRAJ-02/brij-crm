@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import {
   Autocomplete,
   Button as AriaButton,
@@ -72,12 +72,22 @@ export interface SelectProps {
   readonly isSearchable?: boolean;
   /** The search field's name. Defaults to "Search". */
   readonly searchLabel?: string;
+  /**
+   * Offers "Create "<typed>"" last in a search over the options, when what is
+   * typed matches no live option's label (ignoring case): a select or status
+   * cell for someone who may shape the schema (spec 0012, AC-238). Choosing it
+   * hands the label over; the list closes. Turns the search on.
+   */
+  readonly onCreate?: (label: string) => void;
+  /** What the search starts with: the key that opened a grid cell's editor. */
+  readonly defaultSearch?: string;
   /** Opens it on first render: a grid cell's edit, stories and previews. */
   readonly defaultOpen?: boolean;
   readonly onOpenChange?: (isOpen: boolean) => void;
 }
 
 const CLEAR = '\u0000clear';
+const CREATE = '\u0000create';
 
 function Face({ item, optionStyle }: { readonly item: SelectItem; readonly optionStyle: SelectOptionStyle }) {
   if (optionStyle === 'tag') {
@@ -130,8 +140,11 @@ export function Select({
   onOpenChange,
   isSearchable = false,
   searchLabel = strings.search,
+  onCreate,
+  defaultSearch,
 }: SelectProps) {
   const { contains } = useFilter({ sensitivity: 'base' });
+  const [query, setQuery] = useState(defaultSearch ?? '');
   const current = value ?? defaultValue ?? null;
   const chosen = items.find((item) => item.id === current);
   const description = (isReadOnly ? readOnlyReason : undefined) ?? hint;
@@ -156,8 +169,20 @@ export function Select({
   }
 
   const disabledKeys = items.filter((item) => item.isArchived === true && item.id !== current).map((item) => item.id);
-  const options: readonly SelectItem[] =
-    isClearable && !isRequired && current !== null ? [...items, { id: CLEAR, label: strings.clear, icon: 'x' }] : items;
+  const typed = query.trim();
+  const canCreate =
+    onCreate !== undefined &&
+    typed !== '' &&
+    !items.some((item) => item.isArchived !== true && item.label.trim().toLowerCase() === typed.toLowerCase());
+  const options: readonly SelectItem[] = [
+    ...items,
+    ...(isClearable && !isRequired && current !== null
+      ? [{ id: CLEAR, label: strings.clear, icon: 'x' as const }]
+      : []),
+    // Its words hold what was typed, so the search's own filter always keeps it.
+    ...(canCreate ? [{ id: CREATE, label: strings.create(typed), icon: 'plus' as const }] : []),
+  ];
+  const hasSearch = isSearchable || onCreate !== undefined;
 
   const list = (
     <ListBox
@@ -170,11 +195,11 @@ export function Select({
           id={item.id}
           textValue={item.label}
           className={styles.option}
-          data-clear={item.id === CLEAR || undefined}
+          data-clear={item.id === CLEAR || item.id === CREATE || undefined}
         >
           {({ isSelected }) => (
             <>
-              <Face item={item} optionStyle={item.id === CLEAR ? 'plain' : optionStyle} />
+              <Face item={item} optionStyle={item.id === CLEAR || item.id === CREATE ? 'plain' : optionStyle} />
               {item.description !== undefined && <span className={styles.description}>{item.description}</span>}
               {isSelected && (
                 <span className={styles.check}>
@@ -204,6 +229,10 @@ export function Select({
       {...(defaultOpen === undefined ? {} : { defaultOpen })}
       {...(onOpenChange === undefined ? {} : { onOpenChange })}
       onChange={(next) => {
+        if (next === CREATE) {
+          if (canCreate) onCreate(typed);
+          return;
+        }
         onChange?.(next === CLEAR || next === null ? null : String(next));
       }}
     >
@@ -231,9 +260,9 @@ export function Select({
         {error}
       </FieldError>
       <Popover width={variant === 'cell' ? 'menu' : 'trigger'}>
-        {isSearchable ? (
+        {hasSearch ? (
           <div className={styles.searchable}>
-            <Autocomplete filter={contains}>
+            <Autocomplete filter={contains} inputValue={query} onInputChange={setQuery}>
               <div className={styles.search}>
                 {/* A search over a list opens with its field focused, the pattern React Aria expects. */}
                 {/* eslint-disable-next-line jsx-a11y-x/no-autofocus */}
