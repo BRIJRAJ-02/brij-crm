@@ -4,6 +4,7 @@
 // runs; the screens know a kind's label and whether it can be cancelled from
 // `JOB_KINDS` in `@crm/contracts`, and `defineKind` checks the two agree.
 import { JOB_KINDS, type JobKind } from '@crm/contracts';
+import type { WorkspaceTx } from '@crm/db';
 import type { z } from 'zod';
 import type { WriteContext } from '../engine/write.ts';
 
@@ -41,6 +42,23 @@ export interface StepOutcome {
   readonly counts?: { readonly done: number; readonly refused?: number; readonly skipped?: number };
   /** Merged into the job's `result` (the kind's summary). */
   readonly result?: Readonly<Record<string, unknown>>;
+  /**
+   * Ends the job `failed` now, with no retry (AC-124): the batch's item
+   * states and counts commit with it, and the kind's `onFailed` runs in the
+   * same transaction. The code is an existing one from `ERROR_MAP`; the
+   * message is plain and quotes no value.
+   */
+  readonly failed?: { readonly code: string; readonly message: string };
+}
+
+/** What a kind's `onFailed` hook gets: the job as it ended (AC-124). */
+export interface FailedJob<P> {
+  readonly id: string;
+  /** Undefined when the params no longer parse (`JOB_INVALID`). */
+  readonly params: P | undefined;
+  readonly checkpoint: unknown;
+  readonly startedBy: { readonly type: 'member' | 'system'; readonly memberId?: string };
+  readonly error: { readonly code: string; readonly message: string };
 }
 
 /**
@@ -66,7 +84,33 @@ export interface KindDefinition<P> {
   readonly sample: P;
   /** A batch size the params choose, within 1 to 5,000 (the test kind's). */
   batchSizeOf?(params: P): number;
+  /**
+   * The coalescing window (AC-110): a start waits this long before it runs, so
+   * a burst of writes with one `dedupeKey` lands in one job. 0 when absent.
+   */
+  readonly startDelayMs?: number;
+  /**
+   * False keeps the kind's jobs out of the 20 unfinished member jobs (AC-126),
+   * and only with coalescing: every start must carry a `dedupeKey`.
+   */
+  readonly countsTowardLimit?: boolean;
+  /**
+   * The snapshot (AC-109), for an item kind started with `snapshot` or
+   * `confirm`: the next ids after `after` (a keyset cursor, the last id of
+   * the page before; undefined for the first page), in id order, at most
+   * `limit`. A read on `tx` only, of rows that existed at the start (the
+   * params carry the start's `asOf`), never a write.
+   */
+  snapshot?(tx: WorkspaceTx, params: P, after: string | undefined, limit: number): Promise<readonly string[]>;
   step(context: WriteContext, input: StepInput<P>): Promise<StepOutcome>;
+  /**
+   * Undoes or releases what the feature holds for a job that ended `failed`,
+   * on every path that ends it so (a step's `failed`, `JOB_FAILED`,
+   * `ACTOR_REMOVED`, `JOB_INVALID`), in the transaction that sets it, under
+   * the system's scope (AC-124). Short and idempotent: it runs again if it
+   * throws. Cancelling and `WORKSPACE_GONE` don't run it.
+   */
+  onFailed?(context: WriteContext, job: FailedJob<P>): Promise<void>;
 }
 
 /** A kind of any params, as the registry holds it. */
@@ -91,6 +135,15 @@ export function defineKind<P>(definition: KindDefinition<P>): KindDefinition<P> 
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1 || maxAttempts > MAX_ATTEMPTS[lane]) {
     throw new Error(`Kind ${kind}: a ${lane} kind tries at most ${String(MAX_ATTEMPTS[lane])} times.`);
   }
+  if (
+    definition.startDelayMs !== undefined &&
+    (!Number.isInteger(definition.startDelayMs) || definition.startDelayMs < 0)
+  ) {
+    throw new Error(`Kind ${kind}: its start delay is a whole number of milliseconds, 0 or more.`);
+  }
+  if (definition.snapshot !== undefined && definition.mode !== 'items') {
+    throw new Error(`Kind ${kind}: only an item kind takes a snapshot.`);
+  }
   if (Object.hasOwn(JOB_KINDS, kind)) {
     const listed = JOB_KINDS[kind as JobKind];
     if (listed.lane !== lane || listed.cancellable !== cancellable) {
@@ -106,6 +159,8 @@ export interface JobRegistry {
   get(kind: string): AnyKind | undefined;
   /** Every kind's name. */
   kinds(): readonly string[];
+  /** The kinds whose jobs stay out of the unfinished member jobs limit (`countsTowardLimit: false`, AC-126). */
+  uncounted(): readonly string[];
 }
 
 /** A registry of `kinds`. Two kinds with one name is a programming error. */
@@ -116,9 +171,11 @@ export function createRegistry(kinds: readonly AnyKind[]): JobRegistry {
     byName.set(kind.kind, kind);
   }
   const names = Object.freeze([...byName.keys()]);
+  const uncounted = Object.freeze(kinds.filter((kind) => kind.countsTowardLimit === false).map((kind) => kind.kind));
   return {
     get: (kind) => byName.get(kind),
     kinds: () => names,
+    uncounted: () => uncounted,
   };
 }
 

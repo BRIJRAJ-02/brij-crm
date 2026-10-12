@@ -118,6 +118,7 @@ export {
   MAX_ATTEMPTS,
   MAX_BATCH_SIZE,
   type AnyKind,
+  type FailedJob,
   type ItemOutcome,
   type JobRegistry,
   type KindDefinition,
@@ -129,6 +130,7 @@ export { SIMULATED_REFUSAL } from './jobs/kinds/dev-simulate.ts';
 export {
   createRunner,
   retryDelayMs,
+  SNAPSHOT_PAGE,
   type Runner,
   type RunnerDeps,
   type RunnerLog,

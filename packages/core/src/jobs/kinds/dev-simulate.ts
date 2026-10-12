@@ -5,6 +5,9 @@
 // the injected sleep, so tests don't wait), marks its items done, refuses
 // every `refuseEvery`th with SIMULATED_REFUSAL, and throws once when its
 // batch holds `failAtPosition` (only on the first try, so the retry passes).
+// Started with a confirm, its snapshot makes `snapshotItems` synthetic ids,
+// the same ones in the same order on every read, so it goes through
+// `preparing` and `ready` first (AC-109).
 import * as z from 'zod';
 import { defineKind, type KindDefinition } from '../registry.ts';
 
@@ -24,12 +27,25 @@ export const DevSimulateParams = z.strictObject({
   batchMillis: z.number().int().min(0).max(2_000),
   failAtPosition: z.number().int().min(1).optional(),
   refuseEvery: z.number().int().min(1).optional(),
+  /** How many synthetic ids the snapshot makes (a start with a confirm). */
+  snapshotItems: z.number().int().min(1).max(200_000).optional(),
 });
 /** The test kind's params. */
 export type DevSimulateParams = z.infer<typeof DevSimulateParams>;
 
 /** The code a refused test item carries. */
 export const SIMULATED_REFUSAL = 'SIMULATED_REFUSAL';
+
+/** The `n`th synthetic id a snapshot makes (1 based): a uuid v7 shape whose last 12 digits count. */
+export function syntheticId(n: number): string {
+  return `00000000-0000-7000-8000-${n.toString(16).padStart(12, '0')}`;
+}
+
+/** Which synthetic id `id` is, or 0 for any other id. */
+function syntheticNumber(id: string | undefined): number {
+  if (id === undefined || !id.startsWith('00000000-0000-7000-8000-')) return 0;
+  return Number.parseInt(id.slice(-12), 16) || 0;
+}
 
 /** The test kind, waiting with `sleep`. */
 export function devSimulate(sleep: Sleep = realSleep): KindDefinition<DevSimulateParams> {
@@ -44,6 +60,13 @@ export function devSimulate(sleep: Sleep = realSleep): KindDefinition<DevSimulat
     batchSize: 500,
     sample: { batchSize: 100, batchMillis: 0, refuseEvery: 7 },
     batchSizeOf: (params) => params.batchSize ?? 500,
+    snapshot(_tx, params, after, limit) {
+      const from = syntheticNumber(after) + 1;
+      const to = Math.min(params.snapshotItems ?? 0, from + limit - 1);
+      return Promise.resolve(
+        Array.from({ length: Math.max(to - from + 1, 0) }, (_, index) => syntheticId(from + index)),
+      );
+    },
     async step(_context, { job, items = [] }) {
       const { batchMillis, failAtPosition, refuseEvery } = job.params;
       await sleep(batchMillis);

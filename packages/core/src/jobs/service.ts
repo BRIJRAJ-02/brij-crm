@@ -1,6 +1,7 @@
-// Background jobs, as services (spec 0008, milestone 1): starting a job inside
-// the caller's write (`startJob`), reading one or a page of them, cancelling
-// and confirming, and the test job. A job is visible to the member who
+// Background jobs, as services (spec 0008): starting a job inside the
+// caller's write (`startJob`: coalescing, once keys, a later start and a
+// snapshot to confirm), reading one or a page of them, cancelling and
+// confirming, and the test job. A job is visible to the member who
 // started it and to holders of `jobs.manage` (owners and admins); anyone
 // else, and any id that names nothing, gets the same NOT_FOUND (AC-114).
 import { randomUUID } from 'node:crypto';
@@ -23,7 +24,7 @@ import { limitsOf } from '../engine/limits.ts';
 import { refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
-import type { JobRegistry } from './registry.ts';
+import type { AnyKind, JobRegistry } from './registry.ts';
 
 const { jobs, workspaceCounters } = schema;
 
@@ -110,7 +111,7 @@ async function readJob(
   return row;
 }
 
-/** What starting a job takes (spec 0008, Starting a job; milestone 1's part). */
+/** What starting a job takes (spec 0008, Starting a job). */
 export interface StartJobInput {
   /** The job's id: the client's uuid v7 for a member job (the idempotent start key); minted when absent. */
   readonly id?: string;
@@ -120,16 +121,60 @@ export interface StartJobInput {
   readonly subject?: { readonly type: 'object' | 'attribute' | 'list'; readonly id: string };
   /** The ids an item job works through, in order (duplicates kept once). */
   readonly items?: readonly string[];
+  /** Fill the items from the kind's snapshot in the background first (`preparing`, AC-109). */
+  readonly snapshot?: boolean;
+  /** Snapshot, then wait for `jobs.confirm` (`ready`, for an hour) before running (AC-109). */
+  readonly confirm?: boolean;
+  /** Not before this time (AC-111); else now plus the kind's start delay. */
+  readonly runAt?: Date;
+  /**
+   * Coalescing (AC-110): while a job of this kind and key still waits
+   * (`queued`, no slice run), this start adds its items to it and answers it.
+   * A member kind's key is kept per starter, so no member's items ever run as
+   * another member.
+   */
+  readonly dedupeKey?: string;
+  /** A system kind's start that must happen once, such as `maintenance:2026-10-04`: a second answers the first. */
+  readonly onceKey?: string;
 }
+
+/** Where a snapshot got to: the last id read, how many it stored, the last position used, and whether to confirm. */
+export interface SnapshotCheckpoint {
+  readonly after?: string;
+  readonly count: number;
+  readonly position: number;
+  readonly confirm: boolean;
+}
+
+/** A snapshot's checkpoint, as `startJob` wrote it and each snapshot batch moves it (`{ snapshot: … }`). */
+export function readSnapshotCheckpoint(checkpoint: unknown): SnapshotCheckpoint {
+  const inner: unknown =
+    typeof checkpoint === 'object' && checkpoint !== null && 'snapshot' in checkpoint ? checkpoint.snapshot : undefined;
+  const value = typeof inner === 'object' && inner !== null ? (inner as Record<string, unknown>) : {};
+  const whole = (field: unknown) => (typeof field === 'number' && Number.isInteger(field) && field >= 0 ? field : 0);
+  return {
+    ...(isUuid(value.after) ? { after: value.after } : {}),
+    count: whole(value.count),
+    position: whole(value.position),
+    confirm: value.confirm === true,
+  };
+}
+
+/** The longest coalescing or once key a start may carry. */
+const MAX_KEY = 200;
 
 /**
  * Starts a job inside the caller's write transaction (AC-102): if the write
  * rolls back, no job exists and nothing runs; once it commits, the job is on
  * the queue. Starting again with the same id answers the job already made. A
  * member kind needs a member in the scope (a programming error otherwise); a
- * system kind is the system's whoever starts it (AC-125). Refusals: 422
- * CONFIG_INVALID (params), 422 JOB_TOO_LARGE (over a million items), 409
- * LIMIT_REACHED (the workspace's 21st unfinished member job), 409 ID_TAKEN
+ * system kind is the system's whoever starts it (AC-125). With `dedupeKey` a
+ * start joins the job of that kind and key still waiting (AC-110), with
+ * `onceKey` it answers the job already made for it, with `runAt` it waits
+ * till then (AC-111), and with `snapshot` or `confirm` it fills its items in
+ * the background first (AC-109). Refusals: 422 CONFIG_INVALID (params), 422
+ * JOB_TOO_LARGE (over a million items), 409 LIMIT_REACHED (the workspace's
+ * 21st unfinished member job of a kind that counts, AC-126), 409 ID_TAKEN
  * (the id names someone else's job, or one of another kind).
  */
 export async function startJob(
@@ -145,13 +190,31 @@ export async function startJob(
   const items = [...new Set(input.items ?? [])];
   if (!items.every(isUuid)) throw new Error('Job items are ids.');
   const limits = limitsOf(scope);
-  if (items.length > limits.jobItems) {
-    throw refuse('JOB_TOO_LARGE', `A job works on at most ${limits.jobItems.toLocaleString('en')} items.`);
-  }
+  if (items.length > limits.jobItems) throw tooLarge(limits.jobItems);
   const starter = kind.actor === 'system' ? undefined : memberOf(scope);
   if (kind.actor === 'member' && starter === undefined) {
     throw new Error(`Kind ${kind.kind} is a member's job: start it from a member's scope.`);
   }
+  // Programming errors, never refusals: the feature's own code chose these.
+  const snapshot = input.snapshot === true || input.confirm === true;
+  if (snapshot && kind.snapshot === undefined) throw new Error(`Kind ${kind.kind} takes no snapshot.`);
+  if (snapshot && items.length > 0) throw new Error('A snapshot job takes its items from its snapshot.');
+  if (snapshot && input.dedupeKey !== undefined) throw new Error('A coalesced start names its items itself.');
+  if (kind.countsTowardLimit === false && input.dedupeKey === undefined) {
+    throw new Error(`Kind ${kind.kind} stays out of the job limit, so every start carries a dedupeKey.`);
+  }
+  if (input.onceKey !== undefined && kind.actor !== 'system') throw new Error('Only a system kind takes a onceKey.');
+  for (const key of [input.dedupeKey, input.onceKey]) {
+    if (key !== undefined && (key.length === 0 || key.length > MAX_KEY))
+      throw new Error('A job key is 1 to 200 characters.');
+  }
+  if (input.runAt !== undefined && Number.isNaN(input.runAt.getTime())) throw new Error('A job’s run time is a date.');
+  const dedupeKey =
+    input.dedupeKey === undefined
+      ? undefined
+      : starter === undefined
+        ? input.dedupeKey
+        : `member:${starter}:${input.dedupeKey}`;
   const jobId = input.id ?? randomUUID();
   if (!isUuid(jobId)) throw new Error('A job id is a uuid.');
 
@@ -159,8 +222,17 @@ export async function startJob(
   // the id (another member's, another kind) is refused rather than handed back as if this start had made it.
   const existing = await sameStart(tx, scope.workspaceId, jobId);
   if (existing !== undefined) return replayOf(existing, kind.kind, starter, jobId);
+  if (input.onceKey !== undefined) {
+    const once = await onceJob(tx, scope.workspaceId, kind.kind, input.onceKey);
+    if (once !== undefined) return { jobId: once, merged: false };
+  }
+  const join = { kind, params: parsed.data, items, limit: limits.jobItems };
+  if (dedupeKey !== undefined) {
+    const merged = await mergeInto(context, join, dedupeKey);
+    if (merged !== undefined) return { jobId: merged, merged: true };
+  }
 
-  if (starter !== undefined) {
+  if (starter !== undefined && kind.countsTowardLimit !== false) {
     // The limit, counted under the counter row's lock (which every write takes last), so two starts take turns.
     const [counters] = await tx
       .select({ workspaceId: workspaceCounters.workspaceId })
@@ -168,11 +240,13 @@ export async function startJob(
       .where(eq(workspaceCounters.workspaceId, scope.workspaceId))
       .for('update');
     if (counters === undefined) throw new Error('The workspace has no counters row.');
+    // Kinds that stay out of the limit (AC-126) aren't counted; their one waiting job per key bounds them.
     const [counted] = await tx
       .execute<{ n: number }>(
         sql`
       select count(*)::int as n from jobs
       where workspace_id = ${scope.workspaceId} and created_by_type = 'member' and finished_at is null
+        and kind not in (select jsonb_array_elements_text(${JSON.stringify(registry.uncounted())}::jsonb))
     `,
       )
       .then((result) => result.rows);
@@ -184,6 +258,11 @@ export async function startJob(
     }
   }
 
+  // When it may first run: the time asked for, else now plus the kind's coalescing window.
+  const runAt =
+    input.runAt === undefined
+      ? sql`now() + make_interval(secs => ${(kind.startDelayMs ?? 0) / 1000})`
+      : sql`${input.runAt.toISOString()}::timestamptz`;
   const inserted = await tx
     .insert(jobs)
     .values({
@@ -191,37 +270,133 @@ export async function startJob(
       id: jobId,
       kind: kind.kind,
       lane: kind.lane,
-      status: 'queued',
+      status: snapshot ? 'preparing' : 'queued',
       params: parsed.data,
       subjectType: input.subject?.type ?? null,
       subjectId: input.subject?.id ?? null,
+      dedupeKey: dedupeKey ?? null,
+      onceKey: input.onceKey ?? null,
       priority: starter === undefined ? PRIORITY.system : PRIORITY.member,
-      total: kind.mode === 'items' ? items.length : null,
+      runAt,
+      total: snapshot || kind.mode !== 'items' ? null : items.length,
+      checkpoint: snapshot ? { snapshot: { count: 0, position: 0, confirm: input.confirm === true } } : null,
       createdByType: starter === undefined ? 'system' : 'member',
       createdById: starter ?? null,
       createdByMemberId: starter ?? null,
     })
     .onConflictDoNothing()
     .returning({ id: jobs.id });
-  // A concurrent start with the same id won: answer its job, if it is this same start.
+  // A concurrent start won (the same id, the same once key, or the same waiting key): answer its job.
   if (inserted.length === 0) {
     const winner = await sameStart(tx, scope.workspaceId, jobId);
-    if (winner === undefined) throw new Error('A job with this id went away under its start.');
-    return replayOf(winner, kind.kind, starter, jobId);
+    if (winner !== undefined) return replayOf(winner, kind.kind, starter, jobId);
+    if (input.onceKey !== undefined) {
+      const once = await onceJob(tx, scope.workspaceId, kind.kind, input.onceKey);
+      if (once !== undefined) return { jobId: once, merged: false };
+    }
+    if (dedupeKey !== undefined) {
+      const merged = await mergeInto(context, join, dedupeKey);
+      if (merged !== undefined) return { jobId: merged, merged: true };
+    }
+    throw new Error('A job with this id went away under its start.');
   }
 
-  for (let offset = 0; offset < items.length; offset += ITEM_CHUNK) {
-    const chunk = items.slice(offset, offset + ITEM_CHUNK);
-    await tx.execute(sql`
-      insert into job_items (workspace_id, job_id, position, item_id)
-      select ${scope.workspaceId}::uuid, ${jobId}::uuid, ${offset}::int + t.ord, t.item
-      from unnest(${`{${chunk.join(',')}}`}::uuid[]) with ordinality as t(item, ord)
-    `);
-  }
-  await enqueue(tx, jobId);
+  await insertItems(tx, scope.workspaceId, jobId, items, 0);
+  await enqueue(tx, jobId, runAt);
   // Its first event goes out with the write (spec 0007's `jobs` kind), under its starter.
   context.record({ jobs: [{ jobId, startedBy: starter ?? null }] });
   return { jobId, merged: false };
+}
+
+/** A start too large to hold. */
+const tooLarge = (limit: number) =>
+  refuse('JOB_TOO_LARGE', `A job works on at most ${limit.toLocaleString('en')} items.`);
+
+/** The job of this kind already made for a once key, if any. */
+async function onceJob(tx: WorkspaceTx, workspaceId: string, kind: string, onceKey: string) {
+  const [row] = await tx
+    .select({ id: jobs.id })
+    .from(jobs)
+    .where(and(eq(jobs.workspaceId, workspaceId), eq(jobs.kind, kind), eq(jobs.onceKey, onceKey)));
+  return row?.id;
+}
+
+/**
+ * Coalescing (AC-110): adds a start's items to the waiting job of its kind
+ * and key (`queued`, no slice run yet), under that job's lock, after its last
+ * position, an item already there kept once. Answers that job's id, or
+ * undefined when none waits. The key must name the params too: a start whose
+ * params differ from the waiting job's is a programming error.
+ */
+async function mergeInto(
+  context: WriteContext,
+  join: { readonly kind: AnyKind; readonly params: unknown; readonly items: readonly string[]; readonly limit: number },
+  dedupeKey: string,
+): Promise<string | undefined> {
+  const { tx, scope } = context;
+  const [waiting] = await tx
+    .select({
+      id: jobs.id,
+      total: jobs.total,
+      createdByMemberId: jobs.createdByMemberId,
+      sameParams: sql<boolean>`${jobs.params} = ${JSON.stringify(join.params)}::jsonb`,
+    })
+    .from(jobs)
+    .where(
+      and(
+        eq(jobs.workspaceId, scope.workspaceId),
+        eq(jobs.kind, join.kind.kind),
+        eq(jobs.dedupeKey, dedupeKey),
+        eq(jobs.status, 'queued'),
+        eq(jobs.slices, 0),
+      ),
+    )
+    .for('update');
+  if (waiting === undefined) return undefined;
+  if (!waiting.sameParams) throw new Error(`A start of ${join.kind.kind} joins a waiting job with other params.`);
+  if (join.kind.mode === 'items' && join.items.length > 0) {
+    if ((waiting.total ?? 0) + join.items.length > join.limit) throw tooLarge(join.limit);
+    const [last] = await tx
+      .execute<{ position: number }>(
+        sql`select coalesce(max(position), 0)::int as position from job_items
+            where workspace_id = ${scope.workspaceId} and job_id = ${waiting.id}`,
+      )
+      .then((result) => result.rows);
+    const added = await insertItems(tx, scope.workspaceId, waiting.id, join.items, last?.position ?? 0);
+    if (added > 0) {
+      await tx
+        .update(jobs)
+        .set({ total: sql`coalesce(${jobs.total}, 0) + ${added}`, updatedAt: sql`now()` })
+        .where(and(eq(jobs.workspaceId, scope.workspaceId), eq(jobs.id, waiting.id)));
+      context.record({ jobs: [{ jobId: waiting.id, startedBy: waiting.createdByMemberId }] });
+    }
+  }
+  return waiting.id;
+}
+
+/**
+ * Adds `ids` to a job's items at the positions after `after`, in chunks of
+ * 5,000; an id the job already holds is kept once. Answers how many it added.
+ */
+export async function insertItems(
+  tx: WorkspaceTx,
+  workspaceId: string,
+  jobId: string,
+  ids: readonly string[],
+  after: number,
+): Promise<number> {
+  let added = 0;
+  for (let offset = 0; offset < ids.length; offset += ITEM_CHUNK) {
+    const chunk = ids.slice(offset, offset + ITEM_CHUNK);
+    const result = await tx.execute(sql`
+      insert into job_items (workspace_id, job_id, position, item_id)
+      select ${workspaceId}::uuid, ${jobId}::uuid, ${after + offset}::int + t.ord, t.item
+      from unnest(${`{${chunk.join(',')}}`}::uuid[]) with ordinality as t(item, ord)
+      on conflict do nothing
+    `);
+    added += result.rowCount ?? 0;
+  }
+  return added;
 }
 
 /** A job already made with an id: its kind and starter, to tell a replay from someone else's job. */
@@ -251,15 +426,20 @@ function replayOf(
 
 /**
  * Puts a job on Graphile's queue through `crm_enqueue_job` (job key
- * `crm-job:<workspace>:<id>`, `replace`), at `runAt` or now. The function refuses (and
- * this throws, a programming error) for a job that isn't runnable or isn't
- * in the transaction's workspace.
+ * `crm-job:<workspace>:<id>`, `replace`), at `runAt` or now. Answers false
+ * when the function refused: a job that isn't runnable (finished, or `ready`)
+ * or isn't in the transaction's workspace.
  */
-export async function enqueue(tx: WorkspaceTx, jobId: string, runAt?: SQL): Promise<void> {
+export async function tryEnqueue(tx: WorkspaceTx, jobId: string, runAt?: SQL): Promise<boolean> {
   const result = await tx.execute<{ queued: boolean }>(
     sql`select crm_enqueue_job(${jobId}::uuid, ${runAt ?? sql`now()`}) as queued`,
   );
-  if (result.rows[0]?.queued !== true) throw new Error('The job could not be queued.');
+  return result.rows[0]?.queued === true;
+}
+
+/** As `tryEnqueue`, but a refusal throws: the job was meant to be runnable here (a programming error). */
+export async function enqueue(tx: WorkspaceTx, jobId: string, runAt?: SQL): Promise<void> {
+  if (!(await tryEnqueue(tx, jobId, runAt))) throw new Error('The job could not be queued.');
 }
 
 /** One job, for its starter or a holder of `jobs.manage`; NOT_FOUND otherwise (AC-114). */
@@ -444,6 +624,8 @@ export interface TestJobInput {
   readonly batchMillis: number;
   readonly failAtPosition?: number | undefined;
   readonly refuseEvery?: number | undefined;
+  /** Snapshot its items in the background, then wait for a confirm (AC-109). */
+  readonly confirm?: boolean | undefined;
 }
 
 /**
@@ -462,13 +644,20 @@ export async function startTestJob(
   if (!managesJobs(scope)) throw refuse('FORBIDDEN', PERMISSIONS['jobs.manage'].message);
   if (registry.get('dev.simulate') === undefined) throw refuse('NOT_FOUND', 'There is nothing at this address.');
   const id = checkId(input.id, JOB_NOT_FOUND);
-  const items = Array.from({ length: input.items }, () => randomUUID());
+  const confirm = input.confirm === true;
+  // With a confirm, the snapshot makes the items (the same synthetic ids on a replay); else they're made here.
+  const items = confirm ? [] : Array.from({ length: input.items }, () => randomUUID());
   const params = {
     batchMillis: input.batchMillis,
     ...(input.batchSize === undefined ? {} : { batchSize: input.batchSize }),
     ...(input.failAtPosition === undefined ? {} : { failAtPosition: input.failAtPosition }),
     ...(input.refuseEvery === undefined ? {} : { refuseEvery: input.refuseEvery }),
+    ...(confirm ? { snapshotItems: input.items } : {}),
   };
-  await runWrite(scope, (context) => startJob(context, registry, { id, kind: 'dev.simulate', params, items }), hooks);
+  await runWrite(
+    scope,
+    (context) => startJob(context, registry, { id, kind: 'dev.simulate', params, items, confirm }),
+    hooks,
+  );
   return getJob(scope, registry, id);
 }

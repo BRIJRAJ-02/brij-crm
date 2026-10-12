@@ -5,19 +5,25 @@
 // transaction that does the work and saves the item states, the counts, the
 // checkpoint and, at most once a second, the job's change event), checks for
 // a cancel between batches, and hands the job back to the queue behind
-// everyone already waiting. Graphile Worker only wakes it and orders the
-// slices. Everything it needs comes in as an argument: the clock, the
-// database, the hooks, the scope makers, the log and the shutdown signal.
+// everyone already waiting. A job started with a snapshot first fills its
+// items page by page (`preparing`), then waits for a confirm (`ready`, ended
+// `JOB_EXPIRED` by a queue row at its expiry) or queues itself. Every path
+// that ends a job `failed` runs its kind's `onFailed` in that transaction,
+// under the system's scope (milestone 2). Graphile Worker only wakes it and
+// orders the slices. Everything it needs comes in as an argument: the clock,
+// the database, the hooks, the scope makers, the log and the shutdown signal.
 import { hostname } from 'node:os';
 import { and, eq, sql } from 'drizzle-orm';
 import { isFinishedJob, REFUSAL_GROUP_IDS, type QueuePayload } from '@crm/contracts';
+import { ERROR_CODES } from '@crm/contracts/codes';
 import { schema, type Database, type WorkspaceTx } from '@crm/db';
 import { inWorkspace } from '../access/run.ts';
+import { limitsOf } from '../engine/limits.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import type { Actor, EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
-import type { AnyKind, ItemOutcome, JobRegistry, StepOutcome } from './registry.ts';
-import { enqueue } from './service.ts';
+import type { AnyKind, FailedJob, ItemOutcome, JobRegistry, StepOutcome } from './registry.ts';
+import { enqueue, insertItems, readSnapshotCheckpoint, tryEnqueue, type SnapshotCheckpoint } from './service.ts';
 
 const { jobs, workspaces } = schema;
 
@@ -52,14 +58,20 @@ export interface RunnerDeps {
   readonly leaseMs?: number;
   /** At most one progress event per job this often (1 second); the final one always goes. */
   readonly progressMs?: number;
+  /** How long a prepared job waits for its confirm (1 hour, AC-109). */
+  readonly confirmMs?: number;
 }
 
 /** How a slice ended, for the log and the tests. */
 export type SliceOutcome =
   | 'gone'
   | 'finished-already'
+  /** A prepared job waiting for its confirm, before its expiry. */
+  | 'waiting'
   | 'leased-elsewhere'
   | 'handed-over'
+  /** A snapshot finished and the job waits for its confirm. */
+  | 'ready'
   | 'succeeded'
   | 'cancelled'
   | 'failed'
@@ -80,14 +92,47 @@ export interface Runner {
 const SLICE_MS = 20_000;
 const LEASE_MS = 60_000;
 const PROGRESS_MS = 1_000;
+const CONFIRM_MS = 60 * 60_000;
 
-/** The plain sentences a job ends with (spec 0008; AC-104, AC-113). Never a value. */
+/** How many ids one snapshot batch reads and stores (spec 0008, Snapshot). */
+export const SNAPSHOT_PAGE = 5_000;
+
+/** The plain sentences a job ends with (spec 0008; AC-104, AC-109, AC-113, AC-116). Never a value. */
 const ENDINGS = {
   JOB_FAILED: 'This job stopped after repeated errors. What it finished is kept.',
   JOB_INVALID: 'This job can’t run any more: its settings are no longer valid. What it finished is kept.',
   ACTOR_REMOVED: 'The member who started this job was removed, so it stopped. What it finished is kept.',
   WORKSPACE_GONE: 'The workspace was deleted.',
+  JOB_EXPIRED: 'This job waited more than an hour for a confirm, so it was cancelled. Start it again.',
+  JOB_TOO_LARGE: 'This job would work on more items than one job may hold, so it stopped. Start it on fewer.',
 } as const;
+
+/** A code a job ends with. */
+type Ending = keyof typeof ENDINGS;
+
+/** The codes a step's `failed` outcome may name: the error map's (AC-124). */
+const KNOWN_CODES: ReadonlySet<string> = new Set(ERROR_CODES);
+
+/** Who started a job, as `onFailed` gets it. */
+function starterOf(row: JobRow): FailedJob<unknown>['startedBy'] {
+  return row.createdByType === 'member' && row.createdByMemberId !== null
+    ? { type: 'member', memberId: row.createdByMemberId }
+    : { type: 'system' };
+}
+
+/**
+ * A write context whose scope is the system's, on the same transaction (and
+ * its savepoints): what `onFailed` works through (AC-124), since the starter
+ * may be gone.
+ */
+function asSystem(context: WriteContext, system: EngineScope): WriteContext {
+  const wrapped: WriteContext = {
+    ...context,
+    scope: system,
+    perRecord: (work) => context.perRecord((inner) => work({ ...inner, scope: system })),
+  };
+  return wrapped;
+}
 
 /** Graphile Worker's wait before try `attempt` + 1: `exp(min(attempt, 10))` seconds. */
 export function retryDelayMs(attempt: number): number {
@@ -103,22 +148,71 @@ export function createRunner(deps: RunnerDeps): Runner {
   const sliceMs = deps.sliceMs ?? SLICE_MS;
   const leaseMs = deps.leaseMs ?? LEASE_MS;
   const progressMs = deps.progressMs ?? PROGRESS_MS;
+  const confirmMs = deps.confirmMs ?? CONFIRM_MS;
   // When each job's last progress event was stored, by job id: at most one a second, in this closure only.
   const lastSent = new Map<string, number>();
-  const leaseUntil = () => sql`to_timestamp(${(now() + leaseMs) / 1000})`;
+  const instant = (ms: number) => sql`to_timestamp(${ms / 1000})`;
+  const leaseUntil = () => instant(now() + leaseMs);
+  /** Whether a progress event is due for the job: a second since the last, or the final one. */
+  const progressDue = (jobId: string, final: boolean) => {
+    const sentAt = lastSent.get(jobId);
+    return final || sentAt === undefined || now() - sentAt >= progressMs;
+  };
 
-  /** Ends a job outside a batch (it can't run, or it ran out of tries), with its final event. */
+  /**
+   * Runs the kind's `onFailed` for a job ending `failed` in `context`'s
+   * transaction, as the system (AC-124). A hook that throws is logged with
+   * the job id and thrown on, so the whole ending rolls back and is tried
+   * again after Graphile's backoff.
+   */
+  async function runOnFailed(
+    context: WriteContext,
+    row: JobRow,
+    kind: AnyKind | undefined,
+    params: unknown,
+    error: { readonly code: string; readonly message: string },
+  ): Promise<void> {
+    if (kind?.onFailed === undefined) return;
+    try {
+      await kind.onFailed(asSystem(context, deps.systemScope(row.workspaceId)), {
+        id: row.id,
+        params,
+        checkpoint: row.checkpoint,
+        startedBy: starterOf(row),
+        error,
+      });
+    } catch (failure) {
+      deps.log.error('job.onFailed.failed', {
+        jobId: row.id,
+        kind: row.kind,
+        workspaceId: row.workspaceId,
+        // The error's class only: a message may quote a value.
+        error: failure instanceof Error ? failure.name : 'unknown',
+      });
+      throw failure;
+    }
+  }
+
+  /**
+   * Ends a job outside a batch (it can't run, it ran out of tries, its
+   * snapshot grew too large, or it waited too long for a confirm), with its
+   * refusal summary and its final event. A `failed` ending runs the kind's
+   * `onFailed` in the same transaction, and throws when the hook throws.
+   */
   async function end(
     row: JobRow,
     status: 'failed' | 'cancelled',
-    code: keyof typeof ENDINGS,
-    event: boolean,
+    code: Ending,
+    options: { readonly event: boolean; readonly kind?: AnyKind | undefined; readonly params?: unknown },
   ): Promise<void> {
     const scope = deps.systemScope(row.workspaceId);
+    const stored = { event: false };
     await runWrite(
       scope,
       async (context) => {
-        await context.tx
+        const { tx } = context;
+        const groups = await refusalGroups(tx, row);
+        const [ended] = await tx
           .update(jobs)
           .set({
             status,
@@ -128,36 +222,59 @@ export function createRunner(deps: RunnerDeps): Runner {
             leaseOwner: null,
             leaseUntil: null,
             updatedAt: sql`now()`,
+            ...(groups.length === 0
+              ? {}
+              : {
+                  result: sql`coalesce(${jobs.result}, '{}'::jsonb) || ${JSON.stringify({ refusals: groups })}::jsonb`,
+                }),
           })
-          .where(and(eq(jobs.workspaceId, row.workspaceId), eq(jobs.id, row.id), sql`${jobs.finishedAt} is null`));
-        if (event) context.record({ jobs: [{ jobId: row.id, startedBy: row.createdByMemberId }] });
+          .where(and(eq(jobs.workspaceId, row.workspaceId), eq(jobs.id, row.id), sql`${jobs.finishedAt} is null`))
+          .returning({ id: jobs.id });
+        // Another path ended it first: nothing more to do, and no hook to run twice.
+        if (ended === undefined) return;
+        if (status === 'failed') {
+          await runOnFailed(context, row, options.kind, options.params, { code, message: ENDINGS[code] });
+        }
+        if (options.event) {
+          context.record({ jobs: [{ jobId: row.id, startedBy: row.createdByMemberId }] });
+          stored.event = true;
+        }
       },
-      event ? deps.hooks() : [],
+      options.event || status === 'failed' ? deps.hooks() : [],
     );
-    if (event) deps.onStored?.();
+    if (stored.event) deps.onStored?.();
     lastSent.delete(row.id);
   }
 
-  /** Claims the job (step 1): the row under lock, its lease, `running`, one more slice. */
-  async function claim(
-    payload: QueuePayload,
-  ): Promise<
+  /** What a claim found. */
+  type Claim =
     | { readonly kind: 'claimed'; readonly row: JobRow; readonly workspaceGone: boolean }
-    | { readonly kind: 'gone' | 'finished-already' | 'leased-elsewhere' }
-  > {
+    | { readonly kind: 'expired'; readonly row: JobRow }
+    | { readonly kind: 'gone' | 'finished-already' | 'waiting' | 'leased-elsewhere' };
+
+  /** Claims the job (step 1): the row under lock, its lease, `running`, one more slice. */
+  async function claim(payload: QueuePayload): Promise<Claim> {
     const scope = deps.systemScope(payload.workspaceId);
-    return inWorkspace(scope, async (tx) => {
-      const [row] = await tx
-        .select()
+    return inWorkspace(scope, async (tx): Promise<Claim> => {
+      const [found] = await tx
+        .select({
+          row: jobs,
+          // Past its expiry by this runner's clock or the database's, whichever is later: the queue row Graphile
+          // runs at `expires_at` (by the database's clock) always finds it expired.
+          expired: sql<boolean>`coalesce(${jobs.expiresAt} <= greatest(now(), ${instant(now())}), false)`,
+        })
         .from(jobs)
         .where(and(eq(jobs.workspaceId, payload.workspaceId), eq(jobs.id, payload.jobId)))
         .for('update');
-      if (row === undefined) return { kind: 'gone' as const };
-      if (isFinishedJob(row.status) || row.status === 'ready') return { kind: 'finished-already' as const };
+      if (found === undefined) return { kind: 'gone' };
+      const { row } = found;
+      if (isFinishedJob(row.status)) return { kind: 'finished-already' };
+      // A prepared job waits for its confirm; the queue row at its expiry ends it (AC-109).
+      if (row.status === 'ready') return found.expired ? { kind: 'expired', row } : { kind: 'waiting' };
       if (row.leaseUntil !== null && row.leaseUntil.getTime() > now() && row.leaseOwner !== leaseOwner) {
         // Another runner holds it (a deploy overlap, a stale lock released): come back when its lease ends.
         await enqueue(tx, row.id, sql`${row.leaseUntil.toISOString()}::timestamptz`);
-        return { kind: 'leased-elsewhere' as const };
+        return { kind: 'leased-elsewhere' };
       }
       const [workspace] = await tx
         .select({ deletedAt: workspaces.deletedAt })
@@ -175,8 +292,8 @@ export function createRunner(deps: RunnerDeps): Runner {
         })
         .where(and(eq(jobs.workspaceId, row.workspaceId), eq(jobs.id, row.id)))
         .returning();
-      if (claimed === undefined) return { kind: 'gone' as const };
-      return { kind: 'claimed' as const, row: claimed, workspaceGone: (workspace?.deletedAt ?? null) !== null };
+      if (claimed === undefined) return { kind: 'gone' };
+      return { kind: 'claimed', row: claimed, workspaceGone: (workspace?.deletedAt ?? null) !== null };
     });
   }
 
@@ -198,7 +315,7 @@ export function createRunner(deps: RunnerDeps): Runner {
   }
 
   /** The refused items grouped by code, each with its count and first ids by position (AC-105). */
-  async function refusalGroups(tx: WorkspaceTx, row: JobRow) {
+  async function refusalGroups(tx: WorkspaceTx, row: Pick<JobRow, 'workspaceId' | 'id'>) {
     const result = await tx.execute<{ code: string; count: number; item_ids: string[] }>(sql`
       select coalesce(code, '') as code, count(*)::int as count,
         (array_agg(item_id order by position))[1:${REFUSAL_GROUP_IDS}] as item_ids
@@ -209,14 +326,25 @@ export function createRunner(deps: RunnerDeps): Runner {
     return result.rows.map((group) => ({ code: group.code, count: group.count, itemIds: group.item_ids }));
   }
 
-  /** What one batch decided. */
-  type Batch =
-    { readonly kind: 'cancelled' } | { readonly kind: 'done'; readonly finished: boolean; readonly counts: Counts };
-
   interface Counts {
     readonly done: number;
     readonly refused: number;
     readonly skipped: number;
+  }
+
+  /** What one batch decided. */
+  type Batch =
+    | { readonly kind: 'cancelled' }
+    | { readonly kind: 'ended' }
+    | { readonly kind: 'done' | 'failed'; readonly finished: boolean; readonly counts: Counts };
+
+  /** Ends a job its cancel reached (step 5), in the batch's transaction. */
+  async function cancelIn(context: WriteContext, jobId: string, startedBy: string | null): Promise<void> {
+    await context.tx
+      .update(jobs)
+      .set({ status: 'cancelled', finishedAt: sql`now()`, leaseOwner: null, leaseUntil: null, updatedAt: sql`now()` })
+      .where(and(eq(jobs.workspaceId, context.scope.workspaceId), eq(jobs.id, jobId)));
+    context.record({ jobs: [{ jobId, startedBy }] });
   }
 
   /** Runs one batch (step 3) as one engine transaction: the work and its progress commit together, or neither. */
@@ -234,19 +362,11 @@ export function createRunner(deps: RunnerDeps): Runner {
           .where(and(eq(jobs.workspaceId, scope.workspaceId), eq(jobs.id, jobId)))
           .for('no key update');
         if (row === undefined) throw new Error('The job went away while it ran.');
+        // Ended under this slice (a cancel that landed at once): nothing more to do.
+        if (row.finishedAt !== null) return { kind: 'ended' };
         const starter = { jobId, startedBy: row.createdByMemberId };
         if (row.cancelRequestedAt !== null) {
-          await tx
-            .update(jobs)
-            .set({
-              status: 'cancelled',
-              finishedAt: sql`now()`,
-              leaseOwner: null,
-              leaseUntil: null,
-              updatedAt: sql`now()`,
-            })
-            .where(and(eq(jobs.workspaceId, scope.workspaceId), eq(jobs.id, jobId)));
-          context.record({ jobs: [starter] });
+          await cancelIn(context, jobId, row.createdByMemberId);
           event.stored = true;
           return { kind: 'cancelled' };
         }
@@ -273,10 +393,16 @@ export function createRunner(deps: RunnerDeps): Runner {
             limit,
           });
         }
+        const failed = outcome.failed;
+        if (failed !== undefined && !KNOWN_CODES.has(failed.code)) {
+          throw new Error(`Kind ${kind.kind} ended a job with a code the error map doesn't hold.`);
+        }
         const decided = new Map<number, ItemOutcome>((outcome.items ?? []).map((item) => [item.position, item]));
-        if (kind.mode === 'items' && items.some((item) => !decided.has(item.position))) {
+        // A step that ends the job may leave items undecided (they stay pending); any other decides every one.
+        if (failed === undefined && kind.mode === 'items' && items.some((item) => !decided.has(item.position))) {
           throw new Error(`Kind ${kind.kind} left an item of its batch undecided.`);
         }
+        const written = items.filter((item) => decided.has(item.position));
         const counts: Counts =
           kind.mode === 'items'
             ? {
@@ -289,10 +415,10 @@ export function createRunner(deps: RunnerDeps): Runner {
                 refused: outcome.counts?.refused ?? 0,
                 skipped: outcome.counts?.skipped ?? 0,
               };
-        if (kind.mode === 'items' && items.length > 0) {
+        if (written.length > 0) {
           // Every item state of the batch in one statement, from one JSON parameter.
           const states = JSON.stringify(
-            items.map((item) => {
+            written.map((item) => {
               const { state, code, message } = decided.get(item.position) ?? { state: 'done' };
               return { position: item.position, state, code: code ?? null, message: message ?? null };
             }),
@@ -304,19 +430,20 @@ export function createRunner(deps: RunnerDeps): Runner {
             where i.workspace_id = ${scope.workspaceId} and i.job_id = ${jobId} and i.position = v.position
           `);
         }
-        const finished = outcome.finished || (kind.mode === 'items' && items.length < limit);
+        const finished = failed === undefined && (outcome.finished || (kind.mode === 'items' && items.length < limit));
         const nextCheckpoint =
           kind.mode === 'items'
             ? {
                 ...(typeof outcome.checkpoint === 'object' && outcome.checkpoint !== null ? outcome.checkpoint : {}),
-                position: items.at(-1)?.position ?? position,
+                position: (failed === undefined ? items : written).at(-1)?.position ?? position,
               }
             : (outcome.checkpoint ?? checkpoint ?? null);
         const merged = {
           ...(typeof row.result === 'object' && row.result !== null ? row.result : {}),
           ...(outcome.result ?? {}),
         };
-        const result = finished ? { ...merged, refusals: await refusalGroups(tx, row) } : merged;
+        const ends = finished || failed !== undefined;
+        const result = ends ? { ...merged, refusals: await refusalGroups(tx, row) } : merged;
         await tx
           .update(jobs)
           .set({
@@ -329,15 +456,26 @@ export function createRunner(deps: RunnerDeps): Runner {
             leaseUntil: leaseUntil(),
             updatedAt: sql`now()`,
             ...(finished ? { status: 'succeeded', finishedAt: sql`now()`, leaseOwner: null, leaseUntil: null } : {}),
+            ...(failed === undefined
+              ? {}
+              : {
+                  status: 'failed',
+                  errorCode: failed.code,
+                  errorMessage: failed.message,
+                  finishedAt: sql`now()`,
+                  leaseOwner: null,
+                  leaseUntil: null,
+                }),
           })
           .where(and(eq(jobs.workspaceId, scope.workspaceId), eq(jobs.id, jobId)));
+        // The step ended the job: its hook runs here, in the same transaction (AC-124).
+        if (failed !== undefined) await runOnFailed(context, row, kind, params, failed);
         // Progress at most once a second per job, and always the last (AC-106).
-        const sentAt = lastSent.get(jobId);
-        if (finished || sentAt === undefined || now() - sentAt >= progressMs) {
+        if (progressDue(jobId, ends)) {
           context.record({ jobs: [starter] });
           event.stored = true;
         }
-        return { kind: 'done', finished, counts };
+        return { kind: failed === undefined ? 'done' : 'failed', finished, counts };
       },
       hooks,
     );
@@ -348,8 +486,104 @@ export function createRunner(deps: RunnerDeps): Runner {
     return result;
   }
 
-  /** Counts a failed try (fresh transaction): `retry` for Graphile's backoff, or `failed` once at the kind's limit. */
-  async function failedTry(row: JobRow, kind: AnyKind): Promise<'retry' | 'failed'> {
+  /** What one snapshot batch decided. */
+  type SnapshotBatch = 'cancelled' | 'ended' | 'more' | 'ready' | 'queued' | 'too-large';
+
+  /**
+   * Runs one snapshot batch (spec 0008, Snapshot) as one transaction: the
+   * kind's next page of ids after the checkpoint's, stored at the next
+   * positions with the checkpoint. A short page finishes it: the job waits for
+   * its confirm (`ready`, with a queue row at its expiry), or is queued.
+   */
+  async function snapshotBatch(
+    scope: EngineScope,
+    kind: AnyKind,
+    params: unknown,
+    jobId: string,
+  ): Promise<SnapshotBatch> {
+    const event = { stored: false };
+    const { result } = await runWrite(
+      scope,
+      async (context): Promise<SnapshotBatch> => {
+        const { tx } = context;
+        const [row] = await tx
+          .select()
+          .from(jobs)
+          .where(and(eq(jobs.workspaceId, scope.workspaceId), eq(jobs.id, jobId)))
+          .for('no key update');
+        if (row === undefined) throw new Error('The job went away while it ran.');
+        if (row.finishedAt !== null) return 'ended';
+        if (row.cancelRequestedAt !== null) {
+          await cancelIn(context, jobId, row.createdByMemberId);
+          event.stored = true;
+          return 'cancelled';
+        }
+        if (kind.snapshot === undefined) throw new Error(`Kind ${kind.kind} has no snapshot.`);
+        const at = readSnapshotCheckpoint(row.checkpoint);
+        const ids = await kind.snapshot(tx, params, at.after, SNAPSHOT_PAGE);
+        if (at.count + ids.length > limitsOf(scope).jobItems) return 'too-large';
+        const stored = await insertItems(tx, scope.workspaceId, jobId, ids, at.position);
+        const last = ids.at(-1);
+        const next: SnapshotCheckpoint = {
+          ...at,
+          count: at.count + stored,
+          position: at.position + ids.length,
+          ...(last === undefined ? {} : { after: last }),
+        };
+        const starter = { jobId, startedBy: row.createdByMemberId };
+        const where = and(eq(jobs.workspaceId, scope.workspaceId), eq(jobs.id, jobId));
+        if (ids.length === SNAPSHOT_PAGE) {
+          await tx
+            .update(jobs)
+            .set({ checkpoint: { snapshot: next }, leaseUntil: leaseUntil(), updatedAt: sql`now()` })
+            .where(where);
+          if (progressDue(jobId, false)) {
+            context.record({ jobs: [starter] });
+            event.stored = true;
+          }
+          return 'more';
+        }
+        context.record({ jobs: [starter] });
+        event.stored = true;
+        if (at.confirm) {
+          const expiresAt = instant(now() + confirmMs);
+          // Queued while still `preparing`: the row at its expiry ends it if nobody confirms (AC-109).
+          await enqueue(tx, jobId, expiresAt);
+          await tx
+            .update(jobs)
+            .set({
+              status: 'ready',
+              total: next.count,
+              checkpoint: null,
+              expiresAt,
+              leaseOwner: null,
+              leaseUntil: null,
+              updatedAt: sql`now()`,
+            })
+            .where(where);
+          return 'ready';
+        }
+        await tx
+          .update(jobs)
+          .set({ status: 'queued', total: next.count, checkpoint: null, updatedAt: sql`now()` })
+          .where(where);
+        return 'queued';
+      },
+      deps.hooks(),
+    );
+    if (event.stored) {
+      lastSent.set(jobId, now());
+      deps.onStored?.();
+    }
+    return result;
+  }
+
+  /**
+   * Counts a failed try (fresh transaction): `retry` for Graphile's backoff,
+   * or `failed` once at the kind's limit, ended `JOB_FAILED` with its hook
+   * (thrown on when the hook throws: the next try ends it again).
+   */
+  async function failedTry(row: JobRow, kind: AnyKind, params: unknown): Promise<'retry' | 'failed'> {
     const scope = deps.systemScope(row.workspaceId);
     const attempts = await inWorkspace(scope, async (tx) => {
       const [updated] = await tx
@@ -358,17 +592,19 @@ export function createRunner(deps: RunnerDeps): Runner {
           attempts: sql`${jobs.attempts} + 1`,
           leaseOwner: null,
           leaseUntil: null,
-          // Graphile's own next try (its backoff), shown on the page as "Retrying at".
+          // Graphile's own next try (its backoff), shown on the page as "Retrying".
           runAt: sql`now() + make_interval(secs => ${retryDelayMs(row.attempts + 1) / 1000})`,
           updatedAt: sql`now()`,
         })
-        .where(and(eq(jobs.workspaceId, row.workspaceId), eq(jobs.id, row.id)))
+        .where(and(eq(jobs.workspaceId, row.workspaceId), eq(jobs.id, row.id), sql`${jobs.finishedAt} is null`))
         .returning({ attempts: jobs.attempts });
-      return updated?.attempts ?? kind.maxAttempts;
+      return updated?.attempts;
     });
+    // Ended meanwhile (its cancel landed at once): nothing to retry.
+    if (attempts === undefined) return 'failed';
     if (attempts < kind.maxAttempts) return 'retry';
     deps.log.error('job.failed', { jobId: row.id, kind: row.kind, workspaceId: row.workspaceId, attempts });
-    await end(row, 'failed', 'JOB_FAILED', true);
+    await end(row, 'failed', 'JOB_FAILED', { event: true, kind, params });
     return 'failed';
   }
 
@@ -376,6 +612,15 @@ export function createRunner(deps: RunnerDeps): Runner {
     async runSlice(payload, signal) {
       const started = now();
       const claimed = await claim(payload);
+      if (claimed.kind === 'expired') {
+        await end(claimed.row, 'cancelled', 'JOB_EXPIRED', { event: true });
+        deps.log.info('job.expired', {
+          jobId: claimed.row.id,
+          kind: claimed.row.kind,
+          workspaceId: claimed.row.workspaceId,
+        });
+        return 'cancelled';
+      }
       if (claimed.kind !== 'claimed') return claimed.kind;
       const { row } = claimed;
       const fields = { jobId: row.id, kind: row.kind, workspaceId: row.workspaceId, slice: row.slices };
@@ -385,33 +630,60 @@ export function createRunner(deps: RunnerDeps): Runner {
         return outcome;
       };
       if (claimed.workspaceGone) {
-        await end(row, 'cancelled', 'WORKSPACE_GONE', false);
+        await end(row, 'cancelled', 'WORKSPACE_GONE', { event: false });
         return finish('cancelled');
       }
+      // The params are checked again at every slice (AC-116): a deploy may have changed the kind, or removed it.
       const kind = deps.registry.get(row.kind);
-      const params = kind?.params.safeParse(row.params);
-      if (kind === undefined || params?.success !== true) {
-        await end(row, 'failed', 'JOB_INVALID', true);
+      const parsed = kind?.params.safeParse(row.params);
+      if (kind === undefined || parsed?.success !== true) {
+        await end(row, 'failed', 'JOB_INVALID', { event: true, kind });
+        return finish('failed');
+      }
+      const params = parsed.data;
+      // Its tries were used up and its ending rolled back (the hook threw): end it again, before any work.
+      if (row.attempts >= kind.maxAttempts) {
+        await end(row, 'failed', 'JOB_FAILED', { event: true, kind, params });
         return finish('failed');
       }
       const scope = await enter(row);
       if (scope === 'ACTOR_REMOVED' || scope === 'JOB_INVALID') {
-        await end(row, 'failed', scope, true);
+        await end(row, 'failed', scope, { event: true, kind, params });
         return finish('failed');
       }
       let batches = 0;
       const total = { done: 0, refused: 0, skipped: 0 };
       try {
+        const preparing = row.status === 'preparing';
         for (;;) {
-          const outcome = await batch(scope, kind, params.data, row.id);
-          batches += 1;
-          if (outcome.kind === 'cancelled') return finish('cancelled', { batches, ...total });
-          total.done += outcome.counts.done;
-          total.refused += outcome.counts.refused;
-          total.skipped += outcome.counts.skipped;
-          if (outcome.finished) {
-            lastSent.delete(row.id);
-            return finish('succeeded', { batches, ...total });
+          if (preparing) {
+            const outcome = await snapshotBatch(scope, kind, params, row.id);
+            batches += 1;
+            if (outcome === 'ended') return finish('finished-already', { batches });
+            if (outcome === 'cancelled') return finish('cancelled', { batches });
+            if (outcome === 'too-large') {
+              await end(row, 'failed', 'JOB_TOO_LARGE', { event: true, kind, params });
+              return finish('failed', { batches });
+            }
+            if (outcome === 'ready') return finish('ready', { batches });
+            // The snapshot is done and the job queued: the next slice works through its items.
+            if (outcome === 'queued') break;
+          } else {
+            const outcome = await batch(scope, kind, params, row.id);
+            batches += 1;
+            if (outcome.kind === 'ended') return finish('finished-already', { batches, ...total });
+            if (outcome.kind === 'cancelled') return finish('cancelled', { batches, ...total });
+            total.done += outcome.counts.done;
+            total.refused += outcome.counts.refused;
+            total.skipped += outcome.counts.skipped;
+            if (outcome.kind === 'failed') {
+              lastSent.delete(row.id);
+              return finish('failed', { batches, ...total });
+            }
+            if (outcome.finished) {
+              lastSent.delete(row.id);
+              return finish('succeeded', { batches, ...total });
+            }
           }
           if (signal?.aborted === true || now() - started >= sliceMs) break;
         }
@@ -423,19 +695,20 @@ export function createRunner(deps: RunnerDeps): Runner {
           // The error's class and code only: a message may quote a value.
           error: error instanceof Error ? error.name : 'unknown',
         });
-        const ended = await failedTry(row, kind);
+        const ended = await failedTry(row, kind, params);
         if (ended === 'failed') return finish('failed', { batches, ...total });
         // Thrown on, so Graphile tries again after its backoff; the batch that failed rolled back whole.
         finish('retrying', { batches, ...total });
         throw error;
       }
-      // Hand over (step 4): the next slice queues behind every row already waiting.
+      // Hand over (step 4): the next slice queues behind every row already waiting. A job ended meanwhile (a
+      // cancel that landed at once) is queued no more.
       await inWorkspace(deps.systemScope(row.workspaceId), async (tx) => {
         await tx
           .update(jobs)
           .set({ leaseOwner: null, leaseUntil: null, updatedAt: sql`now()` })
           .where(and(eq(jobs.workspaceId, row.workspaceId), eq(jobs.id, row.id), eq(jobs.leaseOwner, leaseOwner)));
-        await enqueue(tx, row.id);
+        await tryEnqueue(tx, row.id);
       });
       return finish(signal?.aborted === true ? 'stopped' : 'handed-over', { batches, ...total });
     },

@@ -3,47 +3,27 @@
 // and cancels what, and the runner driven slice by slice with an injected
 // clock, as Graphile Worker would call it.
 import { sql } from 'drizzle-orm';
-import { PERMISSIONS, type Role } from '@crm/contracts';
-import { createDatabase, type Database } from '@crm/db';
+import { PERMISSIONS } from '@crm/contracts';
+import { createDatabase } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import * as z from 'zod';
-import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { enterAsActor, systemScope } from '../access/door.ts';
+import { afterAll, describe, expect, inject, it } from 'vitest';
+import { systemScope } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
-import { isRefusal } from '../engine/refusals.ts';
-import { createWorkspace } from '../engine/workspaces.ts';
 import { runWrite } from '../engine/write.ts';
-import { rescope, testScope } from '../testing.ts';
+import { rescope } from '../testing.ts';
 import { devSimulate, SIMULATED_REFUSAL } from './kinds/dev-simulate.ts';
 import { jobKinds } from './kinds/index.ts';
 import { createRegistry, defineKind, kindContractProblems, type AnyKind } from './registry.ts';
-import { createRunner, type RunnerDeps } from './runner.ts';
 import { cancelJob, getJob, listJobs, startJob, startTestJob } from './service.ts';
+import { fakeClock, jobTestKit, refusalOf } from './test-kit.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
-let db: Database;
-beforeAll(() => {
-  db = createDatabase({ url: appUrl, applicationName: 'crm-jobs-tests' });
-});
+const db = createDatabase({ url: appUrl, applicationName: 'crm-jobs-tests' });
 afterAll(async () => {
   await db.close();
 });
-
-/** A clock the tests move: the test kind's waits move it, so nothing sleeps. */
-function fakeClock(start = Date.now()) {
-  let at = start;
-  return {
-    now: () => at,
-    sleep: (ms: number) => {
-      at += ms;
-      return Promise.resolve();
-    },
-    advance: (ms: number) => {
-      at += ms;
-    },
-  };
-}
 
 /** A kind that always fails its batch: for the attempt limit. */
 const alwaysFails = defineKind({
@@ -73,114 +53,7 @@ const systemOnce = defineKind({
   step: () => Promise.resolve({ finished: true, counts: { done: 1 }, result: { phase: 'done' } }),
 });
 
-let made = 0;
-/** A workspace with its owner, plus one member of each role given, and scopes for them. */
-async function team(roles: readonly Role[] = ['member', 'admin']) {
-  made += 1;
-  const created = await createWorkspace(db, {
-    name: 'Jobs',
-    slug: `jobs-${String(made)}-${String(Date.now())}`,
-    firstMember: { name: 'Ada', email: 'ada@example.com' },
-  });
-  const ids = roles.map(() => newId());
-  await db.withWorkspace(created.workspaceId, async (tx) => {
-    for (const [index, role] of roles.entries()) {
-      const id = ids[index] ?? '';
-      await tx.execute(
-        sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type) values (${created.workspaceId}, ${id}, ${`M${String(index)}`}, ${`${id}@example.com`}, ${role}, 'system', 'system')`,
-      );
-    }
-  });
-  const as = (memberId: string, role: Role, limits?: Parameters<typeof testScope>[0]['limits']) =>
-    testScope({
-      db,
-      workspaceId: created.workspaceId,
-      actor: { type: 'member', id: memberId },
-      role,
-      ...(limits === undefined ? {} : { limits }),
-    });
-  const [member = '', admin = ''] = ids;
-  return {
-    workspaceId: created.workspaceId,
-    owner: as(created.memberId, 'owner'),
-    member: as(member, 'member'),
-    memberId: member,
-    admin: as(admin, 'admin'),
-    ids,
-    as,
-  };
-}
-
-/** The runner over `registry`, its clock and log, as the worker builds it (relay wake counted). */
-function runnerFor(
-  registry = jobKinds({ environment: 'local' }),
-  clock = fakeClock(),
-  extra: Partial<RunnerDeps> = {},
-) {
-  const lines: { message: string; fields: Record<string, unknown> }[] = [];
-  const keep = (message: string, fields: Record<string, unknown>) => lines.push({ message, fields });
-  let wakes = 0;
-  const runner = createRunner({
-    db,
-    registry,
-    enterAsActor: (input) => enterAsActor({ db }, input),
-    systemScope: (workspaceId) => systemScope(db, workspaceId),
-    hooks: () => [outboxHook()],
-    onStored: () => (wakes += 1),
-    log: { info: keep, warn: keep, error: keep },
-    now: clock.now,
-    leaseOwner: 'test-runner',
-    ...extra,
-  });
-  return { runner, lines, wakes: () => wakes, clock };
-}
-
-async function refusalOf(call: Promise<unknown>) {
-  try {
-    await call;
-  } catch (error) {
-    if (isRefusal(error)) return error.refusal;
-    throw error;
-  }
-  throw new Error('It was let through.');
-}
-
-const queueRows = (jobId: string) =>
-  testQuery<{ key: string; locked: boolean }>(
-    ownerUrl,
-    "select v.key, v.locked_at is not null as locked from graphile_worker.jobs v join graphile_worker._private_jobs j on j.id = v.id where j.payload->>'jobId' = $1",
-    [jobId],
-  );
-
-const jobEvents = (workspaceId: string) =>
-  testQuery<{ item_ids: string[]; actor_member_id: string | null }>(
-    ownerUrl,
-    "select item_ids, actor_member_id from outbox where workspace_id = $1 and kind = 'jobs' order by seq",
-    [workspaceId],
-  );
-
-const itemStates = (workspaceId: string, jobId: string) =>
-  testQuery<{ state: string; n: number }>(
-    ownerUrl,
-    'select state::text, count(*)::int as n from job_items where workspace_id = $1 and job_id = $2 group by 1 order by 1',
-    [workspaceId, jobId],
-  );
-
-/** Drives a job to its end as Graphile would, one slice after another (a rejected slice is a retry). */
-async function drive(
-  run: ReturnType<typeof runnerFor>,
-  workspaceId: string,
-  jobId: string,
-  max = 50,
-): Promise<string[]> {
-  const outcomes: string[] = [];
-  for (let slice = 0; slice < max; slice += 1) {
-    const outcome = await run.runner.runSlice({ workspaceId, jobId }).catch(() => 'threw');
-    outcomes.push(outcome);
-    if (['succeeded', 'failed', 'cancelled', 'finished-already', 'gone'].includes(outcome)) return outcomes;
-  }
-  return outcomes;
-}
+const { team, runnerFor, queueRows, jobEvents, itemStates, drive } = jobTestKit(db, ownerUrl);
 
 describe('starting a job (AC-102, AC-116, AC-125)', () => {
   it('commits with its write and goes on the queue; a write that rolls back leaves no job and no queue row', async () => {
@@ -190,7 +63,7 @@ describe('starting a job (AC-102, AC-116, AC-125)', () => {
     await runWrite(t.member, (context) =>
       startJob(context, registry, { id: kept, kind: 'dev.simulate', params: { batchMillis: 0 }, items: [newId()] }),
     );
-    expect(await queueRows(kept)).toEqual([{ key: `crm-job:${t.workspaceId}:${kept}`, locked: false }]);
+    expect(await queueRows(kept)).toMatchObject([{ key: `crm-job:${t.workspaceId}:${kept}`, locked: false }]);
     const lost = newId();
     await expect(
       runWrite(t.member, async (context) => {
