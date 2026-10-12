@@ -5,8 +5,9 @@
 // never values. `actor_member_id` names the member whose write stored the row,
 // read by the access filter for `jobs` and never published. The relay publishes the rows in `seq` order
 // and stamps `published_at`; published rows are kept for `OUTBOX_RETENTION`
-// (screens that were offline catch up from them), then pruned by the relay
-// through `crm_outbox_prune`. Row level security and the grants (the app may
+// (screens that were offline catch up from them), then pruned through
+// `crm_outbox_prune` (`pruneOutbox`, on the worker's login only). Row level
+// security and the grants (the app may
 // only insert, read, and stamp `published_at` once, from null to a time) are
 // hand written in the migration.
 import { sql } from 'drizzle-orm';
@@ -34,9 +35,10 @@ export const outboxKind = pgEnum('outbox_kind', [
 ]);
 
 /**
- * How long a published outbox row is kept, as a Postgres interval. The
- * migration hard codes the same interval in `crm_outbox_prune` (the app can't
- * pass a cutoff, so it can't widen it); a test keeps the two in step.
+ * How long an outbox row is kept once published, as a Postgres interval
+ * (spec 0007, AC-89): `pruneOutbox` passes `now() - OUTBOX_RETENTION` to
+ * `crm_outbox_prune` as its cutoff. Lowering it only means screens away for
+ * longer resync rather than catch up.
  */
 export const OUTBOX_RETENTION = '24 hours';
 
@@ -127,13 +129,10 @@ export const outbox = pgTable(
       columns: [t.workspaceId, t.objectId],
       foreignColumns: [objects.workspaceId, objects.id],
     }).onDelete('cascade'),
-    // What the relay reads: a workspace's unpublished rows in order.
+    // What the relay reads: a workspace's unpublished rows in order. The prune needs no index of its own: it walks
+    // the primary key from each workspace's oldest row (spec 0007, milestone 3).
     index('outbox_pending')
       .on(t.workspaceId, t.seq)
       .where(sql`${t.publishedAt} is null`),
-    // What the prune reads: published rows, oldest first.
-    index('outbox_published')
-      .on(t.publishedAt)
-      .where(sql`${t.publishedAt} is not null`),
   ],
 );

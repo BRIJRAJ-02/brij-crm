@@ -86,9 +86,7 @@ describe('every tenant table', () => {
           !(
             row.first === 'workspace_id' ||
             (row.table === 'workspaces' && row.first === 'id') ||
-            row.index === 'workspaces_slug' ||
-            // Retention reads published rows oldest first across workspaces, through crm_outbox_prune only.
-            row.index === 'outbox_published'
+            row.index === 'workspaces_slug'
           ),
       )
       .map((row) => row.index);
@@ -153,14 +151,15 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
 
   // Each owner role, its functions, their signatures, and who calls each: the app (and so the worker, which
   // inherits it), or the worker alone. Listing workspaces reaches across them, so it is the worker's (spec 0008);
-  // the app keeps it too until milestone 3's contract migration, once every worker runs on crm_worker_user.
+  // the app keeps it too until milestone 3's contract migration, once every worker runs on crm_worker_user. The
+  // prune is the worker's alone from the start (spec 0007, milestone 3).
   it.each([
     ['crm_search', ['crm_search_text'], ['crm_search_text(uuid, text, integer)'], ['app']],
     [
       'crm_relay',
       ['crm_outbox_workspaces', 'crm_outbox_prune'],
-      ['crm_outbox_workspaces(integer, uuid)', 'crm_outbox_prune(integer)'],
-      ['app', 'app'],
+      ['crm_outbox_workspaces(integer, uuid)', 'crm_outbox_prune(timestamp with time zone, integer)'],
+      ['app', 'worker'],
     ],
     ['crm_queue', ['crm_enqueue_job'], ['crm_enqueue_job(uuid, timestamp with time zone)'], ['app']],
   ])(
@@ -326,43 +325,135 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     }
   });
 
-  it('prunes only rows published more than a day ago, at most 1,000 at a time, and nothing unpublished', async () => {
-    const w = await workspaceWithMember('outbox-prune');
-    const objectId = await objectIn(w.workspaceId);
-    const event = (seq: number, published: string | undefined) =>
-      db.withWorkspace(w.workspaceId, (tx) =>
-        tx.execute(
-          sql`insert into outbox (workspace_id, seq, kind, object_id, created_at, published_at) values (${w.workspaceId}, ${seq}, 'records', ${objectId}, now() - interval '30 days', ${published === undefined ? null : sql`now() - ${published}::interval`})`,
-        ),
-      );
-    await event(1, '25 hours');
-    await event(2, '24 hours 1 minute');
-    await event(3, '23 hours 59 minutes');
-    await event(4, undefined);
-    const app = new pg.Client({ connectionString: appUrl });
-    await app.connect();
-    try {
-      // The app, outside any workspace: the function reaches past row level security, oldest first.
-      const prune = (max: number) =>
-        app.query<{ pruned: number }>('select crm_outbox_prune($1) as pruned', [max]).then((r) => r.rows[0]?.pruned);
-      const left = () =>
-        owner
-          .query<{ seq: number }>('select seq::int as seq from outbox where workspace_id = $1 order by seq', [
-            w.workspaceId,
-          ])
-          .then((r) => r.rows.map((row) => row.seq));
-      // Clamped to 1 to 1,000.
-      expect(await prune(0)).toBeLessThanOrEqual(1);
-      expect(await prune(1_000_000)).toBeLessThanOrEqual(1_000);
-      expect(await left()).toEqual([3, 4]);
-      expect(await prune(1_000)).toBe(0);
-    } finally {
-      await app.end();
+  describe('crm_outbox_prune (spec 0007, milestone 3, AC-89)', () => {
+    type Row = { readonly age: string; readonly published: boolean };
+    const old: Row = { age: '2 days', published: true };
+    const recent: Row = { age: '1 hour', published: true };
+    const waiting: Row = { age: '2 days', published: false };
+
+    /** A workspace whose outbox holds `rows` as seq 1, 2 and on, each made `age` ago. */
+    async function outboxOf(name: string, rows: readonly Row[]): Promise<string> {
+      const { workspaceId } = await workspaceWithMember(name);
+      const objectId = await objectIn(workspaceId);
+      for (const [index, row] of rows.entries()) {
+        await owner.query(
+          `insert into outbox (workspace_id, seq, kind, object_id, created_at, published_at)
+           values ($1, $2, 'records', $3, now() - $4::interval, case when $5::boolean then now() end)`,
+          [workspaceId, index + 1, objectId, row.age, row.published],
+        );
+      }
+      return workspaceId;
     }
-    const definition = await owner.query<{ body: string }>(
-      `select pg_get_functiondef('crm_outbox_prune(integer)'::regprocedure) as body`,
-    );
-    expect(definition.rows[0]?.body).toMatch(/least\(greatest\(crm_outbox_prune\.max, 1\), 1000\)/i);
+
+    const left = async (workspaceId: string): Promise<readonly number[]> =>
+      (
+        await owner.query<{ seq: number }>('select seq::int as seq from outbox where workspace_id = $1 order by seq', [
+          workspaceId,
+        ])
+      ).rows.map((row) => row.seq);
+
+    /** Runs `work` on the worker's login, the only one that may call the prune. */
+    async function asWorker<T>(work: (worker: pg.Client) => Promise<T>): Promise<T> {
+      const worker = new pg.Client({ connectionString: workerUrl });
+      await worker.connect();
+      try {
+        return await work(worker);
+      } finally {
+        await worker.end();
+      }
+    }
+
+    /** One call with the cutoff `retention` ago (null for none). Other suites' rows may go in the same call. */
+    const prune = async (worker: pg.Client, retention: string | null, max: number): Promise<number | undefined> =>
+      (
+        await worker.query<{ pruned: number }>('select crm_outbox_prune(now() - $1::interval, $2) as pruned', [
+          retention,
+          max,
+        ])
+      ).rows[0]?.pruned;
+
+    it('deletes published rows made before the cutoff from the oldest seq up, stopping at the first it keeps', async () => {
+      // An unpublished row: nothing after it goes, however old.
+      const blocked = await outboxOf('prune-blocked', [old, old, waiting, old, recent]);
+      // A newer row before older ones (a clock that stepped back): nothing after it goes either.
+      const newer = await outboxOf('prune-newer', [old, recent, old]);
+      // An unpublished oldest row: nothing goes.
+      const first = await outboxOf('prune-first', [waiting, old]);
+      const clean = await outboxOf('prune-clean', [old, old, old, recent]);
+      await asWorker(async (worker) => {
+        // The worker, outside any workspace: the function reaches past row level security and answers a count.
+        const answered = await worker.query<Record<string, unknown>>(
+          `select * from crm_outbox_prune(now() - interval '24 hours', 10000)`,
+        );
+        expect(answered.fields.map((field) => field.name)).toEqual(['crm_outbox_prune']);
+        expect(answered.rows[0]?.crm_outbox_prune).toBeGreaterThanOrEqual(6);
+        // The table itself still shows the worker nothing outside withWorkspace.
+        expect((await worker.query('select * from outbox')).rowCount).toBe(0);
+      });
+      expect(await left(blocked)).toEqual([3, 4, 5]);
+      expect(await left(newer)).toEqual([2, 3]);
+      expect(await left(first)).toEqual([1, 2]);
+      expect(await left(clean)).toEqual([4]);
+    });
+
+    it('keeps rows made after the cutoff it is given, and deletes nothing for a null cutoff', async () => {
+      const workspaceId = await outboxOf('prune-cutoff', [
+        { age: '24 hours 1 minute', published: true },
+        { age: '23 hours 59 minutes', published: true },
+      ]);
+      await asWorker(async (worker) => {
+        expect(await prune(worker, null, 10_000)).toBe(0);
+        expect(await left(workspaceId)).toEqual([1, 2]);
+        await prune(worker, '24 hours', 10_000);
+      });
+      expect(await left(workspaceId)).toEqual([2]);
+    });
+
+    it('deletes at most max rows a call, clamped to 1 to 10,000', async () => {
+      const workspaceId = await outboxOf('prune-clamp', []);
+      await owner.query(
+        `insert into outbox (workspace_id, seq, kind, created_at, published_at)
+         select $1, n, 'members', now() - interval '2 days', now() from generate_series(1, 10010) n`,
+        [workspaceId],
+      );
+      await asWorker(async (worker) => {
+        expect(await prune(worker, '24 hours', 0)).toBe(1);
+        expect(await prune(worker, '24 hours', -5)).toBe(1);
+        expect(await prune(worker, '24 hours', 1_000_000)).toBe(10_000);
+        // Whatever is left of this workspace's 8 (other suites' rows may share the call).
+        expect(await prune(worker, '24 hours', 10_000)).toBeGreaterThanOrEqual(8);
+      });
+      expect(await left(workspaceId)).toEqual([]);
+      const definition = await owner.query<{ body: string }>(
+        `select pg_get_functiondef('crm_outbox_prune(timestamptz, integer)'::regprocedure) as body`,
+      );
+      expect(definition.rows[0]?.body).toMatch(/least\(greatest\(crm_outbox_prune\.max, 1\), 10000\)/i);
+    });
+
+    it('is refused to the app and the identity login, and is the only crm_outbox_prune', async () => {
+      const workspaceId = await outboxOf('prune-refused', [old]);
+      for (const url of [appUrl, identityUrl]) {
+        const client = new pg.Client({ connectionString: url });
+        await client.connect();
+        try {
+          await expect(
+            client.query(`select public.crm_outbox_prune(now() - interval '24 hours', 10)`),
+          ).rejects.toMatchObject({ code: '42501' });
+        } finally {
+          await client.end();
+        }
+      }
+      // Nor can the app delete outbox rows itself, even its own workspace's.
+      await expect(
+        db.withWorkspace(workspaceId, (tx) => tx.execute(sql`delete from outbox where workspace_id = ${workspaceId}`)),
+      ).rejects.toMatchObject({ cause: { code: '42501' } });
+      expect(await left(workspaceId)).toEqual([1]);
+      // 0020's crm_outbox_prune(integer), the app's, is gone.
+      const overloads = await owner.query<{ signature: string }>(
+        `select p.oid::regprocedure::text as signature from pg_proc p where p.proname = 'crm_outbox_prune'`,
+      );
+      expect(overloads.rows).toEqual([{ signature: 'crm_outbox_prune(timestamp with time zone,integer)' }]);
+    });
   });
 
   it('lets the app stamp published_at once, from null to now(), and never take it back, move it or date it', async () => {
@@ -418,7 +509,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     try {
       for (const call of [
         'select * from public.crm_outbox_workspaces(10, null)',
-        'select public.crm_outbox_prune(10)',
+        'select public.crm_outbox_prune(now(), 10)',
       ]) {
         await expect(identity.query(call)).rejects.toMatchObject({ code: '42501' });
       }

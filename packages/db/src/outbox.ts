@@ -1,9 +1,10 @@
 // The outbox reader (spec 0005, change events): everything the relay asks of
-// Postgres, on one direct connection as the app login, so no raw `pg` lives
-// outside this package. Which workspaces have unpublished rows comes from the
-// security definer function `crm_outbox_workspaces` (ids only), and retention
-// from `crm_outbox_prune`; a workspace's rows are read and marked under row
-// level security, like every other tenant query.
+// Postgres, on one direct connection as the worker's login (`crm_worker`), so
+// no raw `pg` lives outside this package. Which workspaces have unpublished
+// rows comes from the security definer function `crm_outbox_workspaces` (ids
+// only), and retention from `crm_outbox_prune` through `pruneOutbox` (a count
+// only); a workspace's rows are read and marked under row level security, like
+// every other tenant query.
 //
 // The relay's hot path is one round trip per batch: `app.workspace_id` is set,
 // the last batch marked and the next one read by one simple query of several
@@ -14,7 +15,7 @@
 // workspace id against the uuid pattern, and the numbers as whole numbers.
 import { MAX_REPLACED_CELLS } from '@crm/contracts';
 import type pg from 'pg';
-import type { outboxKind } from './schema/outbox.ts';
+import { OUTBOX_RETENTION, type outboxKind } from './schema/outbox.ts';
 
 /** A kind of outbox row (`outbox_kind`): one per kind of spec 0007's `ChangeEvent` but the stub. */
 export type OutboxKind = (typeof outboxKind.enumValues)[number];
@@ -29,8 +30,12 @@ const RELAY_LOCK = 7_007_007;
 const MAX_WORKSPACES = 500;
 /** The most rows one `pending` or `advance` call returns. */
 const MAX_ROWS = 1_000;
-/** The most rows one `prune` call deletes (`crm_outbox_prune` clamps to the same). */
-const MAX_PRUNE = 1_000;
+/**
+ * The most rows one prune deletes (spec 0007, `PRUNE_BATCH`): `pruneOutbox`
+ * asks for this many by default, and `crm_outbox_prune` clamps `max` to 1 to
+ * the same.
+ */
+export const PRUNE_BATCH = 10_000;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -110,10 +115,7 @@ export interface OutboxReader {
   mark(workspaceId: string, upto: number): Promise<Marked>;
   /** `mark(workspaceId, upto)` then `pending(workspaceId, max)`, in one round trip and one transaction. */
   advance(workspaceId: string, upto: number, max: number): Promise<Marked & { readonly rows: readonly OutboxRow[] }>;
-  /**
-   * Deletes at most `max` (clamped to 1 to 1,000) rows published more than
-   * `OUTBOX_RETENTION` ago, through the definer function; returns how many.
-   */
+  /** `pruneOutbox` on this connection, in its turn: one batch of at most `max` rows; returns how many went. */
   prune(max: number): Promise<number>;
   /** LISTENs on `crm_outbox`, calling `onNotify` with the workspace id each committed write names. */
   listen(onNotify: (workspaceId: string) => void): Promise<void>;
@@ -127,7 +129,7 @@ export interface OutboxReader {
 }
 
 /**
- * Wraps a direct connection (from `openDirectConnection`, as the app login)
+ * Wraps a direct connection (from `openDirectConnection`, as the worker's login)
  * as the relay's outbox reader. The reader owns the client from here: it
  * listens for the client's errors, so a dropped connection settles `lost`
  * instead of crashing the process. A dropped reader is done; open a new
@@ -183,12 +185,7 @@ export function createOutboxReader(direct: pg.Client): OutboxReader {
       return { ...markedOf(marked), rows: rowsOf(read) };
     },
 
-    async prune(max) {
-      const result = await direct.query<{ pruned: number }>('select public.crm_outbox_prune($1::integer) as pruned', [
-        clamp(max, MAX_PRUNE),
-      ]);
-      return result.rows[0]?.pruned ?? 0;
-    },
+    prune: (max) => pruneOutbox(direct, max),
 
     async listen(onNotify) {
       direct.on('notification', (message) => {
@@ -220,6 +217,32 @@ export function createOutboxReader(direct: pg.Client): OutboxReader {
     // Closing doesn't wait its turn: a call stuck on a dead connection must not hold it open.
     close: () => calls.close(),
   };
+}
+
+/**
+ * Deletes one batch of outbox rows past retention (spec 0007, AC-89): at most
+ * `max` (clamped to 1 to `PRUNE_BATCH`) rows created more than
+ * `OUTBOX_RETENTION` ago (by the database's clock) and published, from each
+ * workspace's oldest `seq` up, stopping at its first row that is unpublished
+ * or newer, so an unpublished row is never deleted and what a workspace keeps
+ * is one unbroken run of `seq` up to its head (catch up answers `reset` below
+ * it). Returns how many went: fewer than `max` means nothing past retention
+ * is left, so a caller that wants everything gone calls again while it
+ * answers `max`.
+ *
+ * Runs `crm_outbox_prune`, which only the worker's login (`crm_worker`) may
+ * execute: pass the worker's direct connection (the relay's, after a publish
+ * pass, or spec 0008's daily cleanup), never the app's pool, where it is
+ * refused (42501). One statement, so it is its own transaction unless the
+ * caller has one open. It writes nothing but the delete, and returns a count
+ * only.
+ */
+export async function pruneOutbox(connection: pg.ClientBase | pg.Pool, max: number = PRUNE_BATCH): Promise<number> {
+  const result = await connection.query<{ pruned: number }>(
+    'select public.crm_outbox_prune(now() - $1::interval, $2::integer) as pruned',
+    [OUTBOX_RETENTION, clamp(max, PRUNE_BATCH)],
+  );
+  return result.rows[0]?.pruned ?? 0;
 }
 
 /** An outbox row as pg parses it. */

@@ -16,6 +16,8 @@ export {
   OUTBOX_CHANNEL,
   OUTBOX_ROW_COLUMNS,
   outboxRowOf,
+  PRUNE_BATCH,
+  pruneOutbox,
   type Marked,
   type OutboxKind,
   type OutboxReader,

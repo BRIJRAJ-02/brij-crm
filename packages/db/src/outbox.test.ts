@@ -8,7 +8,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from './client.ts';
 import { openDirectConnection } from './direct.ts';
-import { createOutboxReader, type OutboxReader } from './outbox.ts';
+import { createOutboxReader, PRUNE_BATCH, pruneOutbox, type OutboxReader } from './outbox.ts';
 import { OUTBOX_RETENTION } from './schema/outbox.ts';
 
 const { appUrl, adminUrl, workerUrl } = inject('testDatabase');
@@ -207,24 +207,24 @@ describe('the outbox reader', () => {
     ]);
   });
 
-  it('prunes published rows exactly past OUTBOX_RETENTION, the interval crm_outbox_prune hard codes', async () => {
+  it('prunes published rows made more than OUTBOX_RETENTION ago, through pruneOutbox on the worker login', async () => {
     const outbox = await reader();
     const workspaceId = await workspaceWithEvents([]);
     const admin = new pg.Client({ connectionString: adminUrl });
     await admin.connect();
     try {
-      const event = (seq: number, published: string | undefined) =>
+      const event = (seq: number, age: string, published: boolean) =>
         admin.query(
-          `insert into outbox (workspace_id, seq, kind, object_id, published_at)
-           values ($1, $2, 'records', (select id from objects where workspace_id = $1),
-             case when $3::text is null then null else now() - $3::interval end)`,
-          [workspaceId, seq, published ?? null],
+          `insert into outbox (workspace_id, seq, kind, object_id, created_at, published_at)
+           values ($1, $2, 'records', (select id from objects where workspace_id = $1), now() - $3::interval,
+             case when $4::boolean then now() end)`,
+          [workspaceId, seq, age, published],
         );
-      // Just past the constant's cutoff, and just inside it.
-      await event(1, `${OUTBOX_RETENTION} 1 minute`);
-      await event(2, `${OUTBOX_RETENTION} -1 minute`);
-      await event(3, undefined);
-      expect(await outbox.prune(1_000)).toBeGreaterThanOrEqual(1);
+      // Just past the constant's cutoff, and just inside it; then one old row still waiting to be published.
+      await event(1, `${OUTBOX_RETENTION} 1 minute`, true);
+      await event(2, `${OUTBOX_RETENTION} -1 minute`, true);
+      await event(3, '2 days', false);
+      expect(await outbox.prune(PRUNE_BATCH)).toBeGreaterThanOrEqual(1);
       const left = await admin.query<{ seq: number }>(
         'select seq::int as seq from outbox where workspace_id = $1 order by seq',
         [workspaceId],
@@ -244,6 +244,27 @@ describe('the outbox reader', () => {
       ]);
     } finally {
       await admin.end();
+    }
+  });
+
+  it('prunes through pruneOutbox on a worker pool too (the daily cleanup), and is refused on the app login', async () => {
+    const workspaceId = await workspaceWithEvents([]);
+    await db.withWorkspace(workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into outbox (workspace_id, seq, kind, created_at, published_at) select ${workspaceId}, n, 'members', now() - interval '2 days', now() from generate_series(1, 3) n`,
+      ),
+    );
+    const app = new pg.Pool({ connectionString: appUrl, max: 1 });
+    const worker = new pg.Pool({ connectionString: workerUrl, max: 1 });
+    try {
+      await expect(pruneOutbox(app)).rejects.toMatchObject({ code: '42501' });
+      // Clamped to at least one row.
+      expect(await pruneOutbox(worker, 0)).toBe(1);
+      while ((await pruneOutbox(worker)) === PRUNE_BATCH);
+      const left = await db.withWorkspace(workspaceId, (tx) => tx.execute(sql`select seq from outbox`));
+      expect(left.rows).toEqual([]);
+    } finally {
+      await Promise.all([app.end(), worker.end()]);
     }
   });
 
