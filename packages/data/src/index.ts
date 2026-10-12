@@ -74,7 +74,14 @@ export type {
   UsageCount,
   WorkspaceSummary,
 } from '@crm/contracts';
-export type { ActivityEntryShape, ActivityFeed, ActivityState, ActivityStatus, EntrySource } from './activity/feed.ts';
+export type {
+  ActivityEntryShape,
+  ActivityFeed,
+  ActivityState,
+  ActivityStatus,
+  EntrySource,
+  LinkedRecordShape,
+} from './activity/feed.ts';
 export type { Hue, ObjectIcon } from '@crm/contracts/values';
 // The API name rule and the new object's defaults (spec 0012): plain modules with no Zod, so the dialogs share
 // the server's own functions without loading the schema library.
@@ -745,10 +752,25 @@ export function createDataLayer({
       // What the write replaced (spec 0006): a notice for the values this tab wrote.
       if (event.replaced !== undefined) layer.replaced(workspace, event);
     });
+    // Open timelines (spec 0017) read their first page again for a change naming their record; a coarse one,
+    // for every record of the object, waits a random moment first so a whole team doesn't read in step.
+    if (activity === undefined) return;
+    const timelines = activity;
+    const tell = () => {
+      void timelines.then((feeds) => {
+        feeds.changed(workspace, event);
+      });
+    };
+    if (event.coarse === true) spread(`activity ${workspace} ${event.objectId}`, tell);
+    else tell();
   });
   router.on('definitions', (workspace, event) => {
     // A list's own definitions: no screen holds lists yet.
     if (event.listId !== undefined) return;
+    // An attribute archived, hidden or renamed: the object's open timelines start again (spec 0017).
+    void activity?.then((feeds) => {
+      feeds.definitionsChanged(workspace, event.objectId);
+    });
     // Any definition change may move a count the settings meters show (spec 0012, AC-243): a held usage is
     // dropped, and the pages reload once so a settings page reads it again.
     const counted = Promise.resolve(dropUsage(workspace));
@@ -802,6 +824,9 @@ export function createDataLayer({
     jobs.resync(workspace);
     void records?.then((layer) => {
       layer.reload(workspace);
+    });
+    void activity?.then((feeds) => {
+      feeds.resync(workspace);
     });
     void refreshAttributes(workspace);
     // The workspace's objects, usage and members are read again on the next page load, which a resync asks for.
@@ -882,6 +907,19 @@ export function createDataLayer({
     onFinished: onJobFinished,
   });
 
+  /**
+   * A write of this tab landed (spec 0017): its echo never comes back live, so
+   * the open timelines read their first page again (a link written here
+   * changes the far records' timelines too). Undo writes come this way as well.
+   */
+  const landed = <T>(workspace: string, answer: Promise<T>): Promise<T> =>
+    answer.then((value) => {
+      void activity?.then((feeds) => {
+        feeds.ownWrite(workspace);
+      });
+      return value;
+    });
+
   const recordsApi: RecordsApi = {
     query: (input, signal) =>
       call((options) => api.records.query({ ...input, attributeIds: [...input.attributeIds] }, options), signal),
@@ -897,9 +935,21 @@ export function createDataLayer({
           options,
         ),
       ),
-    create: (input) => call((options) => api.records.create(input, options)),
-    setValues: (input) => call((options) => api.records.setValues(input, options)),
-    setValuesBatch: (input) => call((options) => api.records.setValuesBatch(input, options)),
+    create: (input) =>
+      landed(
+        input.workspace,
+        call((options) => api.records.create(input, options)),
+      ),
+    setValues: (input) =>
+      landed(
+        input.workspace,
+        call((options) => api.records.setValues(input, options)),
+      ),
+    setValuesBatch: (input) =>
+      landed(
+        input.workspace,
+        call((options) => api.records.setValuesBatch(input, options)),
+      ),
   };
 
   /** An attribute's title, from the cached list of its object (empty when it can't be read). */
@@ -1147,6 +1197,11 @@ export function createDataLayer({
           if (fresh) members.delete(workspace);
           return readMembers(workspace);
         },
+        // The same cached list the tables and the record page read, options inline.
+        attributes: (workspace, objectId) =>
+          cached(attributes, objectKey(workspace, objectId), () =>
+            beforeRead(workspace).then(() => call((options) => api.attributes.list({ workspace, objectId }, options))),
+          ),
       }),
     );
     return activity;
@@ -1593,14 +1648,16 @@ export function createDataLayer({
     activity: {
       /**
        * A record's timeline, newest first (spec 0017): pages of `records.activity`
-       * mapped to the feed's entries, who did it named from the members. One
-       * per record, shared with `recent`. Read it through `useActivity`.
+       * mapped to the feed's entries, who did it named from the members and
+       * each attribute from `objectId`'s definitions; the next page as the
+       * feed scrolls, and kept live (a change naming the record, this tab's own
+       * writes). One per record, shared with `recent`. Read it through `useActivity`.
        */
-      forRecord: async (workspace: string, recordId: string): Promise<ActivityFeed> =>
-        (await activityFeeds()).forRecord(workspace, recordId),
+      forRecord: async (workspace: string, recordId: string, objectId?: string): Promise<ActivityFeed> =>
+        (await activityFeeds()).forRecord(workspace, recordId, objectId),
       /** The same timeline cut to its newest five entries (Overview's "Recent activity"), sharing the first page. */
-      recent: async (workspace: string, recordId: string): Promise<ActivityFeed> =>
-        (await activityFeeds()).recent(workspace, recordId),
+      recent: async (workspace: string, recordId: string, objectId?: string): Promise<ActivityFeed> =>
+        (await activityFeeds()).recent(workspace, recordId, objectId),
     },
     undo: {
       /**
