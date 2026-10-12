@@ -101,6 +101,8 @@ interface Behaviour {
   access: () => MyAccess;
   attributes: () => AttributeDefinition[];
   addAttribute: () => AttributeDefinition;
+  /** What attributes.update answers, and reorder, archive and restore (spec 0012, milestone 2). */
+  attributeWrite: () => AttributeDefinition[];
   count: () => number;
   query: (position: number, limit: number) => RecordView[];
   setValues: () => RecordView;
@@ -140,6 +142,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     access: () => ({ memberId: ADA_MEMBER.id, role: 'member', roleLabel: 'Member', permissions: ['records.export'] }),
     attributes: () => [TITLE],
     addAttribute: notServed,
+    attributeWrite: notServed,
     count: () => 3,
     query: (position, limit) =>
       Array.from({ length: Math.max(0, Math.min(limit, 3 - position)) }, (_, at) => personRow(position + at)),
@@ -199,7 +202,28 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     usage: { get: os.usage.get.handler(() => behaviour.usage()) },
     attributes: {
       list: os.attributes.list.handler(() => behaviour.attributes()),
-      create: os.attributes.create.handler(() => behaviour.addAttribute()),
+      create: os.attributes.create.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        return behaviour.addAttribute();
+      }),
+      update: os.attributes.update.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        const [first] = behaviour.attributeWrite();
+        if (first === undefined) throw new Error('The fake answered no attribute.');
+        return first;
+      }),
+      reorder: os.attributes.reorder.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        return behaviour.attributeWrite();
+      }),
+      archive: os.attributes.archive.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        return behaviour.attributeWrite();
+      }),
+      restore: os.attributes.restore.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        return behaviour.attributeWrite();
+      }),
     },
     records: {
       query: os.records.query.handler(({ input }) => ({
@@ -508,26 +532,73 @@ describe('members and attributes', () => {
     await data.attributes.list('acme', PEOPLE.id);
     await data.attributes.list('acme', PEOPLE.id);
     expect(count(api.calls, '/api/rpc/attributes/list')).toBe(1);
-    expect(await data.attributes.create('acme', { objectId: PEOPLE.id, title: 'Nickname', type: 'text' })).toEqual(
+    const id = data.attributes.newId();
+    expect(await data.attributes.create('acme', { id, objectId: PEOPLE.id, title: 'Nickname', type: 'text' })).toEqual(
       added,
     );
     await data.attributes.list('acme', PEOPLE.id);
     expect(count(api.calls, '/api/rpc/attributes/list')).toBe(2);
   });
 
-  it('refuses a taken name on the title field', async () => {
+  it('refuses a taken API name on its field', async () => {
     const api = fakeApi({
       addAttribute: () => {
         throw new ORPCError('SLUG_TAKEN', {
           status: 409,
-          message: 'An attribute with this name exists.',
-          data: { refusals: [{ code: 'SLUG_TAKEN', message: 'An attribute with this name exists.', field: 'title' }] },
+          message: 'An attribute here already uses this API name.',
+          data: {
+            refusals: [
+              { code: 'SLUG_TAKEN', message: 'An attribute here already uses this API name.', field: 'apiSlug' },
+            ],
+          },
         });
       },
     });
     const { data } = layer(api);
-    const error = await failure(data.attributes.create('acme', { objectId: PEOPLE.id, title: 'Name', type: 'text' }));
-    expect(error).toMatchObject({ code: 'SLUG_TAKEN', data: { refusals: [{ field: 'title' }] } });
+    const error = await failure(
+      data.attributes.create('acme', { id: data.attributes.newId(), objectId: PEOPLE.id, title: 'Name', type: 'text' }),
+    );
+    expect(error).toMatchObject({ code: 'SLUG_TAKEN', data: { refusals: [{ field: 'apiSlug' }] } });
+  });
+
+  it('reads settings’ list (archived ones too) apart from the tables’, and keeps a move’s answer (spec 0012)', async () => {
+    const archived = { ...TITLE, id: '0199a6f2-0000-7000-8000-000000000008', isArchived: true };
+    const api = fakeApi({ attributes: () => [TITLE, archived], attributeWrite: () => [archived, TITLE] });
+    const reloads: string[] = [];
+    const { data } = layer(api, undefined, { onDefinitionsChange: () => reloads.push('reload') });
+    await data.attributes.all('acme', PEOPLE.id);
+    await data.attributes.all('acme', PEOPLE.id);
+    await data.attributes.list('acme', PEOPLE.id);
+    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(2);
+    // A move answers the whole settings list in its new order: kept, and the page reloads with no read.
+    const order = await data.attributes.reorder('acme', archived.id, 0);
+    expect(order.map((each) => each.id)).toEqual([archived.id, TITLE.id]);
+    expect(await data.attributes.all('acme', PEOPLE.id)).toEqual(order);
+    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(2);
+    expect(reloads).toEqual(['reload']);
+    // The tables' list is read again next time.
+    await data.attributes.list('acme', PEOPLE.id);
+    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(3);
+  });
+  const COMPANIES_ID = '0199a6f2-0000-7000-8000-000000000012';
+
+  it('drops both ends’ objects after an archive or restore, waits for the server, and sends one mutation id', async () => {
+    const team = { ...TITLE, id: '0199a6f2-0000-7000-8000-000000000010', objectId: COMPANIES_ID, title: 'Team' };
+    const company = { ...TITLE, id: '0199a6f2-0000-7000-8000-000000000011', title: 'Company' };
+    const api = fakeApi({ attributeWrite: () => [company, team] });
+    const { data } = layer(api);
+    await data.attributes.list('acme', PEOPLE.id);
+    await data.attributes.list('acme', COMPANIES_ID);
+    const ends = await data.attributes.archive('acme', company.id);
+    expect(ends.map((each) => each.objectId)).toEqual([PEOPLE.id, COMPANIES_ID]);
+    expect(api.mutationIds).toHaveLength(1);
+    await data.attributes.list('acme', PEOPLE.id);
+    await data.attributes.list('acme', COMPANIES_ID);
+    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(4);
+    await data.attributes.restore('acme', company.id);
+    const edited = await data.attributes.update('acme', company.id, { title: 'Employer', defaultValue: null });
+    expect(edited.id).toBe(company.id);
+    expect(api.mutationIds).toHaveLength(3);
   });
 
   it('maps an attribute to the field set’s, reading references and members as read only in this loop', () => {
@@ -833,6 +904,23 @@ describe('live updates', () => {
     expect(definitionChanges()).toBe(1);
     expect(await data.attributes.list('acme', PEOPLE.id)).toEqual([TITLE, NICKNAME]);
     expect(count(api.calls, '/api/rpc/attributes/list')).toBe(3);
+  });
+
+  it('drops a held settings list on an attribute change and reloads the pages, which read it again (spec 0012)', async () => {
+    const { api, client, data, definitionChanges } = await liveLayer({});
+    await data.attributes.all('acme', PEOPLE.id);
+    const lists = () => count(api.calls, '/api/rpc/attributes/list');
+    const before = lists();
+    client
+      .channel()
+      .onPublication({ seq: 1, at: AT, kind: 'definitions', objectId: PEOPLE.id, attributeIds: [TITLE.id] });
+    await settled();
+    // The table's live list is read again now; the settings list is dropped, the pages reload, and their next
+    // load reads it.
+    expect(lists()).toBe(before + 1);
+    expect(definitionChanges()).toBe(1);
+    await data.attributes.all('acme', PEOPLE.id);
+    expect(lists()).toBe(before + 2);
   });
 
   it('reads every held attribute list again only when an object was archived or restored (spec 0012)', async () => {

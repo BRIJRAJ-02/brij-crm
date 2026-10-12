@@ -7,7 +7,7 @@
 // while a screen shows a workspace (the realtime client loads with the first).
 import type {
   AttributeDefinition,
-  CreatableAttributeType,
+  PickerAttributeType,
   CreateWorkspaceInput,
   contract,
   JobView,
@@ -51,7 +51,7 @@ export type {
   AttributeDefinition,
   AttributeOption,
   AttributeType,
-  CreatableAttributeType,
+  PickerAttributeType,
   CreatedWorkspace,
   CreateWorkspaceInput,
   InputIssue,
@@ -76,7 +76,7 @@ export type { Hue, ObjectIcon } from '@crm/contracts/values';
 // The API name rule and the new object's defaults (spec 0012): plain modules with no Zod, so the dialogs share
 // the server's own functions without loading the schema library.
 export { isReservedSlug, RESERVED_SLUGS, toApiSlug } from '@crm/contracts/slugs';
-export { freeHue } from '@crm/contracts/picker';
+export { freeHue, PICKER_TYPES, type PickerType } from '@crm/contracts/picker';
 export type { Auth, SessionUser } from './auth/auth.ts';
 export {
   dataError,
@@ -187,6 +187,38 @@ export interface ObjectChanges {
   readonly pluralName?: string;
   readonly icon?: ObjectSummary['icon'];
   readonly hue?: ObjectSummary['hue'];
+}
+
+/** An attribute's default (spec 0012, AC-234): a value, the member creating the record, or today plus days. */
+export type AttributeDefaultValue = NonNullable<AttributeDefinition['defaultValue']>;
+
+/**
+ * A new attribute, as AttributeSettings sends it (spec 0012, AC-229): the id
+ * from `attributes.newId`, minted once per dialog.
+ */
+export interface NewAttribute {
+  readonly id: string;
+  readonly objectId: string;
+  readonly title: string;
+  readonly type: PickerAttributeType;
+  /** Derived from the title on the server (`toApiSlug`) when absent. */
+  readonly apiSlug?: string;
+  readonly description?: string;
+  readonly isMulti?: boolean;
+  readonly isRequired?: boolean;
+  readonly isUnique?: boolean;
+  readonly config?: Readonly<Record<string, unknown>>;
+  readonly defaultValue?: AttributeDefaultValue;
+}
+
+/** What settings may change on an attribute (spec 0012, AC-231); `null` clears the description or the default. */
+export interface AttributeChanges {
+  readonly title?: string;
+  readonly description?: string | null;
+  readonly isRequired?: boolean;
+  readonly isUnique?: boolean;
+  readonly config?: Readonly<Record<string, unknown>>;
+  readonly defaultValue?: AttributeDefaultValue | null;
 }
 
 /** The cache key of one object's attributes in one workspace. */
@@ -301,6 +333,8 @@ export function createDataLayer({
   let members = new Map<string, Promise<MemberSummary[]>>();
   let access = new Map<string, Promise<MyAccess>>();
   let attributes = new Map<string, Promise<AttributeDefinition[]>>();
+  // Each object's attributes with the archived ones too (settings, spec 0012), apart from the live lists the tables read.
+  let allAttributes = new Map<string, Promise<AttributeDefinition[]>>();
   // The records layer, loaded with the first screen that shows records.
   let records: Promise<RecordsLayer> | undefined;
   // Records' timelines (spec 0017), loaded with the first record page.
@@ -336,6 +370,7 @@ export function createDataLayer({
     members = new Map();
     access = new Map();
     attributes = new Map();
+    allAttributes = new Map();
     heads = new Map();
     firstTokens = new Map();
     uncovered = new Set();
@@ -483,6 +518,20 @@ export function createDataLayer({
    * whether one was held, so the pages reload and that read happens now.
    */
   const dropUsage = (workspace: string): boolean => usage.delete(workspace);
+
+  /**
+   * Drops the held settings lists (attributes with the archived ones) of one
+   * object, or of every object of the workspace, instead of reading them
+   * again: only the settings pages show them, and their next load reads them.
+   * Answers whether one was held, so the pages reload and that read happens.
+   */
+  const dropAllAttributes = (workspace: string, objectId?: string): boolean => {
+    const held = [...allAttributes.keys()].filter((key) =>
+      objectId === undefined ? key.startsWith(`${workspace}/`) : key === objectKey(workspace, objectId),
+    );
+    for (const key of held) allAttributes.delete(key);
+    return held.length > 0;
+  };
 
   /** Runs `onDefinitionsChange` once when any of the comparisons found a list that came back different. */
   const reloadIfChanged = (comparisons: readonly Promise<boolean>[]): void => {
@@ -653,14 +702,20 @@ export function createDataLayer({
     // dropped, and the pages reload once so a settings page reads it again.
     const counted = Promise.resolve(dropUsage(workspace));
     if (event.objectId !== undefined && event.attributeIds !== undefined) {
-      reloadIfChanged([refreshAttributes(workspace, event.objectId), counted]);
+      // An attribute or option changed (spec 0012): that object's lists, the live one read again (the tables),
+      // the one with archived attributes dropped (settings reads it on its next load).
+      const settings = Promise.resolve(dropAllAttributes(workspace, event.objectId));
+      reloadIfChanged([refreshAttributes(workspace, event.objectId), counted, settings]);
     } else if (event.objectId !== undefined) {
       // The object itself was made, renamed, restyled, moved, archived or restored (spec 0012), or a catch up
       // collapsed its attribute changes: its own attributes, the workspace's objects, and every other held
-      // attribute list only when an object was archived or restored. One reload at most.
-      reloadIfChanged([refreshAttributes(workspace, event.objectId), refreshObjects(workspace), counted]);
+      // attribute list only when an object was archived or restored. One reload at most. Every settings list
+      // is dropped, since an archive changes which references count as archived anywhere.
+      const settings = Promise.resolve(dropAllAttributes(workspace));
+      reloadIfChanged([refreshAttributes(workspace, event.objectId), refreshObjects(workspace), counted, settings]);
     } else {
       objects.delete(workspace);
+      dropAllAttributes(workspace);
       void refreshAttributes(workspace);
       onDefinitionsChange();
     }
@@ -702,6 +757,7 @@ export function createDataLayer({
     objects.delete(workspace);
     usage.delete(workspace);
     members.delete(workspace);
+    dropAllAttributes(workspace);
     onDefinitionsChange();
   });
 
@@ -891,7 +947,42 @@ export function createDataLayer({
       if (known === undefined) objects.delete(workspace);
       else objects.set(workspace, Promise.resolve(known));
       usage.delete(workspace);
-      if (effects.archives === true) await refreshAttributes(workspace);
+      if (effects.archives === true) {
+        dropAllAttributes(workspace);
+        await refreshAttributes(workspace);
+      }
+      onDefinitionsChange();
+      return answer;
+    } catch (error) {
+      mutations.forget(mutationId);
+      throw error;
+    }
+  }
+
+  /**
+   * Runs one attribute write (spec 0012, milestone 2): server confirmed, never
+   * optimistic. Its echoes are skipped (one definitions event per object the
+   * answer names), and once it lands each named object's lists are read
+   * again (the live one) or dropped (the settings one), the usage is
+   * dropped, and the app reloads its pages, so this tab shows the change as
+   * every other tab does.
+   */
+  async function writeAttribute<T>(
+    workspace: string,
+    write: (mutationId: string, options: CallOptions) => Promise<T>,
+    objectsOf: (answer: T) => readonly string[],
+  ): Promise<T> {
+    const mutationId = mintId();
+    mutations.sent(mutationId);
+    try {
+      const answer = await call((options) => write(mutationId, options));
+      const touched = [...new Set(objectsOf(answer))];
+      mutations.answered(mutationId, Math.max(1, touched.length));
+      usage.delete(workspace);
+      for (const objectId of touched) {
+        attributes.delete(objectKey(workspace, objectId));
+        dropAllAttributes(workspace, objectId);
+      }
       onDefinitionsChange();
       return answer;
     } catch (error) {
@@ -1079,35 +1170,112 @@ export function createDataLayer({
         ),
     },
     attributes: {
-      /** An object's live attributes in position order, system ones marked. Cached until an attribute is added. */
+      /** An object's live attributes in position order, system ones marked. Cached until a definition changes. */
       list: (workspace: string, objectId: string): Promise<AttributeDefinition[]> =>
         cached(attributes, objectKey(workspace, objectId), () =>
           beforeRead(workspace).then(() => call((options) => api.attributes.list({ workspace, objectId }, options))),
         ),
       /**
-       * Adds an attribute and waits for the server (no optimistic step: it is
-       * often refused, and it reshapes the table). Refusals: `SLUG_TAKEN` on
-       * `title`, `LIMIT_REACHED`, `CONFIG_INVALID`. A retry after a lost answer
-       * gets the attribute the first try made. The object's list is read again
-       * next time.
+       * An object's attributes with the archived ones too (settings, spec 0012,
+       * AC-227), in position order. Cached until a definition of that object
+       * changes.
        */
-      async create(
-        workspace: string,
-        input: { readonly objectId: string; readonly title: string; readonly type: CreatableAttributeType },
-      ): Promise<AttributeDefinition> {
-        const mutationId = mintId();
-        mutations.sent(mutationId);
-        try {
-          const made = await call((options) => api.attributes.create({ workspace, ...input, mutationId }, options));
-          // It stored one definitions row: one echo.
-          mutations.answered(mutationId, 1);
-          attributes.delete(objectKey(workspace, input.objectId));
-          return made;
-        } catch (error) {
-          mutations.forget(mutationId);
-          throw error;
-        }
+      all: (workspace: string, objectId: string): Promise<AttributeDefinition[]> =>
+        cached(allAttributes, objectKey(workspace, objectId), () =>
+          beforeRead(workspace).then(() =>
+            call((options) => api.attributes.list({ workspace, objectId, includeArchived: true }, options)),
+          ),
+        ),
+      /** A new attribute's id: mint it once per dialog, and send the same one again on a retry. */
+      newId: () => mintId(),
+      /**
+       * Creates an attribute and waits for the server (spec 0012, AC-229; no
+       * optimistic step: it is often refused, and it reshapes every table).
+       * Refusals: `SLUG_TAKEN` (on `apiSlug`), `CONFIG_INVALID` (on its field),
+       * `LIMIT_REACHED`, `FORBIDDEN`. A retry with the same id after a lost
+       * answer gets the attribute the first try made.
+       */
+      create: (workspace: string, input: NewAttribute): Promise<AttributeDefinition> =>
+        writeAttribute(
+          workspace,
+          (mutationId, options) =>
+            api.attributes.create(
+              {
+                workspace,
+                id: input.id,
+                objectId: input.objectId,
+                title: input.title,
+                type: input.type,
+                ...(input.apiSlug === undefined ? {} : { apiSlug: input.apiSlug }),
+                ...(input.description === undefined ? {} : { description: input.description }),
+                ...(input.isMulti === undefined ? {} : { isMulti: input.isMulti }),
+                ...(input.isRequired === undefined ? {} : { isRequired: input.isRequired }),
+                ...(input.isUnique === undefined ? {} : { isUnique: input.isUnique }),
+                ...(input.config === undefined ? {} : { config: { ...input.config } }),
+                ...(input.defaultValue === undefined ? {} : { defaultValue: input.defaultValue }),
+                mutationId,
+              },
+              options,
+            ),
+          (made) => [made.objectId],
+        ),
+      /**
+       * Changes an attribute's settings (spec 0012, AC-231), waiting for the
+       * server. Refusals: `UNIQUE_HAS_DUPLICATES`, `CONFIG_INVALID` (on its
+       * field), `ATTRIBUTE_READ_ONLY`, `FORBIDDEN`.
+       */
+      update: (workspace: string, attributeId: string, changes: AttributeChanges): Promise<AttributeDefinition> =>
+        writeAttribute(
+          workspace,
+          (mutationId, options) =>
+            api.attributes.update(
+              {
+                workspace,
+                attributeId,
+                ...changes,
+                ...(changes.config === undefined ? {} : { config: { ...changes.config } }),
+                mutationId,
+              },
+              options,
+            ),
+          (edited) => [edited.objectId],
+        ),
+      /**
+       * Moves an attribute to `position` among its object's own attributes,
+       * archived ones counted (spec 0012, AC-232). Answers the object's
+       * attributes in their new order, which the settings list keeps.
+       */
+      reorder: async (workspace: string, attributeId: string, position: number): Promise<AttributeDefinition[]> => {
+        const order = await writeAttribute(
+          workspace,
+          (mutationId, options) => api.attributes.reorder({ workspace, attributeId, position, mutationId }, options),
+          (answer) => answer.map((each) => each.objectId),
+        );
+        const objectId = order[0]?.objectId;
+        if (objectId !== undefined) allAttributes.set(objectKey(workspace, objectId), Promise.resolve(order));
+        return order;
       },
+      /**
+       * Archives an attribute (spec 0012, AC-233), both ends of a
+       * relationship together; answers every definition it changed.
+       */
+      archive: (workspace: string, attributeId: string): Promise<AttributeDefinition[]> =>
+        writeAttribute(
+          workspace,
+          (mutationId, options) => api.attributes.archive({ workspace, attributeId, mutationId }, options),
+          (ends) => ends.map((end) => end.objectId),
+        ),
+      /**
+       * Restores an archived attribute at its old place (spec 0012, AC-233),
+       * both ends of a relationship together. Refusals: `NOT_FOUND` ("Restore
+       * <Plural> first."), `UNIQUE_HAS_DUPLICATES`.
+       */
+      restore: (workspace: string, attributeId: string): Promise<AttributeDefinition[]> =>
+        writeAttribute(
+          workspace,
+          (mutationId, options) => api.attributes.restore({ workspace, attributeId, mutationId }, options),
+          (ends) => ends.map((end) => end.objectId),
+        ),
     },
     records: {
       /**
