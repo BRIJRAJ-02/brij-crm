@@ -549,3 +549,175 @@ describe('hidden is absent (spec 0017, AC-382)', () => {
     expect(moved?.actor).toEqual({ type: 'system', id: null });
   });
 });
+
+describe('the review of milestone 2: hidden actors, hidden sides and names, and long runs of reorders', () => {
+  it('names nobody on changes and link entries when a field rule hides Updated by or Created by', async () => {
+    const world = await workspace();
+    const acme = await world.company('Acme');
+    const jane = await world.person('Jane');
+    await setValues(world.scope, { recordId: acme, values: { [world.id('companies.description')]: 'Rockets' } });
+    await setValues(world.scope, {
+      recordId: acme,
+      values: { [world.id('companies.team')]: [world.ref(world.people, jane)] },
+    });
+    for (const column of ['updated_by', 'created_by']) {
+      const hides = world.member({
+        levels: [
+          {
+            subject: { type: 'role', role: 'member' },
+            target: { type: 'attribute', objectId: world.companies, attributeId: world.id(`companies.${column}`) },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      });
+      const entries = await all(hides, acme);
+      expect(entries.map((entry) => entry.kind)).toEqual(['links', 'change', 'created']);
+      for (const entry of entries.slice(0, 2)) expect(entry).not.toHaveProperty('actor');
+    }
+    // Under the open policy, every entry names who did it.
+    for (const entry of await all(world.scope, acme)) {
+      expect(entry.actor).toEqual({ type: 'member', id: world.ownerId });
+    }
+  });
+
+  it('leaves out a hidden relationship side from either end', async () => {
+    const world = await workspace();
+    const acme = await world.company('Acme');
+    const jane = await world.person('Jane');
+    await setValues(world.scope, {
+      recordId: jane,
+      values: { [world.id('people.company')]: world.ref(world.companies, acme) },
+    });
+    const hideField = (objectId: string, slug: string) =>
+      world.member({
+        levels: [
+          {
+            subject: { type: 'role', role: 'member' },
+            target: { type: 'attribute', objectId, attributeId: world.id(slug) },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      });
+    expect((await all(hideField(world.companies, 'companies.team'), acme)).map((entry) => entry.kind)).toEqual([
+      'created',
+    ]);
+    expect((await all(hideField(world.people, 'people.company'), jane)).map((entry) => entry.kind)).toEqual([
+      'created',
+    ]);
+  });
+
+  it('counts and names only far records the viewer may see, for removals and for a side that holds one', async () => {
+    const world = await workspace();
+    const acme = await world.company('Acme');
+    await setValues(world.scope, {
+      recordId: acme,
+      values: { [world.id('companies.owner')]: { type: 'member', id: world.memberId } },
+    });
+    const globex = await world.company('Globex');
+    const team = world.id('companies.team');
+    const company = world.id('people.company');
+    const owned = { [world.id('people.owner')]: { type: 'member', id: world.memberId } };
+    const mine = await world.person('Mine', owned);
+    const theirs = await world.person('Theirs');
+    const gone = await world.person('Gone', owned);
+    await setValues(world.scope, {
+      recordId: acme,
+      values: { [team]: [mine, theirs, gone].map((id) => world.ref(world.people, id)) },
+    });
+    // Gone goes to the trash (its link stays, hidden), then the team is cleared: Mine and Theirs leave.
+    await deleteRecord(world.scope, { recordId: gone });
+    await setValues(world.scope, { recordId: acme, values: { [team]: null } });
+    const ownPeople = world.member({
+      levels: [],
+      records: [
+        {
+          subject: { type: 'role', role: 'member' },
+          objectId: world.people,
+          kind: 'own',
+          attributeId: world.id('people.owner'),
+        },
+      ],
+    });
+    const [removal, addition] = await all(ownPeople, acme);
+    expect(removal).toMatchObject({ kind: 'links', removedCount: 1, addedCount: 0 });
+    expect(names(removal?.removed)).toEqual(['Mine']);
+    expect(addition).toMatchObject({ kind: 'links', addedCount: 1 });
+    expect(names(addition?.added)).toEqual(['Mine']);
+
+    // A side that holds one: Mine moves from Acme (the member's) to Globex (not): under a rule on Companies, the
+    // move reads as leaving Acme for nothing the member can see.
+    await setValues(world.scope, { recordId: mine, values: { [company]: world.ref(world.companies, acme) } });
+    await setValues(world.scope, { recordId: mine, values: { [company]: world.ref(world.companies, globex) } });
+    const ownCompanies = world.member({
+      levels: [],
+      records: [
+        {
+          subject: { type: 'role', role: 'member' },
+          objectId: world.companies,
+          kind: 'own',
+          attributeId: world.id('companies.owner'),
+        },
+        {
+          subject: { type: 'role', role: 'member' },
+          objectId: world.people,
+          kind: 'own',
+          attributeId: world.id('people.owner'),
+        },
+      ],
+    });
+    const seen = await all(ownCompanies, mine);
+    expect(seen[0]).toMatchObject({ kind: 'change', attributeId: company, to: null, toRefs: [] });
+    expect(seen[0]?.fromRefs?.map((each) => each.name)).toEqual(['Acme']);
+    expect(JSON.stringify(seen)).not.toContain('Globex');
+    expect(JSON.stringify(seen)).not.toContain(globex);
+  });
+
+  it('names a far record whose name the viewer may not see as unnamed', async () => {
+    const world = await workspace();
+    const acme = await world.company('Acme');
+    const jane = await world.person('Jane');
+    await setValues(world.scope, {
+      recordId: acme,
+      values: { [world.id('companies.team')]: [world.ref(world.people, jane)] },
+    });
+    const hidesNames = world.member({
+      levels: [
+        {
+          subject: { type: 'role', role: 'member' },
+          target: { type: 'attribute', objectId: world.people, attributeId: world.id('people.name') },
+          level: 'hidden',
+        },
+      ],
+      records: [],
+    });
+    const [entry] = await all(hidesNames, acme);
+    expect(names(entry?.added)).toEqual(['Unnamed person']);
+  });
+
+  it('pages through a long run of reorders in bounded reads, skipping nothing', async () => {
+    const world = await workspace();
+    const acme = await world.company('Acme');
+    const team = world.id('companies.team');
+    const people = [await world.person('A'), await world.person('B'), await world.person('C')];
+    const order = (ids: readonly string[]) => ids.map((id) => world.ref(world.people, id));
+    await setValues(world.scope, { recordId: acme, values: { [team]: order(people) } });
+    await setValues(world.scope, { recordId: acme, values: { [world.id('companies.description')]: 'Before' } });
+    for (let index = 0; index < 30; index += 1) {
+      await setValues(world.scope, {
+        recordId: acme,
+        values: { [team]: order(index % 2 === 0 ? [...people].reverse() : people) },
+      });
+    }
+    await setValues(world.scope, { recordId: acme, values: { [world.id('companies.description')]: 'After' } });
+    const whole = (await all(world.scope, acme)).map((entry) => entry.id);
+    expect(whole).toHaveLength(4);
+    // With pages of 2, a side reads 3 moments at a time: the 30 reorders take more reads than a page allows, so a
+    // page stops short and the next one goes on from where it stopped.
+    expect((await paged(world.scope, acme, 2)).map((entry) => entry.id)).toEqual(whole);
+    const first = await getActivity(world.scope, { recordId: acme, limit: 2 });
+    expect(first.entries.length).toBeLessThanOrEqual(2);
+    expect(first.nextCursor).toBeDefined();
+  }, 60_000);
+});

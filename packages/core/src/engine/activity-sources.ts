@@ -6,7 +6,13 @@
 // tasks and comments. The creation's own versions (stamped with the record's
 // id) fold into the creation entry and never show here.
 import { sql, type SQL } from 'drizzle-orm';
-import { ACTIVITY_RANKS, activityKey, LINKS_SHOWN_PER_ENTRY, type ActivityItem } from '@crm/contracts';
+import {
+  ACTIVITY_RANKS,
+  activityKey,
+  compareActivityKeys,
+  LINKS_SHOWN_PER_ENTRY,
+  type ActivityItem,
+} from '@crm/contracts';
 import type { RecordRefDisplay } from '@crm/contracts/values';
 import type { WorkspaceTx } from '@crm/db';
 import { decodeValue, type StoredItem } from './columns.ts';
@@ -49,7 +55,14 @@ function nearBound(at: SQL, after?: ActivityBound): SQL {
  * Values the database itself answered (moments, actor types, uuids) as one
  * array literal parameter, each element quoted. Never caller input.
  */
-const arrayText = (items: readonly string[]): string => `{${items.map((item) => `"${item}"`).join(',')}}`;
+const arrayText = (items: readonly string[]): string => {
+  // Moments, actor kinds and uuids only: anything else is a caller's mistake, refused before it reaches SQL.
+  if (!items.every((item) => /^[0-9A-Za-z:._-]*$/.test(item))) throw new TypeError('arrayText takes plain values.');
+  return `{${items.map((item) => `"${item}"`).join(',')}}`;
+};
+
+/** How many reads a side makes past moments with nothing to show (reorders only) before the page stops there. */
+const MAX_EMPTY_READS = 4;
 
 /** An actor as its stored columns hand it back. */
 const actorOf = (type: Actor['type'], id: string | null): Actor => ({ type, id });
@@ -107,7 +120,7 @@ const storedItem = (row: ItemRow): StoredItem => ({
  */
 export const valueSource: ActivitySource = async ({ tx, record, attributes, after, limit }) => {
   const stored = attributes.filter((attribute) => attribute.type !== 'record_reference');
-  if (stored.length === 0) return [];
+  if (stored.length === 0) return { entries: [] };
   const rank = ACTIVITY_RANKS.change;
   const id = sql`'value:' || x.attribute_id::text || ':' || x.version_id::text`;
   const outerId = sql`'value:' || v.attribute_id || ':' || v.version_id`;
@@ -130,7 +143,7 @@ export const valueSource: ActivitySource = async ({ tx, record, attributes, afte
     limit ${limit + 1}
   `);
   const versions = found.rows;
-  if (versions.length === 0) return [];
+  if (versions.length === 0) return { entries: [] };
   // The kept versions' items, and the items of the version each replaced: the one before it, which the write
   // protocol ended at the kept version's moment.
   const items = await tx.execute<ItemRow>(sql`
@@ -163,7 +176,7 @@ export const valueSource: ActivitySource = async ({ tx, record, attributes, afte
     if (!row.is_cleared) bucket[row.part].push(storedItem(row));
   }
   const byId = new Map(stored.map((attribute) => [attribute.id, attribute]));
-  return versions.flatMap((row, index): ActivityItem[] => {
+  const entries = versions.flatMap((row, index): ActivityItem[] => {
     const attribute = byId.get(row.attribute_id);
     if (attribute === undefined) return [];
     const bucket = byVersion.get(index + 1) ?? { to: [], from: [], hadFrom: false };
@@ -173,7 +186,7 @@ export const valueSource: ActivitySource = async ({ tx, record, attributes, afte
         id: entryId,
         key: activityKey({ at: row.at, rank, id: entryId }),
         at: toMillis(row.at),
-        actor: actorOf(row.actor_type, row.actor_id),
+        ...(record.hidesActors ? {} : { actor: actorOf(row.actor_type, row.actor_id) }),
         kind: 'change',
         attributeId: attribute.id,
         // A first set has no version before it: null, whatever the type.
@@ -182,6 +195,7 @@ export const valueSource: ActivitySource = async ({ tx, record, attributes, afte
       },
     ];
   });
+  return { entries };
 };
 
 /** One relationship side of the record, as the link source reads it. */
@@ -217,7 +231,8 @@ function columnsOf(side: Side): { mine: SQL; far: SQL; position: SQL } {
 function farJoin(access: Access, side: Side): SQL {
   const { far } = columnsOf(side);
   const visible = farVisibleSql(access, side.allowed, 'r');
-  return sql`join records r on r.workspace_id = k.workspace_id and r.id = ${far} and r.deleted_at is null${
+  // Only on the objects this side links to, so a far record anywhere else fails closed.
+  return sql`join records r on r.workspace_id = k.workspace_id and r.id = ${far} and r.deleted_at is null and r.object_id = any(${uuidList(side.allowed)})${
     visible === undefined ? sql`` : sql` and ${visible}`
   }`;
 }
@@ -390,12 +405,15 @@ interface Pending {
  * moment whose net is empty (a reorder only) makes no entry, so when a read
  * was cut and empties leave the page short, it reads on past the last moment.
  */
-async function sideMoments(input: ActivitySourceInput, side: Side): Promise<readonly Pending[]> {
+async function sideMoments(
+  input: ActivitySourceInput,
+  side: Side,
+): Promise<{ readonly pending: readonly Pending[]; readonly stoppedAt?: ActivityBound }> {
   const { tx, scope, record, limit } = input;
   const rank = side.single ? ACTIVITY_RANKS.change : ACTIVITY_RANKS.links;
   const kept: Pending[] = [];
   let after = input.after;
-  for (;;) {
+  for (let reads = 1; ; reads += 1) {
     const { moments, more } = await readMoments(tx, scope.access, record.id, side, rank, after, limit);
     const nets = await netOf(tx, scope.access, record.id, side, moments);
     moments.forEach((moment, index) => {
@@ -405,8 +423,10 @@ async function sideMoments(input: ActivitySourceInput, side: Side): Promise<read
     const last = moments.at(-1);
     if (kept.length > limit || !more || last === undefined) break;
     after = { at: last.at, rank, id: momentId(side, last) };
+    // A long run of reorders: stop here, and the page ends where this read did (the next one goes on from it).
+    if (reads >= MAX_EMPTY_READS) return { pending: kept, stoppedAt: after };
   }
-  return kept.slice(0, limit + 1);
+  return { pending: kept.slice(0, limit + 1) };
 }
 
 /** The record reference sides of the record's object the viewer may see, with their relationships. */
@@ -457,8 +477,17 @@ async function displaysOf(
 export const linkSource: ActivitySource = async (input) => {
   const sides = await sidesOf(input.tx, input.attributes);
   const pending: Pending[] = [];
+  let stoppedAt: ActivityBound | undefined;
   // One side after another: they share the read's one transaction.
-  for (const side of sides) pending.push(...(await sideMoments(input, side)));
+  for (const side of sides) {
+    const read = await sideMoments(input, side);
+    pending.push(...read.pending);
+    if (read.stoppedAt !== undefined) {
+      const isSooner =
+        stoppedAt === undefined || compareActivityKeys(activityKey(read.stoppedAt), activityKey(stoppedAt)) < 0;
+      if (isSooner) stoppedAt = read.stoppedAt;
+    }
+  }
   const parts = pending.map((each) => {
     const rank = each.side.single ? ACTIVITY_RANKS.change : ACTIVITY_RANKS.links;
     const id = momentId(each.side, each.moment);
@@ -483,13 +512,13 @@ export const linkSource: ActivitySource = async (input) => {
       const display = displays.get(id);
       return display === undefined ? [] : [display];
     });
-  return kept.map(({ each, id, key }): ActivityItem => {
+  const entries = kept.map(({ each, id, key }): ActivityItem => {
     const { side, moment, net } = each;
     const base = {
       id,
       key,
       at: toMillis(moment.at),
-      actor: actorOf(moment.actorType, moment.actorId),
+      ...(input.record.hidesActors ? {} : { actor: actorOf(moment.actorType, moment.actorId) }),
       attributeId: side.attribute.id,
     };
     if (side.single) {
@@ -510,4 +539,5 @@ export const linkSource: ActivitySource = async (input) => {
       removedCount: net.removedCount,
     };
   });
+  return stoppedAt === undefined ? { entries } : { entries, stoppedAt };
 };

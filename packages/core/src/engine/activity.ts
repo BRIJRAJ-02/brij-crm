@@ -50,6 +50,12 @@ export interface ActivityRecord {
   readonly createdAt: string;
   /** Who made it; absent when a field rule hides the object's Created by from the viewer. */
   readonly createdBy?: Actor;
+  /**
+   * A field rule hides the object's Created by or Updated by from the viewer:
+   * the changes and link entries name nobody, since the newest change's actor
+   * is the record's Updated by, and a create's own entries its Created by.
+   */
+  readonly hidesActors: boolean;
 }
 
 /** Where the last page ended: its last entry's moment (with microseconds), rank and id. */
@@ -74,11 +80,20 @@ export interface ActivitySourceInput {
 }
 
 /**
- * One source of entries: its newest entries past `after`, at most
- * `limit + 1`, in key order (`compareActivityKeys`). Each entry's `key` is
- * `<at with microseconds>|<rank>|<id>`.
+ * What a source answers: its newest entries past the bound, at most
+ * `limit + 1`, in key order (`compareActivityKeys`), each entry's `key`
+ * `<at with microseconds>|<rank>|<id>`. A source that stopped reading before
+ * it was done (a run of history with nothing to show, read in bounded steps)
+ * says where in `stoppedAt`: the page then ends there, and the next page
+ * goes on from it, so no read is unbounded and nothing is skipped.
  */
-export type ActivitySource = (input: ActivitySourceInput) => Promise<readonly ActivityItem[]>;
+export interface ActivitySourceAnswer {
+  readonly entries: readonly ActivityItem[];
+  readonly stoppedAt?: ActivityBound;
+}
+
+/** One source of entries (`ActivitySourceAnswer`). */
+export type ActivitySource = (input: ActivitySourceInput) => Promise<ActivitySourceAnswer>;
 
 /** Whether an entry with these key parts comes after the bound, in the timeline's order. */
 export function isPastBound(
@@ -95,16 +110,18 @@ export function isPastBound(
 const creationSource: ActivitySource = ({ record, after }) => {
   const id = `created:${record.id}`;
   const parts = { at: record.createdAt, rank: ACTIVITY_RANKS.created, id };
-  if (!isPastBound(parts, after)) return Promise.resolve([]);
-  return Promise.resolve([
-    {
-      id,
-      key: activityKey(parts),
-      at: toMillis(record.createdAt),
-      ...(record.createdBy === undefined ? {} : { actor: record.createdBy }),
-      kind: 'created',
-    },
-  ]);
+  if (!isPastBound(parts, after)) return Promise.resolve({ entries: [] });
+  return Promise.resolve({
+    entries: [
+      {
+        id,
+        key: activityKey(parts),
+        at: toMillis(record.createdAt),
+        ...(record.createdBy === undefined ? {} : { actor: record.createdBy }),
+        kind: 'created',
+      },
+    ],
+  });
 };
 
 /** The timeline's sources, read in this order and merged by key. #19 and #29 add theirs here. */
@@ -161,10 +178,13 @@ async function checkedRecord(
   await checkObject(tx, scope.access, row.object_id, 'read', UNKNOWN_RECORD);
   await checkRecordVisible(tx, scope.access, { objectId: row.object_id, recordId: row.id });
   const all = [...(await loadAttributes(tx, row.object_id)).values()];
-  // Hidden is absent: a field rule hiding the object's Created by leaves the creation entry without its actor.
-  const hidesCreator =
+  // Hidden is absent: a field rule hiding the object's Created by leaves the creation entry without its actor,
+  // and one hiding Created by or Updated by leaves every change and link entry without theirs.
+  const hides = (column: AttributeDef['systemColumn']) =>
     !isOpen(scope.access) &&
-    all.some((attribute) => attribute.systemColumn === 'created_by' && !attributeVisible(scope.access, attribute));
+    all.some((attribute) => attribute.systemColumn === column && !attributeVisible(scope.access, attribute));
+  const hidesCreator = hides('created_by');
+  const hidesActors = hidesCreator || hides('updated_by');
   const attributes = all.filter(
     (attribute) => !attribute.isSystem && !isArchivedNow(attribute) && attributeVisible(scope.access, attribute),
   );
@@ -174,6 +194,7 @@ async function checkedRecord(
       objectId: row.object_id,
       createdAt: row.created_at,
       ...(hidesCreator ? {} : { createdBy: { type: row.created_by_type, id: row.created_by_id } }),
+      hidesActors,
     },
     attributes,
   };
@@ -196,19 +217,26 @@ export async function getActivity(scope: EngineScope, input: ActivityQuery): Pro
   const recordId = checkId(input.recordId, UNKNOWN_RECORD);
   return inWorkspace(scope, async (tx) => {
     const { record, attributes } = await checkedRecord(tx, scope, recordId);
-    const found: ActivityItem[] = [];
+    const answered: ActivityItem[] = [];
+    // Where the source that stopped soonest stopped: the page can't go past it.
+    let stop: string | undefined;
     // One after another: the sources share the read's one transaction.
     for (const source of ACTIVITY_SOURCES) {
       const input = { tx, scope, record, attributes, ...(after === undefined ? {} : { after }), limit };
-      for (const entry of await source(input)) {
-        found.push(entry);
-      }
+      const answer = await source(input);
+      answered.push(...answer.entries);
+      const stopped = answer.stoppedAt === undefined ? undefined : activityKey(answer.stoppedAt);
+      if (stopped !== undefined && (stop === undefined || compareActivityKeys(stopped, stop) < 0)) stop = stopped;
     }
-    found.sort((a, b) => compareActivityKeys(a.key, b.key));
+    const found = (
+      stop === undefined ? answered : answered.filter((entry) => compareActivityKeys(entry.key, stop) < 0)
+    ).sort((a, b) => compareActivityKeys(a.key, b.key));
     const entries = found.slice(0, limit);
     const last = entries.at(-1);
     const bound = last === undefined ? undefined : parseActivityKey(last.key);
-    if (found.length <= limit || bound === undefined) return { entries };
-    return { entries, nextCursor: encodeActivityCursor(bound) };
+    if (found.length > limit && bound !== undefined) return { entries, nextCursor: encodeActivityCursor(bound) };
+    // Short of a page because a source stopped early: the next page goes on from where it stopped.
+    const stopped = stop === undefined ? undefined : parseActivityKey(stop);
+    return stopped === undefined ? { entries } : { entries, nextCursor: encodeActivityCursor(stopped) };
   });
 }

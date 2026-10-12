@@ -76,6 +76,12 @@ const facts = await app.withWorkspace(workspaceId, async (tx) => {
   return {
     deals,
     memberId: await one(tx, sql`select id::text from members where role = 'owner' order by created_at limit 1`),
+    ruledMemberId: await one(tx, sql`select id::text from members where role = 'member' order by created_at limit 1`),
+    people: await one(tx, sql`select id::text from objects where standard_key = 'people'`),
+    peopleOwner: await one(
+      tx,
+      sql`select a.id::text from attributes a join objects o on o.id = a.object_id where o.standard_key = 'people' and a.api_slug = 'owner'`,
+    ),
     hub: await one(
       tx,
       sql`select v.owner_id::text as id from "values" v where v.attribute_id = ${companyName}::uuid
@@ -87,6 +93,26 @@ const facts = await app.withWorkspace(workspaceId, async (tx) => {
   };
 });
 const scope = testScope({ db: watched, workspaceId, actor: { type: 'member', id: facts.memberId } });
+// A member who sees only the people they own (spec 0009's record rule): each step of a side's read walks past
+// the links to people they can't see, the slowest case for the hub's Team.
+const ruled = testScope({
+  db: watched,
+  workspaceId,
+  actor: { type: 'member', id: facts.ruledMemberId },
+  role: 'member',
+  rules: {
+    levels: [],
+    records: [
+      {
+        subject: { type: 'role', role: 'member' },
+        objectId: facts.people,
+        kind: 'own',
+        attributeId: facts.peopleOwner,
+      },
+    ],
+  },
+});
+type Reader = typeof scope;
 
 /** The bench deal, made once, and how many value versions it holds. */
 async function benchDeal(): Promise<{ readonly id: string; readonly versions: number }> {
@@ -122,16 +148,16 @@ for (let index = deal.versions; index < env.BENCH_VERSIONS; index += 1) {
 }
 deal = await benchDeal();
 
-async function timed(recordId: string, cursor?: string) {
+async function timed(recordId: string, cursor?: string, reader: Reader = scope) {
   const at = performance.now();
-  const page = await getActivity(scope, { recordId, ...(cursor === undefined ? {} : { cursor }) });
+  const page = await getActivity(reader, { recordId, ...(cursor === undefined ? {} : { cursor }) });
   return { ms: performance.now() - at, page };
 }
 
-async function firstPage(label: string, recordId: string) {
-  for (let index = 0; index < 3; index += 1) await timed(recordId);
+async function firstPage(label: string, recordId: string, reader: Reader = scope) {
+  for (let index = 0; index < 3; index += 1) await timed(recordId, undefined, reader);
   const samples: number[] = [];
-  for (let index = 0; index < env.BENCH_RUNS; index += 1) samples.push((await timed(recordId)).ms);
+  for (let index = 0; index < env.BENCH_RUNS; index += 1) samples.push((await timed(recordId, undefined, reader)).ms);
   return { label, p50: percentile(samples, 50), p95: percentile(samples, 95), max: Math.max(...samples) };
 }
 
@@ -149,10 +175,10 @@ async function scroll(label: string, recordId: string) {
   return { label, pages: samples.length, entries, p50: percentile(samples, 50), p95: percentile(samples, 95) };
 }
 
-async function explain(recordId: string): Promise<string[]> {
+async function explain(recordId: string, reader: Reader = scope): Promise<string[]> {
   captured.length = 0;
   capturing = true;
-  await getActivity(scope, { recordId });
+  await getActivity(reader, { recordId });
   capturing = false;
   const plans: string[] = [];
   for (const query of [...captured]) {
@@ -173,6 +199,7 @@ const ms = (value: number) => `${value.toFixed(1)} ms`;
 const firsts = [
   await firstPage(`Hub company (${String(hubCount.rows[0]?.n ?? 0)} people in Team)`, facts.hub),
   await firstPage(`Deal with ${String(deal.versions)} value versions`, deal.id),
+  await firstPage('Hub company, as a member who sees only the people they own', facts.hub, ruled),
 ];
 const scrolls = [await scroll('Hub company', facts.hub), await scroll('Bench deal', deal.id)];
 
@@ -188,11 +215,13 @@ console.log(
 for (const row of scrolls) {
   console.log(`| ${row.label} | ${String(row.pages)} | ${String(row.entries)} | ${ms(row.p50)} | ${ms(row.p95)} |`);
 }
-for (const [label, recordId] of [
-  ['Hub company', facts.hub],
-  ['Bench deal', deal.id],
+for (const [label, recordId, reader] of [
+  ['Hub company', facts.hub, scope],
+  ['Bench deal', deal.id, scope],
+  ['Hub company, as a member under a record rule on People', facts.hub, ruled],
 ] as const) {
-  console.log(`\n### Plans, the first page of the ${label}\n`);
-  for (const plan of await explain(recordId)) console.log(`\`\`\`\n${plan}\n\`\`\`\n`);
+  const plans = await explain(recordId, reader);
+  console.log(`\n### Plans, the first page of the ${label} (${String(plans.length)} raw statements)\n`);
+  for (const plan of plans) console.log(`\`\`\`\n${plan}\n\`\`\`\n`);
 }
 await app.close();
