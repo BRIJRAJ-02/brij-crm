@@ -1197,6 +1197,7 @@ export function createDataLayer({
           if (fresh) members.delete(workspace);
           return readMembers(workspace);
         },
+        watch,
         // The same cached list the tables and the record page read, options inline.
         attributes: (workspace, objectId) =>
           cached(attributes, objectKey(workspace, objectId), () =>

@@ -126,6 +126,12 @@ export interface ActivityFeedsOptions {
   readonly members: (workspace: string, fresh: boolean) => Promise<readonly MemberSummary[]>;
   /** An object's live attributes, cached (the definitions store), to name and draw each change. */
   readonly attributes: (workspace: string, objectId: string) => Promise<readonly AttributeDefinition[]>;
+  /**
+   * Listens to the workspace's live changes while a screen shows the feed
+   * (`live.watch`); the answer stops. A record page opened on its own has no
+   * table watching for it, so its timeline does.
+   */
+  readonly watch?: (workspace: string) => () => void;
   /** Runs `run` after `ms`, answering a cancel. */
   readonly later?: (run: () => void, ms: number) => () => void;
   /** How long a timeline nobody shows is kept, in ms: 30 seconds. */
@@ -256,6 +262,7 @@ export function createActivityFeeds({
   page,
   members,
   attributes,
+  watch = () => () => undefined,
   later = timeout,
   keepUnusedMs = 30_000,
   now = () => Date.now(),
@@ -296,6 +303,8 @@ export function createActivityFeeds({
     let coolingDown: (() => void) | undefined;
     // A change arrived while nobody showed the feed: read it again when someone does.
     let stale = false;
+    // Live changes reach the feed while a screen shows it.
+    let unwatch: (() => void) | undefined;
     let settleReady: () => void = () => undefined;
     const readyPromise = new Promise<void>((resolve) => {
       settleReady = resolve;
@@ -491,6 +500,7 @@ export function createActivityFeeds({
 
     const retain = () => {
       retains += 1;
+      unwatch ??= watch(workspace);
       cancelUnused?.();
       cancelUnused = undefined;
       if (stale) {
@@ -502,7 +512,10 @@ export function createActivityFeeds({
         if (released) return;
         released = true;
         retains -= 1;
-        if (retains === 0) cancelUnused = later(dispose, keepUnusedMs);
+        if (retains > 0) return;
+        unwatch?.();
+        unwatch = undefined;
+        cancelUnused = later(dispose, keepUnusedMs);
       };
     };
     const handle = (snapshot: () => ActivityState): ActivityFeed => ({
@@ -520,6 +533,8 @@ export function createActivityFeeds({
     const dispose = () => {
       cancelUnused?.();
       cancelUnused = undefined;
+      unwatch?.();
+      unwatch = undefined;
       coolingDown?.();
       coolingDown = undefined;
       if (isCurrent()) feeds.delete(key);

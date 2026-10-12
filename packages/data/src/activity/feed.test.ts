@@ -298,6 +298,35 @@ describe('the head refresh (spec 0017, AC-381)', () => {
   });
 });
 
+describe('watching (spec 0017, AC-381)', () => {
+  it('listens to the workspace while a screen shows the feed, and stops when none does', async () => {
+    const watched: string[] = [];
+    let stopped = 0;
+    const feeds = createActivityFeeds({
+      page: server([created]).page,
+      members: () => Promise.resolve(MEMBERS),
+      attributes: () => Promise.resolve(DEFINITIONS),
+      watch: (workspace) => {
+        watched.push(workspace);
+        return () => {
+          stopped += 1;
+        };
+      },
+      later: clock().later,
+    });
+    const feed = feeds.forRecord(WS, RECORD, OBJECT);
+    expect(watched).toEqual([]);
+    const first = feed.retain();
+    const second = feeds.recent(WS, RECORD, OBJECT).retain();
+    await flush();
+    expect(watched).toEqual([WS]);
+    first();
+    expect(stopped).toBe(0);
+    second();
+    expect(stopped).toBe(1);
+  });
+});
+
 describe('starting again (spec 0017, 0017-activity.md)', () => {
   it('a definitions change and a resync read the first page afresh, keeping the entries shown until it lands', async () => {
     const { api, feeds, ids, feed } = setup([created, change(1), change(2)]);
