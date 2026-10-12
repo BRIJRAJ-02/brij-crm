@@ -18,7 +18,8 @@ const EMAIL = process.env.ACTIVITY_EMAIL;
 const RECORD = process.env.ACTIVITY_RECORD;
 /** The record's object by its address: `deals` (the bench deal) unless named, `companies` for the hub. */
 const OBJECT = process.env.ACTIVITY_OBJECT ?? 'deals';
-const ENTRIES = 2_000;
+/** How many entries to scroll through: 2,000 as AC-380 states, more with ACTIVITY_ENTRIES. */
+const ENTRIES = Number(process.env.ACTIVITY_ENTRIES ?? 2_000);
 const PX_PER_FRAME = 300;
 
 test.skip(
@@ -88,13 +89,14 @@ test('a record with a long history opens in budget and its timeline scrolls with
   let loaded = 0;
   let nextSample = 500;
   let most = first;
-  for (let step = 0; step < 4_000 && loaded < ENTRIES; step += 1) {
+  for (let step = 0; step < 20_000 && loaded < ENTRIES; step += 1) {
     await feed.evaluate((element, by) => {
       element.scrollTop += by;
     }, PX_PER_FRAME);
     await page.waitForTimeout(16);
-    loaded = Number((await feed.getByRole('article').first().getAttribute('aria-setsize')) ?? 0);
-    if (loaded >= nextSample) {
+    // How far the scroll has reached: the last entry drawn (the set size is -1 while more pages wait).
+    loaded = Number((await feed.getByRole('article').last().getAttribute('aria-posinset')) ?? 0);
+    while (loaded >= nextSample) {
       const now = await heapMb(cdp);
       most = Math.max(most, now);
       report(`heap after GC, ${String(nextSample)} entries loaded: ${now.toFixed(1)} MB`);
