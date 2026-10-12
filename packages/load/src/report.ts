@@ -301,7 +301,11 @@ export function reportLines(input: ReportInput): readonly ReportLine[] {
       : deliveryLines(budget, samples, input.live)),
     poolMs.length > 0
       ? judged('API pool wait', poolMs, p95.poolWait, 'ms')
-      : without('API pool wait', 'not measured', 'no Server-Timing header: is LOAD_TIMING=on?'),
+      : without(
+          'API pool wait',
+          'not measured',
+          'no answer carried a Server-Timing header: is LOAD_TIMING=on, or did nothing answer?',
+        ),
     input.poolerWaitMs === undefined
       ? without('pooler wait (PgBouncer maxwait)', 'not measured', 'SHOW POOLS could not be read')
       : judged('pooler wait (PgBouncer maxwait)', input.poolerWaitMs, p95.poolWait, 'ms'),

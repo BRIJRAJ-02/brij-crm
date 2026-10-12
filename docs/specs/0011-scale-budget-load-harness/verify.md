@@ -270,3 +270,243 @@ A 20 user, 2 minute storm on the first build (other lanes busy on the machine) g
 ### Owner steps
 
 - None. The million record gate run stays waived; milestone 4 (`thousand`, `hub`, the bench and the weekly smoke) is next.
+
+## Milestone 4: 1,000 users, the hub, and the weekly smoke (12 October 2026)
+
+### What was built
+
+- **Task 20, 1,000 users (AC-203, AC-208).** A run spreads its users over worker threads, 250 to a thread unless `--threads` says otherwise (`threadsFor`), and checks each thread's event loop on its own, naming the one that stalled (`the main thread`, `thread 1` and so on). `thousand` plays 1,000 seeded members, each with its own minted session, on the steady mix for 5 measured minutes, prints every verdict and exits by validity only. `pnpm load:seed` takes `--users N` (1 to 1,000), so a small seed can carry 1,000 different people.
+- **Task 21, the hub (AC-206, AC-209).** `hub` plays 100 users on the steady mix where half the edits move one of the user's own people to or from the hub (from the person's Company) and a fifth of the opens read the hub whole (its Team as the first 20 links and the total), while user 1 renames the hub every 10 seconds between `Hub Company (renamed)` and `Hub Company`. The report adds `hub renames`, `hub moves`, `hub moves while a rename ran`, `hub open` and `writes out of retries (runWrite)`; the WAL line was already on every report. `pnpm load:reset` now also puts back every seeded person's Company that moved since `seededAt` (so the hub's Team is the seeded one again), through the engine's batch write as the system actor, 5,000 people a batch in engine calls of 500, and the hub's name.
+- **Task 22, the hub clear bench (AC-214).** `pnpm load:bench-hub-clear` (`packages/core/scripts/bench-hub-clear.ts`) clears the hub's Team in one whole value write as the system actor while 100 engine level writers link other people to the hub and to other companies at 0.2 a second each, through one pool of 10 connections, then writes the Team back the way the reset does, whatever happened.
+- **Task 23, the weekly smoke (AC-211).** `.github/workflows/load-smoke.yml` runs on Mondays at 06:00 UTC and on demand, never on a push. It seeds the smoke profile on the runner's own load stack, plays `steady --users 20 --minutes 2`, judges the result with `packages/load/scripts/smoke.ts` (a warning per judged miss, a failure for an invalid run or a crash, the table on the run's summary page), uploads `.load/results/` (never the sessions file) and wipes the throwaway stack. It needs no secrets and touches no deployed environment. `actionlint` 1.7.7 (its Docker image) passes it with no findings.
+- **Task 24.** `packages/load/AGENTS.md` names the new commands, scenarios and report lines; the runs are below.
+
+### Where it ran
+
+The reference machine (MacBookPro18,3, M1 Pro, 8 cores, 16 GB) with Docker at 8 CPUs and **7.75 GB** (the owner keeps it there). The load stack's data services and then its api and worker were started with `docker compose -f docker-compose.load.yml -p crm-load up` directly, as in milestones 2 and 3, since `pnpm load:stack` refuses under 11 GB.
+
+The load volume was wiped and seeded again with `pnpm load:seed --profile smoke --users 1000` (the same 50,000 records, and 1,000 members instead of 50, so `thousand` has 1,000 different people and `hub` and `storm` their 100). The seed took 53 seconds. **Every criterion that names the million record `crm` seed ran on this smoke seed instead, as the owner decided (the million seed run is waived, 12 October 2026):** the hub's Team holds 7,500 people here, not 150,000 (AC-194, AC-206, AC-214), and `thousand` reads a 50,000 record workspace (AC-208).
+
+Two things made these numbers noisier than milestone 3's:
+
+- **The machine was oversubscribed.** Other build lanes ran their suites and benches beside these runs; the load average was 15 to 19 on 8 cores (`uptime` at 13:35 UTC). With Docker's caps already taking 5 cores, the API and Postgres got less than their caps.
+- **Another lane shared the load stack.** The load stack is one Docker project for the whole machine. While the first `hub` run was measuring, another lane's jobs fairness bench (`packages/core/scripts/jobs-fairness.ts`, spec 0008) restarted the load stack's Postgres, rebuilt the shared `crm-load-worker` image, and wrote about 1.1 million `job_items` rows into this database: its two statements took 90 seconds of Postgres time in a 2 minute window, and the run wrote 393 MB of WAL. That run (seed 402) is thrown away; every run below came after that lane finished and stopped the stack, with the api and worker images built again from this branch.
+
+Full runs would take: `hub`, `storm` and `steady` 10 measured minutes each (about 12 with the warm up and the drain), `thousand` 5 (about 7), each on the `crm` seed, which needs Docker at 12 GB and a seed of up to an hour (AC-195). Each ran here for 2 measured minutes, the shortest that gives every line samples, one at a time, with `pnpm load:reset` between runs.
+
+### hub, 100 users, 2 minutes, smoke seed with 1,000 members
+
+```
+metric                                        target               p50     p95     p99     max  count  verdict
+--------------------------------------------  -----------------  -----  ------  ------  ------  -----  -------
+read (scroll, filter or sort windows)         p95 ≤ 300 ms       166.5  1010.1  2265.1  2792.8    865  MISS
+open a record                                 p95 ≤ 200 ms       234.9  1797.4  2871.8  2953.3    194  MISS
+edit                                          p95 ≤ 250 ms       391.1  2403.9  3273.0  3641.3    284  MISS
+create                                        p95 ≤ 300 ms       449.5  2850.9  3770.3  3770.3     71  MISS  (only 71 samples: a direction, not a measure)
+read by position                                                 121.9   833.0  2265.1  2451.3    350  REPORTED
+read by cursor                                                   194.2  1076.1  2123.2  2792.8    515  REPORTED
+count                                                            119.5   874.4  1699.1  2446.2    286  REPORTED  (not judged)
+API handler time per request                                     172.2  1062.3  1682.9  2785.0   8256  REPORTED  (Server-Timing app: the server side of every request)
+live delivery (commit to visible)             p95 ≤ 1000 ms      250.2   759.8   921.1  2550.5    309  PASS
+scheduled to visible                                             420.1  1511.3  2365.3  4982.7    309  REPORTED  (from the writer's scheduled moment to each holder's refetch)
+event arrival (commit to each subscriber)                         19.8    91.8   190.8   263.8  50200  REPORTED  (live events only, in 1 ms buckets)
+delivery after recovery or catch up                                                                    NO SAMPLES  (not judged: the gap is the point)
+settle (window and count reread)                                 115.3   659.6  2263.4  2989.0    697  REPORTED  (after a create, delete or reorder of the view)
+API pool wait                                 p95 ≤ 50 ms         29.5   865.9  1258.0  2091.8   8256  MISS
+pooler wait (PgBouncer maxwait)               p95 ≤ 50 ms          0.0     0.0     0.0     0.0     24  PASS  (only 24 samples: a direction, not a measure)
+Postgres CPU                                  p95 ≤ 70%           45.6    70.4    78.6    78.6     24  MISS  (only 24 samples: a direction, not a measure)
+API CPU                                                           93.8   106.8   113.0   113.0     24  REPORTED
+relay lag                                     p95 ≤ 250 ms        15.8    82.9   184.7   255.0    502  PASS
+missed seqs                                   0                                                     0  PASS  (no event, stub or catch up within 10 s)
+seqs caught up (realtime.catchUp)                                                                   0  REPORTED  (100 catch up calls, 0 answered reset)
+seqs recovered by Centrifugo                                                                        0  REPORTED
+events applied                                                                                  50200  REPORTED  (367 own echoes skipped, 0 stubs, 32084 of another object discarded (64.4% of records events))
+hub renames (every 10 s)                      p95 ≤ 250 ms       385.8  1311.4  1311.4  1311.4     12  MISS  (only 12 samples: a direction, not a measure)
+hub moves (a person to or from the hub)                          461.1  2623.4  3273.0  3641.3    135  REPORTED  (written from the person's Company)
+hub moves while a rename ran                  p95 ≤ 250 ms       569.3  2094.3  2094.3  2094.3     10  MISS  (only 10 samples: a direction, not a measure)
+hub open (first 20 Team links and the total)                     452.9  1894.6  2713.5  2713.5     44  REPORTED  (not judged)
+writes out of retries (runWrite)                                                                    0  REPORTED  (answered 503 QUERY_CANCELLED, of 367 writes; unexpected, so in the error share)
+unexpected errors                             ≤ 0.1% of actions                                  2638  MISS  (110.701% of 2383 actions; over the limit the run is invalid)
+expected refusals (409, 422)                                                                        0  REPORTED
+429 too many requests                                                                            2638  REPORTED  (unexpected: a person would see this refusal; by what sent it: read 913, count 253, settle 1472)
+counts aborted by a newer view                                                                     12  REPORTED
+scenario hub (reported, exits by validity only), 100 users, 2 measured minutes after 60 s of warm up, seed 403
+run 2026-10-12T13:16:29.651Z to 2026-10-12T13:19:33.952Z, git e26870c792a7e965a3abb2b2d8868f4ee0404a45, API http://localhost:3100, 1 thread(s)
+host MacBookPro18,3, 8 cores, 16.0 GB; Docker 8 CPUs, 7.7 GB
+stack caps: api 1 CPU/1.0 GB, centrifugo 1 CPU/0.5 GB, mailpit uncapped/0.0 GB, pgbouncer uncapped/0.0 GB, postgres 2 CPU/8.0 GB, worker 1 CPU/0.5 GB
+database clock offset: -1.3 ms (moved 1.6 ms from start to end)
+manifest (smoke): deals 12,394 live of 12,500, people 29,718 live of 30,000, companies 7,425 live of 7,500
+mix achieved: scroll 60.0%, filterSort 15.0%, open 10.0%, edit 12.0%, create 3.0% (largest gap 0.04 points)
+actions: 2383 sent of 2383 planned; event loop p99: the main thread 19.2 ms, thread 1 19.8 ms
+WAL written: 10.4 MB
+unexpected errors: 429 TOO_MANY_REQUESTS ×2638
+INVALID (exit 2): unexpected errors were 110.701% of actions (limit 0.1%): 429 TOO_MANY_REQUESTS ×2638.
+```
+
+Result JSON: `.load/results/hub-2026-10-12T13-16-29.651Z.json`. The heaviest statements were the owner filter sorted by created (72 ms a call) and the filtered counts (48 to 90 ms); the hub open's link total read took 31 ms a call.
+
+### thousand, 1,000 users over 4 threads, 2 minutes
+
+```
+metric                                     target               p50     p95     p99     max  count  verdict
+-----------------------------------------  -----------------  -----  ------  ------  ------  -----  -------
+read (scroll, filter or sort windows)      p95 ≤ 300 ms                                             NO SAMPLES
+open a record                              p95 ≤ 200 ms                                             NO SAMPLES
+edit                                       p95 ≤ 250 ms                                             NO SAMPLES
+create                                     p95 ≤ 300 ms                                             NO SAMPLES
+read by position                                                                                    NO SAMPLES
+read by cursor                                                                                      NO SAMPLES
+count                                                                                               NO SAMPLES  (not judged)
+API handler time per request                                                                        NO SAMPLES  (Server-Timing app: the server side of every request)
+live delivery (commit to visible)          p95 ≤ 1000 ms                                            NO SAMPLES
+scheduled to visible                                                                                NO SAMPLES  (from the writer's scheduled moment to each holder's refetch)
+event arrival (commit to each subscriber)                     675.1  2703.1  6793.1  6801.1    246  REPORTED  (live events only, in 1 ms buckets)
+delivery after recovery or catch up                                                                 NO SAMPLES  (not judged: the gap is the point)
+settle (window and count reread)                                                                    NO SAMPLES  (after a create, delete or reorder of the view)
+API pool wait                                                                                       NOT MEASURED  (no Server-Timing header: is LOAD_TIMING=on?)
+pooler wait (PgBouncer maxwait)            p95 ≤ 50 ms          0.0     0.0     0.0     0.0     25  PASS  (only 25 samples: a direction, not a measure)
+Postgres CPU                               p95 ≤ 70%           45.1   105.6   148.2   148.2     25  MISS  (only 25 samples: a direction, not a measure)
+API CPU                                                       129.0   159.9   165.8   165.8     25  REPORTED
+relay lag                                  p95 ≤ 250 ms       631.7  2201.5  6780.1  6780.1     41  MISS  (only 41 samples: a direction, not a measure)
+missed seqs                                0                                                 39935  MISS  (no event, stub or catch up within 10 s; 39935 never heard of by the end)
+seqs caught up (realtime.catchUp)                                                                0  REPORTED  (82 catch up calls, 0 answered reset)
+seqs recovered by Centrifugo                                                                     0  REPORTED
+events applied                                                                                 246  REPORTED  (2 own echoes skipped, 0 stubs, 147 of another object discarded (60.2% of records events))
+unexpected errors                          ≤ 0.1% of actions                                 36144  MISS  (151.700% of 23826 actions; over the limit the run is invalid)
+expected refusals (409, 422)                                                                     0  REPORTED
+429 too many requests                                                                            0  REPORTED  (unexpected: a person would see this refusal)
+counts aborted by a newer view                                                                9518  REPORTED
+scenario thousand (reported, exits by validity only), 1000 users, 2 measured minutes after 60 s of warm up, seed 404
+run 2026-10-12T13:22:22.168Z to 2026-10-12T13:26:12.259Z, git e26870c792a7e965a3abb2b2d8868f4ee0404a45, API http://localhost:3100, 4 thread(s)
+host MacBookPro18,3, 8 cores, 16.0 GB; Docker 8 CPUs, 7.7 GB
+stack caps: api 1 CPU/1.0 GB, centrifugo 1 CPU/0.5 GB, mailpit uncapped/0.0 GB, pgbouncer uncapped/0.0 GB, postgres 2 CPU/8.0 GB, worker 1 CPU/0.5 GB
+database clock offset: -6.8 ms (moved -11.8 ms from start to end)
+manifest (smoke): deals 12,394 live of 12,500, people 29,718 live of 30,000, companies 7,425 live of 7,500
+mix achieved: scroll 60.0%, filterSort 15.0%, open 10.0%, edit 12.0%, create 3.0% (largest gap 0.01 points)
+actions: 23280 sent of 23826 planned; event loop p99: the main thread 32.7 ms, thread 1 330.3 ms, thread 2 533.7 ms, thread 3 390.9 ms, thread 4 430.7 ms
+WAL written: 2.2 MB
+unexpected errors: timeout ×32205, timeout (realtime.subscriptionToken) ×3483, timeout (realtime.connectionToken) ×420, timeout (realtime.catchUp) ×36
+INVALID (exit 2): the harness couldn't keep up: thread 1 stalled 330.3 ms at p99 on its event loop (limit 50 ms); the harness couldn't keep up: thread 2 stalled 533.7 ms at p99 on its event loop (limit 50 ms); the harness couldn't keep up: thread 3 stalled 390.9 ms at p99 on its event loop (limit 50 ms); the harness couldn't keep up: thread 4 stalled 430.7 ms at p99 on its event loop (limit 50 ms); unexpected errors were 151.700% of actions (limit 0.1%): timeout ×32205, timeout (realtime.subscriptionToken) ×3483, timeout (realtime.connectionToken) ×420, timeout (realtime.catchUp) ×36.
+```
+
+To tell the harness's limit from the server's, the same scenario ran with 250 users in one thread for 1 minute (seed 406): the thread kept up (`event loop p99: the main thread 19.6 ms, thread 1 27.3 ms`, 2,960 of 2,960 actions sent on time), while the API saturated (API CPU p95 122%, API pool wait p95 8.2 s, read p95 11.1 s, edit p95 9.4 s, live delivery p95 8.8 s, 4,386 × 429 and 2,034 timeouts, 0 missed seqs: invalid, exit 2). So 250 users fit one harness thread; at 1,000 the API stops answering within 10 seconds at all, and four threads drowning in timeouts stall, on a host whose other lanes already used every core.
+
+### storm, 100 users, 2 minutes
+
+```
+metric                                          target               p50     p95      p99      max   count  verdict
+----------------------------------------------  -----------------  -----  ------  -------  -------  ------  -------
+read (scroll, filter or sort windows)           p95 ≤ 300 ms       112.4   662.5   5878.0  10401.0     915  MISS
+open a record                                   p95 ≤ 200 ms       139.1  6492.7   9183.1   9950.2     229  MISS
+edit                                            p95 ≤ 250 ms       206.5  7280.9   9285.3   9870.6     252  MISS
+create                                          p95 ≤ 300 ms       219.6  7109.8   9976.0   9976.0      63  MISS  (only 63 samples: a direction, not a measure)
+read by position                                                    92.5   708.7   6108.4   9118.5     353  REPORTED
+read by cursor                                                     127.1   588.0   1838.9  10401.0     562  REPORTED
+count                                                               78.9   549.9   3233.9   7163.2     288  REPORTED  (not judged)
+API handler time per request                                       138.5  5095.6   7688.4   9910.5    9727  REPORTED  (Server-Timing app: the server side of every request)
+live delivery (commit to visible)               p95 ≤ 1000 ms      188.6  1706.8   6223.8   9486.5     846  MISS
+scheduled to visible                                               313.6  1476.0  14422.4  16948.2     837  REPORTED  (from the writer's scheduled moment to each holder's refetch)
+event arrival (commit to each subscriber)                           14.5    55.5    146.5    498.5  133067  REPORTED  (live events only, in 1 ms buckets)
+delivery after recovery or catch up                                820.9  1356.0   1356.0   1356.0       4  REPORTED  (not judged: the gap is the point)
+settle (window and count reread)                                    92.2   410.7    693.9   1478.6     941  REPORTED  (after a create, delete or reorder of the view)
+API pool wait                                   p95 ≤ 50 ms         19.6  4627.7   7139.3   9628.0    9727  MISS
+pooler wait (PgBouncer maxwait)                 p95 ≤ 50 ms          0.0     0.0      0.0      0.0      24  PASS  (only 24 samples: a direction, not a measure)
+Postgres CPU                                    p95 ≤ 70%           59.2    79.2     86.4     86.4      24  MISS  (only 24 samples: a direction, not a measure)
+API CPU                                                             91.7   133.1    134.0    134.0      24  REPORTED
+relay lag                                       p95 ≤ 250 ms        11.5    46.5    122.0    450.1    1342  PASS
+missed seqs                                     0                                                        0  PASS  (no event, stub or catch up within 10 s)
+seqs caught up (realtime.catchUp)                                                                       16  REPORTED  (100 catch up calls, 0 answered reset)
+seqs recovered by Centrifugo                                                                           957  REPORTED
+events applied                                                                                      134024  REPORTED  (1341 own echoes skipped, 0 stubs, 83175 of another object discarded (62.7% of records events))
+edit inside bursts                              p95 ≤ 250 ms       859.0  6797.5   7176.8   7264.8    1000  MISS
+reconnect: drop to back (max: every user back)                     732.8  1119.6   1127.3   1128.3     100  REPORTED  (100 dropped: 100 recovered by Centrifugo, 0 caught up, 0 reset, 0 never back)
+unexpected errors                               ≤ 0.1% of actions                                     2608  MISS  (75.115% of 3472 actions; over the limit the run is invalid)
+expected refusals (409, 422)                                                                             0  REPORTED
+429 too many requests                                                                                 2375  REPORTED  (unexpected: a person would see this refusal; by what sent it: read 845, count 253, settle 1277)
+counts aborted by a newer view                                                                          60  REPORTED
+scenario storm (reported, exits by validity only), 100 users, 2 measured minutes after 60 s of warm up, seed 405
+run 2026-10-12T13:26:45.645Z to 2026-10-12T13:29:48.877Z, git e26870c792a7e965a3abb2b2d8868f4ee0404a45, API http://localhost:3100, 1 thread(s)
+host MacBookPro18,3, 8 cores, 16.0 GB; Docker 8 CPUs, 7.7 GB
+stack caps: api 1 CPU/1.0 GB, centrifugo 1 CPU/0.5 GB, mailpit uncapped/0.0 GB, pgbouncer uncapped/0.0 GB, postgres 2 CPU/8.0 GB, worker 1 CPU/0.5 GB
+database clock offset: -0.1 ms (moved 0.9 ms from start to end)
+manifest (smoke): deals 12,394 live of 12,500, people 29,718 live of 30,000, companies 7,425 live of 7,500
+mix achieved: scroll 60.0%, filterSort 15.0%, open 10.0%, edit 12.0%, create 3.0% (largest gap 0.03 points)
+actions: 3472 sent of 3472 planned; event loop p99: the main thread 18.6 ms, thread 1 22.4 ms
+WAL written: 42.5 MB
+unexpected errors: 429 TOO_MANY_REQUESTS ×2375, timeout ×233
+INVALID (exit 2): unexpected errors were 75.115% of actions (limit 0.1%): 429 TOO_MANY_REQUESTS ×2375, timeout ×233.
+```
+
+### The hub clear bench, smoke seed (7,419 live people in the Team)
+
+```
+Hub clear bench on "load" at localhost:5434/crm.
+100 writers at 0.2 a second each through a pool of 10; the hub's Team holds 7,419 people
+clearing the hub's Team in one write
+cleared in 239 ms; the writers go on for 10000 ms
+writing the hub's Team back
+hub Team: put back 5000 of 7784
+hub Team: put back 7784 of 7784
+
+clear of the hub's Team (7,419 links, one write): 239 ms
+
+other writes (ms)                      p50     p95     p99     max  count
+all, from their scheduled moment      18.8    64.0   119.9   160.4    410
+beside the clear                      35.9    47.4    47.4    47.4      4
+
+out of retries (runWrite): 0
+writes that failed: none
+WAL written during the clear (the writers' share included): 5.1 MB
+Team written back: 7,784 people in 100.5 s
+Reported, not judged (#41 judges it).
+```
+
+### The weekly smoke's steps, run here
+
+`pnpm load:run steady --users 20 --minutes 2` (seed 407), then `node packages/load/scripts/smoke.ts 2` with `GITHUB_STEP_SUMMARY` set. With 20 users on the oversubscribed host: read p95 2.1 s, open 3.7 s, edit 3.1 s, create 9.1 s (15 samples), live delivery p95 1.2 s (23 samples), Postgres CPU p95 92% and API CPU p95 137%, 0 missed seqs, 108 × 429 (read 53, count 14, settle 41). The run was invalid on the 429s, and the script printed `::error title=Load smoke invalid::unexpected errors were 20.971%25 of actions (limit 0.1%25): 429 TOO_MANY_REQUESTS ×108`, wrote the table to the summary file and exited 2, as the workflow's step would. A valid run (exit 0 or 1) prints a warning per judged miss and exits 0 (`src/smoke.test.ts`).
+
+### Tests and checks
+
+- `pnpm --filter @crm/load test`: 10 files, 87 tests pass, among them the thread naming and `threadsFor`, the hub's moves, opens and renames against the fake API, `planHubEdits`, `dealPeople`, the hub lines, and the smoke's verdict and summary.
+- `packages/core`'s script suites: 7 files, 59 tests pass. `seed-crm.test.ts` against a real Postgres puts the hub's Team and name back after moves off it and onto it and a rename, and plays the bench on the `test` seed (4 writers at 10 a second, 400 ms either side of the clear), checking the Team comes back to 300 and that the bench refuses while the Team isn't as seeded; `bench-hub-clear.test.ts` covers its percentiles, the writes beside the clear, the printed lines and the remote refusal (exit 3); `load-seed.test.ts` covers `--users`.
+- `pnpm check` passes.
+
+### What the runs say
+
+- **The API is the first limit, at 100 users already, on this host.** In `hub` and `storm` the API ran at 92 to 133% of its 1 CPU cap, its pool wait p95 was 0.9 to 4.6 s, and reads, opens and edits missed their targets by 2 to 32 times; Postgres stayed at p95 70 to 79% (on a busy host). Milestone 3's quiet 50 user runs passed every judged line but the 429s, so the step from 50 to 100 users on one API process is where it bends.
+- **Live delivery holds where the server does.** Commit to arrival at every subscriber stayed at p95 56 to 92 ms in `hub` and `storm` (50,200 and 133,067 arrivals), relay lag p95 47 to 83 ms, and no seq was missed in either. Commit to visible missed in `storm` (p95 1.7 s; 0.76 s in `hub`) only because the holder's refetch waited in the same saturated API.
+- **The hub's contention is not what limits it at this size.** No write ran out of retries in `hub` (0 of 367) or in the bench (0 of 410), and the clear of 7,419 links took 239 ms while the writes beside it stayed at p95 47 ms. Hub renames (p95 1.3 s) and moves beside a rename (p95 2.1 s) were slow with everything else in the saturated API, not apart from it.
+- **The reconnect storm at 100 users:** every user came back through Centrifugo's recovery (957 seqs replayed, 16 more caught up through the API), the last 1.13 s after the drop; the 1,000 burst edits had p95 6.8 s.
+- **thousand collapses on one API process:** at 1,000 users no read, open, edit or create answered within 10 seconds (32,205 timeouts), 3,483 subscription token calls timed out so most users never subscribed (39,935 seqs never heard of), and the harness threads stalled. AC-208's run is proven to play 1,000 members across 4 threads and to judge itself invalid (exit 2); the budget at 1,000 is #41's.
+
+### Misses and their plans
+
+1. **429s make every run from 20 users up invalid, the weekly smoke included** (hub 2,638, storm 2,375, smoke 108; settles sent about half). The owner kept AC-203 as written on 12 October 2026, so the weekly smoke will fail as invalid until the read gate or the settle changes. **Owner's call needed:** keep the smoke failing on 429s (it then reports the read gate every Monday), or let the smoke alone report them on their line without failing (a smoke only change in `src/smoke.ts`). Plan (#41): the read gate per workspace sized to the budget, a short queue instead of a refusal, and the settle spread wider, as milestone 3's plan says.
+2. **The API saturates at 100 users** (`hub`, `storm`; and at 20 on the oversubscribed host). Plan (#41): a quiet machine run of `steady` at 100 users first, then a larger API pool or a second API replica, by the numbers.
+3. **`thousand` is invalid on two counts:** the API (above), and the harness's own threads, which stalled at p99 330 to 534 ms once every request timed out; 250 users fit one thread while the server answers. Plan (#41): run `thousand` with more API replicas, on a machine where Docker's caps and the harness's 4 threads fit the cores (the spec's "larger machine with the same caps"), and only then judge the budget at 1,000.
+4. **Putting the Team back is slow:** 7,784 people in 100.5 s through the engine's batch write (13 ms a person: a savepoint, a link write and its share of the change event each), so the `crm` seed's 150,000 would take about 32 minutes after a bench. It is correct and goes through the engine as the spec asks. Plan (#41, only if it matters): a set based restore inside one engine write.
+5. **The hub's Team holds 7,500 here, not 150,000** (the waived million seed), so the clear (239 ms, 5.1 MB of WAL with the writers') and the hub open's link total (31 ms a call) are smoke sized. A `crm` seed run of `hub` and the bench is the first thing #41 does once Docker has 12 GB.
+6. **A shared load stack mixes lanes' numbers.** Plan: run one lane's load work at a time (now in `packages/load/AGENTS.md`); if lanes keep overlapping, a per lane project name and port offset is a small change to `docker-compose.load.yml` and `LOAD_STACK`.
+
+### Calls made in this milestone
+
+- **`pnpm load:seed --users N`** (1 to 1,000): the waived million seed was the only profile with 1,000 members, so `thousand` needed a small seed with more people. Additive: every profile keeps its own count by default.
+- **250 users to a thread** by default (the build plan's number), each thread's event loop judged and named on its own; the sent on time share stays one share over all threads, as AC-203 reads.
+- **Hub moves come from each user's own 20 people of the Team**, dealt out by a hash so no two users move the same person; each starts in the hub, so moves alternate off and back and split about evenly each way. Every user moves people whatever object its view holds (the move is the edit; the view stays the user's). The people are read through the owner login as setup, like the option ids; every measured action goes through the API.
+- **A move off the hub goes to a live sampled company,** and every move is written from the person's Company: `links.add` and `links.remove` (#15) don't exist yet, and neither does the key share lock on the hub from a stored sort key (#15, #8), so `hub` measures the renames against the moves as the engine stands today.
+- **The renames are kept off the mix and the edit line** (like the storm's bursts) and judged on their own line against the edit target; the moves are edits and stay on the edit line; the hub's opens stay off the open line (AC-199). A move "ran while a rename did" when their spans, from the scheduled moment to the answer, overlap. Like the storm's lines, these verdicts are for #41: `hub` exits by validity only.
+- **Writes out of retries** are writes answered 503 `QUERY_CANCELLED`, which is what `runWrite` refuses with after its last attempt; they are unexpected errors too.
+- **The reset puts back any seeded person's Company that moved,** not only those touching the hub, since the bench's writers also move people between other companies. Link history keeps every ended version, so the Company at `seededAt` is known exactly; nothing else the harness does writes a Company. It uses the engine's batch write (500 records, its limit) in groups of 5,000, and renames the hub back only when its name moved.
+- **The bench runs as the system actor through the engine, without the access door,** like the reset (engine level, AC-214). It refuses while the Team isn't as seeded, lets the writers run alone 10 seconds before the clear and 10 after, picks seeded people outside the hub whose company is live (so the reset can link them back), and writes the Team back even when the clear fails.
+- **The weekly smoke wipes its throwaway stack at the end** and uploads only `.load/results/`; a crash or a refused setup fails it with that exit code, and so does a missing result file.
+- **The hub open reads the whole record** (`records.get` with no `attributeIds`), which is what a record page reads.
+
+### Owner decisions recorded
+
+- The million record seed run stays waived (12 October 2026): every milestone 4 run is on the smoke seed, here with 1,000 members.
+- A 429 stays an unexpected error (12 October 2026), which makes the weekly smoke fail as invalid today; miss 1 asks whether the smoke alone should treat them otherwise.
+- Docker stays at 7.75 GB: the stack is started with `docker compose` directly, and every run fits within it.
+
+### Owner steps
+
+- Decide miss 1 (the weekly smoke and 429s) before the first Monday run, or expect it to fail as invalid until #41 changes the read gate.
