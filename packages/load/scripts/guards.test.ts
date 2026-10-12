@@ -1,7 +1,7 @@
 // The load commands' setup refusals (spec 0011, AC-203, AC-209, AC-210): with
 // any address that isn't this machine, `load:run` and `load:reset` exit 3
-// before they read or reach anything, and so does a scenario a later
-// milestone builds, or none at all. Run as the real commands, in a child.
+// before they read or reach anything, and so does an unknown scenario, or
+// none at all. Run as the real commands, in a child.
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -33,10 +33,10 @@ describe('load:run', () => {
     expect(output).toContain(`Refusing ${name}`);
   });
 
-  it('refuses a scenario a later milestone builds, and a missing one', () => {
-    const later = command(RUN, ['hub'], {});
-    expect(later.status).toBe(3);
-    expect(later.output).toContain('arrives with milestone 4');
+  it('refuses an unknown scenario, and a missing one', () => {
+    const unknown = command(RUN, ['soak'], {});
+    expect(unknown.status).toBe(3);
+    expect(unknown.output).toContain('Name a scenario');
     const none = command(RUN, [], {});
     expect(none.status).toBe(3);
     expect(none.output).toContain('Name a scenario');
@@ -78,10 +78,11 @@ describe('the run’s plan', () => {
     expect(share('companies')).toBeLessThanOrEqual(21);
   });
 
-  it('runs the gates and refuses the rest for now', () => {
+  it('runs the gates, and the stress scenarios by validity only', () => {
     expect(scenarioOf('steady').gate).toBe(true);
     expect(scenarioOf('spread').behaviour.jumps).toBe('even');
-    expect(() => scenarioOf('hub')).toThrow(/milestone 4/);
+    expect(scenarioOf('hub')).toMatchObject({ gate: false, users: 100, hub: { editEveryMs: 10_000 } });
+    expect(scenarioOf('storm').gate).toBe(false);
   });
 
   it('plays 1,000 users for 5 minutes in thousand, by validity only, 250 users to a thread', () => {

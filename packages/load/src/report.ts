@@ -36,6 +36,8 @@ export interface ReportInput {
   readonly live?: LiveInput;
   /** The storm's extra lines (AC-207): edits inside bursts and the reconnect. */
   readonly storm?: boolean;
+  /** The hub's extra lines (AC-206): its renames, the moves while one ran, its opens, and writes out of retries. */
+  readonly hub?: boolean;
 }
 
 /** What the live lines are made from (AC-200, AC-201). */
@@ -264,10 +266,15 @@ export function reportLines(input: ReportInput): readonly ReportLine[] {
   const apiCpu = input.apiCpuShares?.map((share) => share * 100);
   return [
     judged('read (scroll, filter or sort windows)', okTimes(samples, 'read'), p95.read, 'ms'),
-    judged('open a record', okTimes(samples, 'open'), p95.open, 'ms'),
+    judged(
+      'open a record',
+      okTimes(samples, 'open', (sample) => sample.hub !== 'open'),
+      p95.open,
+      'ms',
+    ),
     judged(
       'edit',
-      okTimes(samples, 'edit', (sample) => sample.burst !== true),
+      okTimes(samples, 'edit', (sample) => sample.burst !== true && sample.hub !== 'edit'),
       p95.edit,
       'ms',
     ),
@@ -307,6 +314,58 @@ export function reportLines(input: ReportInput): readonly ReportLine[] {
       : relayLine(budget, input.live.relay),
     ...(input.live === undefined ? [] : streamLines(input.live)),
     ...(input.storm === true ? stormLines(budget, samples, input.live?.users ?? []) : []),
+    ...(input.hub === true ? hubLines(budget, samples) : []),
+  ];
+}
+
+/** What `runWrite` answers when every attempt met a concurrent write: 503 `QUERY_CANCELLED`, "try again". */
+export const OUT_OF_RETRIES = '503 QUERY_CANCELLED';
+
+/**
+ * The hub's lines (AC-206): the hub's own renames, every move to or from it,
+ * the moves that ran while a rename did (the contention spec 0014's lock on
+ * the far record adds), the hub's opens (the first 20 Team links and the
+ * total), and the writes that ran out of retries in `runWrite`. The renames
+ * and the moves beside them are judged against the edit target for #41 (the
+ * hub exits by validity only); the rest are reported.
+ */
+export function hubLines(budget: ScaleBudget, samples: readonly Sample[]): readonly ReportLine[] {
+  const renames = samples.filter((sample) => sample.hub === 'edit');
+  const moves = samples.filter((sample) => sample.hub === 'move' && sample.outcome === 'ok' && sample.requests > 0);
+  // A move ran beside a rename when their spans, from the scheduled moment to the answer, overlap.
+  const beside = moves.filter((move) =>
+    renames.some((rename) => move.scheduledAt < rename.answeredAt && move.answeredAt > rename.scheduledAt),
+  );
+  const writes = samples.filter((sample) => sample.metric === 'edit' || sample.metric === 'create');
+  const outOfRetries = writes.filter((sample) => sample.reason === OUT_OF_RETRIES).length;
+  return [
+    judged(
+      'hub renames (every 10 s)',
+      okTimes(samples, 'edit', (sample) => sample.hub === 'edit'),
+      budget.p95Ms.edit,
+      'ms',
+    ),
+    reported(
+      'hub moves (a person to or from the hub)',
+      moves.map(durationOf),
+      'ms',
+      "written from the person's Company",
+    ),
+    judged('hub moves while a rename ran', beside.map(durationOf), budget.p95Ms.edit, 'ms'),
+    reported(
+      'hub open (first 20 Team links and the total)',
+      okTimes(samples, 'open', (sample) => sample.hub === 'open'),
+      'ms',
+      'not judged',
+    ),
+    {
+      metric: 'writes out of retries (runWrite)',
+      unit: 'count',
+      summary: countSummary(outOfRetries),
+      verdict: 'reported',
+      judged: false,
+      note: `answered ${OUT_OF_RETRIES}, of ${String(writes.length)} writes; unexpected, so in the error share`,
+    },
   ];
 }
 

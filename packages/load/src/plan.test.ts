@@ -4,7 +4,8 @@
 // mix holds within a point even on a short run, and a seed plays a run again.
 import { describe, expect, it } from 'vitest';
 import { SCALE_BUDGET } from '@crm/core/scale-budget';
-import { achievedMix, actionAt, mixDeviation, planArrivals, planStorm, type PlanInput } from './plan.ts';
+import { dealPeople } from './hub.ts';
+import { achievedMix, actionAt, mixDeviation, planArrivals, planHubEdits, planStorm, type PlanInput } from './plan.ts';
 import { createRandom, hash32 } from './random.ts';
 
 describe('the storm (AC-207)', () => {
@@ -21,6 +22,25 @@ describe('the storm (AC-207)', () => {
     expect(new Set(first.map((burst) => burst.slot)).size).toBe(100);
     expect(storm.reconnectAt).toBe(120_000);
     expect(planStorm({ users: 100, warmupMs: 60_000, measuredMs: 120_000, everyMs: 10_000, seed: 5 })).toEqual(storm);
+  });
+});
+
+describe('the hub (AC-206)', () => {
+  it('has one user rename the hub every 10 seconds through the measured window', () => {
+    const edits = planHubEdits({ user: 0, warmupMs: 60_000, measuredMs: 120_000, everyMs: 10_000 });
+    expect(edits.map((edit) => edit.at)).toEqual(Array.from({ length: 12 }, (_, index) => 60_000 + index * 10_000));
+    expect(edits.map((edit) => edit.round)).toEqual(Array.from({ length: 12 }, (_, index) => index));
+    expect(new Set(edits.map((edit) => edit.user))).toEqual(new Set([0]));
+  });
+
+  it("deals the hub's people out so no two users move the same person", () => {
+    const ids = Array.from({ length: 10 }, (_, index) => `p${String(index)}`);
+    const dealt = dealPeople(ids, 3, 2);
+    expect(dealt).toEqual([
+      ['p0', 'p3'],
+      ['p1', 'p4'],
+      ['p2', 'p5'],
+    ]);
   });
 });
 

@@ -14,6 +14,10 @@
 //   aborts the old view's count if it is still running.
 // - Open reads one record; edit changes one editable attribute of a record in
 //   the window (spread: a sampled one); create adds a record.
+// - In `hub` (AC-206), half the edits move one of the user's people to or from
+//   the hub company (its Company), a fifth of the opens read the hub (its
+//   first 20 Team links and the total), and one user renames the hub every 10
+//   seconds.
 //
 // Every call goes through `LoadApi` (the real contract client in a run, a fake
 // in tests), and each action's time runs from its scheduled moment.
@@ -74,6 +78,12 @@ export interface Sample {
   readonly metric: Metric;
   /** A storm burst's edit (AC-207), kept off the mix and the edit line. */
   readonly burst?: boolean;
+  /**
+   * The hub scenario's own (AC-206): a person moved to or from the hub (an
+   * edit, on the edit line), the hub opened (its own line, off the open
+   * line), or the hub renamed (its own line, off the mix and the edit line).
+   */
+  readonly hub?: 'move' | 'open' | 'edit';
   /** A write's `mutationId`, joining it to its holders' refetches (scheduled to visible, AC-200). */
   readonly mutationId?: string;
   /** A delivery: how the event came, and its commit time `at` on the database's clock (ms since the epoch). */
@@ -132,6 +142,32 @@ export interface Behaviour {
   readonly jumpShare: number;
 }
 
+/** The share of a hub user's edits that move a person to or from the hub (AC-206). */
+export const HUB_MOVE_SHARE = 0.5;
+/** The share of a hub user's opens that read the hub itself (AC-206). */
+export const HUB_OPEN_SHARE = 0.2;
+/** The names the hub's renames swap between (AC-206): the seed's, and one beside it. `pnpm load:reset` puts the first back. */
+export const HUB_NAMES = ['Hub Company (renamed)', 'Hub Company'] as const;
+
+/** The hub as the `hub` scenario's users see it (AC-206). */
+export interface HubModel {
+  readonly companyId: string;
+  /** Companies' object id: a reference to a company names it. */
+  readonly companiesObjectId: string;
+  /** People's Company attribute: a move writes it (from the person's side, the side that holds one link). */
+  readonly companyAttributeId: string;
+  /** Companies' name attribute: the hub's renames write it. */
+  readonly nameAttributeId: string;
+  /** Live companies other than the hub, where a person moved off the hub goes. */
+  readonly elsewhere: readonly string[];
+}
+
+/** One user's part of the hub: the model, and the hub's people it moves (each in the hub when the run starts). */
+export interface HubUser {
+  readonly model: HubModel;
+  readonly people: readonly string[];
+}
+
 /** Everything one user needs. */
 export interface UserOptions {
   readonly user: number;
@@ -149,6 +185,8 @@ export interface UserOptions {
   /** A new `mutationId`. */
   readonly mutationId: () => string;
   readonly record: (sample: Sample) => void;
+  /** The `hub` scenario's part (AC-206); absent in every other scenario. */
+  readonly hub?: HubUser;
 }
 
 /** What a user holds, for tests. */
@@ -193,6 +231,8 @@ export interface LoadUser {
    * samples (the manifest's ids spread over the whole object).
    */
   readonly burst: (scheduledAt: number, measured: boolean, slot: number) => Promise<void>;
+  /** The hub's rename number `round` (AC-206): it swaps between `HUB_NAMES`. Only in `hub`. */
+  readonly hubEdit: (scheduledAt: number, measured: boolean, round: number) => Promise<void>;
   readonly holder: Holder;
   readonly snapshot: () => UserSnapshot;
 }
@@ -232,7 +272,7 @@ export function createLoadUser(options: UserOptions): LoadUser {
       scheduledAt: number,
       measured: boolean,
       mode?: 'position' | 'cursor',
-      extras: Pick<Sample, 'burst' | 'mutationId'> = {},
+      extras: Pick<Sample, 'burst' | 'mutationId' | 'hub'> = {},
     ) =>
       options.record({
         user: options.user,
@@ -465,6 +505,66 @@ export function createLoadUser(options: UserOptions): LoadUser {
     return shown === undefined ? { id } : { id, view: shown };
   }
 
+  // The hub's people this user moves, and whether each is in the hub now (all are when the run starts).
+  const inHub = new Map((options.hub?.people ?? []).map((id) => [id, true]));
+
+  /**
+   * Moves one of the user's people to or from the hub (AC-206): half the
+   * moves each way, written from the person's Company. A person moved off
+   * goes to another company; a move back links it to the hub again.
+   */
+  async function hubMove(hub: HubUser, scheduledAt: number, measured: boolean) {
+    const writing = tally();
+    const toHub = random.chance(0.5);
+    const ready = hub.people.filter((id) => inHub.get(id) !== toHub);
+    const person = random.pick(ready.length > 0 ? ready : hub.people);
+    const goesToHub = inHub.get(person) !== true;
+    const target = goesToHub ? hub.model.companyId : random.pick(hub.model.elsewhere);
+    const mutationId = options.mutationId();
+    const answer = await writing.call((call) =>
+      api.setValues(
+        {
+          workspace: options.workspace,
+          recordId: person,
+          values: {
+            [hub.model.companyAttributeId]: { value: { objectId: hub.model.companiesObjectId, recordId: target } },
+          },
+          mutationId,
+        },
+        call,
+      ),
+    );
+    if (answer.ok) inHub.set(person, goesToHub);
+    writing.finish('edit', 'edit', scheduledAt, measured, undefined, { mutationId, hub: 'move' });
+  }
+
+  /** Opens the hub as a record page does (AC-206): the whole record, its Team as the first 20 links and the total. */
+  async function hubOpen(hub: HubUser, scheduledAt: number, measured: boolean) {
+    const reading = tally();
+    await reading.call((call) => api.get({ workspace: options.workspace, ids: [hub.model.companyId] }, call));
+    reading.finish('open', 'open', scheduledAt, measured, undefined, { hub: 'open' });
+  }
+
+  /** Renames the hub (AC-206): round 0 to `HUB_NAMES[0]`, round 1 back to the seed's name, and so on. */
+  async function hubEdit(scheduledAt: number, measured: boolean, round: number) {
+    const hub = options.hub;
+    if (hub === undefined) return;
+    const writing = tally();
+    const mutationId = options.mutationId();
+    await writing.call((call) =>
+      api.setValues(
+        {
+          workspace: options.workspace,
+          recordId: hub.model.companyId,
+          values: { [hub.model.nameAttributeId]: { value: HUB_NAMES[round % HUB_NAMES.length] } },
+          mutationId,
+        },
+        call,
+      ),
+    );
+    writing.finish('edit', 'edit', scheduledAt, measured, undefined, { mutationId, hub: 'edit' });
+  }
+
   async function create(scheduledAt: number, measured: boolean) {
     const writing = tally();
     const id = options.newId();
@@ -501,10 +601,16 @@ export function createLoadUser(options: UserOptions): LoadUser {
         return;
       }
       case 'open':
-        await openRecord(scheduledAt, measured);
+        if (options.hub !== undefined && random.chance(HUB_OPEN_SHARE))
+          await hubOpen(options.hub, scheduledAt, measured);
+        else await openRecord(scheduledAt, measured);
         return;
       case 'edit':
-        await edit(scheduledAt, measured);
+        if (options.hub !== undefined && options.hub.people.length > 0 && random.chance(HUB_MOVE_SHARE)) {
+          await hubMove(options.hub, scheduledAt, measured);
+        } else {
+          await edit(scheduledAt, measured);
+        }
         return;
       case 'create':
         await create(scheduledAt, measured);
@@ -615,6 +721,7 @@ export function createLoadUser(options: UserOptions): LoadUser {
     join: (scheduledAt, measured) => open(firstShape(), 'join', scheduledAt, measured),
     act,
     burst: (scheduledAt, measured, slot) => edit(scheduledAt, measured, slot),
+    hubEdit,
     holder,
     snapshot: () => ({
       view: view?.shape.name ?? '',

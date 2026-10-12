@@ -142,6 +142,32 @@ export function planStorm(input: {
   return { bursts, reconnectAt: input.warmupMs + input.measuredMs / 2 };
 }
 
+/** One of the hub's renames (AC-206): which user, when, and which round (the names swap each round). */
+export interface HubEdit {
+  readonly user: number;
+  readonly at: number;
+  readonly round: number;
+}
+
+/**
+ * Plans the hub's renames (AC-206): `user` renames the hub every `everyMs`
+ * through the measured window, from its first moment, while the other users
+ * link people to it and away.
+ */
+export function planHubEdits(input: {
+  readonly user: number;
+  readonly warmupMs: number;
+  readonly measuredMs: number;
+  readonly everyMs: number;
+}): readonly HubEdit[] {
+  const edits: HubEdit[] = [];
+  const end = input.warmupMs + input.measuredMs;
+  for (let at = input.warmupMs, round = 0; at < end; at += input.everyMs, round += 1) {
+    edits.push({ user: input.user, at, round });
+  }
+  return edits;
+}
+
 /** The largest gap, in points (0.01 = one point), between an achieved mix and the budget's. */
 export function mixDeviation(achieved: Readonly<Record<LoadAction, number>>, mix: Mix): number {
   return Math.max(...MIX_ACTIONS.map((action) => Math.abs(achieved[action] - mix[action])));

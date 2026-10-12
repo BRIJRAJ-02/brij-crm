@@ -10,6 +10,7 @@ import {
   errorCounts,
   exitCodeOf,
   formatReport,
+  hubLines,
   judgeValidity,
   relayLine,
   reportLines,
@@ -372,6 +373,44 @@ describe('the live lines (milestone 3)', () => {
     expect(line('reconnect')?.note).toBe('2 dropped: 1 recovered by Centrifugo, 1 caught up, 0 reset, 0 never back');
     const never = stormLines(SCALE_BUDGET, [], [{ ...users[0], reconnected: { droppedAt: 0 } }] as LiveOutput[]);
     expect(never[1]?.verdict).toBe('miss');
+  });
+
+  it("adds the hub's lines: renames apart from the edit line, moves beside a rename, hub opens apart, retries", () => {
+    const samples = [
+      sample({ metric: 'edit', action: 'edit', scheduledAt: 0, answeredAt: 40 }),
+      sample({ metric: 'edit', action: 'edit', scheduledAt: 1_000, answeredAt: 1_400, hub: 'edit' }),
+      // A move during the rename, one after it, and one that ran out of retries.
+      sample({ metric: 'edit', action: 'edit', scheduledAt: 1_100, answeredAt: 1_500, hub: 'move' }),
+      sample({ metric: 'edit', action: 'edit', scheduledAt: 2_000, answeredAt: 2_030, hub: 'move' }),
+      sample({
+        metric: 'edit',
+        action: 'edit',
+        scheduledAt: 2_100,
+        answeredAt: 2_900,
+        hub: 'move',
+        outcome: 'unexpected',
+        reason: '503 QUERY_CANCELLED',
+      }),
+      sample({ metric: 'open', action: 'open', scheduledAt: 0, answeredAt: 20 }),
+      sample({ metric: 'open', action: 'open', scheduledAt: 0, answeredAt: 700, hub: 'open' }),
+    ];
+    const lines = reportLines({ budget: SCALE_BUDGET, samples, poolerWaitMs: [], postgresCpuShares: [], hub: true });
+    const line = (name: string) => lines.find((each) => each.metric === name);
+    // Moves are edits; the rename isn't. The hub's open isn't on the open line.
+    expect(line('edit')?.summary).toMatchObject({ count: 3, max: 400 });
+    expect(line('open a record')?.summary).toMatchObject({ count: 1, max: 20 });
+    expect(line('hub renames (every 10 s)')).toMatchObject({ verdict: 'miss', summary: { count: 1, max: 400 } });
+    expect(line('hub moves (a person to or from the hub)')?.summary).toMatchObject({ count: 2 });
+    expect(line('hub moves while a rename ran')).toMatchObject({ verdict: 'miss', summary: { count: 1, max: 400 } });
+    expect(line('hub open (first 20 Team links and the total)')).toMatchObject({
+      verdict: 'reported',
+      summary: { max: 700 },
+    });
+    expect(line('writes out of retries (runWrite)')?.summary?.count).toBe(1);
+    expect(hubLines(SCALE_BUDGET, [])).toHaveLength(5);
+    // Without the hub, none of its lines.
+    const plain = reportLines({ budget: SCALE_BUDGET, samples, poolerWaitMs: [], postgresCpuShares: [] });
+    expect(plain.some((each) => each.metric.startsWith('hub'))).toBe(false);
   });
 
   it('counts a failed live call or refetch as unexpected, but only actions in the share', () => {

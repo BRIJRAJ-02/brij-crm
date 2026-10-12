@@ -6,9 +6,9 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { parseAttributeValue, type AttributeType } from '@crm/contracts/values';
 import { createDatabase, createIdentityStore, type Database, type IdentityStore } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
-import { createRecord, newId, readRecordsById } from '../src/index.ts';
+import { createRecord, newId, readRecordsById, setValues } from '../src/index.ts';
 import { systemScope } from '../src/system.ts';
-import { harnessRecords, resetLoadWorkspace } from './load-reset.ts';
+import { harnessRecords, movedPeople, resetLoadWorkspace } from './load-reset.ts';
 import { freeRecordSlots } from './load-slots.ts';
 import { SCALE_BUDGET } from './scale-budget.ts';
 import { testScope } from '../src/testing.ts';
@@ -276,7 +276,7 @@ describe('pnpm load:reset (spec 0011, AC-209)', () => {
     expect([...(await harnessRecords(db, manifest))].sort()).toEqual([...made].sort());
     expect((await freeRecordSlots(db, manifest.workspaceId)).free).toBe(before.free - 3);
     const reset = await resetLoadWorkspace(db, manifest);
-    expect(reset).toEqual({ erased: 3, ...before });
+    expect(reset).toEqual({ erased: 3, restored: 0, ...before });
     expect(await harnessRecords(db, manifest)).toEqual([]);
     const { gone } = await one(`select count(*)::int as gone from records where id = any($1::uuid[])`, [made]);
     expect(gone).toBe(0);
@@ -285,6 +285,60 @@ describe('pnpm load:reset (spec 0011, AC-209)', () => {
       manifest.workspaceId,
     ]);
     expect(stored).toBe(Object.values(manifest.counts).reduce((sum, count) => sum + count.stored, 0));
+  });
+
+  it("puts the hub's Team and name back: people moved off it return, people moved onto it go home", async () => {
+    const scope = systemScope(db, manifest.workspaceId);
+    const company = manifest.attributes['people.company'] ?? '';
+    const companies = manifest.objects.companies ?? '';
+    const name = manifest.attributes['companies.name'] ?? '';
+    const team = async () =>
+      (
+        await one(
+          `select count(*)::int as n from record_links l join attributes a on a.workspace_id = l.workspace_id
+             and a.relationship_id = l.relationship_id
+           where l.workspace_id = $1 and a.id = $2 and l.to_record_id = $3 and l.active_until is null`,
+          [manifest.workspaceId, manifest.hubTeamAttributeId, manifest.hubCompanyId],
+        )
+      ).n;
+    // Two live hub people and one live person elsewhere (with a live company), by their current links.
+    const rows = await testQuery<{ id: string; company: string; hub: boolean }>(
+      ownerUrl,
+      `select l.from_record_id::text as id, l.to_record_id::text as company, l.to_record_id = $3 as hub
+       from record_links l join attributes a on a.workspace_id = l.workspace_id and a.relationship_id = l.relationship_id
+       join records p on p.workspace_id = l.workspace_id and p.id = l.from_record_id and p.deleted_at is null
+       join records c on c.workspace_id = l.workspace_id and c.id = l.to_record_id and c.deleted_at is null
+       where l.workspace_id = $1 and a.id = $2 and l.active_until is null order by l.from_record_id`,
+      [manifest.workspaceId, company, manifest.hubCompanyId],
+    );
+    const [first, second] = rows.filter((row) => row.hub);
+    const outsider = rows.find((row) => !row.hub);
+    if (first === undefined || second === undefined || outsider === undefined) throw new Error('No people to move.');
+    const link = (recordId: string | null) => ({ value: recordId === null ? null : { objectId: companies, recordId } });
+    await setValues(scope, { recordId: first.id, values: { [company]: link(outsider.company) } });
+    await setValues(scope, { recordId: second.id, values: { [company]: link(null) } });
+    await setValues(scope, { recordId: outsider.id, values: { [company]: link(manifest.hubCompanyId) } });
+    await setValues(scope, { recordId: manifest.hubCompanyId, values: { [name]: { value: 'Hub Company (renamed)' } } });
+    expect(await team()).toBe(profile.hubTeam - 1);
+    expect((await movedPeople(db, manifest)).map((person) => person.id).sort()).toEqual(
+      [first.id, second.id, outsider.id].sort(),
+    );
+
+    const reset = await resetLoadWorkspace(db, manifest);
+    expect(reset.restored).toBe(3);
+    expect(await team()).toBe(profile.hubTeam);
+    expect(await movedPeople(db, manifest)).toEqual([]);
+    const { home, named } = await one(
+      `select (select count(*)::int from record_links l where l.workspace_id = $1 and l.from_record_id = $2
+           and l.to_record_id = $3 and l.active_until is null) as home,
+         (select count(*)::int from "values" where workspace_id = $1 and owner_id = $4 and attribute_id = $5
+           and active_until is null and text_value = 'Hub Company') as named`,
+      [manifest.workspaceId, outsider.id, outsider.company, manifest.hubCompanyId, name],
+    );
+    expect(home).toBe(1);
+    expect(named).toBe(1);
+    // Nothing moved: a second reset writes nothing.
+    expect((await resetLoadWorkspace(db, manifest)).restored).toBe(0);
   });
 
   it('refuses (exit 3) a manifest whose workspace this database does not hold under its slug', async () => {

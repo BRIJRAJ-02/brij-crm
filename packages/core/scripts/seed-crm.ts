@@ -22,6 +22,9 @@ import { systemScope } from '../src/system.ts';
 import type { LoadManifest, LoadUser, SeedProfileName } from './load-files.ts';
 import { loadRefusal } from './load-local.ts';
 
+/** The hub company's name as the seed writes it; `pnpm load:reset` puts it back after the `hub` scenario's renames. */
+export const HUB_COMPANY_NAME = 'Hub Company';
+
 /** How many records, members and hub links each profile makes. */
 export interface SeedProfile {
   readonly people: number;
@@ -593,7 +596,7 @@ export async function seedCrm(deps: SeedDeps, input: SeedInput): Promise<LoadMan
   await writeRecords('companies', companies, companyId, async (tx) => {
     await values(tx, {
       attributeId: attr('companies.name'),
-      columns: { text_value: sql`case when n = 1 then 'Hub Company' else 'Company ' || n end` },
+      columns: { text_value: sql`case when n = 1 then ${HUB_COMPANY_NAME}::text else 'Company ' || n end` },
       where: sql`true`,
     });
     const domain = sql`'company' || n || '.load.example.com'`;

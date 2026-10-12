@@ -14,11 +14,11 @@ import { addTo, createHistogram, type Histogram } from './histogram.ts';
 import { openLiveConnection } from './live/centrifuge.ts';
 import type { StreamSnapshot } from './live/stream.ts';
 import { createLiveUser, type LiveTally, type LiveUser, type Reconnected } from './live/user.ts';
-import type { Arrival, Burst, Join } from './plan.ts';
+import type { Arrival, Burst, HubEdit, Join } from './plan.ts';
 import type { LoadAction } from '@crm/core/scale-budget';
 import { createRandom } from './random.ts';
 import type { ObjectKey } from './shapes.ts';
-import { createLoadUser, type Behaviour, type ObjectModel, type Sample } from './user.ts';
+import { createLoadUser, type Behaviour, type HubModel, type ObjectModel, type Sample } from './user.ts';
 
 /** An action sent within this long of its planned moment counts as sent on time. */
 export const ON_TIME_MS = 1_000;
@@ -36,6 +36,8 @@ export interface ThreadUser {
   readonly cookie: string;
   readonly memberId: string;
   readonly object: ObjectKey;
+  /** `hub` (AC-206): the hub's people this user moves, each in the hub when the run starts. */
+  readonly hubPeople?: readonly string[];
 }
 
 /** What a thread is given (all of it structured clone safe). */
@@ -59,6 +61,9 @@ export interface DriveInput {
   /** The storm (AC-207): this thread's users' burst edits, and when every live connection drops (ms from the start). */
   readonly bursts?: readonly Burst[];
   readonly reconnectAt?: number;
+  /** `hub` (AC-206): the hub, and this thread's renames of it. */
+  readonly hub?: HubModel;
+  readonly hubEdits?: readonly HubEdit[];
   /**
    * A test flag (`LOAD_TEST_BLOCK_LOOP_MS`): block this thread's event loop
    * this long every 100 ms, so a harness that can't keep up is shown to make
@@ -108,11 +113,12 @@ const METRIC_OF: Readonly<Record<LoadAction, Sample['metric']>> = {
 /** Milliseconds since the epoch, on a clock every thread shares. */
 export const wallClock = (): number => performance.timeOrigin + performance.now();
 
-/** What happens at a planned moment: a user joins, acts, edits in a burst, or drops its live connection. */
+/** What happens at a planned moment: a user joins, acts, edits in a burst, renames the hub, or drops its live connection. */
 type Event =
   | { readonly kind: 'join'; readonly user: number; readonly at: number }
   | { readonly kind: 'arrival'; readonly user: number; readonly at: number; readonly arrival: Arrival }
   | { readonly kind: 'burst'; readonly user: number; readonly at: number; readonly slot: number }
+  | { readonly kind: 'hubEdit'; readonly user: number; readonly at: number; readonly round: number }
   | { readonly kind: 'reconnect'; readonly user: number; readonly at: number };
 
 /** A timer that never keeps the thread alive on its own. */
@@ -155,6 +161,7 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
         behaviour: input.behaviour,
         now: wallClock,
         newId,
+        ...(input.hub === undefined ? {} : { hub: { model: input.hub, people: user.hubPeople ?? [] } }),
         mutationId: () => {
           const mutationId = randomUUID();
           const sentAt = wallClock();
@@ -197,6 +204,7 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
     ...input.joins.map((join: Join) => ({ kind: 'join' as const, user: join.user, at: join.at })),
     ...input.arrivals.map((arrival) => ({ kind: 'arrival' as const, user: arrival.user, at: arrival.at, arrival })),
     ...(input.bursts ?? []).map((burst) => ({ kind: 'burst' as const, ...burst })),
+    ...(input.hubEdits ?? []).map((edit) => ({ kind: 'hubEdit' as const, ...edit })),
     ...(reconnectAt === undefined
       ? []
       : input.users.map((user) => ({ kind: 'reconnect' as const, user: user.index, at: reconnectAt }))),
@@ -236,7 +244,9 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
         ? user.join(due, isMeasured)
         : event.kind === 'arrival'
           ? user.act(event.arrival.action, due, isMeasured)
-          : user.burst(due, isMeasured, event.slot);
+          : event.kind === 'burst'
+            ? user.burst(due, isMeasured, event.slot)
+            : user.hubEdit(due, isMeasured, event.round);
     if (event.kind !== 'join' && isMeasured) {
       planned += 1;
       if (now - due <= ON_TIME_MS) sent += 1;
@@ -246,6 +256,7 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
       action: event.kind === 'join' ? 'join' : event.kind === 'arrival' ? event.arrival.action : 'edit',
       metric: event.kind === 'join' ? 'read' : event.kind === 'arrival' ? METRIC_OF[event.arrival.action] : 'edit',
       ...(event.kind === 'burst' ? { burst: true } : {}),
+      ...(event.kind === 'hubEdit' ? { hub: 'edit' as const } : {}),
       scheduledAt: due,
       answeredAt: due,
       outcome: 'unexpected',

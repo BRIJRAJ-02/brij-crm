@@ -33,7 +33,8 @@ import type { DriveInput, DriveOutput, ThreadUser } from './drive.ts';
 import { wallClock } from './drive.ts';
 import { mergeHistograms } from './histogram.ts';
 import { headAt, relayLags } from './outbox.ts';
-import { achievedMix, mixDeviation, planArrivals, planStorm, type ArrivalPlan } from './plan.ts';
+import { hubSetup } from './hub.ts';
+import { achievedMix, mixDeviation, planArrivals, planHubEdits, planStorm, type ArrivalPlan } from './plan.ts';
 import { errorCounts, errorLines, exitCodeOf, formatReport, judgeValidity, reportLines } from './report.ts';
 import { LoadResult, type StatementLine } from './result.ts';
 import { SCENARIOS, threadsFor, WARMUP_SECONDS, type Scenario, type ScenarioName } from './scenarios.ts';
@@ -63,13 +64,9 @@ const START_DELAY_MS = 3_000;
 
 const GOLDEN = (Math.sqrt(5) - 1) / 2;
 
-/** The scenario as asked, or a refusal for one a later milestone builds. */
+/** The scenario as asked. */
 export function scenarioOf(name: ScenarioName): Scenario {
-  const scenario = SCENARIOS[name];
-  if (!scenario.built) {
-    throw loadRefusal(`The ${name} scenario arrives with milestone ${String(scenario.milestone)} of spec 0011.`);
-  }
-  return scenario;
+  return SCENARIOS[name];
 }
 
 /** The creates a run plans: users × (minutes and warm up) × the rate × the create share (AC-209). */
@@ -300,14 +297,23 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
       scenario.storm === undefined
         ? undefined
         : planStorm({ users, warmupMs, measuredMs, everyMs: scenario.storm.burstEveryMs, seed });
+    // The hub (AC-206): its model and each user's own people from its Team, read before the warm up; user 1 renames it.
+    const hub =
+      scenario.hub === undefined ? undefined : await hubSetup(owner, manifest, users, scenario.hub.peoplePerUser);
+    const hubEdits =
+      scenario.hub === undefined
+        ? undefined
+        : planHubEdits({ user: 0, warmupMs, measuredMs, everyMs: scenario.hub.editEveryMs });
     const threadUsers: ThreadUser[][] = Array.from({ length: threads }, () => []);
     cookies.forEach((user, index) => {
+      const hubPeople = hub?.people[index];
       threadUsers[index % threads]?.push({
         index,
         n: user.n,
         cookie: user.cookie,
         memberId: user.memberId,
         object: objectOf(index),
+        ...(hubPeople === undefined ? {} : { hubPeople }),
       });
     });
     const startedAt = new Date();
@@ -340,6 +346,9 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
                 bursts: storm.bursts.filter((burst) => indexes.has(burst.user)),
                 reconnectAt: storm.reconnectAt,
               }),
+          ...(hub === undefined || hubEdits === undefined
+            ? {}
+            : { hub: hub.model, hubEdits: hubEdits.filter((edit) => indexes.has(edit.user)) }),
           ...(options.blockLoopMs === undefined ? {} : { blockLoopMs: options.blockLoopMs }),
         });
       }),
@@ -405,6 +414,7 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
           heads,
         },
         storm: storm !== undefined,
+        hub: hub !== undefined,
       }),
       ...errorLines(samples, SCALE_BUDGET),
     ];
@@ -420,7 +430,11 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
     });
     // The mix the measured window really sent: one sample per action (its count apart), never the plan's.
     const sentActions = samples.flatMap((sample) =>
-      ACTION_METRICS.has(sample.metric) && sample.action !== 'join' && sample.action !== 'live' && sample.burst !== true
+      ACTION_METRICS.has(sample.metric) &&
+      sample.action !== 'join' &&
+      sample.action !== 'live' &&
+      sample.burst !== true &&
+      sample.hub !== 'edit'
         ? [sample.action]
         : [],
     );
@@ -460,6 +474,8 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
     const path = await writeResult(result);
     log(formatReport(result));
     log(`result: ${path}`);
+    if (hub !== undefined)
+      log("The hub's Team and name moved: put them back with `pnpm load:reset` before the next run.");
     return { result, path };
   } finally {
     await stats?.close();

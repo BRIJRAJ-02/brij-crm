@@ -9,7 +9,16 @@ import { describe, expect, it } from 'vitest';
 import type { QueryRecordsInput, RecordPage, RecordView } from '@crm/contracts';
 import { createRandom } from './random.ts';
 import { viewShapes, type ShapeAttribute } from './shapes.ts';
-import { createLoadUser, type Behaviour, type Call, type LoadApi, type ObjectModel, type Sample } from './user.ts';
+import {
+  createLoadUser,
+  HUB_NAMES,
+  type Behaviour,
+  type Call,
+  type HubUser,
+  type LoadApi,
+  type ObjectModel,
+  type Sample,
+} from './user.ts';
 
 const ROWS = 5_000;
 const id = (n: number) => `00000000-0000-7000-8000-${n.toString(16).padStart(12, '0')}`;
@@ -123,7 +132,7 @@ function fakeApi(options: { countDelayMs?: number; queryDelayMs?: number; failWi
 
 const steady: Behaviour = { jumps: 'near-top', picks: 'window', jumpShare: 0.2 };
 
-function user(api: LoadApi, options: { behaviour?: Behaviour; seed?: number } = {}) {
+function user(api: LoadApi, options: { behaviour?: Behaviour; seed?: number; hub?: HubUser } = {}) {
   const samples: Sample[] = [];
   let clock = 1_000;
   let ids = 0;
@@ -140,6 +149,7 @@ function user(api: LoadApi, options: { behaviour?: Behaviour; seed?: number } = 
     newId: () => id(1_000_000 + (ids += 1)),
     mutationId: () => id(2_000_000 + (ids += 1)),
     record: (sample) => samples.push(sample),
+    ...(options.hub === undefined ? {} : { hub: options.hub }),
   });
   return { loadUser, samples };
 }
@@ -335,6 +345,64 @@ describe('open, edit and create', () => {
     const bursts = samples.filter((sample) => sample.burst === true);
     expect(bursts).toHaveLength(2);
     expect(bursts.every((sample) => sample.metric === 'edit' && sample.mutationId !== undefined)).toBe(true);
+  });
+
+  it('moves its own hub people to and from the hub in hub, opens the hub, and renames it', async () => {
+    const hub: HubUser = {
+      model: {
+        companyId: id(500_001),
+        companiesObjectId: id(700_002),
+        companyAttributeId: id(900_101),
+        nameAttributeId: id(900_102),
+        elsewhere: [id(500_002), id(500_003)],
+      },
+      people: [id(3_001), id(3_002), id(3_003)],
+    };
+    const { api, calls } = fakeApi();
+    const { loadUser, samples } = user(api, { hub });
+    await loadUser.join(0, false);
+    for (let step = 0; step < 200; step += 1) {
+      await loadUser.act('edit', step, true);
+      await loadUser.act('open', step, true);
+    }
+    await loadUser.hubEdit(500, true, 0);
+    await loadUser.hubEdit(510, true, 1);
+
+    const writes = calls
+      .filter((call) => call.procedure === 'setValues')
+      .map((call) => call.input as { recordId: string; values: Record<string, { value: unknown }> });
+    const companyOf = (write: (typeof writes)[number]) =>
+      write.values[hub.model.companyAttributeId]?.value as { objectId: string; recordId: string };
+    const moves = writes.filter((write) => hub.people.includes(write.recordId));
+    // About half the edits move a person; each move writes the person's Company, to the hub or somewhere else.
+    expect(moves.length).toBeGreaterThan(70);
+    expect(moves.length).toBeLessThan(130);
+    // Every person starts in the hub, so its moves alternate: off the hub, then back.
+    const where = new Map(hub.people.map((person) => [person, hub.model.companyId]));
+    for (const move of moves) {
+      const value = companyOf(move);
+      expect(value.objectId).toBe(hub.model.companiesObjectId);
+      if (where.get(move.recordId) === hub.model.companyId) expect(hub.model.elsewhere).toContain(value.recordId);
+      else expect(value.recordId).toBe(hub.model.companyId);
+      where.set(move.recordId, value.recordId);
+    }
+    const toHub = moves.filter((move) => companyOf(move).recordId === hub.model.companyId).length;
+    expect(Math.abs(toHub - (moves.length - toHub))).toBeLessThanOrEqual(hub.people.length);
+    expect(samples.filter((sample) => sample.hub === 'move' && sample.metric === 'edit')).toHaveLength(moves.length);
+
+    // A fifth of the opens read the hub, whole: its Team as the first 20 links and the total.
+    const hubOpens = calls.filter(
+      (call) => call.procedure === 'get' && (call.input as { ids: string[] }).ids[0] === hub.model.companyId,
+    );
+    expect(hubOpens.length).toBeGreaterThan(20);
+    expect(hubOpens.length).toBeLessThan(60);
+    expect(hubOpens.every((call) => (call.input as { attributeIds?: unknown }).attributeIds === undefined)).toBe(true);
+    expect(samples.filter((sample) => sample.hub === 'open' && sample.metric === 'open')).toHaveLength(hubOpens.length);
+
+    // The renames swap between two names, on the hub itself.
+    const renames = writes.filter((write) => write.recordId === hub.model.companyId);
+    expect(renames.map((write) => write.values[hub.model.nameAttributeId]?.value)).toEqual([...HUB_NAMES]);
+    expect(samples.filter((sample) => sample.hub === 'edit')).toHaveLength(2);
   });
 
   it('lets the live client see what it holds, refetch held records and reread its window', async () => {
