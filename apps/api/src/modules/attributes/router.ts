@@ -31,6 +31,7 @@ export const attributesRouter = member.attributes.router({
           isUnique: input.isUnique,
           config: input.config,
           defaultValue: input.defaultValue,
+          options: input.options,
         },
         hooks,
       ),

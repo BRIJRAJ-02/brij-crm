@@ -80,6 +80,24 @@ async function outboxOf(workspaceId: string): Promise<OutboxRow[]> {
 
 type Member = Awaited<ReturnType<typeof memberWithWorkspace>>;
 
+/** A select attribute "Tier" on People with two options, made with them in one write (one definitions row). */
+async function tierOn(m: Member): Promise<{ readonly id: string; readonly options: readonly string[] }> {
+  const options = [newId(), newId()];
+  const made = await m.client.attributes.create({
+    workspace: m.slug,
+    objectId: m.people.id,
+    id: newId(),
+    title: 'Tier',
+    type: 'select',
+    options: [
+      { id: options[0] ?? '', label: 'Silver', hue: 'gray' },
+      { id: options[1] ?? '', label: 'Platinum', hue: 'blue' },
+    ],
+    mutationId: newId(),
+  });
+  return { id: made.id, options };
+}
+
 /**
  * Each write procedure, called once through the real app: what it should
  * store in the outbox (one row per object it touched), given the member's
@@ -200,6 +218,50 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'definitions', object_id: m.people.id, attribute_ids: [attributeId], mutation_id: mutationId },
     ];
   },
+  // Option writes (spec 0012, milestone 3): one definitions row for the attribute's object, naming the attribute.
+  'options.create': async (m, mutationId) => {
+    const tier = await tierOn(m);
+    await m.client.options.create({ workspace: m.slug, attributeId: tier.id, id: newId(), label: 'Gold', mutationId });
+    return [
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: [tier.id] },
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: [tier.id], mutation_id: mutationId },
+    ];
+  },
+  'options.update': async (m, mutationId) => {
+    const tier = await tierOn(m);
+    await m.client.options.update({ workspace: m.slug, optionId: tier.options[0] ?? '', label: 'Bronze', mutationId });
+    return [
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: [tier.id] },
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: [tier.id], mutation_id: mutationId },
+    ];
+  },
+  'options.reorder': async (m, mutationId) => {
+    const tier = await tierOn(m);
+    await m.client.options.reorder({ workspace: m.slug, optionId: tier.options[1] ?? '', position: 0, mutationId });
+    return [
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: [tier.id] },
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: [tier.id], mutation_id: mutationId },
+    ];
+  },
+  'options.archive': async (m, mutationId) => {
+    const tier = await tierOn(m);
+    await m.client.options.archive({ workspace: m.slug, optionId: tier.options[0] ?? '', mutationId });
+    return [
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: [tier.id] },
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: [tier.id], mutation_id: mutationId },
+    ];
+  },
+  'options.restore': async (m, mutationId) => {
+    const tier = await tierOn(m);
+    const optionId = tier.options[0] ?? '';
+    await m.client.options.archive({ workspace: m.slug, optionId, mutationId: newId() });
+    await m.client.options.restore({ workspace: m.slug, optionId, mutationId });
+    return [
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: [tier.id] },
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: [tier.id] },
+      { kind: 'definitions', object_id: m.people.id, attribute_ids: [tier.id], mutation_id: mutationId },
+    ];
+  },
   // Object writes (spec 0012): one definitions row naming the object, no attributes (the object itself changed).
   'objects.create': async (m, mutationId) => {
     const made = await m.client.objects.create({
@@ -265,6 +327,11 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'jobs.cancel': 2,
   'jobs.confirm': 2,
   'attributes.restore': 2,
+  'options.create': 2,
+  'options.update': 2,
+  'options.reorder': 2,
+  'options.archive': 2,
+  'options.restore': 3,
 };
 
 describe('the one write path', () => {
