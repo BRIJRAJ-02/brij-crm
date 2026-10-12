@@ -1,6 +1,6 @@
-// An object's attributes as the People table reads and adds them (spec 0005):
-// the definitions that make its columns, and "Add attribute", whose API name
-// the server derives from the title.
+// An object's attributes as the tables read them and settings shape them
+// (spec 0005; spec 0012): the definitions that make the columns, and the
+// writes that create, edit, move, archive and restore them.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { AttributeDefault } from './values/attribute-config.ts';
@@ -81,66 +81,123 @@ export const ListAttributesInput = WorkspaceScoped.extend({
 /** Which object's attributes to read. */
 export type ListAttributesInput = z.infer<typeof ListAttributesInput>;
 
-/** The types "Add attribute" offers in the core loop; select, status, currency and relations come with #13. */
-export const CreatableAttributeType = z.enum([
+/**
+ * The attribute types the type picker makes (spec 0012, AC-228): the types
+ * behind `PICKER_TYPES`, Multi select being a `select` with `isMulti`, Link a
+ * `url` and Member an `actor_reference`. Record references are made only
+ * through a relationship (#15).
+ */
+export const PickerAttributeType = z.enum([
   'text',
   'long_text',
   'number',
+  'currency',
   'date',
   'checkbox',
-  'email',
-  'url',
+  'select',
+  'status',
   'rating',
+  'email',
+  'phone',
+  'url',
+  'location',
+  'actor_reference',
 ]);
-/** A type "Add attribute" offers. */
-export type CreatableAttributeType = z.infer<typeof CreatableAttributeType>;
+/** An attribute type the picker makes. */
+export type PickerAttributeType = z.infer<typeof PickerAttributeType>;
+
+/** An attribute's title: 1 to 100 characters, trimmed. */
+const AttributeTitle = z.string().trim().min(1, 'Name the attribute.').max(100, 'Use at most 100 characters.');
+
+/** An attribute's description: at most 500 characters (spec 0012). */
+const AttributeDescription = z.string().max(500, 'Keep the description to 500 characters.');
 
 /**
- * Adding an attribute to an object. The server derives its API name from
- * `title` (`attributeSlugFrom`). `mutationId` is a uuid the browser mints for
- * this write, echoed in its change event.
+ * A new attribute (spec 0012, AC-229). `id` is a UUID v7 the browser mints
+ * and the retry key: the same request again answers the attribute already
+ * made. `apiSlug` is derived from `title` (`toApiSlug`) when absent; the
+ * engine checks its shape (`CONFIG_INVALID` on `apiSlug`). `isMulti` makes a
+ * Multi select, or allows several members, emails or phones. `config` and
+ * `defaultValue` are checked by the type's own schemas. `mutationId` is the
+ * write's own uuid, echoed in its event.
  */
 export const CreateAttributeInput = WorkspaceScoped.extend({
   objectId: z.uuid(),
-  title: z.string().trim().min(1, 'Name the attribute.').max(100, 'Use at most 100 characters.'),
-  type: CreatableAttributeType,
+  id: z.uuid({ version: 'v7', message: 'The attribute id must be a UUID v7.' }),
+  title: AttributeTitle,
+  type: PickerAttributeType,
+  apiSlug: z.string().max(100).optional(),
+  description: AttributeDescription.optional(),
+  isMulti: z.boolean().optional(),
+  isRequired: z.boolean().optional(),
+  isUnique: z.boolean().optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+  defaultValue: AttributeDefault.optional(),
   mutationId: z.uuid(),
 });
-/** Adding an attribute to an object. */
+/** A new attribute. */
 export type CreateAttributeInput = z.infer<typeof CreateAttributeInput>;
 
-/** The longest API name an attribute may have (the engine's rule). */
-const MAX_SLUG = 63;
+/**
+ * An attribute's settings, changed (spec 0012, AC-231). Its type, its
+ * multiple setting and its API name never change here (#14 changes types).
+ * `description` and `defaultValue` take `null` to clear.
+ */
+export const UpdateAttributeInput = WorkspaceScoped.extend({
+  attributeId: z.uuid(),
+  title: AttributeTitle.optional(),
+  description: AttributeDescription.nullable().optional(),
+  isRequired: z.boolean().optional(),
+  isUnique: z.boolean().optional(),
+  config: z.record(z.string(), z.unknown()).optional(),
+  defaultValue: AttributeDefault.nullable().optional(),
+  mutationId: z.uuid(),
+});
+/** An attribute's settings, changed. */
+export type UpdateAttributeInput = z.infer<typeof UpdateAttributeInput>;
 
 /**
- * An attribute's API name from its title (spec 0005, value sourcing): accents
- * dropped, lowercased, runs of letters and digits joined by `_`, at most 63
- * characters. A title with no letter or digit left gives `attribute`, and one
- * that starts with a digit gets `attribute_` in front, since an API name
- * starts with a letter. "Job title" gives `job_title`, "Café" gives `cafe`,
- * "2026 goals" gives `attribute_2026_goals`.
+ * An attribute moved to `position` among its object's own attributes,
+ * archived ones counted, system ones never (spec 0012, AC-232).
  */
-export function attributeSlugFrom(title: string): string {
-  const words = title
-    .normalize('NFKD')
-    .replaceAll(/\p{M}/gu, '')
-    .toLowerCase()
-    .match(/[a-z0-9]+/g);
-  const joined = (words ?? []).join('_');
-  const slug = joined === '' ? 'attribute' : /^[0-9]/.test(joined) ? `attribute_${joined}` : joined;
-  return slug.slice(0, MAX_SLUG).replace(/_+$/, '');
-}
+export const ReorderAttributeInput = WorkspaceScoped.extend({
+  attributeId: z.uuid(),
+  position: z.number().int().min(0),
+  mutationId: z.uuid(),
+});
+/** An attribute moved in its object's order. */
+export type ReorderAttributeInput = z.infer<typeof ReorderAttributeInput>;
+
+/** One attribute to archive or restore (spec 0012, AC-233). */
+export const AttributeWriteInput = WorkspaceScoped.extend({
+  attributeId: z.uuid(),
+  mutationId: z.uuid(),
+});
+/** One attribute to archive or restore. */
+export type AttributeWriteInput = z.infer<typeof AttributeWriteInput>;
 
 /**
  * An object's attributes. `list` answers the live ones in position order
  * (system attributes first, marked), and the archived ones too with
- * `includeArchived`. `create` waits for the server and
- * refuses `SLUG_TAKEN` on the `title` field when the derived API name is
- * taken, `LIMIT_REACHED` when the object is full, and `CONFIG_INVALID`.
- * Repeating a `create` whose response was lost answers the attribute it made.
- * An unknown object is 404 `NOT_FOUND`, like a workspace you're not in.
+ * `includeArchived`. Every write needs `schema.manage` (403 `FORBIDDEN`),
+ * waits for the server and stores one `definitions` event per object it
+ * touched. `create` refuses `SLUG_TAKEN` (on `apiSlug`), `CONFIG_INVALID`
+ * (on its field when it names one), `LIMIT_REACHED` and `ID_TAKEN`;
+ * repeating a `create` whose answer was lost answers the attribute it made.
+ * `update` refuses `UNIQUE_HAS_DUPLICATES`, `CONFIG_INVALID` and
+ * `ATTRIBUTE_READ_ONLY` (a system attribute). `reorder` answers the object's
+ * attributes, archived ones included, in their new order. `archive` and
+ * `restore` act on both ends of a relationship and answer every definition
+ * they changed; `restore` refuses `NOT_FOUND` ("Restore <Plural> first.")
+ * while the far end's object is archived and `UNIQUE_HAS_DUPLICATES`. An
+ * unknown or hidden object or attribute is 404 `NOT_FOUND`, like a
+ * workspace you're not in.
  */
 export const attributesContract = {
   list: oc.input(ListAttributesInput).output(z.array(AttributeDefinition)),
   create: oc.input(CreateAttributeInput).output(AttributeDefinition),
+  update: oc.input(UpdateAttributeInput).output(AttributeDefinition),
+  reorder: oc.input(ReorderAttributeInput).output(z.array(AttributeDefinition)),
+  archive: oc.input(AttributeWriteInput).output(z.array(AttributeDefinition)),
+  restore: oc.input(AttributeWriteInput).output(z.array(AttributeDefinition)),
 };
