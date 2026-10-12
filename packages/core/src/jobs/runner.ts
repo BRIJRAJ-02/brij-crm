@@ -345,7 +345,7 @@ export function createRunner(deps: RunnerDeps): Runner {
 
   /** The refused items grouped by code, each with its count and first ids by position (AC-105). */
   async function refusalGroups(tx: WorkspaceTx, row: Pick<JobRow, 'workspaceId' | 'id'>) {
-    // Counted per code from the index, then each code's first ids by position read in order from it (0031), so a
+    // Counted per code from the index, then each code's first ids by position read in order from it (0030), so a
     // job with a million refusals never sorts them all to keep 20.
     const result = await tx.execute<{ code: string; count: number; item_ids: string[] }>(sql`
       select coalesce(g.code, '') as code, g.count,
