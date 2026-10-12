@@ -1,6 +1,7 @@
 /** Settings' copy (spec 0012): the frame, Objects, the new object dialog, an object's tabs and the archive confirm. */
 export const strings = {
   settings: 'Settings',
+  loading: 'Loading',
   /** The settings navigation's entries. */
   objects: 'Objects',
   objectsDescription: 'Shape the records your workspace keeps.',
@@ -34,7 +35,13 @@ export const strings = {
   archivedObjects: 'Archived objects',
   noLiveObjects: 'No live objects',
   noLiveObjectsText: 'Restore one below or create a new one.',
-  noArchived: 'Nothing is archived.',
+  noArchived: 'Nothing is archived',
+  noArchivedText: 'Archived objects show here, with their records kept.',
+  noLiveObjectsMemberText: 'A workspace owner or admin can restore one or create a new one.',
+  moving: 'Moving',
+  /** A failed move, archive or restore: what failed, then why in the server's words. */
+  moveFailed: (plural: string, why: string) => `Couldn’t move ${plural}. ${why}`,
+  restoreFailed: (plural: string, why: string) => `Couldn’t restore ${plural}. ${why}`,
   readOnlyNote: 'Only workspace owners and admins can change objects and attributes.',
   loadFailed: 'Couldn’t load the objects',
   loadFailedObject: 'Couldn’t load this object',
@@ -80,12 +87,14 @@ export const strings = {
   dangerRestoreText: 'It comes back to the sidebar at its old place, with everything it held.',
   /** The archive confirm (spec 0012, screens). */
   confirmTitle: (plural: string) => `Archive ${plural}?`,
-  confirmText: (records: string, count: number) =>
-    count === 0
-      ? 'It leaves the sidebar. It holds no records yet. Relationship fields that point to it are hidden until you restore it.'
-      : count === 1
-        ? 'It leaves the sidebar and its 1 record is kept. Relationship fields that point to it are hidden until you restore it.'
-        : `It leaves the sidebar and its ${records} records are kept. Relationship fields that point to it are hidden until you restore it.`,
+  confirmText: (records: string, count: number, atLeast: boolean) =>
+    atLeast
+      ? `It leaves the sidebar and its records, at least ${records} of them, are kept. Relationship fields that point to it are hidden until you restore it.`
+      : count === 0
+        ? 'It leaves the sidebar. It holds no records yet. Relationship fields that point to it are hidden until you restore it.'
+        : count === 1
+          ? 'It leaves the sidebar and its 1 record is kept. Relationship fields that point to it are hidden until you restore it.'
+          : `It leaves the sidebar and its ${records} records are kept. Relationship fields that point to it are hidden until you restore it.`,
   confirmCounting:
     'It leaves the sidebar and its records are kept. Relationship fields that point to it are hidden until you restore it.',
   archiving: 'Archiving',

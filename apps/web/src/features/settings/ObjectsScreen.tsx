@@ -2,7 +2,7 @@
 // Purpose: Settings, Objects: every object, standard and custom, in the workspace's order, and the archived ones.
 // Main task: owners and admins create, reorder (drag, or Move up and down), archive and restore objects, or open one.
 // Leaves out: an object's attributes and names (its own page), the schema map (#56) and usage beyond the meter.
-import type { ObjectSummary, Usage } from '@crm/data';
+import { isDataError, type ObjectSummary, type Usage } from '@crm/data';
 import {
   Badge,
   Button,
@@ -16,11 +16,13 @@ import {
   MenuTrigger,
   Meter,
   Skeleton,
+  Spinner,
   Table,
   type TableColumn,
 } from '@crm/ui';
 import { useNavigate, useParams, useRouteContext } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
+import { focusTitle } from '../navigation/focus-title.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { ArchiveObjectDialog } from './ArchiveObjectDialog.tsx';
 import { byPosition, objectSettingsHref } from './nav.ts';
@@ -37,7 +39,7 @@ export interface ObjectsScreenProps {
 }
 
 const COLUMNS: readonly TableColumn[] = [
-  { id: 'object', label: strings.objectColumn, isRowHeader: true },
+  { id: 'object', label: strings.objectColumn, isRowHeader: true, isInline: true },
   { id: 'kind', label: strings.kindColumn },
   { id: 'attributes', label: strings.attributesColumn, align: 'end' },
   { id: 'actions', label: strings.actionsColumn, isLabelHidden: true, align: 'end' },
@@ -45,11 +47,15 @@ const COLUMNS: readonly TableColumn[] = [
 
 const number = (value: number) => new Intl.NumberFormat().format(value);
 
+/** The server's words for a failure, or the plain fallback. */
+const why = (error: unknown) => (isDataError(error) ? error.message : strings.somethingWrong);
+
 /** An object's tile and plural name, as the sidebar shows it. */
 function ObjectName({ object }: { readonly object: ObjectSummary }) {
   return (
     <>
-      <Icon name={object.icon} tile={object.hue} /> {object.pluralName}
+      <Icon name={object.icon} tile={object.hue} />
+      {object.pluralName}
     </>
   );
 }
@@ -81,9 +87,9 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
         const place = order.findIndex((each) => each.id === object.id) + 1;
         toasts.toast({ tone: 'success', message: strings.moved(object.pluralName, place, order.length) });
       },
-      () => {
+      (error: unknown) => {
         setMoving(false);
-        toasts.toast({ tone: 'danger', message: strings.somethingWrong });
+        toasts.toast({ tone: 'danger', message: strings.moveFailed(object.pluralName, why(error)) });
       },
     );
   };
@@ -101,10 +107,11 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
       () => {
         setRestoring(undefined);
         toasts.toast({ tone: 'success', message: strings.restoredToast(object.pluralName) });
+        focusTitle();
       },
-      () => {
+      (error: unknown) => {
         setRestoring(undefined);
-        toasts.toast({ tone: 'danger', message: strings.somethingWrong });
+        toasts.toast({ tone: 'danger', message: strings.restoreFailed(object.pluralName, why(error)) });
       },
     );
   };
@@ -184,6 +191,23 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
     }
   };
 
+  // The live objects' table: the same for everyone, with handles only for those who may move them.
+  const liveTable = {
+    label: strings.objects,
+    columns: COLUMNS,
+    rows: live,
+    getRowId: (object: ObjectSummary) => object.id,
+    renderCell: liveCell,
+    onRowAction: (id: string) => {
+      const object = live.find((each) => each.id === id);
+      if (object !== undefined) open(object);
+    },
+    emptyState: (
+      <EmptyState title={strings.noLiveObjects}>
+        {canManage ? strings.noLiveObjectsText : strings.noLiveObjectsMemberText}
+      </EmptyState>
+    ),
+  };
   const meter = usage.customObjects;
   return (
     <SettingsPage
@@ -193,9 +217,13 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
       {...(canManage
         ? {
             actions: (
-              <Button variant="primary" icon="plus" onPress={() => setCreating(true)}>
-                {strings.newObject}
-              </Button>
+              <>
+                {/* A move waits for the server (definition writes are never optimistic): say it is under way. */}
+                {isMoving && <Spinner label={strings.moving} />}
+                <Button variant="primary" icon="plus" onPress={() => setCreating(true)}>
+                  {strings.newObject}
+                </Button>
+              </>
             ),
           }
         : {})}
@@ -204,34 +232,24 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
         <Meter label={strings.customObjects} value={meter.used} maxValue={meter.limit} />
       )}
       {!canManage && <Callout>{strings.readOnlyNote}</Callout>}
-      <Table
-        label={strings.objects}
-        columns={COLUMNS}
-        rows={live}
-        getRowId={(object) => object.id}
-        getRowLabel={(object) => object.pluralName}
-        renderCell={liveCell}
-        onRowAction={(id) => {
-          const object = live.find((each) => each.id === id);
-          if (object !== undefined) open(object);
-        }}
-        {...(canManage
-          ? {
-              onReorder: (id: string, targetId: string, position: 'before' | 'after') => {
-                const object = all.find((each) => each.id === id);
-                const target = all.find((each) => each.id === targetId);
-                if (object === undefined || target === undefined) return;
-                const rest = all.filter((each) => each.id !== id);
-                const at = rest.indexOf(target) + (position === 'after' ? 1 : 0);
-                moveTo(object, at);
-              },
-            }
-          : {})}
-        emptyState={<EmptyState title={strings.noLiveObjects}>{strings.noLiveObjectsText}</EmptyState>}
-      />
+      {canManage ? (
+        <Table
+          {...liveTable}
+          getRowLabel={(object) => object.pluralName}
+          onReorder={(id, targetId, position) => {
+            const object = all.find((each) => each.id === id);
+            const target = all.find((each) => each.id === targetId);
+            if (object === undefined || target === undefined) return;
+            const rest = all.filter((each) => each.id !== id);
+            moveTo(object, rest.indexOf(target) + (position === 'after' ? 1 : 0));
+          }}
+        />
+      ) : (
+        <Table {...liveTable} />
+      )}
       <Disclosure title={strings.archived} count={archived.length}>
         {archived.length === 0 ? (
-          <EmptyState title={strings.noArchived}>{strings.noLiveObjectsText}</EmptyState>
+          <EmptyState title={strings.noArchived}>{strings.noArchivedText}</EmptyState>
         ) : (
           <Table
             label={strings.archivedObjects}
@@ -266,6 +284,8 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
         onArchived={(object) => {
           setArchiving(undefined);
           toasts.toast({ tone: 'success', message: strings.archivedToast(object.pluralName) });
+          // Its row left the live table, and the menu that opened the confirm with it.
+          focusTitle();
         }}
       />
     </SettingsPage>
@@ -275,13 +295,15 @@ export function ObjectsScreen({ slug, objects, usage }: ObjectsScreenProps) {
 /** Settings, Objects while it loads: the header, a meter's place and skeleton rows (AC-247). */
 export function ObjectsPending() {
   const { slug = '' } = useParams({ strict: false });
+  // The meter's place only for those who get a meter, so nothing moves when the page arrives.
+  const canManage = useCan('schema.manage');
   return (
     <SettingsPage
       title={strings.objects}
       crumbs={settingsCrumbs(slug, 'objects')}
       description={strings.objectsDescription}
     >
-      <Skeleton width="long" />
+      {canManage && <Skeleton width="long" />}
       <Table
         label={strings.objects}
         columns={COLUMNS}

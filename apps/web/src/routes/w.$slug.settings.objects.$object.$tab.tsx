@@ -1,8 +1,8 @@
 import { isDataError } from '@crm/data';
 import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { isObjectTab } from '../features/settings/nav.ts';
-import { ObjectSettingsScreen } from '../features/settings/ObjectSettingsScreen.tsx';
-import { SettingsFailed, SettingsMissing, SettingsPage } from '../features/settings/SettingsPage.tsx';
+import { ObjectSettingsPending, ObjectSettingsScreen } from '../features/settings/ObjectSettingsScreen.tsx';
+import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPage.tsx';
 import { strings } from '../features/settings/strings.ts';
 
 // One object's settings tab (spec 0012, screens), by the object's API name, so
@@ -25,11 +25,7 @@ export const Route = createFileRoute('/w/$slug/settings/objects/$object/$tab')({
         : undefined;
     return { page: { object, tab: params.tab, attributes } };
   },
-  pendingComponent: () => (
-    <SettingsPage title={strings.objects} isLoading>
-      {null}
-    </SettingsPage>
-  ),
+  pendingComponent: ObjectSettingsPending,
   errorComponent: ObjectError,
   component: ObjectSettingsRoute,
 });

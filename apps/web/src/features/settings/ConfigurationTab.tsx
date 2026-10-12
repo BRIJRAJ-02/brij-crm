@@ -2,10 +2,11 @@
 // Purpose: an object's Configuration tab: its names and look, its API name and id, and archiving it.
 // Main task: owners and admins rename or restyle the object and Save; or archive (or restore) it from the danger zone.
 // Leaves out: changing the API name (never, AC-224) and the attributes (the Attributes tab).
-import type { Hue, ObjectIcon, ObjectSummary } from '@crm/data';
+import { isDataError, type Hue, type ObjectIcon, type ObjectSummary } from '@crm/data';
 import { Button, Callout, Card, CopyButton, Field, Form, type FormRefusal, SettingsStack } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useId, useState } from 'react';
+import { focusTitle } from '../navigation/focus-title.ts';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { ArchiveObjectDialog } from './ArchiveObjectDialog.tsx';
 import { ObjectHueField, ObjectIconButton } from './ObjectLookFields.tsx';
@@ -89,10 +90,13 @@ export function ConfigurationTab({ slug, object }: ConfigurationTabProps) {
       () => {
         setRestoring(false);
         toasts.toast({ tone: 'success', message: strings.restoredToast(object.pluralName) });
+        // The Restore button gave way to Archive.
+        focusTitle();
       },
-      () => {
+      (error: unknown) => {
         setRestoring(false);
-        toasts.toast({ tone: 'danger', message: strings.somethingWrong });
+        const why = isDataError(error) ? error.message : strings.somethingWrong;
+        toasts.toast({ tone: 'danger', message: strings.restoreFailed(object.pluralName, why) });
       },
     );
   };
@@ -196,6 +200,8 @@ export function ConfigurationTab({ slug, object }: ConfigurationTabProps) {
         onArchived={(archived) => {
           setArchiving(false);
           toasts.toast({ tone: 'success', message: strings.archivedToast(archived.pluralName) });
+          // The Archive button gave way to Restore.
+          focusTitle();
         }}
       />
     </SettingsStack>

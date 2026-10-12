@@ -66,5 +66,5 @@ export function ObjectHueField({
   readonly onChange: (hue: Hue) => void;
   readonly isReadOnly?: boolean;
 }) {
-  return <HuePicker label={strings.colour} value={hue} onChange={onChange} isDisabled={isReadOnly} isLabelShown />;
+  return <HuePicker label={strings.colour} value={hue} onChange={onChange} isReadOnly={isReadOnly} isLabelShown />;
 }

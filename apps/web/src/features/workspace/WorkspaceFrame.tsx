@@ -127,7 +127,7 @@ export function WorkspaceFrame({
                   <MenuItem id="sign-out">{strings.signOut}</MenuItem>
                 </MenuSection>
               )}
-              {/* The shortcut list, also on ?, so it can be found with the pointer too. Sign out stays first. */}
+              {/* The shortcut list, also on ?, so it can be found with the pointer too. */}
               <MenuItem id="shortcuts" kbd="?">
                 {strings.keyboardShortcuts}
               </MenuItem>

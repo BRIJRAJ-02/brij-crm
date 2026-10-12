@@ -17,7 +17,7 @@ import {
   type TableColumn,
   SettingsStack,
 } from '@crm/ui';
-import { useNavigate } from '@tanstack/react-router';
+import { useNavigate, useParams } from '@tanstack/react-router';
 import { ConfigurationTab } from './ConfigurationTab.tsx';
 import { isObjectTab, objectSettingsHref, type ObjectTab } from './nav.ts';
 import { settingsCrumbs, SettingsPage } from './SettingsPage.tsx';
@@ -76,9 +76,9 @@ export function ObjectSettingsScreen({ slug, object, tab, attributes }: ObjectSe
 }
 
 const COLUMNS: readonly TableColumn[] = [
-  { id: 'title', label: strings.titleColumn, isRowHeader: true },
+  { id: 'title', label: strings.titleColumn, isRowHeader: true, isInline: true },
   { id: 'type', label: strings.typeColumn },
-  { id: 'rules', label: strings.rulesColumn },
+  { id: 'rules', label: strings.rulesColumn, isInline: true },
 ];
 
 /** One attribute's row: its type's icon and its title, the type's label, and its rules as badges. */
@@ -87,7 +87,8 @@ function attributeCell(attribute: AttributeDefinition, column: string) {
     case 'title':
       return (
         <>
-          <Icon name={fieldTypeOf(attribute.type).icon} size="sm" tone="muted" /> {attribute.title}
+          <Icon name={fieldTypeOf(attribute.type).icon} size="sm" tone="muted" />
+          {attribute.title}
         </>
       );
     case 'type':
@@ -144,5 +145,51 @@ function AttributesTab({
         />
       </Card>
     </SettingsStack>
+  );
+}
+
+/**
+ * An object's settings while they load (AC-247): the trail, the header's and
+ * the tabs' places, and skeleton rows where the tab's body goes, so nothing
+ * jumps when the page arrives.
+ */
+export function ObjectSettingsPending() {
+  const { slug = '', tab = 'attributes' } = useParams({ strict: false });
+  return (
+    <SettingsPage title={strings.loading} crumbs={settingsCrumbs(slug, 'object')} isLoading>
+      <Tabs
+        label={strings.loading}
+        selectedKey={isObjectTab(tab) ? tab : 'attributes'}
+        tabs={[
+          { id: 'attributes', label: strings.attributesTab, isDisabled: true },
+          { id: 'configuration', label: strings.configurationTab, isDisabled: true },
+        ]}
+      >
+        <TabPanel id="attributes">
+          <SettingsStack>
+            <Table
+              label={strings.loading}
+              columns={COLUMNS}
+              rows={[]}
+              getRowId={() => ''}
+              renderCell={() => null}
+              isLoading
+            />
+          </SettingsStack>
+        </TabPanel>
+        <TabPanel id="configuration">
+          <SettingsStack>
+            <Table
+              label={strings.loading}
+              columns={COLUMNS}
+              rows={[]}
+              getRowId={() => ''}
+              renderCell={() => null}
+              isLoading
+            />
+          </SettingsStack>
+        </TabPanel>
+      </Tabs>
+    </SettingsPage>
   );
 }

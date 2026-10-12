@@ -45,9 +45,9 @@ const LIST_TYPES: readonly string[] = ['email', 'phone', 'url', 'domain'];
  * a blur added one), and its label says one ("Email address").
  */
 function askedFor(definition: AttributeDefinition) {
-  // Required is checked on Create, never as focus leaves an empty field: a message appearing on blur pushed
-  // "Add more fields" and Create down under the pointer on their way to being pressed.
-  const attribute = { ...toFieldAttribute(definition), isRequired: false };
+  // Required is checked on Create, never as focus leaves an empty field (a message appearing on blur pushed
+  // "Add more fields" and Create down under the pointer); the field still reads as required.
+  const attribute = { ...toFieldAttribute(definition), isRequiredOnSubmit: true };
   if (!LIST_TYPES.includes(definition.type)) return attribute;
   const single = { ...attribute, allowMultiple: false };
   return definition.type === 'email' && definition.isMulti ? { ...single, name: strings.emailAddress } : single;

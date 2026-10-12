@@ -46,6 +46,16 @@ describe('focusPage', () => {
     expect(verify.focused).toEqual(['main input[autocomplete="one-time-code"]']);
   });
 
+  it('leaves focus in a tab list, where the arrow keys chose a tab that is its own address', () => {
+    const tabs = fakeDocument(page);
+    const inTabList = { closest: (selector: string) => (selector === '[role="tablist"]' ? {} : null) };
+    focusPage(
+      { ...tabs.doc, activeElement: inTabList } as unknown as Document,
+      '/w/acme/settings/objects/people/configuration',
+    );
+    expect(tabs.focused).toEqual([]);
+  });
+
   it('puts focus on the title everywhere else, and when a one field page has no field yet', () => {
     const welcome = fakeDocument(page);
     focusPage(welcome.asDocument, '/welcome');

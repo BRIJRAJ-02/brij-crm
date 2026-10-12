@@ -104,7 +104,7 @@ function NewObjectForm({ formId, objects, newId, isBusy, onBusyChange, onCreate,
       singularName: singular.trim(),
       pluralName: pluralShown.trim(),
       // Sent only when the person typed one; the server derives the same otherwise.
-      ...(apiSlug === undefined ? {} : { apiSlug: apiSlug.trim() }),
+      ...(apiSlug === undefined || apiSlug.trim() === '' ? {} : { apiSlug: apiSlug.trim() }),
       icon,
       hue,
     }).then(
@@ -155,7 +155,10 @@ function NewObjectForm({ formId, objects, newId, isBusy, onBusyChange, onCreate,
         maxLength={63}
         hint={strings.apiNameHint}
         value={slugShown}
-        onChange={setApiSlug}
+        // Emptied, it follows the plural again.
+        onChange={(next) => {
+          setApiSlug(next === '' ? undefined : next);
+        }}
       />
       <ObjectHueField hue={hue} onChange={setHue} />
     </Form>

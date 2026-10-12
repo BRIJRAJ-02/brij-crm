@@ -39,7 +39,7 @@ function ArchiveConfirm({
   isOpen,
 }: Omit<ArchiveObjectDialogProps, 'object'> & { readonly object: ObjectSummary; readonly isOpen: boolean }) {
   const [isBusy, setBusy] = useState(false);
-  const [count, setCount] = useState<number | undefined>(undefined);
+  const [count, setCount] = useState<{ readonly count: number; readonly atLeast: boolean } | undefined>(undefined);
   const [failure, setFailure] = useState<string | undefined>(undefined);
   // The count is read once; until it comes the sentence says the records are kept without a number.
   useEffect(() => {
@@ -54,7 +54,7 @@ function ArchiveConfirm({
       isCurrent = false;
     };
   }, [data, slug, object.id]);
-  const records = count === undefined ? undefined : new Intl.NumberFormat().format(count);
+  const records = count === undefined ? undefined : new Intl.NumberFormat().format(count.count);
   const archive = () => {
     if (isBusy) return;
     setBusy(true);
@@ -90,7 +90,9 @@ function ArchiveConfirm({
       }
     >
       {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
-      {records === undefined || count === undefined ? strings.confirmCounting : strings.confirmText(records, count)}
+      {records === undefined || count === undefined
+        ? strings.confirmCounting
+        : strings.confirmText(records, count.count, count.atLeast)}
     </Modal>
   );
 }

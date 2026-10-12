@@ -2,10 +2,11 @@
 // Purpose: what an archived object's address shows (spec 0012, AC-226): that it is archived, inside the frame.
 // Main task: owners and admins restore it in place; everyone can go back to the first live object.
 // Leaves out: its records (they stay, and show again once it is restored).
-import type { ObjectSummary } from '@crm/data';
+import { isDataError, type ObjectSummary } from '@crm/data';
 import { Button, EmptyState, Link, TopBar } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
+import { focusTitle } from '../navigation/focus-title.ts';
 import { objectHref, settingsHref } from './objects.ts';
 import { strings } from './strings.ts';
 import { useCan, WorkspacePage } from './WorkspacePage.tsx';
@@ -31,10 +32,12 @@ export function ArchivedObjectScreen({ slug, object, firstLive }: ArchivedObject
       () => {
         setRestoring(false);
         toasts.toast({ tone: 'success', message: strings.objectRestored(object.pluralName) });
+        // The address stays the same, so no route change moves focus: the table's title takes it.
+        focusTitle();
       },
-      () => {
+      (error: unknown) => {
         setRestoring(false);
-        toasts.toast({ tone: 'danger', message: strings.somethingWrong });
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.somethingWrong });
       },
     );
   };
