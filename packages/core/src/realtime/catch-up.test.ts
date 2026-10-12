@@ -4,7 +4,7 @@
 // audience filtering every row.
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { createDatabase, type Database } from '@crm/db';
+import { createDatabase, OUTBOX_RETENTION, type Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import type { AccessRules } from '../access/policy.ts';
 import { defineAttribute } from '../engine/definitions.ts';
@@ -17,7 +17,7 @@ import { testScope } from '../testing.ts';
 import { MAX_LIFECYCLE_IDS } from '@crm/contracts';
 import { catchUp, CATCH_UP_MAX_ROWS, createCollapse, workspaceHead } from './catch-up.ts';
 
-const { appUrl, ownerUrl } = inject('testDatabase');
+const { appUrl, ownerUrl, workerUrl } = inject('testDatabase');
 let db: Database;
 
 beforeAll(() => {
@@ -107,10 +107,24 @@ describe('catch up', () => {
     ]);
   });
 
-  it('answers reset when the rows after the watermark were pruned, but not from the oldest kept', async () => {
+  it('answers reset when the rows after the watermark were pruned (AC-89), but not from the oldest kept', async () => {
     const { scope, people, workspaceId } = await workspace();
     await rows(workspaceId, people, 0, 5);
-    await testQuery(ownerUrl, 'delete from outbox where workspace_id = $1 and seq <= 2', [workspaceId]);
+    // The first two published two days ago, so past retention; the prune takes them as the worker would.
+    await testQuery(
+      ownerUrl,
+      `update outbox set created_at = now() - interval '2 days', published_at = now() - interval '2 days'
+       where workspace_id = $1 and seq <= 2`,
+      [workspaceId],
+    );
+    await testQuery(workerUrl, `select crm_outbox_prune(now() - $1::interval, 10000)`, [OUTBOX_RETENTION]);
+    expect(
+      (
+        await testQuery<{ seq: number }>(ownerUrl, 'select min(seq)::int as seq from outbox where workspace_id = $1', [
+          workspaceId,
+        ])
+      )[0]?.seq,
+    ).toBe(3);
     expect(await catchUp(scope, { after: 0 })).toEqual({ head: 5, reset: true, events: [] });
     expect(await catchUp(scope, { after: 1 })).toEqual({ head: 5, reset: true, events: [] });
     const kept = await catchUp(scope, { after: 2 });

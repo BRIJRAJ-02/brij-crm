@@ -124,6 +124,8 @@ interface RelayOptions extends Partial<
     | 'pollScheduleMs'
     | 'dormantAfterMs'
     | 'pruneEveryMs'
+    | 'prune'
+    | 'pruneBatch'
     | 'batch'
     | 'concurrency'
     | 'retryMs'
@@ -174,6 +176,8 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
     pollScheduleMs: options.pollScheduleMs ?? [100],
     dormantAfterMs: options.dormantAfterMs ?? 60_000,
     ...(options.pruneEveryMs === undefined ? {} : { pruneEveryMs: options.pruneEveryMs }),
+    ...(options.prune === undefined ? {} : { prune: options.prune }),
+    ...(options.pruneBatch === undefined ? {} : { pruneBatch: options.pruneBatch }),
     ...(options.batch === undefined ? {} : { batch: options.batch }),
     ...(options.concurrency === undefined ? {} : { concurrency: options.concurrency }),
     retryMs: options.retryMs ?? 50,
@@ -598,43 +602,133 @@ describe('the relay', () => {
     await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1]);
   });
 
-  it('prunes rows published more than a day ago while active, and never while dormant', async () => {
-    const centrifugo = await fakeCentrifugo();
-    servers.push(centrifugo);
-    const workspaceId = await workspace();
-    await events(workspaceId, [1, 2]);
-    await testQuery(
-      ownerUrl,
-      `update outbox set published_at = now() - interval '25 hours' where workspace_id = $1 and seq = 1`,
-      [workspaceId],
-    );
-    const prunes: number[] = [];
-    const counting = (reader: OutboxReader): OutboxReader => ({
-      ...reader,
-      prune: (max) => {
-        prunes.push(Date.now());
-        return reader.prune(max);
-      },
-    });
-    const { relay } = relayTo(centrifugo.url, {
-      pollScheduleMs: [50],
-      dormantAfterMs: 500,
-      pruneEveryMs: 100,
-      wrap: counting,
-    });
-    const left = async () =>
+  describe('pruning (spec 0007, milestone 3, AC-89, AC-90)', () => {
+    /** `count` rows made and published two days ago, numbered from `from`: past retention. */
+    async function pastRetention(workspaceId: string, from: number, count: number): Promise<void> {
+      await testQuery(
+        ownerUrl,
+        `insert into outbox (workspace_id, seq, kind, object_id, created_at, published_at)
+         select $1, $2::bigint + n - 1, 'records', (select id from objects where workspace_id = $1),
+           now() - interval '2 days', now() - interval '2 days'
+         from generate_series(1, $3::int) n`,
+        [workspaceId, from, count],
+      );
+    }
+    const left = async (workspaceId: string) =>
       (
-        await testQuery<{ seq: number }>(ownerUrl, 'select seq::int as seq from outbox where workspace_id = $1', [
-          workspaceId,
-        ])
+        await testQuery<{ seq: number }>(
+          ownerUrl,
+          'select seq::int as seq from outbox where workspace_id = $1 order by seq',
+          [workspaceId],
+        )
       ).map((row) => row.seq);
-    await expect.poll(left, WAIT).toEqual([2]);
-    expect(centrifugo.seqs(workspaceId)).toEqual([2]);
-    await expect.poll(() => relay.mode(), WAIT).toBe('dormant');
-    const whileActive = prunes.length;
-    expect(whileActive).toBeGreaterThanOrEqual(2);
-    await sleep(400);
-    expect(prunes).toHaveLength(whileActive);
+
+    interface Call {
+      readonly name: 'workspaces' | 'pending' | 'advance' | 'mark' | 'prune';
+      readonly start: number;
+      end: number;
+      /** What a prune answered. */
+      pruned?: number;
+    }
+    /** Records every database call the relay makes through its reader, in order. */
+    function recorder() {
+      const calls: Call[] = [];
+      const timed = <T>(name: Call['name'], work: () => Promise<T>): Promise<T> => {
+        const call: Call = { name, start: Date.now(), end: Number.NaN };
+        calls.push(call);
+        return work().finally(() => {
+          call.end = Date.now();
+        });
+      };
+      const wrap = (reader: OutboxReader): OutboxReader => ({
+        ...reader,
+        workspaces: (max, after) => timed('workspaces', () => reader.workspaces(max, after)),
+        pending: (workspaceId, max) => timed('pending', () => reader.pending(workspaceId, max)),
+        advance: (workspaceId, upto, max) => timed('advance', () => reader.advance(workspaceId, upto, max)),
+        mark: (workspaceId, upto) => timed('mark', () => reader.mark(workspaceId, upto)),
+        prune: (max) =>
+          timed('prune', async () => {
+            const pruned = await reader.prune(max);
+            const call = calls.findLast((one) => one.name === 'prune');
+            if (call !== undefined) call.pruned = pruned;
+            return pruned;
+          }),
+      });
+      return { calls, wrap, prunes: () => calls.filter((call) => call.name === 'prune') };
+    }
+
+    it('prunes one batch after each pass while batches come back full, never two without a pass between', async () => {
+      const centrifugo = await fakeCentrifugo();
+      servers.push(centrifugo);
+      const workspaceId = await workspace();
+      await pastRetention(workspaceId, 1, 25);
+      // A row still to publish, made now: it stays, and so would everything after it.
+      await events(workspaceId, [26]);
+      const { calls, wrap, prunes } = recorder();
+      relayTo(centrifugo.url, { pollScheduleMs: [50], pruneBatch: 10, pruneEveryMs: 60_000, wrap });
+      await expect.poll(() => left(workspaceId), WAIT).toEqual([26]);
+      expect(centrifugo.seqs(workspaceId)).toEqual([26]);
+      // The round ends with a short batch (other suites' rows may share the batches, so at least three).
+      await expect.poll(() => prunes().some((call) => call.pruned !== undefined && call.pruned < 10), WAIT).toBe(true);
+      const round = prunes();
+      expect(round.length).toBeGreaterThanOrEqual(3);
+      expect(round.slice(0, -1).every((call) => call.pruned === 10)).toBe(true);
+      // Each prune comes after a call of its own pass, never first and never straight after another prune.
+      for (const [index, call] of calls.entries()) {
+        if (call.name !== 'prune') continue;
+        expect(calls[index - 1]?.name, `call ${String(index)}`).not.toBe('prune');
+        expect(index).toBeGreaterThan(0);
+      }
+      // The round is over: the next waits for pruneEveryMs (a minute here), however many passes come.
+      const polls = () => calls.filter((call) => call.name === 'workspaces').length;
+      const before = polls();
+      await sleep(500);
+      expect(polls()).toBeGreaterThan(before + 3);
+      expect(prunes()).toHaveLength(round.length);
+    });
+
+    it('starts a new round only pruneEveryMs after the last ended, never while dormant, and again after a wake', async () => {
+      const centrifugo = await fakeCentrifugo();
+      servers.push(centrifugo);
+      const workspaceId = await workspace();
+      await pastRetention(workspaceId, 1, 3);
+      const { wrap, prunes } = recorder();
+      const { relay, infos } = relayTo(centrifugo.url, {
+        pollScheduleMs: [50],
+        dormantAfterMs: 1_200,
+        pruneEveryMs: 400,
+        wrap,
+      });
+      // The first pass of the awake period starts a round, and the rows past retention go.
+      await expect.poll(() => left(workspaceId), WAIT).toEqual([]);
+      await expect.poll(() => prunes().length, WAIT).toBeGreaterThanOrEqual(2);
+      // Every batch came back short (fewer than 10,000), so each is a round of its own, 400 ms after the last.
+      const [first, second] = prunes();
+      if (first === undefined || second === undefined) throw new Error('Two prunes were seen.');
+      expect(second.start - first.end).toBeGreaterThanOrEqual(400);
+      expect(infos.some((line) => line.message === 'relay.prune' && Number(line.fields.pruned) >= 3)).toBe(true);
+      await expect.poll(() => relay.mode(), WAIT).toBe('dormant');
+      const whileAwake = prunes().length;
+      await sleep(600);
+      expect(prunes()).toHaveLength(whileAwake);
+      // A new awake period: its first pass starts a round at once.
+      relay.wake();
+      await expect.poll(() => prunes().length, { timeout: 300, interval: 10 }).toBe(whileAwake + 1);
+    });
+
+    it('never prunes when told not to (a direct login outside crm_worker)', async () => {
+      const centrifugo = await fakeCentrifugo();
+      servers.push(centrifugo);
+      const workspaceId = await workspace();
+      await pastRetention(workspaceId, 1, 2);
+      await events(workspaceId, [3]);
+      const { wrap, prunes } = recorder();
+      relayTo(centrifugo.url, { pollScheduleMs: [50], prune: false, wrap });
+      await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([3]);
+      await sleep(300);
+      expect(prunes()).toEqual([]);
+      expect(await left(workspaceId)).toEqual([1, 2, 3]);
+    });
   });
 
   it('skips a workspace whose turn hits a database error, without ending the session', async () => {

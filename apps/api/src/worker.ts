@@ -90,10 +90,16 @@ const relay =
         audiences: (workspaceId) => audiences(systemScope(db, workspaceId)),
         publishBatch: createCentrifugoPublisher(env.centrifugo).publishBatch,
         log: reportingLog,
+        // Only crm_worker may run crm_outbox_prune (spec 0007, milestone 3): on another login (where the jobs, and
+        // so the daily cleanup, are off too) the outbox keeps every row until the login moves to crm_worker_user.
+        prune: directInWorker,
       });
 if (relay === undefined) {
   log.info('Relay off: CENTRIFUGO_API_URL and CENTRIFUGO_API_KEY are unset, so no change is published');
 } else {
+  if (!directInWorker) {
+    log.warn('relay.prune.off', { reason: 'the direct login is not in crm_worker; run pnpm db:worker-login' });
+  }
   relay.start();
 }
 
