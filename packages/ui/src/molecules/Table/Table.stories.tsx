@@ -80,6 +80,18 @@ export const Empty: Story = {
   },
 };
 
+/** Rows that move (objects in settings): a handle starts each row, and a drop or a keyboard move reorders them. */
+export const Reorderable: Story = {
+  args: {
+    onReorder: fn(),
+    getRowLabel: (member: Member) => member.name,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Move Ada Lovelace' })).toBeInTheDocument();
+    await expect(canvas.getAllByRole('columnheader')).toHaveLength(6);
+  },
+};
+
 /** The first rows still loading. */
 export const Loading: Story = {
   args: { rows: [], isLoading: true },

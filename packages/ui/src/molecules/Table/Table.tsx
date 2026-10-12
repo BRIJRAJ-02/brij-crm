@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { Cell, Column, Row, Table as AriaTable, TableBody, TableHeader } from 'react-aria-components';
+import { Cell, Column, Row, Table as AriaTable, TableBody, TableHeader, useDragAndDrop } from 'react-aria-components';
+import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
@@ -33,7 +34,19 @@ export interface TableProps<T> {
   readonly isLoading?: boolean;
   /** What it shows with no rows: usually an EmptyState. */
   readonly emptyState?: ReactNode;
+  /**
+   * Rows can be moved (objects in settings): each row starts with a DragHandle,
+   * and a drop calls this with the moved row's id, the row it landed by, and
+   * on which side. Moving by keyboard is the handle's (Enter, the arrows,
+   * Enter). Without it nothing can be dragged.
+   */
+  readonly onReorder?: (id: string, targetId: string, position: 'before' | 'after') => void;
+  /** Names each row's handle for screen readers ("Move Projects"); with `onReorder`. */
+  readonly getRowLabel?: (row: T) => string;
 }
+
+/** The handle column's id, kept apart from any column the caller names. */
+const HANDLE = '__handle';
 
 const SKELETON_ROWS = 3;
 
@@ -51,21 +64,36 @@ export function Table<T>({
   onRowAction,
   isLoading = false,
   emptyState,
+  onReorder,
+  getRowLabel,
 }: TableProps<T>) {
   const showSkeleton = useDelayedLoading(isLoading);
+  const { dragAndDropHooks } = useDragAndDrop({
+    isDisabled: onReorder === undefined,
+    getItems: (keys) => [...keys].map((key) => ({ 'text/plain': String(key) })),
+    onReorder: (event) => {
+      const [moved] = [...event.keys].map(String);
+      if (moved === undefined || onReorder === undefined) return;
+      onReorder(moved, String(event.target.key), event.target.dropPosition === 'after' ? 'after' : 'before');
+    },
+  });
+  const shown: readonly TableColumn[] =
+    onReorder === undefined ? columns : [{ id: HANDLE, label: strings.reorder, isLabelHidden: true }, ...columns];
   return (
     <AriaTable
       className={styles.root}
       aria-label={label}
       {...(onRowAction === undefined ? {} : { onRowAction: (key) => onRowAction(String(key)) })}
+      {...(onReorder === undefined ? {} : { dragAndDropHooks })}
     >
-      <TableHeader className={styles.header} columns={columns}>
+      <TableHeader className={styles.header} columns={shown}>
         {(column) => (
           <Column
             id={column.id}
             isRowHeader={column.isRowHeader ?? false}
             className={styles.column}
             data-align={column.align ?? 'start'}
+            data-handle={column.id === HANDLE || undefined}
           >
             {column.isLabelHidden === true ? <VisuallyHidden>{column.label}</VisuallyHidden> : column.label}
           </Column>
@@ -88,12 +116,18 @@ export function Table<T>({
         }
       >
         {(item) => (
-          <Row id={item.id} columns={columns} className={styles.row}>
-            {(column) => (
-              <Cell className={styles.cell} data-align={column.align ?? 'start'}>
-                {renderCell(item.row, column.id)}
-              </Cell>
-            )}
+          <Row id={item.id} columns={shown} className={styles.row}>
+            {(column) =>
+              column.id === HANDLE ? (
+                <Cell className={styles.cell} data-handle>
+                  <DragHandle label={strings.move(getRowLabel?.(item.row) ?? item.id)} />
+                </Cell>
+              ) : (
+                <Cell className={styles.cell} data-align={column.align ?? 'start'}>
+                  {renderCell(item.row, column.id)}
+                </Cell>
+              )
+            }
           </Row>
         )}
       </TableBody>

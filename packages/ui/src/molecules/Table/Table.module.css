@@ -58,6 +58,22 @@
     outline: none;
   }
 
+  /* The reorder handle's column: as narrow as its grip. */
+  .column[data-handle],
+  .cell[data-handle] {
+    inline-size: var(--size-control);
+    padding-inline: var(--space-4) 0;
+  }
+
+  /* A row being dragged fades where it was; the drop line is the accent's. */
+  .row[data-dragging] {
+    opacity: var(--opacity-disabled);
+  }
+
+  .row[data-drop-target] {
+    background: var(--accent-soft);
+  }
+
   .loading {
     display: flex;
     flex-direction: column;

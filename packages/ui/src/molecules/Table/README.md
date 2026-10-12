@@ -17,14 +17,15 @@ New. Settings lists (#23, #25, #34, #35, #42) are short and need columns, a row 
 - `align="end"` for numbers and actions; `isLabelHidden` keeps an actions column's label for screen readers only.
 - `isLoading` shows skeleton rows through `useDelayedLoading`; `emptyState` shows with no rows.
 - `onRowAction` opens a row on Enter or a click.
+- `onReorder` makes rows movable (objects in settings, #13): a leading column holds each row's `DragHandle` (named by `getRowLabel`, "Move Projects"), and a drop calls `onReorder(id, targetId, 'before' | 'after')`. The screen saves the move and passes the new order back as `rows`. Pair it with Move up and Move down in a row menu, so a move is one keystroke away too. Why a variant: settings lists are short Tables, and React Aria's Table takes drag and drop hooks itself; a GridList copy of the table would have duplicated its columns, header and states.
 
 ## States
 
-Loading (skeletons), empty, rows, hover (pointer only), focus (row and cell).
+Loading (skeletons), empty, rows, hover (pointer only), focus (row and cell), reorderable (a handle per row; the dragged row fades, the row it would land by takes `accent-soft`).
 
 ## Keyboard
 
-Tab enters the table; the arrow keys move between rows and cells; Enter opens a row with `onRowAction`.
+Tab enters the table; the arrow keys move between rows and cells; Enter opens a row with `onRowAction`. With `onReorder`, Enter on a row's handle picks it up, the arrows choose where, Enter drops it and Esc puts it back.
 
 ## Differences from the artifact
 
