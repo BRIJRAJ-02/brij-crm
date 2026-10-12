@@ -1,0 +1,2 @@
+CREATE INDEX "record_links_from_ended" ON "record_links" USING btree ("workspace_id","from_record_id","relationship_id","active_until") WHERE "record_links"."active_until" is not null;--> statement-breakpoint
+CREATE INDEX "record_links_to_ended" ON "record_links" USING btree ("workspace_id","to_record_id","relationship_id","active_until") WHERE "record_links"."active_until" is not null;
