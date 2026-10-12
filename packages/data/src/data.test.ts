@@ -5,6 +5,7 @@
 import {
   contract,
   type AttributeDefinition,
+  type AttributeOption,
   type ChangeEvent,
   type JobView,
   type Me,
@@ -26,6 +27,7 @@ import {
   isDataError,
   isEditableHere,
   toFieldAttribute,
+  withPendingOptions,
   type DataError,
   type DataFault,
   type Notice,
@@ -105,7 +107,7 @@ interface Behaviour {
   attributeWrite: () => AttributeDefinition[];
   count: () => number;
   query: (position: number, limit: number) => RecordView[];
-  setValues: () => RecordView;
+  setValues: () => RecordView | Promise<RecordView>;
   get: (ids: readonly string[]) => RecordView[];
   /** The workspace's head, as the subscription token carries it. */
   head: () => number;
@@ -123,6 +125,8 @@ interface Behaviour {
   activity: (recordId: string, cursor?: string) => RecordActivity;
   /** A record in the trash (spec 0017). */
   trashed: (recordId: string) => TrashedRecord;
+  /** What every option write answers (spec 0012, milestone 3). */
+  optionWrite: () => AttributeOption;
 }
 
 const unauthenticated = () => new ORPCError('UNAUTHENTICATED', { status: 401, message: 'Sign in to continue.' });
@@ -158,9 +162,12 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     usage: () => ({ attributes: { [PEOPLE.id]: { used: 20, limit: 250 } }, optionsPerAttribute: 500 }),
     activity: notServed,
     trashed: notServed,
+    optionWrite: notServed,
     ...overrides,
   };
   const calls: string[] = [];
+  // What each option write and each one record write sent, as the server got it.
+  const sent: unknown[] = [];
   // Each write's mutation id, as sent.
   const mutationIds: string[] = [];
   const os = implement(contract);
@@ -225,6 +232,33 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         return behaviour.attributeWrite();
       }),
     },
+    options: {
+      create: os.options.create.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        sent.push(input);
+        return behaviour.optionWrite();
+      }),
+      update: os.options.update.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        sent.push(input);
+        return behaviour.optionWrite();
+      }),
+      reorder: os.options.reorder.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        sent.push(input);
+        return [behaviour.optionWrite()];
+      }),
+      archive: os.options.archive.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        sent.push(input);
+        return behaviour.optionWrite();
+      }),
+      restore: os.options.restore.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        sent.push(input);
+        return behaviour.optionWrite();
+      }),
+    },
     records: {
       query: os.records.query.handler(({ input }) => ({
         records: behaviour.query(input.position ?? 0, input.limit ?? 50),
@@ -232,9 +266,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       count: os.records.count.handler(() => ({ count: behaviour.count(), atLeast: false })),
       get: os.records.get.handler(({ input }) => behaviour.get(input.ids)),
       create: os.records.create.handler(notServed),
-      setValues: os.records.setValues.handler(({ input }) => {
+      setValues: os.records.setValues.handler(async ({ input }) => {
         mutationIds.push(input.mutationId);
-        const row = behaviour.setValues();
+        sent.push(input.values);
+        const row = await behaviour.setValues();
         const written = Object.fromEntries(
           Object.keys(input.values).flatMap((id) => (row.versions[id] === undefined ? [] : [[id, row.versions[id]]])),
         );
@@ -284,7 +319,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     }
     return new Response('Not found', { status: 404 });
   };
-  return { fetch, calls, mutationIds };
+  return { fetch, calls, mutationIds, sent };
 }
 
 function json(body: unknown, status = 200): Response {
@@ -1713,5 +1748,147 @@ describe('the record page (spec 0017)', () => {
     const missing = data.records.trashed('acme', personRow(2).id);
     await missing.ready();
     expect(missing.getSnapshot()).toEqual({ status: 'unavailable' });
+  });
+});
+
+describe('options (spec 0012, milestone 3)', () => {
+  const settled = () => new Promise((resolve) => setTimeout(resolve, 40));
+  const SILVER: AttributeOption = {
+    id: '0199a6f2-0000-7000-8000-000000000020',
+    label: 'Silver',
+    hue: 'gray',
+    position: 0,
+    isArchived: false,
+  };
+  const TIER: AttributeDefinition = {
+    ...TITLE,
+    id: '0199a6f2-0000-7000-8000-000000000021',
+    apiSlug: 'tier',
+    title: 'Tier',
+    type: 'select',
+    options: [SILVER],
+  };
+
+  it('writes an option and waits for the server, sending a target as P<N>D and reading the object again', async () => {
+    const api = fakeApi({ attributes: () => [TITLE, TIER], optionWrite: () => SILVER });
+    const reloads: string[] = [];
+    const { data } = layer(api, undefined, { onDefinitionsChange: () => reloads.push('reload') });
+    await data.attributes.list('acme', PEOPLE.id);
+    await data.options.update('acme', PEOPLE.id, SILVER.id, { label: 'Steel', targetDays: 7 });
+    await data.options.update('acme', PEOPLE.id, SILVER.id, { targetDays: null });
+    await data.options.create('acme', PEOPLE.id, TIER.id, { id: data.attributes.newId(), label: 'Gold' });
+    await data.options.reorder('acme', PEOPLE.id, SILVER.id, 1);
+    await data.options.archive('acme', PEOPLE.id, SILVER.id);
+    await data.options.restore('acme', PEOPLE.id, SILVER.id);
+    expect(api.sent[0]).toMatchObject({ optionId: SILVER.id, label: 'Steel', targetTimeInStage: 'P7D' });
+    expect(api.sent[1]).toMatchObject({ targetTimeInStage: null });
+    expect(api.sent[2]).not.toHaveProperty('hue');
+    expect(api.mutationIds).toHaveLength(6);
+    expect(reloads).toHaveLength(6);
+    // The object's list is read again after the writes.
+    await data.attributes.list('acme', PEOPLE.id);
+    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(2);
+  });
+
+  it('makes an option from a cell as one optimistic write: the label at once, newOption sent, then read again', async () => {
+    const created: { id?: string } = {};
+    // The server answers once the test has seen the cell's optimistic state.
+    let answer: () => void = () => undefined;
+    const answered = new Promise<void>((resolve) => {
+      answer = resolve;
+    });
+    const api = fakeApi({
+      attributes: () => [
+        TITLE,
+        created.id === undefined
+          ? TIER
+          : {
+              ...TIER,
+              options: [SILVER, { id: created.id, label: 'Gold', hue: 'red', position: 1, isArchived: false }],
+            },
+      ],
+      setValues: async () => {
+        await answered;
+        return { ...personRow(0), values: { ...personRow(0).values, [TIER.id]: created.id ?? null } };
+      },
+    });
+    const reloads: string[] = [];
+    const { data } = layer(api, undefined, { onDefinitionsChange: () => reloads.push('reload') });
+    const view = await data.records.view('acme', PEOPLE.id, {}, [TIER.id]);
+    const row = view.getSnapshot().source.getItem(0);
+    const making = data.records.createOption('acme', {
+      objectId: PEOPLE.id,
+      recordId: row?.id ?? '',
+      attributeId: TIER.id,
+      label: ' Gold ',
+    });
+    await settled();
+    // Shown at once: the minted id in the cell, its label and next hue pending.
+    const [pending] = data.options.pending.getSnapshot().get(`acme/${TIER.id}`) ?? [];
+    expect(pending).toMatchObject({ label: 'Gold', hue: 'red' });
+    created.id = pending?.id;
+    expect(view.getSnapshot().source.getItem(0)?.values[TIER.id]).toBe(pending?.id);
+    answer();
+    const outcome = await making;
+    expect(outcome).toMatchObject({ kind: 'done', landed: 1 });
+    expect(api.sent.at(-1)).toEqual({
+      [TIER.id]: { value: { newOption: { id: pending?.id, label: 'Gold' } } },
+    });
+    await settled();
+    // Its own definitions echo is skipped, so the object's attributes are read again here, and the pages reload.
+    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(2);
+    expect(reloads).toEqual(['reload']);
+  });
+
+  it('rolls a refused cell option back, with the reason on the cell, and leaves no pending option', async () => {
+    const api = fakeApi({
+      attributes: () => [TITLE, TIER],
+      setValues: () => {
+        throw new ORPCError('FORBIDDEN', {
+          status: 403,
+          message: 'Only workspace owners and admins can change objects and attributes.',
+        });
+      },
+    });
+    const { data } = layer(api);
+    const view = await data.records.view('acme', PEOPLE.id, {}, [TIER.id]);
+    const row = view.getSnapshot().source.getItem(0);
+    const outcome = await data.records.createOption('acme', {
+      objectId: PEOPLE.id,
+      recordId: row?.id ?? '',
+      attributeId: TIER.id,
+      label: 'Gold',
+    });
+    await settled();
+    expect(outcome).toMatchObject({ kind: 'done', landed: 0 });
+    expect(view.getSnapshot().source.getItem(0)?.values[TIER.id]).toBeUndefined();
+    expect(data.options.pending.getSnapshot().size).toBe(0);
+    expect(view.getSnapshot().cellErrors.get(`${row?.id ?? ''}:${TIER.id}`)).toBe(
+      'Only workspace owners and admins can change objects and attributes.',
+    );
+  });
+
+  it('reads a number shown as a percent from its settings', () => {
+    expect(toFieldAttribute({ ...TITLE, type: 'number', config: { display: 'percent' } }).isPercent).toBe(true);
+    expect(toFieldAttribute({ ...TITLE, type: 'number', config: { display: 'plain' } })).not.toHaveProperty(
+      'isPercent',
+    );
+  });
+
+  it('adds a cell made option to its column until the attribute lists it', () => {
+    const field = toFieldAttribute(TIER);
+    const pending = new Map([
+      [`acme/${TIER.id}`, [{ attributeId: TIER.id, id: 'new', label: 'Gold', hue: 'red' as const }]],
+    ]);
+    expect(withPendingOptions(field, 'acme', pending).options?.map((option) => option.label)).toEqual([
+      'Silver',
+      'Gold',
+    ]);
+    expect(withPendingOptions(field, 'other', pending)).toBe(field);
+    const listed = {
+      ...field,
+      options: [...(field.options ?? []), { id: 'new', label: 'Gold', hue: 'red' as const, archived: false }],
+    };
+    expect(withPendingOptions(listed, 'acme', pending)).toBe(listed);
   });
 });

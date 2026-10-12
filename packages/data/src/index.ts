@@ -7,6 +7,7 @@
 // while a screen shows a workspace (the realtime client loads with the first).
 import type {
   AttributeDefinition,
+  AttributeOption,
   PickerAttributeType,
   CreateWorkspaceInput,
   contract,
@@ -31,6 +32,8 @@ import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
 import { createLiveRouter } from './live/router.ts';
 import type { Notice } from './notice.ts';
+import { createPendingOptions } from './options.ts';
+import { nextHue } from '@crm/contracts/picker';
 import type { UndoKind } from './records/history.ts';
 import type { RecordAttributes, RecordSubscription } from './records/one.ts';
 import type {
@@ -76,7 +79,14 @@ export type { Hue, ObjectIcon } from '@crm/contracts/values';
 // The API name rule and the new object's defaults (spec 0012): plain modules with no Zod, so the dialogs share
 // the server's own functions without loading the schema library.
 export { isReservedSlug, RESERVED_SLUGS, toApiSlug } from '@crm/contracts/slugs';
-export { freeHue, PICKER_TYPES, type PickerType } from '@crm/contracts/picker';
+export { freeHue, PICKER_TYPES, STARTER_STAGES, type PickerType } from '@crm/contracts/picker';
+export {
+  MAX_PENDING_OPTIONS,
+  withPendingOptions,
+  type PendingOption,
+  type PendingOptions,
+  type PendingOptionsStore,
+} from './options.ts';
 export type { Auth, SessionUser } from './auth/auth.ts';
 export {
   dataError,
@@ -209,6 +219,41 @@ export interface NewAttribute {
   readonly isUnique?: boolean;
   readonly config?: Readonly<Record<string, unknown>>;
   readonly defaultValue?: AttributeDefaultValue;
+  /** A select's or status attribute's first options, in order (AC-230). */
+  readonly options?: readonly NewOption[];
+}
+
+/** A status stage's outcome. */
+export type OptionOutcome = 'open' | 'won' | 'lost';
+
+/**
+ * One option a new select or status attribute starts with, or a new option
+ * (spec 0012, AC-230, AC-236): its id (from `attributes.newId`), label, hue,
+ * and for a stage its outcome and target in whole days (1 to 365).
+ */
+export interface NewOption {
+  readonly id: string;
+  readonly label: string;
+  readonly hue: AttributeOption['hue'];
+  readonly outcome?: OptionOutcome;
+  readonly targetDays?: number;
+}
+
+/** What may change on an option (spec 0012, AC-236); `targetDays: null` clears a stage's target. */
+export interface OptionChanges {
+  readonly label?: string;
+  readonly hue?: AttributeOption['hue'];
+  readonly outcome?: OptionOutcome;
+  readonly targetDays?: number | null;
+}
+
+/** A stage's target in whole days as the API takes it (`P7D`). */
+const targetOf = (days: number): string => `P${String(days)}D`;
+
+/** A stage's target time (`P7D`) as whole days, or undefined for none or another shape. */
+export function targetDaysOf(targetTimeInStage: string | undefined): number | undefined {
+  const days = targetTimeInStage === undefined ? undefined : /^P(\d+)D$/.exec(targetTimeInStage)?.[1];
+  return days === undefined ? undefined : Number(days);
 }
 
 /** What settings may change on an attribute (spec 0012, AC-231); `null` clears the description or the default. */
@@ -337,6 +382,8 @@ export function createDataLayer({
   let allAttributes = new Map<string, Promise<AttributeDefinition[]>>();
   // The records layer, loaded with the first screen that shows records.
   let records: Promise<RecordsLayer> | undefined;
+  // Options a cell made, shown by their label until the attribute's own list holds them (spec 0012, AC-238).
+  const pendingOptions = createPendingOptions();
   // Records' timelines (spec 0017), loaded with the first record page.
   let activity: Promise<ActivityFeeds> | undefined;
   // Records looked up in the trash (spec 0017): a missing record's page.
@@ -389,6 +436,7 @@ export function createDataLayer({
       feeds.clear();
     });
     trashedLookups.clear();
+    pendingOptions.clear();
   };
   const reset = () => {
     forget();
@@ -994,6 +1042,88 @@ export function createDataLayer({
     }
   }
 
+  /** An option's write (spec 0012, AC-236): an attribute write of the object the option's attribute is on. */
+  const writeOption = <T>(
+    workspace: string,
+    objectId: string,
+    write: (mutationId: string, options: CallOptions) => Promise<T>,
+  ): Promise<T> => writeAttribute(workspace, write, () => [objectId]);
+
+  /** An option for the API: its target as `P<N>D`. */
+  const optionInput = (option: NewOption) => ({
+    id: option.id,
+    label: option.label,
+    hue: option.hue,
+    ...(option.outcome === undefined ? {} : { outcome: option.outcome }),
+    ...(option.targetDays === undefined ? {} : { targetTimeInStage: targetOf(option.targetDays) }),
+  });
+
+  /** An option's changes for the API: a target as `P<N>D`, or `null` to clear it. */
+  const optionChanges = (changes: OptionChanges) => ({
+    ...(changes.label === undefined ? {} : { label: changes.label }),
+    ...(changes.hue === undefined ? {} : { hue: changes.hue }),
+    ...(changes.outcome === undefined ? {} : { outcome: changes.outcome }),
+    ...(changes.targetDays === undefined
+      ? {}
+      : { targetTimeInStage: changes.targetDays === null ? null : targetOf(changes.targetDays) }),
+  });
+
+  /**
+   * Makes an option from a cell and sets it (spec 0012, AC-238): the label
+   * shows at once (a pending option, and its minted id in the cell), one
+   * `records.setValues` sends `{ newOption }`, and the server makes and sets
+   * it together or neither. Landed, the object's attributes are read again
+   * (the write's own definitions echo is skipped like every echo of this
+   * tab's) and the pages reload, which hold the option from then on. Refused,
+   * the cell rolls back, marked with why (the 500 limit, `FORBIDDEN`), and
+   * the pending option goes. Answers the edit's outcome.
+   */
+  const createOption = async (
+    workspace: string,
+    change: {
+      readonly objectId: string;
+      readonly recordId: string;
+      readonly attributeId: string;
+      readonly label: string;
+    },
+  ): Promise<EditOutcome> => {
+    const label = change.label.trim();
+    const [layer, list] = await Promise.all([
+      recordsLayer(),
+      cached(attributes, objectKey(workspace, change.objectId), () =>
+        beforeRead(workspace).then(() =>
+          call((options) => api.attributes.list({ workspace, objectId: change.objectId }, options)),
+        ),
+      ),
+    ]);
+    const definition = list.find((attribute) => attribute.id === change.attributeId);
+    if (definition === undefined || label === '' || (definition.type !== 'select' && definition.type !== 'status')) {
+      return { kind: 'done', cells: 1, landed: 0 };
+    }
+    const optionId = mintId();
+    pendingOptions.add(workspace, {
+      attributeId: definition.id,
+      id: optionId,
+      label,
+      hue: nextHue(definition.options ?? []),
+    });
+    const outcome = await layer.createOption(workspace, {
+      recordId: change.recordId,
+      attributeId: definition.id,
+      optionId,
+      label,
+      isMulti: definition.isMulti,
+    });
+    if (outcome.kind === 'done' && outcome.landed > 0) {
+      usage.delete(workspace);
+      dropAllAttributes(workspace, change.objectId);
+      reloadIfChanged([refreshAttributes(workspace, change.objectId)]);
+    } else {
+      pendingOptions.remove(workspace, definition.id, optionId);
+    }
+    return outcome;
+  };
+
   /** An object's primary attribute and its attributes' kinds, for a window's mode (spec 0006, from the cached lists). */
   const describeObject = async (workspace: string, objectId: string): Promise<ObjectShape> => {
     const [list, defined] = await Promise.all([
@@ -1216,6 +1346,7 @@ export function createDataLayer({
                 ...(input.isUnique === undefined ? {} : { isUnique: input.isUnique }),
                 ...(input.config === undefined ? {} : { config: { ...input.config } }),
                 ...(input.defaultValue === undefined ? {} : { defaultValue: input.defaultValue }),
+                ...(input.options === undefined ? {} : { options: input.options.map(optionInput) }),
                 mutationId,
               },
               options,
@@ -1281,6 +1412,70 @@ export function createDataLayer({
           (ends) => ends.map((end) => end.objectId),
         ),
     },
+    options: {
+      /**
+       * Adds an option at the end of a select or status attribute's options
+       * (spec 0012, AC-236), waiting for the server; `id` from
+       * `attributes.newId`, the hue the next one when left out. Refusals:
+       * `CONFIG_INVALID` (a live option holds the label, on `label`),
+       * `LIMIT_REACHED`, `FORBIDDEN`. Its object's lists are read again.
+       */
+      create: (
+        workspace: string,
+        objectId: string,
+        attributeId: string,
+        option: Omit<NewOption, 'hue'> & { readonly hue?: NewOption['hue'] },
+      ): Promise<AttributeOption> =>
+        writeOption(workspace, objectId, (mutationId, options) =>
+          api.options.create(
+            {
+              workspace,
+              attributeId,
+              id: option.id,
+              label: option.label,
+              ...(option.hue === undefined ? {} : { hue: option.hue }),
+              ...(option.outcome === undefined ? {} : { outcome: option.outcome }),
+              ...(option.targetDays === undefined ? {} : { targetTimeInStage: targetOf(option.targetDays) }),
+              mutationId,
+            },
+            options,
+          ),
+        ),
+      /** Renames or recolours an option, or a stage's outcome or target (AC-236). Refusals: `CONFIG_INVALID` on `label`. */
+      update: (
+        workspace: string,
+        objectId: string,
+        optionId: string,
+        changes: OptionChanges,
+      ): Promise<AttributeOption> =>
+        writeOption(workspace, objectId, (mutationId, options) =>
+          api.options.update({ workspace, optionId, ...optionChanges(changes), mutationId }, options),
+        ),
+      /** Moves an option to `position` in its attribute's order, archived ones counted (AC-236). */
+      reorder: (workspace: string, objectId: string, optionId: string, position: number): Promise<AttributeOption[]> =>
+        writeOption(workspace, objectId, (mutationId, options) =>
+          api.options.reorder({ workspace, optionId, position, mutationId }, options),
+        ),
+      /** Archives an option (AC-236): it stays on the values that hold it, and new values can't take it. */
+      archive: (workspace: string, objectId: string, optionId: string): Promise<AttributeOption> =>
+        writeOption(workspace, objectId, (mutationId, options) =>
+          api.options.archive({ workspace, optionId, mutationId }, options),
+        ),
+      /** Restores an archived option (AC-236). Refusals: `LIMIT_REACHED` at 500 live, `CONFIG_INVALID` on `label`. */
+      restore: (workspace: string, objectId: string, optionId: string): Promise<AttributeOption> =>
+        writeOption(workspace, objectId, (mutationId, options) =>
+          api.options.restore({ workspace, optionId, mutationId }, options),
+        ),
+      /**
+       * Options a cell made that their attribute's list doesn't hold yet
+       * (AC-238), by `workspace/attributeId`; merge them into a column with
+       * `withPendingOptions`. Read it through `usePendingOptions`.
+       */
+      pending: {
+        getSnapshot: pendingOptions.getSnapshot,
+        subscribe: pendingOptions.subscribe,
+      },
+    },
     records: {
       /**
        * An object's records for one screen (the same view for every screen
@@ -1345,6 +1540,13 @@ export function createDataLayer({
         id: string,
         values: Readonly<Record<string, unknown>>,
       ): Promise<RecordView> => (await recordsLayer()).create(workspace, objectId, values, id),
+      /**
+       * Makes an option from a select, multi select or status cell and sets
+       * it, as one optimistic write (spec 0012, AC-238; see `createOption`).
+       * For someone who may shape the schema only: anyone else is refused
+       * `FORBIDDEN`, on the cell.
+       */
+      createOption,
       /** Edits one cell at once; a refusal rolls it back with a cell message and a toast with Retry. */
       setValue: (workspace: string, change: CellChange): void => {
         void recordsLayer().then((layer) => layer.setValues(workspace, [change], 'cell'));

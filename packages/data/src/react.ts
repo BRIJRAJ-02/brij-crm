@@ -5,6 +5,7 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import type { ActivityFeed, ActivityState } from './activity/feed.ts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { LiveStatus } from './live/live.ts';
+import type { PendingOptions } from './options.ts';
 import type { RecordsView, ViewReader, ViewState } from './records/layer.ts';
 import type { RecordState, RecordSubscription } from './records/one.ts';
 import type { TrashedSource, TrashedState } from './records/trashed.ts';
@@ -99,5 +100,20 @@ export function useActivityStatus(feed: ActivityFeed): ActivityState['status'] {
 
 /** A missing record looked up in the trash (spec 0017), asked when first read. */
 export function useTrashed(source: TrashedSource): TrashedState {
+  return useSyncExternalStore(source.subscribe, source.getSnapshot);
+}
+
+/** What `usePendingOptions` reads: the data layer's `options.pending`. */
+export interface PendingOptionsSource {
+  readonly getSnapshot: () => PendingOptions;
+  readonly subscribe: (listener: () => void) => () => void;
+}
+
+/**
+ * Options a cell made that their attribute doesn't list yet (spec 0012,
+ * AC-238), re-rendering when one is asked for or refused: a table merges
+ * them into its columns (`withPendingOptions`), so the new label shows at once.
+ */
+export function usePendingOptions(source: PendingOptionsSource): PendingOptions {
   return useSyncExternalStore(source.subscribe, source.getSnapshot);
 }

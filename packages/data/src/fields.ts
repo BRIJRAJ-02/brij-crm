@@ -22,6 +22,8 @@ export interface FieldAttributeShape {
   readonly readOnlyReason?: string;
   readonly cardinality?: 'one' | 'many';
   readonly defaultCurrency?: string;
+  /** A number shown as a percent (its Display setting, spec 0012). */
+  readonly isPercent?: boolean;
   /** A select's options or a status attribute's stages, in order, archived ones marked (spec 0012). */
   readonly options?: readonly {
     readonly id: string;
@@ -41,7 +43,8 @@ export const isEditableHere = (definition: Pick<AttributeDefinition, 'type' | 'i
 
 /**
  * An attribute definition as the field set's attribute: title to name,
- * `isMulti` to `allowMultiple`, a currency's default from its config, and
+ * `isMulti` to `allowMultiple`, a currency's default and a number's percent
+ * display from its config, and
  * the options of a select or status attribute (archived ones marked), and
  * read only for references and members in this loop, with `readOnlyReason`
  * (the screen's words) as the reason. A system attribute is read only with
@@ -66,6 +69,7 @@ export function toFieldAttribute(definition: AttributeDefinition, readOnlyReason
     ...(reason === undefined ? {} : { readOnlyReason: reason }),
     ...(definition.type === 'record_reference' ? { cardinality: definition.isMulti ? 'many' : 'one' } : {}),
     ...(typeof currency === 'string' ? { defaultCurrency: currency } : {}),
+    ...(definition.type === 'number' && definition.config.display === 'percent' ? { isPercent: true } : {}),
     // Options inline (spec 0006, AC-59; spec 0012), so a select or status cell never fetches.
     ...(definition.options === undefined
       ? {}

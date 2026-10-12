@@ -175,7 +175,14 @@ export interface RecordsApi {
 /** One cell a write changes: its value, and for an undo the version it must still be at (`ifVersionId`). */
 interface CellWrite {
   readonly attributeId: string;
+  /** What the cell shows (and holds, once it lands). */
   readonly value: unknown;
+  /**
+   * What goes to the server when it differs from what shows: a new option
+   * from a cell sends `{ newOption }` while the cell shows its minted id
+   * (spec 0012, AC-238).
+   */
+  readonly sent?: unknown;
   readonly ifVersionId?: string;
 }
 
@@ -263,6 +270,8 @@ export interface CellChange {
   readonly rowId: string;
   readonly columnId: string;
   readonly value: unknown;
+  /** What goes to the server when it differs from `value` (a cell's new option). */
+  readonly sent?: unknown;
 }
 
 /** Where a view stands: loading its count and first rows, ready, or failed (with Retry). */
@@ -1235,7 +1244,7 @@ export function createRecordsLayer({
             return [
               cell.attributeId,
               {
-                value: cell.value,
+                value: cell.sent ?? cell.value,
                 ...(cell.ifVersionId !== undefined
                   ? { ifVersionId: cell.ifVersionId }
                   : base === undefined
@@ -1414,7 +1423,11 @@ export function createRecordsLayer({
     for (const change of changes) {
       byRecord.set(change.rowId, [
         ...(byRecord.get(change.rowId) ?? []),
-        { attributeId: change.columnId, value: change.value },
+        {
+          attributeId: change.columnId,
+          value: change.value,
+          ...(change.sent === undefined ? {} : { sent: change.sent }),
+        },
       ]);
     }
     if (byRecord.size > MAX_BATCH_RECORDS) return { kind: 'too-many', limit: MAX_BATCH_RECORDS };
@@ -1429,7 +1442,12 @@ export function createRecordsLayer({
     );
     tellRefusals({ workspace, objectId: object, cellsShow: true }, outcomes, (refusedOnes) => {
       const again = refusedOnes.flatMap((outcome) =>
-        outcome.cells.map((cell) => ({ rowId: outcome.recordId, columnId: cell.attributeId, value: cell.value })),
+        outcome.cells.map((cell) => ({
+          rowId: outcome.recordId,
+          columnId: cell.attributeId,
+          value: cell.value,
+          ...(cell.sent === undefined ? {} : { sent: cell.sent }),
+        })),
       );
       void edit(workspace, object, again, kind);
     });
@@ -1899,6 +1917,42 @@ export function createRecordsLayer({
       changes: readonly CellChange[],
       kind: UndoKind = changes.length > 1 ? 'paste' : 'cell',
     ): Promise<EditOutcome> => edit(workspace, undefined, changes, kind),
+
+    /**
+     * Sets a new option on one record's select, multi select or status cell
+     * (spec 0012, AC-238): the cell shows `optionId` at once (added to what a
+     * multi select holds), and one `records.setValues` sends
+     * `{ newOption: { id, label } }`, which the server makes and sets in one
+     * transaction, or rolls back with the cell marked. One action on the undo
+     * stack, like any cell edit.
+     */
+    createOption: (
+      workspace: string,
+      change: {
+        readonly recordId: string;
+        readonly attributeId: string;
+        readonly optionId: string;
+        readonly label: string;
+        readonly isMulti: boolean;
+      },
+    ): Promise<EditOutcome> => {
+      const newOption = { newOption: { id: change.optionId, label: change.label } };
+      const held = store.get(change.recordId)?.values[change.attributeId];
+      const kept = Array.isArray(held) ? (held as readonly unknown[]).filter((id) => typeof id === 'string') : [];
+      return edit(
+        workspace,
+        undefined,
+        [
+          {
+            rowId: change.recordId,
+            columnId: change.attributeId,
+            value: change.isMulti ? [...kept, change.optionId] : change.optionId,
+            sent: change.isMulti ? [...kept, newOption] : newOption,
+          },
+        ],
+        'cell',
+      );
+    },
 
     undo: {
       /**
