@@ -198,7 +198,7 @@ export interface RuleSettingsContext {
   /** The object's own attributes, by id: what a condition may name. */
   readonly attributes: ReadonlyMap<string, ConditionAttribute>;
   /**
-   * Compiles a pattern (`^(?:<source>)$`) with RE2's rules, throwing an error
+   * Compiles a pattern with RE2's rules, throwing an error
    * whose message says why it can't be used. Absent, a custom pattern is
    * checked for length only (the server always passes it).
    */
@@ -434,6 +434,8 @@ function patternParams(params: Readonly<Record<string, unknown>>, context: RuleS
   if (regex.length > RULE_LIMITS.pattern) return { problems: [{ field: 'regex', message: W.patternLong }] };
   if (context.compile !== undefined) {
     try {
+      // The pattern alone first, so RE2's reason quotes what the person typed; then as the checker runs it.
+      context.compile(regex, ignoreCase);
       context.compile(`^(?:${regex})$`, ignoreCase);
     } catch (error) {
       const reason = error instanceof Error ? error.message.replace(/^error parsing regexp:\s*/i, '') : '';

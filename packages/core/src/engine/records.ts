@@ -36,6 +36,7 @@ import {
 } from './values.ts';
 import { append, runWrite, type AfterWrite, type EntryRef, type ValueChange, type WriteContext } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
+import { checkRecordRules, ruledAttributes } from '../validation/rules.ts';
 import { fieldReadOnlyReason, filterRecordView, isOpen, type Access } from '../access/policy.ts';
 import {
   attributeLevel,
@@ -253,13 +254,17 @@ export async function writeAll(
   ownerId: string,
   parsed: readonly { attribute: AttributeDef; input: ValueInput }[],
   versionId?: string,
+  /** The write's hold on its definitions, when the caller already made it (a record's, taken for its rule check). */
+  hold?: () => Promise<void>,
 ): Promise<Record<string, AttributeResult>> {
   const results: Record<string, AttributeResult> = {};
   const changes: ValueChange[] = [];
-  const holdDefinition = holdDefinitions(
-    context.tx,
-    parsed.map((each) => each.attribute),
-  );
+  const holdDefinition =
+    hold ??
+    holdDefinitions(
+      context.tx,
+      parsed.map((each) => each.attribute),
+    );
   for (const { attribute, input } of parsed) {
     const write = {
       ownerId,
@@ -376,6 +381,13 @@ export async function insertRecord(context: WriteContext, input: RecordInput) {
   await liveObject(tx, objectId);
   const attributes = await loadAttributes(tx, objectId);
   const parsed = await initialValues(tx, scope, attributes, input.values ?? {}, input.timeZone ?? 'UTC');
+  // Every rule of the object runs on a create (spec 0013, AC-255): its definitions are held still, then checked.
+  const hold = holdDefinitions(
+    tx,
+    parsed.map((each) => each.attribute),
+    ruledAttributes(attributes),
+  );
+  await checkRecordRules(context, { objectId, attributes, parsed, isCreate: true, timeZone: input.timeZone, hold });
   const by = actorRow(scope.actor);
   let recordId: string;
   let stampable: boolean;
@@ -411,7 +423,7 @@ export async function insertRecord(context: WriteContext, input: RecordInput) {
   // so the timeline folds exactly these into "created this record". An id from a device whose clock runs ahead
   // (up to 10 minutes is let through) would sort after later writes' versions, so those creates mint as any write
   // does, and their first values show as entries of their own.
-  const versions = await writeAll(context, 'record', recordId, parsed, stampable ? recordId : undefined);
+  const versions = await writeAll(context, 'record', recordId, parsed, stampable ? recordId : undefined, hold);
   await takeRecordSlots(tx, scope, 1);
   // The object's attributes go back too, so a read back after the write doesn't load them again.
   return { recordId, versions, objectId, attributes };
@@ -431,6 +443,8 @@ export async function setValues(
 export interface RecordValues {
   readonly recordId: string;
   readonly values: Readonly<Record<string, ValueInput>>;
+  /** The writer's time zone, for a rule's relative dates (spec 0013); UTC when absent. */
+  readonly timeZone?: string;
 }
 
 /** One list entry's new values (its own, not its record's). */
@@ -499,7 +513,26 @@ async function updateOwner(
   const parsed = parseAll(attributes, values, context.scope);
   // Under the owner's lock, before anything is written: a cell that moved on refuses the whole owner.
   await checkVersions(tx, context.scope.workspaceId, ownerId, parsed);
-  const results = await writeAll(context, ownerKind, ownerId, parsed);
+  // A record's rules (spec 0013): its definitions held still, then every rule the write touches checked, under the lock.
+  const hold =
+    objectId === undefined
+      ? undefined
+      : holdDefinitions(
+          tx,
+          parsed.map((each) => each.attribute),
+        );
+  if (objectId !== undefined && hold !== undefined) {
+    await checkRecordRules(context, {
+      objectId,
+      recordId: ownerId,
+      attributes,
+      parsed,
+      isCreate: false,
+      timeZone: 'timeZone' in input ? input.timeZone : undefined,
+      hold,
+    });
+  }
+  const results = await writeAll(context, ownerKind, ownerId, parsed, undefined, hold);
   if (Object.values(results).some((each) => each.versionId !== undefined)) {
     await touchOwner(context, ownerKind, ownerId);
     // The entry's own values changed: its list's screens read it again (spec 0007, AC-80).
@@ -657,7 +690,7 @@ export const MAX_BATCH_CELLS = 5_000;
  */
 export async function setValuesBatch(
   scope: EngineScope,
-  input: { readonly items: readonly RecordValues[] },
+  input: { readonly items: readonly RecordValues[]; readonly timeZone?: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<readonly BatchResult[]> {
   return (await setRecordValuesBatch(scope, input, hooks)).outcomes;
@@ -670,7 +703,7 @@ export async function setValuesBatch(
  */
 export async function setRecordValuesBatch(
   scope: EngineScope,
-  input: { readonly items: readonly RecordValues[] },
+  input: { readonly items: readonly RecordValues[]; readonly timeZone?: string },
   hooks: readonly AfterWrite[] = [],
 ): Promise<{
   readonly outcomes: readonly BatchResult[];
@@ -688,7 +721,9 @@ export async function setRecordValuesBatch(
       const attributesByObject = new Map<string, ReadonlyMap<string, AttributeDef>>();
       const visible = await batchVisible(context, input.items);
       for (const item of input.items) {
-        const outcome = await context.perRecord((child) => updateOwner(child, item, visible));
+        const outcome = await context.perRecord((child) =>
+          updateOwner(child, input.timeZone === undefined ? item : { ...item, timeZone: input.timeZone }, visible),
+        );
         const recordId = canonicalId(item.recordId);
         if (outcome.ok && outcome.value.objectId !== undefined) {
           attributesByObject.set(outcome.value.objectId, outcome.value.attributes);

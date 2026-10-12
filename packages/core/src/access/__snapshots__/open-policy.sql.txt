@@ -21,7 +21,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -165,7 +165,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -309,7 +309,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -358,7 +358,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -428,7 +428,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
@@ -440,7 +440,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."id" in ($1)
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."id" in ($1)
   ["<id 3>"]
 
 
@@ -584,7 +584,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -794,7 +794,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 3>"]
 
 select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
@@ -806,7 +806,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."list_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."list_id" = $1
   ["<id 2>"]
 
 
@@ -936,7 +936,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."list_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."list_id" = $1
   ["<id 2>"]
 
 select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1) and "values"."active_until" is null and "values"."is_cleared" = $2)
@@ -968,7 +968,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -1095,7 +1095,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -1224,7 +1224,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -1396,7 +1396,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -1534,7 +1534,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -1651,7 +1651,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -1694,7 +1694,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -1758,7 +1758,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 3>"]
 
 select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
@@ -1770,7 +1770,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."list_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."list_id" = $1
   ["<id 2>"]
 
 
@@ -2023,7 +2023,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 
@@ -2138,7 +2138,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 2>"]
 
 select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "owner_id", "attribute_id", "version_id", "is_cleared" from "values" where ("values"."owner_id" in ($1, $2, $3, $4) and "values"."active_until" is null)

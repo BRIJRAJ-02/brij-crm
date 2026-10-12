@@ -7,6 +7,7 @@ import type { EngineRefusal } from '@crm/contracts/values';
 import { isRefusal, postgresError, refuse } from './refusals.ts';
 import type { Actor, EngineScope } from './scope.ts';
 import { inWorkspace } from '../access/run.ts';
+import type { RuleCache } from '../validation/rules.ts';
 
 /** A record a write touched, with its object: the outbox groups a change by object. */
 export interface RecordRef {
@@ -290,6 +291,12 @@ export interface WriteContext {
    */
   readonly activeMembers: Set<string>;
   /**
+   * Each object's validation rules as this write read them (spec 0013), by
+   * object id, with the attribute rule versions they were read under: a
+   * batch reads them once, and reads again if a rule changed meanwhile.
+   */
+  readonly rules: Map<string, RuleCache>;
+  /**
    * Runs one record's part of a batch under its own savepoint, handing `work`
    * a context whose `tx` is that savepoint. A refusal rolls back only that
    * part, and its changes are left out of what the hooks see.
@@ -359,6 +366,7 @@ export async function runWrite<T>(
           tx,
           scope,
           activeMembers: new Set<string>(),
+          rules: new Map<string, RuleCache>(),
           record(part) {
             // A loop, never `push(...items)`: spreading a list of a few hundred thousand (a record with that many
             // links, deleted or erased) as call arguments overflows the stack.

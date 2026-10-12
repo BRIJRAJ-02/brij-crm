@@ -14,6 +14,7 @@ import {
   parseAttributeValue,
   type ApiSlugKind,
   type AttributeType,
+  type ValidationRuleInput,
 } from '@crm/contracts/values';
 import { checkId, isUuid, isUuidV7, uuidArray } from './ids.ts';
 import { checkAttributeRoom, limitsOf, lockAttributeParent, takeCustomObject, type AttributeParent } from './limits.ts';
@@ -23,6 +24,7 @@ import { actorRow, type EngineScope } from './scope.ts';
 import { clearUniqueKeys, fillUniqueKeys, UNIQUE_TYPES } from './unique.ts';
 import { ARCHIVED_BY, loadAttribute, type AttributeDef } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
+import { writeRules } from '../validation/rules.ts';
 import { inWorkspace } from '../access/run.ts';
 import { requirePermission } from '../access/check.ts';
 import { attributeVisible } from '../access/visibility.ts';
@@ -83,6 +85,8 @@ export interface AttributeInput {
    * same write (spec 0012, AC-230), at most the options limit (AC-237).
    */
   readonly options?: readonly InitialOption[];
+  /** Its first validation rules, in order (spec 0013, AC-252), made in the same write. */
+  readonly rules?: readonly ValidationRuleInput[];
 }
 
 /** One option an attribute is created with: a client id (UUID v7), its label and hue, and for a status stage its outcome and target time. */
@@ -103,6 +107,8 @@ export interface AttributeUpdate {
   readonly isUnique?: boolean;
   readonly config?: unknown;
   readonly defaultValue?: unknown;
+  /** Its validation rules, in order (spec 0013, AC-252): the list replaces the attribute's own rules. */
+  readonly rules?: readonly ValidationRuleInput[];
 }
 
 /** What an object's names and look may change to. */
@@ -552,7 +558,12 @@ export async function insertAttribute(
       .returning({ id: attributes.id });
     if (row === undefined) throw new Error('The attribute was not created.');
     if (options.length > 0) await insertInitialOptions(tx, scope, row.id, input.type, options);
-    context.record({ definitions: [{ ...parent, attributeIds: [row.id] }] });
+    // Its first rules (spec 0013): the row is new to this write, so nobody else holds it yet.
+    const ruled =
+      input.rules === undefined || input.rules.length === 0
+        ? { attributeIds: [] }
+        : await writeRules(context, await loadAttribute(tx, row.id), input.rules);
+    context.record({ definitions: [{ ...parent, attributeIds: [...new Set([row.id, ...ruled.attributeIds])] }] });
     return { attributeId: row.id, replayed: false };
   });
 }
@@ -655,11 +666,14 @@ async function attributeGuard<T>(work: () => Promise<T>): Promise<T> {
 export function recordDefinition(
   context: Pick<WriteContext, 'record'>,
   attribute: Pick<AttributeDef, 'id' | 'objectId' | 'listId'>,
+  /** Others of the same object the write changed too (a rule's count on the attributes its condition names). */
+  alsoChanged: readonly string[] = [],
 ): void {
+  const attributeIds = [...new Set([attribute.id, ...alsoChanged])];
   if (attribute.objectId !== null) {
-    context.record({ definitions: [{ objectId: attribute.objectId, attributeIds: [attribute.id] }] });
+    context.record({ definitions: [{ objectId: attribute.objectId, attributeIds }] });
   } else if (attribute.listId !== null) {
-    context.record({ definitions: [{ listId: attribute.listId, attributeIds: [attribute.id] }] });
+    context.record({ definitions: [{ listId: attribute.listId, attributeIds }] });
   }
 }
 
@@ -733,6 +747,9 @@ export async function updateAttribute(
       const turningOff = input.isUnique === false && attribute.isUnique;
       if (turningOn) await fillUniqueKeys(tx, attribute, context.scope.access);
       if (turningOff) await clearUniqueKeys(tx, attribute.id);
+      // Its rules (spec 0013), replaced as sent, under the row lock `editable` took.
+      const ruled =
+        input.rules === undefined ? { attributeIds: [] } : await writeRules(context, attribute, input.rules);
       await tx
         .update(attributes)
         .set({
@@ -749,7 +766,7 @@ export async function updateAttribute(
           ...touched(scope),
         })
         .where(eq(attributes.id, attribute.id));
-      recordDefinition(context, attribute);
+      recordDefinition(context, attribute, ruled.attributeIds);
       return refOf(attribute);
     },
     hooks,

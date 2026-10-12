@@ -5,10 +5,10 @@
 import { and, count, eq, isNull, sql } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { checkId } from './ids.ts';
-import { refuse } from './refusals.ts';
+import { refuse, refuseAll } from './refusals.ts';
 import type { EngineScope } from './scope.ts';
 
-const { attributeOptions, attributes, lists, objects, workspaceCounters } = schema;
+const { attributeOptions, attributes, lists, objects, validationRules, workspaceCounters } = schema;
 
 /** The limits every workspace has today. */
 export const LIMITS = {
@@ -22,6 +22,8 @@ export const LIMITS = {
   unfinishedJobs: 20,
   /** Items in one job (AC-116). */
   jobItems: 1_000_000,
+  /** Rules on one attribute, its own only: rules elsewhere whose condition names it don't count (spec 0013, AC-252). */
+  rulesPerAttribute: 20,
 } as const;
 
 /** One set of limits. */
@@ -231,4 +233,23 @@ export function objectAttributeRows(
         eq(attributes.isSystem, false),
       ),
     );
+}
+
+/**
+ * Refuses `LIMIT_REACHED` on `rules` when an attribute holds more than its
+ * limit of rules after a rule write (spec 0013, AC-252): `count(*)` of its own
+ * rules, never `rule_count`, which also counts rules naming it. Runs after the
+ * write, inside it, so the refusal rolls the rules back.
+ */
+export async function checkRuleRoom(tx: WorkspaceTx, scope: EngineScope, attributeId: string): Promise<void> {
+  const [row] = await tx
+    .select({ held: count() })
+    .from(validationRules)
+    .where(eq(validationRules.attributeId, attributeId));
+  const limit = limitsOf(scope).rulesPerAttribute;
+  if ((row?.held ?? 0) > limit) {
+    throw refuseAll([
+      { code: 'LIMIT_REACHED', message: `An attribute holds at most ${String(limit)} rules.`, field: 'rules' },
+    ]);
+  }
 }

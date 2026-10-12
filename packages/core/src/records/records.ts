@@ -166,6 +166,8 @@ export interface AddRecordInput {
   readonly objectId: string;
   readonly id: string;
   readonly values?: Readonly<Record<string, unknown>>;
+  /** The creator's time zone: date defaults and a rule's relative dates resolve in it (UTC when absent). */
+  readonly timeZone?: string | undefined;
 }
 
 /** How far a new record's id time may be from the server's clock: past it, the device's clock is wrong. */
@@ -201,7 +203,12 @@ export async function addRecord(
   try {
     const { recordId, objectId, attributes, versions } = await createRecord(
       scope,
-      { objectId: input.objectId, id: input.id, ...(input.values === undefined ? {} : { values: input.values }) },
+      {
+        objectId: input.objectId,
+        id: input.id,
+        ...(input.values === undefined ? {} : { values: input.values }),
+        ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+      },
       hooks,
     );
     return {
@@ -251,6 +258,8 @@ async function replayCreate(scope: EngineScope, input: AddRecordInput): Promise<
 export interface EditRecordInput {
   readonly recordId: string;
   readonly values: Readonly<Record<string, ValueInput>>;
+  /** The writer's time zone, for a rule's relative dates (spec 0013); UTC when absent. */
+  readonly timeZone?: string | undefined;
 }
 
 /**
@@ -268,7 +277,11 @@ export async function editRecord(
 ): Promise<WrittenView> {
   const { attributesByObject, results } = await setRecordValues(
     scope,
-    { recordId: input.recordId, values: input.values },
+    {
+      recordId: input.recordId,
+      values: input.values,
+      ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+    },
     hooks,
   );
   return {
@@ -280,6 +293,8 @@ export async function editRecord(
 /** New values for many records (spec 0006, AC-50): each record's by attribute id. */
 export interface EditRecordsInput {
   readonly items: readonly EditRecordInput[];
+  /** The writer's time zone, for every record's rules (spec 0013); UTC when absent. */
+  readonly timeZone?: string | undefined;
 }
 
 /** What a record that landed and then went to the trash before its read back answers. */
@@ -299,7 +314,11 @@ export async function editRecords(
   input: EditRecordsInput,
   hooks: readonly AfterWrite[] = [],
 ): Promise<BatchRecordResult[]> {
-  const { outcomes, attributesByObject } = await setRecordValuesBatch(scope, { items: input.items }, hooks);
+  const { outcomes, attributesByObject } = await setRecordValuesBatch(
+    scope,
+    { items: input.items, ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }) },
+    hooks,
+  );
   const landed = [...new Set(outcomes.flatMap((outcome) => (outcome.ok ? [outcome.recordId] : [])))];
   const views = landed.length === 0 ? [] : await getRecords(scope, { ids: landed, attributes: attributesByObject });
   const byId = new Map(views.map((view) => [view.id, view]));
@@ -311,6 +330,7 @@ export async function editRecords(
           code: refusal.code,
           message: refusal.message,
           ...(refusal.attributeId === undefined ? {} : { attributeId: refusal.attributeId }),
+          ...(refusal.ruleId === undefined ? {} : { ruleId: refusal.ruleId }),
         })),
       };
     }

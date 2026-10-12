@@ -8,7 +8,7 @@ import { encodeValue, sameItems, type ItemColumns, type StoredItem } from './col
 import { canonicalId, checkId, isUuid, uuidArray } from './ids.ts';
 import { postgresError, refuse, writeConflict } from './refusals.ts';
 import { syncSortKey } from './sort-keys.ts';
-import { UNIQUE_TYPES, uniqueKeyOf } from './unique.ts';
+import { uniqueKeyOf } from './unique.ts';
 import { actorRow, type Actor } from './scope.ts';
 import type { ValueChange, WriteContext } from './write.ts';
 import { isOpen, type Access } from '../access/policy.ts';
@@ -42,6 +42,15 @@ export interface AttributeDef {
   readonly defaultValue: unknown;
   /** For a record reference: the relationship it is one end of. */
   readonly relationshipId: string | null;
+  /** Its place among its object's attributes: rule refusals are listed in this order (spec 0013). */
+  readonly position: number;
+  /**
+   * The rules on it plus the rules whose condition names it (spec 0013): a
+   * write loads rules only when an attribute it touches has some.
+   */
+  readonly ruleCount: number;
+  /** Moves whenever one of those rules changes, so a write that loaded them notices (`holdDefinitions`). */
+  readonly rulesVersion: number;
 }
 
 /**
@@ -90,6 +99,9 @@ const DEF_COLUMNS = {
   config: attributes.config,
   defaultValue: attributes.defaultValue,
   relationshipId: attributes.relationshipId,
+  position: attributes.position,
+  ruleCount: attributes.ruleCount,
+  rulesVersion: attributes.rulesVersion,
 } as const;
 
 /** One attribute by id, or a `NOT_FOUND` refusal (a malformed id too, before any query). */
@@ -402,30 +414,51 @@ async function checkActors(
 }
 
 /**
- * A hold on the definitions of the unique capable attributes one `writeAll`
- * writes. The first value that changes takes a key share lock on all of their
- * rows in one query, in id order, then starts the write again if any unique
- * or archived flag changed since it was read; later calls do nothing. Turning
- * Unique on or off, and archiving or restoring, lock that row for update
- * before they fill or clear keys, so a value write either lands before they
- * scan the values, or waits for them and writes with the new definition
- * (AC-10). Each `writeAll` makes its own inside its savepoint: a refused
- * record's rollback releases the locks, and the next record takes them again.
+ * A hold on the definitions a write depends on (spec 0004, AC-10; spec 0013):
+ * every attribute it writes, plus `alsoLock` (on a create, every attribute of
+ * the object that had rules when loaded). The first call takes a key share
+ * lock on all of their rows in one query, in id order, then starts the write
+ * again (`writeConflict`) if any of them changed since it was read: its type,
+ * whether it holds several values, its Unique or archived state, or its rules
+ * (`rules_version`). Later calls do nothing. Turning Unique on or off,
+ * archiving or restoring, and every rule write lock that row for update first,
+ * so a value write either lands before them, or waits and is checked against
+ * the new definition: a rule saved at the same moment is either seen or
+ * waited for, even on an attribute that had no rules when the write loaded
+ * it. Each `writeAll` makes its own inside its savepoint: a refused record's
+ * rollback releases the locks, and the next record takes them again.
  */
-export function holdDefinitions(tx: WorkspaceTx, written: readonly AttributeDef[]): () => Promise<void> {
-  const unique = written.filter((attribute) => UNIQUE_TYPES.includes(attribute.type));
+export function holdDefinitions(
+  tx: WorkspaceTx,
+  written: readonly AttributeDef[],
+  alsoLock: readonly AttributeDef[] = [],
+): () => Promise<void> {
+  const byId = new Map([...written, ...alsoLock].map((attribute) => [attribute.id, attribute]));
   const take = async (): Promise<void> => {
-    if (unique.length === 0) return;
-    const ids = [...new Set(unique.map((attribute) => attribute.id))].sort();
-    const rows = await tx.execute<{ id: string; is_unique: boolean; archived: boolean }>(sql`
-      select id::text as id, is_unique, archived_at is not null as archived from attributes
-      where id = any(${uuidArray(ids)}) order by id for key share
+    if (byId.size === 0) return;
+    const ids = [...byId.keys()].sort();
+    const rows = await tx.execute<{
+      id: string;
+      type: string;
+      is_multi: boolean;
+      is_unique: boolean;
+      archived: boolean;
+      rules_version: number;
+    }>(sql`
+      select id::text as id, type::text as type, is_multi, is_unique, archived_at is not null as archived, rules_version
+      from attributes where id = any(${uuidArray(ids)}) order by id for key share
     `);
     const now = new Map(rows.rows.map((row) => [row.id, row]));
-    for (const attribute of unique) {
+    for (const attribute of byId.values()) {
       const row = now.get(attribute.id);
       if (row === undefined) throw refuse('NOT_FOUND', 'That attribute does not exist.', attribute.id);
-      if (row.is_unique !== attribute.isUnique || row.archived !== (attribute.archivedAt !== null)) {
+      if (
+        row.type !== attribute.type ||
+        row.is_multi !== attribute.isMulti ||
+        row.is_unique !== attribute.isUnique ||
+        row.archived !== (attribute.archivedAt !== null) ||
+        row.rules_version !== attribute.rulesVersion
+      ) {
         throw writeConflict(`${attribute.title} changed under this write.`);
       }
     }
@@ -484,7 +517,7 @@ export async function writeAttribute(
       jsonValue: row.jsonValue,
     }));
   if (sameItems(held, next)) return undefined;
-  if (UNIQUE_TYPES.includes(attribute.type)) await holdDefinition();
+  await holdDefinition();
   if (attribute.type === 'select' || attribute.type === 'status') await checkOptions(tx, attribute, next, held);
   if (attribute.type === 'actor_reference' || attribute.type === 'interaction') {
     await checkActors(context, attribute, next, held);

@@ -4,7 +4,17 @@
 // them. Reads and writes go through the scope the access door made.
 import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { AttributeDefinition, AttributeOption, PickerAttributeType } from '@crm/contracts';
-import { AttributeDefault, HUES, toApiSlug, type Hue } from '@crm/contracts/values';
+import { conditionAttributeIds } from '@crm/contracts/validation';
+import {
+  AttributeDefault,
+  HUES,
+  toApiSlug,
+  type AttributeValidation,
+  type FilterGroup,
+  type Hue,
+  type ValidationRuleInput,
+  type ValidationRuleView,
+} from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import {
   archiveAttribute,
@@ -23,7 +33,7 @@ import { requirePermission } from '../access/check.ts';
 import { inWorkspace } from '../access/run.ts';
 import { objectLevel, readOnlyReason, visibleAttributes } from '../access/policy.ts';
 
-const { attributeOptions, attributes, objects } = schema;
+const { attributeOptions, attributes, objects, validationRules } = schema;
 
 type AttributeRow = typeof attributes.$inferSelect & { readonly archivedBy: string | null };
 
@@ -40,6 +50,8 @@ const OPTION_TYPES: readonly string[] = ['select', 'status'];
 interface DefinitionContext {
   readonly primaryAttributeId: string | null;
   readonly options: ReadonlyMap<string, readonly AttributeOption[]>;
+  /** Each attribute's rules the caller may see, in order (spec 0013). */
+  readonly rules: ReadonlyMap<string, readonly ValidationRuleView[]>;
   /** The far objects the caller may see, for `archivedBy`. */
   readonly canSeeObject: (objectId: string) => boolean;
 }
@@ -68,7 +80,67 @@ function definitionOf(row: AttributeRow, context: DefinitionContext, readOnly?: 
       : {}),
     ...(OPTION_TYPES.includes(row.type) ? { options: [...(context.options.get(row.id) ?? [])] } : {}),
     ...(readOnly === undefined ? {} : { readOnly: { reason: readOnly } }),
+    validation: validationOf(row, context.rules.get(row.id) ?? []),
   };
+}
+
+/**
+ * An attribute's validation (spec 0013): Required is "always" exactly when
+ * `is_required` is set (so `isRequired` keeps its meaning), "when" when it
+ * holds a Required When rule, else "never"; its other rules in order.
+ */
+function validationOf(row: AttributeRow, rules: readonly ValidationRuleView[]): AttributeValidation {
+  const required = row.isRequired ? 'always' : rules.some((rule) => rule.kind === 'required_when') ? 'when' : 'never';
+  return { required, rules: [...rules] };
+}
+
+const isGroup = (value: unknown): value is FilterGroup =>
+  typeof value === 'object' &&
+  value !== null &&
+  'conjunction' in value &&
+  'conditions' in value &&
+  Array.isArray(value.conditions);
+
+/**
+ * The rules of some attributes, by attribute, in order, as the caller may see
+ * them (spec 0013, AC-276): a rule whose condition names an attribute hidden
+ * from the caller is left out (the server still enforces it). One read.
+ */
+async function rulesOf(
+  tx: WorkspaceTx,
+  objectId: string,
+  canSee: (attributeId: string) => boolean,
+): Promise<ReadonlyMap<string, readonly ValidationRuleView[]>> {
+  const rows = await tx
+    .select({
+      id: validationRules.id,
+      attributeId: validationRules.attributeId,
+      kind: validationRules.kind,
+      params: validationRules.params,
+      condition: validationRules.condition,
+      message: validationRules.message,
+      position: validationRules.position,
+    })
+    .from(validationRules)
+    .where(eq(validationRules.objectId, objectId))
+    .orderBy(asc(validationRules.attributeId), asc(validationRules.position));
+  const byAttribute = new Map<string, ValidationRuleView[]>();
+  for (const row of rows) {
+    const condition = isGroup(row.condition) ? row.condition : undefined;
+    if (!conditionAttributeIds(condition).every(canSee)) continue;
+    const view: ValidationRuleView = {
+      id: row.id,
+      kind: row.kind,
+      params: isPlainObject(row.params) ? row.params : {},
+      ...(condition === undefined ? {} : { condition }),
+      ...(row.message === null ? {} : { message: row.message }),
+      position: row.position,
+    };
+    const list = byAttribute.get(row.attributeId);
+    if (list === undefined) byAttribute.set(row.attributeId, [view]);
+    else list.push(view);
+  }
+  return byAttribute;
 }
 
 /**
@@ -187,12 +259,21 @@ export async function listObjectAttributes(
         includeArchived || archivedBy === null ? [{ ...attribute, archivedBy, objectId: id }] : [],
       ),
     );
+    // Hidden means absent (AC-276): a rule naming an attribute the caller can't see isn't theirs to read.
+    const visibleIds = new Set(
+      visibleAttributes(
+        scope.access,
+        rows.map(({ attribute }) => ({ ...attribute, objectId: id })),
+      ).map((row) => row.id),
+    );
+    const anyRules = rows.some(({ attribute }) => attribute.ruleCount > 0);
     const context: DefinitionContext = {
       primaryAttributeId: object.primaryAttributeId,
       options: await optionsOf(
         tx,
         listed.filter((row) => OPTION_TYPES.includes(row.type)).map((row) => row.id),
       ),
+      rules: anyRules ? await rulesOf(tx, id, (attributeId) => visibleIds.has(attributeId)) : new Map(),
       canSeeObject: (far) => objectLevel(scope.access, far) !== 'none',
     };
     return listed.map((row) =>
@@ -254,6 +335,8 @@ export interface CreateAttributeInput {
   readonly defaultValue?: AttributeDefault | undefined;
   /** A select's or status attribute's first options, in order (AC-230): each with its client id. */
   readonly options?: readonly NewAttributeOption[] | undefined;
+  /** Its first validation rules, in order (spec 0013, AC-252). */
+  readonly rules?: readonly ValidationRuleInput[] | undefined;
 }
 
 /** One option a new select or status attribute starts with (AC-230); a stage's target time is `P<N>D`. */
@@ -312,6 +395,7 @@ export async function createAttribute(
               ...(option.targetTimeInStage === undefined ? {} : { targetTimeInStage: option.targetTimeInStage }),
             })),
           }),
+      ...(input.rules === undefined ? {} : { rules: input.rules }),
     },
     hooks,
   );
@@ -327,6 +411,8 @@ export interface EditAttributeInput {
   readonly isUnique?: boolean | undefined;
   readonly config?: Readonly<Record<string, unknown>> | undefined;
   readonly defaultValue?: AttributeDefault | null | undefined;
+  /** Its validation rules, in order (spec 0013, AC-252): the list replaces the attribute's own rules. */
+  readonly rules?: readonly ValidationRuleInput[] | undefined;
 }
 
 /**
@@ -352,6 +438,7 @@ export async function editAttribute(
       ...(input.isUnique === undefined ? {} : { isUnique: input.isUnique }),
       ...(input.config === undefined ? {} : { config: input.config }),
       ...(input.defaultValue === undefined ? {} : { defaultValue: input.defaultValue }),
+      ...(input.rules === undefined ? {} : { rules: input.rules }),
     },
     hooks,
   );

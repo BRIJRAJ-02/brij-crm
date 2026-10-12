@@ -36,6 +36,9 @@ const def = (type: AttributeDef['type'], isMulti = false): AttributeDef => {
     config: {},
     defaultValue: null,
     relationshipId: null,
+    position: counter,
+    ruleCount: 0,
+    rulesVersion: 0,
   };
 };
 
