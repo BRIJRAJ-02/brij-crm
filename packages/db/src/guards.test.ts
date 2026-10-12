@@ -3,6 +3,7 @@
 // workspace, a read never crosses workspaces even with no filter, and a
 // reference into another workspace is refused by the database itself.
 import { randomUUID } from 'node:crypto';
+import { readFile } from 'node:fs/promises';
 import { sql } from 'drizzle-orm';
 import { getTableConfig, PgTable } from 'drizzle-orm/pg-core';
 import pg from 'pg';
@@ -671,19 +672,62 @@ describe('workspace milestones (spec 0010, AC-177)', () => {
       sql`insert into workspace_milestones (workspace_id, milestone) values (${into}, ${milestone}) on conflict do nothing returning milestone`,
     );
 
-  it('lets the app read and insert milestones, and no other role anything', async () => {
+  it('lets the app read milestones and insert only their workspace and name, and no other role anything', async () => {
     const table = await owner.query<{ privileges: string }>(`
       select string_agg(p.privilege, ',' order by p.privilege) as privileges
       from unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) p(privilege)
       where has_table_privilege('crm_app', 'public.workspace_milestones', p.privilege)
     `);
-    expect(table.rows).toEqual([{ privileges: 'INSERT,SELECT' }]);
+    expect(table.rows).toEqual([{ privileges: 'SELECT' }]);
+    // Column grants (pg_attribute.attacl): insert of workspace_id and milestone, never reached_at, and nothing else.
+    const columns = await owner.query<{ grant: string }>(`
+      select coalesce(pg_get_userbyid(nullif(a.grantee, 0)), 'PUBLIC') || ' ' || a.privilege_type || ' ' || att.attname
+        as grant
+      from pg_attribute att, aclexplode(att.attacl) a
+      where att.attrelid = 'public.workspace_milestones'::regclass and att.attnum > 0 and not att.attisdropped
+      order by att.attname, a.privilege_type
+    `);
+    expect(columns.rows.map((row) => row.grant)).toEqual(['crm_app INSERT milestone', 'crm_app INSERT workspace_id']);
     const others = await owner.query<{ grantee: string }>(`
       select coalesce(pg_get_userbyid(nullif(a.grantee, 0)), 'PUBLIC') as grantee
       from pg_class c, aclexplode(c.relacl) a
       where c.oid = 'public.workspace_milestones'::regclass and a.grantee not in (c.relowner, 'crm_app'::regrole)
     `);
     expect(others.rows).toEqual([]);
+  });
+
+  it("fails the migration's closing check on a stray table or column grant", async () => {
+    const migration = await readFile(new URL('../migrations/0030_workspace_milestones.sql', import.meta.url), 'utf8');
+    const check = /do \$\$[\s\S]*?\$\$;/.exec(migration.slice(migration.indexOf('Refuse to finish')))?.[0];
+    expect(check).toBeDefined();
+    for (const stray of [
+      'grant update (reached_at) on workspace_milestones to crm_app',
+      'grant insert (reached_at) on workspace_milestones to crm_app',
+      'grant select (milestone) on workspace_milestones to crm_search',
+      'grant delete on workspace_milestones to crm_app',
+      'grant select on workspace_milestones to public',
+    ]) {
+      await owner.query('begin');
+      try {
+        await owner.query(stray);
+        await expect(owner.query(check ?? ''), stray).rejects.toThrow(/workspace_milestones must reach the owner/);
+      } finally {
+        await owner.query('rollback');
+      }
+    }
+    // As the migration left it, the check passes.
+    await owner.query(check ?? '');
+  });
+
+  it('never lets the app choose when a milestone was reached', async () => {
+    const { workspaceId } = await workspaceWithMember('milestone-time');
+    await expect(
+      inside(
+        workspaceId,
+        sql`insert into workspace_milestones (workspace_id, milestone, reached_at) values (${workspaceId}, 'workspace_created', now() - interval '1 year')`,
+      ),
+    ).rejects.toMatchObject({ cause: { code: '42501' } });
+    expect((await inside(workspaceId, sql`select 1 from workspace_milestones`)).rows).toEqual([]);
   });
 
   it('stores a milestone once: the insert returns its row the first time only', async () => {

@@ -25,6 +25,7 @@ import {
 import { failure, memberWithWorkspace, tag } from '../../test/workspace.ts';
 import { signUpMethod } from '../auth/auth.ts';
 import { log } from '../log.ts';
+import { sendMilestones } from './milestones.ts';
 import { type Analytics, createAnalytics } from './posthog.ts';
 
 const { ownerUrl } = inject('testDatabase');
@@ -197,6 +198,29 @@ describe('first_record_created (AC-176, AC-177)', () => {
     expect(events.map((event) => event.event)).toEqual(['user_signed_up', 'workspace_created', 'first_record_created']);
     expect(events[2]?.properties.object_kind).toBe('companies');
     expect(new Set(events.map((event) => event.distinct_id)).size).toBe(1);
+  });
+});
+
+describe('sendMilestones (AC-166)', () => {
+  it('never throws once the write has committed, and still queues the rest', () => {
+    const queued: string[] = [];
+    const throwing: Analytics = {
+      enabled: true,
+      capture: (event) => {
+        if (event.event === 'workspace_created') throw new Error('broken');
+        queued.push(event.event);
+      },
+      shutdown: () => Promise.resolve(),
+    };
+    const workspaceId = newId();
+    const reachedAt = new Date().toISOString();
+    expect(() => {
+      sendMilestones({ analytics: throwing, user: { id: newId() } }, [
+        { milestone: 'workspace_created', workspaceId, reachedAt },
+        { milestone: 'first_record_created', workspaceId, reachedAt, objectKind: 'people' },
+      ]);
+    }).not.toThrow();
+    expect(queued).toEqual(['first_record_created']);
   });
 });
 

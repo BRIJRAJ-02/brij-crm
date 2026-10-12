@@ -27,15 +27,19 @@ create policy workspace_milestones_tenant on workspace_milestones
   with check (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid);
 --> statement-breakpoint
 
--- A milestone is reached once and never changed: the app reads and inserts it, nothing more (the default
--- privileges would grant update and delete too). A row goes only with its workspace, by the cascade.
+-- A milestone is reached once and never changed: the app reads it, and inserts only its workspace and name, so
+-- reached_at is always the reaching transaction's own time (the default privileges would grant update, delete
+-- and an insert of any column). A row goes only with its workspace, by the cascade.
 revoke all on workspace_milestones from crm_app;
 --> statement-breakpoint
-grant select, insert on workspace_milestones to crm_app;
+grant select on workspace_milestones to crm_app;
+--> statement-breakpoint
+grant insert (workspace_id, milestone) on workspace_milestones to crm_app;
 --> statement-breakpoint
 
--- Refuse to finish if the table reaches anyone but the owner (or a role whose privileges the owner already holds,
--- like Neon's neon_superuser) and the app, or the app holds anything but select and insert.
+-- Refuse to finish if the table or any of its columns reaches anyone but the owner (or a role whose privileges the
+-- owner already holds, like Neon's neon_superuser) and the app, or the app holds anything but select on the table
+-- and insert on workspace_id and milestone.
 do $$
 declare
   milestones regclass := 'public.workspace_milestones'::regclass;
@@ -43,18 +47,30 @@ declare
 begin
   if exists (
     select 1
-    from pg_class c, aclexplode(c.relacl) a
-    where c.oid = milestones
-      and case
-        -- PUBLIC
-        when a.grantee = 0 then true
-        when a.grantee = table_owner then false
-        when a.grantee = 'crm_app'::regrole then a.privilege_type not in ('SELECT', 'INSERT')
-        else not pg_has_role(table_owner, a.grantee, 'USAGE')
-      end
+    from (
+      select a.grantee, a.privilege_type, null::name as column_name
+      from pg_class c, aclexplode(c.relacl) a
+      where c.oid = milestones
+      union all
+      select a.grantee, a.privilege_type, att.attname
+      from pg_attribute att, aclexplode(att.attacl) a
+      where att.attrelid = milestones and att.attnum > 0 and not att.attisdropped
+    ) g
+    where case
+      -- PUBLIC
+      when g.grantee = 0 then true
+      when g.grantee = table_owner then false
+      when g.grantee = 'crm_app'::regrole then
+        case
+          when g.column_name is null then g.privilege_type <> 'SELECT'
+          else g.privilege_type <> 'INSERT' or g.column_name not in ('workspace_id', 'milestone')
+        end
+      else not pg_has_role(table_owner, g.grantee, 'USAGE')
+    end
   ) or not has_table_privilege('crm_app', milestones, 'SELECT')
-    or not has_table_privilege('crm_app', milestones, 'INSERT') then
-    raise exception 'workspace_milestones must reach the owner and crm_app (select, insert) only';
+    or not has_column_privilege('crm_app', milestones, 'workspace_id', 'INSERT')
+    or not has_column_privilege('crm_app', milestones, 'milestone', 'INSERT') then
+    raise exception 'workspace_milestones must reach the owner, and crm_app (select; insert of workspace_id and milestone) only';
   end if;
 end
 $$;

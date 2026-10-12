@@ -47,7 +47,7 @@ PostHog has no project or key yet, so production runs with `POSTHOG_KEY` unset a
 - [x] `workspace_milestones`: forced row level security with the standard policy, the app may only read and insert (no update, delete or truncate; no other role holds anything), an insert returns its row the first time only, no read or write across workspaces, gone with its workspace (`guards.test.ts`, "workspace milestones"); a milestone's event id is the same every time (`events.test.ts` in contracts) → AC-177
 - [x] Nothing personal leaves: the wire carries no email, name, workspace name or address, and no value; `before_send` drops anything outside the catalog and scrubs the rest (`posthog.test.ts`, `events.test.ts`) → AC-165
 - [x] Without a key nothing is sent and nothing changes (milestone rows are still stored); a PostHog that hangs or fails never slows or fails the caller, and shutdown gives up within its timeout (`posthog.test.ts`, `events.test.ts`, "without a key") → AC-166, AC-178
-- [x] `posthog-node` is imported only in `apps/api/src/monitoring/posthog.ts`, which imports no other vendor (`vendors.test.ts`) → AC-184
+- [x] `posthog-node` is imported only in `apps/api/src/monitoring/posthog.ts`, which imports no other vendor; the api's five wrapper exceptions are exact allow lists, so sign in can't import mail or Better Auth's browser client, and the mail modules can't import each other's vendor or Better Auth (`vendors.test.ts`) → AC-184
 
 ### In PostHog and production (owner, once the key is set)
 

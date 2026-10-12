@@ -135,7 +135,11 @@ export const ApiEnv = z
     POSTHOG_KEY: optional(
       z.string().regex(/^phc_[A-Za-z0-9_-]{1,200}$/, 'POSTHOG_KEY is the project key, the one starting phc_.'),
     ),
-    POSTHOG_HOST: optional(z.url({ protocol: /^https$/, error: 'POSTHOG_HOST must be an https URL.' })),
+    // Only PostHog's EU ingest: events never go to another region or host. posthog-node posts to it alone (no
+    // assets host), so the list holds one entry.
+    POSTHOG_HOST: optional(
+      z.enum(['https://eu.i.posthog.com'], { error: 'POSTHOG_HOST may only be https://eu.i.posthog.com.' }),
+    ),
     // The load harness's timing header (spec 0011, AC-202): `on` adds `Server-Timing` (pool wait, database and
     // handler time) to every /api/rpc answer. Local only: it exposes internal timings, so it is refused elsewhere.
     LOAD_TIMING: optional(z.enum(['on', 'off'])),

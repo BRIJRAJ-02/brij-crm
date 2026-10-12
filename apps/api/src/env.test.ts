@@ -263,6 +263,37 @@ describe('the worker environment (spec 0005, the relay)', () => {
   });
 });
 
+describe('product analytics (spec 0010, milestone 3)', () => {
+  it('is off unless a key is set, where an empty value counts as unset', () => {
+    const env = ApiEnv.parse({ ...production, POSTHOG_KEY: '', POSTHOG_HOST: '' });
+    expect(env.POSTHOG_KEY).toBeUndefined();
+    expect(env.POSTHOG_HOST).toBeUndefined();
+  });
+
+  it('takes a project key and the EU ingest host', () => {
+    const env = ApiEnv.parse({ ...production, POSTHOG_KEY: 'phc_abc123XYZ', POSTHOG_HOST: 'https://eu.i.posthog.com' });
+    expect(env.POSTHOG_KEY).toBe('phc_abc123XYZ');
+    expect(env.POSTHOG_HOST).toBe('https://eu.i.posthog.com');
+  });
+
+  it.each(['phx_personalkey', 'phs_secretkey', 'phc_', 'phc_has space', 'abc', 'phc_abc\n'])(
+    'refuses %j as the key: only a project key (phc_) is sent with events',
+    (key) => {
+      expect(problems({ ...production, POSTHOG_KEY: key })).toEqual(['POSTHOG_KEY']);
+    },
+  );
+
+  it.each([
+    'http://eu.i.posthog.com',
+    'https://us.i.posthog.com',
+    'https://eu.i.posthog.com/',
+    'https://eu-assets.i.posthog.com',
+    'https://posthog.example.com',
+  ])('refuses %s as the host: EU ingest over https only', (host) => {
+    expect(problems({ ...production, POSTHOG_HOST: host })).toEqual(['POSTHOG_HOST']);
+  });
+});
+
 describe("the load harness's timing header (spec 0011, AC-202)", () => {
   it('is off unless set, and may be on locally', () => {
     expect(ApiEnv.parse(local).LOAD_TIMING).toBeUndefined();

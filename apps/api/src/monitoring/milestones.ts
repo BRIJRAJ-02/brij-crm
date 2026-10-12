@@ -5,6 +5,7 @@
 // has committed. No vendor here: the PostHog wrapper sends.
 import { milestoneEventId, type ProductEvent } from '@crm/contracts/events';
 import type { ReachedMilestone } from '@crm/core';
+import { log } from '../log.ts';
 import type { Analytics } from './posthog.ts';
 
 /** A reached milestone as its product event, about `userId`, the person whose write reached it. */
@@ -42,5 +43,16 @@ export interface MilestoneSender {
 export function sendMilestones(context: MilestoneSender, reached: readonly ReachedMilestone[]): void {
   const { analytics, user } = context;
   if (analytics === undefined || user === undefined) return;
-  for (const milestone of reached) analytics.capture(milestoneEvent(milestone, user.id));
+  for (const milestone of reached) {
+    // The write has committed and its answer is on the way: nothing here may turn it into an error.
+    try {
+      analytics.capture(milestoneEvent(milestone, user.id));
+    } catch (error) {
+      log.warn('Milestone event not queued', {
+        analytics: 'error',
+        milestone: milestone.milestone,
+        name: error instanceof Error ? error.name : typeof error,
+      });
+    }
+  }
 }

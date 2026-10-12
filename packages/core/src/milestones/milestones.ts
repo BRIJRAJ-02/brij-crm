@@ -4,7 +4,7 @@
 // with `insert … on conflict do nothing returning`, so a row comes back only
 // the first time. Core never sends anything: it returns the milestones a write
 // reached, and the api sends their product events once the write commits.
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { Milestone, ObjectKind } from '@crm/contracts/events';
 import { schema, type WorkspaceTx } from '@crm/db';
 import type { AfterWrite } from '../engine/write.ts';
@@ -41,12 +41,14 @@ export async function reachMilestone(
   workspaceId: string,
   milestone: Milestone,
 ): Promise<string | undefined> {
-  const [row] = await tx
-    .insert(workspaceMilestones)
-    .values({ workspaceId, milestone })
-    .onConflictDoNothing()
-    .returning({ reachedAt: workspaceMilestones.reachedAt });
-  return row?.reachedAt.toISOString();
+  // Written by hand: the app may insert only these two columns (reached_at is always the transaction's time), and
+  // drizzle's insert would name reached_at too, as `default`.
+  const result = await tx.execute<{ reached_at: Date | string }>(
+    sql`insert into ${workspaceMilestones} (workspace_id, milestone) values (${workspaceId}, ${milestone})
+        on conflict do nothing returning reached_at`,
+  );
+  const reachedAt = result.rows[0]?.reached_at;
+  return reachedAt === undefined ? undefined : new Date(reachedAt).toISOString();
 }
 
 /** The kind of object `objectId` is, for a first record's event. */

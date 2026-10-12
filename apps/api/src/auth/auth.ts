@@ -154,6 +154,9 @@ export interface AuthDeps {
  */
 export function signUpMethod(route: string | undefined): SignUpMethod | undefined {
   if (route === SIGN_IN_CODE_PATH) return 'email_code';
+  // Google is the only social provider today, so '/callback/:id' (Better Auth's own name for every provider's
+  // callback) and '/sign-in/social' map to it. Revisit this when a second provider is added: name the method by
+  // the provider, and add it to `SignUpMethod` in the catalog first.
   if (route === '/callback/:id' || route === '/callback/google' || route === '/sign-in/social') return 'google';
   return undefined;
 }

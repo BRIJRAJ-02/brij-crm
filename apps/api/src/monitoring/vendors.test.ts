@@ -40,6 +40,11 @@ describe('monitoring vendors in apps/api', () => {
     ['src/monitoring/posthog.ts', 'posthog-js'],
     ['src/hooks.ts', 'posthog-node'],
     ['src/auth/auth.ts', 'posthog-node'],
+    // Each wrapper is held to its exact entries: sign in may not import mail, nor Better Auth's browser client.
+    ['src/auth/auth.ts', 'resend'],
+    ['src/auth/auth.ts', 'better-auth/client'],
+    ['src/mail/resend.ts', 'better-auth'],
+    ['src/mail/sign-in-code.ts', 'resend'],
   ])('refuses %s importing %s', async (file, entry) => {
     expect((await vendorProblems(file, importing(entry))).join()).toMatch(/one wrapper module/);
   });
