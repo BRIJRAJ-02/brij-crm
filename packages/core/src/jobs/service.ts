@@ -448,7 +448,8 @@ export interface TestJobInput {
 
 /**
  * Starts a test job (`dev.simulate`) of synthetic items, for holders of
- * `jobs.manage`. Where the kind isn't registered (production) it answers
+ * `jobs.manage` (FORBIDDEN otherwise, checked first, as every permission
+ * entry is). Where the kind isn't registered (production) it answers
  * NOT_FOUND, as if it didn't exist (AC-123).
  */
 export async function startTestJob(
@@ -458,8 +459,8 @@ export async function startTestJob(
   hooks: readonly AfterWrite[] = [],
 ): Promise<JobView> {
   checkScope(scope);
-  if (registry.get('dev.simulate') === undefined) throw refuse('NOT_FOUND', 'There is nothing at this address.');
   if (!managesJobs(scope)) throw refuse('FORBIDDEN', PERMISSIONS['jobs.manage'].message);
+  if (registry.get('dev.simulate') === undefined) throw refuse('NOT_FOUND', 'There is nothing at this address.');
   const id = checkId(input.id, JOB_NOT_FOUND);
   const items = Array.from({ length: input.items }, () => randomUUID());
   const params = {

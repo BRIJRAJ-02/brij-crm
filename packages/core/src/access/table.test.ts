@@ -63,6 +63,16 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'wireEvent',
   'createCollapse',
   'audienceOf',
+  // Background jobs (spec 0008): `startJob` runs inside the caller's write (its context carries the scope the
+  // feature's own door made); the rest are the kinds, the registry, the runner's factory and pure helpers.
+  'startJob',
+  'toJobView',
+  'createRegistry',
+  'defineKind',
+  'kindContractProblems',
+  'jobKinds',
+  'createRunner',
+  'retryDelayMs',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;
@@ -150,6 +160,23 @@ describe('the walk: a principal without the access is refused', () => {
     async (name) => {
       const { scope } = await memberOf('admin');
       await expect(service(name)(scope)).rejects.toThrow(/Only the system/);
+    },
+  );
+
+  it.each(entries.filter(([, entry]) => 'jobStarter' in entry).map(([name]) => name))(
+    '%s finds no job a member didn’t start (NOT_FOUND), and lists none of them',
+    async (name) => {
+      const { scope, workspaceId, ownerId } = await memberOf('member');
+      const registry = core.jobKinds({ environment: 'local' });
+      const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });
+      const job = await core.startTestJob(owner, registry, { id: core.newId(), items: 1, batchMillis: 0 });
+      const call = service(name) as unknown as (...args: unknown[]) => Promise<unknown>;
+      if (name === 'listJobs') {
+        const listed = (await call(scope, registry, { scope: 'mine' })) as { jobs: { id: string }[] };
+        expect(listed.jobs.map((each) => each.id)).not.toContain(job.id);
+        return;
+      }
+      expect(await refusalOf(call(scope, registry, job.id))).toMatchObject({ code: 'NOT_FOUND' });
     },
   );
 

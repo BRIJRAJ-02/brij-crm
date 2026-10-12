@@ -10,14 +10,17 @@ import type { Permission } from '@crm/contracts';
  * level on the object it reads or writes (hidden answers as absent; enforced
  * at the engine's choke points from milestone 2), the owner rules
  * (`members.manage` plus who may touch the owner role), any member of the
- * workspace (the member list, your own access), or the system only.
+ * workspace (the member list, your own access), the system only, or (a
+ * background job) its starter or a holder of `jobs.manage`.
  */
 export type AccessEntry =
   | { readonly permission: Permission }
   | { readonly data: 'read' | 'write' }
   | { readonly ownerRules: true }
   | { readonly anyMember: true }
-  | { readonly system: true };
+  | { readonly system: true }
+  /** A job's starter or a holder of `jobs.manage` (spec 0008, AC-114); anyone else finds no such job. */
+  | { readonly jobStarter: true };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -73,6 +76,12 @@ export const ACCESS_TABLE = {
   addEntry: { data: 'write' },
   removeEntry: { data: 'write' },
   restoreEntry: { data: 'write' },
+  // Background jobs (spec 0008): the starter or jobs.manage; the test job needs jobs.manage.
+  getJob: { jobStarter: true },
+  listJobs: { jobStarter: true },
+  cancelJob: { jobStarter: true },
+  confirmJob: { jobStarter: true },
+  startTestJob: { permission: 'jobs.manage' },
   // The relay's read (`@crm/core/system`).
   audiences: { system: true },
 } as const satisfies Record<string, AccessEntry>;
