@@ -23,7 +23,7 @@ import {
   type OptionsEditorOption,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { strings } from './attribute-strings.ts';
 import { formRefusals } from './refusals.ts';
 
@@ -125,8 +125,13 @@ export function AttributeDialog({
   onClose,
   onSaved,
 }: AttributeDialogProps) {
-  const { data } = useRouteContext({ from: '__root__' });
+  const { data, toasts } = useRouteContext({ from: '__root__' });
   const [id, setId] = useState(() => data.attributes.newId());
+  // Whether the dialog is open now: an option write refused after it closed says so in a toast instead.
+  const openNow = useRef(isOpen);
+  useEffect(() => {
+    openNow.current = isOpen;
+  }, [isOpen]);
   const [isBusy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   // Option writes out now, options added and not yet listed, and each option's last refusal (`new` for an add).
@@ -194,8 +199,15 @@ export function AttributeDialog({
     );
   };
 
+  /** A refused option write: on its row while the dialog is open, else in a toast, so it is never lost. */
+  const optionRefused = (key: string, why: string, label: string) => {
+    if (openNow.current) setOptionErrors((before) => ({ ...before, [key]: why }));
+    else toasts.toast({ tone: 'danger', message: strings.optionNotSaved(label, why) });
+  };
+
   /** Runs one option write: its row spins until the server answers, and shows the refusal, if any, after. */
   const track = (key: string, write: () => Promise<unknown>, after: () => void = () => undefined) => {
+    const label = options.find((option) => option.id === key)?.label ?? '';
     setPending((before) => new Set([...before, key]));
     setOptionErrors(({ [key]: _gone, ...rest }) => rest);
     write().then(
@@ -205,7 +217,7 @@ export function AttributeDialog({
       },
       (error: unknown) => {
         setPending((before) => new Set([...before].filter((each) => each !== key)));
-        setOptionErrors((before) => ({ ...before, [key]: refusedWords(error) }));
+        optionRefused(key, refusedWords(error), label);
         after();
       },
     );
@@ -227,7 +239,8 @@ export function AttributeDialog({
                 // Refused: the row leaves, and why shows by Add option.
                 setPending((before) => new Set([...before].filter((each) => each !== option.id)));
                 setAdding((before) => before.filter((each) => each.id !== option.id));
-                setOptionErrors((before) => ({ ...before, new: refusedWords(error) }));
+                // The row went with the refusal: why shows by Add option, naming what was typed.
+                optionRefused('new', strings.optionAddRefused(option.label, refusedWords(error)), option.label);
               },
             );
           },
@@ -275,6 +288,8 @@ export function AttributeDialog({
       onSubmit={submit}
       newOptionId={data.attributes.newId}
       {...(optionsLimit === undefined ? {} : { optionsLimit })}
+      // The writes read `openNow` only when the server answers, never while rendering.
+      // eslint-disable-next-line react-hooks/refs
       {...(optionWrites === undefined ? {} : { optionWrites })}
       {...(readOnlyReason === undefined ? {} : { readOnlyReason })}
     />

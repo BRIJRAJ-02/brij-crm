@@ -24,6 +24,9 @@ export const strings = {
   hasDefault: 'Default',
   /** The default names an archived option (AC-236). */
   defaultArchived: 'Default archived',
+  /** An option write refused (spec 0012, milestone 3): by Add option, or in a toast once the dialog closed. */
+  optionAddRefused: (label: string, why: string) => `Couldn’t add “${label}”. ${why}`,
+  optionNotSaved: (label: string, why: string) => `Couldn’t save the option “${label}”. ${why}`,
   /** An attribute archived because its relationship's other object is (AC-226). */
   archivedBy: (plural: string) => `Links to ${plural}, which is archived`,
   archivedByHidden: 'Links to an archived object',
