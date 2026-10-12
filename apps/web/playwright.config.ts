@@ -1,7 +1,8 @@
 // The app's flow tests (spec 0005, AC-41): Playwright against a running app,
 // locally `pnpm dev` (or `pnpm dev:apps` with Postgres and Mailpit up). Sign
 // in codes are read back from Mailpit. Files are `e2e/*.flow.ts`, so Vitest's
-// unit run never picks them up. CI runs them from milestone 4.
+// unit run never picks them up. CI runs the core loop's flows (the `flows`
+// job in ci.yml) against its services, with one retry for a busy runner.
 import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
@@ -11,6 +12,7 @@ export default defineConfig({
   workers: 1,
   fullyParallel: false,
   timeout: 60_000,
+  retries: process.env.CI === undefined ? 0 : 1,
   expect: { timeout: 10_000 },
   reporter: [['list']],
   use: {

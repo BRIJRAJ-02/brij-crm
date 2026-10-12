@@ -7,10 +7,13 @@
 // drops, its table says live updates are paused, and the change it missed
 // arrives once the connection is back. Set FLOW_SCREENSHOTS to a folder to
 // keep pictures of both browsers (and the timings, as live-timings.json).
+// FLOW_READER_BROWSER=webkit (or firefox) opens the reader in that engine,
+// so the change crosses two browser engines (CI uses WebKit; the writer
+// stays in the project's Chromium).
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { expect, test, type Page, type WebSocketRoute } from '@playwright/test';
+import { expect, firefox, test, webkit, type Browser, type Page, type WebSocketRoute } from '@playwright/test';
 import { addPerson, cellAt, checkScreen, newWorkspace, showColumn, signInAgain } from './people.ts';
 
 const SHOTS = process.env.FLOW_SCREENSHOTS;
@@ -18,6 +21,22 @@ const REALTIME = /\/connection\/websocket/;
 /** AC-38: a change reaches the other browser within 1 second at p95. */
 const BUDGET_MS = 1000;
 const EDITS = 20;
+/** The reader's browser: the project's own (another context), or Firefox. */
+const READER_BROWSER = process.env.FLOW_READER_BROWSER;
+
+/** The browser the reader opens in: WebKit or Firefox when FLOW_READER_BROWSER names one, else the writer's own. */
+async function readerBrowser(
+  writers: Browser,
+): Promise<{ readonly browser: Browser; readonly close: () => Promise<void> }> {
+  if (READER_BROWSER === undefined || READER_BROWSER === '')
+    return { browser: writers, close: () => Promise.resolve() };
+  const engines = { webkit, firefox } as const;
+  if (READER_BROWSER !== 'webkit' && READER_BROWSER !== 'firefox') {
+    throw new Error(`FLOW_READER_BROWSER is webkit, firefox or unset (got ${READER_BROWSER}).`);
+  }
+  const launched = await engines[READER_BROWSER].launch();
+  return { browser: launched, close: () => launched.close() };
+}
 
 /** The p-th percentile of `values` (nearest rank). */
 function percentile(values: readonly number[], p: number): number {
@@ -96,7 +115,8 @@ test.describe('live updates between two browsers', () => {
 
     // The writer makes the workspace; the reader is the same person in another browser.
     const firstCode = await newWorkspace(writer, email, slug);
-    const readerContext = await browser.newContext({
+    const second = await readerBrowser(browser);
+    const readerContext = await second.browser.newContext({
       baseURL: testInfo.project.use.baseURL,
       viewport: testInfo.project.use.viewport ?? null,
     });
@@ -202,5 +222,6 @@ test.describe('live updates between two browsers', () => {
     await picture(reader, '4-reader-back');
 
     await readerContext.close();
+    await second.close();
   });
 });

@@ -1,9 +1,9 @@
 # The check every push must pass: typecheck, lint, format, CSS, module edges,
 # house rules and tests, the first load budget and the artifact build; the
-# library's stories in each engine; and its screenshots. Make `check`,
-# `stories (chromium)`, `stories (firefox)`, `stories (webkit)` and `visual`
-# required status checks on `main` (branch protection), so a red build blocks
-# the merge.
+# core loop's flows in the browser; the library's stories in each engine; and
+# its screenshots. Make `check`, `flows`, `stories (chromium)`,
+# `stories (firefox)`, `stories (webkit)` and `visual` required status checks
+# on `main` (branch protection), so a red build blocks the merge.
 name: CI
 
 on:
@@ -99,6 +99,119 @@ jobs:
       - run: pnpm --filter @crm/ui exec vitest run --project perf
       - run: pnpm size
       - run: pnpm ui:artifact --check
+
+  # The core loop's flows (spec 0005, milestone 4): the built app, the api and
+  # the worker on the local ports against their own services, driven by
+  # Playwright. The flows run in Chromium (1280 and 375 wide); the live flow's
+  # reader opens in WebKit, so a change crosses two browser engines. Kept to
+  # the core loop's flows; the longer ones (catch up, settle, versions, scale,
+  # hidden) stay local. Nothing here touches a deployed environment.
+  flows:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+      mailpit:
+        image: axllent/mailpit:v1.31.4
+        ports:
+          - 8025:8025
+      centrifugo:
+        image: centrifugo/centrifugo:v6.9.7
+        env:
+          CENTRIFUGO_HTTP_SERVER_INTERNAL_PORT: "9000"
+          CENTRIFUGO_HEALTH_ENABLED: "true"
+          CENTRIFUGO_HTTP_API_KEY: local-centrifugo-api-key
+          CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY: local-centrifugo-token-secret
+          CENTRIFUGO_CLIENT_ALLOWED_ORIGINS: http://localhost:5173
+          CENTRIFUGO_CHANNEL_NAMESPACES: '[{"name":"workspace","allow_subscribe_for_client":false,"history_size":1000,"history_ttl":"300s","force_recovery":true}]'
+        ports:
+          - 8000:8000
+          - 9000:9000
+        options: >-
+          --health-cmd "wget -q -O - http://localhost:9000/health"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 30
+    # The local stack's values (.env.example), with the app's queries direct to Postgres (no PgBouncer here).
+    env:
+      APP_ENV: local
+      PORT: "3000"
+      WORKER_PORT: "3001"
+      APP_URL: http://localhost:5173
+      DATABASE_URL: postgres://crm_app_user:crm_app_local@localhost:5433/crm
+      DATABASE_URL_DIRECT: postgres://crm_app_user:crm_app_local@localhost:5433/crm
+      DATABASE_URL_OWNER: postgres://crm_owner:crm_owner_local@localhost:5433/crm
+      IDENTITY_DATABASE_URL: postgres://crm_identity_user:crm_identity_local@localhost:5433/crm
+      BETTER_AUTH_SECRET: local-only-better-auth-secret-not-for-deployment
+      BETTER_AUTH_URL: http://localhost:5173
+      MAILPIT_URL: http://localhost:8025
+      CENTRIFUGO_API_URL: http://localhost:9000
+      CENTRIFUGO_API_KEY: local-centrifugo-api-key
+      CENTRIFUGO_TOKEN_SECRET: local-centrifugo-token-secret
+      WORKER_INTERNAL_URL: http://localhost:3001
+      WORKER_WAKE_SECRET: local-only-worker-wake-secret-not-for-deployment
+      VITE_REALTIME_URL: ws://localhost:8000/connection/websocket
+      FLOW_READER_BROWSER: webkit
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # The owner role and the database, as the local stack's init script makes them, then the migrations and logins.
+      - run: psql -v ON_ERROR_STOP=1 -f infra/postgres/init/01-roles.sql
+        env:
+          PGHOST: localhost
+          PGPORT: "5433"
+          PGUSER: postgres
+          PGPASSWORD: postgres
+      - run: pnpm db:setup
+      - run: pnpm exec turbo run build --filter=@crm/web
+      - name: Read the Playwright version
+        id: playwright
+        run: echo "version=$(node -p "require('./apps/web/node_modules/@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright.outputs.version }}-chromium-webkit
+      - run: pnpm --filter @crm/web exec playwright install --with-deps chromium webkit
+      - name: Start the api, the worker and the built app
+        run: |
+          mkdir -p logs
+          (cd apps/api && nohup node --import ./src/monitoring/instrument.ts src/server.ts > ../../logs/api.log 2>&1 &)
+          (cd apps/api && nohup node --import ./src/monitoring/instrument.ts src/worker.ts > ../../logs/worker.log 2>&1 &)
+          (cd apps/web && nohup pnpm exec vite preview --port 5173 --strictPort > ../../logs/web.log 2>&1 &)
+          for url in http://localhost:5173/api/health/ready http://localhost:3001/health; do
+            for attempt in $(seq 1 60); do
+              if curl -fsS "$url" > /dev/null; then break; fi
+              if [ "$attempt" = 60 ]; then echo "$url never answered"; cat logs/*.log; exit 1; fi
+              sleep 1
+            done
+          done
+      - run: pnpm --filter @crm/web test:flow e2e/sign-in.flow.ts e2e/people.flow.ts e2e/session.flow.ts e2e/keyboard.flow.ts e2e/live.flow.ts
+      - name: Keep the traces and the logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: flow-results
+          path: |
+            apps/web/test-results/
+            logs/
+          if-no-files-found: ignore
 
   # The library's stories as tests, one engine per job so they run side by
   # side (spec 0003, AC-15). With milestone 2 one engine took about 5 minutes;
