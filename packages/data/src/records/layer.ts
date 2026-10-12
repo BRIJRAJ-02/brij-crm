@@ -8,6 +8,7 @@
 // and an undo stack. createDataLayer loads this module when a screen first
 // asks for records, so it stays out of the first load.
 import type {
+  AttributeDefinition,
   BatchResults,
   CreateRecordInput,
   RecordCount,
@@ -20,6 +21,7 @@ import type {
 } from '@crm/contracts';
 import { canJump, type JumpAttribute } from '@crm/contracts/jump';
 import type { FilterGroup, Hue, SortRules } from '@crm/contracts/values';
+import type { PatternCompiler, RuleFailure } from '@crm/contracts/validation';
 import { dataError, refusalFor, refusalSummary, toDataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
 import { createOwnVersions, createUndoStack, type UndoCell, type UndoKind } from './history.ts';
@@ -32,6 +34,14 @@ import type { Layer } from './store.ts';
 type RecordsEvent = Extract<ChangeEvent, { kind: 'records' }>;
 import { createRecordView, nextFrame, type Pin, type RecordSource, type RowNote, type Scheduler } from './view.ts';
 import { createWindows, type ReadFrom, type WindowCount, type WindowMode, type Windows } from './windows.ts';
+import {
+  checkInBrowser,
+  needsPattern,
+  NO_PATTERN,
+  objectRulesOf,
+  touchedRules,
+  type ObjectRules,
+} from '../validation/rules.ts';
 
 /** Rows per block: `records.query` with `position` = block × 100 (spec 0005, value sourcing). */
 const BLOCK_SIZE = 100;
@@ -392,6 +402,17 @@ export interface RecordsLayerOptions {
   readonly describe?: (workspace: string, objectId: string) => Promise<ObjectShape>;
   /** The browser's time zone, which relative date filters resolve in (AC-51). */
   readonly timeZone?: () => string;
+  /**
+   * An object's attribute definitions, with their rules inline, from the
+   * definitions store (spec 0013, AC-257): at once when they are held, else
+   * once they load. A create or an edit is checked against their rules
+   * before anything shows or is sent. Without it nothing is checked here
+   * (the server checks every write anyway).
+   */
+  readonly definitionsOf?: (
+    workspace: string,
+    objectId: string,
+  ) => readonly AttributeDefinition[] | Promise<readonly AttributeDefinition[]>;
   /** Runs `run` after `ms`, answering a cancel: settle's timer. A timer by default; tests pass their own. */
   readonly later?: (run: () => void, ms: number) => () => void;
   /**
@@ -428,6 +449,8 @@ export const RECORD_WORDS = {
   notSavedNamed: (title: string, reason: string) => `Couldn’t save ${title}. ${reason}`,
   /** Refused values on several records: each cell already says why, so this only counts them. */
   notSavedMarked: (count: number) => `${String(count)} changes weren’t saved. Each cell says why.`,
+  /** Several rules a write breaks, in one toast (spec 0013; the server's own words for it). */
+  rulesNotMet: (count: number) => `${String(count)} rules aren\u2019t met.`,
   /** A refused undo, sent again from its toast's Retry. */
   undoRetried: (count: number) => (count === 1 ? 'Undid 1 change.' : `Undid ${String(count)} changes.`),
   kept: (count: number) =>
@@ -525,6 +548,7 @@ export function createRecordsLayer({
   onReplaced = () => undefined,
   describe = () => Promise.resolve({ attributes: [] }),
   timeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+  definitionsOf,
   later = (run, ms) => {
     const id = setTimeout(run, ms);
     return () => {
@@ -533,6 +557,80 @@ export function createRecordsLayer({
   },
   cellOptions = { asked: () => undefined, refused: () => undefined, made: () => undefined },
 }: RecordsLayerOptions) {
+  // Each held attribute list's rules (spec 0013), worked out once per list: a list read again is a new one.
+  const rulesByList = new WeakMap<readonly AttributeDefinition[], ObjectRules>();
+  const rulesOfList = (list: readonly AttributeDefinition[]): ObjectRules => {
+    const known = rulesByList.get(list);
+    if (known !== undefined) return known;
+    const rules = objectRulesOf(list);
+    rulesByList.set(list, rules);
+    return rules;
+  };
+
+  // RE2 for pattern rules (spec 0013, AC-258), loaded with `import()` the first time a write touches one.
+  let patterns: PatternCompiler | undefined;
+  let loadingPatterns: Promise<PatternCompiler> | undefined;
+  const loadPatterns = (): Promise<PatternCompiler> => {
+    loadingPatterns ??= import('../validation/pattern.ts').then(({ compilePattern }) => {
+      patterns = compilePattern;
+      return compilePattern;
+    });
+    return loadingPatterns;
+  };
+
+  /**
+   * What a write is checked with (spec 0013, AC-257): the object's rules and
+   * the pattern engine it needs. Answered at once when both are at hand (no
+   * rule, or the definitions held and RE2 loaded), else once they are, so a
+   * write to an object with no rules shows at once.
+   */
+  function checkWith(
+    workspace: string,
+    objectId: string | undefined,
+    written: ReadonlySet<string>,
+    isCreate: boolean,
+  ):
+    | { readonly rules: ObjectRules; readonly pattern: PatternCompiler }
+    | undefined
+    | Promise<{ readonly rules: ObjectRules; readonly pattern: PatternCompiler } | undefined> {
+    if (definitionsOf === undefined || objectId === undefined) return undefined;
+    const ready = (rules: ObjectRules) => {
+      const touched = touchedRules(rules, written, isCreate);
+      if (touched.length === 0) return undefined;
+      if (!needsPattern(touched)) return { rules, pattern: NO_PATTERN };
+      if (patterns !== undefined) return { rules, pattern: patterns };
+      // A failed load leaves the patterns to the server.
+      return loadPatterns().then(
+        (pattern) => ({ rules, pattern }),
+        () => ({ rules, pattern: NO_PATTERN }),
+      );
+    };
+    const definitions = definitionsOf(workspace, objectId);
+    return definitions instanceof Promise
+      ? definitions.then(
+          (list) => ready(rulesOfList(list)),
+          () => undefined,
+        )
+      : ready(rulesOfList(definitions));
+  }
+
+  /** What one record's broken rules say on a cell: its own rule's message, else the first one's, which names its field. */
+  const ruleMessageFor = (failures: readonly RuleFailure[], attributeId: string): string | undefined =>
+    (failures.find((failure) => failure.attributeId === attributeId) ?? failures[0])?.message;
+
+  /** A browser check's failures as the refusals the server would answer. */
+  const refusalsOfRules = (failures: readonly RuleFailure[]) =>
+    failures.map((failure) => ({
+      code: 'VALIDATION_FAILED' as const,
+      message: failure.message,
+      ruleId: failure.ruleId,
+      ...(failure.attributeId === undefined ? {} : { attributeId: failure.attributeId }),
+    }));
+
+  /** One sentence for a record's broken rules: the rule's own message, or how many there are. */
+  const rulesSummary = (count: number, first: string | undefined): string =>
+    count > 1 || first === undefined ? RECORD_WORDS.rulesNotMet(count) : first;
+
   // New options from cells (spec 0012, AC-238): each minted id's label and hue, and what it resolved to once its
   // write answered (the id the server set, or undefined when refused), so a write naming it waits for that.
   const optionLooks = new Map<string, { readonly label: string; readonly hue: Hue }>();
@@ -1407,12 +1505,16 @@ export function createRecordsLayer({
     try {
       const [only] = live;
       if (live.length === 1 && only !== undefined) {
-        const answer = await delivered(() => api.setValues({ workspace, mutationId, ...itemOf(only) }));
+        const answer = await delivered(() =>
+          api.setValues({ workspace, mutationId, timeZone: timeZone(), ...itemOf(only) }),
+        );
         const { echoes, written, ...row } = answer;
         mutations.answered(mutationId, echoes);
         return [...outcomes, landedAs(only, row, written)];
       }
-      const answer = await delivered(() => api.setValuesBatch({ workspace, mutationId, items: live.map(itemOf) }));
+      const answer = await delivered(() =>
+        api.setValuesBatch({ workspace, mutationId, timeZone: timeZone(), items: live.map(itemOf) }),
+      );
       mutations.answered(mutationId, answer.echoes);
       const results = new Map(answer.results.map((result) => [result.recordId, result]));
       for (const each of live) {
@@ -1485,7 +1587,12 @@ export function createRecordsLayer({
     }
     if (options.quiet?.has(failure.code) === true) return outcome;
     setCellErrors(
-      each.cells.map((cell) => [`${each.recordId}:${cell.attributeId}`, refusalFor(failure, cell.attributeId)]),
+      each.cells.map((cell) => [
+        `${each.recordId}:${cell.attributeId}`,
+        refusalFor(failure, cell.attributeId) ??
+          // A rule on a field the edit didn't touch (spec 0013, AC-256): the edited cell says it, naming that field.
+          (failure.code === 'VALIDATION_FAILED' ? failure.data?.refusals?.[0]?.message : undefined),
+      ]),
     );
     return outcome;
   }
@@ -1548,7 +1655,15 @@ export function createRecordsLayer({
       });
       return;
     }
-    if (lasting.length > 1) notify({ tone: 'danger', message: RECORD_WORDS.notSavedMarked(lasting.length) });
+    if (lasting.length > 1) {
+      notify({ tone: 'danger', message: RECORD_WORDS.notSavedMarked(lasting.length) });
+      return;
+    }
+    // A broken rule says so in a toast too, with no Retry: the same save would be refused again (spec 0013, AC-256).
+    if (firstLasting.failure.code === 'VALIDATION_FAILED') {
+      const refusals = firstLasting.failure.data?.refusals ?? [];
+      notify({ tone: 'danger', message: rulesSummary(refusals.length, refusals[0]?.message) });
+    }
   }
 
   /** Roughly how many bytes a write of these cells sends: their values in UTF-8, and each cell's ids and version. */
@@ -1582,6 +1697,46 @@ export function createRecordsLayer({
     if (byRecord.size > MAX_BATCH_RECORDS) return { kind: 'too-many', limit: MAX_BATCH_RECORDS };
     if (changes.length > MAX_BATCH_CELLS || encodedSize(changes) > MAX_WRITE_BYTES) return { kind: 'too-big' };
     const object = objectId ?? store.get(changes[0]?.rowId ?? '')?.objectId;
+    // The object's rules first (spec 0013, AC-257), with the same checker the server runs: a record that breaks
+    // one shows nothing new and sends nothing, its cells say why, and a toast says it once, with no Retry.
+    const asked = checkWith(workspace, object, new Set(changes.map((change) => change.columnId)), false);
+    const check = asked instanceof Promise ? await asked : asked;
+    const refusedByRules = new Map<string, readonly RuleFailure[]>();
+    if (check !== undefined) {
+      const at = new Date(now()).toISOString();
+      for (const [recordId, cells] of byRecord) {
+        const shown = store.get(recordId)?.values ?? {};
+        const failures = checkInBrowser({
+          rules: check.rules,
+          values: { ...shown, ...Object.fromEntries(cells.map((cell) => [cell.attributeId, cell.value])) },
+          written: new Set(cells.map((cell) => cell.attributeId)),
+          isCreate: false,
+          now: at,
+          timeZone: timeZone(),
+          pattern: check.pattern,
+        });
+        if (failures.length > 0) refusedByRules.set(recordId, failures);
+      }
+    }
+    if (refusedByRules.size > 0) {
+      setCellErrors(
+        [...refusedByRules].flatMap(([recordId, failures]) =>
+          (byRecord.get(recordId) ?? []).map(
+            (cell) => [`${recordId}:${cell.attributeId}`, ruleMessageFor(failures, cell.attributeId)] as const,
+          ),
+        ),
+      );
+      const [only] = [...refusedByRules.values()];
+      notify({
+        tone: 'danger',
+        message:
+          refusedByRules.size === 1 && only !== undefined
+            ? rulesSummary(only.length, only[0]?.message)
+            : RECORD_WORDS.notSavedMarked(refusedByRules.size),
+      });
+      for (const recordId of refusedByRules.keys()) byRecord.delete(recordId);
+      if (byRecord.size === 0) return { kind: 'done', cells: changes.length, landed: 0 };
+    }
     const mutationId = mintId();
     const outcomes = await write(
       workspace,
@@ -2003,6 +2158,25 @@ export function createRecordsLayer({
       values: Readonly<Record<string, unknown>>,
       id: string = mintId(),
     ): Promise<RecordView> => {
+      // Every rule of the object, before the draft shows (spec 0013, AC-257): a refusal rejects as the server's would.
+      const asked = checkWith(workspace, objectId, new Set(Object.keys(values)), true);
+      const check = asked instanceof Promise ? await asked : asked;
+      if (check !== undefined) {
+        const failures = checkInBrowser({
+          rules: check.rules,
+          values,
+          written: new Set(Object.keys(values)),
+          isCreate: true,
+          now: new Date(now()).toISOString(),
+          timeZone: timeZone(),
+          pattern: check.pattern,
+        });
+        if (failures.length > 0) {
+          throw dataError('VALIDATION_FAILED', rulesSummary(failures.length, failures[0]?.message), {
+            refusals: refusalsOfRules(failures),
+          });
+        }
+      }
       const mutationId = mintId();
       const at = new Date(now()).toISOString();
       // Who made it is the server's to say; the draft shows only its values until the answer.
@@ -2036,7 +2210,7 @@ export function createRecordsLayer({
           echoes,
           written: _written,
           ...row
-        } = await delivered(() => api.create({ workspace, objectId, id, values, mutationId }));
+        } = await delivered(() => api.create({ workspace, objectId, id, values, timeZone: timeZone(), mutationId }));
         mutations.answered(mutationId, echoes);
         layer.confirm(row);
         settle(true);

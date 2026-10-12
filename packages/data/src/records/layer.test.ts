@@ -3,6 +3,7 @@
 // and creates with rollback, cell refusals and toasts, retries when busy.
 import {
   MAX_BATCH_RECORDS as CONTRACT_MAX_BATCH,
+  type AttributeDefinition,
   type BatchResults,
   type ChangeEvent,
   type CreateRecordInput,
@@ -160,7 +161,12 @@ interface CountCall {
 }
 
 /** The records layer on a fake API, with frames, waits, timers and notices in the test's hands. */
-function setup(options: { readonly describe?: Parameters<typeof createRecordsLayer>[0]['describe'] } = {}) {
+function setup(
+  options: {
+    readonly describe?: Parameters<typeof createRecordsLayer>[0]['describe'];
+    readonly definitionsOf?: Parameters<typeof createRecordsLayer>[0]['definitionsOf'];
+  } = {},
+) {
   const server = fakeApi();
   const watching: string[] = [];
   const mutationLog: string[] = [];
@@ -191,6 +197,7 @@ function setup(options: { readonly describe?: Parameters<typeof createRecordsLay
       };
     },
     describe: options.describe ?? (() => Promise.resolve({ primaryAttributeId: NAME, attributes: SHAPE })),
+    ...(options.definitionsOf === undefined ? {} : { definitionsOf: options.definitionsOf }),
     watch: (workspace) => {
       watching.push(workspace);
       return () => {
@@ -227,8 +234,8 @@ const block = (from: number, count: number) =>
   );
 
 /** A view of 3 people, loaded and ready, shown by a screen with the city column. */
-async function readyView() {
-  const context = setup();
+async function readyView(options: Parameters<typeof setup>[0] = {}) {
+  const context = setup(options);
   const view = context.layer.view(WS, PEOPLE);
   const reader = view.retain([CITY]);
   await settle();
@@ -1680,5 +1687,145 @@ describe('one record (spec 0006, records.one; the record page, spec 0017)', () =
     expect(layer.one(WS, OTHER, [NAME])).not.toBe(one);
     layer.clear();
     expect(layer.size()).toBe(0);
+  });
+});
+
+describe('validation rules in the browser (spec 0013, AC-256, AC-257)', () => {
+  /** People's attributes as the definitions store holds them, City with `rules` and Name plain. */
+  const definitions = (rules: AttributeDefinition['validation']): AttributeDefinition[] => [
+    {
+      id: NAME,
+      objectId: PEOPLE,
+      apiSlug: 'name',
+      title: 'Name',
+      type: 'text',
+      isMulti: false,
+      isRequired: false,
+      isUnique: false,
+      isSystem: false,
+      isPrimary: true,
+      config: {},
+      position: 5,
+      isArchived: false,
+      validation: { required: 'never', rules: [] },
+    },
+    {
+      id: CITY,
+      objectId: PEOPLE,
+      apiSlug: 'city',
+      title: 'City',
+      type: 'text',
+      isMulti: false,
+      isRequired: false,
+      isUnique: false,
+      isSystem: false,
+      isPrimary: false,
+      config: {},
+      position: 6,
+      isArchived: false,
+      ...(rules === undefined ? {} : { validation: rules }),
+    },
+  ];
+  const RULE = '0199a6f2-0000-7000-8000-0000000000f1';
+  const short = definitions({
+    required: 'never',
+    rules: [{ id: RULE, kind: 'length', params: { max: 5 }, position: 0 }],
+  });
+  const change = (value: unknown) => ({ rowId: idAt(1), columnId: CITY, value });
+
+  it('refuses a value that breaks a rule before it shows or is sent: the cell says why, and a toast, with no Retry', async () => {
+    const { layer, view, edits, frame, notices } = await readyView({ definitionsOf: () => short });
+    const outcome = await layer.setValues(WS, [change('Amsterdam')]);
+    frame();
+    const state = view.getSnapshot();
+    expect(state.source.getItem(1)?.values[CITY]).toBe('London');
+    expect(state.cellErrors.get(`${idAt(1)}:${CITY}`)).toBe('City can have at most 5 characters.');
+    expect(notices).toEqual([{ tone: 'danger', message: 'City can have at most 5 characters.' }]);
+    expect(edits).toEqual([]);
+    expect(outcome).toEqual({ kind: 'done', cells: 1, landed: 0 });
+  });
+
+  it('shows a value that meets the rules at once, and sends the writer’s time zone', async () => {
+    const { layer, view, edits, frame } = await readyView({ definitionsOf: () => short });
+    void layer.setValues(WS, [change('Paris')]);
+    frame();
+    expect(view.getSnapshot().source.getItem(1)?.values[CITY]).toBe('Paris');
+    await settle();
+    expect(edits[0]?.input.timeZone).toBe('Europe/London');
+  });
+
+  it('runs a pattern rule with RE2, loaded only when one is touched', async () => {
+    const digits = definitions({
+      required: 'never',
+      rules: [{ id: RULE, kind: 'pattern', params: { preset: 'digits', ignoreCase: false }, position: 0 }],
+    });
+    const { layer, view, edits, frame } = await readyView({ definitionsOf: () => digits });
+    await layer.setValues(WS, [change('12a')]);
+    frame();
+    expect(view.getSnapshot().cellErrors.get(`${idAt(1)}:${CITY}`)).toBe('City can only contain digits.');
+    expect(edits).toEqual([]);
+  });
+
+  it('leaves a rule whose inputs it doesn’t hold to the server', async () => {
+    const OTHER = 'attr-other';
+    const naming = definitions({
+      required: 'never',
+      rules: [
+        {
+          id: RULE,
+          kind: 'length',
+          params: { max: 2 },
+          condition: { conjunction: 'and', conditions: [{ attributeId: OTHER, operator: 'is_empty' }] },
+          position: 0,
+        },
+      ],
+    });
+    const { layer, edits } = await readyView({ definitionsOf: () => naming });
+    void layer.setValues(WS, [change('Paris')]);
+    await settle();
+    expect(edits).toHaveLength(1);
+  });
+
+  it('marks the edited cell with the server’s refusal on a field the edit didn’t touch, with a toast and no Retry', async () => {
+    const { layer, view, edits, frame, notices } = await readyView();
+    void layer.setValues(WS, [change('Paris')]);
+    await settle();
+    edits[0]?.fail(
+      dataError('VALIDATION_FAILED', 'Name is required when City is Paris.', {
+        refusals: [
+          {
+            code: 'VALIDATION_FAILED',
+            message: 'Name is required when City is Paris.',
+            attributeId: NAME,
+            ruleId: RULE,
+          },
+        ],
+      }),
+    );
+    await settle();
+    frame();
+    expect(view.getSnapshot().cellErrors.get(`${idAt(1)}:${CITY}`)).toBe('Name is required when City is Paris.');
+    expect(notices).toEqual([{ tone: 'danger', message: 'Name is required when City is Paris.' }]);
+  });
+
+  it('refuses a create that breaks a rule before a draft shows, with the server’s refusals', async () => {
+    const { layer, creates, view, frame } = await readyView({ definitionsOf: () => short });
+    await expect(layer.create(WS, PEOPLE, { [CITY]: 'Amsterdam' })).rejects.toMatchObject({
+      code: 'VALIDATION_FAILED',
+      message: 'City can have at most 5 characters.',
+      data: {
+        refusals: [
+          {
+            code: 'VALIDATION_FAILED',
+            message: 'City can have at most 5 characters.',
+            attributeId: CITY,
+            ruleId: RULE,
+          },
+        ],
+      },
+    });
+    frame();
+    expect(creates).toEqual([]);
+    expect(view.getSnapshot().source.count).toBe(3);
   });
 });

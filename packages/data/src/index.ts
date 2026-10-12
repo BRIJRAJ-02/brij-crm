@@ -18,6 +18,7 @@ import type {
   ObjectSummary,
   RecordView,
   Usage,
+  ValidationRuleInput,
 } from '@crm/contracts';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
@@ -51,6 +52,9 @@ import type {
 export type {
   ActorDisplay,
   ApiRefusal,
+  AttributeValidation,
+  ValidationRuleInput,
+  ValidationRuleView,
   AttributeDefinition,
   AttributeOption,
   AttributeType,
@@ -228,6 +232,8 @@ export interface NewAttribute {
   readonly defaultValue?: AttributeDefaultValue;
   /** A select's or status attribute's first options, in order (AC-230). */
   readonly options?: readonly NewOption[];
+  /** Its validation rules, in order (spec 0013, AC-252); at most 20. */
+  readonly rules?: readonly ValidationRuleInput[];
 }
 
 /** A status stage's outcome. */
@@ -274,6 +280,8 @@ export interface AttributeChanges {
   readonly isUnique?: boolean;
   readonly config?: Readonly<Record<string, unknown>>;
   readonly defaultValue?: AttributeDefaultValue | null;
+  /** Its validation rules, in order (spec 0013, AC-252): the list replaces the attribute's rules. */
+  readonly rules?: readonly ValidationRuleInput[];
 }
 
 /** The cache key of one object's attributes in one workspace. */
@@ -1175,14 +1183,32 @@ export function createDataLayer({
     });
   };
 
+  /** One object's live attributes, from the cache, read when it holds none. */
+  const objectAttributes = (workspace: string, objectId: string): Promise<AttributeDefinition[]> =>
+    cached(attributes, objectKey(workspace, objectId), () =>
+      beforeRead(workspace).then(() => call((options) => api.attributes.list({ workspace, objectId }, options))),
+    );
+
+  // Each cached attribute list once it settled, so a write's rule check (spec 0013) runs at once when it is held.
+  const settledLists = new WeakMap<Promise<AttributeDefinition[]>, readonly AttributeDefinition[]>();
+
+  /** An object's attributes with their rules inline: at once when the cache holds them settled, else once read. */
+  const definitionsOf = (
+    workspace: string,
+    objectId: string,
+  ): readonly AttributeDefinition[] | Promise<readonly AttributeDefinition[]> => {
+    const held = objectAttributes(workspace, objectId);
+    const settled = settledLists.get(held);
+    if (settled !== undefined) return settled;
+    return held.then((list) => {
+      settledLists.set(held, list);
+      return list;
+    });
+  };
+
   /** An object's primary attribute and its attributes' kinds, for a window's mode (spec 0006, from the cached lists). */
   const describeObject = async (workspace: string, objectId: string): Promise<ObjectShape> => {
-    const [list, defined] = await Promise.all([
-      listObjects(workspace),
-      cached(attributes, objectKey(workspace, objectId), () =>
-        beforeRead(workspace).then(() => call((options) => api.attributes.list({ workspace, objectId }, options))),
-      ),
-    ]);
+    const [list, defined] = await Promise.all([listObjects(workspace), definitionsOf(workspace, objectId)]);
     const primary = list.find((object) => object.id === objectId)?.primaryAttributeId ?? undefined;
     return {
       ...(primary === undefined ? {} : { primaryAttributeId: primary }),
@@ -1242,6 +1268,7 @@ export function createDataLayer({
           void tellReplaced(notice);
         },
         describe: describeObject,
+        definitionsOf,
         // A cell's new option (spec 0012, AC-238): its label shows while it is made, on every try. Landed, the
         // object's attributes are read again (its own definitions echo is skipped) and the pages reload.
         cellOptions: {
@@ -1429,6 +1456,7 @@ export function createDataLayer({
                 ...(input.config === undefined ? {} : { config: { ...input.config } }),
                 ...(input.defaultValue === undefined ? {} : { defaultValue: input.defaultValue }),
                 ...(input.options === undefined ? {} : { options: input.options.map(optionInput) }),
+                ...(input.rules === undefined ? {} : { rules: [...input.rules] }),
                 mutationId,
               },
               options,
@@ -1450,6 +1478,7 @@ export function createDataLayer({
                 attributeId,
                 ...changes,
                 ...(changes.config === undefined ? {} : { config: { ...changes.config } }),
+                rules: changes.rules === undefined ? undefined : [...changes.rules],
                 mutationId,
               },
               options,
