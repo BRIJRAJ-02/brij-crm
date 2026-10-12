@@ -14,6 +14,8 @@ The load harness (spec 0011, feature #12): `pnpm load:run <scenario>` plays simu
 | `src/user.ts` | One simulated person: a view by position (`canJump`) or by cursor, its 100 row window and checkpoints, scroll, jump, filter or sort (aborting the old count), open, edit, create, a storm burst's edit, and the `Holder` the live client reads and refetches through |
 | `src/live/user.ts` | One person's live updates, as the browser's: tokens through `realtime.*`, own echo skipped, stubs, held records refetched with the changed columns they show, coarse reload, the settle (1.5 s after the last create, delete or reorder, 5 s at most, then 0 to 2 s), the storm's reconnect |
 | `src/live/stream.ts` | The seq contract and its books: the watermark from the head, held seqs, catch up after 0 to 2 s, recovery, the 10 second miss rule, and `trailingMisses` for seqs a user never heard of |
+| `src/live/event.ts` | The change event parsed by hand, as the browser's parser does (no Zod per event per user) |
+| `src/histogram.ts` | Event arrivals in 1 ms buckets per thread, merged and summed up by the nearest rank |
 | `src/live/centrifuge.ts` | Centrifugo's client on `ws` with the API's `Origin`: the one module that imports `centrifuge` and `ws` |
 | `src/outbox.ts` | After the window, through the owner login: the relay lag of every row committed in it, and the workspace's head at a moment |
 | `src/tally.ts` | One measured thing's requests: the 10 second timeout, the worst outcome, the `Server-Timing` waits |
@@ -51,8 +53,8 @@ pnpm --filter @crm/load test
 
 - Imports from `@crm/core/load-local`, `load-files`, `load-stack` and `load-slots`, and the server statistics in `@crm/db/stats`, are allowed here only (`server({ loadHarness: true })`); minting (`@crm/core/load-sessions`) and the reset's erase (`@crm/core/load-reset`) stay refused.
 - 429s count as unexpected (AC-203) though the browser's data layer retries them; the owner kept it that way (12 October 2026).
-- Every user's live client adds the browser's own load: a refetch per event it holds, coarse reloads and settle rereads (window and count). Those reads pass the 6 in flight gate too, so they can draw 429s.
-- A seeded load database doesn't take migrations that land after it was seeded (`pnpm load:seed` refuses a seeded one): apply them with `DATABASE_URL_OWNER=postgres://crm_owner:crm_owner_local@localhost:5434/crm node packages/db/scripts/migrate.ts`, then restart the api and worker.
+- Every user's live client adds the browser's own load: a refetch per frame of events it holds, coarse reloads and settle rereads (window and count). Those reads pass the 6 in flight gate too, so they draw 429s; the 429 line says what sent each (in milestone 3's runs, settles sent most).
+- A seeded load database doesn't take migrations or logins that land after it was seeded (`pnpm load:seed` refuses a seeded one): with the data services up, run `DATABASE_URL_OWNER=postgres://crm_owner:crm_owner_local@localhost:5434/crm node packages/db/scripts/migrate.ts`, and for spec 0008's worker login the same owner URL with `DATABASE_URL=postgres://crm_app_user:local-only-load-app@localhost:6434/crm DATABASE_URL_DIRECT=postgres://crm_worker_user:local-only-load-worker@localhost:5434/crm node packages/db/scripts/worker-login.ts`, then start the api and worker.
 - The api and worker images build from the working tree: after a change to `apps/api` or a package it imports, `docker compose -f docker-compose.load.yml -p crm-load build api worker` before a run.
 - Windows read the columns on screen (`columnsOnScreen`), as the People table does; an open reads the whole record.
 - `LOAD_TEST_BLOCK_LOOP_MS` is a test flag that stalls every harness thread, to prove such a run is invalid. Never set it otherwise.

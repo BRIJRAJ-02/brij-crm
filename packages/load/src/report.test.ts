@@ -279,6 +279,7 @@ describe('the live lines (milestone 3)', () => {
     // The database's clock runs 30 ms ahead of ours.
     clockOffsetMs: 30,
     arrivals: histogramOf([100, 200]),
+    arrivalsOffsetMs: 30,
     users: [{ user: 0, tally, snapshot: { watermark: 10, accounted: [] } }],
     relay: { lagsMs: [20, 40], unpublished: 0 },
     heads: { start: 0, end: 10 },

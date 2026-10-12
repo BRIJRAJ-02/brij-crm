@@ -106,7 +106,7 @@ export function achievedMix(actions: readonly LoadAction[]): Record<LoadAction, 
 export interface Burst {
   readonly user: number;
   readonly at: number;
-  /** Which of its object's samples the user edits: distinct for every user in a burst, and from burst to burst. */
+  /** Which of its object's samples the user edits: distinct for every user within a burst (it wraps over the samples). */
   readonly slot: number;
 }
 

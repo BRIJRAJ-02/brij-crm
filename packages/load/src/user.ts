@@ -592,6 +592,7 @@ export function createLoadUser(options: UserOptions): LoadUser {
       // The refetched rows replace their copies in the window, as the store's revision rule would let them.
       if (answer.ok && state !== undefined && current(state)) {
         const fresh = new Map(answer.value.map((record) => [record.id, record]));
+        const ids = windowIdsOf.window === state.window ? windowIdsOf.ids : undefined;
         state.window = state.window.map((record) => {
           const got = fresh.get(record.id);
           return got === undefined
@@ -602,6 +603,8 @@ export function createLoadUser(options: UserOptions): LoadUser {
                 versions: { ...record.versions, ...got.versions },
               };
         });
+        // The same rows with new values: the ids the live client asks for stay what they were.
+        if (ids !== undefined) windowIdsOf = { window: state.window, ids };
       }
       return reading.answered();
     },

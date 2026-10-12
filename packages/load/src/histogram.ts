@@ -33,6 +33,11 @@ export function mergeHistograms(histograms: readonly Histogram[]): Histogram {
   return merged;
 }
 
+/** How many times landed in the end buckets: below the floor or past the ceiling, so not exact. */
+export function outOfRange(histogram: Histogram): number {
+  return (histogram[0] ?? 0) + (histogram[SIZE - 1] ?? 0);
+}
+
 /**
  * The summary of a histogram's times plus `offsetMs`, by the nearest rank (as
  * `summarize` does), or undefined when it is empty.

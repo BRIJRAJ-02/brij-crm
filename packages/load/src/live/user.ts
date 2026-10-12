@@ -118,7 +118,21 @@ export function createLiveUser(options: LiveUserOptions) {
   let subscribedOnce = false;
   let stopped = false;
   let reconnected: Reconnected | undefined;
+  /** Bumped by every connect: a connect loop still retrying from before a reconnect gives up. */
+  let generation = 0;
   const isStopped = () => stopped;
+
+  /** Runs `run` after `ms`, tracked from now until it has started its work, so the drain waits for it. */
+  function later(ms: number, run: () => void) {
+    options.track(
+      new Promise<void>((resolve) => {
+        schedule(ms, () => {
+          run();
+          resolve();
+        });
+      }),
+    );
+  }
 
   /** Starts a call and hands it to the thread's drain. */
   function tracked<T>(work: Promise<T>): Promise<T> {
@@ -222,7 +236,7 @@ export function createLiveUser(options: LiveUserOptions) {
       return;
     }
     coarse = [gathered];
-    schedule(random() * CATCH_UP_JITTER_MS, () => {
+    later(random() * CATCH_UP_JITTER_MS, () => {
       const waiting = coarse ?? [];
       coarse = undefined;
       if (stopped) return;
@@ -280,7 +294,7 @@ export function createLiveUser(options: LiveUserOptions) {
       return;
     }
     frame = [gathered];
-    schedule(FRAME_MS, flushFrame);
+    later(FRAME_MS, flushFrame);
   }
 
   /** Counts what arrived in the measured window only. */
@@ -361,9 +375,12 @@ export function createLiveUser(options: LiveUserOptions) {
    * stops, as the browser does.
    */
   async function connect(since?: StreamPosition) {
-    for (let failures = 0; !isStopped(); failures += 1) {
+    generation += 1;
+    const mine = generation;
+    const stale = () => isStopped() || generation !== mine;
+    for (let failures = 0; !stale(); failures += 1) {
       const granted = await subscriptionToken();
-      if (isStopped()) return;
+      if (stale()) return;
       if (granted === undefined) {
         await new Promise<void>((resolve) => {
           schedule(backoffMs(failures, random), resolve);
@@ -399,15 +416,19 @@ export function createLiveUser(options: LiveUserOptions) {
   }
 
   return {
-    /** Connects and subscribes, as a browser does before its first read. */
-    start: () => tracked(connect()),
+    /**
+     * Connects and subscribes, as a browser does before its first read. Not
+     * tracked as a whole: its calls are, but a user waiting out a token's
+     * backoff mustn't hold the drain.
+     */
+    start: () => connect(),
     /** The storm's reconnect (AC-207): drop the connection, then open a new one with new tokens, recovering. */
     reconnect: () => {
       const since = connection?.position();
       connection?.close();
       connection = undefined;
       reconnected = { droppedAt: now() };
-      return tracked(connect(since));
+      return connect(since);
     },
     /** The window ended: the books, and what the user knew. */
     freeze: (): { tally: LiveTally; snapshot: StreamSnapshot; reconnected?: Reconnected } => ({

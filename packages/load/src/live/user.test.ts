@@ -217,6 +217,16 @@ describe('a live user', () => {
     expect(rereads()).toBe(1);
   });
 
+  it('gives up a connect still retrying when the storm reconnects, so only one connection opens', async () => {
+    const made = setup({ failTokens: 1 });
+    const starting = made.live.start();
+    await made.timers.advance(0);
+    await made.live.reconnect();
+    await made.timers.advance(10_000);
+    await starting;
+    expect(made.opened).toHaveLength(1);
+  });
+
   it('tries a refused subscription token again with backoff, as the browser does', async () => {
     const made = setup({ failTokens: 2 });
     const starting = made.live.start();

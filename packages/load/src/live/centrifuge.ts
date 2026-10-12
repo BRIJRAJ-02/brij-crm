@@ -91,7 +91,11 @@ export const openLiveConnection: OpenLiveConnection = (options) => {
     down = false;
     options.handlers.subscribed({ wasRecovering: context.wasRecovering, recovered: context.recovered });
   });
-  subscription.on('error', (context) => trouble(`subscription ${context.type}`));
+  // A token that couldn't be fetched is already counted by the live client's own call: not a second error.
+  const ownToken = new Set(['connectToken', 'subscribeToken', 'refreshToken']);
+  subscription.on('error', (context) => {
+    if (!ownToken.has(context.type)) trouble(`subscription ${context.type}`);
+  });
   client.on('connected', () => {
     connected = true;
     down = false;
@@ -102,7 +106,9 @@ export const openLiveConnection: OpenLiveConnection = (options) => {
     connected = false;
   });
   client.on('disconnected', (context) => trouble(`disconnected ${String(context.code)}`));
-  client.on('error', (context) => trouble(`websocket ${context.type}`));
+  client.on('error', (context) => {
+    if (!ownToken.has(context.type)) trouble(`websocket ${context.type}`);
+  });
   subscription.subscribe();
   client.connect();
   return {

@@ -332,6 +332,7 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
           joins: plan.joins.filter((join) => indexes.has(join.user)),
           arrivals: plan.arrivals.filter((arrival) => indexes.has(arrival.user)),
           live: { url: urls.LOAD_CENTRIFUGO_URL, origin: new URL(urls.LOAD_API_URL).origin },
+          clockOffsetMs: offsets[0] ?? 0,
           ...(storm === undefined
             ? {}
             : {
@@ -397,6 +398,7 @@ export async function runLoad(options: RunOptions): Promise<{ result: LoadResult
         live: {
           clockOffsetMs,
           arrivals: mergeHistograms(outputs.map((output) => output.arrivals)),
+          arrivalsOffsetMs: clockOffsetMs - (offsets[0] ?? 0),
           users: outputs.flatMap((output) => output.live),
           relay,
           heads,

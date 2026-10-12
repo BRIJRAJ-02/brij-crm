@@ -7,7 +7,7 @@
 import type { ScaleBudget } from '@crm/core/scale-budget';
 import type { LiveOutput } from './drive.ts';
 import { trailingMisses } from './live/stream.ts';
-import { summarizeHistogram, type Histogram } from './histogram.ts';
+import { outOfRange, summarizeHistogram, type Histogram } from './histogram.ts';
 import type { RelayLags } from './outbox.ts';
 import type { LoadResult, ReportLine, RunValidity, Verdict } from './result.ts';
 import { summarize, type Summary } from './stats.ts';
@@ -42,8 +42,10 @@ export interface ReportInput {
 export interface LiveInput {
   /** The database's clock minus ours: joins `at` and `created_at` to the harness's clock. */
   readonly clockOffsetMs: number;
-  /** Each measured live event arrival, raw (our arrival time minus `at` on the database's clock), as a histogram. */
+  /** Each measured live event arrival at each subscriber, with the start's clock offset applied, as a histogram. */
   readonly arrivals: Histogram;
+  /** What the arrivals still need: the run's offset minus the start's (how far the clocks moved). */
+  readonly arrivalsOffsetMs: number;
   readonly users: readonly LiveOutput[];
   /** The relay lag of every outbox row committed in the window, or undefined when the outbox couldn't be read. */
   readonly relay: RelayLags | undefined;
@@ -163,8 +165,10 @@ export function deliveryLines(budget: ScaleBudget, samples: readonly Sample[], l
     ),
     fromSummary(
       'event arrival (commit to each subscriber)',
-      summarizeHistogram(live.arrivals, offset),
-      'live events only, in 1 ms buckets',
+      summarizeHistogram(live.arrivals, live.arrivalsOffsetMs),
+      `live events only, in 1 ms buckets${
+        outOfRange(live.arrivals) === 0 ? '' : `; ${String(outOfRange(live.arrivals))} past the histogram's ends`
+      }`,
     ),
     reported(
       'delivery after recovery or catch up',

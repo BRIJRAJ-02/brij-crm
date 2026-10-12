@@ -65,6 +65,13 @@ export interface DriveInput {
    * the run invalid. Absent in every real run.
    */
   readonly blockLoopMs?: number;
+  /**
+   * The database's clock minus ours when the run started: arrivals are
+   * bucketed with it applied, so a clock that leads by seconds can't push
+   * them all against the histogram's floor. The report applies only how far
+   * the offset moved after.
+   */
+  readonly clockOffsetMs: number;
 }
 
 /** One user's live books when the window closed. */
@@ -79,9 +86,8 @@ export interface LiveOutput {
 export interface DriveOutput {
   readonly samples: readonly Sample[];
   /**
-   * Each measured live event's arrival at each subscriber, raw (our arrival
-   * time minus its `at` on the database's clock; the offset joins later), as
-   * a histogram.
+   * Each measured live event's arrival at each subscriber (our arrival time
+   * minus its `at`, with the start's clock offset applied), as a histogram.
    */
   readonly arrivals: Histogram;
   readonly live: readonly LiveOutput[];
@@ -178,7 +184,7 @@ export async function drive(input: DriveInput): Promise<DriveOutput> {
             random: createRandom(input.seed, `live:${String(user.index)}`).next,
             measured,
             record,
-            arrival: (rawMs) => addTo(arrivals, rawMs),
+            arrival: (rawMs) => addTo(arrivals, rawMs + input.clockOffsetMs),
             track,
           }),
         );
