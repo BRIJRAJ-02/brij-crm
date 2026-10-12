@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { systemScope } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
+import type { Actor } from '../engine/scope.ts';
 import { runWrite } from '../engine/write.ts';
 import { rescope } from '../testing.ts';
 import { syntheticId } from './kinds/dev-simulate.ts';
@@ -19,7 +20,7 @@ import { jobKinds } from './kinds/index.ts';
 import { defineKind, type AnyKind, type ItemOutcome } from './registry.ts';
 import { SNAPSHOT_PAGE } from './runner.ts';
 import { cancelJob, confirmJob, getJob, startJob, startTestJob } from './service.ts';
-import { ensureTestTables, fakeClock, jobTestKit, refusalOf } from './test-kit.ts';
+import { ensureTestTables, fakeClock, jobTestKit, refusalOf } from '../../test/jobs-kit.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 const db = createDatabase({ url: appUrl, applicationName: 'crm-jobs-m2-tests' });
@@ -31,6 +32,9 @@ beforeAll(async () => {
 afterAll(async () => {
   await db.close();
 });
+
+/** Who each `test.touch` snapshot page read as. */
+const snapshotActors: Actor[] = [];
 
 /** Jobs whose `onFailed` throws the next time it runs (once each). */
 const hookThrowsOnce = new Set<string>();
@@ -93,8 +97,10 @@ const touch = defineKind({
   maxAttempts: 8,
   batchSize: 3,
   sample: { asOf: '2026-10-12T00:00:00.000Z' },
-  async snapshot(tx, params, after, limit) {
-    const result = await tx.execute<{ id: string }>(sql`
+  async snapshot(context, params, after, limit) {
+    // The snapshot reads as the starter (the slice's own scope), never as the system.
+    snapshotActors.push(context.scope.actor);
+    const result = await context.tx.execute<{ id: string }>(sql`
       select id from test_job_targets
       where created_at <= ${params.asOf}::timestamptz and deleted_at is null
         and (${after ?? null}::uuid is null or id > ${after ?? null}::uuid)
@@ -452,6 +458,7 @@ describe('snapshot and confirm (AC-109)', () => {
     const run = runnerFor(registry);
     expect(await run.runner.runSlice({ workspaceId: t.workspaceId, jobId: result.jobId })).toBe('handed-over');
     expect(await getJob(t.member, registry, result.jobId)).toMatchObject({ status: 'queued', total: 7 });
+    expect(snapshotActors.at(-1)).toEqual({ type: 'member', id: t.memberId });
     // Deleted after the snapshot: checked again in its batch.
     const deleted = [...before].sort()[3] ?? '';
     await testQuery(ownerUrl, 'update test_job_targets set deleted_at = now() where id = $1', [deleted]);

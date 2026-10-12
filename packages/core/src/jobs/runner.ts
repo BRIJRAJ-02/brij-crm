@@ -18,6 +18,7 @@ import { isFinishedJob, REFUSAL_GROUP_IDS, type QueuePayload } from '@crm/contra
 import { ERROR_CODES } from '@crm/contracts/codes';
 import { schema, type Database, type WorkspaceTx } from '@crm/db';
 import { inWorkspace } from '../access/run.ts';
+import { isUuid } from '../engine/ids.ts';
 import { limitsOf } from '../engine/limits.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import type { Actor, EngineScope } from '../engine/scope.ts';
@@ -58,6 +59,12 @@ export interface RunnerDeps {
   readonly leaseOwner?: string;
   /** How long a slice runs batches before it hands the job back (20 seconds). */
   readonly sliceMs?: number;
+  /**
+   * The light lane's slice budget (1 second): light work is short, and a
+   * workspace's long light jobs hand their slots back often, so a light job in
+   * any workspace starts within 2 seconds (AC-108).
+   */
+  readonly lightSliceMs?: number;
   /** How long a lease lasts past each batch (60 seconds). */
   readonly leaseMs?: number;
   /** At most one progress event per job this often (1 second); the final one always goes. */
@@ -94,6 +101,7 @@ export interface Runner {
 }
 
 const SLICE_MS = 20_000;
+const LIGHT_SLICE_MS = 1_000;
 const LEASE_MS = 60_000;
 const PROGRESS_MS = 1_000;
 const CONFIRM_MS = 60 * 60_000;
@@ -133,7 +141,8 @@ function asSystem(context: WriteContext, system: EngineScope): WriteContext {
   const wrapped: WriteContext = {
     ...context,
     scope: system,
-    perRecord: (work) => context.perRecord((inner) => work({ ...inner, scope: system })),
+    // Every savepoint, however deep, keeps the system's scope.
+    perRecord: (work) => context.perRecord((inner) => work(asSystem(inner, system))),
   };
   return wrapped;
 }
@@ -152,6 +161,7 @@ export function createRunner(deps: RunnerDeps): Runner {
   // How many slices this runner started: each one's lease names it.
   let slicesStarted = 0;
   const sliceMs = deps.sliceMs ?? SLICE_MS;
+  const lightSliceMs = deps.lightSliceMs ?? Math.min(sliceMs, LIGHT_SLICE_MS);
   const leaseMs = deps.leaseMs ?? LEASE_MS;
   const progressMs = deps.progressMs ?? PROGRESS_MS;
   const confirmMs = deps.confirmMs ?? CONFIRM_MS;
@@ -209,7 +219,13 @@ export function createRunner(deps: RunnerDeps): Runner {
     row: JobRow,
     status: 'failed' | 'cancelled',
     code: Ending,
-    options: { readonly event: boolean; readonly kind?: AnyKind | undefined; readonly params?: unknown },
+    options: {
+      readonly event: boolean;
+      readonly kind?: AnyKind | undefined;
+      readonly params?: unknown;
+      /** Ends it only while it is still in this status (an expiry never cancels a job a confirm just queued). */
+      readonly whileStatus?: JobRow['status'];
+    },
   ): Promise<void> {
     const scope = deps.systemScope(row.workspaceId);
     const stored = { event: false };
@@ -234,9 +250,16 @@ export function createRunner(deps: RunnerDeps): Runner {
                   result: sql`coalesce(${jobs.result}, '{}'::jsonb) || ${JSON.stringify({ refusals: groups })}::jsonb`,
                 }),
           })
-          .where(and(eq(jobs.workspaceId, row.workspaceId), eq(jobs.id, row.id), sql`${jobs.finishedAt} is null`))
+          .where(
+            and(
+              eq(jobs.workspaceId, row.workspaceId),
+              eq(jobs.id, row.id),
+              sql`${jobs.finishedAt} is null`,
+              options.whileStatus === undefined ? undefined : eq(jobs.status, options.whileStatus),
+            ),
+          )
           .returning({ id: jobs.id });
-        // Another path ended it first: nothing more to do, and no hook to run twice.
+        // Another path ended (or confirmed) it first: nothing more to do, and no hook to run twice.
         if (ended === undefined) return;
         if (status === 'failed') {
           await runOnFailed(context, row, options.kind, options.params, { code, message: ENDINGS[code] });
@@ -322,12 +345,22 @@ export function createRunner(deps: RunnerDeps): Runner {
 
   /** The refused items grouped by code, each with its count and first ids by position (AC-105). */
   async function refusalGroups(tx: WorkspaceTx, row: Pick<JobRow, 'workspaceId' | 'id'>) {
+    // Counted per code from the index, then each code's first ids by position read in order from it (0031), so a
+    // job with a million refusals never sorts them all to keep 20.
     const result = await tx.execute<{ code: string; count: number; item_ids: string[] }>(sql`
-      select coalesce(code, '') as code, count(*)::int as count,
-        (array_agg(item_id order by position))[1:${REFUSAL_GROUP_IDS}] as item_ids
-      from job_items
-      where workspace_id = ${row.workspaceId} and job_id = ${row.id} and state = 'refused'
-      group by 1 order by 2 desc, 1
+      select coalesce(g.code, '') as code, g.count,
+        array(
+          select i.item_id from job_items i
+          where i.workspace_id = ${row.workspaceId} and i.job_id = ${row.id} and i.state = 'refused'
+            and i.code is not distinct from g.code
+          order by i.position limit ${REFUSAL_GROUP_IDS}
+        ) as item_ids
+      from (
+        select code, count(*)::int as count from job_items
+        where workspace_id = ${row.workspaceId} and job_id = ${row.id} and state = 'refused'
+        group by code
+      ) g
+      order by g.count desc, 1
     `);
     return result.rows.map((group) => ({ code: group.code, count: group.count, itemIds: group.item_ids }));
   }
@@ -526,7 +559,8 @@ export function createRunner(deps: RunnerDeps): Runner {
         }
         if (kind.snapshot === undefined) throw new Error(`Kind ${kind.kind} has no snapshot.`);
         const at = readSnapshotCheckpoint(row.checkpoint);
-        const ids = await kind.snapshot(tx, params, at.after, SNAPSHOT_PAGE);
+        const ids = await kind.snapshot(context, params, at.after, SNAPSHOT_PAGE);
+        if (!ids.every(isUuid)) throw new Error(`Kind ${kind.kind}'s snapshot answered something other than ids.`);
         if (at.count + ids.length > limitsOf(scope).jobItems) return 'too-large';
         const stored = await insertItems(tx, scope.workspaceId, jobId, ids, at.position);
         const last = ids.at(-1);
@@ -684,7 +718,7 @@ export function createRunner(deps: RunnerDeps): Runner {
             return finish('succeeded', { batches, ...total });
           }
         }
-        if (signal?.aborted === true || now() - started >= sliceMs) break;
+        if (signal?.aborted === true || now() - started >= (kind.lane === 'light' ? lightSliceMs : sliceMs)) break;
       }
     } catch (error) {
       deps.log.warn('job.batch.failed', {
@@ -700,15 +734,25 @@ export function createRunner(deps: RunnerDeps): Runner {
       finish('retrying', { batches, ...total });
       throw error;
     }
-    // Hand over (step 4): the next slice queues behind every row already waiting. A job ended meanwhile (a
-    // cancel that landed at once) is queued no more.
-    await inWorkspace(deps.systemScope(row.workspaceId), async (tx) => {
-      await tx
-        .update(jobs)
-        .set({ leaseOwner: null, leaseUntil: null, updatedAt: sql`now()` })
-        .where(and(eq(jobs.workspaceId, row.workspaceId), eq(jobs.id, row.id), eq(jobs.leaseOwner, leaseOwner)));
-      await tryEnqueue(tx, row.id);
-    });
+    // Hand over (step 4): the next slice queues behind every row already waiting, and its event carries the
+    // progress the slice's last batches made (they may have been inside the once a second throttle), so a job
+    // waiting for a slot never shows stale counts. A job ended meanwhile (a cancel that landed at once) is queued
+    // no more. The next slice may run in another process, so this one forgets the job's throttle.
+    const handed = await runWrite(
+      deps.systemScope(row.workspaceId),
+      async (context) => {
+        await context.tx
+          .update(jobs)
+          .set({ leaseOwner: null, leaseUntil: null, updatedAt: sql`now()` })
+          .where(and(eq(jobs.workspaceId, row.workspaceId), eq(jobs.id, row.id), eq(jobs.leaseOwner, leaseOwner)));
+        const queued = await tryEnqueue(context.tx, row.id);
+        if (queued) context.record({ jobs: [{ jobId: row.id, startedBy: row.createdByMemberId }] });
+        return queued;
+      },
+      deps.hooks(),
+    );
+    lastSent.delete(row.id);
+    if (handed.result) deps.onStored?.();
     return finish(signal?.aborted === true ? 'stopped' : 'handed-over', { batches, ...total });
   }
 
@@ -729,7 +773,7 @@ export function createRunner(deps: RunnerDeps): Runner {
       const leaseOwner = `${worker}:${String(slicesStarted)}`;
       const claimed = await claim(payload, leaseOwner);
       if (claimed.kind === 'expired') {
-        await end(claimed.row, 'cancelled', 'JOB_EXPIRED', { event: true });
+        await end(claimed.row, 'cancelled', 'JOB_EXPIRED', { event: true, whileStatus: 'ready' });
         deps.log.info('job.expired', {
           jobId: claimed.row.id,
           kind: claimed.row.kind,

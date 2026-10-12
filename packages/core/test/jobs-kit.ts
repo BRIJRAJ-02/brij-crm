@@ -1,20 +1,21 @@
 // What the jobs tests share (spec 0008): a clock they move, a workspace with
 // members of each role, the runner as the worker builds it, and reads of the
 // queue, the job events and the item states as the owner sees them. Tests
-// only; nothing here is exported from the package.
+// only: it lives outside src, and only `ensureTestTables` reaches the
+// package's testing entry (`@crm/core/testing`, tests and scripts).
 import { sql } from 'drizzle-orm';
 import type { Role } from '@crm/contracts';
 import type { Database } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
-import { enterAsActor, systemScope } from '../access/door.ts';
-import { newId } from '../engine/ids.ts';
-import { outboxHook } from '../engine/outbox.ts';
-import { isRefusal } from '../engine/refusals.ts';
-import { createWorkspace } from '../engine/workspaces.ts';
-import { testScope } from '../testing.ts';
-import { jobKinds } from './kinds/index.ts';
-import type { JobRegistry } from './registry.ts';
-import { createRunner, type RunnerDeps } from './runner.ts';
+import { enterAsActor, systemScope } from '../src/access/door.ts';
+import { newId } from '../src/engine/ids.ts';
+import { outboxHook } from '../src/engine/outbox.ts';
+import { isRefusal } from '../src/engine/refusals.ts';
+import { createWorkspace } from '../src/engine/workspaces.ts';
+import { testScope } from '../src/testing.ts';
+import { jobKinds } from '../src/jobs/kinds/index.ts';
+import type { JobRegistry } from '../src/jobs/registry.ts';
+import { createRunner, type RunnerDeps } from '../src/jobs/runner.ts';
 
 /** A clock the tests move: the test kind's waits move it, so nothing sleeps. */
 export function fakeClock(start = Date.now()) {

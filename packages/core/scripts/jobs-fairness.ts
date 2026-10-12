@@ -4,7 +4,8 @@
 // starts the test kinds as their owners (through PgBouncer, as the API would),
 // and lets the stack's worker run them: two huge heavy jobs (A, 200,000 items,
 // and D, 100,000) take both heavy slots, a second heavy job in A waits behind
-// A's own, then B's 1,000 item heavy job and light jobs in C arrive. It reads
+// A's own, then B's 1,000 item heavy job arrives, E fills all four light slots
+// with long light jobs, and light jobs in C arrive. It reads
 // when each was queued, started and finished, and how many heavy slices each
 // workspace ran at once, then cancels what is left and prints the numbers for
 // `docs/specs/0008-background-jobs/verify.md`. Localhost only (AC-210).
@@ -107,8 +108,10 @@ async function main(): Promise<void> {
   const db = createDatabase({ url: urls.LOAD_PGBOUNCER_URL, applicationName: 'crm-jobs-fairness' });
   const registry = jobKinds({ environment: 'local' });
   try {
-    const [a, b, c, d] = await Promise.all(['A', 'B', 'C', 'D'].map((name) => workspace(db, name)));
-    if (a === undefined || b === undefined || c === undefined || d === undefined) throw new Error('No workspaces.');
+    const [a, b, c, d, e] = await Promise.all(['A', 'B', 'C', 'D', 'E'].map((name) => workspace(db, name)));
+    if (a === undefined || b === undefined || c === undefined || d === undefined || e === undefined) {
+      throw new Error('No workspaces.');
+    }
     console.log('Starting the two big heavy jobs (A 200,000 items, D 100,000) and a second heavy job in A.');
     const bigA = await start(registry, a, 'dev.simulate', 200_000, 200);
     const bigD = await start(registry, d, 'dev.simulate', 100_000, 200);
@@ -127,6 +130,11 @@ async function main(): Promise<void> {
     await wait(25_000);
     console.log('A and D hold both heavy slots: starting B (1,000 heavy items) and a light job in C every 3 seconds.');
     const smallB = await start(registry, b, 'dev.simulate', 1_000, 200);
+    // E holds every light slot with long light jobs (20,000 items, batches of 500 at 200 ms: about 8 seconds each).
+    const longLights: Started[] = [];
+    for (let index = 0; index < 4; index += 1)
+      longLights.push(await start(registry, e, 'dev.simulate_light', 20_000, 200));
+    await wait(1_000);
     const lights: Started[] = [];
     for (let index = 0; index < 8; index += 1) {
       lights.push(await start(registry, c, 'dev.simulate_light', 100, 50));
@@ -142,7 +150,7 @@ async function main(): Promise<void> {
     sampling.on = false;
     await sampler;
     const rows = await Promise.all(
-      [bigA, bigD, secondA, smallB, ...lights].map(async (job) => ({ job, at: await times(db, job) })),
+      [bigA, bigD, secondA, smallB, ...longLights, ...lights].map(async (job) => ({ job, at: await times(db, job) })),
     );
     console.log('\n| Job | Workspace | Items | Queued to started (s) | Started to finished (s) | Status | Done |');
     console.log('|---|---|---|---|---|---|---|');
@@ -154,12 +162,16 @@ async function main(): Promise<void> {
       );
     }
     const lightStarts = rows
-      .filter(({ job }) => job.kind === 'dev.simulate_light')
+      .filter(({ job }) => job.kind === 'dev.simulate_light' && job.space.name === 'C')
       .map(({ at }) => (at.startedAt === null ? Infinity : (at.startedAt.getTime() - at.queuedAt.getTime()) / 1000));
-    console.log(`\nLight jobs: slowest start ${Math.max(...lightStarts).toFixed(2)} s after queued.`);
+    console.log(
+      `\nLight jobs in C (E holding the light slots): slowest start ${Math.max(...lightStarts).toFixed(2)} s after queued.`,
+    );
     console.log(`Most heavy slices at once: ${[...most].map(([name, n]) => `${name} ${String(n)}`).join(', ')}.`);
     // The big jobs stop here: what they did stays done.
-    for (const job of [bigA, bigD]) await cancelJob(job.space.scope, registry, job.jobId);
+    for (const job of [bigA, bigD, ...longLights]) {
+      if ((await times(db, job)).finishedAt === null) await cancelJob(job.space.scope, registry, job.jobId);
+    }
   } finally {
     await db.close();
   }

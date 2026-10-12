@@ -175,7 +175,11 @@ const MAX_KEY = 200;
  * the background first (AC-109). Refusals: 422 CONFIG_INVALID (params), 422
  * JOB_TOO_LARGE (over a million items), 409 LIMIT_REACHED (the workspace's
  * 21st unfinished member job of a kind that counts, AC-126), 409 ID_TAKEN
- * (the id names someone else's job, or one of another kind).
+ * (the id names someone else's job, or one of another kind). A system kind
+ * (and every kind's `onFailed`) acts with system power on the params and
+ * items it is given, so the feature authorises them through the door first;
+ * a `countsTowardLimit: false` kind's key must not come from client input,
+ * or one member could hold any number of waiting jobs.
  */
 export async function startJob(
   context: WriteContext,
@@ -228,34 +232,11 @@ export async function startJob(
   }
   const join = { kind, params: parsed.data, items, limit: limits.jobItems };
   if (dedupeKey !== undefined) {
+    // A coalesced start takes the counter row first, as the write that will store its event does at commit: two
+    // racing starts then queue on that one lock, rather than one waiting on the other's key while holding it.
+    await lockCounters(tx, scope.workspaceId);
     const merged = await mergeInto(context, join, dedupeKey);
     if (merged !== undefined) return { jobId: merged, merged: true };
-  }
-
-  if (starter !== undefined && kind.countsTowardLimit !== false) {
-    // The limit, counted under the counter row's lock (which every write takes last), so two starts take turns.
-    const [counters] = await tx
-      .select({ workspaceId: workspaceCounters.workspaceId })
-      .from(workspaceCounters)
-      .where(eq(workspaceCounters.workspaceId, scope.workspaceId))
-      .for('update');
-    if (counters === undefined) throw new Error('The workspace has no counters row.');
-    // Kinds that stay out of the limit (AC-126) aren't counted; their one waiting job per key bounds them.
-    const [counted] = await tx
-      .execute<{ n: number }>(
-        sql`
-      select count(*)::int as n from jobs
-      where workspace_id = ${scope.workspaceId} and created_by_type = 'member' and finished_at is null
-        and kind not in (select jsonb_array_elements_text(${JSON.stringify(registry.uncounted())}::jsonb))
-    `,
-      )
-      .then((result) => result.rows);
-    if ((counted?.n ?? 0) >= limits.unfinishedJobs) {
-      throw refuse(
-        'LIMIT_REACHED',
-        `This workspace already runs ${String(limits.unfinishedJobs)} jobs. Wait for one to finish, or cancel one.`,
-      );
-    }
   }
 
   // When it may first run: the time asked for, else now plus the kind's coalescing window.
@@ -302,10 +283,42 @@ export async function startJob(
   }
 
   await insertItems(tx, scope.workspaceId, jobId, items, 0);
+  if (starter !== undefined && kind.countsTowardLimit !== false) {
+    // The limit, counted under the counter row's lock, taken last as every write takes it (after the items, so
+    // a large start never holds the workspace's writes while its items go in), so two starts take turns. Kinds
+    // that stay out of the limit (AC-126) aren't counted; their one waiting job per key bounds them.
+    await lockCounters(tx, scope.workspaceId);
+    const [counted] = await tx
+      .execute<{ n: number }>(
+        sql`
+      select count(*)::int as n from jobs
+      where workspace_id = ${scope.workspaceId} and created_by_type = 'member' and finished_at is null
+        and id <> ${jobId}
+        and kind not in (select jsonb_array_elements_text(${JSON.stringify(registry.uncounted())}::jsonb))
+    `,
+      )
+      .then((result) => result.rows);
+    if ((counted?.n ?? 0) >= limits.unfinishedJobs) {
+      throw refuse(
+        'LIMIT_REACHED',
+        `This workspace already runs ${String(limits.unfinishedJobs)} jobs. Wait for one to finish, or cancel one.`,
+      );
+    }
+  }
   await enqueue(tx, jobId, runAt);
   // Its first event goes out with the write (spec 0007's `jobs` kind), under its starter.
   context.record({ jobs: [{ jobId, startedBy: starter ?? null }] });
   return { jobId, merged: false };
+}
+
+/** Takes the workspace's counter row (every write takes it, the outbox numbering from it). */
+async function lockCounters(tx: WorkspaceTx, workspaceId: string): Promise<void> {
+  const [counters] = await tx
+    .select({ workspaceId: workspaceCounters.workspaceId })
+    .from(workspaceCounters)
+    .where(eq(workspaceCounters.workspaceId, workspaceId))
+    .for('update');
+  if (counters === undefined) throw new Error('The workspace has no counters row.');
 }
 
 /** A start too large to hold. */
@@ -388,10 +401,11 @@ export async function insertItems(
   let added = 0;
   for (let offset = 0; offset < ids.length; offset += ITEM_CHUNK) {
     const chunk = ids.slice(offset, offset + ITEM_CHUNK);
+    // The ids go as one JSON parameter, never spliced into an array literal.
     const result = await tx.execute(sql`
       insert into job_items (workspace_id, job_id, position, item_id)
-      select ${workspaceId}::uuid, ${jobId}::uuid, ${after + offset}::int + t.ord, t.item
-      from unnest(${`{${chunk.join(',')}}`}::uuid[]) with ordinality as t(item, ord)
+      select ${workspaceId}::uuid, ${jobId}::uuid, ${after + offset}::int + t.ord::int, t.item::uuid
+      from jsonb_array_elements_text(${JSON.stringify(chunk)}::jsonb) with ordinality as t(item, ord)
       on conflict do nothing
     `);
     added += result.rowCount ?? 0;

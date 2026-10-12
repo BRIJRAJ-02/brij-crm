@@ -17,7 +17,7 @@ import { devSimulate, SIMULATED_REFUSAL } from './kinds/dev-simulate.ts';
 import { jobKinds } from './kinds/index.ts';
 import { createRegistry, defineKind, kindContractProblems, type AnyKind } from './registry.ts';
 import { cancelJob, getJob, listJobs, startJob, startTestJob } from './service.ts';
-import { fakeClock, jobTestKit, refusalOf } from './test-kit.ts';
+import { fakeClock, jobTestKit, refusalOf } from '../../test/jobs-kit.ts';
 
 const { appUrl, ownerUrl } = inject('testDatabase');
 const db = createDatabase({ url: appUrl, applicationName: 'crm-jobs-tests' });
@@ -231,10 +231,11 @@ describe('the runner (AC-103 to AC-107, AC-113, AC-120)', () => {
       { state: 'done', n: 900 },
       { state: 'refused', n: 100 },
     ]);
-    // The start's event, then at most one a second across 4 seconds of batches, and the final one.
+    // The start's event, then at most one a second across 4 seconds of batches, one per hand over, and the final.
     const events = await jobEvents(t.workspaceId);
+    const handOvers = outcomes.filter((outcome) => outcome === 'handed-over').length;
     expect(events.length).toBeGreaterThanOrEqual(3);
-    expect(events.length).toBeLessThanOrEqual(1 + 5 + 1);
+    expect(events.length).toBeLessThanOrEqual(1 + 5 + handOvers + 1);
     expect(events.every((event) => event.actor_member_id !== null)).toBe(true);
     expect(run.wakes()).toBeGreaterThan(0);
     // Each hand over replaced the job's one waiting row rather than adding another (here no Graphile takes them).

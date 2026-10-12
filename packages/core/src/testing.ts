@@ -80,7 +80,7 @@ export function testScope(input: TestScopeInput): EngineScope {
  * `test_job_targets`), made once per test database as the owner, so a test
  * kind can count its effects exactly once (spec 0008, AC-103).
  */
-export { ensureTestTables } from './jobs/test-kit.ts';
+export { ensureTestTables } from '../test/jobs-kit.ts';
 
 /**
  * Starts a job of any kind `registry` holds, in a write of its own, for tests

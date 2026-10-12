@@ -4,7 +4,6 @@
 // runs; the screens know a kind's label and whether it can be cancelled from
 // `JOB_KINDS` in `@crm/contracts`, and `defineKind` checks the two agree.
 import { JOB_KINDS, type JobKind } from '@crm/contracts';
-import type { WorkspaceTx } from '@crm/db';
 import type { z } from 'zod';
 import type { WriteContext } from '../engine/write.ts';
 
@@ -98,10 +97,13 @@ export interface KindDefinition<P> {
    * The snapshot (AC-109), for an item kind started with `snapshot` or
    * `confirm`: the next ids after `after` (a keyset cursor, the last id of
    * the page before; undefined for the first page), in id order, at most
-   * `limit`. A read on `tx` only, of rows that existed at the start (the
-   * params carry the start's `asOf`), never a write.
+   * `limit`. A read only, never a write, of rows that existed at the start
+   * (the params carry the start's `asOf`), through the slice's own scope
+   * (`context.scope`, the starter as they are now): it reads what the access
+   * door lets the starter see, through the engine's reads, so a hidden
+   * record is never counted or listed (hidden means absent).
    */
-  snapshot?(tx: WorkspaceTx, params: P, after: string | undefined, limit: number): Promise<readonly string[]>;
+  snapshot?(context: WriteContext, params: P, after: string | undefined, limit: number): Promise<readonly string[]>;
   step(context: WriteContext, input: StepInput<P>): Promise<StepOutcome>;
   /**
    * Undoes or releases what the feature holds for a job that ended `failed`,
