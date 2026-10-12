@@ -10,7 +10,10 @@ New. A select option's colour and an object's tile (#13) are picked from the sam
 
 ```tsx
 <HuePicker label="Option colour" value={hue} onChange={setHue} />
+<HuePicker label="Colour" value={hue} onChange={setHue} isLabelShown />
 ```
+
+- `label` names the group for screen readers. `isLabelShown` also draws it above the swatches as a field's label, for a form that stacks it with Fields (the new object dialog, an object's Configuration). Why a variant: in a form beside labelled Fields, swatches with no visible label read as decoration.
 
 ## States
 

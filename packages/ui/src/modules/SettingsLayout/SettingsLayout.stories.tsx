@@ -8,7 +8,7 @@ import { Card } from '../../molecules/Card/Card.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { TabPanel, Tabs } from '../../molecules/Tabs/Tabs.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { SettingsLayout, type SettingsNavEntry } from './SettingsLayout.tsx';
+import { SettingsLayout, SettingsStack, type SettingsNavEntry } from './SettingsLayout.tsx';
 
 const NAV: readonly SettingsNavEntry[] = [
   { id: 'objects', label: 'Objects', href: '#objects', icon: 'box' },
@@ -47,11 +47,18 @@ function SampleSettings({ page = 'objects', isLoading = false, width = 'auto' }:
           >
             <TabPanel id="attributes">{null}</TabPanel>
             <TabPanel id="configuration">
-              <Card title="Archive Projects" description="It leaves the sidebar; its records are kept.">
-                <Button variant="danger" icon="archive">
-                  Archive Projects
-                </Button>
-              </Card>
+              <SettingsStack>
+                <Card title="Configuration" description="Its names and look." />
+                <Card
+                  title="Archive Projects"
+                  description="It leaves the sidebar; its records are kept."
+                  actions={
+                    <Button variant="danger" icon="archive">
+                      Archive Projects
+                    </Button>
+                  }
+                />
+              </SettingsStack>
             </TabPanel>
           </Tabs>
         </SettingsLayout>

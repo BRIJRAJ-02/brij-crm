@@ -108,3 +108,16 @@ export function SettingsLayout({
     </div>
   );
 }
+
+/** Props for SettingsStack. */
+export interface SettingsStackProps {
+  readonly children: ReactNode;
+}
+
+/**
+ * The page body's rhythm inside a tab's panel: sections (Cards, Tables, a
+ * Callout) stacked `space-16` apart, as they are directly in the body.
+ */
+export function SettingsStack({ children }: SettingsStackProps) {
+  return <div className={styles.stack}>{children}</div>;
+}

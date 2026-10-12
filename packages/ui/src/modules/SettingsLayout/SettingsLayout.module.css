@@ -83,11 +83,17 @@
     align-items: center;
   }
 
-  .body {
+  .body,
+  .stack {
     display: flex;
     flex-direction: column;
     gap: var(--space-16);
     min-inline-size: 0;
+  }
+
+  /* Inside a tab's panel: a breath under the tabs' hairline. */
+  .stack {
+    padding-block-start: var(--space-16);
   }
 
   @container (width < 480px) {

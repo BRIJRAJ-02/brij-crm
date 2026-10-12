@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { Field } from '../Field/Field.tsx';
 import { Disclosure, DisclosureGroup } from './Disclosure.tsx';
 
 const meta = {
@@ -59,5 +60,21 @@ export const Label: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('button', { name: 'Records' })).toHaveAttribute('aria-expanded', 'true');
+  },
+};
+
+/** More fields folded inside a form: open, they stack as a form's fields do. */
+export const Fields: Story = {
+  args: { title: 'Add more fields', count: 2, variant: 'fields', defaultExpanded: true },
+  render: (args) => (
+    <Stage direction="column">
+      <Disclosure {...args}>
+        <Field label="Job title" />
+        <Field label="Description" isMultiline />
+      </Disclosure>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Job title' })).toBeVisible();
   },
 };

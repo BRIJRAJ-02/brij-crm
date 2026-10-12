@@ -87,6 +87,7 @@ describe('@crm/ui', () => {
       'Select',
       'Separator',
       'SettingsLayout',
+      'SettingsStack',
       'ShortcutHelp',
       'Sidebar',
       'SignInForm',

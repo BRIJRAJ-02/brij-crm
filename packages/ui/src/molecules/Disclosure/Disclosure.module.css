@@ -77,6 +77,17 @@
     padding-inline: var(--space-4);
   }
 
+  /* The fields variant: more fields inside a form, stacked as the form stacks its own. */
+  .root[data-variant='fields'] .content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+  }
+
+  .root[data-variant='fields'][data-expanded] .panel {
+    padding-block-start: var(--space-12);
+  }
+
   /* The label variant: a sidebar section's quiet 11px title, chevron after it,
      and the items flush under it. */
   .root[data-variant='label'] .trigger {

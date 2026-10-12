@@ -189,7 +189,9 @@ export { RecordHeader, type RecordHeaderProps } from './modules/RecordHeader/Rec
 export { RecordPanel, type RecordPanelProps, type RecordPanelTab } from './modules/RecordPanel/RecordPanel.tsx';
 export {
   SettingsLayout,
+  SettingsStack,
   type SettingsLayoutProps,
+  type SettingsStackProps,
   type SettingsNavEntry,
 } from './modules/SettingsLayout/SettingsLayout.tsx';
 export { SignInForm, type SignInFormProps, type SignInStatus } from './modules/SignInForm/SignInForm.tsx';

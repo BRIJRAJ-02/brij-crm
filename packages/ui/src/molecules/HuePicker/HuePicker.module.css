@@ -11,6 +11,18 @@
     display: inline-flex;
   }
 
+  /* With its label shown (a form): the label as a field's, over the swatches. */
+  .root[data-labelled] {
+    row-gap: var(--space-4);
+  }
+
+  .label {
+    flex-basis: 100%;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
   .swatch {
     display: inline-grid;
     place-items: center;

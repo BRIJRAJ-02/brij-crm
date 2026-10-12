@@ -24,8 +24,13 @@ export interface DisclosureProps {
   readonly defaultExpanded?: boolean;
   readonly onExpandedChange?: (isExpanded: boolean) => void;
   readonly isDisabled?: boolean;
-  /** `label` draws the title as a sidebar section label: 11px, quiet, its chevron after it. */
-  readonly variant?: 'default' | 'label';
+  /**
+   * `label` draws the title as a sidebar section label: 11px, quiet, its
+   * chevron after it. `fields` stacks the panel's content `space-16` apart, as
+   * a Form stacks its fields, for more fields folded inside a form ("Add more
+   * fields" in a create dialog).
+   */
+  readonly variant?: 'default' | 'label' | 'fields';
 }
 
 /** A section that opens and closes under its title: attribute groups, advanced settings, sidebar sections. */
@@ -69,7 +74,11 @@ export function Disclosure({
 /** The panel's content, inert while folded, so links and fields inside it take no focus. */
 function PanelContent({ children }: { readonly children: ReactNode }) {
   const state = useContext(DisclosureStateContext);
-  return <div inert={state?.isExpanded === false}>{children}</div>;
+  return (
+    <div className={styles.content} inert={state?.isExpanded === false}>
+      {children}
+    </div>
+  );
 }
 
 /** Props for DisclosureGroup. */

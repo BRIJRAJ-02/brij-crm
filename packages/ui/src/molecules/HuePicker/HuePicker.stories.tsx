@@ -27,3 +27,17 @@ export const Default: Story = {
     await expect(args.onChange).toHaveBeenCalledWith('sky');
   },
 };
+
+/** In a form beside labelled Fields: the label shows above the swatches, as a field's does. */
+export const LabelShown: Story = {
+  args: { label: 'Colour', isLabelShown: true },
+  render: (args) => (
+    <Stage>
+      <HuePicker {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Colour')).toBeVisible();
+    await expect(canvas.getByRole('radiogroup', { name: 'Colour' })).toBeInTheDocument();
+  },
+};

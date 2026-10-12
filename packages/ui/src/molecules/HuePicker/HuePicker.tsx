@@ -1,4 +1,4 @@
-import { RadioButton, RadioField, RadioGroup } from 'react-aria-components';
+import { Label, RadioButton, RadioField, RadioGroup } from 'react-aria-components';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { HUES, type Hue } from '../../hue.ts';
@@ -13,20 +13,34 @@ export interface HuePickerProps {
   readonly defaultValue?: Hue;
   readonly onChange?: (hue: Hue) => void;
   readonly isDisabled?: boolean;
+  /**
+   * Shows `label` above the swatches, as a field's label, for a form that
+   * stacks it with Fields (the new object dialog). Hidden by default, where a
+   * popover or a row already says what the hue is for.
+   */
+  readonly isLabelShown?: boolean;
 }
 
 /** One of the nine hues, as named swatches: an option's colour, an object's tile. A radio group, so the arrow keys move. */
-export function HuePicker({ label, value, defaultValue, onChange, isDisabled = false }: HuePickerProps) {
+export function HuePicker({
+  label,
+  value,
+  defaultValue,
+  onChange,
+  isDisabled = false,
+  isLabelShown = false,
+}: HuePickerProps) {
   return (
     <RadioGroup
       className={styles.root}
-      aria-label={label}
+      {...(isLabelShown ? { 'data-labelled': true } : { 'aria-label': label })}
       orientation="horizontal"
       isDisabled={isDisabled}
       {...(value === undefined ? {} : { value })}
       {...(defaultValue === undefined ? {} : { defaultValue })}
       {...(onChange === undefined ? {} : { onChange: (next) => onChange(next as Hue) })}
     >
+      {isLabelShown && <Label className={styles.label}>{label}</Label>}
       {HUES.map((hue) => (
         <RadioField key={hue} value={hue} aria-label={strings[hue]} className={styles.field}>
           <Tooltip content={strings[hue]}>
