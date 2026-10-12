@@ -135,7 +135,8 @@ Last local run (2026-10-12, `vite preview` on 5273 against a fresh database, mac
 ### Keyboard and contrast pass
 
 - Every screen today (sign in, verify, welcome, the frame and its workspace menu, People empty and filled, both dialogs, the refused states, the paused notice, the session ended notice, workspace and page not found, `/status`) passes axe's WCAG A and AA rules, contrast included, in light and in dark.
-- axe doesn't judge focus rings. Measured from the tokens: the 1px `accent-line` ring is 5.4 to 5.7:1 on every light surface and 5.1 to 5.8:1 on every dark one. The faint `shadow-focus` halo on its own is about 1.2:1, so a control whose edge can't turn accent showed almost no focus: the primary button (its edge is already blue), the danger button (its edge stays red), the theme switch's segments and links. Each now draws the 1px ring (fixed in `9f2baeb`); the token stays as the owner set it.
+- axe doesn't judge focus rings. Measured from the tokens: the 1px `accent-line` ring is 5.4 to 5.7:1 on every light surface and 5.1 to 5.8:1 on every dark one. The faint `shadow-focus` halo on its own is about 1.2:1, so a control whose edge can't turn accent showed almost no focus: the primary button (its edge is already blue), the danger button (its edge stays red), the theme switch's segments and links. Each now draws the 1px ring (the chosen theme segment on its thumb, which covers the segment); breadcrumbs too. The token stays as the owner set it.
+- Still on the halo alone, mostly off the core loop's screens: Tooltip triggers, DragHandle, Switch, Rating, FileDrop's browse, DatePicker's open button, IconPicker's scroller, CodeInput's message, the Toast region and the file editor. Raising `shadow-focus` to a 3:1 ring would fix all of them at once (the owner's call); otherwise each takes the 1px ring as it reaches a screen.
 
 ### Production run (for the owner; nothing here was run against production)
 
