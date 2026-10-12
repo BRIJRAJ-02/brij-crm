@@ -258,6 +258,32 @@ Decided under the owner's acceptance of the recommended defaults for #11 to #22 
 3. **Records created before milestone 1 show their initial values as separate entries.** No backfill; production holds little data and a backfill would rewrite version ids clients hold.
 4. **The timeline doesn't show the record's own delete and restore until #36.** The record row keeps only the latest delete, and the audit log is the right source.
 
+## Calls made building milestone 1 (pending owner confirmation)
+
+Technical gaps, each the recommended default:
+1. **The creation stamp only when the id isn't ahead of the database's clock.** A create stamps its record id as the version of its values and links only when the id's time is at or before `clock_timestamp()`; an id from a device whose clock runs ahead (up to the 10 minutes a create lets through) mints a version as any write does, so later writes' versions still sort after it. Such a record's first values will show as entries of their own (as for records made before milestone 1).
+2. **`records.one` built here, as spec 0006 describes it**, since #6 hadn't: the page asks for the attributes Details lists rather than `'all'` (the loader and screen share `detailAttributes`); a body a table's view keeps fresh serves the page at once with no read; a screen asking more attributes widens the same subscription; `deleted` says whether it had been shown (`isLost`), keeping the last record for the read only page, and a lost record found again comes back.
+3. **`records.trashed` is a data layer source**, read on its first subscriber and kept for the session, never in the record store. A trashed record's reference cells read empty (its links are hidden until a restore).
+4. **A record on an archived object answers `NOT_FOUND`** from both `records.activity` and `records.getTrashed`; the page shows the missing page (`objects.list` lists live objects only, and #13's archived page doesn't exist yet).
+5. **A hidden Created by leaves the creation entry without its actor** (`ActivityItem.actor` is optional; the feed names nobody, "Someone"). A hidden Created at still dates the entry: the creation anchors the feed's order (AC-378), so dropping its moment needs an owner decision. The same two fields also show at the top level of every `RecordView` (`createdBy`, `createdAt`), a leak that predates this spec and belongs with `filterRecordView`.
+6. **Actor words live in the data layer** (`ACTOR_WORDS`: Former member, An API key, An automation, System, and Someone when the members list can't be read), next to `RECORD_WORDS`, since the mapping to the feed's entries happens there. The members list is read again for an unknown actor at most once a minute per workspace.
+7. **The procedures sit in the `records` namespace**, the schemas of the timeline in `activity.ts` and of the trash read in `records.ts` (no circular import). The key order and the constants are also on a Zod free subpath, `@crm/contracts/activity-keys`, for the browser.
+8. **The Activity tab shows in milestone 1** (the first page, the creation entry), and Overview's Recent activity uses ActivityFeed's existing scrolling layout in a Card until milestone 2 brings the `inline` layout.
+9. **The table's name opens the page through the grid's open action** (a click on the name, or Space). The name as a real link (Cmd click to a new tab) comes with milestone 4, with the side panel that takes the plain click over.
+10. **Single reference and member values are read only on the page** ("You can't change this here yet."), as in the table, until #15 brings the record picker.
+11. **Focus on a tab switch**: switching tabs (and "View all", a button that switches as the tab does) replaces the address and keeps focus on the tab (`isSamePage` in the web app's focus rule; RecordLayout moves focus to the chosen tab when the change came from inside the panel).
+12. **TopBar keeps one tree for loading and loaded**, so a page that loads in place keeps focus on its title; and AttributeList hands focus back after the key that committed (a save that re-renders in the same event had reopened the editor).
+
+## Design calls for the owner
+
+The most conservative option consistent with the existing screens, each open to change:
+1. **The narrow layout starts below 880px** (`bp-container-md` plus `size-panel`), not below `bp-container-md` alone as 0017-screens.md says: at 480px the 400px sidebar left the header and tabs about 80px. A container token of its own (a `bp-container-lg`) would name it, if wanted.
+2. **The sidebar** is the Panel molecule's width (`size-panel`), with a hairline (`border-subtle`) before it and the same padding as RecordPanel's content.
+3. **Notices** sit flush above the page as banner Callouts: danger for "was deleted" and "is no longer available"; the live paused notice is the table's bar Callout, in the top bar.
+4. **"Copy link"** is a ghost button with its label in the header's actions, and says "Link copied" in a toast.
+5. **The unavailable page** names the object in its top bar (with its tile), and adds a line under the title: "It may have been deleted, or you may not have access to it.", with "Back to <Plural>".
+6. **The tabs carry icons** (`layout-dashboard` for Overview, `activity` for Activity), and "View all" is a ghost button in the Recent activity card's header.
+
 ## Follow-up
 
 - [ ] **Spec 0014** (`/sync`): the relationship section of its record panel is the `packages/ui` module `RelatedRecords` (rows of RecordChip from a `ListSource<RecordRefDisplay>`, virtualised, total in the heading, "Show more", optional "Add" and per row "Remove", states loading, empty, error with Retry, read only), which spec 0017 extends with a short form; its link delta inverses are registered on spec 0006's undo stack (spec 0017 registers the removal's if spec 0014 lands before the stack); its panel states (AC-306) now share spec 0017's `recordUnavailable` string, a trashed record opens read only, and the deleted while open notice becomes "This <singular> is no longer available." kept read only until closed.
