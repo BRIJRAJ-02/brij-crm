@@ -7,10 +7,10 @@ import { useActivity } from '@crm/data/react';
 import { ActivityFeed } from '@crm/ui';
 import { strings } from './strings.ts';
 
-/** The feed's status, as the library draws it: a record that isn't available reads as a failure to load. */
-export function feedStatus(state: ActivityState): 'loading' | 'ready' | 'error' {
-  if (state.status === 'loading') return 'loading';
-  return state.status === 'ready' ? 'ready' : 'error';
+/** The feed's status, as the library draws it: a record that isn't available can't be read, so no Try again. */
+export function feedStatus(state: ActivityState): 'loading' | 'ready' | 'error' | 'no-access' {
+  if (state.status === 'unavailable') return 'no-access';
+  return state.status;
 }
 
 /** Props for a record's timeline. */

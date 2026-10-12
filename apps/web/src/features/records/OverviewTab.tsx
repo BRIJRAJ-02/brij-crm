@@ -3,7 +3,7 @@
 // Main task: see the newest things that happened to it, and go on to the whole timeline.
 // Leaves out: Related cards (milestone 3), Highlights (#18) and Open tasks (#19).
 import type { ActivityFeed } from '@crm/data';
-import { Card, Link } from '@crm/ui';
+import { Button, Card } from '@crm/ui';
 import { ActivityTab } from './ActivityTab.tsx';
 import { strings } from './strings.ts';
 
@@ -11,14 +11,21 @@ import { strings } from './strings.ts';
 export interface OverviewTabProps {
   /** The record's timeline cut to its newest five entries. */
   readonly recent: ActivityFeed;
-  /** The Activity tab's address, for "View all". */
-  readonly activityHref: string;
+  /** Opens the Activity tab, as choosing the tab does (the address is replaced, focus moves to the tab). */
+  readonly onViewAll: () => void;
 }
 
 /** Overview: "Recent activity" in a Card, with "View all" opening the Activity tab. */
-export function OverviewTab({ recent, activityHref }: OverviewTabProps) {
+export function OverviewTab({ recent, onViewAll }: OverviewTabProps) {
   return (
-    <Card title={strings.recentActivity} actions={<Link href={activityHref}>{strings.viewAll}</Link>}>
+    <Card
+      title={strings.recentActivity}
+      actions={
+        <Button variant="ghost" onPress={onViewAll}>
+          {strings.viewAll}
+        </Button>
+      }
+    >
       <ActivityTab feed={recent} label={strings.recentActivity} />
     </Card>
   );

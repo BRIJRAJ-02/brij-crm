@@ -3,23 +3,24 @@
 // Main task: read and edit its details in place, and see who made it and when (the timeline grows with milestone 2).
 // Leaves out: deleting and restoring it (#22), presence (#26), related records (milestone 3), notes and tasks (#19), comments (#29).
 import type {
-  ActivityFeed,
+  ActivityFeed as ActivityFeedSource,
   AttributeDefinition,
   MemberSummary,
   ObjectSummary,
   RecordState,
   RecordSubscription,
   RecordView,
-  TrashedLookup,
+  TrashedState,
 } from '@crm/data';
-import { useActivity, useLiveStatus, useRecord } from '@crm/data/react';
-import { Button, Callout, EmptyState, Link, RecordHeader, RecordLayout, TopBar } from '@crm/ui';
-import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useActivityStatus, useLiveStatus, useRecord, useTrashed } from '@crm/data/react';
+import { ActivityFeed, Button, Callout, EmptyState, Link, RecordHeader, RecordLayout, TopBar } from '@crm/ui';
+import { useNavigate, useParams, useRouteContext } from '@tanstack/react-router';
+import type { ReactNode } from 'react';
 import { objectHref } from '../workspace/objects.ts';
+import { strings as workspaceStrings } from '../workspace/strings.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { ActivityTab } from './ActivityTab.tsx';
-import { recordHref, recordName, type RecordTab } from './details.ts';
+import { isRecordTab, recordHref, recordName, type RecordTab } from './details.ts';
 import { OverviewTab } from './OverviewTab.tsx';
 import { RecordDetails } from './RecordDetails.tsx';
 import { strings } from './strings.ts';
@@ -35,8 +36,8 @@ export interface RecordPageProps {
   readonly recordId: string;
   /** The record, subscribed; undefined when the address names no record at all. */
   readonly record: RecordSubscription | undefined;
-  readonly feed: ActivityFeed | undefined;
-  readonly recent: ActivityFeed | undefined;
+  readonly feed: ActivityFeedSource | undefined;
+  readonly recent: ActivityFeedSource | undefined;
 }
 
 /** The page's tabs, in order. */
@@ -45,8 +46,11 @@ const TABS = [
   { id: 'activity', label: strings.activity, icon: 'activity' as const },
 ];
 
+/** A feed with nothing in it yet, for the loading page before the record's timeline exists. */
+const NO_ENTRIES = { count: 0, getItem: () => undefined, getKey: () => '' };
+
 /** The top bar: the object's tile, and the crumbs "<Plural> › <title>" with the title as the page's h1. */
-function recordTopBar(slug: string, object: ObjectSummary, title: string, children?: ReactNode, isLoading = false) {
+function recordTopBar(slug: string, object: ObjectSummary, title: string, end?: ReactNode, isLoading = false) {
   return (
     <TopBar
       title={title}
@@ -55,15 +59,20 @@ function recordTopBar(slug: string, object: ObjectSummary, title: string, childr
       crumbs={[{ id: object.id, label: object.pluralName, href: objectHref(slug, object) }]}
       isLoading={isLoading}
     >
-      {children}
+      {end}
     </TopBar>
   );
 }
 
+/** The top bar naming the object alone, for a page with no record to name. */
+const objectTopBar = (object: ObjectSummary) => (
+  <TopBar title={object.pluralName} icon={object.icon} hue={object.hue} />
+);
+
 /** A record that doesn't exist and one the person may not see: one state, one string (AC-376). */
 function unavailablePage(slug: string, object: ObjectSummary) {
   return {
-    topBar: <TopBar title={object.pluralName} icon={object.icon} hue={object.hue} />,
+    topBar: objectTopBar(object),
     body: (
       <EmptyState
         icon="search"
@@ -76,20 +85,34 @@ function unavailablePage(slug: string, object: ObjectSummary) {
   };
 }
 
-/** The record page while the record loads: the bars and the layout holding their places. */
+/** The record page while its route loads: the bars and the layout holding their places, on the tab asked for. */
 export function RecordPendingPage() {
+  const { tab = '' } = useParams({ strict: false });
+  const shown = isRecordTab(tab) ? tab : 'overview';
   return (
     <WorkspacePage
       page={{
         topBar: <TopBar title={strings.loading} isLoading />,
-        body: <LoadingLayout tab="overview" />,
+        body: (
+          <LoadingLayout tab={shown}>
+            <ActivityFeed label={strings.activity} entries={NO_ENTRIES} status="loading" />
+          </LoadingLayout>
+        ),
       }}
     />
   );
 }
 
-/** The layout with every slot showing its skeleton. */
-function LoadingLayout({ tab, onTabChange }: { readonly tab: RecordTab; readonly onTabChange?: (id: string) => void }) {
+/** The layout with the header and details as skeletons, and the tab's own loading state as its panel. */
+function LoadingLayout({
+  tab,
+  onTabChange,
+  children,
+}: {
+  readonly tab: RecordTab;
+  readonly onTabChange?: (id: string) => void;
+  readonly children: ReactNode;
+}) {
   return (
     <RecordLayout
       header={<RecordHeader objectName="" isLoading />}
@@ -101,45 +124,9 @@ function LoadingLayout({ tab, onTabChange }: { readonly tab: RecordTab; readonly
       sidebar={<RecordDetails attributes={[]} members={[]} record={undefined} />}
       isLoading
     >
-      {null}
+      {children}
     </RecordLayout>
   );
-}
-
-/** A record in the trash, or not available: what `records.trashed` answered, while it asks, or that it failed. */
-type TrashedCheck = TrashedLookup | { readonly status: 'checking' } | { readonly status: 'failed' };
-
-/** Looks a record that wasn't there up in the trash, once its first read says it is missing; `retry` asks again. */
-function useTrashedCheck(
-  slug: string,
-  recordId: string,
-  state: RecordState,
-): { readonly check: TrashedCheck | undefined; readonly retry: () => void } {
-  const { data } = useRouteContext({ from: '__root__' });
-  const [attempt, setAttempt] = useState(0);
-  const [check, setCheck] = useState<{ readonly key: string; readonly answer: TrashedCheck } | undefined>(undefined);
-  const key = `${slug}/${recordId}/${String(attempt)}`;
-  const isMissing = state.status === 'deleted' && !state.isLost;
-  useEffect(() => {
-    if (!isMissing) return;
-    let isCurrent = true;
-    data.records.trashed(slug, recordId).then(
-      (answer) => {
-        if (isCurrent) setCheck({ key, answer });
-      },
-      () => {
-        if (isCurrent) setCheck({ key, answer: { status: 'failed' } });
-      },
-    );
-    return () => {
-      isCurrent = false;
-    };
-  }, [data, slug, recordId, key, isMissing]);
-  const retry = () => {
-    setAttempt((count) => count + 1);
-  };
-  if (!isMissing) return { check: undefined, retry };
-  return { check: check?.key === key ? check.answer : { status: 'checking' }, retry };
 }
 
 /** The record page, or its unavailable state for an address that names no record. */
@@ -151,8 +138,44 @@ export function RecordPage(props: RecordPageProps) {
   return <SubscribedRecordPage {...props} record={record} feed={feed} recent={recent} />;
 }
 
+/** The trash lookup's state once the record's first read found it missing; undefined otherwise. */
+function TrashedCheck({
+  slug,
+  recordId,
+  children,
+}: {
+  readonly slug: string;
+  readonly recordId: string;
+  readonly children: (trashed: TrashedState) => ReactNode;
+}) {
+  const { data } = useRouteContext({ from: '__root__' });
+  const trashed = useTrashed(data.records.trashed(slug, recordId));
+  return children(trashed);
+}
+
 /** The page for a record id: every state of AC-376 from the record's subscription, its timeline and the trash. */
-function SubscribedRecordPage({
+function SubscribedRecordPage(
+  props: RecordPageProps & {
+    readonly record: RecordSubscription;
+    readonly feed: ActivityFeedSource;
+    readonly recent: ActivityFeedSource;
+  },
+) {
+  const state = useRecord(props.record);
+  // Only where the timeline stands: its entries draw in their own tab, so the page doesn't render with each one.
+  const timelineStatus = useActivityStatus(props.feed);
+  if (state.status === 'deleted' && !state.isLost) {
+    return (
+      <TrashedCheck slug={props.slug} recordId={props.recordId}>
+        {(trashed) => <RecordScreen {...props} state={state} timelineStatus={timelineStatus} trashed={trashed} />}
+      </TrashedCheck>
+    );
+  }
+  return <RecordScreen {...props} state={state} timelineStatus={timelineStatus} />;
+}
+
+/** The page itself, in whichever state the record, its timeline and the trash put it. */
+function RecordScreen({
   slug,
   tab,
   object,
@@ -162,16 +185,19 @@ function SubscribedRecordPage({
   record,
   feed,
   recent,
+  state,
+  timelineStatus,
+  trashed,
 }: RecordPageProps & {
   readonly record: RecordSubscription;
-  readonly feed: ActivityFeed;
-  readonly recent: ActivityFeed;
+  readonly feed: ActivityFeedSource;
+  readonly recent: ActivityFeedSource;
+  readonly state: RecordState;
+  readonly timelineStatus: ReturnType<typeof useActivityStatus>;
+  readonly trashed?: TrashedState;
 }) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
-  const state = useRecord(record);
-  const timeline = useActivity(feed);
-  const { check: trashed, retry: checkAgain } = useTrashedCheck(slug, recordId, state);
   const live = useLiveStatus(data.live);
   const unnamed = strings.unnamed(object.singularName);
 
@@ -184,25 +210,37 @@ function SubscribedRecordPage({
       replace: true,
     });
   };
+  const tabContent =
+    tab === 'activity' ? (
+      <ActivityTab feed={feed} />
+    ) : (
+      <OverviewTab
+        recent={recent}
+        onViewAll={() => {
+          openTab('activity');
+        }}
+      />
+    );
 
-  // Missing or hidden (one state), whether the record's read or its timeline said so first.
+  // Missing or hidden (one state), whether the trash lookup or the timeline said so first.
   const isUnavailable =
-    trashed?.status === 'unavailable' || (state.status === 'loading' && timeline.status === 'unavailable');
+    trashed?.status === 'unavailable' || (state.status === 'loading' && timelineStatus === 'unavailable');
   if (isUnavailable) return <WorkspacePage currentObject={object.apiSlug} page={unavailablePage(slug, object)} />;
 
   if (state.status === 'error' || trashed?.status === 'failed') {
+    const failure = state.status === 'error' ? state.error : trashed?.status === 'failed' ? trashed.error : undefined;
     const retry = () => {
       if (state.status === 'error') record.retry();
-      else checkAgain();
+      else data.records.trashed(slug, recordId).retry();
     };
     return (
       <WorkspacePage
         currentObject={object.apiSlug}
         page={{
-          topBar: recordTopBar(slug, object, object.pluralName),
+          topBar: objectTopBar(object),
           body: (
             <EmptyState tone="error" title={strings.loadFailed} onRetry={retry}>
-              {state.error?.message ?? strings.loadFailedText}
+              {failure?.message ?? strings.loadFailedText}
             </EmptyState>
           ),
         }}
@@ -210,25 +248,35 @@ function SubscribedRecordPage({
     );
   }
 
-  const shown: RecordView | undefined =
-    trashed?.status === 'trashed'
-      ? trashed.record
-      : state.status === 'deleted' && !state.isLost
-        ? undefined
-        : state.record;
+  const isTrashed = trashed?.status === 'trashed';
+  const shown: RecordView | undefined = isTrashed
+    ? trashed.record
+    : state.status === 'deleted' && !state.isLost
+      ? undefined
+      : state.record;
+  // In the same top bar as the loaded page, so focus on its title stays when the record arrives.
+  const paused =
+    live === 'paused' ? (
+      <Callout placement="bar" isAnnounced>
+        {workspaceStrings.livePaused}
+      </Callout>
+    ) : undefined;
   if (shown === undefined) {
     return (
       <WorkspacePage
         currentObject={object.apiSlug}
         page={{
           topBar: recordTopBar(slug, object, strings.loading, undefined, true),
-          body: <LoadingLayout tab={tab} onTabChange={openTab} />,
+          body: (
+            <LoadingLayout tab={tab} onTabChange={openTab}>
+              {tabContent}
+            </LoadingLayout>
+          ),
         }}
       />
     );
   }
 
-  const isTrashed = trashed?.status === 'trashed';
   const isLost = state.status === 'deleted' && state.isLost;
   const canEdit = !isTrashed && !isLost && object.access === 'write';
   const name = recordName(shown, object, unnamed);
@@ -259,19 +307,13 @@ function SubscribedRecordPage({
         {strings.noLongerAvailable(object.singularName)}
       </Callout>
     );
-  } else if (live === 'paused') {
-    notice = (
-      <Callout placement="banner" isAnnounced>
-        {strings.livePaused}
-      </Callout>
-    );
   }
 
   return (
     <WorkspacePage
       currentObject={object.apiSlug}
       page={{
-        topBar: recordTopBar(slug, object, name),
+        topBar: recordTopBar(slug, object, name, paused),
         body: (
           <RecordLayout
             header={
@@ -304,11 +346,7 @@ function SubscribedRecordPage({
               />
             }
           >
-            {tab === 'activity' ? (
-              <ActivityTab feed={feed} />
-            ) : (
-              <OverviewTab recent={recent} activityHref={recordHref(slug, object.apiSlug, recordId, 'activity')} />
-            )}
+            {tabContent}
           </RecordLayout>
         ),
       }}

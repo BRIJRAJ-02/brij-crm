@@ -58,6 +58,14 @@ test('a record opens from the table, edits in place, and keeps its tab', async (
   await page.getByRole('button', { name: 'Copy link' }).click();
   await expect(page.getByText('Link copied')).toBeVisible();
 
+  // View all opens the Activity tab: the address is replaced (Back leaves the record) and focus lands on the tab.
+  const before = await page.evaluate(() => history.length);
+  await page.getByRole('button', { name: 'View all' }).focus();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('tab', { name: 'Activity' })).toBeFocused();
+  expect(await page.evaluate(() => history.length)).toBe(before);
+  await page.getByRole('tab', { name: 'Overview' }).click();
+
   // The Activity tab replaces the address, keeps focus on the tab, and a reload reopens it.
   await page.getByRole('tab', { name: 'Activity' }).click();
   await expect(page).toHaveURL(new RegExp(`/${recordId}/activity$`));

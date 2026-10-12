@@ -27,6 +27,4 @@ export const strings = {
   unavailableRecord: 'Unavailable',
   /** Why a reference or member value can't be edited here yet (#15 brings the record picker). */
   referenceReadOnly: 'You can’t change this here yet.',
-  /** Above the page while the live connection is down. */
-  livePaused: 'Live updates paused, reconnecting',
 } as const;
