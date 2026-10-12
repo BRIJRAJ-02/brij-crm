@@ -459,7 +459,8 @@ function Names({ records, count }: NamesProps) {
                 isFlat
                 {...(record.href === undefined ? {} : { href: record.href })}
               />
-              {separator}
+              {/* The chips' own boxes part the names on screen; the comma is for screen readers. */}
+              {separator !== '' && <VisuallyHidden>{separator}</VisuallyHidden>}
             </span>
           </Fragment>
         );
