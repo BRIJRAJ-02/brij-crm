@@ -726,7 +726,14 @@ describe('records', () => {
       },
     });
     const { data, signedOut, endings, notices } = layer(api);
-    await failure(data.attributes.create('acme', { objectId: PEOPLE.id, title: 'Nickname', type: 'text' }));
+    await failure(
+      data.attributes.create('acme', {
+        id: data.attributes.newId(),
+        objectId: PEOPLE.id,
+        title: 'Nickname',
+        type: 'text',
+      }),
+    );
     expect(signedOut).toHaveLength(1);
     expect(endings).toEqual([true]);
     expect(notices).toEqual([]);
