@@ -5,9 +5,9 @@
 import type { Hue, ObjectIcon } from '@crm/data';
 import { EmptyState, Link, SettingsLayout, TopBar, type Crumb } from '@crm/ui';
 import { useParams } from '@tanstack/react-router';
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
-import { objectsSettingsHref, settingsNav } from './nav.ts';
+import { objectsSettingsHref, settingsNav, type SettingsPageId } from './nav.ts';
 import { strings } from './strings.ts';
 
 /** Props for one settings page. */
@@ -23,10 +23,14 @@ export interface SettingsPageProps {
   readonly description?: string;
   readonly actions?: ReactNode;
   readonly isLoading?: boolean;
+  /** Which settings page this is, marked current in the navigation (Objects by default). */
+  readonly current?: SettingsPageId;
+  /** The h1, for a page that moves focus to its title itself (a cancelled job's Cancel goes away). */
+  readonly titleRef?: Ref<HTMLHeadingElement>;
   readonly children: ReactNode;
 }
 
-/** A settings page: the TopBar with its trail, then SettingsLayout with Objects current. */
+/** A settings page: the TopBar with its trail, then SettingsLayout with its page current. */
 export function SettingsPage({
   title,
   crumbs,
@@ -36,6 +40,8 @@ export function SettingsPage({
   description,
   actions,
   isLoading = false,
+  current = 'objects',
+  titleRef,
   children,
 }: SettingsPageProps) {
   const { slug = '' } = useParams({ strict: false });
@@ -49,12 +55,13 @@ export function SettingsPage({
             {...(crumbs === undefined ? {} : { crumbs })}
             {...(icon === undefined ? {} : { icon })}
             {...(hue === undefined ? {} : { hue })}
+            {...(titleRef === undefined ? {} : { titleRef })}
           />
         ),
         body: (
           <SettingsLayout
             nav={settingsNav(slug)}
-            currentNavId="objects"
+            currentNavId={current}
             navLabel={strings.settings}
             title={title}
             isLoading={isLoading}
@@ -81,10 +88,10 @@ export function settingsCrumbs(slug: string, depth: 'objects' | 'object'): reado
 }
 
 /** A settings address that names nothing (an unknown object or tab): said inside the frame, with the way back. */
-export function SettingsMissing() {
+export function SettingsMissing({ current = 'objects' }: { readonly current?: SettingsPageId }) {
   const { slug = '' } = useParams({ strict: false });
   return (
-    <SettingsPage title={strings.missingTitle} crumbs={settingsCrumbs(slug, 'objects')}>
+    <SettingsPage title={strings.missingTitle} crumbs={settingsCrumbs(slug, 'objects')} current={current}>
       <EmptyState
         icon="search"
         title={strings.missingText}
@@ -102,6 +109,7 @@ export function SettingsFailed({
   heading,
   text,
   onRetry,
+  current = 'objects',
 }: {
   /** The page's title ("Objects"). */
   readonly title: string;
@@ -110,10 +118,12 @@ export function SettingsFailed({
   /** Why, in the data layer's words ("Can't reach the CRM" only when the network failed). */
   readonly text: string;
   readonly onRetry: () => void;
+  /** Which settings page failed, kept current in the navigation. */
+  readonly current?: SettingsPageId;
 }) {
   const { slug = '' } = useParams({ strict: false });
   return (
-    <SettingsPage title={title} crumbs={settingsCrumbs(slug, 'objects')}>
+    <SettingsPage title={title} crumbs={settingsCrumbs(slug, 'objects')} current={current}>
       <EmptyState tone="error" title={heading} onRetry={onRetry}>
         {text}
       </EmptyState>

@@ -2,6 +2,8 @@
 // with no React or library imports, so the routes' loaders (in the first load)
 // can use them without pulling a screen in.
 import type { ObjectSummary } from '@crm/data';
+import { jobsHref } from '../workspace/objects.ts';
+import { strings as jobs } from './jobs-strings.ts';
 import { strings } from './strings.ts';
 
 /** An object's settings tabs, in order. */
@@ -22,9 +24,15 @@ export const objectSettingsHref = (
   tab: ObjectTab = 'attributes',
 ) => `/w/${slug}/settings/objects/${object.apiSlug}/${tab}`;
 
-/** The settings navigation: Objects today; #8, #23 and later features add theirs. */
+/** The settings pages, as the navigation names them: Objects (spec 0012) and Background jobs (spec 0008). */
+export type SettingsPageId = 'objects' | 'jobs';
+
+/** The settings navigation: Objects and Background jobs; #23 and later features add theirs. */
 export function settingsNav(slug: string) {
-  return [{ id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' as const }];
+  return [
+    { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' as const },
+    { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' as const },
+  ];
 }
 
 /** The workspace's objects in its order, live ones and archived ones apart (settings lists them in two sections). */

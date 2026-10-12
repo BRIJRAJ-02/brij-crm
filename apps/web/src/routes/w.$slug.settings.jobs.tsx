@@ -1,11 +1,8 @@
 import { isDataError } from '@crm/data';
-import { createFileRoute, useRouter } from '@tanstack/react-router';
-import { EmptyState, TopBar } from '@crm/ui';
-import { failedPage, missingPage } from '../features/workspace/ObjectScreen.tsx';
-import { JobsScreen } from '../features/settings/JobsScreen.tsx';
-import { strings as settings } from '../features/settings/jobs-strings.ts';
-import { strings } from '../features/workspace/strings.ts';
-import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
+import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
+import { JobsPending, JobsScreen } from '../features/settings/JobsScreen.tsx';
+import { strings as jobs } from '../features/settings/jobs-strings.ts';
+import { SettingsFailed, SettingsMissing } from '../features/settings/SettingsPage.tsx';
 
 // Settings, Background jobs (spec 0008, AC-118): every job for owners and
 // admins (`jobs.manage`), the person's own for everyone else. The loader
@@ -28,16 +25,8 @@ export const Route = createFileRoute('/w/$slug/settings/jobs')({
       throw error;
     }
   },
-  // The page's own title while it loads, so the heading and the tab's name don't change when it arrives.
-  pendingComponent: () => (
-    <WorkspacePage
-      currentPage="jobs"
-      page={{
-        topBar: <TopBar title={settings.title} icon="list-checks" />,
-        body: <EmptyState title={settings.title} isLoading />,
-      }}
-    />
-  ),
+  // The page's own title and the settings frame while it loads, so nothing moves when it arrives.
+  pendingComponent: JobsPending,
   errorComponent: JobsError,
   component: JobsRoute,
 });
@@ -47,7 +36,7 @@ function JobsRoute() {
   const { slug } = Route.useParams();
   const { data } = Route.useRouteContext();
   if (page === undefined) {
-    return <WorkspacePage currentPage="jobs" page={missingPage(strings.pageMissingTitle, strings.pageMissingText)} />;
+    return <SettingsMissing current="jobs" />;
   }
   return (
     <JobsScreen
@@ -62,8 +51,15 @@ function JobsRoute() {
   );
 }
 
-function JobsError() {
+function JobsError({ error }: ErrorComponentProps) {
   const router = useRouter();
-  const workspaceName = useWorkspaceName();
-  return <WorkspacePage currentPage="jobs" page={failedPage(workspaceName, () => void router.invalidate())} />;
+  return (
+    <SettingsFailed
+      title={jobs.title}
+      heading={jobs.failedTitle}
+      text={isDataError(error) ? error.message : jobs.failedText}
+      onRetry={() => void router.invalidate()}
+      current="jobs"
+    />
+  );
 }

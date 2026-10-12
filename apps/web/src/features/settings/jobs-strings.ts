@@ -3,8 +3,11 @@ import type { JobStatus } from '@crm/data';
 
 /** Settings, Background jobs: the page's copy (spec 0008, AC-118, AC-119). */
 export const strings = {
-  /** The page's title, and its sidebar entry. */
+  /** The page's title, and its entry in the settings navigation. */
   title: 'Background jobs',
+  /** Under the title: every job for owners and admins, the person's own for everyone else. */
+  description: 'Long work in this workspace, such as bulk changes, with its progress.',
+  descriptionMine: 'Long work you started, such as bulk changes, with its progress.',
   tableLabel: 'Background jobs',
   columns: {
     job: 'Job',

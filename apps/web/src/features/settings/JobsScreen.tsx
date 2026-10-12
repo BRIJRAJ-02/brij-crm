@@ -4,9 +4,10 @@
 // Leaves out: confirming a prepared job and retry controls (milestone 2), and the daily cleanup's details (milestone 3).
 import type { DataLayer, JobsView, JobView, MemberSummary } from '@crm/data';
 import { useJobs } from '@crm/data/react';
-import { Badge, Button, EmptyState, Modal, ProgressBar, RelativeTime, Table, TopBar, type TableColumn } from '@crm/ui';
+import { Badge, Button, EmptyState, Modal, ProgressBar, RelativeTime, Table, type TableColumn } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
-import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { useParams } from '@tanstack/react-router';
+import { settingsCrumbs, SettingsPage } from './SettingsPage.tsx';
 import { strings } from './jobs-strings.ts';
 
 /** Props for the Background jobs screen: what its route loaded through the data layer. */
@@ -217,20 +218,40 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
     );
 
   return (
-    <WorkspacePage
-      currentPage="jobs"
-      page={{
-        topBar: (
-          <TopBar title={strings.title} icon="list-checks" titleRef={titleRef}>
-            {canRunTest && (
+    <SettingsPage
+      title={strings.title}
+      crumbs={settingsCrumbs(slug, 'objects')}
+      description={isAll ? strings.description : strings.descriptionMine}
+      current="jobs"
+      titleRef={titleRef}
+      {...(canRunTest
+        ? {
+            actions: (
               <Button icon="flask-conical" onPress={runTest} isPending={isStarting}>
                 {strings.runTest}
               </Button>
-            )}
-          </TopBar>
-        ),
-        body,
-      }}
-    />
+            ),
+          }
+        : {})}
+    >
+      {body}
+    </SettingsPage>
+  );
+}
+
+/** Settings, Background jobs while it loads: the frame, the header and skeleton rows in their places. */
+export function JobsPending() {
+  const { slug = '' } = useParams({ strict: false });
+  return (
+    <SettingsPage title={strings.title} crumbs={settingsCrumbs(slug, 'objects')} current="jobs">
+      <Table
+        label={strings.tableLabel}
+        columns={COLUMNS}
+        rows={[]}
+        getRowId={() => ''}
+        renderCell={() => null}
+        isLoading
+      />
+    </SettingsPage>
   );
 }
