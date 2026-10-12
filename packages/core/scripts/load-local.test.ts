@@ -155,7 +155,12 @@ describe('docker-compose.load.yml', () => {
   });
 
   it('turns live delivery on: the API signs with the secret Centrifugo checks, and the relay holds its API key', () => {
-    const value = (name: string) => new RegExp(`^\\s+${name}: (\\S+)$`, 'm').exec(file)?.[1];
+    // Every line that sets the variable, anywhere in the file, must agree: one value or none.
+    const value = (name: string) => {
+      const values = new Set([...file.matchAll(new RegExp(`^\\s+${name}: (\\S+)$`, 'gm'))].map((match) => match[1]));
+      expect(values.size, name).toBeLessThanOrEqual(1);
+      return [...values][0];
+    };
     expect(value('CENTRIFUGO_TOKEN_SECRET')).toBeDefined();
     expect(value('CENTRIFUGO_TOKEN_SECRET')).toBe(value('CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY'));
     expect(value('CENTRIFUGO_API_KEY')).toBeDefined();

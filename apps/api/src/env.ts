@@ -94,7 +94,9 @@ function internalUrl(variable: string) {
           isComposeService(host))
       );
     },
-    { message: `${variable} must be https, or http to a *.railway.internal host or localhost.` },
+    {
+      message: `${variable} must be https, or http to a *.railway.internal host or localhost (or, with APP_ENV=local, a one label compose service name).`,
+    },
   );
 }
 
@@ -266,6 +268,11 @@ export const WorkerEnv = z
     const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });
     const url = env.CENTRIFUGO_API_URL === undefined;
     const key = env.CENTRIFUGO_API_KEY === undefined;
+    // As on the api: `local` relaxes the key, the wake secret and the address checks, so a production build never
+    // runs with it.
+    if (env.APP_ENV === 'local' && env.NODE_ENV === 'production') {
+      missing('APP_ENV', 'APP_ENV=local is refused when NODE_ENV=production. Set APP_ENV to preview or production.');
+    }
     if (url !== key)
       missing('CENTRIFUGO_API_KEY', 'Set CENTRIFUGO_API_URL and CENTRIFUGO_API_KEY together, or neither.');
     if (env.APP_ENV !== 'local' && url) {

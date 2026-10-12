@@ -256,6 +256,30 @@ describe('the worker environment (spec 0005, the relay)', () => {
     ]);
   });
 
+  it.each(['preview', 'production'])('refuses a compose service name, however written, in %s', (APP_ENV) => {
+    for (const url of ['http://centrifugo:9000', 'http://CENTRIFUGO:9000', ' http://centrifugo:9000 ']) {
+      expect(workerProblems({ ...deployed, APP_ENV, CENTRIFUGO_API_URL: url }), url).toEqual(['CENTRIFUGO_API_URL']);
+    }
+  });
+
+  it('refuses what only looks like a service name, locally too', () => {
+    for (const url of [
+      'http://centrifugo.',
+      'http://centrifugo@evil.com',
+      'http://evil.com#@centrifugo',
+      'http://10:9000',
+      'http://0xa9fea9fe',
+    ]) {
+      expect(workerProblems({ ...worker, ...centrifugo, CENTRIFUGO_API_URL: url }), url).toEqual([
+        'CENTRIFUGO_API_URL',
+      ]);
+    }
+  });
+
+  it('refuses APP_ENV=local with NODE_ENV=production, as the api does', () => {
+    expect(workerProblems({ ...worker, NODE_ENV: 'production' })).toEqual(['APP_ENV']);
+  });
+
   it("refuses .env.example's Centrifugo key, or one shorter than 32 characters, outside local", () => {
     expect(workerProblems({ ...deployed, CENTRIFUGO_API_KEY: LOCAL_CENTRIFUGO_API_KEY })).toEqual([
       'CENTRIFUGO_API_KEY',
