@@ -149,6 +149,13 @@ export { ActivityFeed, type ActivityEntry, type ActivityFeedProps } from './modu
 export { AppShell, AppShellContext, type AppShellProps } from './modules/AppShell/AppShell.tsx';
 export { AuthLayout, type AuthLayoutProps } from './modules/AuthLayout/AuthLayout.tsx';
 export {
+  AttributeSettings,
+  type AttributeSettingsAttribute,
+  type AttributeSettingsField,
+  type AttributeSettingsProps,
+  type AttributeSettingsValues,
+} from './modules/AttributeSettings/AttributeSettings.tsx';
+export {
   AttributeList,
   type AttributeEditorExtras,
   type AttributeItem,

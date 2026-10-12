@@ -18,6 +18,7 @@ describe('@crm/ui', () => {
       'AttributeDisplay',
       'AttributeEditor',
       'AttributeList',
+      'AttributeSettings',
       'AuthLayout',
       'Avatar',
       'AvatarStack',
