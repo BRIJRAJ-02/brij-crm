@@ -2,7 +2,7 @@
 // takes are exactly the type picker's, and the ids are the client's UUID v7.
 import { describe, expect, it } from 'vitest';
 import { CreateAttributeInput, PickerAttributeType, UpdateAttributeInput } from './attributes.ts';
-import { PICKER_TYPES } from './values/picker.ts';
+import { PICKER_TYPES, pickerTypeOf } from './values/picker.ts';
 
 const workspace = 'acme';
 const objectId = '0199d6a4-0000-7000-8000-000000000001';
@@ -12,6 +12,26 @@ const mutationId = '0199d6a4-0000-7000-8000-000000000003';
 describe('the attribute writes', () => {
   it('take exactly the types the picker offers (AC-228)', () => {
     expect([...PickerAttributeType.options].sort()).toEqual([...new Set(PICKER_TYPES.map((each) => each.type))].sort());
+  });
+
+  it('finds the picker entry an attribute came from, and which entries offer Unique and Allow multiple', () => {
+    expect(pickerTypeOf('select', true)?.key).toBe('multi_select');
+    expect(pickerTypeOf('select', false)?.key).toBe('select');
+    expect(pickerTypeOf('url', false)?.key).toBe('link');
+    expect(pickerTypeOf('actor_reference', true)?.key).toBe('member');
+    expect(pickerTypeOf('record_reference', false)).toBeUndefined();
+    expect(PICKER_TYPES.filter((entry) => entry.allowsUnique).map((entry) => entry.key)).toEqual([
+      'text',
+      'number',
+      'email',
+      'phone',
+      'link',
+    ]);
+    expect(PICKER_TYPES.filter((entry) => entry.allowsMultiple).map((entry) => entry.key)).toEqual([
+      'email',
+      'phone',
+      'member',
+    ]);
   });
 
   it('refuses a create whose id is not a UUID v7', () => {

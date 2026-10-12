@@ -29,6 +29,8 @@ export interface PickerType {
   readonly isMulti: boolean;
   /** Shows "Allow multiple" (Member, Email, Phone). */
   readonly allowsMultiple: boolean;
+  /** Shows "Unique" (AC-229): the engine's unique types the picker offers (text, number, email, phone, link). */
+  readonly allowsUnique: boolean;
 }
 
 /**
@@ -38,21 +40,21 @@ export interface PickerType {
  * offered (#15 adds Relationship through its own entry).
  */
 export const PICKER_TYPES: readonly PickerType[] = [
-  { key: 'text', type: 'text', isMulti: false, allowsMultiple: false },
-  { key: 'long_text', type: 'long_text', isMulti: false, allowsMultiple: false },
-  { key: 'number', type: 'number', isMulti: false, allowsMultiple: false },
-  { key: 'currency', type: 'currency', isMulti: false, allowsMultiple: false },
-  { key: 'date', type: 'date', isMulti: false, allowsMultiple: false },
-  { key: 'checkbox', type: 'checkbox', isMulti: false, allowsMultiple: false },
-  { key: 'select', type: 'select', isMulti: false, allowsMultiple: false },
-  { key: 'multi_select', type: 'select', isMulti: true, allowsMultiple: false },
-  { key: 'status', type: 'status', isMulti: false, allowsMultiple: false },
-  { key: 'rating', type: 'rating', isMulti: false, allowsMultiple: false },
-  { key: 'email', type: 'email', isMulti: false, allowsMultiple: true },
-  { key: 'phone', type: 'phone', isMulti: false, allowsMultiple: true },
-  { key: 'link', type: 'url', isMulti: false, allowsMultiple: false },
-  { key: 'location', type: 'location', isMulti: false, allowsMultiple: false },
-  { key: 'member', type: 'actor_reference', isMulti: false, allowsMultiple: true },
+  { key: 'text', type: 'text', isMulti: false, allowsMultiple: false, allowsUnique: true },
+  { key: 'long_text', type: 'long_text', isMulti: false, allowsMultiple: false, allowsUnique: false },
+  { key: 'number', type: 'number', isMulti: false, allowsMultiple: false, allowsUnique: true },
+  { key: 'currency', type: 'currency', isMulti: false, allowsMultiple: false, allowsUnique: false },
+  { key: 'date', type: 'date', isMulti: false, allowsMultiple: false, allowsUnique: false },
+  { key: 'checkbox', type: 'checkbox', isMulti: false, allowsMultiple: false, allowsUnique: false },
+  { key: 'select', type: 'select', isMulti: false, allowsMultiple: false, allowsUnique: false },
+  { key: 'multi_select', type: 'select', isMulti: true, allowsMultiple: false, allowsUnique: false },
+  { key: 'status', type: 'status', isMulti: false, allowsMultiple: false, allowsUnique: false },
+  { key: 'rating', type: 'rating', isMulti: false, allowsMultiple: false, allowsUnique: false },
+  { key: 'email', type: 'email', isMulti: false, allowsMultiple: true, allowsUnique: true },
+  { key: 'phone', type: 'phone', isMulti: false, allowsMultiple: true, allowsUnique: true },
+  { key: 'link', type: 'url', isMulti: false, allowsMultiple: false, allowsUnique: true },
+  { key: 'location', type: 'location', isMulti: false, allowsMultiple: false, allowsUnique: false },
+  { key: 'member', type: 'actor_reference', isMulti: false, allowsMultiple: true, allowsUnique: false },
 ];
 
 /** What a status stage means: still open, won or lost. */
@@ -90,4 +92,14 @@ export function nextHue(options: readonly { readonly hue: string }[]): HueName {
 export function freeHue(taken: readonly { readonly hue: string }[]): HueName {
   const used = new Set(taken.map((each) => each.hue));
   return HUES.find((hue) => !used.has(hue)) ?? 'gray';
+}
+
+/**
+ * The picker entry an attribute was made from (spec 0012, AC-231): Multi
+ * select for a select holding several, else the entry of its type. None for
+ * a type the picker doesn't offer (a relationship, a system type).
+ */
+export function pickerTypeOf(type: string, isMulti: boolean): PickerType | undefined {
+  if (type === 'select') return PICKER_TYPES.find((entry) => entry.key === (isMulti ? 'multi_select' : 'select'));
+  return PICKER_TYPES.find((entry) => entry.type === type);
 }

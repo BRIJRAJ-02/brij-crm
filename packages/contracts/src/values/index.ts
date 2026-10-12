@@ -85,6 +85,7 @@ export {
   freeHue,
   nextHue,
   PICKER_TYPES,
+  pickerTypeOf,
   STARTER_STAGES,
   type PickerType,
   type StageOutcome,
