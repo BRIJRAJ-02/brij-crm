@@ -22,6 +22,7 @@ import { AttributeEditor, type AttributeEditorProps } from '../../fields/Attribu
 import { fieldTypeOf, typeLabelOf } from '../../fields/registry.ts';
 import type { FieldAttribute } from '../../fields/types.ts';
 import { arraySource } from '../../lib/list-source.ts';
+import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Form, type FormRefusal } from '../../molecules/Form/Form.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
@@ -347,6 +348,8 @@ function AttributeForm({
       label={label}
       focusesFirstField={!isReadOnly}
     >
+      {/* Said once, above the settings, rather than under each of them. */}
+      {readOnlyReason !== undefined && <Callout>{readOnlyReason}</Callout>}
       <Field
         label={strings.name}
         name="title"
@@ -358,14 +361,14 @@ function AttributeForm({
           setName(next);
           touch('title');
         }}
-        {...(isReadOnly ? { isReadOnly, readOnlyReason } : {})}
+        {...(isReadOnly ? { isReadOnly } : {})}
       />
       <Select
         label={strings.type}
         items={items}
         value={typeKey}
         onChange={chooseType}
-        {...(isCreating ? {} : { isReadOnly: true, readOnlyReason: readOnlyReason ?? strings.typeLater })}
+        {...(isCreating ? {} : { isReadOnly: true, readOnlyReason: strings.typeLater })}
         {...(errorOf('type') === undefined ? {} : { error: errorOf('type') })}
       />
       {isCreating ? (
@@ -402,7 +405,7 @@ function AttributeForm({
           setDescription(next);
           touch('description');
         }}
-        {...(isReadOnly ? { isReadOnly, readOnlyReason } : {})}
+        {...(isReadOnly ? { isReadOnly } : {})}
       />
       <Checkbox
         label={strings.required}
@@ -490,7 +493,6 @@ function DefaultSetting({ type, isMulti, draft, members, readOnlyReason, error, 
       isRequired: false,
       isUnique: false,
       isReadOnly,
-      ...(readOnlyReason === undefined ? {} : { readOnlyReason }),
     };
     const chosen = draft.kind === 'static' ? draft.value : null;
     const listed: readonly unknown[] = Array.isArray(chosen) ? (chosen as readonly unknown[]) : [chosen];

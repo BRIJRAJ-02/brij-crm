@@ -1563,7 +1563,7 @@ export function DataGrid<Row>({
           role="grid"
           aria-label={label}
           aria-rowcount={rowCount + 1}
-          aria-colcount={colCount}
+          aria-colcount={headerColCount}
           aria-multiselectable
           aria-busy={status === 'loading' || undefined}
           className={styles.root}

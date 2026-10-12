@@ -435,9 +435,9 @@ export const SchemaActions: Story = {
     onAddColumn: fn(),
     columnActions: (columnId: string) =>
       columnId === 'name'
-        ? [{ id: 'edit', label: 'Edit attribute', icon: 'settings', onAction: editAttribute }]
+        ? [{ id: 'edit', label: 'Edit attribute', icon: 'pencil', onAction: editAttribute }]
         : [
-            { id: 'edit', label: 'Edit attribute', icon: 'settings', onAction: editAttribute },
+            { id: 'edit', label: 'Edit attribute', icon: 'pencil', onAction: editAttribute },
             { id: 'archive', label: 'Archive attribute', icon: 'archive', isDanger: true, onAction: archiveAttribute },
           ],
   },
