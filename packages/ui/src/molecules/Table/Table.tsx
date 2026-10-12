@@ -1,5 +1,14 @@
 import type { ReactNode } from 'react';
-import { Cell, Column, Row, Table as AriaTable, TableBody, TableHeader, useDragAndDrop } from 'react-aria-components';
+import {
+  Cell,
+  Column,
+  DropIndicator,
+  Row,
+  Table as AriaTable,
+  TableBody,
+  TableHeader,
+  useDragAndDrop,
+} from 'react-aria-components';
 import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
@@ -17,10 +26,33 @@ export interface TableColumn {
   readonly align?: 'start' | 'end';
   /** Keeps the label for screen readers only (an actions column). */
   readonly isLabelHidden?: boolean;
+  /**
+   * Lays the cell out as one line of pieces `space-6` apart, centred: a tile
+   * or a type icon before a name, several badges side by side.
+   */
+  readonly isInline?: boolean;
 }
 
+/** Rows that can be moved, and each one's name for its handle; or neither. */
+type Reorder<T> =
+  | {
+      /**
+       * Rows can be moved (objects in settings): each row starts with a
+       * DragHandle, and a drop calls this with the moved row's id, the row it
+       * landed by, and on which side. Moving by keyboard is the handle's
+       * (Enter, the arrows, Enter). Without it nothing can be dragged.
+       */
+      readonly onReorder: (id: string, targetId: string, position: 'before' | 'after') => void;
+      /** Names each row's handle for screen readers ("Move Projects"). */
+      readonly getRowLabel: (row: T) => string;
+    }
+  | { readonly onReorder?: undefined; readonly getRowLabel?: undefined };
+
 /** Props for Table. */
-export interface TableProps<T> {
+export type TableProps<T> = TableBase<T> & Reorder<T>;
+
+/** What every Table takes. */
+interface TableBase<T> {
   /** What the table lists ("Members"). */
   readonly label: string;
   readonly columns: readonly TableColumn[];
@@ -34,15 +66,6 @@ export interface TableProps<T> {
   readonly isLoading?: boolean;
   /** What it shows with no rows: usually an EmptyState. */
   readonly emptyState?: ReactNode;
-  /**
-   * Rows can be moved (objects in settings): each row starts with a DragHandle,
-   * and a drop calls this with the moved row's id, the row it landed by, and
-   * on which side. Moving by keyboard is the handle's (Enter, the arrows,
-   * Enter). Without it nothing can be dragged.
-   */
-  readonly onReorder?: (id: string, targetId: string, position: 'before' | 'after') => void;
-  /** Names each row's handle for screen readers ("Move Projects"); with `onReorder`. */
-  readonly getRowLabel?: (row: T) => string;
 }
 
 /** The handle column's id, kept apart from any column the caller names. */
@@ -76,6 +99,8 @@ export function Table<T>({
       if (moved === undefined || onReorder === undefined) return;
       onReorder(moved, String(event.target.key), event.target.dropPosition === 'after' ? 'after' : 'before');
     },
+    // Where the row would land: an accent line between rows, for a pointer and for the keyboard alike.
+    renderDropIndicator: (target) => <DropIndicator target={target} className={styles.dropLine} />,
   });
   const shown: readonly TableColumn[] =
     onReorder === undefined ? columns : [{ id: HANDLE, label: strings.reorder, isLabelHidden: true }, ...columns];
@@ -124,7 +149,11 @@ export function Table<T>({
                 </Cell>
               ) : (
                 <Cell className={styles.cell} data-align={column.align ?? 'start'}>
-                  {renderCell(item.row, column.id)}
+                  {column.isInline === true ? (
+                    <span className={styles.inline}>{renderCell(item.row, column.id)}</span>
+                  ) : (
+                    renderCell(item.row, column.id)
+                  )}
                 </Cell>
               )
             }

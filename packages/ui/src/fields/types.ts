@@ -30,6 +30,13 @@ export interface FieldAttribute {
   /** Record reference: whether it holds one record or several. */
   readonly cardinality?: 'one' | 'many';
   readonly isRequired: boolean;
+  /**
+   * A form checks Required as it submits (a create dialog), so an editor left
+   * empty commits nothing rather than showing "required" as focus leaves: a
+   * message appearing on blur moved the buttons under the pointer. The field
+   * still says it is required to screen readers.
+   */
+  readonly isRequiredOnSubmit?: boolean;
   readonly isUnique: boolean;
   readonly isReadOnly: boolean;
   readonly readOnlyReason?: string;

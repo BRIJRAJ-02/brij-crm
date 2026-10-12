@@ -17,7 +17,7 @@ New. A select option's colour and an object's tile (#13) are picked from the sam
 
 ## States
 
-Chosen (a tick and a ring), hover tooltip, focus (accent outline), pressed, disabled.
+Chosen (a tick and a ring), hover tooltip, focus (accent outline), pressed, disabled, read only (`isReadOnly`: the chosen hue stays at full contrast and the group is reachable by keyboard, but nothing changes; for a member in settings).
 
 ## Keyboard
 

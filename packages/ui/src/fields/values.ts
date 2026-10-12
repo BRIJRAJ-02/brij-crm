@@ -28,7 +28,9 @@ export type Committable<T extends AttributeType> =
 export function toCommittable<T extends AttributeType>(attribute: FieldAttribute, candidate: unknown): Committable<T> {
   const empty = isEmptyValue(candidate) || candidate === '';
   if (empty && attribute.type !== 'checkbox') {
-    return attribute.isRequired ? { ok: false, message: strings.required(attribute.name) } : { ok: true, value: null };
+    return attribute.isRequired && attribute.isRequiredOnSubmit !== true
+      ? { ok: false, message: strings.required(attribute.name) }
+      : { ok: true, value: null };
   }
   const parsed = parseAttributeValue(attribute.type, candidate, { allowMultiple: attribute.allowMultiple });
   return parsed.ok ? { ok: true, value: parsed.value as FieldValue<T> } : { ok: false, message: parsed.error.message };

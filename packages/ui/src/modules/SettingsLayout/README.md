@@ -26,8 +26,8 @@ New (spec 0012, pulled forward from spec 0003's milestone 4; in the inventory as
 - `title` is the page's second level heading: the `TopBar` above holds the h1 (as the crumbs' current place), which takes focus after a route change, as on a record page.
 - `icon` with `hue` draws an object's tile before the title; `meta` sits beside the title (a "Standard" or "Custom" Badge).
 - `description` is one line under the title; `actions` sit at the end of the header. One primary at most, as everywhere.
-- The body is the screen's: `Tabs` for an object's Attributes and Configuration, `Card`s for sections (a danger zone with `tone`), `Table` for lists, `EmptyState` for empty and failed reads, `Callout` for a read only note.
-- `SettingsStack` keeps that rhythm inside a tab's panel: its sections stack `space-16` apart, under a breath below the tabs, as they do directly in the body. Why: a `TabPanel` lays out nothing itself, so an object's Attributes and Configuration tabs would otherwise butt their Cards together.
+- The body is the screen's: `Tabs` for an object's Attributes and Configuration, `Card`s for sections (a danger zone is a Card whose action is a `danger` Button), `Table` for lists, `EmptyState` for empty and failed reads, `Callout` for a read only note.
+- `SettingsStack` keeps that rhythm inside a tab's panel: its sections stack `space-16` apart, under a breath below the tabs, as they do directly in the body. Why: a `TabPanel` lays out nothing itself, so an object's Attributes and Configuration tabs would otherwise butt their Cards together. Not a TabPanel variant: the record panel's tabs fill their slot edge to edge with one scrolling region, and the rhythm belongs to the settings page (its body's gap, below the tabs' hairline), so it lives beside the layout that owns it.
 - `isLoading` holds the header's place with skeletons after the loading delay (marked busy, "Loading settings" for screen readers); the navigation stays usable.
 - The page is capped at `size-dialog-wide`. Below 480px wide (a container query, as RecordHeader) the navigation sits above the page.
 

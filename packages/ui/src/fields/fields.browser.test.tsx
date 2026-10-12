@@ -191,6 +191,11 @@ describe('editors emit only what parses (AC-5)', () => {
       ok: false,
       message: 'Name is required.',
     });
+    // A form that checks Required on submit: empty commits nothing, quietly (spec 0012).
+    expect(toCommittable(attributeOf('text', 'Name', { isRequired: true, isRequiredOnSubmit: true }), '')).toEqual({
+      ok: true,
+      value: null,
+    });
   });
 
   it('refuses an email without a domain', () => {

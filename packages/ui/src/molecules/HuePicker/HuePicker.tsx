@@ -19,6 +19,8 @@ export interface HuePickerProps {
    * popover or a row already says what the hue is for.
    */
   readonly isLabelShown?: boolean;
+  /** Shows the hue chosen, reachable by keyboard, without letting it change (a member in settings). */
+  readonly isReadOnly?: boolean;
 }
 
 /** One of the nine hues, as named swatches: an option's colour, an object's tile. A radio group, so the arrow keys move. */
@@ -29,6 +31,7 @@ export function HuePicker({
   onChange,
   isDisabled = false,
   isLabelShown = false,
+  isReadOnly = false,
 }: HuePickerProps) {
   return (
     <RadioGroup
@@ -36,6 +39,7 @@ export function HuePicker({
       {...(isLabelShown ? { 'data-labelled': true } : { 'aria-label': label })}
       orientation="horizontal"
       isDisabled={isDisabled}
+      isReadOnly={isReadOnly}
       {...(value === undefined ? {} : { value })}
       {...(defaultValue === undefined ? {} : { defaultValue })}
       {...(onChange === undefined ? {} : { onChange: (next) => onChange(next as Hue) })}

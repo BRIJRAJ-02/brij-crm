@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn } from 'storybook/test';
+import { expect, fn, waitFor } from 'storybook/test';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
@@ -86,9 +86,14 @@ export const Reorderable: Story = {
     onReorder: fn(),
     getRowLabel: (member: Member) => member.name,
   },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole('button', { name: 'Move Ada Lovelace' })).toBeInTheDocument();
+  play: async ({ canvas, userEvent }) => {
+    const handle = canvas.getByRole('button', { name: 'Move Ada Lovelace' });
     await expect(canvas.getAllByRole('columnheader')).toHaveLength(6);
+    // Picked up by keyboard: a drop target takes focus, and its line shows where the row would land.
+    handle.focus();
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(handle).not.toHaveFocus());
+    await userEvent.keyboard('{Escape}');
   },
 };
 
