@@ -16,7 +16,6 @@ import type {
   MyAccess,
   ObjectSummary,
   RecordView,
-  TrashedRecord,
   Usage,
 } from '@crm/contracts';
 import { createORPCClient } from '@orpc/client';
@@ -24,6 +23,7 @@ import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
 import type { ActivityFeed, ActivityFeeds } from './activity/feed.ts';
 import { createAuth } from './auth/auth.ts';
+import { createTrashedLookups, type TrashedSource } from './records/trashed.ts';
 import {
   type DataFault,
   ERROR_MESSAGES,
@@ -115,6 +115,7 @@ export type {
   ViewStatus,
 } from './records/layer.ts';
 export type { RecordAttributes, RecordState, RecordStatus, RecordSubscription } from './records/one.ts';
+export type { TrashedSource, TrashedState } from './records/trashed.ts';
 export type { RowNote } from './records/view.ts';
 export type { NameState, RecordRef } from './records/names.ts';
 export type { WindowCount, WindowMode } from './records/windows.ts';
@@ -140,13 +141,6 @@ export interface ReplacedValue {
     | { readonly kind: 'automation' };
   readonly useMine: () => void;
 }
-
-/**
- * A record asked for by id after `records.one` found it missing (spec 0017):
- * in the trash and visible to the reader (its page opens read only), or not
- * available, the same answer for a missing record and a hidden one.
- */
-export type TrashedLookup = ({ readonly status: 'trashed' } & TrashedRecord) | { readonly status: 'unavailable' };
 
 /** What an undo did (spec 0006, AC-48, AC-49), with the first cell's attribute named for a one cell toast. */
 export type UndoResult =
@@ -309,6 +303,10 @@ export function createDataLayer({
   let records: Promise<RecordsLayer> | undefined;
   // Records' timelines (spec 0017), loaded with the first record page.
   let activity: Promise<ActivityFeeds> | undefined;
+  // Records looked up in the trash (spec 0017): a missing record's page.
+  const trashedLookups = createTrashedLookups((workspace, recordId) =>
+    call((options) => api.records.getTrashed({ workspace, recordId }, options)),
+  );
   // Set by the first 401, so a burst of failed calls signs out once.
   let ended = false;
   // Live updates: loaded with the first watched workspace, and this tab's writes waiting for their echo.
@@ -353,6 +351,7 @@ export function createDataLayer({
     void activity?.then((feeds) => {
       feeds.clear();
     });
+    trashedLookups.clear();
   };
   const reset = () => {
     forget();
@@ -1195,18 +1194,12 @@ export function createDataLayer({
         (await recordsLayer()).one(workspace, recordId, attributeIds),
       /**
        * A record `one` found missing (spec 0017): in the trash and visible to
-       * the reader, or unavailable (missing or hidden, one answer). The
-       * trashed body is never put in the store, so no table shows it.
+       * the reader, or unavailable (missing or hidden, one answer), asked on
+       * its first subscriber and kept for the session. The trashed body is
+       * never put in the store, so no table shows it. Read it through
+       * `useTrashed`.
        */
-      trashed: async (workspace: string, recordId: string): Promise<TrashedLookup> => {
-        try {
-          const found = await call((options) => api.records.getTrashed({ workspace, recordId }, options));
-          return { status: 'trashed', ...found };
-        } catch (error) {
-          if (toDataError(error).code === 'NOT_FOUND') return { status: 'unavailable' };
-          throw error;
-        }
-      },
+      trashed: (workspace: string, recordId: string): TrashedSource => trashedLookups.lookup(workspace, recordId),
     },
     activity: {
       /**

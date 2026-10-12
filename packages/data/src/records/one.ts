@@ -79,7 +79,10 @@ export interface RecordSubscriptionsOptions {
 interface Entry {
   readonly workspace: string;
   readonly recordId: string;
-  readonly attributes: RecordAttributes;
+  /** The attributes it reads now; a screen asking more widens it (`widen`). */
+  readonly attributes: () => RecordAttributes;
+  /** Reads these attributes too, from now on, keeping the same subscription. */
+  readonly widen: (more: RecordAttributes) => void;
   readonly subscription: RecordSubscription;
   readonly update: () => void;
   readonly reread: (attributeIds?: readonly string[]) => void;
@@ -112,14 +115,16 @@ export function createRecordSubscriptions({
     for (const entry of entries.values()) if (ids.has(entry.recordId)) entry.update();
   });
 
-  function open(workspace: string, recordId: string, attributes: RecordAttributes): Entry {
+  function open(workspace: string, recordId: string, asked: RecordAttributes): Entry {
     const key = keyOf(workspace, recordId);
     const listeners = new Set<() => void>();
     let status: RecordStatus = 'loading';
     let isLost = false;
     let error: DataError | undefined;
     let last: RecordView | undefined;
+    let attributes = asked;
     let retains = 0;
+    let isDisposed = false;
     let cancelUnused: (() => void) | undefined;
     let settleReady: () => void = () => undefined;
     const readyPromise = new Promise<void>((resolve) => {
@@ -159,10 +164,15 @@ export function createRecordSubscriptions({
       for (const listener of listeners) listener();
     };
     const update = () => {
+      const isHere = store.get(recordId) !== undefined || store.pending().has(recordId);
       // Shown, then gone from the store: deleted elsewhere or out of reach now.
-      if (status === 'ready' && store.get(recordId) === undefined && !store.pending().has(recordId)) {
+      if (status === 'ready' && !isHere) {
         status = 'deleted';
         isLost = true;
+      } else if (status === 'deleted' && isLost && store.get(recordId) !== undefined) {
+        // Back again (restored, or in reach once more): a read put its body back.
+        status = 'ready';
+        isLost = false;
       }
       announce();
     };
@@ -216,11 +226,23 @@ export function createRecordSubscriptions({
       );
     };
 
+    // Lets go of its body once, however often it is called; a screen retaining it again opens it again.
     const dispose = () => {
       cancelUnused?.();
       cancelUnused = undefined;
+      if (isDisposed) return;
+      isDisposed = true;
       if (entries.get(key) === entry) entries.delete(key);
       store.release([recordId]);
+      // Anything waiting on the first read stops waiting.
+      settleReady();
+    };
+    const revive = () => {
+      if (!isDisposed || entries.has(key)) return;
+      isDisposed = false;
+      store.hold([recordId]);
+      entries.set(key, entry);
+      load();
     };
 
     const subscription: RecordSubscription = {
@@ -235,6 +257,8 @@ export function createRecordSubscriptions({
       ready: () => readyPromise,
       retain: () => {
         retains += 1;
+        // A screen holding a subscription let go of meanwhile (a page shown again from the router's cache).
+        revive();
         cancelUnused?.();
         cancelUnused = undefined;
         let released = false;
@@ -251,7 +275,21 @@ export function createRecordSubscriptions({
     const entry: Entry = {
       workspace,
       recordId,
-      attributes,
+      attributes: () => attributes,
+      widen: (more) => {
+        if (attributes === 'all') return;
+        const held = attributes;
+        const added = more === 'all' ? undefined : more.filter((id) => !held.includes(id));
+        if (added !== undefined && added.length === 0) return;
+        attributes = added === undefined ? 'all' : [...held, ...added];
+        // Only what it didn't read before: the body it holds is kept fresh by the live pipeline.
+        read(workspace, [recordId], added).then(
+          (rows) => {
+            if (entries.get(key) === entry) store.receive(rows);
+          },
+          () => undefined,
+        );
+      },
       subscription,
       update,
       reread: (attributeIds) => {
@@ -282,15 +320,9 @@ export function createRecordSubscriptions({
     one: (workspace: string, recordId: string, attributes: RecordAttributes): RecordSubscription => {
       const existing = entries.get(keyOf(workspace, recordId));
       if (existing === undefined) return open(workspace, recordId, attributes).subscription;
-      const held = existing.attributes;
-      if (held === 'all' || (attributes !== 'all' && attributes.every((id) => held.includes(id)))) {
-        return existing.subscription;
-      }
-      // More attributes than the one held asks: a wider one replaces it, and the body stays held throughout.
-      const wider: RecordAttributes = attributes === 'all' ? 'all' : [...new Set([...held, ...attributes])];
-      const next = open(workspace, recordId, wider);
-      existing.dispose();
-      return next.subscription;
+      // More attributes than it reads (a column added since): the same subscription reads them too.
+      existing.widen(attributes);
+      return existing.subscription;
     },
 
     /** Whether a subscription of the workspace holds the record. */
@@ -311,14 +343,12 @@ export function createRecordSubscriptions({
       const named = new Set(ids);
       for (const entry of entries.values()) {
         if (entry.workspace !== workspace || !named.has(entry.recordId)) continue;
+        const reads = entry.attributes();
         if (changedAttributes === 'all') {
-          entry.reread(entry.attributes === 'all' ? undefined : entry.attributes);
+          entry.reread(reads === 'all' ? undefined : reads);
           continue;
         }
-        const wanted =
-          entry.attributes === 'all'
-            ? [...changedAttributes]
-            : entry.attributes.filter((id) => changedAttributes.has(id));
+        const wanted = reads === 'all' ? [...changedAttributes] : reads.filter((id) => changedAttributes.has(id));
         if (wanted.length > 0 || lifecycle.has(entry.recordId) || changedAttributes.size === 0) entry.reread(wanted);
       }
     },
@@ -329,7 +359,8 @@ export function createRecordSubscriptions({
         if (entry.workspace !== workspace) continue;
         const body = store.get(entry.recordId);
         if (objectId !== undefined && body !== undefined && body.objectId !== objectId) continue;
-        entry.reread(entry.attributes === 'all' ? undefined : entry.attributes);
+        const reads = entry.attributes();
+        entry.reread(reads === 'all' ? undefined : reads);
       }
     },
 

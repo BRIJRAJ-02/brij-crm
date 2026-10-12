@@ -1616,6 +1616,57 @@ describe('one record (spec 0006, records.one; the record page, spec 0017)', () =
     release();
   });
 
+  it('reads a wider ask on the same subscription, and lets go of the body once however often it is let go', async () => {
+    const { layer, gets, getAttributes, tick } = setup();
+    const one = layer.one(WS, OTHER, [NAME]);
+    const first = one.retain();
+    await settle();
+    gets[0]?.answer([rowOf(OTHER, { [NAME]: 'Jane' })]);
+    await one.ready();
+    // A column added since: the same subscription reads only what it lacks.
+    expect(layer.one(WS, OTHER, [NAME, CITY])).toBe(one);
+    await settle();
+    expect(getAttributes.at(-1)).toEqual([CITY]);
+    gets[1]?.answer([rowOf(OTHER, { [NAME]: 'Jane', [CITY]: 'Oslo' })]);
+    await settle();
+    expect(one.getSnapshot().record?.values[CITY]).toBe('Oslo');
+    // Let go twice over (a screen and its StrictMode twin), then shown again from a cached page: held once.
+    first();
+    first();
+    tick(30_000);
+    tick(30_000);
+    const again = one.retain();
+    await settle();
+    expect(gets).toHaveLength(3);
+    gets[2]?.answer([rowOf(OTHER, { [NAME]: 'Jane', [CITY]: 'Oslo' })]);
+    await settle();
+    expect(layer.one(WS, OTHER, [NAME])).toBe(one);
+    expect(layer.size()).toBe(1);
+    again();
+  });
+
+  it('comes back from lost when a read finds it again (restored, or in reach once more)', async () => {
+    const { layer, gets, frame } = setup();
+    const one = layer.one(WS, OTHER, [NAME]);
+    const release = one.retain();
+    await settle();
+    gets[0]?.answer([rowOf(OTHER, { [NAME]: 'Jane' })]);
+    await one.ready();
+    layer.changed(WS, PEOPLE, [OTHER], [], { deletedIds: [OTHER] });
+    frame();
+    await settle();
+    gets[1]?.answer([]);
+    await settle();
+    expect(one.getSnapshot()).toMatchObject({ status: 'deleted', isLost: true });
+    layer.changed(WS, PEOPLE, [OTHER], [], { restoredIds: [OTHER] });
+    frame();
+    await settle();
+    gets[2]?.answer([rowOf(OTHER, { [NAME]: 'Jane' }, {}, 3)]);
+    await settle();
+    expect(one.getSnapshot()).toMatchObject({ status: 'ready', isLost: false });
+    release();
+  });
+
   it('lets go of its body 30 seconds after the last screen leaves, and forgets it with the records', async () => {
     const { layer, gets, tick } = setup();
     const one = layer.one(WS, OTHER, [NAME]);

@@ -1585,11 +1585,19 @@ describe('the record page (spec 0017)', () => {
     const gone = await data.records.one('acme', RECORD, [TITLE.id]);
     await gone.ready();
     expect(gone.getSnapshot()).toMatchObject({ status: 'deleted', isLost: false });
-    expect(await data.records.trashed('acme', RECORD)).toMatchObject({
+    const trashed = data.records.trashed('acme', RECORD);
+    // Asked on its first subscriber, and the same source for every screen.
+    expect(trashed.getSnapshot()).toEqual({ status: 'checking' });
+    trashed.subscribe(() => undefined);
+    await trashed.ready();
+    expect(trashed.getSnapshot()).toMatchObject({
       status: 'trashed',
       record: { id: RECORD },
       deletedBy: { type: 'member', id: ADA_MEMBER.id },
     });
-    expect(await data.records.trashed('acme', personRow(2).id)).toEqual({ status: 'unavailable' });
+    expect(data.records.trashed('acme', RECORD)).toBe(trashed);
+    const missing = data.records.trashed('acme', personRow(2).id);
+    await missing.ready();
+    expect(missing.getSnapshot()).toEqual({ status: 'unavailable' });
   });
 });

@@ -16,7 +16,12 @@ export const ACTOR_WORDS = {
   apiKey: 'An API key',
   automation: 'An automation',
   system: 'System',
+  /** A member the members list couldn't be read to name, or one hidden from the reader. */
+  someone: 'Someone',
 } as const;
+
+/** How long a members list read again for an unknown actor stays good enough, in ms: a minute. */
+const MEMBERS_FRESH_MS = 60_000;
 
 /**
  * One entry as the library's ActivityFeed draws it (structurally its
@@ -78,11 +83,20 @@ export interface ActivityFeedsOptions {
   readonly later?: (run: () => void, ms: number) => () => void;
   /** How long a timeline nobody shows is kept, in ms: 30 seconds. */
   readonly keepUnusedMs?: number;
+  /** Unix milliseconds now. */
+  readonly now?: () => number;
 }
 
 /** How an actor shows: a member by name, "Former member" for one no longer listed, the others by kind. */
-export function actorDisplay(actor: ActivityItem['actor'], members: readonly MemberSummary[]): ActorDisplay {
+export function actorDisplay(
+  actor: ActivityItem['actor'],
+  members: readonly MemberSummary[] | undefined,
+): ActorDisplay {
+  // Hidden from this person (a field rule on Created by): nobody named.
+  if (actor === undefined) return { type: 'member', id: null, name: ACTOR_WORDS.someone };
   if (actor.type === 'member') {
+    // The list couldn't be read: say nothing about who, rather than call them former.
+    if (members === undefined) return { type: 'member', id: actor.id, name: ACTOR_WORDS.someone };
     const member = members.find((each) => each.id === actor.id);
     return member === undefined
       ? { type: 'member', id: actor.id, name: ACTOR_WORDS.formerMember }
@@ -94,7 +108,10 @@ export function actorDisplay(actor: ActivityItem['actor'], members: readonly Mem
 }
 
 /** An item as the feed draws it, or undefined for a kind this client has no mapping for yet. */
-export function toActivityEntry(item: ActivityItem, members: readonly MemberSummary[]): ActivityEntryShape | undefined {
+export function toActivityEntry(
+  item: ActivityItem,
+  members: readonly MemberSummary[] | undefined,
+): ActivityEntryShape | undefined {
   if (item.kind !== 'created') return undefined;
   return { id: item.id, at: item.at, actor: actorDisplay(item.actor, members), kind: 'created' };
 }
@@ -115,13 +132,22 @@ const timeout = (run: () => void, ms: number) => {
 };
 
 /** The timelines of one data layer, one per workspace and record. */
-export function createActivityFeeds({ page, members, later = timeout, keepUnusedMs = 30_000 }: ActivityFeedsOptions) {
+export function createActivityFeeds({
+  page,
+  members,
+  later = timeout,
+  keepUnusedMs = 30_000,
+  now = () => Date.now(),
+}: ActivityFeedsOptions) {
   interface Feed {
     readonly full: ActivityFeed;
     readonly recent: ActivityFeed;
     readonly dispose: () => void;
   }
   const feeds = new Map<string, Feed>();
+  // When each workspace's members were last read again for an actor the list didn't hold: at most once a minute,
+  // so records made by people who have left don't reread the list (shared with every screen) on each open.
+  const membersReadAt = new Map<string, number>();
   const keyOf = (workspace: string, recordId: string) => `${workspace}\u0000${recordId}`;
 
   function open(workspace: string, recordId: string): Feed {
@@ -158,11 +184,15 @@ export function createActivityFeeds({ page, members, later = timeout, keepUnused
 
     /** Names each item's actor, reading the members again once when one isn't listed (someone who joined since). */
     const named = async (loaded: readonly ActivityItem[]): Promise<readonly ActivityEntryShape[]> => {
-      let known = await members(workspace, false).catch(() => []);
-      const unknown = loaded.some(
-        (item) => item.actor.type === 'member' && !known.some((member) => member.id === item.actor.id),
-      );
-      if (unknown) known = await members(workspace, true).catch(() => known);
+      let known = await members(workspace, false).catch(() => undefined);
+      const unknown =
+        known !== undefined &&
+        loaded.some((item) => item.actor?.type === 'member' && !known?.some((member) => member.id === item.actor?.id));
+      const readAt = membersReadAt.get(workspace);
+      if (unknown && (readAt === undefined || now() - readAt > MEMBERS_FRESH_MS)) {
+        membersReadAt.set(workspace, now());
+        known = await members(workspace, true).catch(() => known);
+      }
       return loaded.flatMap((item) => {
         const entry = toActivityEntry(item, known);
         return entry === undefined ? [] : [entry];
@@ -247,6 +277,7 @@ export function createActivityFeeds({ page, members, later = timeout, keepUnused
     clear: (): void => {
       for (const feed of [...feeds.values()]) feed.dispose();
       feeds.clear();
+      membersReadAt.clear();
     },
   };
 }

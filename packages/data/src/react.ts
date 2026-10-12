@@ -7,6 +7,7 @@ import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { LiveStatus } from './live/live.ts';
 import type { RecordsView, ViewReader, ViewState } from './records/layer.ts';
 import type { RecordState, RecordSubscription } from './records/one.ts';
+import type { TrashedSource, TrashedState } from './records/trashed.ts';
 
 /**
  * A view's current state (its rows, count, status, cell refusals and row
@@ -85,4 +86,18 @@ export function useRecord(record: RecordSubscription): RecordState {
 /** A record's timeline (spec 0017), re-rendering when entries arrive. Held while the screen is mounted. */
 export function useActivity(feed: ActivityFeed): ActivityState {
   return useRetained(feed);
+}
+
+/**
+ * Only where a record's timeline stands (`loading`, `ready`, `error`,
+ * `unavailable`), re-rendering only when that changes, not with every entry:
+ * for a screen that shows the timeline elsewhere and only needs its status.
+ */
+export function useActivityStatus(feed: ActivityFeed): ActivityState['status'] {
+  return useSyncExternalStore(feed.subscribe, () => feed.getSnapshot().status);
+}
+
+/** A missing record looked up in the trash (spec 0017), asked when first read. */
+export function useTrashed(source: TrashedSource): TrashedState {
+  return useSyncExternalStore(source.subscribe, source.getSnapshot);
 }
