@@ -426,12 +426,42 @@ export function createDataLayer({
       const [old, next] = await Promise.all([before.catch(() => undefined), fresh]);
       return JSON.stringify(old) !== JSON.stringify(next);
     });
-    return Promise.all(compared).then(
-      (changes) => changes.includes(true),
-      // Unreadable now: dropped from the cache, so the next page load asks again.
-      () => false,
+    // Each list on its own: one that can no longer be read (its object archived) is a change, dropped from the
+    // cache so the next page load asks again, and never hides another list's change.
+    return Promise.allSettled(compared).then((results) =>
+      results.some((result) => result.status === 'rejected' || result.value),
     );
   };
+
+  /** The ids of the workspace's archived objects in a held list, sorted, to tell when the set changed. */
+  const archivedIds = (list: readonly ObjectSummary[] | undefined): string =>
+    (list ?? [])
+      .filter((object) => object.isArchived)
+      .map((object) => object.id)
+      .sort()
+      .join(',');
+
+  /**
+   * Reads the workspace's objects again (when held) and, only when the set of
+   * archived objects changed, every held attribute list too: a reference to
+   * an archived object is archived itself (spec 0012), while a rename,
+   * restyle or move changes no attribute. Answers whether anything changed.
+   */
+  const refreshObjects = async (workspace: string): Promise<boolean> => {
+    const before = await objects.get(workspace)?.catch(() => undefined);
+    const changed = await refreshHeld(objects, workspace, () => allObjects(workspace));
+    if (!changed) return false;
+    const after = await objects.get(workspace)?.catch(() => undefined);
+    if (archivedIds(before) !== archivedIds(after)) await refreshAttributes(workspace);
+    return true;
+  };
+
+  /**
+   * Drops the held usage (when held) instead of reading it again: only the
+   * settings pages show it, and their next load reads it once. Answers
+   * whether one was held, so the pages reload and that read happens now.
+   */
+  const dropUsage = (workspace: string): boolean => usage.delete(workspace);
 
   /** Runs `onDefinitionsChange` once when any of the comparisons found a list that came back different. */
   const reloadIfChanged = (comparisons: readonly Promise<boolean>[]): void => {
@@ -598,19 +628,16 @@ export function createDataLayer({
   router.on('definitions', (workspace, event) => {
     // A list's own definitions: no screen holds lists yet.
     if (event.listId !== undefined) return;
-    // Any definition change may move a count the settings meters show (spec 0012, AC-243).
-    const counted = refreshHeld(usage, workspace, () => readUsage(workspace));
+    // Any definition change may move a count the settings meters show (spec 0012, AC-243): a held usage is
+    // dropped, and the pages reload once so a settings page reads it again.
+    const counted = Promise.resolve(dropUsage(workspace));
     if (event.objectId !== undefined && event.attributeIds !== undefined) {
       reloadIfChanged([refreshAttributes(workspace, event.objectId), counted]);
     } else if (event.objectId !== undefined) {
-      // The object itself was made, renamed, restyled, moved, archived or restored (spec 0012): the workspace's
-      // objects, and every held object's attributes, since a reference to an archived object is archived too.
-      // One reload at most.
-      reloadIfChanged([
-        refreshAttributes(workspace),
-        refreshHeld(objects, workspace, () => allObjects(workspace)),
-        counted,
-      ]);
+      // The object itself was made, renamed, restyled, moved, archived or restored (spec 0012), or a catch up
+      // collapsed its attribute changes: its own attributes, the workspace's objects, and every other held
+      // attribute list only when an object was archived or restored. One reload at most.
+      reloadIfChanged([refreshAttributes(workspace, event.objectId), refreshObjects(workspace), counted]);
     } else {
       objects.delete(workspace);
       void refreshAttributes(workspace);
@@ -824,15 +851,26 @@ export function createDataLayer({
    * app reloads its pages, so this tab shows the change as every other tab
    * does.
    */
-  async function writeObject<T>(workspace: string, write: (mutationId: string, options: CallOptions) => Promise<T>) {
+  async function writeObject<T>(
+    workspace: string,
+    write: (mutationId: string, options: CallOptions) => Promise<T>,
+    effects: {
+      /** An archive or restore: references to the object change, so every held attribute list is read again. */
+      readonly archives?: boolean;
+      /** The workspace's objects as the answer already holds them (a move answers the whole new order). */
+      readonly objectsOf?: (answer: T) => ObjectSummary[];
+    } = {},
+  ) {
     const mutationId = mintId();
     mutations.sent(mutationId);
     try {
       const answer = await call((options) => write(mutationId, options));
       mutations.answered(mutationId, 1);
-      objects.delete(workspace);
+      const known = effects.objectsOf?.(answer);
+      if (known === undefined) objects.delete(workspace);
+      else objects.set(workspace, Promise.resolve(known));
       usage.delete(workspace);
-      await refreshAttributes(workspace);
+      if (effects.archives === true) await refreshAttributes(workspace);
       onDefinitionsChange();
       return answer;
     } catch (error) {
@@ -955,18 +993,24 @@ export function createDataLayer({
         ),
       /** Moves an object to `position` in the workspace's order (AC-225), archived objects counted. */
       reorder: (workspace: string, objectId: string, position: number): Promise<ObjectSummary[]> =>
-        writeObject(workspace, (mutationId, options) =>
-          api.objects.reorder({ workspace, objectId, position, mutationId }, options),
+        writeObject(
+          workspace,
+          (mutationId, options) => api.objects.reorder({ workspace, objectId, position, mutationId }, options),
+          { objectsOf: (order) => order },
         ),
       /** Archives an object (AC-226): it leaves the sidebar; its records stay. */
       archive: (workspace: string, objectId: string): Promise<ObjectSummary> =>
-        writeObject(workspace, (mutationId, options) =>
-          api.objects.archive({ workspace, objectId, mutationId }, options),
+        writeObject(
+          workspace,
+          (mutationId, options) => api.objects.archive({ workspace, objectId, mutationId }, options),
+          { archives: true },
         ),
       /** Restores an archived object (AC-226), at its old place. */
       restore: (workspace: string, objectId: string): Promise<ObjectSummary> =>
-        writeObject(workspace, (mutationId, options) =>
-          api.objects.restore({ workspace, objectId, mutationId }, options),
+        writeObject(
+          workspace,
+          (mutationId, options) => api.objects.restore({ workspace, objectId, mutationId }, options),
+          { archives: true },
         ),
     },
     usage: {
@@ -1073,13 +1117,12 @@ export function createDataLayer({
       newId: () => mintId(),
       /**
        * How many live records an object holds (spec 0012: the archive
-       * confirm says so). One count, never cached: it is asked for once per
+       * confirm says so), with `atLeast` when the server capped it (a record
+       * rule, spec 0009). One count, never cached: it is asked for once per
        * confirm.
        */
-      count: (workspace: string, objectId: string): Promise<number> =>
-        beforeRead(workspace)
-          .then(() => call((options) => api.records.count({ workspace, objectId }, options)))
-          .then((answer) => answer.count),
+      count: (workspace: string, objectId: string): Promise<{ readonly count: number; readonly atLeast: boolean }> =>
+        beforeRead(workspace).then(() => call((options) => api.records.count({ workspace, objectId }, options))),
       /**
        * Makes a record at once (see the records layer) with `id` (from
        * `newId`); rejects with the refusals when the server says no. Sending the

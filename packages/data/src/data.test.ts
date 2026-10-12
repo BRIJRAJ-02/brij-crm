@@ -806,6 +806,39 @@ describe('live updates', () => {
     expect(count(api.calls, '/api/rpc/attributes/list')).toBe(3);
   });
 
+  it('reads every held attribute list again only when an object was archived or restored (spec 0012)', async () => {
+    const COMPANIES: ObjectSummary = {
+      ...PEOPLE,
+      id: '0199a6f2-0000-7000-8000-0000000000d1',
+      apiSlug: 'companies',
+      singularName: 'Company',
+      pluralName: 'Companies',
+      standardKey: 'companies',
+      position: 1,
+    };
+    let reads = 0;
+    const { api, client, data } = await liveLayer({
+      objects: () => {
+        reads += 1;
+        if (reads === 1) return [PEOPLE, COMPANIES];
+        if (reads === 2) return [PEOPLE, { ...COMPANIES, hue: 'red' }];
+        return [PEOPLE, { ...COMPANIES, hue: 'red', isArchived: true }];
+      },
+    });
+    await data.objects.list('acme');
+    await data.attributes.list('acme', PEOPLE.id);
+    const lists = () => count(api.calls, '/api/rpc/attributes/list');
+    const before = lists();
+    // Companies restyled: the objects are read again, People's attributes aren't.
+    client.channel().onPublication({ seq: 1, at: AT, kind: 'definitions', objectId: COMPANIES.id });
+    await settled();
+    expect(lists()).toBe(before);
+    // Companies archived: People's Company reference is archived too, so People's attributes are read again.
+    client.channel().onPublication({ seq: 2, at: AT, kind: 'definitions', objectId: COMPANIES.id });
+    await settled();
+    expect(lists()).toBe(before + 1);
+  });
+
   it('reads the objects again when an object itself changed, and nothing for a list (spec 0007, AC-81)', async () => {
     let reads = 0;
     const { api, client, data, definitionChanges } = await liveLayer({
@@ -1428,6 +1461,6 @@ describe('objects in settings (spec 0012)', () => {
 
   it('counts an object’s records for the archive confirm', async () => {
     const { data } = layer(fakeApi({ count: () => 1240 }));
-    expect(await data.records.count('acme', PEOPLE.id)).toBe(1240);
+    expect(await data.records.count('acme', PEOPLE.id)).toEqual({ count: 1240, atLeast: false });
   });
 });
