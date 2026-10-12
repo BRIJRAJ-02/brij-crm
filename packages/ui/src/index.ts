@@ -187,6 +187,11 @@ export {
 } from './modules/Sidebar/Sidebar.tsx';
 export { RecordHeader, type RecordHeaderProps } from './modules/RecordHeader/RecordHeader.tsx';
 export { RecordPanel, type RecordPanelProps, type RecordPanelTab } from './modules/RecordPanel/RecordPanel.tsx';
+export {
+  SettingsLayout,
+  type SettingsLayoutProps,
+  type SettingsNavEntry,
+} from './modules/SettingsLayout/SettingsLayout.tsx';
 export { SignInForm, type SignInFormProps, type SignInStatus } from './modules/SignInForm/SignInForm.tsx';
 export { SortBuilder, type SortBuilderProps } from './modules/SortBuilder/SortBuilder.tsx';
 export { TaskList, type TaskEntry, type TaskListProps } from './modules/TaskList/TaskList.tsx';
