@@ -3,8 +3,8 @@
 // direct Postgres login (`crm_worker_user`), with the jobs' tenant work on the
 // pooled app login. Its one HTTP port answers Railway's health check and the
 // api's poke, which wakes the relay when it is dormant (`realtime/wake.ts`).
-import { createRunner, jobKinds } from '@crm/core';
-import { audiences, enterAsActor, systemScope } from '@crm/core/system';
+import { jobKinds } from '@crm/core';
+import { audiences, systemScope } from '@crm/core/system';
 import {
   assertWorkerConnection,
   createDatabase,
@@ -12,8 +12,8 @@ import {
   openDirectConnection,
   openQueueConnection,
 } from '@crm/db';
-import { backgroundHooks } from './hooks.ts';
 import { startJobRunners } from './jobs/graphile.ts';
+import { createJobRunner } from './jobs/runner.ts';
 import { loadEnv, WorkerEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
 import { captureFault, flush, MONITORING_FLUSH_MS } from './monitoring/sentry.ts';
@@ -117,12 +117,9 @@ const jobs =
     ? undefined
     : await startJobRunners({
         queue,
-        runner: createRunner({
+        runner: createJobRunner({
           db,
           registry: jobKinds({ environment: env.APP_ENV }),
-          enterAsActor: (input) => enterAsActor({ db, log }, input),
-          systemScope: (workspaceId) => systemScope(db, workspaceId),
-          hooks: backgroundHooks,
           // A batch stored a change event: the relay publishes it, even if it had gone dormant.
           onStored: () => relay?.wake(),
           log,

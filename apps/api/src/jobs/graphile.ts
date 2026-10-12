@@ -38,6 +38,10 @@ export interface JobRunnersOptions {
   readonly onFault?: (error: unknown) => void;
   /** Milliseconds between polls for scheduled rows (LISTEN wakes a runner at once for new ones). */
   readonly pollInterval?: number;
+  /** How old a dead worker's locks must be before they're released (120 seconds); the restart tests shorten it. */
+  readonly staleLockSeconds?: number;
+  /** How often stale locks are released and the backlog logged (a minute); the restart tests shorten it. */
+  readonly housekeepingMs?: number;
 }
 
 /** The running job runners. */
@@ -81,7 +85,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
   const logger = graphileLogger(log);
   const housekeeping = async () => {
     try {
-      const released = await queue.releaseStaleLocks();
+      const released = await queue.releaseStaleLocks(options.staleLockSeconds);
       if (released > 0) log.warn('jobs.locks.released', { workers: released });
       const backlog = await queue.backlog();
       log.info('jobs.backlog', backlog);
@@ -101,6 +105,11 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
           logger,
           pollInterval: options.pollInterval ?? 2_000,
           taskList: { [lane.task]: sliceTask(options, shutdown.signal) },
+          // Completions and failures go through Graphile's batcher (with no wait), which a stop flushes before
+          // the pool closes: unbatched, they're sent and not awaited, so a stop right after a slice handed its job
+          // over could close the pool first and leave the finished call's row locked (key cleared, so harmless,
+          // but kept until the daily cleanup).
+          preset: { worker: { completeJobBatchDelay: 0, failJobBatchDelay: 0 } },
         }),
       );
     }
@@ -114,7 +123,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
       options.onFault?.(error);
     });
   }
-  const timer = setInterval(() => void housekeeping(), HOUSEKEEPING_MS);
+  const timer = setInterval(() => void housekeeping(), options.housekeepingMs ?? HOUSEKEEPING_MS);
   timer.unref();
   log.info('jobs.runners.started', { heavy: LANES.heavy.concurrency, light: LANES.light.concurrency });
   return {

@@ -1,13 +1,25 @@
-// Graphile Worker in the loop (spec 0008, AC-102, AC-103, AC-115, AC-121):
-// the real runners on the worker login, against the test database. A test
-// job runs start to finish in slices handed back through the queue and
+// Graphile Worker in the loop (spec 0008, AC-102, AC-103, AC-111, AC-115,
+// AC-121): the real runners on the worker login, against the test database. A
+// test job runs start to finish in slices handed back through the queue and
 // leaves no queue row behind; a graceful stop mid job hands it back, and new
-// runners carry it on to the end with every item done once.
-import { createRunner, createWorkspace, getJob, jobKinds, newId, startTestJob, type Runner } from '@crm/core';
+// runners carry it on to the end with every item done once; a job that keeps
+// failing ends failed after Graphile's backoff and leaves no row either; and a
+// job started for later runs at its time, never before.
+import {
+  createRunner,
+  createWorkspace,
+  defineKind,
+  getJob,
+  jobKinds,
+  newId,
+  startTestJob,
+  type Runner,
+} from '@crm/core';
 import { enterAsActor, systemScope } from '@crm/core/system';
-import { testScope } from '@crm/core/testing';
+import { startJobForTest, testScope } from '@crm/core/testing';
 import { createDatabase, openQueueConnection, type Database, type QueueConnection } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
+import * as z from 'zod';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { backgroundHooks } from '../hooks.ts';
 import { startJobRunners, type JobsLog } from './graphile.ts';
@@ -25,7 +37,21 @@ afterAll(async () => {
   await db.close();
 });
 
-const registry = jobKinds({ environment: 'local' });
+/** A light kind whose batch always throws, tried twice: Graphile waits exp(1) seconds between. */
+const alwaysFails = defineKind({
+  kind: 'test.always_fails',
+  lane: 'light',
+  actor: 'member',
+  mode: 'items',
+  params: z.strictObject({}),
+  cancellable: true,
+  maxAttempts: 2,
+  batchSize: 10,
+  sample: {},
+  step: () => Promise.reject(new Error('This batch always fails.')),
+});
+
+const registry = jobKinds({ environment: 'local', extra: [alwaysFails] });
 const quiet: JobsLog = { info: () => undefined, warn: () => undefined, error: () => undefined };
 
 function coreRunner(sliceMs: number): Runner {
@@ -105,6 +131,50 @@ describe('the job runners on Graphile Worker', () => {
       expect((await getJob(scope, registry, job.id)).done).toBe(200);
     } finally {
       await second.stop();
+    }
+  });
+
+  it('end a job that keeps failing after Graphile’s backoff, recorded on the job and gone from the queue', async () => {
+    const scope = await owner();
+    const runners = await startJobRunners({ queue, runner: coreRunner(20_000), log: quiet, pollInterval: 200 });
+    try {
+      const { jobId } = await startJobForTest(scope, registry, {
+        kind: 'test.always_fails',
+        params: {},
+        items: [newId(), newId()],
+      });
+      await expect
+        .poll(async () => (await getJob(scope, registry, jobId)).status, { timeout: 20_000, interval: 100 })
+        .toBe('failed');
+      expect(await getJob(scope, registry, jobId)).toMatchObject({ error: { code: 'JOB_FAILED' }, done: 0 });
+      await expect.poll(async () => (await queueRows(jobId)).length, { timeout: 5_000 }).toBe(0);
+    } finally {
+      await runners.stop();
+    }
+  });
+
+  it('run a job started for later at its time, never before', async () => {
+    const scope = await owner();
+    const runners = await startJobRunners({ queue, runner: coreRunner(20_000), log: quiet, pollInterval: 200 });
+    try {
+      const runAt = new Date(Date.now() + 3_000);
+      const { jobId } = await startJobForTest(scope, registry, {
+        kind: 'dev.simulate',
+        params: { batchMillis: 0 },
+        items: [newId()],
+        runAt,
+      });
+      await new Promise((resolve) => setTimeout(resolve, 1_500));
+      expect((await getJob(scope, registry, jobId)).status).toBe('queued');
+      await expect
+        .poll(async () => (await getJob(scope, registry, jobId)).status, { timeout: 10_000, interval: 100 })
+        .toBe('succeeded');
+      const started = Date.parse((await getJob(scope, registry, jobId)).startedAt ?? '');
+      expect(started).toBeGreaterThanOrEqual(runAt.getTime());
+      // Within 5 seconds of its time while the worker is awake (AC-111).
+      expect(started - runAt.getTime()).toBeLessThan(5_000);
+    } finally {
+      await runners.stop();
     }
   });
 });

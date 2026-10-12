@@ -159,6 +159,76 @@ describe('crm_enqueue_job', () => {
   });
 });
 
+describe('queue keys against Graphile 0.18.0 (spec 0008, Queue keys)', () => {
+  /** A job's queue rows with what decides whether Graphile runs them. */
+  const rows = (jobId: string) =>
+    owner
+      .query<{ id: string; key: string | null; locked: boolean; run_at: Date; attempts: number; max_attempts: number }>(
+        `select j.id::text as id, j.key, j.locked_at is not null as locked, j.run_at, j.attempts, j.max_attempts
+         from ${QUEUE_SCHEMA}._private_jobs j where j.payload->>'jobId' = $1 order by j.id`,
+        [jobId],
+      )
+      .then((result) => result.rows);
+  const lockAs = (id: string, worker: string, age = '0 seconds') =>
+    owner.query(
+      `update ${QUEUE_SCHEMA}._private_jobs set locked_by = $1, locked_at = now() - $2::interval where id = $3::bigint`,
+      [worker, age, id],
+    );
+  const enqueueAt = (workspaceId: string, jobId: string, at: string) =>
+    db.withWorkspace(workspaceId, (tx) => tx.execute(sql`select crm_enqueue_job(${jobId}::uuid, ${at}::timestamptz)`));
+
+  it('hands over while the current row is locked: one available row at the new time, the old one deleted when its call returns', async () => {
+    const { workspaceId, memberId } = await workspaceWithMember('queue-hand-over');
+    const job = await jobIn(workspaceId, memberId, 'running');
+    await enqueue(workspaceId, job);
+    const [held] = await rows(job);
+    if (held === undefined) throw new Error('No queue row.');
+    await lockAs(held.id, 'worker-hand-over');
+    const next = new Date(Date.now() + 60_000).toISOString();
+    await enqueueAt(workspaceId, job, next);
+    const during = await rows(job);
+    expect(during).toHaveLength(2);
+    // add_jobs cleared the held row's key and used up its attempts; the new row carries the key and the time.
+    expect(during[0]).toMatchObject({ id: held.id, key: null, locked: true });
+    expect(during[0]?.attempts).toBe(during[0]?.max_attempts);
+    expect(during[1]).toMatchObject({ key: `crm-job:${workspaceId}:${job}`, locked: false, attempts: 0 });
+    expect(during[1]?.run_at.toISOString()).toBe(next);
+    // The call returns: Graphile's runner deletes the held row, as it completes any (by id, on the worker login).
+    const worker = new pg.Client({ connectionString: workerUrl });
+    await worker.connect();
+    try {
+      await worker.query(`delete from ${QUEUE_SCHEMA}._private_jobs where id = $1::bigint`, [held.id]);
+    } finally {
+      await worker.end();
+    }
+    expect((await rows(job)).map((row) => row.key)).toEqual([`crm-job:${workspaceId}:${job}`]);
+  });
+
+  it('leaves a dead row after a hand over whose process died: freed by the stale release, it never runs again', async () => {
+    const { workspaceId, memberId } = await workspaceWithMember('queue-dead');
+    const job = await jobIn(workspaceId, memberId, 'running');
+    await enqueue(workspaceId, job);
+    const [held] = await rows(job);
+    if (held === undefined) throw new Error('No queue row.');
+    const deadWorker = `dead-${randomUUID()}`;
+    await lockAs(held.id, deadWorker, '10 minutes');
+    await enqueue(workspaceId, job);
+    const queue = openQueueConnection({ url: workerUrl, applicationName: 'crm-queue-tests', max: 1 });
+    try {
+      expect(await queue.releaseStaleLocks()).toBeGreaterThanOrEqual(1);
+    } finally {
+      await queue.close();
+    }
+    const after = await rows(job);
+    expect(after.map((row) => ({ key: row.key, locked: row.locked }))).toEqual([
+      { key: null, locked: false },
+      { key: `crm-job:${workspaceId}:${job}`, locked: false },
+    ]);
+    // Its attempts are used up, so Graphile never hands it out; the backlog doesn't count it either.
+    expect(after[0]?.attempts).toBe(after[0]?.max_attempts);
+  });
+});
+
 describe('the queue tables', () => {
   it('are closed to the app: no select, insert, update or delete, nor the schema', async () => {
     const app = new pg.Client({ connectionString: appUrl });
