@@ -971,6 +971,8 @@ export function createDataLayer({
     workspace: string,
     write: (mutationId: string, options: CallOptions) => Promise<T>,
     objectsOf: (answer: T) => readonly string[],
+    /** Runs with the answer before the pages reload (a move keeps its answer as the settings list). */
+    keep: (answer: T) => void = () => undefined,
   ): Promise<T> {
     const mutationId = mintId();
     mutations.sent(mutationId);
@@ -983,6 +985,7 @@ export function createDataLayer({
         attributes.delete(objectKey(workspace, objectId));
         dropAllAttributes(workspace, objectId);
       }
+      keep(answer);
       onDefinitionsChange();
       return answer;
     } catch (error) {
@@ -1246,14 +1249,15 @@ export function createDataLayer({
        * attributes in their new order, which the settings list keeps.
        */
       reorder: async (workspace: string, attributeId: string, position: number): Promise<AttributeDefinition[]> => {
-        const order = await writeAttribute(
+        return writeAttribute(
           workspace,
           (mutationId, options) => api.attributes.reorder({ workspace, attributeId, position, mutationId }, options),
           (answer) => answer.map((each) => each.objectId),
+          (order) => {
+            const objectId = order[0]?.objectId;
+            if (objectId !== undefined) allAttributes.set(objectKey(workspace, objectId), Promise.resolve(order));
+          },
         );
-        const objectId = order[0]?.objectId;
-        if (objectId !== undefined) allAttributes.set(objectKey(workspace, objectId), Promise.resolve(order));
-        return order;
       },
       /**
        * Archives an attribute (spec 0012, AC-233), both ends of a
