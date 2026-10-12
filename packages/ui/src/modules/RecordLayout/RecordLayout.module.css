@@ -2,7 +2,7 @@
    space-16 at the sides, over the tabs and the chosen panel) beside the
    sidebar at the Panel molecule's width (size-panel) with a hairline before
    it; the panel and the sidebar each scroll inside themselves. Narrow (below
-   bp-container-md, measured in script), one scrolling column: the header, the
+   bp-container-md plus size-panel, measured in script), one scrolling column: the header, the
    sidebar's Disclosure, then the tabs, whose panel keeps the slot's height.
    A notice spans the top. */
 @layer components {
@@ -16,9 +16,9 @@
     min-block-size: 0;
   }
 
+  /* A banner Callout sits flush, full width, as Callout draws it. */
   .notice {
     flex: none;
-    padding: var(--space-12) var(--space-16) 0;
   }
 
   .columns {

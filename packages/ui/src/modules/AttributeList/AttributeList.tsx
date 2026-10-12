@@ -133,6 +133,14 @@ function Row({ item, onCommit, editorProps }: RowProps) {
   const reason = readOnlyReasonOf(attribute);
   const canEdit = onCommit !== undefined && reason === undefined && definition.editIn !== 'none';
   const closesOnCommit = definition.editIn === 'cell' || definition.closesOnCommit === true;
+  // The list turned read only under an open editor (the record was deleted elsewhere): the editor goes with its
+  // draft, and focus lands on the value it was editing rather than on the page.
+  const readOnlyValue = useRef<HTMLSpanElement>(null);
+  const isEditorLost = isEditing && !canEdit;
+  useEffect(() => {
+    if (!isEditorLost) return;
+    focusLater(() => (document.activeElement === document.body ? readOnlyValue.current : undefined));
+  }, [isEditorLost]);
   const extras = {
     ...(editorProps?.(attribute) ?? {}),
     ...(display === undefined ? {} : { display: display as never }),
@@ -218,7 +226,8 @@ function Row({ item, onCommit, editorProps }: RowProps) {
     );
   } else {
     body = (
-      <span className={styles.value} data-readonly="">
+      // Focusable by script only: where focus goes when an open editor is taken away.
+      <span ref={readOnlyValue} className={styles.value} data-readonly="" tabIndex={-1}>
         {shown}
         {reason !== undefined && <LockReason reason={reason} />}
       </span>

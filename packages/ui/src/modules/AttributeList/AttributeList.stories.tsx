@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
+import { flushSync } from 'react-dom';
 import { expect, fn, waitFor, within } from 'storybook/test';
 import { SAMPLE_RECORD, sampleDetails, sampleEditorProps } from '../../workbench/record-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -11,10 +12,19 @@ interface SampleProps {
   readonly isReadOnly?: boolean;
   readonly width?: 'auto' | 'narrow';
   readonly errorOn?: string;
+  /** Saves as a data layer's store does: re-rendering at once, inside the commit's own event. */
+  readonly isSyncSave?: boolean;
 }
 
 /** The list holding the sample company's values, as a record page would through the data layer. */
-function SampleList({ onCommit, isLoading = false, isReadOnly = false, width = 'auto', errorOn }: SampleProps) {
+function SampleList({
+  onCommit,
+  isLoading = false,
+  isReadOnly = false,
+  width = 'auto',
+  errorOn,
+  isSyncSave = false,
+}: SampleProps) {
   const [values, setValues] = useState(SAMPLE_RECORD.values);
   const sections = sampleDetails(values).map((section) => ({
     ...section,
@@ -33,7 +43,11 @@ function SampleList({ onCommit, isLoading = false, isReadOnly = false, width = '
           ? {}
           : {
               onCommit: (attributeId: string, value: unknown) => {
-                setValues((previous) => ({ ...previous, [attributeId]: value }));
+                const save = () => {
+                  setValues((previous) => ({ ...previous, [attributeId]: value }));
+                };
+                if (isSyncSave) flushSync(save);
+                else save();
                 onCommit?.(attributeId, value);
               },
             })}
@@ -74,6 +88,27 @@ export const EditInPlace: Story = {
     await expect(args.onCommit).toHaveBeenCalledWith('city', 'Leeds');
     await waitFor(() => expect(canvas.getByRole('button', { name: 'Edit City' })).toHaveFocus());
     await expect(canvas.getByText('Leeds')).toBeInTheDocument();
+  },
+};
+
+/**
+ * A save that re-renders in the same event (a data layer's store) still
+ * closes the editor and hands focus back to the pencil once the key is done,
+ * never pressing the pencil with the Enter that committed.
+ */
+export const CommitWithSameEventSave: Story = {
+  args: { onCommit: fn(), isSyncSave: true },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
+    canvas.getByRole('button', { name: 'Edit City' }).focus();
+    await userEvent.keyboard('{Enter}');
+    const input = await canvas.findByRole('textbox', { name: 'City' });
+    await userEvent.clear(input);
+    await userEvent.type(input, 'York{Enter}');
+    await expect(args.onCommit).toHaveBeenCalledWith('city', 'York');
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Edit City' })).toHaveFocus());
+    await expect(canvas.queryByRole('textbox', { name: 'City' })).toBeNull();
+    await expect(canvas.getByText('York')).toBeInTheDocument();
   },
 };
 

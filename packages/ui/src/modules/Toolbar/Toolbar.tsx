@@ -58,31 +58,23 @@ export function TopBar({ title, icon, hue, crumbs, meta, children, titleRef, isL
       {title}
     </h1>
   );
-  if (isLoading) {
-    return (
-      <header className={styles.top} aria-busy="true">
-        {showSkeleton && (
-          <span className={styles.loading}>
-            <Skeleton width="long" />
-          </span>
-        )}
-        <VisuallyHidden>{heading}</VisuallyHidden>
-      </header>
-    );
-  }
+  // One tree for loading and loaded: the hidden h1 keeps its place (third), so a page that loads in place keeps
+  // the focus the app gave its title when the title arrives.
+  const tile = icon === undefined ? null : hue === undefined ? <Icon name={icon} /> : <Icon name={icon} tile={hue} />;
+  const skeleton = showSkeleton ? (
+    <span className={styles.loading}>
+      <Skeleton width="long" />
+    </span>
+  ) : null;
+  let shownTitle: ReactNode = null;
+  if (!isLoading) shownTitle = hasTrail ? <Breadcrumbs items={[...crumbs, { id: CURRENT, label: title }]} /> : heading;
   return (
-    <header className={styles.top}>
-      {icon !== undefined && (hue === undefined ? <Icon name={icon} /> : <Icon name={icon} tile={hue} />)}
-      {hasTrail ? (
-        <>
-          <Breadcrumbs items={[...crumbs, { id: CURRENT, label: title }]} />
-          <VisuallyHidden>{heading}</VisuallyHidden>
-        </>
-      ) : (
-        heading
-      )}
-      {meta}
-      {children !== undefined && <div className={styles.end}>{children}</div>}
+    <header className={styles.top} aria-busy={isLoading || undefined}>
+      {isLoading ? skeleton : tile}
+      {shownTitle}
+      {isLoading || hasTrail ? <VisuallyHidden>{heading}</VisuallyHidden> : null}
+      {isLoading ? null : meta}
+      {!isLoading && children !== undefined && <div className={styles.end}>{children}</div>}
     </header>
   );
 }

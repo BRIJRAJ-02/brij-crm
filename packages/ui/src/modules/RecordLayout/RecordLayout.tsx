@@ -3,8 +3,9 @@
 // right. Below bp-container-md the sidebar moves above the tabs, folded into
 // a Disclosure. It lays the page out; what goes in each slot comes from
 // other modules (RecordHeader, AttributeList, ActivityFeed).
-import { useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
-import { breakpointToken } from '../../lib/token-values.ts';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { focusLater } from '../../lib/focus-later.ts';
+import { breakpointToken, sizeToken } from '../../lib/token-values.ts';
 import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
 import { TabPanel, Tabs, type TabItem } from '../../molecules/Tabs/Tabs.tsx';
 import styles from './RecordLayout.module.css';
@@ -35,8 +36,12 @@ export interface RecordLayoutProps {
   readonly isLoading?: boolean;
 }
 
-/** The container width (px) below which the sidebar folds above the tabs: `bp-container-md`. */
-const NARROW_BELOW = breakpointToken('bp-container-md');
+/**
+ * The container width (px) below which the sidebar folds above the tabs: the
+ * sidebar's own width (`size-panel`) plus a main column of `bp-container-md`,
+ * so the header and tabs never get less than a medium container beside it.
+ */
+const NARROW_BELOW = breakpointToken('bp-container-md') + sizeToken('size-panel');
 
 /** Whether the element is narrower than `bp-container-md`, kept current as it resizes. */
 function useIsNarrow(): [ref: RefObject<HTMLDivElement | null>, isNarrow: boolean] {
@@ -83,13 +88,41 @@ export function RecordLayout({
   isLoading = false,
 }: RecordLayoutProps) {
   const [ref, isNarrow] = useIsNarrow();
+  // When the tab changes from inside the panel (a "View all" there), the control pressed goes with the panel:
+  // focus moves to the chosen tab, rather than to the page.
+  const panelHadFocus = useRef(false);
+  const shownTab = useRef(selectedTab);
+  useEffect(() => {
+    if (shownTab.current === selectedTab) return;
+    shownTab.current = selectedTab;
+    if (!panelHadFocus.current) return;
+    panelHadFocus.current = false;
+    focusLater(() => {
+      const active = document.activeElement;
+      if (active !== null && active !== document.body) return undefined;
+      return ref.current?.querySelector<HTMLElement>(`[role="tab"][data-key="${CSS.escape(selectedTab)}"]`);
+    });
+  }, [selectedTab, ref]);
   const tabbed = (
     <div className={styles.tabs}>
       <Tabs label={tabsLabel} tabs={tabs} selectedKey={selectedTab} onSelectionChange={onTabChange}>
         {/* A panel per tab, so each tab names its own; only the chosen one draws, and it holds `children`. */}
         {tabs.map((tab) => (
           <TabPanel key={tab.id} id={tab.id}>
-            {tab.id === selectedTab && <div className={styles.panel}>{children}</div>}
+            {tab.id === selectedTab && (
+              <div
+                className={styles.panel}
+                onFocus={() => {
+                  panelHadFocus.current = true;
+                }}
+                onBlur={(event) => {
+                  // Focus moving elsewhere on the page; a control unmounting with the panel blurs to nothing.
+                  if (event.relatedTarget !== null) panelHadFocus.current = false;
+                }}
+              >
+                {children}
+              </div>
+            )}
           </TabPanel>
         ))}
       </Tabs>

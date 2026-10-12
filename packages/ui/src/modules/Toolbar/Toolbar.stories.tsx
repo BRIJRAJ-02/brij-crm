@@ -166,3 +166,39 @@ export const TopBarLoading: Story = {
     await expect(banner.getBoundingClientRect().height).toBe(bar);
   },
 };
+
+/** A record page that loads in place: its title arrives in the same h1, so focus the app gave it stays there. */
+function ArrivingTitle() {
+  const [isLoading, setLoading] = useState(true);
+  return (
+    <div>
+      <TopBar
+        title={isLoading ? 'Loading' : 'Northwind Traders'}
+        crumbs={[{ id: 'companies', label: 'Companies', href: '/companies', icon: 'building' }]}
+        isLoading={isLoading}
+      />
+      <Button
+        onPress={() => {
+          setLoading(false);
+        }}
+      >
+        Arrive
+      </Button>
+    </div>
+  );
+}
+
+/** The title focused while loading keeps focus once the record arrives. */
+export const TopBarArrives: Story = {
+  render: () => <ArrivingTitle />,
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    const loading = canvas.getByRole('heading', { level: 1, name: 'Loading' });
+    loading.focus();
+    // Pressed by script, so focus stays on the title, as when the data layer answers.
+    canvas.getByRole('button', { name: 'Arrive' }).click();
+    const arrived = await canvas.findByRole('heading', { level: 1, name: 'Northwind Traders' });
+    await expect(arrived).toBe(loading);
+    await expect(arrived).toHaveFocus();
+  },
+};
