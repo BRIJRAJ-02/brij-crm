@@ -129,4 +129,20 @@ test('an owner adds, edits, moves, archives and restores attributes without setu
   await expect(page.getByRole('menuitem', { name: 'Archive attribute' })).toHaveCount(0);
   await checkScreen(page, 'table-column-menu');
   await page.keyboard.press('Escape');
+
+  // Sorted by a column that is then archived from its menu: the table goes back to its opening order and stays.
+  await page.getByRole('button', { name: 'Nickname options' }).click();
+  await page.getByRole('menuitem', { name: 'Sort ascending' }).click();
+  await expect(grid.getByRole('columnheader', { name: /Nickname/ })).toHaveAttribute('aria-sort', 'ascending');
+  await page.getByRole('button', { name: 'Nickname options' }).click();
+  await page.getByRole('menuitem', { name: 'Archive attribute' }).click();
+  await page
+    .getByRole('alertdialog', { name: 'Archive Nickname?' })
+    .getByRole('button', { name: 'Archive Nickname' })
+    .click();
+  await expect(page.getByText('Nickname archived.')).toBeVisible();
+  await expect(grid.getByRole('columnheader', { name: /Nickname/ })).toHaveCount(0);
+  await expect(page.getByText('Couldn’t load these records')).toHaveCount(0);
+  // The chevron that opened the confirm left with its column: focus is on the name's header.
+  await expect(page.locator('[role="columnheader"]:focus')).toContainText('Name');
 });

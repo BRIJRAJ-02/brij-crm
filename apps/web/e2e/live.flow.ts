@@ -191,7 +191,7 @@ test.describe('live updates between two browsers', () => {
     // read for the loaded rows (spec 0006, AC-55): a fetch of that one attribute, not of the writer's changes.
     const echoRefetches = writerRefetches;
     const columns = Number(await readerGrid.getAttribute('aria-colcount'));
-    await writer.getByRole('button', { name: 'Add attribute' }).click();
+    await writer.getByRole('button', { name: 'Add attribute' }).first().click();
     const dialog = writer.getByRole('dialog', { name: 'New attribute' });
     await dialog.getByLabel('Name', { exact: true }).fill(`Nickname ${tag}`);
     const addedAt = Date.now();

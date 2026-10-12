@@ -25,7 +25,7 @@ test.describe('the People table', () => {
 
     // Add attribute (spec 0012, AttributeSettings): a name and a type; the column appears once the server agrees.
     const columnsBefore = Number(await grid.getAttribute('aria-colcount'));
-    await page.getByRole('button', { name: 'Add attribute' }).click();
+    await page.getByRole('button', { name: 'Add attribute' }).first().click();
     const addDialog = page.getByRole('dialog', { name: 'New attribute' });
     await expect(addDialog).toBeVisible();
     await addDialog.getByLabel('Name', { exact: true }).fill('Nickname');
@@ -37,7 +37,7 @@ test.describe('the People table', () => {
     await showColumn(page, 'Nickname');
 
     // The same name again takes the same API name, refused inline on that field.
-    await page.getByRole('button', { name: 'Add attribute' }).click();
+    await page.getByRole('button', { name: 'Add attribute' }).first().click();
     await addDialog.getByLabel('Name', { exact: true }).fill('Nickname');
     await addDialog.getByRole('button', { name: /Type$/ }).click();
     await page.getByRole('option', { name: 'Rating' }).click();
