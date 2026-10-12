@@ -697,7 +697,7 @@ describe('workspace milestones (spec 0010, AC-177)', () => {
   });
 
   it("fails the migration's closing check on a stray table or column grant", async () => {
-    const migration = await readFile(new URL('../migrations/0030_workspace_milestones.sql', import.meta.url), 'utf8');
+    const migration = await readFile(new URL('../migrations/0027_workspace_milestones.sql', import.meta.url), 'utf8');
     const check = /do \$\$[\s\S]*?\$\$;/.exec(migration.slice(migration.indexOf('Refuse to finish')))?.[0];
     expect(check).toBeDefined();
     for (const stray of [

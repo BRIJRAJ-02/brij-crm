@@ -265,7 +265,7 @@ Each took the recommended default where the spec left it open (12 October 2026):
 - **`reached_at` is `now()`**, the reaching transaction's start, and is the event's timestamp.
 - **A write that commits and then fails in the same procedure** (a create whose read back finds the record already trashed) keeps its milestone row and sends no event. The row is the source of truth, so the count can be rebuilt from it; resending is left to #39 or a backfill.
 - **The api's other vendor wrappers** (Better Auth, Resend, React Email) moved from the rule switched off to exact `vendorWrappers` allows, so no wrapper can import another vendor (AC-184).
-- **The migration** sets a 5 second lock timeout for the foreign key on `workspaces` and ends with a check that only the owner and `crm_app` hold privileges on the table: `select` on it, and `insert` on `workspace_id` and `milestone` only, so `reached_at` is always the reaching transaction's time (any other table or column grant fails the migration). It is numbered 0030 to stay clear of other lanes, for renumbering at landing.
+- **The migration** sets a 5 second lock timeout for the foreign key on `workspaces` and ends with a check that only the owner and `crm_app` hold privileges on the table: `select` on it, and `insert` on `workspace_id` and `milestone` only, so `reached_at` is always the reaching transaction's time (any other table or column grant fails the migration). It is migration 0027, numbered and stamped at landing.
 
 ## Follow-up
 
