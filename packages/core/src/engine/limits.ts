@@ -176,8 +176,31 @@ export async function countCustomObjects(tx: WorkspaceTx, scope: EngineScope): P
 
 /**
  * Each object's attributes as `checkAttributeRoom` counts them (non system,
- * archived included), one row per attribute, so a caller can count only the
- * ones its principal may see (spec 0012, AC-243).
+ * archived included), counted by Postgres, for a principal who sees every
+ * attribute (the open policy).
+ */
+export async function countAttributesByObject(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+): Promise<ReadonlyMap<string, number>> {
+  const rows = await tx
+    .select({ objectId: attributes.objectId, n: count() })
+    .from(attributes)
+    .where(
+      and(
+        eq(attributes.workspaceId, scope.workspaceId),
+        sql`${attributes.objectId} is not null`,
+        eq(attributes.isSystem, false),
+      ),
+    )
+    .groupBy(attributes.objectId);
+  return new Map(rows.flatMap((row) => (row.objectId === null ? [] : [[row.objectId, row.n] as const])));
+}
+
+/**
+ * Each object's attributes as `checkAttributeRoom` counts them (non system,
+ * archived included), one row per attribute, so a caller under field rules
+ * can count only the ones its principal may see (spec 0012, AC-243).
  */
 export function objectAttributeRows(
   tx: WorkspaceTx,

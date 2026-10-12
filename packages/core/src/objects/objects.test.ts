@@ -329,3 +329,64 @@ describe('usage (AC-243)', () => {
     expect((await listObjects(hidden)).map((object) => object.id)).not.toContain(people);
   });
 });
+
+describe('hidden means absent (spec 0009, under rules)', () => {
+  /** An admin of the workspace whose role can't see `objectId`. */
+  async function adminBlindTo(scope: EngineScope, objectId: string) {
+    return rescope(await memberIn(scope, 'admin'), {
+      rules: {
+        levels: [{ subject: { type: 'role', role: 'admin' }, target: { type: 'object', objectId }, level: 'none' }],
+        records: [],
+      },
+    });
+  }
+
+  it('refuses every write to an object the caller can’t see as unknown, and writes nothing', async () => {
+    const { scope, objects } = await workspace();
+    const deals = objects.deals ?? '';
+    const blind = await adminBlindTo(scope, deals);
+    const before = await outboxCount(scope);
+    for (const call of [
+      () => editObject(blind, { objectId: deals, pluralName: 'Opportunities' }),
+      () => archiveObject(blind, { objectId: deals }),
+      () => restoreObject(blind, { objectId: deals }),
+      () => moveObject(blind, { objectId: deals, position: 0 }),
+    ]) {
+      expect(await refusalOf(call())).toMatchObject({ code: 'NOT_FOUND' });
+    }
+    expect(await outboxCount(scope)).toBe(before);
+    expect((await listObjects(scope)).find((object) => object.id === deals)?.pluralName).toBe('Deals');
+  });
+
+  it('never names an archived far object the caller can’t see', async () => {
+    const { scope, objects } = await workspace();
+    const companies = objects.companies ?? '';
+    await archiveObject(scope, { objectId: companies });
+    const blind = await adminBlindTo(scope, companies);
+    const company = (await listObjectAttributes(blind, objects.people ?? '', { includeArchived: true })).find(
+      (attribute) => attribute.apiSlug === 'company',
+    );
+    expect(company).toMatchObject({ isArchived: true });
+    expect(company?.archivedBy).toBeUndefined();
+  });
+
+  it('counts only the attributes the caller can see', async () => {
+    const { scope, objects } = await workspace();
+    const people = objects.people ?? '';
+    const jobTitle = (await listObjectAttributes(scope, people)).find((attribute) => attribute.apiSlug === 'job_title');
+    const all = (await getUsage(scope)).attributes[people]?.used ?? 0;
+    const blind = rescope(await memberIn(scope, 'member'), {
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'member' },
+            target: { type: 'attribute', objectId: people, attributeId: jobTitle?.id ?? '' },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+    expect((await getUsage(blind)).attributes[people]?.used).toBe(all - 1);
+  });
+});

@@ -108,7 +108,9 @@ async function optionsOf(
       ...(row.outcome === null ? {} : { outcome: row.outcome }),
       ...(row.targetDays === null ? {} : { targetTimeInStage: `P${String(row.targetDays)}D` }),
     };
-    byAttribute.set(row.attributeId, [...(byAttribute.get(row.attributeId) ?? []), option]);
+    const list = byAttribute.get(row.attributeId);
+    if (list === undefined) byAttribute.set(row.attributeId, [option]);
+    else list.push(option);
   }
   return byAttribute;
 }

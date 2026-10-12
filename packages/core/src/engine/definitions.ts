@@ -645,7 +645,14 @@ export async function listAttributes(
   );
   return rows.flatMap(({ attribute, archivedBy }) =>
     attributeVisible(scope.access, attribute) && (options.includeArchived === true || archivedBy === null)
-      ? [{ ...attribute, archivedBy }]
+      ? // The far object is named only to a principal who may see it; to anyone else the attribute is just archived.
+        [
+          {
+            ...attribute,
+            archivedBy: archivedBy !== null && objectLevel(scope.access, archivedBy) === 'none' ? null : archivedBy,
+            isArchivedByObject: archivedBy !== null,
+          },
+        ]
       : [],
   );
 }

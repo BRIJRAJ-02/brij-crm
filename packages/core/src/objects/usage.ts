@@ -7,10 +7,10 @@
 import { eq } from 'drizzle-orm';
 import type { Usage } from '@crm/contracts';
 import { schema } from '@crm/db';
-import { countCustomObjects, limitsOf, objectAttributeRows } from '../engine/limits.ts';
+import { countAttributesByObject, countCustomObjects, limitsOf, objectAttributeRows } from '../engine/limits.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { inWorkspace } from '../access/run.ts';
-import { can, objectLevel } from '../access/policy.ts';
+import { can, isOpen, objectLevel } from '../access/policy.ts';
 import { attributeVisible } from '../access/visibility.ts';
 
 const { objects } = schema;
@@ -26,12 +26,19 @@ export async function getUsage(scope: EngineScope): Promise<Usage> {
       .where(eq(objects.workspaceId, scope.workspaceId));
     const visible = workspaceObjects.filter((object) => objectLevel(scope.access, object.id) !== 'none');
     const counts = new Map(visible.map((object) => [object.id, 0]));
-    for (const row of await objectAttributeRows(tx, scope)) {
-      if (row.objectId === null) continue;
-      const count = counts.get(row.objectId);
-      if (count === undefined) continue;
-      if (attributeVisible(scope.access, { id: row.id, objectId: row.objectId, listId: null })) {
-        counts.set(row.objectId, count + 1);
+    // Every attribute visible (the open policy): Postgres counts them. Under field rules, row by row.
+    if (isOpen(scope.access)) {
+      for (const [objectId, used] of await countAttributesByObject(tx, scope)) {
+        if (counts.has(objectId)) counts.set(objectId, used);
+      }
+    } else {
+      for (const row of await objectAttributeRows(tx, scope)) {
+        if (row.objectId === null) continue;
+        const count = counts.get(row.objectId);
+        if (count === undefined) continue;
+        if (attributeVisible(scope.access, { id: row.id, objectId: row.objectId, listId: null })) {
+          counts.set(row.objectId, count + 1);
+        }
       }
     }
     const customObjects = canManage ? await countCustomObjects(tx, scope) : undefined;
