@@ -313,6 +313,8 @@ export const CreateSelect: Story = {
     await waitFor(() => expect(within(dialog).getByRole('textbox', { name: 'New option' })).toHaveFocus());
     await userEvent.keyboard('Silver{Enter}{Escape}');
     await expect(dialog).toHaveTextContent('2 of 500');
+    // Esc hands focus to Add option a frame later; ⌘↵ waits for it, as a person's next key would.
+    await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Add option' })).toHaveFocus());
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
     await waitFor(() =>
       expect(args.onSubmit).toHaveBeenCalledWith(
