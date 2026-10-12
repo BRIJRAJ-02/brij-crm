@@ -217,21 +217,39 @@ export const Links: Story = {
   args: { entries: arraySource(SAMPLE_LINK_ACTIVITY, (entry) => entry.id) },
   parameters: { crm: { preview: true } },
   play: async ({ canvas }) => {
-    const [many, both, removed, moved] = canvas.getAllByRole('article');
+    const [many, oneMore, both, removed, moved] = canvas.getAllByRole('article');
     // A chip is its own box, so browsers may put a space before the comma after it.
     await expect(many).toHaveAccessibleName(
       /^Ada Lovelace added Jane Doe ?, Ada Lovelace ?, Alan Turing and 97 others to Team$/,
+    );
+    await expect(oneMore).toHaveAccessibleName(
+      /^Grace Hopper added Annie Easley ?, Dorothy Vaughan ?, Mary Jackson and 1 other to Team$/,
     );
     await expect(both).toHaveAccessibleName(
       /^Grace Hopper added Katherine Johnson and Margaret Hamilton to Team ?, and removed Edsger Dijkstra from Team$/,
     );
     await expect(removed).toHaveAccessibleName('Lead routing removed Barbara Liskov from Team');
     await expect(moved).toHaveAccessibleName('Ada Lovelace changed Company');
-    // Each name links to its record.
+    // Each name links to its record, and a record with no page names it with no link.
     await expect(canvas.getByRole('link', { name: 'Jane Doe' })).toHaveAttribute(
       'href',
       '/records/0199a3c0-0000-7000-8000-00000000c101',
     );
+    await expect(canvas.queryByRole('link', { name: 'Barbara Liskov' })).toBeNull();
+  },
+};
+
+/** Tab moves from the entry into its linked names, and on out of the feed. */
+export const LinksKeyboard: Story = {
+  args: { entries: arraySource(SAMPLE_LINK_ACTIVITY, (entry) => entry.id) },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    await expect(canvas.getAllByRole('article')[0]).toHaveFocus();
+    await userEvent.tab();
+    await expect(canvas.getByRole('link', { name: 'Jane Doe' })).toHaveFocus();
+    await userEvent.tab();
+    await expect(canvas.getAllByRole('link', { name: 'Ada Lovelace' })[0]).toHaveFocus();
   },
 };
 

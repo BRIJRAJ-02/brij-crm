@@ -46,6 +46,11 @@
     .root[data-hovered] {
       background: var(--surface-hover);
     }
+
+    /* A flat chip already sits on the hover surface: a linked one deepens to show it can be followed. */
+    .root[data-flat][data-hovered] {
+      background: var(--surface-selected);
+    }
   }
 
   .root[data-focus-visible] {
