@@ -176,7 +176,9 @@ export const MAX_TEST_JOB_ITEMS = 200_000;
  * A test job (`dev.simulate`, local and previews only): `id` is the browser's
  * uuid v7 and the retry key; `items` synthetic items, `batchSize` a batch,
  * each batch waiting `batchMillis`, every `refuseEvery`th item refused with
- * `SIMULATED_REFUSAL`, and one throw at `failAtPosition` (retried).
+ * `SIMULATED_REFUSAL`, and one throw at `failAtPosition` (retried). With
+ * `confirm`, its items come from a snapshot and it waits in `ready` for
+ * `jobs.confirm`.
  */
 export const StartTestJobInput = WorkspaceScoped.extend({
   id: z.uuid({ version: 'v7', message: 'The job id must be a UUID v7.' }),
@@ -185,6 +187,8 @@ export const StartTestJobInput = WorkspaceScoped.extend({
   batchMillis: z.number().int().min(0).max(2_000).default(0),
   failAtPosition: z.number().int().min(1).optional(),
   refuseEvery: z.number().int().min(1).optional(),
+  /** Snapshot the items in the background, then wait for `jobs.confirm` (AC-109). */
+  confirm: z.boolean().optional(),
   mutationId: z.uuid(),
 });
 /** A test job to start. */

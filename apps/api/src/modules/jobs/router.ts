@@ -37,6 +37,7 @@ export const jobsRouter = member.jobs.router({
           batchMillis: input.batchMillis,
           failAtPosition: input.failAtPosition,
           refuseEvery: input.refuseEvery,
+          confirm: input.confirm,
         },
         hooks,
       ),
