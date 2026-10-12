@@ -12,6 +12,7 @@ import {
   pgEnum,
   pgTable,
   primaryKey,
+  smallint,
   text,
   uniqueIndex,
   uuid,
@@ -95,6 +96,14 @@ export const attributes = pgTable(
     /** For a record reference: the relationship it is one end of. */
     relationshipId: uuid('relationship_id'),
     archivedAt: timestamptz('archived_at'),
+    /**
+     * The rules on this attribute plus the rules whose condition names it
+     * (spec 0013): a write loads rules only when an attribute it touches has
+     * some. Kept exact by every rule write, in the same transaction.
+     */
+    ruleCount: smallint('rule_count').notNull().default(0),
+    /** Up by one whenever one of those rules is made, changed or deleted, so a write that loaded them sees a change. */
+    rulesVersion: integer('rules_version').notNull().default(0),
     ...auditColumns(),
   },
   (t): PgTableExtraConfigValue[] => [

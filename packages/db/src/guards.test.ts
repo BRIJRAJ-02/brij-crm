@@ -617,6 +617,39 @@ describe('isolation', () => {
       }),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'records_created_by' } });
   });
+
+  it("reads none of another workspace's validation rules, and refuses a rule on its attribute (spec 0013)", async () => {
+    /** An object with one text attribute and one rule on it, made inside the workspace. */
+    const ruled = async (workspaceId: string) => {
+      const objectId = await objectIn(workspaceId);
+      const attributeId = randomUUID();
+      await db.withWorkspace(workspaceId, async (tx) => {
+        await tx.execute(
+          sql`insert into attributes (workspace_id, id, object_id, api_slug, title, type, position, created_by_type, updated_by_type) values (${workspaceId}, ${attributeId}, ${objectId}, 'code', 'Code', 'text', 0, 'system', 'system')`,
+        );
+        await tx.execute(
+          sql`insert into validation_rules (workspace_id, id, object_id, attribute_id, kind, params, position, created_by_type, updated_by_type) values (${workspaceId}, ${randomUUID()}, ${objectId}, ${attributeId}, 'length', '{"max": 8}', 0, 'system', 'system')`,
+        );
+      });
+      return { objectId, attributeId };
+    };
+    const a = await workspaceWithMember('rules-a');
+    const b = await workspaceWithMember('rules-b');
+    const inA = await ruled(a.workspaceId);
+    const inB = await ruled(b.workspaceId);
+    const seenFromA = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ attribute_id: string }>(sql`select attribute_id from validation_rules`),
+    );
+    expect(seenFromA.rows).toEqual([{ attribute_id: inA.attributeId }]);
+    // A rule in A naming B's attribute: the composite key finds no such attribute in A.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into validation_rules (workspace_id, id, object_id, attribute_id, kind, params, position, created_by_type, updated_by_type) values (${a.workspaceId}, ${randomUUID()}, ${inA.objectId}, ${inB.attributeId}, 'length', '{"max": 8}', 1, 'system', 'system')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'validation_rules_attribute' } });
+  });
 });
 
 describe('the auth schema: global identity, outside row level security (spec 0005)', () => {

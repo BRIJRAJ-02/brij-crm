@@ -10,3 +10,4 @@ export { outbox, outboxKind } from './outbox.ts';
 export { listEntries, recordLinks, records, sortKeys, values } from './records.ts';
 export { jobItems, jobItemState, jobLane, jobs, jobStatus } from './jobs.ts';
 export { workspaceMilestones } from './milestones.ts';
+export { validationRuleKind, validationRules } from './validation.ts';
