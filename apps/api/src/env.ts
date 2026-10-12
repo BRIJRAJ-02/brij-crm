@@ -226,6 +226,9 @@ export const WorkerEnv = z
     CENTRIFUGO_API_KEY: optional(z.string()),
     // The api's poke must carry it (spec 0005). Required outside local; locally, unset takes any poke.
     WORKER_WAKE_SECRET: wakeSecret,
+    // The background jobs' runners (spec 0008): `on` or `off`. Unset is `on` locally and in previews and `off` in
+    // production, where Graphile's LISTEN and poll would keep Neon's compute awake until milestone 3's sleep lands.
+    JOBS_RUNNER: optional(z.enum(['on', 'off'])),
   })
   .superRefine((env, issues) => {
     const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });
@@ -250,9 +253,10 @@ export const WorkerEnv = z
       missing('WORKER_WAKE_SECRET', 'That is the local placeholder. Generate one: `openssl rand -hex 32`.');
     }
   })
-  .transform(({ WORKER_PORT, PORT, CENTRIFUGO_API_URL, CENTRIFUGO_API_KEY, ...rest }) => ({
+  .transform(({ WORKER_PORT, PORT, CENTRIFUGO_API_URL, CENTRIFUGO_API_KEY, JOBS_RUNNER, ...rest }) => ({
     ...rest,
     WORKER_PORT: WORKER_PORT ?? PORT ?? 3001,
+    JOBS_RUNNER: JOBS_RUNNER ?? (rest.APP_ENV === 'production' ? 'off' : 'on'),
     // The relay's Centrifugo, when it is on.
     centrifugo:
       CENTRIFUGO_API_URL === undefined || CENTRIFUGO_API_KEY === undefined

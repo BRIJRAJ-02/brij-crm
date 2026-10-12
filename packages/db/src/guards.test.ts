@@ -152,14 +152,15 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
   });
 
   // Each owner role, its functions, their signatures, and who calls each: the app (and so the worker, which
-  // inherits it), or the worker alone (spec 0008: listing workspaces reaches across them, so the API never may).
+  // inherits it), or the worker alone. Listing workspaces reaches across them, so it is the worker's (spec 0008);
+  // the app keeps it too until milestone 3's contract migration, once every worker runs on crm_worker_user.
   it.each([
     ['crm_search', ['crm_search_text'], ['crm_search_text(uuid, text, integer)'], ['app']],
     [
       'crm_relay',
       ['crm_outbox_workspaces', 'crm_outbox_prune'],
       ['crm_outbox_workspaces(integer, uuid)', 'crm_outbox_prune(integer)'],
-      ['worker', 'app'],
+      ['app', 'app'],
     ],
     ['crm_queue', ['crm_enqueue_job'], ['crm_enqueue_job(uuid, timestamp with time zone)'], ['app']],
   ])(
@@ -263,7 +264,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     await event(b.workspaceId, 1, false);
     await event(done.workspaceId, 1, true);
 
-    // The worker (the function is its alone, spec 0008), outside any workspace: the function sees past row level
+    // The worker (the relay's login from spec 0008 on), outside any workspace: the function sees past row level
     // security, and hands back ids only.
     const app = new pg.Client({ connectionString: workerUrl });
     await app.connect();

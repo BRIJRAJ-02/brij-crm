@@ -181,6 +181,21 @@ describe('the worker environment (spec 0005, the relay)', () => {
     return result.success ? [] : result.error.issues.map((issue) => issue.path.join('.'));
   }
 
+  it('runs the jobs locally and in previews, and not in production, unless JOBS_RUNNER says (spec 0008)', () => {
+    const deployed = {
+      ...worker,
+      ...centrifugo,
+      WORKER_WAKE_SECRET: 'a-wake-secret-of-at-least-32-characters-long',
+    };
+    expect(WorkerEnv.parse(worker).JOBS_RUNNER).toBe('on');
+    expect(WorkerEnv.parse({ ...deployed, APP_ENV: 'preview' }).JOBS_RUNNER).toBe('on');
+    expect(WorkerEnv.parse({ ...deployed, APP_ENV: 'production' }).JOBS_RUNNER).toBe('off');
+    expect(WorkerEnv.parse({ ...deployed, APP_ENV: 'production', JOBS_RUNNER: 'on' }).JOBS_RUNNER).toBe('on');
+    expect(WorkerEnv.parse({ ...worker, JOBS_RUNNER: 'off' }).JOBS_RUNNER).toBe('off');
+    expect(WorkerEnv.parse({ ...worker, JOBS_RUNNER: '' }).JOBS_RUNNER).toBe('on');
+    expect(workerProblems({ ...worker, JOBS_RUNNER: 'yes' })).toEqual(['JOBS_RUNNER']);
+  });
+
   it('boots locally without Centrifugo, with the relay off', () => {
     expect(WorkerEnv.parse(worker).centrifugo).toBeUndefined();
     expect(WorkerEnv.parse({ ...worker, CENTRIFUGO_API_URL: '', CENTRIFUGO_API_KEY: '' }).centrifugo).toBeUndefined();

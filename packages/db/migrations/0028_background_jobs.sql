@@ -1,8 +1,9 @@
 -- Background jobs (spec 0008, milestone 1): the `jobs` and `job_items` tenant tables (drizzle-kit's), then, hand
 -- written, their row level security, the two roles `crm_worker` (the worker's direct login group) and `crm_queue`
 -- (the owner of `crm_enqueue_job`), the one function the app may call to put a job on Graphile Worker's queue, and
--- `crm_outbox_workspaces` moved from the app to the worker. Graphile Worker's own schema is installed before this
--- by `scripts/migrate.ts` (Graphile's migrations, as the owner), and the rights on it are granted after every run
+-- `crm_outbox_workspaces` granted to the worker too (the app keeps it until a later contract migration). Graphile
+-- Worker's own schema is installed before this by `scripts/migrate.ts` (Graphile's migrations, as the owner), and the
+-- rights on it are granted after every run
 -- (`grantQueueRights` in `src/migrations.ts`), so a Graphile upgrade that adds a table is covered. Numbered 0028,
 -- leaving 0026 and 0027 to the other lanes; its journal `when` is the time it was generated.
 --
@@ -193,14 +194,13 @@ revoke create on schema public from crm_queue;
 revoke crm_queue from current_user;
 --> statement-breakpoint
 
--- Listing the workspaces with unpublished outbox rows reaches across workspaces: the worker's alone from now on
--- (the relay runs on crm_worker_user), never the API's. crm_relay owns it, so the change is made as crm_relay, with
--- SET on it held for the change only.
+-- Listing the workspaces with unpublished outbox rows reaches across workspaces, so it becomes the worker's
+-- (the relay runs on crm_worker_user). Expand first: crm_worker gets it now, and crm_app keeps it until every
+-- environment's worker runs on crm_worker_user; a later contract migration takes it from crm_app (spec 0008,
+-- milestone 3). crm_relay owns it, so the grant is made as crm_relay, with SET on it held for the change only.
 grant crm_relay to current_user with inherit false, set true;
 --> statement-breakpoint
 set local role crm_relay;
---> statement-breakpoint
-revoke execute on function crm_outbox_workspaces(integer, uuid) from crm_app;
 --> statement-breakpoint
 grant execute on function crm_outbox_workspaces(integer, uuid) to crm_worker;
 --> statement-breakpoint

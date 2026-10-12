@@ -6,7 +6,7 @@
 import { createRunner, jobKinds } from '@crm/core';
 import { audiences, enterAsActor, systemScope } from '@crm/core/system';
 import {
-  assertAppConnection,
+  assertWorkerConnection,
   createDatabase,
   createOutboxReader,
   openDirectConnection,
@@ -41,14 +41,16 @@ const openDirect = (proveListen: boolean) =>
   openDirectConnection({ url: env.DATABASE_URL_DIRECT, applicationName: 'crm-worker-direct', proveListen });
 
 // Refuse to start on a role that can bypass row level security, on either URL (the direct one is the relay's,
-// and reads and marks rows under row level security like the pool), a direct login outside crm_worker (spec 0008:
-// the group that alone reaches the queue and lists workspaces), or a direct URL that is really a pooler (a NOTIFY
-// must arrive). The relay opens its own connections from here on.
+// and reads and marks rows under row level security like the pool), or a direct URL that is really a pooler (a
+// NOTIFY must arrive). A direct login outside crm_worker (spec 0008: the group that alone reaches the queue), such
+// as production's login before `pnpm db:worker-login`, still runs the relay as before, with the jobs off. The
+// relay opens its own connections from here on.
+let directInWorker = false;
 try {
   await db.assertAppRole();
   const proof = await openDirect(true);
   try {
-    await assertAppConnection(proof, 'DATABASE_URL_DIRECT', 'crm_worker');
+    directInWorker = (await assertWorkerConnection(proof, 'DATABASE_URL_DIRECT')).inWorker;
   } finally {
     await proof.end();
   }
@@ -58,6 +60,16 @@ try {
   await Promise.all([db.close(), flush(MONITORING_FLUSH_MS)]);
   process.exit(1);
 }
+
+// Whether the jobs' runners start, and why not (spec 0008): JOBS_RUNNER (off in production until milestone 3's
+// sleep, so Graphile's LISTEN and poll never keep Neon awake), and a direct login in crm_worker.
+const jobsOff =
+  env.JOBS_RUNNER === 'off'
+    ? 'JOBS_RUNNER is off'
+    : directInWorker
+      ? undefined
+      : 'the direct login is not in crm_worker; run pnpm db:worker-login';
+if (jobsOff !== undefined) log.warn('jobs.off', { reason: jobsOff });
 
 // The relay logs a fault it can't recover from as an error; each one is reported too (its message only: the fields
 // can name workspaces, which stay in the log).
@@ -87,30 +99,37 @@ if (relay === undefined) {
 
 // The background jobs (spec 0008): the core runner does each slice on the pool, as the job's member (entered again
 // at every slice) or the system; Graphile's two runners, on the queue pool, only wake it and order the slices.
-const queue = openQueueConnection({
-  url: env.DATABASE_URL_DIRECT,
-  applicationName: 'crm-worker-queue',
-  max: 4,
-  onError: (error) => {
-    log.error('Idle queue client failed', errorFields(error));
-    captureFault(error, { task: 'queue pool' });
-  },
-});
-const jobs = await startJobRunners({
-  queue,
-  runner: createRunner({
-    db,
-    registry: jobKinds({ environment: env.APP_ENV }),
-    enterAsActor: (input) => enterAsActor({ db, log }, input),
-    systemScope: (workspaceId) => systemScope(db, workspaceId),
-    hooks: backgroundHooks,
-    // A batch stored a change event: the relay publishes it, even if it had gone dormant.
-    onStored: () => relay?.wake(),
-    log,
-  }),
-  log,
-  onFault: (error) => captureFault(error, { task: 'jobs' }),
-});
+// With the jobs off, jobs started meanwhile wait, stored and queued, for a worker that runs them.
+const queue =
+  jobsOff === undefined
+    ? openQueueConnection({
+        url: env.DATABASE_URL_DIRECT,
+        applicationName: 'crm-worker-queue',
+        max: 4,
+        onError: (error) => {
+          log.error('Idle queue client failed', errorFields(error));
+          captureFault(error, { task: 'queue pool' });
+        },
+      })
+    : undefined;
+const jobs =
+  queue === undefined
+    ? undefined
+    : await startJobRunners({
+        queue,
+        runner: createRunner({
+          db,
+          registry: jobKinds({ environment: env.APP_ENV }),
+          enterAsActor: (input) => enterAsActor({ db, log }, input),
+          systemScope: (workspaceId) => systemScope(db, workspaceId),
+          hooks: backgroundHooks,
+          // A batch stored a change event: the relay publishes it, even if it had gone dormant.
+          onStored: () => relay?.wake(),
+          log,
+        }),
+        log,
+        onFault: (error) => captureFault(error, { task: 'jobs' }),
+      });
 
 const health = createWorkerServer({
   wakeSecret: env.WORKER_WAKE_SECRET,
@@ -118,17 +137,23 @@ const health = createWorkerServer({
   // From memory only: the jobs' runners are awake for as long as the process runs (sleep comes with milestone 3).
   health: () => ({
     state: 'awake',
+    jobs: jobs === undefined ? 'off' : 'on',
     ...(relay === undefined ? { relay: 'off' } : { relay: { mode: relay.mode(), ...relay.stats() } }),
   }),
 });
 health.listen(env.WORKER_PORT, '::', () =>
-  log.info('Worker ready', { port: env.WORKER_PORT, environment: env.APP_ENV, relay: relay !== undefined }),
+  log.info('Worker ready', {
+    port: env.WORKER_PORT,
+    environment: env.APP_ENV,
+    relay: relay !== undefined,
+    jobs: jobs !== undefined,
+  }),
 );
 
 onShutdown(async () => {
   // The slices in hand finish their batch and hand their jobs back to the queue first.
-  await jobs.stop();
-  await queue.close();
+  await jobs?.stop();
+  await queue?.close();
   await relay?.stop();
   await new Promise<void>((resolve) => health.close(() => resolve()));
   await db.close();

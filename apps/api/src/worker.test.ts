@@ -1,7 +1,7 @@
 // The worker entrypoint refuses to start (spec 0005) when either of its URLs
 // is a role that could bypass row level security: the pool's, or the direct
-// connection the relay reads and marks rows on; and (spec 0008) when the
-// direct login isn't in crm_worker, the group that alone reaches the queue.
+// connection the relay reads and marks rows on. A direct login outside
+// crm_worker (spec 0008) still boots, with the jobs off, as JOBS_RUNNER=off does.
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, inject, it } from 'vitest';
@@ -38,27 +38,23 @@ describe('the worker at startup', () => {
     expect(output).toContain('can bypass row level security. Point DATABASE_URL_DIRECT at the worker login role');
   });
 
-  it('refuses a direct URL that is the app login, which is not in crm_worker', async () => {
-    const { code, output } = await runWorker({
-      APP_ENV: 'local',
-      DATABASE_URL: appUrl,
-      DATABASE_URL_DIRECT: appUrl,
-      WORKER_PORT: '3999',
-    });
-    expect(code).toBe(1);
-    expect(output).toContain('Refusing to start');
-    expect(output).toContain('is not a member of crm_worker');
-  });
-
-  it('boots on the worker login with the job runners, answers /health awake, and stops cleanly', async () => {
+  it.each([
+    ['on the worker login', { DATABASE_URL_DIRECT: workerUrl }, 'on', undefined],
+    [
+      'on the app login (not in crm_worker), with its jobs off',
+      { DATABASE_URL_DIRECT: appUrl },
+      'off',
+      'the direct login is not in crm_worker; run pnpm db:worker-login',
+    ],
+    [
+      'with JOBS_RUNNER=off, with its jobs off',
+      { DATABASE_URL_DIRECT: workerUrl, JOBS_RUNNER: 'off' },
+      'off',
+      'JOBS_RUNNER is off',
+    ],
+  ] as const)('boots %s, answers /health with the jobs %s, and stops cleanly', async (_name, env, jobs, reason) => {
     const child = spawn(process.execPath, [fileURLToPath(new URL('./worker.ts', import.meta.url))], {
-      env: {
-        PATH: process.env.PATH ?? '',
-        APP_ENV: 'local',
-        DATABASE_URL: appUrl,
-        DATABASE_URL_DIRECT: workerUrl,
-        WORKER_PORT: '3998',
-      },
+      env: { PATH: process.env.PATH ?? '', APP_ENV: 'local', DATABASE_URL: appUrl, WORKER_PORT: '3998', ...env },
     });
     let output = '';
     child.stdout.on('data', (chunk: Buffer) => (output += chunk.toString('utf8')));
@@ -73,8 +69,15 @@ describe('the worker at startup', () => {
           },
           { timeout: 20_000, interval: 200 },
         )
-        .toMatchObject({ status: 'ok', state: 'awake' });
-      expect(output).toContain('jobs.runners.started');
+        .toMatchObject({ status: 'ok', state: 'awake', jobs });
+      if (reason === undefined) {
+        expect(output).toContain('jobs.runners.started');
+        expect(output).not.toContain('jobs.off');
+      } else {
+        expect(output).toContain('"message":"jobs.off"');
+        expect(output).toContain(reason);
+        expect(output).not.toContain('jobs.runners.started');
+      }
     } finally {
       child.kill('SIGTERM');
     }

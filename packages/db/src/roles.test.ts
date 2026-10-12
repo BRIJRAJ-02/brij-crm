@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import { assertAppConnection, createDatabase } from './client.ts';
+import { assertAppConnection, assertWorkerConnection, createDatabase } from './client.ts';
 import { createIdentityStore } from './identity/store.ts';
 import { withSetupLock } from './testing.ts';
 
@@ -125,6 +125,29 @@ describe('the app login check', () => {
       } finally {
         await direct.end();
       }
+    }
+  });
+
+  it('lets the worker boot on the app login with its jobs off, and on the worker login with them on; never on a bypass', async () => {
+    const { workerUrl } = inject('testDatabase');
+    for (const [url, inWorker] of [
+      [workerUrl, true],
+      [appUrl, false],
+    ] as const) {
+      const direct = new pg.Client({ connectionString: url, application_name: 'crm-roles-tests' });
+      await direct.connect();
+      try {
+        expect(await assertWorkerConnection(direct)).toEqual({ inWorker });
+      } finally {
+        await direct.end();
+      }
+    }
+    const owner = new pg.Client({ connectionString: adminUrl, application_name: 'crm-roles-tests' });
+    await owner.connect();
+    try {
+      await expect(assertWorkerConnection(owner)).rejects.toThrow(/bypass row level security/);
+    } finally {
+      await owner.end();
     }
   });
 

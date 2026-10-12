@@ -1,5 +1,6 @@
 export {
   assertAppConnection,
+  assertWorkerConnection,
   createDatabase,
   type Database,
   type DatabaseHealth,

@@ -268,10 +268,36 @@ export async function assertAppConnection(
     );
   }
   if (!row.is_app_member) {
-    throw new Error(
-      `The role "${row.role}" is not a member of ${group}. Run \`pnpm db:migrate\` and \`pnpm ${script}\`.`,
+    throw Object.assign(
+      new Error(`The role "${row.role}" is not a member of ${group}. Run \`pnpm db:migrate\` and \`pnpm ${script}\`.`),
+      { code: NOT_IN_GROUP },
     );
   }
+}
+
+/** The code on the error `assertAppConnection` throws for a login outside its group. */
+const NOT_IN_GROUP = 'CRM_NOT_IN_GROUP';
+
+/**
+ * The worker's direct login check (spec 0008): refuses one that could bypass
+ * row level security, as `assertAppConnection` does, and answers whether it
+ * is in crm_worker (the queue's group). A login outside crm_worker but in
+ * crm_app (today's production login, before `pnpm db:worker-login`) is let
+ * through with `inWorker: false`, so the worker still runs its relay and
+ * leaves the jobs off; one in neither is refused.
+ */
+export async function assertWorkerConnection(
+  connection: pg.Pool | pg.ClientBase,
+  variable = 'DATABASE_URL_DIRECT',
+): Promise<{ readonly inWorker: boolean }> {
+  try {
+    await assertAppConnection(connection, variable, 'crm_worker');
+    return { inWorker: true };
+  } catch (error) {
+    if (!(error instanceof Error && 'code' in error && error.code === NOT_IN_GROUP)) throw error;
+  }
+  await assertAppConnection(connection, variable, 'crm_app');
+  return { inWorker: false };
 }
 
 /** The group a login must be directly in: the app's (`crm_app`) or the worker's direct login's (`crm_worker`). */
