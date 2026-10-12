@@ -8,11 +8,9 @@ export const strings = {
   colourOf: (label: string) => `${label === '' ? 'New option' : label} colour`,
   outcomeOf: (label: string) => `${label === '' ? 'New stage' : label} outcome`,
   daysOf: (label: string) => `${label === '' ? 'New stage' : label} target days`,
-  days: 'Days',
   daysUnit: 'days',
   /** A stage's target, read only, after its outcome. */
   targetShown: (days: number) => `, ${String(days)} ${days === 1 ? 'day' : 'days'} target`,
-  daysHint: 'Days in stage before it counts as stuck: 1 to 365, or empty for no target.',
   daysInvalid: 'Give whole days from 1 to 365, or leave it empty.',
   open: 'Open',
   won: 'Won',

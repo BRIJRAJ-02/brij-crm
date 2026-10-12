@@ -426,7 +426,6 @@ export function OptionsEditor({
                           inputMode="numeric"
                           autoComplete="off"
                           align="end"
-                          placeholder={strings.days}
                           suffix={strings.daysUnit}
                           value={typedOf(option, 'days') ?? baseOf(option, 'days')}
                           onChange={(text) => {

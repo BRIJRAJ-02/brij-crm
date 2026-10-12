@@ -152,6 +152,7 @@ export {
   AttributeSettings,
   type AttributeSettingsAttribute,
   type AttributeSettingsField,
+  type AttributeSettingsOptionWrites,
   type AttributeSettingsProps,
   type AttributeSettingsValues,
 } from './modules/AttributeSettings/AttributeSettings.tsx';

@@ -80,19 +80,19 @@
   .label {
     display: grid;
     flex: 1;
-    min-inline-size: 0;
+    min-inline-size: calc(5 * var(--size-chip));
   }
 
   .outcome {
     display: grid;
     flex: none;
-    inline-size: var(--size-column-narrow);
+    inline-size: calc(4 * var(--size-chip) + var(--size-control));
   }
 
   .days {
     display: grid;
     flex: none;
-    inline-size: calc(2 * var(--size-chip) + var(--size-control));
+    inline-size: calc(3 * var(--size-chip) + var(--size-control));
   }
 
   .meta {
