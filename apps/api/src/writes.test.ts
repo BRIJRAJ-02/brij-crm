@@ -30,6 +30,8 @@ const READS: ReadonlySet<string> = new Set([
   'records.query',
   'records.count',
   'records.get',
+  'records.activity',
+  'records.getTrashed',
   'realtime.connectionToken',
   'realtime.subscriptionToken',
   'realtime.catchUp',
