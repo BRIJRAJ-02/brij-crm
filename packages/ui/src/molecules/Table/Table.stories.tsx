@@ -86,10 +86,21 @@ export const Reorderable: Story = {
     onReorder: fn(),
     getRowLabel: (member: Member) => member.name,
   },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Move Ada Lovelace' })).toBeInTheDocument();
+    await expect(canvas.getAllByRole('columnheader')).toHaveLength(6);
+  },
+};
+
+/** Picked up by keyboard: a drop target takes focus, and its accent line shows where the row would land. */
+export const KeyboardMove: Story = {
+  args: {
+    onReorder: fn(),
+    getRowLabel: (member: Member) => member.name,
+  },
+  parameters: { crm: { screenshot: false } },
   play: async ({ canvas, userEvent }) => {
     const handle = canvas.getByRole('button', { name: 'Move Ada Lovelace' });
-    await expect(canvas.getAllByRole('columnheader')).toHaveLength(6);
-    // Picked up by keyboard: a drop target takes focus, and its line shows where the row would land.
     handle.focus();
     await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(handle).not.toHaveFocus());
