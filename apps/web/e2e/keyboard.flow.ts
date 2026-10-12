@@ -122,14 +122,15 @@ test.describe('the core loop by keyboard', () => {
     await focusedWithRing(page, name, 'the new row');
 
     // Add attribute: Esc closes it and focus goes back to the button that opened it.
-    const addAttribute = page.getByRole('button', { name: 'Add attribute' });
+    // The view bar's Add attribute (the grid's "+" header is the second one, spec 0012).
+    const addAttribute = page.getByRole('button', { name: 'Add attribute' }).first();
     await page.getByRole('heading', { level: 1, name: 'People' }).focus();
     await tabTo(page, addAttribute);
     await focusedWithRing(page, addAttribute, 'Add attribute');
     await page.keyboard.press('Enter');
-    const addDialog = page.getByRole('dialog', { name: 'Add attribute' });
+    const addDialog = page.getByRole('dialog', { name: 'New attribute' });
     await expect(addDialog).toBeVisible();
-    await focusedWithRing(page, addDialog.getByLabel('Name'), 'the attribute name');
+    await focusedWithRing(page, addDialog.getByLabel('Name', { exact: true }), 'the attribute name');
     await page.keyboard.type('Nickname');
     await page.keyboard.press('Escape');
     await expect(addDialog).toBeHidden();
