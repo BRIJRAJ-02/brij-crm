@@ -77,8 +77,13 @@ function server(initial: readonly ActivityItem[], size = 50) {
   const calls: (string | undefined)[] = [];
   const pending: (() => void)[] = [];
   let held = false;
+  const failures: string[] = [];
   const page = (_workspace: string, _recordId: string, cursor?: string): Promise<RecordActivity> => {
     calls.push(cursor);
+    const failing = failures.shift();
+    if (failing !== undefined) {
+      return Promise.reject(Object.assign(new Error('refused'), { name: 'DataError', code: failing }));
+    }
     const sorted = [...items].sort((a, b) => (a.key < b.key ? 1 : a.key > b.key ? -1 : 0));
     const from = cursor === undefined ? 0 : Number(cursor);
     const entries = sorted.slice(from, from + size);
@@ -92,6 +97,10 @@ function server(initial: readonly ActivityItem[], size = 50) {
   return {
     page,
     calls,
+    /** The next calls fail with these codes, in order. */
+    failNext: (...codes: string[]) => {
+      failures.push(...codes);
+    },
     set: (next: readonly ActivityItem[]) => {
       items = [...next];
     },
@@ -329,7 +338,7 @@ describe('watching (spec 0017, AC-381)', () => {
 
 describe('starting again (spec 0017, 0017-activity.md)', () => {
   it('a definitions change and a resync read the first page afresh, keeping the entries shown until it lands', async () => {
-    const { api, feeds, ids, feed } = setup([created, change(1), change(2)]);
+    const { api, feeds, ids, feed, time } = setup([created, change(1), change(2)]);
     await flush();
     api.set([created, change(2)]);
     api.hold();
@@ -344,6 +353,8 @@ describe('starting again (spec 0017, 0017-activity.md)', () => {
     await flush();
     expect(api.calls).toHaveLength(2);
     feeds.resync(WS);
+    // Within half a second of the last read it waits for the cool down, as a change does.
+    time.advance(ACTIVITY_REFRESH_MS);
     await flush();
     expect(api.calls).toHaveLength(3);
   });
@@ -356,5 +367,121 @@ describe('starting again (spec 0017, 0017-activity.md)', () => {
     expect(recent.getSnapshot().entries).toHaveLength(5);
     expect(recent.getSnapshot().source.count).toBe(5);
     expect(recent.getSnapshot().hasMore).toBe(true);
+  });
+});
+
+describe('the reviews of milestone 2', () => {
+  it('brings back a handle let go of before a screen retained it, and keeps it live', async () => {
+    const api = server([created]);
+    const time = clock();
+    const feeds = createActivityFeeds({
+      page: api.page,
+      members: () => Promise.resolve(MEMBERS),
+      attributes: () => Promise.resolve(DEFINITIONS),
+      later: time.later,
+      now: time.now,
+    });
+    const feed = feeds.forRecord(WS, RECORD, OBJECT);
+    await flush();
+    // A definitions change while the route was loading lets it go.
+    feeds.definitionsChanged(WS, OBJECT);
+    api.set([created, change(1)]);
+    feed.retain();
+    await flush();
+    expect(feed.getSnapshot().entries.map((entry) => entry.id)).toEqual([change(1).id, created.id]);
+    api.set([created, change(1), change(2)]);
+    time.advance(ACTIVITY_REFRESH_MS);
+    feeds.changed(WS, { objectId: OBJECT, recordIds: [RECORD] });
+    await flush();
+    expect(feed.getSnapshot().entries[0]?.id).toBe(change(2).id);
+  });
+
+  it('never lets an older first page replace a newer one', async () => {
+    const { api, feeds, ids, feed } = setup([created]);
+    await flush();
+    // Try again starts a first page that is held back; a change's read goes out after it and answers first.
+    api.hold();
+    feed.retry();
+    api.release();
+    api.set([created, change(1), change(2)]);
+    feeds.changed(WS, { objectId: OBJECT, recordIds: [RECORD] });
+    await flush();
+    expect(ids()[0]).toBe(change(2).id);
+  });
+
+  it('coalesces a burst of definition changes, and replaces what is held', async () => {
+    const { api, feeds, ids, time } = setup([created, change(1), change(2)]);
+    await flush();
+    api.set([created, change(2)]);
+    for (let index = 0; index < 10; index += 1) feeds.definitionsChanged(WS, OBJECT);
+    await flush();
+    time.advance(ACTIVITY_REFRESH_MS);
+    await flush();
+    expect(api.calls).toHaveLength(3);
+    expect(ids()).toEqual([change(2).id, created.id]);
+  });
+
+  it('waits while the tab is hidden, and reads when it is shown again', async () => {
+    let hidden = false;
+    const api = server([created]);
+    const feeds = createActivityFeeds({
+      page: api.page,
+      members: () => Promise.resolve(MEMBERS),
+      attributes: () => Promise.resolve(DEFINITIONS),
+      isHidden: () => hidden,
+      later: clock().later,
+    });
+    const feed = feeds.forRecord(WS, RECORD, OBJECT);
+    feed.retain();
+    await flush();
+    hidden = true;
+    api.set([created, change(1)]);
+    feeds.changed(WS, { objectId: OBJECT, recordIds: [RECORD] });
+    await flush();
+    expect(api.calls).toHaveLength(1);
+    hidden = false;
+    feeds.shown();
+    await flush();
+    expect(api.calls).toHaveLength(2);
+    expect(feed.getSnapshot().entries[0]?.id).toBe(change(1).id);
+  });
+
+  it('tries a failed page again, waiting longer each time, while the feed is shown', async () => {
+    const items = [created, ...Array.from({ length: 60 }, (_, index) => change(index + 1))];
+    const { api, feed, time } = setup(items);
+    await flush();
+    api.failNext('API_UNAVAILABLE', 'API_UNAVAILABLE');
+    feed.getSnapshot().source.onRangeChange?.({ start: 40, end: 51 });
+    await flush();
+    expect(api.calls).toEqual([undefined, '50']);
+    time.advance(2_000);
+    await flush();
+    expect(api.calls).toEqual([undefined, '50', '50']);
+    time.advance(2_000);
+    await flush();
+    expect(api.calls).toHaveLength(3);
+    time.advance(2_000);
+    await flush();
+    expect(api.calls).toHaveLength(4);
+    expect(feed.getSnapshot().entries).toHaveLength(61);
+  });
+
+  it('drops what it showed when the record goes out of reach', async () => {
+    const { api, feeds, feed, time } = setup([created, change(1)]);
+    await flush();
+    time.advance(ACTIVITY_REFRESH_MS);
+    api.failNext('NOT_FOUND');
+    feeds.changed(WS, { objectId: OBJECT, recordIds: [RECORD] });
+    await flush();
+    expect(feed.getSnapshot()).toMatchObject({ status: 'unavailable', entries: [] });
+  });
+
+  it('reads on past a page that drew nothing', async () => {
+    const unknown = { ...change(9), attributeId: GONE };
+    const { api, ids } = setup([created, change(1), unknown], 1);
+    await flush();
+    // The first page holds only the entry it can't draw; the next one comes without a scroll.
+    expect(api.calls.slice(0, 2)).toEqual([undefined, '1']);
+    expect(ids()[0]).toBe(change(1).id);
   });
 });

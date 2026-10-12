@@ -2,10 +2,10 @@
 // Purpose: what happened to a record, newest first, on its page's Activity tab (and Overview's Recent activity).
 // Main task: read who changed what and when, and which records were linked, as it happens.
 // Leaves out: notes, tasks (#19) and comments (#29), filters, and the record's own delete and restore (#36).
-import type { ActivityEntryShape, ActivityFeed as ActivityFeedSource, ActivityState } from '@crm/data';
+import type { ActivityEntryShape, ActivityFeed as ActivityFeedSource, ActivityState, EntrySource } from '@crm/data';
 import { useActivity } from '@crm/data/react';
 import { ActivityFeed, type ActivityFeedLayout } from '@crm/ui';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { strings } from './strings.ts';
 import { linkedSource, type RecordLink } from './timeline.ts';
 
@@ -29,9 +29,12 @@ export interface ActivityTabProps {
 /** A record's timeline, paging as it scrolls and live, with Try again when it fails. */
 export function ActivityTab({ feed, link, label = strings.activity, layout = 'feed' }: ActivityTabProps) {
   const state = useActivity(feed);
-  // One linked copy per entry for the feed's life, so an entry draws again only when it changes.
-  const [cache] = useState(() => new WeakMap<object, ActivityEntryShape>());
-  const source = useMemo(() => linkedSource(state.source, link, cache), [state.source, link, cache]);
+  // One linked copy per entry while the links stay the same, so an entry draws again only when it changes.
+  const linking = useMemo(() => {
+    const cache = new WeakMap<object, ActivityEntryShape>();
+    return (entries: EntrySource) => linkedSource(entries, link, cache);
+  }, [link]);
+  const source = useMemo(() => linking(state.source), [linking, state.source]);
   return (
     <ActivityFeed label={label} entries={source} layout={layout} status={feedStatus(state)} onRetry={feed.retry} />
   );

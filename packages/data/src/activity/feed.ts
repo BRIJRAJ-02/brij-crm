@@ -132,6 +132,8 @@ export interface ActivityFeedsOptions {
    * table watching for it, so its timeline does.
    */
   readonly watch?: (workspace: string) => () => void;
+  /** The tab is hidden: a change waits (marked stale) until `shown`, so a background tab reads nothing. */
+  readonly isHidden?: () => boolean;
   /** Runs `run` after `ms`, answering a cancel. */
   readonly later?: (run: () => void, ms: number) => () => void;
   /** How long a timeline nobody shows is kept, in ms: 30 seconds. */
@@ -228,22 +230,23 @@ interface Held {
 
 /**
  * The first page merged into what a feed holds (0017-activity.md): the page
- * is the truth from the newest entry down to its last one, so held entries
- * in that range take the page's content or leave; older held entries stay
- * behind it with their cursor. When everything held is older than the page
- * (more than a page arrived), there may be a gap: only the page stays.
+ * is the truth from the newest entry down to its last one (`lastKey`, the
+ * server's last entry, drawn or not), so held entries in that range take the
+ * page's content or leave; older held entries stay behind it with their
+ * cursor. When everything held is older than the page (more than a page
+ * arrived), there may be a gap: only the page stays.
  */
 export function mergeHead(
   held: readonly Held[],
   heldCursor: string | undefined,
   page: readonly Held[],
   pageCursor: string | undefined,
+  lastKey: string | undefined = page.at(-1)?.key,
 ): { readonly held: readonly Held[]; readonly cursor: string | undefined } {
-  const last = page.at(-1);
-  if (pageCursor === undefined || last === undefined) return { held: page, cursor: pageCursor };
+  if (pageCursor === undefined || lastKey === undefined) return { held: page, cursor: pageCursor };
   const newest = held[0];
-  if (newest !== undefined && compareActivityKeys(newest.key, last.key) > 0) return { held: page, cursor: pageCursor };
-  const older = held.filter((each) => compareActivityKeys(each.key, last.key) > 0);
+  if (newest !== undefined && compareActivityKeys(newest.key, lastKey) > 0) return { held: page, cursor: pageCursor };
+  const older = held.filter((each) => compareActivityKeys(each.key, lastKey) > 0);
   if (older.length === 0) return { held: page, cursor: pageCursor };
   return { held: [...page, ...older], cursor: heldCursor };
 }
@@ -257,12 +260,16 @@ const timeout = (run: () => void, ms: number) => {
 
 const keyOf = (workspace: string, recordId: string) => `${workspace}\u0000${recordId}`;
 
+/** The longest wait between tries of a page that failed, in ms. */
+const MORE_RETRY_MAX_MS = 30_000;
+
 /** The timelines of one data layer, one per workspace and record. */
 export function createActivityFeeds({
   page,
   members,
   attributes,
   watch = () => () => undefined,
+  isHidden = () => false,
   later = timeout,
   keepUnusedMs = 30_000,
   now = () => Date.now(),
@@ -275,8 +282,10 @@ export function createActivityFeeds({
     readonly recent: ActivityFeed;
     /** Reads the first page again and merges it, coalesced (a change named the record). */
     readonly refresh: () => void;
-    /** Reads the first page again and keeps only it (definitions changed, or a resync). */
+    /** Reads the first page again and keeps only it, coalesced (definitions changed, or a resync). */
     readonly reset: () => void;
+    /** The tab is shown again: a change that waited while it was hidden is read now. */
+    readonly wake: () => void;
     readonly dispose: () => void;
   }
   const feeds = new Map<string, Feed>();
@@ -293,15 +302,21 @@ export function createActivityFeeds({
     let cursor: string | undefined;
     let retains = 0;
     let cancelUnused: (() => void) | undefined;
-    // Each first page read starts an epoch: a later page answering from an older one is dropped.
+    // Each time the held entries are replaced, a later page answering from before is dropped.
     let epoch = 0;
+    // First page reads, numbered as sent: an answer older than one already applied is dropped.
+    let sent = 0;
+    let applied = 0;
     let loadingMore = false;
     let moreFailedAt: number | undefined;
+    let moreFailures = 0;
     // The head refresh: one in flight, one waiting, and the cool down after each start.
     let refreshing = false;
     let refreshWaiting = false;
     let coolingDown: (() => void) | undefined;
-    // A change arrived while nobody showed the feed: read it again when someone does.
+    // The next head read replaces what is held instead of merging (a definitions change, a resync).
+    let replaceNext = false;
+    // A change arrived while nobody showed the feed (or the tab was hidden): read it again when someone does.
     let stale = false;
     // Live changes reach the feed while a screen shows it.
     let unwatch: (() => void) | undefined;
@@ -354,8 +369,13 @@ export function createActivityFeeds({
       return known;
     };
 
-    /** A page's items in key order, mapped to entries (a kind or attribute this client can't draw is left out). */
-    const mapped = async (answer: RecordActivity): Promise<readonly Held[]> => {
+    /**
+     * A page's items in key order, mapped to entries (a kind or attribute this
+     * client can't draw is left out), with the server's last key, drawn or not.
+     */
+    const mapped = async (
+      answer: RecordActivity,
+    ): Promise<{ readonly rows: readonly Held[]; readonly lastKey: string | undefined }> => {
       const sorted = [...answer.entries].sort((a, b) => compareActivityKeys(a.key, b.key)).slice(0, ACTIVITY_PAGE);
       const [known, defined] = await Promise.all([
         namesFor(sorted),
@@ -364,16 +384,32 @@ export function createActivityFeeds({
           : attributes(workspace, objectId).catch((): readonly AttributeDefinition[] => []),
       ]);
       const context = { members: known, attributes: new Map(defined.map((each) => [each.id, each])) };
-      return sorted.flatMap((item) => {
+      const rows = sorted.flatMap((item) => {
         const entry = toActivityEntry(item, context);
         return entry === undefined ? [] : [{ key: item.key, entry }];
       });
+      return { rows, lastKey: sorted.at(-1)?.key };
     };
 
-    /** The first page, read again with nothing kept (the first load, a retry, a definitions change, a resync). */
-    const loadFirst = () => {
+    /** The record went out of reach (hidden, or gone for good): nothing it showed stays. */
+    const lose = (failure: DataError) => {
+      held = [];
+      cursor = undefined;
+      status = 'unavailable';
+      error = failure;
       epoch += 1;
-      const mine = epoch;
+      announce();
+    };
+
+    /** A page that drew nothing past a cursor (the server stopped short, or nothing could be drawn): read on. */
+    const onIfEmpty = (added: number) => {
+      if (added === 0 && cursor !== undefined) loadMore();
+    };
+
+    /** The first page, read with nothing kept (the first load, and Try again). */
+    const loadFirst = () => {
+      sent += 1;
+      const mine = sent;
       loadingMore = false;
       // A feed already showing entries keeps them until the new page lands, so nothing flashes.
       if (held.length === 0 && status !== 'loading') {
@@ -382,32 +418,44 @@ export function createActivityFeeds({
         announce();
       }
       page(workspace, recordId)
-        .then(async (answer) => ({ answer, rows: await mapped(answer) }))
+        .then(async (answer) => ({ answer, ...(await mapped(answer)) }))
         .then(
           ({ answer, rows }) => {
-            if (!isCurrent() || mine !== epoch) return;
+            if (!isCurrent() || mine < applied) return;
+            applied = mine;
+            epoch += 1;
             held = rows;
             cursor = answer.nextCursor;
             status = 'ready';
             error = undefined;
             announce();
             settleReady();
+            onIfEmpty(rows.length);
           },
           (failure: unknown) => {
-            if (!isCurrent() || mine !== epoch) return;
+            if (!isCurrent() || mine < applied) return;
             settleReady();
-            // A feed already showing entries stays as it is (a record deleted while open keeps its feed).
-            if (held.length > 0) return;
             const dataFailure = toDataError(failure);
             // Missing or hidden: the page says the record isn't available, the same for both.
-            status = dataFailure.code === 'NOT_FOUND' ? 'unavailable' : 'error';
+            if (dataFailure.code === 'NOT_FOUND') {
+              lose(dataFailure);
+              return;
+            }
+            // A passing failure with entries shown keeps them.
+            if (held.length > 0) return;
+            status = 'error';
             error = dataFailure;
             announce();
           },
         );
     };
 
-    /** The next page past the last loaded entry, appended (an entry already held is not added twice). */
+    /**
+     * The next page past the last loaded entry, appended (an entry already
+     * held is not added twice). A failed page is tried again while a screen
+     * shows the feed, waiting longer each time, so the entry still loading at
+     * the end never waits on a scroll.
+     */
     function loadMore() {
       if (loadingMore || cursor === undefined || status !== 'ready') return;
       if (moreFailedAt !== undefined && now() - moreFailedAt < MORE_RETRY_MS) return;
@@ -415,31 +463,43 @@ export function createActivityFeeds({
       const mine = epoch;
       const after = cursor;
       page(workspace, recordId, after)
-        .then(async (answer) => ({ answer, rows: await mapped(answer) }))
+        .then(async (answer) => ({ answer, ...(await mapped(answer)) }))
         .then(
           ({ answer, rows }) => {
             if (!isCurrent() || mine !== epoch) return;
             loadingMore = false;
             moreFailedAt = undefined;
+            moreFailures = 0;
             // The page a head refresh moved past is no longer the tail.
             if (cursor !== after) return;
             const ids = new Set(held.map((each) => each.entry.id));
-            held = [...held, ...rows.filter((each) => !ids.has(each.entry.id))];
+            const fresh = rows.filter((each) => !ids.has(each.entry.id));
+            held = [...held, ...fresh];
             cursor = answer.nextCursor;
             announce();
+            onIfEmpty(fresh.length);
           },
           () => {
             if (!isCurrent() || mine !== epoch) return;
             loadingMore = false;
             moreFailedAt = now();
+            moreFailures += 1;
+            if (retains === 0) return;
+            const wait = Math.min(MORE_RETRY_MAX_MS, MORE_RETRY_MS * 2 ** (moreFailures - 1));
+            later(() => {
+              if (isCurrent() && retains > 0) loadMore();
+            }, wait);
           },
         );
     }
 
-    /** One head read: the first page, merged by key into what the feed holds. */
+    /** One head read: the first page, merged by key into what the feed holds, or replacing it after a reset. */
     const readHead = () => {
       refreshing = true;
-      const mine = epoch;
+      sent += 1;
+      const mine = sent;
+      const replacing = replaceNext;
+      replaceNext = false;
       coolingDown = later(() => {
         coolingDown = undefined;
         if (refreshWaiting && !refreshing) {
@@ -455,25 +515,36 @@ export function createActivityFeeds({
         }
       };
       page(workspace, recordId)
-        .then(async (answer) => ({ answer, rows: await mapped(answer) }))
+        .then(async (answer) => ({ answer, ...(await mapped(answer)) }))
         .then(
-          ({ answer, rows }) => {
-            if (!isCurrent()) return;
-            if (mine === epoch) {
-              const merged = mergeHead(held, cursor, rows, answer.nextCursor);
-              held = merged.held;
-              cursor = merged.cursor;
+          ({ answer, rows, lastKey }) => {
+            if (isCurrent() && mine >= applied) {
+              applied = mine;
+              if (replacing) {
+                epoch += 1;
+                loadingMore = false;
+                held = rows;
+                cursor = answer.nextCursor;
+              } else {
+                const merged = mergeHead(held, cursor, rows, answer.nextCursor, lastKey);
+                held = merged.held;
+                cursor = merged.cursor;
+              }
               if (status !== 'ready') {
                 status = 'ready';
                 error = undefined;
                 settleReady();
               }
               announce();
+              onIfEmpty(held.length);
             }
             finish();
           },
-          () => {
-            // A failed refresh keeps the feed as it is; the next change reads it again.
+          (failure: unknown) => {
+            const dataFailure = toDataError(failure);
+            if (isCurrent() && mine >= applied && dataFailure.code === 'NOT_FOUND') lose(dataFailure);
+            // A reset that failed is tried with the next read; a failed refresh keeps the feed as it is.
+            else if (replacing) replaceNext = true;
             finish();
           },
         );
@@ -482,12 +553,12 @@ export function createActivityFeeds({
     /**
      * Reads the first page again for a change (0017-activity.md): at once when
      * none is in flight, and at most once more `ACTIVITY_REFRESH_MS` after, so
-     * a burst costs at most two reads a second. A feed nobody shows waits until
-     * one does.
+     * a burst costs at most two reads a second. A feed nobody shows, or in a
+     * hidden tab, waits until it is shown.
      */
     const refresh = () => {
       if (!isCurrent()) return;
-      if (retains === 0) {
+      if (retains === 0 || isHidden()) {
         stale = true;
         return;
       }
@@ -498,15 +569,24 @@ export function createActivityFeeds({
       readHead();
     };
 
+    const wake = () => {
+      if (!stale || retains === 0 || isHidden()) return;
+      stale = false;
+      refresh();
+    };
+
     const retain = () => {
       retains += 1;
+      // A handle a screen got before the feed was let go of (a reset, or the unused wait while the route
+      // loaded): it comes back, and reads afresh.
+      if (!isCurrent() && !feeds.has(key)) {
+        feeds.set(key, feed);
+        loadFirst();
+      }
       unwatch ??= watch(workspace);
       cancelUnused?.();
       cancelUnused = undefined;
-      if (stale) {
-        stale = false;
-        refresh();
-      }
+      wake();
       let released = false;
       return () => {
         if (released) return;
@@ -537,6 +617,8 @@ export function createActivityFeeds({
       unwatch = undefined;
       coolingDown?.();
       coolingDown = undefined;
+      refreshing = false;
+      refreshWaiting = false;
       if (isCurrent()) feeds.delete(key);
     };
     const feed: Feed = {
@@ -548,12 +630,15 @@ export function createActivityFeeds({
       refresh,
       reset: () => {
         if (retains === 0) {
-          // Nobody shows it: forgotten, and read afresh by whoever opens it next.
+          // Nobody shows it: forgotten, and read afresh by whoever opens it next (its handle comes back on retain).
           dispose();
           return;
         }
-        loadFirst();
+        // Through the same coalescer as a change, so a burst of definition edits costs two reads a second at most.
+        replaceNext = true;
+        refresh();
       },
+      wake,
       dispose,
     };
     feeds.set(key, feed);
@@ -591,7 +676,8 @@ export function createActivityFeeds({
     /**
      * This tab's own write landed (its echo never comes back live): every
      * feed of the workspace a screen shows reads its first page again, since
-     * a link written here changes the far records' timelines too.
+     * a link written here changes the far records' timelines too (and the far
+     * records a write unlinks aren't in its answer).
      */
     ownWrite: (workspace: string): void => {
       for (const feed of inWorkspace(workspace)) feed.refresh();
@@ -605,6 +691,10 @@ export function createActivityFeeds({
     /** A full catch up or a reset (spec 0006, 0007): every feed of the workspace starts again. */
     resync: (workspace: string): void => {
       for (const feed of inWorkspace(workspace)) feed.reset();
+    },
+    /** The tab is shown again: the changes that waited while it was hidden are read. */
+    shown: (): void => {
+      for (const feed of feeds.values()) feed.wake();
     },
     /** Forgets every timeline (sign out). */
     clear: (): void => {

@@ -767,10 +767,16 @@ export function createDataLayer({
   router.on('definitions', (workspace, event) => {
     // A list's own definitions: no screen holds lists yet.
     if (event.listId !== undefined) return;
-    // An attribute archived, hidden or renamed: the object's open timelines start again (spec 0017).
-    void activity?.then((feeds) => {
-      feeds.definitionsChanged(workspace, event.objectId);
-    });
+    // An attribute archived, hidden or renamed: the object's open timelines start again (spec 0017), spread a
+    // random moment so a whole team doesn't read in step (each feed also coalesces a burst).
+    if (activity !== undefined) {
+      const timelines = activity;
+      spread(`activity definitions ${workspace} ${event.objectId ?? ''}`, () => {
+        void timelines.then((feeds) => {
+          feeds.definitionsChanged(workspace, event.objectId);
+        });
+      });
+    }
     // Any definition change may move a count the settings meters show (spec 0012, AC-243): a held usage is
     // dropped, and the pages reload once so a settings page reads it again.
     const counted = Promise.resolve(dropUsage(workspace));
@@ -1185,8 +1191,10 @@ export function createDataLayer({
   };
 
   const activityFeeds = (): Promise<ActivityFeeds> => {
-    activity ??= import('./activity/feed.ts').then(({ createActivityFeeds }) =>
-      createActivityFeeds({
+    activity ??= import('./activity/feed.ts').then(({ createActivityFeeds }) => {
+      // A hidden tab's timelines read nothing; what changed meanwhile is read when it is shown again.
+      const isHidden = () => typeof document !== 'undefined' && document.visibilityState === 'hidden';
+      const feeds = createActivityFeeds({
         page: (workspace, recordId, cursor) =>
           beforeRead(workspace).then(() =>
             call((options) =>
@@ -1198,13 +1206,20 @@ export function createDataLayer({
           return readMembers(workspace);
         },
         watch,
+        isHidden,
         // The same cached list the tables and the record page read, options inline.
         attributes: (workspace, objectId) =>
           cached(attributes, objectKey(workspace, objectId), () =>
             beforeRead(workspace).then(() => call((options) => api.attributes.list({ workspace, objectId }, options))),
           ),
-      }),
-    );
+      });
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', () => {
+          if (!isHidden()) feeds.shown();
+        });
+      }
+      return feeds;
+    });
     return activity;
   };
 
