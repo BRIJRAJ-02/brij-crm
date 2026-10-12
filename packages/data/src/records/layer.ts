@@ -24,6 +24,7 @@ import { dataError, refusalFor, refusalSummary, toDataError, type DataError } fr
 import type { Notice } from '../notice.ts';
 import { createOwnVersions, createUndoStack, type UndoCell, type UndoKind } from './history.ts';
 import { createReferenceNames, type NameState, type RecordRef } from './names.ts';
+import { createRecordSubscriptions, type RecordAttributes, type RecordSubscription } from './one.ts';
 import { createPlainStore, sameData } from './plain-store.ts';
 import type { Layer } from './store.ts';
 
@@ -526,6 +527,7 @@ export function createRecordsLayer({
     }
     cellErrors = next;
     for (const entry of views.values()) entry.invalidate();
+    subscriptions.invalidate();
   };
 
   /** Runs a read, trying again after the server's `Retry-After` while it answers that it's busy (429). */
@@ -1695,8 +1697,29 @@ export function createRecordsLayer({
    * record another workspace's view holds under the same id.
    */
   function isHeldIn(workspace: string, id: string): boolean {
-    return viewsOf(workspace).some((entry) => entry.shows(id));
+    return viewsOf(workspace).some((entry) => entry.shows(id)) || subscriptions.holds(workspace, id);
   }
+
+  // One record at a time (spec 0006, `records.one`; the record page, spec 0017): the same store, its body held.
+  const subscriptions = createRecordSubscriptions({
+    store,
+    read: (workspace, ids, attributeIds) =>
+      beforeRead(workspace).then(() =>
+        whenFree(() => api.get({ workspace, ids, ...(attributeIds === undefined ? {} : { attributeIds }) })),
+      ),
+    refetch,
+    isShown: (workspace, id) => viewsOf(workspace).some((entry) => entry.shows(id)),
+    cellErrorsOf: (recordId) => {
+      const prefix = `${recordId}:`;
+      return new Map(
+        [...cellErrors].flatMap(([key, message]) =>
+          key.startsWith(prefix) ? [[key.slice(prefix.length), message] as const] : [],
+        ),
+      );
+    },
+    later,
+    keepUnusedMs: keepUnusedViewMs,
+  });
 
   // Ids change events named in the last 10 seconds, by workspace, with when: a block in flight checks them.
   let recent = new Map<string, Map<string, number>>();
@@ -1727,7 +1750,9 @@ export function createRecordsLayer({
       for (const [objectId, change] of objects) {
         const entries = viewsOf(workspace).filter((entry) => entry.objectId === objectId);
         const ids = [...change.ids];
-        const held = ids.filter((id) => isHeldIn(workspace, id));
+        const held = ids.filter((id) => viewsOf(workspace).some((entry) => entry.shows(id)));
+        // A record a screen subscribes to (a record page) reads what it shows that changed.
+        subscriptions.changed(workspace, change.ids, change.attributes, change.lifecycle);
         // Visible attributes (spec 0006, AC-55): only what the event names and the windows read, plus what every
         // write moves when a window shows it. An event naming only attributes no window reads fetches nothing.
         const read = new Set(entries.flatMap((entry) => entry.attributes()));
@@ -1944,10 +1969,22 @@ export function createRecordsLayer({
      */
     reload: (workspace: string, objectId?: string): void => {
       for (const entry of viewsOf(workspace)) if (objectId === undefined || entry.objectId === objectId) entry.reread();
+      subscriptions.reload(workspace, objectId);
     },
+
+    /**
+     * One record with the attributes a screen shows (spec 0006, `records.one`):
+     * served from the same store as every table (one body), holding it while
+     * subscribed, reading only what the body lacks (everything asked when no
+     * view keeps it fresh), patched live, and `deleted` when it goes away.
+     * `'all'` reads every attribute the object has.
+     */
+    one: (workspace: string, recordId: string, attributeIds: RecordAttributes): RecordSubscription =>
+      subscriptions.one(workspace, recordId, attributeIds),
 
     /** Forgets every record and view (sign out, or someone else signed in). */
     clear: () => {
+      subscriptions.clear();
       for (const entry of views.values()) entry.dispose();
       views.clear();
       incoming = new Map();

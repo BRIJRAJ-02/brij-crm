@@ -1499,3 +1499,135 @@ describe('the replaced notice (spec 0006, AC-46, AC-47)', () => {
     expect(replaced).toEqual([]);
   });
 });
+
+describe('one record (spec 0006, records.one; the record page, spec 0017)', () => {
+  const OTHER = idAt(42);
+
+  it('reads the attributes asked for, holds the body, and is ready with the store’s one copy', async () => {
+    const { layer, gets, getAttributes } = setup();
+    const one = layer.one(WS, OTHER, [NAME, CITY]);
+    const release = one.retain();
+    expect(one.getSnapshot().status).toBe('loading');
+    await settle();
+    expect(gets.map((call) => call.input)).toEqual([[OTHER]]);
+    expect(getAttributes).toEqual([[NAME, CITY]]);
+    gets[0]?.answer([rowOf(OTHER, { [NAME]: 'Jane', [CITY]: 'Oslo' })]);
+    await one.ready();
+    const state = one.getSnapshot();
+    expect(state).toMatchObject({ status: 'ready', isLost: false });
+    expect(state.record?.values[CITY]).toBe('Oslo');
+    // The same subscription for every screen asking it.
+    expect(layer.one(WS, OTHER, [CITY])).toBe(one);
+    expect(layer.size()).toBe(1);
+    release();
+  });
+
+  it('is ready at once from a body a view keeps fresh, reading only what it lacks', async () => {
+    const { layer, gets, getAttributes } = await readyView();
+    const held = layer.one(WS, idAt(1), [CITY]);
+    expect(held.getSnapshot().status).toBe('ready');
+    expect(held.getSnapshot().record?.values[CITY]).toBe('London');
+    const wider = layer.one(WS, idAt(2), [CITY, OWNER]);
+    await settle();
+    expect(gets.map((call) => call.input)).toEqual([[idAt(2)]]);
+    expect(getAttributes).toEqual([[OWNER]]);
+    expect(wider.getSnapshot().status).toBe('loading');
+  });
+
+  it('says deleted, not lost, when the first read leaves it out', async () => {
+    const { layer, gets } = setup();
+    const one = layer.one(WS, OTHER, [NAME]);
+    await settle();
+    gets[0]?.answer([]);
+    await one.ready();
+    expect(one.getSnapshot()).toMatchObject({ status: 'deleted', isLost: false });
+    expect(one.getSnapshot().record).toBeUndefined();
+  });
+
+  it('fails with Retry, and reads again on retry', async () => {
+    const { layer, gets } = setup();
+    const one = layer.one(WS, OTHER, [NAME]);
+    await settle();
+    gets[0]?.fail(dataError('API_UNAVAILABLE', 'Can’t reach the CRM.'));
+    await one.ready();
+    expect(one.getSnapshot()).toMatchObject({ status: 'error', error: { code: 'API_UNAVAILABLE' } });
+    one.retry();
+    expect(one.getSnapshot().status).toBe('loading');
+    await settle();
+    gets[1]?.answer([rowOf(OTHER, { [NAME]: 'Jane' })]);
+    await settle();
+    expect(one.getSnapshot().status).toBe('ready');
+  });
+
+  it('reads a live change it shows, and goes lost, keeping the last record, when a read leaves it out', async () => {
+    const { layer, gets, getAttributes, frame } = setup();
+    const one = layer.one(WS, OTHER, [NAME, CITY]);
+    const release = one.retain();
+    await settle();
+    gets[0]?.answer([rowOf(OTHER, { [NAME]: 'Jane', [CITY]: 'Oslo' }, { [CITY]: version(1) })]);
+    await one.ready();
+    // An edit elsewhere to an attribute it doesn't show reads nothing; one it shows reads that attribute.
+    layer.changed(WS, PEOPLE, [OTHER], [OWNER]);
+    frame();
+    await settle();
+    expect(gets).toHaveLength(1);
+    layer.changed(WS, PEOPLE, [OTHER], [CITY]);
+    frame();
+    await settle();
+    expect(getAttributes.at(-1)).toEqual([CITY]);
+    gets[1]?.answer([rowOf(OTHER, { [NAME]: 'Jane', [CITY]: 'Rome' }, { [CITY]: version(2) }, 2)]);
+    await settle();
+    expect(one.getSnapshot().record?.values[CITY]).toBe('Rome');
+    // Deleted elsewhere: the event names it, its read leaves it out.
+    layer.changed(WS, PEOPLE, [OTHER], [], { deletedIds: [OTHER] });
+    frame();
+    await settle();
+    gets[2]?.answer([]);
+    await settle();
+    const state = one.getSnapshot();
+    expect(state).toMatchObject({ status: 'deleted', isLost: true });
+    expect(state.record?.values[CITY]).toBe('Rome');
+    release();
+  });
+
+  it('reads it again on a reload (a resync, or access changed), and shows its refused values', async () => {
+    const { layer, gets, edits } = setup();
+    const one = layer.one(WS, OTHER, [NAME, CITY]);
+    const release = one.retain();
+    await settle();
+    gets[0]?.answer([rowOf(OTHER, { [NAME]: 'Jane', [CITY]: 'Oslo' }, { [CITY]: version(1) })]);
+    await one.ready();
+    layer.reload(WS);
+    await settle();
+    expect(gets).toHaveLength(2);
+    expect(gets[1]?.input).toEqual([OTHER]);
+    gets[1]?.answer([rowOf(OTHER, { [NAME]: 'Jane', [CITY]: 'Oslo' }, { [CITY]: version(1) })]);
+    void layer.setValues(WS, [{ rowId: OTHER, columnId: CITY, value: 'Paris' }]);
+    expect(one.getSnapshot().record?.values[CITY]).toBe('Paris');
+    await settle();
+    edits[0]?.fail(
+      dataError('UNIQUE_CONFLICT', 'Not unique.', {
+        refusals: [{ code: 'UNIQUE_CONFLICT', message: 'Another person has this city.', attributeId: CITY }],
+      }),
+    );
+    await settle();
+    expect(one.getSnapshot().record?.values[CITY]).toBe('Oslo');
+    expect(one.getSnapshot().cellErrors.get(CITY)).toBe('Another person has this city.');
+    release();
+  });
+
+  it('lets go of its body 30 seconds after the last screen leaves, and forgets it with the records', async () => {
+    const { layer, gets, tick } = setup();
+    const one = layer.one(WS, OTHER, [NAME]);
+    const release = one.retain();
+    await settle();
+    gets[0]?.answer([rowOf(OTHER, { [NAME]: 'Jane' })]);
+    await one.ready();
+    release();
+    tick(30_000);
+    // A new subscription after it was let go reads again.
+    expect(layer.one(WS, OTHER, [NAME])).not.toBe(one);
+    layer.clear();
+    expect(layer.size()).toBe(0);
+  });
+});

@@ -16,11 +16,13 @@ import type {
   MyAccess,
   ObjectSummary,
   RecordView,
+  TrashedRecord,
   Usage,
 } from '@crm/contracts';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
 import type { ContractRouterClient } from '@orpc/contract';
+import type { ActivityFeed, ActivityFeeds } from './activity/feed.ts';
 import { createAuth } from './auth/auth.ts';
 import {
   type DataFault,
@@ -37,6 +39,7 @@ import { createMutationLog } from './live/mutations.ts';
 import { createLiveRouter } from './live/router.ts';
 import type { Notice } from './notice.ts';
 import type { UndoKind } from './records/history.ts';
+import type { RecordAttributes, RecordSubscription } from './records/one.ts';
 import type {
   CellChange,
   EditOutcome,
@@ -70,10 +73,12 @@ export type {
   RecordView,
   SignedInUser,
   SystemStatus,
+  TrashedRecord,
   Usage,
   UsageCount,
   WorkspaceSummary,
 } from '@crm/contracts';
+export type { ActivityEntryShape, ActivityFeed, ActivityState, ActivityStatus, EntrySource } from './activity/feed.ts';
 export type { Hue, ObjectIcon } from '@crm/contracts/values';
 // The API name rule and the new object's defaults (spec 0012): plain modules with no Zod, so the dialogs share
 // the server's own functions without loading the schema library.
@@ -109,6 +114,7 @@ export type {
   ViewState,
   ViewStatus,
 } from './records/layer.ts';
+export type { RecordAttributes, RecordState, RecordStatus, RecordSubscription } from './records/one.ts';
 export type { RowNote } from './records/view.ts';
 export type { NameState, RecordRef } from './records/names.ts';
 export type { WindowCount, WindowMode } from './records/windows.ts';
@@ -134,6 +140,13 @@ export interface ReplacedValue {
     | { readonly kind: 'automation' };
   readonly useMine: () => void;
 }
+
+/**
+ * A record asked for by id after `records.one` found it missing (spec 0017):
+ * in the trash and visible to the reader (its page opens read only), or not
+ * available, the same answer for a missing record and a hidden one.
+ */
+export type TrashedLookup = ({ readonly status: 'trashed' } & TrashedRecord) | { readonly status: 'unavailable' };
 
 /** What an undo did (spec 0006, AC-48, AC-49), with the first cell's attribute named for a one cell toast. */
 export type UndoResult =
@@ -294,6 +307,8 @@ export function createDataLayer({
   let attributes = new Map<string, Promise<AttributeDefinition[]>>();
   // The records layer, loaded with the first screen that shows records.
   let records: Promise<RecordsLayer> | undefined;
+  // Records' timelines (spec 0017), loaded with the first record page.
+  let activity: Promise<ActivityFeeds> | undefined;
   // Set by the first 401, so a burst of failed calls signs out once.
   let ended = false;
   // Live updates: loaded with the first watched workspace, and this tab's writes waiting for their echo.
@@ -335,6 +350,9 @@ export function createDataLayer({
       layer.clear();
     });
     jobs.clear();
+    void activity?.then((feeds) => {
+      feeds.clear();
+    });
   };
   const reset = () => {
     forget();
@@ -894,6 +912,24 @@ export function createDataLayer({
     };
   };
 
+  const activityFeeds = (): Promise<ActivityFeeds> => {
+    activity ??= import('./activity/feed.ts').then(({ createActivityFeeds }) =>
+      createActivityFeeds({
+        page: (workspace, recordId, cursor) =>
+          beforeRead(workspace).then(() =>
+            call((options) =>
+              api.records.activity({ workspace, recordId, ...(cursor === undefined ? {} : { cursor }) }, options),
+            ),
+          ),
+        members: (workspace, fresh) => {
+          if (fresh) members.delete(workspace);
+          return readMembers(workspace);
+        },
+      }),
+    );
+    return activity;
+  };
+
   const recordsLayer = (): Promise<RecordsLayer> => {
     records ??= import('./records/layer.ts').then(({ createRecordsLayer }) =>
       createRecordsLayer({
@@ -1147,6 +1183,42 @@ export function createDataLayer({
        */
       setValues: async (workspace: string, changes: readonly CellChange[], kind?: UndoKind): Promise<EditOutcome> =>
         (await recordsLayer()).setValues(workspace, changes, kind),
+      /**
+       * One record with the attributes a screen shows (spec 0006, `records.one`;
+       * the record page, spec 0017): served from the store every table reads
+       * (one body), held while subscribed, reading only what it lacks, patched
+       * live, and `deleted` when it goes away (`isLost` once it was shown).
+       * Answered once the records layer is loaded; `ready()` settles with the
+       * first read. Read it through `useRecord`.
+       */
+      one: async (workspace: string, recordId: string, attributeIds: RecordAttributes): Promise<RecordSubscription> =>
+        (await recordsLayer()).one(workspace, recordId, attributeIds),
+      /**
+       * A record `one` found missing (spec 0017): in the trash and visible to
+       * the reader, or unavailable (missing or hidden, one answer). The
+       * trashed body is never put in the store, so no table shows it.
+       */
+      trashed: async (workspace: string, recordId: string): Promise<TrashedLookup> => {
+        try {
+          const found = await call((options) => api.records.getTrashed({ workspace, recordId }, options));
+          return { status: 'trashed', ...found };
+        } catch (error) {
+          if (toDataError(error).code === 'NOT_FOUND') return { status: 'unavailable' };
+          throw error;
+        }
+      },
+    },
+    activity: {
+      /**
+       * A record's timeline, newest first (spec 0017): pages of `records.activity`
+       * mapped to the feed's entries, who did it named from the members. One
+       * per record, shared with `recent`. Read it through `useActivity`.
+       */
+      forRecord: async (workspace: string, recordId: string): Promise<ActivityFeed> =>
+        (await activityFeeds()).forRecord(workspace, recordId),
+      /** The same timeline cut to its newest five entries (Overview's "Recent activity"), sharing the first page. */
+      recent: async (workspace: string, recordId: string): Promise<ActivityFeed> =>
+        (await activityFeeds()).recent(workspace, recordId),
     },
     undo: {
       /**

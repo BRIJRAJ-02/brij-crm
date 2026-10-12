@@ -11,8 +11,10 @@ import {
   type MemberSummary,
   type MyAccess,
   type ObjectSummary,
+  type RecordActivity,
   type RecordView,
   type Usage,
+  type TrashedRecord,
 } from '@crm/contracts';
 import { implement, ORPCError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
@@ -115,6 +117,10 @@ interface Behaviour {
   /** What every object write answers (spec 0012). */
   objectWrite: () => ObjectSummary;
   usage: () => Usage;
+  /** A page of a record's timeline (spec 0017). */
+  activity: (recordId: string, cursor?: string) => RecordActivity;
+  /** A record in the trash (spec 0017). */
+  trashed: (recordId: string) => TrashedRecord;
 }
 
 const unauthenticated = () => new ORPCError('UNAUTHENTICATED', { status: 401, message: 'Sign in to continue.' });
@@ -147,6 +153,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     jobStartTest: notServed,
     objectWrite: notServed,
     usage: () => ({ attributes: { [PEOPLE.id]: { used: 20, limit: 250 } }, optionsPerAttribute: 500 }),
+    activity: notServed,
+    trashed: notServed,
     ...overrides,
   };
   const calls: string[] = [];
@@ -209,6 +217,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         return { ...row, echoes: 1, written };
       }),
       setValuesBatch: os.records.setValuesBatch.handler(notServed),
+      activity: os.records.activity.handler(({ input }) => behaviour.activity(input.recordId, input.cursor)),
+      getTrashed: os.records.getTrashed.handler(({ input }) => behaviour.trashed(input.recordId)),
     },
     members: { list: os.members.list.handler(() => behaviour.members()) },
     access: { mine: os.access.mine.handler(() => behaviour.access()) },
@@ -1465,5 +1475,121 @@ describe('objects in settings (spec 0012)', () => {
   it('counts an object’s records for the archive confirm', async () => {
     const { data } = layer(fakeApi({ count: () => 1240 }));
     expect(await data.records.count('acme', PEOPLE.id)).toEqual({ count: 1240, atLeast: false });
+  });
+});
+
+describe('the record page (spec 0017)', () => {
+  const RECORD = personRow(0).id;
+  const createdBy = (actor: RecordView['createdBy']) => ({
+    entries: [
+      {
+        id: `created:${RECORD}`,
+        key: `2026-10-08T09:00:00.000123Z|9|created:${RECORD}`,
+        at: '2026-10-08T09:00:00.000Z',
+        actor,
+        kind: 'created' as const,
+      },
+    ],
+  });
+
+  it('reads the first page once for the Activity tab and Recent activity, naming who made the record', async () => {
+    const asked: string[] = [];
+    const api = fakeApi({
+      activity: (recordId) => {
+        asked.push(recordId);
+        return createdBy({ type: 'member', id: ADA_MEMBER.id });
+      },
+    });
+    const { data } = layer(api);
+    const feed = await data.activity.forRecord('acme', RECORD);
+    const recent = await data.activity.recent('acme', RECORD);
+    await Promise.all([feed.ready(), recent.ready()]);
+    expect(asked).toEqual([RECORD]);
+    const state = feed.getSnapshot();
+    expect(state.status).toBe('ready');
+    expect(state.hasMore).toBe(false);
+    expect(state.entries).toEqual([
+      {
+        id: `created:${RECORD}`,
+        at: '2026-10-08T09:00:00.000Z',
+        kind: 'created',
+        actor: { type: 'member', id: ADA_MEMBER.id, name: 'Ada', email: 'ada@example.com' },
+      },
+    ]);
+    expect(state.source.count).toBe(1);
+    expect(recent.getSnapshot().entries).toEqual(state.entries);
+  });
+
+  it('names a member no longer listed "Former member", after reading the members once more, and the system "System"', async () => {
+    let memberReads = 0;
+    const api = fakeApi({
+      members: () => {
+        memberReads += 1;
+        return [ADA_MEMBER];
+      },
+      activity: (recordId) =>
+        recordId === RECORD
+          ? createdBy({ type: 'member', id: '0199a6f2-0000-7000-8000-0000000000ff' })
+          : createdBy({ type: 'system', id: null }),
+    });
+    const { data } = layer(api);
+    const gone = await data.activity.forRecord('acme', RECORD);
+    await gone.ready();
+    expect(gone.getSnapshot().entries[0]?.actor.name).toBe('Former member');
+    expect(memberReads).toBe(2);
+    const seeded = await data.activity.forRecord('acme', personRow(1).id);
+    await seeded.ready();
+    expect(seeded.getSnapshot().entries[0]?.actor).toEqual({ type: 'system', id: null, name: 'System' });
+  });
+
+  it('says a missing or hidden record is unavailable, and a failure is an error with Retry', async () => {
+    let fails = true;
+    const api = fakeApi({
+      activity: (recordId) => {
+        if (recordId === RECORD)
+          throw new ORPCError('NOT_FOUND', { status: 404, message: 'That record does not exist.' });
+        if (fails) throw new ORPCError('INTERNAL', { status: 500, message: 'Something went wrong.' });
+        return createdBy({ type: 'system', id: null });
+      },
+    });
+    const { data } = layer(api);
+    const missing = await data.activity.forRecord('acme', RECORD);
+    await missing.ready();
+    expect(missing.getSnapshot().status).toBe('unavailable');
+    const flaky = await data.activity.forRecord('acme', personRow(1).id);
+    await flaky.ready();
+    expect(flaky.getSnapshot().status).toBe('error');
+    fails = false;
+    flaky.retry();
+    await new Promise((resolve) => setTimeout(resolve, 40));
+    expect(flaky.getSnapshot().status).toBe('ready');
+  });
+
+  it('subscribes to one record through the records layer, and looks a missing one up in the trash', async () => {
+    const api = fakeApi({
+      get: (ids) => ids.filter((id) => id === personRow(1).id).map(() => personRow(1)),
+      trashed: (recordId) => {
+        if (recordId !== RECORD)
+          throw new ORPCError('NOT_FOUND', { status: 404, message: 'That record does not exist.' });
+        return {
+          record: personRow(0),
+          deletedAt: '2026-10-09T09:00:00.000Z',
+          deletedBy: { type: 'member', id: ADA_MEMBER.id },
+        };
+      },
+    });
+    const { data } = layer(api);
+    const live = await data.records.one('acme', personRow(1).id, [TITLE.id]);
+    await live.ready();
+    expect(live.getSnapshot().record?.values[TITLE.id]).toBe('Engineer');
+    const gone = await data.records.one('acme', RECORD, [TITLE.id]);
+    await gone.ready();
+    expect(gone.getSnapshot()).toMatchObject({ status: 'deleted', isLost: false });
+    expect(await data.records.trashed('acme', RECORD)).toMatchObject({
+      status: 'trashed',
+      record: { id: RECORD },
+      deletedBy: { type: 'member', id: ADA_MEMBER.id },
+    });
+    expect(await data.records.trashed('acme', personRow(2).id)).toEqual({ status: 'unavailable' });
   });
 });

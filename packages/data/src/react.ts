@@ -2,9 +2,11 @@
 // a view and the live status through it, so they never subscribe to the store
 // themselves.
 import { useEffect, useRef, useSyncExternalStore } from 'react';
+import type { ActivityFeed, ActivityState } from './activity/feed.ts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { LiveStatus } from './live/live.ts';
 import type { RecordsView, ViewReader, ViewState } from './records/layer.ts';
+import type { RecordState, RecordSubscription } from './records/one.ts';
 
 /**
  * A view's current state (its rows, count, status, cell refusals and row
@@ -55,4 +57,32 @@ export function useLiveStatus(live: LiveSource): LiveStatus {
 export function useJobs(view: JobsView): JobsSnapshot {
   useEffect(() => view.retain(), [view]);
   return useSyncExternalStore(view.subscribe, view.getSnapshot);
+}
+
+/** Something a screen retains while it shows it, and reads through useSyncExternalStore. */
+interface Retained<State> {
+  readonly subscribe: (listener: () => void) => () => void;
+  readonly getSnapshot: () => State;
+  readonly retain: () => () => void;
+}
+
+/** A retained source's state: held while the screen is mounted, re-rendering when it changes. */
+function useRetained<State>(source: Retained<State>): State {
+  useEffect(() => source.retain(), [source]);
+  return useSyncExternalStore(source.subscribe, source.getSnapshot);
+}
+
+/**
+ * One record's state (spec 0006, `records.one`; the record page, spec 0017):
+ * the store's one body with pending edits on top, its status and its
+ * refused values, re-rendering when it changes. While the screen is mounted
+ * it holds the record, so live changes keep reaching it.
+ */
+export function useRecord(record: RecordSubscription): RecordState {
+  return useRetained(record);
+}
+
+/** A record's timeline (spec 0017), re-rendering when entries arrive. Held while the screen is mounted. */
+export function useActivity(feed: ActivityFeed): ActivityState {
+  return useRetained(feed);
 }
