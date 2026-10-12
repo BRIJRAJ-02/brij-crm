@@ -261,5 +261,7 @@ export const RelationshipEntry: Story = {
     if (last === undefined) throw new globalThis.Error('No Relationship.');
     await userEvent.click(last);
     await waitFor(() => expect(chooseRelationship).toHaveBeenCalledOnce());
+    // The list has gone (its exit fade over) before the story ends.
+    await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
   },
 };
