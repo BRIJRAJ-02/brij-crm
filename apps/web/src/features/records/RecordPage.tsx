@@ -1,6 +1,6 @@
 // Brief
 // Purpose: everything about one record in one place: its details, and what happened to it.
-// Main task: read and edit its details in place, and see who made it and when (the timeline grows with milestone 2).
+// Main task: read and edit its details in place, and see who changed what and when, live.
 // Leaves out: deleting and restoring it (#22), presence (#26), related records (milestone 3), notes and tasks (#19), comments (#29).
 import type {
   ActivityFeed as ActivityFeedSource,
@@ -15,7 +15,7 @@ import type {
 import { useActivityStatus, useLiveStatus, useRecord, useTrashed } from '@crm/data/react';
 import { ActivityFeed, Button, Callout, EmptyState, Link, RecordHeader, RecordLayout, TopBar } from '@crm/ui';
 import { useNavigate, useParams, useRouteContext } from '@tanstack/react-router';
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { objectHref } from '../workspace/objects.ts';
 import { strings as workspaceStrings } from '../workspace/strings.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
@@ -24,12 +24,15 @@ import { isRecordTab, recordHref, recordName, type RecordTab } from './details.t
 import { OverviewTab } from './OverviewTab.tsx';
 import { RecordDetails } from './RecordDetails.tsx';
 import { strings } from './strings.ts';
+import { recordLinks } from './timeline.ts';
 
 /** Props for the record page: what its route loaded through the data layer. */
 export interface RecordPageProps {
   readonly slug: string;
   readonly tab: RecordTab;
   readonly object: ObjectSummary;
+  /** The workspace's objects, so the records the timeline names link to their pages. */
+  readonly objects: readonly ObjectSummary[];
   /** The attributes Details lists. */
   readonly attributes: readonly AttributeDefinition[];
   readonly members: readonly MemberSummary[];
@@ -179,6 +182,7 @@ function RecordScreen({
   slug,
   tab,
   object,
+  objects,
   attributes,
   members,
   recordId,
@@ -200,6 +204,7 @@ function RecordScreen({
   const navigate = useNavigate();
   const live = useLiveStatus(data.live);
   const unnamed = strings.unnamed(object.singularName);
+  const link = useMemo(() => recordLinks(slug, objects), [slug, objects]);
 
   const openTab = (next: string) => {
     if (next === tab) return;
@@ -212,10 +217,11 @@ function RecordScreen({
   };
   const tabContent =
     tab === 'activity' ? (
-      <ActivityTab feed={feed} />
+      <ActivityTab feed={feed} link={link} />
     ) : (
       <OverviewTab
         recent={recent}
+        link={link}
         onViewAll={() => {
           openTab('activity');
         }}

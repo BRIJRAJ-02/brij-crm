@@ -41,7 +41,9 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
     const shown = detailAttributes(attributes);
     // An address that can't be a record's id names no record: the page says so, as for a missing one.
     if (!isRecordId(params.recordId)) {
-      return { page: { object, attributes: shown, members, record: undefined, feed: undefined, recent: undefined } };
+      return {
+        page: { object, objects, attributes: shown, members, record: undefined, feed: undefined, recent: undefined },
+      };
     }
     const [record, feed, recent] = await Promise.all([
       context.data.records.one(
@@ -49,8 +51,8 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
         params.recordId,
         shown.map((attribute) => attribute.id),
       ),
-      context.data.activity.forRecord(params.slug, params.recordId),
-      context.data.activity.recent(params.slug, params.recordId),
+      context.data.activity.forRecord(params.slug, params.recordId, object.id),
+      context.data.activity.recent(params.slug, params.recordId, object.id),
     ]);
     // A quick load arrives with its record; a slow one shows the page loading in place.
     let timer: ReturnType<typeof setTimeout> | undefined;
@@ -61,7 +63,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
       }),
     ]);
     clearTimeout(timer);
-    return { page: { object, attributes: shown, members, record, feed, recent } };
+    return { page: { object, objects, attributes: shown, members, record, feed, recent } };
   },
   pendingComponent: RecordPendingPage,
   errorComponent: RecordError,
