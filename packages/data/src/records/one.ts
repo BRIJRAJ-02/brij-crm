@@ -5,6 +5,7 @@
 // away. The records layer owns it and hands it the store and its reads.
 import type { RecordView } from '@crm/contracts';
 import { toDataError, type DataError } from '../errors.ts';
+import type { NameState, RecordRef } from './names.ts';
 import type { RecordStore } from './store.ts';
 
 /** Where a subscribed record stands. */
@@ -29,6 +30,12 @@ export interface RecordState {
   readonly error?: DataError;
   /** Refused values on this record, by attribute id, to a sentence; each goes with the value's next edit. */
   readonly cellErrors: ReadonlyMap<string, string>;
+  /**
+   * How the records its reference values link to show (a person's Company):
+   * as a view's `referenceDisplays`, read once per record and batched; a new
+   * snapshot comes when names arrive.
+   */
+  readonly referenceDisplays: (refs: readonly RecordRef[]) => readonly NameState[];
 }
 
 /** One record, as a screen subscribes to it (`useRecord` in `@crm/data/react`). */
@@ -61,6 +68,8 @@ export interface RecordSubscriptionsOptions {
   readonly isShown: (workspace: string, recordId: string) => boolean;
   /** Refused values on a record, by attribute id. */
   readonly cellErrorsOf: (recordId: string) => ReadonlyMap<string, string>;
+  /** The names of linked records, as views read them. */
+  readonly displaysOf: (workspace: string, refs: readonly RecordRef[]) => readonly NameState[];
   /** Runs `run` after `ms`, answering a cancel. */
   readonly later: (run: () => void, ms: number) => () => void;
   /** How long a subscription nobody shows is kept, in ms. */
@@ -74,6 +83,8 @@ interface Entry {
   readonly subscription: RecordSubscription;
   readonly update: () => void;
   readonly reread: (attributeIds?: readonly string[]) => void;
+  /** Names of linked records arrived: a new snapshot, so the screen draws them. */
+  readonly renamed: () => void;
   readonly dispose: () => void;
 }
 
@@ -90,6 +101,7 @@ export function createRecordSubscriptions({
   refetch,
   isShown,
   cellErrorsOf,
+  displaysOf,
   later,
   keepUnusedMs,
 }: RecordSubscriptionsOptions) {
@@ -113,7 +125,8 @@ export function createRecordSubscriptions({
     const readyPromise = new Promise<void>((resolve) => {
       settleReady = resolve;
     });
-    let snapshot: RecordState = { status, isLost, cellErrors: EMPTY_ERRORS };
+    let referenceDisplays = (refs: readonly RecordRef[]) => displaysOf(workspace, refs);
+    let snapshot: RecordState = { status, isLost, cellErrors: EMPTY_ERRORS, referenceDisplays };
     // Its body stays while it is subscribed, whatever the windows do.
     store.hold([recordId]);
 
@@ -127,6 +140,7 @@ export function createRecordSubscriptions({
         status,
         isLost,
         cellErrors,
+        referenceDisplays,
         ...(record === undefined ? {} : { record }),
         ...(error === undefined ? {} : { error }),
       };
@@ -138,7 +152,8 @@ export function createRecordSubscriptions({
         next.isLost !== snapshot.isLost ||
         next.record !== snapshot.record ||
         next.error !== snapshot.error ||
-        next.cellErrors !== snapshot.cellErrors;
+        next.cellErrors !== snapshot.cellErrors ||
+        next.referenceDisplays !== snapshot.referenceDisplays;
       if (!changed) return;
       snapshot = next;
       for (const listener of listeners) listener();
@@ -244,6 +259,10 @@ export function createRecordSubscriptions({
         // Read with nothing else to fetch: the record's name alone, which still tells whether it is there.
         void refetch(workspace, [recordId], attributeIds).catch(() => undefined);
       },
+      renamed: () => {
+        referenceDisplays = (refs) => displaysOf(workspace, refs);
+        announce();
+      },
       dispose,
     };
     entries.set(key, entry);
@@ -312,6 +331,11 @@ export function createRecordSubscriptions({
         if (objectId !== undefined && body !== undefined && body.objectId !== objectId) continue;
         entry.reread(entry.attributes === 'all' ? undefined : entry.attributes);
       }
+    },
+
+    /** Names of linked records arrived in the workspace: its subscriptions draw them. */
+    renamed: (workspace: string): void => {
+      for (const entry of entries.values()) if (entry.workspace === workspace) entry.renamed();
     },
 
     /** Refused values changed: each subscription says so when its record's did. */

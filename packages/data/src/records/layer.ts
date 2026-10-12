@@ -491,6 +491,7 @@ export function createRecordsLayer({
     schedule,
     onNames: (workspace) => {
       for (const entry of viewsOf(workspace)) entry.invalidate();
+      subscriptions.renamed(workspace);
     },
     held: (recordId) => store.get(recordId)?.display,
     later: (run, ms) => {
@@ -1717,6 +1718,7 @@ export function createRecordsLayer({
         ),
       );
     },
+    displaysOf: (workspace, refs) => names.displaysOf(workspace, refs),
     later,
     keepUnusedMs: keepUnusedViewMs,
   });
