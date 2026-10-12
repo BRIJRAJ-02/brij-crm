@@ -6,6 +6,7 @@ import {
   isEditableHere,
   toActorDisplays,
   toFieldAttribute,
+  withPendingOptions,
   type AttributeDefinition,
   type MemberSummary,
   type NameState,
@@ -16,7 +17,7 @@ import {
   type RecordView,
   type SortRule,
 } from '@crm/data';
-import { useLiveStatus, useView } from '@crm/data/react';
+import { useLiveStatus, usePendingOptions, useView } from '@crm/data/react';
 import { Badge, Button, Callout, EmptyState, isSystemOnly, Spinner, TopBar, useDelayedLoading, ViewBar } from '@crm/ui';
 import { columnWidthFor, DataGrid, type GridColumn } from '@crm/ui/grid';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
@@ -148,6 +149,18 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
     pinnedCount: 1,
   });
   const columns = useMemo(() => columnsFor(object, attributes, layout.columns), [object, attributes, layout.columns]);
+  // Options a cell just made (spec 0012, AC-238) show by their label until the attribute lists them.
+  const pendingOptions = usePendingOptions(data.options.pending);
+  const gridColumns = useMemo(
+    () =>
+      pendingOptions.size === 0
+        ? columns
+        : columns.map((column) => {
+            const attribute = withPendingOptions(column.attribute, slug, pendingOptions);
+            return attribute === column.attribute ? column : { ...column, attribute };
+          }),
+    [columns, pendingOptions, slug],
+  );
   // The row's picture (People's Avatar) sits in the Name cell, so it is read even while its column is hidden.
   const avatar = useMemo(() => avatarAttribute(object, attributes), [object, attributes]);
   // Only the columns on screen are read (spec 0006, AC-55); showing a hidden one reads it for the loaded rows.
@@ -287,7 +300,7 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
           <>
             <DataGrid<RecordView>
               label={object.pluralName}
-              columns={columns}
+              columns={gridColumns}
               pinnedCount={layout.pinnedCount}
               rows={state.source}
               getValue={(row, columnId) => row.values[columnId] ?? null}
@@ -389,6 +402,10 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
               // column's Edit attribute and Archive attribute. System columns have none; the name never archives.
               {...(canChangeSchema
                 ? {
+                    // "Create" in a select or status cell (AC-238): one optimistic write that makes and sets it.
+                    onCreateOption: (recordId: string, attributeId: string, label: string) => {
+                      void data.records.createOption(slug, { objectId: object.id, recordId, attributeId, label });
+                    },
                     onAddColumn: () => {
                       setAdding(true);
                     },

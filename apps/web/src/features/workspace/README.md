@@ -29,7 +29,7 @@ Spec 0005, milestones 1 to 3; spec 0012 makes the object pages generic. Every pa
 ## The table's schema entry points (spec 0012)
 
 - **Purpose**: change the object's columns where they are seen. Shown only to people whose role holds `schema.manage` (owners and admins, spec 0009); the server refuses anyone else 403 on its own.
-- **Main task**: Add attribute in the view bar or the "+" header after the last column opens settings' attribute dialog (`features/settings/AttributeDialog.tsx`); the new column appears once the server agrees and its header takes focus. A column's menu adds Edit attribute (the same dialog) and Archive attribute (the confirm; not on the name, none on system columns).
+- **Main task**: Add attribute in the view bar or the "+" header after the last column opens settings' attribute dialog (`features/settings/AttributeDialog.tsx`); the new column appears once the server agrees and its header takes focus. A column's menu adds Edit attribute (the same dialog) and Archive attribute (the confirm; not on the name, none on system columns). In a select, multi select or status cell, owners and admins can type a label no live option has and choose "Create "<label>"" (spec 0012, AC-238): one optimistic write through `data.records.createOption`, the cell showing the label at once (the data layer's pending options, merged into the column with `withPendingOptions`) and rolling back, marked, on a refusal. Members never see the offer.
 - **Leaves out**: types with setup and options (milestone 3), and per view column order (#20): moving a column here changes this visit's layout only.
 
 ## Notes

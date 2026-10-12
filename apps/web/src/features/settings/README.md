@@ -18,23 +18,23 @@ Spec 0012, milestone 1 (objects and attributes, #13), and spec 0008 (background 
 
 - **Purpose**: one object, standard or custom alike, under its tile, name and Standard or Custom badge, in two tabs.
 - **Main task**: add, edit, move, archive and restore its attributes (Attributes), and rename, restyle, archive or restore it (Configuration).
-- **Leaves out**: types with setup and options (milestone 3), and changing the API name (never).
+- **Leaves out**: changing a type (#14), and changing the API name (never).
 
 ## An object's attributes (the Attributes tab, AttributesTab)
 
 - **Purpose**: the object's attributes as every table of it shows them: its own by position, the system ones, the archived ones.
 - **Main task**: owners and admins add one (New attribute, in the page's header), open one to edit it (a row, or Edit in its menu; the address gains `?attribute=<id>`, so a link opens the same dialog), move one (drag its handle, or Move up and Move down), archive one (a confirm; not the name) and restore one from Archived.
-- **Leaves out**: options, type settings and the "Default archived" note (milestone 3), groups (#18) and the schema map (#56).
+- **Leaves out**: groups (#18) and the schema map (#56).
 
-A meter "Attributes, N of 250" for owners and admins (a skeleton until `usage.get` answers), then the own attributes' Table (type icon and title, the type, badges for Primary, Required, Unique and Default, and a row menu), the system ones in a sunken Card, read only (a row opens them read only), and an Archived Disclosure: Restore on each, or, for a relationship end whose other object is archived, "Links to <Plural>, which is archived" and no Restore of its own. A move says the new place in a toast. `?attribute=` naming nothing this person can open here is removed, and nothing opens.
+A meter "Attributes, N of 250" for owners and admins (a skeleton until `usage.get` answers), then the own attributes' Table (type icon and title, the type, badges for Primary, Required, Unique and Default, which reads "Default archived" while a select's or status's default names an archived option (milestone 3, AC-236), and a row menu), the system ones in a sunken Card, read only (a row opens them read only), and an Archived Disclosure: Restore on each, or, for a relationship end whose other object is archived, "Links to <Plural>, which is archived" and no Restore of its own. A move says the new place in a toast. `?attribute=` naming nothing this person can open here is removed, and nothing opens.
 
 ## The attribute dialog (AttributeDialog)
 
 - **Purpose**: create or edit one attribute, from settings, the table's "+" header, its column menu or the view bar's Add attribute.
-- **Main task**: name it, pick one of the ten types without setup (Text, Long text, Date, Checkbox, Rating, Email, Phone, Link, Location, Member), set Required, Unique and Allow multiple where the type takes them and a default, then Create attribute or Save.
-- **Leaves out**: Number, Currency, Select, Multi select and Status (milestone 3), Relationship (#15) and changing a type (#14).
+- **Main task**: name it, pick one of the fifteen types, set the type's settings (a Number's display, a Currency's code) and options (a Select's or Multi select's, a Status's stages, starting from Not started, In progress and Done), Required, Unique and Allow multiple where the type takes them and a default, then Create attribute or Save.
+- **Leaves out**: Relationship (#15) and changing a type (#14).
 
-The library's AttributeSettings, connected: one id minted per opening (a retry sends the same one), the write through the data layer and server confirmed, refusals on the setting they name (a taken API name on API name), an edit sending only what changed. A system attribute, or anyone without `schema.manage`, sees it read only with Close.
+The library's AttributeSettings, connected: one id minted per opening (a retry sends the same one), the write through the data layer and server confirmed, refusals on the setting they name (a taken API name on API name), an edit sending only what changed. A new attribute's options go with its create. An existing attribute's options save as they change (milestone 3, the editor's hint says so): each add, rename, recolour, outcome or target, move, archive and restore is one server confirmed write through `data.options`, its row spinning while it is out and showing its refusal after (a refused add's reason shows by Add option); the page reloads after each, and the dialog reads the attribute from the live list, so the rows are the server's. "N of 500" comes from `usage.get`. A system attribute, or anyone without `schema.manage`, sees it read only with Close.
 
 ## Attribute archive confirm (ArchiveAttributeDialog)
 

@@ -5,6 +5,7 @@
 import {
   toActorDisplays,
   toFieldAttribute,
+  withPendingOptions,
   type AttributeDefinition,
   type MemberSummary,
   type NameState,
@@ -12,7 +13,9 @@ import {
   type RecordRefDisplay,
   type RecordView,
 } from '@crm/data';
+import { usePendingOptions } from '@crm/data/react';
 import { AttributeList } from '@crm/ui';
+import { useParams, useRouteContext } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { refsOf } from './details.ts';
 import { strings } from './strings.ts';
@@ -53,13 +56,17 @@ export function RecordDetails({
   onCommit,
 }: RecordDetailsProps) {
   const memberDisplays = useMemo(() => toActorDisplays(members), [members]);
+  // An option a table's cell just made (spec 0012, AC-238) shows by its label here too, until the attribute lists it.
+  const { data } = useRouteContext({ from: '__root__' });
+  const { slug = '' } = useParams({ strict: false });
+  const pendingOptions = usePendingOptions(data.options.pending);
   const fields = useMemo(
     () =>
       attributes.map((definition) => ({
         definition,
-        attribute: toFieldAttribute(definition, strings.referenceReadOnly),
+        attribute: withPendingOptions(toFieldAttribute(definition, strings.referenceReadOnly), slug, pendingOptions),
       })),
-    [attributes],
+    [attributes, slug, pendingOptions],
   );
   if (record === undefined) return <AttributeList label={strings.details} sections={[]} isLoading />;
   const items = fields.map(({ definition, attribute }) => {

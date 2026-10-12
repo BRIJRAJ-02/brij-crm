@@ -1,5 +1,5 @@
 // Attributes without setup (spec 0012, milestone 2), end to end: an owner
-// adds one attribute of each of the ten types from settings, with a
+// adds one attribute of each of the ten types without setup from settings, with a
 // description, Unique, Required, Allow multiple and defaults; edits one through
 // `?attribute=<id>`; moves, archives and restores one; and the table shows the
 // new columns, the "+" header and the column menu's schema items.
@@ -31,6 +31,8 @@ async function createAttribute(page: Page, each: TypeCase): Promise<void> {
   await dialog.getByLabel('Name', { exact: true }).fill(each.name);
   await dialog.getByRole('button', { name: /Type$/ }).click();
   await page.getByRole('option', { name: each.type, exact: true }).click();
+  // The list of fifteen reaches over the settings below it: gone before the next click lands there.
+  await expect(page.getByRole('listbox')).toBeHidden();
   if ('description' in each) await dialog.getByLabel('Description').fill(each.description);
   if ('unique' in each) await dialog.getByText('Unique', { exact: true }).click();
   if ('required' in each) await dialog.getByText('Required', { exact: true }).click();

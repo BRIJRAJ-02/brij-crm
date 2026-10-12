@@ -1,49 +1,58 @@
 // Brief
 // Purpose: create or edit one attribute of an object, from settings, the table's "+" header or a column's menu.
-// Main task: name it, pick one of the ten types without setup, set its rules and default, then Create or Save.
-// Leaves out: types with setup and options (spec 0012, milestone 3), relationships (#15), changing a type (#14).
+// Main task: name it, pick one of the fifteen types, set its settings, options, rules and default, then Create or Save.
+// Leaves out: relationships (#15), changing a type (#14); an existing attribute's options save as they change.
 import {
+  isDataError,
+  refusalSummary,
+  targetDaysOf,
   toActorDisplays,
   type AttributeChanges,
   type AttributeDefinition,
   type MemberSummary,
+  type NewOption,
+  type OptionChanges,
   type PickerAttributeType,
   PICKER_TYPES,
 } from '@crm/data';
-import { AttributeSettings, type AttributeSettingsValues, type FormRefusal } from '@crm/ui';
+import {
+  AttributeSettings,
+  type AttributeSettingsOptionWrites,
+  type AttributeSettingsValues,
+  type FormRefusal,
+  type OptionsEditorOption,
+} from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { strings } from './attribute-strings.ts';
 import { formRefusals } from './refusals.ts';
 
-/** The picker's entries this milestone offers: the ten types without setup (spec 0012, step 13). */
-export const TYPES_WITHOUT_SETUP: readonly string[] = [
-  'text',
-  'long_text',
-  'date',
-  'checkbox',
-  'rating',
-  'email',
-  'phone',
-  'link',
-  'location',
-  'member',
-];
-
 /** The settings the server names on its refusals, as the dialog shows them. */
-const FIELDS = ['title', 'apiSlug', 'description', 'type', 'isRequired', 'isUnique', 'defaultValue'] as const;
+const FIELDS = [
+  'title',
+  'apiSlug',
+  'description',
+  'type',
+  'isRequired',
+  'isUnique',
+  'defaultValue',
+  'config',
+  'options',
+] as const;
 
 /** Props for the attribute dialog. */
 export interface AttributeDialogProps {
   readonly slug: string;
   readonly objectId: string;
   readonly isOpen: boolean;
-  /** The attribute to edit; a new one is made when absent. */
+  /** The attribute to edit, as the live list holds it now; a new one is made when absent. */
   readonly attribute?: AttributeDefinition | undefined;
   /** The workspace's members, for a Member attribute's default. */
   readonly members: readonly MemberSummary[];
   /** Holds `schema.manage`: anyone else sees the settings read only (the server refuses them anyway). */
   readonly canManage: boolean;
+  /** The live options an attribute may hold (`usage.get`), for "N of 500"; nothing shows when unknown. */
+  readonly optionsLimit?: number | undefined;
   readonly onClose: () => void;
   /** The server agreed: the attribute as it is now, and whether it is new. */
   readonly onSaved: (attribute: AttributeDefinition, isNew: boolean) => void;
@@ -67,13 +76,43 @@ function changesOf(values: AttributeSettingsValues): AttributeChanges {
     ...(changed.has('isRequired') ? { isRequired: values.isRequired } : {}),
     ...(changed.has('isUnique') ? { isUnique: values.isUnique } : {}),
     ...(changed.has('defaultValue') ? { defaultValue: values.defaultValue ?? null } : {}),
+    ...(changed.has('config') ? { config: values.config } : {}),
   };
 }
+
+/** An option as the options editor shows it: a stage's target in whole days. */
+function editorOption(option: NonNullable<AttributeDefinition['options']>[number]): OptionsEditorOption {
+  const days = targetDaysOf(option.targetTimeInStage);
+  return {
+    id: option.id,
+    label: option.label,
+    hue: option.hue,
+    isArchived: option.isArchived,
+    ...(option.outcome === undefined ? {} : { outcome: option.outcome }),
+    ...(days === undefined ? {} : { targetDays: days }),
+  };
+}
+
+/** A draft option as a create sends it. */
+function newOptionOf(option: OptionsEditorOption): NewOption {
+  return {
+    id: option.id,
+    label: option.label,
+    hue: option.hue,
+    ...(option.outcome === undefined ? {} : { outcome: option.outcome }),
+    ...(option.targetDays === undefined ? {} : { targetDays: option.targetDays }),
+  };
+}
+
+/** The words a refused option write shows on its row. */
+const refusedWords = (error: unknown): string => (isDataError(error) ? refusalSummary(error) : strings.somethingWrong);
 
 /**
  * The connected AttributeSettings: one id minted per opening (a retry sends
  * the same one), the write through the data layer, server confirmed, and the
- * refusals on the settings they name.
+ * refusals on the settings they name. An existing attribute's options are
+ * written as they change, each server confirmed: a row spins while its write
+ * is out and shows its refusal after.
  */
 export function AttributeDialog({
   slug,
@@ -82,6 +121,7 @@ export function AttributeDialog({
   attribute,
   members,
   canManage,
+  optionsLimit,
   onClose,
   onSaved,
 }: AttributeDialogProps) {
@@ -89,6 +129,10 @@ export function AttributeDialog({
   const [id, setId] = useState(() => data.attributes.newId());
   const [isBusy, setBusy] = useState(false);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
+  // Option writes out now, options added and not yet listed, and each option's last refusal (`new` for an add).
+  const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
+  const [adding, setAdding] = useState<readonly OptionsEditorOption[]>([]);
+  const [optionErrors, setOptionErrors] = useState<Readonly<Partial<Record<string, string>>>>({});
   // Each opening starts afresh, with its own id.
   const [wasOpen, setWasOpen] = useState(isOpen);
   if (isOpen !== wasOpen) {
@@ -97,11 +141,21 @@ export function AttributeDialog({
       setId(data.attributes.newId());
       setBusy(false);
       setRefusals([]);
+      setPending(new Set());
+      setAdding([]);
+      setOptionErrors({});
     }
   }
   const displays = useMemo(() => toActorDisplays(members), [members]);
   const readOnlyReason =
     attribute?.isSystem === true ? strings.systemReason(attribute.title) : canManage ? undefined : strings.memberReason;
+
+  // The options as the live list holds them, then the ones added and not yet listed.
+  const listed = useMemo(() => (attribute?.options ?? []).map(editorOption), [attribute?.options]);
+  const options = useMemo(
+    () => [...listed, ...adding.filter((option) => !listed.some((each) => each.id === option.id))],
+    [listed, adding],
+  );
 
   const submit = (values: AttributeSettingsValues) => {
     if (isBusy) return;
@@ -124,6 +178,8 @@ export function AttributeDialog({
             ...(values.isRequired ? { isRequired: true } : {}),
             ...(values.isUnique ? { isUnique: true } : {}),
             ...(values.defaultValue === undefined ? {} : { defaultValue: values.defaultValue }),
+            ...(Object.keys(values.config).length === 0 ? {} : { config: values.config }),
+            ...(values.options.length === 0 ? {} : { options: values.options.map(newOptionOf) }),
           })
         : data.attributes.update(slug, attribute.id, changesOf(values));
     write.then(
@@ -137,6 +193,59 @@ export function AttributeDialog({
       },
     );
   };
+
+  /** Runs one option write: its row spins until the server answers, and shows the refusal, if any, after. */
+  const track = (key: string, write: () => Promise<unknown>, after: () => void = () => undefined) => {
+    setPending((before) => new Set([...before, key]));
+    setOptionErrors(({ [key]: _gone, ...rest }) => rest);
+    write().then(
+      () => {
+        setPending((before) => new Set([...before].filter((each) => each !== key)));
+        after();
+      },
+      (error: unknown) => {
+        setPending((before) => new Set([...before].filter((each) => each !== key)));
+        setOptionErrors((before) => ({ ...before, [key]: refusedWords(error) }));
+        after();
+      },
+    );
+  };
+
+  const optionWrites: AttributeSettingsOptionWrites | undefined =
+    attribute === undefined || readOnlyReason !== undefined
+      ? undefined
+      : {
+          onAdd: (option) => {
+            setAdding((before) => [...before, option]);
+            setOptionErrors(({ new: _gone, ...rest }) => rest);
+            setPending((before) => new Set([...before, option.id]));
+            data.options.create(slug, objectId, attribute.id, newOptionOf(option)).then(
+              () => {
+                setPending((before) => new Set([...before].filter((each) => each !== option.id)));
+              },
+              (error: unknown) => {
+                // Refused: the row leaves, and why shows by Add option.
+                setPending((before) => new Set([...before].filter((each) => each !== option.id)));
+                setAdding((before) => before.filter((each) => each.id !== option.id));
+                setOptionErrors((before) => ({ ...before, new: refusedWords(error) }));
+              },
+            );
+          },
+          onChange: (optionId, change: OptionChanges) => {
+            track(optionId, () => data.options.update(slug, objectId, optionId, change));
+          },
+          onMove: (optionId, position) => {
+            track(optionId, () => data.options.reorder(slug, objectId, optionId, position));
+          },
+          onArchive: (optionId) => {
+            track(optionId, () => data.options.archive(slug, objectId, optionId));
+          },
+          onRestore: (optionId) => {
+            track(optionId, () => data.options.restore(slug, objectId, optionId));
+          },
+          pending,
+          errors: optionErrors,
+        };
 
   return (
     <AttributeSettings
@@ -156,13 +265,17 @@ export function AttributeDialog({
               isRequired: attribute.isRequired,
               isUnique: attribute.isUnique,
               ...(attribute.defaultValue === undefined ? {} : { defaultValue: attribute.defaultValue }),
+              config: attribute.config,
+              ...(attribute.options === undefined ? {} : { options }),
             },
           })}
-      typeKeys={TYPES_WITHOUT_SETUP}
       members={displays}
       isBusy={isBusy}
       refusals={refusals}
       onSubmit={submit}
+      newOptionId={data.attributes.newId}
+      {...(optionsLimit === undefined ? {} : { optionsLimit })}
+      {...(optionWrites === undefined ? {} : { optionWrites })}
       {...(readOnlyReason === undefined ? {} : { readOnlyReason })}
     />
   );

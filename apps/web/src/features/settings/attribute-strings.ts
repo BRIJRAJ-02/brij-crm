@@ -22,6 +22,8 @@ export const strings = {
   required: 'Required',
   unique: 'Unique',
   hasDefault: 'Default',
+  /** The default names an archived option (AC-236). */
+  defaultArchived: 'Default archived',
   /** An attribute archived because its relationship's other object is (AC-226). */
   archivedBy: (plural: string) => `Links to ${plural}, which is archived`,
   archivedByHidden: 'Links to an archived object',

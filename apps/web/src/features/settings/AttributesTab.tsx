@@ -86,14 +86,30 @@ function AttributeName({ attribute }: { readonly attribute: AttributeDefinition 
   );
 }
 
-/** Its rules as badges (AC-227): Primary, Required, Unique and Default. */
+/**
+ * Whether a select or status default names an archived option (spec 0012,
+ * AC-236): the default stays stored, and new records get the first live
+ * option (required) or nothing meanwhile.
+ */
+function isDefaultArchived(attribute: AttributeDefinition): boolean {
+  const fallback = attribute.defaultValue;
+  if (fallback?.kind !== 'static' || attribute.options === undefined) return false;
+  const named: readonly unknown[] = Array.isArray(fallback.value)
+    ? (fallback.value as readonly unknown[])
+    : [fallback.value];
+  return attribute.options.some((option) => option.isArchived && named.includes(option.id));
+}
+
+/** Its rules as badges (AC-227): Primary, Required, Unique and Default ("Default archived" when its option is, AC-236). */
 function AttributeRules({ attribute }: { readonly attribute: AttributeDefinition }) {
   return (
     <>
       {attribute.isPrimary && <Badge text={strings.primary} />}
       {attribute.isRequired && <Badge text={strings.required} />}
       {attribute.isUnique && <Badge text={strings.unique} />}
-      {attribute.defaultValue !== undefined && <Badge text={strings.hasDefault} />}
+      {attribute.defaultValue !== undefined && (
+        <Badge text={isDefaultArchived(attribute) ? strings.defaultArchived : strings.hasDefault} />
+      )}
     </>
   );
 }
@@ -351,6 +367,7 @@ export function AttributesTab({
         attribute={isCreating ? undefined : selected}
         members={members}
         canManage={canManage}
+        optionsLimit={usage?.optionsPerAttribute}
         onClose={() => {
           if (isCreating) onCreatingChange(false);
           else onSelect(undefined);
