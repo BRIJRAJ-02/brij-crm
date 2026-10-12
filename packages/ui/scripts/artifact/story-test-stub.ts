@@ -11,3 +11,4 @@ export const expect = notInPreviews;
 export const waitFor = notInPreviews;
 export const within = notInPreviews;
 export const userEvent = { setup: notInPreviews };
+export const screen = new Proxy({}, { get: notInPreviews });
