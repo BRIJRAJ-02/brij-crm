@@ -1,7 +1,7 @@
 /* DatePicker: the Field's label and 30px box holding the typed segments and a
    calendar button. The calendar is 256px: month and arrows, a 7 column grid
-   of 28px days (today has a dot, the chosen day is the accent), and the quick
-   picks under a hairline. */
+   of size-nav-item (32px) days (today has a dot, the chosen day is the
+   accent), and the quick picks under a hairline. */
 @layer components {
   .root {
     display: flex;

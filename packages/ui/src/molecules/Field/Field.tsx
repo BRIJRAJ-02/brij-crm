@@ -73,7 +73,7 @@ export interface FieldProps {
 }
 
 /**
- * The one field design: an 11px label above a 30px input with a hairline
+ * The one field design: a 12px label above a 30px input with a hairline
  * outline, a hint or an error below. Every text, number and link attribute is
  * typed through it, in a form, the record panel, a cell or a filter. Built on
  * React Aria's TextField, so the label, hint and error are wired for screen

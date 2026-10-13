@@ -1,6 +1,6 @@
 /* Sidebar: a size-sidebar column on surface-sidebar with a hairline end
    edge: the workspace row (size-bar tall), Quick actions, a scrolling body of
-   28px items and folding sections, and a footer. Collapsed, it is a
+   32px items and folding sections, and a footer. Collapsed, it is a
    size-sidebar-collapsed rail of centred icons. The current item takes
    surface-selected, hover surface-hover. */
 @layer components {

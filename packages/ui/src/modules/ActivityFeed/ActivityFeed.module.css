@@ -2,7 +2,7 @@
    entry has a size-chip marker on a hairline rail (the rail stops at the last
    entry), the actor chip and verb in text-secondary with the time at the end,
    and under it the change (old value, an arrow, new value) or a card with the
-   title and a two line excerpt. Period headings are 11px labels. */
+   title and a two line excerpt. Period headings are 12px labels. */
 @layer components {
   .root {
     --feed-height: 0;

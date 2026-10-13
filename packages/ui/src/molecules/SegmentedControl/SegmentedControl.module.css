@@ -1,6 +1,8 @@
 /* SegmentedControl: equal segments on a surface-sunken track with a hairline,
    and a flat raised thumb that slides to the chosen one over
-   duration-move (at once for the keyboard and under reduced motion).
+   duration-move (at once for the keyboard and under reduced motion). A
+   segment keeps space-8 at its sides, as a button does, so the three theme
+   choices fit the sidebar's footer in body-strong.
    Vertical, the segments stack and keep only space-4 at their sides, so icon
    only ones fit the folded sidebar's rail, and each is a full size-control
    square, so a stacked segment is still a 24 px or larger touch target. */
@@ -32,7 +34,7 @@
     justify-content: center;
     gap: var(--space-6);
     block-size: calc(var(--size-control) - 2 * var(--space-2));
-    padding-inline: var(--space-12);
+    padding-inline: var(--space-8);
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
     font: var(--text-body-strong);

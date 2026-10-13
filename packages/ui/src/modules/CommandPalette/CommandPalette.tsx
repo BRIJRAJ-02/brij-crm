@@ -1,5 +1,5 @@
 // The keyboard first picker (spec 0003, the app shell): Quick actions (⌘K) and
-// "Choose record". A search field over a list of 28px rows, each a name, a
+// "Choose record". A search field over a list of 32px rows, each a name, a
 // quiet identifier and its kind, with the keys it answers named at the foot.
 import type { ReactNode } from 'react';
 import { Kbd } from '../../atoms/Kbd/Kbd.tsx';

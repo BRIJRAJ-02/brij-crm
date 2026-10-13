@@ -25,7 +25,7 @@ export interface DisclosureProps {
   readonly onExpandedChange?: (isExpanded: boolean) => void;
   readonly isDisabled?: boolean;
   /**
-   * `label` draws the title as a sidebar section label: 11px, quiet, its
+   * `label` draws the title as a sidebar section label: 12px, quiet, its
    * chevron after it. `fields` stacks the panel's content `space-16` apart, as
    * a Form stacks its fields, for more fields folded inside a form ("Add more
    * fields" in a create dialog).

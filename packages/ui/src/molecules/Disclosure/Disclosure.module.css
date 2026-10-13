@@ -1,5 +1,5 @@
-/* Disclosure: a 28px title row with a chevron that turns as the section
-   opens; the panel's height animates open over duration-move. */
+/* Disclosure: a size-nav-item (32px) title row with a chevron that turns as
+   the section opens; the panel's height animates open over duration-move. */
 @layer components {
   .group {
     display: flex;
@@ -88,7 +88,7 @@
     padding-block-start: var(--space-12);
   }
 
-  /* The label variant: a sidebar section's quiet 11px title, chevron after it,
+  /* The label variant: a sidebar section's quiet 12px title, chevron after it,
      and the items flush under it. */
   .root[data-variant='label'] .trigger {
     gap: var(--space-4);
