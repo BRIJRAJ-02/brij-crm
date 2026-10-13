@@ -11,6 +11,7 @@ The domain services the api and the worker share, and (from Access model, #9) th
 | `src/index.ts` | The package's public services |
 | `src/system/status.ts` | The pattern to copy: a deps interface plus one service function |
 | `src/milestones/milestones.ts` | The milestones a workspace reaches once (spec 0010, AC-177): `reachMilestone` stores one in the write's transaction, `milestoneHook` reaches `first_record_created` for a member's first record. Core only returns what a write reached; the api sends the events |
+| `src/validation/` | Validation rules (spec 0013): `rules.ts` writes an attribute's rules (replace semantics, `rule_count` and `rules_version` kept exact, the 20 rule limit) and checks the rules a record write touches under its lock (`checkRecordRules`); `pattern.ts` is the only server file that imports `re2js`; `bypass.test.ts` places every engine export and fails when a new write skips the rules |
 
 ## Conventions
 

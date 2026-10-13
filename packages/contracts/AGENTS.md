@@ -14,6 +14,7 @@ The oRPC contract and the Zod schemas the web app, the API and the worker all sh
 | `src/monitoring/` | `@crm/contracts/monitoring` (spec 0010): `scrub`, the one rule for what may leave for Sentry, run by every send hook of both SDKs. Plain TypeScript, no Zod, no vendor, so the browser's lazy Sentry chunk shares it |
 | `src/monitoring/events.ts` | `@crm/contracts/events` (spec 0010, AC-173): the product event catalog, one strict schema per PostHog event, ids and closed lists only, and `milestoneEventId`. Server only (it hashes with `node:crypto`, and the browser never contacts PostHog) |
 | `src/values/jump.ts` | `@crm/contracts/jump` (also in `values`): `canJump(filter, sorts, attributeOf)`, the one rule for whether a view jumps by position or pages by cursor (spec 0006, AC-52), with no Zod, so the browser's records layer picks a window's mode by it and the engine refuses a position by it |
+| `src/validation/` | `@crm/contracts/validation` (spec 0013): `checkRules`, `matchesCondition`, `summarizeCondition`, `formatDay` and the generated messages, plain TypeScript with no Zod, so the engine (under the record lock) and the browser's records layer (before a write) run the same checker. The pattern engine is injected (`re2js` on both sides). The rule schemas and `checkRuleSettings` live in `src/values/validation-rules.ts` |
 | `src/values/` | `@crm/contracts/values`: the attribute value shapes, filters, sorts, options, hues, countries and currencies, as plain Zod with no oRPC and no I/O, so `packages/ui` can parse what its editors emit |
 
 ## Conventions
