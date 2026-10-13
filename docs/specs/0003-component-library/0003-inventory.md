@@ -148,6 +148,7 @@ One display and one editor per attribute type: text, long text, number, currency
 |---|---|---|---|---|
 | SettingsLayout | New | 13, 23, 24, 25, 34 to 39, 42 | | settings navigation, page header, sections |
 | AttributeSettings, OptionsEditor | New | 13, 14, 18 | Field, HuePicker, `GridList` | type, required, unique, default; options with hue, reorder, archive |
+| RulesEditor | New (spec 0013) | 14 | Field, Select, DatePicker, Disclosure, FilterBuilder, `GridList` | an attribute's validation rules: each read as its message, opened in place, reordered, deleted |
 | AccessRuleEditor | New | 24 | Table, Select | object, field and record rules per role |
 | MemberInvite, RolePicker | New | 23 | Field, Select | |
 | TwoFactorSetup | New | 25 | Steps, CodeInput | QR image comes from #25 |

@@ -656,6 +656,7 @@ function AttributeForm({
             attribute={{ title: name, type }}
             newId={ruleId}
             isReadOnly={isReadOnly}
+            hint={strings.rulesSaveOnSave}
             errors={ruleErrors}
             onChange={(next) => {
               setRules(next);

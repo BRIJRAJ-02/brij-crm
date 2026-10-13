@@ -100,13 +100,20 @@ function isDefaultArchived(attribute: AttributeDefinition): boolean {
   return attribute.options.some((option) => option.isArchived && named.includes(option.id));
 }
 
-/** Its rules as badges (AC-227): Primary, Required, Unique and Default ("Default archived" when its option is, AC-236). */
+/**
+ * Its rules as badges (AC-227): Primary, Required, Unique, its validation
+ * rules' count (spec 0013) and Default ("Default archived" when its option
+ * is, AC-236).
+ */
 function AttributeRules({ attribute }: { readonly attribute: AttributeDefinition }) {
   return (
     <>
       {attribute.isPrimary && <Badge text={strings.primary} />}
       {attribute.isRequired && <Badge text={strings.required} />}
       {attribute.isUnique && <Badge text={strings.unique} />}
+      {(attribute.validation?.rules.length ?? 0) > 0 && (
+        <Badge text={strings.validationRules(attribute.validation?.rules.length ?? 0)} />
+      )}
       {attribute.defaultValue !== undefined && (
         <Badge text={isDefaultArchived(attribute) ? strings.defaultArchived : strings.hasDefault} />
       )}

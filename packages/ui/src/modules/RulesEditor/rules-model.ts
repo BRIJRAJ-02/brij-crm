@@ -58,7 +58,8 @@ export function editorRuleOf(rule: RuleSettings): RulesEditorRule {
         return { min: text(params.min), max: text(params.max) };
       case 'pattern':
         return {
-          preset: text(params.preset) || 'digits',
+          // A new rule picks no preset: "Pick a pattern." until one is chosen, so nothing is refused by surprise.
+          preset: text(params.preset),
           text: text(params.text),
           regex: text(params.regex),
           ignoreCase: params.ignoreCase === true,
@@ -84,7 +85,7 @@ export function editorRuleOf(rule: RuleSettings): RulesEditorRule {
   };
 }
 
-/** A new rule of `kind`, with nothing typed yet (a pattern starts at Digits only, an email rule at allow). */
+/** A new rule of `kind`, with nothing typed yet (a pattern with no format chosen, an email rule at allow). */
 export function newRule(kind: ListedKind, id: string): RulesEditorRule {
   return editorRuleOf({ id, kind, params: {} });
 }
@@ -137,7 +138,7 @@ export function ruleOf(rule: RulesEditorRule): RuleSettings {
         return present({ min: min === '' ? undefined : min, max: max === '' ? undefined : max });
       }
       case 'pattern': {
-        const preset = fieldText(rule, 'preset') || 'digits';
+        const preset = fieldText(rule, 'preset');
         return present({
           preset,
           ...(preset === 'starts_with' || preset === 'ends_with'

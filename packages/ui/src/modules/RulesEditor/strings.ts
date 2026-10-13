@@ -14,16 +14,22 @@ export const strings = {
   },
   addRule: 'Add rule',
   ruleKinds: 'Kinds of rule',
-  noRules: 'No rules yet. Any value of the type is accepted.',
+  noRules: 'No rules yet, so any value is accepted.',
   noKinds: 'This type takes no rules.',
   usage: (count: number, limit: number) => `${String(count)} of ${String(limit)}`,
   full: (limit: number) => `An attribute holds at most ${String(limit)} rules.`,
   /** A rule whose settings aren't finished, in place of its summary. */
-  unfinished: (kind: string) => `${kind}: finish its settings`,
-  edit: (summary: string) => `Edit ${summary}`,
+  unfinished: (kind: string) => `${kind} rule isn’t finished.`,
+  /** What a message names while a new attribute has no name yet. */
+  untitled: 'This attribute',
+  /** Under the group's label in a dialog: rules wait for its Save, unlike options. */
+  saveHint: 'Rules save when you press Save.',
   done: 'Done',
-  move: (summary: string) => `Move ${summary}`,
-  actionsFor: (summary: string) => `Actions for ${summary}`,
+  /** A row's handle and menu, by its place and kind (its message can run to 200 characters). */
+  move: (place: number, kind: string) => `Move rule ${String(place)}, ${kind}`,
+  actionsFor: (place: number, kind: string) => `Actions for rule ${String(place)}, ${kind}`,
+  /** Under a closed row with its own message and a condition: when the rule applies. */
+  onlyWhenSummary: (summary: string) => `Only when ${summary}`,
   editRule: 'Edit',
   moveUp: 'Move up',
   moveDown: 'Move down',
@@ -74,9 +80,7 @@ export const strings = {
   daysHint: 'A negative number counts days before today.',
   integerNote: 'Values must be whole numbers.',
   message: 'Message',
-  messageHint:
-    'Everyone who edits this attribute sees it when a value breaks the rule. Leave it empty for the message above.',
+  messageHint: 'Shown to anyone whose change breaks this rule. Leave it empty to use the message above.',
   onlyWhen: 'Only when…',
   conditionHint: 'The rule applies only to records that match, using this object’s own attributes.',
-  readOnlyCondition: 'Only when its conditions are met.',
 } as const;

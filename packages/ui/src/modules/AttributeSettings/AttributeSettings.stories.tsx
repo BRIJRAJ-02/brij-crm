@@ -562,6 +562,7 @@ export const Rules: Story = {
     await userEvent.click(within(dialog).getByRole('button', { name: 'Add rule' }));
     await userEvent.click(await within(document.body).findByRole('menuitem', { name: 'Length' }));
     await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+    await waitFor(() => expect(inDialog(dialog, 'At least, in characters')).toHaveFocus());
     await userEvent.keyboard('2');
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
     await waitFor(() =>

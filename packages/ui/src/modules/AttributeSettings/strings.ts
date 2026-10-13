@@ -63,4 +63,6 @@ export const strings = {
   archivedDefaultSome: 'Some of these options are archived. New records get the others.',
   /** The validation rules' group (spec 0013). */
   rules: 'Rules',
+  /** Under the rules: they wait for Save, unlike options. */
+  rulesSaveOnSave: 'Rules save when you press Save.',
 } as const;

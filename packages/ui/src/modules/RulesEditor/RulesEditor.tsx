@@ -5,7 +5,13 @@
 // drag, by keyboard on the handle, or from the row's menu, which also
 // deletes. Presentational: the rules come in, every change goes out as the
 // whole list, and the dialog sends it with Save.
-import { generatedMessage, RULE_LIMITS, type NamedAttribute, type RuleKindName } from '@crm/contracts/validation';
+import {
+  generatedMessage,
+  RULE_LIMITS,
+  summarizeCondition,
+  type NamedAttribute,
+  type RuleKindName,
+} from '@crm/contracts/validation';
 import {
   checkRuleSettings,
   type AttributeType,
@@ -69,10 +75,9 @@ export interface RulesEditorProps {
   readonly limit?: number;
   /** Shows the rules with nothing to change (a member, a read only dialog). */
   readonly isReadOnly?: boolean;
+  /** A line under the group's label: how changes are kept ("Rules save when you press Save."). */
+  readonly hint?: string;
 }
-
-/** The attribute a message names when it has no title yet (a new attribute). */
-const UNTITLED = 'This attribute';
 
 /** The settings each kind shows, as their fields: names from the API, labels from `strings`. */
 function KindFields({
@@ -81,14 +86,12 @@ function KindFields({
   errorOf,
   onField,
   isReadOnly,
-  autoFocus,
 }: {
   readonly rule: RulesEditorRule;
   readonly type: AttributeType;
   readonly errorOf: (name: string) => string | undefined;
   readonly onField: (name: string, value: string | boolean) => void;
   readonly isReadOnly: boolean;
-  readonly autoFocus: boolean;
 }): ReactNode {
   const textOf = (name: string): string => {
     const value = rule.fields[name];
@@ -124,7 +127,7 @@ function KindFields({
       const inputMode = rule.kind === 'range' && type !== 'rating' ? 'decimal' : 'numeric';
       return (
         <div className={styles.pair}>
-          {textField('min', low, { inputMode, autoFocus })}
+          {textField('min', low, { inputMode })}
           {textField('max', high, { inputMode, hint: strings.boundsHint })}
         </div>
       );
@@ -132,7 +135,7 @@ function KindFields({
     case 'integer':
       return <p className={styles.note}>{strings.integerNote}</p>;
     case 'pattern': {
-      const preset = textOf('preset') || 'digits';
+      const preset = textOf('preset');
       const presetError = errorOf('preset');
       return (
         <>
@@ -140,7 +143,7 @@ function KindFields({
             label={strings.format}
             size="sm"
             items={Object.entries(strings.presets).map(([id, label]) => ({ id, label }))}
-            value={preset}
+            value={preset === '' ? null : preset}
             onChange={(next) => {
               if (next !== null) onField('preset', next);
             }}
@@ -148,21 +151,23 @@ function KindFields({
             {...(presetError === undefined ? {} : { error: presetError })}
           />
           {(preset === 'starts_with' || preset === 'ends_with') &&
-            textField('text', strings.affixText, { maxLength: RULE_LIMITS.affix, hint: strings.affixHint, autoFocus })}
+            textField('text', strings.affixText, { maxLength: RULE_LIMITS.affix, hint: strings.affixHint })}
           {preset === 'custom' &&
             textField('regex', strings.pattern, {
               maxLength: RULE_LIMITS.pattern,
               hint: strings.patternHint,
-              autoFocus,
             })}
-          <Checkbox
-            label={strings.ignoreCase}
-            isSelected={rule.fields.ignoreCase === true}
-            isReadOnly={isReadOnly}
-            onChange={(next) => {
-              onField('ignoreCase', next);
-            }}
-          />
+          {/* Case matters only to text matched as typed: the letter and digit presets ignore it already. */}
+          {(preset === 'starts_with' || preset === 'ends_with' || preset === 'custom') && (
+            <Checkbox
+              label={strings.ignoreCase}
+              isSelected={rule.fields.ignoreCase === true}
+              isReadOnly={isReadOnly}
+              onChange={(next) => {
+                onField('ignoreCase', next);
+              }}
+            />
+          )}
         </>
       );
     }
@@ -181,13 +186,13 @@ function KindFields({
             <Radio value="allow">{strings.allowDomains}</Radio>
             <Radio value="block">{strings.blockDomains}</Radio>
           </RadioGroup>
-          {textField('domains', strings.domains, { hint: strings.domainsHint, autoFocus })}
+          {textField('domains', strings.domains, { hint: strings.domainsHint })}
         </>
       );
     case 'phone_country':
-      return textField('countries', strings.countries, { hint: strings.countriesHint, autoFocus });
+      return textField('countries', strings.countries, { hint: strings.countriesHint });
     case 'currency_in':
-      return textField('codes', strings.currencies, { hint: strings.currenciesHint, autoFocus });
+      return textField('codes', strings.currencies, { hint: strings.currenciesHint });
     case 'date_range':
       return (
         <div className={styles.pair}>
@@ -257,10 +262,10 @@ export function RulesEditor({
   errors = {},
   limit = 20,
   isReadOnly = false,
+  hint,
 }: RulesEditorProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [openId, setOpenId] = useState<string | undefined>(undefined);
-  const [addedId, setAddedId] = useState<string | undefined>(undefined);
   const [said, setSaid] = useState('');
   // Refusals that came in since the rules were last shown open their first rule, so its field says why.
   // Compared by what they say, so a caller passing a fresh object each render settles at once.
@@ -276,7 +281,7 @@ export function RulesEditor({
     if (opened !== undefined) setOpenId(opened.id);
   }
   const isFull = rules.length >= limit;
-  const title = attribute.title.trim() === '' ? UNTITLED : attribute.title.trim();
+  const title = attribute.title.trim() === '' ? strings.untitled : attribute.title.trim();
   const named = new Map<string, NamedAttribute>(
     (conditionAttributes ?? []).map((each) => [
       each.id,
@@ -338,11 +343,16 @@ export function RulesEditor({
     if (event.key === 'Enter' && event.target instanceof HTMLInputElement) event.preventDefault();
   };
 
+  /** Opens a rule in place, focus on its first setting (or its message, for a kind with none). */
+  const open = (id: string) => {
+    setOpenId(id);
+    focusIn(rowControl(id, 'input, textarea, button[aria-haspopup="listbox"]'));
+  };
+
   const add = (kind: ListedKind) => {
     const rule = newRule(kind, newId());
     onChange([...rules, rule]);
-    setOpenId(rule.id);
-    setAddedId(rule.id);
+    open(rule.id);
   };
 
   return (
@@ -351,6 +361,7 @@ export function RulesEditor({
         <span className={styles.title}>{label}</span>
         {!isReadOnly && rules.length > 0 && <span className={styles.usage}>{strings.usage(rules.length, limit)}</span>}
       </div>
+      {hint !== undefined && !isReadOnly && <span className={styles.note}>{hint}</span>}
       {rules.length === 0 && <p className={styles.empty}>{kinds.length === 0 ? strings.noKinds : strings.noRules}</p>}
       {rules.length > 0 && (
         <GridList
@@ -359,12 +370,18 @@ export function RulesEditor({
           className={styles.list}
           keyboardNavigationBehavior="tab"
           onAction={(key) => {
-            if (!isReadOnly) setOpenId(String(key));
+            if (!isReadOnly) open(String(key));
           }}
           {...(isReadOnly ? {} : { dragAndDropHooks })}
         >
           {({ id, rule, index }) => {
             const summary = summaryOf(rule);
+            const kindName = strings.kinds[rule.kind];
+            // A rule's own message hides its condition: a line under it says when it applies.
+            const when =
+              rule.message.trim() !== '' && rule.condition !== undefined && rule.condition.conditions.length > 0
+                ? strings.onlyWhenSummary(summarizeCondition(rule.condition, named))
+                : undefined;
             const isOpen = openId === id && !isReadOnly;
             const problems = errorsOf(index);
             const errorOf = (name: string) => errors[`rules.${String(index)}.${name}`];
@@ -372,13 +389,11 @@ export function RulesEditor({
             return (
               <GridListItem id={id} textValue={summary} className={styles.row} data-open={isOpen || undefined}>
                 <div className={styles.line}>
-                  {!isReadOnly && <DragHandle label={strings.move(summary)} isDisabled={isOpen} />}
+                  {!isReadOnly && <DragHandle label={strings.move(index + 1, kindName)} isDisabled={isOpen} />}
                   <span className={styles.summary}>
-                    <span className={styles.kind}>{strings.kinds[rule.kind]}</span>
+                    <span className={styles.kind}>{kindName}</span>
                     <span className={styles.message}>{summary}</span>
-                    {rule.condition !== undefined && rule.condition.conditions.length > 0 && isReadOnly && (
-                      <span className={styles.note}>{strings.readOnlyCondition}</span>
-                    )}
+                    {when !== undefined && !isOpen && <span className={styles.note}>{when}</span>}
                     {!isOpen && problems.length > 0 && (
                       <span className={styles.error} role="alert">
                         {problems[0]?.[1]}
@@ -387,15 +402,14 @@ export function RulesEditor({
                   </span>
                   {!isReadOnly && (
                     <MenuTrigger>
-                      <Button variant="ghost" icon="ellipsis" label={strings.actionsFor(summary)} />
+                      <Button variant="ghost" icon="ellipsis" label={strings.actionsFor(index + 1, kindName)} />
                       <Menu
-                        label={strings.actionsFor(summary)}
+                        label={strings.actionsFor(index + 1, kindName)}
                         onAction={(key) => {
                           const before = rules[index - 1];
                           const after = rules[index + 1];
                           if (key === 'edit') {
-                            setOpenId(id);
-                            focusIn(rowControl(id, 'input, button[aria-haspopup="listbox"]'));
+                            open(id);
                             return;
                           }
                           if (key === 'up' && before !== undefined) moveTo(id, before.id, 'before');
@@ -443,7 +457,6 @@ export function RulesEditor({
                       type={attribute.type}
                       errorOf={errorOf}
                       isReadOnly={isReadOnly}
-                      autoFocus={addedId === id}
                       onField={(name, value) => {
                         change(id, { fields: { ...rule.fields, [name]: value } });
                       }}

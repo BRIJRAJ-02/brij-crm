@@ -451,6 +451,10 @@ export const RECORD_WORDS = {
   notSavedMarked: (count: number) => `${String(count)} changes weren’t saved. Each cell says why.`,
   /** Several rules a write breaks, in one toast (spec 0013; the server's own words for it). */
   rulesNotMet: (count: number) => `${String(count)} rules aren\u2019t met.`,
+  /** The first broken rule's message, and how many more (spec 0013): every rule shows on its cell. */
+  rulesAndMore: (first: string, more: number) => `${first} And ${String(more)} more.`,
+  /** A rule's own message on a cell of another field: the field it is about comes first. */
+  ruleOnField: (title: string, message: string) => `${title}: ${message}`,
   /** A refused undo, sent again from its toast's Retry. */
   undoRetried: (count: number) => (count === 1 ? 'Undid 1 change.' : `Undid ${String(count)} changes.`),
   kept: (count: number) =>
@@ -564,6 +568,7 @@ export function createRecordsLayer({
     if (known !== undefined) return known;
     const rules = objectRulesOf(list);
     rulesByList.set(list, rules);
+    for (const definition of list) titles.set(definition.id, definition.title);
     // An object with a pattern rule: RE2 starts loading now, so its first edit rarely waits for it.
     if (needsPattern(rules.rules)) void loadPatterns().catch(() => undefined);
     return rules;
@@ -662,9 +667,34 @@ export function createRecordsLayer({
       : ready(rulesOfList(definitions));
   }
 
-  /** What one record's broken rules say on a cell: its own rule's message, else the first one's, which names its field. */
-  const ruleMessageFor = (failures: readonly RuleFailure[], attributeId: string): string | undefined =>
-    (failures.find((failure) => failure.attributeId === attributeId) ?? failures[0])?.message;
+  // Each attribute's title from the lists the checks read, so a rule on another field can be named on a cell.
+  const titles = new Map<string, string>();
+
+  /**
+   * A broken rule's words on a cell of `attributeId`: as they are on its own
+   * field; on another field, led by that field's title unless they already
+   * start with it (a rule's own message may not name it, AC-256).
+   */
+  const onCell = (
+    failure: { readonly attributeId?: string | undefined; readonly message: string },
+    attributeId: string,
+  ) => {
+    if (failure.attributeId === undefined || failure.attributeId === attributeId) return failure.message;
+    const title = titles.get(failure.attributeId);
+    return title === undefined || failure.message.startsWith(title)
+      ? failure.message
+      : RECORD_WORDS.ruleOnField(title, failure.message);
+  };
+
+  /** What a record's broken rules say on a cell: every one on its own field, else every one, each naming its field. */
+  const ruleMessageFor = (
+    failures: readonly { readonly attributeId?: string | undefined; readonly message: string }[],
+    attributeId: string,
+  ): string | undefined => {
+    const own = failures.filter((failure) => failure.attributeId === attributeId);
+    const shown = own.length > 0 ? own : failures;
+    return shown.length === 0 ? undefined : shown.map((failure) => onCell(failure, attributeId)).join(' ');
+  };
 
   /** A browser check's failures as the refusals the server would answer. */
   const refusalsOfRules = (failures: readonly RuleFailure[]) =>
@@ -675,9 +705,21 @@ export function createRecordsLayer({
       ...(failure.attributeId === undefined ? {} : { attributeId: failure.attributeId }),
     }));
 
-  /** One sentence for a record's broken rules: the rule's own message, or how many there are. */
-  const rulesSummary = (count: number, first: string | undefined): string =>
-    count > 1 || first === undefined ? RECORD_WORDS.rulesNotMet(count) : first;
+  /** A toast for a record's broken rules: the first one's message, naming its field, and how many more. */
+  const rulesSummary = (count: number, first: string | undefined): string => {
+    if (first === undefined) return RECORD_WORDS.rulesNotMet(count);
+    return count > 1 ? RECORD_WORDS.rulesAndMore(first, count - 1) : first;
+  };
+
+  /** A failure's first message, led by its field's title when the rule has words of its own that don't name it. */
+  const firstNamed = (failures: readonly { readonly attributeId?: string | undefined; readonly message: string }[]) => {
+    const [first] = failures;
+    if (first?.attributeId === undefined) return first?.message;
+    const title = titles.get(first.attributeId);
+    return title === undefined || first.message.startsWith(title)
+      ? first.message
+      : RECORD_WORDS.ruleOnField(title, first.message);
+  };
 
   // New options from cells (spec 0012, AC-238): each minted id's label and hue, and what it resolved to once its
   // write answered (the id the server set, or undefined when refused), so a write naming it waits for that.
@@ -1637,9 +1679,10 @@ export function createRecordsLayer({
     setCellErrors(
       each.cells.map((cell) => [
         `${each.recordId}:${cell.attributeId}`,
-        refusalFor(failure, cell.attributeId) ??
-          // A rule on a field the edit didn't touch (spec 0013, AC-256): the edited cell says it, naming that field.
-          (failure.code === 'VALIDATION_FAILED' ? failure.data?.refusals?.[0]?.message : undefined),
+        failure.code === 'VALIDATION_FAILED'
+          ? // Every broken rule (spec 0013, AC-256): a rule on a field the edit didn't touch says it, naming that field.
+            ruleMessageFor(failure.data?.refusals ?? [], cell.attributeId)
+          : refusalFor(failure, cell.attributeId),
       ]),
     );
     return outcome;
@@ -1710,7 +1753,7 @@ export function createRecordsLayer({
     // A broken rule says so in a toast too, with no Retry: the same save would be refused again (spec 0013, AC-256).
     if (firstLasting.failure.code === 'VALIDATION_FAILED') {
       const refusals = firstLasting.failure.data?.refusals ?? [];
-      notify({ tone: 'danger', message: rulesSummary(refusals.length, refusals[0]?.message) });
+      notify({ tone: 'danger', message: rulesSummary(refusals.length, firstNamed(refusals)) });
     }
   }
 
@@ -1779,7 +1822,7 @@ export function createRecordsLayer({
         tone: 'danger',
         message:
           refusedByRules.size === 1 && only !== undefined
-            ? rulesSummary(only.length, only[0]?.message)
+            ? rulesSummary(only.length, firstNamed(only))
             : RECORD_WORDS.notSavedMarked(refusedByRules.size),
       });
       for (const recordId of refusedByRules.keys()) byRecord.delete(recordId);

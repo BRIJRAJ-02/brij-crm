@@ -21,6 +21,8 @@ export const strings = {
   primary: 'Primary',
   required: 'Required',
   unique: 'Unique',
+  /** How many validation rules an attribute holds (spec 0013). */
+  validationRules: (count: number) => (count === 1 ? '1 rule' : `${String(count)} rules`),
   hasDefault: 'Default',
   /** The default names an archived option (AC-236). */
   defaultArchived: 'Default archived',

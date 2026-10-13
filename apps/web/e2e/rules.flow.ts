@@ -73,7 +73,7 @@ test.describe('validation rules', () => {
       .getByRole('row', { name: /Email addresses/ })
       .click();
     const dialog = writer.getByRole('dialog', { name: 'Edit attribute' });
-    await expect(dialog.getByText('No rules yet. Any value of the type is accepted.')).toBeVisible();
+    await expect(dialog.getByText('No rules yet, so any value is accepted.')).toBeVisible();
     await dialog.getByRole('button', { name: 'Add rule' }).click();
     await writer.getByRole('menuitem', { name: 'Email domains' }).click();
     await expect(writer.getByRole('menu')).toBeHidden();

@@ -1808,6 +1808,46 @@ describe('validation rules in the browser (spec 0013, AC-256, AC-257)', () => {
     expect(notices).toEqual([{ tone: 'danger', message: 'Name is required when City is Paris.' }]);
   });
 
+  it('names the field a rule with its own words is about, and shows every broken rule on the cell', async () => {
+    const OWN = '0199a6f2-0000-7000-8000-0000000000f2';
+    const both = definitions({ required: 'never', rules: [] }).map((definition) =>
+      definition.id === NAME
+        ? {
+            ...definition,
+            validation: {
+              required: 'never' as const,
+              rules: [
+                {
+                  id: OWN,
+                  kind: 'length' as const,
+                  params: { min: 9 },
+                  message: 'Use the full name.',
+                  condition: {
+                    conjunction: 'and' as const,
+                    conditions: [{ attributeId: CITY, operator: 'is' as const, value: 'Rome' }],
+                  },
+                  position: 0,
+                },
+              ],
+            },
+          }
+        : {
+            ...definition,
+            validation: {
+              required: 'never' as const,
+              rules: [{ id: RULE, kind: 'length' as const, params: { max: 3 }, position: 0 }],
+            },
+          },
+    );
+    const { layer, view, frame, notices, edits } = await readyView({ definitionsOf: () => both });
+    await layer.setValues(WS, [change('Rome')]);
+    frame();
+    // The cell shows its own rule; the toast leads with the first, Name's, its own words led by its field.
+    expect(view.getSnapshot().cellErrors.get(`${idAt(1)}:${CITY}`)).toBe('City can have at most 3 characters.');
+    expect(notices).toEqual([{ tone: 'danger', message: 'Name: Use the full name. And 1 more.' }]);
+    expect(edits).toEqual([]);
+  });
+
   it('refuses a create that breaks a rule before a draft shows, with the server’s refusals', async () => {
     const { layer, creates, view, frame } = await readyView({ definitionsOf: () => short });
     await expect(layer.create(WS, PEOPLE, { [CITY]: 'Amsterdam' })).rejects.toMatchObject({

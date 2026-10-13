@@ -97,7 +97,7 @@ export const Default: Story = {
 export const Empty: Story = {
   args: { initial: [] },
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('No rules yet. Any value of the type is accepted.')).toBeInTheDocument();
+    await expect(canvas.getByText('No rules yet, so any value is accepted.')).toBeInTheDocument();
     await expect(canvas.getByRole('button', { name: 'Add rule' })).toBeEnabled();
   },
 };
@@ -112,7 +112,7 @@ export const AddByKeyboard: Story = {
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
     const least = await canvas.findByRole('textbox', { name: 'At least, in characters' });
     await waitFor(() => expect(least).toHaveFocus());
-    await userEvent.tab();
+    await userEvent.click(canvas.getByRole('textbox', { name: 'At most, in characters' }));
     await userEvent.keyboard('12');
     await expect(canvas.getByText('Reference can have at most 12 characters.')).toBeInTheDocument();
     await userEvent.click(canvas.getByRole('button', { name: 'Done' }));
@@ -195,7 +195,7 @@ export const ReorderByKeyboard: Story = {
     await userEvent.tab();
     await userEvent.keyboard('{ArrowDown}{ArrowDown}');
     await userEvent.tab();
-    const handle = canvas.getByRole('button', { name: 'Move Keep the reference under 80 characters.' });
+    const handle = canvas.getByRole('button', { name: 'Move rule 3, Length' });
     await waitFor(() => expect(handle).toHaveFocus());
     await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(handle).not.toHaveFocus());
@@ -229,12 +229,12 @@ export const ReadOnly: Story = {
     await expect(canvas.getAllByRole('row')).toHaveLength(3);
     await expect(canvas.queryByRole('button', { name: /Actions for/ })).not.toBeInTheDocument();
     await expect(canvas.queryByRole('button', { name: 'Add rule' })).not.toBeInTheDocument();
-    await expect(canvas.getByText('Only when its conditions are met.')).toBeInTheDocument();
+    await expect(canvas.getByText('Reference can only contain letters when Stage is Won.')).toBeInTheDocument();
   },
 };
 
 /** A date range's settings, open: a fixed earliest day and a latest one counted from today. */
-export const EveryKind: Story = {
+export const DateRange: Story = {
   args: {
     attribute: { title: 'Close date', type: 'date' },
     kinds: ['date_range'],
@@ -251,5 +251,114 @@ export const EveryKind: Story = {
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Edit' }));
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
     await expect(await canvas.findByRole('textbox', { name: 'Latest, in days from today' })).toHaveValue('30');
+  },
+};
+
+/** Opens the first rule from its menu, as Edit does, and waits for the menu to close. */
+async function openFirst(
+  canvas: { getAllByRole: (role: string, options: { name: RegExp }) => HTMLElement[] },
+  userEvent: { click: (element: Element) => Promise<void> },
+) {
+  const [menu] = canvas.getAllByRole('button', { name: /Actions for/ });
+  if (menu === undefined) throw new globalThis.Error('no rule');
+  await userEvent.click(menu);
+  await userEvent.click(await screen.findByRole('menuitem', { name: 'Edit' }));
+  await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+}
+
+/** An email rule's settings: allow or block, and the domains. */
+export const EmailDomains: Story = {
+  args: {
+    attribute: { title: 'Email addresses', type: 'email' },
+    kinds: ['pattern', 'email_domain', 'count'],
+    initial: [editorRuleOf({ id: 'acme', kind: 'email_domain', params: { mode: 'allow', domains: ['acme.com'] } })],
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByText('Email addresses must be an address at acme.com.')).toBeInTheDocument();
+    await openFirst(canvas, userEvent);
+    await expect(await canvas.findByRole('textbox', { name: 'Domains' })).toHaveValue('acme.com');
+    await expect(canvas.getByRole('radio', { name: 'Only at these domains' })).toBeChecked();
+  },
+};
+
+/** A phone rule's countries, and a currency rule's codes: one field each, separated by commas. */
+export const CountriesAndCurrencies: Story = {
+  args: {
+    attribute: { title: 'Phone', type: 'phone' },
+    kinds: ['phone_country'],
+    initial: [editorRuleOf({ id: 'uk', kind: 'phone_country', params: { countries: ['GB', 'IE'] } })],
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByText('Phone must be a number from United Kingdom or Ireland.')).toBeInTheDocument();
+    await openFirst(canvas, userEvent);
+    await expect(await canvas.findByRole('textbox', { name: 'Countries' })).toHaveValue('GB, IE');
+  },
+};
+
+/** A number's range and whole numbers: two bounds, and a rule with no settings of its own. */
+export const RangeAndWholeNumbers: Story = {
+  args: {
+    attribute: { title: 'Probability', type: 'number' },
+    kinds: ['range', 'integer'],
+    initial: [
+      editorRuleOf({ id: 'range', kind: 'range', params: { min: '0', max: '100' } }),
+      editorRuleOf({ id: 'whole', kind: 'integer', params: {} }),
+    ],
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByText('Probability must be between 0 and 100.')).toBeInTheDocument();
+    await expect(canvas.getByText('Probability must be a whole number.')).toBeInTheDocument();
+    await openFirst(canvas, userEvent);
+    await expect(await canvas.findByRole('textbox', { name: 'Largest' })).toHaveValue('100');
+  },
+};
+
+/** A count of values on a multi select, and a format that starts with given text, case ignored. */
+export const CountAndStartsWith: Story = {
+  args: {
+    attribute: { title: 'Codes', type: 'email' },
+    kinds: ['pattern', 'email_domain', 'count'],
+    initial: [
+      editorRuleOf({ id: 'starts', kind: 'pattern', params: { preset: 'starts_with', text: 'ID-', ignoreCase: true } }),
+      editorRuleOf({ id: 'count', kind: 'count', params: { max: 3 } }),
+    ],
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByText('Codes must start with “ID-”.')).toBeInTheDocument();
+    await expect(canvas.getByText('Codes can hold at most 3 values.')).toBeInTheDocument();
+    await openFirst(canvas, userEvent);
+    await expect(await canvas.findByRole('textbox', { name: 'Text' })).toHaveValue('ID-');
+    await expect(canvas.getByRole('checkbox', { name: 'Ignore case' })).toBeChecked();
+  },
+};
+
+/** A new Format rule picks no format: it reads as unfinished until one is chosen, and refuses nothing meanwhile. */
+export const NewFormat: Story = {
+  args: { initial: [] },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add rule' }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Format' }));
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    await expect(canvas.getByText('Format rule isn’t finished.')).toBeInTheDocument();
+    await waitFor(() => expect(document.activeElement?.getAttribute('aria-haspopup')).toBe('listbox'));
+  },
+};
+
+/** A rule with its own message and a condition: a line under it says when it applies. */
+export const OwnMessageWithCondition: Story = {
+  args: {
+    initial: [
+      editorRuleOf({
+        id: 'won',
+        kind: 'length',
+        params: { max: 12 },
+        message: 'Keep won references short.',
+        condition: { conjunction: 'and', conditions: [{ attributeId: 'stage', operator: 'is', value: 'won' }] },
+      }),
+    ],
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Only when Stage is Won')).toBeInTheDocument();
   },
 };
