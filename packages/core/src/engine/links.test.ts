@@ -758,6 +758,10 @@ describe('relationships', () => {
         from added, first
       `),
     );
+    // Fresh statistics after the bulk load, as autovacuum gives a real table soon after one. Stats the other
+    // files' writes happened to trigger just before it say this workspace holds about 1 record, and the
+    // planner then reads every record of the workspace for each of the 70,000 links (minutes, not seconds).
+    await owner.vacuumAnalyze(['record_links', 'records']);
     let seen: Change | undefined;
     const hook: AfterWrite = (change) => {
       seen = change;
