@@ -5,7 +5,7 @@
 // views over entry and record attributes, keyset paging, position jumps and
 // the exact count.
 import { sql } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, inject, it, onTestFinished } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { canJump, type FilterCondition, type FilterGroup, type SortRule } from '@crm/contracts/values';
 import { deleteRecord } from '../deletion.ts';
@@ -22,7 +22,8 @@ import { evaluate, type EvaluateContext, type PlainRecord } from './evaluate.ts'
 import { checkTimeZone, countMatches, queryPage, timeZoneProbe, type PageQuery, type ViewSource } from './page.ts';
 import { rescope, testScope } from '../../testing.ts';
 
-const { appUrl, ownerUrl } = inject('testDatabase');
+// A database of its own: two tests lock the whole records table, which in the shared one stalls every other file.
+const { appUrl, ownerUrl } = inject('lockingDatabase');
 const NOW = '2026-10-15T14:00:00.000Z';
 const ZONE = 'America/New_York';
 let db: Database;
@@ -282,8 +283,8 @@ beforeAll(async () => {
       sql`select id::text, primary_attribute_id::text as primary from objects`,
     ),
   );
-  // Fresh stats for the sample. The other suites fill the same tables at once, and stats taken while the
-  // tables were nearly empty make every estimate 1 row, so a two hop filter loops over whole tables.
+  // Fresh stats for the sample: stats taken while the tables were nearly empty make every estimate 1 row,
+  // so a two hop filter loops over whole tables.
   const maintenance = createDatabase({ url: ownerUrl, applicationName: 'crm-query-tests-analyze' });
   await maintenance.vacuumAnalyze(['records', 'values', 'record_links', 'list_entries', 'sort_keys']);
   await maintenance.close();
@@ -303,6 +304,36 @@ beforeAll(async () => {
 afterAll(async () => {
   await db.close();
 });
+
+/**
+ * Locks the records table from another transaction, so a read waits on it
+ * until it is cancelled, and answers the release. The lock also goes when the
+ * test finishes, failed or timed out, so a stuck test never keeps it.
+ */
+async function holdRecords(): Promise<() => Promise<void>> {
+  let release: () => void = () => undefined;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let locked: () => void = () => undefined;
+  const isLocked = new Promise<void>((resolve) => {
+    locked = resolve;
+  });
+  const holder = scope.db.withWorkspace(scope.workspaceId, async (tx) => {
+    // A bounded wait: a lock request still in the queue holds up every later read of the table too.
+    await tx.execute(sql`set local lock_timeout = '10s'`);
+    await tx.execute(sql`lock table records in access exclusive mode`);
+    locked();
+    await held;
+  });
+  const letGo = async () => {
+    release();
+    await holder;
+  };
+  onTestFinished(() => letGo().catch(() => undefined));
+  await Promise.race([isLocked, holder]);
+  return letGo;
+}
 
 const clock = { now: NOW, timeZone: ZONE, weekStart: 'sunday' } as const;
 
@@ -786,27 +817,13 @@ describe('positions and counts', () => {
 
   it('cancels a running count when the signal aborts (AC-15)', async () => {
     // Another transaction holds the records table, so the count waits until it is cancelled.
-    let release: () => void = () => undefined;
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let locked: () => void = () => undefined;
-    const isLocked = new Promise<void>((resolve) => {
-      locked = resolve;
-    });
-    const holder = scope.db.withWorkspace(scope.workspaceId, async (tx) => {
-      await tx.execute(sql`lock table records in access exclusive mode`);
-      locked();
-      await held;
-    });
-    await isLocked;
+    const release = await holdRecords();
     const controller = new AbortController();
     const counting = countMatches(scope, { objectId: missions }, controller.signal);
     await new Promise((resolve) => setTimeout(resolve, 300));
     controller.abort();
     await expect(counting).rejects.toMatchObject({ refusal: { code: 'QUERY_CANCELLED' } });
-    release();
-    await holder;
+    await release();
   });
 });
 
@@ -1128,23 +1145,9 @@ describe('caps and timeouts', () => {
   });
 
   it('cancels a page that runs past its timeout with QUERY_CANCELLED', async () => {
-    let release: () => void = () => undefined;
-    const held = new Promise<void>((resolve) => {
-      release = resolve;
-    });
-    let locked: () => void = () => undefined;
-    const isLocked = new Promise<void>((resolve) => {
-      locked = resolve;
-    });
-    const holder = scope.db.withWorkspace(scope.workspaceId, async (tx) => {
-      await tx.execute(sql`lock table records in access exclusive mode`);
-      locked();
-      await held;
-    });
-    await isLocked;
+    const release = await holdRecords();
     const reading = queryPage(scope, { objectId: missions }, { timeout: '200ms' });
     await expect(reading).rejects.toMatchObject({ refusal: { code: 'QUERY_CANCELLED' } });
-    release();
-    await holder;
+    await release();
   });
 });
