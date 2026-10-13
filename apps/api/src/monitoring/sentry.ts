@@ -2,8 +2,8 @@
 // `@sentry/node` (AC-184). It sends unexpected errors, each with the request it
 // belongs to, and the api's request traces (AC-170: named per procedure and
 // sign in route, sampled by environment, never a health check; the worker
-// traces nothing), the worker's metrics (milestone 4: the relay's lag), and
-// nothing personal: no request bodies, cookies,
+// traces nothing), the worker's metrics, heartbeat and `RELAY_LAGGING`
+// (milestone 4), and nothing personal: no request bodies, cookies,
 // headers beyond two, query strings, local variables or user fields beyond the
 // id, and `scrub` runs in every send hook (AC-165). Every export is a no op
 // until `startSentry` runs, which `instrument.ts` does only when a DSN is set,
@@ -12,7 +12,9 @@ import type { AppEnvironment } from '@crm/contracts';
 import { scrub } from '@crm/contracts/monitoring';
 import {
   type Breadcrumb,
+  captureCheckIn,
   captureException,
+  captureMessage,
   createTransport,
   type ErrorEvent,
   flush as flushEvents,
@@ -79,10 +81,15 @@ const DROPPED_INTEGRATIONS: ReadonlySet<string> = new Set([
 /**
  * The metrics the processes record (spec 0010, milestone 4), each with its
  * unit: a closed list, so a name can never carry an id. `relay.lag` is each
- * published row's delay from commit to publish (AC-179).
+ * published row's delay from commit to publish (AC-179); the three gauges are
+ * the worker's stats tick (AC-180): awake (1) or asleep (0), and the relay's
+ * unpublished rows and the oldest one's age.
  */
 export const METRIC_UNITS = {
   'relay.lag': 'millisecond',
+  'worker.awake': 'none',
+  'outbox.pending': 'none',
+  'outbox.oldest_age_s': 'second',
 } as const;
 
 /** One of the metrics in `METRIC_UNITS`. */
@@ -268,22 +275,26 @@ export function captureFault(error: unknown, context: FaultContext = {}): void {
     captureException(safe, { tags });
     return;
   }
-  // Nothing of a request this fault may have inherited: no user, workspace, request id, request data,
-  // breadcrumbs or trace. Fresh scopes on the same client, and no active span (with tracing on, the request's
-  // span would otherwise lend the event its trace); the service tag lives on the global scope.
+  outsideAnyRequest(() => {
+    captureException(safe, { tags });
+  });
+}
+
+/**
+ * Runs `send` with nothing of a request it may have inherited: no user,
+ * workspace, request id, request data, breadcrumbs or trace. Fresh scopes on
+ * the same client, and no active span (with tracing on, the request's span
+ * would otherwise lend the event its trace); the service tag lives on the
+ * global scope.
+ */
+function outsideAnyRequest(send: () => void): void {
   const client = getClient();
   const fresh = () => {
     const scope = new Scope();
     scope.setClient(client);
     return scope;
   };
-  withActiveSpan(null, () =>
-    withIsolationScope(fresh(), () =>
-      withScope(fresh(), () => {
-        captureException(safe, { tags });
-      }),
-    ),
-  );
+  withActiveSpan(null, () => withIsolationScope(fresh(), () => withScope(fresh(), send)));
 }
 
 /**
@@ -331,7 +342,70 @@ export const metrics = {
     if (!isInitialized() || !Number.isFinite(value)) return;
     sentryMetrics.distribution(name, value, { unit: METRIC_UNITS[name] });
   },
+  /** A gauge's value now (`worker.awake`, `outbox.pending`, `outbox.oldest_age_s`). */
+  gauge(name: MetricName, value: number): void {
+    if (!isInitialized() || !Number.isFinite(value)) return;
+    sentryMetrics.gauge(name, value, { unit: METRIC_UNITS[name] });
+  },
 } as const;
+
+/** A cron monitor's settings, as a check in carries them to create or update it. */
+type MonitorConfig = NonNullable<Parameters<typeof captureCheckIn>[1]>;
+
+/** The cron monitor the worker's stats tick checks in to (AC-181). */
+export const HEARTBEAT_MONITOR = 'worker-heartbeat';
+
+/**
+ * The heartbeat's monitor, created or updated by its first check in: one a
+ * minute, missed after 2 minutes more (3 minutes without one), one missed
+ * check in opens an issue and one on time closes it.
+ */
+export const HEARTBEAT_SCHEDULE: MonitorConfig = {
+  schedule: { type: 'interval', value: 1, unit: 'minute' },
+  checkinMargin: 2,
+  timezone: 'Etc/UTC',
+  failureIssueThreshold: 1,
+  recoveryThreshold: 1,
+};
+
+/**
+ * Checks in to `worker-heartbeat` (AC-181): the process lives. Sent from
+ * memory, awake or asleep, so it never touches the database; production only
+ * (the free plan's one cron monitor), and a no op until Sentry starts.
+ */
+export function heartbeat(): void {
+  if (!isInitialized() || getClient()?.getOptions().environment !== 'production') return;
+  outsideAnyRequest(() => {
+    captureCheckIn({ monitorSlug: HEARTBEAT_MONITOR, status: 'ok' }, HEARTBEAT_SCHEDULE);
+  });
+}
+
+/** The issues the processes raise themselves, each with its one fixed fingerprint and message. */
+export const ISSUES = {
+  RELAY_LAGGING: 'Live updates are behind: the oldest unpublished change has waited over 30 seconds',
+} as const;
+
+/** One of the codes in `ISSUES`. */
+export type IssueCode = keyof typeof ISSUES;
+
+/**
+ * Raises a warning issue the process found itself (`RELAY_LAGGING`, AC-182):
+ * one fingerprint per code, so every episode lands on one issue, with its
+ * numbers (counts and ages only, never an id) in the `numbers` context. Sent
+ * outside any request, never waiting for the network; a no op until Sentry
+ * starts.
+ */
+export function raiseIssue(code: IssueCode, numbers: Readonly<Record<string, number>>): void {
+  if (!isInitialized()) return;
+  outsideAnyRequest(() => {
+    captureMessage(ISSUES[code], {
+      level: 'warning',
+      fingerprint: [code],
+      tags: { code },
+      contexts: { numbers: { ...numbers } },
+    });
+  });
+}
 
 /** The longest a shutdown waits for monitoring to send what it holds (AC-166), inside the 10 second window. */
 export const MONITORING_FLUSH_MS = 2000;

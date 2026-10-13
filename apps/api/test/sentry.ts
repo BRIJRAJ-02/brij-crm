@@ -1,6 +1,6 @@
 // Test helpers for monitoring (spec 0010): a fake Sentry transport that keeps
 // every envelope the SDK would have sent, and readers for the error events,
-// spans and metrics in them. Nothing here imports the vendor; the wrapper's
+// spans, metrics and check ins in them. Nothing here imports the vendor; the wrapper's
 // `deliver` option is the seam.
 
 /** One error event as Sentry receives it, the fields the tests read. */
@@ -16,7 +16,12 @@ export interface SentEvent {
   readonly breadcrumbs?: readonly Readonly<Record<string, unknown>>[];
   readonly request?: Readonly<Record<string, unknown>>;
   readonly extra?: Readonly<Record<string, unknown>>;
-  readonly contexts?: { readonly trace?: { readonly trace_id?: string } };
+  readonly contexts?: {
+    readonly trace?: { readonly trace_id?: string };
+    readonly numbers?: Readonly<Record<string, unknown>>;
+  };
+  readonly level?: string;
+  readonly fingerprint?: readonly string[];
 }
 
 /** The error events in an envelope: each item header is a JSON line, and an `event` item's payload follows it. */
@@ -74,6 +79,25 @@ export function metricsIn(envelope: string): SentMetric[] {
   return metrics;
 }
 
+/** One cron check in as Sentry receives it, the fields the tests read. */
+export interface SentCheckIn {
+  readonly monitor_slug: string;
+  readonly status: string;
+  readonly environment?: string;
+  readonly monitor_config?: Readonly<Record<string, unknown>>;
+}
+
+/** The check ins in an envelope: each `check_in` item's payload is one. */
+export function checkInsIn(envelope: string): SentCheckIn[] {
+  const lines = envelope.split('\n').filter((line) => line.trim() !== '');
+  const checkIns: SentCheckIn[] = [];
+  for (let index = 1; index < lines.length - 1; index += 2) {
+    const header = JSON.parse(lines[index] ?? '{}') as { type?: string };
+    if (header.type === 'check_in') checkIns.push(JSON.parse(lines[index + 1] ?? '{}') as SentCheckIn);
+  }
+  return checkIns;
+}
+
 /** A transport that keeps what it is handed: every envelope as text, and the error events in them. */
 export function memoryTransport() {
   const envelopes: string[] = [];
@@ -86,6 +110,7 @@ export function memoryTransport() {
     events: (): SentEvent[] => envelopes.flatMap(eventsIn),
     spans: (): SentSpan[] => envelopes.flatMap(spansIn),
     metrics: (): SentMetric[] => envelopes.flatMap(metricsIn),
+    checkIns: (): SentCheckIn[] => envelopes.flatMap(checkInsIn),
     clear: () => {
       envelopes.length = 0;
     },

@@ -16,7 +16,8 @@ import { startJobRunners } from './jobs/graphile.ts';
 import { createJobRunner } from './jobs/runner.ts';
 import { loadEnv, WorkerEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
-import { captureFault, flush, metrics, MONITORING_FLUSH_MS } from './monitoring/sentry.ts';
+import { captureFault, flush, heartbeat, metrics, MONITORING_FLUSH_MS, raiseIssue } from './monitoring/sentry.ts';
+import { createStatsReporter, relaySource } from './monitoring/stats.ts';
 import { createCentrifugoPublisher } from './realtime/centrifugo.ts';
 import { createRelay } from './realtime/relay.ts';
 import { onShutdown } from './shutdown.ts';
@@ -157,7 +158,23 @@ health.listen(env.WORKER_PORT, '::', () =>
   }),
 );
 
+// The stats tick (spec 0010, AC-180 to AC-182): once a minute, from memory only, it records whether the worker is
+// awake and, while it is, the relay's backlog; raises RELAY_LAGGING; and checks in to the heartbeat, awake or
+// asleep. Until spec 0008's sleep gives the worker one lifecycle, it is awake while the jobs' runners run (they
+// listen and poll for as long as the process lives) or while the relay is active, and asleep while the relay is
+// dormant with the jobs off, as production runs today.
+const stats = createStatsReporter({
+  sources: relay === undefined ? [] : [relaySource(() => relay.stats())],
+  metrics,
+  heartbeat,
+  raise: raiseIssue,
+  isAwake: () => jobs !== undefined || relay?.mode() === 'active',
+  log,
+});
+stats.start();
+
 onShutdown(async () => {
+  stats.stop();
   // The slices in hand finish their batch and hand their jobs back to the queue first.
   await jobs?.stop();
   await queue?.close();
