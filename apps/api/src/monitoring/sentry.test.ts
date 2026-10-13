@@ -15,6 +15,8 @@ import {
   flush,
   isSentryStarted,
   keepBreadcrumb,
+  keepMetric,
+  metrics,
   type SentryConfig,
   sentryOptions,
   setRequestScope,
@@ -71,6 +73,7 @@ describe('before Sentry starts (no DSN: local and tests)', () => {
     expect(() => {
       captureFault(new Error('nobody hears this'), { requestId: 'r' });
       setRequestScope({ userId: 'u', workspaceId: 'w' });
+      metrics.distribution('relay.lag', 12);
     }).not.toThrow();
     expect(withRequestScope('r', () => 42)).toBe(42);
     await expect(flush(10)).resolves.toBeUndefined();
@@ -145,6 +148,58 @@ describe('the send hooks (AC-165)', () => {
       category: 'http',
       data: { url: '/api/auth/verify' },
     });
+  });
+});
+
+describe('metrics (milestone 4)', () => {
+  type Metric = Parameters<ReturnType<typeof keepMetric>>[0];
+  const metric = (value: object) => value as Metric;
+
+  it('lets only the closed list of metrics out, with service and the SDK’s environment and release, no more', () => {
+    const keep = keepMetric('worker');
+    expect(keep(metric({ name: 'workspace.abc.records', type: 'gauge', value: 1 }))).toBeNull();
+    expect(
+      keep(
+        metric({
+          name: 'relay.lag',
+          type: 'distribution',
+          unit: 'millisecond',
+          value: 40,
+          attributes: {
+            'user.id': 'user-1',
+            'user.email': EMAIL,
+            'server.address': 'container-7f3a',
+            workspace_id: 'workspace-1',
+            'sentry.environment': 'production',
+            'sentry.release': 'abc1234',
+          },
+        }),
+      ),
+    ).toEqual({
+      name: 'relay.lag',
+      type: 'distribution',
+      unit: 'millisecond',
+      value: 40,
+      attributes: { 'sentry.environment': 'production', 'sentry.release': 'abc1234', service: 'worker' },
+    });
+  });
+
+  it('sends relay.lag in milliseconds, tagged by service only, even inside a request with a user (AC-179)', async () => {
+    const transport = memoryTransport();
+    startSentry({ ...CONFIG, service: 'worker', deliver: transport.deliver });
+    withRequestScope('req-5', () => {
+      setRequestScope({ userId: 'user-5', workspaceId: 'workspace-5' });
+      metrics.distribution('relay.lag', 120.5);
+    });
+    metrics.distribution('relay.lag', Number.NaN);
+    await flush(2000);
+    const sent = transport.metrics();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ name: 'relay.lag', type: 'distribution', unit: 'millisecond', value: 120.5 });
+    expect(Object.keys(sent[0]?.attributes ?? {}).filter((key) => !key.startsWith('sentry.'))).toEqual(['service']);
+    expect(sent[0]?.attributes.service?.value).toBe('worker');
+    expect(sent[0]?.attributes['sentry.environment']?.value).toBe('production');
+    expect(transport.envelopes.join('\n')).not.toMatch(/user-5|workspace-5|req-5|server\.address/);
   });
 });
 

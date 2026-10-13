@@ -55,7 +55,9 @@
 // from commit to publish, and the relay keeps a rolling 5 minute window of
 // them with what it still holds unpublished (`stats.ts`). While active it logs
 // them as `relay.stats` once a minute, from memory, so the log costs no query;
-// `stats()` hands the same numbers to the worker's `/health`.
+// `stats()` hands the same numbers to the worker's `/health`. Each marked row's
+// lag also goes to `deps.lag`, which the worker records as the `relay.lag`
+// metric (spec 0010, AC-179).
 //
 // Retention (spec 0007, milestone 3, AC-89, AC-90): while active and holding
 // the lock, the relay prunes in rounds, one batch (`pruneOutbox`, up to
@@ -141,6 +143,12 @@ export interface RelayDeps {
   readonly retryMs?: number;
   /** A workspace's longest wait after failed publishes (default 60 seconds). */
   readonly maxRetryMs?: number;
+  /**
+   * Hears each marked row's lag from commit to publish, in ms, as Postgres
+   * answered it in the mark (`published_at - created_at`), one value per row:
+   * the worker records them as `relay.lag` (spec 0010, AC-179).
+   */
+  readonly lag?: (lagsMs: readonly number[]) => void;
   /** Where the delivery numbers go (a fresh `createRelayStats()` by default). */
   readonly stats?: RelayStats;
   /** How often an active relay logs `relay.stats` (default 1 minute). */
@@ -237,6 +245,16 @@ export function createRelay(deps: RelayDeps): Relay {
   const stats = deps.stats ?? createRelayStats();
   const statsEveryMs = deps.statsEveryMs ?? 60_000;
   const { log } = deps;
+  /** Rows marked: their lags go to the rolling stats and to `deps.lag`, which can never fail a turn. */
+  const published = (lagsMs: readonly number[]): void => {
+    stats.published(lagsMs);
+    if (lagsMs.length === 0 || deps.lag === undefined) return;
+    try {
+      deps.lag(lagsMs);
+    } catch (error) {
+      log.warn('Recording the relay lag failed', errorFields(error));
+    }
+  };
 
   // The loop's own state, read through functions where an await sits between a write and a read.
   let stopped = true;
@@ -394,7 +412,7 @@ export function createRelay(deps: RelayDeps): Relay {
         // One failure, already counted: a mark that fails too is only noted (what landed goes out again on the
         // retry, and its idempotency key drops the repeat).
         try {
-          stats.published((await reader.mark(workspaceId, landed.seq)).lagsMs);
+          published((await reader.mark(workspaceId, landed.seq)).lagsMs);
         } catch (error) {
           log.warn('Marking the part of a failed batch that landed failed; it is sent again on the retry', {
             workspaceId,
@@ -409,7 +427,7 @@ export function createRelay(deps: RelayDeps): Relay {
     const last = rows[rows.length - 1];
     if (last === undefined) return undefined;
     const next = await reader.advance(workspaceId, last.seq, batch);
-    stats.published(next.lagsMs);
+    published(next.lagsMs);
     stats.pending(workspaceId, next.rows.length, next.rows[0]?.at);
     return next.rows.length > 0 ? next.rows : undefined;
   }

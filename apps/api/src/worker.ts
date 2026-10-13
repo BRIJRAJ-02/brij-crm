@@ -16,7 +16,7 @@ import { startJobRunners } from './jobs/graphile.ts';
 import { createJobRunner } from './jobs/runner.ts';
 import { loadEnv, WorkerEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
-import { captureFault, flush, MONITORING_FLUSH_MS } from './monitoring/sentry.ts';
+import { captureFault, flush, metrics, MONITORING_FLUSH_MS } from './monitoring/sentry.ts';
 import { createCentrifugoPublisher } from './realtime/centrifugo.ts';
 import { createRelay } from './realtime/relay.ts';
 import { onShutdown } from './shutdown.ts';
@@ -93,6 +93,10 @@ const relay =
         // Only crm_worker may run crm_outbox_prune (spec 0007, milestone 3): on another login (where the jobs, and
         // so the daily cleanup, are off too) the outbox keeps every row until the login moves to crm_worker_user.
         prune: directInWorker,
+        // Each published row's delay from commit to publish, from Postgres's clock at both ends (spec 0010, AC-179).
+        lag: (lagsMs) => {
+          for (const lagMs of lagsMs) metrics.distribution('relay.lag', lagMs);
+        },
       });
 if (relay === undefined) {
   log.info('Relay off: CENTRIFUGO_API_URL and CENTRIFUGO_API_KEY are unset, so no change is published');

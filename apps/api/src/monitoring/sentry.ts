@@ -2,7 +2,8 @@
 // `@sentry/node` (AC-184). It sends unexpected errors, each with the request it
 // belongs to, and the api's request traces (AC-170: named per procedure and
 // sign in route, sampled by environment, never a health check; the worker
-// traces nothing), and nothing personal: no request bodies, cookies,
+// traces nothing), the worker's metrics (milestone 4: the relay's lag), and
+// nothing personal: no request bodies, cookies,
 // headers beyond two, query strings, local variables or user fields beyond the
 // id, and `scrub` runs in every send hook (AC-165). Every export is a no op
 // until `startSentry` runs, which `instrument.ts` does only when a DSN is set,
@@ -22,6 +23,7 @@ import {
   getRootSpan,
   init,
   isInitialized,
+  metrics as sentryMetrics,
   type NodeOptions,
   Scope,
   onUnhandledRejectionIntegration,
@@ -73,6 +75,48 @@ const DROPPED_INTEGRATIONS: ReadonlySet<string> = new Set([
   'OnUnhandledRejection',
   'Hono',
 ]);
+
+/**
+ * The metrics the processes record (spec 0010, milestone 4), each with its
+ * unit: a closed list, so a name can never carry an id. `relay.lag` is each
+ * published row's delay from commit to publish (AC-179).
+ */
+export const METRIC_UNITS = {
+  'relay.lag': 'millisecond',
+} as const;
+
+/** One of the metrics in `METRIC_UNITS`. */
+export type MetricName = keyof typeof METRIC_UNITS;
+
+const isMetricName = (name: string): name is MetricName => Object.hasOwn(METRIC_UNITS, name);
+
+/** What a metric may say about where it came from beside `service`: the environment, release and SDK, no more. */
+const KEPT_METRIC_ATTRIBUTES: readonly string[] = [
+  'sentry.environment',
+  'sentry.release',
+  'sentry.sdk.name',
+  'sentry.sdk.version',
+];
+
+/** The SDK's view of a metric, as `beforeSendMetric` receives it. */
+type SentMetric = Parameters<NonNullable<NodeOptions['beforeSendMetric']>>[0];
+
+/**
+ * The metric hook: only a metric named in `METRIC_UNITS` leaves, and its
+ * attributes are `service` and the environment, release and SDK the SDK adds,
+ * nothing else (no user, host or anything a caller added), so no metric
+ * carries a workspace, record or user id (AC-182).
+ */
+export function keepMetric(service: Service): (metric: SentMetric) => SentMetric | null {
+  return (metric) => {
+    if (!isMetricName(metric.name)) return null;
+    const attributes = metric.attributes ?? {};
+    const kept = Object.fromEntries(
+      KEPT_METRIC_ATTRIBUTES.filter((key) => typeof attributes[key] === 'string').map((key) => [key, attributes[key]]),
+    );
+    return { ...metric, attributes: { ...kept, service } };
+  };
+}
 
 /** A breadcrumb fit to send, or null to drop it. */
 export function keepBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb | null {
@@ -175,6 +219,7 @@ export function sentryOptions(config: SentryConfig): NodeOptions {
     beforeBreadcrumb: keepBreadcrumb,
     beforeSendSpan: keepSpanOrBlank,
     beforeSendTransaction: transactionBackstop,
+    beforeSendMetric: keepMetric(config.service),
     ...(deliver === undefined
       ? {}
       : {
@@ -273,6 +318,20 @@ export function setRequestScope({ userId, workspaceId }: { userId?: string; work
   if (userId !== undefined) scope.setUser({ id: userId });
   if (workspaceId !== undefined) scope.setTag('workspace_id', workspaceId);
 }
+
+/**
+ * The metrics this process records, named in `METRIC_UNITS`: held in memory
+ * and sent by the SDK every few seconds, so a call never waits for the
+ * network. Each does nothing until Sentry starts, and drops a value that
+ * isn't a finite number.
+ */
+export const metrics = {
+  /** One value of a distribution (`relay.lag`), charted at percentiles. */
+  distribution(name: MetricName, value: number): void {
+    if (!isInitialized() || !Number.isFinite(value)) return;
+    sentryMetrics.distribution(name, value, { unit: METRIC_UNITS[name] });
+  },
+} as const;
 
 /** The longest a shutdown waits for monitoring to send what it holds (AC-166), inside the 10 second window. */
 export const MONITORING_FLUSH_MS = 2000;

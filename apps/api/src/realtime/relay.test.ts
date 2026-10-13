@@ -134,6 +134,7 @@ interface RelayOptions extends Partial<
     | 'healthyMs'
     | 'workspacesPerPoll'
     | 'statsEveryMs'
+    | 'lag'
   >
 > {
   readonly applicationName?: string;
@@ -187,6 +188,7 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
     ...(options.healthyMs === undefined ? {} : { healthyMs: options.healthyMs }),
     ...(options.workspacesPerPoll === undefined ? {} : { workspacesPerPoll: options.workspacesPerPoll }),
     ...(options.statsEveryMs === undefined ? {} : { statsEveryMs: options.statsEveryMs }),
+    ...(options.lag === undefined ? {} : { lag: options.lag }),
   });
   started.push(relay);
   relay.start();
@@ -987,6 +989,46 @@ describe('the relay', () => {
     const snapshot = relay.stats();
     expect(snapshot.published).toBeGreaterThanOrEqual(3);
     expect(snapshot.lagMs?.max).toBeGreaterThanOrEqual(2_000);
+  });
+});
+
+describe('the relay lag metric (spec 0010, AC-179)', () => {
+  it('hands over one lag per published row, as Postgres measured it from commit to publish', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const workspaceId = await workspace();
+    await events(workspaceId, [1, 2, 3]);
+    await testQuery(ownerUrl, `update outbox set created_at = now() - interval '2 seconds' where workspace_id = $1`, [
+      workspaceId,
+    ]);
+    const heard: number[] = [];
+    relayTo(centrifugo.url, { lag: (lagsMs) => heard.push(...lagsMs) });
+    await expect.poll(() => unpublished(workspaceId), WAIT).toEqual([]);
+    // The same numbers the rows hold, both ends from the database's clock (rows other tests left may come too).
+    const stored = await testQuery<{ lag_ms: number }>(
+      ownerUrl,
+      `select (extract(epoch from published_at - created_at) * 1000)::float8 as lag_ms
+       from outbox where workspace_id = $1 order by seq`,
+      [workspaceId],
+    );
+    expect(stored).toHaveLength(3);
+    await expect.poll(() => heard, WAIT).toEqual(expect.arrayContaining(stored.map((row) => row.lag_ms)));
+    for (const row of stored) expect(row.lag_ms).toBeGreaterThanOrEqual(2_000);
+  });
+
+  it('keeps publishing when recording the lag throws', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const workspaceId = await workspace();
+    await events(workspaceId, [1, 2]);
+    const { warnings } = relayTo(centrifugo.url, {
+      lag: () => {
+        throw new Error('metrics broke');
+      },
+    });
+    await expect.poll(() => unpublished(workspaceId), WAIT).toEqual([]);
+    expect(centrifugo.seqs(workspaceId)).toEqual([1, 2]);
+    expect(warnings.map((warning) => warning.message)).toContain('Recording the relay lag failed');
   });
 });
 
