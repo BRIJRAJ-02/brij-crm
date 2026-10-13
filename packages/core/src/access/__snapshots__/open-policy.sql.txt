@@ -1796,6 +1796,210 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
 commit
   []
 
+=== history: a value and a reference
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+select "object_id", "created_at", "deleted_at" from "records" where "records"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."id" = $1
+  ["<id 3>"]
+
+select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "version_id", "is_cleared", to_char("active_from" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), to_char("active_until" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "set_by_type", "set_by_id" from "values" where ("values"."owner_id" = $1 and "values"."attribute_id" = $2) order by "values"."active_from" asc, "values"."position" asc
+  ["<id 2>","<id 3>"]
+
+commit
+  []
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+select "object_id", "created_at", "deleted_at" from "records" where "records"."id" = $1
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."id" = $1
+  ["<id 4>"]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid)
+  
+  ["<id 5>"]
+
+select "records"."id", "records"."object_id", "record_links"."position", to_char("record_links"."active_from" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), to_char("record_links"."active_until" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'), "record_links"."set_by_type", "record_links"."set_by_id", "record_links"."ended_by_type", "record_links"."ended_by_id" from "record_links" inner join "records" on ("records"."workspace_id" = "record_links"."workspace_id" and "records"."id" = "record_links"."to_record_id" and "records"."deleted_at" is null) where ("record_links"."relationship_id" = $1 and "record_links"."from_record_id" = $2) order by "record_links"."active_from" asc, "record_links"."position" asc, "record_links"."id" asc
+  ["<id 5>","<id 2>"]
+
+commit
+  []
+
+=== activity: a first page
+
+begin
+  []
+
+select set_config('app.workspace_id', $1, true)
+  ["<id 1>"]
+
+
+    select r.id::text as id, r.object_id::text as object_id,
+      to_char(r.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as created_at,
+      r.created_by_type, r.created_by_id::text as created_by_id, o.archived_at is not null as object_archived
+    from records r join objects o on o.workspace_id = r.workspace_id and o.id = r.object_id
+    where r.id = $1::uuid
+  
+  ["<id 2>"]
+
+select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "is_required", "is_unique", "is_system", "system_column", "archived_at", (case when "attributes"."relationship_id" is null then null else coalesce(
+  (select far_object.id::text from relationships rel
+    join attributes far on far.id = (case when rel.from_attribute_id = "attributes"."id" then rel.to_attribute_id else rel.from_attribute_id end)
+    join objects far_object on far_object.id = far.object_id
+    where rel.id = "attributes"."relationship_id" and far_object.archived_at is not null limit 1),
+  (select rel.target_object_ids[1]::text from relationships rel
+    where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
+      and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
+    limit 1)
+) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+  ["<id 3>"]
+
+
+    select v.attribute_id, v.version_id, to_char(v.active_from at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at, v.actor_type, v.actor_id
+    from unnest($1::uuid[]) as a(id)
+    cross join lateral (
+      select x.attribute_id::text as attribute_id, x.version_id::text as version_id, x.active_from,
+        x.set_by_type as actor_type, x.set_by_id::text as actor_id
+      from "values" x
+      where x.owner_id = $2::uuid and x.attribute_id = a.id and x.record_id is not null
+        and x.version_id <> $3::uuid
+        and true
+        and true
+      group by x.attribute_id, x.version_id, x.active_from, x.set_by_type, x.set_by_id
+      order by x.active_from desc, ('value:' || x.attribute_id::text || ':' || x.version_id::text) collate "C"
+      limit $4
+    ) v
+    order by v.active_from desc, ('value:' || v.attribute_id || ':' || v.version_id) collate "C"
+    limit $5
+  
+  ["{<id 4>,<id 5>,<id 6>,<id 7>,<id 8>,<id 9>,<id 10>,<id 11>,<id 12>,<id 13>,<id 14>}","<id 2>","<id 2>",51,51]
+
+
+    select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
+      f.object_id::text as from_object_id,
+      (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
+    from relationships rel
+    join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
+    left join attributes t on t.workspace_id = rel.workspace_id and t.id = rel.to_attribute_id
+    where rel.id in ($1::uuid, $2::uuid)
+  
+  ["<id 15>","<id 16>"]
+
+(
+      with recursive starts(at, n) as (
+        select (select k.active_from from record_links k join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null and r.object_id = any($1::uuid[]) where k.from_record_id = $2::uuid and k.relationship_id = $3::uuid and k.version_id <> $4::uuid and true order by k.active_from desc limit 1), 1
+        union all
+        select (select k.active_from from record_links k join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null and r.object_id = any($5::uuid[]) where k.from_record_id = $6::uuid and k.relationship_id = $7::uuid and k.version_id <> $8::uuid and k.active_from < starts.at order by k.active_from desc limit 1), starts.n + 1
+        from starts where starts.at is not null and starts.n < $9
+      )
+      select $10 as part, to_char(g.at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at, g.actor_type, g.actor_id::text as actor_id
+      from (
+        select k.active_from as at, k.set_by_type as actor_type, k.set_by_id as actor_id
+        from record_links k
+        where k.from_record_id = $11::uuid and k.relationship_id = $12::uuid and k.version_id <> $13::uuid and k.active_from = any(array(select starts.at from starts where starts.at is not null))
+        group by 1, 2, 3
+      ) g
+      where true
+      order by g.at desc, ('links:' || $14 || ':' || to_char(g.at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') || ':' || g.actor_type::text || ':' || coalesce(g.actor_id::text, 'none')) collate "C"
+      limit $15
+    ) union all (
+      with recursive ends(at, n) as (
+        select (select k.active_until from record_links k join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null and r.object_id = any($16::uuid[]) where k.from_record_id = $17::uuid and k.relationship_id = $18::uuid and k.active_until is not null and true order by k.active_until desc limit 1), 1
+        union all
+        select (select k.active_until from record_links k join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null and r.object_id = any($19::uuid[]) where k.from_record_id = $20::uuid and k.relationship_id = $21::uuid and k.active_until is not null and k.active_until < ends.at order by k.active_until desc limit 1), ends.n + 1
+        from ends where ends.at is not null and ends.n < $22
+      )
+      select $23 as part, to_char(g.at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at, g.actor_type, g.actor_id::text as actor_id
+      from (
+        select k.active_until as at, k.ended_by_type as actor_type, k.ended_by_id as actor_id
+        from record_links k
+        where k.from_record_id = $24::uuid and k.relationship_id = $25::uuid and k.active_until is not null and k.active_until = any(array(select ends.at from ends where ends.at is not null))
+        group by 1, 2, 3
+      ) g
+      where true
+      order by g.at desc, ('links:' || $26 || ':' || to_char(g.at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') || ':' || g.actor_type::text || ':' || coalesce(g.actor_id::text, 'none')) collate "C"
+      limit $27
+    )
+  ["{<id 17>}","<id 2>","<id 15>","<id 2>","{<id 17>}","<id 2>","<id 15>","<id 2>",52,"start","<id 2>","<id 15>","<id 2>","<id 18>",51,"{<id 17>}","<id 2>","<id 15>","{<id 17>}","<id 2>","<id 15>",52,"end","<id 2>","<id 15>","<id 18>",51]
+
+(
+      with recursive starts(at, n) as (
+        select (select k.active_from from record_links k join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null and r.object_id = any($1::uuid[]) where k.from_record_id = $2::uuid and k.relationship_id = $3::uuid and k.version_id <> $4::uuid and true order by k.active_from desc limit 1), 1
+        union all
+        select (select k.active_from from record_links k join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null and r.object_id = any($5::uuid[]) where k.from_record_id = $6::uuid and k.relationship_id = $7::uuid and k.version_id <> $8::uuid and k.active_from < starts.at order by k.active_from desc limit 1), starts.n + 1
+        from starts where starts.at is not null and starts.n < $9
+      )
+      select $10 as part, to_char(g.at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at, g.actor_type, g.actor_id::text as actor_id
+      from (
+        select k.active_from as at, k.set_by_type as actor_type, k.set_by_id as actor_id
+        from record_links k
+        where k.from_record_id = $11::uuid and k.relationship_id = $12::uuid and k.version_id <> $13::uuid and k.active_from = any(array(select starts.at from starts where starts.at is not null))
+        group by 1, 2, 3
+      ) g
+      where true
+      order by g.at desc, ('links:' || $14 || ':' || to_char(g.at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') || ':' || g.actor_type::text || ':' || coalesce(g.actor_id::text, 'none')) collate "C"
+      limit $15
+    ) union all (
+      with recursive ends(at, n) as (
+        select (select k.active_until from record_links k join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null and r.object_id = any($16::uuid[]) where k.from_record_id = $17::uuid and k.relationship_id = $18::uuid and k.active_until is not null and true order by k.active_until desc limit 1), 1
+        union all
+        select (select k.active_until from record_links k join records r on r.workspace_id = k.workspace_id and r.id = k.to_record_id and r.deleted_at is null and r.object_id = any($19::uuid[]) where k.from_record_id = $20::uuid and k.relationship_id = $21::uuid and k.active_until is not null and k.active_until < ends.at order by k.active_until desc limit 1), ends.n + 1
+        from ends where ends.at is not null and ends.n < $22
+      )
+      select $23 as part, to_char(g.at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at, g.actor_type, g.actor_id::text as actor_id
+      from (
+        select k.active_until as at, k.ended_by_type as actor_type, k.ended_by_id as actor_id
+        from record_links k
+        where k.from_record_id = $24::uuid and k.relationship_id = $25::uuid and k.active_until is not null and k.active_until = any(array(select ends.at from ends where ends.at is not null))
+        group by 1, 2, 3
+      ) g
+      where true
+      order by g.at desc, ('links:' || $26 || ':' || to_char(g.at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') || ':' || g.actor_type::text || ':' || coalesce(g.actor_id::text, 'none')) collate "C"
+      limit $27
+    )
+  ["{<id 19>}","<id 2>","<id 16>","<id 2>","{<id 19>}","<id 2>","<id 16>","<id 2>",52,"start","<id 2>","<id 16>","<id 2>","<id 20>",51,"{<id 19>}","<id 2>","<id 16>","{<id 19>}","<id 2>","<id 16>",52,"end","<id 2>","<id 16>","<id 20>",51]
+
+commit
+  []
+
 === read: records by id
 
 begin

@@ -20,9 +20,9 @@ import { isUuid, uuidList } from './ids.ts';
 import { readRecords } from './records.ts';
 import { loadRelationships, type RelationshipDef } from './relationships.ts';
 import type { Actor } from './scope.ts';
-import type { AttributeDef } from './values.ts';
-import type { Access } from '../access/policy.ts';
-import { farVisibleSql } from '../access/visibility.ts';
+import { loadAttributes, type AttributeDef } from './values.ts';
+import { isOpen, type Access } from '../access/policy.ts';
+import { farVisibleSql, hidesActors } from '../access/visibility.ts';
 import type { ActivityBound, ActivitySource, ActivitySourceInput } from './activity.ts';
 
 /** Moments as fixed width UTC text with microseconds, so they compare as text and key the timeline. */
@@ -476,6 +476,24 @@ async function displaysOf(
  */
 export const linkSource: ActivitySource = async (input) => {
   const sides = await sidesOf(input.tx, input.attributes);
+  // A link's actor is the Updated by of whichever end wrote it: a side names nobody when the record's object or a
+  // far object hides Created by or Updated by from the viewer.
+  const farHides = new Map<string, boolean>();
+  const sideHidesActors = async (side: Side): Promise<boolean> => {
+    if (input.record.hidesActors) return true;
+    if (isOpen(input.scope.access)) return false;
+    for (const objectId of side.allowed) {
+      let hides = farHides.get(objectId);
+      if (hides === undefined) {
+        hides = hidesActors(input.scope.access, [...(await loadAttributes(input.tx, objectId)).values()]);
+        farHides.set(objectId, hides);
+      }
+      if (hides) return true;
+    }
+    return false;
+  };
+  const hiddenSides = new Set<string>();
+  for (const side of sides) if (await sideHidesActors(side)) hiddenSides.add(side.attribute.id);
   const pending: Pending[] = [];
   let stoppedAt: ActivityBound | undefined;
   // One side after another: they share the read's one transaction.
@@ -518,7 +536,7 @@ export const linkSource: ActivitySource = async (input) => {
       id,
       key,
       at: toMillis(moment.at),
-      ...(input.record.hidesActors ? {} : { actor: actorOf(moment.actorType, moment.actorId) }),
+      ...(hiddenSides.has(side.attribute.id) ? {} : { actor: actorOf(moment.actorType, moment.actorId) }),
       attributeId: side.attribute.id,
     };
     if (side.single) {

@@ -96,9 +96,10 @@ export function farVisibleSql(access: Access, objectIds: readonly string[], far:
 
 /**
  * Whether a field rule hides who changed things from the principal (spec
- * 0017): the object's (or list's) Created by or Updated by is hidden. Then a
- * history read names nobody, since the newest version's actor is the owner's
- * Updated by, and a create's its Created by. Never under the open policy.
+ * 0017): among `attributes` (an object's), Created by or Updated by is
+ * hidden. Then a history read names nobody, since the newest version's actor
+ * is the record's Updated by, and a create's its Created by. Never under the
+ * open policy.
  */
 export function hidesActors(
   access: Access,

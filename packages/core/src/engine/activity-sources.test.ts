@@ -750,9 +750,14 @@ describe('history names nobody to a reader who may not see who changed things (s
         expect(versions.length).toBeGreaterThan(1);
         for (const version of versions) expect(version).not.toHaveProperty('setBy');
       }
-      // The far end's history is the far object's: People's Created by and Updated by stay visible there.
+      // The far end too: Jane's Company was set by Acme's Team write, whose actor is Acme's hidden Updated by.
       const far = await getHistory(denied, { recordId: jane, attributeId: world.id('people.company') });
-      expect(far.every((version) => version.setBy !== undefined)).toBe(true);
+      expect(far.length).toBeGreaterThan(1);
+      for (const version of far) expect(version).not.toHaveProperty('setBy');
+      // And Jane's timeline names nobody for that link, though People's own fields are visible.
+      const [linked] = await all(denied, jane);
+      expect(linked).toMatchObject({ kind: 'change', attributeId: world.id('people.company') });
+      expect(linked).not.toHaveProperty('actor');
     }
     // A reader who may see both, and the open policy, are told who set each version.
     const seesAll = world.member({ levels: [], records: [] });

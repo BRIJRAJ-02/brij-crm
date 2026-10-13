@@ -7,16 +7,9 @@ import { IsoInstant, type ValueVersion } from '@crm/contracts/values';
 import { decodeValue, type StoredItem } from './columns.ts';
 import { checkId } from './ids.ts';
 import { refuse } from './refusals.ts';
-import { linkHistory, linkValues } from './relationships.ts';
+import { linkHistory, linkValues, loadRelationships } from './relationships.ts';
 import type { Actor, EngineScope } from './scope.ts';
-import {
-  checkEntryAccess,
-  ITEM_COLUMNS,
-  loadAttribute,
-  loadAttributes,
-  loadListAttributes,
-  type AttributeDef,
-} from './values.ts';
+import { checkEntryAccess, ITEM_COLUMNS, loadAttribute, loadAttributes, type AttributeDef } from './values.ts';
 import { inWorkspace } from '../access/run.ts';
 import { isOpen, type Access } from '../access/policy.ts';
 import {
@@ -83,28 +76,38 @@ async function visibleAttribute(tx: WorkspaceTx, access: Access, attributeId: st
 }
 
 /**
- * Whether the principal may not see who changed `attribute`'s owner: a field
- * rule hides its object's (or list's) Created by or Updated by. No statement
- * under the open policy.
+ * Whether the principal may not see who set `attribute`'s versions: a field
+ * rule hides Created by or Updated by on its object, or, for a record
+ * reference, on an object at the far end (a link's actor is the Updated by of
+ * whichever end wrote it). A list entry's own values follow no field rule on
+ * actors (lists have no Created by or Updated by attributes; entry reads name
+ * their actors as they always have). No statement under the open policy.
  */
 async function actorsHidden(tx: WorkspaceTx, access: Access, attribute: AttributeDef): Promise<boolean> {
-  if (isOpen(access)) return false;
-  const parent =
-    attribute.objectId !== null
-      ? await loadAttributes(tx, attribute.objectId)
-      : attribute.listId !== null
-        ? await loadListAttributes(tx, attribute.listId)
-        : new Map<string, AttributeDef>();
-  return hidesActors(access, [...parent.values()]);
+  if (isOpen(access) || attribute.objectId === null) return false;
+  const objectIds = [attribute.objectId];
+  if (attribute.type === 'record_reference' && attribute.relationshipId !== null) {
+    const relationship = (await loadRelationships(tx, [attribute.relationshipId])).get(attribute.relationshipId);
+    if (relationship !== undefined) {
+      objectIds.push(
+        ...(relationship.fromAttributeId === attribute.id ? relationship.toObjectIds : [relationship.fromObjectId]),
+      );
+    }
+  }
+  for (const objectId of new Set(objectIds)) {
+    if (hidesActors(access, [...(await loadAttributes(tx, objectId)).values()])) return true;
+  }
+  return false;
 }
 
 /**
  * Every version of one attribute on one record or entry, oldest first; a
  * cleared version's value is null (an empty list for a multi reference).
  * Record references read their links' history. Hidden is absent (spec 0009,
- * spec 0017): when a field rule hides Created by or Updated by, no version
- * says who set it (`setBy` is left out), since the newest one's is the
- * owner's Updated by.
+ * spec 0017): when a field rule hides Created by or Updated by (on the
+ * owner's object, or for a reference on the far end's), no version says who
+ * set it (`setBy` is left out), since the newest one's is that record's
+ * Updated by.
  */
 export async function getHistory(
   scope: EngineScope,

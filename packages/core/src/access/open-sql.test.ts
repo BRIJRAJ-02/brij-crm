@@ -3,12 +3,15 @@
 // the access model reached the engine's choke points. Each query of a small
 // copy of the benchmark grid runs with every statement on the wire recorded
 // (text and parameters, ids replaced by their order of first use), and the
-// whole transcript is compared with the one recorded before milestone 2.
+// whole transcript is compared with the one recorded before milestone 2
+// (history and the record timeline joined the grid with spec 0017).
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { recordStatements } from '@crm/db/testing';
 import type { FilterGroup, SortRule } from '@crm/contracts/values';
+import { getActivity } from '../engine/activity.ts';
+import { getHistory } from '../engine/history.ts';
 import { addEntry, defineList } from '../engine/lists.ts';
 import { defineAttribute } from '../engine/definitions.ts';
 import { defineOption } from '../engine/options.ts';
@@ -57,10 +60,12 @@ beforeAll(async () => {
   });
   const deal = (name: string, extra: Record<string, unknown> = {}) =>
     createRecord(scope, { objectId: id('deals'), values: { [id('deals.name')]: name, ...extra } });
-  await deal('Zephyr expansion', {
-    [id('deals.probability')]: '40',
-    [id('deals.associated_company')]: { objectId: id('companies'), recordId: companyA.recordId },
-  });
+  ids.zephyr = (
+    await deal('Zephyr expansion', {
+      [id('deals.probability')]: '40',
+      [id('deals.associated_company')]: { objectId: id('companies'), recordId: companyA.recordId },
+    })
+  ).recordId;
   await deal('Apollo renewal', { [id('deals.next_step')]: 'Call' });
   await deal('Gemini expansion', { [id('deals.probability')]: '70' });
   await deal('Mercury');
@@ -202,6 +207,16 @@ const grid = (): { name: string; run: () => Promise<unknown> }[] => {
         }),
     },
     { name: 'count: a list', run: () => countMatches(scope, { listId: id('list') }) },
+    // Spec 0017: history and the record timeline send nothing for rules under the open policy (who set a value
+    // is hidden only under a rule). Zephyr's values and link came with its create, so no moment is stamped here.
+    {
+      name: 'history: a value and a reference',
+      run: async () => {
+        await getHistory(scope, { recordId: id('zephyr'), attributeId: id('deals.probability') });
+        return getHistory(scope, { recordId: id('zephyr'), attributeId: id('deals.associated_company') });
+      },
+    },
+    { name: 'activity: a first page', run: () => getActivity(scope, { recordId: id('zephyr') }) },
     {
       name: 'read: records by id',
       run: async () => {
