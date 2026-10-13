@@ -16,9 +16,10 @@ const attributes = new Map<string, ConditionAttribute>([
 ]);
 
 // A stand in for RE2: refuses look behind, as RE2 does.
+// A stand in for RE2: refuses look behind as RE2 does, and sizes a program by its repeats.
 const compile = (source: string) => {
   if (source.includes('(?<=')) throw new Error('error parsing regexp: invalid named capture: `(?<=a)`');
-  return new RegExp(source);
+  return { size: /\{1000\}/.test(source) ? 3004 : source.length };
 };
 
 const settings = (
@@ -72,6 +73,9 @@ describe('checkRuleSettings', () => {
     expect(problems(settings('text', 'pattern', { preset: 'custom', regex: '(?<=a)b', ignoreCase: false }))).toEqual([
       { field: 'regex', message: 'That pattern can’t be used: invalid named capture: `(?<=a)`.' },
     ]);
+    expect(
+      problems(settings('text', 'pattern', { preset: 'custom', regex: '(?:.*a){1000}', ignoreCase: false })),
+    ).toEqual([{ field: 'regex', message: W.patternLarge }]);
     expect(problems(settings('text', 'pattern', { preset: 'starts_with', text: '', ignoreCase: false }))).toEqual([
       { field: 'text', message: W.affix },
     ]);
@@ -130,6 +134,17 @@ describe('checkRuleSettings', () => {
     expect(problems(settings('text', 'length', { max: 3 }, { condition: deep }))).toEqual([
       { field: 'condition', message: W.conditionSize },
     ]);
+    const PEOPLE = '00000000-0000-7000-8000-000000000005';
+    const withPeople = new Map(attributes).set(PEOPLE, { type: 'record_reference', isSystem: false });
+    const naming = checkRuleSettings(
+      {
+        kind: 'length',
+        params: { max: 3 },
+        condition: { conjunction: 'and', conditions: [{ attributeId: PEOPLE, operator: 'is_empty' }] },
+      },
+      { attribute: { type: 'text', isMulti: false }, attributes: withPeople, compile },
+    );
+    expect(naming.ok ? [] : naming.problems).toEqual([{ field: 'condition', message: W.relationships }]);
     const twoDeep = { conjunction: 'and', conditions: [{ conjunction: 'or', conditions: [leaf, leaf] }] };
     expect(settings('text', 'length', { max: 3 }, { condition: twoDeep }).ok).toBe(true);
   });
@@ -139,5 +154,7 @@ describe('checkRuleSettings', () => {
     expect(ruleKindsFor({ type: 'email', isMulti: true })).toEqual(['pattern', 'email_domain', 'count']);
     expect(ruleKindsFor({ type: 'number', isMulti: false })).toEqual(['range', 'integer']);
     expect(ruleKindsFor({ type: 'checkbox', isMulti: false })).toEqual([]);
+    // A relationship's links aren't counted under the record lock yet.
+    expect(ruleKindsFor({ type: 'record_reference', isMulti: true })).toEqual([]);
   });
 });

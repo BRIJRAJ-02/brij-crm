@@ -53,17 +53,12 @@ const REQUIRABLE: readonly AttributeType[] = [
   'file',
 ];
 
-/** The types that can hold several values when the attribute allows it (`MULTIPLE_VALUE_TYPES`, repeated without Zod). */
-const MULTI_TYPES: readonly AttributeType[] = [
-  'select',
-  'email',
-  'phone',
-  'domain',
-  'url',
-  'actor_reference',
-  'record_reference',
-  'file',
-];
+/**
+ * The types a count rule takes when the attribute allows several values
+ * (`MULTIPLE_VALUE_TYPES` without Zod). Not record references yet: counting
+ * links under the record lock waits for the relationships' own reads.
+ */
+const MULTI_TYPES: readonly AttributeType[] = ['select', 'email', 'phone', 'domain', 'url', 'actor_reference', 'file'];
 
 /** Whether a rule of `kind` may sit on an attribute of `type` (spec 0013, the rule kinds table). */
 export function ruleKindFits(
@@ -97,6 +92,10 @@ export const RULE_LIMITS = {
   message: 200,
   /** A custom pattern. */
   pattern: 200,
+  /** A pattern's compiled size (RE2's program size), so a check stays fast on a 10,000 character value. */
+  patternProgram: 300,
+  /** One condition as stored, its attribute id, operator and value, in characters. */
+  conditionLeaf: 400,
   /** "Starts with" and "Ends with" text. */
   affix: 100,
   /** Domains, or countries, in one rule. */

@@ -254,7 +254,12 @@ export function checkRules(input: CheckRulesInput): readonly RuleFailure[] {
       failures.push({ ruleId: rule.id, message: HIDDEN_FAILURE });
       continue;
     }
-    const own = rule.message?.trim();
+    // A rule's own message is the admin's words, which may name the condition's fields: one naming a field hidden
+    // from the writer gives the generated message instead ("…when another field matches").
+    const conditionHidden = conditionAttributeIds(rule.condition).some(
+      (id) => input.attributes.get(id)?.visible === false,
+    );
+    const own = conditionHidden ? undefined : rule.message?.trim();
     failures.push({
       ruleId: rule.id,
       attributeId,

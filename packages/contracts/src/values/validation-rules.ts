@@ -202,7 +202,7 @@ export interface RuleSettingsContext {
    * whose message says why it can't be used. Absent, a custom pattern is
    * checked for length only (the server always passes it).
    */
-  readonly compile?: (source: string, ignoreCase: boolean) => unknown;
+  readonly compile?: (source: string, ignoreCase: boolean) => { readonly size: number };
 }
 
 /** The messages the settings check answers with (spec 0013, the settings refusals). */
@@ -221,6 +221,8 @@ export const RULE_SETTINGS_WORDS = {
   affix: 'Give the text in 1 to 100 characters.',
   patternEmpty: 'Type a pattern.',
   patternLong: 'Keep the pattern to 200 characters.',
+  patternLarge: 'That pattern is too large to check quickly. Use fewer repeats.',
+  conditionValue: 'Keep each condition’s value under 200 characters.',
   patternBroken: (reason: string) => `That pattern can’t be used: ${reason}.`,
   mode: 'Pick whether to allow or block these domains.',
   domains: 'Add between 1 and 50 domains.',
@@ -230,6 +232,7 @@ export const RULE_SETTINGS_WORDS = {
   currencies: 'Add between 1 and 20 currencies.',
   currency: (text: string) => `${text} isn’t a currency code, such as USD.`,
   ownAttributes: 'Conditions can only use this object’s own attributes.',
+  relationships: 'Conditions can’t name a relationship yet.',
   conditionSize: 'A condition holds at most 10 conditions, nested at most 2 deep.',
   conditionNeeded: 'Add a condition.',
   kind: 'This kind of rule doesn’t fit this attribute’s type.',
@@ -433,16 +436,24 @@ function patternParams(params: Readonly<Record<string, unknown>>, context: RuleS
   if (regex.trim() === '') return { problems: [{ field: 'regex', message: W.patternEmpty }] };
   if (regex.length > RULE_LIMITS.pattern) return { problems: [{ field: 'regex', message: W.patternLong }] };
   if (context.compile !== undefined) {
+    const compile = context.compile;
+    let size: number;
     try {
-      // The pattern alone first, so RE2's reason quotes what the person typed; then as the checker runs it.
-      context.compile(regex, ignoreCase);
-      context.compile(`^(?:${regex})$`, ignoreCase);
-    } catch (error) {
-      const reason = error instanceof Error ? error.message.replace(/^error parsing regexp:\s*/i, '') : '';
+      size = compile(`^(?:${regex})$`, ignoreCase).size;
+    } catch {
+      // Compiled alone, so RE2's reason quotes what the person typed rather than the wrapper.
+      let reason = '';
+      try {
+        compile(regex, ignoreCase);
+      } catch (error) {
+        reason = error instanceof Error ? error.message.replace(/^error parsing regexp:\s*/i, '') : '';
+      }
       return {
         problems: [{ field: 'regex', message: W.patternBroken(reason.replace(/\.$/, '') || 'it isn’t valid') }],
       };
     }
+    // RE2 matches in time linear in the value, times the program's size: a bounded program keeps every check fast.
+    if (size > RULE_LIMITS.patternProgram) return { problems: [{ field: 'regex', message: W.patternLarge }] };
   }
   return { params: { preset, regex, ignoreCase } };
 }
@@ -452,12 +463,24 @@ function conditionProblems(condition: RuleCondition, context: RuleSettingsContex
   if (size.leaves > RULE_LIMITS.conditions || size.depth > RULE_LIMITS.depth) {
     return [{ field: 'condition', message: W.conditionSize }];
   }
-  const own = leavesOf(condition).every((leaf) => {
+  const leaves = leavesOf(condition);
+  const own = leaves.every((leaf) => {
     if (leaf.operator === 'through') return false;
     const named = context.attributes.get(leaf.attributeId.toLowerCase());
     return named !== undefined && !named.isSystem;
   });
-  return own ? [] : [{ field: 'condition', message: W.ownAttributes }];
+  if (!own) return [{ field: 'condition', message: W.ownAttributes }];
+  // A condition's values travel to every reader and into refusals: each is kept small.
+  if (leaves.some((leaf) => JSON.stringify(leaf).length > RULE_LIMITS.conditionLeaf)) {
+    return [{ field: 'condition', message: W.conditionValue }];
+  }
+  // A reference's links are never read under the record lock yet (a company's people can number thousands).
+  const reference = leaves.some(
+    (leaf) =>
+      leaf.operator !== 'through' &&
+      context.attributes.get(leaf.attributeId.toLowerCase())?.type === 'record_reference',
+  );
+  return reference ? [{ field: 'condition', message: W.relationships }] : [];
 }
 
 /**

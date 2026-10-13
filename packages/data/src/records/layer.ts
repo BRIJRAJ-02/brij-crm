@@ -564,18 +564,66 @@ export function createRecordsLayer({
     if (known !== undefined) return known;
     const rules = objectRulesOf(list);
     rulesByList.set(list, rules);
+    // An object with a pattern rule: RE2 starts loading now, so its first edit rarely waits for it.
+    if (needsPattern(rules.rules)) void loadPatterns().catch(() => undefined);
     return rules;
   };
 
-  // RE2 for pattern rules (spec 0013, AC-258), loaded with `import()` the first time a write touches one.
+  // RE2 for pattern rules (spec 0013, AC-258), loaded with `import()` the first time it is needed; a failed load is
+  // tried again next time. Each pattern is compiled once for the layer's life (a 500 row paste compiles it once).
   let patterns: PatternCompiler | undefined;
   let loadingPatterns: Promise<PatternCompiler> | undefined;
+  const compiled = new Map<string, ReturnType<PatternCompiler>>();
   const loadPatterns = (): Promise<PatternCompiler> => {
-    loadingPatterns ??= import('../validation/pattern.ts').then(({ compilePattern }) => {
-      patterns = compilePattern;
-      return compilePattern;
-    });
+    loadingPatterns ??= import('../validation/pattern.ts').then(
+      ({ compilePattern }) => {
+        const memo: PatternCompiler = (source, ignoreCase) => {
+          const key = `${ignoreCase ? 'i' : 's'}:${source}`;
+          const held = compiled.get(key);
+          if (held !== undefined) return held;
+          const made = compilePattern(source, ignoreCase);
+          compiled.set(key, made);
+          return made;
+        };
+        patterns = memo;
+        return memo;
+      },
+      (error: unknown) => {
+        loadingPatterns = undefined;
+        throw error;
+      },
+    );
     return loadingPatterns;
+  };
+
+  // Checks that had to wait (definitions or RE2 still loading), in order: an edit or create made after one of them
+  // waits its turn too, so one record's edits still show and go out in the order they were made.
+  let checkQueue: Promise<unknown> = Promise.resolve();
+  let checksWaiting = 0;
+  const checkInTurn = <T>(asked: T | Promise<T>): T | Promise<T> => {
+    if (!(asked instanceof Promise) && checksWaiting === 0) return asked;
+    checksWaiting += 1;
+    const turn = checkQueue.then(() => asked);
+    checkQueue = turn.then(
+      () => undefined,
+      () => undefined,
+    );
+    return turn.finally(() => {
+      checksWaiting -= 1;
+    });
+  };
+
+  /**
+   * What the screen shows of a record, for its rule check: its values, less any
+   * multi reference cut short at the cell's cap (its `linkTotals`), which the
+   * browser doesn't hold whole and so leaves to the server.
+   */
+  const heldValues = (recordId: string): Readonly<Record<string, unknown>> => {
+    const shown = store.get(recordId);
+    if (shown === undefined) return {};
+    const cut = Object.keys(shown.linkTotals);
+    if (cut.length === 0) return shown.values;
+    return Object.fromEntries(Object.entries(shown.values).filter(([id]) => !cut.includes(id)));
   };
 
   /**
@@ -1699,13 +1747,13 @@ export function createRecordsLayer({
     const object = objectId ?? store.get(changes[0]?.rowId ?? '')?.objectId;
     // The object's rules first (spec 0013, AC-257), with the same checker the server runs: a record that breaks
     // one shows nothing new and sends nothing, its cells say why, and a toast says it once, with no Retry.
-    const asked = checkWith(workspace, object, new Set(changes.map((change) => change.columnId)), false);
+    const asked = checkInTurn(checkWith(workspace, object, new Set(changes.map((change) => change.columnId)), false));
     const check = asked instanceof Promise ? await asked : asked;
     const refusedByRules = new Map<string, readonly RuleFailure[]>();
     if (check !== undefined) {
       const at = new Date(now()).toISOString();
       for (const [recordId, cells] of byRecord) {
-        const shown = store.get(recordId)?.values ?? {};
+        const shown = heldValues(recordId);
         const failures = checkInBrowser({
           rules: check.rules,
           values: { ...shown, ...Object.fromEntries(cells.map((cell) => [cell.attributeId, cell.value])) },
@@ -2159,7 +2207,7 @@ export function createRecordsLayer({
       id: string = mintId(),
     ): Promise<RecordView> => {
       // Every rule of the object, before the draft shows (spec 0013, AC-257): a refusal rejects as the server's would.
-      const asked = checkWith(workspace, objectId, new Set(Object.keys(values)), true);
+      const asked = checkInTurn(checkWith(workspace, objectId, new Set(Object.keys(values)), true));
       const check = asked instanceof Promise ? await asked : asked;
       if (check !== undefined) {
         const failures = checkInBrowser({

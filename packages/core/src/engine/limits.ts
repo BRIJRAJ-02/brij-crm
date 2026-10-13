@@ -241,11 +241,16 @@ export function objectAttributeRows(
  * rules, never `rule_count`, which also counts rules naming it. Runs after the
  * write, inside it, so the refusal rolls the rules back.
  */
-export async function checkRuleRoom(tx: WorkspaceTx, scope: EngineScope, attributeId: string): Promise<void> {
+export async function checkRuleRoom(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  objectId: string,
+  attributeId: string,
+): Promise<void> {
   const [row] = await tx
     .select({ held: count() })
     .from(validationRules)
-    .where(eq(validationRules.attributeId, attributeId));
+    .where(and(eq(validationRules.objectId, objectId), eq(validationRules.attributeId, attributeId)));
   const limit = limitsOf(scope).rulesPerAttribute;
   if ((row?.held ?? 0) > limit) {
     throw refuseAll([

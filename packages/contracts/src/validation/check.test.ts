@@ -273,6 +273,11 @@ describe('checkRules, which rules run', () => {
     expect(messages(check([namesHidden], { [ID.name]: 'Al', [ID.secret]: 'x' }))).toEqual([
       `Name needs at least 3 characters when ${HIDDEN_CONDITION}.`,
     ]);
+    // A rule's own words may name the hidden field: the generated message stands in.
+    const ownNamesHidden = { ...namesHidden, id: 'own-hidden', message: 'Secret x needs a long name.' };
+    expect(messages(check([ownNamesHidden], { [ID.name]: 'Al', [ID.secret]: 'x' }))).toEqual([
+      `Name needs at least 3 characters when ${HIDDEN_CONDITION}.`,
+    ]);
   });
 
   it('lists every failure, in attribute position then rule position', () => {

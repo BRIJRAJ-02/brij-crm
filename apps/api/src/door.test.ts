@@ -235,8 +235,11 @@ describe('no scope is built in this app', () => {
     const offenders: string[] = [];
     for (const file of files) {
       const source = await readFile(join(root, file), 'utf8');
-      // An attribute's validation rules (spec 0013) pass through as `rules: input.rules`: not the door's.
-      if (/\bRuleSource\b|(?<!input\.)\brules\s*[:,}](?!\s*input\.rules\b)/.test(source)) offenders.push(file);
+      // The attribute router passes an attribute's validation rules (spec 0013) on as `rules: input.rules`: not the
+      // door's. That one form, in that one file, is let through.
+      const checked =
+        file === 'modules/attributes/router.ts' ? source.replaceAll(/\brules: input\.rules\b/g, '') : source;
+      if (/\bRuleSource\b|\brules\s*[:,}]/.test(checked)) offenders.push(file);
     }
     expect(offenders).toEqual([]);
   });

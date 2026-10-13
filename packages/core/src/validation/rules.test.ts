@@ -491,6 +491,19 @@ describe('record writes', () => {
     // And the rule, naming a field they can't see, isn't theirs to read.
     const listed = await listObjectAttributes(hiding, w.objectId);
     expect(listed.find((each) => each.id === w.code.id)?.validation?.rules).toEqual([]);
+    // Nor to delete or change: saving the rules they see keeps it, and naming its id answers as unknown.
+    const theirs = rule('pattern', { preset: 'letters', ignoreCase: false });
+    await editAttribute(hiding, { attributeId: w.code.id, rules: [theirs] });
+    const all = await listObjectAttributes(w.scope, w.objectId);
+    expect(all.find((each) => each.id === w.code.id)?.validation?.rules.map((each) => each.kind)).toEqual([
+      'length',
+      'pattern',
+    ]);
+    const hiddenId = all.find((each) => each.id === w.code.id)?.validation?.rules[0]?.id ?? '';
+    const refused = await refusalsOf(
+      editAttribute(hiding, { attributeId: w.code.id, rules: [{ id: hiddenId, kind: 'length', params: { max: 9 } }] }),
+    );
+    expect(refused.map((each) => each.code)).toEqual(['NOT_FOUND']);
   });
 });
 
@@ -571,6 +584,32 @@ describe('every kind, through a real write', () => {
 });
 
 describe('patterns', () => {
+  it('refuse a pattern too large to check quickly, before it is saved', async () => {
+    const w = await workspace();
+    const refusals = await refusalsOf(
+      editAttribute(w.scope, {
+        attributeId: w.code.id,
+        rules: [rule('pattern', { preset: 'custom', regex: '(?:.*a){1000}', ignoreCase: true })],
+      }),
+    );
+    expect(refusals).toEqual([
+      {
+        code: 'CONFIG_INVALID',
+        message: 'That pattern is too large to check quickly. Use fewer repeats.',
+        field: 'rules.0.regex',
+      },
+    ]);
+  });
+
+  it('check the largest pattern the settings allow against a 10,000 character value quickly', () => {
+    // About 300 instructions: the most the settings let through.
+    const test = compilePattern('^(?:(?:.*a){95})$', true);
+    const value = 'a'.repeat(10_000);
+    const started = performance.now();
+    test.test(value);
+    expect(performance.now() - started).toBeLessThan(200);
+  });
+
   it('match a 10,000 character value against (a+)+$ in linear time, under 50 ms', () => {
     const test = compilePattern('^(?:(a+)+$)$', false);
     const value = `${'a'.repeat(10_000)}b`;
