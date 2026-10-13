@@ -11,7 +11,13 @@ import { memoryTransport } from '../../test/sentry.ts';
 import { createRelay, type Relay } from '../realtime/relay.ts';
 import { createRelayStats } from '../realtime/stats.ts';
 import { flush, heartbeat, metrics, raiseIssue, startSentry, type IssueCode, type MetricName } from './sentry.ts';
-import { createStatsReporter, relaySource, type StatsReporter, type StatsReporterDeps } from './stats.ts';
+import {
+  createLagSample,
+  createStatsReporter,
+  relaySource,
+  type StatsReporter,
+  type StatsReporterDeps,
+} from './stats.ts';
 
 const { adminUrl, workerUrl } = inject('testDatabase');
 const MINUTE = 60_000;
@@ -27,12 +33,16 @@ afterEach(async () => {
 /** A reporter on fakes: what it records, raises, checks in and warns, and a switch for awake. */
 function fakeReporter(overrides: Partial<StatsReporterDeps> = {}) {
   const gauges: { name: MetricName; value: number }[] = [];
+  const distributions: { name: MetricName; value: number }[] = [];
   const raised: { code: IssueCode; numbers: Readonly<Record<string, number>> }[] = [];
   const warnings: { message: string; fields: Record<string, unknown> }[] = [];
   const state = { awake: true, checkIns: 0 };
   const reporter = createStatsReporter({
     sources: [],
-    metrics: { gauge: (name, value) => gauges.push({ name, value }) },
+    metrics: {
+      gauge: (name, value) => gauges.push({ name, value }),
+      distribution: (name, value) => distributions.push({ name, value }),
+    },
     heartbeat: () => {
       state.checkIns += 1;
     },
@@ -42,7 +52,7 @@ function fakeReporter(overrides: Partial<StatsReporterDeps> = {}) {
     ...overrides,
   });
   reporters.push(reporter);
-  return { reporter, gauges, raised, warnings, state };
+  return { reporter, gauges, distributions, raised, warnings, state };
 }
 
 /** Relay stats on a clock the test moves (starting at `now`), holding `count` rows, the oldest committed at `committedAt`. */
@@ -135,6 +145,39 @@ describe('the stats reporter', () => {
     expect(state.checkIns).toBe(10);
   });
 
+  it('raises RELAY_LAGGING again every hour an episode lasts, so auto resolve never closes it meanwhile', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const { reporter, raised } = fakeReporter({
+      sources: [() => ({ 'outbox.pending': 4, 'outbox.oldest_age_s': 600 })],
+    });
+    reporter.start(); // slow once
+    vi.advanceTimersByTime(MINUTE); // slow twice: raised
+    expect(raised).toHaveLength(1);
+    vi.advanceTimersByTime(59 * MINUTE);
+    expect(raised).toHaveLength(1);
+    vi.advanceTimersByTime(MINUTE); // an hour of slow ticks later
+    expect(raised).toHaveLength(2);
+  });
+
+  it('records the relay’s lag values gathered since the last tick as relay.lag, awake or asleep (AC-179)', () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+    const lag = createLagSample();
+    const { reporter, distributions, state } = fakeReporter({ lag });
+    lag.add([12, 40]);
+    reporter.start();
+    expect(distributions).toEqual([
+      { name: 'relay.lag', value: 12 },
+      { name: 'relay.lag', value: 40 },
+    ]);
+    // Rows published just before the worker fell asleep still go out.
+    lag.add([7]);
+    state.awake = false;
+    vi.advanceTimersByTime(MINUTE);
+    expect(distributions.slice(2)).toEqual([{ name: 'relay.lag', value: 7 }]);
+    vi.advanceTimersByTime(MINUTE);
+    expect(distributions).toHaveLength(3);
+  });
+
   it('checks in even when a source, a gauge or the issue throws, and says which step failed', () => {
     const { reporter, state, warnings } = fakeReporter({
       sources: [
@@ -146,6 +189,7 @@ describe('the stats reporter', () => {
         gauge: () => {
           throw new Error('gauge broke');
         },
+        distribution: () => undefined,
       },
     });
     reporter.start();
@@ -165,6 +209,35 @@ describe('the stats reporter', () => {
       vi.advanceTimersByTime(MINUTE);
     }).not.toThrow();
     expect(gauges.filter((gauge) => gauge.name === 'worker.awake')).toHaveLength(2);
+  });
+});
+
+describe('the lag sample', () => {
+  it('keeps every value up to its size, then a uniform sample of that size, and starts afresh at each drain', () => {
+    const sample = createLagSample({ size: 100 });
+    sample.add(Array.from({ length: 80 }, (_, index) => index));
+    expect(sample.drain()).toEqual(Array.from({ length: 80 }, (_, index) => index));
+    expect(sample.drain()).toEqual([]);
+
+    // 100,000 values, 1 to 100,000: the sample keeps 100, spread across the whole range.
+    for (let start = 1; start <= 100_000; start += 1_000) {
+      sample.add(Array.from({ length: 1_000 }, (_, index) => start + index));
+    }
+    const kept = [...sample.drain()].sort((a, b) => a - b);
+    expect(kept).toHaveLength(100);
+    const median = kept[49] ?? 0;
+    expect(median).toBeGreaterThan(30_000);
+    expect(median).toBeLessThan(70_000);
+  });
+
+  it('costs little per row in a burst', () => {
+    const sample = createLagSample();
+    const rows = Array.from({ length: 100 }, () => 42);
+    const started = performance.now();
+    for (let turn = 0; turn < 2_000; turn += 1) sample.add(rows);
+    // 200,000 rows: well under a microsecond each.
+    expect(performance.now() - started).toBeLessThan(200);
+    expect(sample.drain()).toHaveLength(500);
   });
 });
 
@@ -286,5 +359,7 @@ describe('the heartbeat and RELAY_LAGGING through the wrapper', () => {
     });
     expect(event?.message).toContain('over 30 seconds');
     expect(event?.user).toBeUndefined();
+    // No host name: on a laptop it often names its owner.
+    expect(event).not.toHaveProperty('server_name');
   });
 });

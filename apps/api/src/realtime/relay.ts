@@ -168,7 +168,12 @@ export interface Relay {
   wake(): void;
   /** Where the relay is now. */
   mode(): RelayMode;
-  /** The delivery numbers over the last 5 minutes, from memory (the worker's `/health`). */
+  /**
+   * The delivery numbers over the last 5 minutes, from memory (the worker's
+   * `/health` and the stats tick). The oldest pending age is also at least how
+   * long a failing workspace has failed, and how long work has waited for a
+   * relay that hasn't reached Postgres since (a failed connect).
+   */
   stats(): RelayStatsSnapshot;
   /** How many workspaces' audiences the relay holds now (for tests and #12's measurements). */
   cachedAudiences(): number;
@@ -245,6 +250,8 @@ export function createRelay(deps: RelayDeps): Relay {
   const stats = deps.stats ?? createRelayStats();
   const statsEveryMs = deps.statsEveryMs ?? 60_000;
   const { log } = deps;
+  // When recording a lag last failed and was warned about (at most once a minute).
+  let lagWarnedAt = Number.NEGATIVE_INFINITY;
   /** Rows marked: their lags go to the rolling stats and to `deps.lag`, which can never fail a turn. */
   const published = (lagsMs: readonly number[]): void => {
     stats.published(lagsMs);
@@ -252,9 +259,15 @@ export function createRelay(deps: RelayDeps): Relay {
     try {
       deps.lag(lagsMs);
     } catch (error) {
+      if (Date.now() - lagWarnedAt < WARN_EVERY_MS) return;
+      lagWarnedAt = Date.now();
       log.warn('Recording the relay lag failed', errorFields(error));
     }
   };
+  // Since when work has waited for the relay to reach Postgres at all: set at boot and by a poke, cleared by a
+  // poll that answered (or a lock another relay holds). A relay that can't connect, while the api keeps writing
+  // and poking, reads no row, so this is what shows its backlog growing (spec 0010, AC-180).
+  let unservedSince: number | undefined;
 
   // The loop's own state, read through functions where an await sits between a write and a read.
   let stopped = true;
@@ -391,6 +404,9 @@ export function createRelay(deps: RelayDeps): Relay {
       return undefined;
     }
     // A failing workspace's rows aren't work until they go out.
+    // Read and not yet published, until the publish below says otherwise: a turn that throws from here on
+    // (audiences, planning, the mark) leaves its rows counted as waiting.
+    stats.pending(workspaceId, rows.length, rows[0]?.at);
     const retrying = retries.has(workspaceId);
     if (!retrying) sawWork();
     const channel = workspaceChannel(workspaceId);
@@ -540,6 +556,8 @@ export function createRelay(deps: RelayDeps): Relay {
         if (!holding && due) {
           lastPoll = Date.now();
           holding = await reader.lock();
+          // Another relay holds the lock: it serves the outbox.
+          if (!holding) unservedSince = undefined;
           if (holding) {
             // Before the poll below, so a write committed from here on is either seen by it or notified.
             await reader.listen((workspaceId) => {
@@ -566,6 +584,7 @@ export function createRelay(deps: RelayDeps): Relay {
           if (due) {
             lastPoll = Date.now();
             const waiting = await reader.workspaces(workspacesPerPoll, pollAfter);
+            unservedSince = undefined;
             pollAfter = waiting.length >= workspacesPerPoll ? waiting.at(-1) : undefined;
             // Only a workspace that isn't failing counts as work.
             if (waiting.some((workspaceId) => !retries.has(workspaceId))) sawWork();
@@ -671,6 +690,7 @@ export function createRelay(deps: RelayDeps): Relay {
   return {
     start() {
       if (running !== undefined) return;
+      unservedSince = Date.now();
       stopped = false;
       current = 'active';
       pruneRound = { dueAt: Date.now(), open: undefined };
@@ -678,12 +698,24 @@ export function createRelay(deps: RelayDeps): Relay {
     },
     wake() {
       if (halted()) return;
+      unservedSince ??= Date.now();
       sawWork();
       woken = true;
       if (!backingOff) interrupt();
     },
     mode: () => current,
-    stats: () => stats.snapshot(),
+    stats() {
+      // The rows it holds, and at least as long as a failing workspace has failed or work has waited unserved:
+      // a turn that throws before it reads, or a relay that can't connect, still shows its backlog ageing.
+      const snapshot = stats.snapshot();
+      const now = Date.now();
+      const since = Math.min(
+        unservedSince ?? Number.POSITIVE_INFINITY,
+        ...[...retries.values()].map((retry) => retry.since),
+      );
+      if (since === Number.POSITIVE_INFINITY) return snapshot;
+      return { ...snapshot, oldestPendingMs: Math.max(snapshot.oldestPendingMs ?? 0, now - since) };
+    },
     cachedAudiences: () => audienceCache.size,
     async stop() {
       stopped = true;

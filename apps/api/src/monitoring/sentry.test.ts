@@ -196,7 +196,14 @@ describe('metrics (milestone 4)', () => {
     const sent = transport.metrics();
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ name: 'relay.lag', type: 'distribution', unit: 'millisecond', value: 120.5 });
-    expect(Object.keys(sent[0]?.attributes ?? {}).filter((key) => !key.startsWith('sentry.'))).toEqual(['service']);
+    expect(Object.keys(sent[0]?.attributes ?? {}).sort()).toEqual([
+      'sentry.environment',
+      'sentry.release',
+      'sentry.sdk.name',
+      'sentry.sdk.version',
+      'sentry.timestamp.sequence',
+      'service',
+    ]);
     expect(sent[0]?.attributes.service?.value).toBe('worker');
     expect(sent[0]?.attributes['sentry.environment']?.value).toBe('production');
     expect(transport.envelopes.join('\n')).not.toMatch(/user-5|workspace-5|req-5|server\.address/);

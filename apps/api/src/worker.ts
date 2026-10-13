@@ -17,7 +17,7 @@ import { createJobRunner } from './jobs/runner.ts';
 import { loadEnv, WorkerEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
 import { captureFault, flush, heartbeat, metrics, MONITORING_FLUSH_MS, raiseIssue } from './monitoring/sentry.ts';
-import { createStatsReporter, relaySource } from './monitoring/stats.ts';
+import { createLagSample, createStatsReporter, relaySource } from './monitoring/stats.ts';
 import { createCentrifugoPublisher } from './realtime/centrifugo.ts';
 import { createRelay } from './realtime/relay.ts';
 import { onShutdown } from './shutdown.ts';
@@ -82,6 +82,9 @@ const reportingLog = {
   },
 };
 
+// The relay's lag values between two stats ticks: every one up to 500 a minute, a uniform sample past that.
+const lagSample = createLagSample();
+
 const relay =
   env.centrifugo === undefined
     ? undefined
@@ -94,10 +97,9 @@ const relay =
         // Only crm_worker may run crm_outbox_prune (spec 0007, milestone 3): on another login (where the jobs, and
         // so the daily cleanup, are off too) the outbox keeps every row until the login moves to crm_worker_user.
         prune: directInWorker,
-        // Each published row's delay from commit to publish, from Postgres's clock at both ends (spec 0010, AC-179).
-        lag: (lagsMs) => {
-          for (const lagMs of lagsMs) metrics.distribution('relay.lag', lagMs);
-        },
+        // Each published row's delay from commit to publish, from Postgres's clock at both ends (spec 0010,
+        // AC-179), into the bounded sample the stats tick records, so a burst costs a turn nothing.
+        lag: lagSample.add,
       });
 if (relay === undefined) {
   log.info('Relay off: CENTRIFUGO_API_URL and CENTRIFUGO_API_KEY are unset, so no change is published');
@@ -158,14 +160,15 @@ health.listen(env.WORKER_PORT, '::', () =>
   }),
 );
 
-// The stats tick (spec 0010, AC-180 to AC-182): once a minute, from memory only, it records whether the worker is
-// awake and, while it is, the relay's backlog; raises RELAY_LAGGING; and checks in to the heartbeat, awake or
+// The stats tick (spec 0010, AC-179 to AC-182): once a minute, from memory only, it records whether the worker is
+// awake, the relay's lag sample and, while awake, the relay's backlog; raises RELAY_LAGGING; and checks in to the heartbeat, awake or
 // asleep. Until spec 0008's sleep gives the worker one lifecycle, it is awake while the jobs' runners run (they
 // listen and poll for as long as the process lives) or while the relay is active, and asleep while the relay is
 // dormant with the jobs off, as production runs today.
 const stats = createStatsReporter({
   sources: relay === undefined ? [] : [relaySource(() => relay.stats())],
   metrics,
+  lag: lagSample,
   heartbeat,
   raise: raiseIssue,
   isAwake: () => jobs !== undefined || relay?.mode() === 'active',

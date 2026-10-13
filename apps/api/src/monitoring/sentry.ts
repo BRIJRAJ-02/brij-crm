@@ -97,6 +97,9 @@ export type MetricName = keyof typeof METRIC_UNITS;
 
 const isMetricName = (name: string): name is MetricName => Object.hasOwn(METRIC_UNITS, name);
 
+// Scope attributes (`scope.setAttributes`) join a metric after this hook runs, out of its reach: nothing here sets
+// any, and nothing may, or they would reach every metric.
+
 /** What a metric may say about where it came from beside `service`: the environment, release and SDK, no more. */
 const KEPT_METRIC_ATTRIBUTES: readonly string[] = [
   'sentry.environment',
@@ -212,6 +215,8 @@ export function sentryOptions(config: SentryConfig): NodeOptions {
       stackFrameVariables: false,
     },
     includeLocalVariables: false,
+    // No host name on events or metrics: on a laptop it often names its owner.
+    includeServerName: false,
     // Node 24 stops on an unhandled rejection; a listener in warn mode would keep a broken process running.
     // Strict mode reports it, then exits the same way, so monitoring changes nothing about how the app fails.
     // No process session (release health would carry the last request's user id) and no console patching
@@ -388,6 +393,12 @@ export const ISSUES = {
 /** One of the codes in `ISSUES`. */
 export type IssueCode = keyof typeof ISSUES;
 
+/** The numbers each issue carries, named per code, so no key can be an id. */
+export interface IssueNumbers {
+  /** The relay's unpublished rows, and how long the oldest has waited, in seconds. */
+  readonly RELAY_LAGGING: { readonly pending: number; readonly oldest_age_s: number };
+}
+
 /**
  * Raises a warning issue the process found itself (`RELAY_LAGGING`, AC-182):
  * one fingerprint per code, so every episode lands on one issue, with its
@@ -395,7 +406,7 @@ export type IssueCode = keyof typeof ISSUES;
  * outside any request, never waiting for the network; a no op until Sentry
  * starts.
  */
-export function raiseIssue(code: IssueCode, numbers: Readonly<Record<string, number>>): void {
+export function raiseIssue<Code extends IssueCode>(code: Code, numbers: IssueNumbers[Code]): void {
   if (!isInitialized()) return;
   outsideAnyRequest(() => {
     captureMessage(ISSUES[code], {

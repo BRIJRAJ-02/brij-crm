@@ -1016,6 +1016,48 @@ describe('the relay lag metric (spec 0010, AC-179)', () => {
     for (const row of stored) expect(row.lag_ms).toBeGreaterThanOrEqual(2_000);
   });
 
+  it('counts the rows of a turn that fails before publishing as waiting, ageing from their commit (spec 0010, AC-180)', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const workspaceId = await workspace();
+    await events(workspaceId, [1, 2]);
+    await testQuery(ownerUrl, `update outbox set created_at = now() - interval '5 seconds' where workspace_id = $1`, [
+      workspaceId,
+    ]);
+    const { relay } = relayTo(centrifugo.url, {
+      audiences: (id) => (id === workspaceId ? Promise.reject(new Error('audiences down')) : loadAudiences(id)),
+      retryMs: 1_000,
+    });
+    await expect.poll(() => relay.stats().pending, WAIT).toBeGreaterThanOrEqual(2);
+    expect(relay.stats().oldestPendingMs).toBeGreaterThanOrEqual(5_000);
+    expect(centrifugo.seqs(workspaceId)).toEqual([]);
+  });
+
+  it('shows work waiting on a relay that can’t reach Postgres, from boot and from each poke, and none once a poll answers', async () => {
+    const down = createRelay({
+      connect: () => Promise.reject(new Error('direct endpoint down')),
+      audiences: loadAudiences,
+      publishBatch: () => Promise.resolve({ published: 0 }),
+      log: { info: () => undefined, warn: () => undefined, error: () => undefined },
+      backoffMs: 50,
+      maxBackoffMs: 50,
+      prune: false,
+    });
+    started.push(down);
+    down.start();
+    await sleep(300);
+    down.wake();
+    expect(down.mode()).toBe('active');
+    expect(down.stats().oldestPendingMs).toBeGreaterThanOrEqual(250);
+    await sleep(200);
+    expect(down.stats().oldestPendingMs).toBeGreaterThanOrEqual(450);
+
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const { relay } = relayTo(centrifugo.url);
+    await expect.poll(() => relay.stats().oldestPendingMs, WAIT).toBeUndefined();
+  });
+
   it('keeps publishing when recording the lag throws', async () => {
     const centrifugo = await fakeCentrifugo();
     servers.push(centrifugo);
