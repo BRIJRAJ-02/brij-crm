@@ -76,6 +76,25 @@ test.describe('relations', () => {
     await page.getByRole('link', { name: 'Companies' }).first().click();
     await expect(page.getByRole('grid', { name: 'Companies' })).toBeVisible();
 
+    // By keyboard alone: Add attribute, a name, Relationship from the type picker, then Esc puts focus back on
+    // Add attribute (AC-305).
+    const addAttribute = page.getByRole('button', { name: 'Add attribute' }).first();
+    await addAttribute.focus();
+    await page.keyboard.press('Enter');
+    const byKeys = page.getByRole('dialog', { name: 'New attribute' });
+    await expect(byKeys.getByLabel('Name', { exact: true })).toBeFocused();
+    await page.keyboard.type('Advisers');
+    await page.keyboard.press('Tab');
+    await page.keyboard.press('ArrowDown');
+    await page.getByRole('option', { name: 'Relationship', exact: true }).focus();
+    await page.keyboard.press('Enter');
+    const handedOver = page.getByRole('dialog', { name: 'New relationship' });
+    await expect(handedOver).toBeVisible();
+    await expect(handedOver.getByRole('button', { name: /Related object/ })).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(handedOver).toBeHidden();
+    await expect(addAttribute).toBeFocused();
+
     // Add attribute, a name, then Relationship: the dialog takes over with the name on this side (AC-282).
     const dialog = await newRelationship(page, 'Investors');
     await relatedObject(page, dialog, 'People');
@@ -133,7 +152,10 @@ test.describe('relations', () => {
     await page.getByRole('menuitem', { name: 'Edit attribute' }).click();
     const edit = page.getByRole('dialog', { name: 'Edit relationship' });
     await expect(edit).toBeVisible();
-    await expect(edit.getByRole('radiogroup')).toHaveAttribute('aria-readonly', 'true');
+    await expect(edit.getByRole('radio')).toHaveCount(0);
+    await expect(edit.getByLabel('How records link')).toHaveValue(
+      'Each company has many people, each person has many companies',
+    );
     await expect(edit).toContainText('The objects and how records link can’t change once the relationship exists.');
     await edit.getByLabel('Name on Companies').fill('Backers');
     await edit.getByLabel('Name on People').fill('Holdings');

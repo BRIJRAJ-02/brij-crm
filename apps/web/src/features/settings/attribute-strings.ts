@@ -56,8 +56,6 @@ export const strings = {
   memberReason: 'Only workspace owners and admins can change attributes.',
   /** The type picker's entry that hands over to the relationship dialog (spec 0014). */
   relationship: 'Relationship',
-  /** A relationship's other side couldn't be read, so its names show read only. */
-  pairedFailed: 'Couldn’t load the other side of this relationship. Close it and try again.',
   loading: 'Loading attributes',
   loadFailed: 'Couldn’t load the attributes',
   somethingWrong: 'Something went wrong. Try again in a moment.',
