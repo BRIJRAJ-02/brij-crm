@@ -183,9 +183,13 @@ export const SelfRelation: Story = {
     const first = inDialog(dialog, 'Name on People');
     const second = inDialog(dialog, 'Reverse name on People');
     await waitFor(() => expect(first).toHaveFocus());
-    await userEvent.clear(first);
+    // Both names start empty (both defaults would be People), and the choices name the sides.
+    await expect(first).toHaveValue('');
+    await expect(second).toHaveValue('');
+    await expect(
+      within(dialog).getByRole('radio', { name: 'This side holds one person, the reverse side holds many people' }),
+    ).toBeChecked();
     await userEvent.type(first, 'Manager');
-    await userEvent.clear(second);
     await userEvent.type(second, 'manager');
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
     await waitFor(() => expect(dialog).toHaveTextContent('Give each side its own name.'));
@@ -212,15 +216,26 @@ export const BothEndsChoosable: Story = {
   args: { from: undefined },
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog();
-    await expect(
-      within(dialog).getByRole('radio', { name: 'Each record has one record, each record has many records' }),
-    ).toBeChecked();
-    await waitFor(() => expect(document.activeElement?.getAttribute('aria-haspopup')).toBe('listbox'));
+    // Until both objects are chosen there is nothing to phrase: no choices, no names.
+    await expect(within(dialog).queryAllByRole('radio')).toEqual([]);
+    await expect(within(dialog).queryAllByRole('textbox')).toEqual([]);
+    const objectPicker = await waitFor(() => {
+      const active = document.activeElement;
+      if (!(active instanceof HTMLElement) || active.getAttribute('aria-haspopup') !== 'listbox') {
+        throw new globalThis.Error('No picker has focus.');
+      }
+      return active;
+    });
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
+    // The refusal is on the Object picker, which takes focus back so its refusal is read.
     await waitFor(() => expect(dialog).toHaveTextContent('Choose an object for this side.'));
+    await waitFor(() => expect(objectPicker).toHaveFocus());
     await expect(args.onSubmit).not.toHaveBeenCalled();
     await choose(dialog, userEvent, 'Object', 'Deals');
     await choose(dialog, userEvent, 'Related object', 'Companies');
+    await expect(
+      within(dialog).getByRole('radio', { name: 'Each deal has one company, each company has many deals' }),
+    ).toBeChecked();
     await expect(inDialog(dialog, 'Name on Deals')).toHaveValue('Company');
     await expect(inDialog(dialog, 'Name on Companies')).toHaveValue('Deals');
   },
@@ -257,11 +272,11 @@ export const Edit: Story = {
     await expect(dialog).toHaveTextContent(
       'The objects and how records link can’t change once the relationship exists.',
     );
-    const chosen = within(dialog).getByRole('radio', {
-      name: 'Each company has many people, each person has many companies',
-    });
-    await expect(chosen).toBeChecked();
-    await expect(within(dialog).getByRole('radiogroup')).toHaveAttribute('aria-readonly', 'true');
+    // The relationship's own choice alone, read only: no radio that looks pickable.
+    await expect(within(dialog).queryAllByRole('radio')).toEqual([]);
+    const fixed = inDialog(dialog, 'How records link');
+    await expect(fixed).toHaveValue('Each company has many people, each person has many companies');
+    await expect(fixed).toHaveAttribute('readonly');
     const near = inDialog(dialog, 'Name on Companies');
     await waitFor(() => expect(near).toHaveFocus());
     await userEvent.clear(near);
@@ -286,10 +301,16 @@ export const EditSelf: Story = {
     from: { objectId: PEOPLE, title: 'Manager' },
     to: { objectId: PEOPLE, title: 'Reports' },
     cardinality: 'many_to_one',
+    focusSide: 'to',
   },
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog();
+    // Opened from Reports: its name has focus, and the choice names the sides rather than "each person" twice.
     const second = inDialog(dialog, 'Reverse name on People');
+    await waitFor(() => expect(second).toHaveFocus());
+    await expect(inDialog(dialog, 'How records link')).toHaveValue(
+      'This side holds one person, the reverse side holds many people',
+    );
     await userEvent.clear(second);
     await userEvent.type(second, 'Manager');
     await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
@@ -349,6 +370,27 @@ export const RefusedName: Story = {
     await expect(dialog).toHaveTextContent('Companies already has an attribute with this name. Pick another.');
     await userEvent.type(far, ' team');
     await waitFor(() => expect(far).not.toHaveAttribute('aria-invalid', 'true'));
+  },
+};
+
+/** The server refused the name on this object's side (People already has Company): it shows on that name. */
+export const RefusedNearName: Story = {
+  args: {
+    to: { objectId: COMPANIES },
+    refusals: [
+      {
+        code: 'SLUG_TAKEN',
+        message: 'People already has an attribute with this name. Pick another.',
+        attributeId: 'from.title',
+      },
+    ],
+  },
+  play: async () => {
+    const dialog = await openDialog();
+    const near = inDialog(dialog, 'Name on People');
+    await waitFor(() => expect(near).toHaveAttribute('aria-invalid', 'true'));
+    await expect(dialog).toHaveTextContent('People already has an attribute with this name. Pick another.');
+    await expect(inDialog(dialog, 'Name on Companies')).not.toHaveAttribute('aria-invalid', 'true');
   },
 };
 

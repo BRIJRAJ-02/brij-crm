@@ -687,10 +687,10 @@ describe('members and attributes', () => {
       to: { title: 'Staff' },
       mutationId: api.mutationIds.at(-1),
     });
-    // Only Companies' side changed: its list goes, People's stays.
+    // Both objects' lists go: each side carries its pair's name.
     await data.attributes.list('acme', PEOPLE.id);
     await data.attributes.list('acme', COMPANIES_ID);
-    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(5);
+    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(6);
   });
 
   it('maps an attribute to the field set’s, reading references and members as read only in this loop', () => {

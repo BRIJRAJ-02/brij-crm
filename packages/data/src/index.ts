@@ -1506,7 +1506,13 @@ export function createDataLayer({
               },
               options,
             ),
-          (edited) => [edited.objectId],
+          // A relationship side's new title is its pair's too (the relationship block): that object changes as well.
+          (edited) => [
+            edited.objectId,
+            ...(changes.title !== undefined && edited.relationship?.pairedAttributeId !== undefined
+              ? edited.relationship.targetObjectIds
+              : []),
+          ],
         ),
       /**
        * Moves an attribute to `position` among its object's own attributes,
@@ -1577,8 +1583,8 @@ export function createDataLayer({
         ),
       /**
        * Renames one or both sides of a relationship in one write (spec 0014,
-       * AC-307), waiting for the server. Only the objects whose side changed
-       * store an event, so only those count as echoes. Refusals:
+       * AC-307), waiting for the server. Both objects change (each side
+       * carries its pair's name), so both count as echoes. Refusals:
        * `CONFIG_INVALID` on the side's name, `NOT_FOUND`, `FORBIDDEN`.
        */
       update: (workspace: string, relationshipId: string, names: RelationshipNames): Promise<RelationshipView> =>
@@ -1595,10 +1601,8 @@ export function createDataLayer({
               },
               options,
             ),
-          (renamed) => [
-            ...(names.from === undefined ? [] : [renamed.from.objectId]),
-            ...(names.to === undefined ? [] : [renamed.to.objectId]),
-          ],
+          // Both objects change: each side carries its pair's name.
+          (renamed) => [renamed.from.objectId, renamed.to.objectId],
         ),
     },
     options: {

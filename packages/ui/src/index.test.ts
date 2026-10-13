@@ -138,6 +138,7 @@ describe('@crm/ui', () => {
       'isSystemOnly',
       'loadPhoneLibrary',
       'quickPicks',
+      'relationshipStep',
       'ruleOf',
       'safeHref',
       'safeImageSrc',

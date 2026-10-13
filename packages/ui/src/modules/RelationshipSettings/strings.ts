@@ -28,6 +28,12 @@ export const strings = {
     far: { readonly singular: string; readonly plural: string; readonly isOne: boolean },
   ) =>
     `Each ${near.singular} has ${howMany(near.isOne, far.singular, far.plural)}, each ${far.singular} has ${howMany(far.isOne, near.singular, near.plural)}`,
+  /**
+   * One cardinality from an object to itself, by side: "This side holds one
+   * person, the reverse side holds many people".
+   */
+  selfChoice: (fromOne: boolean, toOne: boolean, singular: string, plural: string) =>
+    `This side holds ${howMany(fromOne, singular, plural)}, the reverse side holds ${howMany(toOne, singular, plural)}`,
   /** A side's name field: "Name on People". */
   nameOn: (plural: string) => `Name on ${plural}`,
   /** The second name field of a relationship from an object to itself. */

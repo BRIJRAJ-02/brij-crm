@@ -219,7 +219,10 @@ export { RecordHeader, type RecordHeaderProps } from './modules/RecordHeader/Rec
 export { RecordLayout, type RecordLayoutProps } from './modules/RecordLayout/RecordLayout.tsx';
 export { RecordPanel, type RecordPanelProps, type RecordPanelTab } from './modules/RecordPanel/RecordPanel.tsx';
 export {
+  relationshipStep,
   RelationshipSettings,
+  type DialogStep,
+  type RelationshipStepProps,
   type RelationshipSettingsEnd,
   type RelationshipSettingsField,
   type RelationshipSettingsObject,

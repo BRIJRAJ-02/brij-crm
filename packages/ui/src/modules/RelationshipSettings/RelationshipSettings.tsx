@@ -5,7 +5,7 @@
 // `onSubmit`, and the screen talks to the data layer and mints the
 // relationship's id once per opening.
 import { CARDINALITIES, sidesHoldingOne, type CardinalityKey } from '@crm/contracts/values';
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
@@ -65,6 +65,8 @@ export interface RelationshipSettingsProps {
   readonly onSubmit: (values: RelationshipSettingsValues) => void;
   /** Shown read only, with this reason once, and Close alone (a member who can't change the schema). */
   readonly readOnlyReason?: string;
+  /** Edit mode: the side whose name takes focus, the one the person opened (`from` when absent). */
+  readonly focusSide?: 'from' | 'to';
 }
 
 /** An object's names as the sentences use them, lower case, or the plain words for one the dialog doesn't hold. */
@@ -94,55 +96,51 @@ function defaultTitle(other: RelationshipSettingsObject | undefined, holdsOne: b
 const OWN_ERRORS: ReadonlySet<string> = new Set(['from.objectId', 'to.objectId', 'cardinality']);
 const FORM_FIELDS: ReadonlySet<string> = new Set(['from.title', 'to.title']);
 
+/** One dialog's title, footer and body, which a Modal shows: RelationshipSettings' own, or AttributeSettings' in its place. */
+export interface DialogStep {
+  readonly title: string;
+  readonly actions: ReactNode;
+  readonly body: ReactNode;
+}
+
+/** What `relationshipStep` takes: RelationshipSettings' props without the Modal's, and the form's id. */
+export type RelationshipStepProps = Omit<RelationshipSettingsProps, 'isOpen' | 'onOpenChange'> & {
+  /** The form's id (`useId` in the caller), which the footer's primary submits. */
+  readonly formId: string;
+};
+
 /**
- * RelationshipSettings: a Modal with the two objects, how their records link
- * (four plain choices phrased with both objects), a name for each side and a
- * sentence restating the result. Create waits for the screen's answer; edit
- * renames the sides.
+ * RelationshipSettings' title, footer and body, for a Modal that is already
+ * open: AttributeSettings shows them in its own Modal when Relationship is
+ * chosen (its `step`), so the scrim, the dialog and where focus returns stay
+ * as they were. RelationshipSettings is the same step in a Modal of its own.
  */
-export function RelationshipSettings({
-  isOpen,
-  onOpenChange,
+export function relationshipStep({
+  formId,
   mode,
   isBusy = false,
   readOnlyReason,
   ...rest
-}: RelationshipSettingsProps) {
-  const formId = useId();
+}: RelationshipStepProps): DialogStep {
   const isReadOnly = readOnlyReason !== undefined;
   const title = mode === 'create' ? strings.newTitle : isReadOnly ? strings.viewTitle : strings.editTitle;
-  return (
-    <Modal
-      title={title}
-      isOpen={isOpen}
-      // While the server answers, the dialog stays: a refusal has to land on its side.
-      onOpenChange={(open) => {
-        if (!open && isBusy) return;
-        onOpenChange(open);
-      }}
-      actions={
-        isReadOnly ? (
-          <Button slot="close" kbd="ESC">
-            {strings.close}
-          </Button>
-        ) : (
-          <>
-            <Button slot="close" isDisabled={isBusy} kbd="ESC">
-              {strings.cancel}
-            </Button>
-            <Button variant="primary" type="submit" form={formId} isPending={isBusy} kbd="⌘↵">
-              {mode === 'create'
-                ? isBusy
-                  ? strings.creating
-                  : strings.create
-                : isBusy
-                  ? strings.saving
-                  : strings.save}
-            </Button>
-          </>
-        )
-      }
-    >
+  return {
+    title,
+    actions: isReadOnly ? (
+      <Button slot="close" kbd="ESC">
+        {strings.close}
+      </Button>
+    ) : (
+      <>
+        <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          {strings.cancel}
+        </Button>
+        <Button variant="primary" type="submit" form={formId} isPending={isBusy} kbd="⌘↵">
+          {mode === 'create' ? (isBusy ? strings.creating : strings.create) : isBusy ? strings.saving : strings.save}
+        </Button>
+      </>
+    ),
+    body: (
       <RelationshipForm
         {...rest}
         formId={formId}
@@ -151,6 +149,31 @@ export function RelationshipSettings({
         isBusy={isBusy}
         readOnlyReason={readOnlyReason}
       />
+    ),
+  };
+}
+
+/**
+ * RelationshipSettings: a Modal with the two objects, how their records link
+ * (four plain choices phrased with both objects), a name for each side and a
+ * sentence restating the result. Create waits for the screen's answer; edit
+ * renames the sides.
+ */
+export function RelationshipSettings({ isOpen, onOpenChange, ...props }: RelationshipSettingsProps) {
+  const formId = useId();
+  const { title, actions, body } = relationshipStep({ ...props, formId });
+  return (
+    <Modal
+      title={title}
+      isOpen={isOpen}
+      // While the server answers, the dialog stays: a refusal has to land on its side.
+      onOpenChange={(open) => {
+        if (!open && props.isBusy === true) return;
+        onOpenChange(open);
+      }}
+      actions={actions}
+    >
+      {body}
     </Modal>
   );
 }
@@ -174,13 +197,14 @@ function RelationshipForm({
   refusals = [],
   onSubmit,
   readOnlyReason,
+  focusSide = 'from',
 }: RelationshipFormProps) {
   const isEditing = mode === 'edit';
   const isReadOnly = readOnlyReason !== undefined;
   const [fromId, setFromId] = useState<string | null>(from?.objectId ?? null);
   const [toId, setToId] = useState<string | null>(to?.objectId ?? null);
   const [cardinality, setCardinality] = useState<CardinalityKey>(initialCardinality);
-  // A name follows the objects and the cardinality until the person types it (undefined), as the API name does.
+  // A name follows the objects and the cardinality until the person types it (undefined); emptied, it stays empty.
   const [fromTitle, setFromTitle] = useState<string | undefined>(from?.title);
   const [toTitle, setToTitle] = useState<string | undefined>(to?.title);
   const [changed, setChanged] = useState<ReadonlySet<'from.title' | 'to.title'>>(new Set());
@@ -190,8 +214,11 @@ function RelationshipForm({
   const toObject = objects.find((object) => object.id === toId);
   const holdsOne = sidesHoldingOne(cardinality);
   const isSelf = fromId !== null && fromId === toId;
-  const fromName = fromTitle ?? defaultTitle(toObject, holdsOne.from);
-  const toName = toTitle ?? defaultTitle(fromObject, holdsOne.to);
+  // From an object to itself both defaults would be the same object's name: the person names each side.
+  const fromName = fromTitle ?? (isSelf ? '' : defaultTitle(toObject, holdsOne.from));
+  const toName = toTitle ?? (isSelf ? '' : defaultTitle(fromObject, holdsOne.to));
+  // Create shows the choices and names once both objects are chosen: before, they would name no object.
+  const isShaped = fromId !== null && toId !== null;
   const near = nounsOf(fromObject);
   const far = nounsOf(toObject);
 
@@ -201,21 +228,45 @@ function RelationshipForm({
 
   const submit = () => {
     if (isBusy || isReadOnly) return;
-    const problems: FormRefusal[] = [
+    const missing: FormRefusal[] = [
       ...(fromId === null
         ? [{ code: 'INPUT_INVALID', message: strings.objectMissing, attributeId: 'from.objectId' }]
         : []),
       ...(toId === null ? [{ code: 'INPUT_INVALID', message: strings.objectMissing, attributeId: 'to.objectId' }] : []),
-      ...(fromName.trim() === ''
-        ? [{ code: 'INPUT_INVALID', message: strings.nameMissing, attributeId: 'from.title' }]
-        : []),
-      ...(toName.trim() === ''
-        ? [{ code: 'INPUT_INVALID', message: strings.nameMissing, attributeId: 'to.title' }]
-        : isSelf && fromName.trim().toLowerCase() === toName.trim().toLowerCase()
-          ? [{ code: 'CONFIG_INVALID', message: strings.namesEqual, attributeId: 'to.title' }]
-          : []),
     ];
+    // Names are checked once both objects are chosen (they show only then).
+    const problems: FormRefusal[] =
+      missing.length > 0
+        ? missing
+        : [
+            ...(fromName.trim() === ''
+              ? [{ code: 'INPUT_INVALID', message: strings.nameMissing, attributeId: 'from.title' }]
+              : []),
+            ...(toName.trim() === ''
+              ? [{ code: 'INPUT_INVALID', message: strings.nameMissing, attributeId: 'to.title' }]
+              : isSelf && fromName.trim().toLowerCase() === toName.trim().toLowerCase()
+                ? [{ code: 'CONFIG_INVALID', message: strings.namesEqual, attributeId: 'to.title' }]
+                : []),
+          ];
     setLocal(problems);
+    if (missing.length > 0) {
+      // The Select draws its own refusal, which the Form neither focuses nor reads: focus goes to it, so its
+      // description (the refusal) is read.
+      const side = fromId === null ? 'from' : 'to';
+      const label = side === 'from' ? strings.object : strings.relatedObject;
+      setTimeout(() => {
+        const triggers = document
+          .getElementById(formId)
+          ?.querySelectorAll<HTMLElement>('button[aria-haspopup="listbox"]');
+        const trigger = [...(triggers ?? [])].find((button) =>
+          (button.getAttribute('aria-labelledby') ?? '')
+            .split(' ')
+            .some((id) => document.getElementById(id)?.textContent === label),
+        );
+        trigger?.focus();
+      }, 0);
+      return;
+    }
     if (problems.length > 0 || fromId === null || toId === null) return;
     onSubmit({
       cardinality,
@@ -250,21 +301,18 @@ function RelationshipForm({
           if (side === 'from') setFromId(next);
           else setToId(next);
         }}
-        {...(isEditing || isPreset || isReadOnly
-          ? {
-              isReadOnly: true,
-              // Said once, under the last fixed setting before the choices.
-              ...(isEditing && side === 'to' ? { readOnlyReason: strings.shapeFixed } : {}),
-            }
-          : {})}
+        {...(isEditing || isPreset || isReadOnly ? { isReadOnly: true } : {})}
         {...(error === undefined ? {} : { error })}
       />
     );
   };
   const cardinalityError = errorOf('cardinality');
+  // From an object to itself, "each person has one person" can't say which side is which: the choices name sides.
   const choiceOf = (each: CardinalityKey) => {
     const sides = sidesHoldingOne(each);
-    return strings.choice({ ...near, isOne: sides.from }, { ...far, isOne: sides.to });
+    return isSelf
+      ? strings.selfChoice(sides.from, sides.to, near.singular, near.plural)
+      : strings.choice({ ...near, isOne: sides.from }, { ...far, isOne: sides.to });
   };
   const formRefusals = shown.filter(
     (refusal) => refusal.attributeId === undefined || !OWN_ERRORS.has(refusal.attributeId),
@@ -279,7 +327,7 @@ function RelationshipForm({
         isRequired
         maxLength={100}
         {...(side === 'from' ? { hint: strings.nameHint } : {})}
-        autoFocus={side === 'from' && choosable === undefined && !isReadOnly}
+        autoFocus={side === (isEditing ? focusSide : 'from') && choosable === undefined && !isReadOnly}
         value={side === 'from' ? fromName : toName}
         onChange={(next) => {
           if (side === 'from') setFromTitle(next);
@@ -307,35 +355,49 @@ function RelationshipForm({
       {readOnlyReason !== undefined && <Callout>{readOnlyReason}</Callout>}
       {objectSelect('from', fromId, from !== undefined)}
       {objectSelect('to', toId, to !== undefined)}
-      <RadioGroup
-        label={strings.cardinality}
-        value={cardinality}
-        onChange={(next) => {
-          const found = CARDINALITIES.find((each) => each === next);
-          if (found !== undefined) setCardinality(found);
-        }}
-        {...(isEditing || isReadOnly ? { isReadOnly: true } : {})}
-        {...(cardinalityError === undefined ? {} : { error: cardinalityError })}
-      >
-        {CARDINALITIES.map((each) => (
-          <Radio key={each} value={each}>
-            {choiceOf(each)}
-          </Radio>
-        ))}
-      </RadioGroup>
-      {nameField('from')}
-      {nameField('to')}
-      <Callout>
-        {isSelf
-          ? strings.selfSentence(
-              near.title,
-              { title: fromName.trim(), isOne: holdsOne.from },
-              { title: toName.trim(), isOne: holdsOne.to },
-              near.singular,
-              near.plural,
-            )
-          : `${strings.sideSentence(near.title, fromName.trim(), holdsOne.from, far.singular, far.plural)} ${strings.sideSentence(far.title, toName.trim(), holdsOne.to, near.singular, near.plural)}`}
-      </Callout>
+      {isEditing || isReadOnly ? (
+        // Fixed: the relationship's own choice alone, read only, saying why once (the radios would look live).
+        <Field
+          label={strings.cardinality}
+          value={choiceOf(cardinality)}
+          isMultiline
+          isReadOnly
+          {...(isEditing && !isReadOnly ? { readOnlyReason: strings.shapeFixed } : {})}
+        />
+      ) : (
+        isShaped && (
+          <RadioGroup
+            label={strings.cardinality}
+            value={cardinality}
+            onChange={(next) => {
+              const found = CARDINALITIES.find((each) => each === next);
+              if (found !== undefined) setCardinality(found);
+            }}
+            {...(cardinalityError === undefined ? {} : { error: cardinalityError })}
+          >
+            {CARDINALITIES.map((each) => (
+              <Radio key={each} value={each}>
+                {choiceOf(each)}
+              </Radio>
+            ))}
+          </RadioGroup>
+        )
+      )}
+      {isShaped && nameField('from')}
+      {isShaped && nameField('to')}
+      {isShaped && (
+        <Callout>
+          {isSelf
+            ? strings.selfSentence(
+                near.title,
+                { title: fromName.trim(), isOne: holdsOne.from },
+                { title: toName.trim(), isOne: holdsOne.to },
+                near.singular,
+                near.plural,
+              )
+            : `${strings.sideSentence(near.title, fromName.trim(), holdsOne.from, far.singular, far.plural)} ${strings.sideSentence(far.title, toName.trim(), holdsOne.to, near.singular, near.plural)}`}
+        </Callout>
+      )}
     </Form>
   );
 }

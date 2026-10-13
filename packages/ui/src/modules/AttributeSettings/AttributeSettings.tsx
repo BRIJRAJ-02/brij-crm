@@ -35,6 +35,7 @@ import { Select, type SelectItem } from '../../molecules/Select/Select.tsx';
 import { useFormatSettings } from '../../provider/context.ts';
 import type { FilterBuilderProps } from '../FilterBuilder/FilterBuilder.tsx';
 import { OptionsEditor, type OptionsEditorChange, type OptionsEditorOption } from '../OptionsEditor/OptionsEditor.tsx';
+import type { DialogStep } from '../RelationshipSettings/RelationshipSettings.tsx';
 import {
   editorRuleOf,
   ruleOf,
@@ -153,6 +154,13 @@ export interface AttributeSettingsProps {
   readonly ruleEditorProps?: FilterBuilderProps['editorProps'];
   /** A new rule's id (a UUID v7 the screen mints). */
   readonly newRuleId?: () => string;
+  /**
+   * Another dialog's step shown in this one's place, in the same Modal
+   * (RelationshipSettings' `relationshipStep` once Relationship is chosen,
+   * spec 0014): the scrim stays, and focus still goes back to what opened
+   * the dialog when it closes. `isBusy` then means the step's write.
+   */
+  readonly step?: DialogStep;
 }
 
 /** What the member editor's search answers (its list type is the field set's union of display shapes). */
@@ -235,13 +243,14 @@ export function AttributeSettings({
   ruleAttributes,
   ruleEditorProps,
   newRuleId,
+  step,
 }: AttributeSettingsProps) {
   const formId = useId();
   const isReadOnly = readOnlyReason !== undefined;
   const title = attribute === undefined ? strings.newTitle : isReadOnly ? strings.viewTitle : strings.editTitle;
   return (
     <Modal
-      title={title}
+      title={step?.title ?? title}
       isOpen={isOpen}
       // While the server answers, the dialog stays: a refusal has to land on its setting.
       onOpenChange={(open) => {
@@ -249,7 +258,9 @@ export function AttributeSettings({
         onOpenChange(open);
       }}
       actions={
-        isReadOnly ? (
+        step !== undefined ? (
+          step.actions
+        ) : isReadOnly ? (
           <Button slot="close" kbd="ESC">
             {strings.close}
           </Button>
@@ -271,24 +282,28 @@ export function AttributeSettings({
         )
       }
     >
-      <AttributeForm
-        formId={formId}
-        label={title}
-        attribute={attribute}
-        typeKeys={typeKeys}
-        relationshipEntry={relationshipEntry}
-        members={members}
-        isBusy={isBusy}
-        refusals={refusals}
-        onSubmit={onSubmit}
-        readOnlyReason={readOnlyReason}
-        newOptionId={newOptionId}
-        optionsLimit={optionsLimit}
-        optionWrites={optionWrites}
-        ruleAttributes={ruleAttributes}
-        ruleEditorProps={ruleEditorProps}
-        newRuleId={newRuleId}
-      />
+      {step !== undefined ? (
+        step.body
+      ) : (
+        <AttributeForm
+          formId={formId}
+          label={title}
+          attribute={attribute}
+          typeKeys={typeKeys}
+          relationshipEntry={relationshipEntry}
+          members={members}
+          isBusy={isBusy}
+          refusals={refusals}
+          onSubmit={onSubmit}
+          readOnlyReason={readOnlyReason}
+          newOptionId={newOptionId}
+          optionsLimit={optionsLimit}
+          optionWrites={optionWrites}
+          ruleAttributes={ruleAttributes}
+          ruleEditorProps={ruleEditorProps}
+          newRuleId={newRuleId}
+        />
+      )}
     </Modal>
   );
 }

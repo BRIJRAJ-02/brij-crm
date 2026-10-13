@@ -1,9 +1,10 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { expect, fn, waitFor, within } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import type { FormRefusal } from '../../molecules/Form/Form.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { relationshipStep } from '../RelationshipSettings/RelationshipSettings.tsx';
 import { AttributeSettings, type AttributeSettingsProps } from './AttributeSettings.tsx';
 
 /** The ten types without setup (spec 0012, milestone 2). */
@@ -266,6 +267,92 @@ export const RelationshipEntry: Story = {
     await expect(chooseRelationship).toHaveBeenCalledWith({ title: 'Investors' });
     // The list has gone (its exit fade over) before the story ends.
     await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
+  },
+};
+
+/** The attribute dialog handing over to RelationshipSettings' step in its own Modal, as the screen wires it. */
+function HandOver(props: SampleProps) {
+  const [isOpen, setOpen] = useState(false);
+  const [draft, setDraft] = useState<{ readonly title: string } | undefined>(undefined);
+  const formId = useId();
+  const step =
+    draft === undefined
+      ? undefined
+      : relationshipStep({
+          formId,
+          mode: 'create',
+          objects: [
+            {
+              id: '0199a6f2-0000-7000-8000-0000000c0001',
+              singularName: 'Company',
+              pluralName: 'Companies',
+              icon: 'building',
+              hue: 'purple',
+            },
+            {
+              id: '0199a6f2-0000-7000-8000-0000000c0002',
+              singularName: 'Person',
+              pluralName: 'People',
+              icon: 'user',
+              hue: 'blue',
+            },
+          ],
+          from: { objectId: '0199a6f2-0000-7000-8000-0000000c0001', title: draft.title },
+          onSubmit: () => undefined,
+        });
+  return (
+    <Stage>
+      <Button
+        icon="plus"
+        onPress={() => {
+          setDraft(undefined);
+          setOpen(true);
+        }}
+      >
+        Add attribute
+      </Button>
+      <AttributeSettings
+        {...props}
+        isOpen={isOpen}
+        onOpenChange={setOpen}
+        relationshipEntry={{ label: 'Relationship', onChoose: setDraft }}
+        {...(step === undefined ? {} : { step })}
+      />
+    </Stage>
+  );
+}
+
+/**
+ * Relationship chosen: RelationshipSettings' step takes the dialog's place in
+ * the same Modal, with the name typed so far, and Esc puts focus back on what
+ * opened the dialog (spec 0014).
+ */
+export const RelationshipHandOver: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => <HandOver {...args} />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Add attribute' }));
+    const dialog = await openDialog();
+    await waitFor(() => expect(inDialog(dialog, 'Name')).toHaveFocus());
+    await userEvent.keyboard('Investors');
+    const type = dialog.querySelector<HTMLElement>('button[aria-haspopup="listbox"]');
+    if (type === null) throw new globalThis.Error('No type picker.');
+    await userEvent.click(type);
+    const relationship = await waitFor(() => {
+      const found = [...document.querySelectorAll<HTMLElement>('[role="option"]')].find(
+        (option) => option.textContent === 'Relationship',
+      );
+      if (found === undefined) throw new globalThis.Error('No Relationship option.');
+      return found;
+    });
+    await userEvent.click(relationship);
+    // The same dialog, now the relationship's: the related object has focus, the name typed is this side's.
+    await waitFor(() => expect(dialog).toHaveAccessibleName('New relationship'));
+    await waitFor(() => expect(document.activeElement?.getAttribute('aria-haspopup')).toBe('listbox'));
+    await expect(dialog.isConnected).toBe(true);
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Add attribute' })).toHaveFocus());
   },
 };
 
