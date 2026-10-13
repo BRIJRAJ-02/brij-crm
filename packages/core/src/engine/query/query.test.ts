@@ -299,7 +299,9 @@ beforeAll(async () => {
     weekStart: 'sunday',
     actor: scope.actor,
   };
-});
+  // About 350 transactions one after another, none waiting on a lock: inside the 60 s hook default on CI, but
+  // past it when the CPU is shared several times over (166 s alone, at a load of 45 on 8 cores).
+}, 240_000);
 
 afterAll(async () => {
   await db.close();
