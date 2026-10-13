@@ -9,10 +9,23 @@ import { checkId } from './ids.ts';
 import { refuse } from './refusals.ts';
 import { linkHistory, linkValues } from './relationships.ts';
 import type { Actor, EngineScope } from './scope.ts';
-import { checkEntryAccess, ITEM_COLUMNS, loadAttribute, loadAttributes, type AttributeDef } from './values.ts';
+import {
+  checkEntryAccess,
+  ITEM_COLUMNS,
+  loadAttribute,
+  loadAttributes,
+  loadListAttributes,
+  type AttributeDef,
+} from './values.ts';
 import { inWorkspace } from '../access/run.ts';
-import type { Access } from '../access/policy.ts';
-import { attributeVisible, checkObject, checkRecordVisible, UNKNOWN_RECORD } from '../access/visibility.ts';
+import { isOpen, type Access } from '../access/policy.ts';
+import {
+  attributeVisible,
+  checkObject,
+  checkRecordVisible,
+  hidesActors,
+  UNKNOWN_RECORD,
+} from '../access/visibility.ts';
 
 const { listEntries, records, values } = schema;
 
@@ -70,9 +83,28 @@ async function visibleAttribute(tx: WorkspaceTx, access: Access, attributeId: st
 }
 
 /**
+ * Whether the principal may not see who changed `attribute`'s owner: a field
+ * rule hides its object's (or list's) Created by or Updated by. No statement
+ * under the open policy.
+ */
+async function actorsHidden(tx: WorkspaceTx, access: Access, attribute: AttributeDef): Promise<boolean> {
+  if (isOpen(access)) return false;
+  const parent =
+    attribute.objectId !== null
+      ? await loadAttributes(tx, attribute.objectId)
+      : attribute.listId !== null
+        ? await loadListAttributes(tx, attribute.listId)
+        : new Map<string, AttributeDef>();
+  return hidesActors(access, [...parent.values()]);
+}
+
+/**
  * Every version of one attribute on one record or entry, oldest first; a
  * cleared version's value is null (an empty list for a multi reference).
- * Record references read their links' history.
+ * Record references read their links' history. Hidden is absent (spec 0009,
+ * spec 0017): when a field rule hides Created by or Updated by, no version
+ * says who set it (`setBy` is left out), since the newest one's is the
+ * owner's Updated by.
  */
 export async function getHistory(
   scope: EngineScope,
@@ -81,8 +113,11 @@ export async function getHistory(
   return inWorkspace(scope, async (tx) => {
     const ownerId = await ownerOf(tx, scope.access, input);
     const attribute = await visibleAttribute(tx, scope.access, input.attributeId);
+    const hideActors = await actorsHidden(tx, scope.access, attribute);
     // Far records the principal can't see are left out of every version, inside the read (AC-143).
-    if (attribute.type === 'record_reference') return linkHistory(tx, scope.access, attribute, ownerId);
+    if (attribute.type === 'record_reference') {
+      return linkHistory(tx, scope.access, attribute, ownerId, { hideActors });
+    }
     const rows = await tx
       .select({
         ...ITEM_COLUMNS,
@@ -110,7 +145,7 @@ export async function getHistory(
           value: decodeValue(attribute.type, attribute.isMulti, held),
           activeFrom: first.activeFrom,
           activeUntil: first.activeUntil,
-          setBy,
+          ...(hideActors ? {} : { setBy }),
         },
       ];
     });

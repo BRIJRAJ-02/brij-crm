@@ -721,3 +721,46 @@ describe('the review of milestone 2: hidden actors, hidden sides and names, and 
     expect(first.nextCursor).toBeDefined();
   }, 60_000);
 });
+
+describe('history names nobody to a reader who may not see who changed things (spec 0017, owner decision 3)', () => {
+  it('leaves setBy out of every value and reference version when Updated by or Created by is hidden', async () => {
+    const world = await workspace();
+    const acme = await world.company('Acme');
+    const jane = await world.person('Jane');
+    const description = world.id('companies.description');
+    const team = world.id('companies.team');
+    await setValues(world.scope, { recordId: acme, values: { [description]: 'Rockets' } });
+    await setValues(world.scope, { recordId: acme, values: { [description]: 'Satellites' } });
+    await setValues(world.scope, { recordId: acme, values: { [team]: [world.ref(world.people, jane)] } });
+    await setValues(world.scope, { recordId: acme, values: { [team]: null } });
+    const hiding = (slug: string) =>
+      world.member({
+        levels: [
+          {
+            subject: { type: 'role', role: 'member' },
+            target: { type: 'attribute', objectId: world.companies, attributeId: world.id(slug) },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      });
+    for (const denied of [hiding('companies.updated_by'), hiding('companies.created_by')]) {
+      for (const attributeId of [description, team]) {
+        const versions = await getHistory(denied, { recordId: acme, attributeId });
+        expect(versions.length).toBeGreaterThan(1);
+        for (const version of versions) expect(version).not.toHaveProperty('setBy');
+      }
+      // The far end's history is the far object's: People's Created by and Updated by stay visible there.
+      const far = await getHistory(denied, { recordId: jane, attributeId: world.id('people.company') });
+      expect(far.every((version) => version.setBy !== undefined)).toBe(true);
+    }
+    // A reader who may see both, and the open policy, are told who set each version.
+    const seesAll = world.member({ levels: [], records: [] });
+    for (const reader of [seesAll, world.scope]) {
+      for (const attributeId of [description, team]) {
+        const versions = await getHistory(reader, { recordId: acme, attributeId });
+        expect(versions.every((version) => version.setBy?.id === world.ownerId)).toBe(true);
+      }
+    }
+  });
+});

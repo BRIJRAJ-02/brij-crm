@@ -21,7 +21,13 @@ import { inputInvalid, refuse } from './refusals.ts';
 import type { Actor, EngineScope } from './scope.ts';
 import { inWorkspace } from '../access/run.ts';
 import { isOpen } from '../access/policy.ts';
-import { attributeVisible, checkObject, checkRecordVisible, UNKNOWN_RECORD } from '../access/visibility.ts';
+import {
+  attributeVisible,
+  checkObject,
+  checkRecordVisible,
+  hidesActors,
+  UNKNOWN_RECORD,
+} from '../access/visibility.ts';
 import { linkSource, toMillis, valueSource } from './activity-sources.ts';
 import { isArchivedNow, loadAttributes, type AttributeDef } from './values.ts';
 
@@ -184,7 +190,6 @@ async function checkedRecord(
     !isOpen(scope.access) &&
     all.some((attribute) => attribute.systemColumn === column && !attributeVisible(scope.access, attribute));
   const hidesCreator = hides('created_by');
-  const hidesActors = hidesCreator || hides('updated_by');
   const attributes = all.filter(
     (attribute) => !attribute.isSystem && !isArchivedNow(attribute) && attributeVisible(scope.access, attribute),
   );
@@ -194,7 +199,7 @@ async function checkedRecord(
       objectId: row.object_id,
       createdAt: row.created_at,
       ...(hidesCreator ? {} : { createdBy: { type: row.created_by_type, id: row.created_by_id } }),
-      hidesActors,
+      hidesActors: hidesActors(scope.access, all),
     },
     attributes,
   };

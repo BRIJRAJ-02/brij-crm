@@ -22,6 +22,9 @@ describe('options and displays', () => {
     };
     expect(ValueVersion.parse(version)).toEqual(version);
     expect(ValueVersion.safeParse({ ...version, setBy: { type: 'system', id: 'x' } }).success).toBe(false);
+    // Hidden is absent: a reader who may not see Created by or Updated by gets no `setBy`.
+    const { setBy: _hidden, ...unnamed } = version;
+    expect(ValueVersion.parse(unnamed)).toEqual(unnamed);
   });
 
   it('a record display names its kind', () => {

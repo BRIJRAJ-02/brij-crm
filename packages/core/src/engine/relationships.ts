@@ -745,13 +745,15 @@ export async function linkValues(
 /**
  * Every version of a reference attribute on one record, oldest first, built
  * from its links' periods: a new version starts wherever the set of links
- * changes. Links to records in the trash are hidden here too. Who set it is whoever started a link then, or ended one.
+ * changes. Links to records in the trash are hidden here too. Who set it is whoever started a link then, or ended one
+ * (left out with `hideActors`).
  */
 export async function linkHistory(
   tx: WorkspaceTx,
   access: Access,
   attribute: AttributeDef,
   ownerId: string,
+  options: { readonly hideActors?: boolean } = {},
 ): Promise<readonly ValueVersion[]> {
   const relationship = await relationshipOf(tx, attribute);
   const end = endOf(relationship, attribute.id);
@@ -809,7 +811,8 @@ export async function linkHistory(
       value: version.value,
       activeFrom: millis(version.activeFrom),
       activeUntil: next === undefined ? null : millis(next.activeFrom),
-      setBy: version.setBy,
+      // Who set it, unless a field rule hides Created by or Updated by from the principal (spec 0017).
+      ...(options.hideActors === true ? {} : { setBy: version.setBy }),
     };
   });
 }

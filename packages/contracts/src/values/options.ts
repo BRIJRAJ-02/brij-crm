@@ -28,12 +28,14 @@ export type StatusOption = z.infer<typeof StatusOption>;
  * One version of one attribute's whole value on one record. The current
  * version has `activeUntil: null`; the history is the versions in `activeFrom`
  * order. `value` parses with the attribute's own schema (`attributeValueSchema`).
+ * `setBy` is absent when a field rule hides the owner's Created by or Updated
+ * by from the reader (hidden is absent, spec 0009).
  */
 export const ValueVersion = z.object({
   value: z.unknown(),
   activeFrom: Timestamp,
   activeUntil: Timestamp.nullable(),
-  setBy: ActorReferenceValue,
+  setBy: ActorReferenceValue.optional(),
 });
 export type ValueVersion = z.infer<typeof ValueVersion>;
 
