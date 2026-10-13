@@ -1,4 +1,4 @@
-/* Button, ToggleButton and SplitButton: 26px controls with a 13px medium label.
+/* Button, ToggleButton and SplitButton: 26px controls with a 14px medium label.
    Every look is a data attribute declared once, here. States read React Aria's
    attributes (data-hovered, data-pressed, data-focus-visible, data-disabled,
    data-pending, data-selected). */

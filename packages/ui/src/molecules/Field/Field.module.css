@@ -1,4 +1,4 @@
-/* Field: an 11px text-secondary label over a 30px box with a control-border
+/* Field: a 12px text-secondary label over a 30px box with a control-border
    hairline (3:1 on every surface, WCAG 1.4.11); focus turns it accent-line
    and adds the faint focus halo, an error turns
    the border danger. Read only fills the box with surface-subtle and shows a

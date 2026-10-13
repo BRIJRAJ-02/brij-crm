@@ -1,4 +1,4 @@
-/* AttributeList: rows of a name column (an 11px label with its type's icon)
+/* AttributeList: rows of a name column (a 12px label with its type's icon)
    and a value column, each at least size-row tall. A value that can change
    takes surface-hover under a pointer, with its pencil button showing on hover
    or focus; an empty one reads "Set Name…" in text-tertiary. Below 320px the

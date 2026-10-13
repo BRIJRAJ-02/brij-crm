@@ -68,7 +68,7 @@ export interface SidebarProps {
 
 /**
  * The 260px left column, or the 48px rail when collapsed. It is the app's
- * navigation landmark. Items are 28px; the current page takes
+ * navigation landmark. Items are 32px; the current page takes
  * `surface-selected`, hover `surface-hover`.
  */
 export function Sidebar({
@@ -208,7 +208,7 @@ export type NavItemProps = NavItemFace &
     | { readonly onPress: () => void; readonly href?: never; readonly isCurrent?: never }
   );
 
-/** One 28px row in the sidebar: a routed link with `aria-current` on the current page, or a button. */
+/** One 32px row in the sidebar: a routed link with `aria-current` on the current page, or a button. */
 export function NavItem(props: NavItemProps) {
   const { children, icon, hue, leading, meta, badge } = props;
   const { isCollapsed } = useContext(SidebarContext);

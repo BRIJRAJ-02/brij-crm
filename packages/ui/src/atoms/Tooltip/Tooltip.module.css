@@ -1,4 +1,4 @@
-/* Tooltip: one line on the inverse surface, 11px, above its trigger by
+/* Tooltip: one line on the inverse surface, 12px, above its trigger by
    default. It fades in after React Aria's delay; from the keyboard it appears
    at once. */
 @layer components {

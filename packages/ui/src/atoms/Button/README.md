@@ -1,6 +1,6 @@
 # Button
 
-The one button: 26px tall with a 13px medium label, in five variants, built on React Aria so it works the same by mouse, touch and keyboard. This folder also holds `ToggleButton` (a button that stays pressed), `SplitButton` (a main action with a menu of its variants) and `CopyButton` (copies a value and says so in a toast).
+The one button: 26px tall with a 14px medium label, in five variants, built on React Aria so it works the same by mouse, touch and keyboard. This folder also holds `ToggleButton` (a button that stays pressed), `SplitButton` (a main action with a menu of its variants) and `CopyButton` (copies a value and says so in a toast).
 
 ## Why it exists
 

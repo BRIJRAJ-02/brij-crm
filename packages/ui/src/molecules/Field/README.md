@@ -1,6 +1,6 @@
 # Field
 
-The one field design: an 11px label above a 30px input with a hairline `control-border` outline (3:1 on every surface), and a hint or an error below.
+The one field design: a 12px label above a 30px input with a hairline `control-border` outline (3:1 on every surface), and a hint or an error below.
 
 ## Why it exists
 
