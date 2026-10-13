@@ -77,10 +77,11 @@ export const MAX_BATCH_CELLS = 5_000;
 export const RecordView = z.object({
   id: z.uuid(),
   objectId: z.uuid(),
-  createdAt: Timestamp,
-  createdBy: ActorReferenceValue,
-  updatedAt: Timestamp,
-  updatedBy: ActorReferenceValue,
+  /** Each of these four is absent when a field rule hides its system attribute from the reader (spec 0009). */
+  createdAt: Timestamp.optional(),
+  createdBy: ActorReferenceValue.optional(),
+  updatedAt: Timestamp.optional(),
+  updatedBy: ActorReferenceValue.optional(),
   display: RecordRefDisplay,
   revision: z.number().int().min(0),
   values: z.record(z.string(), z.unknown()),

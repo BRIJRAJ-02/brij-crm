@@ -14,7 +14,7 @@ import { deleteRecord, restoreRecord } from './deletion.ts';
 import { getHistory } from './history.ts';
 import { newId } from './ids.ts';
 import { isRefusal } from './refusals.ts';
-import { createRecord, setValues as setRecordValues } from './records.ts';
+import { createRecord, getRecords, setValues as setRecordValues } from './records.ts';
 import { createWorkspace } from './workspaces.ts';
 import type { EngineScope } from './scope.ts';
 import { rescope, testScope } from '../testing.ts';
@@ -767,5 +767,27 @@ describe('history names nobody to a reader who may not see who changed things (s
         expect(versions.every((version) => version.setBy?.id === world.ownerId)).toBe(true);
       }
     }
+  });
+
+  it('leaves out of a record read each top level system field whose attribute a field rule hides', async () => {
+    const world = await workspace();
+    const acme = await world.company('Acme');
+    const hiding = (...slugs: string[]) =>
+      world.member({
+        levels: slugs.map((slug) => ({
+          subject: { type: 'role' as const, role: 'member' as const },
+          target: { type: 'attribute' as const, objectId: world.companies, attributeId: world.id(slug) },
+          level: 'hidden' as const,
+        })),
+        records: [],
+      });
+    const [denied] = await getRecords(hiding('companies.updated_by', 'companies.created_at'), { ids: [acme] });
+    expect(denied).not.toHaveProperty('updatedBy');
+    expect(denied).not.toHaveProperty('createdAt');
+    expect(denied?.createdBy).toEqual({ type: 'member', id: world.ownerId });
+    expect(denied?.updatedAt).toBeDefined();
+    const [open] = await getRecords(world.scope, { ids: [acme] });
+    expect(open).toMatchObject({ createdBy: { id: world.ownerId }, updatedBy: { id: world.ownerId } });
+    expect(open?.createdAt).toBeDefined();
   });
 });

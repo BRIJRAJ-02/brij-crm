@@ -1343,7 +1343,7 @@ describe('undo, walking back one cell and checking only what this tab wrote', ()
     // Their version isn't this tab's: a notice naming it says nothing.
     layer.replaced(WS, {
       seq: 1,
-      at: at('x', 1).updatedAt,
+      at: at('x', 1).updatedAt ?? '',
       kind: 'records',
       objectId: PEOPLE,
       recordIds: [idAt(1)],

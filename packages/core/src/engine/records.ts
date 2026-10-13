@@ -150,10 +150,15 @@ export interface AttributeResult {
 export interface RecordView {
   readonly id: string;
   readonly objectId: string;
-  readonly createdAt: string;
-  readonly createdBy: Actor;
-  readonly updatedAt: string;
-  readonly updatedBy: Actor;
+  /**
+   * When and by whom it was made and last changed. Each is left out when a
+   * field rule hides its system attribute (Created at, Created by, Updated at,
+   * Updated by) from the reader: hidden is absent (spec 0009).
+   */
+  readonly createdAt?: string;
+  readonly createdBy?: Actor;
+  readonly updatedAt?: string;
+  readonly updatedBy?: Actor;
   readonly display: RecordRefDisplay;
   /**
    * Grows with every statement that updates the record's row (spec 0006,
@@ -926,13 +931,19 @@ export async function readRecords(
         kind: object?.standardKey === 'people' ? 'person' : object?.standardKey === 'companies' ? 'company' : 'other',
         ...(hue === undefined ? {} : { hue }),
       };
+      // The four system fields at the top level follow their attributes' field rules, as `values` does.
+      const shown = (column: NonNullable<AttributeDef['systemColumn']>) =>
+        open ||
+        [...attributes.values()].every(
+          (attribute) => attribute.systemColumn !== column || attributeVisible(access, attribute),
+        );
       const view: RecordView = {
         id: row.id,
         objectId: row.objectId,
-        createdAt: system.created_at as string,
-        createdBy,
-        updatedAt: system.updated_at as string,
-        updatedBy,
+        ...(shown('created_at') ? { createdAt: system.created_at as string } : {}),
+        ...(shown('created_by') ? { createdBy } : {}),
+        ...(shown('updated_at') ? { updatedAt: system.updated_at as string } : {}),
+        ...(shown('updated_by') ? { updatedBy } : {}),
         display,
         revision: row.revision,
         values,

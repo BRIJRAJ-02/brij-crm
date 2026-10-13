@@ -257,7 +257,7 @@ describe('records.setValues', () => {
     });
     expect(view.values[m.attribute('job_title')]).toBe('Analyst');
     expect(view.values[m.attribute('owner')]).toEqual({ type: 'member', id: memberId });
-    expect(view.updatedAt >= person.updatedAt).toBe(true);
+    expect((view.updatedAt ?? '') >= (person.updatedAt ?? '~')).toBe(true);
     const [read] = await m.client.records.get({ workspace: m.slug, ids: [person.id] });
     // The write's answer is the record as any read gives it, plus how many events carry the write (spec 0006).
     const { echoes, written, ...record } = view;
