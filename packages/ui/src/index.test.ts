@@ -84,6 +84,7 @@ describe('@crm/ui', () => {
       'RecordHeader',
       'RecordLayout',
       'RecordPanel',
+      'RelationshipSettings',
       'RelativeTime',
       'RemoteCursor',
       'RulesEditor',

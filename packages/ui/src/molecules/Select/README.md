@@ -20,6 +20,7 @@ Ported from the artifact's Select card (version 8). It is the editor for select 
 - `isClearable` adds a "Clear" option while something is chosen; leave it off for a required attribute.
 - `isReadOnly` shows the value in a filled box with a lock, and `readOnlyReason` says why.
 - `onChange` gets the chosen id, or `null` when cleared.
+- `autoFocus` focuses the trigger as it mounts. Why a variant: a dialog whose first step is a choice (RelationshipSettings' related object, spec 0014) opens on it, and the Form's own first field focus would land on React Aria's hidden native select instead.
 - `isSearchable` puts a search field over the options (it takes focus as the list opens, and typing narrows them), for long lists such as countries; `searchLabel` names it.
 - `onCreate(label)` adds "Create "<typed>"" (a plus) last in that search when what is typed matches no live option's label, ignoring case; choosing it hands the label over and closes the list. When it is the only item it isn't focused first, so one Enter on a typo makes nothing; an arrow reaches it. Each opening searches afresh. It turns the search on; `defaultSearch` starts it with the key that opened a grid cell. Why a variant: a select or status cell offers it to someone who may shape the schema (spec 0012, AC-238), in the same list the person was already choosing from, rather than a second control.
 

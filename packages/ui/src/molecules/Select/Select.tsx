@@ -81,6 +81,8 @@ export interface SelectProps {
   readonly onCreate?: (label: string) => void;
   /** What the search starts with: the key that opened a grid cell's editor. */
   readonly defaultSearch?: string;
+  /** Takes focus as it mounts: the first thing to choose in a dialog (RelationshipSettings' related object). */
+  readonly autoFocus?: boolean;
   /** Opens it on first render: a grid cell's edit, stories and previews. */
   readonly defaultOpen?: boolean;
   readonly onOpenChange?: (isOpen: boolean) => void;
@@ -136,6 +138,7 @@ export function Select({
   isDisabled = false,
   size = 'md',
   variant = 'default',
+  autoFocus = false,
   defaultOpen,
   onOpenChange,
   isSearchable = false,
@@ -227,6 +230,7 @@ export function Select({
       {...(value === undefined ? {} : { value })}
       {...(defaultValue === undefined ? {} : { defaultValue })}
       {...(defaultOpen === undefined ? {} : { defaultOpen })}
+      {...(autoFocus ? { autoFocus: true } : {})}
       // Each opening searches afresh (from the key that opened a cell's list, when one did).
       onOpenChange={(isOpen) => {
         if (!isOpen) setQuery(defaultSearch ?? '');

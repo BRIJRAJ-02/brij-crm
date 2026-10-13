@@ -122,9 +122,13 @@ export interface AttributeSettingsProps {
   readonly typeKeys?: readonly string[];
   /**
    * Adds "Relationship" last to the picker (#15): choosing it calls
-   * `onChoose`, so the screen swaps in its own settings. No entry when absent.
+   * `onChoose` with the name typed so far, so the screen swaps in its own
+   * settings and keeps the name. No entry when absent.
    */
-  readonly relationshipEntry?: { readonly label: string; readonly onChoose: () => void };
+  readonly relationshipEntry?: {
+    readonly label: string;
+    readonly onChoose: (draft: { readonly title: string }) => void;
+  };
   /** The workspace's members, offered for a Member attribute's default. */
   readonly members?: readonly ActorDisplay[];
   /** The screen waits for the server: the primary spins and the dialog stays. */
@@ -385,7 +389,7 @@ function AttributeForm({
   const chooseType = (key: string | null) => {
     if (key === null || key === typeKey) return;
     if (key === RELATIONSHIP) {
-      relationshipEntry?.onChoose();
+      relationshipEntry?.onChoose({ title: name.trim() });
       return;
     }
     const next = PICKER_TYPES.find((each) => each.key === key);

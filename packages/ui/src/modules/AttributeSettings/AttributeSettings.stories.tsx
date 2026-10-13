@@ -230,12 +230,14 @@ export const ReadOnly: Story = {
 
 const chooseRelationship = fn();
 
-/** With #15's entry: "Relationship" last in the picker, handing the dialog over when chosen. */
+/** With #15's entry: "Relationship" last in the picker, handing the dialog over when chosen, with the name typed so far. */
 export const RelationshipEntry: Story = {
   parameters: { crm: { screenshot: false } },
   args: { relationshipEntry: { label: 'Relationship', onChoose: chooseRelationship } },
   play: async ({ userEvent }) => {
     const dialog = await openDialog();
+    await waitFor(() => expect(inDialog(dialog, 'Name')).toHaveFocus());
+    await userEvent.keyboard('Investors');
     const type = dialog.querySelector<HTMLElement>('button[aria-haspopup="listbox"]');
     if (type === null) throw new globalThis.Error('No type picker.');
     await userEvent.click(type);
@@ -261,6 +263,7 @@ export const RelationshipEntry: Story = {
     if (last === undefined) throw new globalThis.Error('No Relationship.');
     await userEvent.click(last);
     await waitFor(() => expect(chooseRelationship).toHaveBeenCalledOnce());
+    await expect(chooseRelationship).toHaveBeenCalledWith({ title: 'Investors' });
     // The list has gone (its exit fade over) before the story ends.
     await waitFor(() => expect(document.querySelector('[role="listbox"]')).toBeNull());
   },
