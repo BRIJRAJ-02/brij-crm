@@ -103,8 +103,9 @@ jobs:
 
   # The core loop's flows (spec 0005, milestone 4): the built app, the api and
   # the worker on the local ports against their own services, driven by
-  # Playwright: sign in, People, session, keyboard, live, the record page and
-  # options (spec 0012, milestone 3).
+  # Playwright: sign in, People, session, keyboard, live, the record page,
+  # options (spec 0012, milestone 3) and validation rules (spec 0013,
+  # milestone 1).
   # They run in Chromium (1280 and 375 wide); the live flow's reader opens in
   # WebKit, so a change crosses two browser engines. The longer ones (catch
   # up, settle, versions, scale, hidden) stay local. Nothing here touches a
@@ -205,7 +206,7 @@ jobs:
               sleep 1
             done
           done
-      - run: pnpm --filter @crm/web test:flow e2e/sign-in.flow.ts e2e/people.flow.ts e2e/session.flow.ts e2e/keyboard.flow.ts e2e/live.flow.ts e2e/record.flow.ts e2e/options.flow.ts
+      - run: pnpm --filter @crm/web test:flow e2e/sign-in.flow.ts e2e/people.flow.ts e2e/session.flow.ts e2e/keyboard.flow.ts e2e/live.flow.ts e2e/record.flow.ts e2e/options.flow.ts e2e/rules.flow.ts
       - name: Keep the traces and the logs
         if: failure()
         uses: actions/upload-artifact@v7
