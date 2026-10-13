@@ -16,9 +16,9 @@ export const strings = {
   relatedObject: 'Related object',
   chooseObject: 'Choose an object',
   objectMissing: 'Choose an object for this side.',
-  objectsFixed: 'The objects can’t change once the relationship exists.',
+  /** Under the related object in edit mode: the objects and the cardinality are fixed (#14 widens it). */
+  shapeFixed: 'The objects and how records link can’t change once the relationship exists.',
   cardinality: 'How records link',
-  cardinalityFixed: 'This can’t change once the relationship exists.',
   /**
    * One cardinality as a plain choice, phrased with both objects (spec 0014,
    * AC-282): "Each person has one company, each company has many people".
@@ -32,7 +32,7 @@ export const strings = {
   nameOn: (plural: string) => `Name on ${plural}`,
   /** The second name field of a relationship from an object to itself. */
   reverseNameOn: (plural: string) => `Reverse name on ${plural}`,
-  nameHint: 'Shows as a column. Its API name comes from it and never changes.',
+  nameHint: 'Each name shows as a column on its object. API names come from the names and never change.',
   nameMissing: 'Name this side.',
   namesEqual: 'Give each side its own name.',
   /** One side in the sentence under the choices: "People get Company, holding one company." */

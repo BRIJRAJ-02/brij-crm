@@ -251,7 +251,11 @@ function RelationshipForm({
           else setToId(next);
         }}
         {...(isEditing || isPreset || isReadOnly
-          ? { isReadOnly: true, ...(isEditing ? { readOnlyReason: strings.objectsFixed } : {}) }
+          ? {
+              isReadOnly: true,
+              // Said once, under the last fixed setting before the choices.
+              ...(isEditing && side === 'to' ? { readOnlyReason: strings.shapeFixed } : {}),
+            }
           : {})}
         {...(error === undefined ? {} : { error })}
       />
@@ -274,7 +278,7 @@ function RelationshipForm({
         autoComplete="off"
         isRequired
         maxLength={100}
-        hint={strings.nameHint}
+        {...(side === 'from' ? { hint: strings.nameHint } : {})}
         autoFocus={side === 'from' && choosable === undefined && !isReadOnly}
         value={side === 'from' ? fromName : toName}
         onChange={(next) => {
@@ -303,31 +307,22 @@ function RelationshipForm({
       {readOnlyReason !== undefined && <Callout>{readOnlyReason}</Callout>}
       {objectSelect('from', fromId, from !== undefined)}
       {objectSelect('to', toId, to !== undefined)}
-      {isEditing || isReadOnly ? (
-        <Select
-          label={strings.cardinality}
-          items={[{ id: cardinality, label: choiceOf(cardinality) }]}
-          value={cardinality}
-          isReadOnly
-          {...(isEditing ? { readOnlyReason: strings.cardinalityFixed } : {})}
-        />
-      ) : (
-        <RadioGroup
-          label={strings.cardinality}
-          value={cardinality}
-          onChange={(next) => {
-            const found = CARDINALITIES.find((each) => each === next);
-            if (found !== undefined) setCardinality(found);
-          }}
-          {...(cardinalityError === undefined ? {} : { error: cardinalityError })}
-        >
-          {CARDINALITIES.map((each) => (
-            <Radio key={each} value={each}>
-              {choiceOf(each)}
-            </Radio>
-          ))}
-        </RadioGroup>
-      )}
+      <RadioGroup
+        label={strings.cardinality}
+        value={cardinality}
+        onChange={(next) => {
+          const found = CARDINALITIES.find((each) => each === next);
+          if (found !== undefined) setCardinality(found);
+        }}
+        {...(isEditing || isReadOnly ? { isReadOnly: true } : {})}
+        {...(cardinalityError === undefined ? {} : { error: cardinalityError })}
+      >
+        {CARDINALITIES.map((each) => (
+          <Radio key={each} value={each}>
+            {choiceOf(each)}
+          </Radio>
+        ))}
+      </RadioGroup>
       {nameField('from')}
       {nameField('to')}
       <Callout>

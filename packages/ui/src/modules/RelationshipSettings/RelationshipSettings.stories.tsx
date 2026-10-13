@@ -254,9 +254,14 @@ export const Edit: Story = {
   play: async ({ args, userEvent }) => {
     const dialog = await openDialog();
     await expect(dialog).toHaveAccessibleName('Edit relationship');
-    await expect(dialog).toHaveTextContent('The objects can’t change once the relationship exists.');
-    await expect(dialog).toHaveTextContent('This can’t change once the relationship exists.');
-    await expect(within(dialog).queryAllByRole('radio')).toEqual([]);
+    await expect(dialog).toHaveTextContent(
+      'The objects and how records link can’t change once the relationship exists.',
+    );
+    const chosen = within(dialog).getByRole('radio', {
+      name: 'Each company has many people, each person has many companies',
+    });
+    await expect(chosen).toBeChecked();
+    await expect(within(dialog).getByRole('radiogroup')).toHaveAttribute('aria-readonly', 'true');
     const near = inDialog(dialog, 'Name on Companies');
     await waitFor(() => expect(near).toHaveFocus());
     await userEvent.clear(near);
