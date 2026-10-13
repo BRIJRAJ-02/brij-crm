@@ -368,6 +368,7 @@ export function AttributesTab({
         members={members}
         canManage={canManage}
         optionsLimit={usage?.optionsPerAttribute}
+        objectAttributes={attributes}
         onClose={() => {
           if (isCreating) onCreatingChange(false);
           else onSelect(undefined);

@@ -2,11 +2,13 @@
 // Purpose: create or edit one attribute of an object, from settings, the table's "+" header or a column's menu.
 // Main task: name it, pick one of the fifteen types, set its settings, options, rules and default, then Create or Save.
 // Leaves out: relationships (#15), changing a type (#14); an existing attribute's options save as they change.
+// Rules (spec 0013) go with Save; their conditions name the object's own attributes, never a relationship.
 import {
   isDataError,
   refusalSummary,
   targetDaysOf,
   toActorDisplays,
+  toFieldAttribute,
   type AttributeChanges,
   type AttributeDefinition,
   type MemberSummary,
@@ -19,8 +21,10 @@ import {
   AttributeSettings,
   type AttributeSettingsOptionWrites,
   type AttributeSettingsValues,
+  type FieldAttribute,
   type FormRefusal,
   type OptionsEditorOption,
+  type RuleSettings,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -53,6 +57,8 @@ export interface AttributeDialogProps {
   readonly canManage: boolean;
   /** The live options an attribute may hold (`usage.get`), for "N of 500"; nothing shows when unknown. */
   readonly optionsLimit?: number | undefined;
+  /** The object's attributes, for a rule's "Only when…" (spec 0013): its own, live, never a system one. */
+  readonly objectAttributes?: readonly AttributeDefinition[] | undefined;
   readonly onClose: () => void;
   /** The server agreed: the attribute as it is now, and whether it is new. */
   readonly onSaved: (attribute: AttributeDefinition, isNew: boolean) => void;
@@ -77,7 +83,39 @@ function changesOf(values: AttributeSettingsValues): AttributeChanges {
     ...(changed.has('isUnique') ? { isUnique: values.isUnique } : {}),
     ...(changed.has('defaultValue') ? { defaultValue: values.defaultValue ?? null } : {}),
     ...(changed.has('config') ? { config: values.config } : {}),
+    ...(changed.has('rules') ? { rules: values.rules } : {}),
   };
+}
+
+/**
+ * The attributes a rule's condition may name (spec 0013): the object's own
+ * live ones. Record references and members wait for their pickers in a
+ * condition (no search is wired here yet), and system ones never take part.
+ */
+function conditionAttributesOf(attributes: readonly AttributeDefinition[]): readonly FieldAttribute[] {
+  return attributes
+    .filter(
+      (each) =>
+        !each.isSystem && !each.isArchived && each.type !== 'record_reference' && each.type !== 'actor_reference',
+    )
+    .map((each) => toFieldAttribute(each));
+}
+
+/** An attribute's rules as the dialog edits them: Required When is set apart (milestone 2). */
+function rulesOf(attribute: AttributeDefinition): readonly RuleSettings[] {
+  return (attribute.validation?.rules ?? []).flatMap((rule): RuleSettings[] =>
+    rule.kind === 'required_when'
+      ? []
+      : [
+          {
+            id: rule.id,
+            kind: rule.kind,
+            params: rule.params,
+            ...(rule.condition === undefined ? {} : { condition: rule.condition }),
+            ...(rule.message === undefined ? {} : { message: rule.message }),
+          },
+        ],
+  );
 }
 
 /** An option as the options editor shows it: a stage's target in whole days. */
@@ -122,6 +160,7 @@ export function AttributeDialog({
   members,
   canManage,
   optionsLimit,
+  objectAttributes,
   onClose,
   onSaved,
 }: AttributeDialogProps) {
@@ -152,6 +191,10 @@ export function AttributeDialog({
     }
   }
   const displays = useMemo(() => toActorDisplays(members), [members]);
+  const ruleAttributes = useMemo(
+    () => (objectAttributes === undefined ? undefined : conditionAttributesOf(objectAttributes)),
+    [objectAttributes],
+  );
   const readOnlyReason =
     attribute?.isSystem === true ? strings.systemReason(attribute.title) : canManage ? undefined : strings.memberReason;
 
@@ -185,6 +228,7 @@ export function AttributeDialog({
             ...(values.defaultValue === undefined ? {} : { defaultValue: values.defaultValue }),
             ...(Object.keys(values.config).length === 0 ? {} : { config: values.config }),
             ...(values.options.length === 0 ? {} : { options: values.options.map(newOptionOf) }),
+            ...(values.rules.length === 0 ? {} : { rules: values.rules }),
           })
         : data.attributes.update(slug, attribute.id, changesOf(values));
     write.then(
@@ -194,7 +238,13 @@ export function AttributeDialog({
       },
       (error: unknown) => {
         setBusy(false);
-        setRefusals(formRefusals(error, FIELDS));
+        // A rule's refusal names its setting (`rules.<index>.<setting>`), or the list itself (`rules`).
+        const ruleFields = isDataError(error)
+          ? (error.data?.refusals ?? []).flatMap((refusal) =>
+              refusal.field?.startsWith('rules') === true ? [refusal.field] : [],
+            )
+          : [];
+        setRefusals(formRefusals(error, [...FIELDS, ...ruleFields]));
       },
     );
   };
@@ -280,6 +330,7 @@ export function AttributeDialog({
               ...(attribute.defaultValue === undefined ? {} : { defaultValue: attribute.defaultValue }),
               config: attribute.config,
               ...(attribute.options === undefined ? {} : { options }),
+              rules: rulesOf(attribute),
             },
           })}
       members={displays}
@@ -287,6 +338,8 @@ export function AttributeDialog({
       refusals={refusals}
       onSubmit={submit}
       newOptionId={data.attributes.newId}
+      newRuleId={data.attributes.newId}
+      {...(ruleAttributes === undefined ? {} : { ruleAttributes })}
       {...(optionsLimit === undefined ? {} : { optionsLimit })}
       // The writes read `openNow` only when the server answers, never while rendering.
       // eslint-disable-next-line react-hooks/refs

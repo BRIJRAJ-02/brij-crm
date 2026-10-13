@@ -464,6 +464,7 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
               attribute={isAdding ? undefined : editing}
               members={members}
               canManage={canChangeSchema}
+              objectAttributes={attributes}
               onClose={() => {
                 setAdding(false);
                 setEditing(undefined);
