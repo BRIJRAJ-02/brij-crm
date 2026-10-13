@@ -17,6 +17,7 @@ import type {
   MyAccess,
   ObjectSummary,
   RecordView,
+  RelationshipView,
   Usage,
   ValidationRuleInput,
 } from '@crm/contracts';
@@ -57,7 +58,9 @@ export type {
   ValidationRuleView,
   AttributeDefinition,
   AttributeOption,
+  AttributeRelationship,
   AttributeType,
+  Cardinality,
   PickerAttributeType,
   CreatedWorkspace,
   CreateWorkspaceInput,
@@ -71,6 +74,7 @@ export type {
   Permission,
   RecordRefDisplay,
   RecordView,
+  RelationshipView,
   SignedInUser,
   SystemStatus,
   TrashedRecord,
@@ -282,6 +286,25 @@ export interface AttributeChanges {
   readonly defaultValue?: AttributeDefaultValue | null;
   /** Its validation rules, in order (spec 0013, AC-252): the list replaces the attribute's rules. */
   readonly rules?: readonly ValidationRuleInput[];
+}
+
+/**
+ * A new relationship, as RelationshipSettings sends it (spec 0014, AC-282):
+ * the id from `relationships.newId`, minted once per dialog and sent again on
+ * every retry, the cardinality read from `from`, and each side's object and
+ * name (its API name comes from the name on the server).
+ */
+export interface NewRelationship {
+  readonly id: string;
+  readonly cardinality: RelationshipView['cardinality'];
+  readonly from: { readonly objectId: string; readonly title: string };
+  readonly to: { readonly objectId: string; readonly title: string };
+}
+
+/** New names for a relationship's sides (spec 0014, AC-307): only the ones that changed. */
+export interface RelationshipNames {
+  readonly from?: string;
+  readonly to?: string;
 }
 
 /** The cache key of one object's attributes in one workspace. */
@@ -1521,6 +1544,61 @@ export function createDataLayer({
           workspace,
           (mutationId, options) => api.attributes.restore({ workspace, attributeId, mutationId }, options),
           (ends) => ends.map((end) => end.objectId),
+        ),
+    },
+    relationships: {
+      /** A new relationship's id: mint it once when the dialog opens, and send the same one again on a retry. */
+      newId: () => mintId(),
+      /**
+       * Creates a relationship, both sides at once, and waits for the server
+       * (spec 0014, AC-282; never optimistic: it is often refused, and it
+       * reshapes two tables). Both objects' lists are read again. Refusals:
+       * `SLUG_TAKEN` and `CONFIG_INVALID` on the side's name (`from.title`,
+       * `to.title`), `LIMIT_REACHED`, `NOT_FOUND`, `ID_TAKEN`, `FORBIDDEN`. A
+       * retry with the same id after a lost answer gets the relationship the
+       * first try made.
+       */
+      create: (workspace: string, input: NewRelationship): Promise<RelationshipView> =>
+        writeAttribute(
+          workspace,
+          (mutationId, options) =>
+            api.relationships.create(
+              {
+                workspace,
+                id: input.id,
+                cardinality: input.cardinality,
+                from: { objectId: input.from.objectId, title: input.from.title },
+                to: { objectId: input.to.objectId, title: input.to.title },
+                mutationId,
+              },
+              options,
+            ),
+          (made) => [made.from.objectId, made.to.objectId],
+        ),
+      /**
+       * Renames one or both sides of a relationship in one write (spec 0014,
+       * AC-307), waiting for the server. Only the objects whose side changed
+       * store an event, so only those count as echoes. Refusals:
+       * `CONFIG_INVALID` on the side's name, `NOT_FOUND`, `FORBIDDEN`.
+       */
+      update: (workspace: string, relationshipId: string, names: RelationshipNames): Promise<RelationshipView> =>
+        writeAttribute(
+          workspace,
+          (mutationId, options) =>
+            api.relationships.update(
+              {
+                workspace,
+                relationshipId,
+                ...(names.from === undefined ? {} : { from: { title: names.from } }),
+                ...(names.to === undefined ? {} : { to: { title: names.to } }),
+                mutationId,
+              },
+              options,
+            ),
+          (renamed) => [
+            ...(names.from === undefined ? [] : [renamed.from.objectId]),
+            ...(names.to === undefined ? [] : [renamed.to.objectId]),
+          ],
         ),
     },
     options: {

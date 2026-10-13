@@ -32,9 +32,17 @@ A meter "Attributes, N of 250" for owners and admins (a skeleton until `usage.ge
 
 - **Purpose**: create or edit one attribute, from settings, the table's "+" header, its column menu or the view bar's Add attribute.
 - **Main task**: name it, pick one of the fifteen types, set the type's settings (a Number's display, a Currency's code) and options (a Select's or Multi select's, a Status's stages, starting from Not started, In progress and Done), Required, Unique and Allow multiple where the type takes them and a default, then Create attribute or Save.
-- **Leaves out**: Relationship (#15) and changing a type (#14).
+- **Leaves out**: changing a type (#14). Relationship, last in the type picker for owners and admins, hands over to the relationship dialog below with the name typed so far, and a side of a two way relationship opens that dialog in edit mode.
 
 The library's AttributeSettings, connected: one id minted per opening (a retry sends the same one), the write through the data layer and server confirmed, refusals on the setting they name (a taken API name on API name), an edit sending only what changed. A new attribute's options go with its create. An existing attribute's options save as they change (milestone 3, the editor's hint says so): each add, rename, recolour, outcome or target, move, archive and restore is one server confirmed write through `data.options`, its row spinning while it is out and showing its refusal after (a refused add's reason shows by Add option); the page reloads after each, and the dialog reads the attribute from the live list, so the rows are the server's. "N of 500" comes from `usage.get`. A system attribute, or anyone without `schema.manage`, sees it read only with Close.
+
+## The relationship dialog (RelationshipDialog)
+
+- **Purpose**: create a relationship from an object's Add attribute, or rename the two sides of one from its settings or its column menu (spec 0014).
+- **Main task**: choose the related object and how records link, name each side, then Create relationship (or Save the names).
+- **Leaves out**: changing the objects or the cardinality (#14), one way references (engine only), linking records (milestone 2).
+
+The library's RelationshipSettings, connected. Creating: this object is the defining side, named with what was typed in the attribute dialog; the relationship's id is minted once per opening and sent again on every retry (a lost answer's retry gets the relationship already made); the write waits for the server and both objects' lists are read again, so the column appears here at once and the other object's table shows its side as its definitions event arrives. Editing: the other side's name is read from its object's live attributes before the dialog shows (a failed read shows the names read only with why), and only the names that changed go out, in one `relationships.update`. Refusals land on the side's name (`from.title`, `to.title`), else above the settings. Anyone without `schema.manage` sees it read only with Close.
 
 ## Attribute archive confirm (ArchiveAttributeDialog)
 

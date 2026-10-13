@@ -1,8 +1,9 @@
 // Brief
 // Purpose: create or edit one attribute of an object, from settings, the table's "+" header or a column's menu.
 // Main task: name it, pick one of the fifteen types, set its settings, options, rules and default, then Create or Save.
-// Leaves out: relationships (#15), changing a type (#14); an existing attribute's options save as they change.
-// Rules (spec 0013) go with Save; their conditions name the object's own attributes, never a relationship.
+// Leaves out: changing a type (#14); an existing attribute's options save as they change; a relationship hands over
+// to RelationshipDialog (spec 0014). Rules (spec 0013) go with Save; their conditions name the object's own attributes,
+// never a relationship.
 import {
   isDataError,
   refusalSummary,
@@ -30,6 +31,7 @@ import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { strings } from './attribute-strings.ts';
 import { formRefusals } from './refusals.ts';
+import { RelationshipDialog } from './RelationshipDialog.tsx';
 
 /** The settings the server names on its refusals, as the dialog shows them. */
 const FIELDS = [
@@ -177,6 +179,8 @@ export function AttributeDialog({
   const [pending, setPending] = useState<ReadonlySet<string>>(new Set());
   const [adding, setAdding] = useState<readonly OptionsEditorOption[]>([]);
   const [optionErrors, setOptionErrors] = useState<Readonly<Partial<Record<string, string>>>>({});
+  // Relationship chosen in the type picker (spec 0014): the relationship dialog takes over, with the name typed so far.
+  const [relationshipDraft, setRelationshipDraft] = useState<{ readonly title: string } | undefined>(undefined);
   // Each opening starts afresh, with its own id.
   const [wasOpen, setWasOpen] = useState(isOpen);
   if (isOpen !== wasOpen) {
@@ -188,6 +192,7 @@ export function AttributeDialog({
       setPending(new Set());
       setAdding([]);
       setOptionErrors({});
+      setRelationshipDraft(undefined);
     }
   }
   const displays = useMemo(() => toActorDisplays(members), [members]);
@@ -310,6 +315,26 @@ export function AttributeDialog({
           errors: optionErrors,
         };
 
+  // A side of a two way relationship opens the relationship dialog in edit mode, and Relationship chosen in the
+  // type picker opens it in create mode (spec 0014).
+  if (
+    attribute?.relationship?.pairedAttributeId !== undefined ||
+    (attribute === undefined && relationshipDraft !== undefined)
+  ) {
+    return (
+      <RelationshipDialog
+        slug={slug}
+        objectId={objectId}
+        isOpen={isOpen}
+        attribute={attribute}
+        draftTitle={relationshipDraft?.title}
+        canManage={canManage}
+        onClose={onClose}
+        onSaved={onSaved}
+      />
+    );
+  }
+
   return (
     <AttributeSettings
       isOpen={isOpen}
@@ -340,6 +365,9 @@ export function AttributeDialog({
       newOptionId={data.attributes.newId}
       newRuleId={data.attributes.newId}
       {...(ruleAttributes === undefined ? {} : { ruleAttributes })}
+      {...(attribute === undefined && canManage
+        ? { relationshipEntry: { label: strings.relationship, onChoose: setRelationshipDraft } }
+        : {})}
       {...(optionsLimit === undefined ? {} : { optionsLimit })}
       // The writes read `openNow` only when the server answers, never while rendering.
       // eslint-disable-next-line react-hooks/refs

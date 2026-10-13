@@ -206,7 +206,7 @@ jobs:
               sleep 1
             done
           done
-      - run: pnpm --filter @crm/web test:flow e2e/sign-in.flow.ts e2e/people.flow.ts e2e/session.flow.ts e2e/keyboard.flow.ts e2e/live.flow.ts e2e/record.flow.ts e2e/options.flow.ts e2e/rules.flow.ts
+      - run: pnpm --filter @crm/web test:flow e2e/sign-in.flow.ts e2e/people.flow.ts e2e/session.flow.ts e2e/keyboard.flow.ts e2e/live.flow.ts e2e/record.flow.ts e2e/options.flow.ts e2e/rules.flow.ts e2e/relations.flow.ts
       - name: Keep the traces and the logs
         if: failure()
         uses: actions/upload-artifact@v7

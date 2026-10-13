@@ -20,7 +20,8 @@ export function formRefusals(
   });
   const issues = (error.data?.issues ?? []).map((issue): FormRefusal => {
     const [first] = issue.path;
-    const field = onField(typeof first === 'string' ? first : undefined);
+    // A nested field (a relationship side's `from.title`) by its whole path, else by its first part.
+    const field = onField(issue.path.join('.')) ?? onField(typeof first === 'string' ? first : undefined);
     return { code: error.code, message: issue.message, ...(field === undefined ? {} : { attributeId: field }) };
   });
   const all = [...refusals, ...issues];

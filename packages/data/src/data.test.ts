@@ -14,6 +14,7 @@ import {
   type ObjectSummary,
   type RecordActivity,
   type RecordView,
+  type RelationshipView,
   type Usage,
   type TrashedRecord,
 } from '@crm/contracts';
@@ -127,6 +128,8 @@ interface Behaviour {
   trashed: (recordId: string) => TrashedRecord;
   /** What every option write answers (spec 0012, milestone 3). */
   optionWrite: () => AttributeOption;
+  /** What both relationship writes answer (spec 0014). */
+  relationshipWrite: () => RelationshipView;
 }
 
 const unauthenticated = () => new ORPCError('UNAUTHENTICATED', { status: 401, message: 'Sign in to continue.' });
@@ -163,6 +166,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     activity: notServed,
     trashed: notServed,
     optionWrite: notServed,
+    relationshipWrite: notServed,
     ...overrides,
   };
   const calls: string[] = [];
@@ -230,6 +234,18 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       restore: os.attributes.restore.handler(({ input }) => {
         mutationIds.push(input.mutationId);
         return behaviour.attributeWrite();
+      }),
+    },
+    relationships: {
+      create: os.relationships.create.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        sent.push(input);
+        return behaviour.relationshipWrite();
+      }),
+      update: os.relationships.update.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        sent.push(input);
+        return behaviour.relationshipWrite();
       }),
     },
     options: {
@@ -634,6 +650,47 @@ describe('members and attributes', () => {
     const edited = await data.attributes.update('acme', company.id, { title: 'Employer', defaultValue: null });
     expect(edited.id).toBe(company.id);
     expect(api.mutationIds).toHaveLength(3);
+  });
+
+  it('creates a relationship with the dialog’s id, drops both objects’ lists, and renames only what changed (spec 0014)', async () => {
+    const team = { ...TITLE, id: '0199a6f2-0000-7000-8000-000000000010', objectId: COMPANIES_ID, title: 'Team' };
+    const company = { ...TITLE, id: '0199a6f2-0000-7000-8000-000000000011', title: 'Company' };
+    const answer = {
+      relationshipId: '0199a6f2-0000-7000-8000-000000000013',
+      cardinality: 'many_to_one' as const,
+      from: company,
+      to: team,
+    };
+    const api = fakeApi({ relationshipWrite: () => answer });
+    const reloads: string[] = [];
+    const { data } = layer(api, undefined, { onDefinitionsChange: () => reloads.push('reload') });
+    await data.attributes.list('acme', PEOPLE.id);
+    await data.attributes.list('acme', COMPANIES_ID);
+    const id = data.relationships.newId();
+    const made = await data.relationships.create('acme', {
+      id,
+      cardinality: 'many_to_one',
+      from: { objectId: PEOPLE.id, title: 'Company' },
+      to: { objectId: COMPANIES_ID, title: 'Team' },
+    });
+    expect(made).toEqual(answer);
+    expect(api.sent.at(-1)).toMatchObject({ id, cardinality: 'many_to_one', from: { title: 'Company' } });
+    expect(reloads).toEqual(['reload']);
+    // Both objects' columns are read again.
+    await data.attributes.list('acme', PEOPLE.id);
+    await data.attributes.list('acme', COMPANIES_ID);
+    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(4);
+    await data.relationships.update('acme', answer.relationshipId, { to: 'Staff' });
+    expect(api.sent.at(-1)).toEqual({
+      workspace: 'acme',
+      relationshipId: answer.relationshipId,
+      to: { title: 'Staff' },
+      mutationId: api.mutationIds.at(-1),
+    });
+    // Only Companies' side changed: its list goes, People's stays.
+    await data.attributes.list('acme', PEOPLE.id);
+    await data.attributes.list('acme', COMPANIES_ID);
+    expect(count(api.calls, '/api/rpc/attributes/list')).toBe(5);
   });
 
   it('maps an attribute to the field set’s, reading references and members as read only in this loop', () => {
