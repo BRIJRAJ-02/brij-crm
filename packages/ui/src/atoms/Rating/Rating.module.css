@@ -1,5 +1,6 @@
 /* Rating: five 14px filled stars, border-strong when off and the accent when
-   on. A hovered star lights up (pointer only). */
+   on. Under a pointer the stars preview the hovered rating (Rating.tsx lights
+   every star up to the hovered one and puts out the rest). */
 @layer components {
   .wrap {
     display: inline-flex;
@@ -33,12 +34,6 @@
     transition:
       color var(--duration-hover) var(--ease-hover),
       scale var(--duration-press) var(--ease-out);
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .choice[data-hovered] {
-      color: var(--accent);
-    }
   }
 
   .choice[data-pressed] {

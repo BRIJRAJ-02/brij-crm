@@ -12,15 +12,15 @@ export function stableHue(id: string): Hue {
   return HUES[(hash >>> 0) % HUES.length] ?? 'gray';
 }
 
-/** Up to two initials from a name: the first letters of its first and last words ("Ada Lovelace" gives "AL"). */
-export function initialsOf(name: string): string {
+/** Up to two initials from a name: the first letters of its first and last words ("Ada Lovelace" gives "AL"), or only the first when `max` is 1. */
+export function initialsOf(name: string, max: 1 | 2 = 2): string {
   const words = name
     .trim()
     .split(/\s+/u)
     .filter((word) => word !== '');
   const first = words[0];
   if (first === undefined) return '';
-  const last = words.length > 1 ? words.at(-1) : undefined;
+  const last = max === 2 && words.length > 1 ? words.at(-1) : undefined;
   const segmenter = memoIntl('segmenter', () => new Intl.Segmenter());
   const letter = (word: string) =>
     segmenter.segment(word)[Symbol.iterator]().next().value?.segment.toLocaleUpperCase() ?? '';

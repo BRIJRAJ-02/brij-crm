@@ -17,6 +17,7 @@ Ported from the artifact's RecordChip card. It is the one display for record ref
 - `display` is the `RecordRefDisplay` or `ActorDisplay` the data layer (#6) builds; the chip never resolves an id.
 - People get a circle avatar, companies and other records a square. API keys, automations and the system get their icon (key, zap, server), and the system always reads "System".
 - `href` makes it a routed link to the record; it passes `safeHref()`.
+- The avatar is the 14px `xxs` size, so it sits an even 3px in from the chip's outer edge, and the edge is `border-subtle`.
 - `isFlat` drops the edge for dense places.
 
 ## States

@@ -33,7 +33,7 @@ function Face({ display }: { readonly display: RecordRefDisplay | ActorDisplay }
       <Avatar
         name={display.name}
         id={display.recordId}
-        size="xs"
+        size="xxs"
         shape={display.kind === 'person' ? 'circle' : 'square'}
         isDecorative
         {...(display.imageSrc === undefined ? {} : { src: display.imageSrc })}
@@ -46,7 +46,7 @@ function Face({ display }: { readonly display: RecordRefDisplay | ActorDisplay }
       <Avatar
         name={display.name}
         id={display.id ?? display.name}
-        size="xs"
+        size="xxs"
         isDecorative
         {...(display.imageSrc === undefined ? {} : { src: display.imageSrc })}
         {...(display.hue === undefined ? {} : { hue: display.hue })}

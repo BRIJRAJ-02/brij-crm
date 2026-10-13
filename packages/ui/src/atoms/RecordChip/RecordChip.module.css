@@ -1,5 +1,7 @@
-/* RecordChip: a 20px chip with a 16px avatar (or an actor's icon) and the
-   name. Flat chips drop the edge for dense places. */
+/* RecordChip: a 20px chip with a 14px avatar (or an actor's icon) and the
+   name. The avatar sits an even 3px in from the outer edge on every side, and
+   the edge is the subtle border so the chip reads lighter than a control.
+   Flat chips drop the edge for dense places. */
 @layer components {
   .root {
     display: inline-flex;
@@ -8,7 +10,7 @@
     max-inline-size: 100%;
     block-size: var(--size-chip);
     padding-inline: var(--space-2) var(--space-6);
-    border: var(--border-width-hairline) solid var(--border);
+    border: var(--border-width-hairline) solid var(--border-subtle);
     border-radius: var(--radius-sm);
     background: var(--surface-raised);
     color: var(--text);
@@ -35,8 +37,8 @@
     flex: none;
     align-items: center;
     justify-content: center;
-    inline-size: var(--size-icon);
-    block-size: var(--size-icon);
+    inline-size: var(--size-icon-sm);
+    block-size: var(--size-icon-sm);
     border-radius: var(--radius-xs);
     background: var(--surface-hover);
     color: var(--text-secondary);

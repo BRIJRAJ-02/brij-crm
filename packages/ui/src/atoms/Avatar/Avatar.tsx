@@ -5,8 +5,8 @@ import { initialsOf, stableHue } from '../../lib/stable-hue.ts';
 import { strings } from './strings.ts';
 import styles from './Avatar.module.css';
 
-/** Avatar sizes: `xs` 16px (cells, chips), `sm` 20px, `md` 24px, `lg` 32px (record headers). */
-export type AvatarSize = 'xs' | 'sm' | 'md' | 'lg';
+/** Avatar sizes: `xxs` 14px (inside a 20px chip), `xs` 16px (cells), `sm` 20px, `md` 24px, `lg` 32px (record headers). `xxs` to `sm` show one initial, so the letters keep room inside the tile. */
+export type AvatarSize = 'xxs' | 'xs' | 'sm' | 'md' | 'lg';
 
 /** Props for Avatar. */
 export interface AvatarProps {
@@ -48,7 +48,7 @@ export function Avatar({ name, id, src, hue, size = 'sm', shape = 'circle', isDe
           }}
         />
       ) : (
-        initialsOf(name)
+        initialsOf(name, size === 'md' || size === 'lg' ? 2 : 1)
       )}
     </span>
   );

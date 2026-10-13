@@ -131,6 +131,7 @@ describe('avatars', () => {
     expect(initialsOf('  grace   brewster hopper ')).toBe('GH');
     expect(initialsOf('Northwind')).toBe('N');
     expect(initialsOf('')).toBe('');
+    expect(initialsOf('Ada Lovelace', 1)).toBe('A');
   });
 });
 

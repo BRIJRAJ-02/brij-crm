@@ -78,3 +78,24 @@ export const ReadOnly: Story = {
 export const Disabled: Story = {
   args: { value: 2, isDisabled: true },
 };
+
+/** Under a pointer the stars preview the hovered rating: hovering the fifth lights all five, the first lights one. */
+export const HoverPreview: Story = {
+  render: (args) => (
+    <Stage>
+      <Editable {...(args.onChange === undefined ? {} : { onChange: args.onChange })} />
+    </Stage>
+  ),
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const star = (count: number) =>
+      canvas.getByRole('radio', { name: count === 1 ? '1 star' : `${String(count)} stars` }).closest('label');
+    const lit = () => canvasElement.querySelectorAll('[data-on]').length;
+    await expect(lit()).toBe(3);
+    await userEvent.hover(star(5) ?? canvasElement);
+    await expect(lit()).toBe(5);
+    await userEvent.hover(star(1) ?? canvasElement);
+    await expect(lit()).toBe(1);
+    await userEvent.unhover(star(1) ?? canvasElement);
+    await expect(lit()).toBe(3);
+  },
+};

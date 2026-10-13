@@ -1,4 +1,4 @@
-import type { KeyboardEvent, MouseEvent } from 'react';
+import { useState, type KeyboardEvent, type MouseEvent } from 'react';
 import { RadioButton, RadioField, RadioGroup } from 'react-aria-components';
 import { Icon } from '../Icon/Icon.tsx';
 import { strings } from './strings.ts';
@@ -44,6 +44,8 @@ export function Rating({
   variant = 'default',
 }: RatingProps) {
   const current = value ?? defaultValue ?? null;
+  // The star under the pointer, so the stars preview that rating before a click.
+  const [hovered, setHovered] = useState<number | undefined>(undefined);
   if (isReadOnly) {
     return (
       <span className={styles.root} role="img" aria-label={strings.rated(label, current)}>
@@ -67,6 +69,8 @@ export function Rating({
     if (event.key === 'Delete' || event.key === 'Backspace') onChange?.(null);
   };
 
+  const lit = hovered ?? current;
+
   return (
     // Clicks and keys bubble here from the stars; the group itself stays the radio group.
     // eslint-disable-next-line jsx-a11y-x/no-static-element-interactions
@@ -84,7 +88,16 @@ export function Rating({
       >
         {STARS.map((star) => (
           <RadioField key={star} value={String(star)} aria-label={strings.stars(star)} className={styles.field}>
-            <RadioButton className={styles.choice} data-on={current !== null && star <= current ? '' : undefined}>
+            <RadioButton
+              className={styles.choice}
+              data-on={lit !== null && star <= lit ? '' : undefined}
+              onHoverStart={() => {
+                setHovered(star);
+              }}
+              onHoverEnd={() => {
+                setHovered((now) => (now === star ? undefined : now));
+              }}
+            >
               <Icon name="star" size="sm" isFilled />
             </RadioButton>
           </RadioField>
