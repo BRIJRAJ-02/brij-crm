@@ -6,10 +6,11 @@ import { eq } from 'drizzle-orm';
 import type { AttributeDefinition, Cardinality } from '@crm/contracts';
 import { toApiSlug } from '@crm/contracts/values';
 import { schema } from '@crm/db';
-import { readOne } from '../attributes/attributes.ts';
+import { readDefinitions } from '../attributes/attributes.ts';
 import { checkId } from '../engine/ids.ts';
-import { isRefusal, refuseOn } from '../engine/refusals.ts';
+import { isRefusal, refuse, refuseOn } from '../engine/refusals.ts';
 import { defineRelationship, updateRelationship } from '../engine/relationships.ts';
+import type { AttributeRef } from '../engine/definitions.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import type { AfterWrite } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
@@ -65,6 +66,20 @@ async function onSideName(scope: EngineScope, input: CreateRelationshipInput, er
 }
 
 /**
+ * Both sides' definitions, read back in one pass (each object's list once,
+ * so a self relationship reads one), or `NOT_FOUND` when either is hidden
+ * from the caller since the write.
+ */
+async function bothSides(
+  scope: EngineScope,
+  refs: readonly [AttributeRef, AttributeRef],
+): Promise<{ readonly from: AttributeDefinition; readonly to: AttributeDefinition }> {
+  const [from, to] = await readDefinitions(scope, refs);
+  if (from === undefined || to === undefined) throw refuse('NOT_FOUND', 'That relationship does not exist.');
+  return { from, to };
+}
+
+/**
  * Creates a two way relationship (spec 0014, AC-282 to AC-284), both sides in
  * one write, each side's API name `toApiSlug(title, 'attribute')`, and
  * answers both definitions. The same create again (same id, same actor,
@@ -96,9 +111,9 @@ export async function createRelationship(
   ).catch((error: unknown) => onSideName(scope, input, error));
   const toAttributeId = made.toAttributeId;
   if (toAttributeId === undefined) throw new Error('A two way relationship was made with one side.');
-  const [from, to] = await Promise.all([
-    readOne(scope, { attributeId: made.fromAttributeId, objectId: fromObjectId, listId: null }),
-    readOne(scope, { attributeId: toAttributeId, objectId: toObjectId, listId: null }),
+  const { from, to } = await bothSides(scope, [
+    { attributeId: made.fromAttributeId, objectId: fromObjectId, listId: null },
+    { attributeId: toAttributeId, objectId: toObjectId, listId: null },
   ]);
   return { relationshipId: made.relationshipId, cardinality: input.cardinality, from, to };
 }
@@ -128,9 +143,9 @@ export async function renameRelationship(
     { relationshipId: input.relationshipId, fromTitle: input.fromTitle, toTitle: input.toTitle },
     hooks,
   );
-  const [from, to] = await Promise.all([
-    readOne(scope, { attributeId: ends.from.attributeId, objectId: ends.from.objectId, listId: null }),
-    readOne(scope, { attributeId: ends.to.attributeId, objectId: ends.to.objectId, listId: null }),
+  const { from, to } = await bothSides(scope, [
+    { attributeId: ends.from.attributeId, objectId: ends.from.objectId, listId: null },
+    { attributeId: ends.to.attributeId, objectId: ends.to.objectId, listId: null },
   ]);
   return { relationshipId: ends.relationshipId, cardinality: ends.cardinality, from, to };
 }

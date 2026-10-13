@@ -57,6 +57,9 @@ export interface RelationshipDef {
   readonly toObjectIds: readonly string[];
   readonly fromSingle: boolean;
   readonly toSingle: boolean;
+  /** Each side's attribute title (none for a one way reference's other side), for the relationship block. */
+  readonly fromTitle: string;
+  readonly toTitle: string | null;
 }
 
 /** Which ends of a cardinality hold one link at most. */
@@ -104,7 +107,7 @@ export interface InsertedRelationship {
 /**
  * The relationship an earlier try of the same create made (spec 0014,
  * AC-284): undefined when no relationship holds the id; the relationship
- * when this actor made it with the same cardinality and ends; else
+ * when this actor made it with the same cardinality, ends and API names; else
  * `ID_TAKEN`. Read under both objects' row locks, so a concurrent try with
  * the same id has committed or not started.
  */
@@ -121,11 +124,14 @@ async function earlierRelationship(
     to_attribute_id: string | null;
     from_object_id: string | null;
     to_object_id: string | null;
+    from_slug: string;
+    to_slug: string | null;
     created_by_type: string;
     created_by_id: string | null;
   }>(sql`
     select rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
       f.object_id::text as from_object_id, t.object_id::text as to_object_id,
+      f.api_slug as from_slug, t.api_slug as to_slug,
       rel.created_by_type::text, rel.created_by_id::text
     from relationships rel
     join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
@@ -138,9 +144,16 @@ async function earlierRelationship(
   const sameShape =
     row.cardinality === input.cardinality &&
     row.from_object_id === canonicalId(input.from.objectId) &&
-    row.to_object_id === canonicalId(to.objectId);
-  if (!isOwnTry || !sameShape || row.to_attribute_id === null) {
+    row.to_object_id === canonicalId(to.objectId) &&
+    // The same names too, by their API names (which never change): a retry with other names is another create.
+    row.from_slug === input.from.apiSlug &&
+    row.to_slug === to.apiSlug;
+  if (!isOwnTry || row.to_attribute_id === null) {
     throw refuse('ID_TAKEN', 'A relationship with that id already exists.');
+  }
+  // This person's earlier try landed (its answer was lost) and they changed the dialog since: it isn't remade.
+  if (!sameShape) {
+    throw refuse('ID_TAKEN', 'This relationship was already created as first sent. Close the dialog to see it.');
   }
   return {
     relationshipId: id,
@@ -237,14 +250,15 @@ export async function insertRelationship(
   if (input.id !== undefined && (!isUuidV7(input.id) || input.to === undefined)) {
     throw refuse('CONFIG_INVALID', 'The relationship id must be a UUID v7, on a relationship with two ends.');
   }
-  const ends = await liveObjects(tx, [
-    input.from.objectId,
-    ...(input.to === undefined ? targets : [input.to.objectId]),
-  ]);
-  // An object the caller can't see answers as one that doesn't exist (spec 0009, AC-140).
-  if (ends.some((objectId) => objectLevel(scope.access, objectId) === 'none')) {
+  const named = [input.from.objectId, ...(input.to === undefined ? targets : [input.to.objectId])].map((id) =>
+    checkId(id, 'That object does not exist.'),
+  );
+  // An object the caller can't see answers as one that doesn't exist (spec 0009, AC-140), before anything says
+  // whether it is archived.
+  if (named.some((objectId) => objectLevel(scope.access, objectId) === 'none')) {
     throw refuse('NOT_FOUND', 'That object does not exist.');
   }
+  const ends = await liveObjects(tx, named);
   const { fromSingle, toSingle } = singleEnds(input.cardinality);
   const id = input.id?.toLowerCase();
   if (input.to !== undefined) {
@@ -334,7 +348,8 @@ const RELATIONSHIP_NOT_FOUND = 'That relationship does not exist.';
  * different names (`CONFIG_INVALID`). Refuses `NOT_FOUND` for a relationship
  * that is unknown, one way, hidden from the caller (either end) or archived
  * (either end, or by its far object). Records one `definitions` change per
- * object whose side changed; names already as asked write nothing.
+ * object, both sides (each carries its pair's name); names already as asked
+ * write nothing.
  */
 export async function updateRelationship(
   scope: EngineScope,
@@ -392,8 +407,9 @@ export async function updateRelationship(
           .update(attributes)
           .set({ title, ...touched(scope) })
           .where(eq(attributes.id, end.id));
-        recordDefinition(context, end);
       }
+      // Each side carries its pair's name (the relationship block), so a rename changes both objects' definitions.
+      if (renames.length > 0) for (const end of [from, to]) recordDefinition(context, end);
       return {
         relationshipId,
         cardinality: relationship.cardinality,
@@ -419,9 +435,11 @@ export async function loadRelationships(
     to_attribute_id: string | null;
     from_object_id: string;
     to_object_ids: string[];
+    from_title: string;
+    to_title: string | null;
   }>(sql`
     select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
-      f.object_id::text as from_object_id,
+      f.object_id::text as from_object_id, f.title as from_title, t.title as to_title,
       (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
     from relationships rel
     join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
@@ -441,6 +459,8 @@ export async function loadRelationships(
         toAttributeId: row.to_attribute_id,
         fromObjectId: row.from_object_id,
         toObjectIds: row.to_object_ids,
+        fromTitle: row.from_title,
+        toTitle: row.to_title,
         ...singleEnds(row.cardinality),
       },
     ]),

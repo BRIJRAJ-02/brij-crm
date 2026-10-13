@@ -76,6 +76,7 @@ describe('relationships.create (AC-282 to AC-286)', () => {
       side: 'to',
       targetObjectIds: [m.companies.id],
       pairedAttributeId: made.from.id,
+      pairedTitle: 'Investors',
       farHoldsOne: false,
     });
   });
@@ -90,7 +91,11 @@ describe('relationships.create (AC-282 to AC-286)', () => {
     expect(await counts(m.workspace.id)).toEqual(before);
     expect(
       await refusal(() => m.client.relationships.create({ ...investors(m, id), cardinality: 'one_to_one' })),
-    ).toEqual({ code: 'ID_TAKEN', status: 409, message: 'A relationship with that id already exists.' });
+    ).toEqual({
+      code: 'ID_TAKEN',
+      status: 409,
+      message: 'This relationship was already created as first sent. Close the dialog to see it.',
+    });
   });
 
   it('refuses a taken name on the side it is about, 409, leaving neither side behind', async () => {

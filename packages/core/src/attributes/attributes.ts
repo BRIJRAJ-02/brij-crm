@@ -302,7 +302,10 @@ export async function listObjectAttributes(
  * in the order asked: one read per object they sit on. An attribute the
  * caller can't see (or one on a list) is left out.
  */
-async function readDefinitions(scope: EngineScope, refs: readonly AttributeRef[]): Promise<AttributeDefinition[]> {
+export async function readDefinitions(
+  scope: EngineScope,
+  refs: readonly AttributeRef[],
+): Promise<AttributeDefinition[]> {
   // An end on an object the caller can't see is left out, object and all (spec 0009, AC-140).
   const objectIds = [
     ...new Set(

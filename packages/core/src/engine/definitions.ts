@@ -717,6 +717,32 @@ const refOf = (attribute: Pick<AttributeDef, 'id' | 'objectId' | 'listId'>): Att
   listId: attribute.listId,
 });
 
+/**
+ * Locks an attribute's row and, when it is a side of a relationship, the
+ * other side's, in id order (spec 0014): every write that changes or checks
+ * both sides (archive, restore, a rename) takes them in this one order, so
+ * two such writes started from opposite sides take turns rather than
+ * deadlock. A malformed id locks nothing (the write refuses it next).
+ */
+async function lockWithPair(tx: WorkspaceTx, attributeId: string): Promise<void> {
+  if (!isUuid(attributeId)) return;
+  const [row] = await tx
+    .select({ fromAttributeId: relationships.fromAttributeId, toAttributeId: relationships.toAttributeId })
+    .from(attributes)
+    .innerJoin(
+      relationships,
+      and(eq(relationships.workspaceId, attributes.workspaceId), eq(relationships.id, attributes.relationshipId)),
+    )
+    .where(eq(attributes.id, attributeId));
+  const ids = row === undefined ? [attributeId] : [row.fromAttributeId, row.toAttributeId ?? row.fromAttributeId];
+  await tx
+    .select({ id: attributes.id })
+    .from(attributes)
+    .where(inArray(attributes.id, [...new Set(ids)]))
+    .orderBy(asc(attributes.id))
+    .for('update');
+}
+
 /** Changes an attribute's title, description, required, unique, settings or default (AC-10, AC-11). */
 export async function updateAttribute(
   scope: EngineScope,
@@ -728,8 +754,19 @@ export async function updateAttribute(
     scope,
     async (context) => {
       const { tx } = context;
+      // A rename of a relationship's side locks both sides first, in id order, as every write over both does.
+      if (input.title !== undefined) await lockWithPair(tx, input.attributeId);
       const attribute = await editable(tx, context.scope.access, input.attributeId);
       if (input.title !== undefined) checkName(input.title, 'title', 'title');
+      const far = input.title === undefined ? undefined : await farEnd(tx, attribute);
+      // A relationship from an object to itself keeps two different names (spec 0014, AC-307).
+      if (
+        far !== undefined &&
+        far.objectId === attribute.objectId &&
+        far.title.trim().toLowerCase() === (input.title ?? '').trim().toLowerCase()
+      ) {
+        throw refuseOn('CONFIG_INVALID', 'Give each side its own name.', 'title');
+      }
       checkDescription(input.description);
       if (input.isUnique === true && !UNIQUE_TYPES.includes(attribute.type)) {
         throw refuseOn(
@@ -767,6 +804,10 @@ export async function updateAttribute(
         })
         .where(eq(attributes.id, attribute.id));
       recordDefinition(context, attribute, ruled.attributeIds);
+      // The other side carries this side's name in its relationship block (spec 0014): its object changes too.
+      if (far !== undefined && input.title !== undefined && input.title.trim() !== attribute.title) {
+        recordDefinition(context, far);
+      }
       return refOf(attribute);
     },
     hooks,
@@ -811,6 +852,7 @@ export async function archiveAttribute(
     scope,
     async (context) => {
       const { tx } = context;
+      await lockWithPair(tx, attributeId);
       const attribute = await editable(tx, context.scope.access, attributeId);
       const [primary] = await tx
         .select({ id: objects.id })
@@ -865,6 +907,7 @@ export async function restoreAttribute(
     scope,
     async (context) => {
       const { tx } = context;
+      await lockWithPair(tx, attributeId);
       const attribute = await editable(tx, context.scope.access, attributeId);
       if (attribute.archivedBy !== null) {
         // Named only to someone who may see that object; anyone else hears it in general words.

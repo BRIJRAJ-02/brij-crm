@@ -78,7 +78,10 @@ export type AttributeParent = { readonly objectId: string } | { readonly listId:
 
 /**
  * Locks an attribute's parent row (its object or list) for the rest of the
- * write, so attribute creates and moves on it take turns. Refuses
+ * write, so attribute creates and moves on it take turns. `for no key
+ * update`: schema writers still queue on it, while record and entry writes,
+ * which hold `key share` on it through their foreign keys, never wait for one
+ * (spec 0014: a relationship create holds two objects). Refuses
  * `NOT_FOUND` for a parent that doesn't exist or is archived, checked under
  * that lock, so an archive that commits first is seen.
  */
@@ -91,8 +94,12 @@ export async function lockAttributeParent(tx: WorkspaceTx, parent: AttributePare
         .select({ archivedAt: objects.archivedAt })
         .from(objects)
         .where(eq(objects.id, parent.objectId))
-        .for('update')
-    : await tx.select({ archivedAt: lists.archivedAt }).from(lists).where(eq(lists.id, parent.listId)).for('update');
+        .for('no key update')
+    : await tx
+        .select({ archivedAt: lists.archivedAt })
+        .from(lists)
+        .where(eq(lists.id, parent.listId))
+        .for('no key update');
   if (locked === undefined || locked.archivedAt !== null) throw refuse('NOT_FOUND', missing);
 }
 

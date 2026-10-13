@@ -46,7 +46,9 @@ export async function relationshipBlocks(
       cardinality: relationship.cardinality,
       side: isFrom ? 'from' : 'to',
       targetObjectIds: targets.filter((objectId) => objectLevel(access, objectId) !== 'none'),
-      ...(pairedSeen ? { pairedAttributeId: pairedId } : {}),
+      ...(pairedSeen
+        ? { pairedAttributeId: pairedId, pairedTitle: (isFrom ? relationship.toTitle : relationship.fromTitle) ?? '' }
+        : {}),
       farHoldsOne: isFrom ? relationship.toSingle : relationship.fromSingle,
     });
   }

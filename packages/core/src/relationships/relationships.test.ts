@@ -8,7 +8,7 @@
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
-import { archiveAttributes, listObjectAttributes, restoreAttributes } from '../attributes/attributes.ts';
+import { archiveAttributes, editAttribute, listObjectAttributes, restoreAttributes } from '../attributes/attributes.ts';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { createRecord, getRecords } from '../engine/records.ts';
@@ -304,16 +304,24 @@ describe('refusals (AC-284, AC-285, AC-286)', () => {
     expect(again).toEqual(first);
     expect(await counts(scope)).toEqual(counted);
     expect((await definitionRows(scope)).length).toBe(rowsAfterFirst);
-    // The same id with other ends, or from someone else, is another relationship's.
-    expect(await refusalOf(createRelationship(scope, { ...input, cardinality: 'one_to_one' }))).toEqual({
+    // The same id with other ends or other names isn't remade, and quietly answering the first names would mislead.
+    const firstSent = {
+      code: 'ID_TAKEN',
+      message: 'This relationship was already created as first sent. Close the dialog to see it.',
+    };
+    expect(await refusalOf(createRelationship(scope, { ...input, cardinality: 'one_to_one' }))).toEqual(firstSent);
+    expect(
+      await refusalOf(createRelationship(scope, { ...input, to: { objectId: people, title: 'Investors' } })),
+    ).toEqual(firstSent);
+    expect(
+      await refusalOf(createRelationship(scope, { ...input, to: { objectId: companies, title: 'Backers' } })),
+    ).toEqual(firstSent);
+    // Someone else's id is another relationship's.
+    const admin = await memberIn(scope, 'admin');
+    expect(await refusalOf(createRelationship(admin, input))).toEqual({
       code: 'ID_TAKEN',
       message: 'A relationship with that id already exists.',
     });
-    expect(
-      await refusalOf(createRelationship(scope, { ...input, to: { objectId: people, title: 'Investors' } })),
-    ).toMatchObject({ code: 'ID_TAKEN' });
-    const admin = await memberIn(scope, 'admin');
-    expect(await refusalOf(createRelationship(admin, input))).toMatchObject({ code: 'ID_TAKEN' });
   });
 
   it('refuses a member without schema.manage and writes nothing (AC-285)', async () => {
@@ -390,11 +398,46 @@ describe('renaming a relationship (AC-307)', () => {
     const rows = (await definitionRows(scope)).slice(before);
     expect(rows).toHaveLength(2);
     expect(rows.map((row) => row.objectId).sort()).toEqual([people, companies].sort());
+    // Each side carries its pair's new name.
+    expect(renamed.from.relationship?.pairedTitle).toBe('Backers');
+    expect(renamed.to.relationship?.pairedTitle).toBe('Holdings');
     // Names already as asked write nothing.
     await renameRelationship(scope, { relationshipId: made.relationshipId, fromTitle: 'Holdings' }, [
       outboxHook({ mutationId: newId() }),
     ]);
     expect((await definitionRows(scope)).length).toBe(before + 2);
+    // One side renamed still changes both objects, whose blocks name it.
+    await renameRelationship(scope, { relationshipId: made.relationshipId, toTitle: 'Funders' }, [
+      outboxHook({ mutationId: newId() }),
+    ]);
+    expect((await definitionRows(scope)).length).toBe(before + 4);
+  });
+
+  it('keeps a self relationship’s names apart through attributes.update too, and tells the other side', async () => {
+    const { scope, people, companies } = await workspace();
+    const self = await createRelationship(scope, {
+      id: newId(),
+      cardinality: 'many_to_one',
+      from: { objectId: people, title: 'Manager' },
+      to: { objectId: people, title: 'Reports' },
+    });
+    expect(await refusalOf(editAttribute(scope, { attributeId: self.to.id, title: ' manager ' }))).toEqual({
+      code: 'CONFIG_INVALID',
+      message: 'Give each side its own name.',
+      field: 'title',
+    });
+    const made = await createRelationship(scope, {
+      id: newId(),
+      cardinality: 'many_to_many',
+      from: { objectId: people, title: 'Investments' },
+      to: { objectId: companies, title: 'Investors' },
+    });
+    const before = (await definitionRows(scope)).length;
+    await editAttribute(scope, { attributeId: made.to.id, title: 'Backers' }, [outboxHook({ mutationId: newId() })]);
+    const rows = (await definitionRows(scope)).slice(before);
+    expect(rows.map((row) => row.objectId).sort()).toEqual([people, companies].sort());
+    const investments = (await listObjectAttributes(scope, people)).find((each) => each.id === made.from.id);
+    expect(investments?.relationship?.pairedTitle).toBe('Backers');
   });
 
   it('keeps a self relationship’s names apart, and refuses archived, unknown and members', async () => {
@@ -478,5 +521,105 @@ describe('archiving and restoring a relationship (AC-287)', () => {
     });
     await restoreObject(scope, { objectId: clients });
     expect(await restoreAttributes(scope, { attributeId: made.from.id })).toHaveLength(2);
+  });
+});
+
+describe('under rules (spec 0009, AC-140, AC-141)', () => {
+  /** An admin whose role can't see `objectId` at all. */
+  async function hidingObject(scope: EngineScope, objectId: string) {
+    const admin = await memberIn(scope, 'admin');
+    return rescope(admin, {
+      rules: {
+        levels: [{ subject: { type: 'role', role: 'admin' }, target: { type: 'object', objectId }, level: 'none' }],
+        records: [],
+      },
+    });
+  }
+
+  it('answers a hidden object as one that does not exist, archived or not, and writes nothing', async () => {
+    const { scope, people, custom } = await workspace();
+    const projects = await custom('Project', 'Projects');
+    const hiding = await hidingObject(scope, projects);
+    const counted = await counts(scope);
+    const toProjects = () =>
+      createRelationship(hiding, {
+        id: newId(),
+        cardinality: 'many_to_one',
+        from: { objectId: people, title: 'Project' },
+        to: { objectId: projects, title: 'Members' },
+      });
+    const unknown = { code: 'NOT_FOUND', message: 'That object does not exist.' };
+    expect(await refusalOf(toProjects())).toEqual(unknown);
+    // Archived, it still answers as unknown: the refusal never says a hidden object exists.
+    await archiveObject(scope, { objectId: projects });
+    expect(await refusalOf(toProjects())).toEqual(unknown);
+    expect(await counts(scope)).toEqual(counted);
+  });
+
+  it('answers a rename with a hidden side as an unknown relationship', async () => {
+    const { scope, people, companies } = await workspace();
+    const made = await createRelationship(scope, {
+      id: newId(),
+      cardinality: 'many_to_many',
+      from: { objectId: people, title: 'Investments' },
+      to: { objectId: companies, title: 'Investors' },
+    });
+    const hiding = await hidingObject(scope, companies);
+    expect(
+      await refusalOf(renameRelationship(hiding, { relationshipId: made.relationshipId, fromTitle: 'Holdings' })),
+    ).toEqual({ code: 'NOT_FOUND', message: 'That relationship does not exist.' });
+  });
+
+  it('leaves a hidden far object and its side out of the relationship block', async () => {
+    const { scope, people, companies } = await workspace();
+    const hiding = await hidingObject(scope, companies);
+    const company = (await listObjectAttributes(hiding, people)).find((each) => each.apiSlug === 'company');
+    expect(company?.relationship).toMatchObject({ targetObjectIds: [], farHoldsOne: false });
+    expect(company?.relationship?.pairedAttributeId).toBeUndefined();
+    expect(company?.relationship?.pairedTitle).toBeUndefined();
+    // A hidden far attribute alone (its object seen) is left out the same way.
+    const team = (await listObjectAttributes(scope, companies)).find((each) => each.apiSlug === 'team');
+    const admin = await memberIn(scope, 'admin');
+    const hidingField = rescope(admin, {
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'admin' },
+            target: { type: 'attribute', objectId: companies, attributeId: team?.id ?? '' },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+    const seen = (await listObjectAttributes(hidingField, people)).find((each) => each.apiSlug === 'company');
+    expect(seen?.relationship?.targetObjectIds).toEqual([companies]);
+    expect(seen?.relationship?.pairedAttributeId).toBeUndefined();
+    expect(seen?.relationship?.pairedTitle).toBeUndefined();
+  });
+});
+
+describe('races (spec 0014, the lock order)', () => {
+  it('lets a rename and archives started from either side take turns', async () => {
+    const { scope, people, companies } = await workspace();
+    const made = await createRelationship(scope, {
+      id: newId(),
+      cardinality: 'many_to_many',
+      from: { objectId: people, title: 'Investments' },
+      to: { objectId: companies, title: 'Investors' },
+    });
+    const settled = await Promise.allSettled([
+      renameRelationship(scope, { relationshipId: made.relationshipId, fromTitle: 'Holdings', toTitle: 'Backers' }),
+      archiveAttributes(scope, { attributeId: made.to.id }),
+      editAttribute(scope, { attributeId: made.from.id, title: 'Stakes' }),
+    ]);
+    // Each either landed or was refused for the state another left (archived): none failed on a deadlock.
+    for (const each of settled) {
+      if (each.status === 'rejected') {
+        expect(isRefusal(each.reason) ? each.reason.refusal.code : each.reason).toBe('NOT_FOUND');
+      }
+    }
+    const restored = await restoreAttributes(scope, { attributeId: made.from.id });
+    expect(restored.map((each) => each.isArchived)).toEqual([false, false]);
   });
 });
