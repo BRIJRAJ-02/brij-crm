@@ -75,7 +75,7 @@ Budgets: heap under 200 MB, growth under 20 MB, frames under 16.7 ms at p95 (a f
 
 Technical:
 1. **Moments are found one index step at a time** (a recursive loose index scan per side), then grouped by actor, so a side's first page reads about a page of index entries however many links it holds. A side reads at most four steps past moments with nothing to show (reorders only); the page then ends where it stopped and the next one goes on from there (`ActivitySourceAnswer.stoppedAt`), so no read is unbounded and nothing is skipped. A page can therefore hold fewer than 50 entries with more to come; the browser reads on.
-2. **Changes and link entries name nobody when a field rule hides Created by or Updated by** (the newest change's actor is the record's Updated by). The creation entry follows Created by alone, as in milestone 1. `getHistory` still names who set each version: the same leak predates this spec and belongs with it.
+2. **Changes and link entries name nobody when a field rule hides Created by or Updated by** (the newest change's actor is the record's Updated by). For a relationship side the far object counts too: a link's actor is the Updated by of whichever end wrote it. The creation entry follows Created by alone, as in milestone 1. Closed in `getHistory` as well (13 October 2026, the coordinator's follow up), see "Hidden actors, closed" below.
 3. **A side that holds one record reads as a `change`** (rank 2) with `from` and `to` as references and `fromRefs`, `toRefs` as displays; its id is the moment's `links:…` id.
 4. **The far record join keeps to the side's own objects** (`r.object_id = any(allowed)`), so a far record anywhere else fails closed.
 5. **A timeline watches its workspace while shown** (`live.watch`). `records.one` doesn't watch on its own, so a record page opened directly (not from a table) had no live updates; the timeline's watch now carries them for the whole page. `records.one` watching for itself is left to #6.
@@ -99,11 +99,22 @@ Design (each the conservative option, open to change):
 
 1. **The million record seed is waived** (12 October 2026): AC-380 and AC-388 are measured on the smoke seed only. Confirm the timeline can be marked done on that basis, or ask for the `crm` profile run when the load stack is next up.
 2. **Network round trips** (technical call above): measure statements per page against a Neon preview, or accept the local numbers until #12's next run. If it misses, the sides' reads can be joined into one statement.
-3. **Hidden actors** (technical call 2): close the same leak in `getHistory` too, or leave it for #24's audit.
+3. **What a denied viewer can still infer** (from the review of the hidden actors fix): with Created by hidden but Updated by visible, a record never edited since its creation shows its creator as its Updated by (and the reverse for the timeline's creation entry); a hidden Created at or Updated at can be read off every version's moment and the timeline's times. Decide whether these pairs are hidden together, or accept the inference and say so in spec 0009.
 4. **A "New activity" pill** when entries arrive while scrolled down (the reader's place holds, but nothing says entries arrived): not built; worth a design call.
 5. **Visible commas** between linked names (design call 1).
 6. **The Activity tab's touch scroll at narrow widths** wasn't checked on a device: the feed's `overscroll-behavior: contain` inside a column that also scrolls might stop a touch scroll at the feed's top. A check on a phone is worth doing.
 7. **The artifact publish** is held (not approved): ActivityFeed (links entry, inline layout, keyboard, card surface) and RecordChip (flat hover) need the next `pnpm ui:artifact` publish.
+
+### Hidden actors, closed (13 October 2026)
+
+Once owner decision 3 here, now closed at the coordinator's request:
+- `getHistory` (values, and record references through `linkHistory`) leaves `setBy` out of every version when a field rule hides Created by or Updated by on the owner's object or, for a reference, on the far object (a link's actor is the Updated by of whichever end wrote it). `ValueVersion.setBy` is optional. One helper, `hidesActors` in `access/visibility.ts`, serves history and the timeline.
+- The timeline's relationship sides follow the same far object rule.
+- A record read (`records.get`, `records.query`, the trash read) leaves out each top level system field, `createdAt`, `createdBy`, `updatedAt` and `updatedBy`, whose attribute a field rule hides, as `values` already did; the four are optional in `RecordView`. This older leak (the review called it high) handed the hidden Updated by over as a plain field, which would have undone the history fix.
+- List entries follow no actor rule: lists have no Created by or Updated by attributes, and entry reads name their actors as they always have.
+- Nothing changes under the open policy: `open-sql.test.ts` now pins history and the timeline's first page too (only new sections were added to its transcript).
+- Tests: `activity-sources.test.ts`, "history names nobody to a reader who may not see who changed things" (values and references with Updated by or Created by hidden, the far end's history and timeline, a reader who sees both and the open policy still named) and the record read's top level fields.
+- Still open, outside this change: a live records event keeps `replaced.by` (the write's actor, the record's new Updated by) for an audience that hides Updated by (`access/events.ts`, `cutRecords`). The fix is an event fact naming each object's Created by and Updated by attributes, read by the relay once a batch, and dropping `replaced` when either is hidden; it belongs with the relay's audience work. Rules arrive only with #24, so none of this is reachable in production today.
 
 ### Reviews
 
