@@ -8,7 +8,7 @@ How each acceptance criterion is proved, the measured numbers, and the calls mad
 
 | Task | Commit (lane) | What |
 |---|---|---|
-| 6 | `feat(db)` | Migration `0030_record_links_ended.sql`: `record_links_from_ended` and `record_links_to_ended`, partial on `active_until is not null`. Guard tests rerun (packages/db, 148 passed) |
+| 6 | `feat(db)` | Migration `0032_record_links_ended.sql`: `record_links_from_ended` and `record_links_to_ended`, partial on `active_until is not null`. Guard tests rerun (packages/db, 148 passed) |
 | 7 | `feat(core)`, `fix(core)` | `packages/core/src/engine/activity-sources.ts`: the value source and the link source, registered in `ACTIVITY_SOURCES`; `bench-activity.ts` |
 | 8 | `feat(ui)`, `fix(ui)` | ActivityFeed: the `links` entry, the `inline` layout, the entry being read kept in place, a 2,000 entry perf test |
 | 9 | `feat(data)`, `fix(data)` | `activity.forRecord` and `recent`: paging as the feed scrolls, the live head refetch, merge by key, resets, actor fallbacks |
