@@ -191,6 +191,8 @@ export {
   type OptionsEditorProps,
 } from './modules/OptionsEditor/OptionsEditor.tsx';
 export {
+  editorRuleOf,
+  ruleOf,
   RulesEditor,
   type ListedKind,
   type RuleSettings,
