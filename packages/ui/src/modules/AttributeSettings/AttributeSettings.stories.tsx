@@ -510,3 +510,101 @@ export const OptionRefusedKeepsCreate: Story = {
     await expect(args.onSubmit).not.toHaveBeenCalled();
   },
 };
+
+/** The object's own attributes a rule's condition may name (spec 0013). */
+const STAGE_ATTRIBUTE = {
+  id: 'stage',
+  name: 'Stage',
+  type: 'status' as const,
+  allowMultiple: false,
+  isRequired: false,
+  isUnique: false,
+  isReadOnly: false,
+  options: [
+    { id: 'lead', label: 'Lead', hue: 'gray' as const, archived: false },
+    { id: 'won', label: 'Won', hue: 'green' as const, archived: false },
+  ],
+};
+
+const REFERENCE = {
+  type: 'text' as const,
+  isMulti: false,
+  title: 'Reference',
+  apiSlug: 'reference',
+  isRequired: false,
+  isUnique: false,
+  rules: [
+    { id: 'short', kind: 'length' as const, params: { max: 12 } },
+    {
+      id: 'digits',
+      kind: 'pattern' as const,
+      params: { preset: 'digits', ignoreCase: false },
+      condition: {
+        conjunction: 'and' as const,
+        conditions: [{ attributeId: 'stage', operator: 'is' as const, value: 'won' }],
+      },
+    },
+  ],
+};
+
+/**
+ * Rules (spec 0013, AC-252): an attribute's rules under its settings, each
+ * reading as the message it gives; a new one from Add rule; Save sends the
+ * list, with `rules` among what changed.
+ */
+export const Rules: Story = {
+  args: { attribute: REFERENCE, ruleAttributes: [STAGE_ATTRIBUTE], newRuleId: () => 'new-rule' },
+  play: async ({ args, userEvent }) => {
+    const dialog = await openDialog();
+    await expect(within(dialog).getByRole('grid', { name: 'Rules' })).toBeInTheDocument();
+    await expect(dialog).toHaveTextContent('Reference can have at most 12 characters.');
+    await expect(dialog).toHaveTextContent('Reference can only contain digits when Stage is Won.');
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Add rule' }));
+    await userEvent.click(await within(document.body).findByRole('menuitem', { name: 'Length' }));
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+    await userEvent.keyboard('2');
+    await userEvent.keyboard('{Meta>}{Enter}{/Meta}');
+    await waitFor(() =>
+      expect(args.onSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({
+          changed: ['rules'],
+          rules: [
+            { id: 'short', kind: 'length', params: { max: 12 } },
+            expect.objectContaining({ id: 'digits', kind: 'pattern' }),
+            { id: 'new-rule', kind: 'length', params: { min: 2 } },
+          ],
+        }),
+      ),
+    );
+  },
+};
+
+/** A rule's settings refused: its row opens, the message on the setting it names. */
+export const RuleRefused: Story = {
+  args: {
+    attribute: REFERENCE,
+    ruleAttributes: [STAGE_ATTRIBUTE],
+    refusals: [{ code: 'CONFIG_INVALID', message: 'Text holds at most 500 characters.', attributeId: 'rules.0.max' }],
+  },
+  parameters: { crm: { screenshot: false } },
+  play: async () => {
+    const dialog = await openDialog();
+    await expect(within(dialog).getByRole('textbox', { name: 'At most, in characters' })).toHaveAccessibleDescription(
+      /Text holds at most 500 characters\./,
+    );
+  },
+};
+
+/** Read only (a member): the rules as sentences, with nothing to change. */
+export const ReadOnlyRules: Story = {
+  args: {
+    attribute: REFERENCE,
+    readOnlyReason: 'Only workspace owners and admins can change attributes.',
+  },
+  parameters: { crm: { screenshot: false } },
+  play: async () => {
+    const dialog = await openDialog();
+    await expect(dialog).toHaveTextContent('Reference can have at most 12 characters.');
+    await expect(within(dialog).queryByRole('button', { name: 'Add rule' })).toBeNull();
+  },
+};

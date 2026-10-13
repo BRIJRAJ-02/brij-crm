@@ -1,0 +1,153 @@
+/* RulesEditor: the group's label and its "N of 20" over a list of rules,
+   space-4 apart. A row is the drag handle, the rule's kind over the message
+   it gives, and its menu; an open row adds its settings under that line,
+   stacked as a form stacks its fields, on the subtle surface. A row being dragged fades; the drop
+   target takes the inset ring. Add rule sits under the list. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+
+  .head {
+    display: flex;
+    gap: var(--space-8);
+    align-items: baseline;
+    justify-content: space-between;
+  }
+
+  .title {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .usage {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .empty {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    outline: none;
+  }
+
+  .row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    padding: var(--space-4);
+    border-radius: var(--radius-sm);
+    outline: none;
+  }
+
+  .row[data-open] {
+    padding-block-end: var(--space-12);
+    background: var(--surface-subtle);
+  }
+
+  .row[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .row[data-dragging] {
+    opacity: var(--opacity-busy);
+  }
+
+  .row[data-drop-target] {
+    box-shadow: var(--shadow-focus-inset);
+  }
+
+  .line {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    min-block-size: var(--size-input);
+  }
+
+  .summary {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .kind {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .message {
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    overflow-wrap: anywhere;
+  }
+
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding-inline: var(--space-8);
+  }
+
+  /* Two bounds side by side, each taking half; in a narrow slot they stack. */
+  .pair {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(calc(6 * var(--size-chip)), 1fr));
+    gap: var(--space-12);
+  }
+
+  .bound {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    min-inline-size: 0;
+  }
+
+  .done {
+    display: flex;
+    justify-content: flex-end;
+  }
+
+  .adder {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-8);
+    align-items: center;
+  }
+
+  .note,
+  .error {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .error {
+    color: var(--danger);
+  }
+
+  @media (forced-colors: active) {
+    .row[data-focus-visible],
+    .row[data-drop-target] {
+      outline: var(--border-width-thick) solid Highlight;
+      outline-offset: calc(-1 * var(--border-width-thick));
+    }
+  }
+}

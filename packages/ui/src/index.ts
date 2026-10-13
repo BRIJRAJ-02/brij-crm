@@ -191,6 +191,13 @@ export {
   type OptionsEditorProps,
 } from './modules/OptionsEditor/OptionsEditor.tsx';
 export {
+  RulesEditor,
+  type ListedKind,
+  type RuleSettings,
+  type RulesEditorProps,
+  type RulesEditorRule,
+} from './modules/RulesEditor/RulesEditor.tsx';
+export {
   ShortcutHelp,
   type Shortcut,
   type ShortcutGroup,

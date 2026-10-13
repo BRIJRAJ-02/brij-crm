@@ -15,6 +15,8 @@ import {
   type AttributeType,
   type PickerType,
 } from '@crm/contracts/values';
+import { ruleKindFits, ruleKindsFor } from '@crm/contracts/validation';
+import { checkRuleSettings, type ConditionAttribute } from '@crm/contracts/values';
 import { useId, useRef, useState } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { CopyButton } from '../../atoms/Button/CopyButton.tsx';
@@ -31,7 +33,15 @@ import { Form, type FormRefusal } from '../../molecules/Form/Form.tsx';
 import { Modal } from '../../molecules/Modal/Modal.tsx';
 import { Select, type SelectItem } from '../../molecules/Select/Select.tsx';
 import { useFormatSettings } from '../../provider/context.ts';
+import type { FilterBuilderProps } from '../FilterBuilder/FilterBuilder.tsx';
 import { OptionsEditor, type OptionsEditorChange, type OptionsEditorOption } from '../OptionsEditor/OptionsEditor.tsx';
+import {
+  editorRuleOf,
+  ruleOf,
+  RulesEditor,
+  type RuleSettings,
+  type RulesEditorRule,
+} from '../RulesEditor/RulesEditor.tsx';
 import { strings } from './strings.ts';
 
 /** An existing attribute as the dialog edits it. */
@@ -48,6 +58,8 @@ export interface AttributeSettingsAttribute {
   readonly config?: Readonly<Record<string, unknown>>;
   /** A select's options or a status attribute's stages, in order, archived ones included. */
   readonly options?: readonly OptionsEditorOption[];
+  /** Its validation rules, in order (spec 0013). */
+  readonly rules?: readonly RuleSettings[];
 }
 
 /** A setting the dialog shows, by the name the server's refusals give it. */
@@ -61,7 +73,8 @@ export type AttributeSettingsField =
   | 'isMulti'
   | 'defaultValue'
   | 'config'
-  | 'options';
+  | 'options'
+  | 'rules';
 
 /**
  * An existing attribute's options, written as they change (spec 0012,
@@ -94,6 +107,8 @@ export interface AttributeSettingsValues {
   readonly config: Readonly<Record<string, unknown>>;
   /** On create, a select's or status attribute's first options, in order; empty for any other type. */
   readonly options: readonly OptionsEditorOption[];
+  /** Its validation rules, in order, as the API takes them (spec 0013); `changed` names `rules` once touched. */
+  readonly rules: readonly RuleSettings[];
   readonly changed: readonly AttributeSettingsField[];
 }
 
@@ -125,6 +140,15 @@ export interface AttributeSettingsProps {
   readonly optionsLimit?: number;
   /** Editing: the options' writes, each sent as it is made. Without it an existing attribute's options are read only. */
   readonly optionWrites?: AttributeSettingsOptionWrites;
+  /**
+   * The object's own attributes a rule's "Only when…" may name (spec 0013;
+   * no relationship is followed). Without them rules take no condition.
+   */
+  readonly ruleAttributes?: readonly FieldAttribute[];
+  /** What a condition's reference operands need (member search, the signed in member). */
+  readonly ruleEditorProps?: FilterBuilderProps['editorProps'];
+  /** A new rule's id (a UUID v7 the screen mints). */
+  readonly newRuleId?: () => string;
 }
 
 /** What the member editor's search answers (its list type is the field set's union of display shapes). */
@@ -204,6 +228,9 @@ export function AttributeSettings({
   newOptionId,
   optionsLimit,
   optionWrites,
+  ruleAttributes,
+  ruleEditorProps,
+  newRuleId,
 }: AttributeSettingsProps) {
   const formId = useId();
   const isReadOnly = readOnlyReason !== undefined;
@@ -254,6 +281,9 @@ export function AttributeSettings({
         newOptionId={newOptionId}
         optionsLimit={optionsLimit}
         optionWrites={optionWrites}
+        ruleAttributes={ruleAttributes}
+        ruleEditorProps={ruleEditorProps}
+        newRuleId={newRuleId}
       />
     </Modal>
   );
@@ -274,6 +304,9 @@ interface AttributeFormProps {
   readonly newOptionId: (() => string) | undefined;
   readonly optionsLimit: number | undefined;
   readonly optionWrites: AttributeSettingsOptionWrites | undefined;
+  readonly ruleAttributes: readonly FieldAttribute[] | undefined;
+  readonly ruleEditorProps: FilterBuilderProps['editorProps'] | undefined;
+  readonly newRuleId: (() => string) | undefined;
 }
 
 function AttributeForm({
@@ -290,6 +323,9 @@ function AttributeForm({
   newOptionId,
   optionsLimit,
   optionWrites,
+  ruleAttributes,
+  ruleEditorProps,
+  newRuleId,
 }: AttributeFormProps) {
   const isCreating = attribute === undefined;
   const isReadOnly = readOnlyReason !== undefined;
@@ -313,6 +349,14 @@ function AttributeForm({
   const [drafts, setDrafts] = useState<readonly OptionsEditorOption[]>(() =>
     attribute === undefined && entry?.type === 'status' ? starterStages(newOptionId) : [],
   );
+  // Its rules as edited, kept until Save sends them (spec 0013, AC-252).
+  const [rules, setRules] = useState<readonly RulesEditorRule[]>(() => (attribute?.rules ?? []).map(editorRuleOf));
+  const madeRules = useRef(0);
+  const ruleId = () => {
+    if (newRuleId !== undefined) return newRuleId();
+    madeRules.current += 1;
+    return `rule-${String(madeRules.current)}`;
+  };
   const [changed, setChanged] = useState<ReadonlySet<AttributeSettingsField>>(new Set());
   // An option row refused what was typed (a label taken): the create waits until it is fixed.
   const [areOptionsInvalid, setOptionsInvalid] = useState(false);
@@ -320,6 +364,10 @@ function AttributeForm({
   const touch = (field: AttributeSettingsField) => {
     setChanged((before) => (before.has(field) ? before : new Set([...before, field])));
   };
+
+  const conditionTypes = new Map<string, ConditionAttribute>(
+    (ruleAttributes ?? []).map((each) => [each.id, { type: each.type, isSystem: false }]),
+  );
 
   const slugShown = isCreating
     ? (apiSlug ?? (name.trim() === '' ? '' : toApiSlug(name.trim(), 'attribute')))
@@ -352,6 +400,8 @@ function AttributeForm({
     setDrafts((before) =>
       next.type === 'status' ? starterStages(newOptionId) : next.type === 'select' && type === 'select' ? before : [],
     );
+    // Rules the new type can't take go (a length on what is now a number).
+    setRules((before) => before.filter((rule) => ruleKindFits(rule.kind, { type: next.type, isMulti: next.isMulti })));
     touch('type');
   };
 
@@ -365,6 +415,17 @@ function AttributeForm({
       ...(isCreating && (type === 'select' || type === 'status') && areOptionsInvalid
         ? [{ code: 'INPUT_INVALID', message: strings.optionsInvalid, attributeId: 'options' }]
         : []),
+      // Each rule's settings, checked here as the server will (spec 0013, AC-253), on their own field.
+      ...rules.flatMap((rule, index) => {
+        const checked = checkRuleSettings(ruleOf(rule), { attribute: { type, isMulti }, attributes: conditionTypes });
+        return checked.ok
+          ? []
+          : checked.problems.map((problem) => ({
+              code: 'CONFIG_INVALID',
+              message: problem.message,
+              attributeId: `rules.${String(index)}.${problem.field}`,
+            }));
+      }),
     ];
     setLocal(problems);
     if (problems.length > 0) return;
@@ -381,6 +442,7 @@ function AttributeForm({
       defaultValue: isCreating && takesOptions ? withinOptions(fallback, drafts) : fallback,
       config: configFor(type, config),
       options: isCreating && takesOptions ? drafts : [],
+      rules: rules.map(ruleOf),
       changed: [...changed],
     });
   };
@@ -401,10 +463,10 @@ function AttributeForm({
       ]
     : [entry === undefined ? { id: typeKey, label: typeLabelOf(type), icon: fieldTypeOf(type).icon } : itemOf(entry)];
   // The default's refusal shows on its editor when one is drawn, else above the settings.
-  const kinds = defaultKindsFor(type);
+  const defaultKinds = defaultKindsFor(type);
   const hasDefaultEditor =
     hasDefault &&
-    ((!kinds.includes('offset') && !kinds.includes('current_user')) ||
+    ((!defaultKinds.includes('offset') && !defaultKinds.includes('current_user')) ||
       draft.kind === 'static' ||
       draft.kind === 'offset');
   const ownErrors = [
@@ -415,9 +477,20 @@ function AttributeForm({
     ...(takesOptions ? ['options'] : []),
     ...(hasDefaultEditor ? ['defaultValue'] : []),
   ];
+  const isRuleField = (field: string | undefined) => field === 'rules' || field?.startsWith('rules.') === true;
   const formRefusals = shown.filter(
-    (refusal) => refusal.attributeId === undefined || !ownErrors.includes(refusal.attributeId),
+    (refusal) =>
+      refusal.attributeId === undefined ||
+      (!ownErrors.includes(refusal.attributeId) && !isRuleField(refusal.attributeId)),
   );
+  // A rule's refusals land on its setting; one about the list (the 20 rule limit) under it.
+  const ruleErrors = Object.fromEntries(
+    shown.flatMap((refusal) =>
+      refusal.attributeId?.startsWith('rules.') === true ? [[refusal.attributeId, refusal.message] as const] : [],
+    ),
+  );
+  const listError = shown.find((refusal) => refusal.attributeId === 'rules')?.message;
+  const kinds = ruleKindsFor({ type, isMulti });
 
   return (
     <Form
@@ -573,6 +646,30 @@ function AttributeForm({
             touch('defaultValue');
           }}
         />
+      )}
+      {(kinds.length > 0 || rules.length > 0) && (
+        <>
+          <RulesEditor
+            label={strings.rules}
+            rules={rules}
+            kinds={kinds}
+            attribute={{ title: name, type }}
+            newId={ruleId}
+            isReadOnly={isReadOnly}
+            errors={ruleErrors}
+            onChange={(next) => {
+              setRules(next);
+              touch('rules');
+              // A setting typed again lets go of the refusal made here; the server's stay until it answers again.
+              if (local.some((refusal) => isRuleField(refusal.attributeId))) {
+                setLocal(local.filter((refusal) => !isRuleField(refusal.attributeId)));
+              }
+            }}
+            {...(ruleAttributes === undefined ? {} : { conditionAttributes: ruleAttributes })}
+            {...(ruleEditorProps === undefined ? {} : { editorProps: ruleEditorProps })}
+          />
+          {listError !== undefined && <Callout tone="danger">{listError}</Callout>}
+        </>
       )}
     </Form>
   );

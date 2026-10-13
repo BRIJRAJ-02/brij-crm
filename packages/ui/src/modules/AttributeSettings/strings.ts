@@ -61,4 +61,6 @@ export const strings = {
   archivedDefaultFirst: (label: string) => `This option is archived. New records get ${label}.`,
   archivedDefaultNone: 'This option is archived. New records get no value.',
   archivedDefaultSome: 'Some of these options are archived. New records get the others.',
+  /** The validation rules' group (spec 0013). */
+  rules: 'Rules',
 } as const;

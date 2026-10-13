@@ -522,7 +522,7 @@ describe('every kind, through a real write', () => {
         good: 'https://ACME.com/x',
       },
       {
-        attributeId: (await make('Web', 'domain')).id,
+        attributeId: (await make('Handle', 'text')).id,
         rule: rule('pattern', { preset: 'ends_with', text: '.org', ignoreCase: false }),
         bad: 'acme.com',
         good: 'acme.org',
