@@ -30,7 +30,7 @@ Dense and neutral, in the refined Attio blue direction:
 - **Objects:** Companies, People, Deals and each list get their own colour tile in the sidebar and top bar.
 - **Themes:** every colour has a light and a dark value. In dark mode, surfaces get lighter as they rise, so layers read without heavy shadows.
 - **Details:** buttons and keycaps are flat (owner decision, 8 Oct 2026): a hairline border, 8px corners, and only a faint 1px drop in light (`shadow-control`, `shadow-primary`).
-- **Sizes:** type is Inter, 13px for body and 11px for labels. Rows are 34px, buttons 26px and the sidebar 260px.
+- **Sizes:** type is Inter, 14px for body and 12px for labels (readability pass, 13 Oct 2026). Rows are 34px, sidebar and menu items 32px, buttons 26px and the sidebar 260px; cards take 12px corners.
 
 Use those numbers through their tokens, never as literals.
 

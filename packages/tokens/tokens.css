@@ -262,7 +262,7 @@
     --size-toolbar: 48px;
     --size-table-header: 36px;
     --size-row: 34px;
-    --size-nav-item: 28px;
+    --size-nav-item: 32px;
     --size-input: 30px;
     --size-control: 26px;
     --size-chip: 20px;
@@ -329,13 +329,13 @@
     --tracking-note-title: -0.02em;
     --text-title: 600 15px/20px var(--font-sans);
     --tracking-title: 0;
-    --text-body-strong: 500 13px/20px var(--font-sans);
+    --text-body-strong: 500 14px/20px var(--font-sans);
     --tracking-body-strong: 0;
-    --text-body: 400 13px/20px var(--font-sans);
+    --text-body: 400 14px/20px var(--font-sans);
     --tracking-body: 0;
-    --text-label: 400 11px/16px var(--font-sans);
+    --text-label: 400 12px/16px var(--font-sans);
     --tracking-label: 0;
-    --text-label-strong: 500 11px/16px var(--font-sans);
+    --text-label-strong: 500 12px/16px var(--font-sans);
     --tracking-label-strong: 0;
     --text-kbd: 500 10px/14px var(--font-sans);
     --tracking-kbd: 0.02em;
