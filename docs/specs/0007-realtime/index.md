@@ -338,3 +338,36 @@ Tracer Bullet: each milestone ends with something you can see in production or i
 - From the reviews: the browser spreads its member list, access and resync rereads over a random 0 to 2 seconds, one read per burst, so a role change doesn't send every tab at once; the relay lets go of a workspace's audiences after a quiet spell with no turn, not only when it sleeps; every file that writes `members` must record a `members` row (a guard test; the local `member:add` script now goes through `runWrite`), since a cached audience missing a member is the leaking kind of stale; a workspace with several audiences is logged as such (`AUDIENCES_NEED_CHANNELS`), once per awake period.
 - Left for later: the 200 id lifecycle cap makes a bulk write of 201 to 1,000 records coarse where it used to name them (part of the pending owner decision: raise it to `CHANGE_CAP`, or keep the record ids past it with only a settle flag); `entries` rows have no lifecycle exception yet (when lists get a store); from milestone 4, audiences are read as the database is now, which can be ahead of the `seq` being planned.
 - Facts for `views` and `tasks` rows are not loaded yet (no such tables); a missing fact counts as not visible, so those rows go coarse until #19 and #20 add their facts loader to the relay.
+
+## Calls made while building milestone 3 (12 October 2026)
+
+Results and the load runs are in [verify.md](verify.md).
+
+- **The old prune goes in the same migration.** 0020 already had a `crm_outbox_prune(max)` (batches of 1,000, cutoff on `published_at`, executable by `crm_app`). Migration 0031 drops it and adds `crm_outbox_prune(before, max)`, executable by `crm_worker` only, rather than leaving the app's version for a later contract step. The cost is small: during the deploy, the old worker's prune call fails, is logged as a warning at most once a minute, and deletes nothing. 0020's `outbox_published` index served only the old function, so it goes too. `crm_relay` already held `delete` on `outbox` (0020), so it gains nothing.
+- **A worker on the app login doesn't prune.** The relay takes a required `prune` flag, which the worker sets only when its direct login is in `crm_worker`; otherwise it logs `relay.prune.off`. Production runs on the app login today, so it prunes nothing until the owner moves the worker's login (spec 0008 `verify.md`, steps 1 to 3). Production's outbox is small.
+- **`OUTBOX_RETENTION` stays in `packages/db`**, not `packages/core` as the value sourcing table says. `pruneOutbox` lives there and is its one user, and `packages/db` can't import core. The cutoff is `now() - OUTBOX_RETENTION` by the database's clock, the clock that stamps `created_at`.
+- **What the function guards on its own**:
+  - It never deletes a row made in the last hour, whatever `before` says, so a slip in the caller's interval (`'24'` for `'24 hours'`) costs nothing.
+  - A null `before` deletes nothing.
+  - It waits at most 1 second for a row lock (`set lock_timeout`), so the relay's prune and the daily cleanup can't hold each other up. A failure ends the relay's round.
+  - These come from the security review.
+- **How the function works**:
+  - The walk is a skip scan over the primary key, one probe a step. The delete looks each walked row up by its whole key. The first version deleted a range per workspace, which the planner ran as a hash join over a full scan of the outbox: 636 ms a batch, and 143 to 310 ms for an empty call on 1.2 million rows. That came from the state and performance review.
+  - The delete checks both conditions again on every row.
+  - A newer row stops a workspace's run just as an unpublished one does, so what a workspace keeps is always one unbroken run of `seq`.
+- **When a round starts.** A round is due from the start of an awake period, then 10 minutes after the last one ended.
+  - It starts on a quiet pass (one with nothing to publish), so the write that woke the worker goes out before a prune runs on a cold cache.
+  - It starts on a busy pass only once it has been due for another 10 minutes, so a worker that is never quiet still prunes.
+  - A round goes on, a batch a pass, while batches come back full.
+  - It ends at a short batch, at a failure, or at a batch slower than 250 ms (`PRUNE_SLOW_MS`), so a slow database costs publishing one batch a round. Run 4 and the early snapshot case in `verify.md` show why.
+  - The round's total is logged once (`relay.prune`).
+  - Going dormant drops an open round. The next wake starts afresh.
+- **A pass** is a loop turn that already reached Postgres: a poll, or a round with a workspace in it. The prune never counts as work, so it never wakes the database or keeps the relay awake.
+- **Left for #12's harness**: the million row round on the load seed, which the owner waived (below). Also a round with a snapshot held from before a large delete. With the slow batch rule that costs one slow batch a round, but the round's rows wait for later rounds or the daily cleanup.
+- **Left for spec 0008 milestone 3**: the daily cleanup calls `pruneOutbox` on the worker's connection, outside any transaction and one batch per call, until a call answers fewer than `PRUNE_BATCH`.
+
+## Owner decisions, milestone 3
+
+**Decided by the owner on 12 October 2026.**
+
+4. **The million row prune run is waived** along with the million record seed (owner, 12 October 2026). AC-89's load check was run on 200,000 rows to prune, in a 1.2 million row outbox, on a local database ([verify.md](verify.md)).
