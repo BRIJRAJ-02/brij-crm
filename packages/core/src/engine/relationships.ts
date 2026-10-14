@@ -57,9 +57,6 @@ export interface RelationshipDef {
   readonly toObjectIds: readonly string[];
   readonly fromSingle: boolean;
   readonly toSingle: boolean;
-  /** Each side's attribute title (none for a one way reference's other side), for the relationship block. */
-  readonly fromTitle: string;
-  readonly toTitle: string | null;
 }
 
 /** Which ends of a cardinality hold one link at most. */
@@ -435,11 +432,9 @@ export async function loadRelationships(
     to_attribute_id: string | null;
     from_object_id: string;
     to_object_ids: string[];
-    from_title: string;
-    to_title: string | null;
   }>(sql`
     select rel.id::text, rel.cardinality, rel.from_attribute_id::text, rel.to_attribute_id::text,
-      f.object_id::text as from_object_id, f.title as from_title, t.title as to_title,
+      f.object_id::text as from_object_id,
       (case when t.object_id is null then rel.target_object_ids else array[t.object_id] end)::text[] as to_object_ids
     from relationships rel
     join attributes f on f.workspace_id = rel.workspace_id and f.id = rel.from_attribute_id
@@ -459,8 +454,6 @@ export async function loadRelationships(
         toAttributeId: row.to_attribute_id,
         fromObjectId: row.from_object_id,
         toObjectIds: row.to_object_ids,
-        fromTitle: row.from_title,
-        toTitle: row.to_title,
         ...singleEnds(row.cardinality),
       },
     ]),

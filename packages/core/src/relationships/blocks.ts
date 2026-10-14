@@ -2,10 +2,13 @@
 // `attributes.list` (spec 0014): its cardinality, which side it is, what it
 // links to and its paired attribute, as the caller may see them.
 import type { AttributeRelationship } from '@crm/contracts';
-import type { WorkspaceTx } from '@crm/db';
+import { inArray } from 'drizzle-orm';
+import { schema, type WorkspaceTx } from '@crm/db';
 import { loadRelationships } from '../engine/relationships.ts';
 import { objectLevel, type Access } from '../access/policy.ts';
 import { attributeVisible } from '../access/visibility.ts';
+
+const { attributes } = schema;
 
 /** An attribute row, as far as its relationship block needs it. */
 export interface RelationshipRow {
@@ -28,6 +31,21 @@ export async function relationshipBlocks(
   const references = rows.filter((row) => row.type === 'record_reference' && row.relationshipId !== null);
   if (references.length === 0) return new Map();
   const loaded = await loadRelationships(tx, [...new Set(references.map((row) => row.relationshipId ?? ''))]);
+  // The other sides' names, in one read (the link paths' own reads of relationships never need them).
+  const pairedIds = [...loaded.values()].flatMap((each) =>
+    each.toAttributeId === null ? [] : [each.fromAttributeId, each.toAttributeId],
+  );
+  const titles =
+    pairedIds.length === 0
+      ? new Map<string, string>()
+      : new Map(
+          (
+            await tx
+              .select({ id: attributes.id, title: attributes.title })
+              .from(attributes)
+              .where(inArray(attributes.id, [...new Set(pairedIds)]))
+          ).map((each) => [each.id, each.title]),
+        );
   const blocks = new Map<string, AttributeRelationship>();
   for (const row of references) {
     const relationship = loaded.get(row.relationshipId ?? '');
@@ -46,9 +64,7 @@ export async function relationshipBlocks(
       cardinality: relationship.cardinality,
       side: isFrom ? 'from' : 'to',
       targetObjectIds: targets.filter((objectId) => objectLevel(access, objectId) !== 'none'),
-      ...(pairedSeen
-        ? { pairedAttributeId: pairedId, pairedTitle: (isFrom ? relationship.toTitle : relationship.fromTitle) ?? '' }
-        : {}),
+      ...(pairedSeen ? { pairedAttributeId: pairedId, pairedTitle: titles.get(pairedId) ?? '' } : {}),
       farHoldsOne: isFrom ? relationship.toSingle : relationship.fromSingle,
     });
   }
