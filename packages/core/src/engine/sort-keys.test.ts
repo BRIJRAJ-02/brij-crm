@@ -156,7 +156,9 @@ async function drift(): Promise<{ extra: number; missing: number }> {
 }
 
 describe('keys follow values (AC-20)', () => {
-  it('stays equal to what the current values say through every kind of write', async () => {
+  // About 150 writes one after another, none waiting on a lock: 6 s on a quiet machine, 22 s and then past
+  // 30 s when the CPU was shared several times over. It proves the keys, never a time, so it gets room.
+  it('stays equal to what the current values say through every kind of write', { timeout: 120_000 }, async () => {
     // Only the system writes the timestamp and the interaction, so it makes the records and their random values.
     const system: EngineScope = rescope(scope, { actor: SYSTEM_ACTOR });
     for (let index = 0; index < 30; index += 1) {
