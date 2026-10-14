@@ -1034,11 +1034,19 @@ describe('the relay lag metric (spec 0010, AC-179)', () => {
   });
 
   it('shows work waiting on a relay that can’t reach Postgres, from boot and from each poke, and none once a poll answers', async () => {
+    // Down until the test lets it connect.
+    const endpoint = { up: false };
     const down = createRelay({
-      connect: () => Promise.reject(new Error('direct endpoint down')),
+      connect: async () => {
+        if (!endpoint.up) throw new Error('direct endpoint down');
+        return createOutboxReader(
+          await openDirectConnection({ url: workerUrl, applicationName: 'crm-relay-tests', proveListen: false }),
+        );
+      },
       audiences: loadAudiences,
-      publishBatch: () => Promise.resolve({ published: 0 }),
+      publishBatch: (items) => Promise.resolve({ published: items.length }),
       log: { info: () => undefined, warn: () => undefined, error: () => undefined },
+      pollScheduleMs: [50],
       backoffMs: 50,
       maxBackoffMs: 50,
       prune: false,
@@ -1052,10 +1060,13 @@ describe('the relay lag metric (spec 0010, AC-179)', () => {
     await sleep(200);
     expect(down.stats().oldestPendingMs).toBeGreaterThanOrEqual(450);
 
-    const centrifugo = await fakeCentrifugo();
-    servers.push(centrifugo);
-    const { relay } = relayTo(centrifugo.url);
-    await expect.poll(() => relay.stats().oldestPendingMs, WAIT).toBeUndefined();
+    // Once it reaches Postgres and a poll answers, the same relay no longer counts from boot: what it reports is
+    // younger than the outage (rows other tests left behind may still fail, but only since it connected).
+    endpoint.up = true;
+    const upAt = Date.now();
+    await expect
+      .poll(() => (down.stats().oldestPendingMs ?? 0) < Date.now() - upAt, { timeout: 10_000, interval: 25 })
+      .toBe(true);
   });
 
   it('keeps publishing when recording the lag throws', async () => {

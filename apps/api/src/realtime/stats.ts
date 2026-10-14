@@ -23,7 +23,13 @@ export interface RelayStatsSnapshot {
    * bound: the relay reads at most one batch (100) of a workspace at a time.
    */
   readonly pending: number;
-  /** How long the oldest of those rows has waited since its commit, in ms; undefined with none. */
+  /**
+   * How long the oldest of those rows has waited since its commit, in ms;
+   * undefined with none. The relay's `stats()` raises it to at least how long
+   * a workspace has failed, or work has waited for a relay that hasn't reached
+   * Postgres, so it can be set with `pending` 0 (a second or so after each
+   * poke on a healthy relay).
+   */
   readonly oldestPendingMs: number | undefined;
 }
 

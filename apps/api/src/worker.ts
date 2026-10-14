@@ -177,11 +177,12 @@ const stats = createStatsReporter({
 stats.start();
 
 onShutdown(async () => {
-  stats.stop();
   // The slices in hand finish their batch and hand their jobs back to the queue first.
   await jobs?.stop();
   await queue?.close();
   await relay?.stop();
+  // After the relay, so the lags of its last publishes go out with the flush below.
+  stats.stop();
   await new Promise<void>((resolve) => health.close(() => resolve()));
   await db.close();
   // What monitoring still holds goes out, within the shutdown window.

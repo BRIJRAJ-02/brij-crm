@@ -268,6 +268,27 @@ export function createRelay(deps: RelayDeps): Relay {
   // poll that answered (or a lock another relay holds). A relay that can't connect, while the api keeps writing
   // and poking, reads no row, so this is what shows its backlog growing (spec 0010, AC-180).
   let unservedSince: number | undefined;
+  // Whether a poke set it (work really waits), or only the boot did.
+  let unservedByWake = false;
+  /**
+   * The rolling numbers, with the oldest pending age at least as long as a
+   * failing workspace has failed, or as work has waited unserved: a turn that
+   * throws before it reads, or a relay that can't connect, still shows its
+   * backlog ageing.
+   */
+  const report = (): RelayStatsSnapshot => {
+    const snapshot = stats.snapshot();
+    const since = Math.min(
+      unservedSince ?? Number.POSITIVE_INFINITY,
+      ...[...retries.values()].map((retry) => retry.since),
+    );
+    if (since === Number.POSITIVE_INFINITY) return snapshot;
+    return { ...snapshot, oldestPendingMs: Math.max(snapshot.oldestPendingMs ?? 0, Date.now() - since) };
+  };
+  const served = (): void => {
+    unservedSince = undefined;
+    unservedByWake = false;
+  };
 
   // The loop's own state, read through functions where an await sits between a write and a read.
   let stopped = true;
@@ -557,7 +578,7 @@ export function createRelay(deps: RelayDeps): Relay {
           lastPoll = Date.now();
           holding = await reader.lock();
           // Another relay holds the lock: it serves the outbox.
-          if (!holding) unservedSince = undefined;
+          if (!holding) served();
           if (holding) {
             // Before the poll below, so a write committed from here on is either seen by it or notified.
             await reader.listen((workspaceId) => {
@@ -584,7 +605,7 @@ export function createRelay(deps: RelayDeps): Relay {
           if (due) {
             lastPoll = Date.now();
             const waiting = await reader.workspaces(workspacesPerPoll, pollAfter);
-            unservedSince = undefined;
+            served();
             pollAfter = waiting.length >= workspacesPerPoll ? waiting.at(-1) : undefined;
             // Only a workspace that isn't failing counts as work.
             if (waiting.some((workspaceId) => !retries.has(workspaceId))) sawWork();
@@ -598,7 +619,7 @@ export function createRelay(deps: RelayDeps): Relay {
           // From memory: the line costs no query, and only the publishing relay writes it.
           if (Date.now() - lastStats >= statsEveryMs) {
             lastStats = Date.now();
-            log.info('relay.stats', { ...stats.snapshot() });
+            log.info('relay.stats', { ...report() });
           }
         }
         if (halted() || dropped() !== undefined || (holding && (notified.size > 0 || leftover.size > 0))) continue;
@@ -664,6 +685,8 @@ export function createRelay(deps: RelayDeps): Relay {
         );
       }
       if (dormant) {
+        // Unserved since boot only, with no poke since: nothing is known to wait, so the age doesn't grow all night.
+        if (!unservedByWake) served();
         // The awake period is over: the audiences are read again at the next wake (AC-85).
         audienceCache.clear();
         audienceUsed.clear();
@@ -691,6 +714,7 @@ export function createRelay(deps: RelayDeps): Relay {
     start() {
       if (running !== undefined) return;
       unservedSince = Date.now();
+      unservedByWake = false;
       stopped = false;
       current = 'active';
       pruneRound = { dueAt: Date.now(), open: undefined };
@@ -699,23 +723,13 @@ export function createRelay(deps: RelayDeps): Relay {
     wake() {
       if (halted()) return;
       unservedSince ??= Date.now();
+      unservedByWake = true;
       sawWork();
       woken = true;
       if (!backingOff) interrupt();
     },
     mode: () => current,
-    stats() {
-      // The rows it holds, and at least as long as a failing workspace has failed or work has waited unserved:
-      // a turn that throws before it reads, or a relay that can't connect, still shows its backlog ageing.
-      const snapshot = stats.snapshot();
-      const now = Date.now();
-      const since = Math.min(
-        unservedSince ?? Number.POSITIVE_INFINITY,
-        ...[...retries.values()].map((retry) => retry.since),
-      );
-      if (since === Number.POSITIVE_INFINITY) return snapshot;
-      return { ...snapshot, oldestPendingMs: Math.max(snapshot.oldestPendingMs ?? 0, now - since) };
-    },
+    stats: report,
     cachedAudiences: () => audienceCache.size,
     async stop() {
       stopped = true;

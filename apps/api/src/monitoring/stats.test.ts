@@ -10,7 +10,16 @@ import { testQuery } from '@crm/db/testing';
 import { memoryTransport } from '../../test/sentry.ts';
 import { createRelay, type Relay } from '../realtime/relay.ts';
 import { createRelayStats } from '../realtime/stats.ts';
-import { flush, heartbeat, metrics, raiseIssue, startSentry, type IssueCode, type MetricName } from './sentry.ts';
+import {
+  captureFault,
+  flush,
+  heartbeat,
+  metrics,
+  raiseIssue,
+  startSentry,
+  type IssueCode,
+  type MetricName,
+} from './sentry.ts';
 import {
   createLagSample,
   createStatsReporter,
@@ -176,6 +185,10 @@ describe('the stats reporter', () => {
     expect(distributions.slice(2)).toEqual([{ name: 'relay.lag', value: 7 }]);
     vi.advanceTimersByTime(MINUTE);
     expect(distributions).toHaveLength(3);
+    // Stopping records what came since the last tick.
+    lag.add([99]);
+    reporter.stop();
+    expect(distributions.slice(3)).toEqual([{ name: 'relay.lag', value: 99 }]);
   });
 
   it('checks in even when a source, a gauge or the issue throws, and says which step failed', () => {
@@ -358,6 +371,13 @@ describe('the heartbeat and RELAY_LAGGING through the wrapper', () => {
       contexts: { numbers: { pending: 12, oldest_age_s: 91 } },
     });
     expect(event?.message).toContain('over 30 seconds');
+    // Raised again (an hour later, or a later episode), it isn't dropped as a duplicate; other events still are.
+    raiseIssue('RELAY_LAGGING', { pending: 12, oldest_age_s: 91 });
+    // The same fault twice from one place: the second is a duplicate.
+    for (let time = 0; time < 2; time += 1) captureFault(new Error('the same fault'), { task: 'relay' });
+    await flush(2000);
+    expect(transport.events().filter((sent) => sent.fingerprint?.[0] === 'RELAY_LAGGING')).toHaveLength(2);
+    expect(transport.events().filter((sent) => sent.fingerprint === undefined)).toHaveLength(1);
     expect(event?.user).toBeUndefined();
     // No host name: on a laptop it often names its owner.
     expect(event).not.toHaveProperty('server_name');

@@ -128,6 +128,30 @@ export function keepMetric(service: Service): (metric: SentMetric) => SentMetric
   };
 }
 
+/** The SDK's view of an integration, as the `integrations` option hands them over. */
+type SdkIntegration = Parameters<
+  Extract<NonNullable<NodeOptions['integrations']>, (...args: never[]) => unknown>
+>[0][number];
+
+/**
+ * The SDK's Dedupe, except for the issues the processes raise themselves
+ * (`raiseIssue`): it drops an event identical to the one before it, and a
+ * `RELAY_LAGGING` raised again an hour later, or in a later episode, is
+ * identical by design (one message, one fingerprint, no stack). Every other
+ * event is still deduplicated.
+ */
+export function passRaisedIssues(dedupe: SdkIntegration): SdkIntegration {
+  if (dedupe.processEvent === undefined) return dedupe;
+  return {
+    ...dedupe,
+    processEvent: (event, hint, client) => {
+      const [first, ...rest] = event.fingerprint ?? [];
+      const raised = first !== undefined && rest.length === 0 && Object.hasOwn(ISSUES, first);
+      return raised || dedupe.processEvent === undefined ? event : dedupe.processEvent(event, hint, client);
+    },
+  };
+}
+
 /** A breadcrumb fit to send, or null to drop it. */
 export function keepBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb | null {
   if (breadcrumb.category !== undefined && DROPPED_BREADCRUMBS.has(breadcrumb.category)) return null;
@@ -222,7 +246,9 @@ export function sentryOptions(config: SentryConfig): NodeOptions {
     // No process session (release health would carry the last request's user id) and no console patching
     // (its breadcrumbs are dropped anyway).
     integrations: (defaults) => [
-      ...defaults.filter((integration) => !DROPPED_INTEGRATIONS.has(integration.name)),
+      ...defaults
+        .filter((integration) => !DROPPED_INTEGRATIONS.has(integration.name))
+        .map((integration) => (integration.name === 'Dedupe' ? passRaisedIssues(integration) : integration)),
       onUnhandledRejectionIntegration({ mode: 'strict' }),
     ],
     // Fetch errors keep their own message; only what is sent gets the host.

@@ -108,7 +108,7 @@ export interface StatsReporterDeps {
 export interface StatsReporter {
   /** Ticks once now, then every `everyMs` until `stop()`; the timer never holds the process open. Calling it again does nothing. */
   start(): void;
-  /** Stops ticking. */
+  /** Stops ticking, and records the lag values gathered since the last tick, so a shutdown loses none. */
   stop(): void;
 }
 
@@ -148,19 +148,23 @@ export function createStatsReporter(deps: StatsReporterDeps): StatsReporter {
       {},
     );
 
+  /** Records the lag values gathered since the last time. */
+  const recordLag = (): void => {
+    const { lag } = deps;
+    if (lag === undefined) return;
+    attempt(
+      'relay.lag',
+      () => {
+        for (const lagMs of lag.drain()) deps.metrics.distribution('relay.lag', lagMs);
+      },
+      undefined,
+    );
+  };
+
   const tick = (): void => {
     const awake = attempt('awake', deps.isAwake, false);
     attempt('worker.awake', () => deps.metrics.gauge('worker.awake', awake ? 1 : 0), undefined);
-    const { lag } = deps;
-    if (lag !== undefined) {
-      attempt(
-        'relay.lag',
-        () => {
-          for (const lagMs of lag.drain()) deps.metrics.distribution('relay.lag', lagMs);
-        },
-        undefined,
-      );
-    }
+    recordLag();
     // Asleep, no source is read and no outbox gauge is sent.
     const gauges = awake ? read() : {};
     for (const [name, value] of Object.entries(gauges) as [keyof SourceGauges, number | undefined][]) {
@@ -186,6 +190,7 @@ export function createStatsReporter(deps: StatsReporterDeps): StatsReporter {
     stop() {
       if (timer !== undefined) clearInterval(timer);
       timer = undefined;
+      recordLag();
     },
   };
 }
