@@ -21,7 +21,7 @@ import { readRecords } from './records.ts';
 import { loadRelationships, type RelationshipDef } from './relationships.ts';
 import type { Actor } from './scope.ts';
 import { loadAttributes, type AttributeDef } from './values.ts';
-import { isOpen, type Access } from '../access/policy.ts';
+import { isOpen, objectLevel, type Access } from '../access/policy.ts';
 import { farVisibleSql, hidesActors } from '../access/visibility.ts';
 import type { ActivityBound, ActivitySource, ActivitySourceInput } from './activity.ts';
 
@@ -481,8 +481,10 @@ export const linkSource: ActivitySource = async (input) => {
   const farHides = new Map<string, boolean>();
   const sideHidesActors = async (side: Side): Promise<boolean> => {
     if (input.record.hidesActors) return true;
-    if (isOpen(input.scope.access)) return false;
+    // Only a two way relationship's far end writes links too, and a far object at none has its links left out.
+    if (isOpen(input.scope.access) || side.relationship.toAttributeId === null) return false;
     for (const objectId of side.allowed) {
+      if (objectLevel(input.scope.access, objectId) === 'none') continue;
       let hides = farHides.get(objectId);
       if (hides === undefined) {
         hides = hidesActors(input.scope.access, [...(await loadAttributes(input.tx, objectId)).values()]);

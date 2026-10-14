@@ -11,7 +11,7 @@ import { linkHistory, linkValues, loadRelationships } from './relationships.ts';
 import type { Actor, EngineScope } from './scope.ts';
 import { checkEntryAccess, ITEM_COLUMNS, loadAttribute, loadAttributes, type AttributeDef } from './values.ts';
 import { inWorkspace } from '../access/run.ts';
-import { isOpen, type Access } from '../access/policy.ts';
+import { isOpen, objectLevel, type Access } from '../access/policy.ts';
 import {
   attributeVisible,
   checkObject,
@@ -88,10 +88,12 @@ async function actorsHidden(tx: WorkspaceTx, access: Access, attribute: Attribut
   const objectIds = [attribute.objectId];
   if (attribute.type === 'record_reference' && attribute.relationshipId !== null) {
     const relationship = (await loadRelationships(tx, [attribute.relationshipId])).get(attribute.relationshipId);
-    if (relationship !== undefined) {
-      objectIds.push(
-        ...(relationship.fromAttributeId === attribute.id ? relationship.toObjectIds : [relationship.fromObjectId]),
-      );
+    // Only a two way relationship's far end writes links too (a one way reference's targets never do), and a
+    // far object the principal can't see at all has its links left out, so neither can name an actor here.
+    if (relationship !== undefined && relationship.toAttributeId !== null) {
+      const far =
+        relationship.fromAttributeId === attribute.id ? relationship.toObjectIds : [relationship.fromObjectId];
+      objectIds.push(...far.filter((objectId) => objectLevel(access, objectId) !== 'none'));
     }
   }
   for (const objectId of new Set(objectIds)) {

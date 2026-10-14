@@ -29,7 +29,8 @@ export type StatusOption = z.infer<typeof StatusOption>;
  * version has `activeUntil: null`; the history is the versions in `activeFrom`
  * order. `value` parses with the attribute's own schema (`attributeValueSchema`).
  * `setBy` is absent when a field rule hides the owner's Created by or Updated
- * by from the reader (hidden is absent, spec 0009).
+ * by from the reader, or for a record reference the far object's (a link's
+ * actor is the Updated by of whichever end wrote it; hidden is absent, spec 0009).
  */
 export const ValueVersion = z.object({
   value: z.unknown(),

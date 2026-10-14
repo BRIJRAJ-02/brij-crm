@@ -933,9 +933,10 @@ export async function readRecords(
       };
       // The four system fields at the top level follow their attributes' field rules, as `values` does.
       const shown = (column: NonNullable<AttributeDef['systemColumn']>) =>
+        // Fails closed: shown only when its attribute is there and visible.
         open ||
-        [...attributes.values()].every(
-          (attribute) => attribute.systemColumn !== column || attributeVisible(access, attribute),
+        [...attributes.values()].some(
+          (attribute) => attribute.systemColumn === column && attributeVisible(access, attribute),
         );
       const view: RecordView = {
         id: row.id,

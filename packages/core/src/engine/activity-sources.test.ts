@@ -14,9 +14,11 @@ import { deleteRecord, restoreRecord } from './deletion.ts';
 import { getHistory } from './history.ts';
 import { newId } from './ids.ts';
 import { isRefusal } from './refusals.ts';
+import { queryPage } from './query/page.ts';
 import { createRecord, getRecords, setValues as setRecordValues } from './records.ts';
 import { createWorkspace } from './workspaces.ts';
 import type { EngineScope } from './scope.ts';
+import { readTrashedRecord } from '../records/records.ts';
 import { rescope, testScope } from '../testing.ts';
 
 const { appUrl, adminUrl } = inject('testDatabase');
@@ -759,14 +761,32 @@ describe('history names nobody to a reader who may not see who changed things (s
       expect(linked).toMatchObject({ kind: 'change', attributeId: world.id('people.company') });
       expect(linked).not.toHaveProperty('actor');
     }
-    // A reader who may see both, and the open policy, are told who set each version.
+    // A reader who may see both, and the open policy, are told who set each version, at either end.
     const seesAll = world.member({ levels: [], records: [] });
     for (const reader of [seesAll, world.scope]) {
       for (const attributeId of [description, team]) {
         const versions = await getHistory(reader, { recordId: acme, attributeId });
         expect(versions.every((version) => version.setBy?.id === world.ownerId)).toBe(true);
       }
+      const far = await getHistory(reader, { recordId: jane, attributeId: world.id('people.company') });
+      expect(far.every((version) => version.setBy?.id === world.ownerId)).toBe(true);
+      const [linked] = await all(reader, jane);
+      expect(linked?.actor).toEqual({ type: 'member', id: world.ownerId });
     }
+    // A far object the reader can't see at all hides its links, not the actors of what they can see: with
+    // People at none, Acme's description still names who set it, and Team names nobody (its links are gone).
+    const noPeople = world.member({
+      levels: [
+        {
+          subject: { type: 'role', role: 'member' },
+          target: { type: 'object', objectId: world.people },
+          level: 'none',
+        },
+      ],
+      records: [],
+    });
+    const descriptions = await getHistory(noPeople, { recordId: acme, attributeId: description });
+    expect(descriptions.every((version) => version.setBy?.id === world.ownerId)).toBe(true);
   });
 
   it('leaves out of a record read each top level system field whose attribute a field rule hides', async () => {
@@ -786,6 +806,15 @@ describe('history names nobody to a reader who may not see who changed things (s
     expect(denied).not.toHaveProperty('createdAt');
     expect(denied?.createdBy).toEqual({ type: 'member', id: world.ownerId });
     expect(denied?.updatedAt).toBeDefined();
+    // The query page and the trash read build the same view.
+    const denier = hiding('companies.updated_by');
+    const page = await queryPage(denier, { objectId: world.companies });
+    expect(page.records.find((record) => record.id === acme)).not.toHaveProperty('updatedBy');
+    const bin = await world.company('Bin');
+    await deleteRecord(world.scope, { recordId: bin });
+    const trashed = await readTrashedRecord(denier, bin);
+    expect(trashed.record).not.toHaveProperty('updatedBy');
+    expect(trashed.record.createdBy).toEqual({ type: 'member', id: world.ownerId });
     const [open] = await getRecords(world.scope, { ids: [acme] });
     expect(open).toMatchObject({ createdBy: { id: world.ownerId }, updatedBy: { id: world.ownerId } });
     expect(open?.createdAt).toBeDefined();
