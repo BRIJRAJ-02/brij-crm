@@ -4,6 +4,9 @@ import { expect, fn, waitFor } from 'storybook/test';
 import { arraySource, type ListSource } from '../../lib/list-source.ts';
 import { ADA, SAMPLE_TASKS } from '../../workbench/record-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { Button } from '../../atoms/Button/Button.tsx';
+import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
+import { Field } from '../../molecules/Field/Field.tsx';
 import type { LoadStatus } from '../../lib/load-status.ts';
 import { TaskList, type TaskEntry } from './TaskList.tsx';
 
@@ -249,6 +252,48 @@ export const EmptyOwnWords: Story = {
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas }) => {
     await expect(canvas.getByText('No open tasks. Add one above.')).toBeInTheDocument();
+  },
+};
+
+/**
+ * A record's Tasks tab: the quick add above the open tasks (it stays when the
+ * list is empty), and the Completed part under them, drawn in place.
+ */
+export const WithQuickAdd: Story = {
+  render: function Render() {
+    const open = SAMPLE_TASKS.filter((task) => !task.isDone);
+    const done = SAMPLE_TASKS.filter((task) => task.isDone);
+    return (
+      <Stage height="grid">
+        <TaskList
+          label="Tasks"
+          tasks={arraySource(open, (task) => task.id)}
+          onToggle={() => undefined}
+          toolbar={
+            <>
+              <Field label="Add a task" isLabelHidden placeholder="Add a task and press Enter" maxLength={2000} />
+              <Button>New task</Button>
+            </>
+          }
+          footer={
+            <Disclosure title="Completed" count={done.length}>
+              <TaskList
+                label="Completed"
+                layout="inline"
+                maxRows={1000}
+                tasks={arraySource(done, (task) => task.id)}
+                onToggle={() => undefined}
+              />
+            </Disclosure>
+          }
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Add a task' })).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: /Completed/ }));
+    await waitFor(() => expect(canvas.getByRole('grid', { name: 'Completed' })).toBeInTheDocument());
   },
 };
 

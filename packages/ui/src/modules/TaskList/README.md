@@ -24,6 +24,8 @@ New. The record page's Tasks tab, Overview's Open tasks block and the My tasks p
 - Done tasks are struck through in the tertiary colour.
 - `sectionOf(task)` answers the heading a task sits under (`{ id, title }`, My tasks' Overdue, Today, Upcoming, No date): a heading row draws before each run of tasks with the same section (React Aria's `GridListSection` and `GridListHeader`), announced as a row header and skipped by the arrows. Rows still loading stay in the run they follow.
 - `layout="inline"` draws at most 10 rows in place, with no scroll of its own (Overview's Open tasks); `list` (the default) fills its slot and scrolls inside it.
+- `maxRows` raises the inline layout's cap, for a list inside a scrolling slot (the Completed part), which pages as its last rows show.
+- `toolbar` and `footer` draw above and under the list in the module's own column, filling its slot (a record's quick add, and the Completed part, which scrolls inside itself past half the slot). The toolbar stays in every state, so the quick add is there when the list is empty. Why slots: screens may not lay anything out themselves (no class names in the app), and the tab's three parts belong to this list.
 - `newIds` marks tasks just made here with the accent "New" Badge (until the screen's list settles).
 - `emptyTitle` and `emptyBody` say what an empty list means in the screen's own words ("No open tasks. Add one above.").
 - `hideRecord` drops the record chips.
@@ -34,7 +36,7 @@ New. The record page's Tasks tab, Overview's Open tasks block and the My tasks p
 
 ## States
 
-Default, done, overdue, read only, a locked task, several records ("+N"), new, sections, inline, loading (skeleton rows after the loading delay), empty (the library's words or the screen's own), failed (with Try again), no access, rows still loading. Hover on a row (pointer only), focus (the inset ring).
+Default, done, overdue, read only, a locked task, several records ("+N"), new, sections, inline, with the quick add and Completed, loading (skeleton rows after the loading delay), empty (the library's words or the screen's own), failed (with Try again), no access, rows still loading. Hover on a row (pointer only), focus (the inset ring).
 
 ## Keyboard
 

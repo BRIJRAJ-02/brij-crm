@@ -57,6 +57,37 @@
     text-decoration: line-through;
   }
 
+  /* With a toolbar or a footer: one column filling the slot, the list taking what the two leave. */
+  .frame {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    inline-size: 100%;
+    block-size: 100%;
+    min-block-size: 0;
+  }
+
+  .toolbar {
+    display: flex;
+    flex: none;
+    gap: var(--space-8);
+    align-items: flex-start;
+  }
+
+  .body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-block-size: 0;
+  }
+
+  /* The Completed part: its own height up to half the slot, then it scrolls inside itself. */
+  .footer {
+    flex: none;
+    max-block-size: 50%;
+    overflow: auto;
+  }
+
   /* The inline layout (Overview) draws its few rows in place, with no scroll of its own. */
   .root[data-inline] {
     block-size: auto;

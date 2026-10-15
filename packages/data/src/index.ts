@@ -16,6 +16,7 @@ import type {
   MemberSummary,
   MyAccess,
   ObjectSummary,
+  RecordRefDisplay,
   RecordView,
   Usage,
   ValidationRuleInput,
@@ -80,6 +81,8 @@ export type {
   RecordRefDisplay,
   RecordView,
   SignedInUser,
+  TaskTotal,
+  TaskView,
   SystemStatus,
   TrashedRecord,
   Usage,
@@ -202,6 +205,9 @@ interface CallOptions {
 
 /** How long a read waits for the workspace's head before going ahead without it (spec 0007: the token call is usually beside `me.get`). */
 const HEAD_WAIT_MS = 5_000;
+/** How many records the task dialog's picker offers for one search. */
+const FIND_LIMIT = 20;
+
 /** The longest spread before a reread every tab of a workspace makes at once (a members or access event), in ms. */
 const SPREAD_MS = 2_000;
 
@@ -1824,6 +1830,40 @@ export function createDataLayer({
       /** Changes a task at once on screen; a refusal puts it back and is answered, for the field to show. */
       update: async (workspace: string, taskId: string, change: TaskChange): Promise<DataError | undefined> =>
         (await tasksStore()).update(workspace, taskId, change),
+      /**
+       * Records of one object whose name holds `query`, for the task dialog's
+       * record picker (spec 0019): the first 20 by the object's own order, as
+       * display shapes, through `records.query` with the primary attribute's
+       * `contains` (an empty query: the first 20). A thin slice until spec
+       * 0014's `records.search` lands, which takes its place.
+       */
+      findRecords: async (workspace: string, objectId: string, query: string): Promise<readonly RecordRefDisplay[]> => {
+        const object = (await listObjects(workspace)).find((each) => each.id === objectId);
+        const primary = object?.primaryAttributeId ?? undefined;
+        const text = query.trim();
+        const page = await beforeRead(workspace).then(() =>
+          call((options) =>
+            api.records.query(
+              {
+                workspace,
+                objectId,
+                limit: FIND_LIMIT,
+                attributeIds: [],
+                ...(text === '' || primary === undefined
+                  ? {}
+                  : {
+                      filter: {
+                        conjunction: 'and' as const,
+                        conditions: [{ attributeId: primary, operator: 'contains' as const, value: text }],
+                      },
+                    }),
+              },
+              options,
+            ),
+          ),
+        );
+        return page.records.map((record) => record.display);
+      },
       /** Ticks or unticks a task at once; a refusal rolls the checkbox back with a toast and Retry. */
       setDone: async (workspace: string, taskId: string, isDone: boolean): Promise<boolean> =>
         (await tasksStore()).setDone(workspace, taskId, isDone),

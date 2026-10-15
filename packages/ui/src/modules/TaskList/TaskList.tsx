@@ -95,6 +95,15 @@ export interface TaskListProps {
   readonly emptyTitle?: string;
   /** The line under `emptyTitle`. */
   readonly emptyBody?: string;
+  /** The inline layout's most rows (10 by default); a list in a scrolling slot passes more and pages as it shows them. */
+  readonly maxRows?: number;
+  /**
+   * Drawn above the list in the module's own column (a record's quick add):
+   * it stays in every state, so the field is there when the list is empty.
+   */
+  readonly toolbar?: ReactNode;
+  /** Drawn under the list in the same column, scrolling inside itself past half the slot (the Completed part). */
+  readonly footer?: ReactNode;
 }
 
 /** A run of rows, with the heading it sits under (none for rows before the first heading). */
@@ -168,15 +177,58 @@ export function TaskList({
   newIds,
   emptyTitle,
   emptyBody,
+  maxRows = INLINE_TASKS,
+  toolbar,
+  footer,
 }: TaskListProps) {
+  const content = (
+    <TaskListContent
+      {...{ label, tasks, onToggle, hideRecord, isReadOnly, status, layout, maxRows }}
+      {...(onAction === undefined ? {} : { onAction })}
+      {...(onRetry === undefined ? {} : { onRetry })}
+      {...(recordHref === undefined ? {} : { recordHref })}
+      {...(sectionOf === undefined ? {} : { sectionOf })}
+      {...(newIds === undefined ? {} : { newIds })}
+      {...(emptyTitle === undefined ? {} : { emptyTitle })}
+      {...(emptyBody === undefined ? {} : { emptyBody })}
+    />
+  );
+  if (toolbar === undefined && footer === undefined) return content;
+  return (
+    <div className={styles.frame}>
+      {toolbar !== undefined && <div className={styles.toolbar}>{toolbar}</div>}
+      <div className={styles.body}>{content}</div>
+      {footer !== undefined && <div className={styles.footer}>{footer}</div>}
+    </div>
+  );
+}
+
+/** The list itself, in whichever state it is. */
+function TaskListContent({
+  label,
+  tasks,
+  onToggle,
+  onAction,
+  hideRecord = false,
+  isReadOnly = false,
+  status = 'ready',
+  onRetry,
+  recordHref,
+  sectionOf,
+  layout = 'list',
+  newIds,
+  emptyTitle,
+  emptyBody,
+  maxRows = INLINE_TASKS,
+}: Omit<TaskListProps, 'toolbar' | 'footer'>) {
   const showSkeleton = useDelayedLoading(status === 'loading');
   const onShown = useRangeReporter(tasks);
   const dueOf = useDueOf();
   const isInline = layout === 'inline';
   const rows = useMemo(() => {
     const all = keyedRows(tasks);
-    return isInline ? all.slice(0, INLINE_TASKS) : all;
-  }, [tasks, isInline]);
+    return isInline ? all.slice(0, maxRows) : all;
+  }, [tasks, isInline, maxRows]);
   const groups = useMemo(
     () => (sectionOf === undefined ? undefined : groupRows(rows, tasks, sectionOf)),
     [rows, tasks, sectionOf],
