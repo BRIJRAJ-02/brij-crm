@@ -16,6 +16,7 @@ import { Route as VerifyRouteImport } from './routes/verify.tsx'
 import { Route as WelcomeRouteImport } from './routes/welcome.tsx'
 import { Route as WSlugRouteImport } from './routes/w.$slug.tsx'
 import { Route as WSlugIndexRouteImport } from './routes/w.$slug.index.tsx'
+import { Route as WSlugTrashRouteImport } from './routes/w.$slug.trash.tsx'
 import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects.$object.tsx'
 import { Route as WSlugSettingsIndexRouteImport } from './routes/w.$slug.settings.index.tsx'
 import { Route as WSlugSettingsJobsRouteImport } from './routes/w.$slug.settings.jobs.tsx'
@@ -58,6 +59,11 @@ const WSlugRoute = WSlugRouteImport.update({
 const WSlugIndexRoute = WSlugIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => WSlugRoute,
+} as any)
+const WSlugTrashRoute = WSlugTrashRouteImport.update({
+  id: '/trash',
+  path: '/trash',
   getParentRoute: () => WSlugRoute,
 } as any)
 const WSlugObjectsObjectRoute = WSlugObjectsObjectRouteImport.update({
@@ -113,6 +119,7 @@ export interface FileRoutesByFullPath {
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
   '/w/$slug': typeof WSlugRouteWithChildren
+  '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug/': typeof WSlugIndexRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
@@ -129,6 +136,7 @@ export interface FileRoutesByTo {
   '/status': typeof StatusRoute
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
+  '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug': typeof WSlugIndexRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
@@ -147,6 +155,7 @@ export interface FileRoutesById {
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
   '/w/$slug': typeof WSlugRouteWithChildren
+  '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug/': typeof WSlugIndexRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
@@ -166,6 +175,7 @@ export interface FileRouteTypes {
     | '/verify'
     | '/welcome'
     | '/w/$slug'
+    | '/w/$slug/trash'
     | '/w/$slug/'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/jobs'
@@ -182,6 +192,7 @@ export interface FileRouteTypes {
     | '/status'
     | '/verify'
     | '/welcome'
+    | '/w/$slug/trash'
     | '/w/$slug'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/jobs'
@@ -199,6 +210,7 @@ export interface FileRouteTypes {
     | '/verify'
     | '/welcome'
     | '/w/$slug'
+    | '/w/$slug/trash'
     | '/w/$slug/'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/jobs'
@@ -270,6 +282,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugIndexRouteImport
       parentRoute: typeof WSlugRoute
     }
+    '/w/$slug/trash': {
+      id: '/w/$slug/trash'
+      path: '/trash'
+      fullPath: '/w/$slug/trash'
+      preLoaderRoute: typeof WSlugTrashRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/objects/$object': {
       id: '/w/$slug/objects/$object'
       path: '/objects/$object'
@@ -330,6 +349,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface WSlugRouteChildren {
+  WSlugTrashRoute: typeof WSlugTrashRoute
   WSlugIndexRoute: typeof WSlugIndexRoute
   WSlugObjectsObjectRoute: typeof WSlugObjectsObjectRoute
   WSlugSettingsJobsRoute: typeof WSlugSettingsJobsRoute
@@ -342,6 +362,7 @@ interface WSlugRouteChildren {
 }
 
 const WSlugRouteChildren: WSlugRouteChildren = {
+  WSlugTrashRoute: WSlugTrashRoute,
   WSlugIndexRoute: WSlugIndexRoute,
   WSlugObjectsObjectRoute: WSlugObjectsObjectRoute,
   WSlugSettingsJobsRoute: WSlugSettingsJobsRoute,

@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { BulkActionBar } from './BulkActionBar.tsx';
 
@@ -88,5 +89,31 @@ export const SelectAllKeepsFocus: Story = {
     canvas.getByRole('button', { name: 'Select all 1,234 matching' }).focus();
     await userEvent.keyboard('{Enter}');
     await waitFor(() => expect(canvas.getByRole('button', { name: 'Add to list' })).toHaveFocus());
+  },
+};
+
+/** Floating, as a screen shows it: centred over the bottom of the view it is placed in, above the rows. */
+export const Floating: Story = {
+  args: { placement: 'floating' },
+  render: (args) => (
+    <Stage height="grid">
+      <BulkActionBar {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent, args }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Clear the selection' }));
+    await expect(args.onClear).toHaveBeenCalled();
+  },
+};
+
+/** A note in an action's place: a selection too big for one request says so, quietly, in the bar. */
+export const WithNote: Story = {
+  args: {
+    count: 620,
+    children: <Callout placement="bar">Changes to more than 500 records arrive soon.</Callout>,
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Changes to more than 500 records arrive soon.')).toBeInTheDocument();
+    await expect(canvas.getByRole('status')).toHaveTextContent('620 selected');
   },
 };

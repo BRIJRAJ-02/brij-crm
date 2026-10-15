@@ -28,6 +28,12 @@ export interface BulkActionBarProps {
   readonly progress?: { readonly label: string; readonly value?: number };
   /** Stops the running action: a Cancel button beside its progress. */
   readonly onCancel?: () => void;
+  /**
+   * `inline` (the default) sits where it is put; `floating` floats centred
+   * over the bottom of the view it is placed in (AppShell's view), above the
+   * rows, as a screen shows it while records are selected.
+   */
+  readonly placement?: 'inline' | 'floating';
 }
 
 /**
@@ -46,6 +52,7 @@ export function BulkActionBar({
   children,
   progress,
   onCancel,
+  placement = 'inline',
 }: BulkActionBarProps) {
   const { locale } = useFormatSettings();
   const actionsRef = useRef<HTMLSpanElement>(null);
@@ -68,7 +75,7 @@ export function BulkActionBar({
   const number = (value: number) => memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(value);
   return (
     // Esc from anywhere in the bar clears the selection.
-    <div className={styles.frame} {...keyboardProps}>
+    <div className={styles.frame} data-placement={placement} {...keyboardProps}>
       <AriaToolbar className={styles.root} aria-label={strings.label}>
         <span className={styles.count} role="status">
           {isAllMatching ? strings.allMatching(number(total)) : strings.selected(number(count))}

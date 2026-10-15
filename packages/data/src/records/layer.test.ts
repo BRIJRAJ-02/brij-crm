@@ -1898,6 +1898,9 @@ describe('deleting records (spec 0022, AC-524 to AC-526, AC-541)', () => {
     expect(outcome).toMatchObject({ kind: 'done', deleted: 2, refused: 0 });
     // The block reloads, since the rows after the gone ones moved up.
     expect(queries.length).toBeGreaterThan(1);
+    // A screen drops them from its selection (AC-522).
+    frame();
+    expect([...view.getSnapshot().gone]).toEqual([idAt(0), idAt(1)]);
     expect(layer.undo.depth(WS)).toBe(1);
   });
 
@@ -1944,7 +1947,7 @@ describe('deleting records (spec 0022, AC-524 to AC-526, AC-541)', () => {
   });
 
   it('undoes a delete by its batch, rereading the view, and says what stayed in the trash (AC-526)', async () => {
-    const { layer, deletes, restores, queries } = await readyView();
+    const { layer, view, deletes, restores, queries } = await readyView();
     const deleting = layer.deleteMany(WS, PEOPLE, [idAt(0), idAt(1)]);
     await settle();
     deletes[0]?.answer([
@@ -1966,6 +1969,11 @@ describe('deleting records (spec 0022, AC-524 to AC-526, AC-541)', () => {
       },
     ]);
     expect(await undone).toEqual({ kind: 'restored', objectId: PEOPLE, restored: 1, kept: 1, reason: 'unique' });
+    // Read live again, a restored record is no longer gone, so a screen may select it again.
+    await settle();
+    queries.at(-1)?.answer(block(0, 3));
+    await settle();
+    expect(view.getSnapshot().gone.has(idAt(0))).toBe(false);
     // The view reads its rows on screen again, so the restored record returns to its place.
     await settle();
     expect(queries.length).toBeGreaterThan(before);

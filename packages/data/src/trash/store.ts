@@ -59,6 +59,10 @@ export interface TrashView {
   readonly ready: () => Promise<void>;
   /** A screen shows it; the answer lets go (and forgets its refusals once nobody shows it). */
   readonly retain: () => () => void;
+  /** A loaded row by its record id (its object, its name), for what a selection may do. */
+  readonly row: (recordId: string) => TrashRow | undefined;
+  /** The screen row a loaded record shows at; undefined when no loaded block holds it. */
+  readonly indexOf: (recordId: string) => number | undefined;
 }
 
 /** What a restore came to, for the screen's toast. */
@@ -300,6 +304,8 @@ export function createTrash({
         void refreshCount();
       },
       ready: () => readyPromise,
+      row: (recordId) => (windows.has(recordId) ? store.get(recordId) : undefined),
+      indexOf: (recordId) => inner.rowOf(recordId),
       retain: () => {
         retains += 1;
         if (retains === 1) {

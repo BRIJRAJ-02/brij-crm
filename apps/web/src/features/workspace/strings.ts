@@ -15,6 +15,8 @@ export const strings = {
   signingOut: 'Signing out',
   signOutFailed: 'Couldn’t sign out. Check your connection, then try again.',
   records: 'Records',
+  /** The sidebar's way to the trash, at the foot of Records (spec 0022). */
+  trash: 'Trash',
   /** The workspace menu's way into settings (spec 0012), above Sign out. */
   settings: 'Settings',
   noObjects: 'No objects yet',

@@ -4,6 +4,7 @@
 // them; the frame and main.tsx do the listening and the raising.
 import type { EditOutcome, ReplacedValue, UndoKind, UndoResult } from '@crm/data';
 import type { KeyboardPlatform, ToastContent } from '@crm/ui';
+import { lifecycleUndoToast } from './bulk.ts';
 import { strings } from './strings.ts';
 
 /** A key press as the shortcut reads it. */
@@ -78,6 +79,8 @@ function undidWords(result: Extract<UndoResult, { kind: 'undone' }>): string {
  */
 export function undoToast(result: UndoResult): ToastContent | undefined {
   if (result.kind === 'nothing') return { tone: 'success', message: strings.nothingToUndo };
+  // A delete or a create undone (spec 0022, AC-526, AC-541).
+  if (result.kind === 'restored' || result.kind === 'uncreated') return lifecycleUndoToast(result);
   // A toast's Undo whose change is no longer the newest: nothing was done, and the newer changes come first.
   if (result.kind === 'stale') return { tone: 'danger', message: strings.undoStale };
   const kept = result.kept > 0 ? strings.keptSince(result.kept, count(result.kept)) : undefined;

@@ -245,6 +245,9 @@ export type EditOutcome =
       readonly undoId?: string;
     };
 
+/** How many gone record ids the layer remembers for screens' selections (spec 0022): a selection's most. */
+const GONE_KEPT = 10_000;
+
 /** The most records one inline delete moves to the trash (spec 0022): more waits for background jobs. */
 export const MAX_DELETE_RECORDS = 500;
 
@@ -387,6 +390,12 @@ export interface ViewState {
    * arrive, and a live change to a named record reads it again.
    */
   readonly referenceDisplays: (refs: readonly RecordRef[]) => readonly NameState[];
+  /**
+   * Records that left the windows because they are gone on the server (in the
+   * trash, or out of reach; spec 0022, AC-522): a screen drops them from its
+   * selection. The last 10,000, as a new set each time one goes.
+   */
+  readonly gone: ReadonlySet<string>;
 }
 
 /** One screen reading a view: the columns it shows (`columns`), and `release` when it goes. */
@@ -887,6 +896,28 @@ export function createRecordsLayer({
   // record's edits in the order they were made and the later value gets the later version.
   const sending = new Map<string, Promise<unknown>>();
   let cellErrors: ReadonlyMap<string, string> = new Map();
+  // Records gone on the server, the last GONE_KEPT (spec 0022, AC-522): screens drop them from their selections.
+  let goneIds: ReadonlySet<string> = new Set();
+  const noteGone = (ids: Iterable<string>) => {
+    const next = new Set(goneIds);
+    for (const id of ids) {
+      next.delete(id);
+      next.add(id);
+    }
+    // A Set keeps insertion order, so the first ids are the oldest.
+    for (const id of next) {
+      if (next.size <= GONE_KEPT) break;
+      next.delete(id);
+    }
+    goneIds = next;
+    for (const entry of views.values()) entry.invalidate();
+  };
+  const backAgain = (ids: readonly string[]) => {
+    if (goneIds.size === 0 || !ids.some((id) => goneIds.has(id))) return;
+    const back = new Set(ids);
+    goneIds = new Set([...goneIds].filter((id) => !back.has(id)));
+    for (const entry of views.values()) entry.invalidate();
+  };
   // Records on their way to the trash (spec 0022): every view skips their rows until the delete answers.
   const trashing = new Map<string, number>();
   let leaving: ReadonlySet<string> = new Set();
@@ -954,6 +985,7 @@ export function createRecordsLayer({
     store.remove(ids);
     const gone = new Set(ids);
     for (const entry of views.values()) entry.windows.drop(gone);
+    noteGone(ids);
   };
 
   function openView(workspace: string, objectId: string, query: ViewQuery, warm: readonly string[]): ViewEntry {
@@ -1072,6 +1104,8 @@ export function createRecordsLayer({
           signal,
         );
         store.receive(page.records, { hold: true });
+        // A record read live again (restored) is no longer gone: it may be selected again.
+        backAgain(page.records.map((record) => record.id));
         // Changed while this block was on its way: its rows may be older than the change.
         const stale = page.records.map((record) => record.id).filter((id) => changedSince(workspace, id, asked));
         if (stale.length > 0) {
@@ -1243,6 +1277,7 @@ export function createRecordsLayer({
     let lastSource: RecordSource<RecordView> | undefined;
     let lastErrors = cellErrors;
     let lastStatus: ViewStatus = status;
+    let lastGone = goneIds;
     let snapshot: ViewState | undefined;
     const rowNotesOf = (): ReadonlyMap<string, RowNote> =>
       new Map(inner.pins().flatMap((pin) => (pin.note === undefined ? [] : [[pin.id, pin.note] as const])));
@@ -1250,10 +1285,17 @@ export function createRecordsLayer({
       subscribe: inner.subscribe,
       getSnapshot: () => {
         const source = inner.getSnapshot();
-        if (snapshot === undefined || source !== lastSource || cellErrors !== lastErrors || status !== lastStatus) {
+        if (
+          snapshot === undefined ||
+          source !== lastSource ||
+          cellErrors !== lastErrors ||
+          status !== lastStatus ||
+          goneIds !== lastGone
+        ) {
           lastSource = source;
           lastErrors = cellErrors;
           lastStatus = status;
+          lastGone = goneIds;
           const told = windows.told();
           // Rows on their way to the trash already left the count (spec 0022, AC-525).
           const goneHere = [...leaving].filter((id) => windows.has(id)).length;
@@ -1265,6 +1307,7 @@ export function createRecordsLayer({
             mode,
             rowNotes: rowNotesOf(),
             referenceDisplays,
+            gone: goneIds,
             ...(error === undefined ? {} : { error }),
           };
         }
@@ -2320,6 +2363,7 @@ export function createRecordsLayer({
         const gone = new Set(part.filter((id) => !found.has(id) && !store.pending().has(id)));
         if (gone.size === 0) return;
         for (const entry of viewsOf(workspace)) entry.windows.drop(gone);
+        noteGone(gone);
         store.remove([...gone].filter((id) => ![...views.values()].some((entry) => entry.shows(id))));
       }),
     );
@@ -2703,6 +2747,7 @@ export function createRecordsLayer({
       store.clear();
       names.clear();
       cellErrors = new Map();
+      goneIds = new Set();
       trashing.clear();
       leaving = new Set();
       own.clear();

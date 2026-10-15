@@ -1,10 +1,22 @@
 /* BulkActionBar: a floating size-toolbar tall bar on surface-raised, with
    shadow-md and radius-lg: the count in body-strong, then the offer, the
    actions space-8 apart, and Clear at the end. A running action's progress
-   takes the actions' place. */
+   takes the actions' place. Floating, it sits centred space-16 above the
+   bottom of the view it is placed in (the view is its containing block),
+   over the rows, and only the bar itself takes the pointer. */
 @layer components {
   .frame {
     display: contents;
+  }
+
+  .frame[data-placement='floating'] {
+    position: absolute;
+    z-index: var(--z-sticky);
+    display: flex;
+    justify-content: center;
+    inset-block-end: var(--space-16);
+    inset-inline: var(--space-16);
+    pointer-events: none;
   }
 
   .root {
@@ -37,5 +49,9 @@
 
   .progress {
     inline-size: var(--size-measure);
+  }
+
+  .frame[data-placement='floating'] .root {
+    pointer-events: auto;
   }
 }

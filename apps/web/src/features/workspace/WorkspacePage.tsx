@@ -42,12 +42,14 @@ export interface WorkspacePageProps {
   readonly page: FramedPage;
   /** The `apiSlug` of the object whose page is open. */
   readonly currentObject?: string;
+  /** A page of the sidebar's that isn't an object's: the trash (spec 0022). */
+  readonly currentPage?: 'trash';
   /** The workspace itself failed to load: no Records section, rather than one loading for ever. */
   readonly isFailed?: boolean;
 }
 
 /** A workspace page inside WorkspaceFrame, reading the frame's data from the `/w/$slug` match (absent while it loads). */
-export function WorkspacePage({ page, currentObject, isFailed = false }: WorkspacePageProps) {
+export function WorkspacePage({ page, currentObject, currentPage, isFailed = false }: WorkspacePageProps) {
   const { data, theme, toasts } = useRouteContext({ from: '__root__' });
   const { slug = '' } = useParams({ strict: false });
   const workspace = useMatch({ from: '/w/$slug', shouldThrow: false })?.loaderData;
@@ -64,6 +66,7 @@ export function WorkspacePage({ page, currentObject, isFailed = false }: Workspa
       // Loaded without objects (the door refused this workspace), or failed to load: no Records section.
       isMissing={workspace === undefined ? isFailed : workspace.objects === undefined}
       {...(currentObject === undefined ? {} : { currentObject })}
+      {...(currentPage === undefined ? {} : { currentPage })}
       topBar={page.topBar}
       viewBar={page.viewBar}
     >

@@ -25,6 +25,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArchiveAttributeDialog } from '../settings/ArchiveAttributeDialog.tsx';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { strings as attributeStrings } from '../settings/attribute-strings.ts';
+import { BulkDeleteBar, useTableSelection } from './BulkDeleteBar.tsx';
 import { avatarAttribute, listedAttributes, queryOf } from './columns.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
 import { strings } from './strings.ts';
@@ -209,6 +210,8 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
   // Another order's first rows are on their way: the old ones stay, and the view bar says it is working.
   const isReordering = useDelayedLoading(shown.key !== wanted);
   const state = useView(view, visible);
+  // The rows ticked (spec 0022, AC-522): a new view starts with none, and rows gone on the server leave.
+  const ticked = useTableSelection(view, state.gone);
   // Paused only while the live connection is down; off (previews) shows nothing.
   const live = useLiveStatus(data.live);
   const memberDisplays = useMemo(() => toActorDisplays(members), [members]);
@@ -306,6 +309,8 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
               getValue={(row, columnId) => row.values[columnId] ?? null}
               isCellKnown={isCellKnown}
               rowNotes={state.rowNotes}
+              selection={ticked.selection}
+              onSelectionChange={ticked.setSelection}
               onEditingChange={(isOpen) => {
                 view.holdSettle(isOpen);
                 isEditing.current = isOpen;
@@ -439,6 +444,21 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
                     },
                   }
                 : {})}
+            />
+            <BulkDeleteBar
+              slug={slug}
+              object={object}
+              selection={ticked.selection}
+              total={state.count.count}
+              onClear={ticked.clear}
+              onDeleting={(recordIds) => {
+                // The table takes focus back where the first deleted row was, so the keyboard carries on there.
+                const rows = recordIds.flatMap((id) => {
+                  const at = view.indexOf(id);
+                  return at === undefined ? [] : [at];
+                });
+                setFocusRow({ index: Math.max(0, Math.min(...rows, state.source.count - 1 - recordIds.length)) });
+              }}
             />
             <NewRecordDialog
               isOpen={isCreating}
