@@ -1357,6 +1357,48 @@ describe('deletion', () => {
     }
   });
 
+  it('purges a batch by locking its lists before its records, the order entry writes take (spec 0008, AC-112)', async () => {
+    const world = await workspace();
+    const deal = await newDeal(world, 'Old deal');
+    const { listId } = await pipeline(world);
+    await addEntry(world.scope, { listId, recordId: deal });
+    await deleteRecord(world.scope, { recordId: deal });
+    await db.withWorkspace(world.scope.workspaceId, (tx) =>
+      tx.execute(sql`update records set deleted_at = now() - interval '31 days' where id = ${deal}`),
+    );
+    const purger = counted(world.scope);
+    // An entry write holding the list (it locks the list, then the record, then the entry).
+    const hold = await holdRows(world, sql`select 1 from lists where id = ${listId}`);
+    let purging: Promise<RemovedCounts> | undefined;
+    try {
+      purging = purgeDeleted(purger.scope);
+      await waitForWaiters(world, 1, 'The purge');
+      // Waiting on the list, the purge holds no lock on the record yet: the entry write could still take it.
+      const record = await db
+        .withWorkspace(world.scope.workspaceId, (tx) =>
+          tx.execute(sql`select 1 from records where id = ${deal} for update nowait`),
+        )
+        .then(
+          () => 'free',
+          (error: unknown) => {
+            if (postgresError(error)?.code === '55P03') return 'held';
+            throw error;
+          },
+        );
+      expect(record).toBe('free');
+      await hold.release();
+      const counts = await purging;
+      expect(counts.records).toBe(1);
+      expect(counts.entries).toBe(1);
+      expect(await rowCount(world.scope, sql`select entry_count as n from lists where id = ${listId}`)).toBe(0);
+      // One short batch, one transaction: no deadlock (40P01) was retried.
+      expect(purger.attempts()).toBe(1);
+    } finally {
+      await hold.release();
+      await purging?.catch(() => undefined);
+    }
+  });
+
   it('lets a create take the unique value a concurrent delete gives up, with no deadlock (AC-8, AC-10, AC-16)', async () => {
     const world = await workspace();
     const emails = world.person('email_addresses');

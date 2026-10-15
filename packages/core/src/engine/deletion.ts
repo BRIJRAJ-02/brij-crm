@@ -21,7 +21,15 @@ import { refuse } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
 import { deleteSortKeys, setRecordKeysLive } from './sort-keys.ts';
 import { holdUniqueKeys, releaseUniqueKeys } from './unique.ts';
-import { CHANGE_CAP, runWrite, type AfterWrite, type EntryRef, type RecordRef, type ReferenceChange } from './write.ts';
+import {
+  CHANGE_CAP,
+  runWrite,
+  type AfterWrite,
+  type EntryRef,
+  type RecordRef,
+  type ReferenceChange,
+  type WriteContext,
+} from './write.ts';
 import { requirePermission } from '../access/check.ts';
 import type { Access } from '../access/policy.ts';
 import { checkObject, checkRecordVisible, UNKNOWN_RECORD } from '../access/visibility.ts';
@@ -387,18 +395,20 @@ async function removeRecords(tx: WorkspaceTx, recordIds: readonly string[]): Pro
   };
 }
 
-/**
- * Removes, in batches, records deleted before the cutoff (30 days ago, or an
- * earlier one given) with their values, links and entries, and entries removed before it
- * with their values. Each batch is its own transaction, skipping rows a
- * restore holds. A system job (#8 schedules it), one workspace at a time.
- */
-export async function purgeDeleted(
-  scope: EngineScope,
-  input: { readonly cutoff?: string; readonly batchSize?: number } = {},
-  hooks: readonly AfterWrite[] = [],
-): Promise<RemovedCounts> {
-  requirePermission(scope, 'records.purge');
+/** What one purge batch removed, and whether it took a whole batch of either kind (so another may follow). */
+export interface PurgeBatchResult {
+  readonly counts: RemovedCounts;
+  readonly full: boolean;
+}
+
+/** What a purge takes: a cutoff (never inside the restore window) and a batch size of 1 to 10,000 (500). */
+export interface PurgeInput {
+  readonly cutoff?: string;
+  readonly batchSize?: number;
+}
+
+/** The checked batch size and the cutoff as SQL: the given one, or `RESTORE_WINDOW` ago, whichever is earlier. */
+function purgeSettings(input: PurgeInput): { readonly batchSize: number; readonly cutoff: SQL } {
   const batchSize = input.batchSize ?? 500;
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 10_000) {
     throw refuse('CONFIG_INVALID', 'Purge 1 to 10,000 rows at a time.');
@@ -410,50 +420,92 @@ export async function purgeDeleted(
       : checkInstant(input.cutoff, 'Give the cutoff as an ISO timestamp with its zone, such as 2026-10-01T00:00:00Z.');
   // Never inside the restore window, whatever cutoff is given.
   const window = sql`now() - ${RESTORE_WINDOW}::interval`;
-  const cutoff = given === undefined ? window : sql`least(${given}::timestamptz, ${window})`;
+  return { batchSize, cutoff: given === undefined ? window : sql`least(${given}::timestamptz, ${window})` };
+}
+
+/**
+ * One purge batch, in the caller's write (spec 0008, milestone 3: the daily
+ * cleanup's `maintenance.daily` runs it, one batch a step): at most
+ * `batchSize` records deleted before the cutoff, with their values, links and
+ * entries, and at most `batchSize` entries removed before it, with their
+ * values. It takes its locks in the order entry writes take them: it picks
+ * the doomed records first without locking them, then locks the lists their
+ * entries are in (in id order, as erasure and `removeRecords` do), and only
+ * then the records, skipping any a restore holds and any restored since the
+ * pick. `full` says a whole batch went, so another may follow; a batch that
+ * skipped a locked row comes back short, and the row waits for the next run.
+ */
+export async function purgeBatch(context: WriteContext, input: PurgeInput = {}): Promise<PurgeBatchResult> {
+  requirePermission(context.scope, 'records.purge');
+  const { batchSize, cutoff } = purgeSettings(input);
+  const { tx } = context;
+  // Picked, not locked: a row lock taken here, before the lists, is the order that deadlocked with entry writes.
+  const picked = await tx.execute<{ id: string }>(sql`
+    select id::text from records where deleted_at < ${cutoff}
+    order by deleted_at, id limit ${batchSize}
+  `);
+  const pickedIds = picked.rows.map((row) => row.id);
+  let doomedIds: readonly string[] = [];
+  if (pickedIds.length > 0) {
+    const ids = uuidArray(pickedIds);
+    await tx.execute(sql`
+      select 1 from lists
+      where id in (select list_id from list_entries where record_id = any(${ids}) and deleted_at is null)
+      order by id for no key update
+    `);
+    // Still in the trash past the cutoff under the lock (a restore that committed since the pick is left alone).
+    const locked = await tx.execute<{ id: string }>(sql`
+      select id::text from records where id = any(${ids}) and deleted_at < ${cutoff}
+      order by id for update skip locked
+    `);
+    doomedIds = locked.rows.map((row) => row.id);
+  }
+  const gone = await removeRecords(tx, doomedIds);
+  const removedEntries = await tx.execute<{ id: string }>(sql`
+    select id::text from list_entries where deleted_at < ${cutoff}
+    order by deleted_at, id limit ${batchSize} for update skip locked
+  `);
+  const entryIds = removedEntries.rows.map((row) => row.id);
+  await deleteSortKeys(tx, { entryIds });
+  const entryValues = await tx.execute(deleteEntryValues(entryIds));
+  const entries = await tx.execute<{ id: string; list_id: string; record_id: string; object_id: string }>(sql`
+    delete from list_entries e using records r
+    where e.id = any(${uuidArray(entryIds)}) and r.workspace_id = e.workspace_id and r.id = e.record_id
+    returning e.id::text, e.list_id::text, e.record_id::text, r.object_id::text
+  `);
+  context.record({
+    purgedRecords: gone.records,
+    purgedEntries: [...gone.entries, ...entryRefs(entries.rows)],
+  });
+  return {
+    full: doomedIds.length === batchSize || entryIds.length === batchSize,
+    counts: add(gone.counts, {
+      records: 0,
+      entries: entries.rows.length,
+      values: entryValues.rowCount ?? 0,
+      links: 0,
+    }),
+  };
+}
+
+/**
+ * Removes, in batches, records deleted before the cutoff (30 days ago, or an
+ * earlier one given) with their values, links and entries, and entries removed before it
+ * with their values. Each batch is its own transaction (`purgeBatch`),
+ * skipping rows a restore holds. The daily cleanup runs `purgeBatch` itself,
+ * a batch a step of its job (spec 0008); this loop is for scripts and tests.
+ */
+export async function purgeDeleted(
+  scope: EngineScope,
+  input: PurgeInput = {},
+  hooks: readonly AfterWrite[] = [],
+): Promise<RemovedCounts> {
+  requirePermission(scope, 'records.purge');
+  // Refused before any transaction opens.
+  purgeSettings(input);
   let total = NONE;
   for (;;) {
-    const { result } = await runWrite(
-      scope,
-      async (context) => {
-        const { tx } = context;
-        const doomed = await tx.execute<{ id: string }>(sql`
-          select id::text from records where deleted_at < ${cutoff}
-          order by deleted_at, id limit ${batchSize} for update skip locked
-        `);
-        const gone = await removeRecords(
-          tx,
-          doomed.rows.map((row) => row.id),
-        );
-        const removedEntries = await tx.execute<{ id: string }>(sql`
-          select id::text from list_entries where deleted_at < ${cutoff}
-          order by deleted_at, id limit ${batchSize} for update skip locked
-        `);
-        const entryIds = removedEntries.rows.map((row) => row.id);
-        await deleteSortKeys(tx, { entryIds });
-        const entryValues = await tx.execute(deleteEntryValues(entryIds));
-        const entries = await tx.execute<{ id: string; list_id: string; record_id: string; object_id: string }>(sql`
-          delete from list_entries e using records r
-          where e.id = any(${uuidArray(entryIds)}) and r.workspace_id = e.workspace_id and r.id = e.record_id
-          returning e.id::text, e.list_id::text, e.record_id::text, r.object_id::text
-        `);
-        context.record({
-          purgedRecords: gone.records,
-          purgedEntries: [...gone.entries, ...entryRefs(entries.rows)],
-        });
-        const full = doomed.rows.length === batchSize || removedEntries.rows.length === batchSize;
-        return {
-          full,
-          counts: add(gone.counts, {
-            records: 0,
-            entries: entries.rows.length,
-            values: entryValues.rowCount ?? 0,
-            links: 0,
-          }),
-        };
-      },
-      hooks,
-    );
+    const { result } = await runWrite(scope, (context) => purgeBatch(context, input), hooks);
     total = add(total, result.counts);
     if (!result.full) return total;
   }
