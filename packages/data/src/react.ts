@@ -9,6 +9,7 @@ import type { PendingOptions } from './options.ts';
 import type { RecordsView, ViewReader, ViewState } from './records/layer.ts';
 import type { RecordState, RecordSubscription } from './records/one.ts';
 import type { TrashedSource, TrashedState } from './records/trashed.ts';
+import type { SavedViewSnapshot, SavedViewSource, ViewsListSnapshot, ViewsListSource } from './views/store.ts';
 
 /**
  * A view's current state (its rows, count, status, cell refusals and row
@@ -116,4 +117,17 @@ export interface PendingOptionsSource {
  */
 export function usePendingOptions(source: PendingOptionsSource): PendingOptions {
   return useSyncExternalStore(source.subscribe, source.getSnapshot);
+}
+
+/**
+ * An object's saved views in switcher order (spec 0020), re-rendering when
+ * they change. Held while the screen is mounted, so live changes reach it.
+ */
+export function useViewsList(source: ViewsListSource): ViewsListSnapshot {
+  return useRetained(source);
+}
+
+/** One saved view whole (spec 0020), re-rendering when it changes. Held while the screen is mounted. */
+export function useSavedView(source: SavedViewSource): SavedViewSnapshot {
+  return useRetained(source);
 }
