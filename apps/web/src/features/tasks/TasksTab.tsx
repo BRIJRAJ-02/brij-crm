@@ -1,0 +1,196 @@
+// Brief
+// Purpose: the follow ups about this record, on its page's Tasks tab.
+// Main task: add a task (type its title, press Enter) and tick it off.
+// Leaves out: reminders (#28), tasks of related records, and deleting a task (milestone 4).
+import { TASK_TITLE_MAX, type MemberSummary, type RecordRefDisplay, type TaskList as TaskListSource } from '@crm/data';
+import { useTaskList } from '@crm/data/react';
+import { Button, Disclosure, Field, TaskList } from '@crm/ui';
+import { useRouteContext } from '@tanstack/react-router';
+import { useEffect, useState } from 'react';
+import { strings } from './strings.ts';
+import { useTaskEntries } from './useTaskEntries.ts';
+
+/** Props for a record's Tasks tab. */
+export interface TasksTabProps {
+  readonly slug: string;
+  /** The page's record, linked to every task made here. */
+  readonly record: RecordRefDisplay;
+  /** Its open tasks, by due date. */
+  readonly open: TaskListSource;
+  readonly members: readonly MemberSummary[];
+  /** The person's member id: a new task is theirs (owner decision 1). */
+  readonly meId: string | undefined;
+  /** The person may change the record's object: the quick add and New task show. */
+  readonly canAdd: boolean;
+  /** A linked record's page, for its chip. */
+  readonly recordHref: (record: RecordRefDisplay) => string | undefined;
+  /** Opens the task dialog on a task, or on a new one. */
+  readonly onOpenTask: (taskId: string) => void;
+}
+
+/** The quick add: Enter makes a task with that title, this record linked, assigned to the person. */
+function QuickAdd({ slug, record, meId }: Pick<TasksTabProps, 'slug' | 'record' | 'meId'>) {
+  const { data } = useRouteContext({ from: '__root__' });
+  const [title, setTitle] = useState('');
+  const isLong = title.length > TASK_TITLE_MAX * 0.9;
+  return (
+    <Field
+      label={strings.addTask}
+      isLabelHidden
+      placeholder={strings.addTaskPlaceholder}
+      value={title}
+      onChange={setTitle}
+      maxLength={TASK_TITLE_MAX}
+      showCounter={isLong}
+      onSubmit={() => {
+        const trimmed = title.trim();
+        if (trimmed === '') return;
+        // The field clears and keeps focus, for the next one; the task shows first in the list at once.
+        setTitle('');
+        void data.tasks.create(slug, {
+          id: data.tasks.newId(),
+          title: trimmed,
+          records: [record],
+          ...(meId === undefined ? {} : { assigneeMemberId: meId, createdBy: meId }),
+        });
+      }}
+    />
+  );
+}
+
+/** A list with nothing in it yet, for the Completed part before its tasks are asked for. */
+const NO_TASKS = { count: 0, getItem: () => undefined, getKey: (task: { readonly id: string }) => task.id };
+
+/** The Completed part: closed by default, its done tasks read when first opened, newest done first. */
+function Completed({
+  slug,
+  record,
+  members,
+  recordHref,
+  onOpenTask,
+}: Pick<TasksTabProps, 'slug' | 'record' | 'members' | 'recordHref' | 'onOpenTask'>) {
+  const { data } = useRouteContext({ from: '__root__' });
+  const [isOpen, setOpen] = useState(false);
+  const [done, setDone] = useState<TaskListSource | undefined>(undefined);
+  useEffect(() => {
+    if (!isOpen || done !== undefined) return;
+    let isLive = true;
+    void data.tasks.forRecord(slug, record.recordId, 'done').then((list) => {
+      if (isLive) setDone(list);
+    });
+    return () => {
+      isLive = false;
+    };
+  }, [isOpen, done, data, slug, record.recordId]);
+  if (done === undefined) {
+    return (
+      <Disclosure title={strings.completed} isExpanded={isOpen} onExpandedChange={setOpen}>
+        <TaskList label={strings.completed} tasks={NO_TASKS} status="loading" onToggle={() => undefined} />
+      </Disclosure>
+    );
+  }
+  return (
+    <CompletedList
+      slug={slug}
+      record={record}
+      list={done}
+      members={members}
+      recordHref={recordHref}
+      onOpenTask={onOpenTask}
+      isOpen={isOpen}
+      onOpenChange={setOpen}
+    />
+  );
+}
+
+/** The done tasks, drawn in place in the Completed part with their count, paging as they show. */
+function CompletedList({
+  slug,
+  record,
+  list,
+  members,
+  recordHref,
+  onOpenTask,
+  isOpen,
+  onOpenChange,
+}: Pick<TasksTabProps, 'slug' | 'record' | 'members' | 'recordHref' | 'onOpenTask'> & {
+  readonly list: TaskListSource;
+  readonly isOpen: boolean;
+  readonly onOpenChange: (isOpen: boolean) => void;
+}) {
+  const { data } = useRouteContext({ from: '__root__' });
+  const state = useTaskList(list);
+  const entries = useTaskEntries(state.source, members, record.recordId);
+  return (
+    <Disclosure
+      title={strings.completed}
+      isExpanded={isOpen}
+      onExpandedChange={onOpenChange}
+      {...(state.total === undefined ? {} : { count: state.total.count })}
+    >
+      <TaskList
+        label={strings.completed}
+        layout="inline"
+        maxRows={Number.MAX_SAFE_INTEGER}
+        tasks={entries}
+        status={state.status === 'unavailable' ? 'no-access' : state.status}
+        onRetry={list.retry}
+        emptyTitle={strings.noCompletedTasks}
+        recordHref={recordHref}
+        onToggle={(task, isDone) => {
+          void data.tasks.setDone(slug, task.id, isDone);
+        }}
+        onAction={(task) => {
+          onOpenTask(task.id);
+        }}
+      />
+    </Disclosure>
+  );
+}
+
+/**
+ * A record's Tasks tab (AC-432, AC-433, AC-435): the quick add and "New
+ * task" over its open tasks by due date, ticked in place (a ticked task stays
+ * struck through until the list settles), and Completed under them.
+ */
+export function TasksTab({ slug, record, open, members, meId, canAdd, recordHref, onOpenTask }: TasksTabProps) {
+  const { data } = useRouteContext({ from: '__root__' });
+  const state = useTaskList(open);
+  const entries = useTaskEntries(state.source, members, record.recordId);
+  return (
+    <TaskList
+      label={strings.openTasks}
+      tasks={entries}
+      status={state.status === 'unavailable' ? 'no-access' : state.status}
+      onRetry={open.retry}
+      newIds={state.newIds}
+      emptyTitle={strings.noOpenTasks}
+      recordHref={recordHref}
+      onToggle={(task, isDone) => {
+        void data.tasks.setDone(slug, task.id, isDone);
+      }}
+      onAction={(task) => {
+        onOpenTask(task.id);
+      }}
+      {...(canAdd
+        ? {
+            toolbar: (
+              <>
+                <QuickAdd slug={slug} record={record} meId={meId} />
+                <Button
+                  onPress={() => {
+                    onOpenTask('new');
+                  }}
+                >
+                  {strings.newTask}
+                </Button>
+              </>
+            ),
+          }
+        : {})}
+      footer={
+        <Completed slug={slug} record={record} members={members} recordHref={recordHref} onOpenTask={onOpenTask} />
+      }
+    />
+  );
+}

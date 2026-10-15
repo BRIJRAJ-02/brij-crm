@@ -1,0 +1,511 @@
+// Brief
+// Purpose: everything about one task, on `?task=<id>` (or `?task=new`) over the page it opened from.
+// Main task: set its title, when it's due, who has it and which records it is about.
+// Leaves out: comments on tasks, reminders (#28), subtasks, and deleting it (milestone 4).
+import {
+  refusalSummary,
+  TASK_RECORDS_MAX,
+  TASK_TITLE_MAX,
+  toActorDisplays,
+  type ActorDisplay,
+  type DataError,
+  type MemberSummary,
+  type ObjectSummary,
+  type RecordRefDisplay,
+  type TaskChange,
+  type TaskSubscription,
+  type TaskView,
+} from '@crm/data';
+import { useTask } from '@crm/data/react';
+import {
+  arraySource,
+  AttributeEditor,
+  Button,
+  Checkbox,
+  DescriptionList,
+  EmptyState,
+  Field,
+  Form,
+  Modal,
+  RelativeTime,
+  type AttributeEditorProps,
+  type FieldAttribute,
+  type ListSource,
+} from '@crm/ui';
+import { useRouteContext } from '@tanstack/react-router';
+import { useEffect, useId, useState, type ReactNode } from 'react';
+import { memberDisplay } from './entries.ts';
+import { strings } from './strings.ts';
+import { useRecordSearch } from './useRecordSearch.ts';
+
+/** Props for the task dialog. */
+export interface TaskDialogProps {
+  readonly slug: string;
+  /** The task's id, or `new`. */
+  readonly task: string;
+  /** The record the dialog opened over: a new task starts linked to it. */
+  readonly pageRecord?: RecordRefDisplay;
+  /** The object the record picker starts on (the page's), else the first. */
+  readonly startObjectId?: string;
+  readonly objects: readonly ObjectSummary[];
+  readonly members: readonly MemberSummary[];
+  readonly meId: string | undefined;
+  /** Closes it (the address loses `?task`). */
+  readonly onClose: () => void;
+}
+
+/**
+ * A search of one display shape as the editor takes it: AttributeEditor types
+ * its search over every attribute type's display, and each editor reads only
+ * its own.
+ */
+const editorSearch = <T,>(search: (query: string) => ListSource<T>) =>
+  search as unknown as NonNullable<AttributeEditorProps['onSearch']>;
+
+/** The member a member editor committed, or null when it was cleared. */
+function memberIdOf(value: unknown): string | null {
+  const picked: unknown = Array.isArray(value) ? (value as readonly unknown[])[0] : value;
+  if (typeof picked !== 'object' || picked === null || !('id' in picked)) return null;
+  return typeof picked.id === 'string' ? picked.id : null;
+}
+
+/** Which field a refusal shows under. */
+type FieldName = 'title' | 'isDone' | 'dueOn' | 'assignee' | 'records';
+
+/** The dialog's attributes, through the field set's own editors (one field design, house rule 3). */
+function attributeOf(
+  id: string,
+  name: string,
+  type: 'date' | 'actor_reference' | 'record_reference',
+  readOnlyReason: string | undefined,
+): FieldAttribute {
+  return {
+    id,
+    name,
+    type,
+    allowMultiple: type === 'record_reference',
+    ...(type === 'record_reference' ? { cardinality: 'many' as const } : {}),
+    isRequired: false,
+    isUnique: false,
+    isReadOnly: readOnlyReason !== undefined,
+    ...(readOnlyReason === undefined ? {} : { readOnlyReason }),
+  };
+}
+
+/** The fields a task has, whether it is new (held here until Create) or saved (each committed as it changes). */
+interface TaskFieldsProps {
+  readonly slug: string;
+  readonly title: string;
+  readonly isDone?: boolean;
+  readonly dueOn: string | undefined;
+  readonly assigneeMemberId: string | undefined;
+  readonly records: readonly RecordRefDisplay[];
+  readonly objects: readonly ObjectSummary[];
+  readonly startObjectId: string | undefined;
+  readonly members: readonly MemberSummary[];
+  readonly meId: string | undefined;
+  readonly readOnlyReason?: string;
+  readonly errors: Partial<Record<FieldName, string>>;
+  readonly onChange: (change: TaskChange) => void;
+  /** The title as typed, before it is committed (a new task holds it). */
+  readonly onTitleInput?: (title: string) => void;
+}
+
+/** The title, Done (a saved task only), due date, assignee and records, each through its one editor. */
+function TaskFields({
+  slug,
+  title,
+  isDone,
+  dueOn,
+  assigneeMemberId,
+  records,
+  objects,
+  startObjectId,
+  members,
+  meId,
+  readOnlyReason,
+  errors,
+  onChange,
+  onTitleInput,
+}: TaskFieldsProps) {
+  const [draft, setDraft] = useState(title);
+  // A change from elsewhere (live, or a refusal putting it back) shows when the person isn't typing over it.
+  const [shownTitle, setShownTitle] = useState(title);
+  if (title !== shownTitle) {
+    setShownTitle(title);
+    setDraft(title);
+  }
+  const [objectId, setObjectId] = useState(startObjectId ?? objects[0]?.id ?? '');
+  const search = useRecordSearch(slug, objectId);
+  const [recordsError, setRecordsError] = useState<string | undefined>(undefined);
+  const commitTitle = () => {
+    const trimmed = draft.trim();
+    if (trimmed === '' || trimmed === title) return;
+    onChange({ title: trimmed });
+  };
+  const memberDisplays = toActorDisplays(members);
+  const me = meId === undefined ? undefined : memberDisplays.find((member) => member.id === meId);
+  const assignee: ActorDisplay | undefined =
+    assigneeMemberId === undefined ? undefined : memberDisplay(members, assigneeMemberId);
+  const byId = new Map(objects.map((object) => [object.id, object]));
+  return (
+    <>
+      <Field
+        label={strings.title}
+        value={draft}
+        onChange={(next) => {
+          setDraft(next);
+          onTitleInput?.(next);
+        }}
+        onBlur={commitTitle}
+        onSubmit={commitTitle}
+        isMultiline
+        maxLength={TASK_TITLE_MAX}
+        showCounter
+        isRequired
+        {...(readOnlyReason === undefined ? {} : { isReadOnly: true, readOnlyReason })}
+        {...(errors.title === undefined ? {} : { error: errors.title })}
+      />
+      {isDone !== undefined && (
+        <Checkbox
+          label={strings.done}
+          isSelected={isDone}
+          isReadOnly={readOnlyReason !== undefined}
+          onChange={(next) => {
+            onChange({ isDone: next });
+          }}
+          {...(errors.isDone === undefined ? {} : { error: errors.isDone })}
+        />
+      )}
+      <AttributeEditor
+        attribute={attributeOf('task-due', strings.dueDate, 'date', readOnlyReason)}
+        value={dueOn ?? null}
+        surface="form"
+        onCommit={(value) => {
+          onChange({ dueOn: typeof value === 'string' ? value : null });
+        }}
+        {...(errors.dueOn === undefined ? {} : { error: errors.dueOn })}
+      />
+      <AttributeEditor
+        attribute={attributeOf('task-assignee', strings.assignee, 'actor_reference', readOnlyReason)}
+        value={assigneeMemberId === undefined ? null : { type: 'member', id: assigneeMemberId }}
+        {...(assignee === undefined ? {} : { display: assignee })}
+        surface="form"
+        {...(me === undefined ? {} : { me })}
+        onSearch={editorSearch((query) =>
+          arraySource(
+            memberDisplays.filter((member) => member.name.toLowerCase().includes(query.trim().toLowerCase())),
+            (member) => member.id ?? member.name,
+          ),
+        )}
+        onCommit={(value) => {
+          onChange({ assigneeMemberId: memberIdOf(value) });
+        }}
+        {...(errors.assignee === undefined ? {} : { error: errors.assignee })}
+      />
+      <AttributeEditor
+        attribute={attributeOf('task-records', strings.records, 'record_reference', readOnlyReason)}
+        value={records.map((record) => ({ objectId: record.objectId, recordId: record.recordId }))}
+        display={records}
+        surface="form"
+        onSearch={editorSearch(search.onSearch)}
+        objectSwitcher={{
+          objects: objects.map((object) => ({
+            id: object.id,
+            label: object.pluralName,
+            icon: object.icon,
+            hue: object.hue,
+          })),
+          objectId,
+          onObjectChange: setObjectId,
+        }}
+        onCommit={(value) => {
+          const next = (Array.isArray(value) ? value : []) as readonly {
+            readonly objectId: string;
+            readonly recordId: string;
+          }[];
+          const held = new Set(records.map((record) => record.recordId));
+          const nextIds = new Set(next.map((ref) => ref.recordId));
+          const added = next.filter((ref) => !held.has(ref.recordId));
+          // Linking needs write on the record's object: said under the field, nothing sent (AC-447).
+          if (added.some((ref) => byId.get(ref.objectId)?.access !== 'write')) {
+            setRecordsError(strings.linkForbidden);
+            return;
+          }
+          if (next.length > TASK_RECORDS_MAX) {
+            setRecordsError(strings.recordsFull(TASK_RECORDS_MAX));
+            return;
+          }
+          setRecordsError(undefined);
+          onChange({
+            addRecords: added.map(
+              (ref) =>
+                search.displayOf(ref.recordId) ?? {
+                  objectId: ref.objectId,
+                  recordId: ref.recordId,
+                  name: '',
+                  kind: 'other',
+                },
+            ),
+            removeRecordIds: records.filter((record) => !nextIds.has(record.recordId)).map((record) => record.recordId),
+          });
+        }}
+        {...((recordsError ?? errors.records) === undefined ? {} : { error: recordsError ?? errors.records })}
+      />
+    </>
+  );
+}
+
+/** A refusal's words, under the field the change named (the first one it touched). */
+function fieldOf(change: TaskChange): FieldName {
+  if (change.title !== undefined) return 'title';
+  if (change.isDone !== undefined) return 'isDone';
+  if (change.dueOn !== undefined) return 'dueOn';
+  if (change.assigneeMemberId !== undefined) return 'assignee';
+  return 'records';
+}
+
+/** A saved task: each field committed as it changes, optimistic, rolled back with the message under it. */
+function SavedTask({
+  slug,
+  subscription,
+  objects,
+  startObjectId,
+  members,
+  meId,
+  onClose,
+}: Omit<TaskDialogProps, 'task' | 'pageRecord'> & { readonly subscription: TaskSubscription }) {
+  const { data, toasts } = useRouteContext({ from: '__root__' });
+  const state = useTask(subscription);
+  const [errors, setErrors] = useState<Partial<Record<FieldName, string>>>({});
+  const close = (
+    <Button slot="close" onPress={onClose}>
+      {strings.close}
+    </Button>
+  );
+  if (state.status === 'loading') {
+    return (
+      <TaskModal title={strings.task} onClose={onClose} actions={close}>
+        {null}
+      </TaskModal>
+    );
+  }
+  if (state.status === 'error') {
+    return (
+      <TaskModal title={strings.task} onClose={onClose} actions={close}>
+        <EmptyState tone="error" title={strings.loadFailed} onRetry={subscription.retry} />
+      </TaskModal>
+    );
+  }
+  const task: TaskView | undefined = state.task;
+  if (state.status === 'missing' || task === undefined) {
+    return (
+      <TaskModal title={strings.task} onClose={onClose} actions={close}>
+        <EmptyState icon="search" title={strings.missing} />
+      </TaskModal>
+    );
+  }
+  const change = (next: TaskChange) => {
+    const field = fieldOf(next);
+    setErrors((held) => ({ ...held, [field]: undefined }));
+    void data.tasks.update(slug, task.id, next).then((failure: DataError | undefined) => {
+      if (failure !== undefined) setErrors((held) => ({ ...held, [field]: refusalSummary(failure) }));
+    });
+  };
+  const copyLink = () => {
+    const href = new URL(window.location.href);
+    href.searchParams.set('task', task.id);
+    navigator.clipboard.writeText(href.href).then(
+      () => {
+        toasts.toast({ tone: 'success', message: strings.linkCopied });
+      },
+      () => {
+        toasts.toast({ tone: 'danger', message: strings.copyFailed });
+      },
+    );
+  };
+  const creator =
+    task.createdBy.type === 'member' && task.createdBy.id !== null
+      ? memberDisplay(members, task.createdBy.id).name
+      : task.createdBy.type === 'api_key'
+        ? strings.apiKey
+        : task.createdBy.type === 'automation'
+          ? strings.automation
+          : strings.system;
+  return (
+    <TaskModal
+      title={strings.task}
+      onClose={onClose}
+      actions={
+        <>
+          <Button variant="ghost" icon="link" onPress={copyLink}>
+            {strings.copyLink}
+          </Button>
+          {close}
+        </>
+      }
+    >
+      <Form id={`task-${task.id}`} onSubmit={() => undefined} label={strings.task}>
+        <TaskFields
+          slug={slug}
+          title={task.title}
+          isDone={task.isDone}
+          dueOn={task.dueOn}
+          assigneeMemberId={task.assigneeMemberId}
+          records={task.records}
+          objects={objects}
+          startObjectId={startObjectId}
+          members={members}
+          meId={meId}
+          errors={errors}
+          onChange={change}
+          {...(task.canChange ? {} : { readOnlyReason: strings.readOnly })}
+        />
+        <DescriptionList
+          items={[
+            {
+              term: strings.created,
+              description: (
+                <>
+                  {creator} · <RelativeTime value={task.createdAt} />
+                </>
+              ),
+            },
+          ]}
+        />
+      </Form>
+    </TaskModal>
+  );
+}
+
+/** A new task: its fields held here until Create, which closes the dialog at once (optimistic). */
+function NewTask({ slug, pageRecord, objects, startObjectId, members, meId, onClose }: Omit<TaskDialogProps, 'task'>) {
+  const { data } = useRouteContext({ from: '__root__' });
+  const formId = useId();
+  // One id per opening, sent again on Retry.
+  const [id] = useState(() => data.tasks.newId());
+  const [title, setTitle] = useState('');
+  const [dueOn, setDueOn] = useState<string | undefined>(undefined);
+  const [assignee, setAssignee] = useState<string | undefined>(meId);
+  const [records, setRecords] = useState<readonly RecordRefDisplay[]>(pageRecord === undefined ? [] : [pageRecord]);
+  const [titleError, setTitleError] = useState<string | undefined>(undefined);
+  const create = () => {
+    const trimmed = title.trim();
+    if (trimmed === '') {
+      setTitleError(strings.titleRequired);
+      return;
+    }
+    void data.tasks.create(slug, {
+      id,
+      title: trimmed,
+      ...(dueOn === undefined ? {} : { dueOn }),
+      ...(assignee === undefined ? {} : { assigneeMemberId: assignee }),
+      records,
+      ...(meId === undefined ? {} : { createdBy: meId }),
+    });
+    onClose();
+  };
+  return (
+    <TaskModal
+      title={strings.newTask}
+      onClose={onClose}
+      actions={
+        <>
+          <Button slot="close" onPress={onClose}>
+            {strings.cancel}
+          </Button>
+          <Button variant="primary" type="submit" form={formId}>
+            {strings.createTask}
+          </Button>
+        </>
+      }
+    >
+      <Form id={formId} onSubmit={create} label={strings.newTask} focusesFirstField>
+        <TaskFields
+          slug={slug}
+          title={title}
+          dueOn={dueOn}
+          assigneeMemberId={assignee}
+          records={records}
+          objects={objects}
+          startObjectId={startObjectId}
+          members={members}
+          meId={meId}
+          errors={titleError === undefined ? {} : { title: titleError }}
+          onTitleInput={(next) => {
+            setTitle(next);
+            if (next.trim() !== '') setTitleError(undefined);
+          }}
+          onChange={(change) => {
+            if (change.title !== undefined) setTitle(change.title);
+            if (change.dueOn !== undefined) setDueOn(change.dueOn ?? undefined);
+            if (change.assigneeMemberId !== undefined) setAssignee(change.assigneeMemberId ?? undefined);
+            if (change.addRecords !== undefined || change.removeRecordIds !== undefined) {
+              const removed = new Set(change.removeRecordIds ?? []);
+              setRecords((held) => [
+                ...held.filter((record) => !removed.has(record.recordId)),
+                ...(change.addRecords ?? []),
+              ]);
+            }
+          }}
+        />
+      </Form>
+    </TaskModal>
+  );
+}
+
+/** The dialog's frame: the library's Modal, open while the address names a task. */
+function TaskModal({
+  title,
+  onClose,
+  actions,
+  children,
+}: {
+  readonly title: string;
+  readonly onClose: () => void;
+  readonly actions: ReactNode;
+  readonly children: ReactNode;
+}) {
+  return (
+    <Modal
+      title={title}
+      isOpen
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      actions={actions}
+    >
+      {children}
+    </Modal>
+  );
+}
+
+/**
+ * The task dialog (AC-434): a new task's fields until Create, or a saved
+ * task's, each committed as it changes and live; a task that doesn't exist,
+ * was deleted, or is hidden says so.
+ */
+export function TaskDialog(props: TaskDialogProps) {
+  const { data } = useRouteContext({ from: '__root__' });
+  const [subscription, setSubscription] = useState<TaskSubscription | undefined>(undefined);
+  const { slug, task } = props;
+  useEffect(() => {
+    if (task === 'new') return;
+    let isLive = true;
+    void data.tasks.one(slug, task).then((found) => {
+      if (isLive) setSubscription(found);
+    });
+    return () => {
+      isLive = false;
+    };
+  }, [data, slug, task]);
+  if (task === 'new') return <NewTask {...props} />;
+  if (subscription === undefined) {
+    return (
+      <TaskModal title={strings.task} onClose={props.onClose} actions={null}>
+        {null}
+      </TaskModal>
+    );
+  }
+  return <SavedTask {...props} subscription={subscription} />;
+}

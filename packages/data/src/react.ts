@@ -108,6 +108,16 @@ export function useTaskList(list: TaskList): TaskListState {
   return useRetained(list);
 }
 
+/**
+ * Only a task list's total (a tab's count), re-rendering only when it moves,
+ * not with every task. Holds the list while the screen is mounted, so the
+ * count stays live.
+ */
+export function useTaskTotal(list: TaskList): TaskListState['total'] {
+  useEffect(() => list.retain(), [list]);
+  return useSyncExternalStore(list.subscribe, () => list.getSnapshot().total);
+}
+
 /** One task (the task dialog), re-rendering when it changes. Held while the screen is mounted. */
 export function useTask(task: TaskSubscription): TaskSubscriptionState {
   return useRetained(task);

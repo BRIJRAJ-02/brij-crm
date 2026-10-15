@@ -5,6 +5,9 @@
 import type { ActivityEntryShape, EntrySource, ObjectSummary } from '@crm/data';
 import { recordHref } from './details.ts';
 
+/** A task's dialog over the page (spec 0019): the page's address with `?task=<id>`. */
+export type TaskLink = (taskId: string) => string;
+
 /** A record's page from its object's id, or undefined when the object isn't one the person can open. */
 export type RecordLink = (objectId: string, recordId: string) => string | undefined;
 
@@ -17,8 +20,9 @@ export function recordLinks(slug: string, objects: readonly ObjectSummary[]): Re
   };
 }
 
-/** A link entry with each named record's page; any other entry as it is. */
-export function withLinks(entry: ActivityEntryShape, link: RecordLink): ActivityEntryShape {
+/** A link entry with each named record's page, a task entry with its dialog's; any other entry as it is. */
+export function withLinks(entry: ActivityEntryShape, link: RecordLink, taskLink?: TaskLink): ActivityEntryShape {
+  if (entry.kind === 'task') return taskLink === undefined ? entry : { ...entry, href: taskLink(entry.itemId) };
   if (entry.kind !== 'links') return entry;
   const linked = (records: typeof entry.added) =>
     records.map((record) => {
@@ -37,15 +41,16 @@ export function linkedSource(
   source: EntrySource,
   link: RecordLink,
   cache: WeakMap<object, ActivityEntryShape>,
+  taskLink?: TaskLink,
 ): EntrySource {
   return {
     ...source,
     getItem: (index) => {
       const entry = source.getItem(index);
-      if (entry === undefined || entry.kind !== 'links') return entry;
+      if (entry === undefined || (entry.kind !== 'links' && entry.kind !== 'task')) return entry;
       const held = cache.get(entry);
       if (held !== undefined) return held;
-      const made = withLinks(entry, link);
+      const made = withLinks(entry, link, taskLink);
       cache.set(entry, made);
       return made;
     },
