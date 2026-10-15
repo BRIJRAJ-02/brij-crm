@@ -456,10 +456,32 @@ export async function enqueue(tx: WorkspaceTx, jobId: string, runAt?: SQL): Prom
   if (!(await tryEnqueue(tx, jobId, runAt))) throw new Error('The job could not be queued.');
 }
 
+/** How long past its time a queued job may wait before a read of it wakes the worker (spec 0008, The wake call). */
+export const OVERDUE_MS = 5_000;
+
+/** What a read of jobs may tell its caller: a queued job is overdue, so a wake call was lost (spec 0008). */
+export interface JobReadOptions {
+  /** Called once when any job read is `queued` more than `OVERDUE_MS` past its `run_at`: the api wakes the worker. */
+  readonly onOverdue?: () => void;
+}
+
+/** Calls `onOverdue` once when a read job is queued and overdue: a lost wake heals as soon as someone looks. */
+function tellOverdue(rows: readonly Pick<JobRow, 'status' | 'runAt'>[], options: JobReadOptions | undefined): void {
+  if (options?.onOverdue === undefined) return;
+  const cutoff = Date.now() - OVERDUE_MS;
+  if (rows.some((row) => row.status === 'queued' && row.runAt.getTime() < cutoff)) options.onOverdue();
+}
+
 /** One job, for its starter or a holder of `jobs.manage`; NOT_FOUND otherwise (AC-114). */
-export async function getJob(scope: EngineScope, registry: JobRegistry, jobId: string): Promise<JobView> {
+export async function getJob(
+  scope: EngineScope,
+  registry: JobRegistry,
+  jobId: string,
+  options?: JobReadOptions,
+): Promise<JobView> {
   checkScope(scope);
   const row = await inWorkspace(scope, (tx) => readJob(tx, scope, jobId, undefined));
+  tellOverdue([row], options);
   return toJobView(row, registry);
 }
 
@@ -503,6 +525,7 @@ export async function listJobs(
   scope: EngineScope,
   registry: JobRegistry,
   input: Pick<JobsListInput, 'scope' | 'cursor' | 'limit'>,
+  options?: JobReadOptions,
 ): Promise<JobList> {
   checkScope(scope);
   const which = input.scope ?? 'mine';
@@ -531,6 +554,10 @@ export async function listJobs(
       .limit(limit + 1),
   );
   const page = rows.slice(0, limit);
+  tellOverdue(
+    page.map(({ row }) => row),
+    options,
+  );
   const last = page.at(-1);
   return {
     jobs: page.map(({ row }) => toJobView(row, registry)),

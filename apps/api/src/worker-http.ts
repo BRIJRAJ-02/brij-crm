@@ -2,7 +2,8 @@
 // relay's delivery numbers from memory) and the
 // api's poke (`POST /internal/outbox-wake`, see `realtime/wake.ts`). Nothing
 // here reads a request body or touches the database: a poke only wakes the
-// relay, which then drains whatever waits in the outbox. A request that comes
+// worker (spec 0008: its runners and relay, when it sleeps), and the relay
+// then drains whatever waits in the outbox. A request that comes
 // with a body is refused and its connection closed, and a slow one is cut off
 // after 5 seconds.
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';

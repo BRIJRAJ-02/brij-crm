@@ -98,6 +98,30 @@ export function createRelayWake(options: RelayWakeOptions): WakeRelay {
   return poke;
 }
 
+/** How often a signed in request wakes the worker at most, per api process (spec 0008, The wake call). */
+export const WAKE_ON_USE_MS = 60_000;
+
+/**
+ * The same call, at most once every `everyMs` (a minute): what every signed
+ * in request sends (spec 0008, milestone 3), so the worker stays awake while
+ * anyone uses the app, and someone who only reads doesn't pay the wake delay
+ * on their first edit. The first request after a quiet minute sends it.
+ */
+export function throttleWake(
+  wake: WakeRelay,
+  everyMs: number = WAKE_ON_USE_MS,
+  now: () => number = Date.now,
+): WakeRelay {
+  if (wake === NO_WAKE) return NO_WAKE;
+  let last = Number.NEGATIVE_INFINITY;
+  return () => {
+    const at = now();
+    if (at - last < everyMs) return;
+    last = at;
+    wake();
+  };
+}
+
 // Hashing both sides first gives equal lengths for timingSafeEqual, so the
 // comparison takes the same time whatever was sent, including its length.
 function digest(value: string): Buffer {

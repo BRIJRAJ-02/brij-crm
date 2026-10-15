@@ -207,6 +207,18 @@ describe('the worker environment (spec 0005, the relay)', () => {
     expect(workerProblems({ ...worker, JOBS_RUNNER: 'yes' })).toEqual(['JOBS_RUNNER']);
   });
 
+  it('sleeps after 180 idle seconds unless WORKER_IDLE_SLEEP_SECONDS says, 0 never (spec 0008, milestone 3)', () => {
+    expect(WorkerEnv.parse(worker).WORKER_IDLE_SLEEP_SECONDS).toBe(180);
+    expect(WorkerEnv.parse({ ...worker, WORKER_IDLE_SLEEP_SECONDS: '' }).WORKER_IDLE_SLEEP_SECONDS).toBe(180);
+    expect(WorkerEnv.parse({ ...worker, WORKER_IDLE_SLEEP_SECONDS: '0' }).WORKER_IDLE_SLEEP_SECONDS).toBe(0);
+    expect(WorkerEnv.parse({ ...worker, WORKER_IDLE_SLEEP_SECONDS: '30' }).WORKER_IDLE_SLEEP_SECONDS).toBe(30);
+    for (const value of ['-1', '1.5', 'soon', '86401']) {
+      expect(workerProblems({ ...worker, WORKER_IDLE_SLEEP_SECONDS: value }), value).toEqual([
+        'WORKER_IDLE_SLEEP_SECONDS',
+      ]);
+    }
+  });
+
   it('boots locally without Centrifugo, with the relay off', () => {
     expect(WorkerEnv.parse(worker).centrifugo).toBeUndefined();
     expect(WorkerEnv.parse({ ...worker, CENTRIFUGO_API_URL: '', CENTRIFUGO_API_KEY: '' }).centrifugo).toBeUndefined();

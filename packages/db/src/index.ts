@@ -26,7 +26,14 @@ export {
   type RawOutboxRow,
 } from './outbox.ts';
 export { OUTBOX_RETENTION } from './schema/outbox.ts';
-export { DEAD_BATCH, jobKey, openQueueConnection, STALE_LOCK_SECONDS, type QueueConnection } from './queue.ts';
+export {
+  DEAD_BATCH,
+  jobKey,
+  openQueueConnection,
+  STALE_LOCK_SECONDS,
+  type QueueConnection,
+  type SleepCheck,
+} from './queue.ts';
 export { addWorkspaceToDirectory, DIRECTORY_SLUG_CONSTRAINT, type DirectoryEntry } from './identity/directory.ts';
 export {
   createIdentityStore,

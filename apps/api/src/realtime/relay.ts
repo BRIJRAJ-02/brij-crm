@@ -51,6 +51,13 @@
 //   holds up the rest. A continuous queue, where a lane takes the next ready
 //   workspace as soon as its turn ends, removes that head of line wait.
 //
+// The worker's lifecycle (spec 0008, milestone 3): with the jobs on, the
+// worker owns one idle clock for its runners and the relay together
+// (`jobs/lifecycle.ts`). The relay then never goes dormant on its own
+// (`selfDormant: false`): it reports every sign of work (`onWork`), and the
+// lifecycle sends it dormant (`sleep()`) when the whole worker sleeps and
+// wakes it with the rest. With the jobs off, it keeps its own 3 minute rule.
+//
 // Delivery numbers (spec 0007, AC-77): Postgres answers each marked row's lag
 // from commit to publish, and the relay keeps a rolling 5 minute window of
 // them with what it still holds unpublished (`stats.ts`). While active it logs
@@ -153,6 +160,15 @@ export interface RelayDeps {
   readonly stats?: RelayStats;
   /** How often an active relay logs `relay.stats` (default 1 minute). */
   readonly statsEveryMs?: number;
+  /**
+   * Whether the relay goes dormant on its own after `dormantAfterMs` with no
+   * work (default true). False when the worker's lifecycle owns the idle
+   * clock (spec 0008): the relay then stays active until `sleep()`, and a
+   * lost connection always reconnects with backoff.
+   */
+  readonly selfDormant?: boolean;
+  /** Hears every sign of work (a row found, a notification, a poke): the worker's idle clock starts again. */
+  readonly onWork?: () => void;
 }
 
 /** `active` while it holds a connection, `dormant` while it makes no database call, `stopped` otherwise. */
@@ -177,6 +193,14 @@ export interface Relay {
   stats(): RelayStatsSnapshot;
   /** How many workspaces' audiences the relay holds now (for tests and #12's measurements). */
   cachedAudiences(): number;
+  /**
+   * Goes dormant now, whatever the quiet clock says (the worker is going to
+   * sleep): the publish in flight finishes, the connection closes (letting
+   * go of the lock), and the promise resolves once no database call is left.
+   * The next `wake()` wakes it. Resolves at once when dormant or stopped, and
+   * also when a `wake()` cancels the sleep first (`mode()` then says `active`).
+   */
+  sleep(): Promise<void>;
   /** Stops after the publish in flight, closes the connection (letting go of the lock) and waits for the loop. */
   stop(): Promise<void>;
 }
@@ -249,7 +273,17 @@ export function createRelay(deps: RelayDeps): Relay {
   const maxRetryMs = deps.maxRetryMs ?? 60_000;
   const stats = deps.stats ?? createRelayStats();
   const statsEveryMs = deps.statsEveryMs ?? 60_000;
+  const selfDormant = deps.selfDormant ?? true;
   const { log } = deps;
+  // Set by sleep(), cleared once dormant or by a wake: the worker is going to sleep, so the relay goes dormant now.
+  let sleepRequested = false;
+  // Who waits for the relay to be dormant (sleep()'s callers).
+  let dormantWaiters: (() => void)[] = [];
+  const settleDormant = (): void => {
+    const waiters = dormantWaiters;
+    dormantWaiters = [];
+    for (const resolve of waiters) resolve();
+  };
   // When recording a lag last failed and was warned about (at most once a minute).
   let lagWarnedAt = Number.NEGATIVE_INFINITY;
   /** Rows marked: their lags go to the rolling stats and to `deps.lag`, which can never fail a turn. */
@@ -360,17 +394,21 @@ export function createRelay(deps: RelayDeps): Relay {
   function sawWork(): void {
     lastWork = Date.now();
     step = 0;
+    deps.onWork?.();
   }
 
   /** A failing workspace the relay may go dormant with: waiting the longest, and failing for a whole quiet spell. */
   const stuck = (retry: Retry, now: number): boolean =>
     retry.waitMs >= maxRetryMs && now - retry.since >= dormantAfterMs;
 
-  // Not while a workspace still backs off toward the longest wait: it may yet get through.
+  // Not while a workspace still backs off toward the longest wait: it may yet get through. Never on its own while
+  // the worker's lifecycle owns the idle clock; then only sleep() sends it dormant.
   const quiet = (): boolean => {
+    if (!selfDormant) return false;
     const now = Date.now();
     return now - lastWork >= dormantAfterMs && [...retries.values()].every((retry) => stuck(retry, now));
   };
+  const sleeping = (): boolean => sleepRequested;
 
   /** True when the workspace may take a turn now: not waiting after a failure. */
   const ready = (workspaceId: string): boolean => (retries.get(workspaceId)?.at ?? 0) <= Date.now();
@@ -571,6 +609,7 @@ export function createRelay(deps: RelayDeps): Relay {
       let leftover = new Map<string, readonly OutboxRow[]>();
       for (;;) {
         if (halted()) return { reason: 'stopped' };
+        if (sleeping()) return { reason: 'quiet' };
         const error = dropped();
         if (error !== undefined) return { reason: 'lost', error };
         const due = Date.now() >= lastPoll + pollWait();
@@ -622,7 +661,8 @@ export function createRelay(deps: RelayDeps): Relay {
             log.info('relay.stats', { ...report() });
           }
         }
-        if (halted() || dropped() !== undefined || (holding && (notified.size > 0 || leftover.size > 0))) continue;
+        if (halted() || sleeping() || dropped() !== undefined || (holding && (notified.size > 0 || leftover.size > 0)))
+          continue;
         if (quiet()) {
           // Only a poke from here on wakes it.
           woken = false;
@@ -642,11 +682,38 @@ export function createRelay(deps: RelayDeps): Relay {
     }
   }
 
+  /** Enters the dormant state: no connection is held here, and none is made until a wake. */
+  function goDormant(): void {
+    const asked = sleepRequested;
+    sleepRequested = false;
+    woken = false;
+    // Unserved since boot only, with no poke since: nothing is known to wait, so the age doesn't grow all night.
+    if (!unservedByWake) served();
+    // The awake period is over: the audiences are read again at the next wake (AC-85).
+    audienceCache.clear();
+    audienceUsed.clear();
+    splitWarned.clear();
+    // A round left open waits for the next awake period, which starts one of its own.
+    if (pruneRound.open !== undefined) log.info('relay.prune', { ...pruneRound.open, unfinished: true });
+    pruneRound = { dueAt: Number.POSITIVE_INFINITY, open: undefined };
+    log.info(
+      asked ? 'Relay dormant: the worker is asleep' : 'Relay dormant: no database calls until a write wakes it',
+      asked ? {} : { quietMs: dormantAfterMs },
+    );
+    current = 'dormant';
+    settleDormant();
+  }
+
   async function run(): Promise<void> {
     let failures = 0;
     // Boot counts as work: drain once, then follow the rules.
     sawWork();
     while (!halted()) {
+      // Asked to sleep while reconnecting or between sessions: dormant now, without connecting again.
+      if (sleeping() && current !== 'dormant') {
+        goDormant();
+        continue;
+      }
       if (current === 'dormant') {
         while (!isWoken() && !halted()) await sleep(undefined);
         if (halted()) break;
@@ -672,7 +739,7 @@ export function createRelay(deps: RelayDeps): Relay {
       }
       // Decide before awaiting the close, and clear `woken` with the decision, so a poke that lands while the
       // connection closes wakes the relay rather than being swallowed by it.
-      const dormant = !halted() && (ended?.reason === 'quiet' || quiet());
+      const dormant = !halted() && (ended?.reason === 'quiet' || quiet() || sleeping());
       if (dormant) woken = false;
       await reader?.close();
       if (halted()) break;
@@ -685,17 +752,7 @@ export function createRelay(deps: RelayDeps): Relay {
         );
       }
       if (dormant) {
-        // Unserved since boot only, with no poke since: nothing is known to wait, so the age doesn't grow all night.
-        if (!unservedByWake) served();
-        // The awake period is over: the audiences are read again at the next wake (AC-85).
-        audienceCache.clear();
-        audienceUsed.clear();
-        splitWarned.clear();
-        // A round left open waits for the next awake period, which starts one of its own.
-        if (pruneRound.open !== undefined) log.info('relay.prune', { ...pruneRound.open, unfinished: true });
-        pruneRound = { dueAt: Number.POSITIVE_INFINITY, open: undefined };
-        log.info('Relay dormant: no database calls until a write wakes it', { quietMs: dormantAfterMs });
-        current = 'dormant';
+        goDormant();
         continue;
       }
       // Only a connection that stayed up a while proves the trouble passed.
@@ -708,6 +765,7 @@ export function createRelay(deps: RelayDeps): Relay {
       backingOff = false;
     }
     current = 'stopped';
+    settleDormant();
   }
 
   return {
@@ -722,11 +780,26 @@ export function createRelay(deps: RelayDeps): Relay {
     },
     wake() {
       if (halted()) return;
+      // A wake after a sleep the relay hasn't reached yet cancels it (the worker is awake again), and sleep()'s
+      // callers hear so at once: they find the relay still active.
+      if (sleepRequested) {
+        sleepRequested = false;
+        settleDormant();
+      }
       unservedSince ??= Date.now();
       unservedByWake = true;
       sawWork();
       woken = true;
       if (!backingOff) interrupt();
+    },
+    sleep() {
+      if (halted() || current === 'dormant' || current === 'stopped') return Promise.resolve();
+      sleepRequested = true;
+      woken = false;
+      const settled = new Promise<void>((resolve) => dormantWaiters.push(resolve));
+      // Cuts a wait short, the reconnect backoff's included: going dormant needs no connection.
+      interrupt();
+      return settled;
     },
     mode: () => current,
     stats: report,

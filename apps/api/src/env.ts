@@ -246,6 +246,9 @@ export type ApiEnv = z.infer<typeof ApiEnv>;
 
 const port = z.coerce.number().int().positive();
 
+/** The worker's idle time before it sleeps (spec 0008): the relay's 3 quiet minutes from spec 0005. */
+export const DEFAULT_IDLE_SLEEP_SECONDS = 180;
+
 export const WorkerEnv = z
   .object({
     ...shared,
@@ -263,6 +266,9 @@ export const WorkerEnv = z
     // The background jobs' runners (spec 0008): `on` or `off`. Unset is `on` locally and in previews and `off` in
     // production, where Graphile's LISTEN and poll would keep Neon's compute awake until milestone 3's sleep lands.
     JOBS_RUNNER: optional(z.enum(['on', 'off'])),
+    // Spec 0008's sleep: seconds with no work before the worker (runners and relay) closes every connection, so
+    // Neon's compute can suspend; 180 when unset, 0 never sleeps (a paid plan, or debugging). Only with the jobs on.
+    WORKER_IDLE_SLEEP_SECONDS: optional(z.coerce.number().int().min(0).max(86_400)),
   })
   .superRefine((env, issues) => {
     const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });
@@ -299,6 +305,7 @@ export const WorkerEnv = z
     ...rest,
     WORKER_PORT: WORKER_PORT ?? PORT ?? 3001,
     JOBS_RUNNER: JOBS_RUNNER ?? (rest.APP_ENV === 'production' ? 'off' : 'on'),
+    WORKER_IDLE_SLEEP_SECONDS: rest.WORKER_IDLE_SLEEP_SECONDS ?? DEFAULT_IDLE_SLEEP_SECONDS,
     // The relay's Centrifugo, when it is on.
     centrifugo:
       CENTRIFUGO_API_URL === undefined || CENTRIFUGO_API_KEY === undefined

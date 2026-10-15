@@ -114,8 +114,10 @@ export {
   getJob,
   listJobs,
   startJob,
+  OVERDUE_MS,
   startTestJob,
   toJobView,
+  type JobReadOptions,
   type StartJobInput,
   type TestJobInput,
 } from './jobs/service.ts';

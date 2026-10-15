@@ -40,6 +40,33 @@ async function joined(workspaceId: string, role: 'admin' | 'member') {
   return { client: rpcClient(app, cookie), memberId };
 }
 
+describe('the worker woken by use (spec 0008, The wake call)', () => {
+  it('wakes the worker from every signed in request through the once a minute call, and from a read of an overdue job', async () => {
+    let onUse = 0;
+    let pokes = 0;
+    const { app: counting } = signInApp(
+      { db, identity },
+      {},
+      { wakeOnUse: () => (onUse += 1), wakeRelay: () => (pokes += 1) },
+    );
+    const m = await memberWithWorkspace(counting);
+    const before = onUse;
+    await m.client.jobs.list({ workspace: m.slug });
+    await m.client.jobs.list({ workspace: m.slug });
+    expect(onUse - before).toBe(2);
+    // A job queued and due 10 seconds ago that nobody picked up: a read of it wakes the worker, once per read.
+    const job = await m.client.jobs.startTest({ workspace: m.slug, id: newId(), items: 1, mutationId: newId() });
+    const quiet = pokes;
+    await m.client.jobs.get({ workspace: m.slug, jobId: job.id });
+    expect(pokes).toBe(quiet);
+    await testQuery(ownerUrl, `update jobs set run_at = now() - interval '10 seconds' where id = $1`, [job.id]);
+    await m.client.jobs.get({ workspace: m.slug, jobId: job.id });
+    expect(pokes).toBe(quiet + 1);
+    await m.client.jobs.list({ workspace: m.slug });
+    expect(pokes).toBe(quiet + 2);
+  });
+});
+
 describe('jobs.*', () => {
   it('starts a test job for an owner, and lists it with its progress, label and starter', async () => {
     const m = await memberWithWorkspace(app);

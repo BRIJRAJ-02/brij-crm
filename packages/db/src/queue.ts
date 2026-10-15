@@ -45,7 +45,26 @@ export interface QueueConnection {
   workspaceIds(after: string | undefined, max: number): Promise<readonly string[]>;
   /** One outbox prune batch (`pruneOutbox`, spec 0007) on this connection: only crm_worker may run it. */
   pruneOutbox(): Promise<number>;
+  /**
+   * What the worker reads before it sleeps (spec 0008, Letting the database
+   * sleep), in one round trip: whether any queue row or queue is locked (a
+   * call in flight, or a stale lock not yet released), when the earliest
+   * runnable unlocked row is due, whether any outbox row waits to be
+   * published (`crm_outbox_workspaces`, asked only when `outbox` is true: a
+   * worker without a relay never publishes them), and the database's time.
+   */
+  sleepCheck(options: { readonly outbox: boolean }): Promise<SleepCheck>;
   close(): Promise<void>;
+}
+
+/** What the queue and the outbox say before the worker sleeps. */
+export interface SleepCheck {
+  readonly locked: boolean;
+  /** The earliest unlocked row with attempts left, or undefined for none. */
+  readonly nextRunAt: Date | undefined;
+  readonly unpublished: boolean;
+  /** The database's clock, so the worker compares times on one clock. */
+  readonly now: Date;
 }
 
 /** The most dead queue rows one round deletes. */
@@ -142,6 +161,33 @@ export function openQueueConnection(options: {
       return result.rows.map((row) => row.id);
     },
     pruneOutbox: () => pruneOutbox(pool),
+    async sleepCheck({ outbox }) {
+      const result = await pool.query<{
+        locked: boolean;
+        next_run_at: Date | null;
+        unpublished: boolean;
+        now: Date;
+      }>(
+        `select
+           exists (select 1 from ${QUEUE_SCHEMA}._private_jobs where locked_at is not null)
+             or exists (select 1 from ${QUEUE_SCHEMA}._private_job_queues where locked_at is not null) as locked,
+           (select min(run_at) from ${QUEUE_SCHEMA}._private_jobs
+             where locked_at is null and attempts < max_attempts) as next_run_at,
+           case when $1::boolean
+             then exists (select 1 from public.crm_outbox_workspaces(1, null))
+             else false end as unpublished,
+           now() as now`,
+        [outbox],
+      );
+      const row = result.rows[0];
+      if (row === undefined) throw new Error('The sleep check answered nothing.');
+      return {
+        locked: row.locked,
+        nextRunAt: row.next_run_at ?? undefined,
+        unpublished: row.unpublished,
+        now: row.now,
+      };
+    },
     close: () => pool.end(),
   };
 }

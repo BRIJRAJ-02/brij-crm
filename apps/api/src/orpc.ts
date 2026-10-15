@@ -35,6 +35,12 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * engine call has resolved, so the write committed: see `realtime/wake.ts`.
    */
   wakeRelay: WakeRelay;
+  /**
+   * The same call at most once a minute per api process (spec 0008): every
+   * signed in request sends it, so the worker sleeps only when nobody uses
+   * the app.
+   */
+  wakeOnUse: WakeRelay;
   /** Product events (spec 0010): a write sends the milestones it reached once it commits (`hooks.ts`). */
   analytics: Analytics;
   environment: AppEnvironment;
@@ -73,6 +79,8 @@ export const requireSession = os.$context<RequestContext>().middleware(async ({ 
   // An error report from here on names the user, by id only.
   setRequestScope({ userId: session.user.id });
   for (const cookie of session.setCookies) context.resHeaders?.append('set-cookie', cookie);
+  // Someone is using the app: the worker stays awake, or wakes (at most once a minute; it never slows the request).
+  context.wakeOnUse();
   return next({ context: { user: session.user } });
 });
 

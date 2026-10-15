@@ -3,7 +3,11 @@
 // direct Postgres login (`crm_worker_user`), with the jobs' tenant work on the
 // pooled app login. Its one HTTP port answers Railway's health check and the
 // api's poke, which wakes the relay when it is dormant (`realtime/wake.ts`).
-import { jobKinds } from '@crm/core';
+// With the jobs on, the runners and the relay share one lifecycle (spec 0008,
+// milestone 3, `jobs/lifecycle.ts`): awake while there is work, asleep with no
+// connection at all once idle for `WORKER_IDLE_SLEEP_SECONDS`, so Neon's
+// compute can suspend; the poke and a timer for scheduled work wake it.
+import { jobKinds, type QueueRows } from '@crm/core';
 import { audiences, runDailyCleanup, systemScope } from '@crm/core/system';
 import {
   assertWorkerConnection,
@@ -11,9 +15,11 @@ import {
   createOutboxReader,
   openDirectConnection,
   openQueueConnection,
+  type QueueConnection,
 } from '@crm/db';
 import { backgroundHooks } from './hooks.ts';
 import { startJobRunners } from './jobs/graphile.ts';
+import { createLifecycle, type AwakeWorker, type Lifecycle } from './jobs/lifecycle.ts';
 import { createJobRunner } from './jobs/runner.ts';
 import { loadEnv, WorkerEnv } from './env.ts';
 import { errorFields, log } from './log.ts';
@@ -86,6 +92,12 @@ const reportingLog = {
 // The relay's lag values between two stats ticks: every one up to 500 a minute, a uniform sample past that.
 const lagSample = createLagSample();
 
+// With the jobs on, the worker's lifecycle (spec 0008, milestone 3) owns one idle clock for the runners and the
+// relay: the relay never goes dormant on its own, and sleeps and wakes with the rest. With them off (production
+// until the owner turns them on), the relay keeps its own 3 minute rule, exactly as before.
+const jobsOn = jobsOff === undefined;
+let lifecycle: Lifecycle | undefined;
+
 const relay =
   env.centrifugo === undefined
     ? undefined
@@ -101,6 +113,8 @@ const relay =
         // Each published row's delay from commit to publish, from Postgres's clock at both ends (spec 0010,
         // AC-179), into the bounded sample the stats tick records, so a burst costs a turn nothing.
         lag: lagSample.add,
+        selfDormant: !jobsOn,
+        onWork: () => lifecycle?.touch(),
       });
 if (relay === undefined) {
   log.info('Relay off: CENTRIFUGO_API_URL and CENTRIFUGO_API_KEY are unset, so no change is published');
@@ -114,56 +128,104 @@ if (relay === undefined) {
 // The background jobs (spec 0008): the core runner does each slice on the pool, as the job's member (entered again
 // at every slice) or the system; Graphile's two runners, on the queue pool, only wake it and order the slices.
 // With the jobs off, jobs started meanwhile wait, stored and queued, for a worker that runs them.
-const queue =
-  jobsOff === undefined
-    ? openQueueConnection({
-        url: env.DATABASE_URL_DIRECT,
-        applicationName: 'crm-worker-queue',
-        max: 4,
-        onError: (error) => {
-          log.error('Idle queue client failed', errorFields(error));
-          captureFault(error, { task: 'queue pool' });
-        },
-      })
-    : undefined;
-// The kinds, with the queue reader the daily cleanup's requeue phase asks which jobs still have a queue row.
-const registry = jobKinds({ environment: env.APP_ENV, ...(queue === undefined ? {} : { queue }) });
-const jobs =
-  queue === undefined
-    ? undefined
-    : await startJobRunners({
-        queue,
-        runner: createJobRunner({
-          db,
-          registry,
-          // A batch stored a change event: the relay publishes it, even if it had gone dormant.
-          onStored: () => relay?.wake(),
-          log,
-        }),
-        log,
-        onFault: (error) => captureFault(error, { task: 'jobs' }),
-        // The daily cleanup (milestone 3): the outbox, the dead queue rows, then one maintenance job a workspace.
-        daily: (input) =>
-          runDailyCleanup(
-            {
-              registry,
-              systemScope: (workspaceId) => systemScope(db, workspaceId),
-              hooks: backgroundHooks,
-              sweep: queue,
-              log,
-              onStored: () => relay?.wake(),
-            },
-            input,
-          ),
-      });
+// The queue pool lives only while the worker is awake; the daily cleanup's requeue phase reads it through this.
+let queue: QueueConnection | undefined;
+const queueRows: QueueRows = {
+  rows: (workspaceId, jobIds) => {
+    if (queue === undefined) return Promise.reject(new Error('The worker is not awake, so the queue is closed.'));
+    return queue.rows(workspaceId, jobIds);
+  },
+};
+const registry = jobKinds({ environment: env.APP_ENV, ...(jobsOn ? { queue: queueRows } : {}) });
+const runner = createJobRunner({
+  db,
+  registry,
+  // A batch stored a change event: the relay publishes it, even if it had gone dormant.
+  onStored: () => relay?.wake(),
+  log,
+});
+
+/** Opens the queue pool and starts the runners: what waking means. The NOTIFY check proves the direct host first. */
+async function openWorker(hooks: {
+  readonly onActivity: () => void;
+  readonly onFailed: (error: unknown) => void;
+}): Promise<AwakeWorker> {
+  const proof = await openDirect(true);
+  await proof.end();
+  const opened = openQueueConnection({
+    url: env.DATABASE_URL_DIRECT,
+    applicationName: 'crm-worker-queue',
+    max: 4,
+    onError: (error) => {
+      log.error('Idle queue client failed', errorFields(error));
+      captureFault(error, { task: 'queue pool' });
+    },
+  });
+  try {
+    const runners = await startJobRunners({
+      queue: opened,
+      runner,
+      log,
+      onFault: (error) => captureFault(error, { task: 'jobs' }),
+      onActivity: hooks.onActivity,
+      onFailed: hooks.onFailed,
+      // The daily cleanup (milestone 3): the outbox, the dead queue rows, then one maintenance job a workspace.
+      daily: (input) =>
+        runDailyCleanup(
+          {
+            registry,
+            systemScope: (workspaceId) => systemScope(db, workspaceId),
+            hooks: backgroundHooks,
+            sweep: opened,
+            log,
+            onStored: () => relay?.wake(),
+          },
+          input,
+        ),
+    });
+    queue = opened;
+    return {
+      busy: () => runners.busy(),
+      check: () => opened.sleepCheck({ outbox: relay !== undefined }),
+      close: async () => {
+        // The slices in hand finish their batch and hand their jobs back first.
+        await runners.stop();
+        if (queue === opened) queue = undefined;
+        await opened.close();
+      },
+    };
+  } catch (error) {
+    await opened.close().catch(() => undefined);
+    throw error;
+  }
+}
+
+if (jobsOn) {
+  lifecycle = createLifecycle({
+    open: openWorker,
+    ...(relay === undefined ? {} : { relay }),
+    idleSleepMs: env.WORKER_IDLE_SLEEP_SECONDS * 1000,
+    log,
+  });
+  void lifecycle.start();
+  log.info('worker.sleep', {
+    idleSeconds: env.WORKER_IDLE_SLEEP_SECONDS,
+    ...(env.WORKER_IDLE_SLEEP_SECONDS === 0 ? { never: true } : {}),
+  });
+}
 
 const health = createWorkerServer({
   wakeSecret: env.WORKER_WAKE_SECRET,
-  onWake: () => relay?.wake(),
-  // From memory only: the jobs' runners are awake for as long as the process runs (sleep comes with milestone 3).
+  // A wake call wakes the whole worker (runners and relay) when it sleeps, restarts its idle clock when awake, and
+  // pokes the relay to drain what the write that sent it stored.
+  onWake: () => {
+    lifecycle?.wake();
+    relay?.wake();
+  },
+  // From memory only, never a query: the lifecycle's state with the jobs on; with them off, as before.
   health: () => ({
-    state: 'awake',
-    jobs: jobs === undefined ? 'off' : 'on',
+    state: lifecycle?.state() ?? 'awake',
+    jobs: jobsOn ? 'on' : 'off',
     ...(relay === undefined ? { relay: 'off' } : { relay: { mode: relay.mode(), ...relay.stats() } }),
   }),
 });
@@ -172,30 +234,28 @@ health.listen(env.WORKER_PORT, '::', () =>
     port: env.WORKER_PORT,
     environment: env.APP_ENV,
     relay: relay !== undefined,
-    jobs: jobs !== undefined,
+    jobs: jobsOn,
   }),
 );
 
 // The stats tick (spec 0010, AC-179 to AC-182): once a minute, from memory only, it records whether the worker is
-// awake, the relay's lag sample and, while awake, the relay's backlog; raises RELAY_LAGGING; and checks in to the heartbeat, awake or
-// asleep. Until spec 0008's sleep gives the worker one lifecycle, it is awake while the jobs' runners run (they
-// listen and poll for as long as the process lives) or while the relay is active, and asleep while the relay is
-// dormant with the jobs off, as production runs today.
+// awake, the relay's lag sample and, while awake, the relay's backlog; raises RELAY_LAGGING; and checks in to the
+// heartbeat, awake or asleep. With the jobs on, awake is the lifecycle's state (spec 0008's one idle clock); with
+// them off, as production runs until the owner turns them on, awake while the relay is active.
 const stats = createStatsReporter({
   sources: relay === undefined ? [] : [relaySource(() => relay.stats())],
   metrics,
   lag: lagSample,
   heartbeat,
   raise: raiseIssue,
-  isAwake: () => jobs !== undefined || relay?.mode() === 'active',
+  isAwake: () => (lifecycle === undefined ? relay?.mode() === 'active' : lifecycle.state() === 'awake'),
   log,
 });
 stats.start();
 
 onShutdown(async () => {
   // The slices in hand finish their batch and hand their jobs back to the queue first.
-  await jobs?.stop();
-  await queue?.close();
+  await lifecycle?.stop();
   await relay?.stop();
   // After the relay, so the lags of its last publishes go out with the flush below.
   stats.stop();

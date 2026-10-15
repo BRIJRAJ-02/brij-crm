@@ -85,12 +85,35 @@ export interface JobRunnersOptions {
    * With it, the light runner holds the crontab line and the daily task.
    */
   readonly daily?: (input: DailyCleanupInput) => Promise<DailyCleanupReport>;
+  /**
+   * Hears every task call start and end (the worker's idle clock starts
+   * again, spec 0008's sleep): a slice, or the daily task.
+   */
+  readonly onActivity?: () => void;
+  /** Hears a runner that stopped on its own (its connection lost): the worker reconnects (milestone 3). */
+  readonly onFailed?: (error: unknown) => void;
 }
 
 /** The running job runners. */
 export interface JobRunners {
   /** Stops taking slices, lets the ones in hand finish their batch and hand their jobs back, then closes. */
   stop(): Promise<void>;
+  /** How many task calls are in flight now: the worker never sleeps while one runs. */
+  busy(): number;
+}
+
+/** A task that counts itself in flight and tells `onActivity` when it starts and ends. */
+function counted(task: Task, inFlight: { count: number }, onActivity: (() => void) | undefined): Task {
+  return async (payload, helpers) => {
+    inFlight.count += 1;
+    onActivity?.();
+    try {
+      await task(payload, helpers);
+    } finally {
+      inFlight.count -= 1;
+      onActivity?.();
+    }
+  };
 }
 
 /** Graphile's own messages, at warn and above, as JSON lines; its chatter below that is dropped. */
@@ -181,6 +204,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
     }
   };
   await housekeeping();
+  const inFlight = { count: 0 };
   const runners: GraphileRunner[] = [];
   try {
     for (const lane of Object.values(LANES)) {
@@ -194,8 +218,10 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
           logger,
           pollInterval: options.pollInterval ?? lane.pollMs,
           taskList: {
-            [lane.task]: sliceTask(options, shutdown.signal),
-            ...(daily === undefined ? {} : { [DAILY_TASK]: dailyTask(options, daily) }),
+            [lane.task]: counted(sliceTask(options, shutdown.signal), inFlight, options.onActivity),
+            ...(daily === undefined
+              ? {}
+              : { [DAILY_TASK]: counted(dailyTask(options, daily), inFlight, options.onActivity) }),
           },
           ...(daily === undefined ? {} : { crontab: DAILY_CRONTAB }),
           // Completions and failures go through Graphile's batcher (with no wait), which a stop flushes before
@@ -214,6 +240,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
     runner.promise.catch((error: unknown) => {
       log.error('jobs.runner.failed', errorFields(error));
       options.onFault?.(error);
+      if (!shutdown.signal.aborted) options.onFailed?.(error);
     });
   }
   const timer = setInterval(() => void housekeeping(), options.housekeepingMs ?? HOUSEKEEPING_MS);
@@ -226,5 +253,6 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
       shutdown.abort();
       await Promise.all(runners.map((runner) => runner.stop()));
     },
+    busy: () => inFlight.count,
   };
 }

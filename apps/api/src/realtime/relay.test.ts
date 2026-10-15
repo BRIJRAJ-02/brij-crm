@@ -135,6 +135,8 @@ interface RelayOptions extends Partial<
     | 'workspacesPerPoll'
     | 'statsEveryMs'
     | 'lag'
+    | 'selfDormant'
+    | 'onWork'
   >
 > {
   readonly applicationName?: string;
@@ -189,6 +191,8 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
     ...(options.workspacesPerPoll === undefined ? {} : { workspacesPerPoll: options.workspacesPerPoll }),
     ...(options.statsEveryMs === undefined ? {} : { statsEveryMs: options.statsEveryMs }),
     ...(options.lag === undefined ? {} : { lag: options.lag }),
+    ...(options.selfDormant === undefined ? {} : { selfDormant: options.selfDormant }),
+    ...(options.onWork === undefined ? {} : { onWork: options.onWork }),
   });
   started.push(relay);
   relay.start();
@@ -926,6 +930,65 @@ describe('the relay', () => {
     clearInterval(pokes);
     // 300 ms, then 600: at most one reconnect in that time, however many pokes.
     expect(connects()).toBeLessThanOrEqual(2);
+  });
+
+  it('under the worker’s lifecycle, never goes dormant on its own, reports its work, and sleeps and wakes when told (spec 0008)', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const name = `crm-relay-lifecycle-${randomUUID().slice(0, 8)}`;
+    let work = 0;
+    const waiting = await workspace();
+    await events(waiting, [1]);
+    const { relay, lines } = relayTo(centrifugo.url, {
+      applicationName: name,
+      pollScheduleMs: [50, 100],
+      dormantAfterMs: 200,
+      selfDormant: false,
+      onWork: () => (work += 1),
+    });
+    await expect.poll(() => centrifugo.seqs(waiting), WAIT).toEqual([1]);
+    expect(work).toBeGreaterThan(0);
+    // Well past its own quiet spell, it is still active: the worker's idle clock decides.
+    await sleep(800);
+    expect(relay.mode()).toBe('active');
+    expect(await connections(name)).toBeGreaterThan(0);
+    // The worker goes to sleep: dormant once the promise resolves, with no connection left.
+    await relay.sleep();
+    expect(relay.mode()).toBe('dormant');
+    expect(lines).toContain('Relay dormant: the worker is asleep');
+    await expect.poll(() => connections(name), WAIT).toBe(0);
+    await relay.sleep();
+    // Rows written while it sleeps wait for the wake, and go out first.
+    await events(waiting, [2]);
+    await sleep(300);
+    expect(centrifugo.seqs(waiting)).toEqual([1]);
+    relay.wake();
+    await expect.poll(() => centrifugo.seqs(waiting), WAIT).toEqual([1, 2]);
+    expect(relay.mode()).toBe('active');
+  });
+
+  it('goes dormant when told to sleep while it backs off from a failed connect, without connecting again', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    let tries = 0;
+    const relay = createRelay({
+      connect: () => {
+        tries += 1;
+        return Promise.reject(new Error('The database is unreachable.'));
+      },
+      audiences: loadAudiences,
+      publishBatch: createCentrifugoPublisher({ apiUrl: centrifugo.url, apiKey: API_KEY }).publishBatch,
+      log: { info: () => undefined, warn: () => undefined, error: () => undefined },
+      prune: false,
+      selfDormant: false,
+      backoffMs: 60_000,
+    });
+    started.push(relay);
+    relay.start();
+    await expect.poll(() => tries, WAIT).toBe(1);
+    await relay.sleep();
+    expect(relay.mode()).toBe('dormant');
+    expect(tries).toBe(1);
   });
 
   it('stops from dormant at once', async () => {

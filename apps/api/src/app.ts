@@ -13,7 +13,7 @@ import { errorFields, log } from './log.ts';
 import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { createRealtimeTokens } from './realtime/tokens.ts';
-import type { WakeRelay } from './realtime/wake.ts';
+import { throttleWake, type WakeRelay } from './realtime/wake.ts';
 import { router as appRouter } from './router.ts';
 import { createRpcHandler } from './rpc.ts';
 import type { RequestTiming } from './timing.ts';
@@ -67,6 +67,11 @@ export interface AppServices {
   readonly auth: Auth;
   readonly wakeRelay: WakeRelay;
   /**
+   * The wake every signed in request sends (spec 0008): `wakeRelay` at most
+   * once a minute for this process unless given (tests pass their own).
+   */
+  readonly wakeOnUse?: WakeRelay;
+  /**
    * Where the door reads object, field and record rules (spec 0009). The
    * server passes none (no rules until #24); only tests and the local test
    * server (`test/rules-server.ts`) inject some.
@@ -105,6 +110,8 @@ export function createApp({
   const allowedOrigins = new Set([new URL(env.APP_URL).origin, ...(env.TRUSTED_ORIGINS ?? [])]);
   // One per app, so its counts are this process's: at most 6 heavy reads per workspace at once.
   const readGate = createReadGate();
+  // One per app too: every signed in request wakes the worker, at most once a minute per process (spec 0008).
+  const wakeOnUse = services.wakeOnUse ?? throttleWake(wakeRelay);
   // Centrifugo's tokens, where live updates are on (spec 0005).
   const realtime =
     env.CENTRIFUGO_TOKEN_SECRET === undefined
@@ -181,6 +188,7 @@ export function createApp({
         identity,
         auth,
         wakeRelay,
+        wakeOnUse,
         analytics,
         environment: env.APP_ENV,
         requestId: c.get('requestId'),

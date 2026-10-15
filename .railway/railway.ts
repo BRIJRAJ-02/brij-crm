@@ -77,6 +77,14 @@ export default defineRailway(() => {
       WORKER_WAKE_SECRET: api.env.WORKER_WAKE_SECRET,
       // The same Sentry project as the api, tagged service=worker.
       SENTRY_DSN_SERVER: api.env.SENTRY_DSN_SERVER,
+      // Background jobs (spec 0008): the runners stay off in production until the owner sets `on` (its verify.md),
+      // and the worker sleeps after this many idle seconds (180 when unset, 0 never).
+      JOBS_RUNNER: preserve(),
+      WORKER_IDLE_SLEEP_SECONDS: preserve(),
+      // Graphile's cron is UTC whatever the zone; the logs' times and anything else local read UTC too.
+      TZ: 'UTC',
+      // SIGTERM to SIGKILL: time for the slices in hand to finish their batch and hand their jobs back.
+      RAILWAY_DEPLOYMENT_DRAINING_SECONDS: '30',
     },
   });
 

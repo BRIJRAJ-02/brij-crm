@@ -294,6 +294,44 @@ describe('what only the worker may do for the daily cleanup (spec 0008, mileston
   });
 });
 
+describe('the check before the worker sleeps (spec 0008, milestone 3, AC-117)', () => {
+  it('says whether a row is locked, when the next one is due, and whether an outbox row waits, on one clock', async () => {
+    const { workspaceId, memberId } = await workspaceWithMember('queue-sleep');
+    const job = await jobIn(workspaceId, memberId, 'queued');
+    const runAt = new Date(Date.now() + 10 * 60_000);
+    await db.withWorkspace(workspaceId, (tx) =>
+      tx.execute(sql`select crm_enqueue_job(${job}::uuid, ${runAt.toISOString()}::timestamptz)`),
+    );
+    const objectId = randomUUID();
+    await db.withWorkspace(workspaceId, async (tx) => {
+      await tx.execute(
+        sql`insert into objects (workspace_id, id, api_slug, singular_name, plural_name, icon, hue, position, created_by_type, updated_by_type) values (${workspaceId}, ${objectId}, 'things', 'Thing', 'Things', 'box', 'gray', 0, 'system', 'system')`,
+      );
+      await tx.execute(
+        sql`insert into outbox (workspace_id, seq, kind, object_id) values (${workspaceId}, 1, 'records', ${objectId})`,
+      );
+    });
+    const queue = openQueueConnection({ url: workerUrl, applicationName: 'crm-queue-tests', max: 1 });
+    try {
+      const first = await queue.sleepCheck({ outbox: true });
+      expect(first.unpublished).toBe(true);
+      expect(first.nextRunAt?.getTime()).toBeLessThanOrEqual(runAt.getTime());
+      expect(Math.abs(first.now.getTime() - Date.now())).toBeLessThan(60_000);
+      // A worker without a relay never publishes, so it never waits on the outbox.
+      expect((await queue.sleepCheck({ outbox: false })).unpublished).toBe(false);
+      await owner.query(
+        `update ${QUEUE_SCHEMA}._private_jobs set locked_by = 'sleep-test', locked_at = now() where key = $1`,
+        [`crm-job:${workspaceId}:${job}`],
+      );
+      expect((await queue.sleepCheck({ outbox: false })).locked).toBe(true);
+    } finally {
+      await queue.close();
+      await owner.query(`delete from ${QUEUE_SCHEMA}._private_jobs where key = $1`, [`crm-job:${workspaceId}:${job}`]);
+      await owner.query('delete from outbox where workspace_id = $1', [workspaceId]);
+    }
+  });
+});
+
 describe('the queue tables', () => {
   it('are closed to the app: no select, insert, update or delete, nor the schema', async () => {
     const app = new pg.Client({ connectionString: appUrl });

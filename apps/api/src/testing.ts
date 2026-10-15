@@ -69,6 +69,8 @@ export function testServices(
     identity?: IdentityStore;
     mailer?: Mailer;
     wakeRelay?: WakeRelay;
+    /** The once a minute wake every signed in request sends: none unless given, so `wakeRelay` counts writes only. */
+    wakeOnUse?: WakeRelay;
     rules?: RuleSource;
     analytics?: Analytics;
     jobs?: JobRegistry;
@@ -87,6 +89,7 @@ export function testServices(
       ...(options.analytics === undefined ? {} : { analytics: options.analytics }),
     }),
     wakeRelay: options.wakeRelay ?? NO_WAKE,
+    wakeOnUse: options.wakeOnUse ?? NO_WAKE,
     ...(options.rules === undefined ? {} : { rules: options.rules }),
     ...(options.analytics === undefined ? {} : { analytics: options.analytics }),
     ...(options.jobs === undefined ? {} : { jobs: options.jobs }),

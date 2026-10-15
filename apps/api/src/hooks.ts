@@ -92,3 +92,12 @@ export async function commitCounted<T>(
   sendMilestones(context, reached);
   return { result, echoes };
 }
+
+/**
+ * What a read of jobs hands the core so a lost wake heals (spec 0008, The
+ * wake call): a job found `queued` more than 5 seconds past its time wakes
+ * the worker. Here, beside the write path's poke, so no router pokes by hand.
+ */
+export function wakeIfOverdue(context: Pick<WriteRequest, 'wakeRelay'>): { readonly onOverdue: () => void } {
+  return { onOverdue: () => context.wakeRelay() };
+}

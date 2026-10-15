@@ -6,7 +6,7 @@ import { connect } from 'node:net';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createWorkerListener, createWorkerServer } from '../worker-http.ts';
-import { createRelayWake, WAKE_HEADER, WAKE_PATH } from './wake.ts';
+import { createRelayWake, NO_WAKE, throttleWake, WAKE_HEADER, WAKE_PATH } from './wake.ts';
 
 const SECRET = 'a-wake-secret-of-at-least-32-characters!';
 
@@ -237,5 +237,28 @@ describe("the worker's wake endpoint", () => {
     const { call, wakes } = await worker(undefined);
     expect((await call(WAKE_PATH, { method: 'POST' })).status).toBe(204);
     expect(wakes()).toBe(1);
+  });
+});
+
+describe('throttleWake (spec 0008, the wake on use)', () => {
+  it('sends at most one call a minute, the first at once', () => {
+    let calls = 0;
+    let now = 1_000_000;
+    const wake = throttleWake(
+      () => (calls += 1),
+      60_000,
+      () => now,
+    );
+    wake();
+    wake();
+    expect(calls).toBe(1);
+    now += 59_999;
+    wake();
+    expect(calls).toBe(1);
+    now += 1;
+    wake();
+    expect(calls).toBe(2);
+    // A poke that does nothing stays one.
+    expect(throttleWake(NO_WAKE)).toBe(NO_WAKE);
   });
 });
