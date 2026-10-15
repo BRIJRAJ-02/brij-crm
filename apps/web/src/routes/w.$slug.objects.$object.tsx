@@ -1,25 +1,19 @@
 import { isDataError } from '@crm/data';
-import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
+import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { ArchivedObjectScreen } from '../features/workspace/ArchivedObjectScreen.tsx';
-import { defaultSort, queryOf, readAttributeIds } from '../features/workspace/columns.ts';
-import { failedPage, missingPage, objectPendingPage } from '../features/workspace/ObjectScreen.tsx';
+import { failedPage, missingPage, noViewsPage, objectPendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { navObjects } from '../features/workspace/objects.ts';
-import { RecordsScreen } from '../features/workspace/RecordsScreen.tsx';
 import { strings } from '../features/workspace/strings.ts';
 import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
+import { landingView } from '../features/views/query.ts';
 
-// Any live object's page, by its address (`people`, `projects`; spec 0012,
-// AC-240): standard and custom objects share it. The loader warms the
-// object's view (its count and first block, newest first, reading only the
-// columns the table shows, waiting at most OPEN_GRACE_MS for its first rows,
-// so a slow load draws the table loading in place) after its attributes and
-// beside the workspace's members, all through the data layer; the table reads
-// the view itself and loads with this route's component, so the grid stays
-// out of the first load. An archived object's address says it is archived
-// (AC-226).
-/** How long the route waits for the first rows before showing the table loading in place. */
-const OPEN_GRACE_MS = 300;
-
+// Any live object's address (`people`, `projects`; spec 0012, AC-240) opens
+// one of its views (spec 0020, AC-462): the address is replaced with the
+// object's default view (milestone 2 adds the last one the person opened),
+// else the first in switcher order. An object with no view for this person
+// says so. An archived object's address says it is archived (AC-226). The
+// views come through the data layer; the screens load with this route's
+// component, outside the first load.
 export const Route = createFileRoute('/w/$slug/objects/$object')({
   loader: async ({ context, params }) => {
     const objects = await context.data.objects.all(params.slug).catch((error: unknown) => {
@@ -27,37 +21,44 @@ export const Route = createFileRoute('/w/$slug/objects/$object')({
       if (isDataError(error) && error.code === 'NOT_FOUND') return [];
       throw error;
     });
-    const object = objects.find((each) => each.apiSlug === params.object);
-    if (object === undefined) return { table: undefined, archived: undefined };
+    const object = object_(objects, params.object);
+    if (object === undefined) return { missing: true as const, archived: undefined, object: undefined };
     if (object.isArchived) {
       const [firstLive] = navObjects(objects);
-      return { table: undefined, archived: { object, firstLive } };
+      return { missing: false as const, archived: { object, firstLive }, object: undefined };
     }
-    const membersLoading = context.data.members.list(params.slug);
-    // The view reads only the columns the table shows, in its opening order (newest first, spec 0006).
-    const attributes = await context.data.attributes.list(params.slug, object.id);
-    const sort = defaultSort(attributes);
-    const columns = readAttributeIds(object, attributes);
-    const [members, view] = await Promise.all([
-      membersLoading,
-      // A quick load arrives with its rows; a slow one shows the table's own loading rows under its header.
-      context.data.records.open(params.slug, object.id, queryOf(sort), columns, OPEN_GRACE_MS),
-    ]);
-    return { table: { object, attributes, members, view, sort }, archived: undefined };
+    const views = context.data.views.list(params.slug, object.id);
+    await views.ready();
+    const list = views.getSnapshot();
+    if (list.status === 'error') throw list.error ?? new Error('The views did not load.');
+    const viewId = list.status === 'ready' ? landingView(list) : undefined;
+    if (viewId !== undefined) {
+      throw redirect({
+        to: '/w/$slug/objects/$object/views/$viewId',
+        params: { slug: params.slug, object: params.object, viewId },
+        replace: true,
+      });
+    }
+    return { missing: false as const, archived: undefined, object };
   },
   pendingComponent: () => <WorkspacePage page={objectPendingPage()} />,
   errorComponent: ObjectError,
   component: ObjectRoute,
 });
 
+/** The object at an address, by its API name. */
+function object_<T extends { readonly apiSlug: string }>(objects: readonly T[], apiSlug: string): T | undefined {
+  return objects.find((each) => each.apiSlug === apiSlug);
+}
+
 function ObjectRoute() {
-  const { table, archived } = Route.useLoaderData();
+  const { archived, object } = Route.useLoaderData();
   const params = Route.useParams();
   if (archived !== undefined) return <ArchivedObjectScreen slug={params.slug} {...archived} />;
-  if (table === undefined) {
+  if (object === undefined) {
     return <WorkspacePage page={missingPage(strings.pageMissingTitle, strings.pageMissingText)} />;
   }
-  return <RecordsScreen slug={params.slug} {...table} />;
+  return <WorkspacePage currentObject={object.apiSlug} page={noViewsPage(object)} />;
 }
 
 function ObjectError({ error }: ErrorComponentProps) {

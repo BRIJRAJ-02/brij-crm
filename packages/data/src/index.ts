@@ -122,6 +122,7 @@ export {
   effectiveColumns,
   effectiveQuery,
   isSortable,
+  queryKey,
   type EffectiveColumn,
   type EffectiveQuery,
   type FarAttributes,

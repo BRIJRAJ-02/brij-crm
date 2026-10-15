@@ -114,6 +114,11 @@ describe('effectiveQuery', () => {
     const unknown = effectiveQuery({ filter: through, sorts: [] }, PEOPLE);
     expect(unknown).toMatchObject({ status: 'ready', dropped: true });
     expect(unknown).not.toHaveProperty('filter');
+    expect(effectiveQuery({ filter: through, sorts: [] }, PEOPLE, () => 'unchecked')).toMatchObject({
+      status: 'ready',
+      filter: through,
+      dropped: false,
+    });
     const archivedFar = effectiveQuery({ filter: through, sorts: [] }, PEOPLE, () => [
       { ...INDUSTRY, isArchived: true },
     ]);

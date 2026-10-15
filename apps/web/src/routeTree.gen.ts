@@ -22,6 +22,7 @@ import { Route as WSlugSettingsJobsRouteImport } from './routes/w.$slug.settings
 import { Route as WSlugSettingsObjectsIndexRouteImport } from './routes/w.$slug.settings.objects.index.tsx'
 import { Route as WSlugObjectsObjectRecordIdIndexRouteImport } from './routes/w.$slug.objects.$object_.$recordId.index.tsx'
 import { Route as WSlugObjectsObjectRecordIdTabRouteImport } from './routes/w.$slug.objects.$object_.$recordId.$tab.tsx'
+import { Route as WSlugObjectsObjectViewsViewIdRouteImport } from './routes/w.$slug.objects.$object_.views.$viewId.tsx'
 import { Route as WSlugSettingsObjectsObjectIndexRouteImport } from './routes/w.$slug.settings.objects.$object.index.tsx'
 import { Route as WSlugSettingsObjectsObjectTabRouteImport } from './routes/w.$slug.settings.objects.$object.$tab.tsx'
 
@@ -93,6 +94,12 @@ const WSlugObjectsObjectRecordIdTabRoute =
     path: '/objects/$object/$recordId/$tab',
     getParentRoute: () => WSlugRoute,
   } as any)
+const WSlugObjectsObjectViewsViewIdRoute =
+  WSlugObjectsObjectViewsViewIdRouteImport.update({
+    id: '/objects/$object_/views/$viewId',
+    path: '/objects/$object/views/$viewId',
+    getParentRoute: () => WSlugRoute,
+  } as any)
 const WSlugSettingsObjectsObjectIndexRoute =
   WSlugSettingsObjectsObjectIndexRouteImport.update({
     id: '/settings/objects/$object/',
@@ -119,6 +126,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
+  '/w/$slug/objects/$object/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
   '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
   '/w/$slug/objects/$object/$recordId/': typeof WSlugObjectsObjectRecordIdIndexRoute
   '/w/$slug/settings/objects/$object/': typeof WSlugSettingsObjectsObjectIndexRoute
@@ -135,6 +143,7 @@ export interface FileRoutesByTo {
   '/w/$slug/settings': typeof WSlugSettingsIndexRoute
   '/w/$slug/settings/objects': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
+  '/w/$slug/objects/$object/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
   '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
   '/w/$slug/objects/$object/$recordId': typeof WSlugObjectsObjectRecordIdIndexRoute
   '/w/$slug/settings/objects/$object': typeof WSlugSettingsObjectsObjectIndexRoute
@@ -153,6 +162,7 @@ export interface FileRoutesById {
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/objects/$object_/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
+  '/w/$slug/objects/$object_/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
   '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
   '/w/$slug/objects/$object_/$recordId/': typeof WSlugObjectsObjectRecordIdIndexRoute
   '/w/$slug/settings/objects/$object/': typeof WSlugSettingsObjectsObjectIndexRoute
@@ -172,6 +182,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/'
     | '/w/$slug/settings/objects/'
     | '/w/$slug/objects/$object/$recordId/$tab'
+    | '/w/$slug/objects/$object/views/$viewId'
     | '/w/$slug/settings/objects/$object/$tab'
     | '/w/$slug/objects/$object/$recordId/'
     | '/w/$slug/settings/objects/$object/'
@@ -188,6 +199,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings'
     | '/w/$slug/settings/objects'
     | '/w/$slug/objects/$object/$recordId/$tab'
+    | '/w/$slug/objects/$object/views/$viewId'
     | '/w/$slug/settings/objects/$object/$tab'
     | '/w/$slug/objects/$object/$recordId'
     | '/w/$slug/settings/objects/$object'
@@ -205,6 +217,7 @@ export interface FileRouteTypes {
     | '/w/$slug/settings/'
     | '/w/$slug/settings/objects/'
     | '/w/$slug/objects/$object_/$recordId/$tab'
+    | '/w/$slug/objects/$object_/views/$viewId'
     | '/w/$slug/settings/objects/$object/$tab'
     | '/w/$slug/objects/$object_/$recordId/'
     | '/w/$slug/settings/objects/$object/'
@@ -312,6 +325,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugObjectsObjectRecordIdTabRouteImport
       parentRoute: typeof WSlugRoute
     }
+    '/w/$slug/objects/$object_/views/$viewId': {
+      id: '/w/$slug/objects/$object_/views/$viewId'
+      path: '/objects/$object/views/$viewId'
+      fullPath: '/w/$slug/objects/$object/views/$viewId'
+      preLoaderRoute: typeof WSlugObjectsObjectViewsViewIdRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/settings/objects/$object/': {
       id: '/w/$slug/settings/objects/$object/'
       path: '/settings/objects/$object'
@@ -336,6 +356,7 @@ interface WSlugRouteChildren {
   WSlugSettingsIndexRoute: typeof WSlugSettingsIndexRoute
   WSlugSettingsObjectsIndexRoute: typeof WSlugSettingsObjectsIndexRoute
   WSlugObjectsObjectRecordIdTabRoute: typeof WSlugObjectsObjectRecordIdTabRoute
+  WSlugObjectsObjectViewsViewIdRoute: typeof WSlugObjectsObjectViewsViewIdRoute
   WSlugSettingsObjectsObjectTabRoute: typeof WSlugSettingsObjectsObjectTabRoute
   WSlugObjectsObjectRecordIdIndexRoute: typeof WSlugObjectsObjectRecordIdIndexRoute
   WSlugSettingsObjectsObjectIndexRoute: typeof WSlugSettingsObjectsObjectIndexRoute
@@ -348,6 +369,7 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugSettingsIndexRoute: WSlugSettingsIndexRoute,
   WSlugSettingsObjectsIndexRoute: WSlugSettingsObjectsIndexRoute,
   WSlugObjectsObjectRecordIdTabRoute: WSlugObjectsObjectRecordIdTabRoute,
+  WSlugObjectsObjectViewsViewIdRoute: WSlugObjectsObjectViewsViewIdRoute,
   WSlugSettingsObjectsObjectTabRoute: WSlugSettingsObjectsObjectTabRoute,
   WSlugObjectsObjectRecordIdIndexRoute: WSlugObjectsObjectRecordIdIndexRoute,
   WSlugSettingsObjectsObjectIndexRoute: WSlugSettingsObjectsObjectIndexRoute,

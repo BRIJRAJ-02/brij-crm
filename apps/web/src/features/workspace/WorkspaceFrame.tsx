@@ -45,6 +45,8 @@ export interface WorkspaceFrameProps {
   readonly topBar?: ReactNode;
   /** The view's ViewBar, on an object's page. */
   readonly viewBar?: ReactNode;
+  /** The view's Toolbar (its sorts, filters and Save), on a view (spec 0020). */
+  readonly toolbar?: ReactNode;
   readonly children: ReactNode;
 }
 
@@ -65,6 +67,7 @@ export function WorkspaceFrame({
   currentObject,
   topBar,
   viewBar,
+  toolbar,
   children,
 }: WorkspaceFrameProps) {
   const navigate = useNavigate();
@@ -93,6 +96,7 @@ export function WorkspaceFrame({
     <AppShell
       topBar={topBar}
       viewBar={viewBar}
+      toolbar={toolbar}
       sidebar={
         <Sidebar
           workspace={workspaceName ?? strings.product}

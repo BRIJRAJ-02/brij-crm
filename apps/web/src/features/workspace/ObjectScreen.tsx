@@ -2,8 +2,9 @@
 // Purpose: the states of a page inside a workspace around its content: loading, failed, missing, or no objects.
 // Main task: say plainly what happened and offer the way on (Try again, or open your workspace).
 // Leaves out: the records themselves, which RecordsScreen shows.
-import { isDataError } from '@crm/data';
+import { isDataError, type ObjectSummary } from '@crm/data';
 import { EmptyState, Link, TopBar, ViewBar } from '@crm/ui';
+import { strings as viewStrings } from '../views/strings.ts';
 import { strings } from './strings.ts';
 
 /** A workspace with no objects to list: its name, and a plain empty state (no way out to loop through). */
@@ -39,6 +40,40 @@ export function objectPendingPage() {
   return {
     ...pendingPage(),
     viewBar: <ViewBar views={[]} currentViewId="" onViewChange={() => undefined} isLoading />,
+  };
+}
+
+/** An object with no view this person may open (spec 0020, AC-462): its bar, and a plain empty state. */
+export function noViewsPage(object: ObjectSummary) {
+  return {
+    topBar: <TopBar title={object.pluralName} icon={object.icon} hue={object.hue} />,
+    body: (
+      <EmptyState icon="layout-grid" title={viewStrings.noViewsTitle}>
+        {viewStrings.noViewsText}
+      </EmptyState>
+    ),
+  };
+}
+
+/**
+ * A view this person can't open (spec 0020, AC-463), never saying whether it
+ * is unknown, deleted or private: the object's bar, and the way to its
+ * default view (the object's address opens it).
+ */
+export function viewNotFoundPage(object: ObjectSummary, slug: string, defaultName: string | undefined) {
+  return {
+    topBar: <TopBar title={object.pluralName} icon={object.icon} hue={object.hue} />,
+    body: (
+      <EmptyState
+        icon="search"
+        title={viewStrings.notFoundText}
+        actions={
+          <Link href={`/w/${slug}/objects/${object.apiSlug}`}>
+            {viewStrings.goTo(defaultName ?? object.pluralName)}
+          </Link>
+        }
+      />
+    ),
   };
 }
 

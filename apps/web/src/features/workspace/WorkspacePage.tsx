@@ -11,6 +11,8 @@ import { WorkspaceFrame } from './WorkspaceFrame.tsx';
 export interface FramedPage {
   readonly topBar: ReactNode;
   readonly viewBar?: ReactNode;
+  /** On a view, its Toolbar (spec 0020). */
+  readonly toolbar?: ReactNode;
   readonly body: ReactNode;
 }
 
@@ -66,6 +68,7 @@ export function WorkspacePage({ page, currentObject, isFailed = false }: Workspa
       {...(currentObject === undefined ? {} : { currentObject })}
       topBar={page.topBar}
       viewBar={page.viewBar}
+      toolbar={page.toolbar}
     >
       {page.body}
     </WorkspaceFrame>

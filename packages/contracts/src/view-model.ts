@@ -74,10 +74,12 @@ export interface ViewQueryShape {
 /**
  * The attributes on the far side of a relation (`relation` is the record
  * reference a `through` condition follows): the list, `pending` while the
- * definitions store loads them, or undefined when the far side can't be
- * read (the condition is then dropped as unavailable).
+ * definitions store loads them, `unchecked` when this reader doesn't know
+ * the far object (the condition is kept as it is, and the server checks it
+ * as it runs), or undefined when the far side can't be read (the condition
+ * is then dropped as unavailable).
  */
-export type FarAttributes = (relation: ViewAttribute) => readonly ViewAttribute[] | 'pending' | undefined;
+export type FarAttributes = (relation: ViewAttribute) => readonly ViewAttribute[] | 'pending' | 'unchecked' | undefined;
 
 /** What runs: the effective filter and sorts, and the archived attributes left out (by id). */
 export type EffectiveQuery =
@@ -135,6 +137,7 @@ export function effectiveQuery(
         seen.pending = true;
         return false;
       }
+      if (far === 'unchecked') return true;
       if (far === undefined) {
         seen.dropped = true;
         return false;
