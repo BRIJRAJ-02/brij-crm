@@ -15,7 +15,7 @@
 import { eq, sql, type SQL } from 'drizzle-orm';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { checkInstant } from './history.ts';
-import { checkId, uuidArray } from './ids.ts';
+import { checkId, newId, uuidArray } from './ids.ts';
 import { RESTORE_WINDOW, takeRecordSlots } from './limits.ts';
 import { refuse } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
@@ -59,7 +59,7 @@ async function lockedRecord(tx: WorkspaceTx, recordId: string) {
 }
 
 /** A record's entries still in their lists: their unique keys go with the record's. */
-async function liveEntries(tx: WorkspaceTx, record: RecordRef): Promise<readonly EntryRef[]> {
+export async function liveEntries(tx: WorkspaceTx, record: RecordRef): Promise<readonly EntryRef[]> {
   const result = await tx.execute<{ id: string; list_id: string }>(
     sql`select id::text, list_id::text from list_entries where record_id = ${record.recordId} and deleted_at is null`,
   );
@@ -160,7 +160,7 @@ export function farReferencesQuery(recordId: string, objectId: string): SQL {
  * with sequential scans allowed. Every caller runs it before it takes the
  * workspace counter row, so this read never holds that lock.
  */
-async function farReferences(
+export async function farReferences(
   tx: WorkspaceTx,
   record: RecordRef,
 ): Promise<{ readonly references: readonly ReferenceChange[]; readonly coarseObjects: readonly string[] }> {
@@ -216,6 +216,8 @@ export async function deleteRecord(
           deletedByType: by.type,
           deletedById: by.id,
           deletedByMemberId: by.memberId,
+          // Every delete carries a batch (spec 0022): a delete of one record is a batch of its own.
+          deletedBatchId: newId(),
           // Every statement that updates the row moves the revision (spec 0006, AC-44).
           revision: sql`${records.revision} + 1`,
         })
@@ -264,6 +266,7 @@ export async function restoreRecord(
           deletedByType: null,
           deletedById: null,
           deletedByMemberId: null,
+          deletedBatchId: null,
           revision: sql`${records.revision} + 1`,
         })
         .where(eq(records.id, recordId));

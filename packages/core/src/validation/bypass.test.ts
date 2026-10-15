@@ -17,7 +17,7 @@ import { testScope } from '../testing.ts';
 const RUN_RULES = ['createRecord', 'setValues', 'setRecordValues', 'setValuesBatch'] as const;
 
 /** The writes allowed to skip rules (AC-259). Type change jobs (milestone 3) and computed writes (spec 0015) join later. */
-const SKIP_RULES = ['restoreRecord'] as const;
+const SKIP_RULES = ['restoreRecord', 'restoreRecords', 'restoreBatch'] as const;
 
 /** Writes of definitions, lifecycles, lists' entries (rules for lists come with #51) and workspaces: no record value. */
 const NO_RECORD_VALUES = [
@@ -31,6 +31,7 @@ const NO_RECORD_VALUES = [
   'defineOption',
   'defineRelationship',
   'deleteRecord',
+  'deleteRecords',
   'eraseRecord',
   'purgeDeleted',
   'removeEntry',
@@ -49,6 +50,7 @@ const NOT_WRITES = [
   'capChange',
   'cappedHook',
   'countMatches',
+  'countTrash',
   'cursorBinding',
   'decodeCursor',
   'encodeCursor',
@@ -69,6 +71,7 @@ const NOT_WRITES = [
   'outboxEvents',
   'outboxHook',
   'queryPage',
+  'queryTrash',
 ] as const;
 
 describe('the bypass walk', () => {

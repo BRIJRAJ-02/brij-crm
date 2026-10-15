@@ -126,3 +126,16 @@ export {
   type ReferenceChange,
   type ValueChange,
 } from './write.ts';
+export {
+  countTrash,
+  deleteRecords,
+  MAX_INLINE_RECORDS,
+  queryTrash,
+  restoreBatch,
+  restoreRecords,
+  TOO_MANY_INLINE,
+  type DeleteOutcome,
+  type RestoreOutcome,
+  type TrashEntry,
+  type TrashPage,
+} from './trash.ts';

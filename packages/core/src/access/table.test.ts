@@ -320,6 +320,23 @@ const empty = (call: DataCase['call'], leaves: DataCase['leaves'] = none): DataC
 const refused = (code: 'NOT_FOUND' | 'FORBIDDEN', call: DataCase['call']): DataCase => ({ call, expect: code });
 const named = (world: DataWorld) => ({ [world.name]: { value: 'Renamed' } });
 
+/** A restore's outcomes, its first refusal thrown as the call's own (a batch of one). */
+function refusedOutcome(outcomes: readonly core.RestoreOutcome[]): readonly core.RestoreOutcome[] {
+  const refusal = outcomes.find((outcome) => outcome.refusal !== undefined)?.refusal;
+  if (refusal === undefined) return outcomes;
+  throw Object.assign(new Error(refusal.message), { refusal, refusals: [refusal] });
+}
+
+/** The delete batch the world's trashed record carries. */
+async function batchOf(world: DataWorld): Promise<string> {
+  const rows = await db.withWorkspace(world.owner.workspaceId, (tx) =>
+    tx.execute<{ batch: string }>(
+      sql`select deleted_batch_id::text as batch from records where id = ${world.trashedId}`,
+    ),
+  );
+  return rows.rows[0]?.batch ?? '';
+}
+
 /** Every data entry of the access table, called as the principal it is about. */
 const DATA_CASES: Readonly<Record<string, DataCase>> = {
   // Reads, by a principal at `none` on People: absent.
@@ -348,6 +365,13 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   getRecordEntries: empty((scope, world) => core.getRecordEntries(scope, { recordId: world.recordId })),
   getActivity: refused('NOT_FOUND', (scope, world) => core.getActivity(scope, { recordId: world.recordId })),
   readTrashedRecord: refused('NOT_FOUND', (scope, world) => core.readTrashedRecord(scope, world.trashedId)),
+  queryTrash: empty((scope, world) =>
+    core.queryTrash(scope, {}).then((page) => page.items.filter((item) => item.recordId === world.trashedId)),
+  ),
+  countTrash: empty(
+    (scope) => core.countTrash(scope, {}),
+    (value) => typeof value === 'object' && value !== null && 'count' in value && value.count === 0,
+  ),
   // Writes, by a principal who may only read People and its list: 403.
   createRecord: refused('FORBIDDEN', (scope, world) => core.createRecord(scope, { objectId: world.people })),
   addRecord: refused('FORBIDDEN', (scope, world) =>
@@ -370,6 +394,16 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   ),
   deleteRecord: refused('FORBIDDEN', (scope, world) => core.deleteRecord(scope, { recordId: world.recordId })),
   restoreRecord: refused('FORBIDDEN', (scope, world) => core.restoreRecord(scope, { recordId: world.recordId })),
+  deleteRecords: refused('FORBIDDEN', (scope, world) =>
+    core.deleteRecords(scope, { objectId: world.people, recordIds: [world.recordId], batchId: core.newId() }),
+  ),
+  // Per record: the one outcome's refusal is the call's.
+  restoreRecords: refused('FORBIDDEN', (scope, world) =>
+    core.restoreRecords(scope, { recordIds: [world.trashedId] }).then(refusedOutcome),
+  ),
+  restoreBatch: refused('FORBIDDEN', async (scope, world) =>
+    core.restoreBatch(scope, { batchId: await batchOf(world) }).then(refusedOutcome),
+  ),
   addEntry: refused('FORBIDDEN', (scope, world) =>
     core.addEntry(scope, { listId: world.listId, recordId: world.recordId }),
   ),
