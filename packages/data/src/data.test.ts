@@ -278,6 +278,13 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       setValuesBatch: os.records.setValuesBatch.handler(notServed),
       activity: os.records.activity.handler(({ input }) => behaviour.activity(input.recordId, input.cursor)),
       getTrashed: os.records.getTrashed.handler(({ input }) => behaviour.trashed(input.recordId)),
+      deleteMany: os.records.deleteMany.handler(notServed),
+      restoreBatch: os.records.restoreBatch.handler(notServed),
+    },
+    trash: {
+      query: os.trash.query.handler(notServed),
+      count: os.trash.count.handler(notServed),
+      restore: os.trash.restore.handler(notServed),
     },
     members: { list: os.members.list.handler(() => behaviour.members()) },
     access: { mine: os.access.mine.handler(() => behaviour.access()) },

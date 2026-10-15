@@ -1,0 +1,88 @@
+// The trash (spec 0022): every trashed record the member may see, newest
+// first, and restoring some of them. Records stay 30 days, then the daily
+// cleanup removes them for good.
+import { oc } from '@orpc/contract';
+import * as z from 'zod';
+import { BULK_INLINE_MAX, BULK_TOO_MANY_MESSAGE, RestoreResults } from './bulk.ts';
+import { ActorReferenceValue, Timestamp } from './values/attribute-values.ts';
+import { RecordRefDisplay } from './values/options.ts';
+import { WorkspaceScoped } from './workspaces.ts';
+
+/** The most rows one `trash.query` answers. */
+export const MAX_TRASH_PAGE = 200;
+
+/**
+ * One record in the trash: its name and look (`display`, "Unnamed <singular>"
+ * when its name is empty or hidden from the reader), its object, when and by
+ * whom it was deleted, and when the daily cleanup removes it for good.
+ */
+export const TrashItem = z.object({
+  recordId: z.uuid(),
+  objectId: z.uuid(),
+  display: RecordRefDisplay,
+  deletedAt: Timestamp,
+  deletedBy: ActorReferenceValue,
+  expiresAt: Timestamp,
+});
+/** One record in the trash. */
+export type TrashItem = z.infer<typeof TrashItem>;
+
+/** A page of the trash, of one object or all: after `cursor` (the last page's `nextCursor`), up to `limit` (100). */
+export const QueryTrashInput = WorkspaceScoped.extend({
+  objectId: z.uuid().optional(),
+  cursor: z.string().min(1).max(512).optional(),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_TRASH_PAGE, `Ask for at most ${String(MAX_TRASH_PAGE)} rows.`)
+    .optional(),
+});
+/** A page of the trash to read. */
+export type QueryTrashInput = z.infer<typeof QueryTrashInput>;
+
+/** A page of the trash, most recently deleted first, and the cursor for the next when there are more. */
+export const TrashPage = z.object({
+  items: z.array(TrashItem),
+  nextCursor: z.string().optional(),
+});
+/** A page of the trash. */
+export type TrashPage = z.infer<typeof TrashPage>;
+
+/** How many records the trash holds, of one object or all. */
+export const CountTrashInput = WorkspaceScoped.extend({
+  objectId: z.uuid().optional(),
+});
+/** A trash count to read. */
+export type CountTrashInput = z.infer<typeof CountTrashInput>;
+
+/** The trash's count: exact up to 10,000, then 10,000 with `atLeast`. */
+export const TrashCount = z.object({
+  count: z.number().int().min(0),
+  atLeast: z.boolean(),
+});
+/** The trash's count. */
+export type TrashCount = z.infer<typeof TrashCount>;
+
+/** Up to 500 records to bring back from the trash, of any objects. */
+export const RestoreTrashInput = WorkspaceScoped.extend({
+  recordIds: z
+    .array(z.uuid())
+    .min(1, 'Choose at least one record.')
+    .max(BULK_INLINE_MAX * 2, BULK_TOO_MANY_MESSAGE),
+  mutationId: z.uuid(),
+});
+/** Records to restore. */
+export type RestoreTrashInput = z.infer<typeof RestoreTrashInput>;
+
+/**
+ * The trash. `query` refuses a cursor that doesn't decode with
+ * `FILTER_INVALID`, and an object the member can't see with `NOT_FOUND`;
+ * `restore` answers each record's outcome (refused ones stay in the trash
+ * with their reason), 422 `CONFIG_INVALID` over 500.
+ */
+export const trashContract = {
+  query: oc.input(QueryTrashInput).output(TrashPage),
+  count: oc.input(CountTrashInput).output(TrashCount),
+  restore: oc.input(RestoreTrashInput).output(RestoreResults),
+};
