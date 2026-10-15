@@ -339,7 +339,7 @@ Decided under the owner's acceptance of the recommended defaults for #11 to #22 
 
 ## Calls made building milestone 1 (pending owner confirmation)
 
-Technical calls the spec left open, each the recommended default. The milestone's migration is `0030_validation_rules` (journal `when` 1791812881544), to renumber and restamp at landing.
+Technical calls the spec left open, each the recommended default. The milestone's migration is `0033_validation_rules`, renumbered at landing after the timeline's 0032.
 
 - **The checker is plain TypeScript in `@crm/contracts/validation`**, with no Zod, so the browser's records layer runs it from its lazy chunk without the schema library; the schemas for rules and `checkRuleSettings` (the settings check the engine and the dialog share) sit in `@crm/contracts/values`. RE2 is injected on both sides: `packages/core/src/validation/pattern.ts` and `packages/data/src/validation/pattern.ts` are the only importers of `re2js` (2.8.6, pinned in the catalog).
 - **The `rules` input takes every kind but Required When** (`ListedRuleKind`); the database enum and the checker already hold `required_when`, so milestone 2 needs no migration.
