@@ -106,6 +106,11 @@ export const ACCESS_TABLE = {
   cancelJob: { jobStarter: true },
   confirmJob: { jobStarter: true },
   startTestJob: { permission: 'jobs.manage' },
-  // The relay's read (`@crm/core/system`).
+  // Saved views (spec 0020): any member who may read the object; a locked view's query needs views.manage inside.
+  listViews: { data: 'read' },
+  getView: { data: 'read' },
+  saveViewQuery: { data: 'read' },
+  // The relay's reads (`@crm/core/system`).
   audiences: { system: true },
+  viewFacts: { system: true },
 } as const satisfies Record<string, AccessEntry>;

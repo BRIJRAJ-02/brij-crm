@@ -51,7 +51,7 @@ export const LIFECYCLE_CAP = MAX_LIFECYCLE_IDS;
 
 /** One outbox row before it gets its number. */
 export interface OutboxEvent {
-  readonly kind: 'records' | 'entries' | 'definitions' | 'members' | 'jobs';
+  readonly kind: 'records' | 'entries' | 'definitions' | 'members' | 'jobs' | 'views';
   /** The object: a `records` row's, an `entries` row's list's parent, a `definitions` row's when it names one. */
   readonly objectId?: string;
   /** The list: an `entries` row's, a `definitions` row's when it names one. */
@@ -292,7 +292,8 @@ function definitionRows(change: CappedChange): OutboxEvent[] {
 
 /**
  * One row per kind a write outside the engine recorded (AC-82): `members`,
- * and (spec 0008) one `jobs` row per starter, its job ids in `itemIds`.
+ * (spec 0008) one `jobs` row per starter, its job ids in `itemIds`, and
+ * (spec 0020) one `views` row per object.
  */
 function kindRows(change: CappedChange): OutboxEvent[] {
   const rows: OutboxEvent[] = [];
@@ -310,7 +311,41 @@ function kindRows(change: CappedChange): OutboxEvent[] {
   for (const starter of starters) {
     rows.push({ kind: 'jobs', ...NO_IDS, itemIds: (byStarter.get(starter) ?? []).sort(byId), coarse: false, starter });
   }
+  rows.push(...viewRows(change));
   return rows;
+}
+
+/**
+ * One `views` row per object (or list) whose saved views the write made,
+ * changed or deleted (spec 0020, AC-482), its view ids in `itemIds`, private
+ * views included: spec 0009's `filterEvent` decides who may see each id.
+ */
+function viewRows(change: CappedChange): OutboxEvent[] {
+  const byParent = new Map<string, { readonly objectId?: string; readonly listId?: string; ids: Set<string> }>();
+  for (const view of change.views) {
+    const key = view.listId === undefined ? `object:${view.objectId ?? ''}` : `list:${view.listId}`;
+    const row = byParent.get(key) ?? {
+      ...(view.objectId === undefined ? {} : { objectId: view.objectId }),
+      ...(view.listId === undefined ? {} : { listId: view.listId }),
+      ids: new Set<string>(),
+    };
+    row.ids.add(view.viewId);
+    byParent.set(key, row);
+  }
+  return [...byParent.keys()].sort(byId).flatMap((key): OutboxEvent[] => {
+    const row = byParent.get(key);
+    if (row === undefined) return [];
+    return [
+      {
+        kind: 'views',
+        ...(row.objectId === undefined ? {} : { objectId: row.objectId }),
+        ...(row.listId === undefined ? {} : { listId: row.listId }),
+        ...NO_IDS,
+        itemIds: [...row.ids].sort(byId),
+        coarse: false,
+      },
+    ];
+  });
 }
 
 /**

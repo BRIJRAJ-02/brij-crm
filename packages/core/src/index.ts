@@ -90,6 +90,14 @@ export {
   type EditRecordInput,
   type RecordWindow,
 } from './records/records.ts';
+export {
+  getView,
+  listViews,
+  saveViewQuery,
+  VIEW_LOCKED,
+  VIEW_NOT_FOUND,
+  type SaveViewQueryInput,
+} from './views/views.ts';
 export { getMyAccess, listMembers, removeMember, setMemberRole, type MemberWithRole } from './members/members.ts';
 export { outboxEvent, stubEvent, wireEvent } from './realtime/events.ts';
 export {

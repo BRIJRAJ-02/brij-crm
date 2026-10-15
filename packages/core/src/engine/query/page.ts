@@ -242,6 +242,23 @@ async function prepare(
   return { context: searches.size === 0 ? context : { ...context, searches }, level, objectAttributes };
 }
 
+/**
+ * Checks a saved view's filter and sorts the way a read would run them
+ * (spec 0020, saving a query): every attribute, at every hop, must be on the
+ * view's object (or along its path), live and visible to the principal, each
+ * operand well formed, and each sort `isSortable`. Refuses `FILTER_INVALID`
+ * as the compiler words it; compiles only, reads no records.
+ */
+export async function checkViewQuery(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  query: { readonly objectId: string; readonly filter?: FilterGroup; readonly sorts: SortRules },
+): Promise<void> {
+  const { context, level } = await prepare(tx, scope, query, false);
+  compileFilter(context, level, query.filter);
+  compileSorts(context, level, query.sorts);
+}
+
 /** The one statement `checkTimeZone` runs: it fails with `22023` for a zone Postgres doesn't know. */
 export function timeZoneProbe(timeZone: string): SQL {
   return sql`select now() at time zone ${timeZone}`;
