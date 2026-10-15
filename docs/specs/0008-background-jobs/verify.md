@@ -84,3 +84,48 @@ Real worker processes (`apps/api/test/jobs-worker.ts`, the worker's own wiring t
 | db, core, contracts, api, data suites; web's node tests | pass (12 October 2026) |
 | Fairness on the load stack | pass, 4 runs (above) |
 | Restart tests | pass, 3 runs in a row after the reviews' fixes; one earlier run timed out while the machine was loaded by other lanes (load average about 22), and passed on its own after |
+
+## Milestone 3
+
+Built 15 October 2026 (steps 16 to 19, and step 20 short of the deploy). Migration `0032_workspace_sweep` (renumbered at landing if another lands first): the role `crm_sweep` and the definer function `crm_workspace_ids`.
+
+Production is unchanged in behaviour until the owner turns the jobs on. Its worker still logs in as the app login (not in `crm_worker`) and `JOBS_RUNNER` is off there, so it boots exactly as before: the jobs' runners off (`jobs.off`), no crontab, no lifecycle, and the relay with its own 3 minute dormancy (`selfDormant` stays true with the jobs off). The migration only adds a role and a function nobody but `crm_worker` may call. The api's new wake calls (once a minute on signed in requests, and on reading an overdue job) reach the worker's existing wake endpoint, which with the jobs off only pokes the relay, as every write already does. `maintenance.daily` is registered everywhere, but nothing starts one until a runner with the crontab runs.
+
+### Owner steps: turning the jobs on in production
+
+Milestone 1's steps 1 to 3 first (unchanged): the worker's own login on Neon (`pnpm db:worker-login -- --plain-password` with production's variables), Railway's worker `DATABASE_URL_DIRECT` set to it in production and in `preview-base`, and a redeploy whose log shows no `jobs.off` for the login. Then:
+
+1. Apply the Railway config (`railway config plan`, then `railway config apply`, linked to `production`, then to `preview-base`). The worker gains `TZ=UTC`, `RAILWAY_DEPLOYMENT_DRAINING_SECONDS=30`, and the preserved `JOBS_RUNNER` and `WORKER_IDLE_SLEEP_SECONDS` (unset means 180 seconds).
+2. Set the worker's `JOBS_RUNNER=on` in production and redeploy. Check the log for `jobs.runners.started` and `worker.sleep` with `idleSeconds: 180`, and `/health` (Railway's private network, or the service's logs) for `jobs: 'on'` and `state: 'awake'`.
+3. Check the sleep. Leave the app unused for 10 minutes. The worker logs `Worker asleep` with its `wakeAt` about 3 minutes after the last request (the next 02:59:30 UTC when nothing is scheduled), and `/health` answers `state: 'asleep'`. In the Neon console (or the Neon API's endpoint `current_state`), the production compute shows `Idle` (suspended) within 10 minutes of the last use (AC-117).
+4. Check the wake. Sign in, edit a record, and start nothing else: the edit saves, a second browser sees it live, and the worker logs `Worker awake` with `reason: 'wake call'`. The compute shows `Active` again.
+5. Check the two assumptions on production, and record them here: no idle pool connection after 10 seconds (Neon's monitoring shows no open connections while the worker sleeps and nobody uses the app), and no timed probe (uptime monitors hit `/api/health`, never `/api/health/ready`; Railway runs the api's `/api/health/ready` check only during a deploy).
+6. The first daily cleanup. After the next 03:00 UTC, the worker logs `daily.cleanup` (or `Worker awake` with `reason: 'timer'` at 02:59:30, then `daily.cleanup`). As an owner, Settings, Background jobs shows "Daily cleanup", started by System, `Done` with the rows it removed. Record the time it finished and its count.
+7. Then the milestone 3 contract migration (index.md, Follow-up): take `crm_outbox_workspaces` from `crm_app` once every environment's worker runs on `crm_worker_user`.
+
+A preview runs the jobs already (`JOBS_RUNNER` unset is `on` there, and each preview makes its own worker login). With the sleep, a preview's worker also sleeps after 3 idle minutes; its Neon branch suspends the same way.
+
+### Local development
+
+Nothing new to set up: `WORKER_IDLE_SLEEP_SECONDS` unset sleeps after 180 idle seconds with the jobs on. Set it to `0` to keep a local worker always awake while debugging.
+
+### AC to test map (milestone 3)
+
+| AC | Tests |
+|---|---|
+| AC-111 | `apps/api/src/jobs/sleep.test.ts`: a job scheduled 40 seconds ahead lets the real worker sleep and its timer wakes it to run the job, within 60 seconds of its time; `lifecycle.test.ts`: the wake time is the next due row |
+| AC-112 | `packages/core/src/jobs/maintenance.test.ts`: one cleanup per workspace a day as the system (a second run the same day starts none, the next day starts one); the outbox pruned until a batch comes back short, dead rows deleted once, a continuation when the budget runs out; trash past 30 days purged, 29 days kept; ready jobs past their hour ended `JOB_EXPIRED` with their event; only a due job with no live lease, untouched for an hour and with no queue row queued again; a replayed batch removes nothing new. `apps/api/src/jobs/graphile.test.ts`: a day missed three days running runs once, for the last 03:00 UTC, and its continuation runs after it. `packages/core/src/engine/links.test.ts`: a purge batch waits on a list an entry write holds before it takes the record. `packages/db/src/guards.test.ts`, `roles.test.ts`: `crm_workspace_ids` |
+| AC-115 | `packages/db/src/guards.test.ts`: five definer functions, each owned by its own role and hardened; only `crm_relay`, `crm_search` and `crm_sweep` bypass row level security; `crm_sweep` reads `workspaces.id` and `deleted_at` and nothing else; `crm_workspace_ids` is executable by `crm_worker` alone (the app and the identity login refused); `roles.test.ts`: the migration's closing check refuses every widening |
+| AC-117 | `apps/api/src/jobs/sleep.test.ts`: the real worker with a 2 second idle time closes every connection (none left in `pg_stat_activity`), answers `asleep` from memory, and a wake call after a job's commit runs it within 5 seconds; `lifecycle.test.ts`: no sleep while a task runs, a row is locked or due within 30 seconds, or an outbox row waits; a wake that lands while closing; a failed wake retried with backoff; a lost runner reconnects; 0 never sleeps; `relay.test.ts`: the relay under the lifecycle never goes dormant on its own and sleeps and wakes when told; `modules/jobs.test.ts`: signed in requests send the once a minute wake, and a read of an overdue job wakes the worker; `wake.test.ts`: at most one call a minute; `packages/db/src/client.test.ts`: the pool closes an idle connection after about 10 seconds by itself |
+| AC-121 | `maintenance.test.ts`: a finished job keeps its refused items and loses the rest; jobs finished more than 30 days ago go with their items; `packages/db/src/queue.test.ts`: dead rows deleted, the waiting, locked and new rows kept |
+| AC-123 | pending (the deploy, steps above) |
+
+### Results
+
+| Check | Result |
+|---|---|
+| `pnpm check` | pass (15 October 2026) |
+| db, core, api suites | pass (15 October 2026): db 179, core 693, api 517 tests |
+| `node packages/db/scripts/journal.ts 512a025` | pass (33 entries); drizzle-kit generate reports no changes |
+| The real sleeping worker (`sleep.test.ts`, its own database) | pass, 57 seconds |
+| Production: the compute suspends and wakes, the two assumptions, the first daily cleanup | pending (owner steps 3 to 6) |
