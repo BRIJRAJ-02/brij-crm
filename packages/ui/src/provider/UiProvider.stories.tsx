@@ -40,6 +40,22 @@ function ToastButtons() {
   );
 }
 
+/** News about someone else's change: the info tone. */
+function InfoButton() {
+  const toasts = useToasts();
+  return (
+    <Stage>
+      <Button
+        onPress={() => {
+          toasts.toast({ tone: 'info', message: 'Bea Ruiz changed the filters on this view.' });
+        }}
+      >
+        Show news
+      </Button>
+    </Stage>
+  );
+}
+
 const meta = {
   title: 'Provider/Toasts',
   component: ToastButtons,
@@ -80,5 +96,20 @@ export const Keyboard: Story = {
     // The region leaves with its last toast, and focus returns to where it was.
     await waitFor(() => expect(findRegion()).toBeNull());
     await expect(lastOnPage).toHaveFocus();
+  },
+};
+
+/** The info tone: news about what someone else did, with the info icon, leaving like a confirmation. */
+export const Info: Story = {
+  render: () => <InfoButton />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Show news' }));
+    const region = await waitFor(() => {
+      const found = document.querySelector<HTMLElement>('[role="region"][aria-label="Notifications"]');
+      if (found === null) throw new Error('no toast region');
+      return found;
+    });
+    await expect(within(region).getByText('Bea Ruiz changed the filters on this view.')).toBeInTheDocument();
+    await userEvent.click(within(region).getByRole('button', { name: 'Dismiss' }));
   },
 };

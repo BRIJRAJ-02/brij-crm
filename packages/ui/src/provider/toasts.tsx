@@ -18,14 +18,21 @@ import styles from './Toast.module.css';
 /** How long a confirmation stays. Toasts with an action stay until dismissed. */
 export const TOAST_TIMEOUT_MS = 5_000;
 
+/** Each tone's icon. */
+const TONE_ICONS = { success: 'circle-check', danger: 'circle-alert', info: 'info' } as const;
+
 /** How long an error with no action stays: longer than a confirmation, since it asks to be read. */
 export const ERROR_TOAST_TIMEOUT_MS = 8_000;
 
 /** At most this many toasts show at once; the rest wait their turn. */
 export const MAX_VISIBLE_TOASTS = 3;
 
-/** A toast's colour and icon: `success` for confirmations, `danger` for errors. */
-export type ToastTone = 'success' | 'danger';
+/**
+ * A toast's colour and icon: `success` for confirmations, `danger` for
+ * errors, `info` for news about something someone else did ("Bea changed the
+ * filters on this view.") or a quiet notice.
+ */
+export type ToastTone = 'success' | 'danger' | 'info';
 
 /** An action a toast offers, such as Undo. A toast with one stays until dismissed. */
 export interface ToastAction {
@@ -109,7 +116,7 @@ export function ToastRegion({ toasts }: { readonly toasts: Toasts }) {
           style={{ '--toast-name': `toast-${toast.key.replaceAll(/[^\w-]/g, '')}` }}
         >
           <span className={styles.icon} data-tone={toast.content.tone}>
-            <Icon name={toast.content.tone === 'danger' ? 'circle-alert' : 'circle-check'} size="sm" />
+            <Icon name={TONE_ICONS[toast.content.tone]} size="sm" />
           </span>
           <AriaToastContent className={styles.content}>
             <Text slot="title">{toast.content.message}</Text>

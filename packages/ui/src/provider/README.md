@@ -33,6 +33,7 @@ const toasts = createToasts(); // once, in main.tsx; also handed to the data lay
 - A 36px confirmation at the bottom right: an icon, one sentence and Dismiss.
 - Confirmations leave after 5 seconds and errors after 8, paused while hovered or focused. Toasts with an action (Undo, Retry, Use mine) stay until dismissed. Only the toasts take part in their view transition: the page is never captured and the transition's overlay passes every click through, so nothing freezes while a toast moves. At most three show at once; the rest wait their turn.
 - Success is past tense and specific: "Record added successfully", "12 people imported". Errors say what failed and what to do next.
+- `info` (an info icon in the info blue) is news about what someone else did ("Bea changed the filters on this view.", spec 0020) or a quiet notice that isn't a failure ("That link's filter couldn't be read, so the saved view is shown."). Why a tone: a view's live change and a skipped link were neither a confirmation of the reader's own action nor an error, and a green tick or a red alert misread both. It times out as a confirmation does.
 - Toasts never carry the only copy of important information.
 - React Aria's toast is still `UNSTABLE_` in 1.21, so only `toasts.tsx` imports it.
 - Enter and exit animations arrive with the overlay layer in milestone 2.
