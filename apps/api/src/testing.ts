@@ -71,6 +71,8 @@ export function testServices(
     wakeRelay?: WakeRelay;
     /** The once a minute wake every signed in request sends: none unless given, so `wakeRelay` counts writes only. */
     wakeOnUse?: WakeRelay;
+    /** The overdue read's wake: none unless given. */
+    wakeOverdue?: WakeRelay;
     rules?: RuleSource;
     analytics?: Analytics;
     jobs?: JobRegistry;
@@ -90,6 +92,7 @@ export function testServices(
     }),
     wakeRelay: options.wakeRelay ?? NO_WAKE,
     wakeOnUse: options.wakeOnUse ?? NO_WAKE,
+    wakeOverdue: options.wakeOverdue ?? NO_WAKE,
     ...(options.rules === undefined ? {} : { rules: options.rules }),
     ...(options.analytics === undefined ? {} : { analytics: options.analytics }),
     ...(options.jobs === undefined ? {} : { jobs: options.jobs }),

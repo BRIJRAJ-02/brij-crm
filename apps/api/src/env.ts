@@ -153,6 +153,10 @@ export const ApiEnv = z
     // The relay's wake up call (spec 0005): the worker's internal address, and the secret it checks.
     WORKER_INTERNAL_URL: optional(internalUrl('WORKER_INTERNAL_URL')),
     WORKER_WAKE_SECRET: wakeSecret,
+    // Spec 0008's wake on use: every signed in request wakes the worker at most once a minute, so it sleeps only when
+    // nobody uses the app. Unset is `on` locally and in previews and `off` in production, where the worker's jobs
+    // (and so its sleep) stay off until the owner turns them on; set it `on` with JOBS_RUNNER (verify.md).
+    WORKER_WAKE_ON_USE: optional(z.enum(['on', 'off'])),
     // Live updates (spec 0005): signs Centrifugo's connection and subscription tokens. The Centrifugo service's
     // CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY. Unset turns live updates off.
     CENTRIFUGO_TOKEN_SECRET: optional(z.string()),
@@ -243,6 +247,11 @@ export const ApiEnv = z
     MAILPIT_URL: env.APP_ENV === 'local' ? env.MAILPIT_URL : undefined,
   }));
 export type ApiEnv = z.infer<typeof ApiEnv>;
+
+/** Whether signed in requests wake the worker (spec 0008): `WORKER_WAKE_ON_USE`, else on outside production. */
+export function wakesOnUse(env: Pick<ApiEnv, 'APP_ENV' | 'WORKER_WAKE_ON_USE'>): boolean {
+  return (env.WORKER_WAKE_ON_USE ?? (env.APP_ENV === 'production' ? 'off' : 'on')) === 'on';
+}
 
 const port = z.coerce.number().int().positive();
 

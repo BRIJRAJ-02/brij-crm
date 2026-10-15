@@ -1,7 +1,7 @@
 // The api's sign in and mail variables (spec 0005): what each environment
 // must set, and what an unset or empty one means.
 import { describe, expect, it } from 'vitest';
-import { ApiEnv, LOCAL_CENTRIFUGO_API_KEY, LOCAL_CENTRIFUGO_TOKEN_SECRET, WorkerEnv } from './env.ts';
+import { ApiEnv, LOCAL_CENTRIFUGO_API_KEY, LOCAL_CENTRIFUGO_TOKEN_SECRET, wakesOnUse, WorkerEnv } from './env.ts';
 
 const local = {
   APP_ENV: 'local',
@@ -205,6 +205,14 @@ describe('the worker environment (spec 0005, the relay)', () => {
     expect(WorkerEnv.parse({ ...worker, JOBS_RUNNER: 'off' }).JOBS_RUNNER).toBe('off');
     expect(WorkerEnv.parse({ ...worker, JOBS_RUNNER: '' }).JOBS_RUNNER).toBe('on');
     expect(workerProblems({ ...worker, JOBS_RUNNER: 'yes' })).toEqual(['JOBS_RUNNER']);
+  });
+
+  it('wakes the worker on use outside production unless WORKER_WAKE_ON_USE says (spec 0008)', () => {
+    expect(wakesOnUse(ApiEnv.parse(local))).toBe(true);
+    expect(wakesOnUse(ApiEnv.parse(production))).toBe(false);
+    expect(wakesOnUse(ApiEnv.parse({ ...production, WORKER_WAKE_ON_USE: 'on' }))).toBe(true);
+    expect(wakesOnUse(ApiEnv.parse({ ...local, WORKER_WAKE_ON_USE: 'off' }))).toBe(false);
+    expect(ApiEnv.safeParse({ ...local, WORKER_WAKE_ON_USE: 'yes' }).success).toBe(false);
   });
 
   it('sleeps after 180 idle seconds unless WORKER_IDLE_SLEEP_SECONDS says, 0 never (spec 0008, milestone 3)', () => {

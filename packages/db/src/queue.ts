@@ -8,7 +8,7 @@
 // lists, all things only crm_worker may do. It reads ids and times only; the
 // queue holds nothing else.
 import pg from 'pg';
-import { assertDirectUrl } from './direct.ts';
+import { assertDirectUrl, CONNECT_TIMEOUT_MS } from './direct.ts';
 import { pruneOutbox } from './outbox.ts';
 
 /** The schema Graphile Worker keeps its queue in. */
@@ -93,6 +93,8 @@ export function openQueueConnection(options: {
     connectionString: options.url,
     application_name: options.applicationName,
     max: options.max ?? 4,
+    // An unreachable host fails a wake within 10 seconds, not the OS's TCP timeout.
+    connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
   });
   pool.on('error', (error) => (options.onError ?? console.error)(error));
   return {

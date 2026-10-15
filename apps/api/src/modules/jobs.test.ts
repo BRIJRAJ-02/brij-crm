@@ -47,12 +47,16 @@ describe('the worker woken by use (spec 0008, The wake call)', () => {
     const { app: counting } = signInApp(
       { db, identity },
       {},
-      { wakeOnUse: () => (onUse += 1), wakeRelay: () => (pokes += 1) },
+      { wakeOnUse: () => (onUse += 1), wakeOverdue: () => (pokes += 1) },
     );
     const m = await memberWithWorkspace(counting);
     const before = onUse;
     await m.client.jobs.list({ workspace: m.slug });
     await m.client.jobs.list({ workspace: m.slug });
+    expect(onUse - before).toBe(2);
+    // Centrifugo's token renewals are background work, not use: they never wake it.
+    await m.client.realtime.connectionToken({}).catch(() => undefined);
+    await m.client.realtime.subscriptionToken({ workspace: m.slug }).catch(() => undefined);
     expect(onUse - before).toBe(2);
     // A job queued and due 10 seconds ago that nobody picked up: a read of it wakes the worker, once per read.
     const job = await m.client.jobs.startTest({ workspace: m.slug, id: newId(), items: 1, mutationId: newId() });

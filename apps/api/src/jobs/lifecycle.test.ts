@@ -312,6 +312,65 @@ describe('the worker lifecycle', () => {
     expect(world.events.filter((event) => event === 'open')).toHaveLength(2);
   });
 
+  it('treats a runner that fails while the other still starts as a failed wake, and tries again', async () => {
+    const time = manualClock();
+    const world = fakeWorld(time);
+    let opens = 0;
+    const lifecycle = createLifecycle({
+      open: async (hooks) => {
+        opens += 1;
+        const worker = await world.open(hooks);
+        // The first open's heavy runner dies before the open returns.
+        if (opens === 1) hooks.onFailed(new Error('Connection terminated.'));
+        return worker;
+      },
+      relay: world.relay,
+      idleSleepMs: 2_000,
+      log: world.log,
+      clock: time.clock,
+    });
+    const started = lifecycle.start();
+    await time.settle();
+    expect(lifecycle.state()).toBe('waking');
+    expect(world.events).toEqual(['open', 'close']);
+    await time.advance(1_000);
+    await started;
+    expect(lifecycle.state()).toBe('awake');
+    expect(opens).toBe(2);
+  });
+
+  it('wakes straight back when a task ran while it closed for sleep', async () => {
+    const time = manualClock();
+    const world = fakeWorld(time);
+    let release = (): void => undefined;
+    const lifecycle = createLifecycle({
+      open: async (hooks) => {
+        const worker = await world.open(hooks);
+        return {
+          ...worker,
+          close: () =>
+            new Promise<void>((resolve) => {
+              release = resolve;
+            }),
+        };
+      },
+      relay: world.relay,
+      idleSleepMs: 2_000,
+      log: world.log,
+      clock: time.clock,
+    });
+    await lifecycle.start();
+    const hooks = world.hooks();
+    await time.advance(2_000);
+    expect(lifecycle.state()).toBe('waking');
+    // A slice Graphile took just after the check runs while the runners stop.
+    hooks?.onActivity();
+    release();
+    await time.settle();
+    expect(lifecycle.state()).toBe('awake');
+    expect(world.events.filter((event) => event === 'open')).toHaveLength(2);
+  });
+
   it('never sleeps with an idle time of 0', async () => {
     const { time, world, lifecycle } = lifecycleIn(0);
     await lifecycle.start();

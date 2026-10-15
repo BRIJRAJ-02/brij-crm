@@ -53,6 +53,7 @@ export function signInApp(
     router?: AnyRouter;
     wakeRelay?: WakeRelay;
     wakeOnUse?: WakeRelay;
+    wakeOverdue?: WakeRelay;
     rules?: RuleSource;
     analytics?: Analytics;
     jobs?: JobRegistry;
@@ -65,6 +66,7 @@ export function signInApp(
     mailer,
     ...(options.wakeRelay ? { wakeRelay: options.wakeRelay } : {}),
     ...(options.wakeOnUse ? { wakeOnUse: options.wakeOnUse } : {}),
+    ...(options.wakeOverdue ? { wakeOverdue: options.wakeOverdue } : {}),
     ...(options.rules ? { rules: options.rules } : {}),
     ...(options.analytics ? { analytics: options.analytics } : {}),
     ...(options.jobs ? { jobs: options.jobs } : {}),

@@ -194,6 +194,13 @@ export interface Relay {
   /** How many workspaces' audiences the relay holds now (for tests and #12's measurements). */
   cachedAudiences(): number;
   /**
+   * True when the only rows left are those of workspaces failing to publish,
+   * each waiting the longest for a whole quiet spell (Centrifugo down): spec
+   * 0005's rule for going dormant anyway, which the worker's sleep check
+   * follows, so an outage never keeps Neon's compute awake.
+   */
+  stuck(): boolean;
+  /**
    * Goes dormant now, whatever the quiet clock says (the worker is going to
    * sleep): the publish in flight finishes, the connection closes (letting
    * go of the lock), and the promise resolves once no database call is left.
@@ -685,6 +692,11 @@ export function createRelay(deps: RelayDeps): Relay {
   /** Enters the dormant state: no connection is held here, and none is made until a wake. */
   function goDormant(): void {
     const asked = sleepRequested;
+    if (asked && retries.size > 0) {
+      log.error('Relay going dormant with workspaces still failing to publish; the next wake tries them first', {
+        workspaces: [...retries.keys()],
+      });
+    }
     sleepRequested = false;
     woken = false;
     // Unserved since boot only, with no poke since: nothing is known to wait, so the age doesn't grow all night.
@@ -804,6 +816,14 @@ export function createRelay(deps: RelayDeps): Relay {
     mode: () => current,
     stats: report,
     cachedAudiences: () => audienceCache.size,
+    stuck: () => {
+      const now = Date.now();
+      return (
+        retries.size > 0 &&
+        now - lastWork >= dormantAfterMs &&
+        [...retries.values()].every((retry) => stuck(retry, now))
+      );
+    },
     async stop() {
       stopped = true;
       interrupt();

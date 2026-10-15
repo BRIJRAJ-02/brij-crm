@@ -31,6 +31,9 @@ export const LANES = {
 /** How often stale locks are released and the backlog is logged, while the runners run. */
 const HOUSEKEEPING_MS = 60_000;
 
+/** The hour (UTC) the daily cleanup runs; the sleeping worker's timer reads it too. */
+export const DAILY_CRON_HOUR_UTC = 3;
+
 /** The daily cleanup's task (light lane): the cron's, and its continuations'. */
 export const DAILY_TASK = 'crm_cron_daily';
 
@@ -40,15 +43,15 @@ export const DAILY_TASK = 'crm_cron_daily';
  * `known_crontabs` keeps one run a day across restarts and sleeps), and at
  * most 5 tries, like a light kind.
  */
-export const DAILY_CRONTAB = `0 3 * * * ${DAILY_TASK} ?fill=1d&id=maintenance_daily&max=5`;
+export const DAILY_CRONTAB = `0 ${String(DAILY_CRON_HOUR_UTC)} * * * ${DAILY_TASK} ?fill=1d&id=maintenance_daily&max=5`;
 
 /**
  * The daily task's payload: the cron's (Graphile adds `_cron.ts`, the time it
  * fired for), or a continuation's (the day and the last workspace reached).
  * Ids and a date only.
  */
-export const DailyPayload = z.object({
-  _cron: z.object({ ts: z.iso.datetime({ offset: true }) }).optional(),
+export const DailyPayload = z.strictObject({
+  _cron: z.object({ ts: z.iso.datetime({ offset: true }), backfilled: z.boolean().optional() }).optional(),
   day: z.iso.date().optional(),
   after: z.uuid().optional(),
 });
@@ -206,42 +209,47 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
   await housekeeping();
   const inFlight = { count: 0 };
   const runners: GraphileRunner[] = [];
-  try {
-    for (const lane of Object.values(LANES)) {
-      // The light runner alone holds the crontab, so the cron fires once whatever the lanes.
-      const daily = lane === LANES.light ? options.daily : undefined;
-      runners.push(
-        await run({
-          pgPool: queue.pool,
-          concurrency: lane.concurrency,
-          noHandleSignals: true,
-          logger,
-          pollInterval: options.pollInterval ?? lane.pollMs,
-          taskList: {
-            [lane.task]: counted(sliceTask(options, shutdown.signal), inFlight, options.onActivity),
-            ...(daily === undefined
-              ? {}
-              : { [DAILY_TASK]: counted(dailyTask(options, daily), inFlight, options.onActivity) }),
-          },
-          ...(daily === undefined ? {} : { crontab: DAILY_CRONTAB }),
-          // Completions and failures go through Graphile's batcher (with no wait), which a stop flushes before
-          // the pool closes: unbatched, they're sent and not awaited, so a stop right after a slice handed its job
-          // over could close the pool first and leave the finished call's row locked (key cleared, so harmless,
-          // but kept until the daily cleanup).
-          preset: { worker: { completeJobBatchDelay: 0, failJobBatchDelay: 0 } },
-        }),
-      );
-    }
-  } catch (error) {
-    await Promise.all(runners.map((runner) => runner.stop()));
-    throw error;
-  }
-  for (const runner of runners) {
+  // Watched as soon as each starts: a runner that fails while the other still starts is reported (and never an
+  // unhandled rejection, which would end the process).
+  const watch = (runner: GraphileRunner): GraphileRunner => {
     runner.promise.catch((error: unknown) => {
       log.error('jobs.runner.failed', errorFields(error));
       options.onFault?.(error);
       if (!shutdown.signal.aborted) options.onFailed?.(error);
     });
+    return runner;
+  };
+  try {
+    for (const lane of Object.values(LANES)) {
+      // The light runner alone holds the crontab, so the cron fires once whatever the lanes.
+      const daily = lane === LANES.light ? options.daily : undefined;
+      runners.push(
+        watch(
+          await run({
+            pgPool: queue.pool,
+            concurrency: lane.concurrency,
+            noHandleSignals: true,
+            logger,
+            pollInterval: options.pollInterval ?? lane.pollMs,
+            taskList: {
+              [lane.task]: counted(sliceTask(options, shutdown.signal), inFlight, options.onActivity),
+              ...(daily === undefined
+                ? {}
+                : { [DAILY_TASK]: counted(dailyTask(options, daily), inFlight, options.onActivity) }),
+            },
+            ...(daily === undefined ? {} : { crontab: DAILY_CRONTAB }),
+            // Completions and failures go through Graphile's batcher (with no wait), which a stop flushes before
+            // the pool closes: unbatched, they're sent and not awaited, so a stop right after a slice handed its job
+            // over could close the pool first and leave the finished call's row locked (key cleared, so harmless,
+            // but kept until the daily cleanup).
+            preset: { worker: { completeJobBatchDelay: 0, failJobBatchDelay: 0 } },
+          }),
+        ),
+      );
+    }
+  } catch (error) {
+    await Promise.all(runners.map((runner) => runner.stop()));
+    throw error;
   }
   const timer = setInterval(() => void housekeeping(), options.housekeepingMs ?? HOUSEKEEPING_MS);
   timer.unref();

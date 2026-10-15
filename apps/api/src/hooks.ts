@@ -98,6 +98,6 @@ export async function commitCounted<T>(
  * wake call): a job found `queued` more than 5 seconds past its time wakes
  * the worker. Here, beside the write path's poke, so no router pokes by hand.
  */
-export function wakeIfOverdue(context: Pick<WriteRequest, 'wakeRelay'>): { readonly onOverdue: () => void } {
-  return { onOverdue: () => context.wakeRelay() };
+export function wakeIfOverdue(context: Pick<RequestContext, 'wakeOverdue'>): { readonly onOverdue: () => void } {
+  return { onOverdue: () => context.wakeOverdue() };
 }

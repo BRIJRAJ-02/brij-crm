@@ -98,6 +98,9 @@ export function createRelayWake(options: RelayWakeOptions): WakeRelay {
   return poke;
 }
 
+/** How often a read of an overdue job wakes the worker at most, per api process (spec 0008). */
+export const OVERDUE_WAKE_MS = 10_000;
+
 /** How often a signed in request wakes the worker at most, per api process (spec 0008, The wake call). */
 export const WAKE_ON_USE_MS = 60_000;
 

@@ -26,7 +26,7 @@
 // `idleSleepMs` 0 never sleeps: only the reconnect applies.
 import type { SleepCheck } from '@crm/db';
 import { errorFields } from '../log.ts';
-import type { JobsLog } from './graphile.ts';
+import { DAILY_CRON_HOUR_UTC, type JobsLog } from './graphile.ts';
 
 /** Where the worker is. `waking` covers the first start and every reconnect. */
 export type WorkerState = 'awake' | 'asleep' | 'waking' | 'stopped';
@@ -102,10 +102,13 @@ export const CRON_LEAD_MS = 30_000;
 /** The longest sleep: a wrong wake time never keeps the worker asleep longer than a day. */
 export const MAX_SLEEP_MS = 24 * 60 * 60_000;
 
-/** The next 03:00 UTC strictly after `now`: when the daily cleanup's cron fires. */
+/** How long the check before sleeping may take before it counts as failed (the worker then stays awake). */
+export const CHECK_TIMEOUT_MS = 15_000;
+
+/** The next 03:00 UTC (`DAILY_CRON_HOUR_UTC`) strictly after `now`: when the daily cleanup's cron fires. */
 export function nextDailyCron(now: number): number {
   const at = new Date(now);
-  at.setUTCHours(3, 0, 0, 0);
+  at.setUTCHours(DAILY_CRON_HOUR_UTC, 0, 0, 0);
   if (at.getTime() <= now) at.setUTCDate(at.getUTCDate() + 1);
   return at.getTime();
 }
@@ -155,6 +158,11 @@ export function createLifecycle(deps: LifecycleDeps): Lifecycle {
   let generation = 0;
   // Ends a backoff wait early: stop() must not wait out a 30 second backoff.
   let endWait: (() => void) | undefined;
+  // The generation being closed for sleep, and whether one of its tasks ran meanwhile (a row taken just after the
+  // check may hand over a new row due now, which the wake time read before the close doesn't know).
+  let closing: number | undefined;
+  let workWhileClosing = false;
+  const workedWhileClosing = (): boolean => workWhileClosing;
   // Read through functions where an await sits between a write and a read.
   const isStopped = (): boolean => stopped;
   const current = (): WorkerState => state;
@@ -203,7 +211,7 @@ export function createLifecycle(deps: LifecycleDeps): Lifecycle {
     }
     let check: SleepCheck;
     try {
-      check = await worker.check();
+      check = await withTimeout(worker.check(), CHECK_TIMEOUT_MS);
     } catch (error) {
       // A connection that failed is the runners' to report; the clock starts again either way.
       log.warn('worker.sleep.check.failed', errorFields(error));
@@ -241,6 +249,8 @@ export function createLifecycle(deps: LifecycleDeps): Lifecycle {
     // Not `asleep` until every connection is closed; a wake meanwhile is kept for after.
     state = 'waking';
     wakeWanted = false;
+    workWhileClosing = false;
+    closing = generation;
     awake = undefined;
     generation += 1;
     try {
@@ -248,10 +258,11 @@ export function createLifecycle(deps: LifecycleDeps): Lifecycle {
     } catch (error) {
       log.warn('worker.sleep.close.failed', errorFields(error));
     }
+    closing = undefined;
     await deps.relay?.sleep();
     if (isStopped()) return;
-    if (wantsWake() || deps.relay?.mode() === 'active') {
-      // Something woke it while it closed: straight back.
+    if (wantsWake() || workedWhileClosing() || deps.relay?.mode() === 'active') {
+      // Something woke it, or a task ran, while it closed: straight back.
       await wakeUp('wake call');
       return;
     }
@@ -269,19 +280,28 @@ export function createLifecycle(deps: LifecycleDeps): Lifecycle {
     touch();
     for (let failures = 0; !isStopped(); failures += 1) {
       const mine = generation + 1;
+      // A runner that fails before this open is adopted (its sibling still starting): the open counts as failed.
+      const early = { failed: false, adopted: false };
       try {
         const worker = await deps.open({
           onActivity: () => {
             if (mine === generation) touch();
+            else if (mine === closing) workWhileClosing = true;
           },
           onFailed: (error) => {
-            if (mine === generation) void serially(() => lost(error));
+            if (mine === generation && early.adopted) void serially(() => lost(error));
+            else if (!early.adopted) early.failed = true;
           },
         });
         if (isStopped()) {
           await worker.close();
           return;
         }
+        if (early.failed) {
+          await worker.close().catch(() => undefined);
+          throw new Error('A job runner stopped as it started.');
+        }
+        early.adopted = true;
         generation = mine;
         awake = worker;
         state = 'awake';
@@ -353,4 +373,14 @@ export function createLifecycle(deps: LifecycleDeps): Lifecycle {
       });
     },
   };
+}
+
+/** `work`, or a rejection once `ms` pass first (its result is then ignored). */
+function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error(`No answer within ${String(ms)} ms.`)), ms);
+    timer.unref();
+  });
+  return Promise.race([work, late]).finally(() => clearTimeout(timer));
 }

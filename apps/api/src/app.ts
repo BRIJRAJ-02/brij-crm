@@ -7,13 +7,13 @@ import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { AUTH_BASE_PATH, AUTH_ROUTES, type Auth } from './auth/auth.ts';
 import { createEdgeGuard } from './edge.ts';
-import type { ApiEnv } from './env.ts';
+import { wakesOnUse, type ApiEnv } from './env.ts';
 import { createReadGate } from './gate.ts';
 import { errorFields, log } from './log.ts';
 import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
 import { createRealtimeTokens } from './realtime/tokens.ts';
-import { throttleWake, type WakeRelay } from './realtime/wake.ts';
+import { NO_WAKE, OVERDUE_WAKE_MS, throttleWake, type WakeRelay } from './realtime/wake.ts';
 import { router as appRouter } from './router.ts';
 import { createRpcHandler } from './rpc.ts';
 import type { RequestTiming } from './timing.ts';
@@ -71,6 +71,8 @@ export interface AppServices {
    * once a minute for this process unless given (tests pass their own).
    */
   readonly wakeOnUse?: WakeRelay;
+  /** The wake a read of an overdue job sends: `wakeRelay` at most every 10 seconds for this process unless given. */
+  readonly wakeOverdue?: WakeRelay;
   /**
    * Where the door reads object, field and record rules (spec 0009). The
    * server passes none (no rules until #24); only tests and the local test
@@ -111,7 +113,9 @@ export function createApp({
   // One per app, so its counts are this process's: at most 6 heavy reads per workspace at once.
   const readGate = createReadGate();
   // One per app too: every signed in request wakes the worker, at most once a minute per process (spec 0008).
-  const wakeOnUse = services.wakeOnUse ?? throttleWake(wakeRelay);
+  // Off in production until the owner turns the worker's jobs on (WORKER_WAKE_ON_USE).
+  const wakeOnUse = services.wakeOnUse ?? (wakesOnUse(env) ? throttleWake(wakeRelay) : NO_WAKE);
+  const wakeOverdue = services.wakeOverdue ?? throttleWake(wakeRelay, OVERDUE_WAKE_MS);
   // Centrifugo's tokens, where live updates are on (spec 0005).
   const realtime =
     env.CENTRIFUGO_TOKEN_SECRET === undefined
@@ -189,6 +193,7 @@ export function createApp({
         auth,
         wakeRelay,
         wakeOnUse,
+        wakeOverdue,
         analytics,
         environment: env.APP_ENV,
         requestId: c.get('requestId'),

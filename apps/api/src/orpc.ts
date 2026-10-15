@@ -41,6 +41,12 @@ export interface RequestContext extends ResponseHeadersPluginContext {
    * the app.
    */
   wakeOnUse: WakeRelay;
+  /**
+   * The wake a read of an overdue job sends (spec 0008): at most once every
+   * 10 seconds per api process, so polling a backlog never keeps the worker
+   * from sleeping or resets the relay's poll on every call.
+   */
+  wakeOverdue: WakeRelay;
   /** Product events (spec 0010): a write sends the milestones it reached once it commits (`hooks.ts`). */
   analytics: Analytics;
   environment: AppEnvironment;
@@ -73,14 +79,21 @@ export const base = implement(contract).$context<RequestContext>();
 export const pub = base;
 
 /** Puts the signed in person in `context.user`, or refuses UNAUTHENTICATED. A renewed session cookie goes back out. */
-export const requireSession = os.$context<RequestContext>().middleware(async ({ context, next }) => {
+/**
+ * Background renewals, not someone using the app: Centrifugo renews its
+ * tokens every 10 minutes from any open tab, and a renewal that woke the
+ * worker would keep Neon's compute awake all night for one idle tab.
+ */
+const NOT_USE: ReadonlySet<string> = new Set(['realtime.connectionToken', 'realtime.subscriptionToken']);
+
+export const requireSession = os.$context<RequestContext>().middleware(async ({ context, next, path }) => {
   const session = await context.auth.session(context.headers, context.clientIp);
   if (session === undefined) throw apiError('UNAUTHENTICATED', 'Sign in to continue.');
   // An error report from here on names the user, by id only.
   setRequestScope({ userId: session.user.id });
   for (const cookie of session.setCookies) context.resHeaders?.append('set-cookie', cookie);
   // Someone is using the app: the worker stays awake, or wakes (at most once a minute; it never slows the request).
-  context.wakeOnUse();
+  if (!NOT_USE.has(path.join('.'))) context.wakeOnUse();
   return next({ context: { user: session.user } });
 });
 

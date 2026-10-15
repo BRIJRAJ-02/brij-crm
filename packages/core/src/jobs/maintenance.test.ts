@@ -346,6 +346,60 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     });
   });
 
+  it('walks a big finished job’s items in bounded windows, keeping every refused one', async () => {
+    const t = await team([]);
+    const big = await jobRow(t.workspaceId, t.ownerId, {
+      status: "'succeeded'",
+      finished_at: "now() - interval '1 day'",
+    });
+    // 12,001 items, every other one refused: three windows of 5,000 positions and a short fourth.
+    await testQuery(
+      ownerUrl,
+      `insert into job_items (workspace_id, job_id, position, item_id, state, code)
+       select $1, $2, g, gen_random_uuid(),
+         (case when g % 2 = 0 then 'refused' else 'done' end)::job_item_state,
+         case when g % 2 = 0 then 'SIMULATED_REFUSAL' end
+       from generate_series(1, 12001) g`,
+      [t.workspaceId, big],
+    );
+    const { jobId } = await cleanUp(t.workspaceId, '2026-10-15');
+    const [left] = await testQuery<{ refused: number; other: number }>(
+      ownerUrl,
+      `select count(*) filter (where state = 'refused')::int as refused, count(*) filter (where state <> 'refused')::int as other
+       from job_items where job_id = $1`,
+      [big],
+    );
+    expect(left).toEqual({ refused: 6_000, other: 0 });
+    expect((await getJob(systemScope(db, t.workspaceId), registry(), jobId)).result).toMatchObject({
+      cleanup: { items: 6_001 },
+    });
+  });
+
+  it('leaves every other workspace’s trash and old jobs alone, even with no filter of its own', async () => {
+    const a = await team([]);
+    const b = await team([]);
+    const theirs = await person(b.owner, 'Theirs');
+    await deleteRecord(b.owner, { recordId: theirs });
+    await testQuery(ownerUrl, `update records set deleted_at = now() - interval '31 days' where id = $1`, [theirs]);
+    const theirJob = await jobRow(b.workspaceId, b.ownerId, {
+      status: "'succeeded'",
+      finished_at: "now() - interval '31 days'",
+    });
+    await itemsFor(b.workspaceId, theirJob, ['done', 'refused']);
+    const theirReady = await jobRow(b.workspaceId, b.ownerId, {
+      status: "'ready'",
+      expires_at: "now() - interval '1 minute'",
+    });
+    await cleanUp(a.workspaceId, '2026-10-15');
+    expect(await testQuery(ownerUrl, 'select 1 from records where id = $1', [theirs])).toHaveLength(1);
+    expect(await jobExists(theirJob)).toBe(true);
+    expect(await itemStatesOf(b.workspaceId, theirJob)).toEqual(['done', 'refused']);
+    const [ready] = await testQuery<{ status: string }>(ownerUrl, 'select status::text from jobs where id = $1', [
+      theirReady,
+    ]);
+    expect(ready?.status).toBe('ready');
+  });
+
   it('replays a committed batch to no new effect: each phase only removes what is still due', async () => {
     const t = await team([]);
     const old = await person(t.owner, 'Old');

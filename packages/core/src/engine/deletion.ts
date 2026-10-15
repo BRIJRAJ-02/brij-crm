@@ -424,6 +424,25 @@ function purgeSettings(input: PurgeInput): { readonly batchSize: number; readonl
 }
 
 /**
+ * The purge's pick of trashed records, oldest first, unlocked: exported for
+ * the plan test, which pins it to `records_trashed_at` with no sort.
+ */
+export function purgeRecordPick(workspaceId: string, cutoff: SQL, limit: number): SQL {
+  return sql`
+    select id::text from records where workspace_id = ${workspaceId} and deleted_at < ${cutoff}
+    order by deleted_at, id limit ${limit}
+  `;
+}
+
+/** The purge's pick of removed entries, oldest first, locked (skipping held ones): pinned to `list_entries_trashed_at`. */
+export function purgeEntryPick(workspaceId: string, cutoff: SQL, limit: number): SQL {
+  return sql`
+    select id::text from list_entries where workspace_id = ${workspaceId} and deleted_at < ${cutoff}
+    order by deleted_at, id limit ${limit} for update skip locked
+  `;
+}
+
+/**
  * One purge batch, in the caller's write (spec 0008, milestone 3: the daily
  * cleanup's `maintenance.daily` runs it, one batch a step): at most
  * `batchSize` records deleted before the cutoff, with their values, links and
@@ -432,18 +451,16 @@ function purgeSettings(input: PurgeInput): { readonly batchSize: number; readonl
  * the doomed records first without locking them, then locks the lists their
  * entries are in (in id order, as erasure and `removeRecords` do), and only
  * then the records, skipping any a restore holds and any restored since the
- * pick. `full` says a whole batch went, so another may follow; a batch that
- * skipped a locked row comes back short, and the row waits for the next run.
+ * pick. `full` says a whole batch was picked, so another may follow; a row a
+ * restore held waits for the next batch.
  */
 export async function purgeBatch(context: WriteContext, input: PurgeInput = {}): Promise<PurgeBatchResult> {
   requirePermission(context.scope, 'records.purge');
   const { batchSize, cutoff } = purgeSettings(input);
-  const { tx } = context;
+  const { tx, scope } = context;
   // Picked, not locked: a row lock taken here, before the lists, is the order that deadlocked with entry writes.
-  const picked = await tx.execute<{ id: string }>(sql`
-    select id::text from records where deleted_at < ${cutoff}
-    order by deleted_at, id limit ${batchSize}
-  `);
+  // Read in order from `records_trashed_at` (workspace, deleted_at, id), never the whole trash sorted.
+  const picked = await tx.execute<{ id: string }>(purgeRecordPick(scope.workspaceId, cutoff, batchSize));
   const pickedIds = picked.rows.map((row) => row.id);
   let doomedIds: readonly string[] = [];
   if (pickedIds.length > 0) {
@@ -455,16 +472,14 @@ export async function purgeBatch(context: WriteContext, input: PurgeInput = {}):
     `);
     // Still in the trash past the cutoff under the lock (a restore that committed since the pick is left alone).
     const locked = await tx.execute<{ id: string }>(sql`
-      select id::text from records where id = any(${ids}) and deleted_at < ${cutoff}
+      select id::text from records
+      where workspace_id = ${scope.workspaceId} and id = any(${ids}) and deleted_at < ${cutoff}
       order by id for update skip locked
     `);
     doomedIds = locked.rows.map((row) => row.id);
   }
   const gone = await removeRecords(tx, doomedIds);
-  const removedEntries = await tx.execute<{ id: string }>(sql`
-    select id::text from list_entries where deleted_at < ${cutoff}
-    order by deleted_at, id limit ${batchSize} for update skip locked
-  `);
+  const removedEntries = await tx.execute<{ id: string }>(purgeEntryPick(scope.workspaceId, cutoff, batchSize));
   const entryIds = removedEntries.rows.map((row) => row.id);
   await deleteSortKeys(tx, { entryIds });
   const entryValues = await tx.execute(deleteEntryValues(entryIds));
@@ -478,7 +493,9 @@ export async function purgeBatch(context: WriteContext, input: PurgeInput = {}):
     purgedEntries: [...gone.entries, ...entryRefs(entries.rows)],
   });
   return {
-    full: doomedIds.length === batchSize || entryIds.length === batchSize,
+    // A whole batch picked means more may wait, even when a restore held one of them (it waits for the next batch);
+    // a batch that removed no record and no entry is never full, so rows a restore holds can't spin the purge.
+    full: (pickedIds.length === batchSize && doomedIds.length > 0) || entryIds.length === batchSize,
     counts: add(gone.counts, {
       records: 0,
       entries: entries.rows.length,

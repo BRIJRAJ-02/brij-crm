@@ -69,6 +69,10 @@ export const records = pgTable(
     index('records_trashed')
       .on(t.workspaceId, t.id)
       .where(sql`${t.deletedAt} is not null`),
+    // The daily purge's pick (spec 0008, milestone 3): the oldest trash first, read in order, never sorted whole.
+    index('records_trashed_at')
+      .on(t.workspaceId, t.deletedAt, t.id)
+      .where(sql`${t.deletedAt} is not null`),
     check('records_deleted', sql`(${t.deletedAt} is null) = (${t.deletedByType} is null)`),
     ...actorConstraints('records', 'created_by', t.workspaceId, {
       type: t.createdByType,
@@ -123,6 +127,10 @@ export const listEntries = pgTable(
       .on(t.workspaceId, t.listId, t.id)
       .where(sql`${t.deletedAt} is null`),
     index('list_entries_record').on(t.workspaceId, t.recordId, t.listId),
+    // The daily purge's removed entries (spec 0008, milestone 3), oldest first, without reading the live ones.
+    index('list_entries_trashed_at')
+      .on(t.workspaceId, t.deletedAt, t.id)
+      .where(sql`${t.deletedAt} is not null`),
     check('list_entries_deleted', sql`(${t.deletedAt} is null) = (${t.deletedByType} is null)`),
     ...actorConstraints('list_entries', 'created_by', t.workspaceId, {
       type: t.createdByType,

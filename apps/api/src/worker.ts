@@ -186,7 +186,8 @@ async function openWorker(hooks: {
     queue = opened;
     return {
       busy: () => runners.busy(),
-      check: () => opened.sleepCheck({ outbox: relay !== undefined }),
+      // Rows the relay can't publish (Centrifugo down for a whole quiet spell) don't keep the worker awake.
+      check: () => opened.sleepCheck({ outbox: relay !== undefined && !relay.stuck() }),
       close: async () => {
         // The slices in hand finish their batch and hand their jobs back first.
         await runners.stop();

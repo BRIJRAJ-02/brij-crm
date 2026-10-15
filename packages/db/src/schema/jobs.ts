@@ -129,6 +129,10 @@ export const jobs = pgTable(
     index('jobs_subject')
       .on(t.workspaceId, t.subjectId)
       .where(sql`${t.finishedAt} is null`),
+    // The daily cleanup's requeue and expiry phases: unfinished jobs in id order (spec 0008, milestone 3).
+    index('jobs_unfinished')
+      .on(t.workspaceId, t.id)
+      .where(sql`${t.finishedAt} is null`),
     // Retention: finished jobs by age.
     index('jobs_finished_at')
       .on(t.workspaceId, t.finishedAt)

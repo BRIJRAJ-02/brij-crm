@@ -46,6 +46,8 @@ export default defineRailway(() => {
       // The relay's wake up call (spec 0005): the worker's private address and port, and the shared secret.
       WORKER_INTERNAL_URL: preserve(),
       WORKER_WAKE_SECRET: preserve(),
+      // Spec 0008: signed in requests wake the worker once a minute; off in production until the owner sets `on`.
+      WORKER_WAKE_ON_USE: preserve(),
       // Live updates (spec 0005): signs Centrifugo's tokens. In production, a reference to the Centrifugo
       // service's CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY; unset in preview-base, which has no live updates.
       CENTRIFUGO_TOKEN_SECRET: preserve(),

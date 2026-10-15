@@ -3,6 +3,9 @@ import pg from 'pg';
 
 const LISTEN_CHECK_TIMEOUT_MS = 2_000;
 
+/** How long opening a direct connection may take before it fails. */
+export const CONNECT_TIMEOUT_MS = 10_000;
+
 /**
  * Neon's pooled hosts carry `-pooler` in the name. LISTEN through a
  * transaction pooler is accepted and never delivers, so refuse it early.
@@ -30,7 +33,13 @@ export async function openDirectConnection(options: {
   const variable = options.variable ?? 'DATABASE_URL_DIRECT';
   assertDirectUrl(options.url, variable);
 
-  const listener = new pg.Client({ connectionString: options.url, application_name: options.applicationName });
+  // A host that never answers fails within 10 seconds rather than the OS's TCP timeout (about 2 minutes), so the
+  // worker's backoff (and its stop) never waits behind it (spec 0008, milestone 3).
+  const listener = new pg.Client({
+    connectionString: options.url,
+    application_name: options.applicationName,
+    connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
+  });
   await listener.connect();
   if (options.proveListen === false) return listener;
   try {
@@ -60,7 +69,11 @@ async function assertListenDelivers(listener: pg.Client, url: string, variable: 
     listener.on('notification', onNotification);
   });
 
-  const sender = new pg.Client({ connectionString: url, application_name: 'crm-listen-check' });
+  const sender = new pg.Client({
+    connectionString: url,
+    application_name: 'crm-listen-check',
+    connectionTimeoutMillis: CONNECT_TIMEOUT_MS,
+  });
   await sender.connect();
   try {
     await sender.query('select pg_notify($1, $2)', [channel, 'ok']);

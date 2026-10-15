@@ -1,10 +1,21 @@
--- The daily cleanup's workspace listing (spec 0008, milestone 3, AC-112, AC-115): crm_workspace_ids(after, max)
--- names the workspaces that aren't deleted, in id order, so the worker's daily cleanup starts one maintenance job in
--- each. Listing every workspace reaches across all of them, so it is the worker's alone (crm_worker), never the
--- app's: the function is owned by crm_sweep, a role that can't log in, reads two columns of one table and nothing
--- else, and bypasses row level security only for that read. Hand written, no table change.
+-- The daily cleanup (spec 0008, milestone 3, AC-112, AC-115). First drizzle-kit's three partial indexes, so each
+-- cleanup batch reads in order what it removes instead of scanning: records and list entries in the trash by
+-- (workspace, deleted_at, id) for the purge's oldest-first pick, and unfinished jobs by id for the expiry and requeue
+-- phases. Then, hand written, the workspace listing: crm_workspace_ids(after, max) names the workspaces that aren't
+-- deleted, in id order, so the worker's daily cleanup starts one maintenance job in each. Listing every workspace
+-- reaches across all of them, so it is the worker's alone (crm_worker), never the app's: the function is owned by
+-- crm_sweep, a role that can't log in, reads two columns of one table and nothing else, and bypasses row level
+-- security only for that read.
 --
--- New role and function only, nothing waits on traffic. Any change here goes through security-access-reviewer.
+-- The indexes take a share lock on records, list_entries and jobs while they build (a migration runs in a
+-- transaction, so not concurrently): small tables today. Give up after 5 seconds rather than queue behind traffic,
+-- like 0020 and 0031. Any change to the role or the function goes through security-access-reviewer.
+set local lock_timeout = '5s';
+--> statement-breakpoint
+CREATE INDEX "jobs_unfinished" ON "jobs" USING btree ("workspace_id","id") WHERE "jobs"."finished_at" is null;--> statement-breakpoint
+CREATE INDEX "list_entries_trashed_at" ON "list_entries" USING btree ("workspace_id","deleted_at","id") WHERE "list_entries"."deleted_at" is not null;--> statement-breakpoint
+CREATE INDEX "records_trashed_at" ON "records" USING btree ("workspace_id","deleted_at","id") WHERE "records"."deleted_at" is not null;
+--> statement-breakpoint
 do $$
 begin
   if not exists (select 1 from pg_roles where rolname = 'crm_sweep') then

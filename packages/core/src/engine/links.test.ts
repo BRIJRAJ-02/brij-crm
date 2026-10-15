@@ -15,6 +15,8 @@ import {
   FAR_LIMIT,
   farReferencesQuery,
   purgeDeleted,
+  purgeEntryPick,
+  purgeRecordPick,
   restoreRecord,
   type RemovedCounts,
 } from './deletion.ts';
@@ -1497,6 +1499,38 @@ describe('deletion', () => {
       expect(plan.seqScansOfValues).toEqual([]);
       expect(plan.valueIndexes).toContain('values_history');
     }
+  });
+
+  it('picks the oldest trash in index order, never reading the live rows or sorting the whole trash (spec 0008)', async () => {
+    const world = await workspace();
+    const plan = async (statement: SQL) => {
+      const result = await db.withWorkspace(world.scope.workspaceId, async (tx) => {
+        // Only an index can serve it here; the test reads which one, and that nothing sorts.
+        await tx.execute(sql`set local enable_seqscan = off`);
+        return tx.execute<{ 'QUERY PLAN': readonly { Plan: PlanNode }[] }>(sql`explain (format json) ${statement}`);
+      });
+      const nodes: PlanNode[] = [];
+      const walk = (node: PlanNode) => {
+        nodes.push(node);
+        for (const child of node.Plans ?? []) walk(child);
+      };
+      const root = result.rows[0]?.['QUERY PLAN'][0]?.Plan;
+      if (root === undefined) throw new Error('No plan.');
+      walk(root);
+      return {
+        indexes: nodes.flatMap((node) => (node['Index Name'] === undefined ? [] : [node['Index Name']])),
+        // A full sort would read the whole trash first; an incremental one (rows already in deleted_at order, ties
+        // put in id order) stops at the limit.
+        sorts: nodes.filter((node) => node['Node Type'] === 'Sort'),
+      };
+    };
+    const cutoff = sql`now() - interval '30 days'`;
+    const records = await plan(purgeRecordPick(world.scope.workspaceId, cutoff, 500));
+    expect(records.indexes).toEqual(['records_trashed_at']);
+    expect(records.sorts).toEqual([]);
+    const entries = await plan(purgeEntryPick(world.scope.workspaceId, cutoff, 500));
+    expect(entries.indexes).toEqual(['list_entries_trashed_at']);
+    expect(entries.sorts).toEqual([]);
   });
 
   it("finds a record's far references by index, never a scan of records or record_links (AC-8, AC-17, AC-18)", async () => {

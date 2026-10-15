@@ -74,6 +74,7 @@ const NO_TOTALS: Totals = {
 /**
  * Where the cleanup got to: its phase, the totals, the last finished job the
  * `items` phase handled (its `finished_at` as Postgres wrote it, and its id),
+ * the job it is part way through with the last item position it reached,
  * the time that phase starts from (the last successful cleanup's start), and
  * the last job id the `requeue` phase looked at.
  */
@@ -82,6 +83,7 @@ const Checkpoint = z.object({
   totals: Totals,
   since: z.string().optional(),
   finished: z.object({ at: z.string(), id: z.uuid() }).optional(),
+  current: z.object({ at: z.string(), id: z.uuid(), position: z.number().int().min(0) }).optional(),
   after: z.uuid().optional(),
 });
 type Checkpoint = z.infer<typeof Checkpoint>;
@@ -154,17 +156,21 @@ async function expired(context: WriteContext, at: Checkpoint, limit: number): Pr
 /**
  * Phase 3: the items of jobs that finished since the last successful cleanup
  * began (every finished job, the first time), all but the refused ones, in
- * the order the jobs finished, at most 5,000 items and 50 jobs a batch.
+ * the order the jobs finished. A batch walks at most 5,000 item positions
+ * (by the primary key, in windows that never revisit one) over at most 50
+ * jobs, so its cost is bounded whatever the items' states: a job with a
+ * million refused items costs 200 short batches once, never a rescan.
  */
 async function items(context: WriteContext, at: Checkpoint, jobId: string): Promise<StepOutcome> {
   const { tx, scope } = context;
   let since = at.since;
   if (since === undefined) {
-    // The last cleanup that finished began after every job it cleaned had finished.
+    // The last cleanup that finished began after every job it cleaned had finished; a minute earlier still, since a
+    // job's finished_at is its last transaction's start, which may come just before a commit that cleanup missed.
     const [last] = await tx
       .execute<{ since: string | null }>(
         sql`
-        select max(started_at)::text as since from jobs
+        select (max(started_at) - interval '1 minute')::text as since from jobs
         where workspace_id = ${scope.workspaceId} and kind = ${MAINTENANCE_DAILY} and status = 'succeeded'
           and id <> ${jobId}
       `,
@@ -172,35 +178,58 @@ async function items(context: WriteContext, at: Checkpoint, jobId: string): Prom
       .then((result) => result.rows);
     since = last?.since ?? '-infinity';
   }
+  // The job in hand first (its next window), then the ones that finished after it.
+  const from = at.current ?? at.finished;
   const jobs = await tx.execute<{ id: string; at: string }>(sql`
     select id::text, finished_at::text as at from jobs
     where workspace_id = ${scope.workspaceId} and finished_at is not null and finished_at >= ${since}::timestamptz
-      ${at.finished === undefined ? sql`` : sql`and (finished_at, id) > (${at.finished.at}::timestamptz, ${at.finished.id}::uuid)`}
+      ${from === undefined ? sql`` : sql`and (finished_at, id) >= (${from.at}::timestamptz, ${from.id}::uuid)`}
     order by finished_at, id
     limit ${JOBS_VISITED}
   `);
-  let left = ITEM_BATCH;
+  let budget = ITEM_BATCH;
+  let removed = 0;
   let finished = at.finished;
+  let current: Checkpoint['current'];
   for (const job of jobs.rows) {
-    const gone = await tx.execute(sql`
-      delete from job_items i
-      using (
-        select position from job_items
-        where workspace_id = ${scope.workspaceId} and job_id = ${job.id} and state <> 'refused'
-        limit ${left}
-      ) doomed
-      where i.workspace_id = ${scope.workspaceId} and i.job_id = ${job.id} and i.position = doomed.position
-    `);
-    const removed = gone.rowCount ?? 0;
-    left -= removed;
-    // A job whose items didn't all fit is started again next batch; the ones before it are done.
-    if (left === 0) break;
+    // Already done: the cursor's own row comes back through `>=`.
+    if (at.current === undefined && job.id === at.finished?.id) continue;
+    const after = at.current?.id === job.id ? at.current.position : 0;
+    const [top] = await tx
+      .execute<{ max: number }>(
+        sql`select coalesce(max(position), 0)::int as max from job_items
+            where workspace_id = ${scope.workspaceId} and job_id = ${job.id}`,
+      )
+      .then((result) => result.rows);
+    const last = top?.max ?? 0;
+    const end = Math.min(last, after + budget);
+    if (end > after) {
+      const gone = await tx.execute(sql`
+        delete from job_items
+        where workspace_id = ${scope.workspaceId} and job_id = ${job.id}
+          and position > ${after} and position <= ${end} and state <> 'refused'
+      `);
+      removed += gone.rowCount ?? 0;
+      budget -= end - after;
+    }
+    if (end < last) {
+      current = { at: job.at, id: job.id, position: end };
+      break;
+    }
     finished = { at: job.at, id: job.id };
+    if (budget <= 0) break;
   }
-  const removed = ITEM_BATCH - left;
   const totals = plus(at.totals, { items: removed });
-  const more = left === 0 || jobs.rows.length === JOBS_VISITED;
-  const next = more ? { ...at, totals, since, ...(finished === undefined ? {} : { finished }) } : nextPhase(at, totals);
+  const more = current !== undefined || budget <= 0 || jobs.rows.length === JOBS_VISITED;
+  const next = more
+    ? {
+        phase: at.phase,
+        totals,
+        since,
+        ...(finished === undefined ? {} : { finished }),
+        ...(current === undefined ? {} : { current }),
+      }
+    : nextPhase(at, totals);
   return outcome(next, at, totals, removed);
 }
 
@@ -242,7 +271,8 @@ async function oldJobs(context: WriteContext, at: Checkpoint, limit: number): Pr
 }
 
 /**
- * Phase 5 (AC-112's rule): an unfinished job `queued` or `running`, due, with
+ * Phase 5 (AC-112's rule): an unfinished job `queued`, `running` or
+ * `cancelling` (its next slice ends it), due, with
  * no live lease and untouched for an hour, is queued again only when the
  * queue holds no row for it (read on the worker's crm_worker connection).
  * Its row stays locked here while the queue is read, so a slice claiming it
@@ -257,7 +287,8 @@ async function requeue(
   const { tx, scope } = context;
   const stuck = await tx.execute<{ id: string }>(sql`
     select id::text from jobs
-    where workspace_id = ${scope.workspaceId} and finished_at is null and status in ('queued', 'running')
+    where workspace_id = ${scope.workspaceId} and finished_at is null
+      and status in ('queued', 'running', 'cancelling')
       and run_at < now() and (lease_until is null or lease_until < now())
       and updated_at < now() - ${REQUEUE_AFTER}::interval
       ${at.after === undefined ? sql`` : sql`and id > ${at.after}::uuid`}
