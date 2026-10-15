@@ -42,6 +42,7 @@ const NO_RECORD_VALUES = [
   'updateAttribute',
   'updateObject',
   'updateOption',
+  'updateRelationship',
 ] as const;
 
 /** Reads, helpers and hooks: they write nothing of their own. */
