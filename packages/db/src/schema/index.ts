@@ -11,3 +11,4 @@ export { listEntries, recordLinks, records, sortKeys, values } from './records.t
 export { jobItems, jobItemState, jobLane, jobs, jobStatus } from './jobs.ts';
 export { workspaceMilestones } from './milestones.ts';
 export { validationRuleKind, validationRules } from './validation.ts';
+export { viewKind, views, viewVisibility } from './views.ts';

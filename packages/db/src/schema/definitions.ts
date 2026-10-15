@@ -19,6 +19,7 @@ import {
   type PgTableExtraConfigValue,
 } from 'drizzle-orm/pg-core';
 import { attributeType, auditColumns, id, systemColumn, timestamptz, workspaceId } from './common.ts';
+import { views } from './views.ts';
 import { actorConstraints, workspaces } from './workspaces.ts';
 
 /** A kind of record, standard or custom. */
@@ -40,10 +41,17 @@ export const objects = pgTable(
     /** The workspace's order (the sidebar's): a new object takes `max + 1` under the counters row lock (spec 0012). */
     position: integer('position').notNull(),
     archivedAt: timestamptz('archived_at'),
+    /** The view everyone lands on (spec 0020): always shared; set in the same transaction as the object. */
+    defaultViewId: uuid('default_view_id'),
     ...auditColumns(),
   },
   (t): PgTableExtraConfigValue[] => [
     primaryKey({ name: 'objects_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({
+      name: 'objects_default_view',
+      columns: [t.workspaceId, t.defaultViewId],
+      foreignColumns: [views.workspaceId, views.id],
+    }),
     foreignKey({ name: 'objects_workspace', columns: [t.workspaceId], foreignColumns: [workspaces.id] }),
     foreignKey({
       name: 'objects_primary_attribute',
