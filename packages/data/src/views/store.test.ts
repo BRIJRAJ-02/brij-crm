@@ -92,6 +92,8 @@ describe('the views store', () => {
     const h = harness();
     const list = h.store.list('acme', OBJECT);
     const body = h.store.get('acme', A);
+    list.retain();
+    body.retain();
     await list.ready();
     await body.ready();
     h.reads.length = 0;
@@ -107,6 +109,7 @@ describe('the views store', () => {
     const list = h.store.list('acme', OBJECT);
     const a = h.store.get('acme', A);
     const b = h.store.get('acme', B);
+    for (const source of [list, a, b]) source.retain();
     await Promise.all([list.ready(), a.ready(), b.ready()]);
     h.reads.length = 0;
     h.server.set(A, view(A, 3));
@@ -121,6 +124,7 @@ describe('the views store', () => {
   it('coalesces a burst per object: one read at once, one more after the window and the jitter', async () => {
     const h = harness();
     const list = h.store.list('acme', OBJECT);
+    list.retain();
     await list.ready();
     h.reads.length = 0;
     for (let at = 0; at < 5; at += 1) h.store.changed('acme', event([], true));
@@ -132,12 +136,33 @@ describe('the views store', () => {
     expect(h.reads).toEqual(['list', 'list']);
   });
 
-  it('reads nothing for an object it holds nothing of', async () => {
+  it('reads nothing for an object no screen holds, and reads it again when one does', async () => {
     const h = harness();
     h.store.changed('acme', event([A]));
+    await h.settle();
+    expect(h.reads).toEqual([]);
+    // Past the coalescing window, so the next change is handled at once.
+    await h.advance(VIEWS_COALESCE_MS);
+    const list = h.store.list('acme', OBJECT);
+    await list.ready();
+    h.reads.length = 0;
     h.store.changed('acme', event([], true));
     await h.settle();
     expect(h.reads).toEqual([]);
+    // Held again: the change it missed is read now.
+    list.retain();
+    await h.settle();
+    expect(h.reads).toEqual(['list']);
+  });
+
+  it('lands only the latest read, and reads again after a failure', async () => {
+    const h = harness();
+    const list = h.store.list('acme', OBJECT);
+    list.retain();
+    const first = list.retry();
+    const second = list.retry();
+    await Promise.all([first, second]);
+    expect(list.getSnapshot().status).toBe('ready');
   });
 
   it('never replaces a body with an older read', async () => {

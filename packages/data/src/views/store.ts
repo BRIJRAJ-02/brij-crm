@@ -100,22 +100,32 @@ export interface SaveQueryInput {
 const LOADING_LIST: ViewsListSnapshot = Object.freeze({ status: 'loading', views: Object.freeze([]) });
 const LOADING_VIEW: SavedViewSnapshot = Object.freeze({ status: 'loading' });
 
-/** A source's shared parts: listeners, holders, the workspace's watch, the first read. */
-function createSource<Snapshot>(
+/**
+ * A source's shared parts: listeners, holders, the workspace's watch, and
+ * its reads. Only the answer of the latest read started lands (`isLatest`),
+ * so an older answer arriving last never replaces a newer one. A source no
+ * screen holds isn't read on a change; it is marked stale and read when a
+ * screen holds it or a loader asks for it again.
+ */
+function createSource<Snapshot extends { readonly status: string }>(
   watch: () => () => void,
   initial: Snapshot,
-  read: () => Promise<void>,
+  read: (isLatest: () => boolean) => Promise<void>,
 ): {
   readonly api: ViewsSource<Snapshot>;
   readonly set: (next: Snapshot) => void;
   readonly get: () => Snapshot;
   readonly isRetained: () => boolean;
   readonly reread: () => Promise<void>;
+  /** Changed on the server while no screen held it: read on the next hold or ask. */
+  readonly markStale: () => void;
 } {
   let snapshot = initial;
   let held = 0;
   let release: (() => void) | undefined;
-  let first: Promise<void> | undefined;
+  let last: Promise<void> | undefined;
+  let started = 0;
+  let isStale = false;
   const listeners = new Set<() => void>();
   const set = (next: Snapshot) => {
     if (next === snapshot) return;
@@ -123,8 +133,11 @@ function createSource<Snapshot>(
     for (const listener of listeners) listener();
   };
   const reread = () => {
-    const reading = read();
-    first ??= reading;
+    started += 1;
+    const mine = started;
+    isStale = false;
+    const reading = read(() => mine === started);
+    last = reading;
     return reading;
   };
   return {
@@ -132,6 +145,9 @@ function createSource<Snapshot>(
     get: () => snapshot,
     isRetained: () => held > 0,
     reread,
+    markStale: () => {
+      isStale = true;
+    },
     api: {
       subscribe(listener) {
         listeners.add(listener);
@@ -142,7 +158,10 @@ function createSource<Snapshot>(
       getSnapshot: () => snapshot,
       retain() {
         held += 1;
-        if (held === 1) release = watch();
+        if (held === 1) {
+          release = watch();
+          if (isStale) void reread();
+        }
         let released = false;
         return () => {
           if (released) return;
@@ -154,7 +173,8 @@ function createSource<Snapshot>(
           }
         };
       },
-      ready: () => first ?? reread(),
+      // A failed read, or a change since, reads again: a Retry that calls this never meets the old failure.
+      ready: () => (last === undefined || isStale || snapshot.status === 'error' ? reread() : last),
       retry: () => reread(),
     },
   };
@@ -182,9 +202,10 @@ export function createViewsStore(deps: ViewsDeps) {
     const source = createSource<ViewsListSnapshot>(
       () => deps.watch(workspace),
       LOADING_LIST,
-      async () => {
+      async (isLatest) => {
         try {
           const answer = await deps.api.list({ workspace, objectId });
+          if (!isLatest()) return;
           source.set({
             status: 'ready',
             views: answer.views,
@@ -192,6 +213,7 @@ export function createViewsStore(deps: ViewsDeps) {
             ...(answer.lastOpenedViewId === undefined ? {} : { lastOpenedViewId: answer.lastOpenedViewId }),
           });
         } catch (failed) {
+          if (!isLatest()) return;
           const error = toDataError(failed);
           const held = source.get();
           // A list already shown stays on a passing failure; an object gone answers not found.
@@ -207,10 +229,12 @@ export function createViewsStore(deps: ViewsDeps) {
     const source = createSource<SavedViewSnapshot>(
       () => deps.watch(workspace),
       LOADING_VIEW,
-      async () => {
+      async (isLatest) => {
         try {
-          put(workspace, await deps.api.get({ workspace, viewId }));
+          const view = await deps.api.get({ workspace, viewId });
+          if (isLatest()) put(workspace, view);
         } catch (failed) {
+          if (!isLatest()) return;
           const error = toDataError(failed);
           if (error.code === 'NOT_FOUND') source.set({ status: 'not-found', error });
           else if (source.get().view === undefined) source.set({ status: 'error', error });
@@ -221,10 +245,10 @@ export function createViewsStore(deps: ViewsDeps) {
   }
 
   /** A view read or saved: replaces the held body unless that one is newer (the revision rule, for views). */
-  const put = (workspace: string, view: View, force = false) => {
+  const put = (workspace: string, view: View) => {
     const body = bodyOf(workspace, view.id);
     const held = body.get().view;
-    if (!force && held !== undefined && held.version > view.version) return;
+    if (held !== undefined && held.version > view.version) return;
     body.set({ status: 'ready', view });
   };
 
@@ -256,13 +280,20 @@ export function createViewsStore(deps: ViewsDeps) {
    * version in the list moved and those gone from it, which become not found.
    */
   const refresh = async (workspace: string, objectId: string, coarse: boolean, named: ReadonlySet<string>) => {
-    const list = lists.get(key(workspace, objectId));
+    const found = lists.get(key(workspace, objectId));
+    // What no screen holds isn't read now: it reads when a screen holds it again.
+    if (found !== undefined && !found.isRetained()) found.markStale();
+    const list = found?.isRetained() === true ? found : undefined;
     if (list !== undefined) await list.reread();
     const listed = list?.get();
     const held = bodiesOn(workspace, objectId);
     for (const body of held) {
       const view = body.get().view;
       if (view === undefined) continue;
+      if (!body.isRetained()) {
+        if (coarse || named.has(view.id)) body.markStale();
+        continue;
+      }
       if (!coarse) {
         if (named.has(view.id)) void body.reread();
         continue;
@@ -279,7 +310,7 @@ export function createViewsStore(deps: ViewsDeps) {
     // A named view held but not yet loaded with its object (opened by id) reads too.
     for (const id of named) {
       const body = bodies.get(key(workspace, id));
-      if (body !== undefined && body.get().view === undefined) void body.reread();
+      if (body !== undefined && body.isRetained() && body.get().view === undefined) void body.reread();
     }
   };
 
@@ -343,9 +374,10 @@ export function createViewsStore(deps: ViewsDeps) {
         });
         // One views row for the view's object: its echo is skipped, so the list is read here.
         deps.mutations.answered(mutationId, 1);
-        put(workspace, view, true);
+        put(workspace, view);
         const list = lists.get(key(workspace, view.objectId));
-        if (list !== undefined) void list.reread();
+        if (list?.isRetained() === true) void list.reread();
+        else list?.markStale();
         return view;
       } catch (error) {
         deps.mutations.forget(mutationId);
@@ -359,8 +391,14 @@ export function createViewsStore(deps: ViewsDeps) {
     },
     /** Everything held of the workspace is read again (a resync after a gap the outbox no longer covers). */
     resync(workspace: string) {
-      for (const [listKey, list] of lists) if (listKey.startsWith(`${workspace}\u0000`)) void list.reread();
-      for (const [bodyKey, body] of bodies) if (bodyKey.startsWith(`${workspace}\u0000`)) void body.reread();
+      const all = [
+        ...[...lists].filter(([sourceKey]) => sourceKey.startsWith(`${workspace}\u0000`)).map(([, list]) => list),
+        ...[...bodies].filter(([sourceKey]) => sourceKey.startsWith(`${workspace}\u0000`)).map(([, body]) => body),
+      ];
+      for (const source of all) {
+        if (source.isRetained()) void source.reread();
+        else source.markStale();
+      }
     },
     /** Forgets everything: the session ended, or the workspace changed. */
     clear() {

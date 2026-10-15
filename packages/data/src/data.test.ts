@@ -2041,6 +2041,7 @@ describe('views (spec 0020)', () => {
     });
     const { data } = layer(api);
     const list = data.views.list('acme', PEOPLE.id);
+    list.retain();
     await list.ready();
     expect(list.getSnapshot()).toMatchObject({ status: 'ready', defaultViewId: VIEW_ID, views: [{ id: VIEW_ID }] });
     const body = data.views.get('acme', VIEW_ID);
