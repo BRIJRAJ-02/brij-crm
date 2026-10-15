@@ -361,6 +361,14 @@ export interface RecordsView {
   readonly retain: (attributeIds?: readonly string[]) => ViewReader;
   /** A cell editor opened (true) or closed (false) in the view: order and membership don't settle while one is open. */
   readonly holdSettle: (isHeld: boolean) => void;
+  /**
+   * The screen moved on before showing it (a draft's filter typed further,
+   * spec 0020 AC-464): while no screen retains it, it leaves the layer now and
+   * its reads in flight (the count and its blocks) are aborted, so a burst of
+   * keystrokes never fills the workspace's query slots. `ready` settles. A
+   * view a screen retains is left as it is.
+   */
+  readonly abandon: () => void;
 }
 
 /** What the records layer needs from createDataLayer. */
@@ -1217,6 +1225,14 @@ export function createRecordsLayer({
         windows.refresh();
       },
       ready: () => readyPromise,
+      abandon: () => {
+        if (retains > 0 || isAbandoned) return;
+        isAbandoned = true;
+        clearTimeout(unused);
+        if (views.get(key)?.view === view) views.delete(key);
+        dispose();
+        settleReady();
+      },
       indexOf: (id) => inner.rowOf(id),
       retain: (attributeIds = []) => {
         retains += 1;
@@ -1290,6 +1306,7 @@ export function createRecordsLayer({
     }
 
     let retains = 0;
+    let isAbandoned = false;
     let unused: ReturnType<typeof setTimeout> | undefined;
     // Live changes to this workspace reach the view while it is open.
     const unwatch = watch(workspace);
