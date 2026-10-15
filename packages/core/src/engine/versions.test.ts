@@ -372,6 +372,7 @@ describe('a save that replaced a value its author never saw (spec 0006, AC-46)',
         coarseObjects: [],
         members: [],
         jobs: [],
+        tasks: [],
         references: [],
         definitions: [],
         values: Array.from({ length: records }, () => newId()).flatMap((ownerId) =>

@@ -74,6 +74,16 @@ export interface JobChange {
 }
 
 /**
+ * A task a write made or changed (spec 0019): the task, and every record it
+ * linked before or after the write, so the outbox stores one `tasks` row and
+ * each of those records' screens reads its tasks again.
+ */
+export interface TaskChange {
+  readonly taskId: string;
+  readonly recordIds: readonly string[];
+}
+
+/**
  * Everything one write landed or made visible or invisible, as the hooks see
  * it. Records and entries that only appear or disappear (a record's entries
  * on its delete, the reference values pointing at it) are listed too, so a
@@ -120,6 +130,8 @@ export interface Change {
   readonly members: readonly string[];
   /** Background jobs the write started, moved on or ended (spec 0008), each with its starter. */
   readonly jobs: readonly JobChange[];
+  /** Tasks the write made or changed (spec 0019), each with every record linked before or after. */
+  readonly tasks: readonly TaskChange[];
 }
 
 /** Marks a change `capChange` made: a type only brand, nothing at run time. */
@@ -250,6 +262,7 @@ const LIST_KEYS = [
   'definitions',
   'members',
   'jobs',
+  'tasks',
 ] as const satisfies readonly (keyof ChangeLists)[];
 
 /**
@@ -361,6 +374,7 @@ export async function runWrite<T>(
           definitions: [] as DefinitionChange[],
           members: [] as string[],
           jobs: [] as JobChange[],
+          tasks: [] as TaskChange[],
         };
         const context: WriteContext = {
           tx,
@@ -387,6 +401,7 @@ export async function runWrite<T>(
             append(collected.definitions, part.definitions);
             append(collected.members, part.members);
             append(collected.jobs, part.jobs);
+            append(collected.tasks, part.tasks);
           },
           async perRecord(step) {
             const marks = LIST_KEYS.map((key) => collected[key].length);
@@ -426,6 +441,7 @@ export async function runWrite<T>(
           members: [...new Set(collected.members)],
           // One entry per job: a slice's batches name the same job again.
           jobs: [...new Map(collected.jobs.map((job) => [job.jobId, job])).values()],
+          tasks: [...collected.tasks],
         };
         for (const hook of hooks) await hook(change, tx);
         return { result, change };

@@ -56,11 +56,18 @@ export interface ViewFact {
   readonly ownerMemberId?: string;
 }
 
-/** A task's people and linked records (#19). */
+/**
+ * A task's people and linked records (#19). A linked record in the trash is
+ * marked `trashed`: its link still counts as a link, but shows nobody the task.
+ */
 export interface TaskFact {
   readonly creatorMemberId?: string;
   readonly assigneeMemberIds: readonly string[];
-  readonly records: readonly { readonly objectId: string; readonly recordId: string }[];
+  readonly records: readonly {
+    readonly objectId: string;
+    readonly recordId: string;
+    readonly trashed?: boolean;
+  }[];
 }
 
 /** The facts some kinds need, loaded by the relay once per batch. A missing fact counts as not visible. */
@@ -244,8 +251,10 @@ export function filterEvent(audience: Audience, row: EventRow, facts: EventFacts
       return settle({ ...row, recordIds: [], noteIds: [], coarse: true }, true);
     }
     case 'tasks': {
-      const visibleRecord = (record: { readonly objectId: string }) =>
-        level(record.objectId) !== 'none' && recordRule({ data: policy }, record.objectId) === undefined;
+      const visibleRecord = (record: { readonly objectId: string; readonly trashed?: boolean }) =>
+        record.trashed !== true &&
+        level(record.objectId) !== 'none' &&
+        recordRule({ data: policy }, record.objectId) === undefined;
       const taskIds = row.taskIds.filter((id) => {
         const task = factOf(facts.tasks, id);
         if (task === undefined) return false;
@@ -261,7 +270,18 @@ export function filterEvent(audience: Audience, row: EventRow, facts: EventFacts
           (factOf(facts.tasks, id)?.records ?? []).filter(visibleRecord).map((record) => record.recordId),
         ),
       );
-      const recordIds = row.recordIds.filter((id) => readable.has(id));
+      // Under the open policy a record id names nothing hidden, so only those of tasks left out go (an unlinked
+      // record, in no task's fact any more, stays, so its screens hear of the unlink). A task with no fact can't be
+      // judged: then only readable records stay (fail closed).
+      const unjudged = row.taskIds.some((id) => factOf(facts.tasks, id) === undefined);
+      const dropped = new Set(
+        row.taskIds
+          .filter((id) => !taskIds.includes(id))
+          .flatMap((id) => (factOf(facts.tasks, id)?.records ?? []).map((record) => record.recordId)),
+      );
+      const recordIds = row.recordIds.filter(
+        (id) => readable.has(id) || (!restricted && !unjudged && !dropped.has(id)),
+      );
       const removed = !sameList(taskIds, row.taskIds) || !sameList(recordIds, row.recordIds);
       return settle({ ...row, taskIds, recordIds, ...(removed ? { coarse: true } : {}) }, removed);
     }

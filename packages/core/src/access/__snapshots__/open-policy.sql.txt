@@ -1816,7 +1816,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."id" = $1
   ["<id 3>"]
 
 select "position", "text_value", "number_value"::text, "date_value"::text, to_char("timestamp_value" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "bool_value", "option_id", "actor_type", "actor_id", "json_value", "version_id", "is_cleared", to_char("active_from" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), to_char("active_until" at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'), "set_by_type", "set_by_id" from "values" where ("values"."owner_id" = $1 and "values"."attribute_id" = $2) order by "values"."active_from" asc, "values"."position" asc
@@ -1843,7 +1843,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."id" = $1
   ["<id 4>"]
 
 
@@ -1889,7 +1889,7 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
     where rel.id = "attributes"."relationship_id" and rel.target_object_ids is not null
       and not exists (select 1 from objects target where target.id = any(rel.target_object_ids) and target.archived_at is null)
     limit 1)
-) end), "config", "default_value", "relationship_id" from "attributes" where "attributes"."object_id" = $1
+) end), "config", "default_value", "relationship_id", "position", "rule_count", "rules_version" from "attributes" where "attributes"."object_id" = $1
   ["<id 3>"]
 
 
@@ -1996,6 +1996,29 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
       limit $27
     )
   ["{<id 19>}","<id 2>","<id 16>","<id 2>","{<id 19>}","<id 2>","<id 16>","<id 2>",52,"start","<id 2>","<id 16>","<id 2>","<id 20>",51,"{<id 19>}","<id 2>","<id 16>","{<id 19>}","<id 2>","<id 16>",52,"end","<id 2>","<id 16>","<id 20>",51]
+
+
+    (
+      select 'added' as part, l.task_id::text as task_id, to_char(l.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at,
+        l.created_by_type as actor_type, l.created_by_id::text as actor_id, t.title, t.is_done
+      from task_records l join tasks t on t.workspace_id = l.workspace_id and t.id = l.task_id
+      where l.record_id = $1::uuid and t.deleted_at is null and exists (select 1 from records r where r.workspace_id = l.workspace_id and r.id = l.record_id and r.deleted_at is null)
+        and true and true
+      order by l.created_at desc, ('task:' || l.task_id::text || ':added') collate "C"
+      limit $2
+    )
+    union all
+    (
+      select 'done' as part, l.task_id::text as task_id, to_char(t.done_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at,
+        t.done_by_type as actor_type, t.done_by_id::text as actor_id, t.title, t.is_done
+      from task_records l join tasks t on t.workspace_id = l.workspace_id and t.id = l.task_id
+      where l.record_id = $3::uuid and t.deleted_at is null and t.is_done and exists (select 1 from records r where r.workspace_id = l.workspace_id and r.id = l.record_id and r.deleted_at is null)
+        and true and true
+      order by t.done_at desc, ('task:' || l.task_id::text || ':done') collate "C"
+      limit $4
+    )
+  
+  ["<id 2>",51,"<id 2>",51]
 
 commit
   []

@@ -19,6 +19,7 @@ export {
   type AudienceMember,
   type EventFacts,
   type EventRow,
+  type TaskFact,
 } from './access/events.ts';
 export {
   can,
@@ -90,6 +91,15 @@ export {
   type EditRecordInput,
   type RecordWindow,
 } from './records/records.ts';
+export {
+  createTask,
+  getTasks,
+  listTasks,
+  updateTask,
+  type CreateTaskInput,
+  type ListTasksInput,
+  type UpdateTaskInput,
+} from './tasks/tasks.ts';
 export { getMyAccess, listMembers, removeMember, setMemberRole, type MemberWithRole } from './members/members.ts';
 export { outboxEvent, stubEvent, wireEvent } from './realtime/events.ts';
 export {

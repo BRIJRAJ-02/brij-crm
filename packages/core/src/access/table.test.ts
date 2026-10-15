@@ -240,6 +240,14 @@ async function dataWorld() {
   await core.deleteRecord(owner, { recordId: trashedId });
   const { listId } = await core.defineList(owner, { objectId: people, apiSlug: 'crew', name: 'Crew' });
   const { entryId } = await core.addEntry(owner, { listId, recordId });
+  const taskId = (
+    await core.createTask(owner, {
+      id: core.newId(),
+      title: 'Call back',
+      recordIds: [recordId],
+      assigneeMemberId: ownerId,
+    })
+  ).id;
   const member = memberScope.actor;
   const objectRule = (objectId: string, level: string) => ({
     subject: { type: 'role' as const, role: 'member' },
@@ -272,6 +280,7 @@ async function dataWorld() {
     trashedId,
     listId,
     entryId,
+    taskId,
   };
 }
 type DataWorld = Awaited<ReturnType<typeof dataWorld>>;
@@ -348,6 +357,11 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   getRecordEntries: empty((scope, world) => core.getRecordEntries(scope, { recordId: world.recordId })),
   getActivity: refused('NOT_FOUND', (scope, world) => core.getActivity(scope, { recordId: world.recordId })),
   readTrashedRecord: refused('NOT_FOUND', (scope, world) => core.readTrashedRecord(scope, world.trashedId)),
+  // Tasks (spec 0019): a task whose only record is hidden is absent; its record's list is NOT_FOUND.
+  getTasks: empty((scope, world) => core.getTasks(scope, { ids: [world.taskId] })),
+  listTasks: refused('NOT_FOUND', (scope, world) =>
+    core.listTasks(scope, { scope: { recordId: world.recordId }, status: 'open' }),
+  ),
   // Writes, by a principal who may only read People and its list: 403.
   createRecord: refused('FORBIDDEN', (scope, world) => core.createRecord(scope, { objectId: world.people })),
   addRecord: refused('FORBIDDEN', (scope, world) =>
@@ -375,6 +389,13 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   ),
   removeEntry: refused('FORBIDDEN', (scope, world) => core.removeEntry(scope, { entryId: world.entryId })),
   restoreEntry: refused('FORBIDDEN', (scope, world) => core.restoreEntry(scope, { entryId: world.entryId })),
+  // Linking a record needs write on its object; changing a task another member owns needs write on a linked object.
+  createTask: refused('FORBIDDEN', (scope, world) =>
+    core.createTask(scope, { id: core.newId(), title: 'Mine', recordIds: [world.recordId] }),
+  ),
+  updateTask: refused('FORBIDDEN', (scope, world) =>
+    core.updateTask(scope, { taskId: world.taskId, title: 'Renamed' }),
+  ),
 };
 
 describe('schema writes (AC-135)', () => {
