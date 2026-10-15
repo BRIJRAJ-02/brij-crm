@@ -73,6 +73,10 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'jobKinds',
   'createRunner',
   'retryDelayMs',
+  // The daily cleanup's fan out (`@crm/core/system`): it takes the worker's deps and enters each workspace as the
+  // system through the `systemScope` it is handed; its once key is a pure helper.
+  'runDailyCleanup',
+  'maintenanceKey',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;

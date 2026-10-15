@@ -12,11 +12,13 @@ import { WorkspaceScoped } from './workspaces.ts';
  * Each kind the screens may name, with its label, its lane and whether it can
  * be cancelled. The registry in `packages/core` declares the rest (its params,
  * its step) and checks it matches this. `dev.simulate` and its light twin run
- * only locally and in previews (AC-123).
+ * only locally and in previews (AC-123); `maintenance.daily` runs everywhere.
  */
 export const JOB_KINDS = {
   'dev.simulate': { label: 'Test job', lane: 'heavy', cancellable: true },
   'dev.simulate_light': { label: 'Light test job', lane: 'light', cancellable: true },
+  // The daily cleanup (milestone 3, AC-112): one per workspace a day, the system's, never cancelled.
+  'maintenance.daily': { label: 'Daily cleanup', lane: 'heavy', cancellable: false },
 } as const satisfies Record<
   string,
   { readonly label: string; readonly lane: 'heavy' | 'light'; readonly cancellable: boolean }

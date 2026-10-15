@@ -38,7 +38,7 @@ export const PRIORITY = { member: 0, system: 10 } as const;
 const ITEM_CHUNK = 5_000;
 
 /** How long a finished job stays on the page (and in the table) before the daily cleanup deletes it. */
-const FINISHED_KEPT = '30 days';
+export const FINISHED_KEPT = '30 days';
 
 /** A job row as the services read it. */
 type JobRow = typeof jobs.$inferSelect;

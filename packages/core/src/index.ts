@@ -134,6 +134,7 @@ export {
   type StepOutcome,
 } from './jobs/registry.ts';
 export { jobKinds, type JobKindsOptions } from './jobs/kinds/index.ts';
+export { MAINTENANCE_DAILY, type QueueRows } from './jobs/kinds/maintenance-daily.ts';
 export { SIMULATED_REFUSAL } from './jobs/kinds/dev-simulate.ts';
 export {
   createRunner,

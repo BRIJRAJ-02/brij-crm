@@ -227,6 +227,71 @@ describe('queue keys against Graphile 0.18.0 (spec 0008, Queue keys)', () => {
     // Its attempts are used up, so Graphile never hands it out; the backlog doesn't count it either.
     expect(after[0]?.attempts).toBe(after[0]?.max_attempts);
   });
+
+  it('names the jobs that still have a row and deletes the dead rows, for the daily cleanup (AC-112, AC-121)', async () => {
+    const { workspaceId, memberId } = await workspaceWithMember('queue-cleanup');
+    const other = await workspaceWithMember('queue-cleanup-other');
+    const waiting = await jobIn(workspaceId, memberId, 'queued');
+    const held = await jobIn(workspaceId, memberId, 'running');
+    const killed = await jobIn(workspaceId, memberId, 'running');
+    const none = await jobIn(workspaceId, memberId, 'queued');
+    // The same id in another workspace, queued there: it never answers for this workspace's job.
+    const twin = await jobIn(other.workspaceId, other.memberId, 'queued', 'heavy', none);
+    for (const job of [waiting, held, killed]) await enqueue(workspaceId, job);
+    await enqueue(other.workspaceId, twin);
+    const [heldRow] = await rows(held);
+    if (heldRow === undefined) throw new Error('No queue row.');
+    await lockAs(heldRow.id, `live-${randomUUID()}`);
+    // A hand over killed mid call: the old row dead (no key, attempts used up, freed), a new one waiting.
+    const [killedRow] = await rows(killed);
+    if (killedRow === undefined) throw new Error('No queue row.');
+    await lockAs(killedRow.id, `dead-${randomUUID()}`, '10 minutes');
+    await enqueue(workspaceId, killed);
+    await owner.query(
+      `update ${QUEUE_SCHEMA}._private_jobs set locked_by = null, locked_at = null where id = $1::bigint`,
+      [killedRow.id],
+    );
+    const queue = openQueueConnection({ url: workerUrl, applicationName: 'crm-queue-tests', max: 1 });
+    try {
+      expect([...(await queue.rows(workspaceId, [waiting, held, killed, none]))].sort()).toEqual(
+        [waiting, held, killed].sort(),
+      );
+      expect(await queue.rows(workspaceId, [])).toEqual([]);
+      expect(await queue.deleteDead()).toBeGreaterThanOrEqual(1);
+      // The dead row went; the waiting, the locked and the new rows stay.
+      expect((await rows(killed)).map((row) => row.key)).toEqual([`crm-job:${workspaceId}:${killed}`]);
+      expect(await rows(held)).toHaveLength(1);
+      expect(await rows(waiting)).toHaveLength(1);
+      expect(await queue.deleteDead()).toBe(0);
+    } finally {
+      await queue.close();
+      await owner.query(`delete from ${QUEUE_SCHEMA}._private_jobs where id = $1::bigint`, [heldRow.id]);
+    }
+  });
+});
+
+describe('what only the worker may do for the daily cleanup (spec 0008, milestone 3)', () => {
+  it('lists the workspaces not deleted and prunes the outbox on the worker login', async () => {
+    const a = await workspaceWithMember('queue-sweep-a');
+    const b = await workspaceWithMember('queue-sweep-b');
+    await owner.query('update workspaces set deleted_at = now() where id = $1', [b.workspaceId]);
+    const queue = openQueueConnection({ url: workerUrl, applicationName: 'crm-queue-tests', max: 1 });
+    try {
+      const all: string[] = [];
+      for (let after: string | undefined; ;) {
+        const page = await queue.workspaceIds(after, 2);
+        all.push(...page);
+        after = page.at(-1);
+        if (page.length < 2) break;
+      }
+      expect(all).toContain(a.workspaceId);
+      expect(all).not.toContain(b.workspaceId);
+      expect(all).toEqual([...all].sort());
+      expect(await queue.pruneOutbox()).toBeGreaterThanOrEqual(0);
+    } finally {
+      await queue.close();
+    }
+  });
 });
 
 describe('the queue tables', () => {

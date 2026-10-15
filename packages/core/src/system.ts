@@ -6,3 +6,13 @@
 export { audiences } from './access/audiences.ts';
 export { enterAsActor, systemScope, type ActorDoorDeps } from './access/door.ts';
 export { SYSTEM_ACTOR } from './engine/scope.ts';
+// The daily cleanup's fan out (spec 0008, milestone 3): lists every workspace and starts a system job in each.
+export {
+  DAILY_BUDGET_MS,
+  maintenanceKey,
+  runDailyCleanup,
+  type DailyCleanupDeps,
+  type DailyCleanupInput,
+  type DailyCleanupReport,
+  type DailySweep,
+} from './jobs/daily.ts';

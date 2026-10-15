@@ -2,10 +2,14 @@
 // connection, logged in as `crm_worker_user` (the only login whose group,
 // crm_worker, reads and changes Graphile Worker's tables). Graphile's two
 // runners share it, and the worker reads the queue's health through it:
-// stale locks to release, and the backlog it logs once a minute. It reads ids
-// and times only; the queue holds nothing else.
+// stale locks to release, and the backlog it logs once a minute. The daily
+// cleanup (milestone 3) works through it too: which jobs still have a queue
+// row, the dead rows it deletes, the outbox it prunes and the workspaces it
+// lists, all things only crm_worker may do. It reads ids and times only; the
+// queue holds nothing else.
 import pg from 'pg';
 import { assertDirectUrl } from './direct.ts';
+import { pruneOutbox } from './outbox.ts';
 
 /** The schema Graphile Worker keeps its queue in. */
 export const QUEUE_SCHEMA = 'graphile_worker';
@@ -23,7 +27,33 @@ export interface QueueConnection {
   releaseStaleLocks(olderThanSeconds?: number): Promise<number>;
   /** How many queue rows are due and unlocked, and how long the oldest has waited, in seconds. */
   backlog(): Promise<{ readonly waiting: number; readonly oldestSeconds: number }>;
+  /**
+   * Which of a workspace's jobs still have a queue row (by job key
+   * `crm-job:<workspace_id>:<id>`, locked or not): the daily cleanup queues
+   * again only a job with none (AC-112). A row a hand over cleared the key of
+   * (a dead row) doesn't count, since it never runs again.
+   */
+  rows(workspaceId: string, jobIds: readonly string[]): Promise<readonly string[]>;
+  /**
+   * Deletes dead queue rows, unlocked with their attempts used up (a killed
+   * hand over's, or one that reached Graphile's backstop), through Graphile's
+   * own `complete_jobs`, at most `DEAD_BATCH` a round until none is left;
+   * answers how many went (AC-121).
+   */
+  deleteDead(): Promise<number>;
+  /** The ids of workspaces not deleted, after `after`, in id order, at most `max` (1 to 500): `crm_workspace_ids`. */
+  workspaceIds(after: string | undefined, max: number): Promise<readonly string[]>;
+  /** One outbox prune batch (`pruneOutbox`, spec 0007) on this connection: only crm_worker may run it. */
+  pruneOutbox(): Promise<number>;
   close(): Promise<void>;
+}
+
+/** The most dead queue rows one round deletes. */
+export const DEAD_BATCH = 1_000;
+
+/** The job key `crm_enqueue_job` gives a job's queue row: the workspace and the job, since a job id is unique per workspace only. */
+export function jobKey(workspaceId: string, jobId: string): string {
+  return `crm-job:${workspaceId}:${jobId}`;
 }
 
 /** How old a lock must be before a stale lock release takes it: no live call runs 2 minutes (each returns by 30). */
@@ -78,6 +108,40 @@ export function openQueueConnection(options: {
       const row = result.rows[0];
       return { waiting: row?.waiting ?? 0, oldestSeconds: row?.oldest ?? 0 };
     },
+    async rows(workspaceId, jobIds) {
+      if (jobIds.length === 0) return [];
+      const keys = jobIds.map((jobId) => jobKey(workspaceId, jobId));
+      const result = await pool.query<{ key: string }>(
+        `select key from ${QUEUE_SCHEMA}._private_jobs where key = any($1::text[])`,
+        [keys],
+      );
+      const found = new Set(result.rows.map((row) => row.key));
+      return jobIds.filter((jobId) => found.has(jobKey(workspaceId, jobId)));
+    },
+    async deleteDead() {
+      let deleted = 0;
+      for (;;) {
+        const result = await pool.query<{ deleted: number }>(
+          `select count(*)::int as deleted from ${QUEUE_SCHEMA}.complete_jobs(array(
+             select id from ${QUEUE_SCHEMA}._private_jobs
+             where locked_at is null and attempts >= max_attempts
+             order by id limit $1
+           ))`,
+          [DEAD_BATCH],
+        );
+        const round = result.rows[0]?.deleted ?? 0;
+        deleted += round;
+        if (round < DEAD_BATCH) return deleted;
+      }
+    },
+    async workspaceIds(after, max) {
+      const result = await pool.query<{ id: string }>('select id from public.crm_workspace_ids($1, $2) as w(id)', [
+        after ?? null,
+        max,
+      ]);
+      return result.rows.map((row) => row.id);
+    },
+    pruneOutbox: () => pruneOutbox(pool),
     close: () => pool.end(),
   };
 }

@@ -15,14 +15,14 @@ import {
   startTestJob,
   type Runner,
 } from '@crm/core';
-import { enterAsActor, systemScope } from '@crm/core/system';
+import { enterAsActor, systemScope, type DailyCleanupInput } from '@crm/core/system';
 import { startJobForTest, testScope } from '@crm/core/testing';
 import { createDatabase, openQueueConnection, type Database, type QueueConnection } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import * as z from 'zod';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { backgroundHooks } from '../hooks.ts';
-import { startJobRunners, type JobsLog } from './graphile.ts';
+import { DailyPayload, dailyDay, startJobRunners, type JobsLog } from './graphile.ts';
 
 const { appUrl, ownerUrl, workerUrl } = inject('testDatabase');
 let db: Database;
@@ -161,6 +161,69 @@ describe('the job runners on Graphile Worker', () => {
     } finally {
       await runners.stop();
     }
+  });
+
+  it('run the daily cleanup once for a missed day, and queue a continuation for what its budget left', async () => {
+    // The cron last ran three days ago (the worker was down or asleep): one day of fill runs it once, not three times.
+    await testQuery(
+      ownerUrl,
+      `insert into graphile_worker._private_known_crontabs (identifier, known_since, last_execution)
+       values ('maintenance_daily', now() - interval '10 days', now() - interval '3 days')
+       on conflict (identifier) do update set last_execution = excluded.last_execution`,
+    );
+    const calls: DailyCleanupInput[] = [];
+    const after = newId();
+    const runners = await startJobRunners({
+      queue,
+      runner: coreRunner(20_000),
+      log: quiet,
+      pollInterval: 200,
+      daily: (input) => {
+        calls.push(input);
+        // The first call runs out of time; the continuation finishes.
+        return Promise.resolve(
+          calls.length === 1
+            ? { pruned: 0, dead: 0, workspaces: 0, failed: 0, next: after }
+            : { pruned: 0, dead: 0, workspaces: 1, failed: 0 },
+        );
+      },
+    });
+    try {
+      await expect.poll(() => calls.length, { timeout: 20_000, interval: 100 }).toBe(2);
+      // The last 03:00 UTC before now: the day the missed run was for.
+      const due = new Date();
+      due.setUTCHours(3, 0, 0, 0);
+      if (due.getTime() > Date.now()) due.setUTCDate(due.getUTCDate() - 1);
+      const day = due.toISOString().slice(0, 10);
+      expect(calls).toEqual([{ day }, { day, after }]);
+      // Nothing more, and nothing left on the queue for it.
+      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      expect(calls).toHaveLength(2);
+      await expect
+        .poll(
+          async () =>
+            (
+              await testQuery(
+                ownerUrl,
+                `select 1 from graphile_worker._private_jobs j join graphile_worker._private_tasks t on t.id = j.task_id
+                 where t.identifier = 'crm_cron_daily'`,
+              )
+            ).length,
+          { timeout: 5_000 },
+        )
+        .toBe(0);
+    } finally {
+      await runners.stop();
+    }
+  });
+
+  it('read the day a daily payload is for: the continuation’s, the cron’s, or today', () => {
+    const now = new Date('2026-10-15T08:00:00Z');
+    expect(dailyDay({ day: '2026-10-14' }, now)).toBe('2026-10-14');
+    expect(dailyDay({ _cron: { ts: '2026-10-13T03:00:00.000Z' } }, now)).toBe('2026-10-13');
+    expect(dailyDay({}, now)).toBe('2026-10-15');
+    expect(DailyPayload.safeParse({ day: 'tomorrow' }).success).toBe(false);
+    expect(DailyPayload.safeParse({ after: 'not-an-id' }).success).toBe(false);
   });
 
   it('run a job started for later at its time, never before', async () => {

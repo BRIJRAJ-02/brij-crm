@@ -4,7 +4,7 @@
 // pooled app login. Its one HTTP port answers Railway's health check and the
 // api's poke, which wakes the relay when it is dormant (`realtime/wake.ts`).
 import { jobKinds } from '@crm/core';
-import { audiences, systemScope } from '@crm/core/system';
+import { audiences, runDailyCleanup, systemScope } from '@crm/core/system';
 import {
   assertWorkerConnection,
   createDatabase,
@@ -12,6 +12,7 @@ import {
   openDirectConnection,
   openQueueConnection,
 } from '@crm/db';
+import { backgroundHooks } from './hooks.ts';
 import { startJobRunners } from './jobs/graphile.ts';
 import { createJobRunner } from './jobs/runner.ts';
 import { loadEnv, WorkerEnv } from './env.ts';
@@ -125,6 +126,8 @@ const queue =
         },
       })
     : undefined;
+// The kinds, with the queue reader the daily cleanup's requeue phase asks which jobs still have a queue row.
+const registry = jobKinds({ environment: env.APP_ENV, ...(queue === undefined ? {} : { queue }) });
 const jobs =
   queue === undefined
     ? undefined
@@ -132,13 +135,26 @@ const jobs =
         queue,
         runner: createJobRunner({
           db,
-          registry: jobKinds({ environment: env.APP_ENV }),
+          registry,
           // A batch stored a change event: the relay publishes it, even if it had gone dormant.
           onStored: () => relay?.wake(),
           log,
         }),
         log,
         onFault: (error) => captureFault(error, { task: 'jobs' }),
+        // The daily cleanup (milestone 3): the outbox, the dead queue rows, then one maintenance job a workspace.
+        daily: (input) =>
+          runDailyCleanup(
+            {
+              registry,
+              systemScope: (workspaceId) => systemScope(db, workspaceId),
+              hooks: backgroundHooks,
+              sweep: queue,
+              log,
+              onStored: () => relay?.wake(),
+            },
+            input,
+          ),
       });
 
 const health = createWorkerServer({

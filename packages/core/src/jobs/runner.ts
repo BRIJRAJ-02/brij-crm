@@ -110,7 +110,7 @@ const CONFIRM_MS = 60 * 60_000;
 export const SNAPSHOT_PAGE = 5_000;
 
 /** The plain sentences a job ends with (spec 0008; AC-104, AC-109, AC-113, AC-116). Never a value. */
-const ENDINGS = {
+export const ENDINGS = {
   JOB_FAILED: 'This job stopped after repeated errors. What it finished is kept.',
   JOB_INVALID: 'This job can’t run any more: its settings are no longer valid. What it finished is kept.',
   ACTOR_REMOVED: 'The member who started this job was removed, so it stopped. What it finished is kept.',
