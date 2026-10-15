@@ -9,7 +9,7 @@ import { createServer, type IncomingMessage } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, afterEach, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { Audience } from '@crm/core';
-import { audiences, systemScope } from '@crm/core/system';
+import { audiences, systemScope, viewFacts } from '@crm/core/system';
 import { createDatabase, createOutboxReader, openDirectConnection, type Database, type OutboxReader } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import { createCentrifugoPublisher } from './centrifugo.ts';
@@ -142,6 +142,8 @@ interface RelayOptions extends Partial<
   readonly wrap?: (reader: OutboxReader) => OutboxReader;
   /** The audience loader (the worker's by default). */
   readonly audiences?: RelayDeps['audiences'];
+  /** The facts loader (none by default: a views row goes out coarse). */
+  readonly facts?: RelayDeps['facts'];
 }
 
 function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
@@ -159,6 +161,7 @@ function relayTo(centrifugoUrl: string, options: RelayOptions = {}) {
       return options.wrap?.(reader) ?? reader;
     },
     audiences: options.audiences ?? loadAudiences,
+    ...(options.facts === undefined ? {} : { facts: options.facts }),
     publishBatch: createCentrifugoPublisher({ apiUrl: centrifugoUrl, apiKey: API_KEY, timeoutMs: 2_000 }).publishBatch,
     log: {
       info: (message, fields = {}) => {
@@ -1197,6 +1200,56 @@ describe('the relay plans each row for its workspace’s audience (spec 0007, mi
     expect(sent(shared)).toMatchObject({ kind: 'jobs', jobIds: [], coarse: true });
     expect(JSON.stringify(centrifugo.published)).not.toContain(ada);
     expect(JSON.stringify(centrifugo.published)).not.toContain(bea);
+  });
+
+  it('names a shared view to everyone and a private one to nobody else, from the facts it loads per batch (spec 0020)', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const workspaceId = await workspace();
+    const ada = await member(workspaceId);
+    await member(workspaceId);
+    const view = async (visibility: 'workspace' | 'private') => {
+      const id = randomUUID();
+      await testQuery(
+        ownerUrl,
+        `insert into views (workspace_id, id, object_id, name, visibility, creator_member_id, position, config, created_by_type, updated_by_type)
+         values ($1, $2, (select id from objects where workspace_id = $1), $3, $4, $5, 0, '{}', 'system', 'system')`,
+        [workspaceId, id, `View ${id}`, visibility, visibility === 'private' ? ada : null],
+      );
+      return id;
+    };
+    const shared = await view('workspace');
+    const mine = await view('private');
+    const viewsRow = (seq: number, ids: readonly string[]) =>
+      testQuery(
+        ownerUrl,
+        `insert into outbox (workspace_id, seq, kind, object_id, item_ids, actor_member_id)
+         values ($1, $2, 'views', (select id from objects where workspace_id = $1), $3::uuid[], $4)`,
+        [workspaceId, seq, `{${ids.join(',')}}`, ada],
+      );
+    await viewsRow(1, [shared]);
+    await viewsRow(2, [mine]);
+    let loads = 0;
+    relayTo(centrifugo.url, {
+      facts: (id, rows) => {
+        loads += 1;
+        return viewFacts(
+          systemScope(db, id),
+          rows.flatMap((row) => (row.kind === 'views' ? row.itemIds : [])),
+        ).then((views) => ({ views }));
+      },
+    });
+    await expect.poll(() => centrifugo.seqs(workspaceId), WAIT).toEqual([1, 2]);
+    const sent = centrifugo.published
+      .filter((item) => item.channel === `workspace:${workspaceId}`)
+      .map((item) => item.data);
+    expect(sent[0]).toMatchObject({ kind: 'views', viewIds: [shared] });
+    expect(sent[0]).not.toHaveProperty('coarse');
+    // Two members share the channel and only Ada may see her private view: coarse, its id nowhere.
+    expect(sent[1]).toMatchObject({ kind: 'views', viewIds: [], coarse: true });
+    expect(JSON.stringify(sent)).not.toContain(mine);
+    // One load for the batch that held both rows.
+    expect(loads).toBe(1);
   });
 
   it('lets go of a workspace’s audiences after a quiet spell with no turn, while other workspaces keep it awake', async () => {

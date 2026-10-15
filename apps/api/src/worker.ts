@@ -4,7 +4,7 @@
 // pooled app login. Its one HTTP port answers Railway's health check and the
 // api's poke, which wakes the relay when it is dormant (`realtime/wake.ts`).
 import { jobKinds } from '@crm/core';
-import { audiences, systemScope } from '@crm/core/system';
+import { audiences, systemScope, viewFacts } from '@crm/core/system';
 import {
   assertWorkerConnection,
   createDatabase,
@@ -92,6 +92,13 @@ const relay =
         connect: async () => createOutboxReader(await openDirect(false)),
         // Spec 0009's audiences, read on the pool with the relay's system scope; only while the relay is awake.
         audiences: (workspaceId) => audiences(systemScope(db, workspaceId)),
+        // Spec 0009's facts for `views` rows (spec 0020): each named view's visibility and creator, one read a batch.
+        facts: async (workspaceId, rows) => ({
+          views: await viewFacts(
+            systemScope(db, workspaceId),
+            rows.flatMap((row) => (row.kind === 'views' ? row.itemIds : [])),
+          ),
+        }),
         publishBatch: createCentrifugoPublisher(env.centrifugo).publishBatch,
         log: reportingLog,
         // Only crm_worker may run crm_outbox_prune (spec 0007, milestone 3): on another login (where the jobs, and

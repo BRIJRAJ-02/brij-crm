@@ -81,9 +81,17 @@
 // keeps them until it goes dormant; a batch stops after a `members` or
 // `access` row, which drops them, so the rows after it are planned with them
 // read again. One channel per workspace until milestone 4: a workspace with
-// more than one audience fails its turn rather than share one copy.
+// more than one audience fails its turn rather than share one copy. A batch
+// holding a `views` row reads its views' facts first (the `facts` dep, spec
+// 0020), so a shared view's id goes out and a private one's goes coarse.
 import { type ChangeEvent, workspaceChannel } from '@crm/contracts';
-import { AUDIENCES_NEED_CHANNELS, isAudiencesNeedChannels, workspaceEvent, type Audience } from '@crm/core';
+import {
+  AUDIENCES_NEED_CHANNELS,
+  isAudiencesNeedChannels,
+  workspaceEvent,
+  type Audience,
+  type EventFacts,
+} from '@crm/core';
 import { PRUNE_BATCH, type OutboxReader, type OutboxRow } from '@crm/db';
 import { errorFields } from '../log.ts';
 import type { PublishBatch } from './centrifugo.ts';
@@ -107,6 +115,13 @@ export interface RelayDeps {
    * again after a `members` or `access` row (AC-85).
    */
   readonly audiences: (workspaceId: string) => Promise<readonly Audience[]>;
+  /**
+   * The facts a batch's rows need (spec 0009's `eventFacts`: each named
+   * view's visibility and creator, spec 0020), read with the relay's system
+   * scope once per batch, only when a row needs some. Without it a `views`
+   * row goes out coarse, which every client also handles.
+   */
+  readonly facts?: (workspaceId: string, rows: readonly OutboxRow[]) => Promise<EventFacts>;
   readonly publishBatch: PublishBatch;
   readonly log: RelayLog;
   /**
@@ -206,9 +221,12 @@ const PRUNE_SLOW_MS = 250;
  * malformed row, or one that leaves nothing, goes out as the stub, so the
  * channel's `seq`s stay gap free (`workspaceEvent` in `@crm/core`).
  */
-export function changeEvent(row: OutboxRow, audiences: readonly Audience[]): ChangeEvent {
-  return workspaceEvent(row, audiences);
+export function changeEvent(row: OutboxRow, audiences: readonly Audience[], facts: EventFacts = {}): ChangeEvent {
+  return workspaceEvent(row, audiences, facts);
 }
+
+/** Whether any of a batch's rows needs facts loaded before it is planned (`views` rows, spec 0020). */
+const needsFacts = (rows: readonly OutboxRow[]): boolean => rows.some((row) => row.kind === 'views');
 
 /** A row after which the workspace's audiences may differ: the cache drops them before the next row (AC-85). */
 const changesAudiences = (row: OutboxRow): boolean => row.kind === 'members' || row.kind === 'access';
@@ -432,10 +450,11 @@ export function createRelay(deps: RelayDeps): Relay {
     if (!retrying) sawWork();
     const channel = workspaceChannel(workspaceId);
     const audiences = await audiencesOf(workspaceId);
+    const facts = deps.facts !== undefined && needsFacts(rows) ? await deps.facts(workspaceId, rows) : {};
     const outcome = await deps.publishBatch(
       rows.map((row) => ({
         channel,
-        data: changeEvent(row, audiences),
+        data: changeEvent(row, audiences, facts),
         idempotencyKey: `${workspaceId}:${String(row.seq)}`,
       })),
     );
