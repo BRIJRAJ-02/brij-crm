@@ -41,6 +41,13 @@ export const records = pgTable(
     deletedById: deletedBy.id,
     deletedByMemberId: deletedBy.memberId,
     /**
+     * The delete that moved the record to the trash (spec 0022): the browser's
+     * batch id for a delete it sent, or a delete job's id. Set with
+     * `deleted_at`, cleared by a restore, so undoing a delete restores exactly
+     * the records still holding its batch.
+     */
+    deletedBatchId: uuid('deleted_batch_id'),
+    /**
      * Grows by one in every statement that updates the row (spec 0006, AC-44):
      * each value or near side link write (`touchOwner`), a delete and a
      * restore. A read carries it, so the browser never lets an older read
@@ -69,7 +76,19 @@ export const records = pgTable(
     index('records_trashed')
       .on(t.workspaceId, t.id)
       .where(sql`${t.deletedAt} is not null`),
+    // The trash (spec 0022), partial so they hold only trashed rows: the workspace's trash newest first, and the
+    // purge's oldest first (`deleted_at < cutoff order by deleted_at, id`); one object's trash; one delete's batch.
+    index('records_trash_time')
+      .on(t.workspaceId, t.deletedAt, t.id)
+      .where(sql`${t.deletedAt} is not null`),
+    index('records_trash_object')
+      .on(t.workspaceId, t.objectId, t.deletedAt, t.id)
+      .where(sql`${t.deletedAt} is not null`),
+    index('records_trash_batch')
+      .on(t.workspaceId, t.deletedBatchId)
+      .where(sql`${t.deletedBatchId} is not null`),
     check('records_deleted', sql`(${t.deletedAt} is null) = (${t.deletedByType} is null)`),
+    check('records_deleted_batch', sql`${t.deletedAt} is not null or ${t.deletedBatchId} is null`),
     ...actorConstraints('records', 'created_by', t.workspaceId, {
       type: t.createdByType,
       id: t.createdById,
