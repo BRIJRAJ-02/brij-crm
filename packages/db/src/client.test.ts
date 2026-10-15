@@ -1,11 +1,13 @@
 // The cancel connection on its own (spec 0005, cancelling a read): it gives
 // up on a connection that never answers instead of queueing every later
 // cancel behind it, and cancels only a backend still carrying the tag.
+import { randomUUID } from 'node:crypto';
 import { createServer, type Server, type Socket } from 'node:net';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase } from './client.ts';
+import { testQuery } from './testing.ts';
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, adminUrl } = inject('testDatabase');
 
 describe('cancelTagged', () => {
   let silent: Server;
@@ -51,4 +53,29 @@ describe('cancelTagged', () => {
       await db.close();
     }
   });
+});
+
+describe('the pool lets go (spec 0008, AC-117: the sleeping database rests on it)', () => {
+  it('closes an idle connection by itself, about 10 seconds after its last query (node-postgres’s default)', async () => {
+    const name = `crm-idle-${randomUUID().slice(0, 8)}`;
+    const db = createDatabase({ url: appUrl, applicationName: name });
+    const open = async () =>
+      (
+        await testQuery<{ open: number }>(
+          adminUrl,
+          'select count(*)::int as open from pg_stat_activity where application_name = $1',
+          [name],
+        )
+      )[0]?.open ?? 0;
+    try {
+      await db.withWorkspace(randomUUID(), (tx) => tx.execute('select 1'));
+      expect(await open()).toBe(1);
+      const used = Date.now();
+      // Gone with no close, so an idle api or worker holds no connection for Neon to count as activity.
+      await expect.poll(open, { timeout: 30_000, interval: 250 }).toBe(0);
+      expect(Date.now() - used).toBeGreaterThanOrEqual(9_000);
+    } finally {
+      await db.close();
+    }
+  }, 40_000);
 });
