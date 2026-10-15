@@ -62,3 +62,22 @@ export const Keyboard: Story = {
     await waitFor(() => expect(trigger).toHaveFocus());
   },
 };
+
+/** Wide enough for a builder: content sized by a container query gets the wide dialog's width. */
+export const Builder: Story = {
+  args: { width: 'builder', label: 'Filters' },
+  render: (args) => (
+    <Stage>
+      <DialogTrigger defaultOpen>
+        <Button icon="list-filter">Filter</Button>
+        <Popover {...args} />
+      </DialogTrigger>
+    </Stage>
+  ),
+  play: async () => {
+    const dialog = await openDialog();
+    const popover = dialog.closest('[data-width]');
+    await expect(popover).toHaveAttribute('data-width', 'builder');
+    await expect((popover as HTMLElement).getBoundingClientRect().width).toBeGreaterThan(400);
+  },
+};

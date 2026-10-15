@@ -16,7 +16,7 @@ New. The artifact draws each menu's surface itself and animates it in only. One 
 ```
 
 - Put a `Menu` or `ListBox` straight inside; give `label` for any other content, and it opens as a dialog with that name.
-- `width`: `content` (the default), `menu` (240px, or the trigger's width when wider), `trigger` (exactly the trigger's width, for a select).
+- `width`: `content` (the default), `menu` (240px, or the trigger's width when wider), `trigger` (exactly the trigger's width, for a select), `builder` (`size-dialog-wide`, never past the window, for a view's FilterBuilder or SortBuilder). Why `builder`: those size themselves by container query, so shrink to fit gave them no width at all and their fields collapsed (spec 0020's Toolbar).
 - `placement` follows React Aria (`bottom start` by default) and flips when there is no room.
 - `triggerRef` anchors it to an element that isn't a React Aria trigger (a context menu's row).
 

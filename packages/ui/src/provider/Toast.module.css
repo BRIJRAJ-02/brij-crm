@@ -56,7 +56,7 @@
   }
 
   .icon[data-tone='info'] {
-    color: var(--tag-blue-text);
+    color: var(--dot-blue);
   }
 
   .content {
