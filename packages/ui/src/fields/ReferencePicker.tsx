@@ -1,16 +1,37 @@
 // The editor references share (members, records): the chosen ones as chips
 // you can remove, and a searchable menu that adds or replaces one. Results
 // come from the screen through a ListSource, so long lists stay outside.
-import type { ActorDisplay, RecordRefDisplay } from '@crm/contracts/values';
+import type { ActorDisplay, Hue, RecordRefDisplay } from '@crm/contracts/values';
 import { useEffect, useState } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
 import { RecordChip } from '../atoms/RecordChip/RecordChip.tsx';
 import { arraySource, type ListSource } from '../lib/list-source.ts';
+import type { IconName } from '../atoms/Icon/icons.ts';
 import { Menu, MenuTrigger } from '../molecules/Menu/Menu.tsx';
+import { Select } from '../molecules/Select/Select.tsx';
 import styles from './ReferencePicker.module.css';
 import { strings } from './strings.ts';
 
 type Reference = RecordRefDisplay | ActorDisplay;
+
+/** One object a record search can look in (spec 0019's object switcher). */
+export interface SearchObject {
+  readonly id: string;
+  readonly label: string;
+  readonly icon?: IconName;
+  readonly hue?: Hue;
+}
+
+/**
+ * Which object a record search looks in, for a reference that may hold
+ * records of any object (a task's linked records): the objects, the one
+ * searched now, and the change.
+ */
+export interface ObjectSwitcher {
+  readonly objects: readonly SearchObject[];
+  readonly objectId: string;
+  readonly onObjectChange: (objectId: string) => void;
+}
 
 /** Props for ReferencePicker. */
 export interface ReferencePickerProps<D extends Reference> {
@@ -37,6 +58,11 @@ export interface ReferencePickerProps<D extends Reference> {
    * would be a panel on a panel.
    */
   readonly isInline?: boolean;
+  /** The objects the search can look in; a Select before the search picks one (spec 0019). Without it, nothing changes. */
+  readonly objects?: readonly SearchObject[];
+  /** The object searched now, one of `objects`. */
+  readonly objectId?: string;
+  readonly onObjectChange?: (objectId: string) => void;
 }
 
 /** Chosen references as removable chips, and a searchable menu to pick one. */
@@ -53,6 +79,9 @@ export function ReferencePicker<D extends Reference>({
   isOpenAtStart = false,
   startQuery,
   isInline = false,
+  objects,
+  objectId,
+  onObjectChange,
 }: ReferencePickerProps<D>) {
   const [query, setQuery] = useState(startQuery ?? '');
   const [isOpen, setOpen] = useState(false);
@@ -138,6 +167,22 @@ export function ReferencePicker<D extends Reference>({
             </li>
           ))}
         </ul>
+      )}
+      {objects !== undefined && objects.length > 0 && onObjectChange !== undefined && (
+        <Select
+          label={strings.searchIn}
+          size="sm"
+          items={objects.map((object) => ({
+            id: object.id,
+            label: object.label,
+            ...(object.icon === undefined ? {} : { icon: object.icon }),
+            ...(object.hue === undefined ? {} : { hue: object.hue }),
+          }))}
+          value={objectId ?? objects[0]?.id ?? null}
+          onChange={(id) => {
+            if (id !== null) onObjectChange(id);
+          }}
+        />
       )}
       {isInline ? (
         menu

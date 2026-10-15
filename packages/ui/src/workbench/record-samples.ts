@@ -83,6 +83,7 @@ export const SAMPLE_ACTIVITY: readonly ActivityEntry[] = [
 
 const NORTHWIND = SAMPLE_COMPANIES[0] as RecordRefDisplay;
 const GLOBEX = SAMPLE_COMPANIES[1] as RecordRefDisplay;
+const THIRD_COMPANY = SAMPLE_COMPANIES[2] as RecordRefDisplay;
 
 /** The people the link entries name, made from their number (records of a People object). */
 const person = (n: number, name: string): RecordRefDisplay => ({
@@ -185,8 +186,7 @@ export const SAMPLE_TASKS: readonly TaskEntry[] = [
     isDone: false,
     dueOn: '2026-10-06',
     assignee: ADA,
-    record: NORTHWIND,
-    recordHref: `/companies/${NORTHWIND.recordId}`,
+    records: [NORTHWIND, GLOBEX, THIRD_COMPANY],
   },
   {
     id: 't2',
@@ -194,17 +194,24 @@ export const SAMPLE_TASKS: readonly TaskEntry[] = [
     isDone: false,
     dueOn: '2026-10-08',
     assignee: GRACE,
-    record: GLOBEX,
+    records: [GLOBEX],
   },
-  { id: 't3', title: 'Prepare the renewal deck', isDone: false, dueOn: '2026-10-09', assignee: ADA, record: NORTHWIND },
-  { id: 't4', title: 'Follow up on pricing', isDone: false, dueOn: '2026-10-21', record: GLOBEX },
+  {
+    id: 't3',
+    title: 'Prepare the renewal deck',
+    isDone: false,
+    dueOn: '2026-10-09',
+    assignee: ADA,
+    records: [NORTHWIND],
+  },
+  { id: 't4', title: 'Follow up on pricing', isDone: false, dueOn: '2026-10-21', records: [GLOBEX] },
   {
     id: 't5',
     title: 'Send the security questionnaire',
     isDone: true,
     dueOn: '2026-10-02',
     assignee: GRACE,
-    record: NORTHWIND,
+    records: [NORTHWIND],
   },
 ];
 

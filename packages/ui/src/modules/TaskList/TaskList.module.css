@@ -57,11 +57,37 @@
     text-decoration: line-through;
   }
 
+  /* The inline layout (Overview) draws its few rows in place, with no scroll of its own. */
+  .root[data-inline] {
+    block-size: auto;
+    overflow: visible;
+  }
+
+  /* A section's heading: a label above its run of tasks, never focused (the arrows skip it). */
+  .heading {
+    display: flex;
+    align-items: center;
+    box-sizing: border-box;
+    block-size: var(--size-row);
+    padding-inline: var(--space-8);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
   .record {
     display: flex;
     flex: none;
+    gap: var(--space-4);
+    align-items: center;
     max-inline-size: var(--size-column);
     min-inline-size: 0;
+  }
+
+  /* "+N", the records past the chip; its tooltip lists them. */
+  .more {
+    display: inline-flex;
+    flex: none;
   }
 
   .due {

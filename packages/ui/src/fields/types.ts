@@ -1,5 +1,6 @@
 // The field set's types (spec 0003, attribute values): what every display and
 // editor takes, and what each attribute type registers once.
+import type { ObjectSwitcher } from './ReferencePicker.tsx';
 import type {
   ActorDisplay,
   AttributeType,
@@ -94,6 +95,12 @@ export interface EditorProps<T extends AttributeType> {
    * when absent.
    */
   readonly onCreateOption?: (label: string) => void;
+  /**
+   * Record references that may hold records of any object (a task's linked
+   * records, spec 0019): which object the search looks in, picked from a
+   * Select before it. Nothing changes without it.
+   */
+  readonly objectSwitcher?: ObjectSwitcher;
 }
 
 /** A pasted or imported text the type can't take, and why ("No option called 'Hot'"). */

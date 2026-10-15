@@ -147,6 +147,111 @@ export const LongList: Story = {
   },
 };
 
+/** The first linked record as a chip and "+2" for the others; its tooltip names them. */
+export const ManyRecords: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('+2')).toBeInTheDocument();
+    await expect(canvas.getByText('2 more records')).toBeInTheDocument();
+  },
+};
+
+/** A task just made here carries the "New" badge until its list settles. */
+export const NewTask: Story = {
+  render: function Render() {
+    return (
+      <Stage height="grid">
+        <TaskList
+          label="Tasks"
+          tasks={arraySource(SAMPLE_TASKS, (task) => task.id)}
+          newIds={new Set(['t4'])}
+          onToggle={() => undefined}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('New')).toBeInTheDocument();
+  },
+};
+
+/** Runs of tasks under headings (My tasks' Overdue, Today, Upcoming); the arrows skip the headings. */
+export const Sections: Story = {
+  render: function Render() {
+    const sectionOf = (task: TaskEntry) =>
+      task.dueOn === undefined
+        ? { id: 'none', title: 'No date' }
+        : task.dueOn < '2026-10-08'
+          ? { id: 'overdue', title: 'Overdue' }
+          : task.dueOn === '2026-10-08'
+            ? { id: 'today', title: 'Today' }
+            : { id: 'upcoming', title: 'Upcoming' };
+    const open = SAMPLE_TASKS.filter((task) => !task.isDone);
+    return (
+      <Stage height="grid">
+        <TaskList
+          label="My tasks"
+          tasks={arraySource(open, (task) => task.id)}
+          sectionOf={sectionOf}
+          onToggle={() => undefined}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByRole('rowheader', { name: 'Overdue' })).toBeInTheDocument();
+    await expect(canvas.getByRole('rowheader', { name: 'Upcoming' })).toBeInTheDocument();
+    await userEvent.tab();
+    await waitFor(() => expect(canvas.getByRole('row', { name: /Send the order form/ })).toHaveFocus());
+    await userEvent.keyboard('{ArrowDown}');
+    await waitFor(() => expect(canvas.getByRole('row', { name: /Book the security review/ })).toHaveFocus());
+    await userEvent.keyboard('{ArrowDown}');
+    await waitFor(() => expect(canvas.getByRole('row', { name: /Prepare the renewal deck/ })).toHaveFocus());
+  },
+};
+
+/** Drawn in place on Overview: a few rows, no scroll of its own. */
+export const Inline: Story = {
+  render: function Render() {
+    return (
+      <Stage>
+        <TaskList
+          label="Open tasks"
+          layout="inline"
+          tasks={arraySource(
+            SAMPLE_TASKS.filter((task) => !task.isDone),
+            (task) => task.id,
+          )}
+          onToggle={() => undefined}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByRole('row')).toHaveLength(4);
+  },
+};
+
+/** An empty list in a screen's own words. */
+export const EmptyOwnWords: Story = {
+  render: function Render() {
+    return (
+      <Stage height="grid">
+        <TaskList
+          label="Tasks"
+          tasks={arraySource([], (task: TaskEntry) => task.id)}
+          emptyTitle="No open tasks. Add one above."
+          onToggle={() => undefined}
+        />
+      </Stage>
+    );
+  },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('No open tasks. Add one above.')).toBeInTheDocument();
+  },
+};
+
 /** No tasks yet. */
 export const Empty: Story = {
   args: { isEmpty: true },

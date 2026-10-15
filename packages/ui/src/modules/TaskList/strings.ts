@@ -15,4 +15,8 @@ export const strings = {
   /** Read before the due day. */
   due: 'Due',
   done: 'Done',
+  /** The badge on a task just made here. */
+  isNew: 'New',
+  /** Read after "+N": how many more records the task is about. */
+  moreRecords: (count: number) => (count === 1 ? '1 more record' : `${String(count)} more records`),
 } as const;

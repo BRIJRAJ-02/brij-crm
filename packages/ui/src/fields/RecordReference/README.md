@@ -12,6 +12,7 @@ Screens never import it; they render values through `AttributeDisplay` and `Attr
 
 - **Display**: a RecordChip (people as circles, companies as squares, names from the data layer's `RecordRefDisplay`); several are a row with "+N".
 - **Editor**: "Choose record": a searchable, virtualised Menu whose results come from `onSearch` as a ListSource, so records never all load. A relation that holds many adds; one replaces. The chosen ones are chips with remove. In a grid cell it edits in the cell's popover, with the search and its results in the panel itself under the chosen chips, never a menu over the panel. (The command palette, milestone 3, gives this picker its full look.)
+- **Object switcher** (spec 0019): a reference that may hold records of any object (a task's linked records) passes `objectSwitcher` (`{ objects: [{ id, label, icon, hue }], objectId, onObjectChange }`) through `AttributeEditor`, and ReferencePicker draws a small Select, "Search in", before the button that opens the search; `onSearch` then searches the object chosen. Without it nothing changes. It sits beside the trigger rather than inside the menu's popover, so the Menu molecule needs no new slot.
 - **Text out / in** (copy, paste, CSV, the import preview): names / refused (choose the records).
 - **Filter operators**: is, is any of, and through the relation (Company › Country), then is empty and is not empty.
 
