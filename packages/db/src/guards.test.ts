@@ -122,8 +122,8 @@ describe('every tenant table', () => {
   });
 });
 
-describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005)', () => {
-  it('has exactly four security definer functions, each owned by its own narrow role', async () => {
+describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
+  it('has exactly five security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -136,6 +136,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
       { name: 'crm_search_text', owner: 'crm_search' },
+      { name: 'crm_workspace_ids', owner: 'crm_sweep' },
     ]);
     // Each hardened: a fixed search path (the prune also waits at most a second for a lock), and a standard SQL body (begin atomic, bound when it was made), but
     // crm_enqueue_job's, which is quoted so a Graphile upgrade that recreates add_job never fails on it.
@@ -150,23 +151,25 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
       { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_search_text', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
+      { name: 'crm_workspace_ids', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
     ]);
   });
 
-  it('lets no role but crm_relay, crm_search and the owner bypass it, outside the superusers', async () => {
+  it('lets no role but crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
     const bypass = await owner.query<{ role: string }>(`
       select rolname as role from pg_roles
       where rolbypassrls and not rolsuper
         and rolname <> (select pg_get_userbyid(datdba) from pg_database where datname = current_database())
       order by rolname
     `);
-    expect(bypass.rows.map((row) => row.role)).toEqual(['crm_relay', 'crm_search']);
+    expect(bypass.rows.map((row) => row.role)).toEqual(['crm_relay', 'crm_search', 'crm_sweep']);
   });
 
   // Each owner role, its functions, their signatures, and who calls each: the app (and so the worker, which
   // inherits it), or the worker alone. Listing workspaces reaches across them, so it is the worker's (spec 0008);
   // the app keeps it too until milestone 3's contract migration, once every worker runs on crm_worker_user. The
-  // prune is the worker's alone from the start (spec 0007, milestone 3).
+  // prune is the worker's alone from the start (spec 0007, milestone 3), and so is the daily cleanup's workspace
+  // listing (spec 0008, milestone 3).
   it.each([
     ['crm_search', ['crm_search_text'], ['crm_search_text(uuid, text, integer)'], ['app']],
     [
@@ -176,6 +179,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       ['app', 'worker'],
     ],
     ['crm_queue', ['crm_enqueue_job'], ['crm_enqueue_job(uuid, timestamp with time zone)'], ['app']],
+    ['crm_sweep', ['crm_workspace_ids'], ['crm_workspace_ids(uuid, integer)'], ['worker']],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
     async (name, fns, signatures, callers) => {
@@ -523,6 +527,100 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     }
   });
 
+  describe('crm_workspace_ids (spec 0008, milestone 3, AC-112, AC-115)', () => {
+    it('gives crm_sweep select on workspaces.id and workspaces.deleted_at and nothing else', async () => {
+      // From the catalog, by every route, as for crm_relay: no table privilege, two column grants, no role.
+      const tables = await owner.query<{ table: string }>(`
+        select n.nspname || '.' || c.relname as table
+        from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        cross join unnest(array['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) p(privilege)
+        where c.relkind in ('r', 'p', 'v', 'm', 'f') and n.nspname not in ('pg_catalog', 'information_schema')
+          and n.nspname not like 'pg\\_toast%' and has_table_privilege('crm_sweep', c.oid, p.privilege)
+      `);
+      expect(tables.rows).toEqual([]);
+      const columns = await owner.query<{ column: string; privilege: string }>(`
+        select att.attrelid::regclass || '.' || att.attname as column, a.privilege_type as privilege
+        from pg_attribute att cross join lateral aclexplode(att.attacl) a
+        where a.grantee = 'crm_sweep'::regrole order by 1
+      `);
+      expect(columns.rows).toEqual([
+        { column: 'workspaces.deleted_at', privilege: 'SELECT' },
+        { column: 'workspaces.id', privilege: 'SELECT' },
+      ]);
+      const memberOf = await owner.query(`select 1 from pg_auth_members where member = 'crm_sweep'::regrole`);
+      expect(memberOf.rowCount).toBe(0);
+      const schemas = await owner.query<{ schema: string; privilege: string }>(`
+        select n.nspname as schema, a.privilege_type as privilege
+        from pg_namespace n cross join aclexplode(n.nspacl) a
+        where a.grantee = 'crm_sweep'::regrole order by 1, 2
+      `);
+      expect(schemas.rows).toEqual([{ schema: 'public', privilege: 'USAGE' }]);
+    });
+
+    it('names the workspaces not deleted, ids only, in id order after the one given, clamped to 1 to 500', async () => {
+      const made = await Promise.all(['sweep-1', 'sweep-2', 'sweep-3'].map((name) => workspaceWithMember(name)));
+      const [a, b, c] = made.map((w) => w.workspaceId).sort();
+      if (a === undefined || b === undefined || c === undefined) throw new Error('Three workspaces were made.');
+      await owner.query('update workspaces set deleted_at = now() where id = $1', [b]);
+      // The worker, outside any workspace: the function sees past row level security, and hands back ids only.
+      const worker = new pg.Client({ connectionString: workerUrl });
+      await worker.connect();
+      try {
+        const page = await worker.query<Record<string, unknown>>('select * from crm_workspace_ids(null, 500)');
+        expect(page.fields.map((field) => field.name)).toEqual(['crm_workspace_ids']);
+        const ids = page.rows.map((row) => String(row.crm_workspace_ids));
+        expect(ids).toEqual([...ids].sort());
+        expect(ids).toEqual(expect.arrayContaining([a, c]));
+        expect(ids).not.toContain(b);
+        const ours = async (after: string | null, max = 500) => {
+          const result = await worker.query<{ id: string }>('select id from crm_workspace_ids($1, $2) as w(id)', [
+            after,
+            max,
+          ]);
+          return result.rows.map((row) => row.id);
+        };
+        // After `a`, every id is greater, and `c` comes before any later page.
+        const afterA = await ours(a);
+        expect(afterA.every((id) => id > a)).toBe(true);
+        expect(afterA).toContain(c);
+        expect(await ours(c)).not.toContain(a);
+        for (const max of [0, -5, 1]) expect(await ours(null, max), String(max)).toHaveLength(1);
+        expect((await ours(null, 1_000_000)).length).toBeLessThanOrEqual(500);
+        // The table itself still shows the worker nothing outside withWorkspace.
+        expect((await worker.query('select id from workspaces')).rowCount).toBe(0);
+      } finally {
+        await worker.end();
+      }
+      const definition = await owner.query<{ body: string }>(
+        `select pg_get_functiondef('crm_workspace_ids(uuid, integer)'::regprocedure) as body`,
+      );
+      expect(definition.rows[0]?.body).toMatch(/least\(greatest\(crm_workspace_ids\.max, 1\), 500\)/i);
+    });
+
+    it('is refused to the app and the identity login, and is the only crm_workspace_ids', async () => {
+      for (const url of [appUrl, identityUrl]) {
+        const client = new pg.Client({ connectionString: url });
+        await client.connect();
+        try {
+          await expect(client.query('select * from public.crm_workspace_ids(null, 10)')).rejects.toMatchObject({
+            code: '42501',
+          });
+        } finally {
+          await client.end();
+        }
+      }
+      // Nor can an app login become crm_sweep, or read the workspaces it lists outside its own.
+      await expect(
+        db.withWorkspace(randomUUID(), (tx) => tx.execute(sql.raw('set local role crm_sweep'))),
+      ).rejects.toMatchObject({ cause: { code: '42501' } });
+      const overloads = await owner.query<{ signature: string }>(
+        `select p.oid::regprocedure::text as signature from pg_proc p where p.proname = 'crm_workspace_ids'`,
+      );
+      expect(overloads.rows).toEqual([{ signature: 'crm_workspace_ids(uuid,integer)' }]);
+    });
+  });
+
   it('answers nothing to a caller without execute', async () => {
     const identity = new pg.Client({ connectionString: identityUrl });
     await identity.connect();
@@ -530,6 +628,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       for (const call of [
         'select * from public.crm_outbox_workspaces(10, null)',
         'select public.crm_outbox_prune(now(), 10)',
+        'select * from public.crm_workspace_ids(null, 10)',
       ]) {
         await expect(identity.query(call)).rejects.toMatchObject({ code: '42501' });
       }

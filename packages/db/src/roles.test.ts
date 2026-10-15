@@ -481,3 +481,61 @@ describe("migration 0020's closing check: who can reach crm_relay", () => {
     await checkAfter(['create role neon_service login', 'grant crm_relay to neon_service']);
   });
 });
+
+describe("migration 0032's closing check: crm_workspace_ids and crm_sweep (spec 0008, milestone 3)", () => {
+  let check: string;
+
+  beforeAll(async () => {
+    const sql = await readFile(new URL('../migrations/0032_workspace_sweep.sql', import.meta.url), 'utf8');
+    check = sql.slice(sql.lastIndexOf('do $$'));
+  });
+
+  /** Runs the check after `setup`, in a transaction that is rolled back, so nothing outlives the test. */
+  async function checkAfter(setup: readonly string[]): Promise<void> {
+    await admin.query('begin');
+    try {
+      for (const statement of setup) await admin.query(statement);
+      await admin.query(check);
+    } finally {
+      await admin.query('rollback');
+    }
+  }
+
+  it('passes the database as migrated', async () => {
+    await checkAfter([]);
+  });
+
+  it.each([
+    ['the app', ['grant execute on function crm_workspace_ids(uuid, integer) to crm_app']],
+    ['PUBLIC', ['grant execute on function crm_workspace_ids(uuid, integer) to public']],
+    ['the identity login', ['grant execute on function crm_workspace_ids(uuid, integer) to crm_identity']],
+    ['an overload', ['create function crm_workspace_ids(integer) returns integer language sql as $f$ select 1 $f$']],
+  ])('refuses the listing reached by %s', async (_name, setup) => {
+    await expect(checkAfter(setup)).rejects.toThrow(/crm_workspace_ids must be owned by crm_sweep/);
+  });
+
+  it.each([
+    ['the app, even WITH ADMIN alone', ['grant crm_sweep to crm_app with admin true, inherit false, set false']],
+    ['the worker', ['grant crm_sweep to crm_worker']],
+    ['a login of its own', ['create role crm_test_probe login', 'grant crm_sweep to crm_test_probe']],
+    ['crm_sweep logging in', ['alter role crm_sweep login']],
+    ['crm_sweep losing BYPASSRLS, which its function needs', ['alter role crm_sweep nobypassrls']],
+    ['crm_sweep in another role', ['grant crm_app to crm_sweep']],
+  ])('refuses %s', async (_name, setup) => {
+    await expect(checkAfter(setup)).rejects.toThrow(/crm_sweep must be a plain role/);
+  });
+
+  it.each([
+    ['reading another column of workspaces', ['grant select (name) on workspaces to crm_sweep']],
+    ['reading the whole table', ['grant select on workspaces to crm_sweep']],
+    ['updating deleted_at', ['grant update (deleted_at) on workspaces to crm_sweep']],
+    ['reading another table', ['grant select on records to crm_sweep']],
+    ['writing another table through PUBLIC', ['grant insert on records to public']],
+  ])('refuses crm_sweep %s', async (_name, setup) => {
+    await expect(checkAfter(setup)).rejects.toThrow(/crm_sweep may only read workspaces\.id/);
+  });
+
+  it("skips Neon's own platform roles by name", async () => {
+    await checkAfter(['create role neon_service login', 'grant crm_sweep to neon_service']);
+  });
+});
