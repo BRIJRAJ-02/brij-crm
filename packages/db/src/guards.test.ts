@@ -650,6 +650,51 @@ describe('isolation', () => {
       ),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'validation_rules_attribute' } });
   });
+
+  it("reads none of another workspace's tasks or task links, and refuses a link to its record (spec 0019)", async () => {
+    /** A task linking one record, made inside the workspace. */
+    const tasked = async (workspaceId: string) => {
+      const objectId = await objectIn(workspaceId);
+      const recordId = randomUUID();
+      const taskId = randomUUID();
+      await db.withWorkspace(workspaceId, async (tx) => {
+        await tx.execute(
+          sql`insert into records (workspace_id, id, object_id, created_by_type, updated_by_type) values (${workspaceId}, ${recordId}, ${objectId}, 'system', 'system')`,
+        );
+        await tx.execute(
+          sql`insert into tasks (workspace_id, id, title, created_by_type, updated_by_type) values (${workspaceId}, ${taskId}, 'Call back', 'system', 'system')`,
+        );
+        await tx.execute(
+          sql`insert into task_records (workspace_id, task_id, record_id, position, created_by_type) values (${workspaceId}, ${taskId}, ${recordId}, 0, 'system')`,
+        );
+      });
+      return { recordId, taskId };
+    };
+    const a = await workspaceWithMember('tasks-a');
+    const b = await workspaceWithMember('tasks-b');
+    const inA = await tasked(a.workspaceId);
+    const inB = await tasked(b.workspaceId);
+    const tasksFromA = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ id: string }>(sql`select id from tasks`),
+    );
+    expect(tasksFromA.rows).toEqual([{ id: inA.taskId }]);
+    const linksFromA = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ task_id: string }>(sql`select task_id from task_records`),
+    );
+    expect(linksFromA.rows).toEqual([{ task_id: inA.taskId }]);
+    // A link in A to B's record: the composite key finds no such record in A.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into task_records (workspace_id, task_id, record_id, position, created_by_type) values (${a.workspaceId}, ${inA.taskId}, ${inB.recordId}, 1, 'system')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'task_records_record' } });
+    // A record removed for good while a task still links it fails: the key has no cascade (AC-446).
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'task_records_record' } });
+  });
 });
 
 describe('the auth schema: global identity, outside row level security (spec 0005)', () => {
