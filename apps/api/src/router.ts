@@ -8,6 +8,7 @@ import { optionsRouter } from './modules/options/router.ts';
 import { realtimeRouter } from './modules/realtime/router.ts';
 import { recordsRouter } from './modules/records/router.ts';
 import { systemRouter } from './modules/system/router.ts';
+import { tasksRouter } from './modules/tasks/router.ts';
 import { usageRouter } from './modules/usage/router.ts';
 import { workspacesRouter } from './modules/workspaces/router.ts';
 import { base } from './orpc.ts';
@@ -26,4 +27,5 @@ export const router = base.router({
   realtime: realtimeRouter,
   jobs: jobsRouter,
   usage: usageRouter,
+  tasks: tasksRouter,
 });

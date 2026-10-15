@@ -83,7 +83,13 @@
 // read again. One channel per workspace until milestone 4: a workspace with
 // more than one audience fails its turn rather than share one copy.
 import { type ChangeEvent, workspaceChannel } from '@crm/contracts';
-import { AUDIENCES_NEED_CHANNELS, isAudiencesNeedChannels, workspaceEvent, type Audience } from '@crm/core';
+import {
+  AUDIENCES_NEED_CHANNELS,
+  isAudiencesNeedChannels,
+  workspaceEvent,
+  type Audience,
+  type EventFacts,
+} from '@crm/core';
 import { PRUNE_BATCH, type OutboxReader, type OutboxRow } from '@crm/db';
 import { errorFields } from '../log.ts';
 import type { PublishBatch } from './centrifugo.ts';
@@ -107,6 +113,13 @@ export interface RelayDeps {
    * again after a `members` or `access` row (AC-85).
    */
   readonly audiences: (workspaceId: string) => Promise<readonly Audience[]>;
+  /**
+   * The facts a batch's rows need (spec 0009's `eventFacts`: a `tasks` row's
+   * tasks, spec 0019), read once per batch with the relay's system scope.
+   * Without it, such rows go out coarse with no ids (a missing fact counts as
+   * not visible).
+   */
+  readonly facts?: (workspaceId: string, rows: readonly OutboxRow[]) => Promise<EventFacts>;
   readonly publishBatch: PublishBatch;
   readonly log: RelayLog;
   /**
@@ -206,8 +219,8 @@ const PRUNE_SLOW_MS = 250;
  * malformed row, or one that leaves nothing, goes out as the stub, so the
  * channel's `seq`s stay gap free (`workspaceEvent` in `@crm/core`).
  */
-export function changeEvent(row: OutboxRow, audiences: readonly Audience[]): ChangeEvent {
-  return workspaceEvent(row, audiences);
+export function changeEvent(row: OutboxRow, audiences: readonly Audience[], facts: EventFacts = {}): ChangeEvent {
+  return workspaceEvent(row, audiences, facts);
 }
 
 /** A row after which the workspace's audiences may differ: the cache drops them before the next row (AC-85). */
@@ -432,10 +445,11 @@ export function createRelay(deps: RelayDeps): Relay {
     if (!retrying) sawWork();
     const channel = workspaceChannel(workspaceId);
     const audiences = await audiencesOf(workspaceId);
+    const facts = deps.facts === undefined ? {} : await deps.facts(workspaceId, rows);
     const outcome = await deps.publishBatch(
       rows.map((row) => ({
         channel,
-        data: changeEvent(row, audiences),
+        data: changeEvent(row, audiences, facts),
         idempotencyKey: `${workspaceId}:${String(row.seq)}`,
       })),
     );
