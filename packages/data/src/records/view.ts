@@ -47,6 +47,9 @@ export interface RecordViewStore<Row extends RecordBody> {
   readonly dispose: () => void;
 }
 
+/** No record on its way to the trash. */
+const NONE_GONE: ReadonlySet<string> = new Set();
+
 /** Runs `flush` once, before the next frame paints. */
 export type Scheduler = (flush: () => void) => void;
 
@@ -67,12 +70,19 @@ export function createRecordView<Row extends RecordBody>({
   windows,
   schedule = nextFrame,
   onShown = () => undefined,
+  gone = () => NONE_GONE,
 }: {
   readonly store: RecordStore<Row>;
   readonly windows: Windows;
   readonly schedule?: Scheduler;
   /** The grid asked for a new range (in screen rows): pinned rows out of sight can let go. */
   readonly onShown?: (range: RowRange) => void;
+  /**
+   * Records on their way to the trash (spec 0022): their rows are skipped at
+   * once, like a pinned row's place, until the delete's answer drops them from
+   * the windows or a refusal brings them back (`invalidate` after a change).
+   */
+  readonly gone?: () => ReadonlySet<string>;
 }): RecordViewStore<Row> {
   const listeners = new Set<() => void>();
   let pins: readonly Pin[] = [];
@@ -86,17 +96,27 @@ export function createRecordView<Row extends RecordBody>({
     onShown(range);
   };
 
-  /** The windows' rows a pinned record holds (skipped), in order. */
-  const hiddenRows = () =>
-    pins
-      .map((pin) => windows.indexOf(pin.id))
-      .filter((at): at is number => at !== undefined)
-      .sort((a, b) => a - b);
+  /** The pins still shown: a pinned record on its way to the trash leaves with it. */
+  const shownPins = () => {
+    const leaving = gone();
+    return leaving.size === 0 ? pins : pins.filter((pin) => !leaving.has(pin.id));
+  };
+
+  /** The windows' rows skipped, in order: those a pinned record holds, and those of records on their way out. */
+  const hiddenRows = () => {
+    const rows = pins.map((pin) => windows.indexOf(pin.id)).filter((at): at is number => at !== undefined);
+    const pinned = new Set(pins.map((pin) => pin.id));
+    for (const id of gone()) {
+      const at = pinned.has(id) ? undefined : windows.indexOf(id);
+      if (at !== undefined) rows.push(at);
+    }
+    return rows.sort((a, b) => a - b);
+  };
 
   const snapshotOf = (): RecordSource<Row> => {
-    const ordered = [...pins].sort((a, b) => a.index - b.index);
+    const ordered = [...shownPins()].sort((a, b) => a.index - b.index);
     const hidden = hiddenRows();
-    const count = Math.max(0, windows.count() - hidden.length) + pins.length;
+    const count = Math.max(0, windows.count() - hidden.length) + ordered.length;
     const byIndex = new Map(ordered.map((pin) => [pin.index, pin]));
     /** The windows' row the screen's `index` shows, past the pins before it and the hidden rows. */
     const windowRow = (index: number) => {
@@ -160,7 +180,9 @@ export function createRecordView<Row extends RecordBody>({
       changed();
     },
     rowOf: (id) => {
-      const pin = pins.find((each) => each.id === id);
+      if (gone().has(id)) return undefined;
+      const shown = shownPins();
+      const pin = shown.find((each) => each.id === id);
       if (pin !== undefined) return pin.index;
       const at = windows.indexOf(id);
       if (at === undefined) return undefined;
@@ -168,7 +190,7 @@ export function createRecordView<Row extends RecordBody>({
       const window = at - hidden;
       // Pins before it push it down: count them in screen rows.
       let index = window;
-      for (const each of [...pins].sort((a, b) => a.index - b.index)) if (each.index <= index) index += 1;
+      for (const each of [...shown].sort((a, b) => a.index - b.index)) if (each.index <= index) index += 1;
       return index;
     },
     shown: () => shown,

@@ -7,6 +7,9 @@ import {
   type AttributeDefinition,
   type AttributeOption,
   type ChangeEvent,
+  type DeleteManyResults,
+  type RestoreResults,
+  type TrashPage,
   type JobView,
   type Me,
   type MemberSummary,
@@ -127,6 +130,13 @@ interface Behaviour {
   trashed: (recordId: string) => TrashedRecord;
   /** What every option write answers (spec 0012, milestone 3). */
   optionWrite: () => AttributeOption;
+  /** Bulk delete and its undo (spec 0022): each record's outcome. */
+  deleteMany: (recordIds: readonly string[]) => DeleteManyResults['results'];
+  restoreBatch: (batchId: string) => RestoreResults['results'];
+  /** The trash (spec 0022): a page, the count, a restore's outcomes. */
+  trashQuery: () => TrashPage;
+  trashCount: () => { count: number; atLeast: boolean };
+  trashRestore: (recordIds: readonly string[]) => RestoreResults['results'];
 }
 
 const unauthenticated = () => new ORPCError('UNAUTHENTICATED', { status: 401, message: 'Sign in to continue.' });
@@ -163,6 +173,11 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     activity: notServed,
     trashed: notServed,
     optionWrite: notServed,
+    deleteMany: notServed,
+    restoreBatch: notServed,
+    trashQuery: () => ({ items: [] }),
+    trashCount: () => ({ count: 0, atLeast: false }),
+    trashRestore: notServed,
     ...overrides,
   };
   const calls: string[] = [];
@@ -278,13 +293,24 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       setValuesBatch: os.records.setValuesBatch.handler(notServed),
       activity: os.records.activity.handler(({ input }) => behaviour.activity(input.recordId, input.cursor)),
       getTrashed: os.records.getTrashed.handler(({ input }) => behaviour.trashed(input.recordId)),
-      deleteMany: os.records.deleteMany.handler(notServed),
-      restoreBatch: os.records.restoreBatch.handler(notServed),
+      deleteMany: os.records.deleteMany.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        sent.push(input);
+        return { results: behaviour.deleteMany(input.recordIds), echoes: 1 };
+      }),
+      restoreBatch: os.records.restoreBatch.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        sent.push(input);
+        return { mode: 'inline' as const, results: behaviour.restoreBatch(input.batchId), echoes: 1 };
+      }),
     },
     trash: {
-      query: os.trash.query.handler(notServed),
-      count: os.trash.count.handler(notServed),
-      restore: os.trash.restore.handler(notServed),
+      query: os.trash.query.handler(() => behaviour.trashQuery()),
+      count: os.trash.count.handler(() => behaviour.trashCount()),
+      restore: os.trash.restore.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        return { results: behaviour.trashRestore(input.recordIds), echoes: 1 };
+      }),
     },
     members: { list: os.members.list.handler(() => behaviour.members()) },
     access: { mine: os.access.mine.handler(() => behaviour.access()) },
@@ -931,6 +957,50 @@ describe('live updates', () => {
     expect(undone).toMatchObject({ kind: 'undone', action: 'cell', undone: 1, kept: 0, attributeTitle: 'Job title' });
     expect(view.getSnapshot().source.getItem(1)?.values[TITLE.id]).toBe('Engineer');
     expect(await data.undo.run('acme')).toEqual({ kind: 'nothing' });
+  });
+
+  it('deletes records as one undoable action, and undoes it by its batch with the object named (spec 0022)', async () => {
+    const { data, api } = await liveLayer({
+      deleteMany: (recordIds) => recordIds.map((recordId) => ({ recordId, state: 'deleted' as const })),
+      restoreBatch: () => [{ recordId: personRow(1).id, state: 'restored' as const }],
+    });
+    const outcome = await data.records.deleteMany('acme', PEOPLE.id, [personRow(1).id]);
+    expect(outcome).toMatchObject({ kind: 'done', deleted: 1, refused: 0, recordName: 'P1' });
+    const deleted = api.sent.find(
+      (input): input is { batchId: string } => typeof input === 'object' && input !== null && 'batchId' in input,
+    );
+    const undone = await data.undo.run('acme', outcome.kind === 'done' ? outcome.undoId : undefined);
+    expect(undone).toMatchObject({ kind: 'restored', restored: 1, kept: 0, pluralName: 'People', recordName: 'P1' });
+    expect(api.sent).toContainEqual(expect.objectContaining({ batchId: deleted?.batchId }));
+  });
+
+  it('lists the trash and restores from it, through the trash procedures (spec 0022)', async () => {
+    const item = {
+      recordId: personRow(4).id,
+      objectId: PEOPLE.id,
+      display: personRow(4).display,
+      deletedAt: '2026-10-15T09:00:00.000Z',
+      deletedBy: { type: 'member' as const, id: ADA_MEMBER.id },
+      expiresAt: '2026-11-14T09:00:00.000Z',
+    };
+    const api = fakeApi({
+      trashQuery: () => ({ items: [item] }),
+      trashCount: () => ({ count: 1, atLeast: false }),
+      trashRestore: (recordIds) => recordIds.map((recordId) => ({ recordId, state: 'restored' as const })),
+    });
+    const { data } = layer(api);
+    const view = await data.trash.view('acme');
+    const release = view.retain();
+    await view.ready();
+    expect(view.getSnapshot()).toMatchObject({ status: 'ready', count: { count: 1, atLeast: false } });
+    expect(await data.trash.restore('acme', [item.recordId])).toEqual({
+      kind: 'done',
+      restored: 1,
+      refused: 0,
+      objectIds: [PEOPLE.id],
+    });
+    expect(count(api.calls, '/api/rpc/trash/restore')).toBe(1);
+    release();
   });
 
   it("reads an object's attributes again on a definitions change, and reloads the app's pages only when they changed", async () => {

@@ -9,6 +9,7 @@ import type { PendingOptions } from './options.ts';
 import type { RecordsView, ViewReader, ViewState } from './records/layer.ts';
 import type { RecordState, RecordSubscription } from './records/one.ts';
 import type { TrashedSource, TrashedState } from './records/trashed.ts';
+import type { TrashState, TrashView } from './trash/store.ts';
 
 /**
  * A view's current state (its rows, count, status, cell refusals and row
@@ -96,6 +97,15 @@ export function useActivity(feed: ActivityFeed): ActivityState {
  */
 export function useActivityStatus(feed: ActivityFeed): ActivityState['status'] {
   return useSyncExternalStore(feed.subscribe, () => feed.getSnapshot().status);
+}
+
+/**
+ * The trash (spec 0022): its rows, count, status and refusals, re-rendering
+ * when they change. While the screen is mounted it holds the view, so it
+ * settles live as records are deleted, restored or purged anywhere.
+ */
+export function useTrash(view: TrashView): TrashState {
+  return useRetained(view);
 }
 
 /** A missing record looked up in the trash (spec 0017), asked when first read. */

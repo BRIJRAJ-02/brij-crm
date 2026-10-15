@@ -4,7 +4,7 @@
 // mine" saves the value kept beside each), and the undo stack (each action's
 // cells, the value before and the version written, checked on the server by
 // `ifVersionId` when undone). Both go with the records on sign out and on a
-// workspace switch.
+// workspace switch. Deletes and creates go on the same stack (spec 0022).
 
 /** The most versions a tab remembers as its own: its last 500 written cells. */
 export const OWN_VERSIONS = 500;
@@ -69,14 +69,49 @@ export interface UndoCell {
 /** What one action was, for the toast that names it: one cell, a paste, or a range clear. */
 export type UndoKind = 'cell' | 'paste' | 'clear';
 
-/** One user action on the undo stack: its kind, its object, and every cell of it that landed. */
-export interface UndoEntry {
+/** One edit on the undo stack: its kind, its object, and every cell of it that landed. */
+export interface CellsEntry {
   /** The action's own id (its write's mutation id): a toast's Undo names it, so it undoes that action or nothing. */
   readonly id: string;
   readonly kind: UndoKind;
   readonly objectId: string;
   readonly cells: readonly UndoCell[];
 }
+
+/**
+ * A delete on the undo stack (spec 0022, AC-526): undoing it restores the
+ * records still in the trash with its batch id (`records.restoreBatch`).
+ */
+export interface DeleteEntry {
+  readonly id: string;
+  readonly kind: 'delete';
+  readonly objectId: string;
+  readonly batchId: string;
+  /** How many records it moved to the trash. */
+  readonly count: number;
+  /** The record's name when it deleted one, for the toast ("Restored Ada Lovelace"). */
+  readonly recordName?: string;
+}
+
+/** A record made here (spec 0022, AC-541): undoing it moves the record to the trash. */
+export interface CreateEntry {
+  readonly id: string;
+  readonly kind: 'create';
+  readonly objectId: string;
+  readonly recordId: string;
+  readonly recordName: string;
+}
+
+/** One user action on the undo stack: an edit of cells, a delete, or a create. */
+export type UndoEntry = CellsEntry | DeleteEntry | CreateEntry;
+
+/** Whether an entry is an edit of cells (a cell, a paste or a range clear). */
+export function isCellsEntry(entry: UndoEntry): entry is CellsEntry {
+  return entry.kind !== 'delete' && entry.kind !== 'create';
+}
+
+/** How many cells an entry holds against the stack's budget: a delete or a create counts as one. */
+const sizeOf = (entry: UndoEntry): number => (isCellsEntry(entry) ? entry.cells.length : 1);
 
 /** A tab's undo stack, one per workspace, `depth` (50) entries each; the oldest goes first. */
 export interface UndoStack {
@@ -101,13 +136,14 @@ export function createUndoStack(depth: number = UNDO_DEPTH, cellBudget: number =
   const stacks = new Map<string, readonly UndoEntry[]>();
   return {
     push: (workspace, entry) => {
-      if (entry.cells.length === 0) return;
+      if (isCellsEntry(entry) && entry.cells.length === 0) return;
       let stack = [...(stacks.get(workspace) ?? []), entry];
       if (stack.length > depth) stack = stack.slice(stack.length - depth);
       // Bounded by cells too, so 50 pastes of 500 rows never hold their old values for the session.
-      let cells = stack.reduce((sum, each) => sum + each.cells.length, 0);
+      let cells = stack.reduce((sum, each) => sum + sizeOf(each), 0);
       while (cells > cellBudget && stack.length > 1) {
-        cells -= stack[0]?.cells.length ?? 0;
+        const [oldest] = stack;
+        cells -= oldest === undefined ? 0 : sizeOf(oldest);
         stack = stack.slice(1);
       }
       stacks.set(workspace, stack);
@@ -119,7 +155,7 @@ export function createUndoStack(depth: number = UNDO_DEPTH, cellBudget: number =
       stacks.set(
         workspace,
         stack.map((entry) =>
-          entry.cells.some((cell) => now(cell) !== undefined)
+          isCellsEntry(entry) && entry.cells.some((cell) => now(cell) !== undefined)
             ? {
                 ...entry,
                 cells: entry.cells.map((cell) => {
