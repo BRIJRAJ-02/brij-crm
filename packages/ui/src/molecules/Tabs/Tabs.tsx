@@ -20,6 +20,10 @@ export interface TabItem {
   readonly icon?: IconName;
   /** A count after the label (Notes 12). */
   readonly count?: number;
+  /** The highest count shown as itself (99 by default); past it, "99+". */
+  readonly countMax?: number;
+  /** The count is a floor, not the total ("10,000+" for a capped count). */
+  readonly isCountAtLeast?: boolean;
   readonly isDisabled?: boolean;
 }
 
@@ -64,7 +68,13 @@ export function Tabs({ label, tabs, selectedKey, defaultSelectedKey, onSelection
           >
             {tab.icon !== undefined && <Icon name={tab.icon} size="sm" />}
             <span>{tab.label}</span>
-            {tab.count !== undefined && <Badge count={tab.count} />}
+            {tab.count !== undefined && (
+              <Badge
+                count={tab.count}
+                {...(tab.countMax === undefined ? {} : { max: tab.countMax })}
+                {...(tab.isCountAtLeast === true ? { isAtLeast: true } : {})}
+              />
+            )}
             <SelectionIndicator className={styles.indicator} />
           </Tab>
         )}

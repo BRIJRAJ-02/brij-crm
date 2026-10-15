@@ -21,7 +21,7 @@ Ported from the artifact's Tabs card. A record's Activity, Notes, Tasks, Emails 
 </Tabs>
 ```
 
-- Each tab can have an `icon` and a `count` (a Badge).
+- Each tab can have an `icon` and a `count` (a Badge). `countMax` raises the highest count shown as itself (99 by default, then "99+"), and `isCountAtLeast` marks a capped count as a floor ("10,000+", a record's open tasks, spec 0019).
 - One `TabPanel` per tab, with the same `id`.
 - Only one panel shows at a time; use Disclosure for sections that can all be open.
 
