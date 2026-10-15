@@ -8,7 +8,7 @@ import { SAMPLE_MEMBERS, SAMPLE_STAGES, SAMPLE_TAGS } from '../../workbench/fiel
 import { SAMPLE_IDS } from '../../workbench/sample-ids.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { arraySource } from '../../lib/list-source.ts';
-import { FilterBuilder } from './FilterBuilder.tsx';
+import { ConditionChip, FilterBuilder } from './FilterBuilder.tsx';
 
 const ATTRIBUTES: readonly FieldAttribute[] = [
   attributeOf('status', 'Stage', { options: SAMPLE_STAGES }),
@@ -76,6 +76,49 @@ function SampleBuilder({ initial = FILTERS, isReadOnly = false, isNarrow = false
         }
         isReadOnly={isReadOnly}
       />
+    </Stage>
+  );
+}
+
+/** A view's toolbar chips, one per top level item of its filter, counting presses as a screen would. */
+function SampleChips() {
+  const [opened, setOpened] = useState(0);
+  const [removed, setRemoved] = useState(0);
+  const items: FilterGroup['conditions'] = [
+    { attributeId: 'stage', operator: 'is_any_of', values: [SAMPLE_IDS.stage.proposal, SAMPLE_IDS.stage.won] },
+    { attributeId: 'close_date', operator: 'is_empty' },
+    {
+      operator: 'through',
+      path: ['company'],
+      condition: { attributeId: 'location', operator: 'country_is', value: 'GB' },
+    },
+    {
+      conjunction: 'or',
+      conditions: [
+        { attributeId: 'owner', operator: 'is_me' },
+        { attributeId: 'created', operator: 'within_last', range: { amount: 7, unit: 'day' } },
+      ],
+    },
+    { attributeId: 'gone', operator: 'is_not_empty' },
+  ];
+  return (
+    <Stage>
+      {items.map((item, index) => (
+        <ConditionChip
+          key={index}
+          item={item}
+          attributes={ATTRIBUTES}
+          relatedAttributes={(relation) => (relation.id === 'company' ? COMPANY_ATTRIBUTES : undefined)}
+          onPress={() => {
+            setOpened((count) => count + 1);
+          }}
+          onRemove={() => {
+            setRemoved((count) => count + 1);
+          }}
+        />
+      ))}
+      <span>{`Opened ${String(opened)}`}</span>
+      <span>{`Removed ${String(removed)}`}</span>
     </Stage>
   );
 }
@@ -178,5 +221,16 @@ export const RetypeAmount: Story = {
       const last: unknown = (args.onChange as ReturnType<typeof fn>).mock.lastCall?.[0];
       return expect(JSON.stringify(last)).toContain('"range":{"amount":30,"unit":"day"}');
     });
+  },
+};
+
+/** The toolbar's chips for a view's filter (spec 0020): a value, no value, through a relation, a group, and a field the view can't show. Every part opens the builder. */
+export const Chips: Story = {
+  render: () => <SampleChips />,
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Close date' }));
+    await expect(canvas.getByText('Opened 1')).toBeInTheDocument();
+    await userEvent.click(canvas.getAllByRole('button', { name: 'Remove filter' })[0] as HTMLElement);
+    await expect(canvas.getByText('Removed 1')).toBeInTheDocument();
   },
 };

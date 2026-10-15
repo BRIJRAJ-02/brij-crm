@@ -178,11 +178,13 @@ export {
   type PaletteItem,
 } from './modules/CommandPalette/CommandPalette.tsx';
 export {
+  ConditionChip,
   FilterBuilder,
+  type ConditionChipProps,
   type FilterBuilderProps,
   type FilterEditorProps,
 } from './modules/FilterBuilder/FilterBuilder.tsx';
-export { completeFilters, countFilters } from './modules/FilterBuilder/filter-model.ts';
+export { completeFilters, conditionOn, countFilters } from './modules/FilterBuilder/filter-model.ts';
 export {
   OptionsEditor,
   type OptionOutcome,

@@ -2,7 +2,7 @@
 // joined by and or or, groups nested up to three deep, paths through
 // relations (Company › Country), and each operand edited through the field
 // set. It holds a FilterGroup from contracts and hands back every change.
-import type { AttributeType, FilterGroup, FilterOperator, RelativeRange } from '@crm/contracts/values';
+import type { AttributeType, FilterCondition, FilterGroup, FilterOperator, RelativeRange } from '@crm/contracts/values';
 import { createContext, useContext, useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
@@ -16,6 +16,7 @@ import { fieldTypeOf, isSystemOnly } from '../../fields/registry.ts';
 import { strings as fieldStrings } from '../../fields/strings.ts';
 import type { EditorProps, FieldAttribute } from '../../fields/types.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
+import { FilterChip } from '../../molecules/FilterChip/FilterChip.tsx';
 import { Field } from '../../molecules/Field/Field.tsx';
 import { Menu, MenuItem, MenuTrigger, SubmenuTrigger, type MenuKey } from '../../molecules/Menu/Menu.tsx';
 import { Select } from '../../molecules/Select/Select.tsx';
@@ -27,6 +28,7 @@ import {
   addItem,
   canNest,
   conditionOn,
+  countFilters,
   isGroup,
   leafOf,
   operandOf,
@@ -556,8 +558,20 @@ function OperandDisplay({ builder, attribute, leaf }: OperandProps) {
   }
   if ('values' in leaf) return shown(leaf.values, listAttribute(attribute));
   if ('range' in leaf) return <RangeText range={leaf.range} />;
+  // A country is a code, and a text match is the words typed: neither is a value of the attribute's own type.
+  if (leaf.operator === 'country_is' && typeof leaf.value === 'string') return <CountryText code={leaf.value} />;
+  if ('value' in leaf && operandOf(attribute, leaf.operator) === 'text' && typeof leaf.value === 'string') {
+    return <span className={styles.operator}>{leaf.value}</span>;
+  }
   if ('value' in leaf) return shown(leaf.value, operandAttribute(attribute));
   return null;
+}
+
+/** A country code as its name in the provider's language: "United Kingdom". */
+function CountryText({ code }: { readonly code: string }) {
+  const { locale } = useFormatSettings();
+  const name = memoIntl(`region:${locale}`, () => new Intl.DisplayNames(locale, { type: 'region' })).of(code) ?? code;
+  return <span className={styles.operator}>{name}</span>;
 }
 
 /** A relative range as words: "this week", or "7 days" with the number in the provider's language. */
@@ -736,5 +750,86 @@ function AttributeTrigger({ builder, current, label, onPick }: AttributeTriggerP
         })}
       </Menu>
     </MenuTrigger>
+  );
+}
+
+/** Props for ConditionChip. */
+export interface ConditionChipProps {
+  /** One top level item of a view's filter: a condition, or a group of them. */
+  readonly item: FilterCondition | FilterGroup;
+  /** The view's object's attributes, as FilterBuilder takes them. */
+  readonly attributes: readonly FieldAttribute[];
+  readonly relatedAttributes?: (relation: FieldAttribute) => readonly FieldAttribute[] | undefined;
+  /** The display shapes for an operand (record and member names). */
+  readonly displayOf?: (attributeId: string, value: unknown) => unknown;
+  /** Opens the filter builder: every part of the chip does. */
+  readonly onPress?: () => void;
+  readonly onRemove?: () => void;
+}
+
+const NO_FILTER: FilterGroup = { conjunction: 'and', conditions: [] };
+
+/**
+ * One applied condition of a view's filter as a FilterChip, in the builder's
+ * own words (spec 0020, the Toolbar): its attribute through relations with
+ * its type's icon, its operator, and its operand through the field set; a
+ * condition with no operand has no value part, and a group reads "3
+ * conditions". Every part opens the builder; remove takes the item away.
+ */
+export function ConditionChip({
+  item,
+  attributes,
+  relatedAttributes,
+  displayOf,
+  onPress,
+  onRemove,
+}: ConditionChipProps) {
+  const press =
+    onPress === undefined ? {} : { onPressAttribute: onPress, onPressOperator: onPress, onPressValue: onPress };
+  const removing = onRemove === undefined ? {} : { onRemove };
+  if (isGroup(item)) {
+    return (
+      <FilterChip
+        icon="list-filter"
+        attribute={[strings.groupChip(countFilters(item))]}
+        hasValue={false}
+        {...press}
+        {...removing}
+      />
+    );
+  }
+  const builder: FilterBuilderProps = {
+    attributes,
+    ...(relatedAttributes === undefined ? {} : { relatedAttributes }),
+    ...(displayOf === undefined ? {} : { displayOf }),
+    value: NO_FILTER,
+    onChange: () => undefined,
+  };
+  const { path, leaf } = leafOf(item);
+  const resolved = resolve(builder, path, leaf.attributeId);
+  if (resolved === undefined) {
+    return (
+      <FilterChip
+        icon="circle-question-mark"
+        attribute={[strings.unknownAttribute]}
+        hasValue={false}
+        {...press}
+        {...removing}
+      />
+    );
+  }
+  const takesValue = operandOf(resolved.attribute, leaf.operator) !== 'none';
+  return (
+    <FilterChip
+      icon={fieldTypeOf(resolved.attribute.type).icon}
+      attribute={resolved.names}
+      operator={fieldStrings.operators[leaf.operator]}
+      hasValue={takesValue}
+      {...(takesValue
+        ? { value: <OperandDisplay builder={builder} attribute={resolved.attribute} leaf={leaf} /> }
+        : {})}
+      {...press}
+      {...removing}
+    />
   );
 }

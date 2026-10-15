@@ -178,12 +178,15 @@ export interface SortChipProps {
   readonly more?: number;
   /** Opens the sort builder. */
   readonly onPress?: () => void;
+  /** The button, for a popover the screen opens from it (spec 0020: the sort builder). */
+  readonly ref?: Ref<HTMLButtonElement>;
 }
 
 /** The toolbar's statement of the sort: "Sorted by Funding raised", with its direction's arrow. A button that opens the sort builder. */
-export function SortChip({ attribute, direction, more = 0, onPress }: SortChipProps) {
+export function SortChip({ attribute, direction, more = 0, onPress, ref }: SortChipProps) {
   return (
     <AriaButton
+      ref={ref}
       className={styles.sort}
       aria-label={strings.sortName(attribute, direction, more)}
       {...(onPress === undefined ? {} : { onPress })}

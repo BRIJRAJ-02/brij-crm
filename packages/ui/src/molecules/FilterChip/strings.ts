@@ -2,5 +2,5 @@
 export const strings = {
   chooseValue: 'Choose a value',
   remove: 'Remove filter',
-  filter: (attribute: string, operator: string) => `Filter: ${attribute} ${operator}`,
+  filter: (attribute: string, operator: string) => `Filter: ${attribute}${operator === '' ? '' : ` ${operator}`}`,
 } as const;
