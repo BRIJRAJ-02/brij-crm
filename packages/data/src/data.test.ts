@@ -303,6 +303,13 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         return behaviour.jobStartTest(input.id);
       }),
     },
+    // Tasks (spec 0019) are driven against their own fake in `tasks/store.test.ts`.
+    tasks: {
+      create: os.tasks.create.handler(notServed),
+      update: os.tasks.update.handler(notServed),
+      get: os.tasks.get.handler(notServed),
+      list: os.tasks.list.handler(notServed),
+    },
   });
   const handler = new RPCHandler(router);
   const fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {

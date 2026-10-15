@@ -7,25 +7,17 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { ActorReferenceValue, DateValue, Timestamp } from './values/attribute-values.ts';
 import { RecordRefDisplay } from './values/options.ts';
+import { TASK_GET_MAX, TASK_PAGE_MAX, TASK_RECORDS_MAX, TASK_TITLE_MAX } from './task-limits.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 
-/** The longest task title, in characters, after trimming its ends. */
-export const TASK_TITLE_MAX = 2_000;
-
-/** The most records one task links, hidden ones included. */
-export const TASK_RECORDS_MAX = 20;
-
-/** A page of tasks when the caller names no limit. */
-export const TASK_PAGE = 50;
-
-/** The most tasks one page answers. */
-export const TASK_PAGE_MAX = 100;
-
-/** The most tasks one `tasks.get` reads. */
-export const TASK_GET_MAX = 100;
-
-/** How far a list's count goes before it says "at least" (shown as "10,000+"). */
-export const TASK_COUNT_CAP = 10_000;
+export {
+  TASK_COUNT_CAP,
+  TASK_GET_MAX,
+  TASK_PAGE,
+  TASK_PAGE_MAX,
+  TASK_RECORDS_MAX,
+  TASK_TITLE_MAX,
+} from './task-limits.ts';
 
 /** The longest cursor `tasks.list` takes. */
 export const MAX_TASK_CURSOR = 256;

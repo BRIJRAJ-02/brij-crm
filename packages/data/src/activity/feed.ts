@@ -77,6 +77,16 @@ export type ActivityEntryShape =
       readonly addedCount: number;
       readonly removed: readonly LinkedRecordShape[];
       readonly removedCount: number;
+    })
+  | (EntryBase & {
+      /** A task linked to the record (spec 0019): "added a task", or "completed a task" when `isDone`. */
+      readonly kind: 'task';
+      /** The task's id, for the screen to open it (`?task=<id>`). */
+      readonly itemId: string;
+      readonly title: string;
+      readonly isDone: boolean;
+      /** Its dialog's address, which the screen adds. */
+      readonly href?: string;
     });
 
 /** Entries from outside, as the library's `ListSource` reads them. */
@@ -185,6 +195,10 @@ function actorValueDisplay(value: unknown, members: readonly MemberSummary[] | u
 export function toActivityEntry(item: ActivityItem, context: EntryContext): ActivityEntryShape | undefined {
   const base = { id: item.id, at: item.at, actor: actorDisplay(item.actor, context.members) };
   if (item.kind === 'created') return { ...base, kind: 'created' };
+  if (item.kind === 'task') {
+    if (item.itemId === undefined) return undefined;
+    return { ...base, kind: 'task', itemId: item.itemId, title: item.title ?? '', isDone: item.isDone === true };
+  }
   if (item.kind !== 'change' && item.kind !== 'links') return undefined;
   const definition = item.attributeId === undefined ? undefined : context.attributes.get(item.attributeId);
   if (definition === undefined) return undefined;
