@@ -126,3 +126,36 @@ export const views = pgTable(
     }),
   ],
 );
+
+/**
+ * The view each member last opened per object (spec 0020, milestone 2,
+ * AC-478): their own bookmark, so another browser or device opens the same
+ * one. Written by `views.markOpened` with no outbox row (nobody else holds
+ * it); gone with its view (cascade) and with the member's removal.
+ */
+export const memberViewState = pgTable(
+  'member_view_state',
+  {
+    workspaceId: workspaceId(),
+    memberId: uuid('member_id').notNull(),
+    /** The object (or, from #51, the list) the view is on. */
+    parentId: uuid('parent_id').notNull(),
+    viewId: uuid('view_id').notNull(),
+    openedAt: timestamptz('opened_at').notNull().defaultNow(),
+  },
+  (t) => [
+    primaryKey({ name: 'member_view_state_pkey', columns: [t.workspaceId, t.memberId, t.parentId] }),
+    foreignKey({
+      name: 'member_view_state_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    foreignKey({
+      name: 'member_view_state_view',
+      columns: [t.workspaceId, t.viewId],
+      foreignColumns: [views.workspaceId, views.id],
+    }).onDelete('cascade'),
+    // A view's delete finds its bookmarks through this, not a scan.
+    index('member_view_state_by_view').on(t.workspaceId, t.viewId),
+  ],
+);
