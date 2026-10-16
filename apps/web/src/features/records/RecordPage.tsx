@@ -303,20 +303,19 @@ function RecordScreen({
   } else {
     tabContent = (
       <>
-        {pageRecord !== undefined && (
-          <OpenTasksCard
-            slug={slug}
-            record={pageRecord}
-            open={open}
-            members={members}
-            canAdd={canAddTasks}
-            recordHref={chipHref}
-            onOpenTask={openTask}
-            onViewAll={() => {
-              openTab('tasks');
-            }}
-          />
-        )}
+        {/* From the start, loading in place, so Recent activity never jumps down when the record arrives. */}
+        <OpenTasksCard
+          slug={slug}
+          recordId={recordId}
+          open={open}
+          members={members}
+          canAdd={canAddTasks}
+          recordHref={chipHref}
+          onOpenTask={openTask}
+          onViewAll={() => {
+            openTab('tasks');
+          }}
+        />
         <OverviewTab
           recent={recent}
           link={link}

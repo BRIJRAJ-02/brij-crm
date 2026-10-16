@@ -6,7 +6,7 @@ import { TASK_TITLE_MAX, type MemberSummary, type RecordRefDisplay, type TaskLis
 import { useTaskList } from '@crm/data/react';
 import { Button, Disclosure, Field, TaskList } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { strings } from './strings.ts';
 import { useTaskEntries } from './useTaskEntries.ts';
 
@@ -61,7 +61,12 @@ function QuickAdd({ slug, record, meId }: Pick<TasksTabProps, 'slug' | 'record' 
 /** A list with nothing in it yet, for the Completed part before its tasks are asked for. */
 const NO_TASKS = { count: 0, getItem: () => undefined, getKey: (task: { readonly id: string }) => task.id };
 
-/** The Completed part: closed by default, its done tasks read when first opened, newest done first. */
+/**
+ * The Completed part (AC-435): one Disclosure, closed by default, that never
+ * changes under the person's focus. Its done tasks are read when it opens,
+ * newest done first, and held only while it is open (closed, nothing settles
+ * unseen); its count stays once read.
+ */
 function Completed({
   slug,
   record,
@@ -71,45 +76,74 @@ function Completed({
 }: Pick<TasksTabProps, 'slug' | 'record' | 'members' | 'recordHref' | 'onOpenTask'>) {
   const { data } = useRouteContext({ from: '__root__' });
   const [isOpen, setOpen] = useState(false);
-  const [done, setDone] = useState<TaskListSource | undefined>(undefined);
+  const [done, setDone] = useState<TaskListSource | 'failed' | undefined>(undefined);
+  const [count, setCount] = useState<number | undefined>(undefined);
   useEffect(() => {
     if (!isOpen || done !== undefined) return;
     let isLive = true;
-    void data.tasks.forRecord(slug, record.recordId, 'done').then((list) => {
-      if (isLive) setDone(list);
-    });
+    data.tasks.forRecord(slug, record.recordId, 'done').then(
+      (list) => {
+        if (isLive) setDone(list);
+      },
+      () => {
+        // The store's code didn't load (offline): the part says so, with Try again.
+        if (isLive) setDone('failed');
+      },
+    );
     return () => {
       isLive = false;
     };
   }, [isOpen, done, data, slug, record.recordId]);
-  if (done === undefined) {
-    return (
-      <Disclosure title={strings.completed} isExpanded={isOpen} onExpandedChange={setOpen}>
-        <TaskList
-          label={strings.completed}
-          layout="inline"
-          tasks={NO_TASKS}
-          status="loading"
-          onToggle={() => undefined}
-        />
-      </Disclosure>
+  let body: ReactNode;
+  if (done === 'failed') {
+    body = (
+      <TaskList
+        label={strings.completed}
+        layout="inline"
+        tasks={NO_TASKS}
+        status="error"
+        onRetry={() => {
+          setDone(undefined);
+        }}
+        onToggle={() => undefined}
+      />
+    );
+  } else if (!isOpen || done === undefined) {
+    body = (
+      <TaskList
+        label={strings.completed}
+        layout="inline"
+        tasks={NO_TASKS}
+        status="loading"
+        onToggle={() => undefined}
+      />
+    );
+  } else {
+    body = (
+      <CompletedList
+        slug={slug}
+        record={record}
+        list={done}
+        members={members}
+        recordHref={recordHref}
+        onOpenTask={onOpenTask}
+        onCount={setCount}
+      />
     );
   }
   return (
-    <CompletedList
-      slug={slug}
-      record={record}
-      list={done}
-      members={members}
-      recordHref={recordHref}
-      onOpenTask={onOpenTask}
-      isOpen={isOpen}
-      onOpenChange={setOpen}
-    />
+    <Disclosure
+      title={strings.completed}
+      isExpanded={isOpen}
+      onExpandedChange={setOpen}
+      {...(count === undefined ? {} : { count })}
+    >
+      {body}
+    </Disclosure>
   );
 }
 
-/** The done tasks, drawn in place in the Completed part with their count, paging as they show. */
+/** The done tasks, drawn in place, the loaded ones only, with "Show more" for the next page. */
 function CompletedList({
   slug,
   record,
@@ -117,52 +151,48 @@ function CompletedList({
   members,
   recordHref,
   onOpenTask,
-  isOpen,
-  onOpenChange,
+  onCount,
 }: Pick<TasksTabProps, 'slug' | 'record' | 'members' | 'recordHref' | 'onOpenTask'> & {
   readonly list: TaskListSource;
-  readonly isOpen: boolean;
-  readonly onOpenChange: (isOpen: boolean) => void;
+  readonly onCount: (count: number) => void;
 }) {
   const { data } = useRouteContext({ from: '__root__' });
   const state = useTaskList(list);
   const entries = useTaskEntries(state.source, members, record.recordId);
+  const total = state.total?.count;
+  useEffect(() => {
+    if (total !== undefined) onCount(total);
+  }, [total, onCount]);
   // Drawn in place, so only the loaded rows (no skeletons to scroll to): "Show more" reads the next page.
   const loaded = useMemo(
     () => ({ count: state.loaded, getItem: entries.getItem, getKey: entries.getKey }),
     [state.loaded, entries],
   );
   return (
-    <Disclosure
-      title={strings.completed}
-      isExpanded={isOpen}
-      onExpandedChange={onOpenChange}
-      {...(state.total === undefined ? {} : { count: state.total.count })}
-    >
-      <TaskList
-        label={strings.completed}
-        layout="inline"
-        maxRows={Number.MAX_SAFE_INTEGER}
-        tasks={loaded}
-        {...(state.hasMore
-          ? {
-              onShowMore: () => {
-                void list.more();
-              },
-            }
-          : {})}
-        status={state.status === 'unavailable' ? 'no-access' : state.status}
-        onRetry={list.retry}
-        emptyTitle={strings.noCompletedTasks}
-        recordHref={recordHref}
-        onToggle={(task, isDone) => {
-          void data.tasks.setDone(slug, task.id, isDone);
-        }}
-        onAction={(task) => {
-          onOpenTask(task.id);
-        }}
-      />
-    </Disclosure>
+    <TaskList
+      label={strings.completed}
+      layout="inline"
+      maxRows={Number.MAX_SAFE_INTEGER}
+      tasks={loaded}
+      {...(state.hasMore
+        ? {
+            onShowMore: () => {
+              void list.more();
+            },
+            isLoadingMore: state.loadingMore,
+          }
+        : {})}
+      status={state.status === 'unavailable' ? 'no-access' : state.status}
+      onRetry={list.retry}
+      emptyTitle={strings.noCompletedTasks}
+      recordHref={recordHref}
+      onToggle={(task, isDone) => {
+        void data.tasks.setDone(slug, task.id, isDone);
+      }}
+      onAction={(task) => {
+        onOpenTask(task.id);
+      }}
+    />
   );
 }
 
@@ -207,7 +237,15 @@ export function TasksTab({ slug, record, open, members, meId, canAdd, recordHref
           }
         : {})}
       footer={
-        <Completed slug={slug} record={record} members={members} recordHref={recordHref} onOpenTask={onOpenTask} />
+        // Keyed by the record, so another record's page never shows this one's done tasks.
+        <Completed
+          key={record.recordId}
+          slug={slug}
+          record={record}
+          members={members}
+          recordHref={recordHref}
+          onOpenTask={onOpenTask}
+        />
       }
     />
   );

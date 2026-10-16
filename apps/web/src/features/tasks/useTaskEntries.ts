@@ -1,6 +1,6 @@
 // A task list's source as TaskList draws it: each TaskView mapped to its
 // entry once and kept while the body stays the same object, so a row draws
-// again only when its task changed (for as long as the list's source lasts).
+// again only when its task changed (while the members and the page stay).
 import type { MemberSummary, TaskListState, TaskView } from '@crm/data';
 import type { ListSource, TaskEntry } from '@crm/ui';
 import { useMemo } from 'react';
@@ -12,22 +12,25 @@ export function useTaskEntries(
   members: readonly MemberSummary[],
   pageRecordId?: string,
 ): ListSource<TaskEntry> {
+  // One cache while the members and the page stay: unchanged bodies keep their entries across list changes.
+  const cache = useMemo(
+    () => ({ entries: new WeakMap<TaskView, TaskEntry>(), members, pageRecordId }),
+    [members, pageRecordId],
+  );
   return useMemo(() => {
-    // Each body mapped once while this source lasts.
-    const cache = new WeakMap<TaskView, TaskEntry>();
     return {
       count: source.count,
       getItem: (index: number) => {
         const task = source.getItem(index);
         if (task === undefined) return undefined;
-        const held = cache.get(task);
+        const held = cache.entries.get(task);
         if (held !== undefined) return held;
-        const made = toTaskEntry(task, members, pageRecordId);
-        cache.set(task, made);
+        const made = toTaskEntry(task, cache.members, cache.pageRecordId);
+        cache.entries.set(task, made);
         return made;
       },
       getKey: (entry: TaskEntry) => entry.id,
       onRangeChange: source.onRangeChange,
     };
-  }, [source, members, pageRecordId]);
+  }, [source, cache]);
 }

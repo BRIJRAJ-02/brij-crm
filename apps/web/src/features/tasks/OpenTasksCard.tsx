@@ -15,7 +15,8 @@ export const OPEN_TASKS_SHOWN = 5;
 /** Props for Overview's Open tasks block. */
 export interface OpenTasksCardProps {
   readonly slug: string;
-  readonly record: RecordRefDisplay;
+  /** The page's record: its chip gives way to the task's other records. */
+  readonly recordId: string;
   /** The record's open tasks, the same list its Tasks tab shows. */
   readonly open: TaskListSource;
   readonly members: readonly MemberSummary[];
@@ -30,7 +31,7 @@ export interface OpenTasksCardProps {
 /** "Open tasks": the first five drawn in place, with "Add a task" and "View all". */
 export function OpenTasksCard({
   slug,
-  record,
+  recordId,
   open,
   members,
   canAdd,
@@ -40,7 +41,7 @@ export function OpenTasksCard({
 }: OpenTasksCardProps) {
   const { data } = useRouteContext({ from: '__root__' });
   const state = useTaskList(open);
-  const entries = useTaskEntries(state.source, members, record.recordId);
+  const entries = useTaskEntries(state.source, members, recordId);
   return (
     <Card
       title={strings.openTasks}
