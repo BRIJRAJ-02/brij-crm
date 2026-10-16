@@ -61,8 +61,6 @@ export function ActorReferenceEditor({
         }
         setMessage(undefined);
         setChosen(next);
-        // What it shows now is this commit: a value put back from outside (a refusal) differs from it, and shows.
-        setShownValue(JSON.stringify(result.value ?? null));
         onCommit(result.value);
       }}
     />

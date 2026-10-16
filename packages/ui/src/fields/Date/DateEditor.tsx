@@ -21,7 +21,8 @@ export function DateEditor({ attribute, value, surface, onCommit, error }: Edito
   }
   const isCompact = isCompactSurface(surface);
   const commit = (next: string | null) => {
-    if (next === committed.current) return;
+    // Nothing new: what was last committed, or the value as it came in (from outside, unchanged since).
+    if (next === committed.current || next === shownValue) return;
     const result = toCommittable<'date'>(attribute, next);
     if (!result.ok) {
       setMessage(result.message);
@@ -29,7 +30,6 @@ export function DateEditor({ attribute, value, surface, onCommit, error }: Edito
     }
     setMessage(undefined);
     committed.current = next;
-    setShownValue(next);
     onCommit(result.value);
   };
   const shown = message ?? error;
