@@ -391,6 +391,23 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   saveViewQuery: refused('NOT_FOUND', (scope, world) =>
     core.saveViewQuery(scope, { viewId: world.peopleView, sorts: [], baseQueryVersion: 1 }),
   ),
+  createView: refused('NOT_FOUND', (scope, world) =>
+    core.createView(scope, {
+      id: core.newId(),
+      objectId: world.people,
+      name: 'Mine',
+      kind: 'table',
+      visibility: 'workspace',
+      config: { columns: [], showNewAttributes: false, pinnedCount: 1, sorts: [] },
+    }),
+  ),
+  updateView: refused('NOT_FOUND', (scope, world) => core.updateView(scope, { viewId: world.peopleView, name: 'X' })),
+  setViewLayout: refused('NOT_FOUND', (scope, world) =>
+    core.setViewLayout(scope, { viewId: world.peopleView, layout: { columns: [], pinnedCount: 1 } }),
+  ),
+  moveView: refused('NOT_FOUND', (scope, world) => core.moveView(scope, { viewId: world.peopleView, direction: 'up' })),
+  deleteView: refused('NOT_FOUND', (scope, world) => core.deleteView(scope, { viewId: world.peopleView })),
+  markViewOpened: refused('NOT_FOUND', (scope, world) => core.markViewOpened(scope, { viewId: world.peopleView })),
   queryTrash: empty((scope, world) =>
     core.queryTrash(scope, {}).then((page) => page.items.filter((item) => item.recordId === world.trashedId)),
   ),

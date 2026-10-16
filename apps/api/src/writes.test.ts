@@ -40,6 +40,8 @@ const READS: ReadonlySet<string> = new Set([
   'usage.get',
   'views.list',
   'views.get',
+  // The one view write with no outbox row (spec 0020, AC-488): the member's own last opened view.
+  'views.markOpened',
   'trash.query',
   'trash.count',
   'tasks.get',
@@ -122,6 +124,22 @@ async function personFor(m: Member): Promise<string> {
  * store in the outbox (one row per object it touched), given the member's
  * workspace and the mutation id it sent.
  */
+/** A shared view on People, made through the API (its own write and outbox row before the case's). */
+async function sharedViewOf(m: Member, name = 'Pipeline'): Promise<string> {
+  const id = newId();
+  await m.client.views.create({
+    workspace: m.slug,
+    id,
+    objectId: m.people.id,
+    name,
+    kind: 'table',
+    visibility: 'workspace',
+    config: { columns: [], showNewAttributes: false, pinnedCount: 1, sorts: [] },
+    mutationId: newId(),
+  });
+  return id;
+}
+
 const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly Partial<OutboxRow>[]>> = {
   'workspaces.create': async (m) => {
     await m.client.workspaces.create({
@@ -412,6 +430,75 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     });
     return [{ kind: 'views', object_id: m.people.id, item_ids: [viewId], mutation_id: mutationId }];
   },
+  'views.create': async (m, mutationId) => {
+    const id = newId();
+    await m.client.views.create({
+      workspace: m.slug,
+      id,
+      objectId: m.people.id,
+      name: 'Pilots',
+      kind: 'table',
+      visibility: 'private',
+      config: { columns: [], showNewAttributes: false, pinnedCount: 1, sorts: [] },
+      mutationId,
+    });
+    return [{ kind: 'views', object_id: m.people.id, item_ids: [id], mutation_id: mutationId }];
+  },
+  'views.update': async (m, mutationId) => {
+    const viewId = await sharedViewOf(m);
+    await m.client.views.update({ workspace: m.slug, viewId, name: 'Crew', mutationId });
+    return [
+      { kind: 'views', item_ids: [viewId] },
+      { kind: 'views', object_id: m.people.id, item_ids: [viewId], mutation_id: mutationId },
+    ];
+  },
+  'views.setLayout': async (m, mutationId) => {
+    const { views } = await m.client.views.list({ workspace: m.slug, objectId: m.people.id });
+    const viewId = views[0]?.id ?? '';
+    await m.client.views.setLayout({
+      workspace: m.slug,
+      viewId,
+      layout: { columns: [{ attributeId: m.attribute('name'), width: 240 }], pinnedCount: 1 },
+      mutationId,
+    });
+    return [{ kind: 'views', object_id: m.people.id, item_ids: [viewId], mutation_id: mutationId }];
+  },
+  'views.move': async (m, mutationId) => {
+    const first = await sharedViewOf(m, 'First');
+    const second = await sharedViewOf(m, 'Second');
+    await m.client.views.move({ workspace: m.slug, viewId: second, direction: 'up', mutationId });
+    return [
+      { kind: 'views', item_ids: [first] },
+      { kind: 'views', item_ids: [second] },
+      { kind: 'views', object_id: m.people.id, item_ids: [first, second].sort(), mutation_id: mutationId },
+    ];
+  },
+  'views.setLocked': async (m, mutationId) => {
+    const viewId = await sharedViewOf(m);
+    await m.client.views.setLocked({ workspace: m.slug, viewId, locked: true, mutationId });
+    return [
+      { kind: 'views', item_ids: [viewId] },
+      { kind: 'views', object_id: m.people.id, item_ids: [viewId], mutation_id: mutationId },
+    ];
+  },
+  'views.setDefault': async (m, mutationId) => {
+    const { views } = await m.client.views.list({ workspace: m.slug, objectId: m.people.id });
+    const old = views[0]?.id ?? '';
+    const viewId = await sharedViewOf(m);
+    await m.client.views.setDefault({ workspace: m.slug, objectId: m.people.id, viewId, mutationId });
+    return [
+      { kind: 'views', item_ids: [viewId] },
+      { kind: 'views', object_id: m.people.id, item_ids: [old, viewId].sort(), mutation_id: mutationId },
+    ];
+  },
+  'views.delete': async (m, mutationId) => {
+    const viewId = await sharedViewOf(m);
+    await m.client.views.delete({ workspace: m.slug, viewId, mutationId });
+    return [
+      { kind: 'views', item_ids: [viewId] },
+      { kind: 'views', object_id: m.people.id, item_ids: [viewId], mutation_id: mutationId },
+    ];
+  },
   // Tasks (spec 0019, AC-448): one tasks row per write, naming the task and every record linked before or after.
   'tasks.create': async (m, mutationId) => {
     const record = await m.client.records.create({
@@ -477,6 +564,11 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
 
 /** How many writes (each one poke) a case in WRITES makes before and with its own. */
 const WRITES_MADE: Readonly<Record<string, number>> = {
+  'views.update': 2,
+  'views.move': 3,
+  'views.setLocked': 2,
+  'views.setDefault': 2,
+  'views.delete': 2,
   'records.setValues': 2,
   'records.setValuesBatch': 3,
   'records.deleteMany': 2,

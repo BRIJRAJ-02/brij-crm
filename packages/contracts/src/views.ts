@@ -166,18 +166,116 @@ export function decodeDraft(text: string): ViewDraft | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
+/** A view's name: 1 to 100 characters once trimmed. */
+export const ViewName = z
+  .string()
+  .trim()
+  .min(1, 'Give the view a name.')
+  .max(100, 'A view name is at most 100 characters.');
+
 /**
- * Saved views (spec 0020, milestone 1). `list` answers an object's views the
- * caller may see (404 for an object they can't); `get` one view, or 404
- * `NOT_FOUND` for one that doesn't exist or isn't theirs to see, never
- * saying which. `saveQuery` saves a filter and sorts for everyone who sees
- * the view and stores one `views` event: 403 `FORBIDDEN` on a view the
- * caller may not change, 409 `VIEW_CHANGED` when someone saved since the
- * draft began, 422 `FILTER_INVALID` or `CONFIG_INVALID` for a filter or sort
- * the view's object can't run.
+ * A new view (AC-472). `id` is a UUID v7 the browser mints once per dialog:
+ * the same create again by the same member on the same object answers the
+ * view already made; the id held by anything else answers 409 `ID_TAKEN`.
+ */
+export const CreateViewInput = WorkspaceScoped.extend({
+  id: z.uuid(),
+  objectId: z.uuid(),
+  name: ViewName,
+  kind: ViewKind,
+  visibility: ViewVisibility,
+  config: ViewConfig,
+  mutationId: z.uuid(),
+});
+/** A new view. */
+export type CreateViewInput = z.infer<typeof CreateViewInput>;
+
+/** A rename, or a change of who sees the view (Share with everyone, Make private). */
+export const UpdateViewInput = WorkspaceScoped.extend({
+  viewId: z.uuid(),
+  name: ViewName.optional(),
+  visibility: ViewVisibility.optional(),
+  mutationId: z.uuid(),
+});
+/** A rename, or a change of who sees the view. */
+export type UpdateViewInput = z.infer<typeof UpdateViewInput>;
+
+/** A column change saved at once, for everyone on the view (AC-470). */
+export const SetViewLayoutInput = WorkspaceScoped.extend({
+  viewId: z.uuid(),
+  layout: ViewLayout,
+  mutationId: z.uuid(),
+});
+/** A column change. */
+export type SetViewLayoutInput = z.infer<typeof SetViewLayoutInput>;
+
+/** Swaps a view with its neighbour in its group (the shared views, or the caller's private ones). */
+export const MoveViewInput = WorkspaceScoped.extend({
+  viewId: z.uuid(),
+  direction: z.enum(['up', 'down']),
+  mutationId: z.uuid(),
+});
+/** Swaps a view with its neighbour. */
+export type MoveViewInput = z.infer<typeof MoveViewInput>;
+
+/** Locks or unlocks a shared view (`views.manage`, AC-475). */
+export const SetViewLockedInput = WorkspaceScoped.extend({
+  viewId: z.uuid(),
+  locked: z.boolean(),
+  mutationId: z.uuid(),
+});
+/** Locks or unlocks a shared view. */
+export type SetViewLockedInput = z.infer<typeof SetViewLockedInput>;
+
+/** Makes a shared view the object's default (`views.manage`, AC-475). */
+export const SetDefaultViewInput = WorkspaceScoped.extend({
+  objectId: z.uuid(),
+  viewId: z.uuid(),
+  mutationId: z.uuid(),
+});
+/** Makes a shared view the object's default. */
+export type SetDefaultViewInput = z.infer<typeof SetDefaultViewInput>;
+
+/** Deletes a view for good (AC-474): never the default. */
+export const DeleteViewInput = WorkspaceScoped.extend({ viewId: z.uuid(), mutationId: z.uuid() });
+/** Deletes a view. */
+export type DeleteViewInput = z.infer<typeof DeleteViewInput>;
+
+/** A delete's answer. */
+export const ViewDeleted = z.object({ deleted: z.literal(true) });
+/** A delete's answer. */
+export type ViewDeleted = z.infer<typeof ViewDeleted>;
+
+/** The view the caller just opened, kept as their last one for its object (AC-478). */
+export const MarkViewOpenedInput = WorkspaceScoped.extend({ viewId: z.uuid() });
+/** The view the caller just opened. */
+export type MarkViewOpenedInput = z.infer<typeof MarkViewOpenedInput>;
+
+/**
+ * Saved views (spec 0020). `list` answers an object's views the caller may
+ * see (404 for an object they can't), with the one they last opened; `get`
+ * one view, or 404 `NOT_FOUND` for one that doesn't exist or isn't theirs to
+ * see, never saying which. Every write but `markOpened` stores one `views`
+ * event per object it touched. `saveQuery` saves a filter and sorts for
+ * everyone who sees the view: 403 `FORBIDDEN` on a view the caller may not
+ * change, 409 `VIEW_CHANGED` when someone saved since the draft began, 422
+ * `FILTER_INVALID` or `CONFIG_INVALID` for a filter or sort the view's object
+ * can't run. `create` answers 409 `NAME_TAKEN` (on `name`), `LIMIT_REACHED`
+ * or `ID_TAKEN`; `update` 403, 409 `NAME_TAKEN` or `VIEW_IS_DEFAULT`;
+ * `setLayout` 403 on a locked view; `setLocked` and `setDefault` need
+ * `views.manage` and a shared view; `delete` answers 409 `VIEW_IS_DEFAULT`
+ * for the object's default view.
  */
 export const viewsContract = {
   list: oc.input(ListViewsInput).output(ViewsList),
   get: oc.input(GetViewInput).output(View),
   saveQuery: oc.input(SaveViewQueryInput).output(View),
+  create: oc.input(CreateViewInput).output(View),
+  update: oc.input(UpdateViewInput).output(View),
+  setLayout: oc.input(SetViewLayoutInput).output(View),
+  move: oc.input(MoveViewInput).output(z.array(ViewSummary)),
+  setLocked: oc.input(SetViewLockedInput).output(View),
+  setDefault: oc.input(SetDefaultViewInput).output(z.array(ViewSummary)),
+  delete: oc.input(DeleteViewInput).output(ViewDeleted),
+  markOpened: oc.input(MarkViewOpenedInput).output(z.void()),
 };

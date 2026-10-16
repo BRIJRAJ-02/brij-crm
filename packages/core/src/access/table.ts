@@ -121,6 +121,15 @@ export const ACCESS_TABLE = {
   listViews: { data: 'read' },
   getView: { data: 'read' },
   saveViewQuery: { data: 'read' },
+  createView: { data: 'read' },
+  updateView: { data: 'read' },
+  setViewLayout: { data: 'read' },
+  moveView: { data: 'read' },
+  deleteView: { data: 'read' },
+  markViewOpened: { data: 'read' },
+  // Locking a view and choosing the default (AC-475).
+  setViewLocked: { permission: 'views.manage' },
+  setDefaultView: { permission: 'views.manage' },
   // The relay's reads (`@crm/core/system`).
   audiences: { system: true },
   viewFacts: { system: true },

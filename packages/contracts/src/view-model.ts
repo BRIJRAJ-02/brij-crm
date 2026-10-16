@@ -300,3 +300,133 @@ export function decodeDraftText(text: string): unknown {
     return undefined;
   }
 }
+
+/** What the view rules need to know of a view (a `ViewSummary`, or the engine's row). */
+export interface ViewRuleView {
+  readonly visibility: 'private' | 'workspace';
+  /** Absent for a view the workspace seeded (each object's default view). */
+  readonly creatorMemberId?: string | undefined;
+  readonly isLocked: boolean;
+  readonly isDefault: boolean;
+}
+
+/** Who is asking: their member id (absent for an API key), and whether they hold `views.manage`. */
+export interface ViewRuleCaller {
+  readonly memberId?: string | undefined;
+  readonly canManage: boolean;
+  /** Whether a member is still in the workspace (the screen's members list); the server's caller always is. */
+  readonly isActiveMember?: (memberId: string) => boolean;
+}
+
+/** What one asks to do to a view (spec 0020, the rules table). */
+export type ViewAction = 'edit' | 'move' | 'delete' | 'share' | 'makePrivate' | 'lock' | 'setDefault';
+
+/**
+ * Why an action is refused, as a key each side words itself (the server its
+ * refusal, the view menu its disabled reason): `locked` (a locked view, for
+ * someone without `views.manage`), `notCreator` (only the creator may),
+ * `default` (the default view can't be deleted or made private),
+ * `defaultFirst` (the default view never moves), `seeded` (the workspace made
+ * it, so it stays shared), `creatorGone` (its creator left the workspace),
+ * `unlockFirst`, `private` (only a shared view can be locked or be the
+ * default), `manage` (needs `views.manage`), and `already` (nothing to do).
+ */
+export type ViewRuleReason =
+  | 'locked'
+  | 'notCreator'
+  | 'default'
+  | 'defaultFirst'
+  | 'seeded'
+  | 'creatorGone'
+  | 'unlockFirst'
+  | 'private'
+  | 'manage'
+  | 'already';
+
+/**
+ * Whether `caller` may do `action` to `view` (spec 0020, the rules table),
+ * the one rule the engine refuses by and the view menu disables by: undefined
+ * when allowed, else why not. Seeing a private view at all is the creator's
+ * alone, which the reads decide before any action.
+ */
+export function viewRule(action: ViewAction, caller: ViewRuleCaller, view: ViewRuleView): ViewRuleReason | undefined {
+  const isCreator = caller.memberId !== undefined && view.creatorMemberId === caller.memberId;
+  const edit = (): ViewRuleReason | undefined => {
+    if (view.visibility === 'private') return isCreator ? undefined : 'notCreator';
+    return view.isLocked && !caller.canManage ? 'locked' : undefined;
+  };
+  switch (action) {
+    case 'edit':
+      return edit();
+    case 'move':
+      return view.isDefault ? 'defaultFirst' : edit();
+    case 'delete':
+      return edit() ?? (view.isDefault ? 'default' : undefined);
+    case 'share':
+      if (view.visibility === 'workspace') return 'already';
+      return isCreator ? undefined : 'notCreator';
+    case 'makePrivate': {
+      if (view.visibility === 'private') return 'already';
+      if (view.isDefault) return 'default';
+      const creator = view.creatorMemberId;
+      if (creator === undefined) return 'seeded';
+      if (!isCreator && caller.isActiveMember !== undefined && !caller.isActiveMember(creator)) return 'creatorGone';
+      if (!isCreator) return 'notCreator';
+      return view.isLocked ? 'unlockFirst' : undefined;
+    }
+    case 'lock':
+      if (view.visibility === 'private') return 'private';
+      return caller.canManage ? undefined : 'manage';
+    case 'setDefault':
+      if (view.visibility === 'private') return 'private';
+      if (!caller.canManage) return 'manage';
+      return view.isDefault ? 'already' : undefined;
+  }
+}
+
+/**
+ * A layout saved by someone who can't see every column (spec 0020,
+ * `mergeLayout`): their columns in their order, with each stored column they
+ * can't see (hidden from them, or archived) and didn't name put back right
+ * after the column that preceded it when stored (or at the start), in stored
+ * order; a predecessor the writer removed gives way to the nearest earlier
+ * one they kept. The pinned count grows by the kept columns that land inside
+ * the pinned edge. `visibleIds` are the attributes the writer sees, live.
+ */
+export function mergeLayout<C extends StoredColumn>(
+  stored: readonly C[],
+  incoming: { readonly columns: readonly C[]; readonly pinnedCount: number },
+  visibleIds: ReadonlySet<string>,
+): { readonly columns: readonly C[]; readonly pinnedCount: number } {
+  const named = new Set(incoming.columns.map((column) => column.attributeId));
+  // Each kept column with the nearest column before it in the stored order that the incoming layout still has.
+  const kept: { readonly column: C; readonly after: string | undefined }[] = [];
+  let lastNamed: string | undefined;
+  for (const column of stored) {
+    if (named.has(column.attributeId)) {
+      lastNamed = column.attributeId;
+      continue;
+    }
+    if (visibleIds.has(column.attributeId)) continue;
+    kept.push({ column, after: lastNamed });
+  }
+  if (kept.length === 0) return { columns: incoming.columns, pinnedCount: incoming.pinnedCount };
+  const result: C[] = [];
+  let pinnedCount = incoming.pinnedCount;
+  let incomingPlaced = 0;
+  const placeAfter = (after: string | undefined) => {
+    for (const each of kept) {
+      if (each.after !== after) continue;
+      // Inside the pinned edge: fewer of the writer's pinned columns placed so far than they pinned.
+      if (incomingPlaced < incoming.pinnedCount) pinnedCount += 1;
+      result.push(each.column);
+    }
+  };
+  placeAfter(undefined);
+  for (const column of incoming.columns) {
+    result.push(column);
+    incomingPlaced += 1;
+    placeAfter(column.attributeId);
+  }
+  return { columns: result, pinnedCount: Math.min(pinnedCount, MAX_PINNED) };
+}

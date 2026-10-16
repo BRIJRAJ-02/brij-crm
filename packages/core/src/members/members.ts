@@ -22,6 +22,7 @@ import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { checkScope } from '../access/mint.ts';
 import { can, isRole } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
+import { deleteMemberViews } from '../views/manage.ts';
 
 const { members } = schema;
 
@@ -244,6 +245,8 @@ export async function removeMember(
         .update(members)
         .set({ status: 'removed', ...touched(scope) })
         .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, target.id)));
+      // Their private views and last opened views go with them (spec 0020, AC-490); their shared views stay.
+      await deleteMemberViews(context, target.id);
       // The `access` row that disconnects them comes with spec 0009 milestone 3; the member list changes now.
       context.record({ members: [target.id] });
     },
