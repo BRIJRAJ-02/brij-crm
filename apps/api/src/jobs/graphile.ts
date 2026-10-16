@@ -209,14 +209,28 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
   await housekeeping();
   const inFlight = { count: 0 };
   const runners: GraphileRunner[] = [];
-  // Watched as soon as each starts: a runner that fails while the other still starts is reported (and never an
-  // unhandled rejection, which would end the process).
+  // Watched as soon as each starts, so a runner that stops while the other still starts is reported (and never an
+  // unhandled rejection, which would end the process). In 0.18.0 a runner whose pool shut down (a connection
+  // terminated, a breaking `worker:migrate`) stops itself and its promise resolves rather than rejects, so any end
+  // that isn't our own stop counts as a failure.
+  const stoppedOnItsOwn = (error: unknown): void => {
+    log.error('jobs.runner.failed', errorFields(error));
+    options.onFault?.(error);
+    options.onFailed?.(error);
+  };
   const watch = (runner: GraphileRunner): GraphileRunner => {
-    runner.promise.catch((error: unknown) => {
-      log.error('jobs.runner.failed', errorFields(error));
-      options.onFault?.(error);
-      if (!shutdown.signal.aborted) options.onFailed?.(error);
-    });
+    runner.promise.then(
+      () => {
+        if (!shutdown.signal.aborted) stoppedOnItsOwn(new Error('A job runner stopped on its own.'));
+      },
+      (error: unknown) => {
+        if (shutdown.signal.aborted) {
+          log.warn('jobs.runner.stop.failed', errorFields(error));
+          return;
+        }
+        stoppedOnItsOwn(error);
+      },
+    );
     return runner;
   };
   try {
@@ -248,6 +262,8 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
       );
     }
   } catch (error) {
+    // Our own stop, so the runners already started aren't reported as failing.
+    shutdown.abort();
     await Promise.all(runners.map((runner) => runner.stop()));
     throw error;
   }
@@ -259,7 +275,8 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
       clearInterval(timer);
       // The slices in hand see this between batches, finish the one in hand and hand their jobs back.
       shutdown.abort();
-      await Promise.all(runners.map((runner) => runner.stop()));
+      // A runner that already stopped on its own answers "already stopped": nothing left to stop there.
+      await Promise.all(runners.map((runner) => runner.stop().catch(() => undefined)));
     },
     busy: () => inFlight.count,
   };

@@ -163,6 +163,39 @@ describe('the job runners on Graphile Worker', () => {
     }
   });
 
+  it('report a runner that stops on its own (its pool shut down), but not one stopped by us', async () => {
+    const failures: unknown[] = [];
+    const exitCode = process.exitCode;
+    const runners = await startJobRunners({
+      queue,
+      runner: coreRunner(20_000),
+      log: quiet,
+      pollInterval: 200,
+      onFailed: (error) => failures.push(error),
+    });
+    try {
+      // A breaking migration elsewhere: Graphile 0.18.0 shuts its pool down, and the runner's promise resolves.
+      await queue.pool.query(`select pg_notify('worker:migrate', '{"breaking":true}')`);
+      await expect.poll(() => failures.length, { timeout: 20_000, interval: 100 }).toBeGreaterThanOrEqual(1);
+      expect(String(failures[0])).toContain('stopped on its own');
+    } finally {
+      await runners.stop();
+      process.exitCode = exitCode;
+    }
+    // Our own stop is never a failure.
+    const count = failures.length;
+    const again = await startJobRunners({
+      queue,
+      runner: coreRunner(20_000),
+      log: quiet,
+      pollInterval: 200,
+      onFailed: (error) => failures.push(error),
+    });
+    await again.stop();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    expect(failures).toHaveLength(count);
+  });
+
   it('run the daily cleanup once for a missed day, and queue a continuation for what its budget left', async () => {
     // The cron last ran three days ago (the worker was down or asleep): one day of fill runs it once, not three times.
     await testQuery(
