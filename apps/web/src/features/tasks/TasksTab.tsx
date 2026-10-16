@@ -212,7 +212,8 @@ export function TasksTab({ slug, record, open, members, meId, canAdd, recordHref
       status={state.status === 'unavailable' ? 'no-access' : state.status}
       onRetry={open.retry}
       newIds={state.newIds}
-      emptyTitle={strings.noOpenTasks}
+      // "Add one above" only where the quick add is.
+      emptyTitle={canAdd ? strings.noOpenTasks : strings.noOpenTasksShort}
       recordHref={recordHref}
       onToggle={(task, isDone) => {
         void data.tasks.setDone(slug, task.id, isDone);

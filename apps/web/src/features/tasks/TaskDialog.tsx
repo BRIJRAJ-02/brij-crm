@@ -69,6 +69,15 @@ function memberIdOf(value: unknown): string | null {
   return typeof picked.id === 'string' ? picked.id : null;
 }
 
+/** A task subscription that only says it is loading, until the store's arrives. */
+const LOADING_TASK: TaskSubscription = {
+  subscribe: () => () => undefined,
+  getSnapshot: () => LOADING_STATE,
+  retain: () => () => undefined,
+  retry: () => undefined,
+};
+const LOADING_STATE = { status: 'loading' } as const;
+
 /** Which field a refusal shows under. */
 type FieldName = 'title' | 'isDone' | 'dueOn' | 'assignee' | 'records';
 
@@ -138,11 +147,20 @@ function TaskFields({
   const [objectId, setObjectId] = useState(startObjectId ?? objects[0]?.id ?? '');
   const search = useRecordSearch(slug, objectId);
   const [recordsError, setRecordsError] = useState<string | undefined>(undefined);
+  const [titleError, setTitleError] = useState<string | undefined>(undefined);
+  // A saved task's title emptied says why it wasn't saved, and keeps what was typed (a new one waits for Create).
+  const isSaved = isDone !== undefined;
   const commitTitle = () => {
     const trimmed = draft.trim();
-    if (trimmed === '' || trimmed === title) return;
+    if (trimmed === '') {
+      if (isSaved) setTitleError(strings.titleRequired);
+      return;
+    }
+    setTitleError(undefined);
+    if (trimmed === title) return;
     onChange({ title: trimmed });
   };
+  const shownTitleError = titleError ?? errors.title;
   const memberDisplays = toActorDisplays(members);
   const me = meId === undefined ? undefined : memberDisplays.find((member) => member.id === meId);
   const assignee: ActorDisplay | undefined =
@@ -155,6 +173,7 @@ function TaskFields({
         value={draft}
         onChange={(next) => {
           setDraft(next);
+          if (next.trim() !== '') setTitleError(undefined);
           onTitleInput?.(next);
         }}
         onBlur={commitTitle}
@@ -164,7 +183,7 @@ function TaskFields({
         showCounter
         isRequired
         {...(readOnlyReason === undefined ? {} : { isReadOnly: true, readOnlyReason })}
-        {...(errors.title === undefined ? {} : { error: errors.title })}
+        {...(shownTitleError === undefined ? {} : { error: shownTitleError })}
       />
       {isDone !== undefined && (
         <Checkbox
@@ -211,12 +230,15 @@ function TaskFields({
         surface="form"
         onSearch={editorSearch(search.onSearch)}
         objectSwitcher={{
-          objects: objects.map((object) => ({
-            id: object.id,
-            label: object.pluralName,
-            icon: object.icon,
-            hue: object.hue,
-          })),
+          // Only objects the person may change: a link to any other would be refused (AC-447).
+          objects: objects
+            .filter((object) => object.access === 'write')
+            .map((object) => ({
+              id: object.id,
+              label: object.pluralName,
+              icon: object.icon,
+              hue: object.hue,
+            })),
           objectId,
           onObjectChange: setObjectId,
         }}
@@ -498,12 +520,6 @@ export function TaskDialog(props: TaskDialogProps) {
     };
   }, [data, slug, task]);
   if (task === 'new') return <NewTask {...props} />;
-  if (subscription === undefined) {
-    return (
-      <TaskModal title={strings.task} onClose={props.onClose}>
-        <EmptyState isLoading title={strings.loading} />
-      </TaskModal>
-    );
-  }
-  return <SavedTask {...props} subscription={subscription} />;
+  // One SavedTask (so one Modal) from the first frame: a placeholder that says loading until the store's lands.
+  return <SavedTask {...props} subscription={subscription ?? LOADING_TASK} />;
 }

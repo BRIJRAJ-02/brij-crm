@@ -118,7 +118,8 @@ test('tasks on a record: quick add, the dialog, links, ticks and the timeline, l
   await page.keyboard.type('Acme');
   await page.getByRole('menuitem', { name: /Acme Corp/ }).click();
   await expect(dialog.getByRole('list', { name: 'Records' })).toContainText('Acme Corp');
-  await dialog.getByRole('button', { name: 'Close' }).click();
+  // Escape right after a pick closes the dialog (focus is back in it at once, not when the menu has faded).
+  await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(page).toHaveURL(new RegExp(`${tasksPath}$`));
 

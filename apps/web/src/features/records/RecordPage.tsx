@@ -16,7 +16,7 @@ import type {
 import { useActivityStatus, useLiveStatus, useRecord, useTaskTotal, useTrashed } from '@crm/data/react';
 import { ActivityFeed, Button, Callout, EmptyState, Link, RecordHeader, RecordLayout, TaskList, TopBar } from '@crm/ui';
 import { useNavigate, useParams, useRouteContext, useRouter } from '@tanstack/react-router';
-import { useCallback, useMemo, useRef, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
 import { tabCount } from '../tasks/entries.ts';
 import { OpenTasksCard } from '../tasks/OpenTasksCard.tsx';
 import { strings as taskStrings } from '../tasks/strings.ts';
@@ -230,6 +230,13 @@ function RecordScreen({
   const openTotal = useTaskTotal(open);
   // Whether the task dialog was opened from this page, so closing it steps Back rather than adding a step.
   const openedHere = useRef(false);
+  // A `?task=` that arrived while the page was open (a timeline entry's link, or `openTask`) was pushed: closing
+  // steps Back. One the page opened with (a link from elsewhere) is replaced.
+  const taskBefore = useRef(task);
+  useEffect(() => {
+    if (taskBefore.current === undefined && task !== undefined) openedHere.current = true;
+    taskBefore.current = task;
+  }, [task]);
   const openTask = (taskId: string) => {
     openedHere.current = true;
     // Opening pushes its param, so Back closes it.

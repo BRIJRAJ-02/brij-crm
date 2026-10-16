@@ -53,8 +53,8 @@ export function useRecordSearch(slug: string, objectId: string) {
           }, SEARCH_DELAY_MS),
         };
       }
-      // While it is out, nothing yet: the menu fills when the answer lands.
-      return arraySource([], keyOf);
+      // While it is out, one row still loading (the menu draws it as loading, never "No results").
+      return { count: 1, getItem: () => undefined, getKey: keyOf };
     },
     // `version` draws the picker again once an answer lands.
     // eslint-disable-next-line react-hooks/exhaustive-deps

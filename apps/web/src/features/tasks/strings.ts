@@ -6,7 +6,6 @@ export const strings = {
   addTask: 'Add a task',
   addTaskPlaceholder: 'Add a task and press Enter',
   newTask: 'New task',
-  viewAll: 'View all',
   /** Overview's block's way to the Tasks tab, named apart from Recent activity's "View all" beside it. */
   viewAllTasks: 'View all tasks',
   /** The Tasks tab with nothing open. */
@@ -40,7 +39,6 @@ export const strings = {
   missing: 'This task doesn’t exist or you can’t see it.',
   loadFailed: 'This task didn’t load.',
   titleRequired: 'Give the task a title.',
-  titleTooLong: (max: string) => `A task title holds at most ${max} characters.`,
   /** The cap on linked records, said under the field. */
   recordsFull: (max: number) => `A task links at most ${String(max)} records.`,
   unknownActor: 'Someone',
