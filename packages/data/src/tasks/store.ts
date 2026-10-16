@@ -613,7 +613,10 @@ export function createTasksStore(deps: TasksDeps) {
           if (lists.get(key) !== list) lists.set(key, list);
           if (retained === 1) {
             release = deps.watch(workspace);
-            if (stale) {
+            // A screen showing it is reason enough to read it: its first page, or the pages it let go of.
+            if (first === undefined) {
+              first = readTop(TASK_PAGE);
+            } else if (stale) {
               stale = false;
               void readTop(Math.max(ids.length, TASK_PAGE));
             }

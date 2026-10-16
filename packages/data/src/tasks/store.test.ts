@@ -450,4 +450,14 @@ describe('the tasks store (spec 0019)', () => {
     expect(store.forRecord(WS, ACME, 'open')).toBe(open);
     expect(calls.filter((call) => call === 'list open')).toHaveLength(2);
   });
+
+  it('reads a list’s first page when a screen first shows it, with no loader asking', async () => {
+    const server = new Map([task(1, { isDone: true })].map((each) => [each.id, each]));
+    const { store, calls } = setupWithGate(server);
+    const done = store.forRecord(WS, ACME, 'done');
+    done.retain();
+    await flush();
+    expect(calls).toContain('list done');
+    expect(done.getSnapshot()).toMatchObject({ status: 'ready', loaded: 1, hasMore: false });
+  });
 });

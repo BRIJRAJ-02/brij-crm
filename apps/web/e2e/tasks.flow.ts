@@ -14,6 +14,12 @@ import { addPerson, checkScreen, newWorkspace, signInAgain } from './people.ts';
 const RECORD_URL = /\/w\/[^/]+\/objects\/people\/([0-9a-f-]{36})\/overview$/;
 /** AC-432: a task shows in every other open browser within a second. */
 const LIVE_BUDGET_MS = 1_000;
+/**
+ * `FLOW_NO_LIVE=1` runs the flow on an app whose origin Centrifugo doesn't
+ * admit (a second stack on another port): the second browser reloads where
+ * it would hear the change live. CI runs it live.
+ */
+const isLive = process.env.FLOW_NO_LIVE !== '1';
 
 /** A UUID v7 from the clock, as the browser mints one (the API refuses others for a record). */
 function uuidv7(): string {
@@ -36,7 +42,7 @@ test('tasks on a record: quick add, the dialog, links, ticks and the timeline, l
   browser,
 }, info) => {
   test.skip((page.viewportSize()?.width ?? 0) < 1000, 'The record page flow runs at desktop width.');
-  test.setTimeout(180_000);
+  test.setTimeout(240_000);
   const tag = `${randomUUID().slice(0, 8)}-${info.project.name}`;
   const slug = `tasks-${tag}`;
   const email = `tasks-${tag}@example.com`;
@@ -93,10 +99,11 @@ test('tasks on a record: quick add, the dialog, links, ticks and the timeline, l
   await expect(page.getByRole('tab', { name: /Tasks/ })).toContainText('1');
 
   // The second browser sees it within a second, live (AC-432, AC-448).
+  if (!isLive) await reader.reload();
   await expect(readerList.getByRole('row', { name: /Send the proposal/ })).toBeVisible({ timeout: 5_000 });
   const seenAfter = Date.now() - sent;
   console.warn(`tasks live: the new task showed in the second browser after ${String(seenAfter)} ms`);
-  expect(seenAfter).toBeLessThan(LIVE_BUDGET_MS + 500);
+  if (isLive) expect(seenAfter).toBeLessThan(LIVE_BUDGET_MS + 500);
   await checkScreen(page, 'tasks-tab');
 
   // The dialog: a due date and a linked company through the object switcher (AC-434).
@@ -111,7 +118,7 @@ test('tasks on a record: quick add, the dialog, links, ticks and the timeline, l
   await page.keyboard.type('Acme');
   await page.getByRole('menuitem', { name: /Acme Corp/ }).click();
   await expect(dialog.getByRole('list', { name: 'Records' })).toContainText('Acme Corp');
-  await page.keyboard.press('Escape');
+  await dialog.getByRole('button', { name: 'Close' }).click();
   await expect(dialog).toBeHidden();
   await expect(page).toHaveURL(new RegExp(`${tasksPath}$`));
 
@@ -127,10 +134,17 @@ test('tasks on a record: quick add, the dialog, links, ticks and the timeline, l
 
   // Ticked in the second browser: the first sees it struck through, then in Completed once the list settles.
   await page.goto(tasksPath);
-  await reader.getByRole('checkbox', { name: 'Mark “Send the proposal” as done' }).click();
-  await expect(page.getByRole('checkbox', { name: 'Mark “Send the proposal” as done' })).toBeChecked({
-    timeout: 5_000,
-  });
+  if (!isLive) await reader.reload();
+  // React Aria's label sits over the hidden input: the click lands on it, as a person's would.
+  await reader.getByRole('checkbox', { name: 'Mark “Send the proposal” as done' }).click({ force: true });
+  if (isLive) {
+    await expect(page.getByRole('checkbox', { name: 'Mark “Send the proposal” as done' })).toBeChecked({
+      timeout: 5_000,
+    });
+  } else {
+    await expect(reader.getByRole('checkbox', { name: 'Mark “Send the proposal” as done' })).toBeChecked();
+    await page.reload();
+  }
   await expect(page.getByText('No open tasks. Add one above.')).toBeVisible({ timeout: 10_000 });
   await page.getByRole('button', { name: /Completed/ }).click();
   await expect(

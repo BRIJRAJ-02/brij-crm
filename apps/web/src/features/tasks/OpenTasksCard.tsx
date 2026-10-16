@@ -59,7 +59,7 @@ export function OpenTasksCard({
             </Button>
           )}
           <Button variant="ghost" onPress={onViewAll}>
-            {strings.viewAll}
+            {strings.viewAllTasks}
           </Button>
         </>
       }

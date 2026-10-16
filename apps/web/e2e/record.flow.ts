@@ -60,7 +60,7 @@ test('a record opens from the table, edits in place, and keeps its tab', async (
 
   // View all opens the Activity tab: the address is replaced (Back leaves the record) and focus lands on the tab.
   const before = await page.evaluate(() => history.length);
-  await page.getByRole('button', { name: 'View all' }).focus();
+  await page.getByRole('button', { name: 'View all', exact: true }).focus();
   await page.keyboard.press('Enter');
   await expect(page.getByRole('tab', { name: 'Activity' })).toBeFocused();
   expect(await page.evaluate(() => history.length)).toBe(before);

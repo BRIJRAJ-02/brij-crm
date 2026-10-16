@@ -7,6 +7,8 @@ export const strings = {
   addTaskPlaceholder: 'Add a task and press Enter',
   newTask: 'New task',
   viewAll: 'View all',
+  /** Overview's block's way to the Tasks tab, named apart from Recent activity's "View all" beside it. */
+  viewAllTasks: 'View all tasks',
   /** The Tasks tab with nothing open. */
   noOpenTasks: 'No open tasks. Add one above.',
   /** Overview's block with nothing open. */
