@@ -45,6 +45,29 @@ describe('the bulk bar', () => {
     );
   });
 
+  it('offers Retry for a passing failure only, and warns when rows were left behind', () => {
+    const retried: string[] = [];
+    const offline = deleteToast(
+      { kind: 'failed', error: dataError('API_UNAVAILABLE', 'Can’t reach the CRM.') },
+      PEOPLE,
+      () => undefined,
+      () => retried.push('again'),
+    );
+    expect(offline?.action?.label).toBe('Retry');
+    offline?.action?.onAction();
+    expect(retried).toEqual(['again']);
+    const refused = deleteToast(
+      { kind: 'failed', error: dataError('FORBIDDEN', 'You can view People but not change them.') },
+      PEOPLE,
+      () => undefined,
+      () => undefined,
+    );
+    expect(refused?.action).toBeUndefined();
+    expect(deleteToast({ kind: 'done', deleted: 46, refused: 2, undoId: 'u' }, PEOPLE, () => undefined)?.tone).toBe(
+      'danger',
+    );
+  });
+
   it('says what an undo of a delete or a create did (AC-526, AC-541)', () => {
     const restored = { kind: 'restored' as const, objectId: OBJECT, ...PEOPLE };
     expect(lifecycleUndoToast({ ...restored, restored: 46, kept: 2, reason: 'unique' })).toEqual({

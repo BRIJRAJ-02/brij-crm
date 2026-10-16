@@ -48,13 +48,13 @@ export function objectPendingPage() {
  * in the data layer's words ("Can't reach the CRM" only when the network
  * failed); anything else gets a plain "try again".
  */
-export function failedPage(workspaceName: string | undefined, onRetry: () => void, error?: unknown) {
+export function failedPage(workspaceName: string | undefined, onRetry: () => void, error?: unknown, title?: string) {
   return {
     // Before the workspace is known, the product names the page, so the body
     // says "Couldn’t load this workspace" once, not twice.
     topBar: <TopBar title={workspaceName ?? strings.product} />,
     body: (
-      <EmptyState tone="error" title={strings.failedTitle} onRetry={onRetry}>
+      <EmptyState tone="error" title={title ?? strings.failedTitle} onRetry={onRetry}>
         {isDataError(error) ? error.message : strings.failedText}
       </EmptyState>
     ),

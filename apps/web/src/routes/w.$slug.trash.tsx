@@ -67,5 +67,10 @@ function TrashRoute() {
 
 function TrashError({ error }: ErrorComponentProps) {
   const router = useRouter();
-  return <WorkspacePage currentPage="trash" page={failedPage(strings.title, () => void router.invalidate(), error)} />;
+  return (
+    <WorkspacePage
+      currentPage="trash"
+      page={failedPage(strings.title, () => void router.invalidate(), error, strings.failedTitle)}
+    />
+  );
 }

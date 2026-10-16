@@ -8,6 +8,14 @@ import type { ToastContent } from '@crm/ui';
 /** The most records one request changes; past it, background jobs (milestone 3) take over. */
 export const BULK_INLINE_MAX = 500;
 
+/** Failures that pass on their own (offline, busy): their toast offers Retry. */
+const PASSING: ReadonlySet<string> = new Set(['INTERNAL', 'API_UNAVAILABLE', 'RATE_LIMITED', 'TOO_MANY_REQUESTS']);
+
+/** Whether a failed bulk action may simply be sent again. */
+export function isPassing(code: string): boolean {
+  return PASSING.has(code);
+}
+
 /** A count in the browser's language ("1,500"), as the grid writes its own. */
 const count = (value: number): string => new Intl.NumberFormat().format(value);
 
@@ -25,6 +33,7 @@ export function recordsWord(value: number, names: ObjectNames): string {
 /** The bar's, the confirm's and the toasts' copy. */
 export const bulkStrings = {
   delete: 'Delete',
+  retry: 'Retry',
   deleting: 'Deleting',
   cancel: 'Cancel',
   undo: 'Undo',
@@ -82,9 +91,16 @@ export function deleteToast(
   result: DeleteResult,
   names: ObjectNames,
   onUndo: (undoId: string) => void,
+  onRetry?: () => void,
 ): ToastContent | undefined {
   if (result.kind === 'too-many') return { tone: 'danger', message: bulkStrings.tooMany };
-  if (result.kind === 'failed') return { tone: 'danger', message: result.error.message || bulkStrings.somethingWrong };
+  if (result.kind === 'failed') {
+    const message = result.error.message || bulkStrings.somethingWrong;
+    // A passing failure (offline, busy) offers the same delete again; a refusal (read only) says why.
+    return onRetry !== undefined && isPassing(result.error.code)
+      ? { tone: 'danger', message, action: { label: bulkStrings.retry, onAction: onRetry } }
+      : { tone: 'danger', message };
+  }
   if (result.deleted === 0 && result.refused === 0) return undefined;
   if (result.deleted === 0) {
     const message =
@@ -101,7 +117,8 @@ export function deleteToast(
     result.refused === 0 ? what : bulkStrings.deletedSome(recordsWord(result.deleted, names), result.refused);
   const { undoId } = result;
   return {
-    tone: 'success',
+    // Rows left behind need the person's eye: the same tone as a restore that left some in the trash.
+    tone: result.refused === 0 ? 'success' : 'danger',
     message,
     ...(undoId === undefined
       ? {}

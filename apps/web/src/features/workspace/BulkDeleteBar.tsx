@@ -89,15 +89,26 @@ export function useBulkDelete({ slug, object, selection, total, onClear, onDelet
   if (asking !== undefined && asking !== lastAsked) setLastAsked(asking);
   const count = selectedCount(selection, total);
   const ids = selection.kind === 'some' ? [...selection.ids] : [];
+  // The one delete toast with Undo this table keeps: a newer delete closes it, so no dead Undo piles up.
+  const lastToast = useRef<string | undefined>(undefined);
 
   const remove = (recordIds: readonly string[]) => {
     onDeleting(recordIds);
     data.records.deleteMany(slug, object.id, recordIds).then(
       (result) => {
-        const toast = deleteToast(result, object, (undoId) => {
-          runUndo(data, toasts, slug, undoId);
-        });
-        if (toast !== undefined) toasts.toast(toast);
+        const toast = deleteToast(
+          result,
+          object,
+          (undoId) => {
+            runUndo(data, toasts, slug, undoId);
+          },
+          () => {
+            remove(recordIds);
+          },
+        );
+        if (toast === undefined) return;
+        if (lastToast.current !== undefined) toasts.dismiss(lastToast.current);
+        lastToast.current = toasts.toast(toast);
       },
       // The records layer failed to load; nothing left the table.
       () => {
@@ -113,7 +124,9 @@ export function useBulkDelete({ slug, object, selection, total, onClear, onDelet
       <BulkActionBar placement="floating" count={count} total={total} onClear={onClear}>
         {object.access !== 'write' ? (
           // Spec 0009's words for an object the person may only read; the server refuses them anyway.
-          <Callout placement="bar">{bulkStrings.readOnly(object.pluralName)}</Callout>
+          <Callout placement="bar" isAnnounced>
+            {bulkStrings.readOnly(object.pluralName)}
+          </Callout>
         ) : deleteOffer(count) === 'too-many' ? (
           <Callout placement="bar" isAnnounced>
             {bulkStrings.tooMany}

@@ -63,10 +63,17 @@ test.describe('trash', () => {
       .or(page.getByRole('dialog', { name: 'Delete 2 people?' }));
     await expect(confirm.getByText('They stay in the trash for 30 days.')).toBeVisible();
     await checkScreen(page, 'trash-confirm');
+    // Cancel (Esc) hands focus back to Delete in the bar (AC-542); then the confirm again, and Delete.
+    await page.keyboard.press('Escape');
+    await expect(confirm).toHaveCount(0);
+    await expect(bar(page).getByRole('button', { name: 'Delete' })).toBeFocused();
+    await bar(page).getByRole('button', { name: 'Delete' }).click();
     await confirm.getByRole('button', { name: 'Delete 2 people' }).click();
     await expect(page.getByText('Deleted 2 people')).toBeVisible();
     await expect(table(page).getByRole('rowheader', { name: /Ada Byron/ })).toHaveCount(0);
     await expect(bar(page)).toHaveCount(0);
+    // The table takes focus back where the deleted rows were, so the keyboard carries on there.
+    await expect(table(page).locator(':focus')).toHaveCount(1);
     // Live in the other browser (AC-527).
     if (LIVE) {
       await expect(table(reader).getByRole('rowheader', { name: /Ada Byron/ })).toHaveCount(0);
@@ -79,6 +86,11 @@ test.describe('trash', () => {
     await expect(table(page).getByRole('rowheader', { name: /Ada Byron/ })).toBeVisible();
     if (LIVE) await expect(table(reader).getByRole('rowheader', { name: /Bea Stone/ })).toBeVisible();
 
+    // Esc in the table clears the ticked rows (AC-522).
+    await tick(page, 'Cy Lane').click();
+    await expect(bar(page)).toHaveCount(1);
+    await page.keyboard.press('Escape');
+    await expect(bar(page)).toHaveCount(0);
     // One ticked goes at once, no confirm (AC-524).
     await tick(page, 'Cy Lane').click();
     await bar(page).getByRole('button', { name: 'Delete' }).click();

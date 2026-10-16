@@ -86,9 +86,16 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
     // The grid takes focus back where the first restored row was, so the keyboard carries on there.
     focusBackAt(ids, true);
     setHeld({ view, selection: noRows() });
-    data.trash.restore(slug, ids).then(
+    restoreIds(ids, onlyName);
+  };
+
+  /** Restores these records; the toast says what came back, with Retry when the failure passes on its own. */
+  const restoreIds = (recordIds: readonly string[], onlyName: string | undefined) => {
+    data.trash.restore(slug, recordIds).then(
       (summary) => {
-        const toast = restoreToast(summary, onlyName);
+        const toast = restoreToast(summary, onlyName, () => {
+          restoreIds(recordIds, onlyName);
+        });
         if (toast !== undefined) toasts.toast(toast);
       },
       () => {
@@ -159,7 +166,10 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
               getValue={(row, columnId) => cellValue(row, columnId, byId, dayOf)}
               getDisplay={(row, columnId) => {
                 if (columnId === TRASH_COLUMNS.name) return row.item.display;
-                if (columnId === TRASH_COLUMNS.deletedBy) return [deleters(row)];
+                if (columnId === TRASH_COLUMNS.deletedBy) {
+                  const by = deleters(row);
+                  return by === undefined ? undefined : [by];
+                }
                 return undefined;
               }}
               rowHeader={TRASH_NAME_COLUMN}
@@ -177,8 +187,20 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
                     {strings.emptyText}
                   </EmptyState>
                 ) : (
-                  <EmptyState title={strings.emptyObject(filtered.pluralName)} icon={filtered.icon}>
-                    {strings.emptyObjectText}
+                  <EmptyState
+                    title={strings.emptyObject(filtered.pluralName)}
+                    icon={filtered.icon}
+                    actions={
+                      <Button
+                        onPress={() => {
+                          void navigate({ to: '/w/$slug/trash', params: { slug }, search: {} });
+                        }}
+                      >
+                        {strings.showAll}
+                      </Button>
+                    }
+                  >
+                    {strings.emptyObjectText(filtered.pluralName)}
                   </EmptyState>
                 )
               }
@@ -192,7 +214,7 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
                       </Callout>
                     ) : (
                       <>
-                        <Button icon="archive-restore" isDisabled={!isAllowed} onPress={restore}>
+                        <Button variant="primary" icon="archive-restore" isDisabled={!isAllowed} onPress={restore}>
                           {strings.restore}
                         </Button>
                         {/* Said when it appears: the ticked rows are all of objects the person may only read. */}

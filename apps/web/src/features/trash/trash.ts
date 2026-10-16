@@ -10,6 +10,7 @@ import type {
   TrashRow,
 } from '@crm/data';
 import type { ToastContent } from '@crm/ui';
+import { isPassing } from '../workspace/bulk.ts';
 import { strings } from './strings.ts';
 
 /** The trash's columns, by id: Name (the row header), Object, Deleted by, Deleted, Removed after. */
@@ -80,7 +81,7 @@ export function cellValue(
     case TRASH_COLUMNS.object:
       return objectLabel(objects.get(item.objectId));
     case TRASH_COLUMNS.deletedBy:
-      return item.deletedBy;
+      return item.deletedBy ?? null;
     case TRASH_COLUMNS.deletedAt:
       return item.deletedAt;
     case TRASH_COLUMNS.expiresAt:
@@ -95,15 +96,17 @@ export function cellValue(
  * ("Someone removed from this workspace" once they left), "The system", "An
  * API key" or "An automation".
  */
-export function deletedBy(row: TrashRow, members: readonly MemberSummary[]): ActorDisplay {
+export function deletedBy(row: TrashRow, members: readonly MemberSummary[]): ActorDisplay | undefined {
   return deletedByOf(members)(row);
 }
 
 /** `deletedBy` over a member list looked up once, by id, for every cell of the grid. */
-export function deletedByOf(members: readonly MemberSummary[]): (row: TrashRow) => ActorDisplay {
+export function deletedByOf(members: readonly MemberSummary[]): (row: TrashRow) => ActorDisplay | undefined {
   const names = new Map(members.map((member) => [member.id, member.name]));
   return (row) => {
     const by = row.item.deletedBy;
+    // Hidden by a field rule (spec 0017): the cell is empty.
+    if (by === undefined) return undefined;
     const name =
       by.type === 'system'
         ? strings.theSystem
@@ -137,9 +140,18 @@ const records = (count: number) =>
  * The toast after a restore (AC-534): "Restored Ada Lovelace." or "Restored
  * 46 records.", and how many couldn't come back (each row says why).
  */
-export function restoreToast(summary: RestoreSummary, onlyName: string | undefined): ToastContent | undefined {
+export function restoreToast(
+  summary: RestoreSummary,
+  onlyName: string | undefined,
+  onRetry?: () => void,
+): ToastContent | undefined {
   if (summary.kind === 'too-many') return { tone: 'danger', message: strings.tooMany };
-  if (summary.kind === 'failed') return { tone: 'danger', message: summary.error.message || strings.somethingWrong };
+  if (summary.kind === 'failed') {
+    const message = summary.error.message || strings.somethingWrong;
+    return onRetry !== undefined && isPassing(summary.error.code)
+      ? { tone: 'danger', message, action: { label: strings.retry, onAction: onRetry } }
+      : { tone: 'danger', message };
+  }
   if (summary.restored === 0 && summary.refused === 0) return undefined;
   if (summary.restored === 0) return { tone: 'danger', message: strings.noneRestored(records(summary.refused)) };
   const restored =

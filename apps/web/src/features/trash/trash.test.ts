@@ -46,10 +46,10 @@ describe('the trash', () => {
   });
 
   it('names who deleted a record, and someone who left', () => {
-    expect(deletedBy(rowOf('people'), [ADA]).name).toBe('Ada Lovelace');
-    expect(deletedBy(rowOf('people'), []).name).toBe('Someone removed from this workspace');
-    expect(deletedBy(rowOf('people', { type: 'system', id: null }), []).name).toBe('The system');
-    expect(deletedBy(rowOf('people', { type: 'api_key', id: 'key' }), []).name).toBe('An API key');
+    expect(deletedBy(rowOf('people'), [ADA])?.name).toBe('Ada Lovelace');
+    expect(deletedBy(rowOf('people'), [])?.name).toBe('Someone removed from this workspace');
+    expect(deletedBy(rowOf('people', { type: 'system', id: null }), [])?.name).toBe('The system');
+    expect(deletedBy(rowOf('people', { type: 'api_key', id: 'key' }), [])?.name).toBe('An API key');
   });
 
   it('allows Restore when any selected record’s object may be changed (AC-534)', () => {

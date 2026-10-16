@@ -21,8 +21,10 @@ export const strings = {
   emptyTitle: 'The trash is empty',
   emptyText: 'Deleted records stay here for 30 days.',
   /** The object filter matching nothing. */
-  emptyObject: (pluralName: string) => `No deleted ${pluralName.toLowerCase()}.`,
-  emptyObjectText: 'Records of it you delete stay here for 30 days.',
+  emptyObject: (pluralName: string) => `No deleted ${pluralName.toLowerCase()}`,
+  emptyObjectText: (pluralName: string) => `Deleted ${pluralName.toLowerCase()} stay here for 30 days.`,
+  showAll: 'Show all objects',
+  retry: 'Retry',
   restore: 'Restore',
   /** No selected record's object is one the person may change (AC-534). */
   cannotRestore: 'You can view these records but not restore them.',
