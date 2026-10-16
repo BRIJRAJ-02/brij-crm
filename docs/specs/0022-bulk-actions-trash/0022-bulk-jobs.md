@@ -86,7 +86,7 @@ Before #8's milestone 2 (and so before this spec's milestone 3), the job rows an
 
 **Progress in the bar**: `data.jobs` (spec 0008) exposes the job by id; the bar's `progress` is `{ label, value: done / total × 100 }` with labels "Counting…" (`preparing`), "Deleting 4,500 of 12,345" / "Updating 4,500 of 12,345" / "Restoring …" / "Deleting forever …" (`running`), and `onCancel` → `jobs.cancel`. The selection clears when the job is confirmed; the bar stays up showing progress until the job ends or the member leaves the view (the finish toast still comes, spec 0008 AC-119).
 
-**Finish toasts** (from `JobView.result` and counts): "Deleted 12,345 people" with "Undo" (→ `records.restoreBatch` with `batchId` = the job id); "Updated 9,998 people. 2 were refused." with "View details" (→ the job on Background jobs); "Restored …"; "Deleted forever …"; "Cancelled after 4,500 of 12,345."
+**Finish toasts** (from `JobView.result` and counts): "Deleted 12,345 people." with "Undo" (→ `records.restoreBatch` with `batchId` = the job id); "Updated 9,998 people. 2 were refused." with "View details" (→ the job on Background jobs); "Restored …"; "Deleted forever …"; "Cancelled after 4,500 of 12,345."
 
 ## Keeping open views current during a job
 

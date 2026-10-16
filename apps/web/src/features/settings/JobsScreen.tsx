@@ -231,7 +231,7 @@ export function JobsScreen({ data, slug, view, isAll, members: loaded, canRunTes
             <>
               <Button slot="close">{strings.dontCancel}</Button>
               <Button
-                variant="danger"
+                variant="danger-solid"
                 onPress={() => {
                   if (confirming !== undefined) cancel(confirming);
                 }}

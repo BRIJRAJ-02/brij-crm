@@ -83,7 +83,7 @@ function ArchiveConfirm({
           <Button slot="close" isDisabled={isBusy} kbd="ESC">
             {strings.cancel}
           </Button>
-          <Button variant="danger" icon="archive" isPending={isBusy} onPress={archive}>
+          <Button variant="danger-solid" icon="archive" isPending={isBusy} onPress={archive}>
             {isBusy ? strings.archiving : strings.dangerArchive(object.pluralName)}
           </Button>
         </>

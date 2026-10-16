@@ -45,8 +45,8 @@ export const bulkStrings = {
   confirmTitle: (records: string) => `Delete ${records}?`,
   confirmText: 'They stay in the trash for 30 days.',
   confirmAction: (records: string) => `Delete ${records}`,
-  deletedOne: (name: string) => `Deleted ${name}`,
-  deleted: (records: string) => `Deleted ${records}`,
+  deletedOne: (name: string) => `Deleted ${name}.`,
+  deleted: (records: string) => `Deleted ${records}.`,
   /** Some went, some didn't: their rows say why (AC-525). */
   deletedSome: (records: string, refused: number) =>
     refused === 1
@@ -83,8 +83,8 @@ export function needsConfirm(selected: number): boolean {
 }
 
 /**
- * The toast after a delete lands (AC-524, AC-525): "Deleted Ada Lovelace" or
- * "Deleted 48 people", with Undo; how many were refused when some were; the
+ * The toast after a delete lands (AC-524, AC-525): "Deleted Ada Lovelace." or
+ * "Deleted 48 people.", with Undo; how many were refused when some were; the
  * failure's own words when the whole delete was refused.
  */
 export function deleteToast(

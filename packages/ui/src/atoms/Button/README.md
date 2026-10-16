@@ -21,7 +21,8 @@ Ported from the design system artifact's Button card. Every pressable control in
 
 - **One primary per surface.** `primary` goes on the action that commits: Save, Add to list, Select record. Pair it with its shortcut (`kbd="⌘↵"`).
 - `secondary` (the default) for view controls (View settings, Import / Export) and Cancel (`kbd="ESC"`).
-- `danger` for the one action that destroys, such as Delete in a confirm dialog: red label and edge on the raised surface, so it holds 4.5:1 in both themes.
+- `danger` for a control that starts a destructive action, such as Delete in the bulk bar or Archive in settings: red label and edge on the raised surface, so it holds 4.5:1 in both themes.
+- `danger-solid` for the final commit that destroys, such as Delete or Archive in a confirm dialog: a `danger-fill` with an `on-danger` label (5.3:1 light, 5.4:1 dark). One per dialog, in place of the primary.
 - `ghost` for undo style actions that shouldn't compete, such as Discard changes, and for icon buttons inside dense rows.
 - `dashed` only for "add a condition" affordances: Filter, Add sort.
 - `SplitButton` when the primary action has variants (Save, Save as new view). Its `menu` is a `Menu`; the chevron is named "More options" unless `menuLabel` says otherwise.

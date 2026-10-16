@@ -22,9 +22,9 @@ describe('the bulk bar', () => {
     const onUndo = (id: string) => undone.push(id);
     expect(
       deleteToast({ kind: 'done', deleted: 1, refused: 0, recordName: 'Ada Lovelace', undoId: 'u1' }, PEOPLE, onUndo),
-    ).toMatchObject({ tone: 'success', message: 'Deleted Ada Lovelace', action: { label: 'Undo' } });
+    ).toMatchObject({ tone: 'success', message: 'Deleted Ada Lovelace.', action: { label: 'Undo' } });
     const many = deleteToast({ kind: 'done', deleted: 48, refused: 0, undoId: 'u2' }, PEOPLE, onUndo);
-    expect(many?.message).toBe('Deleted 48 people');
+    expect(many?.message).toBe('Deleted 48 people.');
     many?.action?.onAction();
     expect(undone).toEqual(['u2']);
     expect(deleteToast({ kind: 'done', deleted: 46, refused: 2, undoId: 'u3' }, PEOPLE, onUndo)?.message).toBe(

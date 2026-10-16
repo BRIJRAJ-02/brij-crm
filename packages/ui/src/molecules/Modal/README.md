@@ -19,7 +19,7 @@ Ported from the artifact's Modal card. Confirms, invites, exports, imports and m
     actions={
       <>
         <Button slot="close">Cancel</Button>
-        <Button variant="danger" onPress={remove}>
+        <Button variant="danger-solid" onPress={remove}>
           Delete records
         </Button>
       </>

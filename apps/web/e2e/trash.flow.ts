@@ -69,7 +69,7 @@ test.describe('trash', () => {
     await expect(bar(page).getByRole('button', { name: 'Delete' })).toBeFocused();
     await bar(page).getByRole('button', { name: 'Delete' }).click();
     await confirm.getByRole('button', { name: 'Delete 2 people' }).click();
-    await expect(page.getByText('Deleted 2 people')).toBeVisible();
+    await expect(page.getByText('Deleted 2 people.')).toBeVisible();
     await expect(table(page).getByRole('rowheader', { name: /Ada Byron/ })).toHaveCount(0);
     await expect(bar(page)).toHaveCount(0);
     // The table takes focus back where the deleted rows were, so the keyboard carries on there.
@@ -94,13 +94,13 @@ test.describe('trash', () => {
     // One ticked goes at once, no confirm (AC-524).
     await tick(page, 'Cy Lane').click();
     await bar(page).getByRole('button', { name: 'Delete' }).click();
-    await expect(page.getByText('Deleted Cy Lane')).toBeVisible();
+    await expect(page.getByText('Deleted Cy Lane.')).toBeVisible();
     await expect(table(page).getByRole('rowheader', { name: /Cy Lane/ })).toHaveCount(0);
 
     // And Ada too; then someone takes her email meanwhile.
     await tick(page, 'Ada Byron').click();
     await bar(page).getByRole('button', { name: 'Delete' }).click();
-    await expect(page.getByText('Deleted Ada Byron')).toBeVisible();
+    await expect(page.getByText('Deleted Ada Byron.')).toBeVisible();
     await addPerson(page, 'Ada', 'Again', `ada-${tag}@acme.com`);
 
     // The Trash lists them, newest first (AC-533).

@@ -34,7 +34,12 @@ function DeleteConfirm({ onDelete }: { readonly onDelete?: () => void }) {
       actions={
         <>
           <Button slot="close">Cancel</Button>
-          <Button variant="danger" icon="trash" slot="close" {...(onDelete === undefined ? {} : { onPress: onDelete })}>
+          <Button
+            variant="danger-solid"
+            icon="trash"
+            slot="close"
+            {...(onDelete === undefined ? {} : { onPress: onDelete })}
+          >
             Delete records
           </Button>
         </>

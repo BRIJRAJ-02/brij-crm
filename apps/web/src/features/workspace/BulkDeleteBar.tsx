@@ -159,7 +159,7 @@ export function useBulkDelete({ slug, object, selection, total, onClear, onDelet
             {bulkStrings.cancel}
           </Button>
           <Button
-            variant="danger"
+            variant="danger-solid"
             icon="trash"
             onPress={() => {
               const confirmed = asking;

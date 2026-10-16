@@ -17,7 +17,7 @@ type Story = StoryObj<typeof meta>;
 /** Secondary, the default: view controls, Import / Export, Cancel. */
 export const Default: Story = {};
 
-/** The four variants. One primary per surface, on the action that commits. */
+/** The variants. One primary per surface, on the action that commits; `danger-solid` takes its place in a destructive confirm. */
 export const Variants: Story = {
   parameters: { crm: { preview: true } },
   render: () => (
@@ -32,6 +32,9 @@ export const Variants: Story = {
       <Button variant="ghost">Discard changes</Button>
       <Button variant="danger" icon="trash">
         Delete record
+      </Button>
+      <Button variant="danger-solid" icon="trash">
+        Delete 3 records
       </Button>
       <Button variant="primary" kbd="⌘↵">
         Add to list
@@ -209,6 +212,17 @@ export const FocusedDanger: Story = {
   play: async ({ canvas, userEvent }) => {
     await userEvent.tab();
     const button = canvas.getByRole('button', { name: 'Delete record' });
+    await expect(button).toHaveFocus();
+    await expect(getComputedStyle(button).outlineStyle).toBe('solid');
+  },
+};
+
+/** A filled danger button focused from the keyboard: the 1px accent ring sits just outside its red fill. */
+export const FocusedDangerSolid: Story = {
+  args: { variant: 'danger-solid', children: 'Delete 3 records', icon: 'trash' },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.tab();
+    const button = canvas.getByRole('button', { name: 'Delete 3 records' });
     await expect(button).toHaveFocus();
     await expect(getComputedStyle(button).outlineStyle).toBe('solid');
   },
