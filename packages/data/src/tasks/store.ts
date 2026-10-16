@@ -7,21 +7,25 @@
 //   open count for the tab's label;
 // - `one` serves the task dialog from the same body.
 //
-// Writes are optimistic (spec 0005's layering rule, per task in order): a
-// create puts its body in at once and its id first, marked new, in every
-// loaded open list of its linked records; a change shows at once. A refusal
-// puts back what was shown before, unless something newer landed meanwhile:
-// a tick or a create raises a toast with Retry, a dialog field answers the
-// refusal for the screen to show under it. A list settles (reads its loaded
-// pages again) 1.5 seconds after the last change in it (`SETTLE_MS`), which
-// is when a ticked task leaves an open list and a moved due date takes its
-// place.
+// Writes are optimistic (spec 0005's layering rule, per task in order): each
+// task keeps its confirmed base and its pending changes on top, so an answer
+// replaces the base and drops its own layer (later ones stay), and a refusal
+// drops only its layer. A create puts its body in at once and its id first,
+// marked new, in every loaded open list of its linked records, kept there
+// through a settle until it lands. A tick or a create refused raises a toast
+// with Retry; a dialog field answers the refusal for the screen to show under
+// it. A list settles (reads its loaded pages again) 1.5 seconds after the
+// last change in it (`TASK_SETTLE_MS`), at most 5 seconds after the first,
+// which is when a ticked task leaves an open list and a moved due date takes
+// its place.
 //
-// Live: a `tasks` event reads the named bodies held again (`tasks.get`, 100
-// a call) and marks dirty every loaded list of a record it names; a coarse
-// one rereads every body held and marks every list dirty, spread over up to
-// 2 seconds. A `records` event naming records deleted or restored rereads
-// the tasks linking them and marks their lists dirty. Nothing polls.
+// Live: a `tasks` event reads the named bodies held again (gathered for a
+// moment, `tasks.get` 100 a call; one named while its read is out is read
+// again after it) and settles every loaded list of a record it names a random
+// 0 to 2 seconds later; a coarse one rereads every body held and settles
+// every list, spread. A `records` event rereads the tasks held that link a
+// record it names (a rename, a trash, a restore) and settles the lists of
+// records it names deleted or restored. Nothing polls.
 import { TASK_GET_MAX, TASK_PAGE, TASK_PAGE_MAX } from '@crm/contracts/task-limits';
 import type { ChangeEvent, RecordRefDisplay, TaskPage, TaskStatus, TaskTotal, TaskView } from '@crm/contracts';
 import { refusalSummary, toDataError, type DataError } from '../errors.ts';
@@ -98,6 +102,8 @@ export interface TasksDeps {
   readonly now?: () => number;
   /** The person's member id in the workspace, for an optimistic body's maker and who ticked it. */
   readonly memberOf?: (workspace: string) => Promise<string | undefined>;
+  /** 0 to 1, for the spread of a settle a live event asked for (tests pass their own). */
+  readonly random?: () => number;
 }
 
 /** What a task list shows now. */
@@ -115,6 +121,10 @@ export interface TaskListState {
   readonly total?: TaskTotal;
   /** Tasks this tab just made, shown first with the "New" badge until the list settles. */
   readonly newIds: ReadonlySet<string>;
+  /** More pages wait past the loaded ones. */
+  readonly hasMore: boolean;
+  /** How many tasks are loaded (the rest of `source.count` draws as skeletons). */
+  readonly loaded: number;
   readonly error?: DataError;
 }
 
@@ -128,6 +138,8 @@ export interface TaskList {
   readonly ready: () => Promise<void>;
   /** Reads it again from the top (Try again). */
   readonly retry: () => void;
+  /** Reads the next page now (a list drawn in place pages by a button, not by scrolling). */
+  readonly more: () => Promise<void>;
 }
 
 /** One task, as the task dialog holds it. */
@@ -204,75 +216,153 @@ function applied(task: TaskView, change: TaskChange, now: string, me: string | u
   };
 }
 
+/** A pending change, layered over the task's confirmed body until its answer lands. */
+interface Patch {
+  readonly mutationId: string;
+  readonly change: TaskChange;
+  readonly at: string;
+}
+
+/** The longest a busy list waits to settle after its first change (spec 0006's `SETTLE_MAX_MS`). */
+const SETTLE_MAX_MS = 5_000;
+
+/** The most a list waits on top for a change someone else made, so a whole team doesn't read in step. */
+const SETTLE_SPREAD_MS = 2_000;
+
+/** How many times in a row a failed next page is tried again before it waits for a scroll or Retry. */
+const MORE_TRIES = 5;
+
+/** Whether two bodies say the same (bodies are plain JSON from the API or from `applied`). */
+const sameBody = (a: TaskView | undefined, b: TaskView): boolean =>
+  a !== undefined && JSON.stringify(a) === JSON.stringify(b);
+
 /** The tasks store: every workspace's task bodies, the lists over them, and the writes. */
 export function createTasksStore(deps: TasksDeps) {
   const later = deps.later ?? defaultLater;
   const now = deps.now ?? Date.now;
-  // One copy of each task, per workspace.
+  const random = deps.random ?? Math.random;
+  // Each task's confirmed body (the server's, or a create's own until it lands), per workspace.
+  const bases = new Map<string, Map<string, TaskView>>();
+  // What screens show: the base with the pending changes on top, one object per task while it says the same.
   const bodies = new Map<string, Map<string, TaskView>>();
+  // The pending changes per task, in the order they were made.
+  const patches = new Map<string, Patch[]>();
+  // Tasks this tab is creating, per workspace: a settle keeps them in their lists until they land.
+  const creating = new Map<string, Set<string>>();
   const lists = new Map<string, ReturnType<typeof makeList>>();
   const ones = new Map<string, ReturnType<typeof makeOne>>();
-  // Writes in flight per task: a read landing meanwhile never replaces what the screen shows.
-  const inFlight = new Map<string, number>();
   // Each task's writes go out one after another, so the server applies them in the order they were made.
   const queues = new Map<string, Promise<unknown>>();
+  // Reads by id: asked for this frame, out now, and asked again while out (read again when the read lands).
+  const wanted = new Map<string, Set<string>>();
   const fetching = new Set<string>();
+  const again = new Set<string>();
+  // The person's member id per workspace, learnt when a list, a task or a write first names the workspace.
+  const mine = new Map<string, string>();
 
-  const bodiesOf = (workspace: string): Map<string, TaskView> => {
-    const found = bodies.get(workspace);
+  const mapOf = <V>(maps: Map<string, Map<string, V>>, workspace: string): Map<string, V> => {
+    const found = maps.get(workspace);
     if (found !== undefined) return found;
-    const made = new Map<string, TaskView>();
-    bodies.set(workspace, made);
+    const made = new Map<string, V>();
+    maps.set(workspace, made);
+    return made;
+  };
+  const bodiesOf = (workspace: string) => mapOf(bodies, workspace);
+  const basesOf = (workspace: string) => mapOf(bases, workspace);
+  const creatingIn = (workspace: string): Set<string> => {
+    const found = creating.get(workspace);
+    if (found !== undefined) return found;
+    const made = new Set<string>();
+    creating.set(workspace, made);
     return made;
   };
   const keyOf = (workspace: string, id: string) => `${workspace}\u0000${id}`;
   const listsOf = (workspace: string) => [...lists.values()].filter((list) => list.workspace === workspace);
   const onesOf = (workspace: string) => [...ones.values()].filter((one) => one.workspace === workspace);
+  const isBusy = (workspace: string, id: string) =>
+    (patches.get(keyOf(workspace, id))?.length ?? 0) > 0 || creatingIn(workspace).has(id);
+
+  const learnMe = (workspace: string) => {
+    if (mine.has(workspace) || deps.memberOf === undefined) return;
+    void deps.memberOf(workspace).then(
+      (id) => {
+        if (id !== undefined) mine.set(workspace, id);
+      },
+      () => undefined,
+    );
+  };
 
   /** Tells every list and subscription of the workspace holding `ids` that their bodies changed. */
   const touched = (workspace: string, ids: readonly string[]) => {
+    if (ids.length === 0) return;
     const named = new Set(ids);
     for (const list of listsOf(workspace)) if (list.holdsAny(named)) list.announce();
     for (const one of onesOf(workspace)) if (named.has(one.taskId)) one.announce();
   };
 
-  /** Puts bodies a read or a write answered in the store; a read never replaces a task with a write in flight. */
-  const put = (workspace: string, tasks: readonly TaskView[], fromWrite = false) => {
-    const held = bodiesOf(workspace);
+  /** What a task shows: its base with its pending changes on top; the same object while it says the same. */
+  const compose = (workspace: string, id: string): boolean => {
+    const base = basesOf(workspace).get(id);
+    const shown = bodiesOf(workspace);
+    if (base === undefined) return shown.delete(id);
+    const layered = (patches.get(keyOf(workspace, id)) ?? []).reduce(
+      (body, patch) => applied(body, patch.change, patch.at, mine.get(workspace)),
+      base,
+    );
+    if (sameBody(shown.get(id), layered)) return false;
+    shown.set(id, layered);
+    return true;
+  };
+
+  /** Puts bodies a read or a write answered in the store, as each task's confirmed base; pending changes stay on top. */
+  const put = (workspace: string, tasks: readonly TaskView[]) => {
+    const held = basesOf(workspace);
     const changed: string[] = [];
     for (const task of tasks) {
-      if (!fromWrite && (inFlight.get(keyOf(workspace, task.id)) ?? 0) > 0) continue;
-      held.set(task.id, task);
-      changed.push(task.id);
+      if (!sameBody(held.get(task.id), task)) held.set(task.id, task);
+      if (compose(workspace, task.id)) changed.push(task.id);
     }
     touched(workspace, changed);
   };
 
   /** A task gone (deleted, hidden, or never made): out of the store and every list. */
   const drop = (workspace: string, ids: readonly string[]) => {
-    const held = bodiesOf(workspace);
-    for (const id of ids) held.delete(id);
+    if (ids.length === 0) return;
+    for (const id of ids) {
+      basesOf(workspace).delete(id);
+      bodiesOf(workspace).delete(id);
+      patches.delete(keyOf(workspace, id));
+    }
     const named = new Set(ids);
     for (const list of listsOf(workspace)) list.forget(named);
     for (const one of onesOf(workspace)) if (named.has(one.taskId)) one.announce();
   };
 
-  /** Lets go of bodies no list or subscription holds. */
+  /** Lets go of bodies no list or subscription holds and no write waits on. */
   const sweep = (workspace: string) => {
     const kept = new Set<string>();
     for (const list of listsOf(workspace)) for (const id of list.ids()) kept.add(id);
     for (const one of onesOf(workspace)) kept.add(one.taskId);
-    const held = bodiesOf(workspace);
-    for (const id of [...held.keys()]) {
-      if (!kept.has(id) && (inFlight.get(keyOf(workspace, id)) ?? 0) === 0) held.delete(id);
+    for (const id of [...basesOf(workspace).keys()]) {
+      if (kept.has(id) || isBusy(workspace, id)) continue;
+      basesOf(workspace).delete(id);
+      bodiesOf(workspace).delete(id);
     }
   };
 
-  /** Reads tasks again by id, 100 a call; those the answer leaves out are gone. */
-  const refetch = (workspace: string, ids: readonly string[]) => {
-    const wanted = ids.filter((id) => !fetching.has(keyOf(workspace, id)));
-    for (let start = 0; start < wanted.length; start += TASK_GET_MAX) {
-      const chunk = wanted.slice(start, start + TASK_GET_MAX);
+  /** Reads what `refetch` gathered for the workspace, 100 a call; those the answer leaves out are gone. */
+  const flush = (workspace: string) => {
+    const asked = [...(wanted.get(workspace) ?? [])];
+    wanted.delete(workspace);
+    const ids: string[] = [];
+    for (const id of asked) {
+      const key = keyOf(workspace, id);
+      // Out already: read again when that read lands, so an event during it is never lost.
+      if (fetching.has(key)) again.add(key);
+      else ids.push(id);
+    }
+    for (let start = 0; start < ids.length; start += TASK_GET_MAX) {
+      const chunk = ids.slice(start, start + TASK_GET_MAX);
       for (const id of chunk) fetching.add(keyOf(workspace, id));
       deps.api
         .get({ workspace, ids: chunk })
@@ -282,35 +372,62 @@ export function createTasksStore(deps: TasksDeps) {
             const answered = new Set(found.map((task) => task.id));
             drop(
               workspace,
-              chunk.filter((id) => !answered.has(id) && (inFlight.get(keyOf(workspace, id)) ?? 0) === 0),
+              chunk.filter((id) => !answered.has(id) && !isBusy(workspace, id)),
             );
           },
           () => undefined,
         )
         .finally(() => {
-          for (const id of chunk) fetching.delete(keyOf(workspace, id));
+          const more: string[] = [];
+          for (const id of chunk) {
+            const key = keyOf(workspace, id);
+            fetching.delete(key);
+            if (again.delete(key)) more.push(id);
+          }
+          if (more.length > 0) refetch(workspace, more);
         });
     }
   };
 
+  /** Reads tasks again by id: a burst of events in one moment costs one call per 100 tasks. */
+  const refetch = (workspace: string, ids: readonly string[]) => {
+    if (ids.length === 0) return;
+    const queued = wanted.get(workspace);
+    if (queued !== undefined) {
+      for (const id of ids) queued.add(id);
+      return;
+    }
+    wanted.set(workspace, new Set(ids));
+    later(() => {
+      flush(workspace);
+    }, 0);
+  };
+
   function makeList(workspace: string, recordId: string, status: TaskStatus) {
+    const key = `${workspace}\u0000${recordId}\u0000${status}`;
     let ids: string[] = [];
     let cursor: string | undefined;
     let total: TaskTotal | undefined;
     let state: TaskListState['status'] = 'loading';
     let error: DataError | undefined;
-    let newIds = new Set<string>();
+    let newIds: ReadonlySet<string> = new Set<string>();
     let first: Promise<void> | undefined;
     let loadingMore = false;
+    let moreFailures = 0;
     let retained = 0;
     let release: (() => void) | undefined;
     let cancelSettle: (() => void) | undefined;
     let cancelUnused: (() => void) | undefined;
-    // A change came while nobody showed the list: it settles when shown again.
+    // When the first change since the last settle came, so a busy list still settles within `SETTLE_MAX_MS`.
+    let dirtySince: number | undefined;
+    // A change came while nobody showed the list, or its ids were let go: it reads again when shown.
     let stale = false;
     // Each read's turn: an older answer landing after a newer one is dropped.
     let turn = 0;
     const listeners = new Set<() => void>();
+
+    const sameTotal = (next: TaskTotal | undefined) =>
+      next === undefined || (total !== undefined && total.count === next.count && total.atLeast === next.atLeast);
 
     const source = (): TaskListState['source'] => {
       const held = bodiesOf(workspace);
@@ -327,16 +444,24 @@ export function createTasksStore(deps: TasksDeps) {
         },
         getKey: (task) => task.id,
         onRangeChange: (range) => {
-          if (range.end >= shown.length && cursor !== undefined) void more();
+          if (range.end >= shown.length && cursor !== undefined && moreFailures < MORE_TRIES) void more();
         },
       };
     };
-    let snapshot: TaskListState = { status: state, source: source(), newIds };
+    let snapshot: TaskListState = {
+      status: state,
+      source: source(),
+      newIds,
+      hasMore: false,
+      loaded: 0,
+    };
     const announce = () => {
       snapshot = {
         status: state,
         source: source(),
         newIds,
+        hasMore: cursor !== undefined,
+        loaded: ids.length,
         ...(total === undefined ? {} : { total }),
         ...(error === undefined ? {} : { error }),
       };
@@ -346,7 +471,7 @@ export function createTasksStore(deps: TasksDeps) {
     /** Reads the first `upTo` tasks again (at least one page): the list's truth from the top. */
     const readTop = (upTo: number): Promise<void> => {
       turn += 1;
-      const mine = turn;
+      const mineTurn = turn;
       const run = async () => {
         const read: string[] = [];
         let next: string | undefined;
@@ -360,23 +485,28 @@ export function createTasksStore(deps: TasksDeps) {
             limit,
             ...(next === undefined ? {} : { cursor: next }),
           });
-          if (mine !== turn) return;
+          if (mineTurn !== turn) return;
           put(workspace, page.items);
           read.push(...page.items.map((task) => task.id).filter((id) => !read.includes(id)));
           counted ??= page.total;
           next = page.nextCursor;
         } while (next !== undefined && read.length < upTo);
-        ids = read;
+        // Tasks this tab is still creating aren't in the answer yet: they stay first, still new, until they land.
+        const pending = ids.filter((id) => creatingIn(workspace).has(id) && !read.includes(id));
+        ids = [...pending, ...read];
         cursor = next;
-        if (counted !== undefined) total = counted;
-        newIds = new Set();
+        if (!sameTotal(counted) && counted !== undefined) {
+          total = pending.length === 0 ? counted : { ...counted, count: counted.count + pending.length };
+        }
+        newIds = pending.length === 0 && newIds.size === 0 ? newIds : new Set(pending);
         state = 'ready';
         error = undefined;
+        moreFailures = 0;
         announce();
         sweep(workspace);
       };
       return run().catch((failed: unknown) => {
-        if (mine !== turn) return;
+        if (mineTurn !== turn) return;
         const failure = toDataError(failed);
         // A record missing, trashed or hidden: its tasks are absent.
         if (failure.code === 'NOT_FOUND') {
@@ -395,25 +525,34 @@ export function createTasksStore(deps: TasksDeps) {
       if (cursor === undefined || loadingMore || state !== 'ready') return;
       loadingMore = true;
       const from = cursor;
-      const mine = turn;
+      const mineTurn = turn;
       try {
         const page = await deps.api.list({ workspace, recordId, status, cursor: from });
-        if (mine !== turn) return;
+        if (mineTurn !== turn) return;
         put(workspace, page.items);
         const have = new Set(ids);
         ids = [...ids, ...page.items.map((task) => task.id).filter((id) => !have.has(id))];
         cursor = page.nextCursor;
+        moreFailures = 0;
         announce();
       } catch (failed) {
-        deps.notify({ tone: 'danger', message: toDataError(failed).message });
+        moreFailures += 1;
+        // Said once; tried again on the next scroll, after a wait that doubles, at most `MORE_TRIES` times in a row.
+        if (moreFailures === 1) deps.notify({ tone: 'danger', message: toDataError(failed).message });
       } finally {
-        loadingMore = false;
+        later(
+          () => {
+            loadingMore = false;
+          },
+          moreFailures === 0 ? 0 : Math.min(30_000, 1_000 * 2 ** (moreFailures - 1)),
+        );
       }
     };
 
     const settle = () => {
       cancelSettle?.();
       cancelSettle = undefined;
+      dirtySince = undefined;
       if (retained === 0) {
         stale = true;
         return;
@@ -421,24 +560,29 @@ export function createTasksStore(deps: TasksDeps) {
       void readTop(Math.max(ids.length, TASK_PAGE));
     };
 
-    return {
+    const list = {
       workspace,
       recordId,
       status,
       ids: () => ids,
       announce,
-      isLoaded: () => state === 'ready',
-      isRetained: () => retained > 0,
       holdsAny: (named: ReadonlySet<string>) => ids.some((id) => named.has(id)),
-      /** A change in the list: it settles `TASK_SETTLE_MS` after the last one. */
-      dirty() {
-        if (state === 'loading' && first === undefined) return;
+      /**
+       * A change in the list: it settles `TASK_SETTLE_MS` after the last one,
+       * at most `SETTLE_MAX_MS` after the first; a change someone else made
+       * waits a random moment more, so a whole team doesn't read in step.
+       */
+      dirty(fromElsewhere = false) {
+        if (first === undefined) return;
+        const at = now();
+        dirtySince ??= at;
+        const quiet = Math.max(0, Math.min(TASK_SETTLE_MS, dirtySince + SETTLE_MAX_MS - at));
         cancelSettle?.();
-        cancelSettle = later(settle, TASK_SETTLE_MS);
+        cancelSettle = later(settle, quiet + (fromElsewhere ? Math.round(random() * SETTLE_SPREAD_MS) : 0));
       },
-      /** Settles now (a resync, or a record trashed or restored). */
+      /** Settles now (a resync). */
       settleNow: settle,
-      /** A task this tab made: first, marked new, until the list settles. */
+      /** A task this tab made: first, marked new, until the list settles after it lands. */
       prepend(taskId: string) {
         if (state !== 'ready' || ids.includes(taskId)) return;
         ids = [taskId, ...ids];
@@ -465,6 +609,8 @@ export function createTasksStore(deps: TasksDeps) {
           retained += 1;
           cancelUnused?.();
           cancelUnused = undefined;
+          // Let go of while a screen still held its handle (Back to a page whose loader ran again): back in the map.
+          if (lists.get(key) !== list) lists.set(key, list);
           if (retained === 1) {
             release = deps.watch(workspace);
             if (stale) {
@@ -480,14 +626,19 @@ export function createTasksStore(deps: TasksDeps) {
             if (retained > 0) return;
             release?.();
             release = undefined;
-            // Shown by nobody for a while: its ids go, and the next screen reads it afresh.
+            // Shown by nobody for a while: its ids go, and it reads afresh if a screen shows it again.
             cancelUnused = later(() => {
-              lists.delete(`${workspace}\u0000${recordId}\u0000${status}`);
+              if (lists.get(key) === list) lists.delete(key);
+              stale = true;
               sweep(workspace);
             }, UNUSED_MS);
           };
         },
         ready: () => (first ??= readTop(TASK_PAGE)),
+        more: () => {
+          moreFailures = 0;
+          return more();
+        },
         retry: () => {
           state = ids.length === 0 ? 'loading' : state;
           announce();
@@ -495,9 +646,11 @@ export function createTasksStore(deps: TasksDeps) {
         },
       } satisfies TaskList,
     };
+    return list;
   }
 
   function makeOne(workspace: string, taskId: string) {
+    const key = keyOf(workspace, taskId);
     let state: TaskSubscriptionState['status'] = 'loading';
     let error: DataError | undefined;
     let retained = 0;
@@ -544,6 +697,8 @@ export function createTasksStore(deps: TasksDeps) {
         getSnapshot: () => snapshot,
         retain() {
           retained += 1;
+          // Let go of by an earlier release (React's StrictMode retains, releases and retains again): back in the map.
+          if (ones.get(key) !== one) ones.set(key, one);
           if (retained === 1) {
             release = deps.watch(workspace);
             if (bodiesOf(workspace).has(taskId)) state = 'ready';
@@ -557,7 +712,7 @@ export function createTasksStore(deps: TasksDeps) {
             if (retained > 0) return;
             release?.();
             release = undefined;
-            ones.delete(keyOf(workspace, taskId));
+            if (ones.get(key) === one) ones.delete(key);
             sweep(workspace);
           };
         },
@@ -571,60 +726,47 @@ export function createTasksStore(deps: TasksDeps) {
     return one;
   }
 
-  /** Runs one task's write after its earlier ones, counting it in flight meanwhile. */
+  /** Runs one task's write after its earlier ones. */
   const queued = <T>(workspace: string, taskId: string, write: () => Promise<T>): Promise<T> => {
     const key = keyOf(workspace, taskId);
-    inFlight.set(key, (inFlight.get(key) ?? 0) + 1);
     const before = queues.get(key) ?? Promise.resolve();
     const run = before.then(write, write);
-    const settled = run.finally(() => {
-      const left = (inFlight.get(key) ?? 1) - 1;
-      if (left === 0) inFlight.delete(key);
-      else inFlight.set(key, left);
+    const settled = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    queues.set(key, settled);
+    void settled.then(() => {
       if (queues.get(key) === settled) queues.delete(key);
     });
-    queues.set(
-      key,
-      settled.catch(() => undefined),
-    );
     return run;
   };
 
   /** Every loaded list of these records (any status): a change in them settles them. */
-  const dirtyRecords = (workspace: string, recordIds: readonly string[]) => {
+  const dirtyRecords = (workspace: string, recordIds: readonly string[], fromElsewhere = false) => {
     const named = new Set(recordIds);
-    for (const list of listsOf(workspace)) if (named.has(list.recordId)) list.dirty();
+    for (const list of listsOf(workspace)) if (named.has(list.recordId)) list.dirty(fromElsewhere);
   };
 
-  // The person's member id per workspace, learnt when a list, a task or a write first names the workspace.
-  const mine = new Map<string, string>();
-  const learnMe = (workspace: string) => {
-    if (mine.has(workspace) || deps.memberOf === undefined) return;
-    void deps.memberOf(workspace).then(
-      (id) => {
-        if (id !== undefined) mine.set(workspace, id);
-      },
-      () => undefined,
-    );
-  };
-
-  /** Sends one task change; the screen shows it at once. Answers the refusal, if any. */
+  /** Sends one task change, layered over the task at once. Answers the refusal, if any. */
   const change = async (workspace: string, taskId: string, patch: TaskChange): Promise<DataError | undefined> => {
-    const held = bodiesOf(workspace);
-    const before = held.get(taskId);
-    const shown =
-      before === undefined ? undefined : applied(before, patch, new Date(now()).toISOString(), mine.get(workspace));
-    if (shown !== undefined) {
-      held.set(taskId, shown);
-      touched(workspace, [taskId]);
-    }
+    learnMe(workspace);
+    const key = keyOf(workspace, taskId);
+    const before = bodiesOf(workspace).get(taskId);
+    const mutationId = deps.mintId();
+    patches.set(key, [...(patches.get(key) ?? []), { mutationId, change: patch, at: new Date(now()).toISOString() }]);
+    if (compose(workspace, taskId)) touched(workspace, [taskId]);
+    const settleOff = () => {
+      const left = (patches.get(key) ?? []).filter((each) => each.mutationId !== mutationId);
+      if (left.length === 0) patches.delete(key);
+      else patches.set(key, left);
+    };
     const linked = [
       ...(before?.records.map((record) => record.recordId) ?? []),
       ...(patch.addRecords?.map((record) => record.recordId) ?? []),
     ];
     // A tick moves the task out of its open list (or into it) only when the list settles.
     dirtyRecords(workspace, linked);
-    const mutationId = deps.mintId();
     try {
       const answer = await queued(workspace, taskId, () => {
         deps.mutations.sent(mutationId);
@@ -643,30 +785,24 @@ export function createTasksStore(deps: TasksDeps) {
         });
       });
       deps.mutations.answered(mutationId, 1);
-      put(workspace, [answer], true);
+      // The answer is the base now, and this change's layer goes; later ones stay on top.
+      settleOff();
+      put(workspace, [answer]);
       dirtyRecords(workspace, [...linked, ...answer.records.map((record) => record.recordId)]);
       deps.timelines(workspace, linked);
       return undefined;
     } catch (failed) {
       deps.mutations.forget(mutationId);
       const failure = toDataError(failed);
-      if (failure.code === 'NOT_FOUND') {
-        drop(workspace, [taskId]);
-      } else if (before !== undefined && held.get(taskId) === shown) {
-        held.set(taskId, before);
-        touched(workspace, [taskId]);
-      }
+      settleOff();
+      if (failure.code === 'NOT_FOUND') drop(workspace, [taskId]);
+      else if (compose(workspace, taskId)) touched(workspace, [taskId]);
       return failure;
     }
   };
 
-  /**
-   * Creates a task (AC-432): its body at once, its id first and marked new
-   * in every loaded open list of its records. A refusal takes it away again
-   * and raises a toast with Retry (which sends the same id). Answers whether
-   * it landed.
-   */
   const create = async (workspace: string, task: NewTask): Promise<boolean> => {
+    learnMe(workspace);
     const at = new Date(now()).toISOString();
     const records = task.records ?? [];
     const body: TaskView = {
@@ -682,7 +818,9 @@ export function createTasksStore(deps: TasksDeps) {
       createdBy: { type: 'member', id: task.createdBy ?? mine.get(workspace) ?? null },
       updatedAt: at,
     };
-    bodiesOf(workspace).set(task.id, body);
+    creatingIn(workspace).add(task.id);
+    basesOf(workspace).set(task.id, body);
+    compose(workspace, task.id);
     const recordIds = records.map((record) => record.recordId);
     for (const list of listsOf(workspace)) {
       if (list.status === 'open' && recordIds.includes(list.recordId)) list.prepend(task.id);
@@ -702,12 +840,14 @@ export function createTasksStore(deps: TasksDeps) {
         });
       });
       deps.mutations.answered(mutationId, 1);
-      put(workspace, [answer], true);
+      creatingIn(workspace).delete(task.id);
+      put(workspace, [answer]);
       dirtyRecords(workspace, recordIds);
       deps.timelines(workspace, recordIds);
       return true;
     } catch (failed) {
       deps.mutations.forget(mutationId);
+      creatingIn(workspace).delete(task.id);
       drop(workspace, [task.id]);
       deps.notify({
         tone: 'danger',
@@ -723,11 +863,6 @@ export function createTasksStore(deps: TasksDeps) {
     }
   };
 
-  /**
-   * Ticks or unticks a task (AC-433): shown at once, staying in its open
-   * list struck through until the list settles; a refusal rolls the
-   * checkbox back and raises a toast with Retry.
-   */
   const setDone = async (workspace: string, taskId: string, isDone: boolean): Promise<boolean> => {
     const failure = await change(workspace, taskId, { isDone });
     if (failure === undefined) return true;
@@ -767,69 +902,88 @@ export function createTasksStore(deps: TasksDeps) {
     },
     /** A new task id: mint it once when the dialog or quick add opens, and send the same one on a retry. */
     newId: () => deps.mintId(),
+    /**
+     * Creates a task (AC-432): its body at once, its id first and marked new
+     * in every loaded open list of its records (kept there through a settle
+     * until it lands). A refusal takes it away again and raises a toast with
+     * Retry, which sends the same id. Answers whether it landed.
+     */
     create: (workspace: string, task: NewTask): Promise<boolean> => create(workspace, task),
     /**
-     * Changes a task from its dialog (AC-434): shown at once, put back on a
-     * refusal, which it answers for the screen to show under the field.
+     * Changes a task from its dialog (AC-434): layered over the task at once,
+     * the layer gone when its answer lands or is refused (which it answers,
+     * for the screen to show under the field).
      */
     update: (workspace: string, taskId: string, patch: TaskChange): Promise<DataError | undefined> =>
       change(workspace, taskId, patch),
+    /**
+     * Ticks or unticks a task (AC-433): shown at once, staying in its open
+     * list struck through until the list settles; a refusal rolls the
+     * checkbox back and raises a toast with Retry.
+     */
     setDone: (workspace: string, taskId: string, isDone: boolean): Promise<boolean> =>
       setDone(workspace, taskId, isDone),
     /**
-     * A live `tasks` event: the named bodies held are read again, and every
-     * loaded list of a record it names settles; a coarse one rereads every
-     * body held and settles every list, spread.
+     * A live `tasks` event: the named bodies held are read again (gathered,
+     * one call per 100), and every loaded list of a record it names settles
+     * a random moment later; a coarse one rereads every body held and settles
+     * every list, spread.
      */
     changed(workspace: string, event: LiveEventOf<'tasks'>) {
       if (event.coarse === true) {
         deps.spread(`tasks ${workspace}`, () => {
-          refetch(workspace, [...bodiesOf(workspace).keys()]);
-          for (const list of listsOf(workspace)) list.dirty();
+          refetch(workspace, [...basesOf(workspace).keys()]);
+          for (const list of listsOf(workspace)) list.dirty(true);
           deps.timelines(workspace, 'all');
         });
         return;
       }
-      const held = bodiesOf(workspace);
+      const held = basesOf(workspace);
       refetch(
         workspace,
         event.taskIds.filter((id) => held.has(id)),
       );
-      dirtyRecords(workspace, event.recordIds);
+      dirtyRecords(workspace, event.recordIds, true);
       deps.timelines(workspace, event.recordIds);
     },
     /**
-     * A live `records` event (AC-446): records deleted or restored change
-     * which links their tasks show, so the tasks held that link them are read
-     * again, and those records' own lists settle (a trashed record's list
-     * becomes unavailable).
+     * A live `records` event: the tasks held that link a record it names are
+     * read again (a rename shows in their chips; a record trashed or restored
+     * changes which links they show, AC-446), and the lists of records it
+     * names as deleted or restored settle (a trashed record's list becomes
+     * unavailable). A coarse one waits a random moment first, once.
      */
     recordsChanged(workspace: string, event: Extract<ChangeEvent, { kind: 'records' }>) {
-      const lifecycle = [...(event.deletedIds ?? []), ...(event.restoredIds ?? [])];
-      if (lifecycle.length === 0 && event.coarse !== true) return;
-      const named = new Set(lifecycle);
-      const held = [...bodiesOf(workspace).values()];
-      const linking =
-        event.coarse === true
-          ? held.map((task) => task.id)
-          : held.filter((task) => task.records.some((record) => named.has(record.recordId))).map((task) => task.id);
-      refetch(workspace, linking);
-      for (const list of listsOf(workspace)) {
-        if (named.has(list.recordId) || event.coarse === true) list.dirty();
+      if (event.coarse === true) {
+        deps.spread(`tasks records ${workspace}`, () => {
+          refetch(workspace, [...basesOf(workspace).keys()]);
+          for (const list of listsOf(workspace)) list.dirty(true);
+        });
+        return;
       }
+      const named = new Set(event.recordIds);
+      const linking = [...basesOf(workspace).values()]
+        .filter((task) => task.records.some((record) => named.has(record.recordId)))
+        .map((task) => task.id);
+      refetch(workspace, linking);
+      dirtyRecords(workspace, [...(event.deletedIds ?? []), ...(event.restoredIds ?? [])], true);
     },
     /** Everything held of the workspace is read again (a resync after a gap the outbox no longer covers). */
     resync(workspace: string) {
-      refetch(workspace, [...bodiesOf(workspace).keys()]);
+      refetch(workspace, [...basesOf(workspace).keys()]);
       for (const list of listsOf(workspace)) list.settleNow();
     },
     /** Forgets everything: the session ended. */
     clear() {
+      bases.clear();
       bodies.clear();
+      patches.clear();
+      creating.clear();
       lists.clear();
       ones.clear();
-      inFlight.clear();
       queues.clear();
+      wanted.clear();
+      again.clear();
     },
   };
 }

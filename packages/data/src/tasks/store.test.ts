@@ -32,7 +32,55 @@ const flush = async () => {
 };
 const refused = (code: string, message: string) => Object.assign(new Error(message), { name: 'DataError', code });
 
-function setup(server: Map<string, TaskView>) {
+function setupWithGate(server: Map<string, TaskView>) {
+  let gate: Promise<void> | undefined;
+  let openGate: () => void = () => undefined;
+  let createGate: Promise<void> | undefined;
+  let openCreateGate: () => void = () => undefined;
+  let refuseOnce: Error | undefined;
+  const made = setup(server, {
+    beforeUpdate: async () => {
+      if (refuseOnce !== undefined) {
+        const error = refuseOnce;
+        refuseOnce = undefined;
+        throw error;
+      }
+      await gate;
+    },
+    beforeCreate: async () => {
+      await createGate;
+    },
+  });
+  return {
+    ...made,
+    api: {
+      open: () => {
+        openGate();
+      },
+    },
+    refuseNext: (error: Error) => {
+      refuseOnce = error;
+    },
+    gateCreates: () => {
+      createGate = new Promise<void>((resolve) => {
+        openCreateGate = resolve;
+      });
+    },
+    openCreates: () => {
+      openCreateGate();
+    },
+    hold: () => {
+      gate = new Promise<void>((resolve) => {
+        openGate = resolve;
+      });
+    },
+  };
+}
+
+function setup(
+  server: Map<string, TaskView>,
+  hooks: { readonly beforeUpdate?: () => Promise<void>; readonly beforeCreate?: () => Promise<void> } = {},
+) {
   const calls: string[] = [];
   const timers: { work: () => void; ms: number; live: boolean }[] = [];
   const notices: { message: string; retry?: () => void }[] = [];
@@ -54,8 +102,9 @@ function setup(server: Map<string, TaskView>) {
       calls.push(`get ${ids.join(',')}`);
       return Promise.resolve(ids.flatMap((id) => (server.has(id) ? [server.get(id) as TaskView] : [])));
     },
-    create: (input) => {
+    create: async (input) => {
       calls.push(`create ${input.title}`);
+      await hooks.beforeCreate?.();
       if (refuse !== undefined) return Promise.reject(refuse);
       const made = task(90, {
         id: input.id,
@@ -65,8 +114,9 @@ function setup(server: Map<string, TaskView>) {
       server.set(made.id, made);
       return Promise.resolve(made);
     },
-    update: (input) => {
+    update: async (input) => {
       calls.push(`update ${JSON.stringify({ isDone: input.isDone, title: input.title })}`);
+      await hooks.beforeUpdate?.();
       if (refuse !== undefined) return Promise.reject(refuse);
       const held = server.get(input.taskId);
       if (held === undefined) return Promise.reject(refused('NOT_FOUND', 'That task does not exist.'));
@@ -90,6 +140,13 @@ function setup(server: Map<string, TaskView>) {
     spread: (_key, work) => spreads.push(work),
     timelines: (_workspace, ids) => timelines.push(ids),
     later: (work, ms) => {
+      // A moment's wait (reads gathered for a frame) runs for real; the settle waits for `elapse`.
+      if (ms === 0) {
+        const real = setTimeout(work, 0);
+        return () => {
+          clearTimeout(real);
+        };
+      }
       const timer = { work, ms, live: true };
       timers.push(timer);
       return () => {
@@ -98,6 +155,7 @@ function setup(server: Map<string, TaskView>) {
     },
     now: () => Date.parse('2026-10-12T10:00:00.000Z'),
     memberOf: () => Promise.resolve(ME),
+    random: () => 0,
   });
   /** Runs every live timer of `ms`, as if that long passed. */
   const elapse = async (ms: number) => {
@@ -288,5 +346,108 @@ describe('the tasks store (spec 0019)', () => {
     await flush();
     expect(calls).toContain(`get ${one.id}`);
     expect(open.getSnapshot().source.getItem(0)?.recordCount).toBe(1);
+  });
+
+  it('keeps a later change on screen when an earlier one’s answer lands, and drops only a refused layer', async () => {
+    const one = task(1);
+    const server = new Map([[one.id, one]]);
+    const { store, api, hold } = setupWithGate(server);
+    const sub = store.one(WS, one.id);
+    sub.retain();
+    await flush();
+    hold();
+    const tick = store.setDone(WS, one.id, true);
+    const rename = store.update(WS, one.id, { title: 'Renamed' });
+    expect(sub.getSnapshot().task).toMatchObject({ isDone: true, title: 'Renamed' });
+    // The tick's answer lands first: the rename still shows on top of it.
+    api.open();
+    await tick;
+    expect(sub.getSnapshot().task).toMatchObject({ isDone: true, title: 'Renamed' });
+    await rename;
+    expect(sub.getSnapshot().task).toMatchObject({ isDone: true, title: 'Renamed' });
+  });
+
+  it('puts back only the refused change, while a later one is still out', async () => {
+    const one = task(1);
+    const server = new Map([[one.id, one]]);
+    const { store, refuseNext } = setupWithGate(server);
+    const sub = store.one(WS, one.id);
+    sub.retain();
+    await flush();
+    refuseNext(refused('FORBIDDEN', 'No.'));
+    const tick = store.update(WS, one.id, { isDone: true });
+    const rename = store.update(WS, one.id, { title: 'Renamed' });
+    expect((await tick)?.code).toBe('FORBIDDEN');
+    expect(sub.getSnapshot().task).toMatchObject({ isDone: false, title: 'Renamed' });
+    expect(await rename).toBeUndefined();
+    expect(sub.getSnapshot().task).toMatchObject({ isDone: false, title: 'Renamed' });
+  });
+
+  it('keeps a task still being created in its list through a settle', async () => {
+    const server = new Map([task(1)].map((each) => [each.id, each]));
+    const { store, gateCreates, openCreates, elapse } = setupWithGate(server);
+    const open = store.forRecord(WS, ACME, 'open');
+    open.retain();
+    await open.ready();
+    gateCreates();
+    const id = store.newId();
+    const landed = store.create(WS, { id, title: 'Pending', records: [acme] });
+    // A teammate's event settles the list while the create is out: the new task stays first, still new.
+    store.changed(WS, { seq: 9, at: '2026-10-12T10:00:00.000Z', kind: 'tasks', recordIds: [ACME], taskIds: [] });
+    await elapse(TASK_SETTLE_MS);
+    expect(titles(open.getSnapshot())).toEqual(['Pending', 'Task 1']);
+    expect(open.getSnapshot().newIds.has(id)).toBe(true);
+    openCreates();
+    expect(await landed).toBe(true);
+  });
+
+  it('gathers a burst of events into one read, and reads a task again when named while its read is out', async () => {
+    const one = task(1);
+    const two = task(2);
+    const server = new Map([one, two].map((each) => [each.id, each]));
+    const { store, calls } = setupWithGate(server);
+    const open = store.forRecord(WS, ACME, 'open');
+    open.retain();
+    await open.ready();
+    const event = (taskIds: string[]) =>
+      store.changed(WS, { seq: 9, at: '2026-10-12T10:00:00.000Z', kind: 'tasks', recordIds: [], taskIds });
+    event([one.id]);
+    event([two.id]);
+    await flush();
+    expect(calls.filter((call) => call.startsWith('get'))).toEqual([`get ${one.id},${two.id}`]);
+  });
+
+  it('reads a task again when a record it links is renamed', async () => {
+    const one = task(1);
+    const server = new Map([[one.id, one]]);
+    const { store, calls } = setupWithGate(server);
+    const open = store.forRecord(WS, ACME, 'open');
+    open.retain();
+    await open.ready();
+    store.recordsChanged(WS, {
+      seq: 3,
+      at: '2026-10-12T10:00:00.000Z',
+      kind: 'records',
+      objectId: 'o1',
+      recordIds: [ACME],
+      attributeIds: ['name'],
+    });
+    await flush();
+    expect(calls).toContain(`get ${one.id}`);
+  });
+
+  it('puts a list let go of back when a screen still holding it shows it again', async () => {
+    const server = new Map([task(1)].map((each) => [each.id, each]));
+    const { store, elapse, calls } = setupWithGate(server);
+    const open = store.forRecord(WS, ACME, 'open');
+    const release = open.retain();
+    await open.ready();
+    release();
+    await elapse(30_000);
+    // A new handle (the loader ran again) and the old one shown again: the old one goes back in the map.
+    open.retain();
+    await flush();
+    expect(store.forRecord(WS, ACME, 'open')).toBe(open);
+    expect(calls.filter((call) => call === 'list open')).toHaveLength(2);
   });
 });
