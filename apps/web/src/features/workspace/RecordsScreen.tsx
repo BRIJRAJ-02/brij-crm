@@ -18,6 +18,7 @@ import {
   type RecordView,
   type SortRule,
   type ViewQuery,
+  type WindowCount,
 } from '@crm/data';
 import { useLiveStatus, usePendingOptions, useView } from '@crm/data/react';
 import { Badge, Button, Callout, EmptyState, isSystemOnly, Spinner, TopBar, useDelayedLoading, ViewBar } from '@crm/ui';
@@ -40,8 +41,10 @@ export interface RecordsScreenProps {
   readonly object: ObjectSummary;
   readonly attributes: readonly AttributeDefinition[];
   readonly members: readonly MemberSummary[];
-  /** The records the loader warmed: the answer to `query`. */
+  /** The records the loader warmed. */
   readonly view: RecordsView;
+  /** The question `view` answers (the loader may have warmed another than `query`: the table then asks again). */
+  readonly viewQuery: ViewQuery;
   /** The question the table runs (spec 0020): the view's effective filter and sorts. */
   readonly query: ViewQuery;
   /** A column menu's Sort ascending or descending (spec 0020: it replaces the draft's sorts). */
@@ -52,8 +55,8 @@ export interface RecordsScreenProps {
   readonly views: readonly { readonly id: string; readonly name: string }[];
   readonly currentViewId: string;
   readonly onViewChange?: (viewId: string) => void;
-  /** The view's Toolbar (its sorts, filters and Save), and any notice under it. */
-  readonly toolbar?: ReactNode;
+  /** The view's Toolbar (its sorts, filters and Save), and any notice under it, given the count shown once known. */
+  readonly toolbar?: (count: WindowCount | undefined) => ReactNode;
   /** What the table says when the view's filter matches nothing; the object's own empty state otherwise. */
   readonly filteredEmpty?: ReactNode;
 }
@@ -142,6 +145,7 @@ export function RecordsScreen({
   attributes,
   members,
   view: warmed,
+  viewQuery,
   query,
   onSort,
   onFilter,
@@ -155,13 +159,14 @@ export function RecordsScreen({
   const navigate = useNavigate();
   // The question asked now, and the records shown: the warmed ones until another question's first rows are in,
   // so the table never blanks while a filter or sort changes.
-  const wanted = queryKey({ ...query, sorts: query.sorts ?? [] });
-  const [shown, setShown] = useState({ key: wanted, view: warmed, query });
+  const keyOf = (asked: ViewQuery) => queryKey({ ...asked, sorts: asked.sorts ?? [] });
+  const wanted = keyOf(query);
+  const [shown, setShown] = useState({ key: keyOf(viewQuery), view: warmed, query: viewQuery });
   // The route loaded another view (another view opened, or Retry): it is shown at once.
   const [warmedFor, setWarmedFor] = useState(warmed);
   if (warmed !== warmedFor) {
     setWarmedFor(warmed);
-    setShown({ key: wanted, view: warmed, query });
+    setShown({ key: keyOf(viewQuery), view: warmed, query: viewQuery });
   }
   // Asks for the wanted records again after their first rows failed to load (the toast's Retry).
   const [attempt, setAttempt] = useState(0);
@@ -201,6 +206,11 @@ export function RecordsScreen({
     data.records.open(slug, object.id, asked, visible).then(
       (next) => {
         opened = next;
+        // Typed past before it even opened: let it go at once.
+        if (!isCurrent) {
+          next.abandon();
+          return;
+        }
         return next.ready().then(() => {
           if (!isCurrent) return;
           isTaken = true;
@@ -306,7 +316,7 @@ export function RecordsScreen({
         ),
         viewBar: (
           <ViewBar views={views} currentViewId={currentViewId} onViewChange={onViewChange ?? (() => undefined)}>
-            {isReordering && <Spinner label={strings.sorting} />}
+            {isReordering && <Spinner label={strings.updating} />}
             {/* In the bar, so the table never moves when the connection drops and comes back. */}
             {live === 'paused' && (
               <Callout placement="bar" isAnnounced>
@@ -320,7 +330,7 @@ export function RecordsScreen({
             )}
           </ViewBar>
         ),
-        toolbar,
+        ...(toolbar === undefined ? {} : { toolbar: toolbar(state.status === 'ready' ? state.count : undefined) }),
         body: (
           <>
             <DataGrid<RecordView>

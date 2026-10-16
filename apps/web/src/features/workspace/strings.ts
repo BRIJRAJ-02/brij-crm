@@ -30,8 +30,6 @@ export const strings = {
   openWorkspace: 'Open your workspace',
   emptyTitle: (pluralName: string) => `No ${pluralName.toLowerCase()} yet`,
   emptyText: (pluralName: string) => `${pluralName} you add show here.`,
-  /** The object's one view in this loop ("All people"). */
-  allRecords: (pluralName: string) => `All ${pluralName.toLowerCase()}`,
   /** The TopBar's action and the new record dialog's title ("New person"). */
   newRecord: (singularName: string) => `New ${singularName.toLowerCase()}`,
   creating: 'Creating',
@@ -47,11 +45,9 @@ export const strings = {
   createRecord: (singularName: string) => `Create ${singularName.toLowerCase()}`,
   /** The create dialog's way to the attributes that aren't asked for first. */
   addMoreFields: 'Add more fields',
-  /** While another order's first rows load (spec 0006, AC-57). */
-  sorting: 'Sorting',
+  /** While another filter's or order's first rows load (spec 0006, AC-57; spec 0020). */
+  updating: 'Updating',
   retry: 'Retry',
-  /** A sort whose first rows didn't load; Retry asks again. */
-  sortFailed: (column: string) => (column === '' ? 'Couldn’t sort the table.' : `Couldn’t sort by ${column}.`),
   /** A failure the server didn't explain. */
   somethingWrong: 'Something went wrong. Try again in a moment.',
   /** Above the table while the live connection is down (AC-38). */

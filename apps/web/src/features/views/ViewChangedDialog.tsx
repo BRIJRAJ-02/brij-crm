@@ -25,7 +25,9 @@ export function ViewChangedDialog({ sentence, isReplacing, onReplace, onCancel }
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isReplacing} kbd="ESC">
+          {/* The dialog opens on its safe choice (spec 0020): Replace overwrites someone else's filters. */}
+          {/* eslint-disable-next-line jsx-a11y-x/no-autofocus */}
+          <Button slot="close" isDisabled={isReplacing} kbd="ESC" autoFocus>
             {strings.keepMine}
           </Button>
           <Button variant="primary" isPending={isReplacing} onPress={onReplace}>

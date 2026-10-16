@@ -134,6 +134,7 @@ describe('@crm/ui', () => {
       'editorRuleOf',
       'fieldTypeOf',
       'fileIconName',
+      'focusLater',
       'formatFileSize',
       'isRefusal',
       'isSystemOnly',

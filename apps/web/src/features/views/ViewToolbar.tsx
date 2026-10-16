@@ -17,11 +17,13 @@ import {
   ConditionChip,
   conditionOn,
   FilterBuilder,
+  focusLater,
   Popover,
   SortBuilder,
   SortChip,
   Toolbar,
 } from '@crm/ui';
+import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { strings } from './strings.ts';
 
@@ -54,6 +56,10 @@ export interface ViewToolbarProps {
   readonly onChange: (next: DraftQuery, how: 'push' | 'replace') => void;
   readonly onDiscard: () => void;
   readonly onSave: () => void;
+  /** What the filter matches, for screen readers ("124 people match"). */
+  readonly status?: string;
+  /** Asks for focus on the Filter button (after Discard, Save or Replace took the focused control away). A new object each time. */
+  readonly focusRequest?: object;
   /** A column's Filter: the builder opens with a new condition on it (none for an empty id). A new object each time it is asked. */
   readonly filterOn?: { readonly attributeId: string };
 }
@@ -73,8 +79,13 @@ export function ViewToolbar({
   onDiscard,
   onSave,
   filterOn,
+  status,
+  focusRequest,
 }: ViewToolbarProps) {
+  const { data } = useRouteContext({ from: '__root__' });
   const fields = useMemo(() => attributes.map((attribute) => toFieldAttribute(attribute)), [attributes]);
+  // The builder offers what it can edit: a record reference waits for record search (spec 0014); its chips still show.
+  const builderFields = useMemo(() => fields.filter((field) => field.type !== 'record_reference'), [fields]);
   const sortFields = useMemo(() => sortable.map((attribute) => toFieldAttribute(attribute)), [sortable]);
   const titleOf = (id: string) => attributes.find((attribute) => attribute.id === id)?.title ?? id;
   const filterAnchor = useRef<HTMLButtonElement>(null);
@@ -87,14 +98,26 @@ export function ViewToolbar({
   const pushed = useRef(false);
   const pending = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const lastShape = useRef('');
+  // The query as it stands now, for a commit that a pause in typing sends later.
+  const current = useRef(query);
+  useEffect(() => {
+    current.current = query;
+  }, [query]);
+  useEffect(() => {
+    if (focusRequest !== undefined) focusLater(() => filterAnchor.current);
+  }, [focusRequest]);
 
+  // A change that asks the same thing (a row still missing its operand) is no change: it neither writes the
+  // address nor spends the Popover's one history entry.
   const commit = (next: DraftQuery) => {
+    if (data.views.isSameQuery(next, current.current)) return;
+    current.current = next;
     onChange(next, pushed.current ? 'replace' : 'push');
     pushed.current = true;
   };
   const commitFilter = (group: FilterGroup) => {
     const complete = completeFilters(group);
-    commit({ ...(complete.conditions.length === 0 ? {} : { filter: complete }), sorts: query.sorts });
+    commit({ ...(complete.conditions.length === 0 ? {} : { filter: complete }), sorts: current.current.sorts });
   };
   const flush = () => {
     if (pending.current === undefined) return;
@@ -120,7 +143,7 @@ export function ViewToolbar({
   useEffect(() => {
     if (filterOn === undefined) return;
     const current = filter ?? NO_FILTER;
-    const field = fields.find((each) => each.id === filterOn.attributeId);
+    const field = builderFields.find((each) => each.id === filterOn.attributeId);
     // No column named (an empty table's Edit filters): the builder opens as it stands.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     openFilter(field === undefined ? current : { ...current, conditions: [...current.conditions, conditionOn(field)] });
@@ -143,6 +166,7 @@ export function ViewToolbar({
     <>
       <Toolbar
         label={strings.toolbar}
+        {...(status === undefined ? {} : { status })}
         {...(isDraft
           ? {
               end: (
@@ -200,6 +224,8 @@ export function ViewToolbar({
                 ...(kept.length === 0 ? {} : { filter: { ...(filter ?? NO_FILTER), conditions: kept } }),
                 sorts: query.sorts,
               });
+              // The chip leaves with its remove button: focus goes to the Filter button.
+              focusLater(() => filterAnchor.current);
             }}
           />
         ))}
@@ -214,7 +240,13 @@ export function ViewToolbar({
           {strings.filter}
         </Button>
       </Toolbar>
-      <Popover triggerRef={sortAnchor} isOpen={isSortOpen} onOpenChange={setSortOpen} label={strings.sorts}>
+      <Popover
+        triggerRef={sortAnchor}
+        isOpen={isSortOpen}
+        onOpenChange={setSortOpen}
+        label={strings.sorts}
+        width="builder"
+      >
         <SortBuilder
           attributes={sortFields}
           value={query.sorts}
@@ -231,9 +263,10 @@ export function ViewToolbar({
           setFilterOpen(open);
         }}
         label={strings.filters}
+        width="builder"
       >
         <FilterBuilder
-          attributes={fields}
+          attributes={builderFields}
           value={building}
           onChange={(next) => {
             setBuilding(next);

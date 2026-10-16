@@ -11,6 +11,7 @@ import {
   type MemberSummary,
   type ObjectSummary,
   type RecordsView,
+  type ViewQuery,
   type SavedViewSource,
   type ViewsListSource,
 } from '@crm/data';
@@ -43,8 +44,9 @@ export interface ViewScreenProps {
   readonly members: readonly MemberSummary[];
   readonly view: SavedViewSource;
   readonly views: ViewsListSource;
-  /** The records the loader warmed for the query it opened with. */
+  /** The records the loader warmed, and the question they answer. */
   readonly records: RecordsView;
+  readonly recordsQuery: ViewQuery;
   readonly opened: OpenedDraft;
   /** The `draft` search param now, and how to write it. */
   readonly param: string | undefined;
@@ -77,6 +79,9 @@ function useFarAttributes(slug: string, objectIds: readonly string[]) {
   return loaded;
 }
 
+/** The longest a tab waits before following someone else's save (spec 0020, AC-468's 1 second at p95). */
+const FOLLOW_SPREAD_MS = 600;
+
 /** One view of an object: the bars, the Toolbar with its draft, and the table running the view. */
 export function ViewScreen(props: ViewScreenProps) {
   const { slug, object, attributes, members, records, opened, param, writeParam } = props;
@@ -91,8 +96,31 @@ export function ViewScreen(props: ViewScreenProps) {
     void navigate({ to: '/w/$slug/objects/$object', params: { slug, object: object.apiSlug }, replace: true });
   }, [body.status, navigate, slug, object.apiSlug]);
 
-  const saved = useMemo(() => (view === undefined ? { sorts: [] } : savedQuery(view)), [view]);
+  const latestSaved = useMemo(() => (view === undefined ? { sorts: [] } : savedQuery(view)), [view]);
   const access = useMyAccess();
+  // Someone else's save reaches every tab on the view at once: each follows after a random moment up to
+  // FOLLOW_SPREAD_MS, so they don't all ask for the new rows in the same instant (the workspace's read slots).
+  // This tab's own save, and the first read, apply at once.
+  const [saved, setSaved] = useState(latestSaved);
+  useEffect(() => {
+    if (data.views.isSameQuery(latestSaved, saved)) return;
+    if (view?.querySavedBy === access?.memberId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSaved(latestSaved);
+      return;
+    }
+    const timer = setTimeout(
+      () => {
+        setSaved(latestSaved);
+      },
+      Math.round(Math.random() * FOLLOW_SPREAD_MS),
+    );
+    return () => {
+      clearTimeout(timer);
+    };
+    // The saved query moving is what this follows.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latestSaved]);
   const canManage = useCan('views.manage');
   const draft = useViewDraft({
     saved,
@@ -150,6 +178,13 @@ export function ViewScreen(props: ViewScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view?.queryVersion]);
 
+  // Asks the Toolbar to focus its Filter button when the focused control went away with its change.
+  const [focusRequest, setFocusRequest] = useState<object | undefined>(undefined);
+  const discard = () => {
+    draft.discard();
+    setShowDropped(false);
+    setFocusRequest({});
+  };
   const [isSaving, setSaving] = useState(false);
   const [clash, setClash] = useState<string | undefined>(undefined);
   const save = (force: boolean) => {
@@ -168,8 +203,10 @@ export function ViewScreen(props: ViewScreenProps) {
           setSaving(false);
           setClash(undefined);
           seenVersion.current = next.queryVersion;
+          setSaved(savedQuery(next));
           draft.settle();
           setShowDropped(false);
+          setFocusRequest({});
           toasts.toast({ tone: 'success', message: strings.saved(next.name) });
         },
         (error: unknown) => {
@@ -203,6 +240,7 @@ export function ViewScreen(props: ViewScreenProps) {
         attributes={attributes}
         members={members}
         view={records}
+        viewQuery={props.recordsQuery}
         query={query}
         onSort={(rule) => {
           draft.set(
@@ -221,7 +259,7 @@ export function ViewScreen(props: ViewScreenProps) {
             params: { slug, object: object.apiSlug, viewId },
           });
         }}
-        toolbar={
+        toolbar={(count) => (
           <>
             <ViewToolbar
               query={draft.query}
@@ -234,19 +272,25 @@ export function ViewScreen(props: ViewScreenProps) {
               canSave={canSave}
               isSaving={isSaving}
               onChange={draft.set}
-              onDiscard={() => {
-                draft.discard();
-                setShowDropped(false);
-              }}
+              onDiscard={discard}
               onSave={() => {
                 save(false);
               }}
               {...(filterOn === undefined ? {} : { filterOn })}
+              {...(focusRequest === undefined ? {} : { focusRequest })}
+              {...(filtered && count !== undefined
+                ? {
+                    status: strings.matching(
+                      count.atLeast ? `${count.count.toLocaleString()}+` : count.count.toLocaleString(),
+                      object.pluralName,
+                    ),
+                  }
+                : {})}
             />
             {showDropped && draft.isDraft && (
               <Callout
                 tone="warning"
-                placement="bar"
+                placement="banner"
                 isAnnounced
                 actions={
                   <Button
@@ -263,12 +307,12 @@ export function ViewScreen(props: ViewScreenProps) {
               </Callout>
             )}
             {view?.kind === 'board' && (
-              <Callout tone="info" placement="bar">
+              <Callout tone="info" placement="banner">
                 {strings.boardSoon}
               </Callout>
             )}
           </>
-        }
+        )}
         {...(filtered
           ? {
               filteredEmpty: (
@@ -277,7 +321,7 @@ export function ViewScreen(props: ViewScreenProps) {
                   title={strings.noMatchesTitle(object.pluralName)}
                   actions={
                     draft.isDraft ? (
-                      <Button onPress={draft.discard}>{strings.discard}</Button>
+                      <Button onPress={discard}>{strings.discard}</Button>
                     ) : (
                       <Button
                         onPress={() => {

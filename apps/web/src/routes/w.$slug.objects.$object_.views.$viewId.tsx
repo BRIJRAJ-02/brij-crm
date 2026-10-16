@@ -32,7 +32,9 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')(
   validateSearch: (search: Record<string, unknown>): ViewSearch =>
     typeof search.draft === 'string' && search.draft !== '' ? { draft: search.draft } : {},
   loaderDeps: () => ({}),
-  shouldReload: false,
+  // Entering the view (again) reads it afresh: the records a cached match held are let go 30 seconds after
+  // the screen leaves. A draft changing on the screen ('stay') never reloads it.
+  shouldReload: ({ cause }) => cause === 'enter',
   loader: async ({ context, params, location }) => {
     const objects = await context.data.objects.all(params.slug).catch((error: unknown) => {
       // The frame above shows "workspace not found" for this one.
@@ -66,13 +68,14 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')(
     const query = linked ?? savedQuery(body.view);
     const effective = runningQuery(query, attributes);
     const running = effective.status === 'ready' ? effective : runningQuery(savedQuery(body.view), attributes);
+    const recordsQuery = running.status === 'ready' ? toViewQuery(running) : {};
     const [members, records] = await Promise.all([
       membersLoading,
       // A quick load arrives with its rows; a slow one shows the table's own loading rows under its header.
       context.data.records.open(
         params.slug,
         object.id,
-        running.status === 'ready' ? toViewQuery(running) : {},
+        recordsQuery,
         readAttributeIds(object, attributes),
         OPEN_GRACE_MS,
       ),
@@ -86,6 +89,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')(
         view,
         views,
         records,
+        recordsQuery,
         opened: {
           query: linked,
           unreadable: search.draft !== undefined && linked === undefined,
