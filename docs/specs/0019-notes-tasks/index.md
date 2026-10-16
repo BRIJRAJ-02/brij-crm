@@ -306,6 +306,38 @@ Decided under the owner's acceptance of the recommended defaults for #11 to #22 
 5. **A note emptied after it was saved stays as an empty note**; it can be deleted, and deleting it silently would surprise someone who is about to type.
 6. **A removed member keeps their tasks**, shown as "Former member" wherever their name would be; #23 adds reassigning them.
 
+## Calls made building milestone 1 (pending owner confirmation)
+
+Technical calls the spec left open, each the recommended default. The milestone's migration is `0034_tasks` (renumbered at landing as needed).
+
+- **`TaskView` gains `canChange`**, the change rule answered by the server for the reader, so the screens make checkboxes and fields read only without guessing (a task whose only links are hidden from the reader can't be judged in the browser).
+- **The task limits live in `@crm/contracts/task-limits`**, plain TypeScript with no Zod, so the lazily loaded tasks store and the screens read them without the schema library; `tasks.ts` re-exports them.
+- **`tasks.list` takes `scope: { recordId }` only in milestone 1**; milestone 2 adds `{ mine }` to the same strict schema.
+- **The task rule and the change rule run in TypeScript over each read's rows** (`taskVisible`, `taskChangeable`), with the linked records' displays read once through `readRecords` (live and visible only). A record's own list needs no predicate (the record is visible, so every task linked to it is). My tasks (milestone 2) needs it as SQL for its keyset pages.
+- **A task whose every link is to a trashed record is hidden from a third member even under the open policy** (AC-447 as written), so `getTasks` checks the links' state whatever the policy.
+- **A principal that isn't a member (an API key) reaches tasks only through its data level on every object** (security review): `read` to read them, `write` to change them; at none it sees no task, not even one with no links.
+- **Re-adding a link the writer can't see answers `NOT_FOUND` "That record does not exist."** (security review), so an edit never reveals that a hidden link exists.
+- **A cursor whose moment or due day Postgres can't read answers 400 `INPUT_INVALID` on `cursor`** (security review), never a 500.
+- **A task's link places close up to 0..n-1 under its row lock past 30,000** (security review), so the smallint never overflows.
+- **Removing records for good deletes their task links first, in the same transaction** (`removeRecords`, so purge, erasure and `load-reset` work), until spec 0022's `PURGE_DEPENDENTS` takes the step over. The tasks themselves live on; this step stores no `tasks` event yet (milestone 4 adds it with the registry).
+- **The timeline's task source shows nothing on a record in the trash**: its links are hidden from every read (AC-446), so its read only page names no task.
+- **`TaskFact.records[].trashed`**: the relay's task facts mark a link to a trashed record, which still counts as a link but shows nobody the task. Under the open policy, a tasks event keeps a record id that no fact names (a record just unlinked), so its screens hear of the unlink; a task with no fact (deleted) fails closed.
+- **The relay takes a `facts(workspaceId, rows)` dep**, read once per batch with the system scope (`taskFacts` in `@crm/core/system`); catch up reads the same facts per page in the caller's transaction (`readTaskFacts`). The saved views lane adds its own facts to the same dep.
+- **The browser's tasks store keeps each task's confirmed base with its pending changes on top** (state review), so an earlier answer never flickers a later edit back and a refusal drops only its own layer. Reads by id are gathered for a moment (one call per 100 tasks), a list settles at most 5 seconds after its first change, and a change made elsewhere waits a random 0 to 2 seconds more. A settle reads up to the furthest row shown plus a page.
+- **Someone else's new task shows before any settle** (state re-review): a tasks event naming a record with a loaded list reads the tasks it doesn't hold yet at once and places each open one in order; the settle that follows confirms it.
+- **A records event rereads the tasks linking its records only for a rename** (the object's primary attribute, or no attribute named), never for every edit to a linked record. This tab's own rename of a linked record reaches the chips at the next settle or reload (its echo is skipped).
+- **The record picker in the task dialog searches through `data.tasks.findRecords`** (the object's primary attribute `contains` the text, 20 at a time, through `records.query`), a thin slice until spec 0014's `records.search` lands and takes its place.
+- **The object switcher ("Search in") sits beside the picker's button**, not inside its menu, so the Menu molecule (the design session's) needs no new slot.
+- **The task dialog has no More menu yet**: "Copy link" is a ghost button in its footer, and the menu arrives with "Delete task" in milestone 4.
+- **The quick add stops typing at 2,000 characters** (the Field's `maxLength`, its count shown past 1,800), so it never sends a title the server refuses.
+- **Completed shows its count once opened**, draws its loaded done tasks in place with "Show more" for the next page (state and design reviews), rather than reading every page, and holds its list only while open.
+- **Overview's Open tasks names its way to the Tasks tab "View all tasks"**, apart from Recent activity's "View all" beside it.
+- **TaskList's records show through the field set's `ChipRow`** (design review): the first chip, then "+N", which opens every record as a link, the same row a record reference value shows everywhere; the screens doc's "+N with a Tooltip" gives way to it.
+- **Library variants added beyond the screens doc's list**: TaskList's `toolbar`, `footer`, `maxRows`, `onShowMore`, `emptyTitle` and `emptyBody`; Tabs' `countMax` and `isCountAtLeast` (the tab's "10,000+"); RecordLayout's panel stacks a tab's parts `space-16` apart; `EditorProps.objectSwitcher` carries ReferencePicker's `objects`, `objectId` and `onObjectChange` through the record reference editor.
+- **The side panel's Tasks tab waits for spec 0017's milestone 4** (the panel), which isn't built yet.
+- **AC-450's numbers belong to milestone 2's seed script** (step 8); milestone 1 measured nothing at scale. The owner waived the million record seed.
+- **`tasks.flow.ts` joins CI's flows**; with `FLOW_NO_LIVE=1` it runs on a second stack whose origin the local Centrifugo doesn't admit, the second browser reloading where it would hear the change live.
+
 ## Follow-up
 
 - [ ] **Spec 0009** (`/sync`): `eventFacts` gains `taskFacts(taskIds)` (each task's assignee, creator and linked record ids, loaded once per relay batch) for `tasks` rows, built in milestone 1 here; the task rule's open clause reads "no linked records at all (a link to a trashed record still counts)"; `removeMember`'s list of what it leaves to later features gains "tasks assigned to or created by the person stay, shown as Former member, until #23 reassigns them".
