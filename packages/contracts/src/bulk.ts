@@ -72,6 +72,8 @@ export type RestoreBatchInput = z.infer<typeof RestoreBatchInput>;
 export const RestoreOutcome = z.object({
   recordId: z.uuid(),
   state: z.enum(['restored', 'live', 'refused']),
+  /** The record's object, on a record restored or live (one the member may see): its tables read again. */
+  objectId: z.uuid().optional(),
   refusal: ApiRefusal.optional(),
 });
 /** One record's outcome in a restore. */

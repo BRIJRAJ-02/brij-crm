@@ -72,6 +72,8 @@ export interface RestoreOutcome {
   readonly recordId: string;
   /** `restored` by this call, `live` already (a retry, or restored elsewhere), or `refused` with why. */
   readonly state: 'restored' | 'live' | 'refused';
+  /** The record's object, when it is one the principal may see: a screen reads that object's tables again. */
+  readonly objectId?: string;
   readonly refusal?: EngineRefusal;
 }
 
@@ -330,7 +332,7 @@ async function restoreLocked(
       const message = `You can view ${names.get(row.object_id) ?? 'these records'} but not change them.`;
       refused(id, { code: 'FORBIDDEN', message });
     } else if (!row.deleted) {
-      outcomes.set(id, { recordId: id, state: 'live' });
+      outcomes.set(id, { recordId: id, state: 'live', objectId: row.object_id });
     } else {
       candidates.push(row);
     }
@@ -382,7 +384,7 @@ async function restoreLocked(
         await showRecordsKeys(batch, comingIds);
       });
       restored = coming.length;
-      for (const id of comingIds) outcomes.set(id, { recordId: id, state: 'restored' });
+      for (const row of coming) outcomes.set(row.id, { recordId: row.id, state: 'restored', objectId: row.object_id });
       context.record({
         restoredRecords: coming.map((row) => ({ recordId: row.id, objectId: row.object_id })),
         shownEntries: comingEntries,
@@ -408,7 +410,7 @@ async function restoreLocked(
         });
         if (done.ok) {
           restored += 1;
-          outcomes.set(row.id, { recordId: row.id, state: 'restored' });
+          outcomes.set(row.id, { recordId: row.id, state: 'restored', objectId: row.object_id });
         } else {
           refused(row.id, done.refusals[0] ?? { code: 'UNIQUE_CONFLICT', message: uniqueTakenMessage([]) });
         }
@@ -431,13 +433,21 @@ async function restoreLocked(
 
 /** Locks rows for a restore, in id order (at most `limit`): the records `where` names, wherever their object. */
 function lockForRestore(tx: WorkspaceTx, where: SQL, limit?: number) {
-  return tx.execute<LockedTrash>(sql`
+  return tx.execute<LockedTrash>(restoreLockQuery(where, limit));
+}
+
+/** The statement `lockForRestore` sends, exported for the plan test. */
+export function restoreLockQuery(where: SQL, limit?: number): SQL {
+  return sql`
     select id::text, object_id::text, deleted_at is not null as deleted,
       coalesce(deleted_at < now() - ${RESTORE_WINDOW}::interval, false) as expired
     from records where ${where}
     order by id ${limit === undefined ? sql`` : sql`limit ${limit}`} for no key update
-  `);
+  `;
 }
+
+/** The records of one delete still in the trash (through `records_trash_batch`). */
+export const inBatch = (batchId: string): SQL => sql`deleted_batch_id = ${batchId}::uuid and deleted_at is not null`;
 
 /**
  * Brings up to 500 records of any objects back from the trash in one write
@@ -480,11 +490,7 @@ export async function restoreBatch(
     async (context) => {
       const { tx } = context;
       // Through `records_trash_batch`; one past the limit, to know the batch is too big.
-      const locked = await lockForRestore(
-        tx,
-        sql`deleted_batch_id = ${batchId}::uuid and deleted_at is not null`,
-        MAX_INLINE_RECORDS + 1,
-      );
+      const locked = await lockForRestore(tx, inBatch(batchId), MAX_INLINE_RECORDS + 1);
       const seen = await visibleRecords(
         tx,
         scope.access,
@@ -564,6 +570,50 @@ async function trashScope(tx: WorkspaceTx, access: Access, objectId: string | un
 }
 
 /**
+ * The statement behind a page of the trash, exported for the plan test:
+ * the rows `where` keeps (trashed, the principal's, maybe one object's),
+ * after `after` by keyset (`deleted_at` desc, `id` desc), `limit` of them,
+ * through `records_trash_time` (or `records_trash_object` for one object).
+ */
+export function trashPageQuery(
+  where: SQL,
+  after: { readonly at: string; readonly id: string } | undefined,
+  limit: number,
+): SQL {
+  const keyset =
+    after === undefined ? sql`true` : sql`(r.deleted_at, r.id) < (${after.at}::timestamptz, ${after.id}::uuid)`;
+  return sql`
+    select r.id::text, r.object_id::text, to_json(r.deleted_at) #>> '{}' as at,
+      to_char(r.deleted_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as deleted_at,
+      to_char((r.deleted_at + ${RESTORE_WINDOW}::interval) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as expires_at,
+      r.deleted_by_type::text as by_type, r.deleted_by_id::text as by_id
+    from records r
+    where ${where} and ${keyset}
+    order by r.deleted_at desc, r.id desc
+    limit ${limit}
+  `;
+}
+
+/**
+ * The statement behind the trash's count, exported for the plan test: at most
+ * `TRASH_COUNT_CAP + 1` rows `where` keeps, counted, so it costs an index scan
+ * of at most 10,001 entries of a partial index holding only trashed rows.
+ */
+export function trashCountQuery(where: SQL): SQL {
+  return sql`select count(*)::int as n from (select 1 from records r where ${where} limit ${TRASH_COUNT_CAP + 1}) capped`;
+}
+
+/**
+ * The rows of the trash an open principal sees, of one object or all: the
+ * condition `trashScope` gives under the open policy (for the plan tests).
+ */
+export function openTrashScope(objectId?: string): SQL {
+  return objectId === undefined
+    ? sql`r.deleted_at is not null`
+    : sql`r.deleted_at is not null and r.object_id = ${objectId}::uuid`;
+}
+
+/**
  * A page of the trash (spec 0022, AC-533): the trashed records of every
  * object the principal may read (or of one), most recently deleted first, by
  * keyset (`deleted_at` desc, `id` desc), through `records_trash_time` or
@@ -582,8 +632,6 @@ export async function queryTrash(
   const after = input.cursor === undefined ? undefined : decodeTrashCursor(input.cursor);
   return inWorkspace(scope, async (tx) => {
     const where = await trashScope(tx, scope.access, objectId);
-    const keyset =
-      after === undefined ? sql`true` : sql`(r.deleted_at, r.id) < (${after.at}::timestamptz, ${after.id}::uuid)`;
     const found = await tx.execute<{
       id: string;
       object_id: string;
@@ -592,16 +640,7 @@ export async function queryTrash(
       expires_at: string;
       by_type: 'member' | 'api_key' | 'automation' | 'system';
       by_id: string | null;
-    }>(sql`
-      select r.id::text, r.object_id::text, to_json(r.deleted_at) #>> '{}' as at,
-        to_char(r.deleted_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as deleted_at,
-        to_char((r.deleted_at + ${RESTORE_WINDOW}::interval) at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') as expires_at,
-        r.deleted_by_type::text as by_type, r.deleted_by_id::text as by_id
-      from records r
-      where ${where} and ${keyset}
-      order by r.deleted_at desc, r.id desc
-      limit ${limit + 1}
-    `);
+    }>(trashPageQuery(where, after, limit + 1));
     const rows = found.rows.slice(0, limit);
     const views = await readRecords(
       tx,
@@ -639,9 +678,7 @@ export async function countTrash(
   const objectId = input.objectId === undefined ? undefined : checkId(input.objectId, UNKNOWN_OBJECT);
   return inWorkspace(scope, async (tx) => {
     const where = await trashScope(tx, scope.access, objectId);
-    const counted = await tx.execute<{ n: number }>(sql`
-      select count(*)::int as n from (select 1 from records r where ${where} limit ${TRASH_COUNT_CAP + 1}) capped
-    `);
+    const counted = await tx.execute<{ n: number }>(trashCountQuery(where));
     const n = counted.rows[0]?.n ?? 0;
     return n > TRASH_COUNT_CAP ? { count: TRASH_COUNT_CAP, atLeast: true } : { count: n, atLeast: false };
   });

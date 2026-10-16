@@ -152,6 +152,6 @@ describe('the trash (AC-533, AC-534)', () => {
       recordIds: [ada ?? ''],
       mutationId: newId(),
     });
-    expect(back.results).toEqual([{ recordId: ada, state: 'restored' }]);
+    expect(back.results).toEqual([{ recordId: ada, state: 'restored', objectId: owner.people.id }]);
   });
 });

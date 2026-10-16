@@ -2,7 +2,7 @@
 // real Postgres as the app role: links, entries, history, unique values and
 // record slots round trip; one batch restores exactly its records; the trash
 // lists what the principal may see, newest first, by keyset.
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import { getHistory } from './history.ts';
@@ -17,9 +17,14 @@ import {
   countTrash,
   deleteRecords,
   farReferencesManyQuery,
+  inBatch,
+  openTrashScope,
   queryTrash,
   restoreBatch,
+  restoreLockQuery,
   restoreRecords,
+  trashCountQuery,
+  trashPageQuery,
 } from './trash.ts';
 import type { AfterWrite, Change } from './write.ts';
 import { createWorkspace } from './workspaces.ts';
@@ -263,7 +268,9 @@ describe('restoreBatch and restoreRecords', () => {
     const batchId = newId();
     await deleteRecords(w.scope, { objectId: w.people, recordIds: [ada], batchId });
     const before = await liveRecords(w);
-    expect(await restoreBatch(w.scope, { batchId })).toEqual([{ recordId: ada, state: 'restored' }]);
+    expect(await restoreBatch(w.scope, { batchId })).toEqual([
+      { recordId: ada, state: 'restored', objectId: w.people },
+    ]);
     const [adaView] = await getRecords(w.scope, { ids: [ada] });
     expect(adaView?.values[w.person('company')]).toEqual({ objectId: w.companies, recordId: acme });
     expect(adaView?.values[w.person('job_title')]).toBe('Countess');
@@ -348,8 +355,8 @@ describe('restoreBatch and restoreRecords', () => {
         state: 'refused',
         refusal: { code: 'NOT_FOUND', message: 'That record was deleted more than 30 days ago.' },
       },
-      { recordId: fresh, state: 'restored' },
-      { recordId: live, state: 'live' },
+      { recordId: fresh, state: 'restored', objectId: w.people },
+      { recordId: live, state: 'live', objectId: w.people },
       {
         recordId: deal,
         state: 'refused',
@@ -570,3 +577,42 @@ function nodesOf(plan: PlanNode | undefined): PlanNode[] {
   if (plan === undefined) throw new Error('No plan.');
   return [plan, ...(plan.Plans ?? []).flatMap((child) => nodesOf(child))];
 }
+
+describe('the trash by index (spec 0022, the three partial indexes)', () => {
+  it('reads a page, one object’s page, the count and a batch through the trash indexes, never a scan', async () => {
+    const w = await world();
+    // 3,000 trashed people and 3,000 live ones, in bulk as the owner, half of the trash in one batch.
+    const batchId = newId();
+    await owner.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`
+        insert into records (workspace_id, object_id, created_by_type, updated_by_type, deleted_at, deleted_by_type,
+          deleted_batch_id)
+        select ${w.workspaceId}::uuid, ${w.people}::uuid, 'system', 'system',
+          case when n <= 3000 then now() - (n || ' seconds')::interval end,
+          case when n <= 3000 then 'system'::actor_type end,
+          case when n <= 1500 then ${batchId}::uuid end
+        from generate_series(1, 6000) n
+      `),
+    );
+    await owner.vacuumAnalyze(['records']);
+    const indexes = async (statement: SQL) => {
+      const plan = await db.withWorkspace(w.workspaceId, (tx) =>
+        tx.execute<{ 'QUERY PLAN': readonly { Plan: PlanNode }[] }>(sql`explain (format json) ${statement}`),
+      );
+      const nodes = nodesOf(plan.rows[0]?.['QUERY PLAN'][0]?.Plan);
+      expect(nodes.filter((node) => node['Node Type'] === 'Seq Scan' && node['Relation Name'] === 'records')).toEqual(
+        [],
+      );
+      return nodes.flatMap((node) => (node['Index Name'] === undefined ? [] : [node['Index Name']]));
+    };
+    expect(await indexes(trashPageQuery(openTrashScope(), undefined, 101))).toContain('records_trash_time');
+    expect(await indexes(trashPageQuery(openTrashScope(w.people), undefined, 101))).toContain('records_trash_object');
+    // The count needs no order: either partial index of trashed rows will do.
+    expect(
+      (await indexes(trashCountQuery(openTrashScope()))).some((name) =>
+        ['records_trash_time', 'records_trashed'].includes(name),
+      ),
+    ).toBe(true);
+    expect(await indexes(restoreLockQuery(inBatch(batchId), 501))).toContain('records_trash_batch');
+  });
+});
