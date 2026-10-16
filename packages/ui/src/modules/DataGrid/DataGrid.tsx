@@ -995,6 +995,8 @@ export function DataGrid<Row>({
       return;
     }
     if (event.key === 'Escape') {
+      // A cell range goes first; with none, Esc clears the ticked rows (spec 0022, AC-522).
+      if (range === undefined && selectedCount(currentSelection, count) > 0) changeSelection(noRows(), true);
       setRange(undefined);
       setTipDismissed(true);
       closeTip();

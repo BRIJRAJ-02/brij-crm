@@ -379,6 +379,25 @@ export const Selection: Story = {
   },
 };
 
+/** Esc clears a cell range first, then, with no range, the ticked rows (spec 0022, AC-522). */
+export const EscapeClearsTickedRows: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const press = presser((keys) => userEvent.keyboard(keys));
+    await userEvent.tab();
+    await press(['{Home}'], '0:0');
+    await press([' ']);
+    await waitFor(() => expect(canvas.getAllByRole('row', { selected: true })).toHaveLength(1));
+    await press(['{ArrowRight}'], '0:1');
+    await press(['{Shift>}{ArrowDown}{/Shift}'], '1:1');
+    await press(['{Escape}']);
+    await waitFor(() => expect(canvasElement.querySelectorAll('[data-in-range]')).toHaveLength(0));
+    await expect(canvas.getAllByRole('row', { selected: true })).toHaveLength(1);
+    await press(['{Escape}']);
+    await waitFor(() => expect(canvas.queryAllByRole('row', { selected: true })).toHaveLength(0));
+  },
+};
+
 /** A cell range copies as tab separated text, and a pasted block goes through each column's type; refused cells are reported (AC-8). */
 export const CopyAndPaste: Story = {
   parameters: { crm: { screenshot: false } },
