@@ -28,7 +28,7 @@ Ported from the design system artifact's Button card. Every pressable control in
 - `SplitButton` when the primary action has variants (Save, Save as new view). Its `menu` is a `Menu`; the chevron is named "More options" unless `menuLabel` says otherwise.
 - Labels are verbs in sentence case: "Add to list", never "ADD" or "Submit".
 
-Props: `children` (the label, a string) or `icon` with `label` (icon only); `icon`, `iconRight`; `variant`; `size` (`md` 26px, `lg` 30px, to sit beside an input); `kbd` (one keycap or several); `onPress`; `isDisabled`; `isPending`; `type`; `form`; `aria-describedby`; `isFullWidth`; `slot`; `ref`.
+Props: `children` (the label, a string) or `icon` with `label` (icon only); `icon`, `iconRight`; `variant`; `size` (`md` 26px, `lg` 30px, to sit beside an input); `kbd` (one keycap or several); `onPress`; `isDisabled`; `isPending`; `type`; `form`; `aria-describedby`; `isFullWidth`; `tooltipWhenCut`; `slot`; `ref`.
 
 - `isFullWidth` fills the row, with the label at the start and the keycaps at the end, for the sidebar's Quick actions. `isFullWidth="center"` fills the row with the label in the middle: a Form's submit on a sign in page, and the other ways to go on under it (Continue with Google). A container never stretches a button itself; it asks for this.
 - `form` is the `id` of the form a `type="submit"` button sends when it sits outside it: a Modal's footer submitting the Form in its body (see Form's README).
@@ -48,6 +48,7 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only); `ico
 
 - `Tab` and `Shift Tab` reach it (not when disabled).
 - `Enter` and `Space` press it. On a `ToggleButton` they toggle it.
+- `tooltipWhenCut` shows the whole label in a tooltip when the button is held narrower than its label (with `isFullWidth`, in a fixed width cell), measured only as the tooltip is about to open, like TruncatedText. Why: the sort and filter builders hold their attribute pickers to one width so rows line up (spec 0020), and a cut name must still be readable; a tooltip can't sit inside a button, so the button wraps itself.
 - `autoFocus` gives it focus when it mounts: the safe choice a dialog opens on (Cancel beside Replace, spec 0020), since a dialog otherwise focuses itself and the first Tab lands on its close button.
 - On a `SplitButton`, `Tab` moves from the action to the chevron; `Enter`, `Space` or `↓` opens the menu, `Esc` closes it and returns focus to the chevron. Disabled or pending, both halves wait together.
 

@@ -6,13 +6,14 @@ import { useEffect, useRef } from 'react';
 import { GridList, GridListItem, useDragAndDrop } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
+import { Icon } from '../../atoms/Icon/Icon.tsx';
+import { Path } from '../../atoms/Path/Path.tsx';
 import { fieldTypeOf } from '../../fields/registry.ts';
 import type { FieldAttribute } from '../../fields/types.ts';
 import { focusLater } from '../../lib/focus-later.ts';
 import { reorder } from '../../lib/reorder.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Menu, MenuItem, MenuTrigger, type MenuKey } from '../../molecules/Menu/Menu.tsx';
-import { Select } from '../../molecules/Select/Select.tsx';
 import styles from './SortBuilder.module.css';
 import { strings } from './strings.ts';
 
@@ -26,11 +27,18 @@ export interface SortBuilderProps {
   readonly isReadOnly?: boolean;
 }
 
+const DIRECTIONS = [
+  { id: 'ascending', icon: 'arrow-up-narrow-wide' },
+  { id: 'descending', icon: 'arrow-down-wide-narrow' },
+] as const;
+
 /**
  * A view's sorts as a React Aria GridList: drag a sort by its handle, or by
  * keyboard (Enter on the handle, the arrows, Enter), to change which decides
- * first. Each row picks its attribute and direction; Add sort adds one, up to
- * five, each attribute once.
+ * first. Each row picks its attribute and direction, laid out as
+ * FilterBuilder's rows are (the lead, then pickers of fixed widths, so rows
+ * line up as columns; a long name is cut, whole in a tooltip); Add sort adds
+ * one, up to five, each attribute once.
  */
 export function SortBuilder({ attributes, value, onChange, isReadOnly = false }: SortBuilderProps) {
   // A control that leaves with its change (a row's old attribute, a removed row,
@@ -118,44 +126,69 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
               {!isReadOnly && <DragHandle label={strings.move(name)} />}
               <span className={styles.lead}>{index === 0 ? strings.sortBy : strings.thenBy}</span>
               {isReadOnly ? (
-                <span className={styles.text}>
-                  {name}, {rule.direction === 'ascending' ? strings.ascending : strings.descending}
-                </span>
+                <>
+                  <span className={styles.attribute}>
+                    <Icon
+                      name={attribute === undefined ? 'circle-question-mark' : fieldTypeOf(attribute.type).icon}
+                      size="sm"
+                      tone="muted"
+                    />
+                    <Path parts={[name]} />
+                  </span>
+                  <span className={styles.direction}>{directionLabel(rule.direction)}</span>
+                </>
               ) : (
                 <>
-                  <MenuTrigger>
-                    <Button
-                      variant="secondary"
-                      icon={attribute === undefined ? 'circle-question-mark' : fieldTypeOf(attribute.type).icon}
-                      iconRight="chevron-down"
-                    >
-                      {name}
-                    </Button>
-                    <AttributeMenu
-                      attributes={[...(attribute === undefined ? [] : [attribute]), ...unused]}
-                      onAction={(key) => {
-                        change(
-                          value.map((each) =>
-                            each.attributeId === rule.attributeId ? { ...rule, attributeId: String(key) } : each,
-                          ),
-                          { row: String(key) },
-                        );
-                      }}
-                    />
-                  </MenuTrigger>
-                  <Select
-                    label={strings.direction(name)}
-                    isLabelHidden
-                    size="sm"
-                    value={rule.direction}
-                    items={[
-                      { id: 'ascending', label: strings.ascending, icon: 'arrow-up-narrow-wide' },
-                      { id: 'descending', label: strings.descending, icon: 'arrow-down-wide-narrow' },
-                    ]}
-                    onChange={(next) => {
-                      if (next === 'ascending' || next === 'descending') replace({ ...rule, direction: next });
-                    }}
-                  />
+                  <span className={styles.pick}>
+                    <MenuTrigger>
+                      <Button
+                        variant="secondary"
+                        icon={attribute === undefined ? 'circle-question-mark' : fieldTypeOf(attribute.type).icon}
+                        iconRight="chevron-down"
+                        isFullWidth
+                        tooltipWhenCut
+                      >
+                        {name}
+                      </Button>
+                      <AttributeMenu
+                        attributes={[...(attribute === undefined ? [] : [attribute]), ...unused]}
+                        onAction={(key) => {
+                          change(
+                            value.map((each) =>
+                              each.attributeId === rule.attributeId ? { ...rule, attributeId: String(key) } : each,
+                            ),
+                            { row: String(key) },
+                          );
+                        }}
+                      />
+                    </MenuTrigger>
+                  </span>
+                  <span className={styles.pick}>
+                    <MenuTrigger>
+                      <Button
+                        variant="secondary"
+                        icon={rule.direction === 'ascending' ? 'arrow-up-narrow-wide' : 'arrow-down-wide-narrow'}
+                        iconRight="chevron-down"
+                        isFullWidth
+                      >
+                        {directionLabel(rule.direction)}
+                      </Button>
+                      <Menu
+                        label={strings.direction(name)}
+                        selectionMode="single"
+                        selectedKeys={[rule.direction]}
+                        onAction={(key: MenuKey) => {
+                          if (key === 'ascending' || key === 'descending') replace({ ...rule, direction: key });
+                        }}
+                      >
+                        {DIRECTIONS.map((each) => (
+                          <MenuItem key={each.id} id={each.id} icon={each.icon}>
+                            {directionLabel(each.id)}
+                          </MenuItem>
+                        ))}
+                      </Menu>
+                    </MenuTrigger>
+                  </span>
                   <Button
                     variant="ghost"
                     icon="x"
@@ -178,6 +211,10 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
     </div>
   );
 }
+
+/** A direction in words: "Ascending", "Descending". */
+const directionLabel = (direction: 'ascending' | 'descending') =>
+  direction === 'ascending' ? strings.ascending : strings.descending;
 
 /** A searchable menu of attributes, each with its type's icon. */
 function AttributeMenu({

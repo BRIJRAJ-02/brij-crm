@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import { expect, fn, waitFor } from 'storybook/test';
-import { hoverUntilHovered } from '../../workbench/pointer.ts';
+import { hoverFresh, hoverUntilHovered, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { Button, SplitButton, ToggleButton } from './Button.tsx';
 
@@ -358,5 +358,24 @@ export const SplitStates: Story = {
     await expect(disabled).toBeDisabled();
     await expect(pending).toHaveAttribute('aria-disabled', 'true');
     await expect(pending).toHaveAttribute('data-pending', 'true');
+  },
+};
+
+/** Held narrower than its label: the label is cut and shows whole in a tooltip; one that fits shows none. */
+export const TooltipWhenCut: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Stage width="narrow" direction="column">
+      <Button icon="calendar" iconRight="chevron-down" isFullWidth tooltipWhenCut>
+        Last email interaction with the account owner
+      </Button>
+      <Button icon="tag" tooltipWhenCut>
+        Stage
+      </Button>
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await hoverFresh(userEvent, canvas.getByRole('button', { name: 'Last email interaction with the account owner' }));
+    await expect(await shownTooltip()).toHaveTextContent('Last email interaction with the account owner');
   },
 };

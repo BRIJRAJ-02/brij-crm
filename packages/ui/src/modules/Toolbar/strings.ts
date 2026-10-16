@@ -4,9 +4,11 @@ export const strings = {
   chooseView: (name: string) => `${name}, choose a view`,
   createView: 'Create view',
   loadingViews: 'Loading views',
-  sortedBy: 'Sorted by',
-  /** A sort chip's name: "Sorted by Funding raised, descending, and 1 more". */
+  locked: 'Locked',
+  /** A sort chip's name: "Sort: Funding raised, descending, and 1 more". */
   sortName: (attribute: string, direction: 'ascending' | 'descending', more: number) =>
-    `Sorted by ${attribute}, ${direction}${more === 0 ? '' : more === 1 ? ', and 1 more' : `, and ${String(more)} more`}`,
+    `Sort: ${attribute}, ${direction}${more === 0 ? '' : more === 1 ? ', and 1 more' : `, and ${String(more)} more`}`,
+  directions: { ascending: 'ascending', descending: 'descending' },
+  removeSorts: (count: number) => (count === 1 ? 'Remove sort' : 'Remove sorts'),
   more: (count: number) => `+${String(count)}`,
 } as const;

@@ -59,6 +59,7 @@
 
   .root[data-full-width='start'] .label {
     flex: 1;
+    min-inline-size: 0;
     text-align: start;
   }
 

@@ -1,4 +1,4 @@
-import type { JSX, ReactNode, Ref } from 'react';
+import { useRef, useState, type JSX, type ReactNode, type Ref } from 'react';
 import {
   Button as AriaButton,
   MenuTrigger,
@@ -11,6 +11,7 @@ import { Kbd } from '../Kbd/Kbd.tsx';
 import { keyShortcuts, type KeyboardPlatform } from '../Kbd/shortcuts.ts';
 import { useKeyboardPlatform } from '../../provider/context.ts';
 import { Spinner } from '../Spinner/Spinner.tsx';
+import { Tooltip } from '../Tooltip/Tooltip.tsx';
 import styles from './Button.module.css';
 import { strings } from './strings.ts';
 
@@ -70,6 +71,12 @@ export type ButtonProps = ButtonLook &
     readonly 'aria-describedby'?: string;
     /** Takes focus when it mounts: the safe choice a dialog opens on, such as Cancel beside Replace. */
     readonly autoFocus?: boolean;
+    /**
+     * Shows the whole label in a tooltip when it is cut short: a picker held
+     * to a fixed width (a builder's attribute). Measured only as the tooltip
+     * is about to open, like TruncatedText.
+     */
+    readonly tooltipWhenCut?: boolean;
   };
 
 /** Props for ToggleButton: a button that stays pressed, such as Bold in a format toolbar. */
@@ -141,6 +148,40 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
  * pressed. One `primary` per surface.
  */
 export function Button(props: ButtonProps) {
+  if (props.tooltipWhenCut === true && props.children !== undefined) return <CutButton {...props} />;
+  return <PlainButton {...props} />;
+}
+
+/** A Button whose label shows whole in a tooltip when it is cut short (`tooltipWhenCut`). */
+function CutButton(props: ButtonProps & { readonly children: string }) {
+  const own = useRef<HTMLButtonElement>(null);
+  const [isOpen, setOpen] = useState(false);
+  const { ref } = props;
+  const isCut = () => {
+    const label = own.current?.querySelector<HTMLElement>(`.${styles.label ?? ''}`);
+    return label !== null && label !== undefined && label.scrollWidth > label.clientWidth;
+  };
+  return (
+    <Tooltip
+      content={props.children}
+      isOpen={isOpen}
+      onOpenChange={(next) => {
+        setOpen(next && isCut());
+      }}
+    >
+      <PlainButton
+        {...props}
+        ref={(element: HTMLButtonElement | null) => {
+          own.current = element;
+          if (typeof ref === 'function') ref(element);
+          else if (ref !== undefined && ref !== null) ref.current = element;
+        }}
+      />
+    </Tooltip>
+  );
+}
+
+function PlainButton(props: ButtonProps) {
   const { onPress, isPending = false, type = 'button', isDisabled, slot, form, ref } = props;
   const describedBy = props['aria-describedby'];
   const face: ButtonFace = props;
