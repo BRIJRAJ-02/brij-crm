@@ -328,3 +328,32 @@ Tracer Bullet: milestone 1 threads one saved query through every layer (table, p
 5. **Order of a view with no sorts**: decided, newest first everywhere (spec 0006 AC-57), so AC-465 runs empty sorts as Created at descending.
 6. **How private view changes travel live**: decided, through spec 0009's `filterEvent` `views` rule with this spec's facts and spec 0007 milestone 2's `planDelivery`: coarse on any channel whose members may not all see the view, and `data.views` answers a coarse event by refetching the object's list and the changed bodies it holds. No member channel, no special audience, and no write without an outbox row.
 7. **A removed member's views**: decided, `removeMember` deletes their private views in its transaction and stores the `views` rows; shared views keep `creator_member_id`; "Make private" is disabled with "This view's creator has left the workspace."; the creator's name reads "A removed member".
+
+## Calls made building milestone 1 (pending owner confirmation)
+
+Technical calls the spec left open, each the recommended default. The milestone's migration is `0034_saved_views` (renumber at landing).
+
+- **The default view is seeded by `insertObject`**, so the workspace template, a custom object and a replayed create all go through one path; it records no `views` event (nobody holds the views of an object that didn't exist, and the object's own `definitions` event reaches every screen), so `objects.create` still stores one row. The backfill seeds archived objects too, so a restore finds its view.
+- **`objects.default_view_id`'s foreign key is not deferrable**: the seed inserts the view after the object and then points the object at it, so nothing needs the deferral.
+- **`isSortable` is every type but long text, and every system attribute**, the set `compileSorts` has a key for; `compileSorts` refuses through it first, and a test walks every type and system column through both.
+- **`VIEW_CHANGED` carries no data**: its message names who saved ("Bea changed this view's filters since you started."), read under the view's row lock, and the dialog shows it.
+- **A query save checks the filter and sorts by compiling them** (`checkViewQuery` beside the page reader: the same attribute catalog, visibility, archive and operand checks a read makes, without running a search), so a saved view never holds a filter its saver couldn't run. The 64 kB cap is checked on the compact JSON, and the database's own check on the stored text answers `CONFIG_INVALID` too.
+- **`views.list` and `views.get` cut hidden columns now**; making a view built on a hidden attribute or record absent is milestone 3's `viewVisible` (task 14), before any rule source reaches production.
+- **The relay reads each batch's view facts once** (`viewFacts`, `@crm/core/system`), only when the batch holds a `views` row; a failed read sends those rows coarse rather than holding the batch.
+- **The draft param is checked lazily**: the route's `validateSearch` keeps `draft` as text, and the loader and the screen check it through `data.views.readDraft`, which imports the schemas on first use, so Zod stays out of the first load. `useViewDraft` lives in the web app (it reads the router's search), not in `@crm/data/react`; the React bindings are `useViewsList` and `useSavedView`, since `useView` already names a records view.
+- **A through condition whose reference doesn't yet say where it leads is kept for the server to check** (`effectiveQuery`'s `unchecked`), until spec 0014's relationship block gives attributes their far object; the builder offers no record references (and so no through paths) until record search lands with spec 0014.
+- **An operand's 300 ms wait applies to every change that only moves an operand**; an attribute, an operator, a group or a removal applies at once. A change that asks the same thing as before (a row still missing its operand) writes nothing and keeps the Popover's one history entry.
+- **A superseded window is abandoned** (`RecordsView.abandon`): a view no screen showed leaves the layer at once and its count and blocks in flight are aborted.
+- **Another member's save is followed after a random 0 to 600 ms**, so a hundred tabs don't ask for the new rows in the same instant against the workspace's six read slots; this tab's own save applies at once. #12 measures the follow at 100 holders (Follow-up).
+- **Views sources no screen holds are marked stale on a live change** and read when held again, so a tab that once opened People and moved on sends nothing for People's views events.
+- **The grid keeps its columns as before in milestone 1**: People's opening columns (owner decision, 8 October 2026) stay until milestone 2 saves layouts, when the seeded default views can carry them. `effectiveColumns` is built and tested in contracts.
+- **The clash dialog offers Replace and Cancel**; Save as new view joins it with milestone 2's create dialog. Save is a plain primary Button until then.
+- **The live toast is for another member's save**: a member's own other tabs follow without one.
+
+## Design calls for the owner (milestone 1)
+
+- **Library additions beyond the ViewBar switcher variant** (each with its why in its README and a story): `ConditionChip` (one applied condition as a FilterChip, in the builder's own words), FilterChip's `hasValue` and optional `operator` (no "Choose a value" on a bare condition or a group), SortChip's `ref` and Popover's `builder` width (the builders size by container query and collapsed in a shrink to fit popover), Toolbar's `status` (the spoken "124 people match"), Button's `autoFocus` (the clash dialog opens on Cancel), the `info` toast tone (another member's save, a skipped link), and `focusLater` exported for screens.
+- **The seeded default view is "All People"**, the object's plural name as written (it was "All people" before views); every other screen word is sentence case.
+- **The copy**: "Filters saved on All People." after Save; "Bea changed the filters on this view." live; "This view changed" with "… Replace them with yours? Cancel keeps your changes here, unsaved."; the link notices as AC-467 words them, the dropped one a closable banner.
+- **The Filter and Sort Popovers open from the dashed Filter button and the sort chip**, whichever chip was pressed; focus returns to Filter after Discard, Save, Replace and a removed chip.
+

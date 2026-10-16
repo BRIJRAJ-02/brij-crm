@@ -2,7 +2,7 @@
 
 ## Summary
 
-One screen shows any view of any object: the three bars from the library (TopBar, ViewBar, Toolbar) above the DataGrid. The ViewBar holds the switcher and the view's menu; the Toolbar holds the sorts and filters and, while there is a draft, Discard and Save. Every piece is an existing library component; the one variant is the ViewBar switcher's grouped and locked choices (below), reviewed by `design-system-guardian` in milestone 2. The grid's row note comes from spec 0006. Views reach the screen only through `data.views`.
+One screen shows any view of any object: the three bars from the library (TopBar, ViewBar, Toolbar) above the DataGrid. The ViewBar holds the switcher and the view's menu; the Toolbar holds the sorts and filters and, while there is a draft, Discard and Save. Every piece is an existing library component; the variants are the ViewBar switcher's grouped and locked choices (below, milestone 2) and milestone 1's small additions listed in [index.md](index.md) (Design calls for the owner): ConditionChip, FilterChip's `hasValue`, SortChip's `ref`, Popover's `builder` width, Toolbar's `status`, Button's `autoFocus` and the `info` toast tone. The grid's row note comes from spec 0006. Views reach the screen only through `data.views`.
 
 Brief (the three lines the house rule asks for): **Purpose**: slice one object the way you work and keep it. **Main task**: filter and sort the table, then save it. **Leaves out**: grouping inside the table, view search, charts, sharing outside the workspace.
 
