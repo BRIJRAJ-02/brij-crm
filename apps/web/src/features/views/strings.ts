@@ -37,5 +37,7 @@ export const strings = {
   noViewsText: 'Ask a workspace owner or admin about the views on this object.',
   /** A board before boards arrive (spec 0021). */
   boardSoon: 'Boards arrive soon. This view shows as a table for now.',
+  /** The column menu's Filter on a relationship, until record search (spec 0014). */
+  referenceFilterSoon: 'Filtering by a relationship arrives soon. Filter by its other fields for now.',
   saveFailed: 'Couldn’t save this view. Try again in a moment.',
 } as const;

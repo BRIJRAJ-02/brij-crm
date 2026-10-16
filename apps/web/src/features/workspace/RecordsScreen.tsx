@@ -55,8 +55,13 @@ export interface RecordsScreenProps {
   readonly views: readonly { readonly id: string; readonly name: string }[];
   readonly currentViewId: string;
   readonly onViewChange?: (viewId: string) => void;
-  /** The view's Toolbar (its sorts, filters and Save), and any notice under it, given the count shown once known. */
-  readonly toolbar?: (count: WindowCount | undefined) => ReactNode;
+  /**
+   * The view's Toolbar (its sorts, filters and Save), and any notice under it, given what to say to screen
+   * readers: `announce`'s words for the count, once the rows for a new question are in (never for the first,
+   * nor for others' edits moving the count).
+   */
+  readonly toolbar?: (announced: string | undefined) => ReactNode;
+  readonly announce?: (count: WindowCount) => string | undefined;
   /** What the table says when the view's filter matches nothing; the object's own empty state otherwise. */
   readonly filteredEmpty?: ReactNode;
 }
@@ -153,6 +158,7 @@ export function RecordsScreen({
   currentViewId,
   onViewChange,
   toolbar,
+  announce,
   filteredEmpty,
 }: RecordsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
@@ -247,6 +253,14 @@ export function RecordsScreen({
   // Another order's first rows are on their way: the old ones stay, and the view bar says it is working.
   const isReordering = useDelayedLoading(shown.key !== wanted);
   const state = useView(view, visible);
+  // The count spoken after a new question's rows are in (spec 0020, AC-487), once per question.
+  const [announced, setAnnounced] = useState<{ readonly key: string; readonly text: string | undefined }>({
+    key: wanted,
+    text: undefined,
+  });
+  if (state.status === 'ready' && shown.key === wanted && announced.key !== wanted) {
+    setAnnounced({ key: wanted, text: announce?.(state.count) });
+  }
   // Paused only while the live connection is down; off (previews) shows nothing.
   const live = useLiveStatus(data.live);
   const memberDisplays = useMemo(() => toActorDisplays(members), [members]);
@@ -330,7 +344,7 @@ export function RecordsScreen({
             )}
           </ViewBar>
         ),
-        ...(toolbar === undefined ? {} : { toolbar: toolbar(state.status === 'ready' ? state.count : undefined) }),
+        ...(toolbar === undefined ? {} : { toolbar: toolbar(announced.text) }),
         body: (
           <>
             <DataGrid<RecordView>

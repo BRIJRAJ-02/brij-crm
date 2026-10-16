@@ -101,17 +101,21 @@ export function ViewScreen(props: ViewScreenProps) {
   // Someone else's save reaches every tab on the view at once: each follows after a random moment up to
   // FOLLOW_SPREAD_MS, so they don't all ask for the new rows in the same instant (the workspace's read slots).
   // This tab's own save, and the first read, apply at once.
-  const [saved, setSaved] = useState(latestSaved);
+  // The query and its version move together, so a draft begun while following starts on the version it shows.
+  const latestVersion = view?.queryVersion ?? 1;
+  const [followed, setFollowed] = useState({ query: latestSaved, version: latestVersion });
+  const saved = followed.query;
   useEffect(() => {
-    if (data.views.isSameQuery(latestSaved, saved)) return;
+    if (followed.version === latestVersion && data.views.isSameQuery(latestSaved, followed.query)) return;
+    const next = { query: latestSaved, version: latestVersion };
     if (view?.querySavedBy === access?.memberId) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      setSaved(latestSaved);
+      setFollowed(next);
       return;
     }
     const timer = setTimeout(
       () => {
-        setSaved(latestSaved);
+        setFollowed(next);
       },
       Math.round(Math.random() * FOLLOW_SPREAD_MS),
     );
@@ -124,7 +128,7 @@ export function ViewScreen(props: ViewScreenProps) {
   const canManage = useCan('views.manage');
   const draft = useViewDraft({
     saved,
-    savedVersion: view?.queryVersion ?? 1,
+    savedVersion: followed.version,
     param,
     opened: opened.query,
     write: writeParam,
@@ -206,7 +210,7 @@ export function ViewScreen(props: ViewScreenProps) {
           setSaving(false);
           setClash(undefined);
           seenVersion.current = next.queryVersion;
-          setSaved(savedQuery(next));
+          setFollowed({ query: savedQuery(next), version: next.queryVersion });
           draft.settle();
           setShowDropped(false);
           setFocusRequest({});
@@ -252,6 +256,11 @@ export function ViewScreen(props: ViewScreenProps) {
           );
         }}
         onFilter={(attributeId) => {
+          // A relationship's filter needs record search, which arrives with relationships (spec 0014).
+          if (attributes.find((attribute) => attribute.id === attributeId)?.type === 'record_reference') {
+            toasts.toast({ tone: 'info', message: strings.referenceFilterSoon });
+            return;
+          }
           setFilterOn({ attributeId });
         }}
         views={choices.map((each) => ({ id: each.id, name: each.name }))}
@@ -262,7 +271,15 @@ export function ViewScreen(props: ViewScreenProps) {
             params: { slug, object: object.apiSlug, viewId },
           });
         }}
-        toolbar={(count) => (
+        announce={(count) =>
+          filtered
+            ? strings.matching(
+                count.atLeast ? `${count.count.toLocaleString()}+` : count.count.toLocaleString(),
+                object.pluralName,
+              )
+            : undefined
+        }
+        toolbar={(announced) => (
           <>
             <ViewToolbar
               query={draft.query}
@@ -281,14 +298,7 @@ export function ViewScreen(props: ViewScreenProps) {
               }}
               {...(filterOn === undefined ? {} : { filterOn })}
               {...(focusRequest === undefined ? {} : { focusRequest })}
-              {...(filtered && count !== undefined
-                ? {
-                    status: strings.matching(
-                      count.atLeast ? `${count.count.toLocaleString()}+` : count.count.toLocaleString(),
-                      object.pluralName,
-                    ),
-                  }
-                : {})}
+              {...(announced === undefined ? {} : { status: announced })}
             />
             {showDropped && draft.isDraft && (
               <Callout
