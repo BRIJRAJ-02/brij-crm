@@ -133,3 +133,32 @@ export const ObjectSwitcher: Story = {
     await expect(canvas.getByRole('button', { name: /Choose Records/ })).toBeInTheDocument();
   },
 };
+
+/** The object switcher with records already chosen, and a refusal under the field. */
+export const ObjectSwitcherWithChosen: Story = {
+  args: { onCommit: fn() },
+  render: function Render(args) {
+    const [objectId, setObjectId] = useState<string>(SAMPLE_IDS.companies);
+    const objects = [
+      { id: SAMPLE_IDS.companies, label: 'Companies', icon: 'building' as const, hue: 'blue' as const },
+      { id: 'people', label: 'People', icon: 'user' as const, hue: 'green' as const },
+    ];
+    const chosen = SAMPLE_COMPANIES.slice(0, 2);
+    return (
+      <Stage width="narrow">
+        <AttributeEditor
+          {...args}
+          attribute={{ ...sample.attribute, allowMultiple: true, name: 'Records' }}
+          value={chosen.map((company) => ({ objectId: company.objectId, recordId: company.recordId }))}
+          display={chosen}
+          error="You can’t link a task to a record you can’t change."
+          objectSwitcher={{ objects, objectId, onObjectChange: setObjectId }}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('list', { name: 'Records' })).toBeInTheDocument();
+    await expect(canvas.getByRole('alert')).toHaveTextContent('You can’t link a task to a record you can’t change.');
+  },
+};

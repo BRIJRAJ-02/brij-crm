@@ -17,6 +17,8 @@ export const strings = {
   done: 'Done',
   /** The badge on a task just made here. */
   isNew: 'New',
-  /** Read after "+N": how many more records the task is about. */
-  moreRecords: (count: number) => (count === 1 ? '1 more record' : `${String(count)} more records`),
+  /** The records' popover from "+N". */
+  records: 'Records',
+  /** An in place list's next page. */
+  showMore: 'Show more',
 } as const;

@@ -150,12 +150,14 @@ export const LongList: Story = {
   },
 };
 
-/** The first linked record as a chip and "+2" for the others; its tooltip names them. */
+/** The first linked record as a chip and "+2" for the others, the field set's one row of records: it opens them all. */
 export const ManyRecords: Story = {
   parameters: { crm: { screenshot: false } },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByText('+2')).toBeInTheDocument();
-    await expect(canvas.getByText('2 more records')).toBeInTheDocument();
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Show 2 more' }));
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull());
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
   },
 };
 
@@ -363,5 +365,123 @@ export const TickKeepsTheRightRow: Story = {
     await waitFor(() => expect(rows()).toHaveLength(3));
     await expect(rows()[0]).toHaveTextContent('Book the security review');
     await expect(canvas.getByRole('checkbox', { name: /Book the security review/ })).not.toBeChecked();
+  },
+};
+
+/** In place (Overview), still loading: skeleton rows after the loading delay. */
+export const InlineLoading: Story = {
+  render: function Render() {
+    return (
+      <Stage>
+        <TaskList
+          label="Open tasks"
+          layout="inline"
+          tasks={arraySource([], (task: TaskEntry) => task.id)}
+          status="loading"
+          onToggle={() => undefined}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Loading tasks')).toBeInTheDocument();
+  },
+};
+
+/** In place, with nothing open, in the screen's own words. */
+export const InlineEmpty: Story = {
+  render: function Render() {
+    return (
+      <Stage>
+        <TaskList
+          label="Open tasks"
+          layout="inline"
+          tasks={arraySource([], (task: TaskEntry) => task.id)}
+          emptyTitle="No open tasks."
+          onToggle={() => undefined}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('No open tasks.')).toBeInTheDocument();
+  },
+};
+
+/** In place, failed, with Try again. */
+export const InlineFailed: Story = {
+  args: { onRetry: fn() },
+  render: function Render(args) {
+    return (
+      <Stage>
+        <TaskList
+          label="Open tasks"
+          layout="inline"
+          tasks={arraySource([], (task: TaskEntry) => task.id)}
+          status="error"
+          onToggle={() => undefined}
+          {...(args.onRetry === undefined ? {} : { onRetry: args.onRetry })}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
+    await expect(args.onRetry).toHaveBeenCalled();
+  },
+};
+
+/** In place with more waiting: "Show more" under the rows reads the next page (the Completed part). */
+export const ShowMore: Story = {
+  args: { onRangeChange: fn() },
+  render: function Render(args) {
+    return (
+      <Stage>
+        <TaskList
+          label="Completed"
+          layout="inline"
+          maxRows={1000}
+          tasks={arraySource(SAMPLE_TASKS, (task) => task.id)}
+          onShowMore={() => {
+            args.onRangeChange?.({ start: 0, end: 0 });
+          }}
+          onToggle={() => undefined}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Show more' }));
+    await expect(args.onRangeChange).toHaveBeenCalled();
+  },
+};
+
+/** Sections with rows still loading: a loading row stays in the run it follows. */
+export const SectionsLoading: Story = {
+  render: function Render() {
+    const open = SAMPLE_TASKS.filter((task) => !task.isDone);
+    const source = {
+      count: open.length + 2,
+      getItem: (index: number) => open[index],
+      getKey: (task: TaskEntry) => task.id,
+    };
+    return (
+      <Stage height="grid">
+        <TaskList
+          label="My tasks"
+          tasks={source}
+          sectionOf={(task) =>
+            task.dueOn !== undefined && task.dueOn < '2026-10-08'
+              ? { id: 'overdue', title: 'Overdue' }
+              : { id: 'upcoming', title: 'Upcoming' }
+          }
+          onToggle={() => undefined}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('rowheader', { name: 'Overdue' })).toBeInTheDocument();
+    await expect(canvas.getByRole('rowheader', { name: 'Upcoming' })).toBeInTheDocument();
   },
 };

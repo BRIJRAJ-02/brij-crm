@@ -102,7 +102,7 @@
     block-size: var(--size-row);
     padding-inline: var(--space-8);
     color: var(--text-secondary);
-    font: var(--text-label);
+    font: var(--text-label-strong);
     letter-spacing: var(--tracking-label);
   }
 
@@ -115,10 +115,10 @@
     min-inline-size: 0;
   }
 
-  /* "+N", the records past the chip; its tooltip lists them. */
-  .more {
-    display: inline-flex;
-    flex: none;
+  /* An in place list's "Show more", under its rows. */
+  .showMore {
+    display: flex;
+    padding-inline: var(--space-8);
   }
 
   .due {

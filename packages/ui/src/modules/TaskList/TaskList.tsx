@@ -18,13 +18,14 @@ import {
 } from 'react-aria-components';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { LockReason } from '../../atoms/Tooltip/LockReason.tsx';
 import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
-import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
+import { ChipRow } from '../../fields/parts.tsx';
 import { formatDate } from '../../lib/format.ts';
 import { itemOfKey, keyedRows, type KeyedRow } from '../../lib/keyed-rows.ts';
 import type { ListSource } from '../../lib/list-source.ts';
@@ -104,6 +105,12 @@ export interface TaskListProps {
   readonly toolbar?: ReactNode;
   /** Drawn under the list in the same column, scrolling inside itself past half the slot (the Completed part). */
   readonly footer?: ReactNode;
+  /**
+   * The inline layout's next page, as a "Show more" button under the rows:
+   * a list drawn in place has no scroll of its own to page by. Absent when
+   * nothing more waits.
+   */
+  readonly onShowMore?: () => void;
 }
 
 /** A run of rows, with the heading it sits under (none for rows before the first heading). */
@@ -180,8 +187,9 @@ export function TaskList({
   maxRows = INLINE_TASKS,
   toolbar,
   footer,
+  onShowMore,
 }: TaskListProps) {
-  const content = (
+  const list = (
     <TaskListContent
       {...{ label, tasks, onToggle, hideRecord, isReadOnly, status, layout, maxRows }}
       {...(onAction === undefined ? {} : { onAction })}
@@ -193,6 +201,19 @@ export function TaskList({
       {...(emptyBody === undefined ? {} : { emptyBody })}
     />
   );
+  const content =
+    onShowMore === undefined || layout !== 'inline' || status !== 'ready' ? (
+      list
+    ) : (
+      <>
+        {list}
+        <span className={styles.showMore}>
+          <Button variant="ghost" onPress={onShowMore}>
+            {strings.showMore}
+          </Button>
+        </span>
+      </>
+    );
   if (toolbar === undefined && footer === undefined) return content;
   return (
     <div className={styles.frame}>
@@ -220,7 +241,7 @@ function TaskListContent({
   emptyTitle,
   emptyBody,
   maxRows = INLINE_TASKS,
-}: Omit<TaskListProps, 'toolbar' | 'footer'>) {
+}: Omit<TaskListProps, 'toolbar' | 'footer' | 'onShowMore'>) {
   const showSkeleton = useDelayedLoading(status === 'loading');
   const onShown = useRangeReporter(tasks);
   const dueOf = useDueOf();
@@ -284,10 +305,7 @@ function TaskListContent({
     }
     const due = task.dueOn === undefined ? undefined : dueOf(task.dueOn);
     const isOverdue = due?.isPast === true && !task.isDone;
-    const [first, ...others] = task.records ?? [];
-    const linked = Math.max(task.recordCount ?? 0, task.records?.length ?? 0);
-    const more = first === undefined ? 0 : linked - 1;
-    const href = first === undefined ? undefined : recordHref?.(first);
+    const records = task.records ?? [];
     const isNew = newIds?.has(task.id) === true;
     return (
       <GridListItem id={row.id} className={styles.row} textValue={task.title} data-done={task.isDone || undefined}>
@@ -307,19 +325,20 @@ function TaskListContent({
           {task.isDone && <VisuallyHidden>{`, ${strings.done}`}</VisuallyHidden>}
         </span>
         {isNew && <Badge text={strings.isNew} tone="accent" />}
-        {!hideRecord && first !== undefined && (
+        {!hideRecord && records.length > 0 && (
           <span className={styles.record}>
-            <RecordChip display={first} isFlat {...(href === undefined ? {} : { href })} />
-            {more > 0 && (
-              <Tooltip
-                content={others.length === 0 ? strings.moreRecords(more) : others.map((other) => other.name).join(', ')}
-                isTextTrigger
-              >
-                <span className={styles.more}>
-                  <Badge text={`+${String(more)}`} label={strings.moreRecords(more)} />
-                </span>
-              </Tooltip>
-            )}
+            {/* The field set's one row of records: the first chip, then "+N", which opens every one as a link. */}
+            <ChipRow
+              label={strings.records}
+              maxVisible={1}
+              chips={records.map((record) => {
+                const href = recordHref?.(record);
+                return {
+                  key: record.recordId,
+                  node: <RecordChip display={record} isFlat {...(href === undefined ? {} : { href })} />,
+                };
+              })}
+            />
           </span>
         )}
         {/* The due day and assignee keep their columns, so rows line up when one is missing. */}
