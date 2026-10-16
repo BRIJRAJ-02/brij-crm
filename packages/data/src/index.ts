@@ -21,6 +21,9 @@ import type {
   RelationshipView,
   Usage,
   ValidationRuleInput,
+  View,
+  ViewLayout,
+  ViewVisibility,
 } from '@crm/contracts';
 import { createORPCClient } from '@orpc/client';
 import { RPCLink } from '@orpc/client/fetch';
@@ -39,7 +42,13 @@ import {
 import type { FetchLike } from './fetch.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
-import { createViewsStore, type SavedViewSource, type SaveQueryInput, type ViewsListSource } from './views/store.ts';
+import {
+  createViewsStore,
+  type NewView,
+  type SavedViewSource,
+  type SaveQueryInput,
+  type ViewsListSource,
+} from './views/store.ts';
 import type { NewTask, TaskChange, TaskList, TasksStore, TaskSubscription } from './tasks/store.ts';
 import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
@@ -133,7 +142,7 @@ export {
 } from './errors.ts';
 export type { FetchLike } from './fetch.ts';
 export type { JobsScope, JobsSnapshot, JobsView, TestJobSettings } from './jobs/store.ts';
-export type { View, ViewConfig, ViewSummary, ViewColumn } from '@crm/contracts';
+export type { View, ViewColumn, ViewConfig, ViewKind, ViewLayout, ViewSummary, ViewVisibility } from '@crm/contracts';
 export {
   CREATED_AT_SLUG,
   effectiveColumns,
@@ -144,9 +153,13 @@ export {
   type EffectiveQuery,
   type FarAttributes,
   type ViewAttribute,
+  type ViewAction,
+  type ViewRuleReason,
+  viewRule,
 } from '@crm/contracts/views';
 export { DRAFT_LINK_MAX, FILTER_EDIT_MS, type DraftQuery } from './views/draft.ts';
 export type {
+  NewView,
   SavedViewSnapshot,
   SavedViewSource,
   SaveQueryInput,
@@ -1054,11 +1067,23 @@ export function createDataLayer({
             options,
           ),
         ),
+      create: (input) => call((options) => api.views.create({ ...input, config: input.config }, options)),
+      update: (input) => call((options) => api.views.update(input, options)),
+      setLayout: (input) => call((options) => api.views.setLayout(input, options)),
+      move: (input) => call((options) => api.views.move(input, options)),
+      setLocked: (input) => call((options) => api.views.setLocked(input, options)),
+      setDefault: (input) => call((options) => api.views.setDefault(input, options)),
+      remove: (input) => call((options) => api.views.delete(input, options)),
+      markOpened: (input) => call((options) => api.views.markOpened(input, options)),
     },
     mintId,
     mutations,
     watch,
     random,
+    // A refused column change was put back (spec 0020, AC-470): say why.
+    onLayoutRefused: (error) => {
+      notify({ tone: 'danger', message: error.message });
+    },
   });
 
   /**
@@ -2174,6 +2199,48 @@ export function createDataLayer({
        */
       saveQuery: (workspace: string, viewId: string, input: SaveQueryInput) =>
         views.saveQuery(workspace, viewId, input),
+      /**
+       * Makes a view (AC-472), waiting for the server; rejects with a
+       * `DataError` (`NAME_TAKEN` on `name`, `LIMIT_REACHED`, `ID_TAKEN`).
+       * `newId` mints the id once per dialog, so a retry sends the same.
+       */
+      create: (workspace: string, input: NewView): Promise<View> => views.create(workspace, input),
+      /** A fresh UUID v7 for a view the create dialog will make. */
+      newId: (): string => mintId(),
+      /** Renames a view, or shares it or makes it private, waiting for the server. */
+      update: (
+        workspace: string,
+        viewId: string,
+        changes: { readonly name?: string; readonly visibility?: ViewVisibility },
+      ): Promise<View> => views.update(workspace, viewId, changes),
+      /**
+       * A column change (AC-470), shown at once and saved at most once per
+       * 500 ms; a refusal is rolled back with a toast. `isLocal` keeps it in
+       * this tab only (a locked view, AC-476) until `dropLocalLayout`.
+       */
+      setLayout: (workspace: string, viewId: string, layout: ViewLayout, options?: { readonly isLocal?: boolean }) => {
+        views.setLayout(workspace, viewId, layout, options);
+      },
+      /** Drops a locked view's layout kept in this tab (the screen left it). */
+      dropLocalLayout: (workspace: string, viewId: string) => {
+        views.dropLocalLayout(workspace, viewId);
+      },
+      /** Swaps a view with its neighbour in its group, waiting for the server. */
+      move: (workspace: string, objectId: string, viewId: string, direction: 'up' | 'down'): Promise<void> =>
+        views.move(workspace, objectId, viewId, direction),
+      /** Locks or unlocks a shared view (`views.manage`), waiting for the server. */
+      setLocked: (workspace: string, viewId: string, locked: boolean): Promise<View> =>
+        views.setLocked(workspace, viewId, locked),
+      /** Makes a shared view the object's default (`views.manage`), waiting for the server. */
+      setDefault: (workspace: string, objectId: string, viewId: string): Promise<void> =>
+        views.setDefault(workspace, objectId, viewId),
+      /** Deletes a view for good, waiting for the server (`VIEW_IS_DEFAULT` for the default). */
+      remove: (workspace: string, objectId: string, viewId: string): Promise<void> =>
+        views.remove(workspace, objectId, viewId),
+      /** Keeps a view as the person's last opened one for its object: fire and forget, once per 10 seconds. */
+      markOpened: (workspace: string, viewId: string) => {
+        views.markOpened(workspace, viewId);
+      },
       /** A draft's URL text (base64url of its canonical JSON), or undefined past `DRAFT_LINK_MAX`. */
       draftParam: (query: DraftQuery): string | undefined => draftParam(query),
       /** A link's draft, checked (loads the schemas on first use), or undefined when it can't be read. */

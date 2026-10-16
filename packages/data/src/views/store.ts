@@ -8,11 +8,25 @@
 // Both are coalesced at most once a second per object: the first at once,
 // the next after a random 0 to 2 seconds. A body is replaced only by a read
 // with a version at least the one held (spec 0006's revision rule, for
-// views). Saving a query waits for the server.
+// views). Saving a query, and every other view write but the layout, waits
+// for the server. A layout change shows at once as a layer over the held
+// body and is sent at most once per 500 ms (the latest wins); a refusal drops
+// the layer and says why. On a locked view the person may not change, the
+// layer stays in this tab only and is dropped when the screen leaves.
 //
 // Plain TypeScript with no runtime imports beyond the layer's own, so it sits
 // in the first load.
-import type { FilterGroup, SortRule, View, ViewsList, ViewSummary } from '@crm/contracts';
+import type {
+  FilterGroup,
+  SortRule,
+  View,
+  ViewConfig,
+  ViewKind,
+  ViewLayout,
+  ViewsList,
+  ViewSummary,
+  ViewVisibility,
+} from '@crm/contracts';
 import { toDataError, type DataError } from '../errors.ts';
 import type { MutationLog } from '../live/mutations.ts';
 import type { LiveEventOf } from '../live/router.ts';
@@ -22,6 +36,12 @@ export const VIEWS_COALESCE_MS = 1000;
 
 /** The longest random wait before a coalesced reread (spec 0006 AC-61's 0 to 2 seconds). */
 export const VIEWS_JITTER_MS = 2000;
+
+/** The least time between two layout saves of one view (spec 0020, AC-470: a resize sends at most one per 500 ms). */
+export const LAYOUT_SAVE_MS = 500;
+
+/** The least time between two "last opened" marks of one view (spec 0020: at most once per view per 10 seconds). */
+export const MARK_OPENED_MS = 10_000;
 
 /** The calls the views store makes, each mapped to a DataError by the layer. */
 export interface ViewsApi {
@@ -36,6 +56,54 @@ export interface ViewsApi {
     readonly force?: boolean;
     readonly mutationId: string;
   }) => Promise<View>;
+  readonly create: (input: { readonly workspace: string; readonly mutationId: string } & NewView) => Promise<View>;
+  readonly update: (input: {
+    readonly workspace: string;
+    readonly viewId: string;
+    readonly name?: string;
+    readonly visibility?: ViewVisibility;
+    readonly mutationId: string;
+  }) => Promise<View>;
+  readonly setLayout: (input: {
+    readonly workspace: string;
+    readonly viewId: string;
+    readonly layout: ViewLayout;
+    readonly mutationId: string;
+  }) => Promise<View>;
+  readonly move: (input: {
+    readonly workspace: string;
+    readonly viewId: string;
+    readonly direction: 'up' | 'down';
+    readonly mutationId: string;
+  }) => Promise<readonly ViewSummary[]>;
+  readonly setLocked: (input: {
+    readonly workspace: string;
+    readonly viewId: string;
+    readonly locked: boolean;
+    readonly mutationId: string;
+  }) => Promise<View>;
+  readonly setDefault: (input: {
+    readonly workspace: string;
+    readonly objectId: string;
+    readonly viewId: string;
+    readonly mutationId: string;
+  }) => Promise<readonly ViewSummary[]>;
+  readonly remove: (input: {
+    readonly workspace: string;
+    readonly viewId: string;
+    readonly mutationId: string;
+  }) => Promise<unknown>;
+  readonly markOpened: (input: { readonly workspace: string; readonly viewId: string }) => Promise<unknown>;
+}
+
+/** A view to make (the create dialog): the id minted once per dialog, its object, name, kind, who sees it and its config. */
+export interface NewView {
+  readonly id: string;
+  readonly objectId: string;
+  readonly name: string;
+  readonly kind: ViewKind;
+  readonly visibility: ViewVisibility;
+  readonly config: ViewConfig;
 }
 
 /** What the views store needs from the layer. */
@@ -49,6 +117,10 @@ export interface ViewsDeps {
   readonly random?: () => number;
   /** Runs `work` after `ms` (tests pass their own); the answer cancels it. */
   readonly after?: (ms: number, work: () => void) => () => void;
+  /** The time now, in ms (tests pass their own). */
+  readonly now?: () => number;
+  /** A layout save the server refused: it was rolled back, and the person is told why. */
+  readonly onLayoutRefused?: (error: DataError) => void;
 }
 
 /** An object's views, as the switcher shows them. */
@@ -66,8 +138,11 @@ export interface ViewsListSnapshot {
 export interface SavedViewSnapshot {
   /** `not-found` for a view that doesn't exist or isn't the person's to see (never saying which). */
   readonly status: 'loading' | 'ready' | 'error' | 'not-found';
+  /** The view, with this tab's layout change on top while it is on its way (or kept here, on a locked view). */
   readonly view?: View;
   readonly error?: DataError;
+  /** The layout shown is this tab's own and isn't saved: a locked view the person may not change (AC-476). */
+  readonly isLayoutLocal?: boolean;
 }
 
 /** Something a screen holds while it shows it, and reads through useSyncExternalStore. */
@@ -236,20 +311,115 @@ export function createViewsStore(deps: ViewsDeps) {
         } catch (failed) {
           if (!isLatest()) return;
           const error = toDataError(failed);
-          if (error.code === 'NOT_FOUND') source.set({ status: 'not-found', error });
-          else if (source.get().view === undefined) source.set({ status: 'error', error });
+          if (error.code === 'NOT_FOUND') {
+            servers.delete(key(workspace, viewId));
+            source.set({ status: 'not-found', error });
+          } else if (source.get().view === undefined) source.set({ status: 'error', error });
         }
       },
     );
     return source;
   }
 
+  // The server's copy of each view held, and this tab's layout on top of it while one is on its way or kept here.
+  const servers = new Map<string, View>();
+  const layers = new Map<string, { readonly layout: ViewLayout; readonly isLocal: boolean }>();
+  const saves = new Map<string, { queued?: ViewLayout; inFlight: boolean; lastSent: number; cancel?: () => void }>();
+  const opened = new Map<string, number>();
+  const now = deps.now ?? Date.now;
+
+  /** The body as shown: the server's view with this tab's layout on top. */
+  const show = (workspace: string, viewId: string) => {
+    const body = bodyOf(workspace, viewId);
+    const view = servers.get(key(workspace, viewId));
+    if (view === undefined) return;
+    const layer = layers.get(key(workspace, viewId));
+    if (layer === undefined) {
+      body.set({ status: 'ready', view });
+      return;
+    }
+    const { layout } = layer;
+    body.set({
+      status: 'ready',
+      view: {
+        ...view,
+        ...(layout.kind === undefined ? {} : { kind: layout.kind }),
+        config: {
+          ...view.config,
+          columns: layout.columns,
+          pinnedCount: layout.pinnedCount,
+          ...(layout.board === undefined ? {} : { board: layout.board }),
+        },
+      },
+      ...(layer.isLocal ? { isLayoutLocal: true } : {}),
+    });
+  };
+
   /** A view read or saved: replaces the held body unless that one is newer (the revision rule, for views). */
   const put = (workspace: string, view: View) => {
-    const body = bodyOf(workspace, view.id);
-    const held = body.get().view;
+    const held = servers.get(key(workspace, view.id));
     if (held !== undefined && held.version > view.version) return;
-    body.set({ status: 'ready', view });
+    servers.set(key(workspace, view.id), view);
+    show(workspace, view.id);
+  };
+
+  /** Reads the object's list again when a screen holds it, else marks it stale (after this tab's own write). */
+  const refreshList = (workspace: string, objectId: string) => {
+    const list = lists.get(key(workspace, objectId));
+    if (list?.isRetained() === true) void list.reread();
+    else list?.markStale();
+  };
+
+  /** One server confirmed write: its mutation id is logged for its echo, and forgotten on a refusal. */
+  const confirmed = async <T>(send: (mutationId: string) => Promise<T>, echoes = 1): Promise<T> => {
+    const mutationId = deps.mintId();
+    deps.mutations.sent(mutationId);
+    try {
+      const answer = await send(mutationId);
+      deps.mutations.answered(mutationId, echoes);
+      return answer;
+    } catch (error) {
+      deps.mutations.forget(mutationId);
+      throw toDataError(error);
+    }
+  };
+
+  /** Sends a view's queued layout, at most once per LAYOUT_SAVE_MS, the latest winning. */
+  const sendLayout = (workspace: string, viewId: string) => {
+    const saveKey = key(workspace, viewId);
+    const state = saves.get(saveKey);
+    if (state?.queued === undefined || state.inFlight || state.cancel !== undefined) return;
+    const wait = state.lastSent + LAYOUT_SAVE_MS - now();
+    if (wait > 0) {
+      state.cancel = after(wait, () => {
+        state.cancel = undefined;
+        sendLayout(workspace, viewId);
+      });
+      return;
+    }
+    const layout = state.queued;
+    state.queued = undefined;
+    state.inFlight = true;
+    state.lastSent = now();
+    confirmed((mutationId) => deps.api.setLayout({ workspace, viewId, layout, mutationId })).then(
+      (view) => {
+        state.inFlight = false;
+        // Nothing newer waits: the server's copy is what shows.
+        if (state.queued === undefined && layers.get(saveKey)?.layout === layout) layers.delete(saveKey);
+        put(workspace, view);
+        sendLayout(workspace, viewId);
+      },
+      (error: unknown) => {
+        state.inFlight = false;
+        state.queued = undefined;
+        layers.delete(saveKey);
+        show(workspace, viewId);
+        deps.onLayoutRefused?.(toDataError(error));
+        // What the view holds now, from the server (someone may have locked it).
+        const body = bodies.get(saveKey);
+        if (body?.isRetained() === true) void body.reread();
+      },
+    );
   };
 
   const listOf = (workspace: string, objectId: string) => {
@@ -304,8 +474,10 @@ export function createViewsStore(deps: ViewsDeps) {
         continue;
       }
       const summary = listed.views.find((each) => each.id === view.id);
-      if (summary === undefined) body.set({ status: 'not-found' });
-      else if (summary.version !== view.version) void body.reread();
+      if (summary === undefined) {
+        servers.delete(key(workspace, view.id));
+        body.set({ status: 'not-found' });
+      } else if (summary.version !== view.version) void body.reread();
     }
     // A named view held but not yet loaded with its object (opened by id) reads too.
     for (const id of named) {
@@ -360,10 +532,8 @@ export function createViewsStore(deps: ViewsDeps) {
      * (`VIEW_CHANGED`, `FORBIDDEN`, `FILTER_INVALID`) for the screen to show.
      */
     async saveQuery(workspace: string, viewId: string, input: SaveQueryInput): Promise<View> {
-      const mutationId = deps.mintId();
-      deps.mutations.sent(mutationId);
-      try {
-        const view = await deps.api.saveQuery({
+      const view = await confirmed((mutationId) =>
+        deps.api.saveQuery({
           workspace,
           viewId,
           ...(input.filter === undefined ? {} : { filter: input.filter }),
@@ -371,18 +541,113 @@ export function createViewsStore(deps: ViewsDeps) {
           baseQueryVersion: input.baseQueryVersion,
           ...(input.force === true ? { force: true } : {}),
           mutationId,
-        });
-        // One views row for the view's object: its echo is skipped, so the list is read here.
-        deps.mutations.answered(mutationId, 1);
-        put(workspace, view);
-        const list = lists.get(key(workspace, view.objectId));
-        if (list?.isRetained() === true) void list.reread();
-        else list?.markStale();
-        return view;
-      } catch (error) {
-        deps.mutations.forget(mutationId);
-        throw toDataError(error);
+        }),
+      );
+      // One views row for the view's object: its echo is skipped, so the list is read here.
+      put(workspace, view);
+      refreshList(workspace, view.objectId);
+      return view;
+    },
+    /**
+     * Makes a view (AC-472), waiting for the server: it joins the held list
+     * and its body is held. Rejects with the refusal (`NAME_TAKEN` on
+     * `name`, `LIMIT_REACHED`, `ID_TAKEN`) for the dialog to show.
+     */
+    async create(workspace: string, input: NewView): Promise<View> {
+      const view = await confirmed((mutationId) => deps.api.create({ workspace, mutationId, ...input }));
+      put(workspace, view);
+      refreshList(workspace, view.objectId);
+      return view;
+    },
+    /** Renames a view, or changes who sees it, waiting for the server. */
+    async update(
+      workspace: string,
+      viewId: string,
+      changes: { readonly name?: string; readonly visibility?: ViewVisibility },
+    ): Promise<View> {
+      const view = await confirmed((mutationId) =>
+        deps.api.update({
+          workspace,
+          viewId,
+          ...(changes.name === undefined ? {} : { name: changes.name }),
+          ...(changes.visibility === undefined ? {} : { visibility: changes.visibility }),
+          mutationId,
+        }),
+      );
+      put(workspace, view);
+      refreshList(workspace, view.objectId);
+      return view;
+    },
+    /**
+     * A column change (AC-470): it shows at once in every screen holding the
+     * view and is sent at most once per 500 ms, the latest winning; a
+     * refusal puts the server's layout back and calls `onLayoutRefused`.
+     * `isLocal` (a locked view the person may not change, AC-476) keeps it in
+     * this tab and sends nothing, until `dropLocalLayout`.
+     */
+    setLayout(workspace: string, viewId: string, layout: ViewLayout, options: { readonly isLocal?: boolean } = {}) {
+      const layerKey = key(workspace, viewId);
+      if (!servers.has(layerKey)) return;
+      const isLocal = options.isLocal === true;
+      layers.set(layerKey, { layout, isLocal });
+      show(workspace, viewId);
+      if (isLocal) return;
+      const state = saves.get(layerKey) ?? { inFlight: false, lastSent: Number.NEGATIVE_INFINITY };
+      saves.set(layerKey, state);
+      state.queued = layout;
+      sendLayout(workspace, viewId);
+    },
+    /** Drops the layout kept in this tab only (the screen left a locked view). */
+    dropLocalLayout(workspace: string, viewId: string) {
+      const layerKey = key(workspace, viewId);
+      if (layers.get(layerKey)?.isLocal !== true) return;
+      layers.delete(layerKey);
+      show(workspace, viewId);
+    },
+    /** Swaps a view with its neighbour in its group, waiting for the server; the list takes the new order. */
+    async move(workspace: string, objectId: string, viewId: string, direction: 'up' | 'down'): Promise<void> {
+      await confirmed((mutationId) => deps.api.move({ workspace, viewId, direction, mutationId }));
+      refreshList(workspace, objectId);
+    },
+    /** Locks or unlocks a shared view (`views.manage`), waiting for the server. */
+    async setLocked(workspace: string, viewId: string, locked: boolean): Promise<View> {
+      const view = await confirmed((mutationId) => deps.api.setLocked({ workspace, viewId, locked, mutationId }));
+      put(workspace, view);
+      refreshList(workspace, view.objectId);
+      return view;
+    },
+    /** Makes a shared view the object's default (`views.manage`), waiting for the server. */
+    async setDefault(workspace: string, objectId: string, viewId: string): Promise<void> {
+      await confirmed((mutationId) => deps.api.setDefault({ workspace, objectId, viewId, mutationId }));
+      refreshList(workspace, objectId);
+      // Both the old default and the new one changed: the held bodies of the object are read again.
+      for (const body of bodiesOn(workspace, objectId)) {
+        if (body.isRetained()) void body.reread();
+        else body.markStale();
       }
+    },
+    /** Deletes a view for good (AC-474), waiting for the server: its body becomes not found. */
+    async remove(workspace: string, objectId: string, viewId: string): Promise<void> {
+      await confirmed((mutationId) => deps.api.remove({ workspace, viewId, mutationId }));
+      const bodyKey = key(workspace, viewId);
+      servers.delete(bodyKey);
+      layers.delete(bodyKey);
+      bodies.get(bodyKey)?.set({ status: 'not-found' });
+      refreshList(workspace, objectId);
+    },
+    /**
+     * Keeps a view as the person's last opened one for its object (AC-478):
+     * fire and forget, at most once per view per 10 seconds; a failure is
+     * quiet (the next open marks it again).
+     */
+    markOpened(workspace: string, viewId: string) {
+      const markKey = key(workspace, viewId);
+      const last = opened.get(markKey);
+      if (last !== undefined && now() - last < MARK_OPENED_MS) return;
+      opened.set(markKey, now());
+      deps.api.markOpened({ workspace, viewId }).catch(() => {
+        opened.delete(markKey);
+      });
     },
     /** A live `views` event: the object's list and the bodies it concerns are read again, coalesced per object. */
     changed(workspace: string, event: LiveEventOf<'views'>) {
@@ -404,6 +669,11 @@ export function createViewsStore(deps: ViewsDeps) {
     clear() {
       for (const state of windows.values()) state.cancel();
       windows.clear();
+      for (const state of saves.values()) state.cancel?.();
+      saves.clear();
+      layers.clear();
+      servers.clear();
+      opened.clear();
       lists.clear();
       bodies.clear();
     },
