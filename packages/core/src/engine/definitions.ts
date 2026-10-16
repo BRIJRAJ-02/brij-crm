@@ -25,6 +25,7 @@ import { clearUniqueKeys, fillUniqueKeys, UNIQUE_TYPES } from './unique.ts';
 import { ARCHIVED_BY, loadAttribute, type AttributeDef } from './values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from './write.ts';
 import { writeRules } from '../validation/rules.ts';
+import { seedDefaultView } from '../views/seed.ts';
 import { inWorkspace } from '../access/run.ts';
 import { requirePermission } from '../access/check.ts';
 import { attributeVisible } from '../access/visibility.ts';
@@ -414,16 +415,19 @@ export async function insertObject(context: WriteContext, input: ObjectInput): P
       })
       .returning({ id: objects.id });
     if (object === undefined) throw new Error('The object was not created.');
-    await tx.insert(attributes).values(
-      SYSTEM_ATTRIBUTES.map((attribute, position) => ({
-        workspaceId: scope.workspaceId,
-        objectId: object.id,
-        ...attribute,
-        isSystem: true,
-        position,
-        ...audit(scope),
-      })),
-    );
+    const system = await tx
+      .insert(attributes)
+      .values(
+        SYSTEM_ATTRIBUTES.map((attribute, position) => ({
+          workspaceId: scope.workspaceId,
+          objectId: object.id,
+          ...attribute,
+          isSystem: true,
+          position,
+          ...audit(scope),
+        })),
+      )
+      .returning({ id: attributes.id, systemColumn: attributes.systemColumn });
     const [name] = await tx
       .insert(attributes)
       .values({
@@ -439,6 +443,12 @@ export async function insertObject(context: WriteContext, input: ObjectInput): P
       .returning({ id: attributes.id });
     if (name === undefined) throw new Error('The primary attribute was not created.');
     await tx.update(objects).set({ primaryAttributeId: name.id }).where(eq(objects.id, object.id));
+    // Its default view, in the same write (spec 0020, AC-462).
+    await seedDefaultView(context, {
+      objectId: object.id,
+      pluralName: input.pluralName,
+      createdAtId: system.find((attribute) => attribute.systemColumn === 'created_at')?.id,
+    });
     return { objectId: object.id, primaryAttributeId: name.id, replayed: false };
   });
   // The custom object slot (the counters row is already held): a full workspace refuses here and the refusal

@@ -4,7 +4,7 @@ import { Dialog, Popover as AriaPopover, type PopoverProps as AriaPopoverProps }
 import styles from './Popover.module.css';
 
 /** How wide a popover is: its content (the default), a menu (240px, or the trigger's width if wider), or exactly its trigger's width (a select). */
-export type PopoverWidth = 'content' | 'menu' | 'trigger';
+export type PopoverWidth = 'content' | 'menu' | 'trigger' | 'builder';
 
 /** Where a popover sits against its trigger, as React Aria names it ("bottom start", "top", "end"). */
 export type PopoverPlacement = NonNullable<AriaPopoverProps['placement']>;

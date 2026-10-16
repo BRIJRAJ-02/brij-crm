@@ -10,6 +10,7 @@ import { recordsContract } from './records.ts';
 import { relationshipsContract } from './relations.ts';
 import { systemContract } from './system.ts';
 import { usageContract } from './usage.ts';
+import { viewsContract } from './views.ts';
 import { workspacesContract } from './workspaces.ts';
 
 export * from './access.ts';
@@ -27,6 +28,8 @@ export * from './records.ts';
 export * from './relations.ts';
 export * from './system.ts';
 export * from './usage.ts';
+export * from './view-model.ts';
+export * from './views.ts';
 export * from './values/index.ts';
 export * from './workspaces.ts';
 
@@ -50,4 +53,5 @@ export const contract = {
   realtime: realtimeContract,
   jobs: jobsContract,
   usage: usageContract,
+  views: viewsContract,
 };

@@ -479,6 +479,26 @@ describe('windows keyed by their question (spec 0006, AC-51 to AC-53)', () => {
     return { ...context, view, reader };
   }
 
+  it('aborts a window no screen showed once it is abandoned (a draft typed on, spec 0020 AC-464), and opens a fresh one after', async () => {
+    const { layer, counts } = setup();
+    const typed = layer.view(WS, PEOPLE, inLondon);
+    const ready = typed.ready();
+    await settle();
+    const count = counts[0];
+    expect(count?.signal?.aborted).toBe(false);
+    typed.abandon();
+    expect(count?.signal?.aborted).toBe(true);
+    // Its ready settles, so nothing waits on it for ever.
+    await expect(ready).resolves.toBeUndefined();
+    expect(layer.view(WS, PEOPLE, inLondon)).not.toBe(typed);
+    // A view a screen holds is left alone.
+    const held = layer.view(WS, PEOPLE, byCity);
+    const reader = held.retain([CITY]);
+    held.abandon();
+    expect(layer.view(WS, PEOPLE, byCity)).toBe(held);
+    reader.release();
+  });
+
   it('shares one window between screens asking the same question, and opens another for a new sort', () => {
     const { layer } = setup();
     const one = layer.view(WS, PEOPLE, byCity);

@@ -73,6 +73,7 @@ export type {
 export { isRefusal } from './fields/values.ts';
 export { HUES, type Hue } from './hue.ts';
 export { arraySource, type ListRange, type ListSource } from './lib/list-source.ts';
+export { focusLater } from './lib/focus-later.ts';
 export { safeHref } from './lib/safe-href.ts';
 export { safeImageSrc } from './lib/safe-image-src.ts';
 export { Breadcrumbs, type BreadcrumbsProps, type Crumb } from './molecules/Breadcrumbs/Breadcrumbs.tsx';
@@ -178,11 +179,13 @@ export {
   type PaletteItem,
 } from './modules/CommandPalette/CommandPalette.tsx';
 export {
+  ConditionChip,
   FilterBuilder,
+  type ConditionChipProps,
   type FilterBuilderProps,
   type FilterEditorProps,
 } from './modules/FilterBuilder/FilterBuilder.tsx';
-export { completeFilters, countFilters } from './modules/FilterBuilder/filter-model.ts';
+export { completeFilters, conditionOn, countFilters } from './modules/FilterBuilder/filter-model.ts';
 export {
   OptionsEditor,
   type OptionOutcome,

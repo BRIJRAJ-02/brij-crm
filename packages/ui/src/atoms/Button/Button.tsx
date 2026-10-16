@@ -68,6 +68,8 @@ export type ButtonProps = ButtonLook &
     readonly form?: string;
     /** The `id` of text that says more about it, such as the line under a disabled button saying when it turns on. */
     readonly 'aria-describedby'?: string;
+    /** Takes focus when it mounts: the safe choice a dialog opens on, such as Cancel beside Replace. */
+    readonly autoFocus?: boolean;
   };
 
 /** Props for ToggleButton: a button that stays pressed, such as Bold in a format toolbar. */
@@ -155,6 +157,7 @@ export function Button(props: ButtonProps) {
       {...(onPress === undefined ? {} : { onPress })}
       {...(face.label === undefined ? {} : { 'aria-label': face.label })}
       {...(describedBy === undefined ? {} : { 'aria-describedby': describedBy })}
+      {...(props.autoFocus === true ? { autoFocus: true } : {})}
       {...shortcutAttribute(props.kbd, platform)}
       {...lookAttributes(props, face)}
     >

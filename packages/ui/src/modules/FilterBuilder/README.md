@@ -25,10 +25,12 @@ Ported from the artifact's FilterBuilder card. Every view (#20, #21) filters thr
 - Operands: the type's editor for one value (a system time edits as a date), two for between, the multi value editor for a list (a status's statuses as a multi select), a range for within (a named range, or an amount of days, weeks, months or years), a Field for text matches, the country picker for "country is", and nothing for bare operators (is empty, is me).
 - `displayOf(attributeId, value)` passes record and member names to the operand editors and displays.
 - `isReadOnly` shows each condition as a sentence through the field set's displays, with nothing to press.
+- `ConditionChip` is one top level item of a view's filter as a FilterChip, in the builder's own words (spec 0020, the view's Toolbar): its attribute through relations with its type's icon, its operator and its operand through the field set; a condition with no operand has no value part, a group reads "3 conditions", and an attribute the view can't show reads "Unavailable field". Every part calls `onPress` (the screen opens the builder); remove calls `onRemove`. It lives here because only the builder knows how an operator and an operand read, so a chip and its row can't word a condition differently.
+- `conditionOn(attribute, operator?)` is a new condition on an attribute with its type's first operator and no operand yet: the column menu's Filter starts one.
 
 ## States
 
-Empty ("No filters yet", with Add filter), filled, nested, read only. A row missing its operand. Narrow: below `bp-container-md` each row's lead stacks above its controls (container query).
+Empty ("No filters yet", with Add filter), filled, nested, read only. A row missing its operand. ConditionChip: with a value, without one, through a relation, a group, and an unavailable field (the Chips story). Narrow: below `bp-container-md` each row's lead stacks above its controls (container query).
 
 ## Keyboard
 

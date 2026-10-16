@@ -244,6 +244,12 @@ async function dataWorld() {
   await core.deleteRecord(owner, { recordId: trashedId });
   const { listId } = await core.defineList(owner, { objectId: people, apiSlug: 'crew', name: 'Crew' });
   const { entryId } = await core.addEntry(owner, { listId, recordId });
+  const peopleView =
+    (
+      await db.withWorkspace(workspaceId, (tx) =>
+        tx.execute<{ id: string }>(sql`select default_view_id::text as id from objects where id = ${people}`),
+      )
+    ).rows[0]?.id ?? '';
   const member = memberScope.actor;
   const objectRule = (objectId: string, level: string) => ({
     subject: { type: 'role' as const, role: 'member' },
@@ -276,6 +282,7 @@ async function dataWorld() {
     trashedId,
     listId,
     entryId,
+    peopleView,
   };
 }
 type DataWorld = Awaited<ReturnType<typeof dataWorld>>;
@@ -352,6 +359,12 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   getRecordEntries: empty((scope, world) => core.getRecordEntries(scope, { recordId: world.recordId })),
   getActivity: refused('NOT_FOUND', (scope, world) => core.getActivity(scope, { recordId: world.recordId })),
   readTrashedRecord: refused('NOT_FOUND', (scope, world) => core.readTrashedRecord(scope, world.trashedId)),
+  // Saved views (spec 0020): a view on an object the principal can't see is absent, and so can't be saved.
+  listViews: refused('NOT_FOUND', (scope, world) => core.listViews(scope, world.people)),
+  getView: refused('NOT_FOUND', (scope, world) => core.getView(scope, world.peopleView)),
+  saveViewQuery: refused('NOT_FOUND', (scope, world) =>
+    core.saveViewQuery(scope, { viewId: world.peopleView, sorts: [], baseQueryVersion: 1 }),
+  ),
   // Writes, by a principal who may only read People and its list: 403.
   createRecord: refused('FORBIDDEN', (scope, world) => core.createRecord(scope, { objectId: world.people })),
   addRecord: refused('FORBIDDEN', (scope, world) =>

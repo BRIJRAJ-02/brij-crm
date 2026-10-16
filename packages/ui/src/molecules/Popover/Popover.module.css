@@ -33,6 +33,12 @@
     min-inline-size: max(var(--trigger-width), var(--size-menu));
   }
 
+  /* A builder (filters, sorts): the wide dialog's width, never past the window. Content sized by a container
+     query has no width of its own, so it needs one here. */
+  .root[data-width='builder'] {
+    inline-size: var(--size-dialog-wide);
+  }
+
   .root[data-placement='bottom'] {
     margin-block-start: var(--space-4);
   }

@@ -749,6 +749,51 @@ describe('isolation', () => {
       ),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'validation_rules_attribute' } });
   });
+
+  it("reads none of another workspace's views, and refuses a view on its object or a default naming its view (spec 0020)", async () => {
+    /** An object with one shared view, made inside the workspace, set as its default. */
+    const viewed = async (workspaceId: string) => {
+      const objectId = await objectIn(workspaceId);
+      const viewId = randomUUID();
+      await db.withWorkspace(workspaceId, async (tx) => {
+        await tx.execute(
+          sql`insert into views (workspace_id, id, object_id, name, visibility, position, config, created_by_type, updated_by_type) values (${workspaceId}, ${viewId}, ${objectId}, 'All things', 'workspace', 0, '{"columns":[],"showNewAttributes":true,"pinnedCount":1,"sorts":[]}', 'system', 'system')`,
+        );
+        await tx.execute(sql`update objects set default_view_id = ${viewId} where id = ${objectId}`);
+      });
+      return { objectId, viewId };
+    };
+    const a = await workspaceWithMember('views-a');
+    const b = await workspaceWithMember('views-b');
+    const inA = await viewed(a.workspaceId);
+    const inB = await viewed(b.workspaceId);
+    const seenFromA = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ id: string }>(sql`select id from views`),
+    );
+    expect(seenFromA.rows).toEqual([{ id: inA.viewId }]);
+    // A view in A on B's object: the composite key finds no such object in A.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into views (workspace_id, object_id, name, visibility, position, config, created_by_type, updated_by_type) values (${a.workspaceId}, ${inB.objectId}, 'Theirs', 'workspace', 1, '{}', 'system', 'system')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'views_object' } });
+    // A's object pointing at B's view as its default.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(sql`update objects set default_view_id = ${inB.viewId} where id = ${inA.objectId}`),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'objects_default_view' } });
+    // A private view needs its creator and can't be locked.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into views (workspace_id, object_id, name, visibility, position, config, created_by_type, updated_by_type) values (${a.workspaceId}, ${inA.objectId}, 'Mine', 'private', 0, '{}', 'system', 'system')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23514', constraint: 'views_private' } });
+  });
 });
 
 describe('the auth schema: global identity, outside row level security (spec 0005)', () => {

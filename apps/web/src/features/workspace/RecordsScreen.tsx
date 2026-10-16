@@ -1,9 +1,10 @@
 // Brief
 // Purpose: any live object's records (People, Companies, a custom Projects) as a fast table, under its name and tile.
-// Main task: read and edit records in place (a paste or clear is one change, undone with ⌘Z), sort a column, add a record and a column, live.
-// Leaves out: filters, saved views and sorts that last past the visit, and presence (#7, #20).
+// Main task: read and edit records in place (a paste or clear is one change, undone with ⌘Z), add a record and a column, live.
+// Leaves out: which filter and sorts run and saving them (the view screen, spec 0020, hands them in), and presence.
 import {
   isEditableHere,
+  queryKey,
   toActorDisplays,
   toFieldAttribute,
   withPendingOptions,
@@ -16,24 +17,23 @@ import {
   type RecordsView,
   type RecordView,
   type SortRule,
+  type ViewQuery,
+  type WindowCount,
 } from '@crm/data';
 import { useLiveStatus, usePendingOptions, useView } from '@crm/data/react';
 import { Badge, Button, Callout, EmptyState, isSystemOnly, Spinner, TopBar, useDelayedLoading, ViewBar } from '@crm/ui';
 import { columnWidthFor, DataGrid, type GridColumn } from '@crm/ui/grid';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArchiveAttributeDialog } from '../settings/ArchiveAttributeDialog.tsx';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { strings as attributeStrings } from '../settings/attribute-strings.ts';
-import { avatarAttribute, listedAttributes, queryOf } from './columns.ts';
+import { avatarAttribute, listedAttributes } from './columns.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
 import { strings } from './strings.ts';
 import { editToast, isClear } from './undo.ts';
 import { runUndo } from './useUndoShortcut.ts';
 import { useCan, WorkspacePage } from './WorkspacePage.tsx';
-
-/** The one view this loop has ("All people"). */
-const ALL = 'all';
 
 /** Props for the records screen: what the object's route loaded through the data layer. */
 export interface RecordsScreenProps {
@@ -41,10 +41,29 @@ export interface RecordsScreenProps {
   readonly object: ObjectSummary;
   readonly attributes: readonly AttributeDefinition[];
   readonly members: readonly MemberSummary[];
-  /** The view the loader warmed, in the table's opening order (`sort`). */
+  /** The records the loader warmed. */
   readonly view: RecordsView;
-  /** The opening order: newest first (spec 0006, AC-57). */
-  readonly sort: SortRule | undefined;
+  /** The question `view` answers (the loader may have warmed another than `query`: the table then asks again). */
+  readonly viewQuery: ViewQuery;
+  /** The question the table runs (spec 0020): the view's effective filter and sorts. */
+  readonly query: ViewQuery;
+  /** A column menu's Sort ascending or descending (spec 0020: it replaces the draft's sorts). */
+  readonly onSort: (rule: SortRule) => void;
+  /** A column menu's Filter: the view opens its filter builder on that column. */
+  readonly onFilter?: (columnId: string) => void;
+  /** The view switcher: the object's views, the one shown, and opening another. */
+  readonly views: readonly { readonly id: string; readonly name: string }[];
+  readonly currentViewId: string;
+  readonly onViewChange?: (viewId: string) => void;
+  /**
+   * The view's Toolbar (its sorts, filters and Save), and any notice under it, given what to say to screen
+   * readers: `announce`'s words for the count, once the rows for a new question are in (never for the first,
+   * nor for others' edits moving the count).
+   */
+  readonly toolbar?: (announced: string | undefined) => ReactNode;
+  readonly announce?: (count: WindowCount) => string | undefined;
+  /** What the table says when the view's filter matches nothing; the object's own empty state otherwise. */
+  readonly filteredEmpty?: ReactNode;
 }
 
 /** A reference value's links, as a list: one link, several, or none. */
@@ -63,9 +82,6 @@ function displayOf(ref: RecordRef, state: NameState): RecordRefDisplay {
   if (state === 'unknown') return { ...ref, name: strings.unavailableRecord, kind: 'other' };
   return state;
 }
-
-/** A sort as one string, so a new object with the same sort is the same order. */
-const sortKey = (sort: SortRule | undefined) => (sort === undefined ? '' : `${sort.attributeId}:${sort.direction}`);
 
 /** Whether a record holds a column's value yet (a column just shown is read for the loaded rows first). */
 const isCellKnown = (row: RecordView, columnId: string) => Object.hasOwn(row.values, columnId);
@@ -128,22 +144,38 @@ function createEditors(
 }
 
 /** One object's page: the TopBar with New <singular>, the ViewBar with Add attribute, and the table. */
-export function RecordsScreen({ slug, object, attributes, members, view: warmed, sort: opening }: RecordsScreenProps) {
+export function RecordsScreen({
+  slug,
+  object,
+  attributes,
+  members,
+  view: warmed,
+  viewQuery,
+  query,
+  onSort,
+  onFilter,
+  views,
+  currentViewId,
+  onViewChange,
+  toolbar,
+  announce,
+  filteredEmpty,
+}: RecordsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
-  // The column menu's sort, for this visit (spec 0006, AC-57): it replaces the order, and #20 saves it with a view.
-  const [sort, setSort] = useState(opening);
-  // The view for that sort: the warmed one until another sort's first rows are in, so the table never blanks.
-  const [shown, setShown] = useState({ key: sortKey(opening), view: warmed, sort: opening });
-  // A column the rows are sorted by left the object (archived here or by someone else, spec 0012): its sort is
-  // refused now, so the table goes back to its opening order and the warmed view, before any read asks again.
-  const isSortGone = (rule: SortRule | undefined) =>
-    rule !== undefined && !attributes.some((attribute) => attribute.id === rule.attributeId);
-  if (!isSortGone(opening) && (isSortGone(sort) || isSortGone(shown.sort))) {
-    setSort(opening);
-    setShown({ key: sortKey(opening), view: warmed, sort: opening });
+  // The question asked now, and the records shown: the warmed ones until another question's first rows are in,
+  // so the table never blanks while a filter or sort changes.
+  const keyOf = (asked: ViewQuery) => queryKey({ ...asked, sorts: asked.sorts ?? [] });
+  const wanted = keyOf(query);
+  const [shown, setShown] = useState({ key: keyOf(viewQuery), view: warmed, query: viewQuery });
+  // The route loaded another view (another view opened, or Retry): it is shown at once.
+  const [warmedFor, setWarmedFor] = useState(warmed);
+  if (warmed !== warmedFor) {
+    setWarmedFor(warmed);
+    setShown({ key: keyOf(viewQuery), view: warmed, query: viewQuery });
   }
-  const wanted = sortKey(sort);
+  // Asks for the wanted records again after their first rows failed to load (the toast's Retry).
+  const [attempt, setAttempt] = useState(0);
   const [layout, setLayout] = useState<{ readonly columns: readonly GridColumn[]; readonly pinnedCount: number }>({
     columns: [],
     pinnedCount: 1,
@@ -174,26 +206,36 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
   useEffect(() => {
     if (shown.key === wanted) return;
     let isCurrent = true;
-    data.records.view(slug, object.id, queryOf(sort), visible).then(
+    let opened: RecordsView | undefined;
+    let isTaken = false;
+    const asked = query;
+    data.records.open(slug, object.id, asked, visible).then(
       (next) => {
-        if (!isCurrent) return;
-        const arrived = { key: wanted, view: next, sort };
-        if (isEditing.current) waiting.current = arrived;
-        else setShown(arrived);
+        opened = next;
+        // Typed past before it even opened: let it go at once.
+        if (!isCurrent) {
+          next.abandon();
+          return;
+        }
+        return next.ready().then(() => {
+          if (!isCurrent) return;
+          isTaken = true;
+          // A view that failed shows its own error state with Retry, under the bars.
+          const arrived = { key: wanted, view: next, query: asked };
+          if (isEditing.current) waiting.current = arrived;
+          else setShown(arrived);
+        });
       },
       () => {
         if (!isCurrent) return;
-        // Back to the order on screen, so choosing that sort again asks again; Retry asks for it now.
-        const failed = sort;
-        setSort(shown.sort);
-        const title = attributes.find((attribute) => attribute.id === failed?.attributeId)?.title ?? '';
+        // The records layer itself didn't load (offline): the rows on screen stay; Retry asks again.
         toasts.toast({
           tone: 'danger',
-          message: strings.sortFailed(title),
+          message: strings.somethingWrong,
           action: {
             label: strings.retry,
             onAction: () => {
-              setSort(failed);
+              setAttempt((count) => count + 1);
             },
           },
         });
@@ -201,14 +243,24 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
     );
     return () => {
       isCurrent = false;
+      // Typed past before it was shown (spec 0020, AC-464): its reads in flight are aborted.
+      if (!isTaken) opened?.abandon();
     };
-    // `visible` is read when the sort changes; a column shown later reaches the view through useView.
+    // `visible` and `query` are read when the question changes; a column shown later reaches the view through useView.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wanted, shown.key, data, slug, object.id]);
+  }, [wanted, shown.key, data, slug, object.id, attempt]);
   const view = shown.view;
   // Another order's first rows are on their way: the old ones stay, and the view bar says it is working.
   const isReordering = useDelayedLoading(shown.key !== wanted);
   const state = useView(view, visible);
+  // The count spoken after a new question's rows are in (spec 0020, AC-487), once per question.
+  const [announced, setAnnounced] = useState<{ readonly key: string; readonly text: string | undefined }>({
+    key: wanted,
+    text: undefined,
+  });
+  if (state.status === 'ready' && shown.key === wanted && announced.key !== wanted) {
+    setAnnounced({ key: wanted, text: announce?.(state.count) });
+  }
   // Paused only while the live connection is down; off (previews) shows nothing.
   const live = useLiveStatus(data.live);
   const memberDisplays = useMemo(() => toActorDisplays(members), [members]);
@@ -277,12 +329,8 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
           </TopBar>
         ),
         viewBar: (
-          <ViewBar
-            views={[{ id: ALL, name: strings.allRecords(object.pluralName) }]}
-            currentViewId={ALL}
-            onViewChange={() => undefined}
-          >
-            {isReordering && <Spinner label={strings.sorting} />}
+          <ViewBar views={views} currentViewId={currentViewId} onViewChange={onViewChange ?? (() => undefined)}>
+            {isReordering && <Spinner label={strings.updating} />}
             {/* In the bar, so the table never moves when the connection drops and comes back. */}
             {live === 'paused' && (
               <Callout placement="bar" isAnnounced>
@@ -296,6 +344,7 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
             )}
           </ViewBar>
         ),
+        ...(toolbar === undefined ? {} : { toolbar: toolbar(announced.text) }),
         body: (
           <>
             <DataGrid<RecordView>
@@ -312,15 +361,16 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
                 const arrived = waiting.current;
                 if (!isOpen && arrived !== undefined) {
                   waiting.current = undefined;
-                  if (arrived.key === sortKey(sort)) setShown(arrived);
+                  if (arrived.key === wanted) setShown(arrived);
                 }
               }}
               onSort={(columnId, direction) => {
-                setSort({ attributeId: columnId, direction });
+                onSort({ attributeId: columnId, direction });
               }}
-              {...(shown.sort === undefined
+              {...(onFilter === undefined ? {} : { onFilter })}
+              {...(shown.query.sorts?.[0] === undefined
                 ? {}
-                : { sort: { columnId: shown.sort.attributeId, direction: shown.sort.direction } })}
+                : { sort: { columnId: shown.query.sorts[0].attributeId, direction: shown.query.sorts[0].direction } })}
               getDisplay={(row, columnId) => {
                 if (actorColumns.has(columnId)) return memberDisplays;
                 if (!referenceColumns.has(columnId)) return undefined;
@@ -379,22 +429,24 @@ export function RecordsScreen({ slug, object, attributes, members, view: warmed,
               {...(state.error === undefined ? {} : { errorText: state.error.message })}
               members={memberDisplays}
               emptyState={
-                <EmptyState
-                  title={strings.emptyTitle(object.pluralName)}
-                  icon={object.icon}
-                  // The top bar's New person is the one primary on the page.
-                  {...(object.access === 'write'
-                    ? {
-                        actions: (
-                          <Button icon="plus" onPress={openCreate}>
-                            {newRecord}
-                          </Button>
-                        ),
-                      }
-                    : {})}
-                >
-                  {strings.emptyText(object.pluralName)}
-                </EmptyState>
+                filteredEmpty ?? (
+                  <EmptyState
+                    title={strings.emptyTitle(object.pluralName)}
+                    icon={object.icon}
+                    // The top bar's New person is the one primary on the page.
+                    {...(object.access === 'write'
+                      ? {
+                          actions: (
+                            <Button icon="plus" onPress={openCreate}>
+                              {newRecord}
+                            </Button>
+                          ),
+                        }
+                      : {})}
+                  >
+                    {strings.emptyText(object.pluralName)}
+                  </EmptyState>
+                )
               }
               {...(focusRow === undefined ? {} : { focusRow })}
               {...(focusColumn === undefined ? {} : { focusColumn })}

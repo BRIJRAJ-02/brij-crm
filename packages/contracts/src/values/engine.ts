@@ -33,6 +33,10 @@ export const ENGINE_REFUSAL_CODES = [
   'JOB_TOO_LARGE',
   // A write that breaks an attribute's rules (spec 0013, AC-254): one refusal per failing rule, each with its ruleId.
   'VALIDATION_FAILED',
+  // Saved views (spec 0020): the filter or sorts were saved by someone else since the draft began; the default
+  // view can't be deleted or made private.
+  'VIEW_CHANGED',
+  'VIEW_IS_DEFAULT',
 ] as const;
 
 /** One of the engine's refusal codes. */

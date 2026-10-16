@@ -120,6 +120,18 @@ export interface Change {
   readonly members: readonly string[];
   /** Background jobs the write started, moved on or ended (spec 0008), each with its starter. */
   readonly jobs: readonly JobChange[];
+  /** Saved views the write made, changed or deleted (spec 0020), private ones included. */
+  readonly views: readonly ViewChange[];
+}
+
+/**
+ * A saved view a write made, changed or deleted (spec 0020), with its object
+ * (or, from #51, its list), so the outbox stores one `views` row per object.
+ */
+export interface ViewChange {
+  readonly viewId: string;
+  readonly objectId?: string;
+  readonly listId?: string;
 }
 
 /** Marks a change `capChange` made: a type only brand, nothing at run time. */
@@ -250,6 +262,7 @@ const LIST_KEYS = [
   'definitions',
   'members',
   'jobs',
+  'views',
 ] as const satisfies readonly (keyof ChangeLists)[];
 
 /**
@@ -361,6 +374,7 @@ export async function runWrite<T>(
           definitions: [] as DefinitionChange[],
           members: [] as string[],
           jobs: [] as JobChange[],
+          views: [] as ViewChange[],
         };
         const context: WriteContext = {
           tx,
@@ -387,6 +401,7 @@ export async function runWrite<T>(
             append(collected.definitions, part.definitions);
             append(collected.members, part.members);
             append(collected.jobs, part.jobs);
+            append(collected.views, part.views);
           },
           async perRecord(step) {
             const marks = LIST_KEYS.map((key) => collected[key].length);
@@ -426,6 +441,8 @@ export async function runWrite<T>(
           members: [...new Set(collected.members)],
           // One entry per job: a slice's batches name the same job again.
           jobs: [...new Map(collected.jobs.map((job) => [job.jobId, job])).values()],
+          // One entry per view: a write that touches a view twice names it once.
+          views: [...new Map(collected.views.map((view) => [view.viewId, view])).values()],
         };
         for (const hook of hooks) await hook(change, tx);
         return { result, change };

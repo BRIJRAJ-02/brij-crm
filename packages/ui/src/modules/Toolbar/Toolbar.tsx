@@ -154,17 +154,25 @@ export interface ToolbarProps {
   readonly children: ReactNode;
   /** Only while the view has unsaved changes: Discard changes (ghost), then Save (split primary). */
   readonly end?: ReactNode;
+  /**
+   * What the view's condition now matches, for screen readers only ("124
+   * people match"): spoken when it changes, never shown.
+   */
+  readonly status?: string;
 }
 
 /**
  * The size-toolbar tall bar that states how the view is shaped. A React Aria
  * toolbar: Tab enters it once, and the arrow keys move between its controls.
  */
-export function Toolbar({ label, children, end }: ToolbarProps) {
+export function Toolbar({ label, children, end, status }: ToolbarProps) {
   return (
     <AriaToolbar className={styles.toolbar} aria-label={label}>
       {children}
       {end !== undefined && <div className={styles.end}>{end}</div>}
+      <VisuallyHidden>
+        <span role="status">{status ?? ''}</span>
+      </VisuallyHidden>
     </AriaToolbar>
   );
 }
@@ -178,12 +186,15 @@ export interface SortChipProps {
   readonly more?: number;
   /** Opens the sort builder. */
   readonly onPress?: () => void;
+  /** The button, for a popover the screen opens from it (spec 0020: the sort builder). */
+  readonly ref?: Ref<HTMLButtonElement>;
 }
 
 /** The toolbar's statement of the sort: "Sorted by Funding raised", with its direction's arrow. A button that opens the sort builder. */
-export function SortChip({ attribute, direction, more = 0, onPress }: SortChipProps) {
+export function SortChip({ attribute, direction, more = 0, onPress, ref }: SortChipProps) {
   return (
     <AriaButton
+      ref={ref}
       className={styles.sort}
       aria-label={strings.sortName(attribute, direction, more)}
       {...(onPress === undefined ? {} : { onPress })}

@@ -36,4 +36,8 @@ export const strings = {
   amountRange: 'Enter a whole number from 1 to 999.',
   noFilters: 'No filters yet',
   noFiltersText: 'Add a filter to narrow this view.',
+  /** A group of conditions as one chip in the toolbar. */
+  groupChip: (count: number) => (count === 1 ? '1 condition' : `${String(count)} conditions`),
+  /** A condition whose attribute the view can't show. */
+  unknownAttribute: 'Unavailable field',
 } as const;

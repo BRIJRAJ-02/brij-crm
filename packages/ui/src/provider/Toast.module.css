@@ -55,6 +55,10 @@
     color: var(--danger);
   }
 
+  .icon[data-tone='info'] {
+    color: var(--dot-blue);
+  }
+
   .content {
     flex: 1;
     min-inline-size: 0;

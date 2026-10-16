@@ -30,6 +30,8 @@ import { createTrashedLookups, type TrashedSource } from './records/trashed.ts';
 import { type DataFault, isUnseenFault, parseRetryAfter, toDataError, withRetryAfter } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
+import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
+import { createViewsStore, type SavedViewSource, type SaveQueryInput, type ViewsListSource } from './views/store.ts';
 import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
 import { createLiveRouter } from './live/router.ts';
@@ -118,6 +120,26 @@ export {
 } from './errors.ts';
 export type { FetchLike } from './fetch.ts';
 export type { JobsScope, JobsSnapshot, JobsView, TestJobSettings } from './jobs/store.ts';
+export type { View, ViewConfig, ViewSummary, ViewColumn } from '@crm/contracts';
+export {
+  CREATED_AT_SLUG,
+  effectiveColumns,
+  effectiveQuery,
+  isSortable,
+  queryKey,
+  type EffectiveColumn,
+  type EffectiveQuery,
+  type FarAttributes,
+  type ViewAttribute,
+} from '@crm/contracts/views';
+export { DRAFT_LINK_MAX, FILTER_EDIT_MS, type DraftQuery } from './views/draft.ts';
+export type {
+  SavedViewSnapshot,
+  SavedViewSource,
+  SaveQueryInput,
+  ViewsListSnapshot,
+  ViewsListSource,
+} from './views/store.ts';
 export { isEditableHere, toActorDisplays, toFieldAttribute, type FieldAttributeShape } from './fields.ts';
 export { createIdMinter, type IdSources } from './ids.ts';
 export type { LiveStatus } from './live/live.ts';
@@ -473,6 +495,7 @@ export function createDataLayer({
       layer.clear();
     });
     jobs.clear();
+    views.clear();
     void activity?.then((feeds) => {
       feeds.clear();
     });
@@ -857,8 +880,12 @@ export function createDataLayer({
   router.on('jobs', (workspace, event) => {
     jobs.changed(workspace, event);
   });
+  router.on('views', (workspace, event) => {
+    views.changed(workspace, event);
+  });
   router.onResync((workspace) => {
     jobs.resync(workspace);
+    views.resync(workspace);
     void records?.then((layer) => {
       layer.reload(workspace);
     });
@@ -942,6 +969,33 @@ export function createDataLayer({
       ),
     spread,
     onFinished: onJobFinished,
+  });
+
+  // Saved views (spec 0020): one store for the app, a list per object and a body per view.
+  const views = createViewsStore({
+    api: {
+      list: (input) => beforeRead(input.workspace).then(() => call((options) => api.views.list(input, options))),
+      get: (input) => beforeRead(input.workspace).then(() => call((options) => api.views.get(input, options))),
+      saveQuery: (input) =>
+        call((options) =>
+          api.views.saveQuery(
+            {
+              workspace: input.workspace,
+              viewId: input.viewId,
+              ...(input.filter === undefined ? {} : { filter: input.filter }),
+              sorts: [...input.sorts],
+              baseQueryVersion: input.baseQueryVersion,
+              ...(input.force === undefined ? {} : { force: input.force }),
+              mutationId: input.mutationId,
+            },
+            options,
+          ),
+        ),
+    },
+    mintId,
+    mutations,
+    watch,
+    random,
   });
 
   /**
@@ -1827,6 +1881,30 @@ export function createDataLayer({
        * Answers whether it landed.
        */
       confirm: (workspace: string, jobId: string): Promise<boolean> => jobs.confirm(workspace, jobId),
+    },
+    views: {
+      /**
+       * An object's saved views in switcher order (spec 0020), the same
+       * source for every screen, live while a screen retains it
+       * (`useViewsList`).
+       */
+      list: (workspace: string, objectId: string): ViewsListSource => views.list(workspace, objectId),
+      /** One view whole, the same source for every screen, live while retained (`useSavedView`). */
+      get: (workspace: string, viewId: string): SavedViewSource => views.get(workspace, viewId),
+      /**
+       * Saves a draft as the view's filter and sorts for everyone (AC-468),
+       * waiting for the server. Rejects with a `DataError`: `VIEW_CHANGED`
+       * when someone saved since `baseQueryVersion` (send again with `force`
+       * to replace theirs), `FORBIDDEN` on a locked view, `FILTER_INVALID`.
+       */
+      saveQuery: (workspace: string, viewId: string, input: SaveQueryInput) =>
+        views.saveQuery(workspace, viewId, input),
+      /** A draft's URL text (base64url of its canonical JSON), or undefined past `DRAFT_LINK_MAX`. */
+      draftParam: (query: DraftQuery): string | undefined => draftParam(query),
+      /** A link's draft, checked (loads the schemas on first use), or undefined when it can't be read. */
+      readDraft: (text: string): Promise<DraftQuery | undefined> => readDraft(text),
+      /** Whether two queries ask the same thing. */
+      isSameQuery: (a: DraftQuery, b: DraftQuery): boolean => isSameQuery(a, b),
     },
     live: {
       /**

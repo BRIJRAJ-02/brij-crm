@@ -47,6 +47,7 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only); `ico
 
 - `Tab` and `Shift Tab` reach it (not when disabled).
 - `Enter` and `Space` press it. On a `ToggleButton` they toggle it.
+- `autoFocus` gives it focus when it mounts: the safe choice a dialog opens on (Cancel beside Replace, spec 0020), since a dialog otherwise focuses itself and the first Tab lands on its close button.
 - On a `SplitButton`, `Tab` moves from the action to the chevron; `Enter`, `Space` or `↓` opens the menu, `Esc` closes it and returns focus to the chevron. Disabled or pending, both halves wait together.
 
 ## Differences from the artifact

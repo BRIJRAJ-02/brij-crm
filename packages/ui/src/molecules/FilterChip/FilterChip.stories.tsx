@@ -54,3 +54,17 @@ export const Kinds: Story = {
     </Stage>
   ),
 };
+
+/** No value part: a condition that takes none ("is empty"), and a group with no operator either. */
+export const WithoutValue: Story = {
+  render: () => (
+    <Stage>
+      <FilterChip icon="calendar" attribute={['Close date']} operator="is empty" hasValue={false} />
+      <FilterChip icon="list-filter" attribute={['2 conditions']} hasValue={false} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByText('Choose a value')).not.toBeInTheDocument();
+    await expect(canvas.getByRole('group', { name: 'Filter: 2 conditions' })).toBeInTheDocument();
+  },
+};

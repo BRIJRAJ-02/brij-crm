@@ -20,6 +20,7 @@ import {
   type RelativeRange,
   type SortRule,
 } from '@crm/contracts/values';
+import { isSortable } from '@crm/contracts/views';
 import { isUuid, uuidArray, uuidList } from '../ids.ts';
 import { refuse } from '../refusals.ts';
 import { hasSortKey } from '../sort-keys.ts';
@@ -841,6 +842,10 @@ export function compileSorts(context: CompileContext, level: Level, sorts: reado
   if (!parsed.success) invalid(parsed.error.issues[0]?.message ?? 'Those sorts are not valid.');
   return parsed.data.flatMap((rule, index): readonly SortKey[] => {
     const attribute = attributeFor(context, rule.attributeId);
+    // The one rule for what sorts (spec 0020, AC-465): SortBuilder lists and the view config check accept the same.
+    if (!isSortable({ type: attribute.type, isSystem: attribute.systemColumn !== null })) {
+      invalid(`A ${attribute.type.replaceAll('_', ' ')} attribute can't be sorted.`);
+    }
     const alias = `k${String(index)}`;
     const { direction } = rule;
     const one = (join: SQL, kind: KeyKind) => [{ ...keysFrom(alias, direction, [kind])[0], join } as SortKey];

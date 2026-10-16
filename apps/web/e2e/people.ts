@@ -68,7 +68,7 @@ export async function newWorkspace(page: Page, email: string, slug: string): Pro
   await page.getByLabel('Your name').fill('Ada Lovelace');
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people$`), { timeout: WORKSPACE_MADE_MS });
+  await expect(page).toHaveURL(objectUrl(slug, 'people'), { timeout: WORKSPACE_MADE_MS });
   return code;
 }
 
@@ -80,7 +80,13 @@ export async function signInAgain(page: Page, email: string, path: string, seen:
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await expect(page).toHaveURL(/\/verify/);
   await page.getByLabel('Code').fill(await codeFor(page.request, email, seen));
-  await expect(page).toHaveURL(new RegExp(`${path}$`));
+  // An object's address opens its default view (spec 0020): the address grows its view.
+  await expect(page).toHaveURL(new RegExp(`${path}(/views/[0-9a-f-]{36})?$`));
+}
+
+/** An object's page: its address, or the view it opened (spec 0020, AC-462). */
+export function objectUrl(slug: string, object: string): RegExp {
+  return new RegExp(`/w/${slug}/objects/${object}/views/[0-9a-f-]{36}$`);
 }
 
 /**

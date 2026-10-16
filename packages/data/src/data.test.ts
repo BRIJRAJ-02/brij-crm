@@ -17,6 +17,8 @@ import {
   type RelationshipView,
   type Usage,
   type TrashedRecord,
+  type View,
+  type ViewsList,
 } from '@crm/contracts';
 import { implement, ORPCError } from '@orpc/server';
 import { RPCHandler } from '@orpc/server/fetch';
@@ -130,6 +132,10 @@ interface Behaviour {
   optionWrite: () => AttributeOption;
   /** What both relationship writes answer (spec 0014). */
   relationshipWrite: () => RelationshipView;
+  /** Saved views (spec 0020): an object's list, one view, a save's answer. */
+  viewsList: (objectId: string) => ViewsList;
+  viewGet: (viewId: string) => View;
+  viewSave: (input: { readonly viewId: string; readonly baseQueryVersion: number; readonly force?: boolean }) => View;
 }
 
 const unauthenticated = () => new ORPCError('UNAUTHENTICATED', { status: 401, message: 'Sign in to continue.' });
@@ -167,6 +173,9 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     trashed: notServed,
     optionWrite: notServed,
     relationshipWrite: notServed,
+    viewsList: notServed,
+    viewGet: notServed,
+    viewSave: notServed,
     ...overrides,
   };
   const calls: string[] = [];
@@ -211,6 +220,15 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       }),
     },
     usage: { get: os.usage.get.handler(() => behaviour.usage()) },
+    views: {
+      list: os.views.list.handler(({ input }) => behaviour.viewsList(input.objectId)),
+      get: os.views.get.handler(({ input }) => behaviour.viewGet(input.viewId)),
+      saveQuery: os.views.saveQuery.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        sent.push(input);
+        return behaviour.viewSave(input);
+      }),
+    },
     attributes: {
       list: os.attributes.list.handler(() => behaviour.attributes()),
       create: os.attributes.create.handler(({ input }) => {
@@ -2049,5 +2067,99 @@ describe('options (spec 0012, milestone 3)', () => {
       options: [...(field.options ?? []), { id: 'new', label: 'Gold', hue: 'red' as const, archived: false }],
     };
     expect(withPendingOptions(listed, 'acme', pending)).toBe(listed);
+  });
+});
+
+describe('views (spec 0020)', () => {
+  const VIEW_ID = '0199a6f2-0000-7000-8000-0000000000c1';
+  const savedView = (queryVersion: number, sorts: View['config']['sorts'] = []): View => ({
+    id: VIEW_ID,
+    objectId: PEOPLE.id,
+    name: 'All people',
+    kind: 'table',
+    visibility: 'workspace',
+    position: 0,
+    isDefault: true,
+    isLocked: false,
+    version: queryVersion,
+    config: { columns: [], showNewAttributes: true, pinnedCount: 1, sorts },
+    queryVersion,
+  });
+
+  it('lists an object’s views and reads one, then saves a query with one mutation id and reads the list again', async () => {
+    let lists = 0;
+    const api = fakeApi({
+      viewsList: () => {
+        lists += 1;
+        return { views: [savedView(lists)], defaultViewId: VIEW_ID };
+      },
+      viewGet: () => savedView(1),
+      viewSave: (input) => savedView(input.baseQueryVersion + 1, [{ attributeId: TITLE.id, direction: 'ascending' }]),
+    });
+    const { data } = layer(api);
+    const list = data.views.list('acme', PEOPLE.id);
+    list.retain();
+    await list.ready();
+    expect(list.getSnapshot()).toMatchObject({ status: 'ready', defaultViewId: VIEW_ID, views: [{ id: VIEW_ID }] });
+    const body = data.views.get('acme', VIEW_ID);
+    await body.ready();
+    expect(body.getSnapshot()).toMatchObject({ status: 'ready', view: { queryVersion: 1 } });
+    const saved = await data.views.saveQuery('acme', VIEW_ID, {
+      sorts: [{ attributeId: TITLE.id, direction: 'ascending' }],
+      baseQueryVersion: 1,
+    });
+    expect(saved.queryVersion).toBe(2);
+    expect(body.getSnapshot().view?.queryVersion).toBe(2);
+    expect(api.mutationIds).toHaveLength(1);
+    await expect.poll(() => lists).toBe(2);
+  });
+
+  it('hands a refused save back as a DataError, and reads an unknown view as not found', async () => {
+    const api = fakeApi({
+      viewGet: () => {
+        throw new ORPCError('NOT_FOUND', { status: 404, message: "This view doesn't exist or isn't shared with you." });
+      },
+      viewSave: () => {
+        throw new ORPCError('VIEW_CHANGED', {
+          status: 409,
+          message: 'Bea changed this view’s filters since you started.',
+        });
+      },
+    });
+    const { data } = layer(api);
+    await expect(data.views.saveQuery('acme', VIEW_ID, { sorts: [], baseQueryVersion: 1 })).rejects.toMatchObject({
+      code: 'VIEW_CHANGED',
+      message: 'Bea changed this view’s filters since you started.',
+    });
+    const body = data.views.get('acme', VIEW_ID);
+    await body.ready();
+    expect(body.getSnapshot().status).toBe('not-found');
+  });
+
+  it('writes a draft for the URL and reads it back, refusing a link that isn’t one', async () => {
+    const { data } = layer(fakeApi());
+    const query = {
+      filter: { conjunction: 'and' as const, conditions: [{ attributeId: TITLE.id, operator: 'is_empty' as const }] },
+      sorts: [{ attributeId: TITLE.id, direction: 'descending' as const }],
+    };
+    const text = data.views.draftParam(query) ?? '';
+    expect(await data.views.readDraft(text)).toEqual(query);
+    expect(await data.views.readDraft('bm90IGEgcXVlcnk')).toBeUndefined();
+    expect(await data.views.readDraft('%%%')).toBeUndefined();
+    expect(data.views.isSameQuery({ sorts: [] }, { filter: { conjunction: 'or', conditions: [] }, sorts: [] })).toBe(
+      true,
+    );
+    const long = {
+      filter: {
+        conjunction: 'and' as const,
+        conditions: Array.from({ length: 60 }, (_, at) => ({
+          attributeId: TITLE.id,
+          operator: 'contains' as const,
+          value: `a longer phrase to search for, number ${String(at)}`,
+        })),
+      },
+      sorts: [],
+    };
+    expect(data.views.draftParam(long)).toBeUndefined();
   });
 });

@@ -202,3 +202,19 @@ export const TopBarArrives: Story = {
     await expect(arrived).toHaveFocus();
   },
 };
+
+/** What the filter matches, spoken to screen readers and never shown (spec 0020, AC-487). */
+export const MatchStatus: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => (
+    <Toolbar label="View options" status="124 people match">
+      <SortChip attribute="Created at" direction="descending" />
+      <Button variant="dashed" icon="list-filter">
+        Filter
+      </Button>
+    </Toolbar>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('status')).toHaveTextContent('124 people match');
+  },
+};

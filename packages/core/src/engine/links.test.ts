@@ -1209,6 +1209,7 @@ describe('deletion', () => {
       coarseObjects: [],
       members: [],
       jobs: [],
+      views: [],
       values: ids.slice(half).map((ownerId) => ({
         ownerId,
         ownerKind: 'record' as const,

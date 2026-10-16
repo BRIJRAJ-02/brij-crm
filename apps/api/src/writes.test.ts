@@ -38,6 +38,8 @@ const READS: ReadonlySet<string> = new Set([
   'jobs.list',
   'jobs.get',
   'usage.get',
+  'views.list',
+  'views.get',
 ]);
 
 let db: Database;
@@ -331,6 +333,19 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
   'objects.restore': async (m, mutationId) => {
     await m.client.objects.restore({ workspace: m.slug, objectId: m.people.id, mutationId });
     return [{ kind: 'definitions', object_id: m.people.id, attribute_ids: [], mutation_id: mutationId }];
+  },
+  // Saved views (spec 0020): one views row for the view's object, naming the view.
+  'views.saveQuery': async (m, mutationId) => {
+    const { views } = await m.client.views.list({ workspace: m.slug, objectId: m.people.id });
+    const viewId = views[0]?.id ?? '';
+    await m.client.views.saveQuery({
+      workspace: m.slug,
+      viewId,
+      sorts: [{ attributeId: m.attribute('name'), direction: 'ascending' }],
+      baseQueryVersion: 1,
+      mutationId,
+    });
+    return [{ kind: 'views', object_id: m.people.id, item_ids: [viewId], mutation_id: mutationId }];
   },
   // Background jobs (spec 0008): one jobs row per write, naming the job.
   'jobs.startTest': async (m, mutationId) => {
