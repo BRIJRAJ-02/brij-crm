@@ -74,6 +74,16 @@ export interface JobChange {
 }
 
 /**
+ * A task a write made or changed (spec 0019): the task, and every record it
+ * linked before or after the write, so the outbox stores one `tasks` row and
+ * each of those records' screens reads its tasks again.
+ */
+export interface TaskChange {
+  readonly taskId: string;
+  readonly recordIds: readonly string[];
+}
+
+/**
  * Everything one write landed or made visible or invisible, as the hooks see
  * it. Records and entries that only appear or disappear (a record's entries
  * on its delete, the reference values pointing at it) are listed too, so a
@@ -122,6 +132,8 @@ export interface Change {
   readonly jobs: readonly JobChange[];
   /** Saved views the write made, changed or deleted (spec 0020), private ones included. */
   readonly views: readonly ViewChange[];
+  /** Tasks the write made or changed (spec 0019), each with every record linked before or after. */
+  readonly tasks: readonly TaskChange[];
 }
 
 /**
@@ -263,6 +275,7 @@ const LIST_KEYS = [
   'members',
   'jobs',
   'views',
+  'tasks',
 ] as const satisfies readonly (keyof ChangeLists)[];
 
 /**
@@ -375,6 +388,7 @@ export async function runWrite<T>(
           members: [] as string[],
           jobs: [] as JobChange[],
           views: [] as ViewChange[],
+          tasks: [] as TaskChange[],
         };
         const context: WriteContext = {
           tx,
@@ -402,6 +416,7 @@ export async function runWrite<T>(
             append(collected.members, part.members);
             append(collected.jobs, part.jobs);
             append(collected.views, part.views);
+            append(collected.tasks, part.tasks);
           },
           async perRecord(step) {
             const marks = LIST_KEYS.map((key) => collected[key].length);
@@ -443,6 +458,7 @@ export async function runWrite<T>(
           jobs: [...new Map(collected.jobs.map((job) => [job.jobId, job])).values()],
           // One entry per view: a write that touches a view twice names it once.
           views: [...new Map(collected.views.map((view) => [view.viewId, view])).values()],
+          tasks: [...collected.tasks],
         };
         for (const hook of hooks) await hook(change, tx);
         return { result, change };

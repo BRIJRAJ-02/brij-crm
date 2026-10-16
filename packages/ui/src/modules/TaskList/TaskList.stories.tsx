@@ -4,6 +4,9 @@ import { expect, fn, waitFor } from 'storybook/test';
 import { arraySource, type ListSource } from '../../lib/list-source.ts';
 import { ADA, SAMPLE_TASKS } from '../../workbench/record-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { Button } from '../../atoms/Button/Button.tsx';
+import { Disclosure } from '../../molecules/Disclosure/Disclosure.tsx';
+import { Field } from '../../molecules/Field/Field.tsx';
 import type { LoadStatus } from '../../lib/load-status.ts';
 import { TaskList, type TaskEntry } from './TaskList.tsx';
 
@@ -147,6 +150,155 @@ export const LongList: Story = {
   },
 };
 
+/** The first linked record as a chip and "+2" for the others, the field set's one row of records: it opens them all. */
+export const ManyRecords: Story = {
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Show 2 more' }));
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).not.toBeNull());
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+  },
+};
+
+/** A task just made here carries the "New" badge until its list settles. */
+export const NewTask: Story = {
+  render: function Render() {
+    return (
+      <Stage height="grid">
+        <TaskList
+          label="Tasks"
+          tasks={arraySource(SAMPLE_TASKS, (task) => task.id)}
+          newIds={new Set(['t4'])}
+          onToggle={() => undefined}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('New')).toBeInTheDocument();
+  },
+};
+
+/** Runs of tasks under headings (My tasks' Overdue, Today, Upcoming); the arrows skip the headings. */
+export const Sections: Story = {
+  render: function Render() {
+    const sectionOf = (task: TaskEntry) =>
+      task.dueOn === undefined
+        ? { id: 'none', title: 'No date' }
+        : task.dueOn < '2026-10-08'
+          ? { id: 'overdue', title: 'Overdue' }
+          : task.dueOn === '2026-10-08'
+            ? { id: 'today', title: 'Today' }
+            : { id: 'upcoming', title: 'Upcoming' };
+    const open = SAMPLE_TASKS.filter((task) => !task.isDone);
+    return (
+      <Stage height="grid">
+        <TaskList
+          label="My tasks"
+          tasks={arraySource(open, (task) => task.id)}
+          sectionOf={sectionOf}
+          onToggle={() => undefined}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByRole('rowheader', { name: 'Overdue' })).toBeInTheDocument();
+    await expect(canvas.getByRole('rowheader', { name: 'Upcoming' })).toBeInTheDocument();
+    await userEvent.tab();
+    await waitFor(() => expect(canvas.getByRole('row', { name: /Send the order form/ })).toHaveFocus());
+    await userEvent.keyboard('{ArrowDown}');
+    await waitFor(() => expect(canvas.getByRole('row', { name: /Book the security review/ })).toHaveFocus());
+    await userEvent.keyboard('{ArrowDown}');
+    await waitFor(() => expect(canvas.getByRole('row', { name: /Prepare the renewal deck/ })).toHaveFocus());
+  },
+};
+
+/** Drawn in place on Overview: a few rows, no scroll of its own. */
+export const Inline: Story = {
+  render: function Render() {
+    return (
+      <Stage>
+        <TaskList
+          label="Open tasks"
+          layout="inline"
+          tasks={arraySource(
+            SAMPLE_TASKS.filter((task) => !task.isDone),
+            (task) => task.id,
+          )}
+          onToggle={() => undefined}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByRole('row')).toHaveLength(4);
+  },
+};
+
+/** An empty list in a screen's own words. */
+export const EmptyOwnWords: Story = {
+  render: function Render() {
+    return (
+      <Stage height="grid">
+        <TaskList
+          label="Tasks"
+          tasks={arraySource([], (task: TaskEntry) => task.id)}
+          emptyTitle="No open tasks. Add one above."
+          onToggle={() => undefined}
+        />
+      </Stage>
+    );
+  },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('No open tasks. Add one above.')).toBeInTheDocument();
+  },
+};
+
+/**
+ * A record's Tasks tab: the quick add above the open tasks (it stays when the
+ * list is empty), and the Completed part under them, drawn in place.
+ */
+export const WithQuickAdd: Story = {
+  render: function Render() {
+    const open = SAMPLE_TASKS.filter((task) => !task.isDone);
+    const done = SAMPLE_TASKS.filter((task) => task.isDone);
+    return (
+      <Stage height="grid">
+        <TaskList
+          label="Tasks"
+          tasks={arraySource(open, (task) => task.id)}
+          onToggle={() => undefined}
+          toolbar={
+            <>
+              <Field label="Add a task" isLabelHidden placeholder="Add a task and press Enter" maxLength={2000} />
+              <Button>New task</Button>
+            </>
+          }
+          footer={
+            <Disclosure title="Completed" count={done.length}>
+              <TaskList
+                label="Completed"
+                layout="inline"
+                maxRows={1000}
+                tasks={arraySource(done, (task) => task.id)}
+                onToggle={() => undefined}
+              />
+            </Disclosure>
+          }
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByRole('textbox', { name: 'Add a task' })).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: /Completed/ }));
+    await waitFor(() => expect(canvas.getByRole('grid', { name: 'Completed' })).toBeInTheDocument());
+  },
+};
+
 /** No tasks yet. */
 export const Empty: Story = {
   args: { isEmpty: true },
@@ -213,5 +365,136 @@ export const TickKeepsTheRightRow: Story = {
     await waitFor(() => expect(rows()).toHaveLength(3));
     await expect(rows()[0]).toHaveTextContent('Book the security review');
     await expect(canvas.getByRole('checkbox', { name: /Book the security review/ })).not.toBeChecked();
+  },
+};
+
+/** In place (Overview), still loading: skeleton rows after the loading delay. */
+export const InlineLoading: Story = {
+  render: function Render() {
+    return (
+      <Stage>
+        <TaskList
+          label="Open tasks"
+          layout="inline"
+          tasks={arraySource([], (task: TaskEntry) => task.id)}
+          status="loading"
+          onToggle={() => undefined}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Loading tasks')).toBeInTheDocument();
+  },
+};
+
+/** In place, with nothing open, in the screen's own words. */
+export const InlineEmpty: Story = {
+  render: function Render() {
+    return (
+      <Stage>
+        <TaskList
+          label="Open tasks"
+          layout="inline"
+          tasks={arraySource([], (task: TaskEntry) => task.id)}
+          emptyTitle="No open tasks."
+          onToggle={() => undefined}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('No open tasks.')).toBeInTheDocument();
+  },
+};
+
+/** In place, failed, with Try again. */
+export const InlineFailed: Story = {
+  args: { onRetry: fn() },
+  render: function Render(args) {
+    return (
+      <Stage>
+        <TaskList
+          label="Open tasks"
+          layout="inline"
+          tasks={arraySource([], (task: TaskEntry) => task.id)}
+          status="error"
+          onToggle={() => undefined}
+          {...(args.onRetry === undefined ? {} : { onRetry: args.onRetry })}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Try again' }));
+    await expect(args.onRetry).toHaveBeenCalled();
+  },
+};
+
+/**
+ * In place with more waiting: "Show more" under the rows reads the next page
+ * (the Completed part); when the last page lands it goes, and focus moves to
+ * the last row rather than the page.
+ */
+export const ShowMore: Story = {
+  args: { onAction: fn() },
+  render: function Render() {
+    const [shown, setShown] = useState(3);
+    return (
+      <Stage>
+        <TaskList
+          label="Completed"
+          layout="inline"
+          maxRows={1000}
+          tasks={arraySource(SAMPLE_TASKS.slice(0, shown), (task) => task.id)}
+          {...(shown < SAMPLE_TASKS.length
+            ? {
+                onShowMore: () => {
+                  setShown(SAMPLE_TASKS.length);
+                },
+              }
+            : {})}
+          onToggle={() => undefined}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getAllByRole('row')).toHaveLength(3);
+    canvas.getByRole('button', { name: 'Show more' }).focus();
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Show more' })).toHaveFocus());
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(canvas.getAllByRole('row')).toHaveLength(SAMPLE_TASKS.length));
+    await waitFor(() => expect(canvas.getAllByRole('row').at(-1)).toHaveFocus());
+  },
+};
+
+/** Sections with rows still loading: a loading row stays in the run it follows. */
+export const SectionsLoading: Story = {
+  render: function Render() {
+    const open = SAMPLE_TASKS.filter((task) => !task.isDone);
+    const source = {
+      count: open.length + 2,
+      getItem: (index: number) => open[index],
+      getKey: (task: TaskEntry) => task.id,
+    };
+    return (
+      <Stage height="grid">
+        <TaskList
+          label="My tasks"
+          tasks={source}
+          sectionOf={(task) =>
+            task.dueOn !== undefined && task.dueOn < '2026-10-08'
+              ? { id: 'overdue', title: 'Overdue' }
+              : { id: 'upcoming', title: 'Upcoming' }
+          }
+          onToggle={() => undefined}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('rowheader', { name: 'Overdue' })).toBeInTheDocument();
+    await expect(canvas.getByRole('rowheader', { name: 'Upcoming' })).toBeInTheDocument();
   },
 };

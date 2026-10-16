@@ -3,6 +3,7 @@ import { FieldSurfaces } from '../../workbench/FieldSurfaces/FieldSurfaces.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
 import { AttributeEditor } from '../AttributeEditor.tsx';
+import { useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
 
 const sample = FIELD_SAMPLES.date;
@@ -44,5 +45,30 @@ export const Editor: Story = {
     await userEvent.tab();
     await waitFor(() => expect(args.onCommit).toHaveBeenCalledWith('2026-10-20'));
     await expect(args.onCommit).toHaveBeenCalledTimes(1);
+  },
+};
+
+/** The value changes from outside (someone else's edit, a refusal putting it back): the field shows it. */
+export const ValueFromOutside: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: function Render(args) {
+    const [value, setValue] = useState<string | null>('2026-10-15');
+    return (
+      <Stage width="narrow">
+        <AttributeEditor {...args} value={value} />
+        <button
+          type="button"
+          onClick={() => {
+            setValue('2026-12-25');
+          }}
+        >
+          Change from outside
+        </button>
+      </Stage>
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Change from outside' }));
+    await waitFor(() => expect(canvas.getAllByRole('spinbutton', { name: /month/i })[0]).toHaveTextContent('12'));
   },
 };

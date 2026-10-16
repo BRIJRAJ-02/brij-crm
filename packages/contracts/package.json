@@ -12,6 +12,7 @@
     "./slugs": "./src/values/slugs.ts",
     "./picker": "./src/values/picker.ts",
     "./activity-keys": "./src/activity-keys.ts",
+    "./task-limits": "./src/task-limits.ts",
     "./monitoring": "./src/monitoring/index.ts",
     "./events": "./src/monitoring/events.ts",
     "./views": "./src/view-model.ts"

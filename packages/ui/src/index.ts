@@ -70,6 +70,7 @@ export type {
   TextContext,
   TextRefusal,
 } from './fields/types.ts';
+export type { ObjectSwitcher, SearchObject } from './fields/ReferencePicker.tsx';
 export { isRefusal } from './fields/values.ts';
 export { HUES, type Hue } from './hue.ts';
 export { arraySource, type ListRange, type ListSource } from './lib/list-source.ts';
@@ -241,7 +242,13 @@ export {
 } from './modules/SettingsLayout/SettingsLayout.tsx';
 export { SignInForm, type SignInFormProps, type SignInStatus } from './modules/SignInForm/SignInForm.tsx';
 export { SortBuilder, type SortBuilderProps } from './modules/SortBuilder/SortBuilder.tsx';
-export { TaskList, type TaskEntry, type TaskListProps } from './modules/TaskList/TaskList.tsx';
+export {
+  TaskList,
+  type TaskEntry,
+  type TaskListLayout,
+  type TaskListProps,
+  type TaskSection,
+} from './modules/TaskList/TaskList.tsx';
 export { VerifyEmail, type VerifyEmailProps } from './modules/VerifyEmail/VerifyEmail.tsx';
 export { ViewSettings, type ViewField, type ViewSettingsProps } from './modules/ViewSettings/ViewSettings.tsx';
 export {

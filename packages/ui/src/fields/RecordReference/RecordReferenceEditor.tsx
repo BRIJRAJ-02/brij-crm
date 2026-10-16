@@ -18,12 +18,20 @@ export function RecordReferenceEditor({
   error,
   autoOpen = false,
   startText,
+  objectSwitcher,
 }: EditorProps<'record_reference'>) {
   const displays = asList<RecordRefDisplay>(display);
   const [chosen, setChosen] = useState<readonly (typeof displays)[number][]>(() =>
     asList<RecordReferenceValue>(value).map((record) => recordDisplayOf(record, displays)),
   );
   const [message, setMessage] = useState<string | undefined>(undefined);
+  // A value changed from outside (live, or the screen refusing a pick) shows: the chips follow it.
+  const incoming = JSON.stringify(value ?? null);
+  const [shownValue, setShownValue] = useState(incoming);
+  if (incoming !== shownValue) {
+    setShownValue(incoming);
+    setChosen(asList<RecordReferenceValue>(value).map((record) => recordDisplayOf(record, displays)));
+  }
   const shown = message ?? error;
   return (
     <ReferencePicker<RecordRefDisplay>
@@ -34,9 +42,11 @@ export function RecordReferenceEditor({
       isCompact={isCompactSurface(surface)}
       isOpenAtStart={autoOpen}
       isInline={surface === 'cell'}
+      showLabel={surface === 'form'}
       {...(startText === undefined ? {} : { startQuery: startText })}
       {...(onSearch === undefined ? {} : { onSearch })}
       {...(shown === undefined ? {} : { error: shown })}
+      {...(objectSwitcher === undefined ? {} : objectSwitcher)}
       onChange={(next) => {
         const records = next.map((item) => ({ objectId: item.objectId, recordId: item.recordId }));
         const result = toCommittable<'record_reference'>(

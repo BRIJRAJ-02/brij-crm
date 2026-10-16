@@ -11,6 +11,7 @@ import { recordsContract } from './records.ts';
 import { relationshipsContract } from './relations.ts';
 import { systemContract } from './system.ts';
 import { trashContract } from './trash.ts';
+import { tasksContract } from './tasks.ts';
 import { usageContract } from './usage.ts';
 import { viewsContract } from './views.ts';
 import { workspacesContract } from './workspaces.ts';
@@ -31,6 +32,7 @@ export * from './records.ts';
 export * from './relations.ts';
 export * from './system.ts';
 export * from './trash.ts';
+export * from './tasks.ts';
 export * from './usage.ts';
 export * from './view-model.ts';
 export * from './views.ts';
@@ -60,4 +62,5 @@ export const contract = {
   usage: usageContract,
   views: viewsContract,
   trash: trashContract,
+  tasks: tasksContract,
 };

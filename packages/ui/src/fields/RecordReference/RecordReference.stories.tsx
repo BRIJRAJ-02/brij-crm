@@ -5,6 +5,7 @@ import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES, SAMPLE_COMPANIES } from '../../workbench/field-samples.ts';
 import { SAMPLE_IDS } from '../../workbench/sample-ids.ts';
 import { AttributeEditor } from '../AttributeEditor.tsx';
+import { useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
 
 const sample = FIELD_SAMPLES.record_reference;
@@ -87,11 +88,81 @@ export const Editor: Story = {
       return item;
     });
     await userEvent.click(globex);
+    // Focus is back on the trigger at once, before the menu has faded (a key pressed meanwhile reaches the page).
+    await waitFor(() => expect(canvas.getByRole('button', { name: /Choose Company/ })).toHaveFocus(), { timeout: 100 });
+    // In a form the picker is named by its visible label.
+    await expect(canvas.getByRole('group', { name: 'Company' })).toBeInTheDocument();
     await expect(args.onCommit).toHaveBeenCalledWith({
       objectId: SAMPLE_IDS.companies,
       recordId: SAMPLE_IDS.company.globex,
     });
     // The menu fades out; let it finish before the accessibility check reads colours.
     await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+  },
+};
+
+/**
+ * A reference that may hold records of any object (a task's linked records,
+ * spec 0019): a Select before the search picks which object it looks in.
+ */
+export const ObjectSwitcher: Story = {
+  args: { onCommit: fn() },
+  render: function Render(args) {
+    const [objectId, setObjectId] = useState<string>(SAMPLE_IDS.companies);
+    const objects = [
+      { id: SAMPLE_IDS.companies, label: 'Companies', icon: 'building' as const, hue: 'blue' as const },
+      { id: 'people', label: 'People', icon: 'user' as const, hue: 'green' as const },
+    ];
+    return (
+      <Stage width="narrow">
+        <AttributeEditor
+          {...args}
+          attribute={{ ...sample.attribute, allowMultiple: true, name: 'Records' }}
+          onSearch={
+            ((query: string) =>
+              arraySource(
+                objectId === SAMPLE_IDS.companies
+                  ? SAMPLE_COMPANIES.filter((company) => company.name.toLowerCase().includes(query.toLowerCase()))
+                  : [],
+                (company) => company.recordId,
+              )) as never
+          }
+          objectSwitcher={{ objects, objectId, onObjectChange: setObjectId }}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: /Search in/ })).toHaveTextContent('Companies');
+    await expect(canvas.getByRole('button', { name: /Choose Records/ })).toBeInTheDocument();
+  },
+};
+
+/** The object switcher with records already chosen, and a refusal under the field. */
+export const ObjectSwitcherWithChosen: Story = {
+  args: { onCommit: fn() },
+  render: function Render(args) {
+    const [objectId, setObjectId] = useState<string>(SAMPLE_IDS.companies);
+    const objects = [
+      { id: SAMPLE_IDS.companies, label: 'Companies', icon: 'building' as const, hue: 'blue' as const },
+      { id: 'people', label: 'People', icon: 'user' as const, hue: 'green' as const },
+    ];
+    const chosen = SAMPLE_COMPANIES.slice(0, 2);
+    return (
+      <Stage width="narrow">
+        <AttributeEditor
+          {...args}
+          attribute={{ ...sample.attribute, allowMultiple: true, name: 'Records' }}
+          value={chosen.map((company) => ({ objectId: company.objectId, recordId: company.recordId }))}
+          display={chosen}
+          error="You can’t link a task to a record you can’t change."
+          objectSwitcher={{ objects, objectId, onObjectChange: setObjectId }}
+        />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('list', { name: 'Records' })).toBeInTheDocument();
+    await expect(canvas.getByRole('alert')).toHaveTextContent('You can’t link a task to a record you can’t change.');
   },
 };

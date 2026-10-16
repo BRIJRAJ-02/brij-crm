@@ -25,6 +25,13 @@ export function ActorReferenceEditor({
     asList<ActorReferenceValue>(value).map((actor) => actorDisplayOf(actor, displays)),
   );
   const [message, setMessage] = useState<string | undefined>(undefined);
+  // A value changed from outside (live, or the screen refusing a pick) shows: the chips follow it.
+  const incoming = JSON.stringify(value ?? null);
+  const [shownValue, setShownValue] = useState(incoming);
+  if (incoming !== shownValue) {
+    setShownValue(incoming);
+    setChosen(asList<ActorReferenceValue>(value).map((actor) => actorDisplayOf(actor, displays)));
+  }
   const shown = message ?? error;
   return (
     <ReferencePicker<ActorDisplay>
@@ -35,6 +42,7 @@ export function ActorReferenceEditor({
       isCompact={isCompactSurface(surface)}
       isOpenAtStart={autoOpen}
       isInline={surface === 'cell'}
+      showLabel={surface === 'form'}
       {...(startText === undefined ? {} : { startQuery: startText })}
       {...(onSearch === undefined ? {} : { onSearch })}
       {...(me === undefined ? {} : { pinned: [me] })}

@@ -1210,6 +1210,7 @@ describe('deletion', () => {
       members: [],
       jobs: [],
       views: [],
+      tasks: [],
       values: ids.slice(half).map((ownerId) => ({
         ownerId,
         ownerKind: 'record' as const,

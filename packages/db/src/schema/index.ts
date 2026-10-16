@@ -12,3 +12,4 @@ export { jobItems, jobItemState, jobLane, jobs, jobStatus } from './jobs.ts';
 export { workspaceMilestones } from './milestones.ts';
 export { validationRuleKind, validationRules } from './validation.ts';
 export { viewKind, views, viewVisibility } from './views.ts';
+export { taskRecords, tasks } from './tasks.ts';

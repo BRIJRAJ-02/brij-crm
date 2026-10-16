@@ -11,6 +11,7 @@ import type { RecordState, RecordSubscription } from './records/one.ts';
 import type { TrashedSource, TrashedState } from './records/trashed.ts';
 import type { SavedViewSnapshot, SavedViewSource, ViewsListSnapshot, ViewsListSource } from './views/store.ts';
 import type { TrashState, TrashView } from './trash/store.ts';
+import type { TaskList, TaskListState, TaskSubscription, TaskSubscriptionState } from './tasks/store.ts';
 
 /**
  * A view's current state (its rows, count, status, cell refusals and row
@@ -107,6 +108,30 @@ export function useActivityStatus(feed: ActivityFeed): ActivityState['status'] {
  */
 export function useTrash(view: TrashView): TrashState {
   return useRetained(view);
+}
+
+/**
+ * A list of tasks (spec 0019): a record's open or done tasks, re-rendering
+ * when a task in it or the list itself changes. Held while the screen is
+ * mounted, so it stays live and settles.
+ */
+export function useTaskList(list: TaskList): TaskListState {
+  return useRetained(list);
+}
+
+/**
+ * Only a task list's total (a tab's count), re-rendering only when it moves,
+ * not with every task. Holds the list while the screen is mounted, so the
+ * count stays live.
+ */
+export function useTaskTotal(list: TaskList): TaskListState['total'] {
+  useEffect(() => list.retain(), [list]);
+  return useSyncExternalStore(list.subscribe, () => list.getSnapshot().total);
+}
+
+/** One task (the task dialog), re-rendering when it changes. Held while the screen is mounted. */
+export function useTask(task: TaskSubscription): TaskSubscriptionState {
+  return useRetained(task);
 }
 
 /** A missing record looked up in the trash (spec 0017), asked when first read. */

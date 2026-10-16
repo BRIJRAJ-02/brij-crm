@@ -16,6 +16,7 @@ import type {
   MemberSummary,
   MyAccess,
   ObjectSummary,
+  RecordRefDisplay,
   RecordView,
   RelationshipView,
   Usage,
@@ -27,11 +28,19 @@ import type { ContractRouterClient } from '@orpc/contract';
 import type { ActivityFeed, ActivityFeeds } from './activity/feed.ts';
 import { createAuth } from './auth/auth.ts';
 import { createTrashedLookups, type TrashedSource } from './records/trashed.ts';
-import { type DataFault, isUnseenFault, parseRetryAfter, toDataError, withRetryAfter } from './errors.ts';
+import {
+  type DataError,
+  type DataFault,
+  isUnseenFault,
+  parseRetryAfter,
+  toDataError,
+  withRetryAfter,
+} from './errors.ts';
 import type { FetchLike } from './fetch.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
 import { createViewsStore, type SavedViewSource, type SaveQueryInput, type ViewsListSource } from './views/store.ts';
+import type { NewTask, TaskChange, TaskList, TasksStore, TaskSubscription } from './tasks/store.ts';
 import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
 import { createLiveRouter } from './live/router.ts';
@@ -80,6 +89,8 @@ export type {
   RecordView,
   RelationshipView,
   SignedInUser,
+  TaskTotal,
+  TaskView,
   SystemStatus,
   TrashedRecord,
   Usage,
@@ -142,6 +153,15 @@ export type {
   ViewsListSnapshot,
   ViewsListSource,
 } from './views/store.ts';
+export type {
+  NewTask,
+  TaskChange,
+  TaskList,
+  TaskListState,
+  TaskSubscription,
+  TaskSubscriptionState,
+} from './tasks/store.ts';
+export { TASK_COUNT_CAP, TASK_RECORDS_MAX, TASK_TITLE_MAX } from '@crm/contracts/task-limits';
 export { isEditableHere, toActorDisplays, toFieldAttribute, type FieldAttributeShape } from './fields.ts';
 export { createIdMinter, type IdSources } from './ids.ts';
 export type { LiveStatus } from './live/live.ts';
@@ -222,6 +242,9 @@ interface CallOptions {
 
 /** How long a read waits for the workspace's head before going ahead without it (spec 0007: the token call is usually beside `me.get`). */
 const HEAD_WAIT_MS = 5_000;
+/** How many records the task dialog's picker offers for one search. */
+const FIND_LIMIT = 20;
+
 /** The longest spread before a reread every tab of a workspace makes at once (a members or access event), in ms. */
 const SPREAD_MS = 2_000;
 
@@ -462,6 +485,8 @@ export function createDataLayer({
   let activity: Promise<ActivityFeeds> | undefined;
   // The trash (spec 0022), loaded with the first trash screen.
   let trash: Promise<Trash> | undefined;
+  // Tasks (spec 0019), loaded with the first screen that shows one.
+  let tasks: Promise<TasksStore> | undefined;
   // Records looked up in the trash (spec 0017): a missing record's page.
   const trashedLookups = createTrashedLookups((workspace, recordId) =>
     call((options) => api.records.getTrashed({ workspace, recordId }, options)),
@@ -511,6 +536,9 @@ export function createDataLayer({
     views.clear();
     void activity?.then((feeds) => {
       feeds.clear();
+    });
+    void tasks?.then((store) => {
+      store.clear();
     });
     trashedLookups.clear();
     void trash?.then((held) => {
@@ -826,6 +854,10 @@ export function createDataLayer({
       // What the write replaced (spec 0006): a notice for the values this tab wrote.
       if (event.replaced !== undefined) layer.replaced(workspace, event);
     });
+    // Records trashed or restored change which links their tasks show (spec 0019, AC-446).
+    void tasks?.then((store) => {
+      store.recordsChanged(workspace, event);
+    });
     // Open timelines (spec 0017) read their first page again for a change naming their record; a coarse one,
     // for every record of the object, waits a random moment first so a whole team doesn't read in step.
     if (activity === undefined) return;
@@ -903,11 +935,19 @@ export function createDataLayer({
   router.on('views', (workspace, event) => {
     views.changed(workspace, event);
   });
+  router.on('tasks', (workspace, event) => {
+    void tasks?.then((store) => {
+      store.changed(workspace, event);
+    });
+  });
   router.onResync((workspace) => {
     jobs.resync(workspace);
     views.resync(workspace);
     void trash?.then((held) => {
       held.reload(workspace);
+    });
+    void tasks?.then((store) => {
+      store.resync(workspace);
     });
     void records?.then((layer) => {
       layer.reload(workspace);
@@ -1385,6 +1425,74 @@ export function createDataLayer({
     void trash?.then((held) => {
       held.reload(workspace);
     });
+  };
+
+  const tasksStore = (): Promise<TasksStore> => {
+    tasks ??= import('./tasks/store.ts').then(({ createTasksStore }) =>
+      createTasksStore({
+        api: {
+          list: (input) =>
+            beforeRead(input.workspace).then(() =>
+              call((options) =>
+                api.tasks.list(
+                  {
+                    workspace: input.workspace,
+                    scope: { recordId: input.recordId },
+                    status: input.status,
+                    ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
+                    ...(input.limit === undefined ? {} : { limit: input.limit }),
+                  },
+                  options,
+                ),
+              ),
+            ),
+          get: (input) =>
+            call((options) => api.tasks.get({ workspace: input.workspace, ids: [...input.ids] }, options)),
+          create: ({ recordIds, ...input }) =>
+            call((options) =>
+              api.tasks.create(
+                { ...input, ...(recordIds === undefined ? {} : { recordIds: [...recordIds] }) },
+                options,
+              ),
+            ),
+          update: ({ addRecordIds, removeRecordIds, ...input }) =>
+            call((options) =>
+              api.tasks.update(
+                {
+                  ...input,
+                  ...(addRecordIds === undefined ? {} : { addRecordIds: [...addRecordIds] }),
+                  ...(removeRecordIds === undefined ? {} : { removeRecordIds: [...removeRecordIds] }),
+                },
+                options,
+              ),
+            ),
+        },
+        mintId,
+        mutations,
+        notify,
+        watch,
+        spread,
+        // A task changed on these records: their open timelines read their first page again (spec 0019, AC-438).
+        timelines: (workspace, recordIds) => {
+          void activity?.then((feeds) => {
+            if (recordIds === 'all') feeds.ownWrite(workspace);
+            else feeds.changed(workspace, { objectId: '', recordIds });
+          });
+        },
+        memberOf: (workspace) =>
+          readAccess(workspace).then(
+            (mine) => mine.memberId,
+            () => undefined,
+          ),
+        // From the cached objects list: a records event rereads tasks only when it renames their records.
+        primaryOf: (workspace, objectId) =>
+          listObjects(workspace).then(
+            (list) => list.find((object) => object.id === objectId)?.primaryAttributeId ?? undefined,
+            () => undefined,
+          ),
+      }),
+    );
+    return tasks;
   };
 
   const recordsLayer = (): Promise<RecordsLayer> => {
@@ -1912,6 +2020,68 @@ export function createDataLayer({
       /** The same timeline cut to its newest five entries (Overview's "Recent activity"), sharing the first page. */
       recent: async (workspace: string, recordId: string, objectId?: string): Promise<ActivityFeed> =>
         (await activityFeeds()).recent(workspace, recordId, objectId),
+    },
+    tasks: {
+      /**
+       * A record's open tasks (by due date) or done ones (newest done first),
+       * the same list for every screen that asks (spec 0019): 50 at a time as
+       * it scrolls, with the open count, live, and settling 1.5 seconds after
+       * the last change in it. Read it through `useTaskList`.
+       */
+      forRecord: async (workspace: string, recordId: string, status: 'open' | 'done'): Promise<TaskList> =>
+        (await tasksStore()).forRecord(workspace, recordId, status),
+      /** One task (the task dialog), from the store's one copy. Read it through `useTask`. */
+      one: async (workspace: string, taskId: string): Promise<TaskSubscription> =>
+        (await tasksStore()).one(workspace, taskId),
+      /** A new task id: mint it once when the dialog or quick add opens, and send the same one on a retry. */
+      newId: (): string => mintId(),
+      /**
+       * Creates a task at once on screen (first, marked new, in the open lists
+       * of its records); a refusal takes it away with a toast and Retry.
+       * Answers whether it landed.
+       */
+      create: async (workspace: string, task: NewTask): Promise<boolean> =>
+        (await tasksStore()).create(workspace, task),
+      /** Changes a task at once on screen; a refusal puts it back and is answered, for the field to show. */
+      update: async (workspace: string, taskId: string, change: TaskChange): Promise<DataError | undefined> =>
+        (await tasksStore()).update(workspace, taskId, change),
+      /**
+       * Records of one object whose name holds `query`, for the task dialog's
+       * record picker (spec 0019): the first 20 by the object's own order, as
+       * display shapes, through `records.query` with the primary attribute's
+       * `contains` (an empty query: the first 20). A thin slice until spec
+       * 0014's `records.search` lands, which takes its place.
+       */
+      findRecords: async (workspace: string, objectId: string, query: string): Promise<readonly RecordRefDisplay[]> => {
+        const object = (await listObjects(workspace)).find((each) => each.id === objectId);
+        const primary = object?.primaryAttributeId ?? undefined;
+        const text = query.trim();
+        const page = await beforeRead(workspace).then(() =>
+          call((options) =>
+            api.records.query(
+              {
+                workspace,
+                objectId,
+                limit: FIND_LIMIT,
+                attributeIds: [],
+                ...(text === '' || primary === undefined
+                  ? {}
+                  : {
+                      filter: {
+                        conjunction: 'and' as const,
+                        conditions: [{ attributeId: primary, operator: 'contains' as const, value: text }],
+                      },
+                    }),
+              },
+              options,
+            ),
+          ),
+        );
+        return page.records.map((record) => record.display);
+      },
+      /** Ticks or unticks a task at once; a refusal rolls the checkbox back with a toast and Retry. */
+      setDone: async (workspace: string, taskId: string, isDone: boolean): Promise<boolean> =>
+        (await tasksStore()).setDone(workspace, taskId, isDone),
     },
     undo: {
       /**

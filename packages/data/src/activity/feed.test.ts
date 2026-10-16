@@ -204,6 +204,13 @@ describe('mapping (spec 0017, AC-378, AC-379, AC-382)', () => {
     // An attribute the definitions don't hold (archived since), and a kind this client can't draw: left out.
     expect(toActivityEntry({ ...change(8), attributeId: GONE }, context)).toBeUndefined();
     expect(toActivityEntry({ ...change(9), kind: 'comment' }, context)).toBeUndefined();
+    // A task (spec 0019): its id, title, and whether this is its completion.
+    const taskId = '0199a6f2-0000-7000-8000-0000000009aa';
+    const { attributeId: _attribute, from: _from, to: _to, ...plain } = change(10);
+    expect(
+      toActivityEntry({ ...plain, kind: 'task', itemId: taskId, title: 'Call back', isDone: true }, context),
+    ).toMatchObject({ kind: 'task', itemId: taskId, title: 'Call back', isDone: true });
+    expect(toActivityEntry({ ...plain, kind: 'task', title: 'No id' }, context)).toBeUndefined();
   });
 });
 

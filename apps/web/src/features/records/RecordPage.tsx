@@ -1,7 +1,7 @@
 // Brief
 // Purpose: everything about one record in one place: its details, and what happened to it.
 // Main task: read and edit its details in place, and see who changed what and when, live.
-// Leaves out: deleting and restoring it (#22), presence (#26), related records (milestone 3), notes and tasks (#19), comments (#29).
+// Leaves out: deleting and restoring it (#22), presence (#26), related records (milestone 3), notes (#19 milestone 3), comments (#29).
 import type {
   ActivityFeed as ActivityFeedSource,
   AttributeDefinition,
@@ -10,12 +10,18 @@ import type {
   RecordState,
   RecordSubscription,
   RecordView,
+  TaskList as TaskListSource,
   TrashedState,
 } from '@crm/data';
-import { useActivityStatus, useLiveStatus, useRecord, useTrashed } from '@crm/data/react';
-import { ActivityFeed, Button, Callout, EmptyState, Link, RecordHeader, RecordLayout, TopBar } from '@crm/ui';
-import { useNavigate, useParams, useRouteContext } from '@tanstack/react-router';
-import { useMemo, type ReactNode } from 'react';
+import { useActivityStatus, useLiveStatus, useRecord, useTaskTotal, useTrashed } from '@crm/data/react';
+import { ActivityFeed, Button, Callout, EmptyState, Link, RecordHeader, RecordLayout, TaskList, TopBar } from '@crm/ui';
+import { useNavigate, useParams, useRouteContext, useRouter } from '@tanstack/react-router';
+import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { tabCount } from '../tasks/entries.ts';
+import { OpenTasksCard } from '../tasks/OpenTasksCard.tsx';
+import { strings as taskStrings } from '../tasks/strings.ts';
+import { TaskDialog } from '../tasks/TaskDialog.tsx';
+import { TasksTab } from '../tasks/TasksTab.tsx';
 import { objectHref } from '../workspace/objects.ts';
 import { strings as workspaceStrings } from '../workspace/strings.ts';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
@@ -41,13 +47,23 @@ export interface RecordPageProps {
   readonly record: RecordSubscription | undefined;
   readonly feed: ActivityFeedSource | undefined;
   readonly recent: ActivityFeedSource | undefined;
+  /** The record's open tasks (spec 0019): the Tasks tab, its count, and Overview's block. */
+  readonly open: TaskListSource | undefined;
+  /** The person's member id: a new task is theirs. */
+  readonly meId: string | undefined;
+  /** `?task=`: the task dialog's task, or `new`. */
+  readonly task?: string;
 }
 
 /** The page's tabs, in order. */
 const TABS = [
   { id: 'overview', label: strings.overview, icon: 'layout-dashboard' as const },
   { id: 'activity', label: strings.activity, icon: 'activity' as const },
+  { id: 'tasks', label: taskStrings.tasks, icon: 'list-checks' as const },
 ];
+
+/** A task list with nothing in it yet, for the Tasks tab before the record arrives. */
+const NO_TASKS = { count: 0, getItem: () => undefined, getKey: (task: { readonly id: string }) => task.id };
 
 /** A feed with nothing in it yet, for the loading page before the record's timeline exists. */
 const NO_ENTRIES = { count: 0, getItem: () => undefined, getKey: () => '' };
@@ -134,11 +150,11 @@ function LoadingLayout({
 
 /** The record page, or its unavailable state for an address that names no record. */
 export function RecordPage(props: RecordPageProps) {
-  const { record, feed, recent } = props;
-  if (record === undefined || feed === undefined || recent === undefined) {
+  const { record, feed, recent, open } = props;
+  if (record === undefined || feed === undefined || recent === undefined || open === undefined) {
     return <WorkspacePage currentObject={props.object.apiSlug} page={unavailablePage(props.slug, props.object)} />;
   }
-  return <SubscribedRecordPage {...props} record={record} feed={feed} recent={recent} />;
+  return <SubscribedRecordPage {...props} record={record} feed={feed} recent={recent} open={open} />;
 }
 
 /** The trash lookup's state once the record's first read found it missing; undefined otherwise. */
@@ -162,6 +178,7 @@ function SubscribedRecordPage(
     readonly record: RecordSubscription;
     readonly feed: ActivityFeedSource;
     readonly recent: ActivityFeedSource;
+    readonly open: TaskListSource;
   },
 ) {
   const state = useRecord(props.record);
@@ -189,6 +206,9 @@ function RecordScreen({
   record,
   feed,
   recent,
+  open,
+  meId,
+  task,
   state,
   timelineStatus,
   trashed,
@@ -196,6 +216,7 @@ function RecordScreen({
   readonly record: RecordSubscription;
   readonly feed: ActivityFeedSource;
   readonly recent: ActivityFeedSource;
+  readonly open: TaskListSource;
   readonly state: RecordState;
   readonly timelineStatus: ReturnType<typeof useActivityStatus>;
   readonly trashed?: TrashedState;
@@ -205,6 +226,49 @@ function RecordScreen({
   const live = useLiveStatus(data.live);
   const unnamed = strings.unnamed(object.singularName);
   const link = useMemo(() => recordLinks(slug, objects), [slug, objects]);
+  const router = useRouter();
+  const openTotal = useTaskTotal(open);
+  // Whether the task dialog was opened from this page, so closing it steps Back rather than adding a step.
+  const openedHere = useRef(false);
+  // A `?task=` that arrived while the page was open (a timeline entry's link, or `openTask`) was pushed: closing
+  // steps Back. One the page opened with (a link from elsewhere) is replaced.
+  const taskBefore = useRef(task);
+  useEffect(() => {
+    if (taskBefore.current === undefined && task !== undefined) openedHere.current = true;
+    taskBefore.current = task;
+  }, [task]);
+  const openTask = (taskId: string) => {
+    openedHere.current = true;
+    // Opening pushes its param, so Back closes it.
+    void navigate({
+      to: '/w/$slug/objects/$object/$recordId/$tab',
+      params: { slug, object: object.apiSlug, recordId, tab },
+      search: { task: taskId },
+    });
+  };
+  const closeTask = () => {
+    if (openedHere.current) {
+      openedHere.current = false;
+      router.history.back();
+      return;
+    }
+    void navigate({
+      to: '/w/$slug/objects/$object/$recordId/$tab',
+      params: { slug, object: object.apiSlug, recordId, tab },
+      search: {},
+      replace: true,
+    });
+  };
+  // Kept while the page's address stays, so the timeline's links and the task rows don't draw again with each render.
+  const taskHref = useCallback(
+    (taskId: string) => `${recordHref(slug, object.apiSlug, recordId, tab)}?task=${taskId}`,
+    [slug, object.apiSlug, recordId, tab],
+  );
+  const chipHref = useCallback(
+    (display: { readonly objectId: string; readonly recordId: string }) => link(display.objectId, display.recordId),
+    [link],
+  );
+  const tabs = TABS.map((each) => (each.id === 'tasks' ? { ...each, ...tabCount(openTotal) } : each));
 
   const openTab = (next: string) => {
     if (next === tab) return;
@@ -215,16 +279,72 @@ function RecordScreen({
       replace: true,
     });
   };
-  const tabContent =
-    tab === 'activity' ? (
-      <ActivityTab feed={feed} link={link} />
-    ) : (
-      <OverviewTab
-        recent={recent}
-        link={link}
-        onViewAll={() => {
-          openTab('activity');
-        }}
+  // The page's own record as a task links it: its chip in the lists, and a new task's first link.
+  const pageRecord = (() => {
+    const shownRecord = state.status === 'ready' || state.status === 'deleted' ? state.record : undefined;
+    return shownRecord === undefined
+      ? undefined
+      : { ...shownRecord.display, name: recordName(shownRecord, object, strings.unnamed(object.singularName)) };
+  })();
+  const canAddTasks = object.access === 'write' && trashed?.status !== 'trashed' && state.status === 'ready';
+  let tabContent: ReactNode;
+  if (tab === 'activity') {
+    tabContent = <ActivityTab feed={feed} link={link} taskHref={taskHref} />;
+  } else if (tab === 'tasks' && pageRecord !== undefined) {
+    tabContent = (
+      <TasksTab
+        slug={slug}
+        record={pageRecord}
+        open={open}
+        members={members}
+        meId={meId}
+        canAdd={canAddTasks}
+        recordHref={chipHref}
+        onOpenTask={openTask}
+      />
+    );
+  } else if (tab === 'tasks') {
+    tabContent = (
+      <TaskList label={taskStrings.openTasks} tasks={NO_TASKS} status="loading" onToggle={() => undefined} />
+    );
+  } else {
+    tabContent = (
+      <>
+        {/* From the start, loading in place, so Recent activity never jumps down when the record arrives. */}
+        <OpenTasksCard
+          slug={slug}
+          recordId={recordId}
+          open={open}
+          members={members}
+          canAdd={canAddTasks}
+          recordHref={chipHref}
+          onOpenTask={openTask}
+          onViewAll={() => {
+            openTab('tasks');
+          }}
+        />
+        <OverviewTab
+          recent={recent}
+          link={link}
+          taskHref={taskHref}
+          onViewAll={() => {
+            openTab('activity');
+          }}
+        />
+      </>
+    );
+  }
+  const dialog =
+    task === undefined ? undefined : (
+      <TaskDialog
+        slug={slug}
+        task={task}
+        {...(pageRecord === undefined || !canAddTasks ? {} : { pageRecord })}
+        startObjectId={object.id}
+        objects={objects}
+        members={members}
+        meId={meId}
+        onClose={closeTask}
       />
     );
 
@@ -316,46 +436,49 @@ function RecordScreen({
   }
 
   return (
-    <WorkspacePage
-      currentObject={object.apiSlug}
-      page={{
-        topBar: recordTopBar(slug, object, name, paused),
-        body: (
-          <RecordLayout
-            header={
-              <RecordHeader record={display} objectName={object.singularName}>
-                <Button variant="ghost" icon="link" onPress={copyLink}>
-                  {strings.copyLink}
-                </Button>
-              </RecordHeader>
-            }
-            tabs={TABS}
-            tabsLabel={strings.tabs}
-            selectedTab={tab}
-            onTabChange={openTab}
-            sidebarLabel={strings.details}
-            {...(notice === undefined ? {} : { notice })}
-            sidebar={
-              <RecordDetails
-                attributes={attributes}
-                members={members}
-                record={shown}
-                cellErrors={state.cellErrors}
-                referenceDisplays={state.referenceDisplays}
-                {...(canEdit
-                  ? {
-                      onCommit: (attributeId: string, value: unknown) => {
-                        data.records.setValue(slug, { rowId: recordId, columnId: attributeId, value });
-                      },
-                    }
-                  : {})}
-              />
-            }
-          >
-            {tabContent}
-          </RecordLayout>
-        ),
-      }}
-    />
+    <>
+      <WorkspacePage
+        currentObject={object.apiSlug}
+        page={{
+          topBar: recordTopBar(slug, object, name, paused),
+          body: (
+            <RecordLayout
+              header={
+                <RecordHeader record={display} objectName={object.singularName}>
+                  <Button variant="ghost" icon="link" onPress={copyLink}>
+                    {strings.copyLink}
+                  </Button>
+                </RecordHeader>
+              }
+              tabs={tabs}
+              tabsLabel={strings.tabs}
+              selectedTab={tab}
+              onTabChange={openTab}
+              sidebarLabel={strings.details}
+              {...(notice === undefined ? {} : { notice })}
+              sidebar={
+                <RecordDetails
+                  attributes={attributes}
+                  members={members}
+                  record={shown}
+                  cellErrors={state.cellErrors}
+                  referenceDisplays={state.referenceDisplays}
+                  {...(canEdit
+                    ? {
+                        onCommit: (attributeId: string, value: unknown) => {
+                          data.records.setValue(slug, { rowId: recordId, columnId: attributeId, value });
+                        },
+                      }
+                    : {})}
+                />
+              }
+            >
+              {tabContent}
+            </RecordLayout>
+          ),
+        }}
+      />
+      {dialog}
+    </>
   );
 }

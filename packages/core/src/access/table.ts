@@ -124,4 +124,11 @@ export const ACCESS_TABLE = {
   // The relay's reads (`@crm/core/system`).
   audiences: { system: true },
   viewFacts: { system: true },
+  // Tasks (spec 0019): reads answer only tasks the reader may see; writes check the change rule and `write` on
+  // each linked record's object.
+  getTasks: { data: 'read' },
+  listTasks: { data: 'read' },
+  createTask: { data: 'write' },
+  updateTask: { data: 'write' },
+  taskFacts: { system: true },
 } as const satisfies Record<string, AccessEntry>;

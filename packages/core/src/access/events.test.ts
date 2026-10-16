@@ -298,6 +298,29 @@ describe('tasks', () => {
       coarse: true,
     });
   });
+
+  it('keeps an unlinked record for the open audience, so its screens hear of the unlink (spec 0019)', () => {
+    const unlinked: EventRow = { ...tasks, recordIds: ['r1', 'gone'], taskIds: ['t1'] };
+    expect(filterEvent(open, unlinked, facts)).toEqual(unlinked);
+    // A restricted audience can't judge a record in no fact: left out, coarse.
+    expect(filterEvent(hiddenObject, unlinked, facts)).toMatchObject({ recordIds: [], taskIds: [], coarse: true });
+  });
+
+  it('shows a task whose every link is in the trash to its assignee and creator only (spec 0019, AC-447)', () => {
+    const trashed = {
+      tasks: {
+        t1: {
+          creatorMemberId: BEA,
+          assigneeMemberIds: [],
+          records: [{ objectId: OBJECT, recordId: 'r1', trashed: true }],
+        },
+      },
+    };
+    const row: EventRow = { ...tasks, recordIds: ['r1'], taskIds: ['t1'] };
+    // Ada neither made it nor has it: nothing of it, and not its record either.
+    expect(filterEvent(open, row, trashed)).toMatchObject({ taskIds: [], recordIds: [], coarse: true });
+    expect(filterEvent(audience([{ id: BEA, role: 'member' }]), row, trashed)).toEqual(row);
+  });
 });
 
 describe('members, access and jobs', () => {

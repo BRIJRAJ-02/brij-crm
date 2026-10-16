@@ -383,6 +383,9 @@ async function removeRecords(tx: WorkspaceTx, recordIds: readonly string[]): Pro
     where e.record_id = any(${ids}) and r.workspace_id = e.workspace_id and r.id = e.record_id
     returning e.id::text, e.list_id::text, e.record_id::text, r.object_id::text
   `);
+  // Tasks keep living without the records removed for good; their links to them go first (spec 0019, AC-446),
+  // until spec 0022's purge registry takes this step over.
+  await tx.execute(sql`delete from task_records where record_id = any(${ids})`);
   const removed = await tx.execute<{ id: string; object_id: string }>(
     sql`delete from records where id = any(${ids}) returning id::text, object_id::text`,
   );

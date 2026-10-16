@@ -124,9 +124,10 @@ export interface RelayDeps {
   readonly audiences: (workspaceId: string) => Promise<readonly Audience[]>;
   /**
    * The facts a batch's rows need (spec 0009's `eventFacts`: each named
-   * view's visibility and creator, spec 0020), read with the relay's system
-   * scope once per batch, only when a row needs some. Without it a `views`
-   * row goes out coarse, which every client also handles.
+   * view's visibility and creator, spec 0020, and a `tasks` row's tasks, spec
+   * 0019), read with the relay's system scope once per batch, only when a row
+   * needs some. Without it, such rows go out coarse with no ids (a missing fact
+   * counts as not visible), which every client also handles.
    */
   readonly facts?: (workspaceId: string, rows: readonly OutboxRow[]) => Promise<EventFacts>;
   readonly publishBatch: PublishBatch;
@@ -258,7 +259,8 @@ export function changeEvent(row: OutboxRow, audiences: readonly Audience[], fact
 }
 
 /** Whether any of a batch's rows needs facts loaded before it is planned (`views` rows, spec 0020). */
-const needsFacts = (rows: readonly OutboxRow[]): boolean => rows.some((row) => row.kind === 'views');
+const needsFacts = (rows: readonly OutboxRow[]): boolean =>
+  rows.some((row) => row.kind === 'views' || row.kind === 'tasks');
 
 /** A row after which the workspace's audiences may differ: the cache drops them before the next row (AC-85). */
 const changesAudiences = (row: OutboxRow): boolean => row.kind === 'members' || row.kind === 'access';
@@ -500,7 +502,7 @@ export function createRelay(deps: RelayDeps): Relay {
     const facts =
       deps.facts !== undefined && needsFacts(rows)
         ? await deps.facts(workspaceId, rows).catch((error: unknown) => {
-            log.warn('Reading the view facts failed; views events go out coarse', {
+            log.warn('Reading the event facts failed; views and tasks events go out coarse', {
               workspaceId,
               ...errorFields(error),
             });

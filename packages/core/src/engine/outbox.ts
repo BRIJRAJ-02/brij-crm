@@ -51,14 +51,14 @@ export const LIFECYCLE_CAP = MAX_LIFECYCLE_IDS;
 
 /** One outbox row before it gets its number. */
 export interface OutboxEvent {
-  readonly kind: 'records' | 'entries' | 'definitions' | 'members' | 'jobs' | 'views';
+  readonly kind: 'records' | 'entries' | 'definitions' | 'members' | 'jobs' | 'views' | 'tasks';
   /** The object: a `records` row's, an `entries` row's list's parent, a `definitions` row's when it names one. */
   readonly objectId?: string;
   /** The list: an `entries` row's, a `definitions` row's when it names one. */
   readonly listId?: string;
   readonly recordIds: readonly string[];
   readonly attributeIds: readonly string[];
-  /** The row's own items: entry ids for `entries`, member ids for `members`. */
+  /** The row's own items: entry ids for `entries`, member ids for `members`, task ids for `tasks`. */
   readonly itemIds: readonly string[];
   /** On a `records` row: the records the write created, deleted and restored, at most `LIFECYCLE_CAP` together. */
   readonly createdIds: readonly string[];
@@ -293,7 +293,8 @@ function definitionRows(change: CappedChange): OutboxEvent[] {
 /**
  * One row per kind a write outside the engine recorded (AC-82): `members`,
  * (spec 0008) one `jobs` row per starter, its job ids in `itemIds`, and
- * (spec 0020) one `views` row per object.
+ * (spec 0020) one `views` row per object, and (spec 0019) one `tasks` row, its task ids in `itemIds` and in `recordIds`
+ * every record they linked before or after the write.
  */
 function kindRows(change: CappedChange): OutboxEvent[] {
   const rows: OutboxEvent[] = [];
@@ -312,6 +313,11 @@ function kindRows(change: CappedChange): OutboxEvent[] {
     rows.push({ kind: 'jobs', ...NO_IDS, itemIds: (byStarter.get(starter) ?? []).sort(byId), coarse: false, starter });
   }
   rows.push(...viewRows(change));
+  if (change.tasks.length > 0) {
+    const taskIds = [...new Set(change.tasks.map((task) => task.taskId))].sort(byId);
+    const recordIds = [...new Set(change.tasks.flatMap((task) => task.recordIds))].sort(byId);
+    rows.push({ kind: 'tasks', ...NO_IDS, itemIds: taskIds, recordIds, coarse: false });
+  }
   return rows;
 }
 

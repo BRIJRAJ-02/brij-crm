@@ -6,7 +6,7 @@ Spec 0017, milestones 1 and 2: a record's own page, and its timeline. It sits in
 
 - **Purpose**: everything about one record in one place: its details, and what happened to it.
 - **Main task**: read and edit its details in place, and see who changed what and when, live.
-- **Leaves out**: deleting and restoring it (#22), presence (#26), related records (milestone 3), notes and tasks (#19), comments (#29).
+- **Leaves out**: deleting and restoring it (#22), presence (#26), related records (milestone 3), notes (#19 milestone 3), comments (#29). Tasks (#19 milestone 1) have their own tab and Overview block, `features/tasks`.
 
 ## Details (RecordDetails)
 
@@ -18,11 +18,11 @@ Spec 0017, milestones 1 and 2: a record's own page, and its timeline. It sits in
 
 - **Purpose**: a record at a glance, and what happened to it, newest first.
 - **Main task**: see the newest entries (Overview draws five in place, the library's `inline` layout), and go on to the whole timeline ("View all"), which pages as it scrolls and shows changes made anywhere within a second.
-- **Leaves out**: Related cards (milestone 3), Highlights (#18), Open tasks (#19), notes, tasks and comments in the feed (#19, #29), the record's own delete and restore (#36).
+- **Leaves out**: Related cards (milestone 3), Highlights (#18), notes and comments in the feed (#19, #29), the record's own delete and restore (#36). Overview shows Open tasks above Recent activity, and the feed shows tasks (spec 0019).
 
 ## Notes
 
-- `$tab` is `overview` or `activity`; anything else, and no tab at all, goes to `overview`. Switching tabs replaces the address, and focus stays on the tab (`isSamePage` in `features/navigation/focus.ts`). A reload reopens the same tab.
+- `$tab` is `overview`, `activity` or `tasks` (spec 0019); anything else, and no tab at all, goes to `overview`. Switching tabs replaces the address, and focus stays on the tab (`isSamePage` in `features/navigation/focus.ts`). A reload reopens the same tab.
 - The loader warms the record through `data.records.one` with the attributes Details lists (`detailAttributes` in `details.ts`, shared with the screen) and the timeline's first page (`data.activity.forRecord` and `recent`, one request), waiting at most 300 ms; it hands the screen subscriptions, never rows. A record the table already shows opens at once from the same store body.
 - The header's name follows the primary attribute as the store holds it (`recordName`), so an edit in Details shows there and in the tab's title at once. "Copy link" writes the page's address (no search) and says "Link copied".
 - States (AC-376): loading (the layout's skeletons), failed (Try again), unavailable (a missing id, a hidden record and an address that isn't an id: one EmptyState, "This record isn't available.", with "Back to <Plural>"), trashed (read only from `data.records.trashed`, with "This <singular> was deleted."), and no longer available (deleted or out of reach while open: the last record stays, read only, with "This <singular> is no longer available."). An object the person may only read shows every value with no editor. While live updates are paused a Callout says so.

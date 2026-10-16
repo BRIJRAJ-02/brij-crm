@@ -1187,7 +1187,7 @@ describe('the relay plans each row for its workspace’s audience (spec 0007, mi
   async function row(
     workspaceId: string,
     seq: number,
-    kind: 'members' | 'jobs',
+    kind: 'members' | 'jobs' | 'tasks',
     itemIds: readonly string[],
     actorMemberId?: string,
   ): Promise<void> {
@@ -1332,6 +1332,39 @@ describe('the relay plans each row for its workspace’s audience (spec 0007, mi
     expect(JSON.stringify(sent)).not.toContain(mine);
     // One load for the batch that held both rows.
     expect(loads).toBe(1);
+  });
+
+  it('names a task only with its facts, read once per batch (spec 0019), and goes coarse without them', async () => {
+    const centrifugo = await fakeCentrifugo();
+    servers.push(centrifugo);
+    const known = await workspace();
+    await member(known);
+    const unknown = await workspace();
+    await member(unknown);
+    const task = randomUUID();
+    await row(known, 1, 'tasks', [task]);
+    await row(known, 2, 'tasks', [task]);
+    await row(unknown, 1, 'tasks', [task]);
+    const asked: string[][] = [];
+    relayTo(centrifugo.url, {
+      facts: (workspaceId, rows) => {
+        asked.push(rows.map((each) => each.kind));
+        // A task linking nothing is everyone's to see; the other workspace's loader knows no task.
+        return Promise.resolve(
+          workspaceId === known ? { tasks: { [task]: { assigneeMemberIds: [], records: [] } } } : {},
+        );
+      },
+    });
+    await expect.poll(() => [...centrifugo.seqs(known), ...centrifugo.seqs(unknown)], WAIT).toEqual([1, 2, 1]);
+    const sent = (workspaceId: string) =>
+      centrifugo.published.filter((item) => item.channel === `workspace:${workspaceId}`).map((item) => item.data);
+    expect(sent(known)).toEqual([
+      expect.objectContaining({ kind: 'tasks', taskIds: [task] }),
+      expect.objectContaining({ kind: 'tasks', taskIds: [task] }),
+    ]);
+    expect(sent(unknown)).toEqual([expect.objectContaining({ kind: 'tasks', taskIds: [], coarse: true })]);
+    // One read per batch, with the batch's rows.
+    expect(asked).toContainEqual(['tasks', 'tasks']);
   });
 
   it('lets go of a workspace’s audiences after a quiet spell with no turn, while other workspaces keep it awake', async () => {

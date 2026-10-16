@@ -5,6 +5,7 @@ import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES, SAMPLE_MEMBERS } from '../../workbench/field-samples.ts';
 import { SAMPLE_IDS } from '../../workbench/sample-ids.ts';
 import { AttributeEditor } from '../AttributeEditor.tsx';
+import { useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
 
 const sample = FIELD_SAMPLES.actor_reference;
@@ -73,5 +74,52 @@ export const Editor: Story = {
     await expect(args.onCommit).toHaveBeenCalledWith({ type: 'member', id: SAMPLE_IDS.member.ada });
     // The menu fades out; let it finish before the accessibility check reads colours.
     await waitFor(() => expect(document.querySelector('[role="menu"]')).toBeNull());
+  },
+};
+
+/**
+ * The value changes from outside (a refusal putting it back): the chips
+ * follow it. Removing a chip keeps focus among the chips, then the button.
+ */
+export const ValueFromOutside: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: function Render(args) {
+    const team = SAMPLE_MEMBERS.slice(0, 2);
+    const [value, setValue] = useState<readonly { type: 'member'; id: string }[]>(
+      team.map((member) => ({ type: 'member' as const, id: member.id ?? '' })),
+    );
+    return (
+      <Stage width="narrow">
+        <AttributeEditor
+          {...args}
+          attribute={{ ...sample.attribute, allowMultiple: true, name: 'Team' }}
+          value={value}
+          display={team}
+          onCommit={(next) => {
+            // As a screen does: what lands is the value now (here at once; a refusal would put it back).
+            setValue(Array.isArray(next) ? (next as readonly { type: 'member'; id: string }[]) : []);
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => {
+            setValue(team.map((member) => ({ type: 'member' as const, id: member.id ?? '' })));
+          }}
+        >
+          Put back
+        </button>
+      </Stage>
+    );
+  },
+  play: async ({ canvas, userEvent }) => {
+    const chips = () => canvas.getByRole('list', { name: 'Team' }).querySelectorAll('li');
+    await expect(chips()).toHaveLength(2);
+    const first = SAMPLE_MEMBERS[0]?.name ?? '';
+    await userEvent.click(canvas.getByRole('button', { name: new RegExp(`Remove ${first}`) }));
+    await waitFor(() => expect(chips()).toHaveLength(1));
+    // Focus stays among the chips: the remaining chip's remove button.
+    await waitFor(() => expect(canvas.getAllByRole('button', { name: /^Remove/ })[0]).toHaveFocus());
+    await userEvent.click(canvas.getByRole('button', { name: 'Put back' }));
+    await waitFor(() => expect(chips()).toHaveLength(2));
   },
 };

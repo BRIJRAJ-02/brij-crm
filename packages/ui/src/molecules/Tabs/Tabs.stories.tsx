@@ -38,3 +38,25 @@ export const Default: Story = {
     await expect(canvas.getByRole('tabpanel')).toHaveTextContent('12 notes.');
   },
 };
+
+/** Big counts: up to `countMax` as they are, and a capped count as a floor ("10,000+"). */
+export const LargeCounts: Story = {
+  args: {
+    tabs: [
+      { id: 'activity', label: 'Activity', icon: 'activity' },
+      { id: 'notes', label: 'Notes', icon: 'notebook', count: 1_250, countMax: 10_000 },
+      { id: 'tasks', label: 'Tasks', icon: 'list-checks', count: 10_000, countMax: 10_000, isCountAtLeast: true },
+    ],
+  },
+  render: (args) => (
+    <Tabs {...args}>
+      <TabPanel id="activity">Field changes, notes and emails, newest first.</TabPanel>
+      <TabPanel id="notes">Notes.</TabPanel>
+      <TabPanel id="tasks">Open tasks.</TabPanel>
+    </Tabs>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('tab', { name: /Notes/ })).toHaveTextContent('1,250');
+    await expect(canvas.getByRole('tab', { name: /Tasks/ })).toHaveTextContent('10,000+');
+  },
+};

@@ -15,4 +15,10 @@ export const strings = {
   /** Read before the due day. */
   due: 'Due',
   done: 'Done',
+  /** The badge on a task just made here. */
+  isNew: 'New',
+  /** The records' popover from "+N". */
+  records: 'Records',
+  /** An in place list's next page. */
+  showMore: 'Show more',
 } as const;

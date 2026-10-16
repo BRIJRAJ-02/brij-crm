@@ -42,6 +42,8 @@ const READS: ReadonlySet<string> = new Set([
   'views.get',
   'trash.query',
   'trash.count',
+  'tasks.get',
+  'tasks.list',
 ]);
 
 let db: Database;
@@ -410,6 +412,40 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     });
     return [{ kind: 'views', object_id: m.people.id, item_ids: [viewId], mutation_id: mutationId }];
   },
+  // Tasks (spec 0019, AC-448): one tasks row per write, naming the task and every record linked before or after.
+  'tasks.create': async (m, mutationId) => {
+    const record = await m.client.records.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      id: newId(),
+      values: { [m.attribute('name')]: { firstName: 'Ada' } },
+      mutationId: newId(),
+    });
+    const task = await m.client.tasks.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Call back',
+      recordIds: [record.id],
+      mutationId,
+    });
+    return [
+      { kind: 'records', record_ids: [record.id] },
+      { kind: 'tasks', item_ids: [task.id], record_ids: [record.id], mutation_id: mutationId },
+    ];
+  },
+  'tasks.update': async (m, mutationId) => {
+    const task = await m.client.tasks.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Call back',
+      mutationId: newId(),
+    });
+    await m.client.tasks.update({ workspace: m.slug, taskId: task.id, isDone: true, mutationId });
+    return [
+      { kind: 'tasks', item_ids: [task.id] },
+      { kind: 'tasks', item_ids: [task.id], record_ids: [], mutation_id: mutationId },
+    ];
+  },
   // Background jobs (spec 0008): one jobs row per write, naming the job.
   'jobs.startTest': async (m, mutationId) => {
     const job = await m.client.jobs.startTest({ workspace: m.slug, id: newId(), items: 3, mutationId });
@@ -448,6 +484,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'trash.restore': 3,
   'jobs.cancel': 2,
   'jobs.confirm': 2,
+  'tasks.create': 2,
+  'tasks.update': 2,
   'attributes.restore': 2,
   'relationships.update': 2,
   'options.create': 2,

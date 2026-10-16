@@ -1,16 +1,38 @@
 // The editor references share (members, records): the chosen ones as chips
 // you can remove, and a searchable menu that adds or replaces one. Results
 // come from the screen through a ListSource, so long lists stay outside.
-import type { ActorDisplay, RecordRefDisplay } from '@crm/contracts/values';
-import { useEffect, useState } from 'react';
+import type { ActorDisplay, Hue, RecordRefDisplay } from '@crm/contracts/values';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
 import { RecordChip } from '../atoms/RecordChip/RecordChip.tsx';
 import { arraySource, type ListSource } from '../lib/list-source.ts';
+import type { IconName } from '../atoms/Icon/icons.ts';
 import { Menu, MenuTrigger } from '../molecules/Menu/Menu.tsx';
+import { Select } from '../molecules/Select/Select.tsx';
+import { focusLater } from '../lib/focus-later.ts';
 import styles from './ReferencePicker.module.css';
 import { strings } from './strings.ts';
 
 type Reference = RecordRefDisplay | ActorDisplay;
+
+/** One object a record search can look in (spec 0019's object switcher). */
+export interface SearchObject {
+  readonly id: string;
+  readonly label: string;
+  readonly icon?: IconName;
+  readonly hue?: Hue;
+}
+
+/**
+ * Which object a record search looks in, for a reference that may hold
+ * records of any object (a task's linked records): the objects, the one
+ * searched now, and the change.
+ */
+export interface ObjectSwitcher {
+  readonly objects: readonly SearchObject[];
+  readonly objectId: string;
+  readonly onObjectChange: (objectId: string) => void;
+}
 
 /** Props for ReferencePicker. */
 export interface ReferencePickerProps<D extends Reference> {
@@ -37,6 +59,16 @@ export interface ReferencePickerProps<D extends Reference> {
    * would be a panel on a panel.
    */
   readonly isInline?: boolean;
+  /** The objects the search can look in; a Select before the search picks one (spec 0019). Without it, nothing changes. */
+  readonly objects?: readonly SearchObject[];
+  /** The object searched now, one of `objects`. */
+  readonly objectId?: string;
+  readonly onObjectChange?: (objectId: string) => void;
+  /**
+   * Draws the attribute's name as the picker's visible label (in a form,
+   * where nothing else names it); a cell or a panel row names it already.
+   */
+  readonly showLabel?: boolean;
 }
 
 /** Chosen references as removable chips, and a searchable menu to pick one. */
@@ -53,7 +85,14 @@ export function ReferencePicker<D extends Reference>({
   isOpenAtStart = false,
   startQuery,
   isInline = false,
+  objects,
+  objectId,
+  onObjectChange,
+  showLabel = false,
 }: ReferencePickerProps<D>) {
+  const labelId = useId();
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState(startQuery ?? '');
   const [isOpen, setOpen] = useState(false);
   useEffect(() => {
@@ -90,6 +129,13 @@ export function ReferencePicker<D extends Reference>({
       (item) => item !== undefined && keyOf(item) === String(key),
     );
     if (found === undefined) return;
+    // A pointer pick: focus goes back to the trigger at once, not when the closing menu has faded, so a key pressed
+    // meanwhile (Escape in a dialog) reaches what it is meant for. A keyboard pick does the same already.
+    if (!isInline) {
+      requestAnimationFrame(() => {
+        triggerRef.current?.focus();
+      });
+    }
     if (!allowMultiple) {
       onChange([found]);
       return;
@@ -118,10 +164,17 @@ export function ReferencePicker<D extends Reference>({
   );
   return (
     <div
+      ref={rootRef}
       className={styles.root}
       data-compact={(isCompact && !isInline) || undefined}
       data-inline={isInline || undefined}
+      {...(showLabel ? { role: 'group', 'aria-labelledby': labelId } : {})}
     >
+      {showLabel && (
+        <span id={labelId} className={styles.label}>
+          {name}
+        </span>
+      )}
       {chosen.length > 0 && (
         <ul className={styles.chosen} aria-label={name}>
           {chosen.map((display) => (
@@ -132,18 +185,42 @@ export function ReferencePicker<D extends Reference>({
                 icon="x"
                 label={strings.remove(display.name === '' ? name : display.name)}
                 onPress={() => {
+                  const place = chosen.findIndex((item) => keyOf(item) === keyOf(display));
                   onChange(chosen.filter((item) => keyOf(item) !== keyOf(display)));
+                  // The pressed button goes with its chip: focus moves to the next chip's, the one before, or the
+                  // picker's button, never to the page or the dialog's Close.
+                  focusLater(() => {
+                    const removes = rootRef.current?.querySelectorAll<HTMLButtonElement>('ul > li button');
+                    const list = removes === undefined ? [] : [...removes];
+                    return list[Math.min(place, list.length - 1)] ?? triggerRef.current;
+                  });
                 }}
               />
             </li>
           ))}
         </ul>
       )}
+      {objects !== undefined && objects.length > 0 && onObjectChange !== undefined && (
+        <Select
+          label={strings.searchIn}
+          size="sm"
+          items={objects.map((object) => ({
+            id: object.id,
+            label: object.label,
+            ...(object.icon === undefined ? {} : { icon: object.icon }),
+            ...(object.hue === undefined ? {} : { hue: object.hue }),
+          }))}
+          value={objectId ?? objects[0]?.id ?? null}
+          onChange={(id) => {
+            if (id !== null) onObjectChange(id);
+          }}
+        />
+      )}
       {isInline ? (
         menu
       ) : (
         <MenuTrigger isOpen={isOpen} onOpenChange={setOpen}>
-          <Button variant={chosen.length === 0 ? 'secondary' : 'ghost'} icon="plus">
+          <Button variant={chosen.length === 0 ? 'secondary' : 'ghost'} icon="plus" ref={triggerRef}>
             {chosen.length === 0 || !allowMultiple ? strings.choose(name) : strings.addAnother}
           </Button>
           {menu}

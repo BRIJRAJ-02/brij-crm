@@ -47,7 +47,11 @@
     min-block-size: 0;
   }
 
+  /* The panel stacks what a tab holds (Overview's cards) space-16 apart. */
   .panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
     box-sizing: border-box;
     block-size: 100%;
     padding: var(--space-12) var(--space-16);
