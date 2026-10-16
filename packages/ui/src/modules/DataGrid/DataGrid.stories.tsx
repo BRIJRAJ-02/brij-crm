@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState, type ReactNode } from 'react';
 import { expect, fn, screen, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { BulkActionBar } from '../BulkActionBar/BulkActionBar.tsx';
 import type { CellChange } from '../../fields/types.ts';
 import { arraySource } from '../../lib/list-source.ts';
 import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
@@ -45,6 +46,8 @@ interface SampleGridProps {
   readonly columnActions?: (columnId: string) => readonly GridColumnAction[];
   /** "Create" in a select or status cell's list (spec 0012, AC-238). */
   readonly onCreateOption?: (rowId: string, columnId: string, label: string) => void;
+  /** A bar floating over the grid's foot (spec 0022): the BulkActionBar while rows are ticked. */
+  readonly floatingBar?: ReactNode;
 }
 
 /** A grid over sample companies that keeps its own edits, columns and selection, as a screen would. */
@@ -67,6 +70,7 @@ function SampleGrid({
   onAddColumn,
   columnActions,
   onCreateOption,
+  floatingBar,
 }: SampleGridProps) {
   const [data, setData] = useState(() =>
     sampleRows(count).map((row) =>
@@ -144,6 +148,7 @@ function SampleGrid({
         {...(onAddColumn === undefined ? {} : { onAddColumn })}
         {...(columnActions === undefined ? {} : { columnActions })}
         {...(onCreateOption === undefined ? {} : { onCreateOption })}
+        {...(floatingBar === undefined ? {} : { floatingBar })}
         {...(unknown === undefined
           ? {}
           : {
@@ -610,6 +615,47 @@ export const Sorted: Story = {
 /** Calculations the screen worked out, under their columns. */
 export const Footer: Story = {
   args: { footer: { employees: '1,234 avg', arr: 'USD 91,234,560 sum' } },
+};
+
+/**
+ * A bar floating over the foot (spec 0022): the BulkActionBar centres on the
+ * grid, and the last row scrolls clear of it, so the bar never hides the
+ * focused cell.
+ */
+export const FloatingBar: Story = {
+  args: {
+    count: 30,
+    selected: ['company-1', 'company-2'],
+    floatingBar: (
+      <BulkActionBar placement="floating" count={2} total={30} onClear={() => undefined}>
+        <Button variant="danger" icon="trash">
+          Delete
+        </Button>
+      </BulkActionBar>
+    ),
+  },
+  play: async ({ canvas, canvasElement, userEvent }) => {
+    const press = presser((keys) => userEvent.keyboard(keys));
+    const grid = canvas.getByRole('grid', { name: 'Companies' });
+    const bar = canvas.getByRole('toolbar', { name: 'Selected records' });
+    const gridBox = grid.getBoundingClientRect();
+    const barBox = bar.getBoundingClientRect();
+    // Centred on the grid, inside it.
+    await expect(Math.abs(barBox.left + barBox.width / 2 - (gridBox.left + gridBox.width / 2))).toBeLessThan(2);
+    await expect(barBox.bottom).toBeLessThanOrEqual(gridBox.bottom);
+    // The last row, focused by the keyboard, sits clear of the bar.
+    const first = canvasElement.querySelector('[data-cell="0:3"]');
+    await expect(first).not.toBeNull();
+    if (first === null) return;
+    await userEvent.click(first);
+    await press(['{Meta>}{End}{/Meta}'], '29:9');
+    await waitFor(() => {
+      const last = canvasElement.querySelector('[data-cell="29:9"]');
+      return expect(last?.getBoundingClientRect().bottom ?? Infinity).toBeLessThanOrEqual(
+        bar.getBoundingClientRect().top,
+      );
+    });
+  },
 };
 
 /** The footer is the last row the keys reach; it reads, and nothing in it edits. */

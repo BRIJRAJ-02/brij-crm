@@ -51,16 +51,19 @@ export function objectLabel(object: ObjectSummary | undefined): string {
   return object.isArchived ? strings.archived(object.pluralName) : object.pluralName;
 }
 
-/** A day as `YYYY-MM-DD` in `timeZone` (the date field's value): when the daily cleanup removes the record. */
+/** A day as `YYYY-MM-DD` in `timeZone` (the date field's value), from one formatter made once per zone. */
+export function dayFormatter(timeZone: string): (iso: string) => string {
+  const format = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' });
+  return (iso) => {
+    const parts = format.formatToParts(new Date(iso));
+    const part = (type: string) => parts.find((each) => each.type === type)?.value ?? '';
+    return `${part('year')}-${part('month')}-${part('day')}`;
+  };
+}
+
+/** A day as `YYYY-MM-DD` in `timeZone`: when the daily cleanup removes the record. */
 export function dayIn(iso: string, timeZone: string): string {
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(new Date(iso));
-  const part = (type: string) => parts.find((each) => each.type === type)?.value ?? '';
-  return `${part('year')}-${part('month')}-${part('day')}`;
+  return dayFormatter(timeZone)(iso);
 }
 
 /** What one cell of the trash holds, in its type's value shape. */
@@ -68,7 +71,7 @@ export function cellValue(
   row: TrashRow,
   columnId: string,
   objects: ReadonlyMap<string, ObjectSummary>,
-  timeZone: string,
+  dayOf: (iso: string) => string,
 ): unknown {
   const { item } = row;
   switch (columnId) {
@@ -81,7 +84,7 @@ export function cellValue(
     case TRASH_COLUMNS.deletedAt:
       return item.deletedAt;
     case TRASH_COLUMNS.expiresAt:
-      return dayIn(item.expiresAt, timeZone);
+      return dayOf(item.expiresAt);
     default:
       return null;
   }
@@ -93,28 +96,37 @@ export function cellValue(
  * API key" or "An automation".
  */
 export function deletedBy(row: TrashRow, members: readonly MemberSummary[]): ActorDisplay {
-  const by = row.item.deletedBy;
-  const name =
-    by.type === 'system'
-      ? strings.theSystem
-      : by.type === 'api_key'
-        ? strings.anApiKey
-        : by.type === 'automation'
-          ? strings.anAutomation
-          : (members.find((member) => member.id === by.id)?.name ?? strings.removedMember);
-  return { type: by.type, id: by.id, name };
+  return deletedByOf(members)(row);
+}
+
+/** `deletedBy` over a member list looked up once, by id, for every cell of the grid. */
+export function deletedByOf(members: readonly MemberSummary[]): (row: TrashRow) => ActorDisplay {
+  const names = new Map(members.map((member) => [member.id, member.name]));
+  return (row) => {
+    const by = row.item.deletedBy;
+    const name =
+      by.type === 'system'
+        ? strings.theSystem
+        : by.type === 'api_key'
+          ? strings.anApiKey
+          : by.type === 'automation'
+            ? strings.anAutomation
+            : ((by.id === null ? undefined : names.get(by.id)) ?? strings.removedMember);
+    return { type: by.type, id: by.id, name };
+  };
 }
 
 /**
  * Whether Restore may run for the selected rows (AC-534): at least one of
- * their objects is one the person may change. The server refuses the rest,
- * each with its reason on its row.
+ * their objects is one the person may change, or a row scrolled out of the
+ * loaded ones (its object unknown here). The server refuses the rest, each
+ * with its reason on its row.
  */
 export function canRestore(
   rows: readonly (TrashRow | undefined)[],
   objects: ReadonlyMap<string, ObjectSummary>,
 ): boolean {
-  return rows.some((row) => row !== undefined && objects.get(row.item.objectId)?.access === 'write');
+  return rows.some((row) => row === undefined || objects.get(row.item.objectId)?.access === 'write');
 }
 
 /** "1 record", "46 records". */

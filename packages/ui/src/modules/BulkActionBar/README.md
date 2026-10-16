@@ -4,7 +4,7 @@ The bar that shows while records are selected: how many, "Select all N matching"
 
 ## Why it exists
 
-New. Bulk actions and trash (#22) act on a selection that can be every record matching a view, a million of them, so the bar says how many and offers all of them. It is a React Aria `Toolbar` holding `Button`s and a `ProgressBar`; the screen places it, usually with `placement="floating"`, which floats it over the bottom of the view.
+New. Bulk actions and trash (#22) act on a selection that can be every record matching a view, a million of them, so the bar says how many and offers all of them. It is a React Aria `Toolbar` holding `Button`s and a `ProgressBar`; the screen places it, usually with `placement="floating"` in the DataGrid's `floatingBar`, which floats it over the grid's foot.
 
 ## Use
 
@@ -24,7 +24,7 @@ New. Bulk actions and trash (#22) act on a selection that can be every record ma
 </BulkActionBar>
 ```
 
-- `placement="floating"` centres it `space-16` above the bottom of the view it sits in (AppShell's view is its containing block), over the rows, with only the bar taking the pointer. Why a variant: the app has no stylesheets of its own, and every screen that selects records (#20, #21, #22) floats it the same way. `inline` (the default) leaves it where it is put.
+- `placement="floating"` centres it `space-16` above the bottom of its nearest positioned container, over the rows, with only the bar taking the pointer: hand it to the DataGrid's `floatingBar`, whose frame is that container, and which keeps the focused row clear of it. Why a variant: the app has no stylesheets of its own, and every screen that selects records (#20, #21, #22) floats it the same way. `inline` (the default) leaves it where it is put.
 - A note that replaces an action (a selection too big for one request, "Changes to more than 500 records arrive soon.") goes in as a `Callout placement="bar"` among the children.
 - The count is a live region, so a change in the selection is announced.
 - "Select all N matching" shows while only some are selected and more match.

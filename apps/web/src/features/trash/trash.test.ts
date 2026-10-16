@@ -1,7 +1,16 @@
 // The Trash screen's rules and words (spec 0022, AC-533, AC-534).
 import { dataError, type MemberSummary, type ObjectSummary, type TrashRow } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { canRestore, cellValue, dayIn, deletedBy, objectLabel, restoreToast, TRASH_COLUMNS } from './trash.ts';
+import {
+  canRestore,
+  cellValue,
+  dayFormatter,
+  dayIn,
+  deletedBy,
+  objectLabel,
+  restoreToast,
+  TRASH_COLUMNS,
+} from './trash.ts';
 
 const PEOPLE = { id: 'people', pluralName: 'People', isArchived: false, access: 'write' } as ObjectSummary;
 const DEALS = { id: 'deals', pluralName: 'Deals', isArchived: true, access: 'read' } as ObjectSummary;
@@ -26,9 +35,12 @@ function rowOf(objectId: string, by: TrashRow['item']['deletedBy'] = { type: 'me
 describe('the trash', () => {
   it('shows each cell in its type’s shape, the removal day in the browser’s zone', () => {
     const row = rowOf('deals');
-    expect(cellValue(row, TRASH_COLUMNS.name, OBJECTS, 'UTC')).toEqual({ objectId: 'deals', recordId: 'record-deals' });
-    expect(cellValue(row, TRASH_COLUMNS.object, OBJECTS, 'UTC')).toBe('Deals (archived)');
-    expect(cellValue(row, TRASH_COLUMNS.expiresAt, OBJECTS, 'UTC')).toBe('2026-11-14');
+    expect(cellValue(row, TRASH_COLUMNS.name, OBJECTS, dayFormatter('UTC'))).toEqual({
+      objectId: 'deals',
+      recordId: 'record-deals',
+    });
+    expect(cellValue(row, TRASH_COLUMNS.object, OBJECTS, dayFormatter('UTC'))).toBe('Deals (archived)');
+    expect(cellValue(row, TRASH_COLUMNS.expiresAt, OBJECTS, dayFormatter('UTC'))).toBe('2026-11-14');
     expect(dayIn('2026-11-14T23:30:00.000Z', 'Asia/Tokyo')).toBe('2026-11-15');
     expect(objectLabel(PEOPLE)).toBe('People');
   });
@@ -43,7 +55,8 @@ describe('the trash', () => {
   it('allows Restore when any selected record’s object may be changed (AC-534)', () => {
     expect(canRestore([rowOf('deals'), rowOf('people')], OBJECTS)).toBe(true);
     expect(canRestore([rowOf('deals')], OBJECTS)).toBe(false);
-    expect(canRestore([undefined], OBJECTS)).toBe(false);
+    // A row scrolled out of the loaded ones may be writable: the server decides.
+    expect(canRestore([undefined], OBJECTS)).toBe(true);
   });
 
   it('says what a restore did', () => {

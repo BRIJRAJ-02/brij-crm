@@ -92,20 +92,6 @@ export const SelectAllKeepsFocus: Story = {
   },
 };
 
-/** Floating, as a screen shows it: centred over the bottom of the view it is placed in, above the rows. */
-export const Floating: Story = {
-  args: { placement: 'floating' },
-  render: (args) => (
-    <Stage height="grid">
-      <BulkActionBar {...args} />
-    </Stage>
-  ),
-  play: async ({ canvas, userEvent, args }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Clear the selection' }));
-    await expect(args.onClear).toHaveBeenCalled();
-  },
-};
-
 /** A note in an action's place: a selection too big for one request says so, quietly, in the bar. */
 export const WithNote: Story = {
   args: {

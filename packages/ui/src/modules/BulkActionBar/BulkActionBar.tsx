@@ -30,8 +30,8 @@ export interface BulkActionBarProps {
   readonly onCancel?: () => void;
   /**
    * `inline` (the default) sits where it is put; `floating` floats centred
-   * over the bottom of the view it is placed in (AppShell's view), above the
-   * rows, as a screen shows it while records are selected.
+   * over the bottom of its nearest positioned container, above the rows: the
+   * DataGrid's frame, through its `floatingBar`.
    */
   readonly placement?: 'inline' | 'floating';
 }

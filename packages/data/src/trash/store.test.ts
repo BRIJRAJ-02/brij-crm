@@ -48,11 +48,14 @@ function setup() {
   const frames: (() => void)[] = [];
   const timers: { ms: number; run: () => void; live: boolean }[] = [];
   let minted = 0;
+  let time = 0;
+  const clock = { advance: (ms: number) => (time += ms) };
   const trash = createTrash({
     api,
     mintId: () => idAt(5000 + (minted += 1)),
     schedule: (flush) => frames.push(flush),
     random: () => 0,
+    now: () => time,
     later: (run, ms) => {
       const timer = { ms, run, live: true };
       timers.push(timer);
@@ -71,7 +74,7 @@ function setup() {
       else timers.push({ ...timer, ms: timer.ms - ms });
     }
   };
-  return { trash, queries, counts, restores, frame, tick };
+  return { trash, queries, counts, restores, frame, tick, clock };
 }
 
 async function readyTrash() {
@@ -162,7 +165,7 @@ describe('restoring (AC-534)', () => {
     expect(view.getSnapshot().count.count).toBe(1);
     await settle();
     restores[0]?.answer([
-      { recordId: idAt(0), state: 'restored' },
+      { recordId: idAt(0), state: 'restored', objectId: PEOPLE },
       {
         recordId: idAt(1),
         state: 'refused',
@@ -209,5 +212,56 @@ describe('restoring (AC-534)', () => {
     release();
     frame();
     expect(view.getSnapshot().cellErrors.size).toBe(0);
+  });
+});
+
+describe('the trash under a stream of changes (spec 0022, the state review)', () => {
+  const deleted = (seq: number, objectId = PEOPLE): Extract<ChangeEvent, { kind: 'records' }> => ({
+    kind: 'records',
+    seq,
+    at: '2026-10-15T09:00:01.000Z',
+    objectId,
+    recordIds: [idAt(7000 + seq)],
+    attributeIds: [],
+    deletedIds: [idAt(7000 + seq)],
+  });
+
+  it('settles at most 5 s after the first change, however many keep coming', async () => {
+    const { trash, counts, tick, clock } = await readyTrash();
+    for (let seq = 1; seq <= 12; seq += 1) {
+      trash.changed(WS, deleted(seq));
+      clock.advance(500);
+      tick(500);
+      await settle();
+    }
+    // Six seconds of changes every half second: the settle came once the 5 s were up, not never.
+    expect(counts.length).toBeGreaterThan(1);
+  });
+
+  it('settles a view narrowed to one object only for that object’s records', async () => {
+    const { trash, counts, tick } = setup();
+    const view = trash.view(WS, PEOPLE);
+    view.retain();
+    await settle();
+    counts[0]?.answer({ count: 0, atLeast: false });
+    await view.ready();
+    trash.changed(WS, deleted(1, '0199a6f2-0000-7000-8000-0000000000cc'));
+    tick(5000);
+    await settle();
+    expect(counts).toHaveLength(1);
+    trash.changed(WS, deleted(2));
+    tick(5000);
+    await settle();
+    expect(counts).toHaveLength(2);
+  });
+
+  it('lowers the count with the rows restored, so it never bounces back before a settle', async () => {
+    const { trash, view, restores, frame } = await readyTrash();
+    const restoring = trash.restore(WS, [idAt(0)]);
+    await settle();
+    restores[0]?.answer([{ recordId: idAt(0), state: 'restored', objectId: PEOPLE }]);
+    await restoring;
+    frame();
+    expect(view.getSnapshot().count).toEqual({ count: 2, atLeast: false });
   });
 });

@@ -2023,7 +2023,7 @@ describe('deleting records (spec 0022, AC-524 to AC-526, AC-541)', () => {
         refusal: { code: 'RECORD_DELETED', message: 'That record was already deleted.' },
       },
     ]);
-    expect(await deleting).toMatchObject({ kind: 'done', deleted: 0, refused: 1 });
+    expect(await deleting).toMatchObject({ kind: 'done', deleted: 0, refused: 0 });
     expect(layer.undo.depth(WS)).toBe(0);
   });
 
@@ -2041,5 +2041,76 @@ describe('deleting records (spec 0022, AC-524 to AC-526, AC-541)', () => {
     deletes[0]?.answer([{ recordId: id, state: 'deleted' }]);
     expect(await undone).toEqual({ kind: 'uncreated', objectId: PEOPLE, recordName: 'Grace', deleted: true });
     expect(layer.undo.depth(WS)).toBe(0);
+  });
+});
+
+describe('deleting records, the state review (spec 0022)', () => {
+  it('lowers the count with the rows the server deleted, so it never bounces back before a settle', async () => {
+    const { layer, view, deletes, frame } = await readyView();
+    const deleting = layer.deleteMany(WS, PEOPLE, [idAt(0)]);
+    await settle();
+    deletes[0]?.answer([{ recordId: idAt(0), state: 'deleted' }]);
+    await deleting;
+    frame();
+    expect(view.getSnapshot().count).toEqual({ count: 2, atLeast: false });
+  });
+
+  it('marks no cell for a record another delete took first', async () => {
+    const { layer, view, deletes, frame } = await readyView();
+    const deleting = layer.deleteMany(WS, PEOPLE, [idAt(1)]);
+    await settle();
+    deletes[0]?.answer([
+      {
+        recordId: idAt(1),
+        state: 'already-deleted',
+        refusal: { code: 'RECORD_DELETED', message: 'That record was already deleted.' },
+      },
+    ]);
+    await deleting;
+    frame();
+    expect(view.getSnapshot().cellErrors.size).toBe(0);
+    expect(view.getSnapshot().gone.has(idAt(1))).toBe(true);
+  });
+
+  it('calls an undo restored when its first answer was lost and the retry finds the batch gone', async () => {
+    const { layer, deletes, restores } = await readyView();
+    const deleting = layer.deleteMany(WS, PEOPLE, [idAt(0), idAt(1)]);
+    await settle();
+    deletes[0]?.answer([
+      { recordId: idAt(0), state: 'deleted' },
+      { recordId: idAt(1), state: 'deleted' },
+    ]);
+    await deleting;
+    const undone = layer.undo.run(WS);
+    await settle();
+    restores[0]?.fail(dataError('API_UNAVAILABLE', 'Can’t reach the CRM.'));
+    await settle();
+    await settle();
+    restores[1]?.fail(dataError('NOT_FOUND', 'Nothing from that delete is still in the trash.'));
+    expect(await undone).toEqual({ kind: 'restored', objectId: PEOPLE, restored: 2, kept: 0 });
+  });
+
+  it('keeps a delete on the stack when its undo fails for a passing reason', async () => {
+    const { layer, deletes, restores } = await readyView();
+    const deleting = layer.deleteMany(WS, PEOPLE, [idAt(0)]);
+    await settle();
+    deletes[0]?.answer([{ recordId: idAt(0), state: 'deleted' }]);
+    await deleting;
+    const undone = layer.undo.run(WS);
+    await settle();
+    restores[0]?.fail(dataError('INTERNAL', 'Something went wrong. Try again in a moment.'));
+    await expect(undone).rejects.toMatchObject({ code: 'INTERNAL' });
+    expect(layer.undo.depth(WS)).toBe(1);
+  });
+
+  it('reads ticked rows again on request and notes the ones gone (a coarse delete elsewhere)', async () => {
+    const { view, gets, frame } = await readyView();
+    view.confirm([idAt(0), idAt(1)]);
+    await settle();
+    expect(gets[0]?.input).toEqual([idAt(0), idAt(1)]);
+    gets[0]?.answer([rowOf(idAt(0), { [NAME]: 'P0' })]);
+    await settle();
+    frame();
+    expect([...view.getSnapshot().gone]).toEqual([idAt(1)]);
   });
 });

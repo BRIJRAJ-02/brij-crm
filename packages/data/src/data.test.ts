@@ -986,7 +986,8 @@ describe('live updates', () => {
     const api = fakeApi({
       trashQuery: () => ({ items: [item] }),
       trashCount: () => ({ count: 1, atLeast: false }),
-      trashRestore: (recordIds) => recordIds.map((recordId) => ({ recordId, state: 'restored' as const })),
+      trashRestore: (recordIds) =>
+        recordIds.map((recordId) => ({ recordId, state: 'restored' as const, objectId: PEOPLE.id })),
     });
     const { data } = layer(api);
     const view = await data.trash.view('acme');

@@ -19,7 +19,11 @@ import { createWindows, type WindowCount } from '../records/windows.ts';
 const BLOCK_SIZE = 100;
 /** A settle's wait after the last change, and its random spread (spec 0006's settle). */
 const SETTLE_MS = 1500;
+/** A settle never waits longer than this after the first change it covers, however many keep coming. */
+const SETTLE_MAX_MS = 5000;
 const SPREAD_MS = 2000;
+/** How long a view nobody shows is kept (one the route warmed and no screen held, too). */
+const KEEP_UNUSED_MS = 30_000;
 
 /** The most records one restore brings back (spec 0022): more waits for background jobs. */
 export const MAX_RESTORE_RECORDS = 500;
@@ -110,11 +114,15 @@ export interface TrashOptions {
     readonly answered: (mutationId: string, echoes: number) => void;
     readonly forget: (mutationId: string) => void;
   };
+  /** Unix milliseconds now, for the settle's longest wait. */
+  readonly now?: () => number;
 }
 
 /** One trash view and what the store needs to reach it. */
 interface Entry {
   readonly workspace: string;
+  /** The object the view is narrowed to, or undefined for every object. */
+  readonly objectId: string | undefined;
   readonly view: TrashView;
   /** Whether a loaded block holds the record. */
   readonly shows: (id: string) => boolean;
@@ -143,6 +151,7 @@ export function createTrash({
   watch = () => () => undefined,
   beforeRead = () => Promise.resolve(),
   mutations = { sent: () => undefined, answered: () => undefined, forget: () => undefined },
+  now = () => Date.now(),
 }: TrashOptions) {
   const store = createPlainStore<TrashRow>();
   const entries = new Map<string, Entry>();
@@ -251,21 +260,28 @@ export function createTrash({
       }
       if (isMarked()) markDirty();
     }
+    // When the first change still waiting to settle came: a settle never waits longer than SETTLE_MAX_MS after it.
+    let dirtySince: number | undefined;
     function markDirty() {
+      if (!dirt.isDirty || dirtySince === undefined) dirtySince = now();
       dirt.isDirty = true;
       if (retains === 0 || isSettling) return;
       settleTimer?.();
+      const quiet = Math.max(0, Math.min(SETTLE_MS, dirtySince + SETTLE_MAX_MS - now()));
       settleTimer = later(
         () => {
           settleTimer = undefined;
+          dirtySince = undefined;
           void settle();
         },
-        SETTLE_MS + Math.round(random() * SPREAD_MS),
+        quiet + Math.round(random() * SPREAD_MS),
       );
     }
 
     function start() {
       void beforeRead(workspace).then(() => refreshCount());
+      // A view the route warmed but no screen ever showed lets go too.
+      letGoLater();
     }
 
     let lastSource: RecordSource<TrashRow> | undefined;
@@ -321,23 +337,32 @@ export function createTrash({
           unwatch?.();
           unwatch = undefined;
           // The member left the trash: its refusals go with it, and it reads afresh next time.
-          const key = keyOf(workspace, objectId);
-          later(() => {
-            if (retains > 0 || entries.get(key) !== entry) return;
-            entries.delete(key);
-            entry.dispose();
-          }, 30_000);
+          letGoLater();
           setCellErrors([...cellErrors.keys()]);
         };
       },
     };
+    /** Nobody shows the view: after a while it leaves the store and lets go of its rows. */
+    function letGoLater() {
+      const key = keyOf(workspace, objectId);
+      later(() => {
+        if (retains > 0 || entries.get(key) !== entry) return;
+        entries.delete(key);
+        entry.dispose();
+      }, KEEP_UNUSED_MS);
+    }
     const entry: Entry = {
       workspace,
+      objectId,
       view,
       shows: (id) => windows.has(id),
       markDirty,
       drop: (ids) => {
+        // Out of the rows, and out of the exact count at once, so the count never bounces back until a settle.
+        const held = [...ids].filter((id) => windows.has(id)).length;
         windows.drop(ids);
+        const told = windows.told();
+        if (held > 0 && !told.atLeast) windows.setCount({ count: Math.max(0, told.count - held), atLeast: false });
       },
       invalidate: inner.invalidate,
       dispose: () => {
@@ -382,7 +407,6 @@ export function createTrash({
       const ids = [...new Set(recordIds)];
       if (ids.length > MAX_RESTORE_RECORDS) return { kind: 'too-many', limit: MAX_RESTORE_RECORDS };
       if (ids.length === 0) return { kind: 'done', restored: 0, refused: 0, objectIds: [] };
-      const objectOf = new Map(ids.map((id) => [id, store.get(id)?.item.objectId]));
       const nameCell = (id: string) => `${id}:${TRASH_NAME_COLUMN}`;
       setCellErrors(ids.map(nameCell));
       leaving = new Set([...leaving, ...ids]);
@@ -418,12 +442,12 @@ export function createTrash({
           result.refusal === undefined ? [] : [[nameCell(result.recordId), result.refusal.message] as const],
         ),
       );
+      // The objects restored into, from the answer: a row scrolled away is no longer in the store.
       const objectIds = [
         ...new Set(
-          [...back].flatMap((id) => {
-            const objectId = objectOf.get(id);
-            return objectId === undefined ? [] : [objectId];
-          }),
+          results.flatMap((result) =>
+            result.state !== 'refused' && result.objectId !== undefined ? [result.objectId] : [],
+          ),
         ),
       ];
       return { kind: 'done', restored: back.size, refused: refused.length, objectIds };
@@ -441,7 +465,10 @@ export function createTrash({
         (event.restoredIds?.length ?? 0) > 0 ||
         event.recordIds.some((id) => of(workspace).some((entry) => entry.shows(id)));
       if (!moves) return;
-      for (const entry of of(workspace)) entry.markDirty();
+      // A view narrowed to one object settles only for that object's records.
+      for (const entry of of(workspace)) {
+        if (entry.objectId === undefined || entry.objectId === event.objectId) entry.markDirty();
+      }
     },
 
     /** Changes may have been missed, or this tab deleted or restored records: the open trash views settle. */

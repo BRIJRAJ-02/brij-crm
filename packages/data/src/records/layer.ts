@@ -396,6 +396,12 @@ export interface ViewState {
    * selection. The last 10,000, as a new set each time one goes.
    */
   readonly gone: ReadonlySet<string>;
+  /**
+   * How many times the view was read again because changes were too many to
+   * name (a coarse event, a gap): a screen holding ticked rows asks `confirm`
+   * for them then, since a coarse delete names none of the ids it took.
+   */
+  readonly reloads: number;
 }
 
 /** One screen reading a view: the columns it shows (`columns`), and `release` when it goes. */
@@ -425,6 +431,12 @@ export interface RecordsView {
   readonly retain: (attributeIds?: readonly string[]) => ViewReader;
   /** A cell editor opened (true) or closed (false) in the view: order and membership don't settle while one is open. */
   readonly holdSettle: (isHeld: boolean) => void;
+  /**
+   * Reads these records again (500 a call, names only) and notes the ones the
+   * server no longer answers as `gone`, so a selection drops them (spec 0022,
+   * AC-522, after a coarse delete elsewhere).
+   */
+  readonly confirm: (recordIds: readonly string[]) => void;
 }
 
 /** What the records layer needs from createDataLayer. */
@@ -898,7 +910,7 @@ export function createRecordsLayer({
   let cellErrors: ReadonlyMap<string, string> = new Map();
   // Records gone on the server, the last GONE_KEPT (spec 0022, AC-522): screens drop them from their selections.
   let goneIds: ReadonlySet<string> = new Set();
-  const noteGone = (ids: Iterable<string>) => {
+  const noteGone = (workspace: string, ids: Iterable<string>) => {
     const next = new Set(goneIds);
     for (const id of ids) {
       next.delete(id);
@@ -910,7 +922,8 @@ export function createRecordsLayer({
       next.delete(id);
     }
     goneIds = next;
-    for (const entry of views.values()) entry.invalidate();
+    // Only this workspace's views: ids are unique per workspace, and no other view holds these.
+    for (const entry of viewsOf(workspace)) entry.invalidate();
   };
   const backAgain = (ids: readonly string[]) => {
     if (goneIds.size === 0 || !ids.some((id) => goneIds.has(id))) return;
@@ -979,13 +992,25 @@ export function createRecordsLayer({
     }
   }
 
-  /** Records gone on the server: out of the store and out of every window, whose later rows reload. */
-  const dropRecords = (ids: readonly string[]) => {
+  /**
+   * Records gone from a window: out of its rows (the later ones reload), and
+   * out of its exact count at once, so the count never bounces back up until
+   * the next settle reads it again (spec 0022).
+   */
+  const dropFrom = (entry: ViewEntry, gone: ReadonlySet<string>) => {
+    const held = [...gone].filter((id) => entry.windows.has(id)).length;
+    entry.windows.drop(gone);
+    const told = entry.windows.told();
+    if (held > 0 && !told.atLeast) entry.windows.setCount({ count: Math.max(0, told.count - held), atLeast: false });
+  };
+
+  /** Records gone on the server: out of the store and out of every window of the workspace, whose later rows reload. */
+  const dropRecords = (workspace: string, ids: readonly string[]) => {
     if (ids.length === 0) return;
     store.remove(ids);
     const gone = new Set(ids);
-    for (const entry of views.values()) entry.windows.drop(gone);
-    noteGone(ids);
+    for (const entry of viewsOf(workspace)) dropFrom(entry, gone);
+    noteGone(workspace, ids);
   };
 
   function openView(workspace: string, objectId: string, query: ViewQuery, warm: readonly string[]): ViewEntry {
@@ -1278,6 +1303,8 @@ export function createRecordsLayer({
     let lastErrors = cellErrors;
     let lastStatus: ViewStatus = status;
     let lastGone = goneIds;
+    let reloads = 0;
+    let lastReloads = reloads;
     let snapshot: ViewState | undefined;
     const rowNotesOf = (): ReadonlyMap<string, RowNote> =>
       new Map(inner.pins().flatMap((pin) => (pin.note === undefined ? [] : [[pin.id, pin.note] as const])));
@@ -1290,8 +1317,10 @@ export function createRecordsLayer({
           source !== lastSource ||
           cellErrors !== lastErrors ||
           status !== lastStatus ||
-          goneIds !== lastGone
+          goneIds !== lastGone ||
+          reloads !== lastReloads
         ) {
+          lastReloads = reloads;
           lastSource = source;
           lastErrors = cellErrors;
           lastStatus = status;
@@ -1308,6 +1337,7 @@ export function createRecordsLayer({
             rowNotes: rowNotesOf(),
             referenceDisplays,
             gone: goneIds,
+            reloads,
             ...(error === undefined ? {} : { error }),
           };
         }
@@ -1362,6 +1392,21 @@ export function createRecordsLayer({
             }
           },
         };
+      },
+      confirm: (recordIds) => {
+        for (const part of chunks([...new Set(recordIds)], GET_LIMIT)) {
+          whenFree(() => api.get({ workspace, ids: part, attributeIds: [] })).then(
+            (rows) => {
+              const found = new Set(rows.map((row) => row.id));
+              dropRecords(
+                workspace,
+                part.filter((id) => !found.has(id)),
+              );
+            },
+            // Left ticked: the server refuses whatever is gone when the action is sent.
+            () => undefined,
+          );
+        }
       },
       holdSettle: (isHeld) => {
         editors = Math.max(0, editors + (isHeld ? 1 : -1));
@@ -1452,6 +1497,8 @@ export function createRecordsLayer({
       view,
       invalidate: inner.invalidate,
       reread: () => {
+        reloads += 1;
+        inner.invalidate();
         // Still loading: what it loads is already newer than what was missed.
         if (status !== 'ready') return;
         dirt.isDirty = true;
@@ -1787,7 +1834,7 @@ export function createRecordsLayer({
     // Signed out: the layer already said so, and sign in comes next.
     if (failure.code === 'UNAUTHENTICATED') return { recordId: each.recordId, cells: each.cells };
     if (failure.code === 'RECORD_DELETED' || failure.code === 'NOT_FOUND') {
-      dropRecords([each.recordId]);
+      dropRecords(workspace, [each.recordId]);
       return { ...outcome, gone: true };
     }
     if (options.quiet?.has(failure.code) === true) return outcome;
@@ -2154,10 +2201,10 @@ export function createRecordsLayer({
       return { kind: 'failed', error: toDataError(error) };
     }
     const deleted = results.filter((result) => result.state === 'deleted').map((result) => result.recordId);
-    // Already in the trash (another delete got there first) is gone all the same.
+    // Already in the trash (another delete got there first) is gone all the same: no mark, no refusal.
     const gone = results.filter((result) => result.state !== 'refused').map((result) => result.recordId);
-    const refused = results.filter((result) => result.state !== 'deleted');
-    dropRecords(gone);
+    const refused = results.filter((result) => result.state === 'refused');
+    dropRecords(workspace, gone);
     setLeaving(ids, false);
     subscriptions.changed(workspace, new Set(gone), 'all', new Set(gone));
     for (const entry of viewsOf(workspace)) if (entry.objectId === objectId) entry.markDirty();
@@ -2202,15 +2249,28 @@ export function createRecordsLayer({
     mutations.sent(mutationId);
     const named = entry.recordName === undefined ? {} : { recordName: entry.recordName };
     let results: RestoreBatchResults['results'];
+    let tries = 0;
     try {
-      const answer = await delivered(() => api.restoreBatch({ workspace, batchId: entry.batchId, mutationId }));
+      const answer = await delivered(() => {
+        tries += 1;
+        return api.restoreBatch({ workspace, batchId: entry.batchId, mutationId });
+      });
       mutations.answered(mutationId, answer.echoes);
       results = answer.results;
     } catch (error) {
       mutations.forget(mutationId);
       const failure = toDataError(error);
-      if (failure.code !== 'NOT_FOUND') throw failure;
-      return { kind: 'restored', objectId: entry.objectId, restored: 0, kept: entry.count, reason: 'gone', ...named };
+      if (failure.code === 'NOT_FOUND' && tries > 1) {
+        // A try whose answer never came restored the batch, so the retry found none of it left: it came back.
+        for (const view of viewsOf(workspace)) if (view.objectId === entry.objectId) view.reread();
+        return { kind: 'restored', objectId: entry.objectId, restored: entry.count, kept: 0, ...named };
+      }
+      if (failure.code === 'NOT_FOUND') {
+        return { kind: 'restored', objectId: entry.objectId, restored: 0, kept: entry.count, reason: 'gone', ...named };
+      }
+      // Anything else (offline, the server busy): the delete stays on the stack, to undo again.
+      undo.push(workspace, entry);
+      throw failure;
     }
     const back = results.filter((result) => result.state !== 'refused').map((result) => result.recordId);
     const kept = results.filter((result) => result.state === 'refused');
@@ -2269,6 +2329,8 @@ export function createRecordsLayer({
       if (entry.kind === 'delete') return undoDelete(workspace, entry);
       if (entry.kind === 'create') {
         const outcome = await trashRecords(workspace, entry.objectId, [entry.recordId], { undoable: false });
+        // Refused whole for a passing reason: the create stays on the stack, to undo again.
+        if (outcome.kind === 'failed') undo.push(workspace, entry);
         return {
           kind: 'uncreated',
           objectId: entry.objectId,
@@ -2362,8 +2424,8 @@ export function createRecordsLayer({
         const found = new Set(rows.map((row) => row.id));
         const gone = new Set(part.filter((id) => !found.has(id) && !store.pending().has(id)));
         if (gone.size === 0) return;
-        for (const entry of viewsOf(workspace)) entry.windows.drop(gone);
-        noteGone(gone);
+        for (const entry of viewsOf(workspace)) dropFrom(entry, gone);
+        noteGone(workspace, gone);
         store.remove([...gone].filter((id) => ![...views.values()].some((entry) => entry.shows(id))));
       }),
     );

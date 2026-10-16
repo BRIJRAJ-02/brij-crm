@@ -10,7 +10,16 @@ import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { strings } from './strings.ts';
-import { canRestore, cellValue, deletedBy, restoreToast, TRASH_ATTRIBUTES, TRASH_COLUMNS } from './trash.ts';
+import { deleteOffer } from '../workspace/bulk.ts';
+import {
+  canRestore,
+  cellValue,
+  dayFormatter,
+  deletedByOf,
+  restoreToast,
+  TRASH_ATTRIBUTES,
+  TRASH_COLUMNS,
+} from './trash.ts';
 
 /** Props for the Trash screen: what its route loaded through the data layer. */
 export interface TrashScreenProps {
@@ -50,24 +59,33 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
     selection: noRows(),
   }));
   const selection = held.view === view ? held.selection : noRows();
-  const clear = () => {
-    setHeld({ view, selection: noRows() });
-  };
   const [focusRow, setFocusRow] = useState<{ readonly index: number } | undefined>(undefined);
   const count = selectedCount(selection, state.count.count);
   const ids = selection.kind === 'some' ? [...selection.ids] : [];
   const filtered = objectId === undefined ? undefined : byId.get(objectId);
+  // Names and days are worked out once per member list and zone, not per cell.
+  const deleters = useMemo(() => deletedByOf(members), [members]);
+  const dayOf = useMemo(() => dayFormatter(timeZone), [timeZone]);
+  /** The grid takes focus back at the first of these rows (or the first row), as the bar that held it goes. */
+  const focusBackAt = (recordIds: readonly string[], leaving: boolean) => {
+    const rows = recordIds.flatMap((id) => {
+      const at = view.indexOf(id);
+      return at === undefined ? [] : [at];
+    });
+    const last = Math.max(0, state.source.count - 1 - (leaving ? recordIds.length : 0));
+    setFocusRow({ index: Math.max(0, Math.min(...rows, last)) });
+  };
+  const clear = () => {
+    focusBackAt(ids, false);
+    setHeld({ view, selection: noRows() });
+  };
 
   const restore = () => {
     const [only] = ids.length === 1 ? ids : [];
     const onlyName = only === undefined ? undefined : view.row(only)?.item.display.name;
     // The grid takes focus back where the first restored row was, so the keyboard carries on there.
-    const rows = ids.flatMap((id) => {
-      const at = view.indexOf(id);
-      return at === undefined ? [] : [at];
-    });
-    setFocusRow({ index: Math.max(0, Math.min(...rows, state.source.count - 1 - ids.length)) });
-    clear();
+    focusBackAt(ids, true);
+    setHeld({ view, selection: noRows() });
     data.trash.restore(slug, ids).then(
       (summary) => {
         const toast = restoreToast(summary, onlyName);
@@ -138,10 +156,10 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
               columns={COLUMNS}
               pinnedCount={1}
               rows={state.source}
-              getValue={(row, columnId) => cellValue(row, columnId, byId, timeZone)}
+              getValue={(row, columnId) => cellValue(row, columnId, byId, dayOf)}
               getDisplay={(row, columnId) => {
                 if (columnId === TRASH_COLUMNS.name) return row.item.display;
-                if (columnId === TRASH_COLUMNS.deletedBy) return [deletedBy(row, members)];
+                if (columnId === TRASH_COLUMNS.deletedBy) return [deleters(row)];
                 return undefined;
               }}
               rowHeader={TRASH_NAME_COLUMN}
@@ -165,21 +183,30 @@ export function TrashScreen({ slug, objects, members, view, objectId }: TrashScr
                 )
               }
               {...(focusRow === undefined ? {} : { focusRow })}
+              floatingBar={
+                count > 0 && (
+                  <BulkActionBar placement="floating" count={count} total={state.count.count} onClear={clear}>
+                    {deleteOffer(count) === 'too-many' ? (
+                      <Callout placement="bar" isAnnounced>
+                        {strings.tooMany}
+                      </Callout>
+                    ) : (
+                      <>
+                        <Button icon="archive-restore" isDisabled={!isAllowed} onPress={restore}>
+                          {strings.restore}
+                        </Button>
+                        {/* Said when it appears: the ticked rows are all of objects the person may only read. */}
+                        {!isAllowed && (
+                          <Callout placement="bar" isAnnounced>
+                            {strings.cannotRestore}
+                          </Callout>
+                        )}
+                      </>
+                    )}
+                  </BulkActionBar>
+                )
+              }
             />
-            {count > 0 && (
-              <BulkActionBar placement="floating" count={count} total={state.count.count} onClear={clear}>
-                {count > 500 ? (
-                  <Callout placement="bar">{strings.tooMany}</Callout>
-                ) : (
-                  <>
-                    <Button icon="archive-restore" isDisabled={!isAllowed} onPress={restore}>
-                      {strings.restore}
-                    </Button>
-                    {!isAllowed && <Callout placement="bar">{strings.cannotRestore}</Callout>}
-                  </>
-                )}
-              </BulkActionBar>
-            )}
           </>
         ),
       }}

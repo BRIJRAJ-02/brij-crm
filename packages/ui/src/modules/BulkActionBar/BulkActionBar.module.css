@@ -2,8 +2,9 @@
    shadow-md and radius-lg: the count in body-strong, then the offer, the
    actions space-8 apart, and Clear at the end. A running action's progress
    takes the actions' place. Floating, it sits centred space-16 above the
-   bottom of the view it is placed in (the view is its containing block),
-   over the rows, and only the bar itself takes the pointer. */
+   bottom of its nearest positioned container (the DataGrid's frame, through
+   its floatingBar), over the rows, and only the bar itself takes the
+   pointer. */
 @layer components {
   .frame {
     display: contents;
