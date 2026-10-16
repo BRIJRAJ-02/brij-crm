@@ -155,6 +155,68 @@ export async function holdUniqueKeys(tx: WorkspaceTx, ownerIds: readonly string[
   `);
 }
 
+/** The words of a restore refused because another record took unique values meanwhile (AC-8, spec 0009 AC-144). */
+export function uniqueTakenMessage(taken: readonly { readonly title: string; readonly key: string }[]): string {
+  const named = taken.map((row) => `${row.title} ${row.key}`).join(', ');
+  return `Another record now has ${named || 'one of its unique values'}. Change that record first, then restore this one.`;
+}
+
+/**
+ * Which of `ownerIds` hold unique keys another live record now has (a
+ * restore of many records at once, spec 0022): by owner, the attributes the
+ * principal can see and the taken values, in title order. One statement for
+ * the whole batch.
+ */
+export async function heldKeysTaken(
+  tx: WorkspaceTx,
+  access: Access,
+  ownerIds: readonly string[],
+): Promise<ReadonlyMap<string, readonly { readonly title: string; readonly key: string }[]>> {
+  if (ownerIds.length === 0) return new Map();
+  const found = await tx.execute<{
+    owner: string;
+    id: string;
+    object_id: string | null;
+    list_id: string | null;
+    title: string;
+    key: string;
+  }>(sql`
+    select v.owner_id::text as owner, a.id::text, a.object_id::text, a.list_id::text, a.title, v.held_unique_key as key
+    from "values" v join attributes a on a.workspace_id = v.workspace_id and a.id = v.attribute_id
+    where v.owner_id = any(${uuidArray(ownerIds)}) and v.active_until is null and v.held_unique_key is not null
+      and exists (
+        select 1 from "values" o
+        where o.workspace_id = v.workspace_id and o.attribute_id = v.attribute_id
+          and o.unique_key = v.held_unique_key and o.active_until is null
+      )
+    order by a.title, v.held_unique_key
+  `);
+  const byOwner = new Map<string, { title: string; key: string }[]>();
+  for (const row of found.rows) {
+    const list = byOwner.get(row.owner) ?? [];
+    byOwner.set(row.owner, list);
+    // Only attributes the principal can see are named; the owner is refused either way.
+    if (attributeVisible(access, { id: row.id, objectId: row.object_id, listId: row.list_id })) {
+      list.push({ title: row.title, key: row.key });
+    }
+  }
+  return byOwner;
+}
+
+/**
+ * Moves the held keys of many owners back at once (a restore of many
+ * records whose keys `heldKeysTaken` found free). A clash between two of
+ * them (two trashed records holding the same value) fails with the unique
+ * index's `23505`, which the caller rolls back.
+ */
+export async function releaseManyUniqueKeys(tx: WorkspaceTx, ownerIds: readonly string[]): Promise<void> {
+  if (ownerIds.length === 0) return;
+  await tx.execute(sql`
+    update "values" set unique_key = held_unique_key, held_unique_key = null
+    where owner_id = any(${uuidArray(ownerIds)}) and active_until is null and held_unique_key is not null
+  `);
+}
+
 /**
  * Moves held keys back on a restore. Refuses with `UNIQUE_CONFLICT`, listing
  * the values, when another record took one of them meanwhile (AC-8). Only the

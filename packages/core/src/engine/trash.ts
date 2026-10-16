@@ -11,14 +11,20 @@
 import { sql, type SQL } from 'drizzle-orm';
 import type { EngineRefusal } from '@crm/contracts/values';
 import type { WorkspaceTx } from '@crm/db';
-import { farReferences, liveEntries } from './deletion.ts';
+import { FAR_LIMIT, farReferences, liveEntries } from './deletion.ts';
 import { checkId, isUuid, uuidArray } from './ids.ts';
 import { limitsOf, RESTORE_WINDOW, takeRecordSlots } from './limits.ts';
 import { readRecords, type RecordView } from './records.ts';
-import { isRefusal, refuse } from './refusals.ts';
+import { isRefusal, postgresError, refuse } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
-import { hideRecordsKeys, setRecordKeysLive } from './sort-keys.ts';
-import { holdUniqueKeys, releaseUniqueKeys } from './unique.ts';
+import { hideRecordsKeys, setRecordKeysLive, showRecordsKeys } from './sort-keys.ts';
+import {
+  heldKeysTaken,
+  holdUniqueKeys,
+  releaseManyUniqueKeys,
+  releaseUniqueKeys,
+  uniqueTakenMessage,
+} from './unique.ts';
 import {
   runWrite,
   type AfterWrite,
@@ -95,6 +101,97 @@ async function entriesOf(tx: WorkspaceTx, refs: readonly RecordRef[]): Promise<r
 }
 
 /**
+ * The statement behind `farReferencesMany`, exported for the plan test: as
+ * `farReferencesQuery` (spec 0007, AC-83) for a whole batch of one object's
+ * records, each relationship end reading at most `FAR_LIMIT` live far records
+ * across the batch (an index scan of `record_links_from` or `record_links_to`
+ * by relationship and `= any` of the ids), each one primary key probe.
+ */
+export function farReferencesManyQuery(objectId: string, recordIds: readonly string[]): SQL {
+  const ids = uuidArray(recordIds);
+  return sql`
+    with ends as materialized (
+      select rel.workspace_id, rel.id as relationship_id,
+        case when fa.object_id = ${objectId}::uuid then rel.to_attribute_id end as via_to,
+        case when ta.object_id = ${objectId}::uuid or ${objectId}::uuid = any(rel.target_object_ids)
+          then rel.from_attribute_id end as via_from
+      from relationships rel
+      join attributes fa on fa.workspace_id = rel.workspace_id and fa.id = rel.from_attribute_id
+      left join attributes ta on ta.workspace_id = rel.workspace_id and ta.id = rel.to_attribute_id
+      where fa.object_id = ${objectId}::uuid or ta.object_id = ${objectId}::uuid
+        or ${objectId}::uuid = any(rel.target_object_ids)
+    )
+    select far.id::text as record_id, far.object_id::text as object_id, e.via_to::text as attribute_id,
+      e.relationship_id::text || ':to' as end_key
+    from ends e
+    cross join lateral (
+      select r.id, r.object_id
+      from record_links l
+      cross join lateral (
+        select r.id, r.object_id from records r
+        where r.workspace_id = l.workspace_id and r.id = l.to_record_id and r.deleted_at is null
+        offset 0
+      ) r
+      where l.workspace_id = e.workspace_id and l.relationship_id = e.relationship_id
+        and l.from_record_id = any(${ids}) and l.active_until is null
+      limit ${FAR_LIMIT}
+    ) far
+    where e.via_to is not null
+    union all
+    select far.id::text, far.object_id::text, e.via_from::text, e.relationship_id::text || ':from'
+    from ends e
+    cross join lateral (
+      select r.id, r.object_id
+      from record_links l
+      cross join lateral (
+        select r.id, r.object_id from records r
+        where r.workspace_id = l.workspace_id and r.id = l.from_record_id and r.deleted_at is null
+        offset 0
+      ) r
+      where l.workspace_id = e.workspace_id and l.relationship_id = e.relationship_id
+        and l.to_record_id = any(${ids}) and l.active_until is null
+      limit ${FAR_LIMIT}
+    ) far
+    where e.via_from is not null
+  `;
+}
+
+/**
+ * The reference values on live records that show any of a batch of one
+ * object's records (a bulk delete or restore), in one statement: at most
+ * `FAR_LIMIT` far records per relationship end across the whole batch, so a
+ * delete of 500 hub records never holds 500 × 1,000 far rows. An end cut
+ * short names its object in `coarseObjects` (spec 0007, AC-83). Each far
+ * record and attribute is named once.
+ */
+async function farReferencesMany(
+  tx: WorkspaceTx,
+  objectId: string,
+  recordIds: readonly string[],
+): Promise<{ readonly references: readonly ReferenceChange[]; readonly coarseObjects: readonly string[] }> {
+  if (recordIds.length === 0) return { references: [], coarseObjects: [] };
+  const result = await tx.execute<{ record_id: string; object_id: string; attribute_id: string; end_key: string }>(
+    farReferencesManyQuery(objectId, recordIds),
+  );
+  const perEnd = new Map<string, { count: number; objectId: string }>();
+  const references = new Map<string, ReferenceChange>();
+  for (const row of result.rows) {
+    const end = perEnd.get(row.end_key) ?? { count: 0, objectId: row.object_id };
+    end.count += 1;
+    perEnd.set(row.end_key, end);
+    references.set(`${row.record_id}:${row.attribute_id}`, {
+      recordId: row.record_id,
+      objectId: row.object_id,
+      attributeId: row.attribute_id,
+    });
+  }
+  const coarseObjects = [
+    ...new Set([...perEnd.values()].flatMap((end) => (end.count >= FAR_LIMIT ? [end.objectId] : []))),
+  ];
+  return { references: [...references.values()], coarseObjects };
+}
+
+/**
  * Moves up to 500 records of one object to the trash in one write (spec
  * 0022, AC-524, AC-525): object `write` is checked once for the call (403
  * `FORBIDDEN` on an object the principal may only read, nothing deleted);
@@ -141,19 +238,13 @@ export async function deleteRecords(
         `);
         const refs = live.map((recordId) => ({ recordId, objectId }));
         const entries = await entriesOf(tx, refs);
-        const references: ReferenceChange[] = [];
-        const coarse = new Set<string>();
-        // Each record's far references, cut at the cap per relationship end (spec 0007, AC-83).
-        for (const ref of refs) {
-          const far = await farReferences(tx, ref);
-          for (const each of far.references) references.push(each);
-          for (const each of far.coarseObjects) coarse.add(each);
-        }
+        // The far references of the whole batch in one statement, capped per relationship end (spec 0007, AC-83).
+        const far = await farReferencesMany(tx, objectId, live);
         await holdUniqueKeys(tx, [...live, ...entries.map((entry) => entry.entryId)]);
         await hideRecordsKeys(tx, live);
         // Last, as every write takes the counter row.
         await takeRecordSlots(tx, scope, -live.length);
-        context.record({ deletedRecords: refs, hiddenEntries: entries, references, coarseObjects: [...coarse] });
+        context.record({ deletedRecords: refs, hiddenEntries: entries, ...far });
       }
       const isLive = new Set(live);
       return ids.map((recordId): DeleteOutcome => {
@@ -223,53 +314,105 @@ async function restoreLocked(
     sql`select live_records as live from workspace_counters where workspace_id = ${scope.workspaceId}::uuid`,
   );
   const limit = limitsOf(scope).liveRecords;
-  let free = limit - (counters.rows[0]?.live ?? 0);
+  const free = limit - (counters.rows[0]?.live ?? 0);
   const full = `Your workspace holds ${limit.toLocaleString('en')} records, the most it can. Delete some before restoring.`;
   const outcomes = new Map<string, RestoreOutcome>();
-  let restored = 0;
+  const refused = (id: string, refusal: EngineRefusal) => {
+    outcomes.set(id, { recordId: id, state: 'refused', refusal });
+  };
+  // What may come back, in id order.
+  const candidates: LockedTrash[] = [];
   for (const id of [...ids].sort()) {
     const row = rows.get(id);
     if (row === undefined || (row.deleted && row.expired)) {
-      outcomes.set(id, { recordId: id, state: 'refused', refusal: { code: 'NOT_FOUND', message: EXPIRED } });
-      continue;
-    }
-    if (readOnly.has(row.object_id)) {
+      refused(id, { code: 'NOT_FOUND', message: EXPIRED });
+    } else if (readOnly.has(row.object_id)) {
       const message = `You can view ${names.get(row.object_id) ?? 'these records'} but not change them.`;
-      outcomes.set(id, { recordId: id, state: 'refused', refusal: { code: 'FORBIDDEN', message } });
-      continue;
-    }
-    if (!row.deleted) {
+      refused(id, { code: 'FORBIDDEN', message });
+    } else if (!row.deleted) {
       outcomes.set(id, { recordId: id, state: 'live' });
-      continue;
-    }
-    if (free <= 0) {
-      outcomes.set(id, { recordId: id, state: 'refused', refusal: { code: 'LIMIT_REACHED', message: full } });
-      continue;
-    }
-    const ref = { recordId: id, objectId: row.object_id };
-    const done = await context.perRecord(async (part) => {
-      const entries = await liveEntries(part.tx, ref);
-      const far = await farReferences(part.tx, ref);
-      await releaseUniqueKeys(part.tx, access, [id, ...entries.map((entry) => entry.entryId)]);
-      await part.tx.execute(sql`
-        update records set deleted_at = null, deleted_by_type = null, deleted_by_id = null,
-          deleted_by_member_id = null, deleted_batch_id = null, revision = revision + 1
-        where id = ${id}::uuid
-      `);
-      await setRecordKeysLive(part.tx, id, true);
-      part.record({ restoredRecords: [ref], shownEntries: entries, ...far });
-    });
-    if (done.ok) {
-      restored += 1;
-      free -= 1;
-      outcomes.set(id, { recordId: id, state: 'restored' });
     } else {
-      const [refusal] = done.refusals;
-      outcomes.set(id, {
-        recordId: id,
-        state: 'refused',
-        refusal: refusal ?? { code: 'UNIQUE_CONFLICT', message: 'Another record now has one of its unique values.' },
+      candidates.push(row);
+    }
+  }
+  // The batch in a few statements whatever its size: entries, unique values taken meanwhile, far references.
+  const entries = await entriesOf(
+    tx,
+    candidates.map((row) => ({ recordId: row.id, objectId: row.object_id })),
+  );
+  const ownerOf = new Map<string, string>(candidates.map((row) => [row.id, row.id]));
+  for (const entry of entries) ownerOf.set(entry.entryId, entry.recordId);
+  const taken = await heldKeysTaken(tx, access, [...ownerOf.keys()]);
+  const takenBy = new Map<string, { readonly title: string; readonly key: string }[]>();
+  for (const [owner, values] of taken) {
+    const recordId = ownerOf.get(owner);
+    if (recordId === undefined) continue;
+    takenBy.set(recordId, [...(takenBy.get(recordId) ?? []), ...values]);
+  }
+  for (const [recordId, values] of takenBy)
+    refused(recordId, { code: 'UNIQUE_CONFLICT', message: uniqueTakenMessage(values) });
+  // As far as the free slots go, after the ones whose values were taken: those never take a slot.
+  const clear = candidates.filter((row) => !takenBy.has(row.id));
+  const coming = clear.slice(0, Math.max(0, free));
+  for (const row of clear.slice(Math.max(0, free))) refused(row.id, { code: 'LIMIT_REACHED', message: full });
+  let restored = 0;
+  if (coming.length > 0) {
+    const comingIds = coming.map((row) => row.id);
+    const isComing = new Set(comingIds);
+    const comingEntries = entries.filter((entry) => isComing.has(entry.recordId));
+    const owners = [...comingIds, ...comingEntries.map((entry) => entry.entryId)];
+    const byObject = new Map<string, string[]>();
+    for (const row of coming) byObject.set(row.object_id, [...(byObject.get(row.object_id) ?? []), row.id]);
+    const references: ReferenceChange[] = [];
+    const coarse = new Set<string>();
+    for (const [objectId, recordIds] of byObject) {
+      const far = await farReferencesMany(tx, objectId, recordIds);
+      for (const each of far.references) references.push(each);
+      for (const each of far.coarseObjects) coarse.add(each);
+    }
+    try {
+      // One savepoint for the batch: two of its records holding the same unique value clash on the index.
+      await tx.transaction(async (batch) => {
+        await releaseManyUniqueKeys(batch, owners);
+        await batch.execute(sql`
+          update records set deleted_at = null, deleted_by_type = null, deleted_by_id = null,
+            deleted_by_member_id = null, deleted_batch_id = null, revision = revision + 1
+          where id = any(${uuidArray(comingIds)})
+        `);
+        await showRecordsKeys(batch, comingIds);
       });
+      restored = coming.length;
+      for (const id of comingIds) outcomes.set(id, { recordId: id, state: 'restored' });
+      context.record({
+        restoredRecords: coming.map((row) => ({ recordId: row.id, objectId: row.object_id })),
+        shownEntries: comingEntries,
+        references,
+        coarseObjects: [...coarse],
+      });
+    } catch (error) {
+      if (postgresError(error)?.code !== '23505') throw error;
+      // Rare: the batch clashed with itself. Each record then comes back on its own, the later ones refused.
+      for (const row of coming) {
+        const ref = { recordId: row.id, objectId: row.object_id };
+        const done = await context.perRecord(async (part) => {
+          const own = await liveEntries(part.tx, ref);
+          const far = await farReferences(part.tx, ref);
+          await releaseUniqueKeys(part.tx, access, [row.id, ...own.map((entry) => entry.entryId)]);
+          await part.tx.execute(sql`
+            update records set deleted_at = null, deleted_by_type = null, deleted_by_id = null,
+              deleted_by_member_id = null, deleted_batch_id = null, revision = revision + 1
+            where id = ${row.id}::uuid
+          `);
+          await setRecordKeysLive(part.tx, row.id, true);
+          part.record({ restoredRecords: [ref], shownEntries: own, ...far });
+        });
+        if (done.ok) {
+          restored += 1;
+          outcomes.set(row.id, { recordId: row.id, state: 'restored' });
+        } else {
+          refused(row.id, done.refusals[0] ?? { code: 'UNIQUE_CONFLICT', message: uniqueTakenMessage([]) });
+        }
+      }
     }
   }
   if (restored > 0) {

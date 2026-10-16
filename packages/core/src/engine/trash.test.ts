@@ -12,18 +12,31 @@ import { outboxHook } from './outbox.ts';
 import { createRecord, getRecords, setValues } from './records.ts';
 import { isRefusal } from './refusals.ts';
 import type { Actor, EngineScope } from './scope.ts';
-import { countTrash, deleteRecords, queryTrash, restoreBatch, restoreRecords } from './trash.ts';
+import { FAR_LIMIT } from './deletion.ts';
+import {
+  countTrash,
+  deleteRecords,
+  farReferencesManyQuery,
+  queryTrash,
+  restoreBatch,
+  restoreRecords,
+} from './trash.ts';
+import type { AfterWrite, Change } from './write.ts';
 import { createWorkspace } from './workspaces.ts';
 import { rescope, testScope } from '../testing.ts';
 
-const { appUrl } = inject('testDatabase');
+const { appUrl, ownerUrl } = inject('testDatabase');
 let db: Database;
+/** The owner, for bulk rows and analyze. */
+let owner: Database;
 
 beforeAll(() => {
   db = createDatabase({ url: appUrl, applicationName: 'crm-trash-tests' });
+  owner = createDatabase({ url: ownerUrl, applicationName: 'crm-trash-tests-owner' });
 });
 afterAll(async () => {
   await db.close();
+  await owner.close();
 });
 
 let made = 0;
@@ -419,3 +432,141 @@ describe('queryTrash and countTrash (AC-533)', () => {
     expect((await queryTrash(ownOnly, { objectId: w.people })).items).toEqual([]);
   });
 });
+
+/** A hook that keeps the change a write handed it. */
+function keep(into: Change[]): AfterWrite {
+  return (change) => {
+    into.push(change);
+    return Promise.resolve();
+  };
+}
+
+/** `count` people at `company`, made in bulk as the owner: one link each. */
+async function bulkAt(w: World, company: string, count: number): Promise<string[]> {
+  const rows = await owner.withWorkspace(w.workspaceId, (tx) =>
+    tx.execute<{ id: string }>(sql`
+      with first as (
+        select r.id as relationship_id from relationships r
+        join attributes a on a.workspace_id = r.workspace_id and a.relationship_id = r.id
+        where a.id = ${w.person('company')} limit 1
+      ), added as (
+        insert into records (workspace_id, object_id, created_by_type, updated_by_type)
+        select ${w.workspaceId}::uuid, ${w.people}::uuid, 'system', 'system' from generate_series(1, ${count}::int)
+        returning id
+      ), linked as (
+        insert into record_links (workspace_id, version_id, relationship_id, from_record_id, to_record_id,
+          position, to_position, from_single, to_single, active_from, set_by_type)
+        select ${w.workspaceId}::uuid, uuidv7(), first.relationship_id, added.id, ${company}::uuid,
+          0, 100 + row_number() over (), true, false, now(), 'system'
+        from added, first
+        returning from_record_id
+      )
+      select from_record_id::text as id from linked
+    `),
+  );
+  await owner.withWorkspace(w.workspaceId, (tx) =>
+    tx.execute(sql`update workspace_counters set live_records = live_records + ${count}::int`),
+  );
+  return rows.rows.map((row) => row.id);
+}
+
+describe('a batch of far references (spec 0007, AC-83)', () => {
+  it('reads them in one statement for the whole batch, each far record and attribute once', async () => {
+    const w = await world();
+    const acme = (await createRecord(w.scope, { objectId: w.companies, values: { [w.company('name')]: 'Acme' } }))
+      .recordId;
+    const people = await bulkAt(w, acme, 400);
+    const changes: Change[] = [];
+    await deleteRecords(w.scope, { objectId: w.people, recordIds: people, batchId: newId() }, [keep(changes)]);
+    // 400 people at Acme: Acme's Team is named once, not 400 times.
+    expect(changes[0]?.references).toEqual([{ recordId: acme, objectId: w.companies, attributeId: w.company('team') }]);
+    expect(changes[0]?.coarseObjects).toEqual([]);
+    const back: Change[] = [];
+    await restoreRecords(w.scope, { recordIds: people }, [keep(back)]);
+    expect(back[0]?.restoredRecords).toHaveLength(400);
+    expect(back[0]?.references).toEqual([{ recordId: acme, objectId: w.companies, attributeId: w.company('team') }]);
+  });
+
+  it('goes coarse for an end past the cap, holding at most FAR_LIMIT far rows for the whole batch', async () => {
+    const w = await world();
+    const acme = (await createRecord(w.scope, { objectId: w.companies, values: { [w.company('name')]: 'Acme' } }))
+      .recordId;
+    const globex = (await createRecord(w.scope, { objectId: w.companies, values: { [w.company('name')]: 'Globex' } }))
+      .recordId;
+    await bulkAt(w, acme, FAR_LIMIT);
+    await bulkAt(w, globex, 10);
+    const rows = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ attribute_id: string }>(farReferencesManyQuery(w.companies, [acme, globex])),
+    );
+    expect(rows.rows.filter((row) => row.attribute_id === w.person('company'))).toHaveLength(FAR_LIMIT);
+    const changes: Change[] = [];
+    await deleteRecords(w.scope, { objectId: w.companies, recordIds: [acme, globex], batchId: newId() }, [
+      keep(changes),
+    ]);
+    expect(changes[0]?.coarseObjects).toEqual([w.people]);
+  });
+
+  it('finds them by index, never a scan of records or record_links (measured on the smoke seed)', async () => {
+    const w = await world();
+    const acme = (await createRecord(w.scope, { objectId: w.companies, values: { [w.company('name')]: 'Acme' } }))
+      .recordId;
+    const people = await bulkAt(w, acme, 3_000);
+    await owner.vacuumAnalyze(['record_links', 'records']);
+    const plan = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ 'QUERY PLAN': readonly { Plan: PlanNode }[] }>(
+        sql`explain (format json) ${farReferencesManyQuery(w.people, people.slice(0, 500))}`,
+      ),
+    );
+    const nodes = nodesOf(plan.rows[0]?.['QUERY PLAN'][0]?.Plan);
+    expect(
+      nodes.filter(
+        (node) =>
+          node['Node Type'] === 'Seq Scan' &&
+          (node['Relation Name'] === 'record_links' || node['Relation Name'] === 'records'),
+      ),
+    ).toEqual([]);
+    expect(nodes.filter((node) => node['Node Type'] === 'Hash Join')).toEqual([]);
+  });
+});
+
+describe('restoring a batch', () => {
+  it('restores records that clash with each other one by one, the later refused UNIQUE_CONFLICT', async () => {
+    const w = await world();
+    const first = await person(w, 'Ada', 'twin@acme.com');
+    await deleteRecords(w.scope, { objectId: w.people, recordIds: [first], batchId: newId() });
+    const second = await person(w, 'Ada Two', 'twin@acme.com');
+    await deleteRecords(w.scope, { objectId: w.people, recordIds: [second], batchId: newId() });
+    const outcomes = await restoreRecords(w.scope, { recordIds: [first, second] });
+    const [earlier, later] = [first, second].sort();
+    expect(outcomes.find((outcome) => outcome.recordId === earlier)?.state).toBe('restored');
+    expect(outcomes.find((outcome) => outcome.recordId === later)?.refusal?.code).toBe('UNIQUE_CONFLICT');
+    expect((await getRecords(w.scope, { ids: [first, second] })).map((view) => view.id)).toEqual([earlier]);
+  });
+
+  it('gives the slot a refused record never took to the next one', async () => {
+    const w = await world();
+    const ada = await person(w, 'Ada', 'ada@acme.com');
+    const bob = await person(w, 'Bob');
+    await deleteRecords(w.scope, { objectId: w.people, recordIds: [ada, bob], batchId: newId() });
+    await person(w, 'Ada Again', 'ada@acme.com');
+    const live = (await liveRecords(w)) ?? 0;
+    const outcomes = await restoreRecords(rescope(w.scope, { limits: { liveRecords: live + 1 } }), {
+      recordIds: [ada, bob],
+    });
+    expect(outcomes.find((outcome) => outcome.recordId === bob)?.state).toBe('restored');
+    expect(outcomes.find((outcome) => outcome.recordId === ada)?.refusal?.code).toBe('UNIQUE_CONFLICT');
+  });
+});
+
+/** The parts of an `explain (format json)` node the plan tests read. */
+interface PlanNode {
+  readonly 'Node Type': string;
+  readonly 'Relation Name'?: string;
+  readonly 'Index Name'?: string;
+  readonly Plans?: readonly PlanNode[];
+}
+
+function nodesOf(plan: PlanNode | undefined): PlanNode[] {
+  if (plan === undefined) throw new Error('No plan.');
+  return [plan, ...(plan.Plans ?? []).flatMap((child) => nodesOf(child))];
+}
