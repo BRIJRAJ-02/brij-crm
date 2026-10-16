@@ -467,7 +467,11 @@ export async function purgeBatch(context: WriteContext, input: PurgeInput = {}):
     const ids = uuidArray(pickedIds);
     await tx.execute(sql`
       select 1 from lists
-      where id in (select list_id from list_entries where record_id = any(${ids}) and deleted_at is null)
+      where workspace_id = ${scope.workspaceId}
+        and id in (
+          select list_id from list_entries
+          where workspace_id = ${scope.workspaceId} and record_id = any(${ids}) and deleted_at is null
+        )
       order by id for no key update
     `);
     // Still in the trash past the cutoff under the lock (a restore that committed since the pick is left alone).
@@ -485,7 +489,8 @@ export async function purgeBatch(context: WriteContext, input: PurgeInput = {}):
   const entryValues = await tx.execute(deleteEntryValues(entryIds));
   const entries = await tx.execute<{ id: string; list_id: string; record_id: string; object_id: string }>(sql`
     delete from list_entries e using records r
-    where e.id = any(${uuidArray(entryIds)}) and r.workspace_id = e.workspace_id and r.id = e.record_id
+    where e.workspace_id = ${scope.workspaceId} and e.id = any(${uuidArray(entryIds)})
+      and r.workspace_id = e.workspace_id and r.id = e.record_id
     returning e.id::text, e.list_id::text, e.record_id::text, r.object_id::text
   `);
   context.record({

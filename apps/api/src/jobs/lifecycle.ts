@@ -211,7 +211,7 @@ export function createLifecycle(deps: LifecycleDeps): Lifecycle {
     }
     let check: SleepCheck;
     try {
-      check = await withTimeout(worker.check(), CHECK_TIMEOUT_MS);
+      check = await withTimeout(worker.check(), CHECK_TIMEOUT_MS, clock);
     } catch (error) {
       // A connection that failed is the runners' to report; the clock starts again either way.
       log.warn('worker.sleep.check.failed', errorFields(error));
@@ -375,12 +375,11 @@ export function createLifecycle(deps: LifecycleDeps): Lifecycle {
   };
 }
 
-/** `work`, or a rejection once `ms` pass first (its result is then ignored). */
-function withTimeout<T>(work: Promise<T>, ms: number): Promise<T> {
-  let timer: ReturnType<typeof setTimeout> | undefined;
+/** `work`, or a rejection once `ms` pass first on `clock` (its result is then ignored). */
+function withTimeout<T>(work: Promise<T>, ms: number, clock: LifecycleClock): Promise<T> {
+  let timer: unknown;
   const late = new Promise<never>((_resolve, reject) => {
-    timer = setTimeout(() => reject(new Error(`No answer within ${String(ms)} ms.`)), ms);
-    timer.unref();
+    timer = clock.setTimeout(() => reject(new Error(`No answer within ${String(ms)} ms.`)), ms);
   });
-  return Promise.race([work, late]).finally(() => clearTimeout(timer));
+  return Promise.race([work, late]).finally(() => clock.clearTimeout(timer));
 }

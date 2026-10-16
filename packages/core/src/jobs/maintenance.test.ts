@@ -375,7 +375,7 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     });
   });
 
-  it('leaves every other workspace’s trash and old jobs alone, even with no filter of its own', async () => {
+  it('leaves every other workspace’s trash, old jobs, expired and lost jobs alone (AC-115)', async () => {
     const a = await team([]);
     const b = await team([]);
     const theirs = await person(b.owner, 'Theirs');
@@ -390,7 +390,13 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
       status: "'ready'",
       expires_at: "now() - interval '1 minute'",
     });
+    // A job of B's that lost its queue row: only B's own cleanup may queue it again.
+    const theirLost = await jobRow(b.workspaceId, b.ownerId, {
+      run_at: "now() - interval '2 hours'",
+      updated_at: "now() - interval '2 hours'",
+    });
     await cleanUp(a.workspaceId, '2026-10-15');
+    expect(await queueRows(theirLost)).toEqual([]);
     expect(await testQuery(ownerUrl, 'select 1 from records where id = $1', [theirs])).toHaveLength(1);
     expect(await jobExists(theirJob)).toBe(true);
     expect(await itemStatesOf(b.workspaceId, theirJob)).toEqual(['done', 'refused']);

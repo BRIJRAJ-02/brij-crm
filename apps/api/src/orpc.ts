@@ -78,14 +78,14 @@ export const base = implement(contract).$context<RequestContext>();
 /** Procedures anyone may call. */
 export const pub = base;
 
-/** Puts the signed in person in `context.user`, or refuses UNAUTHENTICATED. A renewed session cookie goes back out. */
 /**
  * Background renewals, not someone using the app: Centrifugo renews its
- * tokens every 10 minutes from any open tab, and a renewal that woke the
- * worker would keep Neon's compute awake all night for one idle tab.
+ * tokens from any open tab (every hour), and a renewal that woke the worker
+ * would keep Neon's compute awake for a tab nobody uses.
  */
 const NOT_USE: ReadonlySet<string> = new Set(['realtime.connectionToken', 'realtime.subscriptionToken']);
 
+/** Puts the signed in person in `context.user`, or refuses UNAUTHENTICATED. A renewed session cookie goes back out. */
 export const requireSession = os.$context<RequestContext>().middleware(async ({ context, next, path }) => {
   const session = await context.auth.session(context.headers, context.clientIp);
   if (session === undefined) throw apiError('UNAUTHENTICATED', 'Sign in to continue.');
