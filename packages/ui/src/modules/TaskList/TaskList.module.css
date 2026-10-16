@@ -103,7 +103,7 @@
     padding-inline: var(--space-8);
     color: var(--text-secondary);
     font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label);
+    letter-spacing: var(--tracking-label-strong);
   }
 
   .record {

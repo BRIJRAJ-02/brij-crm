@@ -6,7 +6,7 @@
 // and `newIds` marks tasks just made.
 import type { ActorDisplay, RecordRefDisplay } from '@crm/contracts/values';
 import { parseDate } from '@internationalized/date';
-import { useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, type ReactNode } from 'react';
 import {
   Collection,
   GridList,
@@ -26,6 +26,7 @@ import { RecordChip } from '../../atoms/RecordChip/RecordChip.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { ChipRow } from '../../fields/parts.tsx';
+import { focusLater } from '../../lib/focus-later.ts';
 import { formatDate } from '../../lib/format.ts';
 import { itemOfKey, keyedRows, type KeyedRow } from '../../lib/keyed-rows.ts';
 import type { ListSource } from '../../lib/list-source.ts';
@@ -111,6 +112,8 @@ export interface TaskListProps {
    * nothing more waits.
    */
   readonly onShowMore?: () => void;
+  /** The next page is being read: "Show more" shows it pending. */
+  readonly isLoadingMore?: boolean;
 }
 
 /** A run of rows, with the heading it sits under (none for rows before the first heading). */
@@ -188,7 +191,21 @@ export function TaskList({
   toolbar,
   footer,
   onShowMore,
+  isLoadingMore = false,
 }: TaskListProps) {
+  // Whether "Show more" had focus: when the last page lands it goes, and focus moves to the list's last row.
+  const moreHadFocus = useRef(false);
+  const hasMore = onShowMore !== undefined;
+  useEffect(() => {
+    if (hasMore || !moreHadFocus.current) return;
+    moreHadFocus.current = false;
+    focusLater(() => {
+      const rows = document.querySelectorAll<HTMLElement>(
+        `[role="grid"][aria-label="${CSS.escape(label)}"] [role="row"]`,
+      );
+      return rows[rows.length - 1];
+    });
+  }, [hasMore, label]);
   const list = (
     <TaskListContent
       {...{ label, tasks, onToggle, hideRecord, isReadOnly, status, layout, maxRows }}
@@ -207,8 +224,16 @@ export function TaskList({
     ) : (
       <>
         {list}
-        <span className={styles.showMore}>
-          <Button variant="ghost" onPress={onShowMore}>
+        <span
+          className={styles.showMore}
+          onFocus={() => {
+            moreHadFocus.current = true;
+          }}
+          onBlur={() => {
+            moreHadFocus.current = false;
+          }}
+        >
+          <Button variant="ghost" onPress={onShowMore} isPending={isLoadingMore}>
             {strings.showMore}
           </Button>
         </span>
@@ -241,7 +266,7 @@ function TaskListContent({
   emptyTitle,
   emptyBody,
   maxRows = INLINE_TASKS,
-}: Omit<TaskListProps, 'toolbar' | 'footer' | 'onShowMore'>) {
+}: Omit<TaskListProps, 'toolbar' | 'footer' | 'onShowMore' | 'isLoadingMore'>) {
   const showSkeleton = useDelayedLoading(status === 'loading');
   const onShown = useRangeReporter(tasks);
   const dueOf = useDueOf();

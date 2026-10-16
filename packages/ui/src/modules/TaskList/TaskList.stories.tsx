@@ -431,28 +431,41 @@ export const InlineFailed: Story = {
   },
 };
 
-/** In place with more waiting: "Show more" under the rows reads the next page (the Completed part). */
+/**
+ * In place with more waiting: "Show more" under the rows reads the next page
+ * (the Completed part); when the last page lands it goes, and focus moves to
+ * the last row rather than the page.
+ */
 export const ShowMore: Story = {
-  args: { onRangeChange: fn() },
-  render: function Render(args) {
+  args: { onAction: fn() },
+  render: function Render() {
+    const [shown, setShown] = useState(3);
     return (
       <Stage>
         <TaskList
           label="Completed"
           layout="inline"
           maxRows={1000}
-          tasks={arraySource(SAMPLE_TASKS, (task) => task.id)}
-          onShowMore={() => {
-            args.onRangeChange?.({ start: 0, end: 0 });
-          }}
+          tasks={arraySource(SAMPLE_TASKS.slice(0, shown), (task) => task.id)}
+          {...(shown < SAMPLE_TASKS.length
+            ? {
+                onShowMore: () => {
+                  setShown(SAMPLE_TASKS.length);
+                },
+              }
+            : {})}
           onToggle={() => undefined}
         />
       </Stage>
     );
   },
-  play: async ({ args, canvas, userEvent }) => {
-    await userEvent.click(canvas.getByRole('button', { name: 'Show more' }));
-    await expect(args.onRangeChange).toHaveBeenCalled();
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getAllByRole('row')).toHaveLength(3);
+    canvas.getByRole('button', { name: 'Show more' }).focus();
+    await waitFor(() => expect(canvas.getByRole('button', { name: 'Show more' })).toHaveFocus());
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(canvas.getAllByRole('row')).toHaveLength(SAMPLE_TASKS.length));
+    await waitFor(() => expect(canvas.getAllByRole('row').at(-1)).toHaveFocus());
   },
 };
 
