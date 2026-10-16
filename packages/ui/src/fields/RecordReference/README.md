@@ -16,6 +16,8 @@ Screens never import it; they render values through `AttributeDisplay` and `Attr
 - **Text out / in** (copy, paste, CSV, the import preview): names / refused (choose the records).
 - **Filter operators**: is, is any of, and through the relation (Company › Country), then is empty and is not empty.
 
+- **In a form** the picker draws the attribute's name as its visible label (a group named by it), as Field does; a cell and a panel row name it already. A pick with the pointer hands focus back to the button on the next frame, before the menu has faded, so a key pressed meanwhile (Escape in a dialog) reaches the dialog. Chosen records follow the value when it changes from outside (live, or a screen refusing a pick).
+
 ## States
 
 Empty (nothing in a cell, a dash elsewhere, "Empty" for screen readers), a value, and in the editor its own states. A linked record whose display has no name yet (the data layer reads the names of linked records by id) draws a skeleton chip, read as "Loading"; one with no display at all says "Unknown".

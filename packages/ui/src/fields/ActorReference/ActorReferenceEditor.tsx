@@ -35,6 +35,7 @@ export function ActorReferenceEditor({
       isCompact={isCompactSurface(surface)}
       isOpenAtStart={autoOpen}
       isInline={surface === 'cell'}
+      showLabel={surface === 'form'}
       {...(startText === undefined ? {} : { startQuery: startText })}
       {...(onSearch === undefined ? {} : { onSearch })}
       {...(me === undefined ? {} : { pinned: [me] })}

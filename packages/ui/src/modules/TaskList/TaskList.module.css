@@ -74,6 +74,12 @@
     align-items: flex-start;
   }
 
+  /* The toolbar's first part (a record's quick add) takes the room its buttons leave. */
+  .toolbar > :first-child {
+    flex: 1;
+    min-inline-size: 0;
+  }
+
   .body {
     display: flex;
     flex: 1;

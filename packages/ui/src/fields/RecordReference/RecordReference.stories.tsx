@@ -88,6 +88,10 @@ export const Editor: Story = {
       return item;
     });
     await userEvent.click(globex);
+    // Focus is back on the trigger at once, before the menu has faded (a key pressed meanwhile reaches the page).
+    await waitFor(() => expect(canvas.getByRole('button', { name: /Choose Company/ })).toHaveFocus(), { timeout: 100 });
+    // In a form the picker is named by its visible label.
+    await expect(canvas.getByRole('group', { name: 'Company' })).toBeInTheDocument();
     await expect(args.onCommit).toHaveBeenCalledWith({
       objectId: SAMPLE_IDS.companies,
       recordId: SAMPLE_IDS.company.globex,

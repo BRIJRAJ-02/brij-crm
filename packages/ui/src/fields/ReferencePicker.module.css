@@ -23,6 +23,13 @@
     contain: inline-size;
   }
 
+  /* A form's label over the picker, as Field draws its own. */
+  .label {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
   .chosen {
     display: flex;
     flex-wrap: wrap;

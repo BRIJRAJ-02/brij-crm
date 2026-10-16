@@ -2,7 +2,7 @@
 // you can remove, and a searchable menu that adds or replaces one. Results
 // come from the screen through a ListSource, so long lists stay outside.
 import type { ActorDisplay, Hue, RecordRefDisplay } from '@crm/contracts/values';
-import { useEffect, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Button } from '../atoms/Button/Button.tsx';
 import { RecordChip } from '../atoms/RecordChip/RecordChip.tsx';
 import { arraySource, type ListSource } from '../lib/list-source.ts';
@@ -63,6 +63,11 @@ export interface ReferencePickerProps<D extends Reference> {
   /** The object searched now, one of `objects`. */
   readonly objectId?: string;
   readonly onObjectChange?: (objectId: string) => void;
+  /**
+   * Draws the attribute's name as the picker's visible label (in a form,
+   * where nothing else names it); a cell or a panel row names it already.
+   */
+  readonly showLabel?: boolean;
 }
 
 /** Chosen references as removable chips, and a searchable menu to pick one. */
@@ -82,7 +87,10 @@ export function ReferencePicker<D extends Reference>({
   objects,
   objectId,
   onObjectChange,
+  showLabel = false,
 }: ReferencePickerProps<D>) {
+  const labelId = useId();
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const [query, setQuery] = useState(startQuery ?? '');
   const [isOpen, setOpen] = useState(false);
   useEffect(() => {
@@ -119,6 +127,13 @@ export function ReferencePicker<D extends Reference>({
       (item) => item !== undefined && keyOf(item) === String(key),
     );
     if (found === undefined) return;
+    // A pointer pick: focus goes back to the trigger at once, not when the closing menu has faded, so a key pressed
+    // meanwhile (Escape in a dialog) reaches what it is meant for. A keyboard pick does the same already.
+    if (!isInline) {
+      requestAnimationFrame(() => {
+        triggerRef.current?.focus();
+      });
+    }
     if (!allowMultiple) {
       onChange([found]);
       return;
@@ -150,7 +165,13 @@ export function ReferencePicker<D extends Reference>({
       className={styles.root}
       data-compact={(isCompact && !isInline) || undefined}
       data-inline={isInline || undefined}
+      {...(showLabel ? { role: 'group', 'aria-labelledby': labelId } : {})}
     >
+      {showLabel && (
+        <span id={labelId} className={styles.label}>
+          {name}
+        </span>
+      )}
       {chosen.length > 0 && (
         <ul className={styles.chosen} aria-label={name}>
           {chosen.map((display) => (
@@ -188,7 +209,7 @@ export function ReferencePicker<D extends Reference>({
         menu
       ) : (
         <MenuTrigger isOpen={isOpen} onOpenChange={setOpen}>
-          <Button variant={chosen.length === 0 ? 'secondary' : 'ghost'} icon="plus">
+          <Button variant={chosen.length === 0 ? 'secondary' : 'ghost'} icon="plus" ref={triggerRef}>
             {chosen.length === 0 || !allowMultiple ? strings.choose(name) : strings.addAnother}
           </Button>
           {menu}

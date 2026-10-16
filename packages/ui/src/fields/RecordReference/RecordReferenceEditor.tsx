@@ -25,6 +25,12 @@ export function RecordReferenceEditor({
     asList<RecordReferenceValue>(value).map((record) => recordDisplayOf(record, displays)),
   );
   const [message, setMessage] = useState<string | undefined>(undefined);
+  // A value changed from outside (live, or the screen refusing a pick) shows: the chips follow it.
+  const [shownValue, setShownValue] = useState(value);
+  if (value !== shownValue) {
+    setShownValue(value);
+    setChosen(asList<RecordReferenceValue>(value).map((record) => recordDisplayOf(record, displays)));
+  }
   const shown = message ?? error;
   return (
     <ReferencePicker<RecordRefDisplay>
@@ -35,6 +41,7 @@ export function RecordReferenceEditor({
       isCompact={isCompactSurface(surface)}
       isOpenAtStart={autoOpen}
       isInline={surface === 'cell'}
+      showLabel={surface === 'form'}
       {...(startText === undefined ? {} : { startQuery: startText })}
       {...(onSearch === undefined ? {} : { onSearch })}
       {...(shown === undefined ? {} : { error: shown })}

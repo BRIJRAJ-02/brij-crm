@@ -15,6 +15,8 @@ Screens never import it; they render values through `AttributeDisplay` and `Attr
 - **Text out / in** (copy, paste, CSV, the import preview): names / a member's exact name, matched ignoring case (members come in `TextContext.members`; `ActorDisplay` carries no email, so email matching waits for #23).
 - **Filter operators**: is, is any of, is me, then is empty and is not empty.
 
+- **In a form** the picker draws the attribute's name as its visible label (a group named by it), as Field does; a cell and a panel row name it already. A pick with the pointer hands focus back to the button on the next frame, before the menu has faded, so a key pressed meanwhile (Escape in a dialog) reaches the dialog.
+
 ## States
 
 Empty (nothing in a cell, a dash elsewhere, "Empty" for screen readers), a value, and in the editor its own states.
