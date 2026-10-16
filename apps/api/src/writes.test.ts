@@ -32,6 +32,7 @@ const READS: ReadonlySet<string> = new Set([
   'records.get',
   'records.activity',
   'records.getTrashed',
+  'records.search',
   'realtime.connectionToken',
   'realtime.subscriptionToken',
   'realtime.catchUp',
@@ -115,6 +116,42 @@ async function personFor(m: Member): Promise<string> {
     mutationId: newId(),
   });
   return id;
+}
+
+/** One write's rows, one per object in object id order (the outbox hook's), each naming its one record. */
+function byObject(recordOf: Readonly<Record<string, string>>, mutationId?: string): Partial<OutboxRow>[] {
+  return Object.entries(recordOf)
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([objectId, recordId]) => ({
+      kind: 'records',
+      object_id: objectId,
+      record_ids: [recordId],
+      ...(mutationId === undefined ? {} : { mutation_id: mutationId }),
+    }));
+}
+
+/** A person and a company in the member's workspace, and Companies' Team side (spec 0014's link writes). */
+async function linkPair(m: Member) {
+  const personId = newId();
+  await m.client.records.create({
+    workspace: m.slug,
+    objectId: m.people.id,
+    id: personId,
+    values: { [m.attribute('name')]: { firstName: 'Ada' } },
+    mutationId: newId(),
+  });
+  const companyAttributes = await m.client.attributes.list({ workspace: m.slug, objectId: m.companies.id });
+  const team = companyAttributes.find((each) => each.apiSlug === 'team')?.id ?? '';
+  const name = companyAttributes.find((each) => each.apiSlug === 'name')?.id ?? '';
+  const companyId = newId();
+  await m.client.records.create({
+    workspace: m.slug,
+    objectId: m.companies.id,
+    id: companyId,
+    values: { [name]: 'Acme' },
+    mutationId: newId(),
+  });
+  return { personId, companyId, team };
 }
 
 /**
@@ -286,6 +323,45 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     ];
   },
   // Relationship writes (spec 0014): one definitions row for each object, naming its side.
+  'links.add': async (m, mutationId) => {
+    const { personId, companyId, team } = await linkPair(m);
+    await m.client.links.add({
+      workspace: m.slug,
+      recordId: companyId,
+      attributeId: team,
+      targets: [{ objectId: m.people.id, recordId: personId }],
+      mutationId,
+    });
+    // One row per object (in object id order): the near company and the far person.
+    return [
+      { kind: 'records', object_id: m.people.id, record_ids: [personId] },
+      { kind: 'records', object_id: m.companies.id, record_ids: [companyId] },
+      ...byObject({ [m.companies.id]: companyId, [m.people.id]: personId }, mutationId),
+    ];
+  },
+  'links.remove': async (m, mutationId) => {
+    const { personId, companyId, team } = await linkPair(m);
+    await m.client.links.add({
+      workspace: m.slug,
+      recordId: companyId,
+      attributeId: team,
+      targets: [{ objectId: m.people.id, recordId: personId }],
+      mutationId: newId(),
+    });
+    await m.client.links.remove({
+      workspace: m.slug,
+      recordId: companyId,
+      attributeId: team,
+      targetRecordIds: [personId],
+      mutationId,
+    });
+    return [
+      { kind: 'records', object_id: m.people.id, record_ids: [personId] },
+      { kind: 'records', object_id: m.companies.id, record_ids: [companyId] },
+      ...byObject({ [m.companies.id]: companyId, [m.people.id]: personId }),
+      ...byObject({ [m.companies.id]: companyId, [m.people.id]: personId }, mutationId),
+    ];
+  },
   'relationships.create': async (m, mutationId) => {
     const made = await m.client.relationships.create({
       workspace: m.slug,
@@ -488,6 +564,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'tasks.update': 2,
   'attributes.restore': 2,
   'relationships.update': 2,
+  'links.add': 3,
+  'links.remove': 4,
   'options.create': 2,
   'options.update': 2,
   'options.reorder': 2,

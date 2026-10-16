@@ -280,6 +280,53 @@ export const BatchResults = z.object({
 /** A batch's outcomes. */
 export type BatchResults = z.infer<typeof BatchResults>;
 
+/** The most results one `records.search` answers, and the longest query it takes (spec 0014). */
+export const MAX_SEARCH_RESULTS = 50;
+export const MAX_SEARCH_QUERY = 200;
+
+/**
+ * The record picker's search (spec 0014, AC-289): one object's live records
+ * the caller may see. An empty `query` lists the 20 most recently updated;
+ * one or two characters, names that start with them; three or more, names
+ * or an email or domain attribute that contain them, names starting with it
+ * first. `forAttributeId` and `forRecordId` name the side being edited, so
+ * each result says whether it is linked there already and, when the far side
+ * holds one, who holds it now.
+ */
+export const SearchRecordsInput = WorkspaceScoped.extend({
+  objectId: z.uuid(),
+  query: z.string().max(MAX_SEARCH_QUERY, `Search with at most ${String(MAX_SEARCH_QUERY)} characters.`),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_SEARCH_RESULTS, `Ask for at most ${String(MAX_SEARCH_RESULTS)} results.`)
+    .optional(),
+  forAttributeId: z.uuid().optional(),
+  forRecordId: z.uuid().optional(),
+});
+/** The record picker's search. */
+export type SearchRecordsInput = z.infer<typeof SearchRecordsInput>;
+
+/**
+ * One search result: the record as a chip shows it, whether it is already
+ * linked from `forRecordId`, and the record holding it on a far side that
+ * holds one ("At Acme"), or `{ hidden: true }` when the caller can't see
+ * that record ("Linked elsewhere").
+ */
+export const SearchResult = z.object({
+  ref: RecordRefDisplay,
+  linked: z.boolean(),
+  takenBy: z.union([RecordRefDisplay, z.object({ hidden: z.literal(true) })]).optional(),
+});
+/** One search result. */
+export type SearchResult = z.infer<typeof SearchResult>;
+
+/** A search's results, in order. Displays only, never record bodies. */
+export const SearchResults = z.object({ results: z.array(SearchResult) });
+/** A search's results. */
+export type SearchResults = z.infer<typeof SearchResults>;
+
 /** A record in the trash, by id (spec 0017). */
 export const GetTrashedInput = WorkspaceScoped.extend({
   recordId: z.uuid(),
@@ -327,6 +374,13 @@ export type TrashedRecord = z.infer<typeof TrashedRecord>;
  * that doesn't decode is 400 `INPUT_INVALID` on `cursor` (start again from
  * the top). `getTrashed` answers a record in the trash; a live, missing or
  * hidden one is `NOT_FOUND`.
+ *
+ * Spec 0014: `search` answers the record picker (an unknown, hidden or
+ * archived object is `NOT_FOUND`; a search past its time `QUERY_CANCELLED`),
+ * shares the read gate with `query` and `count`, and is cancelled with its
+ * request. `setValues` refuses a side that holds many with
+ * `ATTRIBUTE_VALUE_INVALID` ("Add or remove links one at a time."): those
+ * change through `links.add` and `links.remove`.
  */
 export const recordsContract = {
   query: oc.input(QueryRecordsInput).output(RecordPage),
@@ -337,4 +391,5 @@ export const recordsContract = {
   setValuesBatch: oc.input(SetValuesBatchInput).output(BatchResults),
   activity: oc.input(RecordActivityInput).output(RecordActivity),
   getTrashed: oc.input(GetTrashedInput).output(TrashedRecord),
+  search: oc.input(SearchRecordsInput).output(SearchResults),
 };

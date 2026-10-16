@@ -8,7 +8,7 @@ import { objectsContract } from './objects.ts';
 import { optionsContract } from './options.ts';
 import { realtimeContract } from './realtime.ts';
 import { recordsContract } from './records.ts';
-import { relationshipsContract } from './relations.ts';
+import { linksContract, relationshipsContract } from './relations.ts';
 import { systemContract } from './system.ts';
 import { trashContract } from './trash.ts';
 import { tasksContract } from './tasks.ts';
@@ -55,6 +55,7 @@ export const contract = {
   // Bulk actions (spec 0022) join the records namespace from their own file.
   records: { ...recordsContract, ...bulkRecordsContract },
   relationships: relationshipsContract,
+  links: linksContract,
   members: membersContract,
   access: accessContract,
   realtime: realtimeContract,

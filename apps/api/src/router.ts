@@ -1,6 +1,7 @@
 import { accessRouter } from './modules/access/router.ts';
 import { attributesRouter } from './modules/attributes/router.ts';
 import { jobsRouter } from './modules/jobs/router.ts';
+import { linksRouter } from './modules/links/router.ts';
 import { meRouter } from './modules/me/router.ts';
 import { membersRouter } from './modules/members/router.ts';
 import { objectsRouter } from './modules/objects/router.ts';
@@ -26,6 +27,7 @@ export const router = base.router({
   options: optionsRouter,
   records: recordsRouter,
   relationships: relationshipsRouter,
+  links: linksRouter,
   members: membersRouter,
   access: accessRouter,
   realtime: realtimeRouter,
