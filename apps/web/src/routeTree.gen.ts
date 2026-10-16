@@ -8,152 +8,157 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from './routes/__root.tsx';
-import { Route as IndexRouteImport } from './routes/index.tsx';
-import { Route as SignInRouteImport } from './routes/sign-in.tsx';
-import { Route as StatusRouteImport } from './routes/status.tsx';
-import { Route as VerifyRouteImport } from './routes/verify.tsx';
-import { Route as WelcomeRouteImport } from './routes/welcome.tsx';
-import { Route as WSlugRouteImport } from './routes/w.$slug.tsx';
-import { Route as WSlugIndexRouteImport } from './routes/w.$slug.index.tsx';
-import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects.$object.tsx';
-import { Route as WSlugSettingsIndexRouteImport } from './routes/w.$slug.settings.index.tsx';
-import { Route as WSlugSettingsJobsRouteImport } from './routes/w.$slug.settings.jobs.tsx';
-import { Route as WSlugSettingsObjectsIndexRouteImport } from './routes/w.$slug.settings.objects.index.tsx';
-import { Route as WSlugObjectsObjectRecordIdIndexRouteImport } from './routes/w.$slug.objects.$object_.$recordId.index.tsx';
-import { Route as WSlugObjectsObjectRecordIdTabRouteImport } from './routes/w.$slug.objects.$object_.$recordId.$tab.tsx';
-import { Route as WSlugSettingsObjectsObjectIndexRouteImport } from './routes/w.$slug.settings.objects.$object.index.tsx';
-import { Route as WSlugSettingsObjectsObjectTabRouteImport } from './routes/w.$slug.settings.objects.$object.$tab.tsx';
+import { Route as rootRouteImport } from './routes/__root.tsx'
+import { Route as IndexRouteImport } from './routes/index.tsx'
+import { Route as SignInRouteImport } from './routes/sign-in.tsx'
+import { Route as StatusRouteImport } from './routes/status.tsx'
+import { Route as VerifyRouteImport } from './routes/verify.tsx'
+import { Route as WelcomeRouteImport } from './routes/welcome.tsx'
+import { Route as WSlugRouteImport } from './routes/w.$slug.tsx'
+import { Route as WSlugIndexRouteImport } from './routes/w.$slug.index.tsx'
+import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects.$object.tsx'
+import { Route as WSlugSettingsIndexRouteImport } from './routes/w.$slug.settings.index.tsx'
+import { Route as WSlugSettingsJobsRouteImport } from './routes/w.$slug.settings.jobs.tsx'
+import { Route as WSlugSettingsObjectsIndexRouteImport } from './routes/w.$slug.settings.objects.index.tsx'
+import { Route as WSlugObjectsObjectRecordIdIndexRouteImport } from './routes/w.$slug.objects.$object_.$recordId.index.tsx'
+import { Route as WSlugObjectsObjectRecordIdTabRouteImport } from './routes/w.$slug.objects.$object_.$recordId.$tab.tsx'
+import { Route as WSlugSettingsObjectsObjectIndexRouteImport } from './routes/w.$slug.settings.objects.$object.index.tsx'
+import { Route as WSlugSettingsObjectsObjectTabRouteImport } from './routes/w.$slug.settings.objects.$object.$tab.tsx'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const SignInRoute = SignInRouteImport.update({
   id: '/sign-in',
   path: '/sign-in',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const StatusRoute = StatusRouteImport.update({
   id: '/status',
   path: '/status',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const VerifyRoute = VerifyRouteImport.update({
   id: '/verify',
   path: '/verify',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const WelcomeRoute = WelcomeRouteImport.update({
   id: '/welcome',
   path: '/welcome',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const WSlugRoute = WSlugRouteImport.update({
   id: '/w/$slug',
   path: '/w/$slug',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const WSlugIndexRoute = WSlugIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => WSlugRoute,
-} as any);
+} as any)
 const WSlugObjectsObjectRoute = WSlugObjectsObjectRouteImport.update({
   id: '/objects/$object',
   path: '/objects/$object',
   getParentRoute: () => WSlugRoute,
-} as any);
+} as any)
 const WSlugSettingsIndexRoute = WSlugSettingsIndexRouteImport.update({
   id: '/settings/',
   path: '/settings/',
   getParentRoute: () => WSlugRoute,
-} as any);
+} as any)
 const WSlugSettingsJobsRoute = WSlugSettingsJobsRouteImport.update({
   id: '/settings/jobs',
   path: '/settings/jobs',
   getParentRoute: () => WSlugRoute,
-} as any);
-const WSlugSettingsObjectsIndexRoute = WSlugSettingsObjectsIndexRouteImport.update({
-  id: '/settings/objects/',
-  path: '/settings/objects/',
-  getParentRoute: () => WSlugRoute,
-} as any);
-const WSlugObjectsObjectRecordIdIndexRoute = WSlugObjectsObjectRecordIdIndexRouteImport.update({
-  id: '/objects/$object_/$recordId/',
-  path: '/objects/$object/$recordId/',
-  getParentRoute: () => WSlugRoute,
-} as any);
-const WSlugObjectsObjectRecordIdTabRoute = WSlugObjectsObjectRecordIdTabRouteImport.update({
-  id: '/objects/$object_/$recordId/$tab',
-  path: '/objects/$object/$recordId/$tab',
-  getParentRoute: () => WSlugRoute,
-} as any);
-const WSlugSettingsObjectsObjectIndexRoute = WSlugSettingsObjectsObjectIndexRouteImport.update({
-  id: '/settings/objects/$object/',
-  path: '/settings/objects/$object/',
-  getParentRoute: () => WSlugRoute,
-} as any);
-const WSlugSettingsObjectsObjectTabRoute = WSlugSettingsObjectsObjectTabRouteImport.update({
-  id: '/settings/objects/$object/$tab',
-  path: '/settings/objects/$object/$tab',
-  getParentRoute: () => WSlugRoute,
-} as any);
+} as any)
+const WSlugSettingsObjectsIndexRoute =
+  WSlugSettingsObjectsIndexRouteImport.update({
+    id: '/settings/objects/',
+    path: '/settings/objects/',
+    getParentRoute: () => WSlugRoute,
+  } as any)
+const WSlugObjectsObjectRecordIdIndexRoute =
+  WSlugObjectsObjectRecordIdIndexRouteImport.update({
+    id: '/objects/$object_/$recordId/',
+    path: '/objects/$object/$recordId/',
+    getParentRoute: () => WSlugRoute,
+  } as any)
+const WSlugObjectsObjectRecordIdTabRoute =
+  WSlugObjectsObjectRecordIdTabRouteImport.update({
+    id: '/objects/$object_/$recordId/$tab',
+    path: '/objects/$object/$recordId/$tab',
+    getParentRoute: () => WSlugRoute,
+  } as any)
+const WSlugSettingsObjectsObjectIndexRoute =
+  WSlugSettingsObjectsObjectIndexRouteImport.update({
+    id: '/settings/objects/$object/',
+    path: '/settings/objects/$object/',
+    getParentRoute: () => WSlugRoute,
+  } as any)
+const WSlugSettingsObjectsObjectTabRoute =
+  WSlugSettingsObjectsObjectTabRouteImport.update({
+    id: '/settings/objects/$object/$tab',
+    path: '/settings/objects/$object/$tab',
+    getParentRoute: () => WSlugRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
-  '/': typeof IndexRoute;
-  '/sign-in': typeof SignInRoute;
-  '/status': typeof StatusRoute;
-  '/verify': typeof VerifyRoute;
-  '/welcome': typeof WelcomeRoute;
-  '/w/$slug': typeof WSlugRouteWithChildren;
-  '/w/$slug/': typeof WSlugIndexRoute;
-  '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute;
-  '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute;
-  '/w/$slug/settings/': typeof WSlugSettingsIndexRoute;
-  '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute;
-  '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute;
-  '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute;
-  '/w/$slug/objects/$object/$recordId/': typeof WSlugObjectsObjectRecordIdIndexRoute;
-  '/w/$slug/settings/objects/$object/': typeof WSlugSettingsObjectsObjectIndexRoute;
+  '/': typeof IndexRoute
+  '/sign-in': typeof SignInRoute
+  '/status': typeof StatusRoute
+  '/verify': typeof VerifyRoute
+  '/welcome': typeof WelcomeRoute
+  '/w/$slug': typeof WSlugRouteWithChildren
+  '/w/$slug/': typeof WSlugIndexRoute
+  '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
+  '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
+  '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
+  '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
+  '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
+  '/w/$slug/objects/$object/$recordId/': typeof WSlugObjectsObjectRecordIdIndexRoute
+  '/w/$slug/settings/objects/$object/': typeof WSlugSettingsObjectsObjectIndexRoute
 }
 export interface FileRoutesByTo {
-  '/': typeof IndexRoute;
-  '/sign-in': typeof SignInRoute;
-  '/status': typeof StatusRoute;
-  '/verify': typeof VerifyRoute;
-  '/welcome': typeof WelcomeRoute;
-  '/w/$slug': typeof WSlugIndexRoute;
-  '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute;
-  '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute;
-  '/w/$slug/settings': typeof WSlugSettingsIndexRoute;
-  '/w/$slug/settings/objects': typeof WSlugSettingsObjectsIndexRoute;
-  '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute;
-  '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute;
-  '/w/$slug/objects/$object/$recordId': typeof WSlugObjectsObjectRecordIdIndexRoute;
-  '/w/$slug/settings/objects/$object': typeof WSlugSettingsObjectsObjectIndexRoute;
+  '/': typeof IndexRoute
+  '/sign-in': typeof SignInRoute
+  '/status': typeof StatusRoute
+  '/verify': typeof VerifyRoute
+  '/welcome': typeof WelcomeRoute
+  '/w/$slug': typeof WSlugIndexRoute
+  '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
+  '/w/$slug/settings': typeof WSlugSettingsIndexRoute
+  '/w/$slug/settings/objects': typeof WSlugSettingsObjectsIndexRoute
+  '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
+  '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
+  '/w/$slug/objects/$object/$recordId': typeof WSlugObjectsObjectRecordIdIndexRoute
+  '/w/$slug/settings/objects/$object': typeof WSlugSettingsObjectsObjectIndexRoute
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport;
-  '/': typeof IndexRoute;
-  '/sign-in': typeof SignInRoute;
-  '/status': typeof StatusRoute;
-  '/verify': typeof VerifyRoute;
-  '/welcome': typeof WelcomeRoute;
-  '/w/$slug': typeof WSlugRouteWithChildren;
-  '/w/$slug/': typeof WSlugIndexRoute;
-  '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute;
-  '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute;
-  '/w/$slug/settings/': typeof WSlugSettingsIndexRoute;
-  '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute;
-  '/w/$slug/objects/$object_/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute;
-  '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute;
-  '/w/$slug/objects/$object_/$recordId/': typeof WSlugObjectsObjectRecordIdIndexRoute;
-  '/w/$slug/settings/objects/$object/': typeof WSlugSettingsObjectsObjectIndexRoute;
+  __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
+  '/sign-in': typeof SignInRoute
+  '/status': typeof StatusRoute
+  '/verify': typeof VerifyRoute
+  '/welcome': typeof WelcomeRoute
+  '/w/$slug': typeof WSlugRouteWithChildren
+  '/w/$slug/': typeof WSlugIndexRoute
+  '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
+  '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
+  '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
+  '/w/$slug/objects/$object_/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
+  '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
+  '/w/$slug/objects/$object_/$recordId/': typeof WSlugObjectsObjectRecordIdIndexRoute
+  '/w/$slug/settings/objects/$object/': typeof WSlugSettingsObjectsObjectIndexRoute
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath;
+  fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/sign-in'
@@ -169,8 +174,8 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object/$recordId/$tab'
     | '/w/$slug/settings/objects/$object/$tab'
     | '/w/$slug/objects/$object/$recordId/'
-    | '/w/$slug/settings/objects/$object/';
-  fileRoutesByTo: FileRoutesByTo;
+    | '/w/$slug/settings/objects/$object/'
+  fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/sign-in'
@@ -185,7 +190,7 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object/$recordId/$tab'
     | '/w/$slug/settings/objects/$object/$tab'
     | '/w/$slug/objects/$object/$recordId'
-    | '/w/$slug/settings/objects/$object';
+    | '/w/$slug/settings/objects/$object'
   id:
     | '__root__'
     | '/'
@@ -202,138 +207,138 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object_/$recordId/$tab'
     | '/w/$slug/settings/objects/$object/$tab'
     | '/w/$slug/objects/$object_/$recordId/'
-    | '/w/$slug/settings/objects/$object/';
-  fileRoutesById: FileRoutesById;
+    | '/w/$slug/settings/objects/$object/'
+  fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute;
-  SignInRoute: typeof SignInRoute;
-  StatusRoute: typeof StatusRoute;
-  VerifyRoute: typeof VerifyRoute;
-  WelcomeRoute: typeof WelcomeRoute;
-  WSlugRoute: typeof WSlugRouteWithChildren;
+  IndexRoute: typeof IndexRoute
+  SignInRoute: typeof SignInRoute
+  StatusRoute: typeof StatusRoute
+  VerifyRoute: typeof VerifyRoute
+  WelcomeRoute: typeof WelcomeRoute
+  WSlugRoute: typeof WSlugRouteWithChildren
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
     '/': {
-      id: '/';
-      path: '/';
-      fullPath: '/';
-      preLoaderRoute: typeof IndexRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/sign-in': {
-      id: '/sign-in';
-      path: '/sign-in';
-      fullPath: '/sign-in';
-      preLoaderRoute: typeof SignInRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/status': {
-      id: '/status';
-      path: '/status';
-      fullPath: '/status';
-      preLoaderRoute: typeof StatusRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/status'
+      path: '/status'
+      fullPath: '/status'
+      preLoaderRoute: typeof StatusRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/verify': {
-      id: '/verify';
-      path: '/verify';
-      fullPath: '/verify';
-      preLoaderRoute: typeof VerifyRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/verify'
+      path: '/verify'
+      fullPath: '/verify'
+      preLoaderRoute: typeof VerifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/welcome': {
-      id: '/welcome';
-      path: '/welcome';
-      fullPath: '/welcome';
-      preLoaderRoute: typeof WelcomeRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/welcome'
+      path: '/welcome'
+      fullPath: '/welcome'
+      preLoaderRoute: typeof WelcomeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/w/$slug': {
-      id: '/w/$slug';
-      path: '/w/$slug';
-      fullPath: '/w/$slug';
-      preLoaderRoute: typeof WSlugRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+      id: '/w/$slug'
+      path: '/w/$slug'
+      fullPath: '/w/$slug'
+      preLoaderRoute: typeof WSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/w/$slug/': {
-      id: '/w/$slug/';
-      path: '/';
-      fullPath: '/w/$slug/';
-      preLoaderRoute: typeof WSlugIndexRouteImport;
-      parentRoute: typeof WSlugRoute;
-    };
+      id: '/w/$slug/'
+      path: '/'
+      fullPath: '/w/$slug/'
+      preLoaderRoute: typeof WSlugIndexRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/objects/$object': {
-      id: '/w/$slug/objects/$object';
-      path: '/objects/$object';
-      fullPath: '/w/$slug/objects/$object';
-      preLoaderRoute: typeof WSlugObjectsObjectRouteImport;
-      parentRoute: typeof WSlugRoute;
-    };
+      id: '/w/$slug/objects/$object'
+      path: '/objects/$object'
+      fullPath: '/w/$slug/objects/$object'
+      preLoaderRoute: typeof WSlugObjectsObjectRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/settings/': {
-      id: '/w/$slug/settings/';
-      path: '/settings';
-      fullPath: '/w/$slug/settings/';
-      preLoaderRoute: typeof WSlugSettingsIndexRouteImport;
-      parentRoute: typeof WSlugRoute;
-    };
+      id: '/w/$slug/settings/'
+      path: '/settings'
+      fullPath: '/w/$slug/settings/'
+      preLoaderRoute: typeof WSlugSettingsIndexRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/settings/jobs': {
-      id: '/w/$slug/settings/jobs';
-      path: '/settings/jobs';
-      fullPath: '/w/$slug/settings/jobs';
-      preLoaderRoute: typeof WSlugSettingsJobsRouteImport;
-      parentRoute: typeof WSlugRoute;
-    };
+      id: '/w/$slug/settings/jobs'
+      path: '/settings/jobs'
+      fullPath: '/w/$slug/settings/jobs'
+      preLoaderRoute: typeof WSlugSettingsJobsRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/settings/objects/': {
-      id: '/w/$slug/settings/objects/';
-      path: '/settings/objects';
-      fullPath: '/w/$slug/settings/objects/';
-      preLoaderRoute: typeof WSlugSettingsObjectsIndexRouteImport;
-      parentRoute: typeof WSlugRoute;
-    };
+      id: '/w/$slug/settings/objects/'
+      path: '/settings/objects'
+      fullPath: '/w/$slug/settings/objects/'
+      preLoaderRoute: typeof WSlugSettingsObjectsIndexRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/objects/$object_/$recordId/': {
-      id: '/w/$slug/objects/$object_/$recordId/';
-      path: '/objects/$object/$recordId';
-      fullPath: '/w/$slug/objects/$object/$recordId/';
-      preLoaderRoute: typeof WSlugObjectsObjectRecordIdIndexRouteImport;
-      parentRoute: typeof WSlugRoute;
-    };
+      id: '/w/$slug/objects/$object_/$recordId/'
+      path: '/objects/$object/$recordId'
+      fullPath: '/w/$slug/objects/$object/$recordId/'
+      preLoaderRoute: typeof WSlugObjectsObjectRecordIdIndexRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/objects/$object_/$recordId/$tab': {
-      id: '/w/$slug/objects/$object_/$recordId/$tab';
-      path: '/objects/$object/$recordId/$tab';
-      fullPath: '/w/$slug/objects/$object/$recordId/$tab';
-      preLoaderRoute: typeof WSlugObjectsObjectRecordIdTabRouteImport;
-      parentRoute: typeof WSlugRoute;
-    };
+      id: '/w/$slug/objects/$object_/$recordId/$tab'
+      path: '/objects/$object/$recordId/$tab'
+      fullPath: '/w/$slug/objects/$object/$recordId/$tab'
+      preLoaderRoute: typeof WSlugObjectsObjectRecordIdTabRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/settings/objects/$object/': {
-      id: '/w/$slug/settings/objects/$object/';
-      path: '/settings/objects/$object';
-      fullPath: '/w/$slug/settings/objects/$object/';
-      preLoaderRoute: typeof WSlugSettingsObjectsObjectIndexRouteImport;
-      parentRoute: typeof WSlugRoute;
-    };
+      id: '/w/$slug/settings/objects/$object/'
+      path: '/settings/objects/$object'
+      fullPath: '/w/$slug/settings/objects/$object/'
+      preLoaderRoute: typeof WSlugSettingsObjectsObjectIndexRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/settings/objects/$object/$tab': {
-      id: '/w/$slug/settings/objects/$object/$tab';
-      path: '/settings/objects/$object/$tab';
-      fullPath: '/w/$slug/settings/objects/$object/$tab';
-      preLoaderRoute: typeof WSlugSettingsObjectsObjectTabRouteImport;
-      parentRoute: typeof WSlugRoute;
-    };
+      id: '/w/$slug/settings/objects/$object/$tab'
+      path: '/settings/objects/$object/$tab'
+      fullPath: '/w/$slug/settings/objects/$object/$tab'
+      preLoaderRoute: typeof WSlugSettingsObjectsObjectTabRouteImport
+      parentRoute: typeof WSlugRoute
+    }
   }
 }
 
 interface WSlugRouteChildren {
-  WSlugIndexRoute: typeof WSlugIndexRoute;
-  WSlugObjectsObjectRoute: typeof WSlugObjectsObjectRoute;
-  WSlugSettingsJobsRoute: typeof WSlugSettingsJobsRoute;
-  WSlugSettingsIndexRoute: typeof WSlugSettingsIndexRoute;
-  WSlugSettingsObjectsIndexRoute: typeof WSlugSettingsObjectsIndexRoute;
-  WSlugObjectsObjectRecordIdTabRoute: typeof WSlugObjectsObjectRecordIdTabRoute;
-  WSlugSettingsObjectsObjectTabRoute: typeof WSlugSettingsObjectsObjectTabRoute;
-  WSlugObjectsObjectRecordIdIndexRoute: typeof WSlugObjectsObjectRecordIdIndexRoute;
-  WSlugSettingsObjectsObjectIndexRoute: typeof WSlugSettingsObjectsObjectIndexRoute;
+  WSlugIndexRoute: typeof WSlugIndexRoute
+  WSlugObjectsObjectRoute: typeof WSlugObjectsObjectRoute
+  WSlugSettingsJobsRoute: typeof WSlugSettingsJobsRoute
+  WSlugSettingsIndexRoute: typeof WSlugSettingsIndexRoute
+  WSlugSettingsObjectsIndexRoute: typeof WSlugSettingsObjectsIndexRoute
+  WSlugObjectsObjectRecordIdTabRoute: typeof WSlugObjectsObjectRecordIdTabRoute
+  WSlugSettingsObjectsObjectTabRoute: typeof WSlugSettingsObjectsObjectTabRoute
+  WSlugObjectsObjectRecordIdIndexRoute: typeof WSlugObjectsObjectRecordIdIndexRoute
+  WSlugSettingsObjectsObjectIndexRoute: typeof WSlugSettingsObjectsObjectIndexRoute
 }
 
 const WSlugRouteChildren: WSlugRouteChildren = {
@@ -346,9 +351,9 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugSettingsObjectsObjectTabRoute: WSlugSettingsObjectsObjectTabRoute,
   WSlugObjectsObjectRecordIdIndexRoute: WSlugObjectsObjectRecordIdIndexRoute,
   WSlugSettingsObjectsObjectIndexRoute: WSlugSettingsObjectsObjectIndexRoute,
-};
+}
 
-const WSlugRouteWithChildren = WSlugRoute._addFileChildren(WSlugRouteChildren);
+const WSlugRouteWithChildren = WSlugRoute._addFileChildren(WSlugRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -357,5 +362,7 @@ const rootRouteChildren: RootRouteChildren = {
   VerifyRoute: VerifyRoute,
   WelcomeRoute: WelcomeRoute,
   WSlugRoute: WSlugRouteWithChildren,
-};
-export const routeTree = rootRouteImport._addFileChildren(rootRouteChildren)._addFileTypes<FileRouteTypes>();
+}
+export const routeTree = rootRouteImport
+  ._addFileChildren(rootRouteChildren)
+  ._addFileTypes<FileRouteTypes>()

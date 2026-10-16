@@ -10,13 +10,13 @@ import type {
   RecordState,
   RecordSubscription,
   RecordView,
-  TaskList,
+  TaskList as TaskListSource,
   TrashedState,
 } from '@crm/data';
 import { useActivityStatus, useLiveStatus, useRecord, useTaskTotal, useTrashed } from '@crm/data/react';
-import { ActivityFeed, Button, Callout, EmptyState, Link, RecordHeader, RecordLayout, TopBar } from '@crm/ui';
+import { ActivityFeed, Button, Callout, EmptyState, Link, RecordHeader, RecordLayout, TaskList, TopBar } from '@crm/ui';
 import { useNavigate, useParams, useRouteContext, useRouter } from '@tanstack/react-router';
-import { useMemo, useRef, type ReactNode } from 'react';
+import { useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { tabCount } from '../tasks/entries.ts';
 import { OpenTasksCard } from '../tasks/OpenTasksCard.tsx';
 import { strings as taskStrings } from '../tasks/strings.ts';
@@ -48,7 +48,7 @@ export interface RecordPageProps {
   readonly feed: ActivityFeedSource | undefined;
   readonly recent: ActivityFeedSource | undefined;
   /** The record's open tasks (spec 0019): the Tasks tab, its count, and Overview's block. */
-  readonly open: TaskList | undefined;
+  readonly open: TaskListSource | undefined;
   /** The person's member id: a new task is theirs. */
   readonly meId: string | undefined;
   /** `?task=`: the task dialog's task, or `new`. */
@@ -61,6 +61,9 @@ const TABS = [
   { id: 'activity', label: strings.activity, icon: 'activity' as const },
   { id: 'tasks', label: taskStrings.tasks, icon: 'list-checks' as const },
 ];
+
+/** A task list with nothing in it yet, for the Tasks tab before the record arrives. */
+const NO_TASKS = { count: 0, getItem: () => undefined, getKey: (task: { readonly id: string }) => task.id };
 
 /** A feed with nothing in it yet, for the loading page before the record's timeline exists. */
 const NO_ENTRIES = { count: 0, getItem: () => undefined, getKey: () => '' };
@@ -175,7 +178,7 @@ function SubscribedRecordPage(
     readonly record: RecordSubscription;
     readonly feed: ActivityFeedSource;
     readonly recent: ActivityFeedSource;
-    readonly open: TaskList;
+    readonly open: TaskListSource;
   },
 ) {
   const state = useRecord(props.record);
@@ -213,7 +216,7 @@ function RecordScreen({
   readonly record: RecordSubscription;
   readonly feed: ActivityFeedSource;
   readonly recent: ActivityFeedSource;
-  readonly open: TaskList;
+  readonly open: TaskListSource;
   readonly state: RecordState;
   readonly timelineStatus: ReturnType<typeof useActivityStatus>;
   readonly trashed?: TrashedState;
@@ -249,9 +252,15 @@ function RecordScreen({
       replace: true,
     });
   };
-  const taskHref = (taskId: string) => `${recordHref(slug, object.apiSlug, recordId, tab)}?task=${taskId}`;
-  const chipHref = (display: { readonly objectId: string; readonly recordId: string }) =>
-    link(display.objectId, display.recordId);
+  // Kept while the page's address stays, so the timeline's links and the task rows don't draw again with each render.
+  const taskHref = useCallback(
+    (taskId: string) => `${recordHref(slug, object.apiSlug, recordId, tab)}?task=${taskId}`,
+    [slug, object.apiSlug, recordId, tab],
+  );
+  const chipHref = useCallback(
+    (display: { readonly objectId: string; readonly recordId: string }) => link(display.objectId, display.recordId),
+    [link],
+  );
   const tabs = TABS.map((each) => (each.id === 'tasks' ? { ...each, ...tabCount(openTotal) } : each));
 
   const openTab = (next: string) => {
@@ -288,7 +297,9 @@ function RecordScreen({
       />
     );
   } else if (tab === 'tasks') {
-    tabContent = <ActivityFeed label={taskStrings.tasks} entries={NO_ENTRIES} status="loading" />;
+    tabContent = (
+      <TaskList label={taskStrings.openTasks} tasks={NO_TASKS} status="loading" onToggle={() => undefined} />
+    );
   } else {
     tabContent = (
       <>

@@ -6,7 +6,7 @@ import { TASK_TITLE_MAX, type MemberSummary, type RecordRefDisplay, type TaskLis
 import { useTaskList } from '@crm/data/react';
 import { Button, Disclosure, Field, TaskList } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { strings } from './strings.ts';
 import { useTaskEntries } from './useTaskEntries.ts';
 
@@ -85,7 +85,13 @@ function Completed({
   if (done === undefined) {
     return (
       <Disclosure title={strings.completed} isExpanded={isOpen} onExpandedChange={setOpen}>
-        <TaskList label={strings.completed} tasks={NO_TASKS} status="loading" onToggle={() => undefined} />
+        <TaskList
+          label={strings.completed}
+          layout="inline"
+          tasks={NO_TASKS}
+          status="loading"
+          onToggle={() => undefined}
+        />
       </Disclosure>
     );
   }
@@ -121,6 +127,11 @@ function CompletedList({
   const { data } = useRouteContext({ from: '__root__' });
   const state = useTaskList(list);
   const entries = useTaskEntries(state.source, members, record.recordId);
+  // Drawn in place, so only the loaded rows (no skeletons to scroll to): "Show more" reads the next page.
+  const loaded = useMemo(
+    () => ({ count: state.loaded, getItem: entries.getItem, getKey: entries.getKey }),
+    [state.loaded, entries],
+  );
   return (
     <Disclosure
       title={strings.completed}
@@ -132,7 +143,14 @@ function CompletedList({
         label={strings.completed}
         layout="inline"
         maxRows={Number.MAX_SAFE_INTEGER}
-        tasks={entries}
+        tasks={loaded}
+        {...(state.hasMore
+          ? {
+              onShowMore: () => {
+                void list.more();
+              },
+            }
+          : {})}
         status={state.status === 'unavailable' ? 'no-access' : state.status}
         onRetry={list.retry}
         emptyTitle={strings.noCompletedTasks}

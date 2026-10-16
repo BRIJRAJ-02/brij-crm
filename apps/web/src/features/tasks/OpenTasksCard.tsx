@@ -44,6 +44,7 @@ export function OpenTasksCard({
   return (
     <Card
       title={strings.openTasks}
+      isBusy={state.status === 'loading'}
       actions={
         <>
           {canAdd && (

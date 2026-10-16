@@ -129,11 +129,11 @@ function TaskFields({
   onTitleInput,
 }: TaskFieldsProps) {
   const [draft, setDraft] = useState(title);
-  // A change from elsewhere (live, or a refusal putting it back) shows when the person isn't typing over it.
+  // A change from elsewhere (live, or a refusal putting it back) shows only when the person isn't typing over it.
   const [shownTitle, setShownTitle] = useState(title);
   if (title !== shownTitle) {
     setShownTitle(title);
-    setDraft(title);
+    if (draft === shownTitle) setDraft(title);
   }
   const [objectId, setObjectId] = useState(startObjectId ?? objects[0]?.id ?? '');
   const search = useRecordSearch(slug, objectId);
@@ -171,6 +171,7 @@ function TaskFields({
           label={strings.done}
           isSelected={isDone}
           isReadOnly={readOnlyReason !== undefined}
+          {...(readOnlyReason === undefined ? {} : { description: readOnlyReason })}
           onChange={(next) => {
             onChange({ isDone: next });
           }}
@@ -285,8 +286,8 @@ function SavedTask({
   );
   if (state.status === 'loading') {
     return (
-      <TaskModal title={strings.task} onClose={onClose} actions={close}>
-        {null}
+      <TaskModal title={strings.task} onClose={onClose}>
+        <EmptyState isLoading title={strings.loading} />
       </TaskModal>
     );
   }
@@ -337,12 +338,9 @@ function SavedTask({
       title={strings.task}
       onClose={onClose}
       actions={
-        <>
-          <Button variant="ghost" icon="link" onPress={copyLink}>
-            {strings.copyLink}
-          </Button>
-          {close}
-        </>
+        <Button variant="ghost" icon="link" onPress={copyLink}>
+          {strings.copyLink}
+        </Button>
       }
     >
       <Form id={`task-${task.id}`} onSubmit={() => undefined} label={strings.task}>
@@ -463,7 +461,7 @@ function TaskModal({
 }: {
   readonly title: string;
   readonly onClose: () => void;
-  readonly actions: ReactNode;
+  readonly actions?: ReactNode;
   readonly children: ReactNode;
 }) {
   return (
@@ -473,7 +471,7 @@ function TaskModal({
       onOpenChange={(open) => {
         if (!open) onClose();
       }}
-      actions={actions}
+      {...(actions === undefined ? {} : { actions })}
     >
       {children}
     </Modal>
@@ -502,8 +500,8 @@ export function TaskDialog(props: TaskDialogProps) {
   if (task === 'new') return <NewTask {...props} />;
   if (subscription === undefined) {
     return (
-      <TaskModal title={strings.task} onClose={props.onClose} actions={null}>
-        {null}
+      <TaskModal title={strings.task} onClose={props.onClose}>
+        <EmptyState isLoading title={strings.loading} />
       </TaskModal>
     );
   }

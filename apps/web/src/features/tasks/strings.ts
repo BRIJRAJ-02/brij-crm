@@ -18,6 +18,7 @@ export const strings = {
   readOnly: 'You can view this task but not change it.',
   // The task dialog.
   task: 'Task',
+  loading: 'Loading the task',
   title: 'Title',
   done: 'Done',
   dueDate: 'Due date',
@@ -26,7 +27,6 @@ export const strings = {
   createTask: 'Create task',
   cancel: 'Cancel',
   close: 'Close',
-  more: 'More',
   copyLink: 'Copy link',
   linkCopied: 'Link copied',
   copyFailed: 'Couldn’t copy the link. Copy it from the address bar.',
