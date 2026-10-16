@@ -367,9 +367,24 @@ export function createWindows({
       first = first === undefined ? block : Math.min(first, block);
     }
     if (first === undefined) return;
-    // Every row after a gone one moved up a place: load its block and the later ones again.
     const from = first;
-    for (const block of [...blocks.keys()].filter((each) => each >= from)) fetchBlock(block);
+    if (isCursor()) {
+      // A later block's checkpoint is the cursor after rows that have now moved up a place: read from it, the
+      // block would skip one row and its predecessor repeat one. So the chain after the first gone row goes,
+      // and comes back from that block's own (still good) checkpoint as its read lands and the screen asks.
+      for (const block of [...blocks.keys()].filter((each) => each > from)) setBlock(block, undefined);
+      for (const [block, controller] of [...loading]) {
+        if (block <= from) continue;
+        controller.abort();
+        loading.delete(block);
+      }
+      for (const at of [...checkpoints.keys()]) if (at > from) checkpoints.delete(at);
+      ended = undefined;
+      fetchBlock(from);
+    } else {
+      // Every row after a gone one moved up a place: load its block and the later ones again.
+      for (const block of [...blocks.keys()].filter((each) => each >= from)) fetchBlock(block);
+    }
     onStale();
     notify();
   };
