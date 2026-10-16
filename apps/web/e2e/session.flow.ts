@@ -23,8 +23,9 @@ test.describe('the session ending', () => {
     const tag = randomUUID().slice(0, 8);
     const email = `session-${tag}@example.com`;
     const slug = `session-${tag}`;
-    const people = `/w/${slug}/objects/people`;
     const firstCode = await newWorkspace(page, email, slug);
+    // People's address opened its default view (spec 0020, AC-462): the page to come back to.
+    const people = new URL(page.url()).pathname;
     await addPerson(page, 'Grace', 'Hopper', `grace-${tag}@example.com`);
     const title = await cellAt(page, 0, 'Job title');
     await title.click();
@@ -69,9 +70,10 @@ test.describe('the session ending', () => {
     const tag = randomUUID().slice(0, 8);
     const slug = `idle-${tag}`;
     await newWorkspace(page, `idle-${tag}@example.com`, slug);
+    const people = new URL(page.url()).pathname;
     await context.clearCookies();
     await page.reload();
-    await expect(page).toHaveURL(new RegExp(`/sign-in\\?redirect=${encodeURIComponent(`/w/${slug}/objects/people`)}$`));
+    await expect(page).toHaveURL(new RegExp(`/sign-in\\?redirect=${encodeURIComponent(people)}$`));
     await expect(page.getByLabel('Email')).toBeFocused();
     await expect(page.getByText(UNSAVED)).toHaveCount(0);
   });

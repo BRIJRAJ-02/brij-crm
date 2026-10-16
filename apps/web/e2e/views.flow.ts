@@ -94,7 +94,11 @@ test.describe('saved views', () => {
       reader.getByRole('toolbar', { name: 'View options' }).getByRole('button', { name: 'Discard changes' }),
     ).toBeVisible();
 
-    // The writer saves its draft first; the reader's save of the older draft is never silent (AC-469).
+    // The writer narrows its draft further and saves first; the reader's save of the older draft is never
+    // silent (AC-469). The writer's save differs from the reader's draft, so following it live leaves the reader
+    // a draft of its own.
+    await filterEmails(writer, `grace-${tag}`);
+    await expect(grid(writer).getByText('Grace Hopper', { exact: true })).toBeVisible();
     await toolbar.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(writer).not.toHaveURL(/draft=/);
     await reader

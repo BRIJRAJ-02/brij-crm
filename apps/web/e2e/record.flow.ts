@@ -93,5 +93,5 @@ test('a record opens from the table, edits in place, and keeps its tab', async (
   }
   await checkScreen(page, 'record-unavailable');
   await page.getByRole('link', { name: 'Back to People' }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people$`));
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`));
 });

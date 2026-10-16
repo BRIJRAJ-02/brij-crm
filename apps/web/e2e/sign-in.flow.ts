@@ -104,7 +104,9 @@ async function newWorkspace(page: Page, email: string, name: string, slug: strin
   await page.getByLabel('Workspace name').fill(name);
   await page.getByLabel('Web address').fill(slug);
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people$`), { timeout: WORKSPACE_MADE_MS });
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`), {
+    timeout: WORKSPACE_MADE_MS,
+  });
 }
 
 /** Signs out from the workspace menu, by keyboard, and waits for /sign-in. */
@@ -170,7 +172,9 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
 
   // Create workspace lands on the empty People page, with focus on its title.
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people$`), { timeout: WORKSPACE_MADE_MS });
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`), {
+    timeout: WORKSPACE_MADE_MS,
+  });
   const title = page.getByRole('heading', { level: 1, name: 'People' });
   await expect(title).toBeVisible();
   await expect(title).toBeFocused();
@@ -215,12 +219,12 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await page.goto(`/w/${slug}/objects/people`);
   await expect(page).toHaveURL(/\/sign-in\?redirect=/);
   await signIn(page, email, [code, wrong]);
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people$`));
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`));
   await expect(page.getByText('No people yet')).toBeVisible();
 
   // Signed in, / opens the workspace.
   await page.goto('/');
-  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people$`));
+  await expect(page).toHaveURL(new RegExp(`/w/${slug}/objects/people(/views/[0-9a-f-]+)?$`));
 });
 
 test('drops each refusal as its field changes, so one press sends the fixed welcome form', async ({ page }) => {
@@ -262,7 +266,9 @@ test('drops each refusal as its field changes, so one press sends the fixed welc
   // The hint comes back in the refusal's place.
   await expect(page.getByText(`Opens at /w/${taken}-two`)).toBeVisible();
   await page.getByRole('button', { name: 'Create workspace' }).click();
-  await expect(page).toHaveURL(new RegExp(`/w/${taken}-two/objects/people$`), { timeout: WORKSPACE_MADE_MS });
+  await expect(page).toHaveURL(new RegExp(`/w/${taken}-two/objects/people(/views/[0-9a-f-]+)?$`), {
+    timeout: WORKSPACE_MADE_MS,
+  });
 });
 
 test('a refused resend says why under its button and waits as long as the server asks', async ({ page }) => {
