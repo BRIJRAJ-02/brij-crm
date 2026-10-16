@@ -450,7 +450,17 @@ export function createRelay(deps: RelayDeps): Relay {
     if (!retrying) sawWork();
     const channel = workspaceChannel(workspaceId);
     const audiences = await audiencesOf(workspaceId);
-    const facts = deps.facts !== undefined && needsFacts(rows) ? await deps.facts(workspaceId, rows) : {};
+    // Facts that fail to load leave the rows that need them coarse (fail closed), and never hold the others back.
+    const facts =
+      deps.facts !== undefined && needsFacts(rows)
+        ? await deps.facts(workspaceId, rows).catch((error: unknown) => {
+            log.warn('Reading the view facts failed; views events go out coarse', {
+              workspaceId,
+              ...errorFields(error),
+            });
+            return {};
+          })
+        : {};
     const outcome = await deps.publishBatch(
       rows.map((row) => ({
         channel,

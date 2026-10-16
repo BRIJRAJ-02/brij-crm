@@ -96,6 +96,29 @@ describe('views', () => {
     });
   });
 
+  it('finds no view of another workspace through the caller’s own, and writes nothing there', async () => {
+    const owner = await memberWithWorkspace(app);
+    const other = await memberWithWorkspace(app);
+    const [view] = (await owner.client.views.list({ workspace: owner.slug, objectId: owner.people.id })).views;
+    const viewId = view?.id ?? '';
+    expect(await refusal(() => other.client.views.get({ workspace: other.slug, viewId }))).toMatchObject({
+      code: 'NOT_FOUND',
+      status: 404,
+    });
+    expect(
+      await refusal(() =>
+        other.client.views.saveQuery({
+          workspace: other.slug,
+          viewId,
+          sorts: [],
+          baseQueryVersion: 1,
+          mutationId: newId(),
+        }),
+      ),
+    ).toMatchObject({ code: 'NOT_FOUND', status: 404 });
+    expect(await owner.client.views.get({ workspace: owner.slug, viewId })).toMatchObject({ queryVersion: 1 });
+  });
+
   it('answers a non member as an unknown workspace', async () => {
     const owner = await memberWithWorkspace(app);
     const stranger = await memberWithWorkspace(app);

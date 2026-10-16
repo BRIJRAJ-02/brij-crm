@@ -3,7 +3,7 @@
 // for everyone who sees it. Every read goes through the scope the door made;
 // the save runs inside `runWrite` and records the view in `Change.views`, so
 // `outboxHook` stores its `views` row in the same transaction.
-import { and, asc, eq, or, sql } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, or, sql } from 'drizzle-orm';
 import {
   MAX_VIEW_CONFIG_BYTES,
   ViewConfig,
@@ -16,7 +16,7 @@ import {
 import { schema, type WorkspaceTx } from '@crm/db';
 import { touched } from '../engine/definitions.ts';
 import { checkViewQuery } from '../engine/query/page.ts';
-import { refuse } from '../engine/refusals.ts';
+import { postgresError, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { can, fieldLevel, type Access } from '../access/policy.ts';
@@ -177,7 +177,9 @@ export async function listViews(scope: EngineScope, objectId: string): Promise<V
       .where(
         and(
           eq(views.workspaceId, scope.workspaceId),
-          eq(views.objectId, objectId),
+          // By its parent, so the switcher's index (workspace, parent, visibility, position) answers it.
+          eq(views.parentId, objectId),
+          isNotNull(views.objectId),
           caller === undefined
             ? eq(views.visibility, 'workspace')
             : or(eq(views.visibility, 'workspace'), eq(views.creatorMemberId, caller)),
@@ -261,17 +263,26 @@ export async function saveViewQuery(
         throw refuse('CONFIG_INVALID', 'This view has too many settings to save.');
       }
       const saver = scope.actor.type === 'member' ? scope.actor.id : null;
-      await tx
-        .update(views)
-        .set({
-          config: config.data,
-          version: sql`${views.version} + 1`,
-          queryVersion: sql`${views.queryVersion} + 1`,
-          querySavedAt: sql`now()`,
-          querySavedByMemberId: saver,
-          ...touched(scope),
-        })
-        .where(and(eq(views.workspaceId, scope.workspaceId), eq(views.id, row.id)));
+      try {
+        await tx
+          .update(views)
+          .set({
+            config: config.data,
+            version: sql`${views.version} + 1`,
+            queryVersion: sql`${views.queryVersion} + 1`,
+            querySavedAt: sql`now()`,
+            querySavedByMemberId: saver,
+            ...touched(scope),
+          })
+          .where(and(eq(views.workspaceId, scope.workspaceId), eq(views.id, row.id)));
+      } catch (error) {
+        // The database measures the stored text, a little longer than the compact JSON checked above.
+        const pg = postgresError(error);
+        if (pg?.code === '23514' && pg.constraint === 'views_config') {
+          throw refuse('CONFIG_INVALID', 'This view has too many settings to save.');
+        }
+        throw error;
+      }
       context.record({ views: [{ viewId: row.id, objectId: row.objectId }] });
       return viewOf(scope.access, await readView(tx, scope, row.id, false));
     },

@@ -241,7 +241,13 @@ describe('saveViewQuery (AC-468, AC-469, AC-476, AC-482)', () => {
     const sorts = [{ attributeId: w.attribute('name'), direction: 'ascending' as const }];
     await saveViewQuery(w.bea, { viewId: w.peopleView, sorts, baseQueryVersion: 1 });
     const outbox = (await outboxOf(w)).length;
-    expect(await refusalOf(saveViewQuery(w.owner, { viewId: w.peopleView, sorts: [], baseQueryVersion: 1 }))).toEqual({
+    expect(
+      await refusalOf(
+        saveViewQuery(w.owner, { viewId: w.peopleView, sorts: [], baseQueryVersion: 1 }, [
+          outboxHook({ mutationId: newId() }),
+        ]),
+      ),
+    ).toEqual({
       code: 'VIEW_CHANGED',
       message: 'Bea Ruiz changed this view’s filters since you started.',
     });
@@ -258,10 +264,16 @@ describe('saveViewQuery (AC-468, AC-469, AC-476, AC-482)', () => {
   it('refuses a member on a locked view, lets an owner through, and keeps private views to their creator', async () => {
     const w = await workspace();
     const locked = await insertView(w, { name: 'Pipeline', visibility: 'workspace', position: 1, locked: true });
-    expect(await refusalOf(saveViewQuery(w.bea, { viewId: locked, sorts: [], baseQueryVersion: 1 }))).toEqual({
+    const outbox = (await outboxOf(w)).length;
+    expect(
+      await refusalOf(
+        saveViewQuery(w.bea, { viewId: locked, sorts: [], baseQueryVersion: 1 }, [outboxHook({ mutationId: newId() })]),
+      ),
+    ).toEqual({
       code: 'FORBIDDEN',
       message: VIEW_LOCKED,
     });
+    expect(await outboxOf(w)).toHaveLength(outbox);
     await expect(saveViewQuery(w.owner, { viewId: locked, sorts: [], baseQueryVersion: 1 })).resolves.toMatchObject({
       queryVersion: 2,
     });
@@ -282,14 +294,18 @@ describe('saveViewQuery (AC-468, AC-469, AC-476, AC-482)', () => {
     const before = await getView(w.owner, w.peopleView);
     const save = (scope: typeof w.owner, filterId: string | undefined, sortId?: string) =>
       refusalOf(
-        saveViewQuery(scope, {
-          viewId: w.peopleView,
-          ...(filterId === undefined
-            ? {}
-            : { filter: { conjunction: 'and', conditions: [{ attributeId: filterId, operator: 'is_not_empty' }] } }),
-          sorts: sortId === undefined ? [] : [{ attributeId: sortId, direction: 'ascending' }],
-          baseQueryVersion: 1,
-        }),
+        saveViewQuery(
+          scope,
+          {
+            viewId: w.peopleView,
+            ...(filterId === undefined
+              ? {}
+              : { filter: { conjunction: 'and', conditions: [{ attributeId: filterId, operator: 'is_not_empty' }] } }),
+            sorts: sortId === undefined ? [] : [{ attributeId: sortId, direction: 'ascending' }],
+            baseQueryVersion: 1,
+          },
+          [outboxHook({ mutationId: newId() })],
+        ),
       );
     expect(await save(w.owner, w.attribute('name', w.objects.companies))).toMatchObject({ code: 'FILTER_INVALID' });
     expect(await save(w.owner, undefined, notes.id)).toEqual({
