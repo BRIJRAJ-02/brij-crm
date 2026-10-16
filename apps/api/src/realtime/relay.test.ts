@@ -967,6 +967,25 @@ describe('the relay', () => {
     expect(relay.mode()).toBe('active');
   });
 
+  it('names a workspace stuck once it waits the longest and has failed for a quiet spell, and no other (spec 0008)', async () => {
+    const failing = await workspace();
+    const centrifugo = await fakeCentrifugo({
+      refuse: (publication) => publication.channel === `workspace:${failing}`,
+    });
+    servers.push(centrifugo);
+    await events(failing, [1]);
+    const { relay } = relayTo(centrifugo.url, {
+      pollScheduleMs: [50],
+      dormantAfterMs: 300,
+      retryMs: 50,
+      maxRetryMs: 100,
+      selfDormant: false,
+    });
+    expect(relay.stuckWorkspaces()).toEqual([]);
+    await expect.poll(() => relay.stuckWorkspaces(), WAIT).toEqual([failing]);
+    expect(relay.mode()).toBe('active');
+  });
+
   it('goes dormant when told to sleep while it backs off from a failed connect, without connecting again', async () => {
     const centrifugo = await fakeCentrifugo();
     servers.push(centrifugo);

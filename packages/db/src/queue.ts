@@ -52,9 +52,22 @@ export interface QueueConnection {
    * runnable unlocked row is due, whether any outbox row waits to be
    * published (`crm_outbox_workspaces`, asked only when `outbox` is true: a
    * worker without a relay never publishes them), and the database's time.
+   * Only rows of `tasks` count (the ones this worker's runners run: a row of
+   * a task nobody here takes would keep it awake for ever), and an outbox row
+   * of a workspace in `stuck` doesn't (the relay can't publish it now).
    */
-  sleepCheck(options: { readonly outbox: boolean }): Promise<SleepCheck>;
+  sleepCheck(options: SleepCheckOptions): Promise<SleepCheck>;
   close(): Promise<void>;
+}
+
+/** What the check before sleeping asks about. */
+export interface SleepCheckOptions {
+  /** Whether an outbox row waiting keeps the worker awake: true when its relay is on. */
+  readonly outbox: boolean;
+  /** Workspaces whose rows the relay can't publish now (Centrifugo down for a whole quiet spell): not counted. */
+  readonly stuck?: readonly string[];
+  /** The task identifiers this worker's runners run: only their rows count. */
+  readonly tasks: readonly string[];
 }
 
 /** What the queue and the outbox say before the worker sleeps. */
@@ -163,23 +176,26 @@ export function openQueueConnection(options: {
       return result.rows.map((row) => row.id);
     },
     pruneOutbox: () => pruneOutbox(pool),
-    async sleepCheck({ outbox }) {
+    async sleepCheck({ outbox, stuck = [], tasks }) {
       const result = await pool.query<{
         locked: boolean;
         next_run_at: Date | null;
         unpublished: boolean;
         now: Date;
       }>(
-        `select
-           exists (select 1 from ${QUEUE_SCHEMA}._private_jobs where locked_at is not null)
+        `with ours as (select id from ${QUEUE_SCHEMA}._private_tasks where identifier = any($3::text[]))
+         select
+           exists (select 1 from ${QUEUE_SCHEMA}._private_jobs where locked_at is not null and task_id in (select id from ours))
              or exists (select 1 from ${QUEUE_SCHEMA}._private_job_queues where locked_at is not null) as locked,
            (select min(run_at) from ${QUEUE_SCHEMA}._private_jobs
-             where locked_at is null and attempts < max_attempts) as next_run_at,
+             where locked_at is null and attempts < max_attempts and task_id in (select id from ours)) as next_run_at,
            case when $1::boolean
-             then exists (select 1 from public.crm_outbox_workspaces(1, null))
+             then exists (
+               select 1 from public.crm_outbox_workspaces(500, null) as w(id) where w.id <> all($2::uuid[])
+             )
              else false end as unpublished,
            now() as now`,
-        [outbox],
+        [outbox, stuck, tasks],
       );
       const row = result.rows[0];
       if (row === undefined) throw new Error('The sleep check answered nothing.');

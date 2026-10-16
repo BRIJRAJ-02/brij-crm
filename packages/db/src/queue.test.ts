@@ -313,17 +313,32 @@ describe('the check before the worker sleeps (spec 0008, milestone 3, AC-117)', 
     });
     const queue = openQueueConnection({ url: workerUrl, applicationName: 'crm-queue-tests', max: 1 });
     try {
-      const first = await queue.sleepCheck({ outbox: true });
+      const first = await queue.sleepCheck({ outbox: true, tasks: ['crm_job_heavy'] });
       expect(first.unpublished).toBe(true);
       expect(first.nextRunAt?.getTime()).toBeLessThanOrEqual(runAt.getTime());
       expect(Math.abs(first.now.getTime() - Date.now())).toBeLessThan(60_000);
       // A worker without a relay never publishes, so it never waits on the outbox.
-      expect((await queue.sleepCheck({ outbox: false })).unpublished).toBe(false);
+      expect((await queue.sleepCheck({ outbox: false, tasks: ['crm_job_heavy'] })).unpublished).toBe(false);
       await owner.query(
         `update ${QUEUE_SCHEMA}._private_jobs set locked_by = 'sleep-test', locked_at = now() where key = $1`,
         [`crm-job:${workspaceId}:${job}`],
       );
-      expect((await queue.sleepCheck({ outbox: false })).locked).toBe(true);
+      expect((await queue.sleepCheck({ outbox: false, tasks: ['crm_job_heavy'] })).locked).toBe(true);
+      // Only the tasks this worker runs count: a row of a task nobody here takes never keeps it awake.
+      const task = `test_sleep_${randomUUID().replaceAll('-', '')}`;
+      const later = new Date(Date.now() + 20 * 60_000);
+      await owner.query(`select ${QUEUE_SCHEMA}.add_job($1, '{}'::json, run_at => $2::timestamptz)`, [
+        task,
+        later.toISOString(),
+      ]);
+      expect((await queue.sleepCheck({ outbox: false, tasks: [task] })).nextRunAt?.toISOString()).toBe(
+        later.toISOString(),
+      );
+      expect((await queue.sleepCheck({ outbox: false, tasks: [`${task}_none`] })).nextRunAt).toBeUndefined();
+      await owner.query(
+        `delete from ${QUEUE_SCHEMA}._private_jobs where task_id in (select id from ${QUEUE_SCHEMA}._private_tasks where identifier = $1)`,
+        [task],
+      );
     } finally {
       await queue.close();
       await owner.query(`delete from ${QUEUE_SCHEMA}._private_jobs where key = $1`, [`crm-job:${workspaceId}:${job}`]);

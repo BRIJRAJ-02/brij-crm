@@ -37,6 +37,9 @@ export const DAILY_CRON_HOUR_UTC = 3;
 /** The daily cleanup's task (light lane): the cron's, and its continuations'. */
 export const DAILY_TASK = 'crm_cron_daily';
 
+/** Every task the worker's runners run: only their queue rows keep a sleeping worker's check awake. */
+export const RUNNER_TASKS: readonly string[] = [LANES.heavy.task, LANES.light.task, DAILY_TASK];
+
 /**
  * The one crontab line (spec 0008, Cron): every day at 03:00 UTC, with one
  * day of fill (a missed day runs once), an identifier of its own (so

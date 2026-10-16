@@ -194,12 +194,13 @@ export interface Relay {
   /** How many workspaces' audiences the relay holds now (for tests and #12's measurements). */
   cachedAudiences(): number;
   /**
-   * True when the only rows left are those of workspaces failing to publish,
-   * each waiting the longest for a whole quiet spell (Centrifugo down): spec
-   * 0005's rule for going dormant anyway, which the worker's sleep check
-   * follows, so an outage never keeps Neon's compute awake.
+   * The workspaces failing to publish that wait the longest and have failed
+   * for a whole quiet spell (Centrifugo down): spec 0005's rule for going
+   * dormant anyway. The worker's sleep check leaves their rows out, so an
+   * outage never keeps Neon's compute awake, while any other workspace's
+   * waiting rows still do.
    */
-  stuck(): boolean;
+  stuckWorkspaces(): readonly string[];
   /**
    * Goes dormant now, whatever the quiet clock says (the worker is going to
    * sleep): the publish in flight finishes, the connection closes (letting
@@ -816,13 +817,9 @@ export function createRelay(deps: RelayDeps): Relay {
     mode: () => current,
     stats: report,
     cachedAudiences: () => audienceCache.size,
-    stuck: () => {
+    stuckWorkspaces: () => {
       const now = Date.now();
-      return (
-        retries.size > 0 &&
-        now - lastWork >= dormantAfterMs &&
-        [...retries.values()].every((retry) => stuck(retry, now))
-      );
+      return [...retries].flatMap(([workspaceId, retry]) => (stuck(retry, now) ? [workspaceId] : []));
     },
     async stop() {
       stopped = true;

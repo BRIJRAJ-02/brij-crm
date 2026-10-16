@@ -18,7 +18,7 @@ import {
   type QueueConnection,
 } from '@crm/db';
 import { backgroundHooks } from './hooks.ts';
-import { startJobRunners } from './jobs/graphile.ts';
+import { RUNNER_TASKS, startJobRunners } from './jobs/graphile.ts';
 import { createLifecycle, type AwakeWorker, type Lifecycle } from './jobs/lifecycle.ts';
 import { createJobRunner } from './jobs/runner.ts';
 import { loadEnv, WorkerEnv } from './env.ts';
@@ -186,8 +186,14 @@ async function openWorker(hooks: {
     queue = opened;
     return {
       busy: () => runners.busy(),
-      // Rows the relay can't publish (Centrifugo down for a whole quiet spell) don't keep the worker awake.
-      check: () => opened.sleepCheck({ outbox: relay !== undefined && !relay.stuck() }),
+      // Rows the relay can't publish (Centrifugo down for a whole quiet spell) don't keep the worker awake; any
+      // other workspace's waiting rows do. Only the tasks these runners run count.
+      check: () =>
+        opened.sleepCheck({
+          outbox: relay !== undefined,
+          stuck: relay?.stuckWorkspaces() ?? [],
+          tasks: RUNNER_TASKS,
+        }),
       close: async () => {
         // The slices in hand finish their batch and hand their jobs back first.
         await runners.stop();
