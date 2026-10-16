@@ -70,7 +70,7 @@ export type {
   TextContext,
   TextRefusal,
 } from './fields/types.ts';
-export type { ObjectSwitcher, SearchObject } from './fields/ReferencePicker.tsx';
+export type { ObjectSwitcher, ResultState, SearchObject } from './fields/ReferencePicker.tsx';
 export { isRefusal } from './fields/values.ts';
 export { HUES, type Hue } from './hue.ts';
 export { arraySource, type ListRange, type ListSource } from './lib/list-source.ts';

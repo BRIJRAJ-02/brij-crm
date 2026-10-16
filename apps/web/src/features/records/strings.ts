@@ -1,5 +1,9 @@
 /** The record page's copy (spec 0017). The side panel (milestone 4) shares `recordUnavailable`. */
 export const strings = {
+  /** A search result held on a far side that holds one (spec 0014): picking it moves it here. */
+  linkedAt: (name: string) => `At ${name}`,
+  /** The same, held by a record the person can't see: never named. */
+  linkedElsewhere: 'Linked elsewhere',
   /** A record that doesn't exist and one the person may not see read the same (AC-376, AC-384). */
   recordUnavailable: 'This record isn’t available.',
   /** Under it: what to do next. */

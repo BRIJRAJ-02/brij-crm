@@ -60,6 +60,9 @@ export const strings = {
   unavailableRecord: 'Unavailable',
   /** Why a company or Owner cell can't be edited in this loop. */
   referenceReadOnly: 'You can’t change this here yet.',
+  /** Clearing a relation cell that shows only its first 20 links (spec 0014). */
+  clearTooMany: (title: string) =>
+    `${title} holds more records than show here. Remove them from the record, one at a time.`,
   /** Spec 0006: a paste or range clear that landed, with Undo (AC-48). */
   /** Counts arrive formatted in the browser's language ("1,500"). */
   pasted: (cells: string) => `Pasted into ${cells} cells.`,

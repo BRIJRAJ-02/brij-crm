@@ -146,8 +146,12 @@ export interface DataGridProps<Row> {
   readonly members?: readonly ActorDisplay[];
   /** Phone parsing for paste, once loaded (`createPhoneParser`). */
   readonly phone?: PhoneParser;
-  /** What a column's reference or file editor needs: search, uploads, the signed in member. */
-  readonly editorProps?: (column: GridColumn) => GridEditorProps;
+  /**
+   * What a column's reference or file editor needs: search, uploads, the
+   * signed in member, and each search result's note. Asked per cell, with
+   * the row's key, so a record search can say what is linked from that row.
+   */
+  readonly editorProps?: (column: GridColumn, rowId: string | undefined) => GridEditorProps;
   /**
    * Whether a row holds a column's value yet (spec 0006, AC-55: a column just
    * shown is read for the loaded rows). An unknown cell draws a skeleton,
@@ -1471,7 +1475,7 @@ export function DataGrid<Row>({
                 ? { rangeEdges: edgesOf(rangeEdges(range), row, place.col) }
                 : {})}
               tipId={`${gridId}-tip-${keyOf(row, place.col)}`}
-              editorProps={editorProps?.(each.column) ?? NO_EDITOR_PROPS}
+              editorProps={editorProps?.(each.column, id) ?? NO_EDITOR_PROPS}
               onCommit={(next) => {
                 commitCell(row, place.col, next);
               }}

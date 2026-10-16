@@ -1,7 +1,7 @@
 // Brief
 // Purpose: a record's details in the page's sidebar (and, with milestone 4, the side panel's Details tab).
 // Main task: read every attribute and edit it in place, saved through the data layer, a refusal said under the value.
-// Leaves out: relationship sections that hold many records (milestone 3) and attribute groups (#18).
+// Leaves out: relationship sections that hold many records (spec 0014, milestone 3) and attribute groups (#18).
 import {
   toActorDisplays,
   toFieldAttribute,
@@ -18,6 +18,7 @@ import { AttributeList } from '@crm/ui';
 import { useParams, useRouteContext } from '@tanstack/react-router';
 import { useMemo } from 'react';
 import { refsOf } from './details.ts';
+import { useLinkEditing } from './links.ts';
 import { strings } from './strings.ts';
 
 /** Props for the record's details. */
@@ -68,6 +69,9 @@ export function RecordDetails({
       })),
     [attributes, slug, pendingOptions],
   );
+  // A record reference edits through its picker and goes as link deltas (spec 0014), never a whole value.
+  const links = useLinkEditing(slug);
+  const byId = useMemo(() => new Map(attributes.map((definition) => [definition.id, definition])), [attributes]);
   if (record === undefined) return <AttributeList label={strings.details} sections={[]} isLoading />;
   const items = fields.map(({ definition, attribute }) => {
     const value = record.values[definition.id] ?? null;
@@ -91,7 +95,19 @@ export function RecordDetails({
     <AttributeList
       label={strings.details}
       sections={[{ id: 'details', items }]}
-      {...(onCommit === undefined ? {} : { onCommit })}
+      editorProps={(attribute) => {
+        const definition = byId.get(attribute.id);
+        return (definition === undefined ? undefined : links.pickerFor(definition, record.id)) ?? {};
+      }}
+      {...(onCommit === undefined
+        ? {}
+        : {
+            onCommit: (attributeId: string, value: unknown) => {
+              const definition = byId.get(attributeId);
+              if (definition?.type === 'record_reference') void links.commit(definition, record.id, value);
+              else onCommit(attributeId, value);
+            },
+          })}
     />
   );
 }

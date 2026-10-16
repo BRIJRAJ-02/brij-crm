@@ -1,6 +1,6 @@
 // The field set's types (spec 0003, attribute values): what every display and
 // editor takes, and what each attribute type registers once.
-import type { ObjectSwitcher } from './ReferencePicker.tsx';
+import type { ObjectSwitcher, ResultState } from './ReferencePicker.tsx';
 import type {
   ActorDisplay,
   AttributeType,
@@ -101,6 +101,11 @@ export interface EditorProps<T extends AttributeType> {
    * Select before it. Nothing changes without it.
    */
   readonly objectSwitcher?: ObjectSwitcher;
+  /**
+   * Record references (spec 0014): what each search result says beside its
+   * name ("At Acme") and whether it is linked already, shown as chosen.
+   */
+  readonly describeResult?: (display: DisplayFor<T> & object) => ResultState | undefined;
 }
 
 /** A pasted or imported text the type can't take, and why ("No option called 'Hot'"). */
