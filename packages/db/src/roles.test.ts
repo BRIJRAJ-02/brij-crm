@@ -482,11 +482,11 @@ describe("migration 0020's closing check: who can reach crm_relay", () => {
   });
 });
 
-describe("migration 0032's closing check: crm_workspace_ids and crm_sweep (spec 0008, milestone 3)", () => {
+describe("migration 0034's closing check: crm_workspace_ids and crm_sweep (spec 0008, milestone 3)", () => {
   let check: string;
 
   beforeAll(async () => {
-    const sql = await readFile(new URL('../migrations/0032_workspace_sweep.sql', import.meta.url), 'utf8');
+    const sql = await readFile(new URL('../migrations/0034_workspace_sweep.sql', import.meta.url), 'utf8');
     check = sql.slice(sql.lastIndexOf('do $$'));
   });
 

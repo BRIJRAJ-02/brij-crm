@@ -239,6 +239,13 @@
       "when": 1792031989465,
       "tag": "0033_validation_rules",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1792148078183,
+      "tag": "0034_workspace_sweep",
+      "breakpoints": true
     }
   ]
 }

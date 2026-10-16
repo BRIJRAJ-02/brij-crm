@@ -87,7 +87,7 @@ Real worker processes (`apps/api/test/jobs-worker.ts`, the worker's own wiring t
 
 ## Milestone 3
 
-Built 15 October 2026 (steps 16 to 19, and step 20 short of the deploy). Migration `0032_workspace_sweep` (renumbered at landing if another lands first): the role `crm_sweep` and the definer function `crm_workspace_ids`.
+Built 15 October 2026 (steps 16 to 19, and step 20 short of the deploy). Migration `0034_workspace_sweep` (renumbered at landing if another lands first): the role `crm_sweep` and the definer function `crm_workspace_ids`.
 
 Production is unchanged in behaviour until the owner turns the jobs on. Its worker still logs in as the app login (not in `crm_worker`) and `JOBS_RUNNER` is off there, so it boots exactly as before: the jobs' runners off (`jobs.off`), no crontab, no lifecycle, and the relay with its own 3 minute dormancy (`selfDormant` stays true with the jobs off). The migration adds three partial indexes (small tables today, built under a 5 second lock timeout), a role and a function nobody but `crm_worker` may call. The api's once a minute wake on signed in requests is off in production (`WORKER_WAKE_ON_USE` unset is `off` there), so an idle tab can't keep the relay polling; the overdue read's wake (at most every 10 seconds) has nothing to find, since no job is started in production yet. `maintenance.daily` is registered everywhere, but nothing starts one until a runner with the crontab runs.
 

@@ -24,7 +24,9 @@ import { rescope, testScope } from '../../testing.ts';
 
 // A database of its own: two tests lock the whole records table, which in the shared one stalls every other file.
 const { appUrl, ownerUrl } = inject('lockingDatabase');
-const NOW = '2026-10-15T14:00:00.000Z';
+// The next whole hour, not a fixed date: records are created at the real time, so a fixed now falls behind them
+// as the calendar moves on, and "created within the last 30 days" then matches nothing.
+const NOW = new Date(Math.ceil(Date.now() / 3_600_000) * 3_600_000).toISOString();
 const ZONE = 'America/New_York';
 let db: Database;
 let scope: EngineScope;
