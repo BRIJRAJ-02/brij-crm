@@ -23,6 +23,10 @@ export function useRecordSearch(slug: string, objectId: string) {
   );
   // Moves when an answer lands, so the picker asks again and finds it.
   const [version, setVersion] = useState(0);
+  // The search that failed last (a blip, offline): it answers nothing until the person types again, and the field
+  // says so; any other search asks afresh, and that failed one is forgotten.
+  const failedKey = useRef<string | undefined>(undefined);
+  const [failed, setFailed] = useState(false);
   useEffect(
     () => () => {
       clearTimeout(pending.current?.timer);
@@ -32,6 +36,10 @@ export function useRecordSearch(slug: string, objectId: string) {
   const onSearch = useCallback(
     (query: string): ListSource<RecordRefDisplay> => {
       const key = `${objectId}\u0000${query.trim()}`;
+      if (failedKey.current !== undefined && failedKey.current !== key) {
+        answers.current.delete(failedKey.current);
+        failedKey.current = undefined;
+      }
       const answered = answers.current.get(key);
       if (answered !== undefined) return arraySource(answered, keyOf);
       if (pending.current?.key !== key) {
@@ -43,11 +51,16 @@ export function useRecordSearch(slug: string, objectId: string) {
               (found) => {
                 answers.current.set(key, found);
                 for (const display of found) seen.current.set(display.recordId, display);
+                setFailed(false);
                 setVersion((at) => at + 1);
               },
               () => {
-                // Nothing offered; the next key asks again.
+                // Nothing to offer: the field says the search failed, and the next key asks again.
+                answers.current.set(key, []);
+                failedKey.current = key;
                 pending.current = undefined;
+                setFailed(true);
+                setVersion((at) => at + 1);
               },
             );
           }, SEARCH_DELAY_MS),
@@ -61,5 +74,5 @@ export function useRecordSearch(slug: string, objectId: string) {
     [data, slug, objectId, version],
   );
   const displayOf = useCallback((recordId: string) => seen.current.get(recordId), []);
-  return { onSearch, displayOf };
+  return { onSearch, displayOf, failed };
 }

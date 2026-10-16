@@ -78,6 +78,12 @@ const LOADING_TASK: TaskSubscription = {
 };
 const LOADING_STATE = { status: 'loading' } as const;
 
+/** A task subscription that only says it failed, with Try again (`retry`), when the task's code didn't load. */
+function failedTask(retry: () => void): TaskSubscription {
+  const state = { status: 'error' } as const;
+  return { subscribe: () => () => undefined, getSnapshot: () => state, retain: () => () => undefined, retry };
+}
+
 /** Which field a refusal shows under. */
 type FieldName = 'title' | 'isDone' | 'dueOn' | 'assignee' | 'records';
 
@@ -144,7 +150,13 @@ function TaskFields({
     setShownTitle(title);
     if (draft === shownTitle) setDraft(title);
   }
-  const [objectId, setObjectId] = useState(startObjectId ?? objects[0]?.id ?? '');
+  // Only objects the person may change can take a link (AC-447): the picker starts on the page's object when it is
+  // one of them, else the first; with none, Records is read only and says why.
+  const writable = objects.filter((object) => object.access === 'write');
+  const [objectId, setObjectId] = useState(
+    writable.find((object) => object.id === startObjectId)?.id ?? writable[0]?.id ?? '',
+  );
+  const recordsReason = readOnlyReason ?? (writable.length === 0 ? strings.linkForbidden : undefined);
   const search = useRecordSearch(slug, objectId);
   const [recordsError, setRecordsError] = useState<string | undefined>(undefined);
   const [titleError, setTitleError] = useState<string | undefined>(undefined);
@@ -224,21 +236,19 @@ function TaskFields({
         {...(errors.assignee === undefined ? {} : { error: errors.assignee })}
       />
       <AttributeEditor
-        attribute={attributeOf('task-records', strings.records, 'record_reference', readOnlyReason)}
+        attribute={attributeOf('task-records', strings.records, 'record_reference', recordsReason)}
         value={records.map((record) => ({ objectId: record.objectId, recordId: record.recordId }))}
         display={records}
         surface="form"
         onSearch={editorSearch(search.onSearch)}
         objectSwitcher={{
           // Only objects the person may change: a link to any other would be refused (AC-447).
-          objects: objects
-            .filter((object) => object.access === 'write')
-            .map((object) => ({
-              id: object.id,
-              label: object.pluralName,
-              icon: object.icon,
-              hue: object.hue,
-            })),
+          objects: writable.map((object) => ({
+            id: object.id,
+            label: object.pluralName,
+            icon: object.icon,
+            hue: object.hue,
+          })),
           objectId,
           onObjectChange: setObjectId,
         }}
@@ -273,7 +283,9 @@ function TaskFields({
             removeRecordIds: records.filter((record) => !nextIds.has(record.recordId)).map((record) => record.recordId),
           });
         }}
-        {...((recordsError ?? errors.records) === undefined ? {} : { error: recordsError ?? errors.records })}
+        {...((recordsError ?? errors.records ?? (search.failed ? strings.searchFailed : undefined)) === undefined
+          ? {}
+          : { error: recordsError ?? errors.records ?? strings.searchFailed })}
       />
     </>
   );
@@ -507,19 +519,34 @@ function TaskModal({
  */
 export function TaskDialog(props: TaskDialogProps) {
   const { data } = useRouteContext({ from: '__root__' });
-  const [subscription, setSubscription] = useState<TaskSubscription | undefined>(undefined);
+  const [subscription, setSubscription] = useState<TaskSubscription | 'failed' | undefined>(undefined);
+  // Moves on Try again after the task's code failed to load.
+  const [attempt, setAttempt] = useState(0);
   const { slug, task } = props;
   useEffect(() => {
     if (task === 'new') return;
     let isLive = true;
-    void data.tasks.one(slug, task).then((found) => {
-      if (isLive) setSubscription(found);
-    });
+    data.tasks.one(slug, task).then(
+      (found) => {
+        if (isLive) setSubscription(found);
+      },
+      () => {
+        // The store's code didn't load (offline): the dialog says so, with Try again.
+        if (isLive) setSubscription('failed');
+      },
+    );
     return () => {
       isLive = false;
     };
-  }, [data, slug, task]);
+  }, [data, slug, task, attempt]);
   if (task === 'new') return <NewTask {...props} />;
   // One SavedTask (so one Modal) from the first frame: a placeholder that says loading until the store's lands.
-  return <SavedTask {...props} subscription={subscription ?? LOADING_TASK} />;
+  const shown =
+    subscription === 'failed'
+      ? failedTask(() => {
+          setSubscription(undefined);
+          setAttempt((at) => at + 1);
+        })
+      : (subscription ?? LOADING_TASK);
+  return <SavedTask {...props} subscription={shown} />;
 }

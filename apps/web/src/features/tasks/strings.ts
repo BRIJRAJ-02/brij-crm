@@ -35,6 +35,8 @@ export const strings = {
   created: 'Created by',
   /** A link to a record of an object the person may only read (AC-447). */
   linkForbidden: 'You can’t link a task to a record you can’t change.',
+  /** The record picker's search didn't answer. */
+  searchFailed: 'The search didn’t answer. Type again to try again.',
   /** A task that doesn't exist, was deleted, or the reader can't see. */
   missing: 'This task doesn’t exist or you can’t see it.',
   loadFailed: 'This task didn’t load.',
