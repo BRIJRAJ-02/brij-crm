@@ -40,6 +40,8 @@ const READS: ReadonlySet<string> = new Set([
   'usage.get',
   'views.list',
   'views.get',
+  'trash.query',
+  'trash.count',
 ]);
 
 let db: Database;
@@ -98,6 +100,19 @@ async function tierOn(m: Member): Promise<{ readonly id: string; readonly option
     mutationId: newId(),
   });
   return { id: made.id, options };
+}
+
+/** A person made through the app, for a case that deletes or restores one. */
+async function personFor(m: Member): Promise<string> {
+  const id = newId();
+  await m.client.records.create({
+    workspace: m.slug,
+    objectId: m.people.id,
+    id,
+    values: { [m.attribute('name')]: { firstName: 'Ada' } },
+    mutationId: newId(),
+  });
+  return id;
 }
 
 /**
@@ -171,6 +186,54 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'records', object_id: m.people.id, record_ids: [ids[0] ?? ''] },
       { kind: 'records', object_id: m.people.id, record_ids: [ids[1] ?? ''] },
       { kind: 'records', object_id: m.people.id, record_ids: ids, mutation_id: mutationId },
+    ];
+  },
+  // Bulk actions and the trash (spec 0022): one records row for the object, naming the records.
+  'records.deleteMany': async (m, mutationId) => {
+    const id = await personFor(m);
+    await m.client.records.deleteMany({
+      workspace: m.slug,
+      objectId: m.people.id,
+      recordIds: [id],
+      batchId: newId(),
+      mutationId,
+    });
+    return [
+      { kind: 'records', object_id: m.people.id, record_ids: [id] },
+      { kind: 'records', object_id: m.people.id, record_ids: [id], mutation_id: mutationId },
+    ];
+  },
+  'records.restoreBatch': async (m, mutationId) => {
+    const id = await personFor(m);
+    const batchId = newId();
+    await m.client.records.deleteMany({
+      workspace: m.slug,
+      objectId: m.people.id,
+      recordIds: [id],
+      batchId,
+      mutationId: newId(),
+    });
+    await m.client.records.restoreBatch({ workspace: m.slug, batchId, mutationId });
+    return [
+      { kind: 'records', object_id: m.people.id, record_ids: [id] },
+      { kind: 'records', object_id: m.people.id, record_ids: [id] },
+      { kind: 'records', object_id: m.people.id, record_ids: [id], mutation_id: mutationId },
+    ];
+  },
+  'trash.restore': async (m, mutationId) => {
+    const id = await personFor(m);
+    await m.client.records.deleteMany({
+      workspace: m.slug,
+      objectId: m.people.id,
+      recordIds: [id],
+      batchId: newId(),
+      mutationId: newId(),
+    });
+    await m.client.trash.restore({ workspace: m.slug, recordIds: [id], mutationId });
+    return [
+      { kind: 'records', object_id: m.people.id, record_ids: [id] },
+      { kind: 'records', object_id: m.people.id, record_ids: [id] },
+      { kind: 'records', object_id: m.people.id, record_ids: [id], mutation_id: mutationId },
     ];
   },
   'attributes.create': async (m, mutationId) => {
@@ -380,6 +443,9 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
 const WRITES_MADE: Readonly<Record<string, number>> = {
   'records.setValues': 2,
   'records.setValuesBatch': 3,
+  'records.deleteMany': 2,
+  'records.restoreBatch': 3,
+  'trash.restore': 3,
   'jobs.cancel': 2,
   'jobs.confirm': 2,
   'attributes.restore': 2,

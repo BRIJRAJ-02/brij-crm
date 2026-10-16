@@ -7,7 +7,11 @@ import {
   type BatchResults,
   type ChangeEvent,
   type CreateRecordInput,
+  type DeleteManyInput,
+  type DeleteManyResults,
   type RecordView,
+  type RestoreBatchInput,
+  type RestoreBatchResults,
   type SetValuesBatchInput,
   type SetValuesInput,
 } from '@crm/contracts';
@@ -91,6 +95,8 @@ function fakeApi() {
   const edits: Pending<SetValuesInput, RecordView & { readonly written?: Record<string, string> }>[] = [];
   const batches: Pending<SetValuesBatchInput, BatchResults>[] = [];
   const gets: Pending<readonly string[], RecordView[]>[] = [];
+  const deletes: Pending<DeleteManyInput, DeleteManyResults['results']>[] = [];
+  const restores: Pending<RestoreBatchInput, RestoreBatchResults['results']>[] = [];
   // What each records.get asked for besides its ids: the attributes (spec 0006, AC-55).
   const getAttributes: (readonly string[] | undefined)[] = [];
   const queue =
@@ -137,8 +143,11 @@ function fakeApi() {
         ),
       };
     },
+    // Spec 0022: each answers its results with one echo.
+    deleteMany: async (input) => ({ results: await queue(deletes)(input), echoes: 1 }),
+    restoreBatch: async (input) => ({ mode: 'inline' as const, results: await queue(restores)(input), echoes: 1 }),
   };
-  return { api, queries, counts, creates, edits, batches, gets, getAttributes };
+  return { api, queries, counts, creates, edits, batches, gets, getAttributes, deletes, restores };
 }
 
 /** What a records.query carried, past its workspace and object. */
@@ -1887,5 +1896,241 @@ describe('validation rules in the browser (spec 0013, AC-256, AC-257)', () => {
     frame();
     expect(creates).toEqual([]);
     expect(view.getSnapshot().source.count).toBe(3);
+  });
+});
+
+describe('deleting records (spec 0022, AC-524 to AC-526, AC-541)', () => {
+  it('takes the rows out of the view and the count at once, then drops what the server deleted', async () => {
+    const { layer, view, deletes, frame, queries } = await readyView();
+    const deleting = layer.deleteMany(WS, PEOPLE, [idAt(0), idAt(1)]);
+    frame();
+    // Gone from the rows and the count before any answer (AC-525).
+    expect(view.getSnapshot().source.count).toBe(1);
+    expect(view.getSnapshot().source.getItem(0)?.id).toBe(idAt(2));
+    expect(view.getSnapshot().count).toEqual({ count: 1, atLeast: false });
+    await settle();
+    expect(deletes[0]?.input).toMatchObject({ workspace: WS, objectId: PEOPLE, recordIds: [idAt(0), idAt(1)] });
+    deletes[0]?.answer([
+      { recordId: idAt(0), state: 'deleted' },
+      { recordId: idAt(1), state: 'deleted' },
+    ]);
+    const outcome = await deleting;
+    expect(outcome).toMatchObject({ kind: 'done', deleted: 2, refused: 0 });
+    // The block reloads, since the rows after the gone ones moved up.
+    expect(queries.length).toBeGreaterThan(1);
+    // A screen drops them from its selection (AC-522).
+    frame();
+    expect([...view.getSnapshot().gone]).toEqual([idAt(0), idAt(1)]);
+    expect(layer.undo.depth(WS)).toBe(1);
+  });
+
+  it('brings a refused record back with its reason on its name cell, and counts it', async () => {
+    const { layer, view, deletes, frame } = await readyView();
+    const deleting = layer.deleteMany(WS, PEOPLE, [idAt(0), idAt(1)]);
+    await settle();
+    deletes[0]?.answer([
+      { recordId: idAt(0), state: 'deleted' },
+      { recordId: idAt(1), state: 'refused', refusal: { code: 'NOT_FOUND', message: 'That record does not exist.' } },
+    ]);
+    expect(await deleting).toMatchObject({
+      kind: 'done',
+      deleted: 1,
+      refused: 1,
+      reason: 'That record does not exist.',
+    });
+    frame();
+    expect(view.getSnapshot().cellErrors.get(`${idAt(1)}:${NAME}`)).toBe('That record does not exist.');
+    const shown = Array.from({ length: view.getSnapshot().source.count }, (_, at) =>
+      view.getSnapshot().source.getItem(at),
+    ).map((row) => row?.id);
+    expect(shown).toContain(idAt(1));
+  });
+
+  it('brings every row back when the whole delete is refused, and pushes nothing to undo', async () => {
+    const { layer, view, deletes, frame } = await readyView();
+    const deleting = layer.deleteMany(WS, PEOPLE, [idAt(0)]);
+    await settle();
+    deletes[0]?.fail(dataError('FORBIDDEN', 'You can view People but not change them.'));
+    const outcome = await deleting;
+    expect(outcome).toMatchObject({ kind: 'failed', error: { code: 'FORBIDDEN' } });
+    frame();
+    expect(view.getSnapshot().source.count).toBe(3);
+    expect(layer.undo.depth(WS)).toBe(0);
+  });
+
+  it('refuses more than 500 records before anything leaves', async () => {
+    const { layer, view, deletes } = await readyView();
+    const ids = Array.from({ length: 501 }, (_, at) => idAt(at));
+    expect(await layer.deleteMany(WS, PEOPLE, ids)).toEqual({ kind: 'too-many', limit: 500 });
+    expect(deletes).toHaveLength(0);
+    expect(view.getSnapshot().source.count).toBe(3);
+  });
+
+  it('undoes a delete by its batch, rereading the view, and says what stayed in the trash (AC-526)', async () => {
+    const { layer, view, deletes, restores, queries } = await readyView();
+    const deleting = layer.deleteMany(WS, PEOPLE, [idAt(0), idAt(1)]);
+    await settle();
+    deletes[0]?.answer([
+      { recordId: idAt(0), state: 'deleted' },
+      { recordId: idAt(1), state: 'deleted' },
+    ]);
+    const outcome = await deleting;
+    const batchId = deletes[0]?.input.batchId;
+    const undone = layer.undo.run(WS, outcome.kind === 'done' ? outcome.undoId : undefined);
+    await settle();
+    expect(restores[0]?.input).toMatchObject({ workspace: WS, batchId });
+    const before = queries.length;
+    restores[0]?.answer([
+      { recordId: idAt(0), state: 'restored' },
+      {
+        recordId: idAt(1),
+        state: 'refused',
+        refusal: { code: 'UNIQUE_CONFLICT', message: 'Another record now has Email ada@acme.com.' },
+      },
+    ]);
+    expect(await undone).toEqual({ kind: 'restored', objectId: PEOPLE, restored: 1, kept: 1, reason: 'unique' });
+    // Read live again, a restored record is no longer gone, so a screen may select it again.
+    await settle();
+    queries.at(-1)?.answer(block(0, 3));
+    await settle();
+    expect(view.getSnapshot().gone.has(idAt(0))).toBe(false);
+    // The view reads its rows on screen again, so the restored record returns to its place.
+    await settle();
+    expect(queries.length).toBeGreaterThan(before);
+    expect(layer.undo.depth(WS)).toBe(0);
+  });
+
+  it('names the one record a delete took, and answers gone when nothing is left in the trash', async () => {
+    const { layer, deletes, restores } = await readyView();
+    const deleting = layer.deleteMany(WS, PEOPLE, [idAt(2)]);
+    await settle();
+    deletes[0]?.answer([{ recordId: idAt(2), state: 'deleted' }]);
+    expect(await deleting).toMatchObject({ kind: 'done', deleted: 1, recordName: 'P2' });
+    const undone = layer.undo.run(WS);
+    await settle();
+    restores[0]?.fail(dataError('NOT_FOUND', 'Nothing from that delete is still in the trash.'));
+    expect(await undone).toEqual({
+      kind: 'restored',
+      objectId: PEOPLE,
+      restored: 0,
+      kept: 1,
+      reason: 'gone',
+      recordName: 'P2',
+    });
+  });
+
+  it('waits for a delete still out before an undo runs, so Cmd+Z undoes the delete', async () => {
+    const { layer, deletes, restores } = await readyView();
+    const deleting = layer.deleteMany(WS, PEOPLE, [idAt(0)]);
+    const undone = layer.undo.run(WS);
+    await settle();
+    expect(restores).toHaveLength(0);
+    deletes[0]?.answer([{ recordId: idAt(0), state: 'deleted' }]);
+    await deleting;
+    await settle();
+    restores[0]?.answer([{ recordId: idAt(0), state: 'restored' }]);
+    expect(await undone).toMatchObject({ kind: 'restored', restored: 1, kept: 0 });
+  });
+
+  it('pushes no undo for a retried delete that deleted nothing new', async () => {
+    const { layer, deletes } = await readyView();
+    const deleting = layer.deleteMany(WS, PEOPLE, [idAt(0)]);
+    await settle();
+    deletes[0]?.answer([
+      {
+        recordId: idAt(0),
+        state: 'already-deleted',
+        refusal: { code: 'RECORD_DELETED', message: 'That record was already deleted.' },
+      },
+    ]);
+    expect(await deleting).toMatchObject({ kind: 'done', deleted: 0, refused: 0 });
+    expect(layer.undo.depth(WS)).toBe(0);
+  });
+
+  it('undoes a create by moving the record to the trash, pushing nothing more (AC-541)', async () => {
+    const { layer, creates, deletes } = await readyView();
+    const id = idAt(7000);
+    const making = layer.create(WS, PEOPLE, { [NAME]: 'Grace' }, id);
+    await settle();
+    creates[0]?.answer(rowOf(id, { [NAME]: 'Grace' }));
+    await making;
+    expect(layer.undo.depth(WS)).toBe(1);
+    const undone = layer.undo.run(WS);
+    await settle();
+    expect(deletes[0]?.input).toMatchObject({ objectId: PEOPLE, recordIds: [id] });
+    deletes[0]?.answer([{ recordId: id, state: 'deleted' }]);
+    expect(await undone).toEqual({ kind: 'uncreated', objectId: PEOPLE, recordName: 'Grace', deleted: true });
+    expect(layer.undo.depth(WS)).toBe(0);
+  });
+});
+
+describe('deleting records, the state review (spec 0022)', () => {
+  it('lowers the count with the rows the server deleted, so it never bounces back before a settle', async () => {
+    const { layer, view, deletes, frame } = await readyView();
+    const deleting = layer.deleteMany(WS, PEOPLE, [idAt(0)]);
+    await settle();
+    deletes[0]?.answer([{ recordId: idAt(0), state: 'deleted' }]);
+    await deleting;
+    frame();
+    expect(view.getSnapshot().count).toEqual({ count: 2, atLeast: false });
+  });
+
+  it('marks no cell for a record another delete took first', async () => {
+    const { layer, view, deletes, frame } = await readyView();
+    const deleting = layer.deleteMany(WS, PEOPLE, [idAt(1)]);
+    await settle();
+    deletes[0]?.answer([
+      {
+        recordId: idAt(1),
+        state: 'already-deleted',
+        refusal: { code: 'RECORD_DELETED', message: 'That record was already deleted.' },
+      },
+    ]);
+    await deleting;
+    frame();
+    expect(view.getSnapshot().cellErrors.size).toBe(0);
+    expect(view.getSnapshot().gone.has(idAt(1))).toBe(true);
+  });
+
+  it('calls an undo restored when its first answer was lost and the retry finds the batch gone', async () => {
+    const { layer, deletes, restores } = await readyView();
+    const deleting = layer.deleteMany(WS, PEOPLE, [idAt(0), idAt(1)]);
+    await settle();
+    deletes[0]?.answer([
+      { recordId: idAt(0), state: 'deleted' },
+      { recordId: idAt(1), state: 'deleted' },
+    ]);
+    await deleting;
+    const undone = layer.undo.run(WS);
+    await settle();
+    restores[0]?.fail(dataError('API_UNAVAILABLE', 'Can’t reach the CRM.'));
+    await settle();
+    await settle();
+    restores[1]?.fail(dataError('NOT_FOUND', 'Nothing from that delete is still in the trash.'));
+    expect(await undone).toEqual({ kind: 'restored', objectId: PEOPLE, restored: 2, kept: 0 });
+  });
+
+  it('keeps a delete on the stack when its undo fails for a passing reason', async () => {
+    const { layer, deletes, restores } = await readyView();
+    const deleting = layer.deleteMany(WS, PEOPLE, [idAt(0)]);
+    await settle();
+    deletes[0]?.answer([{ recordId: idAt(0), state: 'deleted' }]);
+    await deleting;
+    const undone = layer.undo.run(WS);
+    await settle();
+    restores[0]?.fail(dataError('INTERNAL', 'Something went wrong. Try again in a moment.'));
+    await expect(undone).rejects.toMatchObject({ code: 'INTERNAL' });
+    expect(layer.undo.depth(WS)).toBe(1);
+  });
+
+  it('reads ticked rows again on request and notes the ones gone (a coarse delete elsewhere)', async () => {
+    const { view, gets, frame } = await readyView();
+    view.confirm([idAt(0), idAt(1)]);
+    await settle();
+    expect(gets[0]?.input).toEqual([idAt(0), idAt(1)]);
+    gets[0]?.answer([rowOf(idAt(0), { [NAME]: 'P0' })]);
+    await settle();
+    frame();
+    expect([...view.getSnapshot().gone]).toEqual([idAt(1)]);
   });
 });

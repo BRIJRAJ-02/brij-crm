@@ -36,6 +36,7 @@ import { DataGrid } from '@crm/ui/grid';
 - `rowAvatar(row)` gives the row header the row's picture, an Avatar before its name (the image address, or undefined for initials): People's photo sits in the Name cell, never in a column of its own.
 - `errorText` is the error state's sentence, in the screen's words: "Can't reach the CRM" only when the network failed, never for a server fault. A plain "try again" when absent.
 - `footer` draws calculations the screen worked out; the grid never computes over loaded rows.
+- `floatingBar` (spec 0022) draws a bar over the grid's foot, inside the grid's frame so it centres on the grid: the BulkActionBar with `placement="floating"` while rows are ticked. The rows then end `size-toolbar` plus `space-16` twice higher, and a focused row scrolls clear of the bar, so it never hides the cell in use (WCAG 2.4.11). It comes after the grid in the tab order. Why a prop: only the grid knows its frame and its scroll padding; a bar placed by the screen centred on the window and covered the last rows.
 - `editorProps(column)` gives a column's reference or file editor its search, uploads and the signed in member.
 - `onSort` and `onFilter` add Sort and Filter to the column menu. `sort` (`{ columnId, direction }`) names the order the rows are in: that header carries `aria-sort` and the direction's arrow after its name.
 - `rowNotes` (row key to `new` or `no-longer-matches`) draws a row's note after its row header's value, through Badge's label form (`<Badge text>`), so it is read with the name ("Ada Lovelace, New"): "New" (a record the person just made, kept first) or "Doesn't match this view" (a row they edited out of the view's filter, kept where they saw it). In a narrow column it truncates, keeping its full text for screen readers. Spec 0006, AC-56.
@@ -66,7 +67,7 @@ The ⌘ key on a Mac, Ctrl elsewhere (Mod):
 - Space on the checkbox column ticks the row, and on the header's checkbox ticks or clears the rows on screen. Space opens the record on the row header, and toggles a checkbox value.
 - Mod+Enter follows a link in the cell (an email, a website).
 - Delete or Backspace clears the cell or range (a checkbox becomes false; a required value refuses).
-- Shift with an arrow draws a cell range; Shift with a click extends it. Mod+A selects the rows on screen. Esc clears the range.
+- Shift with an arrow draws a cell range; Shift with a click extends it. Mod+A selects the rows on screen. Esc clears the range, and with no range the ticked rows.
 - Mod+C copies the range as tab separated text, and announces how many cells. Mod+V pastes through each column's type: a full paste says so in a toast (unless `confirmsPaste` is false, when the screen confirms it once the write lands, with Undo); otherwise one toast counts what was left and why (refused, outside the table, read only), and refused cells keep their reason.
 - The footer is the last row the arrows reach; it reads, and nothing in it edits.
 - On a header, Alt+Down or Enter opens the column menu: Move left and right, Pin or Unpin, Hide (focus moves to the column that takes its place), Resize, and Sort and Filter when the screen handles them. In resize mode Left and Right step the width by `space-8`, the width is announced and the keys show on the header; Enter or Esc finish, and any other key, a click or a move ends it too.

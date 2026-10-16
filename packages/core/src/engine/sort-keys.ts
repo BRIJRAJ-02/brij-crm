@@ -83,6 +83,24 @@ export async function setRecordKeysLive(tx: WorkspaceTx, recordId: string, live:
   );
 }
 
+/** Hides the keys of many records going to the trash at once, and their entries' (spec 0022's bulk delete). */
+export async function hideRecordsKeys(tx: WorkspaceTx, recordIds: readonly string[]): Promise<void> {
+  if (recordIds.length === 0) return;
+  await tx.execute(sql`update sort_keys set live = false where record_id = any(${uuidArray(recordIds)}) and live`);
+}
+
+/** Shows the keys of many records back from the trash at once, and their entries' still in their lists. */
+export async function showRecordsKeys(tx: WorkspaceTx, recordIds: readonly string[]): Promise<void> {
+  if (recordIds.length === 0) return;
+  await tx.execute(sql`
+    update sort_keys s set live = true
+    where s.record_id = any(${uuidArray(recordIds)}) and not s.live
+      and (s.entry_id is null or exists (
+        select 1 from list_entries e where e.workspace_id = s.workspace_id and e.id = s.entry_id and e.deleted_at is null
+      ))
+  `);
+}
+
 /** Marks an entry's keys as hidden (removed) or shown again (restored; its record is live, the caller checked). */
 export async function setEntryKeysLive(tx: WorkspaceTx, entryId: string, live: boolean): Promise<void> {
   await tx.execute(sql`update sort_keys set live = ${live} where entry_id = ${entryId} and live <> ${live}`);

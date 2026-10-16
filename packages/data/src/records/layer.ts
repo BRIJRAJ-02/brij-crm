@@ -11,6 +11,10 @@ import type {
   AttributeDefinition,
   BatchResults,
   CreateRecordInput,
+  DeleteManyInput,
+  DeleteManyResults,
+  RestoreBatchInput,
+  RestoreBatchResults,
   RecordCount,
   RecordPage,
   RecordView,
@@ -24,7 +28,7 @@ import type { FilterGroup, Hue, SortRules } from '@crm/contracts/values';
 import type { PatternCompiler, RuleFailure } from '@crm/contracts/validation';
 import { dataError, refusalFor, refusalSummary, toDataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
-import { createOwnVersions, createUndoStack, type UndoCell, type UndoKind } from './history.ts';
+import { createOwnVersions, createUndoStack, type DeleteEntry, type UndoCell, type UndoKind } from './history.ts';
 import { createReferenceNames, type NameState, type RecordRef } from './names.ts';
 import { createRecordSubscriptions, type RecordAttributes, type RecordSubscription } from './one.ts';
 import { createPlainStore, sameData } from './plain-store.ts';
@@ -180,6 +184,10 @@ export interface RecordsApi {
   readonly create: (input: CreateRecordInput) => Promise<WrittenRecord>;
   readonly setValues: (input: SetValuesInput) => Promise<WrittenRecord>;
   readonly setValuesBatch: (input: SetValuesBatchInput) => Promise<BatchResults>;
+  /** Moves up to 500 records of one object to the trash (spec 0022). */
+  readonly deleteMany: (input: DeleteManyInput) => Promise<DeleteManyResults>;
+  /** Undoes a delete by its batch (spec 0022). */
+  readonly restoreBatch: (input: RestoreBatchInput) => Promise<RestoreBatchResults>;
 }
 
 /** One cell a write changes: its value, and for an undo the version it must still be at (`ifVersionId`). */
@@ -237,6 +245,40 @@ export type EditOutcome =
       readonly undoId?: string;
     };
 
+/** How many gone record ids the layer remembers for screens' selections (spec 0022): a selection's most. */
+const GONE_KEPT = 10_000;
+
+/** The most records one inline delete moves to the trash (spec 0022): more waits for background jobs. */
+export const MAX_DELETE_RECORDS = 500;
+
+/**
+ * What a bulk delete came to (spec 0022), for the screen's toast: refused
+ * whole over 500 records (before anything left), failed whole (a read only
+ * object, the network), or how many records went to the trash and how many
+ * were refused (back in their rows, the first reason given), with the undo
+ * entry it pushed and the record's name when it deleted one.
+ */
+export type DeleteResult =
+  | { readonly kind: 'too-many'; readonly limit: number }
+  | { readonly kind: 'failed'; readonly error: DataError }
+  | {
+      readonly kind: 'done';
+      readonly deleted: number;
+      readonly refused: number;
+      readonly reason?: string;
+      readonly recordName?: string;
+      readonly undoId?: string;
+    };
+
+/** Why a restored delete left a record in the trash, from its refusal's code (spec 0022, AC-526). */
+function reasonOf(code: string | undefined): 'unique' | 'limit' | 'gone' | 'other' | undefined {
+  if (code === undefined) return undefined;
+  if (code === 'UNIQUE_CONFLICT') return 'unique';
+  if (code === 'LIMIT_REACHED') return 'limit';
+  if (code === 'NOT_FOUND') return 'gone';
+  return 'other';
+}
+
 /**
  * What an undo did, for the screen's toast (spec 0006, AC-48, AC-49):
  * nothing to undo, or the action it undid, how many of its cells went back,
@@ -245,6 +287,22 @@ export type EditOutcome =
  */
 export type UndoOutcome =
   | { readonly kind: 'nothing' }
+  /**
+   * A delete undone (spec 0022, AC-526): how many records came back, how many
+   * stay in the trash and the first reason (`unique`: a unique value is now
+   * another record's; `limit`: the workspace is full; `gone`: purged or no
+   * longer in the trash; `other`), and the record's name when it was one.
+   */
+  | {
+      readonly kind: 'restored';
+      readonly objectId: string;
+      readonly restored: number;
+      readonly kept: number;
+      readonly reason?: 'unique' | 'limit' | 'gone' | 'other';
+      readonly recordName?: string;
+    }
+  /** A create undone (spec 0022, AC-541): the record went to the trash, or (`deleted` false) couldn't. */
+  | { readonly kind: 'uncreated'; readonly objectId: string; readonly recordName: string; readonly deleted: boolean }
   /** A toast's Undo whose action is no longer the newest (a later change, or already undone): nothing was done. */
   | { readonly kind: 'stale' }
   | {
@@ -332,6 +390,18 @@ export interface ViewState {
    * arrive, and a live change to a named record reads it again.
    */
   readonly referenceDisplays: (refs: readonly RecordRef[]) => readonly NameState[];
+  /**
+   * Records that left the windows because they are gone on the server (in the
+   * trash, or out of reach; spec 0022, AC-522): a screen drops them from its
+   * selection. The last 10,000, as a new set each time one goes.
+   */
+  readonly gone: ReadonlySet<string>;
+  /**
+   * How many times the view was read again because changes were too many to
+   * name (a coarse event, a gap): a screen holding ticked rows asks `confirm`
+   * for them then, since a coarse delete names none of the ids it took.
+   */
+  readonly reloads: number;
 }
 
 /** One screen reading a view: the columns it shows (`columns`), and `release` when it goes. */
@@ -369,6 +439,12 @@ export interface RecordsView {
    * view a screen retains is left as it is.
    */
   readonly abandon: () => void;
+  /**
+   * Reads these records again (500 a call, names only) and notes the ones the
+   * server no longer answers as `gone`, so a selection drops them (spec 0022,
+   * AC-522, after a coarse delete elsewhere).
+   */
+  readonly confirm: (recordIds: readonly string[]) => void;
 }
 
 /** What the records layer needs from createDataLayer. */
@@ -840,6 +916,42 @@ export function createRecordsLayer({
   // record's edits in the order they were made and the later value gets the later version.
   const sending = new Map<string, Promise<unknown>>();
   let cellErrors: ReadonlyMap<string, string> = new Map();
+  // Records gone on the server, the last GONE_KEPT (spec 0022, AC-522): screens drop them from their selections.
+  let goneIds: ReadonlySet<string> = new Set();
+  const noteGone = (workspace: string, ids: Iterable<string>) => {
+    const next = new Set(goneIds);
+    for (const id of ids) {
+      next.delete(id);
+      next.add(id);
+    }
+    // A Set keeps insertion order, so the first ids are the oldest.
+    for (const id of next) {
+      if (next.size <= GONE_KEPT) break;
+      next.delete(id);
+    }
+    goneIds = next;
+    // Only this workspace's views: ids are unique per workspace, and no other view holds these.
+    for (const entry of viewsOf(workspace)) entry.invalidate();
+  };
+  const backAgain = (ids: readonly string[]) => {
+    if (goneIds.size === 0 || !ids.some((id) => goneIds.has(id))) return;
+    const back = new Set(ids);
+    goneIds = new Set([...goneIds].filter((id) => !back.has(id)));
+    for (const entry of views.values()) entry.invalidate();
+  };
+  // Records on their way to the trash (spec 0022): every view skips their rows until the delete answers.
+  const trashing = new Map<string, number>();
+  let leaving: ReadonlySet<string> = new Set();
+  const setLeaving = (ids: readonly string[], isLeaving: boolean) => {
+    for (const id of ids) {
+      const held = (trashing.get(id) ?? 0) + (isLeaving ? 1 : -1);
+      if (held > 0) trashing.set(id, held);
+      else trashing.delete(id);
+    }
+    leaving = new Set(trashing.keys());
+    for (const entry of views.values()) entry.invalidate();
+    subscriptions.invalidate();
+  };
 
   const keyOf = (workspace: string, objectId: string, query: ViewQuery = {}) => {
     const filter = query.filter === undefined || query.filter.conditions.length === 0 ? null : query.filter;
@@ -888,12 +1000,25 @@ export function createRecordsLayer({
     }
   }
 
-  /** Records gone on the server: out of the store and out of every window, whose later rows reload. */
-  const dropRecords = (ids: readonly string[]) => {
+  /**
+   * Records gone from a window: out of its rows (the later ones reload), and
+   * out of its exact count at once, so the count never bounces back up until
+   * the next settle reads it again (spec 0022).
+   */
+  const dropFrom = (entry: ViewEntry, gone: ReadonlySet<string>) => {
+    const held = [...gone].filter((id) => entry.windows.has(id)).length;
+    entry.windows.drop(gone);
+    const told = entry.windows.told();
+    if (held > 0 && !told.atLeast) entry.windows.setCount({ count: Math.max(0, told.count - held), atLeast: false });
+  };
+
+  /** Records gone on the server: out of the store and out of every window of the workspace, whose later rows reload. */
+  const dropRecords = (workspace: string, ids: readonly string[]) => {
     if (ids.length === 0) return;
     store.remove(ids);
     const gone = new Set(ids);
-    for (const entry of views.values()) entry.windows.drop(gone);
+    for (const entry of viewsOf(workspace)) dropFrom(entry, gone);
+    noteGone(workspace, ids);
   };
 
   function openView(workspace: string, objectId: string, query: ViewQuery, warm: readonly string[]): ViewEntry {
@@ -1012,6 +1137,8 @@ export function createRecordsLayer({
           signal,
         );
         store.receive(page.records, { hold: true });
+        // A record read live again (restored) is no longer gone: it may be selected again.
+        backAgain(page.records.map((record) => record.id));
         // Changed while this block was on its way: its rows may be older than the change.
         const stale = page.records.map((record) => record.id).filter((id) => changedSince(workspace, id, asked));
         if (stale.length > 0) {
@@ -1041,6 +1168,7 @@ export function createRecordsLayer({
       store,
       windows,
       schedule,
+      gone: () => leaving,
       onShown: (range) => {
         // An edited row held in place lets go once it scrolls out of sight (spec 0006, AC-56).
         const kept = inner
@@ -1182,6 +1310,9 @@ export function createRecordsLayer({
     let lastSource: RecordSource<RecordView> | undefined;
     let lastErrors = cellErrors;
     let lastStatus: ViewStatus = status;
+    let lastGone = goneIds;
+    let reloads = 0;
+    let lastReloads = reloads;
     let snapshot: ViewState | undefined;
     const rowNotesOf = (): ReadonlyMap<string, RowNote> =>
       new Map(inner.pins().flatMap((pin) => (pin.note === undefined ? [] : [[pin.id, pin.note] as const])));
@@ -1189,18 +1320,32 @@ export function createRecordsLayer({
       subscribe: inner.subscribe,
       getSnapshot: () => {
         const source = inner.getSnapshot();
-        if (snapshot === undefined || source !== lastSource || cellErrors !== lastErrors || status !== lastStatus) {
+        if (
+          snapshot === undefined ||
+          source !== lastSource ||
+          cellErrors !== lastErrors ||
+          status !== lastStatus ||
+          goneIds !== lastGone ||
+          reloads !== lastReloads
+        ) {
+          lastReloads = reloads;
           lastSource = source;
           lastErrors = cellErrors;
           lastStatus = status;
+          lastGone = goneIds;
+          const told = windows.told();
+          // Rows on their way to the trash already left the count (spec 0022, AC-525).
+          const goneHere = [...leaving].filter((id) => windows.has(id)).length;
           snapshot = {
             source,
             status,
             cellErrors,
-            count: windows.told(),
+            count: goneHere === 0 ? told : { ...told, count: Math.max(0, told.count - goneHere) },
             mode,
             rowNotes: rowNotesOf(),
             referenceDisplays,
+            gone: goneIds,
+            reloads,
             ...(error === undefined ? {} : { error }),
           };
         }
@@ -1263,6 +1408,21 @@ export function createRecordsLayer({
             }
           },
         };
+      },
+      confirm: (recordIds) => {
+        for (const part of chunks([...new Set(recordIds)], GET_LIMIT)) {
+          whenFree(() => api.get({ workspace, ids: part, attributeIds: [] })).then(
+            (rows) => {
+              const found = new Set(rows.map((row) => row.id));
+              dropRecords(
+                workspace,
+                part.filter((id) => !found.has(id)),
+              );
+            },
+            // Left ticked: the server refuses whatever is gone when the action is sent.
+            () => undefined,
+          );
+        }
       },
       holdSettle: (isHeld) => {
         editors = Math.max(0, editors + (isHeld ? 1 : -1));
@@ -1354,6 +1514,8 @@ export function createRecordsLayer({
       view,
       invalidate: inner.invalidate,
       reread: () => {
+        reloads += 1;
+        inner.invalidate();
         // Still loading: what it loads is already newer than what was missed.
         if (status !== 'ready') return;
         dirt.isDirty = true;
@@ -1689,7 +1851,7 @@ export function createRecordsLayer({
     // Signed out: the layer already said so, and sign in comes next.
     if (failure.code === 'UNAUTHENTICATED') return { recordId: each.recordId, cells: each.cells };
     if (failure.code === 'RECORD_DELETED' || failure.code === 'NOT_FOUND') {
-      dropRecords([each.recordId]);
+      dropRecords(workspace, [each.recordId]);
       return { ...outcome, gone: true };
     }
     if (options.quiet?.has(failure.code) === true) return outcome;
@@ -1993,6 +2155,155 @@ export function createRecordsLayer({
     return { landed: landedCells, kept, failed };
   }
 
+  /** Waits for `work` before an undo pressed meanwhile runs (an undoable write still out, spec 0006). */
+  function holdUndo(workspace: string, work: Promise<unknown>): void {
+    const done = work.then(
+      () => undefined,
+      () => undefined,
+    );
+    const waiting = inflight.get(workspace) ?? new Set<Promise<void>>();
+    inflight.set(workspace, waiting);
+    waiting.add(done);
+    void done.finally(() => waiting.delete(done));
+  }
+
+  /** A refusal's words on a record's name cell, keyed as the grid keys every cell error. */
+  async function markNames(
+    workspace: string,
+    objectId: string,
+    marks: readonly (readonly [string, string])[],
+  ): Promise<void> {
+    if (marks.length === 0) return;
+    const primary = (await describe(workspace, objectId).catch(() => undefined))?.primaryAttributeId;
+    if (primary === undefined) return;
+    setCellErrors(marks.map(([recordId, message]) => [`${recordId}:${primary}`, message] as const));
+  }
+
+  /**
+   * Moves up to 500 records of one object to the trash as one action (spec
+   * 0022, AC-524, AC-525): their rows leave every view at once and the counts
+   * drop, then one `records.deleteMany` with a batch id minted here. What the
+   * server deleted leaves the windows for good (the rows after it move up);
+   * a refused record comes back with its reason on its name cell; a refusal
+   * of the whole call (a read only object, the network) brings every row
+   * back. With `undoable`, what was deleted goes on the undo stack as one
+   * entry, so Cmd+Z or the toast's Undo restores exactly that batch.
+   */
+  async function trashRecords(
+    workspace: string,
+    objectId: string,
+    recordIds: readonly string[],
+    { undoable }: { readonly undoable: boolean },
+  ): Promise<DeleteResult> {
+    const ids = [...new Set(recordIds)];
+    if (ids.length > MAX_DELETE_RECORDS) return { kind: 'too-many', limit: MAX_DELETE_RECORDS };
+    if (ids.length === 0) return { kind: 'done', deleted: 0, refused: 0 };
+    const [only] = ids.length === 1 ? ids : [];
+    const recordName = only === undefined ? undefined : (store.get(only) ?? store.base(only))?.display.name;
+    const mutationId = mintId();
+    const batchId = mintId();
+    setLeaving(ids, true);
+    mutations.sent(mutationId);
+    const answer = delivered(() => api.deleteMany({ workspace, objectId, recordIds: ids, batchId, mutationId }));
+    // An undo pressed meanwhile waits for this answer, so it undoes the delete rather than the edit before it.
+    holdUndo(workspace, answer);
+    let results: DeleteManyResults['results'];
+    try {
+      const { echoes, results: answered } = await answer;
+      mutations.answered(mutationId, echoes);
+      results = answered;
+    } catch (error) {
+      mutations.forget(mutationId);
+      setLeaving(ids, false);
+      return { kind: 'failed', error: toDataError(error) };
+    }
+    const deleted = results.filter((result) => result.state === 'deleted').map((result) => result.recordId);
+    // Already in the trash (another delete got there first) is gone all the same: no mark, no refusal.
+    const gone = results.filter((result) => result.state !== 'refused').map((result) => result.recordId);
+    const refused = results.filter((result) => result.state === 'refused');
+    dropRecords(workspace, gone);
+    setLeaving(ids, false);
+    subscriptions.changed(workspace, new Set(gone), 'all', new Set(gone));
+    for (const entry of viewsOf(workspace)) if (entry.objectId === objectId) entry.markDirty();
+    await markNames(
+      workspace,
+      objectId,
+      refused.flatMap((result) =>
+        result.refusal === undefined ? [] : [[result.recordId, result.refusal.message] as const],
+      ),
+    );
+    const pushed = undoable && deleted.length > 0;
+    if (pushed) {
+      const entry: DeleteEntry = {
+        id: mutationId,
+        kind: 'delete',
+        objectId,
+        batchId,
+        count: deleted.length,
+        ...(recordName === undefined ? {} : { recordName }),
+      };
+      undo.push(workspace, entry);
+    }
+    const [firstRefused] = refused;
+    return {
+      kind: 'done',
+      deleted: deleted.length,
+      refused: refused.length,
+      ...(firstRefused?.refusal === undefined ? {} : { reason: firstRefused.refusal.message }),
+      ...(recordName === undefined || deleted.length === 0 ? {} : { recordName }),
+      ...(pushed ? { undoId: mutationId } : {}),
+    };
+  }
+
+  /**
+   * Undoes a delete (spec 0022, AC-526): `records.restoreBatch` brings back
+   * the records still in the trash with its batch, and every view of the
+   * object settles at once so they return to their rows. Records that can't
+   * come back stay in the trash; the answer counts them with the first reason.
+   */
+  async function undoDelete(workspace: string, entry: DeleteEntry): Promise<UndoOutcome> {
+    const mutationId = mintId();
+    mutations.sent(mutationId);
+    const named = entry.recordName === undefined ? {} : { recordName: entry.recordName };
+    let results: RestoreBatchResults['results'];
+    let tries = 0;
+    try {
+      const answer = await delivered(() => {
+        tries += 1;
+        return api.restoreBatch({ workspace, batchId: entry.batchId, mutationId });
+      });
+      mutations.answered(mutationId, answer.echoes);
+      results = answer.results;
+    } catch (error) {
+      mutations.forget(mutationId);
+      const failure = toDataError(error);
+      if (failure.code === 'NOT_FOUND' && tries > 1) {
+        // A try whose answer never came restored the batch, so the retry found none of it left: it came back.
+        for (const view of viewsOf(workspace)) if (view.objectId === entry.objectId) view.reread();
+        return { kind: 'restored', objectId: entry.objectId, restored: entry.count, kept: 0, ...named };
+      }
+      if (failure.code === 'NOT_FOUND') {
+        return { kind: 'restored', objectId: entry.objectId, restored: 0, kept: entry.count, reason: 'gone', ...named };
+      }
+      // Anything else (offline, the server busy): the delete stays on the stack, to undo again.
+      undo.push(workspace, entry);
+      throw failure;
+    }
+    const back = results.filter((result) => result.state !== 'refused').map((result) => result.recordId);
+    const kept = results.filter((result) => result.state === 'refused');
+    for (const view of viewsOf(workspace)) if (view.objectId === entry.objectId) view.reread();
+    subscriptions.changed(workspace, new Set(back), 'all', new Set(back));
+    const reason = reasonOf(kept[0]?.refusal?.code);
+    return {
+      kind: 'restored',
+      objectId: entry.objectId,
+      restored: back.length,
+      kept: kept.length,
+      ...(reason === undefined ? {} : { reason }),
+      ...named,
+    };
+  }
+
   /**
    * Runs undo work for a workspace one at a time, after every undoable write
    * still out: a second press waits until the first press's writes have
@@ -2030,8 +2341,22 @@ export function createRecordsLayer({
       // A toast's Undo undoes its own action or nothing: once a newer one sits on top (or it was undone), it is stale.
       if (only !== undefined && undo.top(workspace)?.id !== only) return { kind: 'stale' };
       const entry = undo.pop(workspace);
-      const [firstCell] = entry?.cells ?? [];
-      if (entry === undefined || firstCell === undefined) return { kind: 'nothing' };
+      if (entry === undefined) return { kind: 'nothing' };
+      // A delete comes back from the trash by its batch; a create goes to the trash (spec 0022).
+      if (entry.kind === 'delete') return undoDelete(workspace, entry);
+      if (entry.kind === 'create') {
+        const outcome = await trashRecords(workspace, entry.objectId, [entry.recordId], { undoable: false });
+        // Refused whole for a passing reason: the create stays on the stack, to undo again.
+        if (outcome.kind === 'failed') undo.push(workspace, entry);
+        return {
+          kind: 'uncreated',
+          objectId: entry.objectId,
+          recordName: entry.recordName,
+          deleted: outcome.kind === 'done' && outcome.deleted > 0,
+        };
+      }
+      const [firstCell] = entry.cells;
+      if (firstCell === undefined) return { kind: 'nothing' };
       const { landed: undone, kept, failed } = await undoCellsBack(workspace, entry.objectId, entry.cells);
       const shown = store.get(firstCell.recordId) ?? store.base(firstCell.recordId);
       return {
@@ -2116,7 +2441,8 @@ export function createRecordsLayer({
         const found = new Set(rows.map((row) => row.id));
         const gone = new Set(part.filter((id) => !found.has(id) && !store.pending().has(id)));
         if (gone.size === 0) return;
-        for (const entry of viewsOf(workspace)) entry.windows.drop(gone);
+        for (const entry of viewsOf(workspace)) dropFrom(entry, gone);
+        noteGone(workspace, gone);
         store.remove([...gone].filter((id) => ![...views.values()].some((entry) => entry.shows(id))));
       }),
     );
@@ -2322,6 +2648,8 @@ export function createRecordsLayer({
         mutations.answered(mutationId, echoes);
         layer.confirm(row);
         settle(true);
+        // Undo moves it to the trash (spec 0022, AC-541).
+        undo.push(workspace, { id: mutationId, kind: 'create', objectId, recordId: id, recordName: row.display.name });
         return row;
       } catch (error) {
         mutations.forget(mutationId);
@@ -2393,6 +2721,14 @@ export function createRecordsLayer({
         'cell',
       );
     },
+
+    /**
+     * Moves up to 500 records of one object to the trash as one undoable
+     * action (spec 0022): they leave every view at once, and the answer says
+     * how many went and how many were refused (see `trashRecords`).
+     */
+    deleteMany: (workspace: string, objectId: string, recordIds: readonly string[]): Promise<DeleteResult> =>
+      trashRecords(workspace, objectId, recordIds, { undoable: true }),
 
     undo: {
       /**
@@ -2490,6 +2826,9 @@ export function createRecordsLayer({
       store.clear();
       names.clear();
       cellErrors = new Map();
+      goneIds = new Set();
+      trashing.clear();
+      leaving = new Set();
       own.clear();
       undo.clear();
       inflight.clear();

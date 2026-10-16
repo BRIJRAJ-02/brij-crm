@@ -60,7 +60,7 @@ export const PURGE_DEPENDENTS: readonly PurgeDependent[];          // built from
 ## The daily purge and the sleeping database
 
 - No new cron, timer or poll. The purge is phase 1 of spec 0008's `maintenance.daily`, which already runs once a day at 03:00 UTC per workspace and wakes the worker (and so the Neon compute) for that one run.
-- The phase starts with one probe: `select 1 from records where deleted_at < $cutoff limit 1` (the `records_trash_time` index, a single index lookup). Nothing found: the phase ends at once. Otherwise `purgeBatch` runs in batches of 500 until a batch comes back short, removing dependents as above.
+- The phase starts with one probe: `select 1 from records where deleted_at < $cutoff limit 1` (the `records_trashed_at` index, a single index lookup). Nothing found: the phase ends at once. Otherwise `purgeBatch` runs in batches of 500 until a batch comes back short, removing dependents as above.
 - With the indexes here, each batch finds its rows by `deleted_at` order instead of scanning, so even a large trash is purged in short transactions that leave the heavy lane free between batches.
 - The cost on the free plan: one wake a day for the whole cleanup, plus the usual idle tail (spec 0008: about 4 minutes for the worker, then 5 for Neon to suspend). The Trash screen's "Removed after" is computed in the browser from `expiresAt`, so an open Trash tab makes no request while idle.
 - After a purge batch commits, its outbox row (purged ids) reaches open Trash screens, which drop those rows at the next settle.

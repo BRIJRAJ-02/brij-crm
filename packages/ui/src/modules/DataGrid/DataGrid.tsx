@@ -118,6 +118,14 @@ export interface DataGridProps<Row> {
   readonly cellErrors?: ReadonlyMap<string, string>;
   /** Calculations by column id, computed by the screen across all matching rows. */
   readonly footer?: Readonly<Record<string, ReactNode>>;
+  /**
+   * A bar floating over the grid's foot (the BulkActionBar with
+   * `placement="floating"` while rows are ticked), drawn in the grid's frame
+   * so it centres on the grid: the rows end that much higher and a focused
+   * row is scrolled clear of it, so the bar never hides the cell in use
+   * (WCAG 2.4.11). Nothing (undefined, null or false) when none shows.
+   */
+  readonly floatingBar?: ReactNode;
   readonly status?: GridStatus;
   readonly onRetry?: () => void;
   /**
@@ -190,6 +198,8 @@ const ROW = sizeToken('size-row');
 const HEADER = sizeToken('size-table-header');
 const CHECK = sizeToken('size-column-check');
 const LIMITS = { min: sizeToken('size-column-min'), max: sizeToken('size-column-max') };
+/** What a floating bar over the grid's foot covers (BulkActionBar floating: its height and space-16 either side). */
+const FLOATING_INSET = sizeToken('size-toolbar') + 2 * spaceToken('space-16');
 const RESIZE_STEP = spaceToken('space-8');
 const OVERSCAN = 8;
 /** Past this many drawn columns, the unpinned ones virtualise too. */
@@ -271,6 +281,7 @@ export function DataGrid<Row>({
   confirmsPaste = true,
   cellErrors,
   footer,
+  floatingBar,
   status = 'ready',
   onRetry,
   errorText,
@@ -319,6 +330,7 @@ export function DataGrid<Row>({
   // Rows: the records, then the footer row when there is one, which the keys reach too.
   const count = status === 'ready' ? rows.count : 0;
   const hasFooter = footer !== undefined && count > 0;
+  const hasFloatingBar = floatingBar !== undefined && floatingBar !== null && floatingBar !== false;
   const rowCount = count + (hasFooter ? 1 : 0);
 
   // Focus, ranges and editing come first: the focused and edited rows stay drawn.
@@ -388,7 +400,9 @@ export function DataGrid<Row>({
     overscan: OVERSCAN,
     scrollMargin: HEADER,
     scrollPaddingStart: HEADER,
-    scrollPaddingEnd: hasFooter ? ROW : 0,
+    scrollPaddingEnd: (hasFooter ? ROW : 0) + (hasFloatingBar ? FLOATING_INSET : 0),
+    // The body draws the virtualizer's total less the header (`rowsHeight`), so the inset carries the header too.
+    paddingEnd: hasFloatingBar ? FLOATING_INSET + HEADER : 0,
     rangeExtractor: (visible) => {
       const drawn = defaultRangeExtractor(visible);
       const extra = kept.filter((row) => !drawn.includes(row));
@@ -874,7 +888,7 @@ export function DataGrid<Row>({
     if (element === null) return [];
     const scrolled = virtualizer.scrollOffset ?? element.scrollTop;
     const top = scrolled + HEADER;
-    const bottom = scrolled + element.clientHeight - (hasFooter ? ROW : 0);
+    const bottom = scrolled + element.clientHeight - (hasFooter ? ROW : 0) - (hasFloatingBar ? FLOATING_INSET : 0);
     return items.filter((item) => item.start >= top && item.end <= bottom).flatMap((item) => rowIdAt(item.index) ?? []);
   };
   const selectRowRange = (from: number, to: number) => {
@@ -981,6 +995,8 @@ export function DataGrid<Row>({
       return;
     }
     if (event.key === 'Escape') {
+      // A cell range goes first; with none, Esc clears the ticked rows (spec 0022, AC-522).
+      if (range === undefined && selectedCount(currentSelection, count) > 0) changeSelection(noRows(), true);
       setRange(undefined);
       setTipDismissed(true);
       closeTip();
@@ -1651,6 +1667,8 @@ export function DataGrid<Row>({
         <VisuallyHidden>
           <span role="status">{spoken}</span>
         </VisuallyHidden>
+        {/* After the grid in the page, so Tab reaches it after the one cell stop; it floats over the foot. */}
+        {hasFloatingBar && floatingBar}
       </div>
     </SharedTooltipContext>
   );

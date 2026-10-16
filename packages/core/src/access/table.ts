@@ -91,6 +91,9 @@ export const ACCESS_TABLE = {
   // The record page (spec 0017): its timeline and a record in the trash.
   getActivity: { data: 'read' },
   readTrashedRecord: { data: 'read' },
+  // The trash (spec 0022): what it holds, by the principal's object levels and record rules.
+  queryTrash: { data: 'read' },
+  countTrash: { data: 'read' },
   // Record and entry writes.
   createRecord: { data: 'write' },
   addRecord: { data: 'write' },
@@ -101,6 +104,10 @@ export const ACCESS_TABLE = {
   editRecords: { data: 'write' },
   deleteRecord: { data: 'write' },
   restoreRecord: { data: 'write' },
+  // Bulk deletes and restores (spec 0022): object write, checked once for a delete, per record for a restore.
+  deleteRecords: { data: 'write' },
+  restoreRecords: { data: 'write' },
+  restoreBatch: { data: 'write' },
   addEntry: { data: 'write' },
   removeEntry: { data: 'write' },
   restoreEntry: { data: 'write' },

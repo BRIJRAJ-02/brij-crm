@@ -1,5 +1,6 @@
 import { accessContract } from './access.ts';
 import { attributesContract } from './attributes.ts';
+import { bulkRecordsContract } from './bulk.ts';
 import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
 import { membersContract } from './members.ts';
@@ -9,6 +10,7 @@ import { realtimeContract } from './realtime.ts';
 import { recordsContract } from './records.ts';
 import { relationshipsContract } from './relations.ts';
 import { systemContract } from './system.ts';
+import { trashContract } from './trash.ts';
 import { usageContract } from './usage.ts';
 import { viewsContract } from './views.ts';
 import { workspacesContract } from './workspaces.ts';
@@ -16,6 +18,7 @@ import { workspacesContract } from './workspaces.ts';
 export * from './access.ts';
 export * from './activity.ts';
 export * from './attributes.ts';
+export * from './bulk.ts';
 export * from './change-event.ts';
 export * from './errors.ts';
 export * from './jobs.ts';
@@ -27,6 +30,7 @@ export * from './realtime.ts';
 export * from './records.ts';
 export * from './relations.ts';
 export * from './system.ts';
+export * from './trash.ts';
 export * from './usage.ts';
 export * from './view-model.ts';
 export * from './views.ts';
@@ -46,7 +50,8 @@ export const contract = {
   objects: objectsContract,
   attributes: attributesContract,
   options: optionsContract,
-  records: recordsContract,
+  // Bulk actions (spec 0022) join the records namespace from their own file.
+  records: { ...recordsContract, ...bulkRecordsContract },
   relationships: relationshipsContract,
   members: membersContract,
   access: accessContract,
@@ -54,4 +59,5 @@ export const contract = {
   jobs: jobsContract,
   usage: usageContract,
   views: viewsContract,
+  trash: trashContract,
 };

@@ -28,6 +28,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArchiveAttributeDialog } from '../settings/ArchiveAttributeDialog.tsx';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { strings as attributeStrings } from '../settings/attribute-strings.ts';
+import { useBulkDelete, useTableSelection } from './BulkDeleteBar.tsx';
 import { avatarAttribute, listedAttributes } from './columns.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
 import { strings } from './strings.ts';
@@ -261,6 +262,8 @@ export function RecordsScreen({
   if (state.status === 'ready' && shown.key === wanted && announced.key !== wanted) {
     setAnnounced({ key: wanted, text: announce?.(state.count) });
   }
+  // The rows ticked (spec 0022, AC-522): a new view starts with none, and rows gone on the server leave.
+  const ticked = useTableSelection(view, state);
   // Paused only while the live connection is down; off (previews) shows nothing.
   const live = useLiveStatus(data.live);
   const memberDisplays = useMemo(() => toActorDisplays(members), [members]);
@@ -290,6 +293,31 @@ export function RecordsScreen({
     () => createEditors(object, attributes),
     [object, attributes],
   );
+  /** The table takes focus back at the first of these rows (or the first row), as the bar that held it goes. */
+  const focusBackAt = (recordIds: readonly string[], leaving: boolean) => {
+    const rows = recordIds.flatMap((id) => {
+      const at = view.indexOf(id);
+      return at === undefined ? [] : [at];
+    });
+    const last = Math.max(0, state.source.count - 1 - (leaving ? recordIds.length : 0));
+    setFocusRow({ index: Math.max(0, Math.min(...rows, last)) });
+  };
+  const tickedIds = ticked.selection.kind === 'some' ? [...ticked.selection.ids] : [];
+  // The bar while rows are ticked (spec 0022): Delete, its confirm, and Clear; focus comes back to the table.
+  const bulk = useBulkDelete({
+    slug,
+    object,
+    selection: ticked.selection,
+    total: state.count.count,
+    onClear: () => {
+      focusBackAt(tickedIds, false);
+      ticked.clear();
+    },
+    onDeleting: (recordIds) => {
+      focusBackAt(recordIds, true);
+      ticked.clear();
+    },
+  });
   const rowHeader = object.primaryAttributeId ?? columns[0]?.id ?? '';
   const newRecord = strings.newRecord(object.singularName);
 
@@ -355,6 +383,9 @@ export function RecordsScreen({
               getValue={(row, columnId) => row.values[columnId] ?? null}
               isCellKnown={isCellKnown}
               rowNotes={state.rowNotes}
+              floatingBar={bulk.bar}
+              selection={ticked.selection}
+              onSelectionChange={ticked.setSelection}
               onEditingChange={(isOpen) => {
                 view.holdSettle(isOpen);
                 isEditing.current = isOpen;
@@ -492,6 +523,7 @@ export function RecordsScreen({
                   }
                 : {})}
             />
+            {bulk.dialog}
             <NewRecordDialog
               isOpen={isCreating}
               onOpenChange={setCreating}

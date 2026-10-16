@@ -14,6 +14,13 @@ Spec 0005, milestones 1 to 3; spec 0012 makes the object pages generic. Every pa
 - **Main task**: read and edit records in place, sort a column for the visit, add a record ("New <singular>"), and add a column, seeing others' changes live.
 - **Leaves out**: filters, saved views and sorts that last past the visit, and presence (#7, #20).
 
+## Bulk delete (spec 0022, milestone 1: BulkDeleteBar.tsx, bulk.ts)
+
+- **Purpose**: act on the rows ticked in an object's table.
+- **Main task**: tick rows (the checkbox column, Space, Shift ranges, Mod+A), then Delete in the floating bar: one record goes at once, several after a danger confirm ("Delete 48 people? They stay in the trash for 30 days."); the toast says "Deleted 48 people" with Undo, and ⌘Z undoes it too. A refused row comes back with its reason on its name cell. Clear or Esc empties the selection and gives focus back to the table.
+- **Leaves out**: Edit (milestone 2), "Select all matching" and more than 500 at once (background jobs, milestone 3: the bar says "Changes to more than 500 records arrive soon."). A member who may only read the object sees why instead of Delete.
+- A new view (another sort, later a filter or view) starts with nothing ticked, and rows gone on the server leave the selection (the view's `gone`, and `confirm` after a coarse reload). ⌘Z after New <singular> moves the record to the trash ("Undid the create of Ada Lovelace.").
+
 ## An archived object's page (ArchivedObjectScreen)
 
 - **Purpose**: what an archived object's address shows (spec 0012, AC-226): "<Plural> is archived", inside the frame.

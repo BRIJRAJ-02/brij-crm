@@ -253,6 +253,13 @@
       "when": 1792154981385,
       "tag": "0035_saved_views",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1792155633856,
+      "tag": "0036_records_trash",
+      "breakpoints": true
     }
   ]
 }

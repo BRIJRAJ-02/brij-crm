@@ -16,6 +16,8 @@ export function navObjects(objects: readonly ObjectSummary[]): readonly ObjectSu
 export const objectHref = (slug: string, object: Pick<ObjectSummary, 'apiSlug'>) =>
   `/w/${slug}/objects/${object.apiSlug}`;
 
+/** The workspace's trash (spec 0022). */
+export const trashHref = (slug: string) => `/w/${slug}/trash`;
 /** Settings, Background jobs (spec 0008). */
 export const jobsHref = (slug: string) => `/w/${slug}/settings/jobs`;
 /** Settings, Objects (spec 0012): where a workspace with no live object opens, and the workspace menu's Settings. */

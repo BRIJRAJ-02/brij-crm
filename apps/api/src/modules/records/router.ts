@@ -1,12 +1,14 @@
 import {
   addRecord,
   countMatches,
+  deleteRecords,
   editRecord,
   editRecords,
   getActivity,
   queryRecords,
   readRecordsById,
   readTrashedRecord,
+  restoreBatch,
 } from '@crm/core';
 import { withInputFields } from '../../errors.ts';
 import { commitCounted } from '../../hooks.ts';
@@ -110,5 +112,22 @@ export const recordsRouter = member.records.router({
       ),
     );
     return { results: result, echoes };
+  }),
+  // Bulk actions (spec 0022): up to 500 records to the trash in one write, and undoing a delete by its batch.
+  deleteMany: member.records.deleteMany.handler(async ({ context, input }) => {
+    const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
+      deleteRecords(
+        context.scope,
+        { objectId: input.objectId, recordIds: input.recordIds, batchId: input.batchId },
+        hooks,
+      ),
+    );
+    return { results: [...result], echoes };
+  }),
+  restoreBatch: member.records.restoreBatch.handler(async ({ context, input }) => {
+    const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
+      restoreBatch(context.scope, { batchId: input.batchId }, hooks),
+    );
+    return { mode: 'inline' as const, results: [...result], echoes };
   }),
 });

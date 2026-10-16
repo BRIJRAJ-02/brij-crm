@@ -233,6 +233,24 @@ describe('cursor mode', () => {
     expect(idsIn(windows, 300, 340)).toEqual(rows.slice(300, 340));
   });
 
+  it('drops a gone row without repeating or skipping one: the chain after it reloads from its own checkpoint (spec 0022)', async () => {
+    const rows = sample(300);
+    const { windows, server, setRows } = windowsOver(rows, 'cursor');
+    windows.setCount({ count: 300, atLeast: false });
+    windows.show({ start: 0, end: 300 });
+    await server.answerAll();
+    expect(idsIn(windows, 0, 300)).toEqual(rows);
+    const gone = rows[50] ?? '';
+    const left = rows.filter((id) => id !== gone);
+    setRows(left);
+    windows.drop(new Set([gone]));
+    windows.setCount({ count: 299, atLeast: false });
+    await server.answerAll();
+    windows.show({ start: 0, end: 299 });
+    await server.answerAll();
+    expect(idsIn(windows, 0, 299)).toEqual(left);
+  });
+
   it('reads ahead of the chain in calls of 200 to a far row, and the second block of a call reloads from the first', async () => {
     const rows = sample(5000);
     const { windows, server } = windowsOver(rows, 'cursor');

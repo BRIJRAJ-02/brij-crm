@@ -40,8 +40,10 @@ import { createPendingOptions } from './options.ts';
 import { nextHue } from '@crm/contracts/picker';
 import type { UndoKind } from './records/history.ts';
 import type { RecordAttributes, RecordSubscription } from './records/one.ts';
+import type { RestoreSummary, Trash, TrashView } from './trash/store.ts';
 import type {
   CellChange,
+  DeleteResult,
   EditOutcome,
   ObjectShape,
   RecordsApi,
@@ -147,6 +149,7 @@ export type { Notice } from './notice.ts';
 export type { UndoKind } from './records/history.ts';
 export type {
   CellChange,
+  DeleteResult,
   EditOutcome,
   RecordsView,
   ViewQuery,
@@ -157,6 +160,8 @@ export type {
 export type { RecordAttributes, RecordState, RecordStatus, RecordSubscription } from './records/one.ts';
 export type { TrashedSource, TrashedState } from './records/trashed.ts';
 export type { RowNote } from './records/view.ts';
+export type { RestoreSummary, TrashRow, TrashState, TrashStatus, TrashView } from './trash/store.ts';
+export { TRASH_NAME_COLUMN } from './trash/columns.ts';
 export type { NameState, RecordRef } from './records/names.ts';
 export type { WindowCount, WindowMode } from './records/windows.ts';
 export type { FilterGroup, SortRule, SortRules } from '@crm/contracts/values';
@@ -182,11 +187,17 @@ export interface ReplacedValue {
   readonly useMine: () => void;
 }
 
-/** What an undo did (spec 0006, AC-48, AC-49), with the first cell's attribute named for a one cell toast. */
+/**
+ * What an undo did (spec 0006, AC-48, AC-49), with the first cell's attribute
+ * named for a one cell toast; a delete undone (spec 0022, AC-526) with its
+ * object's names, for "Restored 46 people"; or a create undone (AC-541).
+ */
 export type UndoResult =
   | { readonly kind: 'nothing' }
   | { readonly kind: 'stale' }
-  | (Extract<UndoOutcome, { kind: 'undone' }> & { readonly attributeTitle: string });
+  | (Extract<UndoOutcome, { kind: 'undone' }> & { readonly attributeTitle: string })
+  | (Extract<UndoOutcome, { kind: 'restored' }> & { readonly singularName: string; readonly pluralName: string })
+  | Extract<UndoOutcome, { kind: 'uncreated' }>;
 
 /** What each API call carries to the link: where to report the answer's `Retry-After`, and that an answer came. */
 interface CallContext {
@@ -449,6 +460,8 @@ export function createDataLayer({
   const pendingOptions = createPendingOptions();
   // Records' timelines (spec 0017), loaded with the first record page.
   let activity: Promise<ActivityFeeds> | undefined;
+  // The trash (spec 0022), loaded with the first trash screen.
+  let trash: Promise<Trash> | undefined;
   // Records looked up in the trash (spec 0017): a missing record's page.
   const trashedLookups = createTrashedLookups((workspace, recordId) =>
     call((options) => api.records.getTrashed({ workspace, recordId }, options)),
@@ -500,6 +513,9 @@ export function createDataLayer({
       feeds.clear();
     });
     trashedLookups.clear();
+    void trash?.then((held) => {
+      held.clear();
+    });
     pendingOptions.clear();
   };
   const reset = () => {
@@ -800,6 +816,10 @@ export function createDataLayer({
   // the person's own access when it names them); access, naming the person, everything held; and a resync
   // everything held of the workspace. Entries have no store yet: no screen shows lists.
   router.on('records', (workspace, event) => {
+    // The open trash (spec 0022) settles on deletes, restores, purges and coarse changes.
+    void trash?.then((held) => {
+      held.changed(workspace, event);
+    });
     void records?.then((layer) => {
       if (event.coarse === true) layer.reload(workspace, event.objectId);
       else layer.changed(workspace, event.objectId, event.recordIds, event.attributeIds, event);
@@ -886,6 +906,9 @@ export function createDataLayer({
   router.onResync((workspace) => {
     jobs.resync(workspace);
     views.resync(workspace);
+    void trash?.then((held) => {
+      held.reload(workspace);
+    });
     void records?.then((layer) => {
       layer.reload(workspace);
     });
@@ -1040,6 +1063,16 @@ export function createDataLayer({
       landed(
         input.workspace,
         call((options) => api.records.setValuesBatch(input, options)),
+      ),
+    deleteMany: (input) =>
+      landed(
+        input.workspace,
+        call((options) => api.records.deleteMany({ ...input, recordIds: [...input.recordIds] }, options)),
+      ),
+    restoreBatch: (input) =>
+      landed(
+        input.workspace,
+        call((options) => api.records.restoreBatch(input, options)),
       ),
   };
 
@@ -1324,6 +1357,34 @@ export function createDataLayer({
       return feeds;
     });
     return activity;
+  };
+
+  const trashStore = (): Promise<Trash> => {
+    trash ??= import('./trash/store.ts').then(({ createTrash }) =>
+      createTrash({
+        api: {
+          query: (input, signal) => call((options) => api.trash.query(input, options), signal),
+          count: (input, signal) => call((options) => api.trash.count(input, options), signal),
+          restore: (input) =>
+            landed(
+              input.workspace,
+              call((options) => api.trash.restore({ ...input, recordIds: [...input.recordIds] }, options)),
+            ),
+        },
+        mintId,
+        watch,
+        beforeRead,
+        mutations,
+      }),
+    );
+    return trash;
+  };
+
+  /** This tab deleted or restored records: its own echoes never come back, so an open trash settles now. */
+  const trashMoved = (workspace: string): void => {
+    void trash?.then((held) => {
+      held.reload(workspace);
+    });
   };
 
   const recordsLayer = (): Promise<RecordsLayer> => {
@@ -1808,6 +1869,18 @@ export function createDataLayer({
       setValues: async (workspace: string, changes: readonly CellChange[], kind?: UndoKind): Promise<EditOutcome> =>
         (await recordsLayer()).setValues(workspace, changes, kind),
       /**
+       * Moves up to 500 records of one object to the trash as one action
+       * (spec 0022): their rows leave every view at once and the counts drop;
+       * one `records.deleteMany` follows. A refused record comes back with
+       * its reason on its name cell; the whole action can be undone (Cmd+Z,
+       * or `undo.run` with the answer's `undoId`), restoring exactly its batch.
+       */
+      deleteMany: async (workspace: string, objectId: string, recordIds: readonly string[]): Promise<DeleteResult> => {
+        const result = await (await recordsLayer()).deleteMany(workspace, objectId, recordIds);
+        if (result.kind === 'done' && result.deleted > 0) trashMoved(workspace);
+        return result;
+      },
+      /**
        * One record with the attributes a screen shows (spec 0006, `records.one`;
        * the record page, spec 0017): served from the store every table reads
        * (one body), held while subscribed, reading only what it lacks, patched
@@ -1850,11 +1923,43 @@ export function createDataLayer({
        */
       run: async (workspace: string, only?: string): Promise<UndoResult> => {
         const outcome = await (await recordsLayer()).undo.run(workspace, only);
+        if (outcome.kind === 'restored' || outcome.kind === 'uncreated') trashMoved(workspace);
+        if (outcome.kind === 'restored') {
+          const object = (await allObjects(workspace).catch(() => [])).find((each) => each.id === outcome.objectId);
+          return {
+            ...outcome,
+            singularName: object?.singularName ?? 'record',
+            pluralName: object?.pluralName ?? 'records',
+          };
+        }
         if (outcome.kind !== 'undone') return outcome;
         return {
           ...outcome,
           attributeTitle: await attributeTitle(workspace, outcome.objectId, outcome.first.attributeId),
         };
+      },
+    },
+    trash: {
+      /**
+       * The trash of one object or of every object the member may see (spec
+       * 0022), the same view for every screen that asks: newest first, in
+       * windows by cursor, with its count, live. Read it through `useTrash`.
+       */
+      view: async (workspace: string, objectId?: string): Promise<TrashView> =>
+        (await trashStore()).view(workspace, objectId),
+      /**
+       * Restores up to 500 records from the trash (spec 0022, AC-534): their
+       * rows leave at once; a refused record comes back with its reason on
+       * its name cell. The tables of the objects restored into read again.
+       */
+      restore: async (workspace: string, recordIds: readonly string[]): Promise<RestoreSummary> => {
+        const summary = await (await trashStore()).restore(workspace, recordIds);
+        if (summary.kind === 'done' && summary.restored > 0) {
+          void records?.then((layer) => {
+            for (const objectId of summary.objectIds) layer.reload(workspace, objectId);
+          });
+        }
+        return summary;
       },
     },
     jobs: {
