@@ -8,6 +8,7 @@ import type { LiveStatus } from './live/live.ts';
 import type { PendingOptions } from './options.ts';
 import type { RecordsView, ViewReader, ViewState } from './records/layer.ts';
 import type { RecordState, RecordSubscription } from './records/one.ts';
+import type { RecordSearch, RecordSearchState } from './records/search.ts';
 import type { TrashedSource, TrashedState } from './records/trashed.ts';
 import type { SavedViewSnapshot, SavedViewSource, ViewsListSnapshot, ViewsListSource } from './views/store.ts';
 import type { TrashState, TrashView } from './trash/store.ts';
@@ -132,6 +133,15 @@ export function useTaskTotal(list: TaskList): TaskListState['total'] {
 /** One task (the task dialog), re-rendering when it changes. Held while the screen is mounted. */
 export function useTask(task: TaskSubscription): TaskSubscriptionState {
   return useRetained(task);
+}
+
+/**
+ * The record picker's search (spec 0014), re-rendering as answers land. The
+ * screen asks (`search.ask`) as the person types and disposes the search
+ * when the picker closes.
+ */
+export function useRecordSearch(search: RecordSearch): RecordSearchState {
+  return useSyncExternalStore(search.subscribe, search.getSnapshot);
 }
 
 /** A missing record looked up in the trash (spec 0017), asked when first read. */

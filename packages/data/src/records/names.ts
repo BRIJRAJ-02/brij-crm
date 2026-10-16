@@ -46,6 +46,8 @@ export interface ReferenceNames {
   readonly displaysOf: (workspace: string, refs: readonly RecordRef[]) => readonly NameState[];
   /** Drops these records' names (a live change named them), so the next ask reads them again. */
   readonly forget: (workspace: string, recordIds: readonly string[]) => void;
+  /** Displays already in hand (a record picked from a search, spec 0014): its chip shows at once, never a skeleton. */
+  readonly learn: (workspace: string, displays: readonly RecordRefDisplay[]) => void;
   readonly clear: () => void;
 }
 
@@ -157,6 +159,10 @@ export function createReferenceNames({
         ask(workspace, ref.recordId);
         return 'loading';
       }),
+    learn: (workspace, displays) => {
+      const names = knownIn(workspace);
+      for (const display of displays) if (!names.has(display.recordId)) names.set(display.recordId, display);
+    },
     forget: (workspace, recordIds) => {
       const names = known.get(workspace);
       if (names === undefined) return;

@@ -13,6 +13,7 @@ import {
   newerBase,
   remainingLayers,
   type Layer,
+  type LinkTotals,
   type RecordBody,
   type RecordStore,
   type RecordValues,
@@ -23,6 +24,7 @@ interface PendingLayer<Row extends RecordBody> {
   readonly id: string;
   readonly values: RecordValues;
   readonly draft?: Row;
+  readonly linkTotals?: LinkTotals;
 }
 
 interface Entry<Row extends RecordBody> {
@@ -212,7 +214,8 @@ export function createPlainStore<Row extends RecordBody>({
       }
       notify(changed);
     },
-    edit: (recordId, values, mutationId) => addLayer(recordId, { id: mutationId, values }),
+    edit: (recordId, values, mutationId, linkTotals) =>
+      addLayer(recordId, { id: mutationId, values, ...(linkTotals === undefined ? {} : { linkTotals }) }),
     create: (draft, mutationId) => addLayer(draft.id, { id: mutationId, values: draft.values, draft }),
     pending: () => {
       const ids = new Set<string>();

@@ -13,6 +13,9 @@ import type {
   CreateRecordInput,
   DeleteManyInput,
   DeleteManyResults,
+  AddLinksInput,
+  LinksWritten,
+  RemoveLinksInput,
   RestoreBatchInput,
   RestoreBatchResults,
   RecordCount,
@@ -24,15 +27,23 @@ import type {
   WrittenRecord,
 } from '@crm/contracts';
 import { canJump, type JumpAttribute } from '@crm/contracts/jump';
-import type { FilterGroup, Hue, SortRules } from '@crm/contracts/values';
+import type { FilterGroup, Hue, RecordRefDisplay, SortRules } from '@crm/contracts/values';
 import type { PatternCompiler, RuleFailure } from '@crm/contracts/validation';
 import { dataError, refusalFor, refusalSummary, toDataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
-import { createOwnVersions, createUndoStack, type DeleteEntry, type UndoCell, type UndoKind } from './history.ts';
+import {
+  createOwnVersions,
+  createUndoStack,
+  type DeleteEntry,
+  type LinksEntry,
+  type LinkStep,
+  type UndoCell,
+  type UndoKind,
+} from './history.ts';
 import { createReferenceNames, type NameState, type RecordRef } from './names.ts';
 import { createRecordSubscriptions, type RecordAttributes, type RecordSubscription } from './one.ts';
 import { createPlainStore, sameData } from './plain-store.ts';
-import type { Layer } from './store.ts';
+import type { Layer, LinkTotals } from './store.ts';
 
 /** A records change event (spec 0007's union), as the live router hands it over. */
 type RecordsEvent = Extract<ChangeEvent, { kind: 'records' }>;
@@ -46,6 +57,9 @@ import {
   touchedRules,
   type ObjectRules,
 } from '../validation/rules.ts';
+
+/** The most links a cell carries (spec 0005's `MAX_CELL_LINKS`, kept here so no schema module loads). */
+const MAX_CELL_LINKS = 20;
 
 /** Rows per block: `records.query` with `position` = block × 100 (spec 0005, value sourcing). */
 const BLOCK_SIZE = 100;
@@ -188,6 +202,9 @@ export interface RecordsApi {
   readonly deleteMany: (input: DeleteManyInput) => Promise<DeleteManyResults>;
   /** Undoes a delete by its batch (spec 0022). */
   readonly restoreBatch: (input: RestoreBatchInput) => Promise<RestoreBatchResults>;
+  /** Link deltas (spec 0014): one side of one record, never the whole list. */
+  readonly linksAdd: (input: AddLinksInput) => Promise<LinksWritten>;
+  readonly linksRemove: (input: RemoveLinksInput) => Promise<LinksWritten>;
 }
 
 /** One cell a write changes: its value, and for an undo the version it must still be at (`ifVersionId`). */
@@ -518,6 +535,56 @@ export interface RecordsLayerOptions {
     ) => void;
   };
 }
+
+/**
+ * One link delta a screen asks for (spec 0014, milestone 2): add `target` on
+ * a side of `recordId` (`isMulti` says whether it holds many), or remove it.
+ * `move` takes a record the picker marked "At …" from its holder
+ * (`movedFrom`, when the reader may see it, which undo hands it back to).
+ * `pairedAttributeId` is the side's pair, which the far records reread.
+ */
+export type LinkChange =
+  | {
+      readonly kind: 'add';
+      readonly recordId: string;
+      readonly attributeId: string;
+      readonly target: RecordRef;
+      readonly isMulti: boolean;
+      readonly move?: boolean;
+      readonly movedFrom?: RecordRef;
+      readonly pairedAttributeId?: string;
+      /** The picked record as the search showed it, so its chip shows its name at once. */
+      readonly display?: RecordRefDisplay;
+    }
+  | {
+      readonly kind: 'remove';
+      readonly recordId: string;
+      readonly attributeId: string;
+      readonly target: RecordRef;
+      readonly isMulti: boolean;
+      readonly pairedAttributeId?: string;
+    };
+
+/**
+ * A reference cell's new value from its editor (spec 0014), sent as link
+ * deltas against what the cell holds (`editLinks`): `pickOf` tells, for a
+ * record just picked, whether to move it ("At …") and how the search showed it.
+ */
+export interface LinkCell {
+  readonly recordId: string;
+  readonly attributeId: string;
+  readonly value: unknown;
+  readonly isMulti: boolean;
+  readonly pairedAttributeId?: string;
+  readonly pickOf?: (
+    recordId: string,
+  ) => { readonly move?: boolean; readonly movedFrom?: RecordRef; readonly display?: RecordRefDisplay } | undefined;
+}
+
+/** What a link delta came to: landed (`changed` false when it was already so, with its undo entry), or refused. */
+export type LinkOutcome =
+  | { readonly kind: 'done'; readonly changed: boolean; readonly undoId?: string }
+  | { readonly kind: 'refused'; readonly error: DataError };
 
 /** The words the records layer raises itself. */
 export const RECORD_WORDS = {
@@ -2034,6 +2101,273 @@ export function createRecordsLayer({
     return { kind: 'done', cells: changes.length, landed: landedCells, ...(pushed ? { undoId: mutationId } : {}) };
   }
 
+  /** A reference value's links, as a list: one link, several, or none. */
+  const linksIn = (value: unknown): readonly RecordRef[] => {
+    const list: readonly unknown[] = Array.isArray(value)
+      ? value
+      : value === null || value === undefined
+        ? []
+        : [value];
+    return list.flatMap((each) => {
+      if (typeof each !== 'object' || each === null) return [];
+      const { objectId, recordId } = each as { readonly objectId?: unknown; readonly recordId?: unknown };
+      return typeof objectId === 'string' && typeof recordId === 'string' ? [{ objectId, recordId }] : [];
+    });
+  };
+
+  /**
+   * What a link delta shows at once on the near record (spec 0014, the
+   * layering rule): a side that holds one shows the pick (or nothing); a side
+   * that holds many appends the chip while it shows fewer than 20, else
+   * raises its total by one (21 for a cell exactly full), and a remove drops
+   * the chip or lowers the total.
+   */
+  function shownAfter(
+    change: LinkChange,
+    held: readonly RecordRef[],
+    total: number | undefined,
+  ): { readonly value: unknown; readonly linkTotals?: LinkTotals } {
+    const { attributeId } = change;
+    if (!change.isMulti) return { value: change.kind === 'add' ? change.target : null };
+    const has = held.some((ref) => ref.recordId === change.target.recordId);
+    if (change.kind === 'add') {
+      if (has) return { value: held };
+      if (total === undefined && held.length < MAX_CELL_LINKS) return { value: [...held, change.target] };
+      return { value: held, linkTotals: { [attributeId]: (total ?? held.length) + 1 } };
+    }
+    const kept = held.filter((ref) => ref.recordId !== change.target.recordId);
+    if (total === undefined) return { value: kept };
+    const next = total - 1;
+    return { value: kept, linkTotals: { [attributeId]: next > kept.length ? next : null } };
+  }
+
+  /**
+   * After a link write landed: the other records it changed (far records, a
+   * moved link's old holder, a side of one's old far record) are read again
+   * where a screen shows them, through the same path a live change takes,
+   * since this tab skips its own echoes; windows the near side orders by
+   * settle, and the edited row keeps its place.
+   */
+  function linkLanded(
+    workspace: string,
+    change: LinkChange,
+    known: readonly RecordRef[],
+    objectId: string,
+    changedIds: readonly string[],
+  ) {
+    const movedFrom = change.kind === 'add' ? change.movedFrom : undefined;
+    const objectOf = new Map<string, string>([
+      [change.target.recordId, change.target.objectId],
+      ...known.map((ref) => [ref.recordId, ref.objectId] as const),
+      ...(movedFrom === undefined ? [] : [[movedFrom.recordId, movedFrom.objectId] as const]),
+    ]);
+    const byObject = new Map<string, string[]>();
+    const unknown: string[] = [];
+    for (const id of changedIds) {
+      const at = objectOf.get(id);
+      if (at === undefined) unknown.push(id);
+      else byObject.set(at, [...(byObject.get(at) ?? []), id]);
+    }
+    const paired = change.pairedAttributeId === undefined ? [] : [change.pairedAttributeId];
+    for (const [at, ids] of byObject) {
+      // A far record changed on the paired side; a moved link's old holder (on the near object) on this same side.
+      const attributes = at === objectId ? [change.attributeId, ...paired] : paired;
+      // Their names didn't change: the chips keep them (no skeleton while they are read again).
+      records.changed(workspace, at, ids, attributes.length === 0 ? undefined : attributes, {}, true);
+    }
+    if (unknown.length > 0) void refetch(workspace, unknown).catch(() => undefined);
+    for (const entry of viewsOf(workspace)) {
+      if (!entry.shows(change.recordId)) continue;
+      entry.edited([change.recordId]);
+      const order = entry.orderAttributes();
+      if (order.any || order.ids.has(change.attributeId)) entry.markDirty();
+    }
+  }
+
+  /**
+   * A reference cell's new value as link deltas (spec 0014): what the editor
+   * committed, against what the cell holds, becomes one add or remove each
+   * (a picker commits one change at a time), so a side of many is never sent
+   * whole. `pickOf` says, for a record just picked, whether to move it from
+   * its holder and how the search showed it.
+   */
+  function editLinks(workspace: string, cell: LinkCell): Promise<readonly LinkOutcome[]> {
+    const held = linksIn(store.get(cell.recordId)?.values[cell.attributeId]);
+    const next = linksIn(cell.value);
+    const has = (list: readonly RecordRef[], ref: RecordRef) => list.some((each) => each.recordId === ref.recordId);
+    const shared = {
+      recordId: cell.recordId,
+      attributeId: cell.attributeId,
+      isMulti: cell.isMulti,
+      ...(cell.pairedAttributeId === undefined ? {} : { pairedAttributeId: cell.pairedAttributeId }),
+    };
+    const added = next.filter((ref) => !has(held, ref));
+    // A side of one replaces: its pick is the add, and the old link ends with it.
+    const removed = cell.isMulti || added.length === 0 ? held.filter((ref) => !has(next, ref)) : [];
+    return Promise.all([
+      ...added.map((target) => {
+        const pick = cell.pickOf?.(target.recordId);
+        return changeLink(workspace, {
+          kind: 'add',
+          ...shared,
+          target,
+          ...(pick?.move === true ? { move: true } : {}),
+          ...(pick?.movedFrom === undefined ? {} : { movedFrom: pick.movedFrom }),
+          ...(pick?.display === undefined ? {} : { display: pick.display }),
+        });
+      }),
+      ...removed.map((target) => changeLink(workspace, { kind: 'remove', ...shared, target })),
+    ]);
+  }
+
+  /** The inverse of a delta that landed, for undo: what puts the side back as it was. */
+  function inverseOf(change: LinkChange, held: readonly RecordRef[]): LinkStep {
+    const { recordId, attributeId, target } = change;
+    if (change.kind === 'remove') return { kind: 'add', recordId, attributeId, target };
+    // A move: the record goes back to its old holder, taken from this one.
+    if (change.movedFrom !== undefined) {
+      return { kind: 'add', recordId: change.movedFrom.recordId, attributeId, target, move: true };
+    }
+    // A side of one that held another record gets it back (taking it again, should its far side hold one).
+    const [previous] = change.isMulti ? [] : held.filter((ref) => ref.recordId !== target.recordId);
+    if (previous !== undefined) return { kind: 'add', recordId, attributeId, target: previous, move: true };
+    return { kind: 'remove', recordId, attributeId, target };
+  }
+
+  /**
+   * One link delta from a cell, a picker or a section (spec 0014, AC-290 to
+   * AC-293): optimistic on the near record only (`shownAfter`), sent after
+   * the record's other writes as `links.add` or `links.remove` (a side of one
+   * names the version it started from), then the answer's record becomes the
+   * base and every other record it changed is read again (`linkLanded`). A
+   * refusal rolls the cell back, marks it with why and raises a toast with
+   * Retry. What landed goes on the undo stack as its inverse, unless this is
+   * an undo itself (`undoable: false`).
+   */
+  function changeLink(
+    workspace: string,
+    change: LinkChange,
+    options: { readonly undoable?: boolean } = {},
+  ): Promise<LinkOutcome> {
+    const { recordId, attributeId } = change;
+    if (change.kind === 'add' && change.display !== undefined) names.learn(workspace, [change.display]);
+    const shown = store.get(recordId);
+    const held = linksIn(shown?.values[attributeId]);
+    const mutationId = mintId();
+    setCellErrors([[`${recordId}:${attributeId}`, undefined]]);
+    const after = shownAfter(change, held, shown?.linkTotals[attributeId]);
+    const layer = store.edit(recordId, { [attributeId]: after.value }, mutationId, after.linkTotals);
+    mutations.sent(mutationId);
+    const turn = (sending.get(recordId) ?? Promise.resolve()).then(
+      () => undefined,
+      () => undefined,
+    );
+    const mine = turn.then(() => sendLink(workspace, change, mutationId, layer, held, options));
+    sending.set(recordId, mine);
+    void mine.finally(() => {
+      if (sending.get(recordId) === mine) sending.delete(recordId);
+    });
+    if (options.undoable !== false) {
+      // An undo pressed meanwhile waits for this write's answer first (spec 0006).
+      const entry = mine.then(() => undefined);
+      const waiting = inflight.get(workspace) ?? new Set<Promise<void>>();
+      inflight.set(workspace, waiting);
+      waiting.add(entry);
+      void entry.finally(() => waiting.delete(entry));
+    }
+    return mine;
+  }
+
+  /** Sends one delta after its record's turn, and settles its layer by the answer. */
+  async function sendLink(
+    workspace: string,
+    change: LinkChange,
+    mutationId: string,
+    layer: Layer<RecordView>,
+    held: readonly RecordRef[],
+    options: { readonly undoable?: boolean },
+  ): Promise<LinkOutcome> {
+    const { recordId, attributeId } = change;
+    const base = store.base(recordId);
+    // A side of one names the version its base held when the write went out (`null` when it held none).
+    const baseVersionId =
+      change.isMulti || base === undefined || !Object.hasOwn(base.values, attributeId)
+        ? undefined
+        : (base.versions[attributeId] ?? null);
+    try {
+      const answer = await delivered(() =>
+        change.kind === 'add'
+          ? api.linksAdd({
+              workspace,
+              recordId,
+              attributeId,
+              targets: [change.target],
+              ...(change.move === true ? { move: true } : {}),
+              ...(baseVersionId === undefined ? {} : { baseVersionId }),
+              mutationId,
+            })
+          : api.linksRemove({
+              workspace,
+              recordId,
+              attributeId,
+              targetRecordIds: [change.target.recordId],
+              mutationId,
+            }),
+      );
+      mutations.answered(mutationId, answer.echoes);
+      layer.confirm(answer.record);
+      const written = answer.written[attributeId];
+      if (written !== undefined) {
+        own.add(written, {
+          workspace,
+          objectId: answer.record.objectId,
+          recordId,
+          attributeId,
+          value: answer.record.values[attributeId] ?? null,
+          recordName: answer.record.display.name,
+        });
+      }
+      linkLanded(workspace, change, held, answer.record.objectId, answer.changedRecordIds);
+      if (options.undoable !== false && written !== undefined) {
+        undo.push(workspace, {
+          id: mutationId,
+          kind: 'links',
+          objectId: answer.record.objectId,
+          recordId,
+          attributeId,
+          isMulti: change.isMulti,
+          ...(change.pairedAttributeId === undefined ? {} : { pairedAttributeId: change.pairedAttributeId }),
+          recordName: answer.record.display.name,
+          inverse: inverseOf(change, held),
+        });
+      }
+      const pushed = undo.top(workspace)?.id === mutationId;
+      return { kind: 'done', changed: written !== undefined, ...(pushed ? { undoId: mutationId } : {}) };
+    } catch (error) {
+      const failure = toDataError(error);
+      mutations.forget(mutationId);
+      layer.refuse();
+      // Signed out: the layer already said so, and sign in comes next.
+      if (failure.code === 'UNAUTHENTICATED') return { kind: 'refused', error: failure };
+      setCellErrors([[`${recordId}:${attributeId}`, refusalFor(failure, attributeId) ?? refusalSummary(failure)]]);
+      const objectId = store.get(recordId)?.objectId ?? base?.objectId;
+      void titleOf(workspace, objectId, attributeId).then((title) => {
+        const reason = refusalSummary(failure);
+        notify({
+          tone: 'danger',
+          message: title === undefined ? reason : RECORD_WORDS.notSavedNamed(title, reason),
+          action: {
+            label: RECORD_WORDS.retry,
+            onAction: () => {
+              void changeLink(workspace, change, options);
+            },
+          },
+        });
+      });
+      return { kind: 'refused', error: failure };
+    }
+  }
+
   /** Splits record writes into runs whose encoded size stays under one request's limit; each record stays whole. */
   function bySize(writes: readonly RecordWrite[]): RecordWrite[][] {
     const runs: RecordWrite[][] = [];
@@ -2305,6 +2639,38 @@ export function createRecordsLayer({
   }
 
   /**
+   * Undoes a link delta (spec 0014): its inverse, sent as a delta of its own
+   * that goes on no stack, answered as a one cell undo ("Undid Team on Acme").
+   */
+  async function undoLink(workspace: string, entry: LinksEntry): Promise<UndoOutcome> {
+    const step = entry.inverse;
+    const shared = {
+      recordId: step.recordId,
+      attributeId: step.attributeId,
+      isMulti: entry.isMulti,
+      ...(entry.pairedAttributeId === undefined ? {} : { pairedAttributeId: entry.pairedAttributeId }),
+    };
+    const outcome = await changeLink(
+      workspace,
+      step.kind === 'add'
+        ? { kind: 'add', ...shared, target: step.target, ...(step.move === true ? { move: true } : {}) }
+        : { kind: 'remove', ...shared, target: step.target },
+      { undoable: false },
+    );
+    const landed = outcome.kind === 'done' ? 1 : 0;
+    return {
+      kind: 'undone',
+      action: 'cell',
+      objectId: entry.objectId,
+      cells: 1,
+      undone: landed,
+      kept: 0,
+      failed: 1 - landed,
+      first: { recordId: entry.recordId, attributeId: entry.attributeId, recordName: entry.recordName },
+    };
+  }
+
+  /**
    * Runs undo work for a workspace one at a time, after every undoable write
    * still out: a second press waits until the first press's writes have
    * answered and handed their versions on, so a quick double press walks
@@ -2355,6 +2721,7 @@ export function createRecordsLayer({
           deleted: outcome.kind === 'done' && outcome.deleted > 0,
         };
       }
+      if (entry.kind === 'links') return undoLink(workspace, entry);
       const [firstCell] = entry.cells;
       if (firstCell === undefined) return { kind: 'nothing' };
       const { landed: undone, kept, failed } = await undoCellsBack(workspace, entry.objectId, entry.cells);
@@ -2723,6 +3090,16 @@ export function createRecordsLayer({
     },
 
     /**
+     * One link delta from a cell, a picker or a record panel section (spec
+     * 0014; see `changeLink`): shows at once on the near record, lands or
+     * rolls back with a toast and Retry, and goes on the undo stack.
+     */
+    changeLink: (workspace: string, change: LinkChange): Promise<LinkOutcome> => changeLink(workspace, change),
+
+    /** A reference cell's new value from its editor, sent as link deltas (see `editLinks`). */
+    editLinks: (workspace: string, cell: LinkCell): Promise<readonly LinkOutcome[]> => editLinks(workspace, cell),
+
+    /**
      * Moves up to 500 records of one object to the trash as one undoable
      * action (spec 0022): they leave every view at once, and the answer says
      * how many went and how many were refused (see `trashRecords`).
@@ -2763,11 +3140,13 @@ export function createRecordsLayer({
       ids: readonly string[],
       attributeIds?: readonly string[],
       lifecycle: Lifecycle = {},
+      /** This tab's own link write (spec 0014): the records' names stand. */
+      keepNames = false,
     ): void => {
       if (ids.length === 0) return;
       remember(workspace, ids);
       // A renamed record shows its new name wherever a cell links to it.
-      names.forget(workspace, ids);
+      if (!keepNames) names.forget(workspace, ids);
       const objects = incoming.get(workspace) ?? new Map<string, Gathered>();
       incoming.set(workspace, objects);
       const gathered = objects.get(objectId) ?? {

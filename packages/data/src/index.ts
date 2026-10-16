@@ -16,7 +16,6 @@ import type {
   MemberSummary,
   MyAccess,
   ObjectSummary,
-  RecordRefDisplay,
   RecordView,
   RelationshipView,
   Usage,
@@ -49,11 +48,15 @@ import { createPendingOptions } from './options.ts';
 import { nextHue } from '@crm/contracts/picker';
 import type { UndoKind } from './records/history.ts';
 import type { RecordAttributes, RecordSubscription } from './records/one.ts';
+import { createRecordSearch, type RecordSearch } from './records/search.ts';
 import type { RestoreSummary, Trash, TrashView } from './trash/store.ts';
 import type {
   CellChange,
   DeleteResult,
   EditOutcome,
+  LinkCell,
+  LinkChange,
+  LinkOutcome,
   ObjectShape,
   RecordsApi,
   RecordsLayer,
@@ -88,6 +91,7 @@ export type {
   RecordRefDisplay,
   RecordView,
   RelationshipView,
+  SearchResult,
   SignedInUser,
   TaskTotal,
   TaskView,
@@ -171,6 +175,9 @@ export type {
   CellChange,
   DeleteResult,
   EditOutcome,
+  LinkCell,
+  LinkChange,
+  LinkOutcome,
   RecordsView,
   ViewQuery,
   ViewReader,
@@ -178,6 +185,7 @@ export type {
   ViewStatus,
 } from './records/layer.ts';
 export type { RecordAttributes, RecordState, RecordStatus, RecordSubscription } from './records/one.ts';
+export { SEARCH_DELAY_MS, type RecordSearch, type RecordSearchState } from './records/search.ts';
 export type { TrashedSource, TrashedState } from './records/trashed.ts';
 export type { RowNote } from './records/view.ts';
 export type { RestoreSummary, TrashRow, TrashState, TrashStatus, TrashView } from './trash/store.ts';
@@ -242,9 +250,6 @@ interface CallOptions {
 
 /** How long a read waits for the workspace's head before going ahead without it (spec 0007: the token call is usually beside `me.get`). */
 const HEAD_WAIT_MS = 5_000;
-/** How many records the task dialog's picker offers for one search. */
-const FIND_LIMIT = 20;
-
 /** The longest spread before a reread every tab of a workspace makes at once (a members or access event), in ms. */
 const SPREAD_MS = 2_000;
 
@@ -1114,6 +1119,16 @@ export function createDataLayer({
         input.workspace,
         call((options) => api.records.restoreBatch(input, options)),
       ),
+    linksAdd: (input) =>
+      landed(
+        input.workspace,
+        call((options) => api.links.add({ ...input, targets: [...input.targets] }, options)),
+      ),
+    linksRemove: (input) =>
+      landed(
+        input.workspace,
+        call((options) => api.links.remove({ ...input, targetRecordIds: [...input.targetRecordIds] }, options)),
+      ),
   };
 
   /** An attribute's title, from the cached list of its object (empty when it can't be read). */
@@ -1963,6 +1978,49 @@ export function createDataLayer({
        * `FORBIDDEN`, on the cell.
        */
       createOption,
+      /**
+       * One link delta (spec 0014): adds or removes one record on a side of
+       * one record. It shows at once on that record (a side of many appends
+       * the chip, or raises its "+N"); the far records and a moved link's old
+       * holder read again when it lands; a refusal rolls it back, marks the
+       * cell and raises a toast with Retry. What landed can be undone.
+       */
+      changeLink: async (workspace: string, change: LinkChange): Promise<LinkOutcome> =>
+        (await recordsLayer()).changeLink(workspace, change),
+      /**
+       * A reference cell's new value from its editor (a table cell, a record
+       * page row), sent as link deltas against what the cell holds: a pick
+       * adds one, a removed chip removes one, a side of one replaces. Never a
+       * whole list (a side of many changes only by delta, spec 0014).
+       */
+      editLinks: async (workspace: string, cell: LinkCell): Promise<readonly LinkOutcome[]> =>
+        (await recordsLayer()).editLinks(workspace, cell),
+      /**
+       * The record picker's search over one object (spec 0014): `ask` as the
+       * person types (150 ms after the last key, the previous request
+       * aborted), answers kept for the picker's life. With the side being
+       * edited (`forAttributeId`, `forRecordId`) each result says whether it
+       * is linked there already and who holds it ("At Acme"). Results are
+       * displays, never record bodies. Read it through `useRecordSearch`, and
+       * `dispose` it when the picker closes.
+       */
+      search: (
+        workspace: string,
+        input: {
+          readonly objectId: string;
+          readonly forAttributeId?: string;
+          readonly forRecordId?: string;
+          readonly limit?: number;
+        },
+      ): RecordSearch =>
+        createRecordSearch({
+          run: (query, signal) =>
+            beforeRead(workspace).then(() =>
+              call((options) => api.records.search({ workspace, ...input, query }, options), signal).then(
+                (answer) => answer.results,
+              ),
+            ),
+        }),
       /** Edits one cell at once; a refusal rolls it back with a cell message and a toast with Retry. */
       setValue: (workspace: string, change: CellChange): void => {
         void recordsLayer().then((layer) => layer.setValues(workspace, [change], 'cell'));
@@ -2045,40 +2103,6 @@ export function createDataLayer({
       /** Changes a task at once on screen; a refusal puts it back and is answered, for the field to show. */
       update: async (workspace: string, taskId: string, change: TaskChange): Promise<DataError | undefined> =>
         (await tasksStore()).update(workspace, taskId, change),
-      /**
-       * Records of one object whose name holds `query`, for the task dialog's
-       * record picker (spec 0019): the first 20 by the object's own order, as
-       * display shapes, through `records.query` with the primary attribute's
-       * `contains` (an empty query: the first 20). A thin slice until spec
-       * 0014's `records.search` lands, which takes its place.
-       */
-      findRecords: async (workspace: string, objectId: string, query: string): Promise<readonly RecordRefDisplay[]> => {
-        const object = (await listObjects(workspace)).find((each) => each.id === objectId);
-        const primary = object?.primaryAttributeId ?? undefined;
-        const text = query.trim();
-        const page = await beforeRead(workspace).then(() =>
-          call((options) =>
-            api.records.query(
-              {
-                workspace,
-                objectId,
-                limit: FIND_LIMIT,
-                attributeIds: [],
-                ...(text === '' || primary === undefined
-                  ? {}
-                  : {
-                      filter: {
-                        conjunction: 'and' as const,
-                        conditions: [{ attributeId: primary, operator: 'contains' as const, value: text }],
-                      },
-                    }),
-              },
-              options,
-            ),
-          ),
-        );
-        return page.records.map((record) => record.display);
-      },
       /** Ticks or unticks a task at once; a refusal rolls the checkbox back with a toast and Retry. */
       setDone: async (workspace: string, taskId: string, isDone: boolean): Promise<boolean> =>
         (await tasksStore()).setDone(workspace, taskId, isDone),
