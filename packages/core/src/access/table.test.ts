@@ -285,6 +285,8 @@ async function dataWorld() {
     people,
     name: attribute('name'),
     jobTitle: attribute('job_title'),
+    company: attribute('company'),
+    associatedDeals: attribute('associated_deals'),
     stage,
     recordId,
     trashedId,
@@ -385,6 +387,10 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   getRecordEntries: empty((scope, world) => core.getRecordEntries(scope, { recordId: world.recordId })),
   getActivity: refused('NOT_FOUND', (scope, world) => core.getActivity(scope, { recordId: world.recordId })),
   readTrashedRecord: refused('NOT_FOUND', (scope, world) => core.readTrashedRecord(scope, world.trashedId)),
+  // The record picker's search (spec 0014): an object the reader can't see is absent.
+  searchRecords: refused('NOT_FOUND', (scope, world) =>
+    core.searchRecords(scope, { objectId: world.people, query: '' }),
+  ),
   // Saved views (spec 0020): a view on an object the principal can't see is absent, and so can't be saved.
   listViews: refused('NOT_FOUND', (scope, world) => core.listViews(scope, world.people)),
   getView: refused('NOT_FOUND', (scope, world) => core.getView(scope, world.peopleView)),
@@ -434,6 +440,29 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   ),
   restoreBatch: refused('FORBIDDEN', async (scope, world) =>
     core.restoreBatch(scope, { batchId: await batchOf(world) }).then(refusedOutcome),
+  ),
+  // Link deltas (spec 0014): a record the principal may only read refuses before any far record is looked at.
+  changeLinks: refused('FORBIDDEN', (scope, world) =>
+    core.changeLinks(scope, {
+      kind: 'remove',
+      recordId: world.recordId,
+      attributeId: world.associatedDeals,
+      targetRecordIds: [world.trashedId],
+    }),
+  ),
+  addRecordLinks: refused('FORBIDDEN', (scope, world) =>
+    core.addRecordLinks(scope, {
+      recordId: world.recordId,
+      attributeId: world.company,
+      targets: [{ objectId: world.people, recordId: world.trashedId }],
+    }),
+  ),
+  removeRecordLinks: refused('FORBIDDEN', (scope, world) =>
+    core.removeRecordLinks(scope, {
+      recordId: world.recordId,
+      attributeId: world.associatedDeals,
+      targetRecordIds: [world.trashedId],
+    }),
   ),
   addEntry: refused('FORBIDDEN', (scope, world) =>
     core.addEntry(scope, { listId: world.listId, recordId: world.recordId }),

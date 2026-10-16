@@ -91,6 +91,8 @@ export const ACCESS_TABLE = {
   // The record page (spec 0017): its timeline and a record in the trash.
   getActivity: { data: 'read' },
   readTrashedRecord: { data: 'read' },
+  // The record picker's search (spec 0014): only records the reader may see.
+  searchRecords: { data: 'read' },
   // The trash (spec 0022): what it holds, by the principal's object levels and record rules.
   queryTrash: { data: 'read' },
   countTrash: { data: 'read' },
@@ -108,6 +110,10 @@ export const ACCESS_TABLE = {
   deleteRecords: { data: 'write' },
   restoreRecords: { data: 'write' },
   restoreBatch: { data: 'write' },
+  // Links from the table (spec 0014, milestone 2): write on the near side, every far record visible.
+  changeLinks: { data: 'write' },
+  addRecordLinks: { data: 'write' },
+  removeRecordLinks: { data: 'write' },
   addEntry: { data: 'write' },
   removeEntry: { data: 'write' },
   restoreEntry: { data: 'write' },

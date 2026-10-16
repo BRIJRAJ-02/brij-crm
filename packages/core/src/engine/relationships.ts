@@ -13,7 +13,7 @@ import { canonicalId, checkId, isUuid, isUuidV7, uuidList } from './ids.ts';
 import { limitsOf, lockAttributeParent } from './limits.ts';
 import { isRefusal, postgresError, refuse, refuseOn, versionChangedMessage, writeConflict } from './refusals.ts';
 import { actorRow, type Actor, type EngineScope } from './scope.ts';
-import { loadAttribute, parseFor, type AttributeDef, type AttributeWrite } from './values.ts';
+import { isArchivedNow, loadAttribute, parseFor, type AttributeDef, type AttributeWrite } from './values.ts';
 import { runWrite, type AfterWrite, type ValueChange, type WriteContext } from './write.ts';
 import { requirePermission } from '../access/check.ts';
 import { objectLevel, type Access } from '../access/policy.ts';
@@ -69,7 +69,8 @@ export function singleEnds(cardinality: Cardinality): { fromSingle: boolean; toS
 
 /** A link time as fixed width UTC text with microseconds, so times compare as strings. */
 const MICRO = `'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'`;
-const micro = (column: unknown) => sql<string>`to_char(${column} at time zone 'UTC', ${sql.raw(MICRO)})`;
+/** A timestamp column as fixed width UTC text with microseconds (`MICRO`), so link times compare as strings. */
+export const micro = (column: unknown) => sql<string>`to_char(${column} at time zone 'UTC', ${sql.raw(MICRO)})`;
 
 /** The most objects a one way reference may point to. */
 const MAX_TARGETS = 20;
@@ -460,7 +461,8 @@ export async function loadRelationships(
   );
 }
 
-async function relationshipOf(tx: WorkspaceTx, attribute: AttributeDef): Promise<RelationshipDef> {
+/** The relationship a record reference attribute is one end of. */
+export async function relationshipOf(tx: WorkspaceTx, attribute: AttributeDef): Promise<RelationshipDef> {
   const relationship =
     attribute.relationshipId === null
       ? undefined
@@ -470,7 +472,7 @@ async function relationshipOf(tx: WorkspaceTx, attribute: AttributeDef): Promise
 }
 
 /** Which end of its relationship an attribute is, and that end's columns. */
-function endOf(relationship: RelationshipDef, attributeId: string) {
+export function endOf(relationship: RelationshipDef, attributeId: string) {
   const isFrom = relationship.fromAttributeId === attributeId;
   return {
     isFrom,
@@ -503,7 +505,7 @@ function referencesOf(value: unknown): readonly RecordReferenceValue[] {
 }
 
 /** A record's name for a message: its primary attribute's text, or "an unnamed <object>". */
-async function recordName(tx: WorkspaceTx, access: Access, recordId: string): Promise<string> {
+export async function recordName(tx: WorkspaceTx, access: Access, recordId: string): Promise<string> {
   const result = await tx.execute<{
     name: string | null;
     singular: string;
@@ -911,7 +913,9 @@ function endColumns(isFrom: boolean): { mine: SQL; far: SQL; position: SQL } {
  * 20 of them, not 70,000), and a cell cut short gets its total in `totals`.
  * Only far records `access` may see are read (spec 0009, AC-143): the cap,
  * the total and the cell's version all count visible links alone, and the
- * open policy adds nothing to the statement.
+ * open policy adds nothing to the statement. A side spec 0012 counts as
+ * archived (its own row, or its far object) reads no cell at all (spec 0014,
+ * AC-308).
  */
 export async function linkValues(
   tx: WorkspaceTx,
@@ -934,6 +938,8 @@ export async function linkValues(
       ? sql`k.active_until is null`
       : sql`k.active_from <= ${options.at}::timestamptz and (k.active_until is null or k.active_until > ${options.at}::timestamptz)`;
   for (const attribute of references) {
+    // A side archived, or whose far object is archived (spec 0012's rule), reads nothing (spec 0014, AC-308).
+    if (isArchivedNow(attribute)) continue;
     const relationship =
       attribute.relationshipId === null ? undefined : relationshipsById.get(attribute.relationshipId);
     if (relationship === undefined) continue;
