@@ -26,7 +26,7 @@ describe("Centrifugo's tokens", () => {
       header: { alg: 'HS256', typ: 'JWT' },
       claims: { sub: USER, exp: NOW / 1000 + REALTIME_TOKEN_SECONDS },
     });
-    expect(REALTIME_TOKEN_SECONDS).toBe(600);
+    expect(REALTIME_TOKEN_SECONDS).toBe(3_600);
   });
 
   it("signs a subscription token for the workspace's channel only, with the same user", () => {

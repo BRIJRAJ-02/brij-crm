@@ -1,12 +1,18 @@
 // Centrifugo's tokens (spec 0005, change events): HS256 JWTs signed with the
 // secret the Centrifugo service checks (`CENTRIFUGO_TOKEN_SECRET`, equal to its
-// `CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY`), each good for 10 minutes. The
+// `CENTRIFUGO_CLIENT_TOKEN_HMAC_SECRET_KEY`), each good for an hour. The
 // one place the API signs them, with node:crypto and no JWT library.
 import { createHmac } from 'node:crypto';
 import { workspaceChannel } from '@crm/contracts';
 
-/** How long a connection or subscription token lasts: 10 minutes. The browser asks again before it runs out. */
-export const REALTIME_TOKEN_SECONDS = 10 * 60;
+/**
+ * How long a connection or subscription token lasts: an hour (spec 0008,
+ * milestone 3; 10 minutes before). The browser asks again before it runs out,
+ * and each renewal is a query, so a shorter life kept Neon's compute awake for
+ * an open tab nobody used. Events carry ids only and every read goes through
+ * the door, so a member removed meanwhile learns only that something changed.
+ */
+export const REALTIME_TOKEN_SECONDS = 60 * 60;
 
 /** Signs Centrifugo's tokens for a signed in person. */
 export interface RealtimeTokens {

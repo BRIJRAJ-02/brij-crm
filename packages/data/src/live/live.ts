@@ -17,7 +17,10 @@
 // A new subscription catches up from `W` at once; one that came back without
 // recovering what it missed (history gone, or Centrifugo restarted) after a
 // random 0 to 2 seconds, so a whole team doesn't ask in step; and so does a
-// tab coming back after 5 minutes hidden. A catch up answered `reset` (the
+// tab coming back after 5 minutes hidden. A tab hidden for 5 minutes also lets
+// its connection go (spec 0008, milestone 3: Centrifugo's token renewals query
+// the database, so an idle tab left open would keep Neon's compute awake), and
+// connects again when shown, catching up as above. A catch up answered `reset` (the
 // outbox no longer holds the range) runs every store's resync instead.
 // Nothing here polls: when the connection is down the screens say live
 // updates are paused, and Centrifugo's client reconnects with its own backoff.
@@ -115,6 +118,14 @@ export const REFETCH_JITTER_MS = 2000;
 
 /** How long a tab may stay hidden before it catches up on coming back: 5 minutes (Centrifugo's history). */
 export const HIDDEN_CATCH_UP_MS = 5 * 60_000;
+
+/**
+ * How long a tab may stay hidden before it lets its connection go (spec 0008,
+ * milestone 3): Centrifugo renews tokens through the API, and a renewal is a
+ * query, so a tab nobody looks at must not keep the database awake. Shown
+ * again, it connects and catches up from the watermark.
+ */
+export const HIDDEN_DISCONNECT_MS = 5 * 60_000;
 
 /** The longest wait between tries at a workspace's subscription token or a catch up. */
 const MAX_RETRY_MS = 30_000;
@@ -325,6 +336,10 @@ export function createLive({
   let stopTrouble: (() => void) | undefined;
   let status: 'live' | 'paused' = 'live';
   let hiddenSince: number | undefined = visibility?.hidden() === true ? now() : undefined;
+  // Hidden long enough that the connection was let go: every watched workspace subscribes again when shown.
+  let asleep = false;
+  // Which hide the disconnect timer belongs to: a show in between cancels it.
+  let hides = 0;
 
   const report = () => {
     const next = [...watched.values()].some((entry) => entry.state === 'down' || entry.failing) ? 'paused' : 'live';
@@ -508,8 +523,8 @@ export function createLive({
 
   /** Connects (once per tab) and subscribes, trying again with backoff while the client or a token can't load. */
   const start = async (workspace: string, entry: Watched) => {
-    // Read fresh after each await: a release may stop the entry meanwhile.
-    const isStopped = () => entry.isStopped;
+    // Read fresh after each await: a release may stop the entry meanwhile, and a hidden tab may let go.
+    const isStopped = () => entry.isStopped || asleep;
     if (!marks.has(workspace)) {
       const first = await head(workspace).catch(() => undefined);
       if (first !== undefined && !marks.has(workspace)) marks.set(workspace, first);
@@ -580,14 +595,52 @@ export function createLive({
     },
   });
 
-  // A tab back after 5 minutes hidden may have missed more than Centrifugo kept: catch up.
+  /** Hidden for `HIDDEN_DISCONNECT_MS`: unsubscribe everything and let the connection go, keeping the watermarks. */
+  const sleep = () => {
+    if (asleep || watched.size === 0) return;
+    asleep = true;
+    for (const entry of watched.values()) {
+      entry.stop();
+      entry.stop = () => undefined;
+    }
+    close();
+  };
+
+  /** Shown again after sleeping: connect, and subscribe every watched workspace again (it catches up on subscribing). */
+  const wakeUp = () => {
+    if (!asleep) return;
+    asleep = false;
+    for (const [workspace, entry] of watched) {
+      if (entry.isStopped || entry.refused) continue;
+      start(workspace, entry).catch(() => {
+        setState(entry, 'down');
+      });
+    }
+  };
+
+  // A tab back after 5 minutes hidden may have missed more than Centrifugo kept: catch up. Hidden that long, it has
+  // let its connection go, and connects again first.
+  const hidden = () => {
+    hiddenSince ??= now();
+    hides += 1;
+    const mine = hides;
+    void wait(HIDDEN_DISCONNECT_MS).then(() => {
+      if (mine === hides && hiddenSince !== undefined) sleep();
+    });
+  };
+  if (hiddenSince !== undefined) hidden();
   const stopVisibility = visibility?.onChange(() => {
     if (visibility.hidden()) {
-      hiddenSince ??= now();
+      if (hiddenSince === undefined) hidden();
       return;
     }
+    hides += 1;
     const since = hiddenSince;
     hiddenSince = undefined;
+    if (asleep) {
+      wakeUp();
+      return;
+    }
     if (since === undefined || now() - since < HIDDEN_CATCH_UP_MS) return;
     for (const [workspace, entry] of watched) if (entry.hasSubscribed) void fill(workspace, entry);
   });
@@ -625,9 +678,12 @@ export function createLive({
         void wait(startupMs).then(() => {
           if (entry.state === 'starting') setState(entry, 'down');
         });
-        start(workspace, entry).catch(() => {
-          setState(entry, 'down');
-        });
+        // While the tab sleeps, it subscribes when shown again.
+        if (!asleep) {
+          start(workspace, entry).catch(() => {
+            setState(entry, 'down');
+          });
+        }
       }
       let isReleased = false;
       return () => {

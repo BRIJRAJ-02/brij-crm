@@ -9,6 +9,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createLive,
   HIDDEN_CATCH_UP_MS,
+  HIDDEN_DISCONNECT_MS,
   parseChangeEvent,
   REFETCH_JITTER_MS,
   type CaughtUp,
@@ -422,6 +423,29 @@ describe('catching up', () => {
     t.setHidden(true, HIDDEN_CATCH_UP_MS);
     t.setHidden(false, 2 * HIDDEN_CATCH_UP_MS);
     await settle();
+    expect(t.afters).toEqual([0]);
+  });
+
+  it('lets the connection go after 5 minutes hidden, and connects, subscribes and catches up when shown (spec 0008)', async () => {
+    const t = setup();
+    await t.subscribed();
+    t.setHidden(true, 0);
+    // Shown again before the 5 minutes: nothing let go.
+    t.setHidden(false, 1_000);
+    await t.elapse(HIDDEN_DISCONNECT_MS);
+    expect(t.closed()).toBe(0);
+    t.setHidden(true, 2_000);
+    await t.elapse(HIDDEN_DISCONNECT_MS);
+    expect(t.unlistened).toEqual([`workspace:${WS}-id`]);
+    expect(t.closed()).toBe(1);
+    // Asleep: the screens don't say paused, since nobody looks.
+    expect(t.statuses).toEqual([]);
+    t.setHidden(false, 2_000 + HIDDEN_DISCONNECT_MS + 1);
+    await settle();
+    expect(t.opened()).toBe(2);
+    expect(t.channels).toHaveLength(2);
+    t.channels[1]?.onSubscribed({ wasRecovering: false, recovered: false });
+    await t.elapse(jitter);
     expect(t.afters).toEqual([0]);
   });
 
