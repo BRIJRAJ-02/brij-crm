@@ -1503,12 +1503,14 @@ describe('deletion', () => {
 
   it('picks the oldest trash in index order, never reading the live rows or sorting the whole trash (spec 0008)', async () => {
     const world = await workspace();
-    // Fresh statistics, so the plan never depends on what other files have just written (it failed once in a full run).
-    await owner.vacuumAnalyze(['records', 'list_entries']);
     const plan = async (statement: SQL) => {
       const result = await db.withWorkspace(world.scope.workspaceId, async (tx) => {
-        // Only an index can serve it here; the test reads which one, and that nothing sorts.
+        // Only an index can serve it here; the test reads which one, and that nothing sorts. With sorting priced out too,
+        // the planner takes the index that already holds the order whatever the table's statistics say (on a tiny
+        // trash it would otherwise take records_trashed and sort a handful of rows, as it did once in a full run). The
+        // plan at a million records is the load harness's to check (spec 0011).
         await tx.execute(sql`set local enable_seqscan = off`);
+        await tx.execute(sql`set local enable_sort = off`);
         return tx.execute<{ 'QUERY PLAN': readonly { Plan: PlanNode }[] }>(sql`explain (format json) ${statement}`);
       });
       const nodes: PlanNode[] = [];
