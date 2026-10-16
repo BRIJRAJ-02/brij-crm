@@ -133,9 +133,12 @@ export function ViewScreen(props: ViewScreenProps) {
       writeParam(undefined, true);
     },
   });
-  // A link's draft that couldn't be read: say so once, and show the saved view.
+  // A link's draft that couldn't be read: say so once (StrictMode runs this twice in development), and show the
+  // saved view.
+  const toldUnreadable = useRef(false);
   useEffect(() => {
-    if (!opened.unreadable) return;
+    if (!opened.unreadable || toldUnreadable.current) return;
+    toldUnreadable.current = true;
     toasts.toast({ tone: 'info', message: strings.draftUnreadable });
     writeParam(undefined, true);
     // Once, for the link the page opened with.

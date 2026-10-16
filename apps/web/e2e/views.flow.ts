@@ -8,6 +8,12 @@ import { randomUUID } from 'node:crypto';
 import { expect, test, type Page } from '@playwright/test';
 import { addPerson, checkScreen, newWorkspace, objectUrl, signInAgain } from './people.ts';
 
+/**
+ * Whether live updates reach the browsers: Centrifugo admits only the app on :5173, so a run on another port
+ * (`FLOW_LIVE=off`) reloads the second browser where it would otherwise watch the change arrive.
+ */
+const LIVE = process.env.FLOW_LIVE !== 'off';
+
 /** The People grid. */
 const grid = (page: Page) => page.getByRole('grid', { name: 'People' });
 
@@ -18,7 +24,7 @@ async function filterEmails(page: Page, text: string): Promise<void> {
     .getByRole('button', { name: 'Filter', exact: true })
     .click();
   const builder = page.getByRole('dialog', { name: 'Filters' });
-  await builder.getByRole('button', { name: 'Add filter' }).click();
+  await builder.getByRole('button', { name: 'Add filter', exact: true }).click();
   await page.getByRole('menuitem', { name: 'Email addresses' }).click();
   await builder.getByRole('button', { name: 'is', exact: true }).click();
   await page.getByRole('menuitemradio', { name: 'contains', exact: true }).click();
@@ -75,6 +81,7 @@ test.describe('saved views', () => {
     await toolbar.getByRole('button', { name: 'Save', exact: true }).click();
     await expect(writer).not.toHaveURL(/draft=/);
     await expect(toolbar.getByRole('button', { name: 'Discard changes' })).toBeHidden();
+    if (!LIVE) await reader.reload();
     await expect(grid(reader).getByText('Alan Turing', { exact: true })).toBeHidden({ timeout: 10_000 });
     await expect(grid(reader).getByText('Grace Hopper', { exact: true })).toBeVisible();
 
