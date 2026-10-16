@@ -509,6 +509,10 @@ describe("migration 0032's closing check: crm_workspace_ids and crm_sweep (spec 
     ['the app', ['grant execute on function crm_workspace_ids(uuid, integer) to crm_app']],
     ['PUBLIC', ['grant execute on function crm_workspace_ids(uuid, integer) to public']],
     ['the identity login', ['grant execute on function crm_workspace_ids(uuid, integer) to crm_identity']],
+    [
+      'the identity login through crm_worker, even with no inherit',
+      ['grant crm_worker to crm_identity with inherit false, set true'],
+    ],
     ['an overload', ['create function crm_workspace_ids(integer) returns integer language sql as $f$ select 1 $f$']],
   ])('refuses the listing reached by %s', async (_name, setup) => {
     await expect(checkAfter(setup)).rejects.toThrow(/crm_workspace_ids must be owned by crm_sweep/);

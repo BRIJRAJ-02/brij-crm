@@ -94,6 +94,9 @@ begin
     )
     or has_function_privilege('crm_app', listing, 'EXECUTE')
     or has_function_privilege('crm_identity', listing, 'EXECUTE')
+    -- has_function_privilege follows INHERIT only: a login could still SET ROLE crm_worker and call it.
+    or pg_has_role('crm_app', 'crm_worker', 'MEMBER')
+    or pg_has_role('crm_identity', 'crm_worker', 'MEMBER')
     or not has_function_privilege('crm_worker', listing, 'EXECUTE') then
     raise exception 'crm_workspace_ids must be owned by crm_sweep and executable by crm_worker alone';
   end if;
