@@ -12,6 +12,13 @@ export function DateEditor({ attribute, value, surface, onCommit, error }: Edito
   const [draft, setDraft] = useState<string | null>(typeof value === 'string' ? value : null);
   const committed = useRef(draft);
   const [message, setMessage] = useState<string | undefined>(undefined);
+  // A value changed from outside (live, or the screen refusing an edit) shows, as the title and records do.
+  const incoming = typeof value === 'string' ? value : null;
+  const [shownValue, setShownValue] = useState(incoming);
+  if (incoming !== shownValue) {
+    setShownValue(incoming);
+    setDraft(incoming);
+  }
   const isCompact = isCompactSurface(surface);
   const commit = (next: string | null) => {
     if (next === committed.current) return;
@@ -22,6 +29,7 @@ export function DateEditor({ attribute, value, surface, onCommit, error }: Edito
     }
     setMessage(undefined);
     committed.current = next;
+    setShownValue(next);
     onCommit(result.value);
   };
   const shown = message ?? error;

@@ -9,6 +9,7 @@ import { arraySource, type ListSource } from '../lib/list-source.ts';
 import type { IconName } from '../atoms/Icon/icons.ts';
 import { Menu, MenuTrigger } from '../molecules/Menu/Menu.tsx';
 import { Select } from '../molecules/Select/Select.tsx';
+import { focusLater } from '../lib/focus-later.ts';
 import styles from './ReferencePicker.module.css';
 import { strings } from './strings.ts';
 
@@ -91,6 +92,7 @@ export function ReferencePicker<D extends Reference>({
 }: ReferencePickerProps<D>) {
   const labelId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState(startQuery ?? '');
   const [isOpen, setOpen] = useState(false);
   useEffect(() => {
@@ -162,6 +164,7 @@ export function ReferencePicker<D extends Reference>({
   );
   return (
     <div
+      ref={rootRef}
       className={styles.root}
       data-compact={(isCompact && !isInline) || undefined}
       data-inline={isInline || undefined}
@@ -182,7 +185,15 @@ export function ReferencePicker<D extends Reference>({
                 icon="x"
                 label={strings.remove(display.name === '' ? name : display.name)}
                 onPress={() => {
+                  const place = chosen.findIndex((item) => keyOf(item) === keyOf(display));
                   onChange(chosen.filter((item) => keyOf(item) !== keyOf(display)));
+                  // The pressed button goes with its chip: focus moves to the next chip's, the one before, or the
+                  // picker's button, never to the page or the dialog's Close.
+                  focusLater(() => {
+                    const removes = rootRef.current?.querySelectorAll<HTMLButtonElement>('ul > li button');
+                    const list = removes === undefined ? [] : [...removes];
+                    return list[Math.min(place, list.length - 1)] ?? triggerRef.current;
+                  });
                 }}
               />
             </li>

@@ -26,9 +26,10 @@ export function RecordReferenceEditor({
   );
   const [message, setMessage] = useState<string | undefined>(undefined);
   // A value changed from outside (live, or the screen refusing a pick) shows: the chips follow it.
-  const [shownValue, setShownValue] = useState(value);
-  if (value !== shownValue) {
-    setShownValue(value);
+  const incoming = JSON.stringify(value ?? null);
+  const [shownValue, setShownValue] = useState(incoming);
+  if (incoming !== shownValue) {
+    setShownValue(incoming);
     setChosen(asList<RecordReferenceValue>(value).map((record) => recordDisplayOf(record, displays)));
   }
   const shown = message ?? error;
@@ -58,6 +59,8 @@ export function RecordReferenceEditor({
         }
         setMessage(undefined);
         setChosen(next);
+        // What it shows now is this commit: a value put back from outside (a refusal) differs from it, and shows.
+        setShownValue(JSON.stringify(result.value ?? null));
         onCommit(result.value);
       }}
     />
