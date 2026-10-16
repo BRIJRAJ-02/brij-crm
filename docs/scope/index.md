@@ -28,7 +28,7 @@ _These are recommendations to keep your build orderly, not requirements. Skip an
 - [Collaboration](collaboration.md): presence, shared notes, notifications, comments · 4 planned
 - [Data in and out](data-in-out.md): import, export, merge, files, search, API, webhooks, backups · 7 planned
 - [Business and operations](business-and-ops.md): monitoring, scale, plans, operator console, onboarding, billing · 7 planned
-- [Integrations](integrations.md): email, calendar, round robin, booking, sending, sequences, enrichment, forms, Slack, Zapier, other CRMs · 10 planned
+- [Integrations](integrations.md): email, calendar, round robin, booking, sending, sequences, enrichment, forms, Slack, Zapier, other CRMs · 1 in progress, 9 planned
 - [Intelligence](intelligence.md): automations, AI assistant, AI attributes · 3 planned
 
 ## At a glance
@@ -88,7 +88,7 @@ Build order is the order of the rows below (a feature added later takes the next
 | 45 | Send email from records | Slice 12 | [Integrations](integrations.md) | planned |
 | 46 | Sequences | Slice 13 | [Integrations](integrations.md) | planned |
 | 47 | Enrichment | Slice 14 | [Integrations](integrations.md) | planned |
-| 48 | Forms | Slice 15 | [Integrations](integrations.md) | planned |
+| 48 | Forms | Slice 15 | [Integrations](integrations.md) | in-progress |
 | 49 | Slack and Zapier | Slice 15 | [Integrations](integrations.md) | planned |
 | 50 | CRM connectors | Slice 16 | [Integrations](integrations.md) | planned |
 | 51 | Lists and pipelines | Slice 17 | [Data engine](engine.md) | planned |

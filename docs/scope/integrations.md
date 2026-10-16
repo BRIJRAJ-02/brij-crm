@@ -45,10 +45,20 @@ Fill in company and person details automatically from a domain or email address.
 
 ## Slice 15: Forms, Slack and Zapier
 
-### 48. Forms · needs a decision · GA
+### 48. Forms · GA · in-progress
 Public web forms that feed the CRM: each submission becomes linked records, lands on their timelines, gets an owner, and can hand the visitor straight to a booking page.
 **Done when:** a member builds a form from an object's attributes, each question using that attribute's one field design and validation rules, with show or hide logic and multiple steps, and previews it; publishing shares it as a link or embeds it on a website (inline or popup), and edits stay in a draft until republished; one submission creates or updates several linked records (the person matched on email, their company matched on the email's domain, and optionally a deal or a list entry), never overwriting what someone typed unless the form says to; hidden fields capture UTM tags and the page the form sat on, and answers can be prefilled from the link; each submission is kept on the form and on the records' timelines, can be given an owner by round robin (#58), can notify chosen members, and can route the visitor to a booking page (#59) picked by their answers; spam and bots are filtered without a puzzle for most people, consent text is recorded with each submission, and submissions count against the plan.
-- [ ] Design it (spec): `/architect forms`
+- [x] Design it (spec): `/architect forms`
+- [ ] Build it: `/develop forms`
+  - [ ] Milestone 1: a hosted form makes a person (builder, versions, public submit, bot checks, processing job, timeline), AC-545 to AC-566, AC-583 to AC-587
+  - [ ] Milestone 2: linked records, owners, notices, booking routing, review and spam flows, plan caps, consent, AC-547, AC-551, AC-559 to AC-579
+  - [ ] Milestone 3: forms on any website (sites, embed script, popups, capture, browser retry, file questions, custom domains), AC-587 to AC-593
+  - [ ] Milestone 4: analytics and consented tracking (counters, funnel, drop off, sources, outcomes, page views on timelines), AC-580 to AC-582, AC-594 to AC-596
+- [ ] Verify it: `/check verify forms`
+- [ ] Test it: `/test forms`
+- [ ] Review it (fresh model): `/check review forms`
+- [ ] Document it: `/document forms`
+Spec [0023](../specs/0023-forms/index.md)
 
 ### 49. Slack and Zapier · needs a decision
 Connect the CRM to the tools customers already use.
