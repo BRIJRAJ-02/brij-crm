@@ -15,6 +15,7 @@ import { FAR_LIMIT, farReferences, liveEntries } from './deletion.ts';
 import { checkId, isUuid, uuidArray } from './ids.ts';
 import { limitsOf, RESTORE_WINDOW, takeRecordSlots } from './limits.ts';
 import { readRecords, type RecordView } from './records.ts';
+import { loadAttributes } from './values.ts';
 import { isRefusal, postgresError, refuse } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
 import { hideRecordsKeys, setRecordKeysLive, showRecordsKeys } from './sort-keys.ts';
@@ -35,7 +36,7 @@ import {
 } from './write.ts';
 import { inWorkspace } from '../access/run.ts';
 import { isOpen, objectLevel, type Access } from '../access/policy.ts';
-import { checkObject, farVisibleSql, UNKNOWN_OBJECT, visibleRecords } from '../access/visibility.ts';
+import { checkObject, farVisibleSql, hidesActors, UNKNOWN_OBJECT, visibleRecords } from '../access/visibility.ts';
 
 /** The most records one inline delete or restore changes (spec 0022): more is refused `CONFIG_INVALID`. */
 export const MAX_INLINE_RECORDS = 500;
@@ -498,7 +499,8 @@ export async function restoreBatch(
       );
       const rows = locked.rows.filter((row) => seen.has(row.id));
       if (rows.length === 0) throw refuse('NOT_FOUND', BATCH_GONE);
-      if (locked.rows.length > MAX_INLINE_RECORDS) throw refuse('CONFIG_INVALID', TOO_MANY_INLINE);
+      // Counted over what the member sees, so the answer never hints at records hidden from them.
+      if (rows.length > MAX_INLINE_RECORDS) throw refuse('CONFIG_INVALID', TOO_MANY_INLINE);
       return restoreLocked(
         context,
         rows.map((row) => row.id),
@@ -517,7 +519,8 @@ export interface TrashEntry {
   /** Its name and look (spec 0004, AC-19): "Unnamed <singular>" when the name is empty or hidden from the reader. */
   readonly display: RecordView['display'];
   readonly deletedAt: string;
-  readonly deletedBy: { readonly type: 'member' | 'api_key' | 'automation' | 'system'; readonly id: string | null };
+  /** Absent where a field rule hides Created by or Updated by on the object from the reader (spec 0017). */
+  readonly deletedBy?: { readonly type: 'member' | 'api_key' | 'automation' | 'system'; readonly id: string | null };
   /** When the daily cleanup removes it for good: 30 days after the delete. */
   readonly expiresAt: string;
 }
@@ -528,6 +531,9 @@ export interface TrashPage {
   readonly nextCursor?: string;
 }
 
+/** What a cursor that doesn't name a page of the trash answers. */
+const CURSOR_BAD = "That page of the trash can't be read. Start again from the top.";
+
 /** A page cursor: the last row's delete time (Postgres's JSON text, to the microsecond) and id. */
 function encodeTrashCursor(at: string, id: string): string {
   return Buffer.from(JSON.stringify([at, id]), 'utf8').toString('base64url');
@@ -535,7 +541,7 @@ function encodeTrashCursor(at: string, id: string): string {
 
 /** The keyset a cursor names, or `FILTER_INVALID` when it doesn't decode. */
 function decodeTrashCursor(cursor: string): { readonly at: string; readonly id: string } {
-  const bad = () => refuse('FILTER_INVALID', "That page of the trash can't be read. Start again from the top.");
+  const bad = () => refuse('FILTER_INVALID', CURSOR_BAD);
   let parsed: unknown;
   try {
     parsed = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
@@ -632,15 +638,32 @@ export async function queryTrash(
   const after = input.cursor === undefined ? undefined : decodeTrashCursor(input.cursor);
   return inWorkspace(scope, async (tx) => {
     const where = await trashScope(tx, scope.access, objectId);
-    const found = await tx.execute<{
-      id: string;
-      object_id: string;
-      at: string;
-      deleted_at: string;
-      expires_at: string;
-      by_type: 'member' | 'api_key' | 'automation' | 'system';
-      by_id: string | null;
-    }>(trashPageQuery(where, after, limit + 1));
+    const found = await tx
+      .execute<{
+        id: string;
+        object_id: string;
+        at: string;
+        deleted_at: string;
+        expires_at: string;
+        by_type: 'member' | 'api_key' | 'automation' | 'system';
+        by_id: string | null;
+      }>(trashPageQuery(where, after, limit + 1))
+      .catch((error: unknown) => {
+        // A cursor of the right shape naming a time that doesn't exist (31 February): Postgres refuses the cast.
+        const code = postgresError(error)?.code;
+        if (after !== undefined && code !== undefined && ['22007', '22008', '22003', '22P02'].includes(code)) {
+          throw refuse('FILTER_INVALID', CURSOR_BAD);
+        }
+        throw error;
+      });
+    // Who deleted a record is left out where a field rule hides who changed its object's records (spec 0017).
+    const objectIds = [...new Set(found.rows.map((row) => row.object_id))];
+    const hidesBy = new Set<string>();
+    if (!isOpen(scope.access)) {
+      for (const id of objectIds) {
+        if (hidesActors(scope.access, [...(await loadAttributes(tx, id)).values()])) hidesBy.add(id);
+      }
+    }
     const rows = found.rows.slice(0, limit);
     const views = await readRecords(
       tx,
@@ -658,7 +681,9 @@ export async function queryTrash(
           objectId: row.object_id,
           display,
           deletedAt: row.deleted_at,
-          deletedBy: { type: row.by_type, id: row.by_type === 'system' ? null : row.by_id },
+          ...(hidesBy.has(row.object_id)
+            ? {}
+            : { deletedBy: { type: row.by_type, id: row.by_type === 'system' ? null : row.by_id } }),
           expiresAt: row.expires_at,
         },
       ];

@@ -616,3 +616,75 @@ describe('the trash by index (spec 0022, the three partial indexes)', () => {
     expect(await indexes(restoreLockQuery(inBatch(batchId), 501))).toContain('records_trash_batch');
   });
 });
+
+describe('the trash and hidden records (spec 0009, the security review)', () => {
+  const role = { type: 'role' as const, role: 'member' };
+
+  it('refuses a hidden record’s restore as gone, naming nothing, and leaves it out of an undo', async () => {
+    const w = await world();
+    const ada = await person(w, 'Ada');
+    const acme = (await createRecord(w.scope, { objectId: w.companies, values: { [w.company('name')]: 'Acme' } }))
+      .recordId;
+    const batchId = newId();
+    await deleteRecords(w.scope, { objectId: w.people, recordIds: [ada], batchId });
+    await deleteRecords(w.scope, { objectId: w.companies, recordIds: [acme], batchId: newId() });
+    const noPeople = rescope(w.scope, {
+      actor: { type: 'member', id: newId() },
+      role: 'member',
+      rules: {
+        levels: [{ subject: role, target: { type: 'object', objectId: w.people }, level: 'none' }],
+        records: [],
+      },
+    });
+    expect(await restoreRecords(noPeople, { recordIds: [ada] })).toEqual([
+      {
+        recordId: ada,
+        state: 'refused',
+        refusal: { code: 'NOT_FOUND', message: 'That record was deleted more than 30 days ago.' },
+      },
+    ]);
+    expect(await refusalOf(restoreBatch(noPeople, { batchId }))).toMatchObject({ code: 'NOT_FOUND' });
+    const ownOnly = rescope(w.scope, {
+      actor: { type: 'member', id: newId() },
+      role: 'member',
+      rules: {
+        levels: [],
+        records: [{ subject: role, objectId: w.people, attributeId: w.person('created_by'), kind: 'own' }],
+      },
+    });
+    expect((await restoreRecords(ownOnly, { recordIds: [ada] }))[0]).toEqual({
+      recordId: ada,
+      state: 'refused',
+      refusal: { code: 'NOT_FOUND', message: 'That record was deleted more than 30 days ago.' },
+    });
+  });
+
+  it('leaves out who deleted a record where a field rule hides Updated by on its object (spec 0017)', async () => {
+    const w = await world();
+    const ada = await person(w, 'Ada');
+    await deleteRecords(w.scope, { objectId: w.people, recordIds: [ada], batchId: newId() });
+    const hidden = rescope(w.scope, {
+      actor: { type: 'member', id: newId() },
+      role: 'member',
+      rules: {
+        levels: [
+          {
+            subject: role,
+            target: { type: 'attribute', objectId: w.people, attributeId: w.person('updated_by') },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+    const [item] = (await queryTrash(hidden)).items;
+    expect(item?.recordId).toBe(ada);
+    expect(item?.deletedBy).toBeUndefined();
+  });
+
+  it('answers a cursor naming a time that does not exist FILTER_INVALID', async () => {
+    const w = await world();
+    const cursor = Buffer.from(JSON.stringify(['2024-02-31T00:00:00Z', newId()]), 'utf8').toString('base64url');
+    expect(await refusalOf(queryTrash(w.scope, { cursor }))).toMatchObject({ code: 'FILTER_INVALID' });
+  });
+});

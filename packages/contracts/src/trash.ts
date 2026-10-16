@@ -21,7 +21,8 @@ export const TrashItem = z.object({
   objectId: z.uuid(),
   display: RecordRefDisplay,
   deletedAt: Timestamp,
-  deletedBy: ActorReferenceValue,
+  /** Absent where a field rule hides Created by or Updated by on the record's object from the reader (spec 0017). */
+  deletedBy: ActorReferenceValue.optional(),
   expiresAt: Timestamp,
 });
 /** One record in the trash. */
