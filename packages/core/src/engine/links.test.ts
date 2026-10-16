@@ -1503,6 +1503,8 @@ describe('deletion', () => {
 
   it('picks the oldest trash in index order, never reading the live rows or sorting the whole trash (spec 0008)', async () => {
     const world = await workspace();
+    // Fresh statistics, so the plan never depends on what other files have just written (it failed once in a full run).
+    await owner.vacuumAnalyze(['records', 'list_entries']);
     const plan = async (statement: SQL) => {
       const result = await db.withWorkspace(world.scope.workspaceId, async (tx) => {
         // Only an index can serve it here; the test reads which one, and that nothing sorts.
