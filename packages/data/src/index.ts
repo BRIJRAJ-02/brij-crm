@@ -1346,6 +1346,12 @@ export function createDataLayer({
             (mine) => mine.memberId,
             () => undefined,
           ),
+        // From the cached objects list: a records event rereads tasks only when it renames their records.
+        primaryOf: (workspace, objectId) =>
+          listObjects(workspace).then(
+            (list) => list.find((object) => object.id === objectId)?.primaryAttributeId ?? undefined,
+            () => undefined,
+          ),
       }),
     );
     return tasks;

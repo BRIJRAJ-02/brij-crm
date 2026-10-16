@@ -104,6 +104,8 @@ export interface TasksDeps {
   readonly memberOf?: (workspace: string) => Promise<string | undefined>;
   /** 0 to 1, for the spread of a settle a live event asked for (tests pass their own). */
   readonly random?: () => number;
+  /** An object's primary attribute (its records' names), so a records event rereads tasks only on a rename. */
+  readonly primaryOf?: (workspace: string, objectId: string) => Promise<string | undefined>;
 }
 
 /** What a task list shows now. */
@@ -123,6 +125,8 @@ export interface TaskListState {
   readonly newIds: ReadonlySet<string>;
   /** More pages wait past the loaded ones. */
   readonly hasMore: boolean;
+  /** The next page is being read (a "Show more" shows it pending). */
+  readonly loadingMore: boolean;
   /** How many tasks are loaded (the rest of `source.count` draws as skeletons). */
   readonly loaded: number;
   readonly error?: DataError;
@@ -369,13 +373,18 @@ export function createTasksStore(deps: TasksDeps) {
         .then(
           (found) => {
             put(workspace, found);
+            for (const task of found) for (const list of listsOf(workspace)) list.place(task);
             const answered = new Set(found.map((task) => task.id));
             drop(
               workspace,
               chunk.filter((id) => !answered.has(id) && !isBusy(workspace, id)),
             );
           },
-          () => undefined,
+          () => {
+            // Not read (a blip, a limit): the lists holding them read their pages again when they settle.
+            const named = new Set(chunk);
+            for (const list of listsOf(workspace)) if (list.holdsAny(named)) list.dirty(true);
+          },
         )
         .finally(() => {
           const more: string[] = [];
@@ -404,7 +413,6 @@ export function createTasksStore(deps: TasksDeps) {
   };
 
   function makeList(workspace: string, recordId: string, status: TaskStatus) {
-    const key = `${workspace}\u0000${recordId}\u0000${status}`;
     let ids: string[] = [];
     let cursor: string | undefined;
     let total: TaskTotal | undefined;
@@ -424,7 +432,11 @@ export function createTasksStore(deps: TasksDeps) {
     let stale = false;
     // Each read's turn: an older answer landing after a newer one is dropped.
     let turn = 0;
+    // The furthest row a screen has shown: a settle reads up to it and a page more, not every page loaded.
+    let shownTo = 0;
+    let cancelMoreRetry: (() => void) | undefined;
     const listeners = new Set<() => void>();
+    const settleReach = () => Math.max(TASK_PAGE, Math.min(ids.length, shownTo + TASK_PAGE));
 
     const sameTotal = (next: TaskTotal | undefined) =>
       next === undefined || (total !== undefined && total.count === next.count && total.atLeast === next.atLeast);
@@ -444,6 +456,7 @@ export function createTasksStore(deps: TasksDeps) {
         },
         getKey: (task) => task.id,
         onRangeChange: (range) => {
+          shownTo = Math.max(shownTo, range.end);
           if (range.end >= shown.length && cursor !== undefined && moreFailures < MORE_TRIES) void more();
         },
       };
@@ -453,6 +466,7 @@ export function createTasksStore(deps: TasksDeps) {
       source: source(),
       newIds,
       hasMore: false,
+      loadingMore: false,
       loaded: 0,
     };
     const announce = () => {
@@ -461,6 +475,7 @@ export function createTasksStore(deps: TasksDeps) {
         source: source(),
         newIds,
         hasMore: cursor !== undefined,
+        loadingMore,
         loaded: ids.length,
         ...(total === undefined ? {} : { total }),
         ...(error === undefined ? {} : { error }),
@@ -474,6 +489,7 @@ export function createTasksStore(deps: TasksDeps) {
       const mineTurn = turn;
       const run = async () => {
         const read: string[] = [];
+        const seen = new Set<string>();
         let next: string | undefined;
         let counted: TaskTotal | undefined;
         do {
@@ -487,12 +503,16 @@ export function createTasksStore(deps: TasksDeps) {
           });
           if (mineTurn !== turn) return;
           put(workspace, page.items);
-          read.push(...page.items.map((task) => task.id).filter((id) => !read.includes(id)));
+          for (const task of page.items) {
+            if (seen.has(task.id)) continue;
+            seen.add(task.id);
+            read.push(task.id);
+          }
           counted ??= page.total;
           next = page.nextCursor;
         } while (next !== undefined && read.length < upTo);
         // Tasks this tab is still creating aren't in the answer yet: they stay first, still new, until they land.
-        const pending = ids.filter((id) => creatingIn(workspace).has(id) && !read.includes(id));
+        const pending = ids.filter((id) => creatingIn(workspace).has(id) && !seen.has(id));
         ids = [...pending, ...read];
         cursor = next;
         if (!sameTotal(counted) && counted !== undefined) {
@@ -521,14 +541,21 @@ export function createTasksStore(deps: TasksDeps) {
       });
     };
 
-    const more = async () => {
+    const more = async (): Promise<void> => {
       if (cursor === undefined || loadingMore || state !== 'ready') return;
+      cancelMoreRetry?.();
+      cancelMoreRetry = undefined;
       loadingMore = true;
+      announce();
       const from = cursor;
       const mineTurn = turn;
       try {
         const page = await deps.api.list({ workspace, recordId, status, cursor: from });
-        if (mineTurn !== turn) return;
+        loadingMore = false;
+        if (mineTurn !== turn) {
+          announce();
+          return;
+        }
         put(workspace, page.items);
         const have = new Set(ids);
         ids = [...ids, ...page.items.map((task) => task.id).filter((id) => !have.has(id))];
@@ -536,16 +563,33 @@ export function createTasksStore(deps: TasksDeps) {
         moreFailures = 0;
         announce();
       } catch (failed) {
+        loadingMore = false;
         moreFailures += 1;
-        // Said once; tried again on the next scroll, after a wait that doubles, at most `MORE_TRIES` times in a row.
-        if (moreFailures === 1) deps.notify({ tone: 'danger', message: toDataError(failed).message });
-      } finally {
-        later(
-          () => {
-            loadingMore = false;
-          },
-          moreFailures === 0 ? 0 : Math.min(30_000, 1_000 * 2 ** (moreFailures - 1)),
-        );
+        announce();
+        // Said once, with Retry; while a screen shows the list it tries again by itself, waiting 2 s and doubling
+        // (at most 30 s), `MORE_TRIES` times in a row.
+        if (moreFailures === 1) {
+          deps.notify({
+            tone: 'danger',
+            message: toDataError(failed).message,
+            action: {
+              label: TASK_WORDS.retry,
+              onAction: () => {
+                moreFailures = 0;
+                void more();
+              },
+            },
+          });
+        }
+        if (retained > 0 && moreFailures < MORE_TRIES) {
+          cancelMoreRetry = later(
+            () => {
+              cancelMoreRetry = undefined;
+              void more();
+            },
+            Math.min(30_000, 2_000 * 2 ** (moreFailures - 1)),
+          );
+        }
       }
     };
 
@@ -557,7 +601,25 @@ export function createTasksStore(deps: TasksDeps) {
         stale = true;
         return;
       }
-      void readTop(Math.max(ids.length, TASK_PAGE));
+      void readTop(settleReach());
+    };
+
+    /**
+     * Whether a task belongs before the list's last loaded task in its order:
+     * open by due date (none last), then made, then id; done by when it was
+     * done, newest first, then id.
+     */
+    const before = (task: TaskView, other: TaskView): boolean => {
+      if (status === 'done') {
+        const a = task.doneAt ?? '';
+        const b = other.doneAt ?? '';
+        return a !== b ? a > b : task.id < other.id;
+      }
+      const a = task.dueOn ?? '\uffff';
+      const b = other.dueOn ?? '\uffff';
+      if (a !== b) return a < b;
+      if (task.createdAt !== other.createdAt) return task.createdAt < other.createdAt;
+      return task.id < other.id;
     };
 
     const list = {
@@ -582,6 +644,26 @@ export function createTasksStore(deps: TasksDeps) {
       },
       /** Settles now (a resync). */
       settleNow: settle,
+      /**
+       * A task someone else made or linked here, read at once on its event
+       * (AC-432): it takes its place in the list's order when it falls inside
+       * the loaded rows, or the end when every row is loaded; the settle that
+       * follows confirms it.
+       */
+      place(task: TaskView) {
+        if (state !== 'ready' || ids.includes(task.id)) return;
+        if (task.isDone !== (status === 'done')) return;
+        if (!task.records.some((record) => record.recordId === recordId)) return;
+        const held = bodiesOf(workspace);
+        const at = ids.findIndex((id) => {
+          const other = held.get(id);
+          return other !== undefined && before(task, other);
+        });
+        if (at === -1 && cursor !== undefined) return;
+        ids = at === -1 ? [...ids, task.id] : [...ids.slice(0, at), task.id, ...ids.slice(at)];
+        if (total !== undefined) total = { ...total, count: total.count + 1 };
+        announce();
+      },
       /** A task this tab made: first, marked new, until the list settles after it lands. */
       prepend(taskId: string) {
         if (state !== 'ready' || ids.includes(taskId)) return;
@@ -609,8 +691,6 @@ export function createTasksStore(deps: TasksDeps) {
           retained += 1;
           cancelUnused?.();
           cancelUnused = undefined;
-          // Let go of while a screen still held its handle (Back to a page whose loader ran again): back in the map.
-          if (lists.get(key) !== list) lists.set(key, list);
           if (retained === 1) {
             release = deps.watch(workspace);
             // A screen showing it is reason enough to read it: its first page, or the pages it let go of.
@@ -618,7 +698,7 @@ export function createTasksStore(deps: TasksDeps) {
               first = readTop(TASK_PAGE);
             } else if (stale) {
               stale = false;
-              void readTop(Math.max(ids.length, TASK_PAGE));
+              void readTop(settleReach());
             }
           }
           let released = false;
@@ -629,10 +709,16 @@ export function createTasksStore(deps: TasksDeps) {
             if (retained > 0) return;
             release?.();
             release = undefined;
-            // Shown by nobody for a while: its ids go, and it reads afresh if a screen shows it again.
+            cancelMoreRetry?.();
+            cancelMoreRetry = undefined;
+            // Shown by nobody for a while: its ids go (it stays the one list for its key), and it reads afresh
+            // if a screen shows it again.
             cancelUnused = later(() => {
-              if (lists.get(key) === list) lists.delete(key);
+              ids = [];
+              cursor = undefined;
+              shownTo = 0;
               stale = true;
+              announce();
               sweep(workspace);
             }, UNUSED_MS);
           };
@@ -642,6 +728,7 @@ export function createTasksStore(deps: TasksDeps) {
           moreFailures = 0;
           return more();
         },
+
         retry: () => {
           state = ids.length === 0 ? 'loading' : state;
           announce();
@@ -942,9 +1029,13 @@ export function createTasksStore(deps: TasksDeps) {
         return;
       }
       const held = basesOf(workspace);
+      // Bodies held are read again; one no screen holds yet is read at once too when a loaded list of a record the
+      // event names could show it (someone else's new task shows within a second, AC-432).
+      const named = new Set(event.recordIds);
+      const shows = listsOf(workspace).some((list) => named.has(list.recordId));
       refetch(
         workspace,
-        event.taskIds.filter((id) => held.has(id)),
+        event.taskIds.filter((id) => shows || held.has(id)),
       );
       dirtyRecords(workspace, event.recordIds, true);
       deps.timelines(workspace, event.recordIds);
@@ -964,12 +1055,29 @@ export function createTasksStore(deps: TasksDeps) {
         });
         return;
       }
-      const named = new Set(event.recordIds);
-      const linking = [...basesOf(workspace).values()]
-        .filter((task) => task.records.some((record) => named.has(record.recordId)))
-        .map((task) => task.id);
-      refetch(workspace, linking);
-      dirtyRecords(workspace, [...(event.deletedIds ?? []), ...(event.restoredIds ?? [])], true);
+      const lifecycle = [...(event.deletedIds ?? []), ...(event.restoredIds ?? [])];
+      dirtyRecords(workspace, lifecycle, true);
+      const reread = (recordIds: readonly string[]) => {
+        const named = new Set(recordIds);
+        refetch(
+          workspace,
+          [...basesOf(workspace).values()]
+            .filter((task) => task.records.some((record) => named.has(record.recordId)))
+            .map((task) => task.id),
+        );
+      };
+      // Trashed or restored records change which links their tasks show.
+      reread(lifecycle);
+      // A rename shows in the chips: only an event naming the object's primary attribute (or naming no attribute)
+      // rereads the tasks linking its records, never every edit to a linked record.
+      if (event.recordIds.length === 0) return;
+      if (event.attributeIds.length === 0) {
+        reread(event.recordIds);
+        return;
+      }
+      void (deps.primaryOf?.(workspace, event.objectId) ?? Promise.resolve(undefined)).then((primary) => {
+        if (primary !== undefined && event.attributeIds.includes(primary)) reread(event.recordIds);
+      });
     },
     /** Everything held of the workspace is read again (a resync after a gap the outbox no longer covers). */
     resync(workspace: string) {

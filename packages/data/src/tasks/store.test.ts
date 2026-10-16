@@ -79,7 +79,11 @@ function setupWithGate(server: Map<string, TaskView>) {
 
 function setup(
   server: Map<string, TaskView>,
-  hooks: { readonly beforeUpdate?: () => Promise<void>; readonly beforeCreate?: () => Promise<void> } = {},
+  hooks: {
+    readonly beforeUpdate?: () => Promise<void>;
+    readonly beforeCreate?: () => Promise<void>;
+    readonly list?: (page: { readonly cursor?: string }) => TaskPage;
+  } = {},
 ) {
   const calls: string[] = [];
   const timers: { work: () => void; ms: number; live: boolean }[] = [];
@@ -94,9 +98,13 @@ function setup(
     return { items, total: { count: items.length, atLeast: false } };
   };
   const api: TasksApi = {
-    list: ({ recordId, status }) => {
+    list: ({ recordId, status, cursor }) => {
       calls.push(`list ${status}`);
-      return Promise.resolve(listOf(recordId, status));
+      try {
+        return Promise.resolve(hooks.list?.(cursor === undefined ? {} : { cursor }) ?? listOf(recordId, status));
+      } catch (error) {
+        return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+      }
     },
     get: ({ ids }) => {
       calls.push(`get ${ids.join(',')}`);
@@ -156,6 +164,7 @@ function setup(
     now: () => Date.parse('2026-10-12T10:00:00.000Z'),
     memberOf: () => Promise.resolve(ME),
     random: () => 0,
+    primaryOf: () => Promise.resolve('name'),
   });
   /** Runs every live timer of `ms`, as if that long passed. */
   const elapse = async (ms: number) => {
@@ -459,5 +468,72 @@ describe('the tasks store (spec 0019)', () => {
     await flush();
     expect(calls).toContain('list done');
     expect(done.getSnapshot()).toMatchObject({ status: 'ready', loaded: 1, hasMore: false });
+  });
+
+  it('shows a task someone else made on the record before any settle, in its place', async () => {
+    const early = task(1, { dueOn: '2026-10-01' });
+    const late = task(2, { dueOn: '2026-12-01' });
+    const server = new Map([early, late].map((each) => [each.id, each]));
+    const { store, calls } = setupWithGate(server);
+    const open = store.forRecord(WS, ACME, 'open');
+    open.retain();
+    await open.ready();
+    const theirs = task(3, { title: 'Theirs', dueOn: '2026-11-01' });
+    server.set(theirs.id, theirs);
+    store.changed(WS, {
+      seq: 9,
+      at: '2026-10-12T10:00:00.000Z',
+      kind: 'tasks',
+      recordIds: [ACME],
+      taskIds: [theirs.id],
+    });
+    await flush();
+    expect(calls.filter((call) => call === 'list open')).toHaveLength(1);
+    expect(titles(open.getSnapshot())).toEqual(['Task 1', 'Theirs', 'Task 2']);
+  });
+
+  it('rereads linked tasks for a rename only, not for every edit to a linked record', async () => {
+    const one = task(1);
+    const server = new Map([[one.id, one]]);
+    const { store, calls } = setupWithGate(server);
+    const open = store.forRecord(WS, ACME, 'open');
+    open.retain();
+    await open.ready();
+    store.recordsChanged(WS, {
+      seq: 3,
+      at: '2026-10-12T10:00:00.000Z',
+      kind: 'records',
+      objectId: 'o1',
+      recordIds: [ACME],
+      attributeIds: ['stage'],
+    });
+    await flush();
+    expect(calls.some((call) => call.startsWith('get'))).toBe(false);
+  });
+
+  it('tries a failed next page again by itself while shown, saying so once with Retry', async () => {
+    const tasks = Array.from({ length: 52 }, (_, n) => task(n + 1));
+    const server = new Map(tasks.map((each) => [each.id, each]));
+    let fail = true;
+    const { store, notices, elapse } = setup(server, {
+      list: (page) => {
+        if (page.cursor === undefined) {
+          return { items: tasks.slice(0, 50), nextCursor: 'c1', total: { count: 52, atLeast: false } };
+        }
+        if (fail) throw refused('API_UNAVAILABLE', 'You’re offline.');
+        return { items: tasks.slice(50) };
+      },
+    });
+    const open = store.forRecord(WS, ACME, 'open');
+    open.retain();
+    await open.ready();
+    open.getSnapshot().source.onRangeChange({ start: 0, end: 50 });
+    await flush();
+    expect(notices).toHaveLength(1);
+    expect(notices[0]?.retry).toBeDefined();
+    fail = false;
+    await elapse(2_000);
+    expect(open.getSnapshot().loaded).toBe(52);
+    expect(notices).toHaveLength(1);
   });
 });
