@@ -44,6 +44,9 @@ export const LINK_FORBIDDEN = "You can't link a task to a record you can't chang
 export const UNKNOWN_MEMBER = "That member isn't in this workspace.";
 /** What a 21st link answers. */
 export const LINKS_FULL = `A task links at most ${String(TASK_RECORDS_MAX)} records.`;
+/** Past this place a task's links close up again (a smallint holds 32,767). */
+export const POSITION_RENUMBER = 30_000;
+
 /** What a cursor the server didn't make answers, on the `cursor` field. */
 export const TASK_CURSOR_MESSAGE = 'That task cursor is not valid here. Start again from the top.';
 
@@ -81,6 +84,23 @@ export interface ListTasksInput {
 const millis = (column: string) => sql.raw(`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`);
 /** A moment with microseconds, for cursors, so two tasks made in one millisecond still page apart. */
 const micros = (column: string) => sql.raw(`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`);
+
+/** What a principal that isn't a member (an API key) answers when its data level doesn't reach tasks. */
+const NOT_FOR_KEYS = 'This key can’t work with tasks.';
+
+/**
+ * Tasks have no object of their own, so a principal that isn't a member (an
+ * API key, later an automation) reaches them only through its data level on
+ * every object: `read` to read them, `write` to change them (fail closed: a
+ * key at none sees no task, not even one with no links). Members and the
+ * system go through the task rule alone.
+ */
+function principalReaches(access: Access, need: 'read' | 'write'): boolean {
+  const { kind } = access.principal;
+  if (kind === 'member' || kind === 'system') return true;
+  const level = access.data.defaultObject;
+  return need === 'read' ? level === 'read' || level === 'write' : level === 'write';
+}
 
 /** The member the principal is, if a member: the assignee rule reads it. */
 function memberOf(access: Access): string | undefined {
@@ -324,6 +344,7 @@ export async function createTask(
   hooks: readonly AfterWrite[] = [],
 ): Promise<TaskView> {
   checkScope(scope);
+  if (!principalReaches(scope.access, 'write')) throw refuse('FORBIDDEN', NOT_FOR_KEYS);
   if (!isUuidV7(input.id)) throw inputInvalid('id', 'The task id must be a UUID v7.');
   const id = canonicalId(input.id);
   const title = checkTitle(input.title);
@@ -392,6 +413,8 @@ export async function updateTask(
   hooks: readonly AfterWrite[] = [],
 ): Promise<TaskView> {
   checkScope(scope);
+  if (!principalReaches(scope.access, 'read')) throw refuse('NOT_FOUND', UNKNOWN_TASK);
+  if (!principalReaches(scope.access, 'write')) throw refuse('FORBIDDEN', NOT_FOR_KEYS);
   const taskId = checkId(input.taskId, UNKNOWN_TASK);
   const title = input.title === undefined ? undefined : checkTitle(input.title);
   const dueOn = input.dueOn === undefined || input.dueOn === null ? input.dueOn : checkDueOn(input.dueOn);
@@ -427,6 +450,8 @@ export async function updateTask(
       // Links: removed only when the writer can see them; added only when not linked already.
       const current = new Set(row.record_ids);
       const removed = removing.filter((id) => current.has(id) && seen.has(id));
+      // A link the writer can't see answers as an unknown record, as it would anywhere else: never "already linked".
+      if (adding.some((id) => current.has(id) && !seen.has(id))) throw refuse('NOT_FOUND', UNKNOWN_RECORD);
       const added = adding.filter((id) => !current.has(id));
       if (current.size - removed.length + added.length > TASK_RECORDS_MAX) {
         throw refuse('LIMIT_REACHED', LINKS_FULL);
@@ -441,7 +466,21 @@ export async function updateTask(
         const positions = await tx.execute<Pick<LinkRow, 'position'>>(
           sql`select coalesce(max(position), -1)::int as position from task_records where task_id = ${taskId}::uuid`,
         );
-        const after = positions.rows[0]?.position ?? -1;
+        let after = positions.rows[0]?.position ?? -1;
+        // Each add appends past the highest place; past POSITION_RENUMBER (links removed and added for years),
+        // the links close up to 0..n-1 in their order first, under the task's lock, so a smallint never overflows.
+        if (after + added.length > POSITION_RENUMBER) {
+          const renumbered = await tx.execute<{ n: number }>(sql`
+            update task_records l set position = (o.n - 1)::smallint
+            from (
+              select record_id, row_number() over (order by position, record_id) as n
+              from task_records where task_id = ${taskId}::uuid
+            ) o
+            where l.task_id = ${taskId}::uuid and l.record_id = o.record_id
+            returning o.n::int as n
+          `);
+          after = renumbered.rows.length - 1;
+        }
         await tx.execute(sql`
           insert into task_records (workspace_id, task_id, record_id, position, created_by_type, created_by_id, created_by_member_id)
           select ${scope.workspaceId}::uuid, ${taskId}::uuid, x.id, (${after} + x.n)::smallint, ${actor.type}, ${actor.id}::uuid, ${memberId}::uuid
@@ -478,7 +517,7 @@ export async function getTasks(scope: EngineScope, input: { readonly ids: readon
     throw refuse('CONFIG_INVALID', `Read at most ${String(TASK_GET_MAX)} tasks at once.`);
   }
   const ids = [...new Set(input.ids.filter(isUuid).map(canonicalId))];
-  if (ids.length === 0) return [];
+  if (ids.length === 0 || !principalReaches(scope.access, 'read')) return [];
   return inWorkspace(scope, async (tx) => [...(await readTaskViews(tx, scope, ids))]);
 }
 
@@ -500,6 +539,17 @@ function decodeTaskCursor(cursor: string, status: TaskStatus): TaskCursor {
   // Moments the server wrote: fixed width UTC with microseconds, so a forged one never reaches a cast.
   const moment = bound.data.status === 'open' ? bound.data.createdAt : bound.data.doneAt;
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/.test(moment)) throw inputInvalid('cursor', TASK_CURSOR_MESSAGE);
+  // A real moment from year 1 on (Postgres has no year 0, and refuses month 13 or the 32nd): it round trips.
+  const stamp = Date.parse(moment);
+  const badDay = bound.data.status === 'open' && bound.data.dueOn?.startsWith('0000') === true;
+  if (
+    badDay ||
+    Number.isNaN(stamp) ||
+    new Date(stamp).toISOString().slice(0, 19) !== moment.slice(0, 19) ||
+    moment.startsWith('0000')
+  ) {
+    throw inputInvalid('cursor', TASK_CURSOR_MESSAGE);
+  }
   return bound.data;
 }
 
@@ -547,6 +597,7 @@ export async function listTasks(scope: EngineScope, input: ListTasksInput): Prom
   const status = input.status;
   const after = input.cursor === undefined ? undefined : decodeTaskCursor(input.cursor, status);
   const recordId = checkId(input.scope.recordId, UNKNOWN_RECORD);
+  if (!principalReaches(scope.access, 'read')) throw refuse('NOT_FOUND', UNKNOWN_RECORD);
   return inWorkspace(scope, async (tx) => {
     await checkListedRecord(tx, scope.access, recordId);
     const from = sql`from task_records l join tasks t on t.workspace_id = l.workspace_id and t.id = l.task_id

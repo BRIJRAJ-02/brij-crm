@@ -7,7 +7,7 @@ import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
 import type { AccessRules } from '../access/policy.ts';
 import { getActivity } from '../engine/activity.ts';
-import { deleteRecord } from '../engine/deletion.ts';
+import { deleteRecord, eraseRecord } from '../engine/deletion.ts';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { isInputError, isRefusal } from '../engine/refusals.ts';
@@ -16,7 +16,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { rescope, testScope } from '../testing.ts';
 import { readTaskFacts } from './facts.ts';
-import { createTask, getTasks, listTasks, updateTask } from './tasks.ts';
+import { createTask, getTasks, listTasks, POSITION_RENUMBER, updateTask } from './tasks.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -311,6 +311,79 @@ describe('updateTask (AC-433, AC-434, AC-447, AC-448)', () => {
   });
 });
 
+describe('the security review (spec 0019)', () => {
+  it('answers re-linking a hidden record as an unknown record, never as already linked', async () => {
+    const w = await workspace();
+    const ada = await w.person('Ada');
+    const acme = await w.company('Acme');
+    const task = await createTask(w.scope, {
+      id: newId(),
+      title: 'Mixed',
+      recordIds: [acme, ada],
+      assigneeMemberId: w.bea,
+    });
+    const blind = w.as(w.bea, w.level(w.people, 'none'));
+    expect(await refusalOf(updateTask(blind, { taskId: task.id, addRecordIds: [ada] }))).toEqual({
+      code: 'NOT_FOUND',
+      message: 'That record does not exist.',
+    });
+    expect(await refusalOf(updateTask(blind, { taskId: task.id, addRecordIds: [newId()] }))).toEqual({
+      code: 'NOT_FOUND',
+      message: 'That record does not exist.',
+    });
+  });
+
+  it('keeps tasks from an API key whose data level doesn’t reach them, links or none', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const loose = await createTask(w.scope, { id: newId(), title: 'No links' });
+    const key = (scopes: readonly string[]) => rescope(w.scope, { actor: { type: 'api_key', id: newId() }, scopes });
+    const none = key([]);
+    expect(await getTasks(none, { ids: [loose.id] })).toEqual([]);
+    expect(await refusalOf(listTasks(none, { scope: { recordId: acme }, status: 'open' }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(await refusalOf(createTask(none, { id: newId(), title: 'Mine' }))).toMatchObject({ code: 'FORBIDDEN' });
+    expect(await refusalOf(updateTask(none, { taskId: loose.id, title: 'Mine' }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    const reader = key(['data.read']);
+    expect(await getTasks(reader, { ids: [loose.id] })).toHaveLength(1);
+    expect(await refusalOf(updateTask(reader, { taskId: loose.id, title: 'Mine' }))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    const writer = key(['data.write']);
+    expect((await updateTask(writer, { taskId: loose.id, title: 'Keyed' })).title).toBe('Keyed');
+  });
+
+  it('lets a record linked to a task be erased: the link goes, the task stays', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const task = await createTask(w.scope, { id: newId(), title: 'Survives', recordIds: [acme] });
+    await eraseRecord(w.scope, { recordId: acme });
+    const [left] = await getTasks(w.scope, { ids: [task.id] });
+    expect(left?.recordCount).toBe(0);
+  });
+
+  it('closes a task’s link places up before they could overflow', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const ada = await w.person('Ada');
+    const task = await createTask(w.scope, { id: newId(), title: 'Long lived', recordIds: [acme] });
+    await db.withWorkspace(w.scope.workspaceId, (tx) =>
+      tx.execute(sql`update task_records set position = ${POSITION_RENUMBER} where task_id = ${task.id}::uuid`),
+    );
+    const after = await updateTask(w.scope, { taskId: task.id, addRecordIds: [ada] });
+    expect(after.records.map((record) => record.recordId)).toEqual([acme, ada]);
+    const places = await db.withWorkspace(w.scope.workspaceId, (tx) =>
+      tx.execute<{ position: number }>(
+        sql`select position from task_records where task_id = ${task.id}::uuid order by position`,
+      ),
+    );
+    expect(places.rows.map((row) => row.position)).toEqual([0, 1]);
+  });
+});
+
 describe('the task rule (AC-447)', () => {
   it('shows a task whose every link is in the trash to its assignee and creator only', async () => {
     const w = await workspace();
@@ -391,7 +464,14 @@ describe('listTasks (AC-435)', () => {
     const tampered = Buffer.from(
       JSON.stringify({ status: 'open', dueOn: null, createdAt: "x'; --", id: newId() }),
     ).toString('base64url');
-    for (const cursor of ['nope', tampered]) {
+    const cursorOf = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url');
+    // Moments and days of the right shape that Postgres can't read: refused on cursor, never a 500.
+    const outOfRange = [
+      cursorOf({ status: 'open', dueOn: null, createdAt: '2026-13-45T00:00:00.000000Z', id: newId() }),
+      cursorOf({ status: 'open', dueOn: '0000-01-01', createdAt: '2026-10-01T00:00:00.000000Z', id: newId() }),
+      cursorOf({ status: 'open', dueOn: null, createdAt: '0000-01-01T00:00:00.000000Z', id: newId() }),
+    ];
+    for (const cursor of ['nope', tampered, ...outOfRange]) {
       expect(await refusalOf(listTasks(w.scope, { scope: { recordId: acme }, status: 'open', cursor }))).toMatchObject({
         code: 'INPUT_INVALID',
         field: 'cursor',
