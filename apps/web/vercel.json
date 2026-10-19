@@ -3,7 +3,10 @@
   "framework": "vite",
   "outputDirectory": "dist",
   "git": { "deploymentEnabled": false },
-  "rewrites": [{ "source": "/((?!api/|api$).*)", "destination": "/index.html" }],
+  "rewrites": [
+    { "source": "/b/:publicKey", "destination": "/book.html" },
+    { "source": "/((?!api/|api$).*)", "destination": "/index.html" }
+  ],
   "headers": [
     {
       "source": "/((?!api/|api$).*)",

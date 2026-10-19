@@ -104,6 +104,30 @@ function uploadSourceMaps(): Plugin[] {
   });
 }
 
+/** The public booking page's addresses (spec 0025): `/b/<publicKey>`, served book.html in dev and preview as Vercel does. */
+const BOOKING_PATH = /^\/b\/[^/?#]+\/?(?:[?#].*)?$/;
+
+/** Serves book.html for `/b/<publicKey>` locally, as vercel.json's rewrite does when deployed. */
+function publicBookingPage(): Plugin {
+  const rewrite = (url: string | undefined): string | undefined =>
+    url !== undefined && BOOKING_PATH.test(url) ? '/book.html' : url;
+  return {
+    name: 'crm:public-booking-page',
+    configureServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        request.url = rewrite(request.url);
+        next();
+      });
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        request.url = rewrite(request.url);
+        next();
+      });
+    },
+  };
+}
+
 export default defineConfig({
   // One `.env` at the repo root for local work.
   envDir: '../..',
@@ -134,6 +158,7 @@ export default defineConfig({
     checkSentryDsn(),
     uploadSourceMaps(),
     deleteSourceMaps(),
+    publicBookingPage(),
   ],
   server: {
     port: 5173,
@@ -147,5 +172,12 @@ export default defineConfig({
     sourcemap: 'hidden',
     // dist/.vite/manifest.json: the first load budget reads the index route's static graph from it.
     manifest: true,
+    // Two pages: the app, and the public booking page (spec 0025), which shares nothing with the app shell.
+    rollupOptions: {
+      input: {
+        app: path.join(import.meta.dirname, 'index.html'),
+        book: path.join(import.meta.dirname, 'book.html'),
+      },
+    },
   },
 });

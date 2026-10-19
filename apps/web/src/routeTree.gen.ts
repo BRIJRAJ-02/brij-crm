@@ -20,6 +20,8 @@ import { Route as WSlugTrashRouteImport } from './routes/w.$slug.trash.tsx'
 import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects.$object.tsx'
 import { Route as WSlugSettingsIndexRouteImport } from './routes/w.$slug.settings.index.tsx'
 import { Route as WSlugSettingsJobsRouteImport } from './routes/w.$slug.settings.jobs.tsx'
+import { Route as WSlugSettingsBookingPagesIndexRouteImport } from './routes/w.$slug.settings.booking-pages.index.tsx'
+import { Route as WSlugSettingsBookingPagesPageIdRouteImport } from './routes/w.$slug.settings.booking-pages.$pageId.tsx'
 import { Route as WSlugSettingsObjectsIndexRouteImport } from './routes/w.$slug.settings.objects.index.tsx'
 import { Route as WSlugObjectsObjectRecordIdIndexRouteImport } from './routes/w.$slug.objects.$object_.$recordId.index.tsx'
 import { Route as WSlugObjectsObjectRecordIdTabRouteImport } from './routes/w.$slug.objects.$object_.$recordId.$tab.tsx'
@@ -82,6 +84,18 @@ const WSlugSettingsJobsRoute = WSlugSettingsJobsRouteImport.update({
   path: '/settings/jobs',
   getParentRoute: () => WSlugRoute,
 } as any)
+const WSlugSettingsBookingPagesIndexRoute =
+  WSlugSettingsBookingPagesIndexRouteImport.update({
+    id: '/settings/booking-pages/',
+    path: '/settings/booking-pages/',
+    getParentRoute: () => WSlugRoute,
+  } as any)
+const WSlugSettingsBookingPagesPageIdRoute =
+  WSlugSettingsBookingPagesPageIdRouteImport.update({
+    id: '/settings/booking-pages/$pageId',
+    path: '/settings/booking-pages/$pageId',
+    getParentRoute: () => WSlugRoute,
+  } as any)
 const WSlugSettingsObjectsIndexRoute =
   WSlugSettingsObjectsIndexRouteImport.update({
     id: '/settings/objects/',
@@ -131,6 +145,8 @@ export interface FileRoutesByFullPath {
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
+  '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
+  '/w/$slug/settings/booking-pages/': typeof WSlugSettingsBookingPagesIndexRoute
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
   '/w/$slug/objects/$object/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
@@ -149,6 +165,8 @@ export interface FileRoutesByTo {
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
   '/w/$slug/settings': typeof WSlugSettingsIndexRoute
+  '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
+  '/w/$slug/settings/booking-pages': typeof WSlugSettingsBookingPagesIndexRoute
   '/w/$slug/settings/objects': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
   '/w/$slug/objects/$object/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
@@ -169,6 +187,8 @@ export interface FileRoutesById {
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
+  '/w/$slug/settings/booking-pages/$pageId': typeof WSlugSettingsBookingPagesPageIdRoute
+  '/w/$slug/settings/booking-pages/': typeof WSlugSettingsBookingPagesIndexRoute
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/objects/$object_/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
   '/w/$slug/objects/$object_/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
@@ -190,6 +210,8 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/jobs'
     | '/w/$slug/settings/'
+    | '/w/$slug/settings/booking-pages/$pageId'
+    | '/w/$slug/settings/booking-pages/'
     | '/w/$slug/settings/objects/'
     | '/w/$slug/objects/$object/$recordId/$tab'
     | '/w/$slug/objects/$object/views/$viewId'
@@ -208,6 +230,8 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/jobs'
     | '/w/$slug/settings'
+    | '/w/$slug/settings/booking-pages/$pageId'
+    | '/w/$slug/settings/booking-pages'
     | '/w/$slug/settings/objects'
     | '/w/$slug/objects/$object/$recordId/$tab'
     | '/w/$slug/objects/$object/views/$viewId'
@@ -227,6 +251,8 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/jobs'
     | '/w/$slug/settings/'
+    | '/w/$slug/settings/booking-pages/$pageId'
+    | '/w/$slug/settings/booking-pages/'
     | '/w/$slug/settings/objects/'
     | '/w/$slug/objects/$object_/$recordId/$tab'
     | '/w/$slug/objects/$object_/views/$viewId'
@@ -323,6 +349,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsJobsRouteImport
       parentRoute: typeof WSlugRoute
     }
+    '/w/$slug/settings/booking-pages/': {
+      id: '/w/$slug/settings/booking-pages/'
+      path: '/settings/booking-pages'
+      fullPath: '/w/$slug/settings/booking-pages/'
+      preLoaderRoute: typeof WSlugSettingsBookingPagesIndexRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/settings/booking-pages/$pageId': {
+      id: '/w/$slug/settings/booking-pages/$pageId'
+      path: '/settings/booking-pages/$pageId'
+      fullPath: '/w/$slug/settings/booking-pages/$pageId'
+      preLoaderRoute: typeof WSlugSettingsBookingPagesPageIdRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/settings/objects/': {
       id: '/w/$slug/settings/objects/'
       path: '/settings/objects'
@@ -374,6 +414,8 @@ interface WSlugRouteChildren {
   WSlugObjectsObjectRoute: typeof WSlugObjectsObjectRoute
   WSlugSettingsJobsRoute: typeof WSlugSettingsJobsRoute
   WSlugSettingsIndexRoute: typeof WSlugSettingsIndexRoute
+  WSlugSettingsBookingPagesPageIdRoute: typeof WSlugSettingsBookingPagesPageIdRoute
+  WSlugSettingsBookingPagesIndexRoute: typeof WSlugSettingsBookingPagesIndexRoute
   WSlugSettingsObjectsIndexRoute: typeof WSlugSettingsObjectsIndexRoute
   WSlugObjectsObjectRecordIdTabRoute: typeof WSlugObjectsObjectRecordIdTabRoute
   WSlugObjectsObjectViewsViewIdRoute: typeof WSlugObjectsObjectViewsViewIdRoute
@@ -388,6 +430,8 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugObjectsObjectRoute: WSlugObjectsObjectRoute,
   WSlugSettingsJobsRoute: WSlugSettingsJobsRoute,
   WSlugSettingsIndexRoute: WSlugSettingsIndexRoute,
+  WSlugSettingsBookingPagesPageIdRoute: WSlugSettingsBookingPagesPageIdRoute,
+  WSlugSettingsBookingPagesIndexRoute: WSlugSettingsBookingPagesIndexRoute,
   WSlugSettingsObjectsIndexRoute: WSlugSettingsObjectsIndexRoute,
   WSlugObjectsObjectRecordIdTabRoute: WSlugObjectsObjectRecordIdTabRoute,
   WSlugObjectsObjectViewsViewIdRoute: WSlugObjectsObjectViewsViewIdRoute,
