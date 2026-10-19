@@ -1020,19 +1020,34 @@ export async function queryPage(scope: EngineScope, query: PageQuery, options: P
   }
 }
 
-/** The body of `queryPage`, inside its workspace transaction; `checkpoint` refuses once the request has gone. */
-async function readPage(
+/** A statement timeout as Postgres reads it: a fixed one, or a number of milliseconds (at least 1). */
+const timeoutText = (timeout: string | number): string =>
+  typeof timeout === 'number' ? `${String(Math.max(1, Math.floor(timeout)))}ms` : timeout;
+
+/**
+ * The body of `queryPage`, inside its workspace transaction; `checkpoint`
+ * refuses once the request has gone. `timeout` overrides the statement
+ * timeout (a board's time left, spec 0021).
+ */
+export async function readPage(
   tx: WorkspaceTx,
   scope: EngineScope,
   query: PageQuery,
   tuning: PageTuning,
   checkpoint: () => void,
+  timeout?: () => number,
 ): Promise<Page> {
-  await tx.execute(sql`set local statement_timeout = ${sql.raw(`'${tuning.timeout ?? STATEMENT_TIMEOUT}'`)}`);
+  const limitTime = () =>
+    tx.execute(
+      sql`set local statement_timeout = ${sql.raw(`'${timeoutText(timeout?.() ?? tuning.timeout ?? STATEMENT_TIMEOUT)}'`)}`,
+    );
+  await limitTime();
   const built = await buildPage(tx, scope, query, tuning.candidates, tuning.search ?? true);
   checkpoint();
+  if (timeout !== undefined) await limitTime();
   const all = await pageRows(tx, built, query.position);
   checkpoint();
+  if (timeout !== undefined) await limitTime();
   const { limit, keyCount, isList } = built;
   const rows = all.slice(0, limit);
   const last = rows.at(-1);
@@ -1095,46 +1110,80 @@ export async function countMatches(
   signal?: AbortSignal,
   tuning: { readonly cap?: number; readonly search?: false } = {},
 ): Promise<MatchCount> {
-  const cap = tuning.cap ?? COUNT_CAP;
   const cancelled = () => refuse('QUERY_CANCELLED', 'The count took too long or was cancelled.');
   try {
-    return await withCancel(scope, 'count', signal, cancelled, async (tx, checkpoint) => {
-      // Set first, so the searches the filter runs while it is prepared are bounded too.
-      await tx.execute(sql`set local statement_timeout = ${sql.raw(`'${STATEMENT_TIMEOUT}'`)}`);
-      // Prepared under the cancel, so an abort cancels the filter's searches too.
-      const { context, level } = await prepare(tx, scope, query, tuning.search ?? true);
-      // A cancel that landed on a search looks like its timeout there, which only narrows that contains.
-      checkpoint();
-      const filter = compileFilter(context, level, query.filter);
-      const { tables, where } = fromParts(context, level);
-      // Under a record rule a count counts only the records the principal sees, through the capped path, like a
-      // filter (spec 0009, AC-143): the stored totals count every record.
-      const filtered =
-        (query.filter !== undefined && query.filter.conditions.length > 0) || levelRule(context, level) !== undefined;
-      if (!filtered) {
-        // The whole object: its live records, index only. The whole list: its entry count, less the live
-        // entries of records in the trash (which keep their slots until the purge).
-        const total =
-          level.listId === null
-            ? sql`select count(*)::int as n from records r where r.object_id = ${level.objectId} and r.deleted_at is null`
-            : sql`
-              select l.entry_count - (
-                select count(*)::int from records t
-                join list_entries e on e.workspace_id = t.workspace_id and e.record_id = t.id
-                where t.deleted_at is not null and e.list_id = ${level.listId} and e.deleted_at is null
-              ) as n from lists l where l.id = ${level.listId}
-            `;
-        const result = await tx.execute<{ n: number }>(total);
-        return { count: result.rows[0]?.n ?? 0, atLeast: false };
-      }
-      const result = await tx.execute<{ n: number }>(
-        sql`select count(*)::int as n from (select 1 from ${tables} where ${where} and ${filter} limit ${cap + 1}) s`,
-      );
-      const n = result.rows[0]?.n ?? 0;
-      return n > cap ? { count: cap, atLeast: true } : { count: n, atLeast: false };
-    });
+    return await withCancel(scope, 'count', signal, cancelled, (tx, checkpoint) =>
+      countIn(tx, scope, query, checkpoint, tuning),
+    );
   } catch (error) {
     if (postgresError(error)?.code === '57014') throw cancelled();
     throw error;
   }
+}
+
+/**
+ * The body of `countMatches`, inside its workspace transaction; `checkpoint`
+ * refuses once the request has gone, and `timeout` overrides the statement
+ * timeout (a board's time left, spec 0021).
+ */
+export async function countIn(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  query: ViewSource & QueryClock & { readonly filter?: FilterGroup },
+  checkpoint: () => void,
+  tuning: { readonly cap?: number; readonly search?: false } = {},
+  timeout?: () => number,
+): Promise<MatchCount> {
+  const cap = tuning.cap ?? COUNT_CAP;
+  const limitTime = () =>
+    tx.execute(sql`set local statement_timeout = ${sql.raw(`'${timeoutText(timeout?.() ?? STATEMENT_TIMEOUT)}'`)}`);
+  // Set first, so the searches the filter runs while it is prepared are bounded too.
+  await limitTime();
+  // Prepared under the cancel, so an abort cancels the filter's searches too.
+  const { context, level } = await prepare(tx, scope, query, tuning.search ?? true);
+  // A cancel that landed on a search looks like its timeout there, which only narrows that contains.
+  checkpoint();
+  if (timeout !== undefined) await limitTime();
+  const filter = compileFilter(context, level, query.filter);
+  const { tables, where } = fromParts(context, level);
+  // Under a record rule a count counts only the records the principal sees, through the capped path, like a
+  // filter (spec 0009, AC-143): the stored totals count every record.
+  const filtered =
+    (query.filter !== undefined && query.filter.conditions.length > 0) || levelRule(context, level) !== undefined;
+  if (!filtered) {
+    // The whole object: its live records, index only. The whole list: its entry count, less the live
+    // entries of records in the trash (which keep their slots until the purge).
+    const total =
+      level.listId === null
+        ? sql`select count(*)::int as n from records r where r.object_id = ${level.objectId} and r.deleted_at is null`
+        : sql`
+          select l.entry_count - (
+            select count(*)::int from records t
+            join list_entries e on e.workspace_id = t.workspace_id and e.record_id = t.id
+            where t.deleted_at is not null and e.list_id = ${level.listId} and e.deleted_at is null
+          ) as n from lists l where l.id = ${level.listId}
+        `;
+    const result = await tx.execute<{ n: number }>(total);
+    return { count: result.rows[0]?.n ?? 0, atLeast: false };
+  }
+  const result = await tx.execute<{ n: number }>(
+    sql`select count(*)::int as n from (select 1 from ${tables} where ${where} and ${filter} limit ${cap + 1}) s`,
+  );
+  const n = result.rows[0]?.n ?? 0;
+  return n > cap ? { count: cap, atLeast: true } : { count: n, atLeast: false };
+}
+
+/**
+ * Whether a count over this view would count every record of the object as
+ * stored (no filter conditions and no record rule for the principal), so a
+ * total may come from the stored keys rather than a capped filtered count.
+ */
+export async function countsWhole(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  query: { readonly objectId: string; readonly filter?: FilterGroup },
+): Promise<boolean> {
+  if (query.filter !== undefined && query.filter.conditions.length > 0) return false;
+  const { context, level } = await prepare(tx, scope, query, false);
+  return levelRule(context, level) === undefined;
 }

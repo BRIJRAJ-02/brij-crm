@@ -83,6 +83,8 @@ export const ACCESS_TABLE = {
   queryRecords: { data: 'read' },
   queryPage: { data: 'read' },
   countMatches: { data: 'read' },
+  // A board's first load (spec 0021): object read, and the filter's field checks through the compiler.
+  queryGroups: { data: 'read' },
   getHistory: { data: 'read' },
   getValuesAsOf: { data: 'read' },
   getTimeInStages: { data: 'read' },
