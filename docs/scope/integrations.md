@@ -9,20 +9,31 @@ Connect a mailbox so conversations land on the right people and companies automa
 **Done when:** a member connects Gmail or Outlook; messages match people by address and companies by domain; missing people and companies can be created; each member chooses whether their mail is shared or private; threads show on timelines, live as mail arrives.
 - [ ] Design it (spec): `/architect email sync`
 
-### 44. Calendar sync · needs a decision · GA
+### 44. Calendar sync · GA · planned
 Meetings show up on the records of the people in them, and booking can read and write each member's calendar.
 **Done when:** a member connects a Google or Outlook calendar; past and upcoming meetings appear on every attendee's timeline, live as they change; unknown attendees can be created as people; each member chooses whether their meetings are shared or private; free and busy times can be read, and events created, moved and cancelled, for round robin and booking (#58, #59); a calendar that disconnects or expires says so and never silently stops.
-- [ ] Design it (spec): `/architect calendar sync`
+- [x] Design it (spec): `/architect calendar sync`
+- [ ] Build it: `/develop calendar sync`
+  - [ ] Milestone 1: Google meetings on timelines
+  - [ ] Milestone 2: live, private and unknown attendees
+  - [ ] Milestone 3: free and busy, and events
+  - [ ] Milestone 4: Outlook
+- Spec [0024](../specs/0024-calendar-sync/index.md)
 
 ### 58. Round robin assignment · needs a decision · GA
 Share new leads and meetings fairly across a team, automatically.
 **Done when:** an admin sets up a rotation of members, with optional weights, caps per day and per member availability (working hours, time off, and calendar free or busy from #44); a new record from a form, a booking or an import can be given an owner by the rotation, or by rules first (for example by region or company size) and the rotation as the fallback; an existing customer goes back to their current owner instead of the rotation; assignment stays fair and never gives the same lead to two members, even when many arrive at once; every assignment says why it went to that member; members see their share and admins can rebalance.
 - [ ] Design it (spec): `/architect round robin assignment`
 
-### 59. Booking pages · needs a decision · GA
+### 59. Booking pages · GA · planned
 Let people outside the workspace book time with a member or a team, and land every booking on the right records.
 **Done when:** a member shares a booking page that offers free slots from their connected calendar (#44), with meeting length, buffers, minimum notice, a booking window and daily limits; a team page books round robin across members (#58) or at a time all required members are free; the visitor picks a slot in their own time zone and answers a few questions; the booking creates the calendar event with a video link where the calendar provides one, matches or creates the person and company, puts the meeting on their timelines, and can create or move a deal; the visitor gets a confirmation, reminders before the meeting, and links to cancel or reschedule; two visitors picking the same slot at once never both get it; abuse is rate limited.
-- [ ] Design it (spec): `/architect booking pages`
+- [x] Design it (spec): `/architect booking pages`
+- [ ] Build it: `/develop booking pages`
+  - [ ] Milestone 1: a personal page books a meeting
+  - [ ] Milestone 2: emails, questions, deals and changing a booking
+  - [ ] Milestone 3: teams and the forms hand off
+- Spec [0025](../specs/0025-booking-pages/index.md)
 
 ### 45. Send email from records · needs a decision
 Write and send email from any person or company, through your own connected mailbox.
