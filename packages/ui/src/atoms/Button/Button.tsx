@@ -1,10 +1,5 @@
-import { useRef, useState, type JSX, type ReactNode, type Ref } from 'react';
-import {
-  Button as AriaButton,
-  MenuTrigger,
-  ToggleButton as AriaToggleButton,
-  type PressEvent,
-} from 'react-aria-components';
+import { lazy, Suspense, useRef, type JSX, type ReactNode, type Ref } from 'react';
+import { Button as AriaButton, ToggleButton as AriaToggleButton, type PressEvent } from 'react-aria-components';
 import { Icon } from '../Icon/Icon.tsx';
 import type { IconName } from '../Icon/icons.ts';
 import { Kbd } from '../Kbd/Kbd.tsx';
@@ -12,9 +7,7 @@ import { ProviderMark, type ProviderName } from '../ProviderMark/ProviderMark.ts
 import { keyShortcuts, type KeyboardPlatform } from '../Kbd/shortcuts.ts';
 import { useKeyboardPlatform } from '../../provider/context.ts';
 import { Spinner } from '../Spinner/Spinner.tsx';
-import { Tooltip } from '../Tooltip/Tooltip.tsx';
 import styles from './Button.module.css';
-import { strings } from './strings.ts';
 
 /** `secondary` (the default) for view controls and Cancel, `primary` for the one action that commits, `danger` for a control that starts a destructive action (Delete in a bar, Archive in settings), `danger-solid` for the final commit that destroys (Delete in a confirm), `ghost` for quiet and undo style actions, `ghost-danger` for a quiet icon button that deletes at once with an Undo (red only under the pointer or focus), `dashed` for "add a condition". */
 export type ButtonVariant = 'secondary' | 'primary' | 'danger' | 'danger-solid' | 'ghost' | 'ghost-danger' | 'dashed';
@@ -167,32 +160,30 @@ export function Button(props: ButtonProps) {
   return <PlainButton {...props} />;
 }
 
+// A cut label's tooltip loads on its own: Tooltip brings React Aria's overlay code, which the first load
+// (the toasts' Buttons) never needs. Until it arrives the plain button stands in, the same element.
+const LazyCutButton = lazy(() => import('./CutButton.tsx').then((module) => ({ default: module.CutButton })));
+
 /** A Button whose label shows whole in a tooltip when it is cut short (`tooltipWhenCut`). */
 function CutButton(props: ButtonProps & { readonly children: string }) {
   const own = useRef<HTMLButtonElement>(null);
-  const [isOpen, setOpen] = useState(false);
   const { ref } = props;
-  const isCut = () => {
-    const label = own.current?.querySelector<HTMLElement>(`.${styles.label ?? ''}`);
-    return label !== null && label !== undefined && label.scrollWidth > label.clientWidth;
-  };
-  return (
-    <Tooltip
-      content={props.children}
-      isOpen={isOpen}
-      onOpenChange={(next) => {
-        setOpen(next && isCut());
+  const button = (
+    <PlainButton
+      {...props}
+      ref={(element: HTMLButtonElement | null) => {
+        own.current = element;
+        if (typeof ref === 'function') ref(element);
+        else if (ref !== undefined && ref !== null) ref.current = element;
       }}
-    >
-      <PlainButton
-        {...props}
-        ref={(element: HTMLButtonElement | null) => {
-          own.current = element;
-          if (typeof ref === 'function') ref(element);
-          else if (ref !== undefined && ref !== null) ref.current = element;
-        }}
-      />
-    </Tooltip>
+    />
+  );
+  return (
+    <Suspense fallback={button}>
+      <LazyCutButton label={props.children} labelClass={styles.label ?? ''} target={own}>
+        {button}
+      </LazyCutButton>
+    </Suspense>
   );
 }
 
@@ -244,63 +235,54 @@ export function ToggleButton(props: ToggleButtonProps) {
   );
 }
 
-/** Props for SplitButton: the main action, and a menu of its variants. */
-export interface SplitButtonProps {
-  /** The main action's label ("Save"). */
-  readonly children: string;
-  readonly onPress?: (event: PressEvent) => void;
-  readonly variant?: 'primary' | 'secondary';
-  readonly kbd?: string | readonly string[];
-  /** The name of the menu half. Defaults to "More options". */
-  readonly menuLabel?: string;
-  /** The menu the chevron opens: a `Menu` holding the variants (Save as new view). */
-  readonly menu: ReactNode;
-  readonly isDisabled?: boolean;
-  readonly isPending?: boolean;
+/** Props for SplitHalf: one half of a SplitButton. */
+export interface SplitHalfProps {
+  /** `start` is the main action, drawn with its label and keycaps; `end` the menu half. */
+  readonly half: 'start' | 'end';
+  readonly variant: 'primary' | 'secondary';
+  readonly kbd?: string | readonly string[] | undefined;
+  /** The menu half's name. */
+  readonly label?: string;
+  readonly onPress?: ((event: PressEvent) => void) | undefined;
+  readonly isDisabled: boolean;
+  readonly isPending: boolean;
+  /** The start half's label, or the end half's chevron. */
+  readonly children: ReactNode;
 }
 
-/** A primary action with a menu of its variants beside it: Save, and Save as new view. */
-export function SplitButton({
-  children,
-  onPress,
-  variant = 'primary',
-  kbd,
-  menuLabel = strings.moreOptions,
-  menu,
-  isDisabled = false,
-  isPending = false,
-}: SplitButtonProps) {
-  const look = { variant, kbd } as const;
+/**
+ * The frame SplitButton joins its two halves in, and each half (SplitHalf). They live here because they wear
+ * Button's own styles; SplitButton itself sits in its own file, so its menu code stays out of the first load.
+ */
+export function SplitFrame({ children }: { readonly children: ReactNode }) {
+  return <div className={styles.split}>{children}</div>;
+}
+
+/** One half of a SplitButton, in Button's look: the main action (`start`) or the menu trigger (`end`). */
+export function SplitHalf({ half, variant, kbd, label, onPress, isDisabled, isPending, children }: SplitHalfProps) {
   const platform = useKeyboardPlatform();
   return (
-    <div className={styles.split}>
-      <AriaButton
-        className={styles.root}
-        isDisabled={isDisabled}
-        isPending={isPending}
-        data-variant={variant}
-        data-size="md"
-        data-split="start"
-        {...shortcutAttribute(kbd, platform)}
-        {...(onPress === undefined ? {} : { onPress })}
-      >
-        <Face face={{ children }} look={look} isPending={isPending} />
-      </AriaButton>
-      <MenuTrigger>
-        <AriaButton
-          className={styles.root}
-          isDisabled={isDisabled}
+    <AriaButton
+      className={styles.root}
+      isDisabled={isDisabled}
+      isPending={isPending}
+      data-variant={variant}
+      data-size="md"
+      data-split={half}
+      {...(label === undefined ? {} : { 'aria-label': label })}
+      {...(half === 'start' ? shortcutAttribute(kbd, platform) : {})}
+      {...(onPress === undefined ? {} : { onPress })}
+    >
+      {half === 'start' ? (
+        <Face
+          face={{ children: typeof children === 'string' ? children : '' }}
+          look={{ variant, ...(kbd === undefined ? {} : { kbd }) }}
           isPending={isPending}
-          aria-label={menuLabel}
-          data-variant={variant}
-          data-size="md"
-          data-split="end"
-        >
-          <Icon name="chevron-down" size="sm" />
-        </AriaButton>
-        {menu}
-      </MenuTrigger>
-    </div>
+        />
+      ) : (
+        children
+      )}
+    </AriaButton>
   );
 }
 

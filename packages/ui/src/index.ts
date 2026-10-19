@@ -11,16 +11,15 @@ export { Badge, type BadgeProps, type BadgeTone } from './atoms/Badge/Badge.tsx'
 export {
   Button,
   ButtonGroup,
-  SplitButton,
   ToggleButton,
   type ButtonGroupProps,
   type ButtonProps,
   type ButtonSize,
   type ButtonVariant,
-  type SplitButtonProps,
   type ToggleButtonProps,
 } from './atoms/Button/Button.tsx';
 export { CopyButton, type CopyButtonProps } from './atoms/Button/CopyButton.tsx';
+export { SplitButton, type SplitButtonProps } from './atoms/Button/SplitButton.tsx';
 export { Checkbox, type CheckboxProps } from './atoms/Checkbox/Checkbox.tsx';
 export { Code, type CodeProps } from './atoms/Code/Code.tsx';
 export { Currency, type CurrencyProps } from './atoms/Currency/Currency.tsx';

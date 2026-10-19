@@ -3,7 +3,8 @@ import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import { expect, fn, waitFor } from 'storybook/test';
 import { hoverFresh, hoverUntilHovered, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { Button, ButtonGroup, SplitButton, ToggleButton } from './Button.tsx';
+import { Button, ButtonGroup, ToggleButton } from './Button.tsx';
+import { SplitButton } from './SplitButton.tsx';
 
 const meta = {
   title: 'Atoms/Button',
@@ -365,6 +366,13 @@ export const SplitStates: Story = {
 /** Held narrower than its label: the label is cut and shows whole in a tooltip; one that fits shows none. */
 export const TooltipWhenCut: Story = {
   parameters: { crm: { screenshot: false } },
+  // The cut label's tooltip loads on demand (it keeps Tooltip out of the first load); load it before the story.
+  loaders: [
+    async () => {
+      await import('./CutButton.tsx');
+      return {};
+    },
+  ],
   render: () => (
     <Stage width="narrow" direction="column">
       <Button icon="calendar" iconRight="chevron-down" isFullWidth tooltipWhenCut>
@@ -376,6 +384,8 @@ export const TooltipWhenCut: Story = {
     </Stage>
   ),
   play: async ({ canvas, userEvent }) => {
+    // Until the tooltip's code has loaded the plain button stands in; wait for the wrapped one.
+    await new Promise((resolve) => setTimeout(resolve, 50));
     await hoverFresh(userEvent, canvas.getByRole('button', { name: 'Last email interaction with the account owner' }));
     await expect(await shownTooltip()).toHaveTextContent('Last email interaction with the account owner');
   },
