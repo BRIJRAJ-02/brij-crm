@@ -6,17 +6,21 @@
 // failing ends failed after Graphile's backoff and leaves no row either; and a
 // job started for later runs at its time, never before.
 import {
+  connectCalendar,
   createRunner,
   createWorkspace,
+  decodeTokenKey,
   defineKind,
   getJob,
   jobKinds,
+  listCalendarConnections,
   newId,
+  removeCalendarConnection,
   startTestJob,
   type Runner,
 } from '@crm/core';
-import { enterAsActor, systemScope, type DailyCleanupInput } from '@crm/core/system';
-import { startJobForTest, testScope } from '@crm/core/testing';
+import { enterAsActor, POLL_INTERVAL_MS, syncConnection, systemScope, type DailyCleanupInput } from '@crm/core/system';
+import { createFakeCalendarProvider, startJobForTest, testScope } from '@crm/core/testing';
 import { createDatabase, openQueueConnection, type Database, type QueueConnection } from '@crm/db';
 import { testQuery } from '@crm/db/testing';
 import * as z from 'zod';
@@ -279,6 +283,65 @@ describe('the job runners on Graphile Worker', () => {
       expect(started).toBeGreaterThanOrEqual(runAt.getTime());
       // Within 5 seconds of its time while the worker is awake (AC-111).
       expect(started - runAt.getTime()).toBeLessThan(5_000);
+    } finally {
+      await runners.stop();
+    }
+  });
+});
+
+describe('calendar sync on the light runner (spec 0024)', () => {
+  it('syncs a newly connected calendar, queues its next poll 15 minutes on, and nothing once it stops', async () => {
+    const scope = await owner();
+    const fake = createFakeCalendarProvider();
+    const tokenKey = decodeTokenKey(Buffer.alloc(32, 4).toString('base64'));
+    const exchanged = await fake.provider.exchangeCode('code:ada@acme.dev', 'https://app.test/callback');
+    // Connecting queues the first sync through crm_enqueue_calendar_sync, in the connect's transaction.
+    const connection = await connectCalendar(scope, { provider: 'google', exchanged, tokenKey });
+    const syncRows = () =>
+      testQuery<{ run_at: Date; key: string | null; locked: boolean }>(
+        ownerUrl,
+        `select run_at, key, locked_at is not null as locked from graphile_worker._private_jobs
+         where payload->>'connectionId' = $1 order by id`,
+        [connection.id],
+      );
+    expect(await syncRows()).toHaveLength(1);
+    const runners = await startJobRunners({
+      queue,
+      runner: coreRunner(20_000),
+      log: quiet,
+      pollInterval: 200,
+      calendar: (input) =>
+        syncConnection(
+          {
+            providers: { google: fake.provider },
+            tokenKey,
+            systemScope: (workspaceId) => systemScope(db, workspaceId),
+            hooks: backgroundHooks(),
+            isFreeDomain: () => false,
+          },
+          input,
+        ),
+    });
+    try {
+      await expect
+        .poll(async () => (await listCalendarConnections(scope))[0]?.status, { timeout: 15_000, interval: 100 })
+        .toBe('connected');
+      // The run handed its row back and queued the next, on the same key, a poll interval away.
+      await expect
+        .poll(async () => (await syncRows()).filter((row) => !row.locked), { timeout: 5_000, interval: 100 })
+        .toHaveLength(1);
+      const [next] = await syncRows();
+      expect(next?.key).toBe(`crm-calendar:${scope.workspaceId}:${connection.id}`);
+      expect((next?.run_at.getTime() ?? 0) - Date.now()).toBeGreaterThan(POLL_INTERVAL_MS - 60_000);
+      expect(fake.calls('listChanges')).toBe(1);
+      // Disconnected: a run brought forward finds it gone and queues nothing more.
+      await removeCalendarConnection(scope, { connectionId: connection.id });
+      await testQuery(
+        ownerUrl,
+        `update graphile_worker._private_jobs set run_at = now() where payload->>'connectionId' = $1`,
+        [connection.id],
+      );
+      await expect.poll(async () => (await syncRows()).length, { timeout: 10_000, interval: 100 }).toBe(0);
     } finally {
       await runners.stop();
     }

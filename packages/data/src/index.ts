@@ -40,6 +40,7 @@ import {
 } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
+import { connectUrl, createCalendarStore, type CalendarView } from './calendar/store.ts';
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
 import {
   createViewsStore,
@@ -76,6 +77,13 @@ import type {
   ViewQuery,
 } from './records/layer.ts';
 
+export type {
+  CalendarConnectionView,
+  CalendarConnections,
+  CalendarSharing,
+  CalendarStatus,
+  MeetingView,
+} from '@crm/contracts';
 export type {
   ActorDisplay,
   ApiRefusal,
@@ -118,7 +126,10 @@ export type {
   ActivityStatus,
   EntrySource,
   LinkedRecordShape,
+  MeetingAttendeeShape,
 } from './activity/feed.ts';
+export type { CalendarState, CalendarView } from './calendar/store.ts';
+export { connectUrl } from './calendar/store.ts';
 export type { Hue, ObjectIcon } from '@crm/contracts/values';
 // The API name rule and the new object's defaults (spec 0012): plain modules with no Zod, so the dialogs share
 // the server's own functions without loading the schema library.
@@ -969,6 +980,24 @@ export function createDataLayer({
       store.changed(workspace, event);
     });
   });
+  // Meetings synced, moved, cancelled or made private (spec 0024, AC-610): the open timelines of the records they
+  // showed on read their first page again; a coarse one (a whole calendar's sync) waits a random moment first, so a
+  // whole team doesn't read in step, and then every open timeline of the workspace reads again.
+  router.on('meetings', (workspace, event) => {
+    if (activity === undefined) return;
+    const timelines = activity;
+    if (event.coarse === true) {
+      spread(`meetings ${workspace}`, () => {
+        void timelines.then((feeds) => {
+          feeds.ownWrite(workspace);
+        });
+      });
+      return;
+    }
+    void timelines.then((feeds) => {
+      feeds.changed(workspace, { objectId: '', recordIds: event.recordIds });
+    });
+  });
   router.onResync((workspace) => {
     jobs.resync(workspace);
     views.resync(workspace);
@@ -1061,6 +1090,18 @@ export function createDataLayer({
       ),
     spread,
     onFinished: onJobFinished,
+  });
+
+  // Calendar sync (spec 0024): the member's connections, Settings › Calendar's one list per workspace.
+  const calendar = createCalendarStore({
+    api: {
+      list: (input) =>
+        beforeRead(input.workspace).then(() => call((options) => api.calendar.connections.list(input, options))),
+      update: (input) => call((options) => api.calendar.connections.update(input, options)),
+      remove: (input) => call((options) => api.calendar.connections.remove(input, options)),
+    },
+    mintId,
+    notify,
   });
 
   // Saved views (spec 0020): one store for the app, a list per object and a body per view.
@@ -2218,6 +2259,25 @@ export function createDataLayer({
         }
         return summary;
       },
+    },
+    calendar: {
+      /**
+       * The member's calendar connections in a workspace (spec 0024): whether
+       * calendar sync is set up here, each connection's status, sharing and
+       * last sync. The same list for every screen; while a screen retains it
+       * (`useCalendar`) and a connection is still syncing, it is read again.
+       */
+      view: (workspace: string): CalendarView => calendar.view(workspace),
+      /** Who sees a connection's meetings: shown at once, put back with a toast if refused. Answers whether it landed. */
+      setSharing: (workspace: string, connectionId: string, sharing: 'shared' | 'private'): Promise<boolean> =>
+        calendar.setSharing(workspace, connectionId, sharing),
+      /** Makes a connection the member's default: shown at once, put back with a toast if refused. */
+      makeDefault: (workspace: string, connectionId: string): Promise<boolean> =>
+        calendar.makeDefault(workspace, connectionId),
+      /** Disconnects a connection: gone at once, back with a toast if refused. Answers whether it landed. */
+      remove: (workspace: string, connectionId: string): Promise<boolean> => calendar.remove(workspace, connectionId),
+      /** Where the browser goes to connect a Google calendar (the API sends it on to Google's consent). */
+      connectUrl: (workspace: string): string => connectUrl(workspace),
     },
     jobs: {
       /**

@@ -68,6 +68,37 @@ export function formatExactTime(timestamp: string, locale: string, timeZone: str
   ).format(new Date(timestamp));
 }
 
+/**
+ * A meeting's span (spec 0024): "Tue, 20 Oct, 09:00 – 09:30" in the time
+ * zone, or for an all day meeting its days ("Tue, 20 Oct"), read in UTC (an
+ * all day meeting is stored from midnight UTC to midnight UTC the day after).
+ */
+export function formatTimeRange(start: string, end: string, allDay: boolean, locale: string, timeZone: string): string {
+  const from = new Date(start);
+  if (allDay) {
+    // The end is the next day's start: the meeting's last day is the moment before it.
+    const last = new Date(Math.max(from.getTime(), new Date(end).getTime() - 1));
+    const days = memoIntl(
+      `days:${locale}`,
+      () => new Intl.DateTimeFormat(locale, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }),
+    );
+    return days.formatRange(from, last);
+  }
+  const span = memoIntl(
+    `span:${locale}:${timeZone}`,
+    () =>
+      new Intl.DateTimeFormat(locale, {
+        weekday: 'short',
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        timeZone,
+      }),
+  );
+  return span.formatRange(from, new Date(Math.max(from.getTime(), new Date(end).getTime())));
+}
+
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
 const DAY = 24 * HOUR;

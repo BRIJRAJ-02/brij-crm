@@ -20,7 +20,12 @@ export type AccessEntry =
   | { readonly anyMember: true }
   | { readonly system: true }
   /** A job's starter or a holder of `jobs.manage` (spec 0008, AC-114); anyone else finds no such job. */
-  | { readonly jobStarter: true };
+  | { readonly jobStarter: true }
+  /**
+   * A member's own calendar connection (spec 0024): anyone else's is
+   * `NOT_FOUND`, and a principal that isn't a member is `FORBIDDEN`.
+   */
+  | { readonly ownConnection: true };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -148,4 +153,11 @@ export const ACCESS_TABLE = {
   createTask: { data: 'write' },
   updateTask: { data: 'write' },
   taskFacts: { system: true },
+  // Calendar sync (spec 0024): a member's own connections only; a record's meetings through the record's door.
+  listCalendarConnections: { anyMember: true },
+  connectCalendar: { ownConnection: true },
+  updateCalendarConnection: { ownConnection: true },
+  removeCalendarConnection: { ownConnection: true },
+  listMeetingsForRecord: { data: 'read' },
+  meetingFacts: { system: true },
 } as const satisfies Record<string, AccessEntry>;

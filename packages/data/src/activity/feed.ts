@@ -87,7 +87,32 @@ export type ActivityEntryShape =
       readonly isDone: boolean;
       /** Its dialog's address, which the screen adds. */
       readonly href?: string;
+    })
+  | (EntryBase & {
+      /**
+       * A meeting the record is in (spec 0024), at its start, as the library's
+       * meeting entry draws it: "Private meeting" with its time only when the
+       * reader doesn't hold a private one (`detailsHidden`).
+       */
+      readonly kind: 'meeting';
+      readonly itemId: string;
+      readonly title: string;
+      readonly startsAt: string;
+      readonly endsAt: string;
+      readonly allDay: boolean;
+      readonly attendees: readonly MeetingAttendeeShape[];
+      readonly videoUrl?: string;
+      readonly detailsHidden: boolean;
     });
+
+/** A meeting's attendee as the library's `MeetingAttendee`: a person's or member's chip (the screen adds its page), else an address. */
+export interface MeetingAttendeeShape {
+  readonly email: string;
+  readonly name?: string;
+  readonly display?: RecordRefDisplay | ActorDisplay;
+  readonly href?: string;
+  readonly response: 'accepted' | 'declined' | 'tentative' | 'needs_action';
+}
 
 /** Entries from outside, as the library's `ListSource` reads them. */
 export interface EntrySource {
@@ -198,6 +223,34 @@ export function toActivityEntry(item: ActivityItem, context: EntryContext): Acti
   if (item.kind === 'task') {
     if (item.itemId === undefined) return undefined;
     return { ...base, kind: 'task', itemId: item.itemId, title: item.title ?? '', isDone: item.isDone === true };
+  }
+  if (item.kind === 'meeting') {
+    const meeting = item.meeting;
+    if (item.itemId === undefined || meeting === undefined) return undefined;
+    return {
+      ...base,
+      kind: 'meeting',
+      itemId: item.itemId,
+      title: meeting.title,
+      startsAt: meeting.startsAt,
+      endsAt: meeting.endsAt,
+      allDay: meeting.allDay,
+      attendees: meeting.attendees.map((attendee): MeetingAttendeeShape => {
+        const display =
+          attendee.person ??
+          (attendee.memberId === undefined
+            ? undefined
+            : actorDisplay({ type: 'member', id: attendee.memberId }, context.members));
+        return {
+          email: attendee.email,
+          ...(attendee.name === undefined ? {} : { name: attendee.name }),
+          ...(display === undefined ? {} : { display }),
+          response: attendee.response,
+        };
+      }),
+      ...(meeting.videoUrl === undefined ? {} : { videoUrl: meeting.videoUrl }),
+      detailsHidden: meeting.detailsHidden,
+    };
   }
   if (item.kind !== 'change' && item.kind !== 'links') return undefined;
   const definition = item.attributeId === undefined ? undefined : context.attributes.get(item.attributeId);

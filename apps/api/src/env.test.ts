@@ -392,3 +392,60 @@ describe("the load harness's timing header (spec 0011, AC-202)", () => {
     expect(problems({ ...local, LOAD_TIMING: 'yes' })).toEqual(['LOAD_TIMING']);
   });
 });
+
+describe('calendar sync (spec 0024)', () => {
+  const key = Buffer.alloc(32, 3).toString('base64');
+  const on = {
+    CALENDAR_SYNC: 'on',
+    GOOGLE_CALENDAR_CLIENT_ID: 'client.apps.googleusercontent.com',
+    GOOGLE_CALENDAR_CLIENT_SECRET: 'secret',
+    CALENDAR_TOKEN_KEY: key,
+  };
+  const worker = {
+    APP_ENV: 'local',
+    DATABASE_URL: 'postgres://app:p@localhost:6432/crm',
+    DATABASE_URL_DIRECT: 'postgres://app:p@localhost:5433/crm',
+  };
+  const workerProblems = (input: Record<string, unknown>) => {
+    const result = WorkerEnv.safeParse(input);
+    return result.success ? [] : result.error.issues.map((issue) => issue.path.join('.'));
+  };
+
+  it('is off unless switched on, asking nothing of the app then', () => {
+    expect(ApiEnv.parse(local).calendar).toBeUndefined();
+    expect(ApiEnv.parse({ ...local, CALENDAR_SYNC: 'off', CALENDAR_TOKEN_KEY: 'not a key' }).calendar).toBeUndefined();
+    expect(WorkerEnv.parse(worker).calendar).toBeUndefined();
+  });
+
+  it('needs the client, its secret and a 32 byte key when on, and keeps them only decoded in `calendar`', () => {
+    expect(problems({ ...local, CALENDAR_SYNC: 'on' }).sort()).toEqual([
+      'CALENDAR_TOKEN_KEY',
+      'GOOGLE_CALENDAR_CLIENT_ID',
+      'GOOGLE_CALENDAR_CLIENT_SECRET',
+    ]);
+    expect(problems({ ...local, ...on, CALENDAR_TOKEN_KEY: Buffer.alloc(16, 1).toString('base64') })).toEqual([
+      'CALENDAR_TOKEN_KEY',
+    ]);
+    const env = ApiEnv.parse({ ...local, ...on });
+    expect(env.calendar).toMatchObject({ clientId: 'client.apps.googleusercontent.com', clientSecret: 'secret' });
+    expect(env.calendar?.tokenKey).toHaveLength(32);
+    expect(env).not.toHaveProperty('CALENDAR_TOKEN_KEY');
+    expect(env).not.toHaveProperty('GOOGLE_CALENDAR_CLIENT_SECRET');
+    expect(WorkerEnv.parse({ ...worker, ...on }).calendar?.tokenKey).toHaveLength(32);
+    expect(workerProblems({ ...worker, CALENDAR_SYNC: 'on' })).toHaveLength(3);
+  });
+
+  it('runs locally on the poll alone, and needs an https webhook origin elsewhere', () => {
+    expect(ApiEnv.parse({ ...local, ...on }).calendar?.webhookOrigin).toBeUndefined();
+    expect(problems({ ...production, ...on })).toEqual(['CALENDAR_WEBHOOK_ORIGIN']);
+    expect(problems({ ...production, ...on, CALENDAR_WEBHOOK_ORIGIN: 'http://api.app.test' })).toEqual([
+      'CALENDAR_WEBHOOK_ORIGIN',
+    ]);
+    expect(problems({ ...production, ...on, CALENDAR_WEBHOOK_ORIGIN: 'https://api.app.test/hooks' })).toEqual([
+      'CALENDAR_WEBHOOK_ORIGIN',
+    ]);
+    expect(
+      ApiEnv.parse({ ...production, ...on, CALENDAR_WEBHOOK_ORIGIN: 'https://api.app.test' }).calendar?.webhookOrigin,
+    ).toBe('https://api.app.test');
+  });
+});

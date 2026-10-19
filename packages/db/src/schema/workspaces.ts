@@ -120,9 +120,15 @@ interface ActorRef {
  * The constraints one actor needs on a tenant table: its shape check, and a
  * foreign key from `*_member_id` to `members` that carries `workspace_id`.
  */
-export function actorConstraints(table: string, role: string, workspace: AnyPgColumn, actor: ActorRef) {
+export function actorConstraints(
+  table: string,
+  role: string,
+  workspace: AnyPgColumn,
+  actor: ActorRef,
+  options: { readonly withCalendar?: boolean } = {},
+) {
   return [
-    actorCheck(`${table}_${role}_actor`, actor),
+    actorCheck(`${table}_${role}_actor`, actor, options),
     foreignKey({
       name: `${table}_${role}`,
       columns: [workspace, actor.memberId],

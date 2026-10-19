@@ -31,6 +31,7 @@ export const EVENT_KINDS = [
   'views',
   'notes',
   'tasks',
+  'meetings',
   'members',
   'access',
   'jobs',
@@ -70,16 +71,34 @@ export interface TaskFact {
   }[];
 }
 
+/**
+ * A meeting's privacy and the records it shows on (spec 0024, AC-611): a
+ * private one shows in full only to the members whose connections hold it;
+ * to everyone else it is "Private meeting", still on its records. A record in
+ * the trash is marked `trashed`, and shows its meetings to nobody.
+ */
+export interface MeetingFact {
+  readonly isPrivate: boolean;
+  readonly holderMemberIds: readonly string[];
+  readonly records: readonly {
+    readonly objectId: string;
+    readonly recordId: string;
+    readonly trashed?: boolean;
+  }[];
+}
+
 /** The facts some kinds need, loaded by the relay once per batch. A missing fact counts as not visible. */
 export interface EventFacts {
   readonly views?: Readonly<Record<string, ViewFact>>;
   readonly tasks?: Readonly<Record<string, TaskFact>>;
+  readonly meetings?: Readonly<Record<string, MeetingFact>>;
 }
 
-/** Which facts a row needs: `views` for views, `tasks` for tasks, none for the rest. */
+/** Which facts a row needs: `views` for views, `tasks` for tasks, `meetings` for meetings, none for the rest. */
 export function eventFacts(row: EventRow): readonly (keyof EventFacts)[] {
   if (row.kind === 'views') return ['views'];
   if (row.kind === 'tasks') return ['tasks'];
+  if (row.kind === 'meetings') return ['meetings'];
   return [];
 }
 
@@ -284,6 +303,34 @@ export function filterEvent(audience: Audience, row: EventRow, facts: EventFacts
       );
       const removed = !sameList(taskIds, row.taskIds) || !sameList(recordIds, row.recordIds);
       return settle({ ...row, taskIds, recordIds, ...(removed ? { coarse: true } : {}) }, removed);
+    }
+    case 'meetings': {
+      const visibleRecord = (record: { readonly objectId: string; readonly trashed?: boolean }) =>
+        record.trashed !== true &&
+        level(record.objectId) !== 'none' &&
+        recordRule({ data: policy }, record.objectId) === undefined;
+      // A private meeting's id only to an audience of its holders; everyone else rereads its records' timelines,
+      // where it shows as "Private meeting" (AC-611). A meeting with no fact (removed) names nothing.
+      const meetingIds = row.meetingIds.filter((id) => {
+        const meeting = factOf(facts.meetings, id);
+        if (meeting === undefined) return false;
+        if (!meeting.isPrivate) return true;
+        return (
+          audience.members.length > 0 &&
+          audience.members.every((member) => meeting.holderMemberIds.includes(member.memberId))
+        );
+      });
+      // Under the open policy a record id names nothing hidden: they all stay, so a removed meeting's records hear
+      // of it. A restricted audience keeps only records it may read through a fact (fail closed).
+      const readable = new Set(
+        row.meetingIds.flatMap((id) =>
+          (factOf(facts.meetings, id)?.records ?? []).filter(visibleRecord).map((record) => record.recordId),
+        ),
+      );
+      const recordIds = restricted ? row.recordIds.filter((id) => readable.has(id)) : row.recordIds;
+      const cut = !sameList(recordIds, row.recordIds);
+      const removed = cut || !sameList(meetingIds, row.meetingIds);
+      return settle({ ...row, meetingIds, recordIds, ...(cut ? { coarse: true } : {}) }, removed);
     }
     case 'members':
     case 'access':

@@ -14,6 +14,11 @@ describe('periodOf', () => {
     expect(periodOf('2026-10-08T13:31:00.000Z', NOW, 'Europe/London', 'en-GB')).toBe('today');
   });
 
+  it('puts a meeting still to come under Upcoming, later today and on later days alike (spec 0024)', () => {
+    expect(periodOf('2026-10-08T16:00:00.000Z', NOW, 'Europe/London', 'en-GB')).toBe('upcoming');
+    expect(periodOf('2026-11-02T09:00:00.000Z', NOW, 'Europe/London', 'en-GB')).toBe('upcoming');
+  });
+
   it('puts earlier days of this week in This week, from the language’s first day', () => {
     // Monday 5 October starts the week in en-GB; Sunday 4 October starts it in en-US.
     expect(periodOf('2026-10-05T09:00:00.000Z', NOW, 'Europe/London', 'en-GB')).toBe('week');

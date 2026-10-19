@@ -123,7 +123,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly five security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly six security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -132,6 +132,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       order by 1
     `);
     expect(definers.rows).toEqual([
+      { name: 'crm_enqueue_calendar_sync', owner: 'crm_queue' },
       { name: 'crm_enqueue_job', owner: 'crm_queue' },
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
@@ -147,6 +148,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       order by 1
     `);
     expect(hardening.rows).toEqual([
+      { name: 'crm_enqueue_calendar_sync', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_job', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
       { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -178,7 +180,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       ['crm_outbox_workspaces(integer, uuid)', 'crm_outbox_prune(timestamp with time zone, integer)'],
       ['app', 'worker'],
     ],
-    ['crm_queue', ['crm_enqueue_job'], ['crm_enqueue_job(uuid, timestamp with time zone)'], ['app']],
+    [
+      'crm_queue',
+      ['crm_enqueue_job', 'crm_enqueue_calendar_sync'],
+      ['crm_enqueue_job(uuid, timestamp with time zone)', 'crm_enqueue_calendar_sync(uuid, timestamp with time zone)'],
+      ['app', 'app'],
+    ],
     ['crm_sweep', ['crm_workspace_ids'], ['crm_workspace_ids(uuid, integer)'], ['worker']],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
@@ -854,6 +861,94 @@ describe('isolation', () => {
     await expect(
       db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'task_records_record' } });
+  });
+  it("reads none of another workspace's calendar rows, and refuses a link to its record (spec 0024)", async () => {
+    /** A connection holding one meeting that shows on one record, made inside the workspace. */
+    const synced = async (workspaceId: string, memberId: string) => {
+      const objectId = await objectIn(workspaceId);
+      const recordId = randomUUID();
+      const connectionId = randomUUID();
+      const meetingId = randomUUID();
+      await db.withWorkspace(workspaceId, async (tx) => {
+        await tx.execute(
+          sql`insert into records (workspace_id, id, object_id, created_by_type, updated_by_type) values (${workspaceId}, ${recordId}, ${objectId}, 'system', 'system')`,
+        );
+        await tx.execute(
+          sql`insert into calendar_connections (workspace_id, id, member_id, provider, account_email, tokens, created_by_type, created_by_id, created_by_member_id, updated_by_type)
+            values (${workspaceId}, ${connectionId}, ${memberId}, 'google', 'ada@example.com', '\\x00'::bytea, 'member', ${memberId}, ${memberId}, 'calendar')`,
+        );
+        await tx.execute(
+          sql`insert into meetings (workspace_id, id, ical_uid, title, starts_at, ends_at, created_by_type, updated_by_type)
+            values (${workspaceId}, ${meetingId}, ${`uid-${meetingId}`}, 'Intro', now(), now(), 'calendar', 'calendar')`,
+        );
+        await tx.execute(
+          sql`insert into meeting_sources (workspace_id, meeting_id, connection_id, provider_event_id, calendar_id) values (${workspaceId}, ${meetingId}, ${connectionId}, 'event-1', 'primary')`,
+        );
+        await tx.execute(
+          sql`insert into meeting_attendees (workspace_id, meeting_id, email, position, match, person_record_id) values (${workspaceId}, ${meetingId}, 'bea@example.com', 0, 'linked', ${recordId})`,
+        );
+        await tx.execute(
+          sql`insert into meeting_records (workspace_id, meeting_id, record_id, via, starts_at) values (${workspaceId}, ${meetingId}, ${recordId}, 'attendee', now())`,
+        );
+        await tx.execute(
+          sql`insert into calendar_settings (workspace_id, created_by_type, updated_by_type) values (${workspaceId}, 'system', 'system')`,
+        );
+      });
+      return { recordId, connectionId, meetingId };
+    };
+    const a = await workspaceWithMember('calendar-a');
+    const b = await workspaceWithMember('calendar-b');
+    const inA = await synced(a.workspaceId, a.memberId);
+    const inB = await synced(b.workspaceId, b.memberId);
+    const read = (table: string) =>
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute<{ workspace_id: string }>(sql.raw(`select workspace_id::text from ${table}`)),
+      );
+    for (const table of [
+      'calendar_connections',
+      'meetings',
+      'meeting_sources',
+      'meeting_attendees',
+      'meeting_records',
+      'calendar_settings',
+    ]) {
+      expect((await read(table)).rows, table).toEqual([{ workspace_id: a.workspaceId }]);
+    }
+    // A link in A to B's record, or to B's meeting: the composite keys find no such rows in A.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into meeting_records (workspace_id, meeting_id, record_id, via, starts_at) values (${a.workspaceId}, ${inA.meetingId}, ${inB.recordId}, 'attendee', now())`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'meeting_records_record' } });
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into meeting_sources (workspace_id, meeting_id, connection_id, provider_event_id, calendar_id) values (${a.workspaceId}, ${inB.meetingId}, ${inA.connectionId}, 'event-2', 'primary')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'meeting_sources_meeting' } });
+    // A record removed for good while a meeting still shows on it fails: the purge removes the links first.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),
+    ).rejects.toMatchObject({ cause: { code: '23503' } });
+    // Only calendar sync and the system act with no id: any other actor type still needs one.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into meetings (workspace_id, ical_uid, title, starts_at, ends_at, created_by_type, updated_by_type) values (${a.workspaceId}, 'uid-x', 'X', now(), now(), 'automation', 'calendar')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23514', constraint: 'meetings_created_by_actor' } });
+    // And a table that admits no calendar actor refuses it.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into tasks (workspace_id, id, title, created_by_type, updated_by_type) values (${a.workspaceId}, ${randomUUID()}, 'Call', 'calendar', 'calendar')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23514', constraint: 'tasks_created_by_actor' } });
   });
 });
 

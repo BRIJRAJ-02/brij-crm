@@ -153,6 +153,7 @@ export {
   type ActivityFeedLayout,
   type ActivityFeedProps,
   type LinkedRecord,
+  type MeetingAttendee,
 } from './modules/ActivityFeed/ActivityFeed.tsx';
 export { AppShell, AppShellContext, type AppShellProps } from './modules/AppShell/AppShell.tsx';
 export { AuthLayout, type AuthLayoutProps } from './modules/AuthLayout/AuthLayout.tsx';

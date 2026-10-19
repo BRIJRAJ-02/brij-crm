@@ -1,11 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { type ErrorCode, errorStatus } from '@crm/contracts';
-import { jobKinds, type JobRegistry, type RuleSource } from '@crm/core';
+import { enterWorkspace, jobKinds, type JobRegistry, type RuleSource } from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import type { AnyRouter } from '@orpc/server';
 import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { AUTH_BASE_PATH, AUTH_ROUTES, type Auth } from './auth/auth.ts';
+import { createCalendarRoutes } from './calendar/routes.ts';
+import { createCalendarServices, type CalendarServices } from './calendar/services.ts';
 import { createEdgeGuard } from './edge.ts';
 import { wakesOnUse, type ApiEnv } from './env.ts';
 import { createReadGate } from './gate.ts';
@@ -92,6 +94,11 @@ export interface AppServices {
   readonly analytics?: Analytics;
   /** The job kinds this API knows (spec 0008): the environment's (`jobKinds`) unless a test passes its own. */
   readonly jobs?: JobRegistry;
+  /**
+   * Calendar sync (spec 0024): the environment's (`CALENDAR_SYNC=on`, Google
+   * on the real network) unless a test passes its own (the fake provider).
+   */
+  readonly calendar?: CalendarServices;
 }
 
 /** The API. `router` is the app's own unless a test passes one. */
@@ -123,6 +130,20 @@ export function createApp({
       : createRealtimeTokens({ secret: env.CENTRIFUGO_TOKEN_SECRET });
   // The monitoring test fault (spec 0010, AC-168): off, its address answers exactly as one that doesn't exist.
   const testFault = env.MONITORING_TEST_FAULT === 'on';
+  // Calendar sync (spec 0024): off unless switched on, so the app boots without its settings.
+  const calendar =
+    services.calendar ?? (env.calendar === undefined ? undefined : createCalendarServices(env.calendar, env.APP_URL));
+  const calendarRoutes = createCalendarRoutes({
+    // The same door the RPC's `member` base opens (orpc.ts), with the same rules.
+    enter: (userId, slug) =>
+      enterWorkspace({ db, identity, log, ...(rules === undefined ? {} : { rules }) }, { userId, slug }),
+    auth,
+    wakeRelay,
+    analytics,
+    calendar,
+    appUrl: env.APP_URL,
+    secure: env.APP_ENV !== 'local',
+  });
 
   const app = new Hono<{ Variables: AppVariables }>().basePath('/api');
 
@@ -203,11 +224,16 @@ export function createApp({
         realtime,
         testFault,
         jobs,
+        calendar,
         ...(rules === undefined ? {} : { rules }),
       },
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();
   }
+
+  // Connecting a calendar (spec 0024): the browser navigates both, so they are plain routes beside the RPC.
+  app.get('/calendar/google/start', (c) => calendarRoutes.start(c));
+  app.get('/calendar/google/callback', (c) => calendarRoutes.callback(c));
 
   // Better Auth's own routes: only the ones sign in uses (`AUTH_ROUTES`), matched on the path as sent, so
   // an encoded or padded path never reaches a route we didn't list.

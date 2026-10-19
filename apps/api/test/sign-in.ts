@@ -10,6 +10,7 @@ import type { AnyRouter, RouterClient } from '@orpc/server';
 import { inject } from 'vitest';
 import * as z from 'zod';
 import { createApp } from '../src/app.ts';
+import type { CalendarServices } from '../src/calendar/services.ts';
 import type { ApiEnv } from '../src/env.ts';
 import { createMailpitMailer } from '../src/mail/mailpit.ts';
 import type { Mailer } from '../src/mail/mailer.ts';
@@ -57,6 +58,7 @@ export function signInApp(
     rules?: RuleSource;
     analytics?: Analytics;
     jobs?: JobRegistry;
+    calendar?: CalendarServices;
   } = {},
 ) {
   const env = testEnv(overrides);
@@ -70,6 +72,7 @@ export function signInApp(
     ...(options.rules ? { rules: options.rules } : {}),
     ...(options.analytics ? { analytics: options.analytics } : {}),
     ...(options.jobs ? { jobs: options.jobs } : {}),
+    ...(options.calendar ? { calendar: options.calendar } : {}),
   });
   return { app: createApp({ services, env, ...(options.router ? { router: options.router } : {}) }), services };
 }

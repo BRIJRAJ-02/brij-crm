@@ -15,6 +15,7 @@ import type { Database, IdentityStore } from '@crm/db';
 import { implement, os } from '@orpc/server';
 import type { ResponseHeadersPluginContext } from '@orpc/server/plugins';
 import type { Auth, SessionUser } from './auth/auth.ts';
+import type { CalendarServices } from './calendar/services.ts';
 import { apiError } from './errors.ts';
 import { log } from './log.ts';
 import type { ReadGate } from './gate.ts';
@@ -66,6 +67,8 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   rules?: RuleSource;
   /** The job kinds this API knows (spec 0008): the test kind only locally and in previews. */
   jobs: JobRegistry;
+  /** Calendar sync (spec 0024): its provider and keys where `CALENDAR_SYNC=on`, else undefined. */
+  calendar: CalendarServices | undefined;
 }
 
 /** What `authed` adds: the signed in person. */

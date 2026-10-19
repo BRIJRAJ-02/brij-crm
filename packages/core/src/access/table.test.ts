@@ -77,6 +77,16 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // system through the `systemScope` it is handed; its once key is a pure helper.
   'runDailyCleanup',
   'maintenanceKey',
+  // Calendar sync (spec 0024): the worker's sync takes its deps and enters as the system through the
+  // `systemScope` it is handed; the rest are pure (provider errors, emails, signed values, the token key).
+  'syncConnection',
+  'isProviderError',
+  'providerError',
+  'normaliseEmail',
+  'signValue',
+  'verifyValue',
+  'deriveKey',
+  'decodeTokenKey',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;
@@ -181,6 +191,31 @@ describe('the walk: a principal without the access is refused', () => {
         return;
       }
       expect(await refusalOf(call(scope, registry, job.id))).toMatchObject({ code: 'NOT_FOUND' });
+    },
+  );
+
+  it.each(entries.filter(([, entry]) => 'ownConnection' in entry).map(([name]) => name))(
+    '%s refuses an API key, and finds no connection of another member (NOT_FOUND)',
+    async (name) => {
+      const { scope, workspaceId, ownerId } = await memberOf('member');
+      const tokenKey = core.decodeTokenKey(Buffer.alloc(32, 7).toString('base64'));
+      const exchanged = {
+        accessToken: 'a',
+        refreshToken: 'r',
+        expiresAt: new Date(Date.now() + 3_600_000).toISOString(),
+        accountEmail: 'owner@example.com',
+      };
+      const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });
+      const theirs = await core.connectCalendar(owner, { provider: 'google', exchanged, tokenKey });
+      const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() } });
+      const call = service(name) as unknown as (...args: unknown[]) => Promise<unknown>;
+      const input =
+        name === 'connectCalendar'
+          ? { provider: 'google', exchanged: { ...exchanged, accountEmail: 'bea@example.com' }, tokenKey }
+          : { connectionId: theirs.id, sharing: 'private' };
+      expect(await refusalOf(call(key, input))).toMatchObject({ code: 'FORBIDDEN' });
+      if (name === 'connectCalendar') return;
+      expect(await refusalOf(call(scope, input))).toMatchObject({ code: 'NOT_FOUND' });
     },
   );
 
@@ -428,6 +463,10 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   getTasks: empty((scope, world) => core.getTasks(scope, { ids: [world.taskId] })),
   listTasks: refused('NOT_FOUND', (scope, world) =>
     core.listTasks(scope, { scope: { recordId: world.recordId }, status: 'open' }),
+  ),
+  // Meetings (spec 0024): a hidden record's meetings are NOT_FOUND, as the record is.
+  listMeetingsForRecord: refused('NOT_FOUND', (scope, world) =>
+    core.listMeetingsForRecord(scope, { recordId: world.recordId }),
   ),
   // Writes, by a principal who may only read People and its list: 403.
   createRecord: refused('FORBIDDEN', (scope, world) => core.createRecord(scope, { objectId: world.people })),

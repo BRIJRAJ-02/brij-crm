@@ -53,9 +53,10 @@ describe('outboxEvent', () => {
     expect(events[3]).toMatchObject({ kind: 'views', viewIds: items });
     expect(events[4]).toMatchObject({ kind: 'notes', noteIds: items, recordIds: records });
     expect(events[5]).toMatchObject({ kind: 'tasks', taskIds: items, recordIds: records });
-    expect(events[6]).toMatchObject({ kind: 'members', memberIds: items });
-    expect(events[7]).toMatchObject({ kind: 'access', memberIds: items });
-    expect(events[8]).toMatchObject({ kind: 'jobs', jobIds: items });
+    expect(events[6]).toMatchObject({ kind: 'meetings', meetingIds: items, recordIds: records });
+    expect(events[7]).toMatchObject({ kind: 'members', memberIds: items });
+    expect(events[8]).toMatchObject({ kind: 'access', memberIds: items });
+    expect(events[9]).toMatchObject({ kind: 'jobs', jobIds: items });
   });
 
   it('carries seq, at and the mutation id, and coarse only when true', () => {

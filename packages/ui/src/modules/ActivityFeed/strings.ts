@@ -2,12 +2,14 @@
 export const strings = {
   loading: 'Loading activity',
   empty: 'No activity yet',
-  emptyBody: 'Changes, notes, tasks and emails show here as they happen.',
+  emptyBody: 'Changes, notes, tasks, emails and meetings show here as they happen.',
   failed: 'Activity didn’t load',
   noAccess: 'You can’t see this activity',
   noAccessBody: 'Ask a workspace admin for access.',
   /** An entry still loading, for screen readers. */
   loadingEntry: 'Loading',
+  /** Above meetings still to come (spec 0024). */
+  upcoming: 'Upcoming',
   today: 'Today',
   yesterday: 'Yesterday',
   week: 'Earlier this week',
@@ -40,4 +42,14 @@ export const strings = {
   clauseSeparator: ', and',
   /** Between a change's old and new value, for screen readers. */
   to: 'to',
+  /** A meeting entry's line, before its title (spec 0024). */
+  meeting: 'Meeting:',
+  /** Before a meeting's attendees, for screen readers. */
+  attendees: 'With',
+  /** An attendee's answer, beside their name, when it isn't yes. */
+  responses: { declined: 'declined', tentative: 'maybe', needs_action: 'no reply' },
+  /** A meeting's video link. */
+  joinVideo: 'Join video call',
+  /** A private meeting the reader doesn't hold: its time only. */
+  privateMeeting: 'Only the people whose calendar holds it see its details.',
 } as const;

@@ -404,6 +404,19 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       get: os.tasks.get.handler(notServed),
       list: os.tasks.list.handler(notServed),
     },
+    calendar: {
+      connections: {
+        list: os.calendar.connections.list.handler(() => ({
+          enabled: false,
+          providers: [],
+          connections: [],
+          max: 3,
+        })),
+        update: os.calendar.connections.update.handler(notServed),
+        remove: os.calendar.connections.remove.handler(notServed),
+      },
+      meetings: { forRecord: os.calendar.meetings.forRecord.handler(() => ({ items: [] })) },
+    },
   });
   const handler = new RPCHandler(router);
   const fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {

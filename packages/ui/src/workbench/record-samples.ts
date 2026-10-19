@@ -76,7 +76,19 @@ export const SAMPLE_ACTIVITY: readonly ActivityEntry[] = [
     from: { amount: '24000', currency: 'USD' },
     to: { amount: '36000', currency: 'USD' },
   },
-  { id: 'e7', kind: 'meeting', at: '2026-09-21T15:00:00.000Z', actor: ADA, title: 'Intro with Northwind' },
+  {
+    id: 'e7',
+    kind: 'meeting',
+    at: '2026-09-21T15:00:00.000Z',
+    actor: ADA,
+    title: 'Intro with Northwind',
+    startsAt: '2026-09-21T15:00:00.000Z',
+    endsAt: '2026-09-21T15:30:00.000Z',
+    attendees: [
+      { email: 'ada@acme.dev', display: ADA, response: 'accepted' },
+      { email: 'jane@northwind.com', name: 'Jane Doe', response: 'accepted' },
+    ],
+  },
   { id: 'e8', kind: 'comment', at: '2026-09-02T11:00:00.000Z', actor: GRACE, excerpt: 'Their renewal is in March.' },
   { id: 'e9', kind: 'created', at: '2025-12-04T09:00:00.000Z', actor: ADA },
 ];
@@ -179,6 +191,70 @@ export const SAMPLE_LINK_ACTIVITY: readonly ActivityEntry[] = [
 
 // The stories' clock is Thursday 8 October 2026.
 /** Open tasks (one overdue, one due today, one tomorrow), one with no assignee, and one done. */
+// The stories' clock is Thursday 8 October 2026, 14:30 in London.
+/**
+ * Meetings on a record (spec 0024): one still to come with every kind of
+ * answer and a video link, an all day one, a private one the reader doesn't
+ * hold, and one past.
+ */
+export const SAMPLE_MEETING_ACTIVITY: readonly ActivityEntry[] = [
+  {
+    id: 'm1',
+    kind: 'meeting',
+    at: '2026-10-13T09:00:00.000Z',
+    actor: ADA,
+    title: 'Renewal review with Northwind',
+    startsAt: '2026-10-13T09:00:00.000Z',
+    endsAt: '2026-10-13T09:45:00.000Z',
+    attendees: [
+      { email: 'ada@acme.dev', display: ADA, response: 'accepted' },
+      { email: 'jane@northwind.com', display: person(1, 'Jane Doe'), href: '/records/jane', response: 'accepted' },
+      { email: 'alan@northwind.com', display: person(3, 'Alan Turing'), href: '/records/alan', response: 'tentative' },
+      { email: 'cfo@northwind.com', name: 'Grace Lee', response: 'needs_action' },
+      { email: 'ops@northwind.com', response: 'declined' },
+    ],
+    videoUrl: 'https://meet.google.com/abc-defg-hij',
+  },
+  {
+    id: 'm2',
+    kind: 'meeting',
+    at: '2026-10-12T00:00:00.000Z',
+    actor: ADA,
+    title: 'Northwind offsite',
+    startsAt: '2026-10-12T00:00:00.000Z',
+    endsAt: '2026-10-14T00:00:00.000Z',
+    allDay: true,
+    attendees: [
+      { email: 'ada@acme.dev', display: ADA, response: 'accepted' },
+      { email: 'jane@northwind.com', display: person(1, 'Jane Doe'), href: '/records/jane', response: 'accepted' },
+    ],
+  },
+  {
+    id: 'm3',
+    kind: 'meeting',
+    at: '2026-10-08T10:00:00.000Z',
+    actor: GRACE,
+    title: 'Private meeting',
+    startsAt: '2026-10-08T10:00:00.000Z',
+    endsAt: '2026-10-08T10:30:00.000Z',
+    attendees: [],
+    detailsHidden: true,
+  },
+  {
+    id: 'm4',
+    kind: 'meeting',
+    at: '2026-10-01T15:00:00.000Z',
+    actor: GRACE,
+    title: 'Intro with Northwind',
+    startsAt: '2026-10-01T15:00:00.000Z',
+    endsAt: '2026-10-01T15:30:00.000Z',
+    attendees: [
+      { email: 'grace@acme.dev', display: GRACE, response: 'accepted' },
+      { email: 'jane@northwind.com', display: person(1, 'Jane Doe'), href: '/records/jane', response: 'accepted' },
+    ],
+  },
+];
+
 export const SAMPLE_TASKS: readonly TaskEntry[] = [
   {
     id: 't1',

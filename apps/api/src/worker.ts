@@ -8,7 +8,15 @@
 // connection at all once idle for `WORKER_IDLE_SLEEP_SECONDS`, so Neon's
 // compute can suspend; the poke and a timer for scheduled work wake it.
 import { jobKinds, type QueueRows } from '@crm/core';
-import { audiences, runDailyCleanup, systemScope, taskFacts, viewFacts } from '@crm/core/system';
+import {
+  audiences,
+  meetingFacts,
+  runDailyCleanup,
+  syncConnection,
+  systemScope,
+  taskFacts,
+  viewFacts,
+} from '@crm/core/system';
 import {
   assertWorkerConnection,
   createDatabase,
@@ -18,7 +26,9 @@ import {
   type QueueConnection,
 } from '@crm/db';
 import { backgroundHooks } from './hooks.ts';
-import { RUNNER_TASKS, startJobRunners } from './jobs/graphile.ts';
+import { createFreeDomains } from './calendar/free-domains.ts';
+import { createGoogleCalendar } from './calendar/google.ts';
+import { runnerTasks, startJobRunners } from './jobs/graphile.ts';
 import { createLifecycle, type AwakeWorker, type Lifecycle } from './jobs/lifecycle.ts';
 import { createJobRunner } from './jobs/runner.ts';
 import { loadEnv, WorkerEnv } from './env.ts';
@@ -106,14 +116,16 @@ const relay =
         // Spec 0009's audiences, read on the pool with the relay's system scope; only while the relay is awake.
         audiences: (workspaceId) => audiences(systemScope(db, workspaceId)),
         // Spec 0009's facts, one read a batch for each kind a row needs: each named view's visibility and creator
-        // (spec 0020), and each tasks row's tasks (spec 0019).
+        // (spec 0020), each tasks row's tasks (spec 0019), and each meetings row's meetings (spec 0024).
         facts: async (workspaceId, rows) => {
           const viewIds = rows.flatMap((row) => (row.kind === 'views' ? row.itemIds : []));
           const taskIds = rows.flatMap((row) => (row.kind === 'tasks' ? row.itemIds : []));
+          const meetingIds = rows.flatMap((row) => (row.kind === 'meetings' ? row.itemIds : []));
           const scope = systemScope(db, workspaceId);
           return {
             ...(viewIds.length === 0 ? {} : { views: await viewFacts(scope, viewIds) }),
             ...(taskIds.length === 0 ? {} : { tasks: await taskFacts(scope, taskIds) }),
+            ...(meetingIds.length === 0 ? {} : { meetings: await meetingFacts(scope, meetingIds) }),
           };
         },
         publishBatch: createCentrifugoPublisher(env.centrifugo).publishBatch,
@@ -156,6 +168,30 @@ const runner = createJobRunner({
   log,
 });
 
+// Calendar sync (spec 0024), when CALENDAR_SYNC=on: each connection's sync runs on the light runner as the system,
+// calling Google outside every transaction; a sync that stored events wakes the relay. Off, its queued rows wait.
+const calendarSync =
+  env.calendar === undefined
+    ? undefined
+    : (() => {
+        const settings = env.calendar;
+        const deps = {
+          providers: {
+            google: createGoogleCalendar({ clientId: settings.clientId, clientSecret: settings.clientSecret }),
+          },
+          tokenKey: settings.tokenKey,
+          systemScope: (workspaceId: string) => systemScope(db, workspaceId),
+          hooks: backgroundHooks(),
+          isFreeDomain: createFreeDomains(),
+        };
+        return async (input: { readonly workspaceId: string; readonly connectionId: string }) => {
+          const outcome = await syncConnection(deps, input);
+          if (outcome.kind === 'synced') relay?.wake();
+          return outcome;
+        };
+      })();
+if (env.calendar === undefined) log.info('calendar.off', { reason: 'CALENDAR_SYNC is not on' });
+
 /** Opens the queue pool and starts the runners: what waking means. The NOTIFY check proves the direct host first. */
 async function openWorker(hooks: {
   readonly onActivity: () => void;
@@ -180,6 +216,7 @@ async function openWorker(hooks: {
       onFault: (error) => captureFault(error, { task: 'jobs' }),
       onActivity: hooks.onActivity,
       onFailed: hooks.onFailed,
+      ...(calendarSync === undefined ? {} : { calendar: calendarSync }),
       // The daily cleanup (milestone 3): the outbox, the dead queue rows, then one maintenance job a workspace.
       daily: (input) =>
         runDailyCleanup(
@@ -203,7 +240,7 @@ async function openWorker(hooks: {
         opened.sleepCheck({
           outbox: relay !== undefined,
           stuck: relay?.stuckWorkspaces() ?? [],
-          tasks: RUNNER_TASKS,
+          tasks: runnerTasks(calendarSync !== undefined),
         }),
       close: async () => {
         // The slices in hand finish their batch and hand their jobs back first.

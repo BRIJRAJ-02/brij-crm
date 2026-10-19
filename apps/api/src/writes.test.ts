@@ -48,6 +48,8 @@ const READS: ReadonlySet<string> = new Set([
   'trash.count',
   'tasks.get',
   'tasks.list',
+  'calendar.connections.list',
+  'calendar.meetings.forRecord',
 ]);
 
 let db: Database;
@@ -155,6 +157,47 @@ async function linkPair(m: Member) {
     mutationId: newId(),
   });
   return { personId, companyId, team };
+}
+
+/**
+ * A calendar connection of the member's with one synced meeting that shows on a person they made: stored by hand
+ * (the owner role), as a sync would leave them, since connecting is the OAuth redirect, not a procedure.
+ */
+async function heldMeeting(m: Member): Promise<{ connectionId: string; meetingId: string; recordId: string }> {
+  const recordId = await personFor(m);
+  const [member] = await testQuery<{ id: string }>(
+    ownerUrl,
+    `select id::text from members where workspace_id = $1 and status = 'active' limit 1`,
+    [m.workspace.id],
+  );
+  const memberId = member?.id ?? '';
+  const connectionId = newId();
+  const meetingId = newId();
+  await testQuery(
+    ownerUrl,
+    `insert into calendar_connections (workspace_id, id, member_id, provider, account_email, status, tokens,
+       created_by_type, created_by_id, created_by_member_id, updated_by_type, updated_by_id, updated_by_member_id)
+     values ($1, $2, $3, 'google', 'ada@acme.dev', 'connected', '\\x00'::bytea, 'member', $3, $3, 'member', $3, $3)`,
+    [m.workspace.id, connectionId, memberId],
+  );
+  await testQuery(
+    ownerUrl,
+    `insert into meetings (workspace_id, id, ical_uid, title, starts_at, ends_at, created_by_type, updated_by_type)
+     values ($1, $2, 'intro@google.com', 'Intro', now(), now(), 'calendar', 'calendar')`,
+    [m.workspace.id, meetingId],
+  );
+  await testQuery(
+    ownerUrl,
+    `insert into meeting_sources (workspace_id, meeting_id, connection_id, provider_event_id, calendar_id)
+     values ($1, $2, $3, 'intro', 'primary')`,
+    [m.workspace.id, meetingId, connectionId],
+  );
+  await testQuery(
+    ownerUrl,
+    `insert into meeting_records (workspace_id, meeting_id, record_id, via, starts_at) values ($1, $2, $3, 'attendee', now())`,
+    [m.workspace.id, meetingId, recordId],
+  );
+  return { connectionId, meetingId, recordId };
 }
 
 /**
@@ -610,6 +653,24 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'tasks', item_ids: [task.id], record_ids: [], mutation_id: mutationId },
     ];
   },
+  // Calendar sync (spec 0024): a sharing change names the connection's meetings and their records; so does a
+  // disconnect, for the meetings it removed.
+  'calendar.connections.update': async (m, mutationId) => {
+    const { connectionId, meetingId, recordId } = await heldMeeting(m);
+    await m.client.calendar.connections.update({ workspace: m.slug, connectionId, sharing: 'private', mutationId });
+    return [
+      { kind: 'records', record_ids: [recordId] },
+      { kind: 'meetings', item_ids: [meetingId], record_ids: [recordId], mutation_id: mutationId },
+    ];
+  },
+  'calendar.connections.remove': async (m, mutationId) => {
+    const { connectionId, meetingId, recordId } = await heldMeeting(m);
+    await m.client.calendar.connections.remove({ workspace: m.slug, connectionId, mutationId });
+    return [
+      { kind: 'records', record_ids: [recordId] },
+      { kind: 'meetings', item_ids: [meetingId], record_ids: [recordId], mutation_id: mutationId },
+    ];
+  },
   // Background jobs (spec 0008): one jobs row per write, naming the job.
   'jobs.startTest': async (m, mutationId) => {
     const job = await m.client.jobs.startTest({ workspace: m.slug, id: newId(), items: 3, mutationId });
@@ -655,6 +716,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'jobs.confirm': 2,
   'tasks.create': 2,
   'tasks.update': 2,
+  'calendar.connections.update': 2,
+  'calendar.connections.remove': 2,
   'attributes.restore': 2,
   'relationships.update': 2,
   'links.add': 3,

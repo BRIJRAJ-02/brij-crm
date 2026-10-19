@@ -3,6 +3,7 @@
 // can use them without pulling a screen in.
 import type { ObjectSummary } from '@crm/data';
 import { jobsHref } from '../workspace/objects.ts';
+import { strings as calendar } from './calendar-strings.ts';
 import { strings as jobs } from './jobs-strings.ts';
 import { strings } from './strings.ts';
 
@@ -24,14 +25,18 @@ export const objectSettingsHref = (
   tab: ObjectTab = 'attributes',
 ) => `/w/${slug}/settings/objects/${object.apiSlug}/${tab}`;
 
-/** The settings pages, as the navigation names them: Objects (spec 0012) and Background jobs (spec 0008). */
-export type SettingsPageId = 'objects' | 'jobs';
+/** The settings pages, as the navigation names them: Objects (spec 0012), Background jobs (spec 0008), Calendar (spec 0024). */
+export type SettingsPageId = 'objects' | 'jobs' | 'calendar';
 
-/** The settings navigation: Objects and Background jobs; #23 and later features add theirs. */
+/** Settings, Calendar (spec 0024): every member's own calendar connections. */
+export const calendarSettingsHref = (slug: string) => `/w/${slug}/settings/calendar`;
+
+/** The settings navigation: Objects, Background jobs and Calendar; #23 and later features add theirs. */
 export function settingsNav(slug: string) {
   return [
     { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' as const },
     { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' as const },
+    { id: 'calendar', label: calendar.title, href: calendarSettingsHref(slug), icon: 'calendar' as const },
   ];
 }
 

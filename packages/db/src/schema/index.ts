@@ -13,3 +13,18 @@ export { workspaceMilestones } from './milestones.ts';
 export { validationRuleKind, validationRules } from './validation.ts';
 export { memberViewState, viewKind, views, viewVisibility } from './views.ts';
 export { taskRecords, tasks } from './tasks.ts';
+export {
+  attendeeMatch,
+  attendeeResponse,
+  calendarConnections,
+  calendarProvider,
+  calendarSettings,
+  calendarSharing,
+  calendarStatus,
+  meetingAttendees,
+  meetingLinkVia,
+  meetingRecords,
+  meetings,
+  meetingSources,
+  meetingStatus,
+} from './calendar.ts';

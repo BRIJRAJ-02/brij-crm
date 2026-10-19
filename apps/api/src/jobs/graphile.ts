@@ -12,9 +12,16 @@
 // cleanup, `crm_cron_daily` at 03:00 UTC (Graphile's cron is UTC whatever the
 // process's zone), with one day of fill, so a day missed while the worker was
 // down or asleep runs once when it starts again, never once per missed day.
+// With calendar sync on (spec 0024), the light runner also takes
+// `crm_calendar_sync`: one connection's sync, one at a time per connection
+// (its own queue), keyed by connection so a burst is one waiting row. Each run
+// queues the next itself (`preserve_run_at`, so a sooner one already waiting,
+// from a connect or a push notice, keeps its time): 15 minutes after a sync
+// (the poll fallback), sooner after a failure, never for a connection that
+// stopped. A sleeping worker wakes for that row like any other due row.
 import { QueuePayload } from '@crm/contracts';
 import type { Runner } from '@crm/core';
-import type { DailyCleanupInput, DailyCleanupReport } from '@crm/core/system';
+import type { CalendarSyncInput, CalendarSyncOutcome, DailyCleanupInput, DailyCleanupReport } from '@crm/core/system';
 import type { QueueConnection } from '@crm/db';
 import { Logger, run, type Runner as GraphileRunner, type Task } from 'graphile-worker';
 import * as z from 'zod';
@@ -37,8 +44,32 @@ export const DAILY_CRON_HOUR_UTC = 3;
 /** The daily cleanup's task (light lane): the cron's, and its continuations'. */
 export const DAILY_TASK = 'crm_cron_daily';
 
-/** Every task the worker's runners run: only their queue rows keep a sleeping worker's check awake. */
+/** Calendar sync's task (spec 0024, light lane): one connection's sync. */
+export const CALENDAR_TASK = 'crm_calendar_sync';
+
+/**
+ * Every task the worker's runners run: only their queue rows keep a sleeping
+ * worker's check awake. With calendar sync on, `CALENDAR_TASK` joins them
+ * (`runnerTasks`); off, its rows wait and never wake a worker that won't run them.
+ */
 export const RUNNER_TASKS: readonly string[] = [LANES.heavy.task, LANES.light.task, DAILY_TASK];
+
+/** The tasks this worker runs: calendar sync's too when it is on. */
+export function runnerTasks(calendar: boolean): readonly string[] {
+  return calendar ? [...RUNNER_TASKS, CALENDAR_TASK] : RUNNER_TASKS;
+}
+
+/** A calendar sync's payload: the workspace and the connection, ids only (what `crm_enqueue_calendar_sync` writes). */
+export const CalendarPayload = z.strictObject({ workspaceId: z.uuid(), connectionId: z.uuid() });
+export type CalendarPayload = z.infer<typeof CalendarPayload>;
+
+/** A connection's queue key and queue name: the same `crm_enqueue_calendar_sync` builds. */
+export function calendarQueue(payload: CalendarPayload): { readonly jobKey: string; readonly queueName: string } {
+  return {
+    jobKey: `crm-calendar:${payload.workspaceId}:${payload.connectionId}`,
+    queueName: `calendar:${payload.workspaceId}:${payload.connectionId}`,
+  };
+}
 
 /**
  * The one crontab line (spec 0008, Cron): every day at 03:00 UTC, with one
@@ -91,6 +122,11 @@ export interface JobRunnersOptions {
    * With it, the light runner holds the crontab line and the daily task.
    */
   readonly daily?: (input: DailyCleanupInput) => Promise<DailyCleanupReport>;
+  /**
+   * Calendar sync (spec 0024): one connection's run (`syncConnection` with the
+   * worker's deps). With it, the light runner takes `crm_calendar_sync`.
+   */
+  readonly calendar?: (input: CalendarSyncInput) => Promise<CalendarSyncOutcome>;
   /**
    * Hears every task call start and end (the worker's idle clock starts
    * again, spec 0008's sleep): a slice, or the daily task.
@@ -188,6 +224,48 @@ function dailyTask(options: JobRunnersOptions, daily: NonNullable<JobRunnersOpti
 }
 
 /**
+ * The calendar sync task: one connection's sync, then its next run queued by
+ * the outcome's `nextInMs` (none once it stopped). A failure the sync didn't
+ * record (the database, a bug) is thrown on with a plain message, so Graphile
+ * tries again after its backoff.
+ */
+function calendarTask(options: JobRunnersOptions, sync: NonNullable<JobRunnersOptions['calendar']>): Task {
+  return async (payload, helpers) => {
+    const parsed = CalendarPayload.safeParse(payload);
+    if (!parsed.success) {
+      options.log.error('calendar.payload.invalid', { queueJobId: helpers.job.id });
+      return;
+    }
+    // The error's class only, logged here: a thrown message may quote a value, so what is thrown on is plain.
+    let outcome: CalendarSyncOutcome | undefined;
+    let failure: string | undefined;
+    try {
+      outcome = await sync(parsed.data);
+    } catch (error) {
+      failure = error instanceof Error ? error.name : 'unknown';
+    }
+    if (outcome === undefined) {
+      options.log.error('calendar.sync.failed', { connectionId: parsed.data.connectionId, error: failure });
+      throw new Error('A calendar sync failed; the worker log has its connection id.');
+    }
+    options.log.info('calendar.sync', {
+      connectionId: parsed.data.connectionId,
+      outcome: outcome.kind,
+      ...(outcome.kind === 'synced' ? { events: outcome.events, full: outcome.full } : {}),
+      ...(outcome.kind === 'retry' ? { code: outcome.code } : {}),
+      ...(outcome.kind === 'stopped' ? { reason: outcome.reason } : {}),
+    });
+    if (outcome.kind === 'stopped') return;
+    await helpers.addJob(CALENDAR_TASK, parsed.data, {
+      ...calendarQueue(parsed.data),
+      jobKeyMode: 'preserve_run_at',
+      runAt: new Date(Date.now() + outcome.nextInMs),
+      maxAttempts: 25,
+    });
+  };
+}
+
+/**
  * Starts the two runners on the queue pool. Graphile's `run()` calls its
  * migrate step; its migrations ran before deploy (as the owner), so here that
  * step only reads Graphile's `migrations` table, the one right `crm_worker`
@@ -240,6 +318,7 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
     for (const lane of Object.values(LANES)) {
       // The light runner alone holds the crontab, so the cron fires once whatever the lanes.
       const daily = lane === LANES.light ? options.daily : undefined;
+      const calendar = lane === LANES.light ? options.calendar : undefined;
       runners.push(
         watch(
           await run({
@@ -253,6 +332,9 @@ export async function startJobRunners(options: JobRunnersOptions): Promise<JobRu
               ...(daily === undefined
                 ? {}
                 : { [DAILY_TASK]: counted(dailyTask(options, daily), inFlight, options.onActivity) }),
+              ...(calendar === undefined
+                ? {}
+                : { [CALENDAR_TASK]: counted(calendarTask(options, calendar), inFlight, options.onActivity) }),
             },
             ...(daily === undefined ? {} : { crontab: DAILY_CRONTAB }),
             // Completions and failures go through Graphile's batcher (with no wait), which a stop flushes before

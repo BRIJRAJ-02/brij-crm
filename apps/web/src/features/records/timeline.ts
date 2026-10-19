@@ -20,9 +20,21 @@ export function recordLinks(slug: string, objects: readonly ObjectSummary[]): Re
   };
 }
 
-/** A link entry with each named record's page, a task entry with its dialog's; any other entry as it is. */
+/** A link entry with each named record's page, a task entry with its dialog's, a meeting's people with theirs. */
 export function withLinks(entry: ActivityEntryShape, link: RecordLink, taskLink?: TaskLink): ActivityEntryShape {
   if (entry.kind === 'task') return taskLink === undefined ? entry : { ...entry, href: taskLink(entry.itemId) };
+  // A meeting's people (spec 0024): each person's chip links to their page; members and addresses stay as they are.
+  if (entry.kind === 'meeting') {
+    return {
+      ...entry,
+      attendees: entry.attendees.map((attendee) => {
+        const display = attendee.display;
+        if (display === undefined || !('recordId' in display)) return attendee;
+        const href = link(display.objectId, display.recordId);
+        return href === undefined ? attendee : { ...attendee, href };
+      }),
+    };
+  }
   if (entry.kind !== 'links') return entry;
   const linked = (records: typeof entry.added) =>
     records.map((record) => {
@@ -47,7 +59,9 @@ export function linkedSource(
     ...source,
     getItem: (index) => {
       const entry = source.getItem(index);
-      if (entry === undefined || (entry.kind !== 'links' && entry.kind !== 'task')) return entry;
+      if (entry === undefined || (entry.kind !== 'links' && entry.kind !== 'task' && entry.kind !== 'meeting')) {
+        return entry;
+      }
       const held = cache.get(entry);
       if (held !== undefined) return held;
       const made = withLinks(entry, link, taskLink);

@@ -149,6 +149,21 @@ export const TasksEvent = z.object({
   mutationId,
 });
 
+/**
+ * Meetings changed (spec 0024): synced, moved, cancelled, or their privacy
+ * changed, with every record they showed on before or after. A screen showing
+ * one of those records reads its meetings (its timeline) again; `coarse`
+ * means too many to list, so every open timeline reads again.
+ */
+export const MeetingsEvent = z.object({
+  ...place,
+  kind: z.literal('meetings'),
+  recordIds: ids,
+  meetingIds: ids,
+  coarse,
+  mutationId,
+});
+
 /** Members changed (#23): joined, left, renamed, or a role changed. */
 export const MembersEvent = z.object({
   ...place,
@@ -195,6 +210,7 @@ export const ChangeEvent = z.discriminatedUnion('kind', [
   ViewsEvent,
   NotesEvent,
   TasksEvent,
+  MeetingsEvent,
   MembersEvent,
   AccessEvent,
   JobsEvent,
@@ -211,6 +227,7 @@ export const CHANGE_EVENT_KINDS = [
   'views',
   'notes',
   'tasks',
+  'meetings',
   'members',
   'access',
   'jobs',

@@ -20,6 +20,7 @@ import type { EngineScope } from '../access/mint.ts';
 import type { Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { CHANGE_CAP } from '../engine/write.ts';
+import { readMeetingFacts } from '../calendar/facts.ts';
 import { readTaskFacts } from '../tasks/facts.ts';
 import { outboxEvent, wireEvent } from './events.ts';
 
@@ -49,6 +50,7 @@ type IdField =
   | 'viewIds'
   | 'noteIds'
   | 'taskIds'
+  | 'meetingIds'
   | 'memberIds'
   | 'jobIds';
 
@@ -63,6 +65,7 @@ const MERGED: Readonly<Record<Kind, readonly IdField[]>> = {
   views: ['viewIds'],
   notes: ['recordIds', 'noteIds'],
   tasks: ['recordIds', 'taskIds'],
+  meetings: ['recordIds', 'meetingIds'],
   members: ['memberIds'],
   access: ['memberIds'],
   jobs: ['jobIds'],
@@ -76,6 +79,7 @@ const CAPPED: Readonly<Record<Kind, readonly IdField[]>> = {
   views: ['viewIds'],
   notes: ['recordIds', 'noteIds'],
   tasks: ['recordIds', 'taskIds'],
+  meetings: ['recordIds', 'meetingIds'],
   members: [],
   access: [],
   jobs: ['jobIds'],
@@ -237,7 +241,11 @@ export async function catchUp(scope: EngineScope, input: { readonly after: numbe
       const rows = page.rows.map(outboxRowOf);
       // The facts the page's rows need (spec 0009, `eventFacts`), read once per page in the caller's transaction.
       const taskIds = rows.flatMap((row) => (row.kind === 'tasks' ? row.itemIds : []));
-      const facts = taskIds.length === 0 ? {} : { tasks: await readTaskFacts(tx, taskIds) };
+      const meetingIds = rows.flatMap((row) => (row.kind === 'meetings' ? row.itemIds : []));
+      const facts = {
+        ...(taskIds.length === 0 ? {} : { tasks: await readTaskFacts(tx, taskIds) }),
+        ...(meetingIds.length === 0 ? {} : { meetings: await readMeetingFacts(tx, meetingIds) }),
+      };
       for (const row of rows) {
         if (row.seq !== last + 1) return reset;
         last = row.seq;

@@ -223,6 +223,7 @@ const SHAPES: Readonly<Record<ChangeEventKind, Shape>> = {
   views: { optionalRefs: ['objectId', 'listId'], lists: ['viewIds'], coarse: true },
   notes: { optionalRefs: ['objectId'], lists: ['recordIds', 'noteIds'], coarse: true },
   tasks: { lists: ['recordIds', 'taskIds'], coarse: true },
+  meetings: { lists: ['recordIds', 'meetingIds'], coarse: true },
   members: { lists: ['memberIds'] },
   access: { lists: ['memberIds'] },
   jobs: { lists: ['jobIds'], coarse: true },
