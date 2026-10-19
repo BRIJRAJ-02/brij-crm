@@ -1,74 +1,143 @@
 import { describe, expect, it } from 'vitest';
-import type { FormDocument } from '@crm/data';
+import type { FormAttributeChoice, FormDocument } from '@crm/data';
 import {
-  addAttributeQuestion,
-  addFormOnlyQuestion,
-  addLayout,
-  askedAttributes,
-  blocksOf,
-  changeBlock,
-  freeId,
-  moveBlock,
-  removeBlock,
+  addQuestion,
+  changeQuestion,
+  duplicateQuestion,
+  fileByLabel,
+  filedLine,
+  isMatchQuestion,
+  moveQuestion,
+  removeQuestion,
+  restoreQuestion,
+  sameDocument,
+  statusOf,
 } from './draft.ts';
 
 const EMAIL = '0199f0a0-0000-7000-8000-00000000000e';
+const NAME = '0199f0a0-0000-7000-8000-00000000000a';
+const BUDGET = '0199f0a0-0000-7000-8000-0000000000bb';
 const PEOPLE = '0199f0a0-0000-7000-8000-00000000000b';
 
 const base: FormDocument = {
-  steps: [
+  questions: [
     {
-      id: 'main',
-      blocks: [
-        {
-          kind: 'question',
-          id: 'email',
-          label: 'Email',
-          required: true,
-          target: { role: 'main', attributeId: EMAIL },
-          update: 'fill',
-        },
-      ],
+      id: 'q-name',
+      key: 'name',
+      label: 'Your name',
+      answerType: 'short_text',
+      required: true,
+      filedOn: { objectRole: 'main', attributeId: NAME },
+      update: 'fill',
+    },
+    {
+      id: 'q-email',
+      key: 'email',
+      label: 'Work email',
+      answerType: 'email',
+      required: true,
+      filedOn: { objectRole: 'main', attributeId: EMAIL },
+      update: 'fill',
     },
   ],
   targets: { main: { objectId: PEOPLE, matchAttributeId: EMAIL } },
-  owner: { kind: 'none' },
-  after: { kind: 'message', text: 'Thanks.' },
-  style: { title: 'Contact us', buttonText: 'Send', language: 'en' },
-  spam: { minFillMs: 2_500, scoreThreshold: 0.3 },
+  look: { colour: 'light', corners: 'rounded' },
+  headline: 'Fill this in and we will come back to you',
+  buttonText: 'Send',
+  language: 'en',
+  after: { kind: 'message', message: '' },
+  spam: { minFillMs: 2_000, scoreThreshold: 0.3 },
 };
 
-describe('the builder’s draft edits (spec 0023)', () => {
-  it('adds a field question, a form only question and layout blocks, each with its own id', () => {
-    let draft = addAttributeQuestion(base, {
-      attributeId: '0199f0a0-0000-7000-8000-0000000000a1',
-      title: 'Job title',
-      type: 'text',
-      isRequired: false,
-      isUnique: false,
-      canWrite: true,
-    });
-    draft = addFormOnlyQuestion(draft, 'long_text', 'Long text');
-    draft = addLayout(draft, 'heading', 'About you');
-    draft = addLayout(draft, 'divider', '');
-    expect(blocksOf(draft).map((block) => block.id)).toEqual(['email', 'job-title', 'long-text', 'heading', 'divider']);
-    expect(askedAttributes(draft).has(EMAIL)).toBe(true);
-    // The document passed in is never changed.
-    expect(blocksOf(base)).toHaveLength(1);
+const ATTRIBUTES: readonly FormAttributeChoice[] = [
+  { attributeId: NAME, title: 'Name', type: 'personal_name', isRequired: false, isUnique: false, canWrite: true },
+  { attributeId: EMAIL, title: 'Email addresses', type: 'email', isRequired: false, isUnique: true, canWrite: true },
+  { attributeId: BUDGET, title: 'Budget band', type: 'select', isRequired: false, isUnique: false, canWrite: true },
+];
+
+describe('the builder’s draft changes', () => {
+  it('adds an untitled short text question at the end, with a free key', () => {
+    const next = addQuestion(addQuestion(base, 'q1'), 'q2');
+    expect(next.questions.map((question) => question.key)).toEqual(['name', 'email', 'question', 'question_2']);
+    expect(next.questions[2]).toMatchObject({ label: '', answerType: 'short_text', required: false });
   });
 
-  it('keeps ids unique and well formed', () => {
-    expect(freeId(base, 'Email')).toBe('email-2');
-    expect(freeId(base, '  Why? ')).toBe('why-');
-    expect(freeId(base, '***')).toBe('q');
+  it('duplicates right below, with a suffixed key and no filing', () => {
+    const next = duplicateQuestion(base, 'q-name', 'q-copy');
+    expect(next.questions.map((question) => question.id)).toEqual(['q-name', 'q-copy', 'q-email']);
+    expect(next.questions[1]?.key).toBe('name_2');
+    expect(next.questions[1]?.filedOn).toBeUndefined();
   });
 
-  it('changes, moves and removes a block', () => {
-    const two = addLayout(base, 'text', 'Hello');
-    const changed = changeBlock(two, 'text', (block) => (block.kind === 'text' ? { ...block, text: 'Hi' } : block));
-    expect(blocksOf(changed)[1]).toEqual({ kind: 'text', id: 'text', text: 'Hi' });
-    expect(blocksOf(moveBlock(changed, 'text', -1)).map((block) => block.id)).toEqual(['text', 'email']);
-    expect(moveBlock(changed, 'email', -1)).toBe(changed);
-    expect(blocksOf(removeBlock(changed, 'email')).map((block) => block.id)).toEqual(['text']);
+  it('removes and puts back at the same place', () => {
+    const { document, removed } = removeQuestion(base, 'q-name');
+    expect(document.questions).toHaveLength(1);
+    if (removed === undefined) throw new Error('nothing removed');
+    const back = restoreQuestion(document, removed.question, removed.index);
+    expect(back.questions.map((question) => question.id)).toEqual(['q-name', 'q-email']);
+    expect(back.questions[0]?.filedOn?.attributeId).toBe(NAME);
+  });
+
+  it('drops a restored question’s filing when another question took it meanwhile', () => {
+    const { document, removed } = removeQuestion(base, 'q-name');
+    if (removed === undefined) throw new Error('nothing removed');
+    const taken = changeQuestion(addQuestion(document, 'q-new'), 'q-new', { filedOn: NAME });
+    const back = restoreQuestion(taken, removed.question, removed.index);
+    expect(back.questions.find((question) => question.id === 'q-name')?.filedOn).toBeUndefined();
+  });
+
+  it('moves a question to a place', () => {
+    expect(moveQuestion(base, 'q-email', 0).questions.map((question) => question.id)).toEqual(['q-email', 'q-name']);
+  });
+
+  it('follows the label with the key until the question goes live', () => {
+    const drafted = changeQuestion(addQuestion(base, 'q1'), 'q1', { label: 'Budget band' });
+    expect(drafted.questions[2]?.key).toBe('budget_band');
+    const live = changeQuestion(drafted, 'q1', { label: 'Budget' }, new Set(['q1']));
+    expect(live.questions[2]?.key).toBe('budget_band');
+  });
+
+  it('moves a filing from the question that held it', () => {
+    const next = changeQuestion(addQuestion(base, 'q1'), 'q1', { filedOn: NAME });
+    expect(next.questions[0]?.filedOn).toBeUndefined();
+    expect(next.questions[2]?.filedOn?.attributeId).toBe(NAME);
+  });
+
+  it('gives a choice type its first empty choice', () => {
+    const next = changeQuestion(addQuestion(base, 'q1'), 'q1', { answerType: 'dropdown' });
+    expect(next.questions[2]?.choices).toEqual(['']);
+  });
+
+  it('files questions by their labels, only onto free attributes that fit', () => {
+    const asked = changeQuestion(addQuestion(base, 'q1'), 'q1', { label: 'Budget band', answerType: 'dropdown' });
+    const filed = fileByLabel(asked, ATTRIBUTES);
+    expect(filed.questions[2]?.filedOn?.attributeId).toBe(BUDGET);
+    const asText = changeQuestion(addQuestion(base, 'q2'), 'q2', { label: 'Budget band', answerType: 'email' });
+    expect(fileByLabel(asText, ATTRIBUTES).questions[2]?.filedOn).toBeUndefined();
+  });
+
+  it('names where a question is filed', () => {
+    const [name] = base.questions;
+    if (name === undefined) throw new Error('no question');
+    expect(filedLine(name, 'Person', ATTRIBUTES)).toBe('Person · Name');
+    expect(filedLine({ ...name, filedOn: undefined }, 'Person', ATTRIBUTES)).toBe('Not filed, kept with the enquiry');
+  });
+
+  it('keeps the match email question', () => {
+    expect(base.questions.map((question) => isMatchQuestion(base, question))).toEqual([false, true]);
+  });
+
+  it('says where the form stands', () => {
+    const form = { status: 'live' as const, liveVersionNumber: 7, hasUnpublished: false };
+    expect(statusOf(form, false)).toEqual({ tone: 'live', text: 'Published · v7' });
+    expect(statusOf(form, true).tone).toBe('changed');
+    expect(statusOf({ ...form, status: 'paused' }, false).text).toBe('Not accepting');
+    expect(statusOf({ status: 'draft', hasUnpublished: true }, true).text).toBe('Not published');
+  });
+
+  it('compares documents whatever their key order', () => {
+    const reordered = { ...base, look: { corners: 'rounded' as const, colour: 'light' as const } };
+    expect(sameDocument(base, reordered)).toBe(true);
+    expect(sameDocument(base, { ...base, headline: 'Hello' })).toBe(false);
   });
 });

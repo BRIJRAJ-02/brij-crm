@@ -3,14 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Hosted forms stay out of search engines unless a form turns indexing on (spec 0023, AC-587). -->
+    <!-- Hosted forms stay out of search engines (spec 0023, AC-587). -->
     <meta name="robots" content="noindex" />
-    <!-- Before anything paints: a saved Light or Dark choice, as the app does. -->
-    <script src="/theme-boot.js"></script>
     <title>Form</title>
   </head>
   <body>
+    <!-- The form's own look (Colour) decides light or dark, never the visitor's saved app theme. -->
     <div id="root" data-app-root></div>
-    <script type="module" src="/src/public/main.tsx"></script>
+    <script type="module" src="/src/public/main.ts"></script>
   </body>
 </html>

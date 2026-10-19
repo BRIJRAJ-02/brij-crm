@@ -5,7 +5,6 @@ import type { ObjectSummary } from '@crm/data';
 import { jobsHref } from '../workspace/objects.ts';
 import { strings as jobs } from './jobs-strings.ts';
 import { strings } from './strings.ts';
-import { strings as forms } from '../forms/strings.ts';
 
 /** An object's settings tabs, in order. */
 export const OBJECT_TABS = ['attributes', 'configuration'] as const;
@@ -25,26 +24,13 @@ export const objectSettingsHref = (
   tab: ObjectTab = 'attributes',
 ) => `/w/${slug}/settings/objects/${object.apiSlug}/${tab}`;
 
-/** The settings pages, as the navigation names them: Objects (spec 0012), Forms (spec 0023) and Background jobs (spec 0008). */
-export type SettingsPageId = 'objects' | 'forms' | 'jobs';
-
-/** Settings, Forms (spec 0023). */
-export const formsHref = (slug: string) => `/w/${slug}/settings/forms`;
-
-/** A form's tabs. */
-export const FORM_TABS = ['build', 'submissions'] as const;
-/** One of a form's tabs. */
-export type FormTab = (typeof FORM_TABS)[number];
-
-/** One form's page, on a tab (Build by default), optionally with one submission open. */
-export const formHref = (slug: string, formId: string, tab: FormTab = 'build', submissionId?: string) =>
-  `/w/${slug}/settings/forms/${formId}?tab=${tab}${submissionId === undefined ? '' : `&submission=${submissionId}`}`;
+/** The settings pages, as the navigation names them: Objects (spec 0012) and Background jobs (spec 0008). */
+export type SettingsPageId = 'objects' | 'jobs';
 
 /** The settings navigation: Objects and Background jobs; #23 and later features add theirs. */
 export function settingsNav(slug: string) {
   return [
     { id: 'objects', label: strings.objects, href: objectsSettingsHref(slug), icon: 'box' as const },
-    { id: 'forms', label: forms.forms, href: formsHref(slug), icon: 'clipboard-list' as const },
     { id: 'jobs', label: jobs.title, href: jobsHref(slug), icon: 'list-checks' as const },
   ];
 }

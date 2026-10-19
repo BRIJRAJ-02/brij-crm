@@ -1,220 +1,235 @@
 // Brief
-// Purpose: Settings, Forms: the workspace's public forms, live, paused and draft, and the archived ones (spec 0023).
-// Main task: owners and admins make a new form, or open one to build it or read its submissions.
-// Leaves out: analytics, sites and embeds (later milestones), and anything about one form (its own page).
-import { isDataError, type FormSummary, type FormView, type ObjectSummary } from '@crm/data';
+// Purpose: Captures, Forms: the workspace's forms as cards, with their enquiries and whether they accept more (spec 0023).
+// Main task: open a form, make a new one at once, or pause and resume one with its Accepting switch.
+// Leaves out: anything inside one form (its builder), and archived forms (a later pass).
+import { isDataError, type FormSummary } from '@crm/data';
 import {
   Badge,
   Button,
-  Callout,
-  Disclosure,
+  Card,
   EmptyState,
-  Field,
-  Form,
-  Icon,
+  FormEditorLayout,
+  Link,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
   Modal,
-  Select,
-  Table,
-  type TableColumn,
+  Switch,
+  TopBar,
 } from '@crm/ui';
-import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useId, useState } from 'react';
-import { formHref } from '../settings/nav.ts';
-import { settingsCrumbs, SettingsPage } from '../settings/SettingsPage.tsx';
-import { useCan } from '../workspace/WorkspacePage.tsx';
+import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router';
+import { useState } from 'react';
+import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
 
-/** Props for Settings, Forms: what its route loaded through the data layer. */
+/** Props for Captures, Forms: what its route loaded through the data layer. */
 export interface FormsScreenProps {
   readonly slug: string;
   readonly forms: readonly FormSummary[];
-  readonly archived: readonly FormSummary[];
-  /** The objects the person can see: a form's object, and the choice for a new one. */
-  readonly objects: readonly ObjectSummary[];
 }
 
-const COLUMNS: readonly TableColumn[] = [
-  { id: 'name', label: strings.nameColumn, isRowHeader: true },
-  { id: 'status', label: strings.statusColumn },
-  { id: 'object', label: strings.objectColumn, isInline: true },
-  { id: 'submissions', label: strings.submissionsColumn, align: 'end' },
-];
+/** "Tue, Sep 1 · 1:44 PM", in the reader's language. */
+function when(iso: string): string {
+  const date = new Date(iso);
+  const day = new Intl.DateTimeFormat(undefined, { weekday: 'short', month: 'short', day: 'numeric' }).format(date);
+  const time = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' }).format(date);
+  return `${day} · ${time}`;
+}
 
-/** Settings, Forms: the active forms, then the archived ones in a disclosure. */
-export function FormsScreen({ slug, forms, archived, objects }: FormsScreenProps) {
-  const { data } = useRouteContext({ from: '__root__' });
+/** Captures, Forms: New form, then one card per form, newest change first. */
+export function FormsScreen({ slug, forms }: FormsScreenProps) {
+  const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
+  const router = useRouter();
   const canManage = useCan('forms.manage');
-  const [isCreating, setCreating] = useState(false);
-  const byId = new Map(objects.map((object) => [object.id, object]));
+  const [creating, setCreating] = useState<string | undefined>(undefined);
+  const [deleting, setDeleting] = useState<FormSummary | undefined>(undefined);
+  const [busy, setBusy] = useState<string | undefined>(undefined);
 
-  const cell = (form: FormSummary, column: string) => {
-    switch (column) {
-      case 'name':
-        return form.name;
-      case 'status':
-        return <Badge text={strings.status[form.status]} tone={form.status === 'live' ? 'accent' : 'neutral'} />;
-      case 'object': {
-        const object = byId.get(form.mainObjectId);
-        return object === undefined ? null : (
-          <>
-            <Icon name={object.icon} tile={object.hue} />
-            {object.pluralName}
-          </>
-        );
-      }
-      default:
-        return new Intl.NumberFormat().format(form.submissionCount);
-    }
+  const failed = (error: unknown) => {
+    setBusy(undefined);
+    toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
   };
+
   const open = (formId: string) => {
     void navigate({ href: formHref(slug, formId) });
   };
-  return (
-    <SettingsPage
-      title={strings.forms}
-      crumbs={settingsCrumbs(slug, 'objects')}
-      description={strings.formsDescription}
-      current="forms"
-      {...(canManage
-        ? {
-            actions: (
-              <Button variant="primary" icon="plus" onPress={() => setCreating(true)}>
-                {strings.newForm}
-              </Button>
-            ),
-          }
-        : {})}
-    >
-      {!canManage && <Callout>{strings.readOnlyNote}</Callout>}
-      <Table
-        label={strings.forms}
-        columns={COLUMNS}
-        rows={forms}
-        getRowId={(form) => form.id}
-        renderCell={cell}
-        onRowAction={open}
-        emptyState={
-          <EmptyState icon="clipboard-list" title={strings.noForms}>
-            {canManage ? strings.noFormsText : strings.noFormsMemberText}
-          </EmptyState>
-        }
-      />
-      <Disclosure title={strings.archived} count={archived.length}>
-        {archived.length === 0 ? (
-          <EmptyState title={strings.noArchived} />
-        ) : (
-          <Table
-            label={strings.archivedForms}
-            columns={COLUMNS}
-            rows={archived}
-            getRowId={(form) => form.id}
-            renderCell={cell}
-            onRowAction={open}
-          />
-        )}
-      </Disclosure>
-      {canManage && (
-        <NewFormDialog
-          isOpen={isCreating}
-          onOpenChange={setCreating}
-          objects={objects.filter((object) => !object.isArchived)}
-          newId={() => data.forms.newId()}
-          onCreate={(input) => data.forms.create(slug, input)}
-          onCreated={(form) => {
-            setCreating(false);
-            open(form.id);
-          }}
-        />
-      )}
-    </SettingsPage>
-  );
-}
 
-/** Props for the new form dialog. */
-interface NewFormDialogProps {
-  readonly isOpen: boolean;
-  readonly onOpenChange: (isOpen: boolean) => void;
-  readonly objects: readonly ObjectSummary[];
-  /** Mints the form's id, once per opening: a second press after a lost answer sends the same one. */
-  readonly newId: () => string;
-  readonly onCreate: (input: {
-    readonly id: string;
-    readonly name: string;
-    readonly mainObjectId: string;
-  }) => Promise<FormView>;
-  readonly onCreated: (form: FormView) => void;
-}
-
-/** "New form": its name and the object it fills (People first); Create waits for the server. */
-function NewFormDialog({ isOpen, onOpenChange, objects, newId, onCreate, onCreated }: NewFormDialogProps) {
-  const formId = useId();
-  const [isBusy, setBusy] = useState(false);
-  const people = objects.find((object) => object.standardKey === 'people') ?? objects[0];
-  const [id] = useState(newId);
-  const [name, setName] = useState('');
-  const [objectId, setObjectId] = useState<string | undefined>(people?.id);
-  const [error, setError] = useState<string | undefined>(undefined);
+  // New form makes "Untitled form" at once and opens it: no dialog first, the builder is the dialog.
   const create = () => {
-    if (isBusy || objectId === undefined) return;
-    if (name.trim() === '') {
-      setError('Give the form a name.');
-      return;
-    }
-    setBusy(true);
-    setError(undefined);
-    onCreate({ id, name: name.trim(), mainObjectId: objectId }).then(
+    if (creating !== undefined) return;
+    const id = data.forms.newId();
+    setCreating(id);
+    data.forms.create(slug, { id }).then(
       (form) => {
-        setBusy(false);
-        onCreated(form);
+        setCreating(undefined);
+        open(form.id);
       },
-      (failure: unknown) => {
-        setBusy(false);
-        setError(isDataError(failure) ? failure.message : strings.somethingWrong);
+      (error: unknown) => {
+        setCreating(undefined);
+        failed(error);
       },
     );
   };
+
+  const setAccepting = (form: FormSummary, isAccepting: boolean) => {
+    setBusy(form.id);
+    data.forms.setStatus(slug, form.id, isAccepting ? 'live' : 'paused').then(() => {
+      setBusy(undefined);
+      toasts.toast({ tone: 'success', message: isAccepting ? strings.resumed(form.name) : strings.paused(form.name) });
+      void router.invalidate();
+    }, failed);
+  };
+
+  const copyAddress = (form: FormSummary) => {
+    void navigator.clipboard.writeText(data.forms.hostedUrl(form.publicKey)).then(
+      () => {
+        toasts.toast({ tone: 'success', message: strings.addressCopied });
+      },
+      () => undefined,
+    );
+  };
+
+  const duplicate = (form: FormSummary) => {
+    setBusy(form.id);
+    data.forms.duplicate(slug, form.id).then((copy) => {
+      setBusy(undefined);
+      toasts.toast({ tone: 'success', message: strings.duplicated(copy.name) });
+      void router.invalidate();
+    }, failed);
+  };
+
+  const remove = (form: FormSummary) => {
+    setBusy(form.id);
+    data.forms.delete(slug, form.id).then(() => {
+      setBusy(undefined);
+      setDeleting(undefined);
+      toasts.toast({ tone: 'success', message: strings.deleted(form.name) });
+      void router.invalidate();
+    }, failed);
+  };
+
+  const newForm = (
+    <Button variant="primary" icon="plus" onPress={create} isPending={creating !== undefined}>
+      {creating === undefined ? strings.newForm : strings.creating}
+    </Button>
+  );
+
+  const cards =
+    forms.length === 0 ? (
+      <EmptyState icon="clipboard-list" title={strings.noForms} {...(canManage ? { actions: newForm } : {})}>
+        {strings.noFormsText}
+      </EmptyState>
+    ) : (
+      forms.map((form) => {
+        const isPublished = form.liveVersionNumber !== undefined;
+        const isAccepting = form.status === 'live';
+        return (
+          <Card
+            key={form.id}
+            title={form.name}
+            actions={
+              <>
+                {isPublished ? (
+                  <Switch
+                    label={isAccepting ? strings.accepting : strings.notAccepting}
+                    isSelected={isAccepting}
+                    isDisabled={!canManage || busy === form.id}
+                    onChange={(next) => {
+                      setAccepting(form, next);
+                    }}
+                  />
+                ) : (
+                  <Badge text={strings.notPublishedYet} />
+                )}
+                <MenuTrigger>
+                  <Button variant="ghost" icon="ellipsis" label={strings.formActions(form.name)} />
+                  <Menu
+                    label={strings.formActions(form.name)}
+                    onAction={(key) => {
+                      if (key === 'open') open(form.id);
+                      if (key === 'copy') copyAddress(form);
+                      if (key === 'duplicate') duplicate(form);
+                      if (key === 'delete') setDeleting(form);
+                    }}
+                  >
+                    <MenuItem id="open" icon="arrow-right">
+                      {strings.open}
+                    </MenuItem>
+                    <MenuItem id="copy" icon="copy" isDisabled={!isPublished}>
+                      {strings.copyAddress}
+                    </MenuItem>
+                    {canManage && (
+                      <MenuItem id="duplicate" icon="layers">
+                        {strings.duplicate}
+                      </MenuItem>
+                    )}
+                    {canManage && <MenuSeparator />}
+                    {canManage && (
+                      <MenuItem id="delete" icon="trash" isDanger>
+                        {strings.delete}
+                      </MenuItem>
+                    )}
+                  </Menu>
+                </MenuTrigger>
+              </>
+            }
+            footer={<Link href={formHref(slug, form.id)}>{strings.open}</Link>}
+          >
+            <Badge text={strings.thisMonth(form.submissionsThisMonth)} />{' '}
+            {form.spamCount > 0 && (
+              <>
+                <Badge text={strings.spam(form.spamCount)} />{' '}
+              </>
+            )}
+            {form.lastSubmissionAt !== undefined && <Badge text={strings.lastEnquiry(when(form.lastSubmissionAt))} />}
+          </Card>
+        );
+      })
+    );
+
   return (
-    <Modal
-      title={strings.newForm}
-      isOpen={isOpen}
-      onOpenChange={(open) => {
-        if (!open && isBusy) return;
-        onOpenChange(open);
+    <WorkspacePage
+      page={{
+        topBar: (
+          <TopBar title={strings.forms} icon="clipboard-list">
+            {canManage && forms.length > 0 ? newForm : null}
+          </TopBar>
+        ),
+        body: (
+          <FormEditorLayout>
+            {cards}
+            <Modal
+              title={deleting === undefined ? strings.deleteForm : strings.deleteTitle(deleting.name)}
+              tone="danger"
+              isOpen={deleting !== undefined}
+              onOpenChange={(isOpen) => {
+                if (!isOpen && busy === undefined) setDeleting(undefined);
+              }}
+              actions={
+                <>
+                  <Button slot="close" isDisabled={busy !== undefined}>
+                    {strings.cancel}
+                  </Button>
+                  <Button
+                    variant="danger-solid"
+                    isPending={busy !== undefined}
+                    onPress={() => {
+                      if (deleting !== undefined) remove(deleting);
+                    }}
+                  >
+                    {strings.delete}
+                  </Button>
+                </>
+              }
+            >
+              <p>{strings.deleteText(deleting?.submissionCount ?? 0)}</p>
+            </Modal>
+          </FormEditorLayout>
+        ),
       }}
-      actions={
-        <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
-            {strings.cancel}
-          </Button>
-          <Button variant="primary" type="submit" form={formId} isPending={isBusy}>
-            {isBusy ? strings.creatingForm : strings.createForm}
-          </Button>
-        </>
-      }
-    >
-      <Form id={formId} isBusy={isBusy} onSubmit={create} focusesFirstField>
-        <Field
-          label={strings.formName}
-          name="name"
-          value={name}
-          onChange={(value) => {
-            setName(value);
-            setError(undefined);
-          }}
-          hint={strings.formNameHint}
-          {...(error === undefined ? {} : { error })}
-          isRequired
-        />
-        <Select
-          label={strings.object}
-          hint={strings.objectHint}
-          items={objects.map((object) => ({ id: object.id, label: object.pluralName, icon: object.icon }))}
-          value={objectId ?? null}
-          onChange={(value) => setObjectId(value ?? undefined)}
-          isRequired
-        />
-      </Form>
-    </Modal>
+    />
   );
 }

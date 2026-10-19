@@ -1,18 +1,17 @@
 // Brief
-// Purpose: a form's submissions, newest first, by state, and one in full beside them (spec 0023, AC-572, AC-573).
-// Main task: see what came in and what it became, and retry a failed one or delete one.
-// Leaves out: releasing spam, picking a record for one that needs review, notices (milestone 2).
+// Purpose: a form's submissions, newest first, by state, and one in full beside them (spec 0023, 0023-experience.md, Submissions tab).
+// Main task: see what came in and what it became, and release, mark as spam, retry or delete one.
+// Leaves out: picking the right record for one that needs review, and live arrival (both later).
 import {
   isDataError,
   type ObjectSummary,
+  type SubmissionAnswer,
   type SubmissionPage,
   type SubmissionState,
   type SubmissionSummary,
   type SubmissionView,
 } from '@crm/data';
 import {
-  AttributeDisplay,
-  Badge,
   Button,
   Callout,
   DescriptionList,
@@ -21,14 +20,15 @@ import {
   Panel,
   RecordChip,
   RelativeTime,
-  Select,
+  SegmentedControl,
   Table,
+  Badge,
   type TableColumn,
 } from '@crm/ui';
 import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { recordLinks } from '../records/timeline.ts';
-import { formHref } from '../settings/nav.ts';
+import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
 
 /** Props for the Submissions tab: what its route loaded through the data layer. */
@@ -36,33 +36,39 @@ export interface SubmissionsTabProps {
   readonly slug: string;
   readonly formId: string;
   readonly objects: readonly ObjectSummary[];
-  /** The first page, for the state in the address. */
   readonly page: SubmissionPage;
   readonly state: SubmissionState | undefined;
-  /** The submission open beside the list (`?submission=`), when it loaded. */
   readonly open: SubmissionView | undefined;
   readonly canManage: boolean;
 }
 
 const COLUMNS: readonly TableColumn[] = [
-  { id: 'received', label: strings.receivedColumn, isRowHeader: true },
-  { id: 'state', label: strings.statusColumn },
-  { id: 'record', label: strings.recordColumn, isInline: true },
-  { id: 'answer', label: strings.answerColumn },
+  { id: 'when', label: strings.when, isRowHeader: true },
+  { id: 'person', label: strings.person, isInline: true },
+  { id: 'state', label: strings.state },
+  { id: 'answers', label: strings.answers },
 ];
 
-/** The value of "every state" in the filter. */
 const ALL = 'all';
+const FILTERS: readonly SubmissionState[] = ['processed', 'spam', 'needs_review', 'failed'];
 
-const STATES: readonly SubmissionState[] = ['processed', 'received', 'failed', 'spam'];
+/** An answer as words: text, Yes or No, a phone's number. */
+function answerText(answer: SubmissionAnswer): string {
+  const { value } = answer;
+  if (typeof value === 'boolean') return value ? strings.yes : strings.no;
+  if (typeof value === 'string') return value;
+  if (typeof value === 'object' && value !== null && typeof (value as { number?: unknown }).number === 'string') {
+    return (value as { number: string }).number;
+  }
+  return '';
+}
 
-/** The list, a state filter above it, and the open submission in a panel. */
+/** The filter, the table, Show more, and the open submission in a Panel. */
 export function SubmissionsTab({ slug, formId, objects, page, state, open, canManage }: SubmissionsTabProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const router = useRouter();
   const link = recordLinks(slug, objects);
-  // Pages read past the first with Show more, for this filter only: a new filter starts from the loader's page.
   const [more, setMore] = useState<{
     readonly for: SubmissionPage;
     readonly items: readonly SubmissionSummary[];
@@ -77,21 +83,21 @@ export function SubmissionsTab({ slug, formId, objects, page, state, open, canMa
       ? more
       : { for: page, items: [], ...(page.nextCursor === undefined ? {} : { next: page.nextCursor }) };
   const rows = [...page.items, ...held.items];
-  const [isLoadingMore, setLoadingMore] = useState(false);
-  const [busy, setBusy] = useState<'retry' | 'delete' | undefined>(undefined);
+  const [busy, setBusy] = useState<string | undefined>(undefined);
   const [isConfirmingDelete, setConfirmingDelete] = useState(false);
 
   const go = (submissionId?: string, nextState: SubmissionState | undefined = state) => {
     const href = formHref(slug, formId, 'submissions', submissionId);
     void navigate({ href: nextState === undefined ? href : `${href}&state=${nextState}` });
   };
+
   const loadMore = () => {
     const cursor = held.next;
-    if (cursor === undefined || isLoadingMore) return;
-    setLoadingMore(true);
+    if (cursor === undefined || busy !== undefined) return;
+    setBusy('more');
     data.submissions.list(slug, formId, { ...(state === undefined ? {} : { state }), cursor }).then(
       (next) => {
-        setLoadingMore(false);
+        setBusy(undefined);
         setMore({
           for: page,
           items: [...held.items, ...next.items],
@@ -99,34 +105,53 @@ export function SubmissionsTab({ slug, formId, objects, page, state, open, canMa
         });
       },
       (error: unknown) => {
-        setLoadingMore(false);
-        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.somethingWrong });
+        setBusy(undefined);
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
       },
     );
   };
-  const act = (kind: 'retry' | 'delete', submissionId: string) => {
+
+  const act = (kind: 'release' | 'spam' | 'retry' | 'delete', submissionId: string) => {
     setBusy(kind);
     const done =
-      kind === 'retry' ? data.submissions.retry(slug, submissionId) : data.submissions.delete(slug, submissionId);
+      kind === 'release'
+        ? data.submissions.release(slug, submissionId)
+        : kind === 'spam'
+          ? data.submissions.markSpam(slug, submissionId)
+          : kind === 'retry'
+            ? data.submissions.retry(slug, submissionId)
+            : data.submissions.delete(slug, submissionId);
+    const said = {
+      release: strings.released,
+      spam: strings.markedSpam,
+      retry: strings.retried,
+      delete: strings.submissionDeleted,
+    };
     done.then(
       () => {
         setBusy(undefined);
         setConfirmingDelete(false);
-        toasts.toast({ tone: 'success', message: kind === 'retry' ? strings.retried : strings.deleted });
+        toasts.toast({ tone: 'success', message: said[kind] });
         if (kind === 'delete') go(undefined);
         else void router.invalidate();
       },
       (error: unknown) => {
         setBusy(undefined);
-        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.somethingWrong });
+        toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
       },
     );
   };
 
   const cell = (submission: SubmissionSummary, column: string) => {
     switch (column) {
-      case 'received':
+      case 'when':
         return <RelativeTime value={submission.receivedAt} />;
+      case 'person': {
+        const record = submission.mainRecord;
+        if (record === undefined) return submission.email ?? '';
+        const href = link(record.objectId, record.recordId);
+        return <RecordChip display={record} {...(href === undefined ? {} : { href })} isFlat />;
+      }
       case 'state':
         return (
           <Badge
@@ -134,63 +159,73 @@ export function SubmissionsTab({ slug, formId, objects, page, state, open, canMa
             tone={submission.state === 'processed' ? 'accent' : 'neutral'}
           />
         );
-      case 'record': {
-        const record = submission.mainRecord;
-        if (record === undefined) return null;
-        const href = link(record.objectId, record.recordId);
-        return <RecordChip display={record} {...(href === undefined ? {} : { href })} isFlat />;
-      }
       default:
-        return submission.preview ?? '';
+        return submission.firstAnswers
+          .map(answerText)
+          .filter((text) => text !== '')
+          .join(' · ');
     }
   };
 
   return (
     <>
-      <Select
-        label={strings.stateFilter}
-        items={[
-          { id: ALL, label: strings.allStates },
-          ...STATES.map((each) => ({ id: each, label: strings.states[each] })),
-        ]}
+      <SegmentedControl
+        label={strings.filterStates}
         value={state ?? ALL}
-        onChange={(value) => go(undefined, value === null || value === ALL ? undefined : (value as SubmissionState))}
-        size="sm"
+        onChange={(value) => {
+          go(undefined, value === ALL ? undefined : (value as SubmissionState));
+        }}
+        segments={[
+          { value: ALL, label: strings.allStates },
+          ...FILTERS.map((each) => ({ value: each, label: strings.states[each] })),
+        ]}
       />
       <Table
-        label={strings.submissions}
+        label={strings.tabSubmissions}
         columns={COLUMNS}
         rows={rows}
         getRowId={(submission) => submission.id}
         renderCell={cell}
-        onRowAction={(id) => go(id)}
+        onRowAction={(id) => {
+          go(id);
+        }}
         emptyState={
-          <EmptyState icon="inbox" title={state === undefined ? strings.noSubmissions : strings.noSubmissionsInState}>
-            {state === undefined ? strings.noSubmissionsText : undefined}
-          </EmptyState>
+          <EmptyState icon="inbox" title={state === undefined ? strings.noSubmissions : strings.noneInState} />
         }
       />
       {held.next !== undefined && (
-        <Button onPress={loadMore} isPending={isLoadingMore}>
-          {isLoadingMore ? strings.loadingMore : strings.loadMore}
+        <Button onPress={loadMore} isPending={busy === 'more'}>
+          {strings.loadMore}
         </Button>
       )}
       {open !== undefined && (
         <Panel
           title={strings.submission}
           isOpen
-          onClose={() => go(undefined)}
+          onClose={() => {
+            go(undefined);
+          }}
           {...(canManage
             ? {
                 footer: (
                   <>
+                    {open.state === 'spam' && (
+                      <Button variant="primary" isPending={busy === 'release'} onPress={() => act('release', open.id)}>
+                        {strings.release}
+                      </Button>
+                    )}
                     {open.state === 'failed' && (
                       <Button variant="primary" isPending={busy === 'retry'} onPress={() => act('retry', open.id)}>
-                        {busy === 'retry' ? strings.retrying : strings.retry}
+                        {strings.retry}
+                      </Button>
+                    )}
+                    {open.state !== 'spam' && (
+                      <Button isPending={busy === 'spam'} onPress={() => act('spam', open.id)}>
+                        {strings.markSpam}
                       </Button>
                     )}
                     <Button variant="ghost" icon="trash" onPress={() => setConfirmingDelete(true)}>
-                      {strings.delete}
+                      {strings.deleteSubmission}
                     </Button>
                   </>
                 ),
@@ -201,7 +236,7 @@ export function SubmissionsTab({ slug, formId, objects, page, state, open, canMa
         </Panel>
       )}
       <Modal
-        title={strings.deleteTitle}
+        title={strings.deleteSubmissionTitle}
         tone="danger"
         isOpen={isConfirmingDelete}
         onOpenChange={setConfirmingDelete}
@@ -217,18 +252,18 @@ export function SubmissionsTab({ slug, formId, objects, page, state, open, canMa
                 if (open !== undefined) act('delete', open.id);
               }}
             >
-              {strings.delete}
+              {strings.deleteSubmission}
             </Button>
           </>
         }
       >
-        <p>{strings.deleteText}</p>
+        <p>{strings.deleteSubmissionText}</p>
       </Modal>
     </>
   );
 }
 
-/** One submission: where it is, its answers through each type's one display, and the records it touched. */
+/** One submission: its answers in question order (Not filed marked), where it came from, and the records it touched. */
 function SubmissionDetail({
   submission,
   link,
@@ -236,26 +271,7 @@ function SubmissionDetail({
   readonly submission: SubmissionView;
   readonly link: ReturnType<typeof recordLinks>;
 }) {
-  const facts = [
-    { term: strings.statusColumn, description: strings.states[submission.state] },
-    { term: strings.received, description: <RelativeTime value={submission.receivedAt} /> },
-    ...(submission.processedAt === undefined
-      ? []
-      : [{ term: strings.processed, description: <RelativeTime value={submission.processedAt} /> }]),
-    { term: strings.version, description: String(submission.versionNumber) },
-    { term: strings.verdict, description: strings.verdicts[submission.verdict] },
-    ...(submission.hidden.utm_source === undefined
-      ? []
-      : [{ term: strings.source, description: submission.hidden.utm_source }]),
-    ...(submission.assignment === undefined
-      ? []
-      : [
-          {
-            term: strings.assigned,
-            description: strings.assignment[submission.assignment.reason] ?? submission.assignment.reason,
-          },
-        ]),
-  ];
+  const source = Object.entries(submission.hidden).map(([term, description]) => ({ term, description }));
   return (
     <>
       {submission.failure !== undefined && (
@@ -263,49 +279,26 @@ function SubmissionDetail({
           {submission.failure}
         </Callout>
       )}
-      {submission.refused.length > 0 && (
-        <Callout tone="warning" title={strings.refused}>
-          {submission.refused
-            .map((refusal) => {
-              const label = submission.answers.find((answer) => answer.questionId === refusal.questionId)?.label;
-              return `${label ?? refusal.questionId}: ${refusal.message}`;
-            })
-            .join(' ')}
-        </Callout>
-      )}
-      <DescriptionList items={facts} />
+      <DescriptionList
+        items={[
+          { term: strings.state, description: strings.states[submission.state] },
+          { term: strings.when, description: <RelativeTime value={submission.receivedAt} /> },
+        ]}
+      />
       <h3>{strings.answers}</h3>
       <DescriptionList
         layout="stacked"
         items={submission.answers.map((answer) => ({
-          term: answer.label,
-          description: (
-            <AttributeDisplay
-              attribute={{
-                id: answer.questionId,
-                name: answer.label,
-                type: answer.type,
-                allowMultiple: Array.isArray(answer.value),
-                ...(answer.options === undefined
-                  ? {}
-                  : {
-                      options: answer.options.map((option) => ({
-                        id: option.id,
-                        label: option.label,
-                        hue: option.hue ?? 'gray',
-                        archived: false,
-                      })),
-                    }),
-                isRequired: false,
-                isUnique: false,
-                isReadOnly: true,
-              }}
-              value={answer.value ?? null}
-              surface="panel"
-            />
-          ),
+          term: answer.attributeId === undefined ? `${answer.label} · ${strings.notFiledMark}` : answer.label,
+          description: answerText(answer),
         }))}
       />
+      {source.length > 0 && (
+        <>
+          <h3>{strings.cameFrom}</h3>
+          <DescriptionList items={source} />
+        </>
+      )}
       {submission.records.length > 0 && (
         <>
           <h3>{strings.records}</h3>
@@ -313,7 +306,7 @@ function SubmissionDetail({
             items={submission.records.map((touched) => {
               const href = link(touched.record.objectId, touched.record.recordId);
               return {
-                term: `${strings.roles[touched.role]} · ${strings.actions[touched.action]}`,
+                term: strings.recordAction[touched.action],
                 description: <RecordChip display={touched.record} {...(href === undefined ? {} : { href })} />,
               };
             })}

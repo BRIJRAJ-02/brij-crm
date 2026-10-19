@@ -1,0 +1,150 @@
+/* QuestionList: cards on the raised surface, space-8 apart, each a
+   hairline border and radius-md. The header is one row: the handle, then
+   the question (muted while untitled), its type Tag and its facts, with
+   where it is filed under them in text-secondary, then a chevron. No hover
+   fill. An open card shows its editor under a hairline. A card a publish
+   refused takes the danger border. A dragged card fades; the drop line is
+   a thick accent rule. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    outline: none;
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-xs);
+    outline: none;
+  }
+
+  .card[data-focus-visible] {
+    box-shadow: var(--shadow-focus);
+  }
+
+  .card[data-problem] {
+    border-color: var(--danger);
+  }
+
+  .card[data-dragging] {
+    opacity: var(--opacity-busy);
+  }
+
+  .head {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    padding: var(--space-8) var(--space-12);
+  }
+
+  .toggle {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+    align-items: flex-start;
+    min-inline-size: 0;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+    outline: none;
+  }
+
+  .toggle[data-focus-visible] {
+    border-radius: var(--radius-xs);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .summary {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4) var(--space-8);
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .name {
+    overflow: hidden;
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .name[data-untitled] {
+    color: var(--text-tertiary);
+  }
+
+  .fact {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .problem {
+    display: inline-flex;
+    gap: var(--space-4);
+    align-items: center;
+    color: var(--danger);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .filed {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .chevron {
+    display: inline-flex;
+    flex: none;
+    color: var(--text-tertiary);
+  }
+
+  .body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    padding: var(--space-12);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  .indicator {
+    block-size: var(--border-width-thick);
+    margin-block: calc(-1 * var(--space-6));
+    border-radius: var(--radius-full);
+  }
+
+  .indicator[data-drop-target] {
+    background: var(--accent);
+  }
+
+  @media (forced-colors: active) {
+    .card[data-focus-visible],
+    .toggle[data-focus-visible] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+
+    .indicator[data-drop-target] {
+      background: Highlight;
+    }
+  }
+}
