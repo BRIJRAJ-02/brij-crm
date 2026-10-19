@@ -1,4 +1,5 @@
--- Booking pages (spec 0025, milestone 1): `booking_pages`, `booking_page_members` and `bookings`, with the standard
+-- Booking pages (spec 0025, milestone 1): `booking_pages`, `booking_page_members`, `bookings` and
+-- `booking_member_hours` (a member's own weekly hours and days off, which their pages may follow), with the standard
 -- tenant policy on each; drizzle-kit's tables, keys and indexes, the rest hand written at the end.
 --
 -- The actor type gains `booking`: the records a visitor's booking writes name the booking page (AC-634). Postgres
@@ -25,6 +26,29 @@
 set local lock_timeout = '5s';
 --> statement-breakpoint
 ALTER TYPE "public"."actor_type" ADD VALUE 'booking';--> statement-breakpoint
+CREATE TABLE "booking_member_hours" (
+	"workspace_id" uuid NOT NULL,
+	"member_id" uuid NOT NULL,
+	"availability" jsonb NOT NULL,
+	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
+	"created_by_type" "actor_type" NOT NULL,
+	"created_by_id" uuid,
+	"created_by_member_id" uuid,
+	"updated_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
+	"updated_by_type" "actor_type" NOT NULL,
+	"updated_by_id" uuid,
+	"updated_by_member_id" uuid,
+	CONSTRAINT "booking_member_hours_pkey" PRIMARY KEY("workspace_id","member_id"),
+	CONSTRAINT "booking_member_hours_created_by_actor" CHECK (("booking_member_hours"."created_by_type" is null and "booking_member_hours"."created_by_id" is null and "booking_member_hours"."created_by_member_id" is null)
+      or ("booking_member_hours"."created_by_type" = 'system' and "booking_member_hours"."created_by_id" is null and "booking_member_hours"."created_by_member_id" is null)
+      or ("booking_member_hours"."created_by_type" = 'member' and "booking_member_hours"."created_by_id" is not null and "booking_member_hours"."created_by_member_id" = "booking_member_hours"."created_by_id")
+      or ("booking_member_hours"."created_by_type" not in ('member', 'system') and "booking_member_hours"."created_by_id" is not null and "booking_member_hours"."created_by_member_id" is null)),
+	CONSTRAINT "booking_member_hours_updated_by_actor" CHECK (("booking_member_hours"."updated_by_type" is null and "booking_member_hours"."updated_by_id" is null and "booking_member_hours"."updated_by_member_id" is null)
+      or ("booking_member_hours"."updated_by_type" = 'system' and "booking_member_hours"."updated_by_id" is null and "booking_member_hours"."updated_by_member_id" is null)
+      or ("booking_member_hours"."updated_by_type" = 'member' and "booking_member_hours"."updated_by_id" is not null and "booking_member_hours"."updated_by_member_id" = "booking_member_hours"."updated_by_id")
+      or ("booking_member_hours"."updated_by_type" not in ('member', 'system') and "booking_member_hours"."updated_by_id" is not null and "booking_member_hours"."updated_by_member_id" is null))
+);
+--> statement-breakpoint
 CREATE TABLE "booking_page_members" (
 	"workspace_id" uuid NOT NULL,
 	"page_id" uuid NOT NULL,
@@ -55,6 +79,7 @@ CREATE TABLE "booking_pages" (
 	"questions" jsonb DEFAULT '[]'::jsonb NOT NULL,
 	"deal" jsonb,
 	"status" text DEFAULT 'live' NOT NULL,
+	"hours_mode" text DEFAULT 'own' NOT NULL,
 	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,
 	"created_by_type" "actor_type" NOT NULL,
 	"created_by_id" uuid,
@@ -69,6 +94,7 @@ CREATE TABLE "booking_pages" (
 	CONSTRAINT "booking_pages_slug_shape" CHECK ("booking_pages"."slug" ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length("booking_pages"."slug") <= 60),
 	CONSTRAINT "booking_pages_kind" CHECK ("booking_pages"."kind" in ('personal', 'collective', 'round_robin')),
 	CONSTRAINT "booking_pages_status" CHECK ("booking_pages"."status" in ('live', 'paused')),
+	CONSTRAINT "booking_pages_hours_mode" CHECK ("booking_pages"."hours_mode" in ('mine', 'own')),
 	CONSTRAINT "booking_pages_title" CHECK (char_length("booking_pages"."title") between 1 and 120),
 	CONSTRAINT "booking_pages_description" CHECK (char_length("booking_pages"."description") <= 2000),
 	CONSTRAINT "booking_pages_durations" CHECK (cardinality("booking_pages"."durations") between 1 and 5 and "booking_pages"."durations" <@ '{15,30,45,60,90}'::smallint[]),
@@ -171,6 +197,9 @@ ALTER TABLE "views" DROP CONSTRAINT "views_created_by_actor";--> statement-break
 ALTER TABLE "views" DROP CONSTRAINT "views_updated_by_actor";--> statement-breakpoint
 ALTER TABLE "workspaces" DROP CONSTRAINT "workspaces_created_by_actor";--> statement-breakpoint
 ALTER TABLE "workspaces" DROP CONSTRAINT "workspaces_updated_by_actor";--> statement-breakpoint
+ALTER TABLE "booking_member_hours" ADD CONSTRAINT "booking_member_hours_member" FOREIGN KEY ("workspace_id","member_id") REFERENCES "public"."members"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "booking_member_hours" ADD CONSTRAINT "booking_member_hours_created_by" FOREIGN KEY ("workspace_id","created_by_member_id") REFERENCES "public"."members"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "booking_member_hours" ADD CONSTRAINT "booking_member_hours_updated_by" FOREIGN KEY ("workspace_id","updated_by_member_id") REFERENCES "public"."members"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "booking_page_members" ADD CONSTRAINT "booking_page_members_page" FOREIGN KEY ("workspace_id","page_id") REFERENCES "public"."booking_pages"("workspace_id","id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "booking_page_members" ADD CONSTRAINT "booking_page_members_member" FOREIGN KEY ("workspace_id","member_id") REFERENCES "public"."members"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "booking_pages" ADD CONSTRAINT "booking_pages_owner" FOREIGN KEY ("workspace_id","owner_member_id") REFERENCES "public"."members"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
@@ -342,6 +371,14 @@ alter table booking_page_members enable row level security;
 alter table booking_page_members force row level security;
 --> statement-breakpoint
 create policy booking_page_members_tenant on booking_page_members
+  using (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid)
+  with check (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid);
+--> statement-breakpoint
+alter table booking_member_hours enable row level security;
+--> statement-breakpoint
+alter table booking_member_hours force row level security;
+--> statement-breakpoint
+create policy booking_member_hours_tenant on booking_member_hours
   using (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid)
   with check (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid);
 --> statement-breakpoint

@@ -4,13 +4,20 @@
 // Postgres, then the pure engine. Shared by the public slots read and the
 // booking's recheck under the host lock.
 import { and, asc, eq, gt, inArray, lt, sql } from 'drizzle-orm';
-import { BookingAvailability, BookingLocation, minutesOf, WEEKDAYS, type BookingPageSettings } from '@crm/contracts';
+import {
+  BookingAvailability,
+  BookingLocation,
+  defaultAvailability,
+  minutesOf,
+  WEEKDAYS,
+  type BookingPageSettings,
+} from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { refuse } from '../engine/refusals.ts';
 import type { BusyReader } from './calendar.ts';
 import { computeSlots, type BookedSpan, type DateOverride, type Span, type WeeklyRule } from './engine.ts';
 
-const { bookingPageMembers, bookingPages, bookings } = schema;
+const { bookingMemberHours, bookingPageMembers, bookingPages, bookings } = schema;
 
 /** A page as the services read it: its row, the settings parsed. */
 export interface PageRecord extends BookingPageSettings {
@@ -49,16 +56,32 @@ export function pageOf(row: typeof bookingPages.$inferSelect): PageRecord {
     dailyLimit: row.dailyLimit,
     slotStep: step !== null && SLOT_STEPS.has(step) ? (step as 15 | 30 | 60) : null,
     status: row.status === 'paused' ? 'paused' : 'live',
+    hoursMode: row.hoursMode === 'mine' ? 'mine' : 'own',
     isDeleted: row.deletedAt !== null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
 }
 
-/** One page by id, deleted ones too, or undefined. */
+/**
+ * One page by id, deleted ones too, or undefined, with the hours it books by:
+ * a page that follows its owner's hours takes theirs (in their zone), or
+ * weekdays 09:00 to 17:00 in the page's zone until they set any.
+ */
 export async function loadPage(tx: WorkspaceTx, pageId: string): Promise<PageRecord | undefined> {
   const [row] = await tx.select().from(bookingPages).where(eq(bookingPages.id, pageId));
-  return row === undefined ? undefined : pageOf(row);
+  if (row === undefined) return undefined;
+  const page = pageOf(row);
+  if (page.hoursMode === 'own') return page;
+  const [hours] = await tx
+    .select({ availability: bookingMemberHours.availability })
+    .from(bookingMemberHours)
+    .where(eq(bookingMemberHours.memberId, page.ownerMemberId));
+  const parsed = hours === undefined ? undefined : BookingAvailability.safeParse(hours.availability);
+  return {
+    ...page,
+    availability: parsed?.success === true ? parsed.data : defaultAvailability(page.availability.timeZone),
+  };
 }
 
 /** The page's hours as the engine takes them: weekday ranges (0 Sunday) and date overrides, in minutes. */

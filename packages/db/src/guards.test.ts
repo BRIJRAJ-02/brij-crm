@@ -882,6 +882,9 @@ describe('booking pages (spec 0025, milestone 1)', () => {
       await tx.execute(
         sql`insert into booking_page_members (workspace_id, page_id, member_id, position) values (${workspaceId}, ${pageId}, ${memberId}, 0)`,
       );
+      await tx.execute(
+        sql`insert into booking_member_hours (workspace_id, member_id, availability, created_by_type, updated_by_type) values (${workspaceId}, ${memberId}, '{}', 'system', 'system') on conflict do nothing`,
+      );
     });
     return { pageId, publicKey };
   };
@@ -908,7 +911,7 @@ describe('booking pages (spec 0025, milestone 1)', () => {
     const inB = await pageIn(b.workspaceId, b.memberId);
     await book(a.workspaceId, inA.pageId, a.memberId, '2026-11-02T09:00Z', '2026-11-02T09:30Z');
     await book(b.workspaceId, inB.pageId, b.memberId, '2026-11-02T09:00Z', '2026-11-02T09:30Z');
-    for (const table of ['booking_pages', 'booking_page_members', 'bookings']) {
+    for (const table of ['booking_pages', 'booking_page_members', 'bookings', 'booking_member_hours']) {
       const rows = await db.withWorkspace(a.workspaceId, (tx) =>
         tx.execute<{ workspace_id: string }>(sql.raw(`select workspace_id::text from ${table}`)),
       );

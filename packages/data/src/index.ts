@@ -7,6 +7,7 @@
 // while a screen shows a workspace (the realtime client loads with the first).
 import type {
   AttributeDefinition,
+  BookingAvailability,
   BookingPageSettings,
   BookingPageView,
   BookingView,
@@ -1636,6 +1637,15 @@ export function createDataLayer({
       /** A page's bookings: upcoming soonest first, or past latest first, at most 100. */
       list: (workspace: string, pageId: string, when: 'upcoming' | 'past'): Promise<BookingView[]> =>
         call((options) => api.bookings.list({ workspace, pageId, when }, options)),
+      /** The member's own hours and days off; never set yet, weekdays 09:00 to 17:00 in `timeZone`. */
+      hours: (workspace: string, timeZone: string): Promise<{ availability: BookingAvailability }> =>
+        call((options) => api.bookings.hours({ workspace, timeZone }, options)),
+      /** Replaces the member's own hours and days off; their pages that follow them book by them at once. */
+      setHours: (
+        workspace: string,
+        availability: BookingAvailability,
+      ): Promise<{ availability: BookingAvailability }> =>
+        call((options) => api.bookings.setHours({ workspace, availability, mutationId: mintId() }, options)),
     },
     objects: {
       /**

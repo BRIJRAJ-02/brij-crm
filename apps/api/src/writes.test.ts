@@ -50,6 +50,7 @@ const READS: ReadonlySet<string> = new Set([
   'bookingPages.list',
   'bookingPages.get',
   'bookings.list',
+  'bookings.hours',
 ]);
 
 let db: Database;
@@ -567,6 +568,11 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       mutationId: newId(),
     });
     await m.client.bookingPages.delete({ workspace: m.slug, pageId: page.id, mutationId });
+    return [];
+  },
+  'bookings.setHours': async (m, mutationId) => {
+    const { availability } = await m.client.bookings.hours({ workspace: m.slug, timeZone: 'UTC' });
+    await m.client.bookings.setHours({ workspace: m.slug, availability, mutationId });
     return [];
   },
   // Background jobs (spec 0008): one jobs row per write, naming the job.

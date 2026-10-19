@@ -152,4 +152,6 @@ export const ACCESS_TABLE = {
   updateBookingPage: { bookingPages: true },
   deleteBookingPage: { bookingPages: true },
   listBookings: { bookingPages: true },
+  getMemberHours: { bookingPages: true },
+  setMemberHours: { bookingPages: true },
 } as const satisfies Record<string, AccessEntry>;

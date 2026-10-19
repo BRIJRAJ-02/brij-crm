@@ -2,8 +2,10 @@ import {
   createBookingPage,
   deleteBookingPage,
   getBookingPage,
+  getMemberHours,
   listBookingPages,
   listBookings,
+  setMemberHours,
   updateBookingPage,
 } from '@crm/core';
 import { withInputFields } from '../../errors.ts';
@@ -47,4 +49,13 @@ export const bookingsRouter = member.bookings.router({
   list: member.bookings.list.handler(async ({ context, input }) => [
     ...(await listBookings(context.scope, { pageId: input.pageId, when: input.when })),
   ]),
+  // The member's own hours and days off (Bookings › Availability), which their pages may follow.
+  hours: member.bookings.hours.handler(({ context, input }) =>
+    getMemberHours(context.scope, { timeZone: input.timeZone }),
+  ),
+  setHours: member.bookings.setHours.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      setMemberHours(context.scope, { availability: input.availability }),
+    ),
+  ),
 });

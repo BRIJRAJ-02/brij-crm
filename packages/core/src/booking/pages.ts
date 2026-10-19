@@ -6,6 +6,7 @@
 import { randomBytes } from 'node:crypto';
 import { and, asc, desc, eq, gte, inArray, isNull, like, lt, sql } from 'drizzle-orm';
 import {
+  BookingAvailability,
   defaultAvailability,
   PERMISSIONS,
   slugFromTitle,
@@ -28,7 +29,7 @@ import { postgresError, refuse, refuseOn } from '../engine/refusals.ts';
 import { actorRow } from '../engine/scope.ts';
 import { loadPage, pageOf, type PageRecord } from './slots.ts';
 
-const { bookingPageMembers, bookingPages, bookings } = schema;
+const { bookingMemberHours, bookingPageMembers, bookingPages, bookings } = schema;
 
 /** A public key: 16 URL safe characters from 12 random bytes. */
 export function newPublicKey(): string {
@@ -111,6 +112,7 @@ function viewOf(scope: EngineScope, page: PageRecord, count: number): BookingPag
     dailyLimit: page.dailyLimit,
     slotStep: page.slotStep,
     status: page.status,
+    hoursMode: page.hoursMode,
     bookingsThisMonth: count,
     canChange: mayChange(scope, page),
     createdAt: page.createdAt.toISOString(),
@@ -209,6 +211,7 @@ export async function createBookingPage(
       dailyLimit: given.dailyLimit ?? null,
       slotStep: given.slotStep ?? null,
       status: given.status ?? 'live',
+      hoursMode: given.hoursMode ?? 'own',
     };
     const by = actorRow(scope.actor);
     try {
@@ -233,6 +236,7 @@ export async function createBookingPage(
           dailyLimit: settings.dailyLimit,
           slotStep: settings.slotStep,
           status: settings.status,
+          hoursMode: settings.hoursMode,
           createdByType: by.type,
           createdById: by.id,
           createdByMemberId: by.memberId,
@@ -281,6 +285,7 @@ export async function updateBookingPage(
           ...(settings.dailyLimit === undefined ? {} : { dailyLimit: settings.dailyLimit }),
           ...(settings.slotStep === undefined ? {} : { slotStep: settings.slotStep }),
           ...(settings.status === undefined ? {} : { status: settings.status }),
+          ...(settings.hoursMode === undefined ? {} : { hoursMode: settings.hoursMode }),
           updatedAt: sql`now()`,
           updatedByType: by.type,
           updatedById: by.id,
@@ -356,5 +361,64 @@ export async function listBookings(
       eventFailed: row.eventFailedAt !== null,
       createdAt: row.createdAt.toISOString(),
     }));
+  });
+}
+
+/** The member a scope acts for, or FORBIDDEN (hours are a member's own). */
+function hoursOwner(scope: EngineScope): string {
+  requirePermission(scope, 'booking.manage');
+  const member = memberOf(scope);
+  if (member === undefined) throw refuse('FORBIDDEN', PERMISSIONS['booking.manage'].message);
+  return member;
+}
+
+/** The caller's own hours and days off; never set yet, weekdays 09:00 to 17:00 in `timeZone`. */
+export async function getMemberHours(
+  scope: EngineScope,
+  input: { readonly timeZone: string },
+): Promise<{ readonly availability: BookingAvailability }> {
+  const member = hoursOwner(scope);
+  return inWorkspace(scope, async (tx) => {
+    const [row] = await tx
+      .select({ availability: bookingMemberHours.availability })
+      .from(bookingMemberHours)
+      .where(eq(bookingMemberHours.memberId, member));
+    const parsed = row === undefined ? undefined : BookingAvailability.safeParse(row.availability);
+    return { availability: parsed?.success === true ? parsed.data : defaultAvailability(input.timeZone) };
+  });
+}
+
+/** Replaces the caller's own hours and days off: every page that follows them books by them at once. */
+export async function setMemberHours(
+  scope: EngineScope,
+  input: { readonly availability: BookingAvailability },
+): Promise<{ readonly availability: BookingAvailability }> {
+  const member = hoursOwner(scope);
+  const by = actorRow(scope.actor);
+  return inWorkspace(scope, async (tx) => {
+    await tx
+      .insert(bookingMemberHours)
+      .values({
+        workspaceId: scope.workspaceId,
+        memberId: member,
+        availability: input.availability,
+        createdByType: by.type,
+        createdById: by.id,
+        createdByMemberId: by.memberId,
+        updatedByType: by.type,
+        updatedById: by.id,
+        updatedByMemberId: by.memberId,
+      })
+      .onConflictDoUpdate({
+        target: [bookingMemberHours.workspaceId, bookingMemberHours.memberId],
+        set: {
+          availability: input.availability,
+          updatedAt: sql`now()`,
+          updatedByType: by.type,
+          updatedById: by.id,
+          updatedByMemberId: by.memberId,
+        },
+      });
+    return { availability: input.availability };
   });
 }

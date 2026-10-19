@@ -85,7 +85,12 @@ export const TimeZoneName = z.string().refine(isTimeZone, { error: 'Pick a time 
 export type TimeZoneName = z.infer<typeof TimeZoneName>;
 
 /** One date's own hours: its ranges replace the week's; none is a day off. */
-export const DateOverride = z.object({ date: DateValue, ranges: DayRanges });
+export const DateOverride = z.object({
+  date: DateValue,
+  ranges: DayRanges,
+  /** Why (a day off's reason), for the member only. */
+  note: z.string().trim().max(120, 'Keep the reason to 120 characters.').optional(),
+});
 /** One date's own hours. */
 export type DateOverride = z.infer<typeof DateOverride>;
 
@@ -184,6 +189,8 @@ export const BookingPageSettings = z.object({
     )
     .nullable(),
   status: BookingPageStatus,
+  /** `mine` follows the owner's own hours (Bookings › Availability); `own` uses `availability`. */
+  hoursMode: z.enum(['mine', 'own']),
 });
 /** Every setting a member edits. */
 export type BookingPageSettings = z.infer<typeof BookingPageSettings>;

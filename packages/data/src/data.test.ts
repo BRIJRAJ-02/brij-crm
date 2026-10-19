@@ -403,6 +403,8 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     },
     bookings: {
       list: os.bookings.list.handler(notServed),
+      hours: os.bookings.hours.handler(notServed),
+      setHours: os.bookings.setHours.handler(notServed),
     },
   });
   const handler = new RPCHandler(router);

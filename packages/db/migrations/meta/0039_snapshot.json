@@ -1,5 +1,5 @@
 {
-  "id": "0603a6ed-0170-486b-b6cf-3642becef73f",
+  "id": "f210f00c-7d09-468b-9785-69787250546c",
   "prevId": "c2304fb2-61c6-479f-be6c-7b436d0468c3",
   "version": "7",
   "dialect": "postgresql",
@@ -690,6 +690,152 @@
       },
       "isRLSEnabled": false
     },
+    "public.booking_member_hours": {
+      "name": "booking_member_hours",
+      "schema": "",
+      "columns": {
+        "workspace_id": {
+          "name": "workspace_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "member_id": {
+          "name": "member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "availability": {
+          "name": "availability",
+          "type": "jsonb",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_at": {
+          "name": "created_at",
+          "type": "timestamp (6) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "created_by_type": {
+          "name": "created_by_type",
+          "type": "actor_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "created_by_id": {
+          "name": "created_by_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "created_by_member_id": {
+          "name": "created_by_member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_at": {
+          "name": "updated_at",
+          "type": "timestamp (6) with time zone",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "now()"
+        },
+        "updated_by_type": {
+          "name": "updated_by_type",
+          "type": "actor_type",
+          "typeSchema": "public",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "updated_by_id": {
+          "name": "updated_by_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "updated_by_member_id": {
+          "name": "updated_by_member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        }
+      },
+      "indexes": {},
+      "foreignKeys": {
+        "booking_member_hours_member": {
+          "name": "booking_member_hours_member",
+          "tableFrom": "booking_member_hours",
+          "tableTo": "members",
+          "columnsFrom": [
+            "workspace_id",
+            "member_id"
+          ],
+          "columnsTo": [
+            "workspace_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "booking_member_hours_created_by": {
+          "name": "booking_member_hours_created_by",
+          "tableFrom": "booking_member_hours",
+          "tableTo": "members",
+          "columnsFrom": [
+            "workspace_id",
+            "created_by_member_id"
+          ],
+          "columnsTo": [
+            "workspace_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "booking_member_hours_updated_by": {
+          "name": "booking_member_hours_updated_by",
+          "tableFrom": "booking_member_hours",
+          "tableTo": "members",
+          "columnsFrom": [
+            "workspace_id",
+            "updated_by_member_id"
+          ],
+          "columnsTo": [
+            "workspace_id",
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        }
+      },
+      "compositePrimaryKeys": {
+        "booking_member_hours_pkey": {
+          "name": "booking_member_hours_pkey",
+          "columns": [
+            "workspace_id",
+            "member_id"
+          ]
+        }
+      },
+      "uniqueConstraints": {},
+      "policies": {},
+      "checkConstraints": {
+        "booking_member_hours_created_by_actor": {
+          "name": "booking_member_hours_created_by_actor",
+          "value": "(\"booking_member_hours\".\"created_by_type\" is null and \"booking_member_hours\".\"created_by_id\" is null and \"booking_member_hours\".\"created_by_member_id\" is null)\n      or (\"booking_member_hours\".\"created_by_type\" = 'system' and \"booking_member_hours\".\"created_by_id\" is null and \"booking_member_hours\".\"created_by_member_id\" is null)\n      or (\"booking_member_hours\".\"created_by_type\" = 'member' and \"booking_member_hours\".\"created_by_id\" is not null and \"booking_member_hours\".\"created_by_member_id\" = \"booking_member_hours\".\"created_by_id\")\n      or (\"booking_member_hours\".\"created_by_type\" not in ('member', 'system') and \"booking_member_hours\".\"created_by_id\" is not null and \"booking_member_hours\".\"created_by_member_id\" is null)"
+        },
+        "booking_member_hours_updated_by_actor": {
+          "name": "booking_member_hours_updated_by_actor",
+          "value": "(\"booking_member_hours\".\"updated_by_type\" is null and \"booking_member_hours\".\"updated_by_id\" is null and \"booking_member_hours\".\"updated_by_member_id\" is null)\n      or (\"booking_member_hours\".\"updated_by_type\" = 'system' and \"booking_member_hours\".\"updated_by_id\" is null and \"booking_member_hours\".\"updated_by_member_id\" is null)\n      or (\"booking_member_hours\".\"updated_by_type\" = 'member' and \"booking_member_hours\".\"updated_by_id\" is not null and \"booking_member_hours\".\"updated_by_member_id\" = \"booking_member_hours\".\"updated_by_id\")\n      or (\"booking_member_hours\".\"updated_by_type\" not in ('member', 'system') and \"booking_member_hours\".\"updated_by_id\" is not null and \"booking_member_hours\".\"updated_by_member_id\" is null)"
+        }
+      },
+      "isRLSEnabled": false
+    },
     "public.booking_page_members": {
       "name": "booking_page_members",
       "schema": "",
@@ -927,6 +1073,13 @@
           "notNull": true,
           "default": "'live'"
         },
+        "hours_mode": {
+          "name": "hours_mode",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'own'"
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp (6) with time zone",
@@ -1127,6 +1280,10 @@
         "booking_pages_status": {
           "name": "booking_pages_status",
           "value": "\"booking_pages\".\"status\" in ('live', 'paused')"
+        },
+        "booking_pages_hours_mode": {
+          "name": "booking_pages_hours_mode",
+          "value": "\"booking_pages\".\"hours_mode\" in ('mine', 'own')"
         },
         "booking_pages_title": {
           "name": "booking_pages_title",

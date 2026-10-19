@@ -133,8 +133,10 @@ export {
   createBookingPage,
   deleteBookingPage,
   getBookingPage,
+  getMemberHours,
   listBookingPages,
   listBookings,
+  setMemberHours,
   updateBookingPage,
 } from './booking/pages.ts';
 export {

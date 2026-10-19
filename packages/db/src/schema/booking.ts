@@ -62,6 +62,8 @@ export const bookingPages = pgTable(
     /** `{ mode: 'create' | 'move_open', stageOptionId }` (milestone 2). */
     deal: jsonb('deal'),
     status: text('status').notNull().default('live'),
+    /** `mine` follows the owner's hours (`booking_member_hours`); `own` uses `availability` above. */
+    hoursMode: text('hours_mode').notNull().default('own'),
     ...auditColumns(),
     deletedAt: timestamptz('deleted_at'),
   },
@@ -83,6 +85,7 @@ export const bookingPages = pgTable(
     check('booking_pages_slug_shape', sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.slug}) <= 60`),
     check('booking_pages_kind', sql`${t.kind} in ('personal', 'collective', 'round_robin')`),
     check('booking_pages_status', sql`${t.status} in ('live', 'paused')`),
+    check('booking_pages_hours_mode', sql`${t.hoursMode} in ('mine', 'own')`),
     check('booking_pages_title', sql`char_length(${t.title}) between 1 and 120`),
     check('booking_pages_description', sql`char_length(${t.description}) <= 2000`),
     check(
@@ -100,6 +103,36 @@ export const bookingPages = pgTable(
       memberId: t.createdByMemberId,
     }),
     ...actorConstraints('booking_pages', 'updated_by', t.workspaceId, {
+      type: t.updatedByType,
+      id: t.updatedById,
+      memberId: t.updatedByMemberId,
+    }),
+  ],
+);
+
+/** A member's own weekly hours and days off (Bookings › Availability), which their pages may follow. */
+export const bookingMemberHours = pgTable(
+  'booking_member_hours',
+  {
+    workspaceId: workspaceId(),
+    memberId: uuid('member_id').notNull(),
+    /** The same shape as a page's `availability`. */
+    availability: jsonb('availability').notNull(),
+    ...auditColumns(),
+  },
+  (t) => [
+    primaryKey({ name: 'booking_member_hours_pkey', columns: [t.workspaceId, t.memberId] }),
+    foreignKey({
+      name: 'booking_member_hours_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    ...actorConstraints('booking_member_hours', 'created_by', t.workspaceId, {
+      type: t.createdByType,
+      id: t.createdById,
+      memberId: t.createdByMemberId,
+    }),
+    ...actorConstraints('booking_member_hours', 'updated_by', t.workspaceId, {
       type: t.updatedByType,
       id: t.updatedById,
       memberId: t.updatedByMemberId,

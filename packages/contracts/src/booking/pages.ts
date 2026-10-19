@@ -104,7 +104,29 @@ export const bookingPagesContract = {
   delete: oc.input(DeleteBookingPageInput).output(z.object({ pageId: z.uuid() })),
 };
 
+/** A member's own hours and days off, which their pages may follow. */
+export const MemberHours = z.object({ availability: BookingPageSettings.shape.availability });
+/** A member's own hours. */
+export type MemberHours = z.infer<typeof MemberHours>;
+
+/** The caller's own hours; never set yet, weekdays 09:00 to 17:00 in `timeZone`. */
+export const GetMemberHoursInput = WorkspaceScoped.extend({
+  timeZone: BookingPageSettings.shape.availability.shape.timeZone,
+});
+/** The caller's own hours. */
+export type GetMemberHoursInput = z.infer<typeof GetMemberHoursInput>;
+
+/** Replaces the caller's own hours. */
+export const UpdateMemberHoursInput = WorkspaceScoped.extend({
+  availability: BookingPageSettings.shape.availability,
+  mutationId: z.uuid(),
+});
+/** Replaces the caller's own hours. */
+export type UpdateMemberHoursInput = z.infer<typeof UpdateMemberHoursInput>;
+
 /** Member procedures for bookings. */
 export const bookingsContract = {
   list: oc.input(ListBookingsInput).output(z.array(BookingView)),
+  hours: oc.input(GetMemberHoursInput).output(MemberHours),
+  setHours: oc.input(UpdateMemberHoursInput).output(MemberHours),
 };

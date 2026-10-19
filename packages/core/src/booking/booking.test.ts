@@ -17,8 +17,10 @@ import {
   createBookingPage,
   deleteBookingPage,
   getBookingPage,
+  getMemberHours,
   listBookingPages,
   listBookings,
+  setMemberHours,
   updateBookingPage,
 } from './pages.ts';
 import {
@@ -489,5 +491,32 @@ describe('the guest page (AC-674)', () => {
       calendar: 'unreachable',
     });
     expect((await mondaySlots(entry)).calendar).toBe('ok');
+  });
+});
+
+describe('a member’s own hours (Bookings › Availability)', () => {
+  it('defaults to weekdays 9 to 5, is the member’s own, and a page that follows them books by them', async () => {
+    const w = await workspace();
+    const bea = await w.addMember('bea', 'member');
+    expect((await getMemberHours(w.owner, { timeZone: 'UTC' })).availability.weekly.mon).toEqual([['09:00', '17:00']]);
+    const { page, entry } = await livePage(w, { hoursMode: 'mine' });
+    expect(page.hoursMode).toBe('mine');
+    expect((await mondaySlots(entry)).slots).toHaveLength(16);
+    const mine = (await getMemberHours(w.owner, { timeZone: 'UTC' })).availability;
+    await setMemberHours(w.owner, {
+      availability: { ...mine, weekly: { ...mine.weekly, mon: [['10:00', '11:00']] }, overrides: [] },
+    });
+    expect((await mondaySlots(entry)).slots.map((slot) => slot.start)).toEqual([
+      '2026-11-02T10:00:00.000Z',
+      '2026-11-02T10:30:00.000Z',
+    ]);
+    // Bea's hours are hers alone; the owner's page still follows the owner's.
+    await setMemberHours(bea, {
+      availability: { ...mine, overrides: [{ date: '2026-11-02', ranges: [], note: 'Away' }] },
+    });
+    expect((await mondaySlots(entry)).slots).toHaveLength(2);
+    expect((await getMemberHours(bea, { timeZone: 'UTC' })).availability.overrides).toEqual([
+      { date: '2026-11-02', ranges: [], note: 'Away' },
+    ]);
   });
 });
