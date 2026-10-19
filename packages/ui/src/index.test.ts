@@ -30,6 +30,7 @@ describe('@crm/ui', () => {
       'Callout',
       'Card',
       'Checkbox',
+      'ChoiceChips',
       'Code',
       'CodeInput',
       'CommandPalette',

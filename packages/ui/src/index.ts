@@ -144,6 +144,7 @@ export {
   type ThemeSwitchProps,
 } from './molecules/SegmentedControl/SegmentedControl.tsx';
 export { Select, type SelectItem, type SelectOptionStyle, type SelectProps } from './molecules/Select/Select.tsx';
+export { ChoiceChips, type ChoiceChip, type ChoiceChipsProps } from './molecules/ChoiceChips/ChoiceChips.tsx';
 export { Steps, type Step, type StepsProps } from './molecules/Steps/Steps.tsx';
 export { Table, type TableColumn, type TableProps } from './molecules/Table/Table.tsx';
 export { TabPanel, Tabs, type TabItem, type TabPanelProps, type TabsProps } from './molecules/Tabs/Tabs.tsx';
