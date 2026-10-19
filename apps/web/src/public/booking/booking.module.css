@@ -1,8 +1,10 @@
-/* The public booking pages (spec 0025, 0025-experience.md, with spec 0023's
-   visitor rules): plain markup styled here with the compiled tokens only. A
-   rail and the card side by side from the page breakpoint, stacked below it;
-   16px text on phones so inputs never zoom. Motion uses the motion tokens, and
-   reduced motion keeps fades only. */
+/* The public booking pages (spec 0025, 0025-experience.md), laid out as the
+   timefix booking page and styled with the compiled tokens only (spec 0023's
+   public bundle rules). Wide: one centred unit, a rail (the host, the title,
+   the facts, Timefix at its foot) beside the booking card. Phone: the rail's
+   identity, then the card, then Timefix at the page's end. 16px inputs on a
+   phone so nothing zooms. Motion uses the motion tokens; reduced motion keeps
+   the fades and drops the movement. */
 @layer components {
   /* Fills the window on its own (no reset loads here), so the browser's body margin never shows. */
   .page {
@@ -10,7 +12,9 @@
     inset: 0;
     overflow: auto;
     box-sizing: border-box;
-    padding-block: var(--space-32);
+    display: flex;
+    flex-direction: column;
+    padding-block: var(--space-24);
     padding-inline: var(--space-16);
     background: var(--surface-subtle);
     color: var(--text);
@@ -21,47 +25,64 @@
   .layout {
     display: flex;
     flex-direction: column;
-    gap: var(--space-24);
-    max-inline-size: calc(var(--size-dialog-wide) + var(--size-sidebar));
-    margin-inline: auto;
+    gap: var(--space-20);
+    inline-size: 100%;
+    max-inline-size: calc(var(--size-menu) + var(--space-32) + var(--size-dialog-wide));
+    margin: auto;
   }
 
-  .solo {
+  .solo,
+  .manage {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-20);
+    inline-size: 100%;
     max-inline-size: var(--size-page-card);
-    margin-inline: auto;
+    margin: auto;
+  }
+
+  .manage {
+    max-inline-size: calc(var(--size-page-card) + var(--space-32) * 2);
   }
 
   .rail,
   .main {
+    min-inline-size: 0;
     animation: rise var(--duration-modal) var(--ease-out) both;
   }
 
   .main {
     display: flex;
     flex-direction: column;
-    gap: var(--space-12);
-    min-inline-size: 0;
     animation-delay: calc(var(--duration-hover) / 2);
   }
 
   .rail {
     display: flex;
     flex-direction: column;
-    gap: var(--space-16);
+    gap: var(--space-24);
   }
 
   @media (width >= 1024px) {
+    .page {
+      padding-block: var(--space-32);
+      padding-inline: var(--space-24);
+    }
+
     .layout {
       flex-direction: row;
-      align-items: flex-start;
+      align-items: stretch;
+      gap: var(--space-32);
     }
 
     .rail {
+      flex: none;
+      inline-size: var(--size-menu);
+    }
+
+    .identity {
       position: sticky;
       inset-block-start: 0;
-      flex: none;
-      inline-size: var(--size-column-wide);
-      min-block-size: var(--size-dialog);
     }
 
     .main {
@@ -69,105 +90,180 @@
     }
   }
 
-  .host {
+  /* The host, the title as the page's heading, and the facts as compact icon rows. */
+  .identity {
     display: flex;
-    align-items: center;
-    gap: var(--space-12);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-4);
   }
 
-  .avatar {
+  .avatar,
+  .manageAvatar {
+    position: relative;
     display: inline-grid;
     flex: none;
     place-items: center;
     inline-size: var(--size-toolbar);
     block-size: var(--size-toolbar);
+    margin-block-end: var(--space-8);
     border-radius: var(--radius-full);
     background: var(--accent-soft);
     color: var(--accent);
     font: var(--text-title);
-  }
-
-  .hostName {
-    font: var(--text-title);
     letter-spacing: var(--tracking-title);
   }
 
-  .facts,
-  .factsList {
-    display: grid;
-    gap: var(--space-4) var(--space-12);
+  .hostName {
     margin: 0;
-  }
-
-  .factsList {
-    grid-template-columns: auto 1fr;
-  }
-
-  .factTerm {
     color: var(--text-secondary);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
-  }
-
-  .factValue {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-    margin: 0;
-  }
-
-  .facts .factValue {
-    flex-direction: row;
-    align-items: center;
-    gap: var(--space-6);
-    margin-block-end: var(--space-8);
-  }
-
-  /* The foot sits at the rail's end on wide screens and at the page's end on a phone. */
-  .railFoot {
-    display: none;
-    margin-block-start: auto;
-  }
-
-  .pageFoot {
-    text-align: center;
-  }
-
-  @media (width >= 1024px) {
-    .railFoot {
-      display: block;
-    }
-
-    .pageFoot {
-      display: none;
-    }
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
   }
 
   .headline {
     margin: 0;
     font: var(--text-heading);
     letter-spacing: var(--tracking-heading);
-    transition: opacity var(--duration-move) var(--ease-out);
+    overflow-wrap: anywhere;
   }
 
-  .headline[data-quiet] {
+  .description {
+    display: -webkit-box;
+    margin: var(--space-4) 0 0;
+    overflow: hidden;
+    color: var(--text-secondary);
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 6;
+    line-clamp: 6;
+  }
+
+  .facts {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    inline-size: 100%;
+    margin: var(--space-12) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .fact {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    min-inline-size: 0;
+    color: var(--text-secondary);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  /* Timefix under the booking: a quiet card at the rail's foot on wide screens, centred at the page's end on a phone. */
+  .brand {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-8);
+    text-align: center;
+  }
+
+  .brand[data-placement='rail'] {
+    display: none;
+  }
+
+  @media (width >= 1024px) {
+    .brand[data-placement='rail'] {
+      position: sticky;
+      inset-block-end: 0;
+      display: flex;
+      align-items: flex-start;
+      margin-block-start: auto;
+      padding: var(--space-12) var(--space-16);
+      border: var(--border-width-hairline) solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--surface-raised);
+      text-align: start;
+    }
+
+    .layout > .brand[data-placement='page'] {
+      display: none;
+    }
+  }
+
+  .brandWorkspace {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .brandLink {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: inherit;
+    gap: var(--space-4);
+    border-radius: var(--radius-xs);
+    color: var(--text-tertiary);
+    text-decoration: none;
     opacity: var(--opacity-busy);
+    transition: opacity var(--duration-hover) var(--ease-hover);
   }
 
+  .brandLabel {
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    text-transform: uppercase;
+  }
+
+  .wordmark {
+    display: block;
+    block-size: var(--space-16);
+    inline-size: auto;
+  }
+
+  /* One wordmark per theme: dark ink on light, white on dark, the other out of the tree. */
+  .wordmark[data-scheme='dark'] {
+    display: none;
+  }
+
+  :root[data-theme='dark'] .wordmark[data-scheme='light'] {
+    display: none;
+  }
+
+  :root[data-theme='dark'] .wordmark[data-scheme='dark'] {
+    display: block;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .wordmark[data-scheme='light'] {
+      display: none;
+    }
+
+    :root:not([data-theme='light']) .wordmark[data-scheme='dark'] {
+      display: block;
+    }
+  }
+
+  /* The booking card. */
   .card {
     box-sizing: border-box;
     display: flex;
     flex-direction: column;
     gap: var(--space-16);
-    padding: var(--space-24);
+    padding: var(--space-20);
     border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-xl);
     background: var(--surface-raised);
     box-shadow: var(--shadow-md);
     container: booking / inline-size;
     animation: rise var(--duration-modal) var(--ease-out) var(--duration-hover) both;
-    interpolate-size: allow-keywords;
-    transition: block-size var(--duration-move) var(--ease-in-out);
+  }
+
+  @media (width >= 1024px) {
+    .main > .card {
+      flex: 1;
+      padding: var(--space-24);
+    }
   }
 
   .title {
@@ -196,7 +292,8 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-8);
-    padding-block: var(--space-24);
+    margin: 0;
+    padding-block: var(--space-32);
     text-align: center;
   }
 
@@ -206,14 +303,19 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
+  /* The step swap: the details rise in from below, the times come back from above. */
   .swap {
-    animation: rise var(--duration-move) var(--ease-out) both;
+    animation: enter var(--duration-move) var(--ease-out) both;
   }
 
-  .icon {
+  .swap[data-enter='back'] {
+    animation-name: enter-back;
+  }
+
+  .icon,
+  .iconSmall,
+  .chevron {
     flex: none;
-    inline-size: var(--size-icon);
-    block-size: var(--size-icon);
     fill: none;
     stroke: currentcolor;
     stroke-linecap: round;
@@ -221,8 +323,29 @@
     stroke-width: var(--icon-stroke);
   }
 
+  .icon {
+    inline-size: var(--size-icon);
+    block-size: var(--size-icon);
+  }
+
+  .iconSmall,
+  .chevron {
+    inline-size: var(--size-icon-sm);
+    block-size: var(--size-icon-sm);
+  }
+
+  .chevron {
+    color: var(--text-tertiary);
+    transition: rotate var(--duration-popover) var(--ease-out);
+  }
+
+  .chevron[data-open] {
+    rotate: 180deg;
+  }
+
   /* Buttons. */
   .iconButton,
+  .roundButton,
   .secondary,
   .ghost,
   .segment,
@@ -231,14 +354,16 @@
   .commit,
   .zoneRow,
   .link,
-  .dayCell {
+  .dayCell,
+  .join {
     font: inherit;
     letter-spacing: inherit;
     cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
 
-  .iconButton {
+  .iconButton,
+  .roundButton {
     display: inline-grid;
     flex: none;
     place-items: center;
@@ -248,14 +373,22 @@
     border: var(--border-width-hairline) solid transparent;
     border-radius: var(--radius-md);
     background: transparent;
-    color: var(--text);
+    color: var(--text-secondary);
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      color var(--duration-hover) var(--ease-hover);
+  }
+
+  .roundButton {
+    border-radius: var(--radius-full);
   }
 
   .secondary {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    align-self: center;
+    gap: var(--space-6);
+    box-sizing: border-box;
     min-block-size: var(--size-input);
     padding-inline: var(--space-12);
     border: var(--border-width-hairline) solid var(--border);
@@ -264,6 +397,7 @@
     box-shadow: var(--shadow-control);
     color: var(--text);
     font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
     text-decoration: none;
   }
 
@@ -274,6 +408,7 @@
     background: none;
     color: var(--link);
     font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
   }
 
   .link {
@@ -290,6 +425,7 @@
 
   .segmented {
     display: inline-flex;
+    flex: none;
     align-self: flex-start;
     padding: var(--space-2);
     border-radius: var(--radius-md);
@@ -298,13 +434,16 @@
 
   .segment {
     min-block-size: var(--size-control);
-    padding-inline: var(--space-12);
+    padding-inline: var(--space-8);
     border: none;
     border-radius: var(--radius-sm);
     background: transparent;
     color: var(--text-secondary);
     font: var(--text-body-strong);
-    transition: background-color var(--duration-move) var(--ease-in-out);
+    letter-spacing: var(--tracking-body-strong);
+    transition:
+      background-color var(--duration-move) var(--ease-in-out),
+      color var(--duration-hover) var(--ease-hover);
   }
 
   .segment[aria-checked='true'] {
@@ -313,20 +452,36 @@
     color: var(--text);
   }
 
-  /* The time zone row and its list. */
+  /* The time zone row: one line, ellipsised, the full name in its tooltip; its list opens under it. */
   .zone {
     position: relative;
+    inline-size: 100%;
+    min-inline-size: 0;
   }
 
   .zoneRow {
-    display: inline-flex;
+    display: flex;
     align-items: center;
-    gap: var(--space-6);
-    padding: 0;
+    gap: var(--space-8);
+    box-sizing: border-box;
+    inline-size: calc(100% + var(--space-8));
+    min-block-size: var(--size-control);
+    margin-inline: calc(var(--space-4) * -1);
+    padding: var(--space-2) var(--space-4);
     border: none;
+    border-radius: var(--radius-sm);
     background: none;
-    color: var(--link);
+    color: var(--text-secondary);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
     text-align: start;
+  }
+
+  .zoneText {
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .zoneMenu {
@@ -334,16 +489,21 @@
     z-index: var(--z-popover);
     inset-block-start: calc(100% + var(--space-4));
     inset-inline-start: 0;
+    box-sizing: border-box;
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
-    inline-size: var(--size-menu);
+    inline-size: var(--size-column-wide);
+    max-inline-size: calc(100vi - var(--space-32));
     padding: var(--space-8);
     border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-lg);
     background: var(--surface-raised);
     box-shadow: var(--shadow-lg);
-    animation: grow var(--duration-popover) var(--ease-out) both;
+    color: var(--text);
+    font: var(--text-body);
+    transform-origin: top left;
+    animation: drop var(--duration-popover) var(--ease-out) both;
   }
 
   .zoneList {
@@ -351,27 +511,59 @@
     margin: 0;
     padding: 0;
     overflow: auto;
+    overscroll-behavior: contain;
     list-style: none;
   }
 
   .zoneOption {
     display: flex;
-    justify-content: space-between;
+    align-items: center;
     gap: var(--space-8);
     padding: var(--space-6) var(--space-8);
     border-radius: var(--radius-sm);
+    color: var(--text-secondary);
     cursor: pointer;
   }
 
   .zoneOption[data-active] {
     background: var(--surface-hover);
+    color: var(--text);
   }
 
   .zoneOption[aria-selected='true'] {
+    color: var(--text);
+  }
+
+  .zoneName {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .zoneOffset {
+    flex: none;
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .zoneTick {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--size-icon-sm);
     color: var(--accent);
   }
 
-  /* Step 1. */
+  .zoneEmpty {
+    padding: var(--space-6) var(--space-8);
+    color: var(--text-secondary);
+  }
+
+  /* Step 1: one header row, then the month beside its times (Month) or the day strip over them (List). */
   .picker {
     display: flex;
     flex-direction: column;
@@ -385,17 +577,24 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--space-8);
+    min-block-size: var(--size-input);
+  }
+
+  .pickerHead {
+    flex-wrap: wrap;
   }
 
   .stepTitle,
-  .monthLabel {
+  .monthLabel,
+  .timesDay {
     margin: 0;
-    font: var(--text-title);
-    letter-spacing: var(--tracking-title);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
   }
 
-  .monthLabel {
-    font: var(--text-body-strong);
+  .stepTitle {
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
   }
 
   .monthLayout,
@@ -405,19 +604,38 @@
     gap: var(--space-16);
   }
 
-  @container booking (inline-size >= 480px) {
+  @media (width >= 1024px) {
     .monthLayout {
       flex-direction: row;
+      gap: var(--space-24);
     }
 
     .monthView {
       flex: 1;
+      max-inline-size: var(--size-panel);
     }
 
-    .timesColumn {
+    /* The times take the month's height and scroll inside it, with a fade at the foot. */
+    .monthLayout .timesColumn {
       flex: none;
       inline-size: var(--size-column-wide);
+      padding-inline-start: var(--space-24);
+      border-inline-start: var(--border-width-hairline) solid var(--border-subtle);
+      contain: size;
     }
+  }
+
+  @media (width < 1024px) {
+    .monthLayout .timesColumn {
+      padding-block-start: var(--space-16);
+      border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    }
+  }
+
+  .monthView {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
   }
 
   .arrows {
@@ -429,37 +647,61 @@
   .monthGrid {
     display: grid;
     grid-template-columns: repeat(7, minmax(0, 1fr));
-    gap: var(--space-4);
+    gap: var(--space-4) var(--space-2);
   }
 
   .weekday {
-    color: var(--text-secondary);
-    font: var(--text-label);
-    letter-spacing: var(--tracking-label);
+    color: var(--text-tertiary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
     text-align: center;
+  }
+
+  .monthGrid {
+    animation: fade var(--duration-move) var(--ease-out) both;
+  }
+
+  .monthGrid[data-direction='forward'] {
+    animation-name: slide-forward;
+  }
+
+  .monthGrid[data-direction='back'] {
+    animation-name: slide-back;
   }
 
   .dayCell {
     position: relative;
     display: grid;
     place-items: center;
+    justify-self: center;
+    inline-size: 100%;
+    max-inline-size: calc(var(--size-row) + var(--space-6));
     aspect-ratio: 1;
+    padding: 0;
     border: none;
-    border-radius: var(--radius-full);
+    border-radius: var(--radius-md);
     background: var(--accent-soft);
     color: var(--accent);
     font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    font-variant-numeric: tabular-nums;
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      color var(--duration-hover) var(--ease-hover);
   }
 
   .dayCell:disabled {
     background: transparent;
     color: var(--text-tertiary);
+    font: var(--text-body);
     cursor: default;
   }
 
+  /* The chosen day: solid blue that pops in under the number. */
   .dayCell[aria-pressed='true'] {
     background: var(--accent);
     color: var(--on-accent);
+    animation: pop var(--duration-popover) var(--ease-out) both;
   }
 
   .todayDot {
@@ -471,11 +713,13 @@
     background: currentcolor;
   }
 
+  /* The day strip: only days with times, sideways. */
   .chips {
     display: flex;
     gap: var(--space-8);
-    overflow-x: auto;
     padding-block-end: var(--space-4);
+    overflow-x: auto;
+    scrollbar-width: none;
   }
 
   .chip {
@@ -487,9 +731,12 @@
     min-inline-size: var(--size-toolbar);
     padding: var(--space-6) var(--space-8);
     border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-md);
     background: var(--surface-raised);
     color: var(--text);
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      border-color var(--duration-hover) var(--ease-hover);
   }
 
   .chip[aria-pressed='true'] {
@@ -498,12 +745,15 @@
     color: var(--on-accent);
   }
 
-  .chip[aria-pressed='true'] .weekday {
-    color: var(--on-accent);
+  .chipWeekday {
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    text-transform: uppercase;
   }
 
   .chipDate {
     font: var(--text-body-strong);
+    font-variant-numeric: tabular-nums;
   }
 
   .timesColumn,
@@ -512,87 +762,107 @@
     flex-direction: column;
     gap: var(--space-8);
     min-inline-size: 0;
-  }
-
-  .timesDay {
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
+    min-block-size: 0;
   }
 
   .timesScroll,
   .timesGrid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-content: start;
+    gap: var(--space-8);
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
-  .timesScroll {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-8);
-    max-block-size: var(--size-column-wide);
-    overflow-y: auto;
-    mask-image: linear-gradient(to bottom, var(--surface) calc(100% - var(--space-24)), transparent);
-    padding-block-end: var(--space-24);
-  }
-
-  .timesGrid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-8);
-  }
-
-  @container booking (inline-size >= 320px) {
+  @container booking (inline-size >= 480px) {
+    .timesScroll,
     .timesGrid {
       grid-template-columns: repeat(3, minmax(0, 1fr));
     }
   }
 
-  @container booking (inline-size >= 480px) {
+  @media (width >= 1024px) {
     .timesGrid {
       grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+
+    .monthLayout .timesScroll {
+      flex: 1;
+      grid-template-columns: minmax(0, 1fr);
+      min-block-size: 0;
+      margin: calc(var(--space-2) * -1);
+      padding: var(--space-2) var(--space-2) var(--space-32);
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      mask-image: linear-gradient(to bottom, var(--surface) calc(100% - var(--space-32)), transparent);
+      scrollbar-width: thin;
     }
   }
 
   .timeItem {
     animation: rise var(--duration-move) var(--ease-out) both;
-    animation-delay: calc(var(--index, 0) * var(--duration-hover) / 6);
+    animation-delay: calc(var(--duration-hover) / 6 + var(--index, 0) * var(--duration-hover) / 5);
   }
 
   .time {
     box-sizing: border-box;
     inline-size: 100%;
-    min-block-size: calc(var(--size-row) + var(--space-8) + var(--space-2));
+    min-block-size: calc(var(--size-row) + var(--space-4));
+    padding-inline: var(--space-8);
     border: var(--border-width-hairline) solid var(--border);
     border-radius: var(--radius-md);
     background: var(--surface-raised);
     color: var(--text);
     font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
     font-variant-numeric: tabular-nums;
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      border-color var(--duration-hover) var(--ease-hover),
+      color var(--duration-hover) var(--ease-hover);
   }
 
   .time[aria-pressed='true'] {
     border-color: var(--accent);
     background: var(--accent-soft);
+    color: var(--accent);
+  }
+
+  /* The commit bar: under the picker, across the card, the one action. */
+  .commitBand {
+    margin-inline: calc(var(--space-20) * -1);
+    padding: var(--space-16) var(--space-20) 0;
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  @media (width >= 1024px) {
+    .commitBand {
+      margin-inline: calc(var(--space-24) * -1);
+      padding-inline: var(--space-24);
+    }
   }
 
   .commit {
-    position: sticky;
-    inset-block-end: 0;
     display: grid;
     place-items: center;
-    min-block-size: calc(var(--size-row) + var(--space-8) + var(--space-2));
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-block-size: calc(var(--size-row) + var(--space-4));
     padding-inline: var(--space-16);
     border: var(--border-width-hairline) solid var(--accent);
-    border-radius: var(--radius-full);
+    border-radius: var(--radius-md);
     background: var(--accent);
     box-shadow: var(--shadow-primary);
     color: var(--on-accent);
     font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    transition: background-color var(--duration-hover) var(--ease-hover);
   }
 
   .commit:disabled {
-    border-color: var(--border);
+    border-color: var(--border-subtle);
     background: var(--surface-sunken);
     box-shadow: none;
     color: var(--text-secondary);
@@ -600,7 +870,7 @@
   }
 
   .commitLabel {
-    animation: fade var(--duration-move) var(--ease-out) both;
+    animation: rise var(--duration-popover) var(--ease-out) both;
   }
 
   /* Step 2. */
@@ -612,8 +882,22 @@
 
   .slotHead {
     display: flex;
-    align-items: flex-start;
+    align-items: center;
     gap: var(--space-8);
+    margin: calc(var(--space-20) * -1) calc(var(--space-20) * -1) var(--space-4);
+    padding: var(--space-12) var(--space-20);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  @media (width >= 1024px) {
+    .slotHead {
+      margin: calc(var(--space-24) * -1) calc(var(--space-24) * -1) var(--space-4);
+      padding-inline: var(--space-24);
+    }
+  }
+
+  .slotHead .iconButton {
+    border-radius: var(--radius-full);
   }
 
   .slotTitle {
@@ -626,17 +910,18 @@
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
+    animation: rise var(--duration-move) var(--ease-out) both;
   }
 
   .label {
     margin: 0;
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   .optional {
-    color: var(--text-secondary);
-    font: var(--text-body);
+    color: var(--text-tertiary);
   }
 
   .inputRow {
@@ -645,18 +930,24 @@
     gap: var(--space-4);
   }
 
+  /* The library Field's look: a 30px box, a control-border hairline, the accent ring on focus. */
   .input {
     box-sizing: border-box;
     inline-size: 100%;
-    min-block-size: var(--size-toolbar);
-    padding-block: var(--space-6);
-    padding-inline: var(--space-12);
+    min-block-size: var(--size-input);
+    padding-block: var(--space-4);
+    padding-inline: var(--space-8);
     border: var(--border-width-hairline) solid var(--control-border);
     border-radius: var(--radius-md);
     background: var(--surface-raised);
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
+    transition: border-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .input::placeholder {
+    color: var(--text-tertiary);
   }
 
   @media (width < 1024px) {
@@ -688,6 +979,7 @@
 
   .errorLine {
     min-block-size: var(--space-20);
+    animation: drop var(--duration-popover) var(--ease-out) both;
   }
 
   .trap,
@@ -701,80 +993,216 @@
   }
 
   /* The guest page. */
-  .mark {
-    align-self: flex-start;
+  .manageHead {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--space-8);
+    text-align: center;
+  }
+
+  .manageAvatar {
+    inline-size: calc(var(--size-toolbar) + var(--space-8));
+    block-size: calc(var(--size-toolbar) + var(--space-8));
     margin: 0;
-    padding: var(--space-2) var(--space-8);
+  }
+
+  .stateBadge {
+    position: absolute;
+    inset-block-end: calc(var(--space-2) * -1);
+    inset-inline-end: calc(var(--space-2) * -1);
+    display: inline-grid;
+    place-items: center;
+    inline-size: var(--space-24);
+    block-size: var(--space-24);
+    border: var(--border-width-thick) solid var(--surface-subtle);
     border-radius: var(--radius-full);
     background: var(--tag-green-bg);
     color: var(--tag-green-text);
-    font: var(--text-label-strong);
-    letter-spacing: var(--tracking-label-strong);
+    animation: pop var(--duration-modal) var(--ease-out) var(--duration-hover) both;
   }
 
-  .mark[data-state='cancelled'] {
+  .stateBadge[data-state='cancelled'] {
     background: var(--tag-red-bg);
     color: var(--tag-red-text);
   }
 
-  .mark[data-state='past'] {
+  .stateBadge[data-state='past'] {
     background: var(--tag-gray-bg);
     color: var(--tag-gray-text);
   }
 
-  .timeCard {
-    display: flex;
-    gap: var(--space-16);
-    padding: var(--space-16);
-    border-radius: var(--radius-lg);
-    background: var(--surface-subtle);
+  .manageTitle {
+    margin: 0;
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
   }
 
-  .dateBlock {
+  .manageTitle:focus {
+    outline: none;
+  }
+
+  .factsCard {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-xl);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-md);
+    container: facts / inline-size;
+    animation: rise var(--duration-modal) var(--ease-out) var(--duration-hover) both;
+  }
+
+  .timeBand {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    padding: var(--space-20);
+  }
+
+  @container facts (inline-size >= 480px) {
+    .timeBand {
+      flex-direction: row;
+      align-items: center;
+    }
+  }
+
+  .dateChip {
     display: flex;
     flex: none;
     flex-direction: column;
     align-items: center;
-    inline-size: var(--size-toolbar);
-    padding-block: var(--space-6);
-    border-radius: var(--radius-md);
-    background: var(--surface-raised);
-    box-shadow: var(--shadow-xs);
+    justify-content: center;
+    inline-size: calc(var(--size-toolbar) + var(--space-16));
+    block-size: calc(var(--size-toolbar) + var(--space-16));
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-lg);
+    color: var(--text-secondary);
+  }
+
+  .dateChip[data-live] {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--on-accent);
   }
 
   .dateWeekday,
   .dateMonth {
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    text-transform: uppercase;
+  }
+
+  .dateDay {
+    font: var(--text-heading);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .timeText {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .timeRange {
+    margin: 0;
+    font: var(--text-note-title);
+    letter-spacing: var(--tracking-note-title);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .timeBand:not([data-state='confirmed']) .timeRange {
+    color: var(--text-secondary);
+    text-decoration: line-through;
+  }
+
+  .relative {
+    margin: 0;
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .factsList {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-4) var(--space-16);
+    margin: 0;
+    padding: var(--space-16) var(--space-20);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  @container facts (inline-size >= 480px) {
+    .factsList {
+      grid-template-columns: var(--size-toolbar) minmax(0, 1fr);
+      row-gap: var(--space-12);
+    }
+  }
+
+  .factTerm {
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+    line-height: inherit;
+  }
+
+  .factValue {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: 0;
+    overflow-wrap: anywhere;
+  }
+
+  .person {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-6);
+  }
+
+  .personEmail {
+    color: var(--text-secondary);
+  }
+
+  .tag {
+    padding-inline: var(--space-6);
+    border-radius: var(--radius-sm);
+    background: var(--tag-gray-bg);
+    color: var(--tag-gray-text);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .actionBand {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-12);
+    padding: var(--space-12) var(--space-20);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-subtle);
+  }
+
+  .actionLabel {
     color: var(--text-secondary);
     font: var(--text-label-strong);
     letter-spacing: var(--tracking-label-strong);
   }
 
-  .dateDay {
-    font: var(--text-heading);
-  }
-
-  .timeRange {
-    margin: 0;
-    font: var(--text-title);
-    font-variant-numeric: tabular-nums;
-  }
-
-  .timeCard[data-state='cancelled'] .timeRange {
-    text-decoration: line-through;
-  }
-
-  .tag {
-    padding-inline: var(--space-4);
-    border-radius: var(--radius-xs);
-    background: var(--surface-sunken);
-    color: var(--text-secondary);
-    font: var(--text-label);
-  }
-
-  .calendarLinks {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-8);
+  .join {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: var(--size-input);
+    padding-inline: var(--space-12);
+    border-radius: var(--radius-md);
+    background: var(--accent);
+    color: var(--on-accent);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    text-decoration: none;
   }
 
   .linkRow {
@@ -783,8 +1211,11 @@
     gap: var(--space-8);
   }
 
-  .linkRow .secondary {
-    align-self: auto;
+  .nextLine {
+    margin: 0;
+    padding: var(--space-16) var(--space-20);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    color: var(--text-secondary);
   }
 
   /* Loading. */
@@ -808,9 +1239,8 @@
   }
 
   .skeletonBar {
-    block-size: calc(var(--size-row) + var(--space-8) + var(--space-2));
+    block-size: calc(var(--size-row) + var(--space-4));
     margin-block-start: var(--space-16);
-    border-radius: var(--radius-full);
   }
 
   /* Interaction states, after the looks they change. */
@@ -820,6 +1250,7 @@
   }
 
   .iconButton:focus-visible,
+  .roundButton:focus-visible,
   .secondary:focus-visible,
   .ghost:focus-visible,
   .segment:focus-visible,
@@ -828,37 +1259,79 @@
   .commit:focus-visible,
   .zoneRow:focus-visible,
   .link:focus-visible,
+  .anchor:focus-visible,
+  .brandLink:focus-visible,
   .dayCell:focus-visible,
-  .input:focus-visible {
+  .join:focus-visible {
     outline: var(--border-width-thick) solid var(--accent-line);
     outline-offset: var(--border-width-hairline);
   }
 
+  .input:focus-visible {
+    border-color: var(--accent-line);
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
   @media (hover: hover) and (pointer: fine) {
     .iconButton:not(:disabled):hover,
+    .roundButton:hover,
     .secondary:hover,
-    .chip:not([aria-pressed='true']):hover,
-    .time:not([aria-pressed='true']):hover {
+    .zoneRow:hover,
+    .chip:not([aria-pressed='true']):hover {
       background: var(--surface-hover);
+      color: var(--text);
+    }
+
+    .roundButton[data-tone='remove']:hover {
+      color: var(--danger);
+    }
+
+    .roundButton[data-tone='add']:hover {
+      color: var(--accent);
+    }
+
+    .time:not([aria-pressed='true']):hover {
+      border-color: var(--accent);
+      color: var(--accent);
     }
 
     .dayCell:not(:disabled, [aria-pressed='true']):hover {
       background: var(--accent-border);
     }
 
-    .commit:not(:disabled):hover {
+    .commit:not(:disabled):hover,
+    .join:hover {
       background: var(--accent-hover);
+    }
+
+    .brandLink:hover {
+      opacity: 1;
     }
   }
 
   .iconButton:active:not(:disabled),
+  .roundButton:active,
   .secondary:active,
+  .segment:active,
   .chip:active,
   .time:active,
-  .commit:active:not(:disabled),
-  .dayCell:active:not(:disabled) {
+  .commit:active:not(:disabled) {
     scale: var(--scale-press);
     transition: scale var(--duration-press) var(--ease-out);
+  }
+
+  .dayCell:active:not(:disabled) {
+    scale: var(--scale-press-sm);
+    transition: scale var(--duration-press) var(--ease-out);
+  }
+
+  @media (forced-colors: active) {
+    .dayCell[aria-pressed='true'],
+    .chip[aria-pressed='true'],
+    .time[aria-pressed='true'] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
   }
 
   @keyframes rise {
@@ -868,10 +1341,44 @@
     }
   }
 
-  @keyframes grow {
+  @keyframes enter {
     from {
       opacity: 0;
-      scale: var(--scale-enter);
+      translate: 0 var(--space-8);
+    }
+  }
+
+  @keyframes enter-back {
+    from {
+      opacity: 0;
+      translate: 0 calc(var(--space-6) * -1);
+    }
+  }
+
+  @keyframes drop {
+    from {
+      opacity: 0;
+      translate: 0 calc(var(--space-4) * -1);
+    }
+  }
+
+  @keyframes slide-forward {
+    from {
+      opacity: 0;
+      translate: var(--space-24) 0;
+    }
+  }
+
+  @keyframes slide-back {
+    from {
+      opacity: 0;
+      translate: calc(var(--space-24) * -1) 0;
+    }
+  }
+
+  @keyframes pop {
+    from {
+      scale: var(--scale-shrunk);
     }
   }
 
@@ -892,16 +1399,32 @@
     .main,
     .card,
     .swap,
-    .timeItem {
+    .swap[data-enter='back'],
+    .timeItem,
+    .zoneMenu,
+    .monthGrid,
+    .monthGrid[data-direction='forward'],
+    .monthGrid[data-direction='back'],
+    .commitLabel,
+    .field,
+    .errorLine,
+    .factsCard {
       animation-name: fade;
     }
 
-    .zoneMenu {
-      animation-name: fade;
+    .dayCell[aria-pressed='true'],
+    .stateBadge {
+      animation: none;
+    }
+
+    .chevron {
+      transition: none;
     }
 
     .iconButton:active:not(:disabled),
+    .roundButton:active,
     .secondary:active,
+    .segment:active,
     .chip:active,
     .time:active,
     .commit:active:not(:disabled),

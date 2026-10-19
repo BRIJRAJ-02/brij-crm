@@ -1,7 +1,18 @@
 // The public page's dates in the visitor's zone (spec 0025, AC-630): day keys,
 // local midnight across DST and fractional offsets, and the week's steps.
 import { describe, expect, it } from 'vitest';
-import { addDays, dayKey, monthCells, relativeLabel, shiftMonth, startOfDay, timeLabel, zoneDisplay } from './time.ts';
+import {
+  addDays,
+  dayKey,
+  monthCells,
+  rangeLabel,
+  relativeLabel,
+  shiftMonth,
+  startOfDay,
+  timeLabel,
+  weekdayNames,
+  zoneDisplay,
+} from './time.ts';
 
 describe('the visitor’s days', () => {
   it('keys an instant by its day in the zone', () => {
@@ -54,5 +65,27 @@ describe('the month, the zone and the clock', () => {
     expect(relativeLabel('2026-11-02T08:03:00.000Z', now, 'UTC', 'en')).toBe('In 3 minutes');
     expect(relativeLabel('2026-11-03T09:00:00.000Z', now, 'UTC', 'en')).toBe('Tomorrow morning');
     expect(relativeLabel('2026-11-07T09:00:00.000Z', now, 'UTC', 'en')).toBe('In 5 days');
+  });
+});
+
+describe('the weekdays and the meeting’s span', () => {
+  it('names the weekdays in grid order', () => {
+    expect(weekdayNames('en-US').map((name) => name.long)).toEqual([
+      'Sunday',
+      'Monday',
+      'Tuesday',
+      'Wednesday',
+      'Thursday',
+      'Friday',
+      'Saturday',
+    ]);
+  });
+
+  it('writes a meeting’s span as one range in the zone', () => {
+    const range = rangeLabel('2026-11-02T09:30:00.000Z', '2026-11-02T10:00:00.000Z', 'UTC', 'en-US', true);
+    expect(range).toMatch(/^9:30\s.\s10:00\sAM$/);
+    expect(rangeLabel('2026-11-02T09:30:00.000Z', '2026-11-02T10:00:00.000Z', 'UTC', 'en-GB', false)).toMatch(
+      /^09:30\s?.\s?10:00$/,
+    );
   });
 });

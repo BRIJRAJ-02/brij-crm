@@ -18,6 +18,7 @@ const CONTACT: PublicForm = {
     { id: 'q1', key: 'name', label: 'Your name', answerType: 'short_text', placeholder: 'John Doe', required: true },
     { id: 'q2', key: 'email', label: 'Work email', answerType: 'email', placeholder: 'john@acme.com', required: true },
     { id: 'q3', key: 'phone', label: 'Phone or WhatsApp', answerType: 'phone', required: false },
+    { id: 'q7', key: 'country', label: 'Country', answerType: 'country', required: false },
     {
       id: 'q4',
       key: 'budget',
@@ -31,9 +32,16 @@ const CONTACT: PublicForm = {
   ],
 };
 
+/** A stand in wordmark, 860 by 210 like the product's, drawn in one fill. */
+const wordmark = (fill: string) =>
+  `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 210"><rect x="0" y="40" width="130" height="130" rx="65" fill="${fill}"/><rect x="170" y="70" width="660" height="70" rx="12" fill="${fill}"/></svg>`,
+  )}`;
+
 const meta = {
   title: 'Modules/HostedFormPreview',
   component: HostedFormPreview,
+  args: { form: CONTACT, logo: { light: wordmark('black'), dark: wordmark('white') } },
   render: (args) => (
     <Stage width="narrow">
       <HostedFormPreview {...args} />

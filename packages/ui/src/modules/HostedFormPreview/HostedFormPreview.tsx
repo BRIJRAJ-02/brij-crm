@@ -1,6 +1,6 @@
 import type { PublicForm } from '@crm/contracts/forms';
-import { useEffect, useRef } from 'react';
-import { mountHostedForm, type HostedFormHandle } from '../../public-form/hosted-form.ts';
+import { HostedForm } from '../../public-form/HostedForm.tsx';
+import type { ProductLogo } from '../AuthLayout/AuthLayout.tsx';
 
 /** Props for HostedFormPreview. */
 export interface HostedFormPreviewProps {
@@ -13,32 +13,14 @@ export interface HostedFormPreviewProps {
    * but sends nothing: a draft opened to try.
    */
   readonly mode?: 'preview' | 'page';
+  /** The Timefix wordmark under the form; defaults to the web app's own files, as on the hosted page. */
+  readonly logo?: ProductLogo;
 }
 
 /**
- * The form a visitor fills in, drawn by the hosted page's own renderer, so
- * the builder shows exactly what goes live. It redraws as the form changes.
+ * The form a visitor fills in, drawn by the hosted page's own component, so
+ * the builder shows exactly what goes live: the same tree, the same controls.
  */
-export function HostedFormPreview({ form, mode = 'preview' }: HostedFormPreviewProps) {
-  const rootRef = useRef<HTMLDivElement>(null);
-  const handleRef = useRef<HostedFormHandle | undefined>(undefined);
-
-  // Drawn once, then redrawn in place as the form changes.
-  useEffect(() => {
-    const root = rootRef.current;
-    if (root === null) return;
-    if (handleRef.current === undefined) handleRef.current = mountHostedForm(root, form, { mode });
-    else handleRef.current.update(form);
-  }, [form, mode]);
-
-  // Removed when the mode changes (drawn again above) and when the preview goes.
-  useEffect(
-    () => () => {
-      handleRef.current?.destroy();
-      handleRef.current = undefined;
-    },
-    [mode],
-  );
-
-  return <div ref={rootRef} />;
+export function HostedFormPreview({ form, mode = 'preview', logo }: HostedFormPreviewProps) {
+  return <HostedForm key={mode} form={form} mode={mode} {...(logo === undefined ? {} : { logo })} />;
 }

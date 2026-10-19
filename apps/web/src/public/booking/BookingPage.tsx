@@ -3,8 +3,9 @@
 // Main task: see the first open day's times at once, pick a time, press the bar that names it, give a name and email, confirm.
 // Leaves out: questions (milestone 2), the forms hand off's signed prefill (milestone 3, a seam), analytics and captcha.
 //
-// Built by hand with plain markup and the compiled tokens (spec 0023's public bundle rules): a sticky rail with
-// the host, What and the time zone beside the card on wide screens, stacked on a phone.
+// Built by hand with plain markup and the compiled tokens (spec 0023's public bundle rules), laid out as the
+// timefix booking page: a rail (the host, the title as the page's heading, the length, the place and the time
+// zone, and Timefix pinned at its foot) beside the card on wide screens; stacked on a phone, Timefix at the end.
 import { createBookingClient, isDataError, withPreviewDraft, type PublicBookingPage } from '@crm/data/booking';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import styles from './booking.module.css';
@@ -45,6 +46,58 @@ const initials = (name: string) =>
     .slice(0, 2)
     .map((part) => part[0]?.toUpperCase() ?? '')
     .join('');
+
+/** How the location reads in the facts: "Video call", "Phone call", or the address or words the host gave. */
+const locationLabel = (location: PublicBookingPage['location']) =>
+  location.type === 'video'
+    ? strings.locations.video
+    : location.type === 'phone'
+      ? strings.locations.phone
+      : location.value;
+
+/** A clock, for the meeting's length (Lucide's shape, drawn here since the page loads no library). */
+function ClockIcon() {
+  return (
+    <svg className={styles.icon} viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l3 2" />
+    </svg>
+  );
+}
+
+/**
+ * Timefix under the booking: "Powered by" over the wordmark, in a quiet card at the rail's foot on wide
+ * screens and centred at the page's end on a phone, with the workspace's name. The wordmark is one image
+ * per theme, and CSS shows the one for the theme in use.
+ */
+export function Brand({
+  workspaceName,
+  placement,
+}: {
+  readonly workspaceName?: string;
+  readonly placement: 'rail' | 'page';
+}) {
+  return (
+    <footer className={styles.brand} data-placement={placement}>
+      {workspaceName !== undefined && workspaceName !== '' && <p className={styles.brandWorkspace}>{workspaceName}</p>}
+      <a className={styles.brandLink} href="https://timefix.ai" rel="noopener noreferrer">
+        <span className={styles.brandLabel}>{strings.poweredBy}</span>
+        <img
+          className={styles.wordmark}
+          data-scheme="light"
+          src="/brand/timefix-wordmark-light.png"
+          alt={strings.product}
+        />
+        <img
+          className={styles.wordmark}
+          data-scheme="dark"
+          src="/brand/timefix-wordmark-dark.png"
+          alt={strings.product}
+        />
+      </a>
+    </footer>
+  );
+}
 
 /** The location's icon: video, pin or phone. */
 function LocationIcon({ type }: { readonly type: PublicBookingPage['location']['type'] }) {
@@ -141,6 +194,7 @@ export function BookingPage({ publicKey, locale, timeZone, now, prefill, onBooke
             )}
           </div>
         )}
+        <Brand placement="page" />
       </div>
     </main>
   );
@@ -198,6 +252,10 @@ function Booking({
     back: false,
   });
   const [notice, setNotice] = useState<string | undefined>(undefined);
+  // The tab names the meeting and the host: "Intro call with Ada · Timefix".
+  useEffect(() => {
+    document.title = `${page.title} with ${page.hostName} · ${strings.product}`;
+  }, [page.title, page.hostName]);
 
   useEffect(() => {
     const current = read.key === readKey ? read.loaded : new Map<number, readonly string[]>();
@@ -287,7 +345,7 @@ function Booking({
         </div>
       )}
       {step.step === 'details' && time !== undefined ? (
-        <div className={styles.swap}>
+        <div className={styles.swap} data-enter="forward">
           <Details
             client={client}
             page={page}
@@ -333,7 +391,7 @@ function Booking({
           <p className={styles.muted}>{strings.noTimesText}</p>
         </div>
       ) : (
-        <div className={styles.swap}>
+        <div className={styles.swap} data-enter={step.back ? 'back' : undefined}>
           <Picker
             byDay={byDay}
             today={today}
@@ -375,46 +433,38 @@ function Booking({
     <main className={styles.page}>
       <div className={styles.layout}>
         <aside className={styles.rail}>
-          <div className={styles.host}>
+          <div className={styles.identity}>
             <span className={styles.avatar} aria-hidden="true">
               {initials(page.hostName)}
             </span>
-            <span className={styles.hostName}>{page.hostName}</span>
+            <p className={styles.hostName}>{page.hostName}</p>
+            <h1 className={styles.headline}>{page.title}</h1>
+            {page.description !== '' && <p className={styles.description}>{page.description}</p>}
+            <ul className={styles.facts}>
+              <li className={styles.fact}>
+                <ClockIcon />
+                <span>{strings.minutesShort(duration)}</span>
+              </li>
+              <li className={styles.fact}>
+                <LocationIcon type={page.location.type} />
+                <span>{locationLabel(page.location)}</span>
+              </li>
+              <li className={styles.fact}>
+                <ZoneMenu
+                  zone={zone}
+                  now={now()}
+                  onChange={(next) => {
+                    setZone(next);
+                    resetChoice();
+                  }}
+                />
+              </li>
+            </ul>
           </div>
-          <dl className={styles.facts}>
-            <dt className={styles.factTerm}>{strings.what}</dt>
-            <dd className={styles.factValue}>
-              <LocationIcon type={page.location.type} />
-              <span>{page.title}</span>
-            </dd>
-            <dt className={styles.factTerm}>{strings.timeZone}</dt>
-            <dd className={styles.factValue}>
-              <ZoneMenu
-                zone={zone}
-                now={now()}
-                onChange={(next) => {
-                  setZone(next);
-                  resetChoice();
-                }}
-              />
-            </dd>
-          </dl>
-          <footer className={styles.railFoot}>
-            {page.workspaceName !== '' && <p className={styles.muted}>{page.workspaceName}</p>}
-            <p className={styles.faint}>{strings.madeWith}</p>
-          </footer>
+          <Brand workspaceName={page.workspaceName} placement="rail" />
         </aside>
-        <div className={styles.main}>
-          <h1 className={styles.headline} data-quiet={step.step === 'details' ? '' : undefined}>
-            {page.title}
-          </h1>
-          {page.description !== '' && step.step === 'pick' && <p className={styles.muted}>{page.description}</p>}
-          {card}
-        </div>
-        <footer className={styles.pageFoot}>
-          {page.workspaceName !== '' && <p className={styles.muted}>{page.workspaceName}</p>}
-          <p className={styles.faint}>{strings.madeWith}</p>
-        </footer>
+        <div className={styles.main}>{card}</div>
+        <Brand workspaceName={page.workspaceName} placement="page" />
       </div>
     </main>
   );

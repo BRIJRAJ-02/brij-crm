@@ -15,6 +15,10 @@ import { firstLoad } from './first-load.ts';
 const DIST = path.join(import.meta.dirname, 'dist');
 const manifest = JSON.parse(readFileSync(path.join(DIST, '.vite/manifest.json'), 'utf8'));
 const { js, css } = firstLoad(manifest);
+// The hosted form (spec 0023) draws with the library's own controls since 19 October 2026, so it loads React
+// and React Aria: 8.4 kB of JavaScript and 4.4 kB of CSS before, 197.8 kB and 12.2 kB after (gzipped, measured
+// on the built page). Its own budget leaves about 10% of room. The phone library loads later, on demand.
+const form = firstLoad(manifest, 'form.html');
 const inDist = (files) => files.map((file) => path.join(DIST, file));
 
 // React's development build carries this message; production never does.
@@ -26,4 +30,6 @@ if (inDist(js).some((file) => readFileSync(file, 'utf8').includes(DEVELOPMENT_RE
 export default [
   { name: 'First load JavaScript (gzipped)', path: inDist(js), limit: '250 kB', gzip: true, running: false },
   { name: 'First load CSS (gzipped)', path: inDist(css), limit: '40 kB', gzip: true, running: false },
+  { name: 'Hosted form JavaScript (gzipped)', path: inDist(form.js), limit: '220 kB', gzip: true, running: false },
+  { name: 'Hosted form CSS (gzipped)', path: inDist(form.css), limit: '16 kB', gzip: true, running: false },
 ];

@@ -65,6 +65,8 @@ if (loaded.kind !== 'form') {
   document.title = form.headline;
   document.documentElement.lang = form.language;
   document.documentElement.dataset.theme = form.look.colour;
+  // On the root too, so the lists that open outside the form (in a popover) square their corners with it.
+  document.documentElement.dataset.corners = form.look.corners;
   const captcha = form.recaptchaSiteKey === undefined ? undefined : loadCaptcha(form.recaptchaSiteKey);
   const keys = new Map<number, string>();
   mountHostedForm(root, form, {

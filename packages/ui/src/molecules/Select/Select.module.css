@@ -79,6 +79,33 @@
     box-shadow: none;
   }
 
+  /* Joined to the start of a Field's box (a phone number's code): the Field draws the box, the focus ring and
+     the error edge; this draws only a hairline after itself. */
+  .root[data-variant='prefix'] {
+    align-self: stretch;
+  }
+
+  .root[data-variant='prefix'] .trigger {
+    inline-size: auto;
+    block-size: 100%;
+    padding-inline: 0 var(--space-6);
+    border: none;
+    border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .short {
+    /* As wide as the longest code ("+998"), so a choice never moves the number. */
+    min-inline-size: var(--space-32);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    font-variant-numeric: tabular-nums;
+  }
+
   .value {
     display: flex;
     flex: 1;
