@@ -4,8 +4,11 @@ import { sql } from 'drizzle-orm';
 import { check, pgEnum, timestamp, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { AttributeType } from '@crm/contracts/values';
 
-/** Who did something: a member, an API key, an automation, or the system (whose id is null). */
-export const actorType = pgEnum('actor_type', ['member', 'api_key', 'automation', 'system']);
+/**
+ * Who did something: a member, an API key, an automation, a form (spec 0023:
+ * its submissions' writes), or the system (whose id is null).
+ */
+export const actorType = pgEnum('actor_type', ['member', 'api_key', 'automation', 'system', 'form']);
 
 /** Every attribute type the field set knows (spec 0003), mirrored from `@crm/contracts/values`. */
 export const attributeType = pgEnum('attribute_type', AttributeType.options as [AttributeType, ...AttributeType[]]);
@@ -53,7 +56,10 @@ export function auditColumns() {
 /**
  * The rule one actor's columns obey: an absent actor has nothing set; the system has
  * no id; a member's id is repeated in `*_member_id` (which carries the
- * foreign key); an API key or automation has an id and no member id.
+ * foreign key); any other actor (an API key, an automation, a form) has an id
+ * and no member id. The last branch names only the two types it excludes, so a
+ * new actor type needs no constraint rewritten (and a migration that adds the
+ * type never uses its new value in the same transaction).
  */
 export function actorCheck(name: string, actor: { type: AnyPgColumn; id: AnyPgColumn; memberId: AnyPgColumn }) {
   const { type, id, memberId } = actor;
@@ -62,6 +68,6 @@ export function actorCheck(name: string, actor: { type: AnyPgColumn; id: AnyPgCo
     sql`(${type} is null and ${id} is null and ${memberId} is null)
       or (${type} = 'system' and ${id} is null and ${memberId} is null)
       or (${type} = 'member' and ${id} is not null and ${memberId} = ${id})
-      or (${type} in ('api_key', 'automation') and ${id} is not null and ${memberId} is null)`,
+      or (${type} not in ('member', 'system') and ${id} is not null and ${memberId} is null)`,
   );
 }
