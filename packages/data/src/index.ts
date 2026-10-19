@@ -216,7 +216,8 @@ export interface ReplacedValue {
   readonly by:
     | { readonly kind: 'member'; readonly name: string | undefined }
     | { readonly kind: 'api_key' }
-    | { readonly kind: 'automation' };
+    | { readonly kind: 'automation' }
+    | { readonly kind: 'booking' };
   readonly useMine: () => void;
 }
 

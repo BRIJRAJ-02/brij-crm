@@ -128,6 +128,27 @@ export {
   type ListTasksInput,
   type UpdateTaskInput,
 } from './tasks/tasks.ts';
+// Booking pages (spec 0025): members' pages and bookings, and the calendar calls the api passes in.
+export {
+  createBookingPage,
+  deleteBookingPage,
+  getBookingPage,
+  listBookingPages,
+  listBookings,
+  updateBookingPage,
+} from './booking/pages.ts';
+export {
+  createBusyCache,
+  NO_CALENDAR,
+  type BookingCalendar,
+  type BookingEvent,
+  type BusyAnswer,
+  type BusyInterval,
+  type BusyReader,
+  type EventAttendee,
+  type EventWriter,
+  type WrittenEvent,
+} from './booking/calendar.ts';
 export { getMyAccess, listMembers, removeMember, setMemberRole, type MemberWithRole } from './members/members.ts';
 export { outboxEvent, stubEvent, wireEvent } from './realtime/events.ts';
 export {

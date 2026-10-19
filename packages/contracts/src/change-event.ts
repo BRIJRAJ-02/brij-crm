@@ -46,7 +46,7 @@ export type ReplacedCell = z.infer<typeof ReplacedCell>;
  */
 export const Replaced = z.object({
   by: z.object({
-    type: z.enum(['member', 'api_key', 'automation', 'system']),
+    type: z.enum(['member', 'api_key', 'automation', 'system', 'booking']),
     id: z.uuid().nullable(),
   }),
   cells: z.array(ReplacedCell).min(1).max(MAX_REPLACED_CELLS),

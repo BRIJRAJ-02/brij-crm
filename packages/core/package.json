@@ -5,6 +5,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./system": "./src/system.ts",
+    "./public": "./src/public.ts",
     "./testing": "./src/testing.ts",
     "./scale-budget": "./scripts/scale-budget.ts",
     "./load-sessions": "./scripts/load-sessions.ts",

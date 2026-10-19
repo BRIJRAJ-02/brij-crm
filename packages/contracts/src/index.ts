@@ -1,5 +1,6 @@
 import { accessContract } from './access.ts';
 import { attributesContract } from './attributes.ts';
+import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
 import { bulkRecordsContract } from './bulk.ts';
 import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
@@ -19,6 +20,8 @@ import { workspacesContract } from './workspaces.ts';
 export * from './access.ts';
 export * from './activity.ts';
 export * from './attributes.ts';
+export * from './booking/index.ts';
+export * from './booking/pages.ts';
 export * from './bulk.ts';
 export * from './change-event.ts';
 export * from './errors.ts';
@@ -63,4 +66,6 @@ export const contract = {
   views: viewsContract,
   trash: trashContract,
   tasks: tasksContract,
+  bookingPages: bookingPagesContract,
+  bookings: bookingsContract,
 };

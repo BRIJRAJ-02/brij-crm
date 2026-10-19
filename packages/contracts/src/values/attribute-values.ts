@@ -300,7 +300,7 @@ export type PersonalNameValue = z.infer<typeof PersonalNameValue>;
  */
 export const ActorReferenceValue = z
   .object({
-    type: z.enum(['member', 'api_key', 'automation', 'system'], { error: 'Pick who it was.' }),
+    type: z.enum(['member', 'api_key', 'automation', 'system', 'booking'], { error: 'Pick who it was.' }),
     id: id('Pick who it was.').nullable(),
   })
   .refine((actor) => (actor.type === 'system') === (actor.id === null), {

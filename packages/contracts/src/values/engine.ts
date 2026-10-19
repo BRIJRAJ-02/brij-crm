@@ -37,6 +37,10 @@ export const ENGINE_REFUSAL_CODES = [
   // view can't be deleted or made private.
   'VIEW_CHANGED',
   'VIEW_IS_DEFAULT',
+  // Booking pages (spec 0025): the slot went to someone else between the offer and the booking; the page is paused
+  // or deleted, or the host can't be booked.
+  'SLOT_TAKEN',
+  'BOOKING_CLOSED',
 ] as const;
 
 /** One of the engine's refusal codes. */

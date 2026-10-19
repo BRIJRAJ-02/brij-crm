@@ -77,6 +77,8 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // system through the `systemScope` it is handed; its once key is a pure helper.
   'runDailyCleanup',
   'maintenanceKey',
+  // Booking pages (spec 0025): the busy cache wraps the reader the api passes in; it takes no scope.
+  'createBusyCache',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;
@@ -181,6 +183,24 @@ describe('the walk: a principal without the access is refused', () => {
         return;
       }
       expect(await refusalOf(call(scope, registry, job.id))).toMatchObject({ code: 'NOT_FOUND' });
+    },
+  );
+
+  it.each(entries.filter(([, entry]) => 'bookingPages' in entry).map(([name]) => name))(
+    '%s refuses a principal without booking.manage, and answers another member’s page as absent',
+    async (name) => {
+      const { scope, workspaceId, ownerId } = await memberOf('member');
+      const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() }, scopes: [] });
+      expect(await refusalOf(service(name)(key, {}))).toEqual({
+        code: 'FORBIDDEN',
+        message: PERMISSIONS['booking.manage'].message,
+      });
+      if (name === 'listBookingPages' || name === 'createBookingPage') return;
+      const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });
+      const page = await core.createBookingPage(owner, { id: core.newId(), title: 'Intro', timeZone: 'UTC' });
+      expect(await refusalOf(service(name)(scope, { pageId: page.id, settings: {}, when: 'upcoming' }))).toMatchObject({
+        code: 'NOT_FOUND',
+      });
     },
   );
 

@@ -82,6 +82,8 @@ export type Principal =
       readonly teamIds: readonly string[];
     }
   | { readonly kind: 'api_key'; readonly keyId: string; readonly scopes: readonly string[] }
+  /** A visitor booking through a page (spec 0025): the page acts, on People and Companies only. */
+  | { readonly kind: 'booking'; readonly pageId: string }
   | { readonly kind: 'system' };
 
 /** A member principal. */
@@ -279,6 +281,24 @@ export function keyAccess(keyId: string, scopes: readonly string[]): Access {
     data: sealPolicy({
       defaultObject: level,
       objects: frozenRecord([]),
+      fields: frozenRecord([]),
+      records: frozenRecord([]),
+    }),
+  });
+}
+
+/**
+ * A booking page's access (spec 0025, AC-634): no permission, and write on
+ * the objects a booking matches and makes records on (People and Companies),
+ * nothing on any other. Only the door's `enterBookingPage` builds one.
+ */
+export function bookingAccess(pageId: string, objectIds: readonly string[]): Access {
+  return Object.freeze({
+    principal: Object.freeze({ kind: 'booking', pageId }),
+    permissions: Object.freeze([]),
+    data: sealPolicy({
+      defaultObject: 'none',
+      objects: frozenRecord(objectIds.map((objectId) => [objectId, 'write' as const])),
       fields: frozenRecord([]),
       records: frozenRecord([]),
     }),

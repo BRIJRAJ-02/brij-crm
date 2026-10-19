@@ -10,13 +10,13 @@
 // unknown address, a workspace the user isn't in, a removed member, a deleted
 // workspace and a role the code doesn't know are all refused the same way, so
 // nothing leaks whether a workspace exists.
-import { and, eq, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { schema, type Database, type IdentityStore, type WorkspaceTx } from '@crm/db';
 import { isUuid } from '../engine/ids.ts';
 import { refuse, type RefusalError } from '../engine/refusals.ts';
 import { SYSTEM_ACTOR, type Actor } from '../engine/scope.ts';
 import { mintScope, type EngineScope } from './mint.ts';
-import { isRole, NO_RULES, roleAccess, SYSTEM_ACCESS, type AccessRules } from './policy.ts';
+import { bookingAccess, isRole, NO_RULES, roleAccess, SYSTEM_ACCESS, type AccessRules } from './policy.ts';
 
 /**
  * Where the door reads a workspace's object, field and record rules, inside
@@ -33,7 +33,7 @@ export type RuleSource = (
 /** No rules at all, with no query: production's source until #24. */
 export const NO_RULE_SOURCE: RuleSource = () => Promise.resolve(NO_RULES);
 
-const { members, workspaces } = schema;
+const { members, objects, workspaces } = schema;
 
 /** Where the door reports a member row it refused for a role the code doesn't know (the member id only). */
 export interface DoorLog {
@@ -186,4 +186,62 @@ export function enterWithKey(
  */
 export function systemScope(db: Database, workspaceId: string): EngineScope {
   return mintScope({ db, workspaceId, actor: SYSTEM_ACTOR, access: SYSTEM_ACCESS });
+}
+
+/** The ids crm_booking_page_by_key reads past row level security: a page's workspace and id, nothing else. */
+interface PageKeyRow extends Record<string, unknown> {
+  readonly workspace_id: string;
+  readonly page_id: string;
+}
+
+/** No workspace yet: the public key lookup runs under a workspace setting that names none. */
+const NO_WORKSPACE = '00000000-0000-0000-0000-000000000000';
+
+/** The page a visitor's booking acts as, and the People and Companies objects it may write. */
+export interface BookingEntry {
+  readonly scope: EngineScope;
+  readonly pageId: string;
+  readonly people: string;
+  readonly companies: string;
+}
+
+/**
+ * The scope a visitor's booking acts with (spec 0025): the page found by its
+ * public key (`crm_booking_page_by_key`, ids only), as the `booking` actor,
+ * with write on People and Companies and nothing else (`bookingAccess`). An
+ * unknown key, a deleted workspace, or a workspace without both standard
+ * objects is NOT_FOUND. Whether the page takes bookings is the services'
+ * question. Exported only from `@crm/core/public`.
+ */
+export async function enterBookingPage(deps: { readonly db: Database }, publicKey: string): Promise<BookingEntry> {
+  const missing = () => refuse('NOT_FOUND', 'This page is no longer available.');
+  if (!/^[A-Za-z0-9_-]{16}$/.test(publicKey)) throw missing();
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<PageKeyRow>(
+      sql`select workspace_id::text as workspace_id, page_id::text as page_id from crm_booking_page_by_key(${publicKey})`,
+    ),
+  );
+  const [row] = found.rows;
+  if (row === undefined) throw missing();
+  const standard = await deps.db.withWorkspace(row.workspace_id, async (tx) => {
+    const [workspace] = await tx
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(and(eq(workspaces.id, row.workspace_id), isNull(workspaces.deletedAt)));
+    if (workspace === undefined) return [];
+    return tx
+      .select({ id: objects.id, key: objects.standardKey })
+      .from(objects)
+      .where(and(inArray(objects.standardKey, ['people', 'companies']), isNull(objects.archivedAt)));
+  });
+  const people = standard.find((object) => object.key === 'people')?.id;
+  const companies = standard.find((object) => object.key === 'companies')?.id;
+  if (people === undefined || companies === undefined) throw missing();
+  const scope = mintScope({
+    db: deps.db,
+    workspaceId: row.workspace_id,
+    actor: { type: 'booking', id: row.page_id },
+    access: bookingAccess(row.page_id, [people, companies]),
+  });
+  return { scope, pageId: row.page_id, people, companies };
 }

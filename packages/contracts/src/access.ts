@@ -46,6 +46,9 @@ export const PERMISSIONS = {
   'workspace.export': { message: 'Only workspace owners can export the whole workspace.' },
   'billing.manage': { message: 'Only workspace owners can manage billing.' },
   'support.grant': { message: 'Only workspace owners can let support into the workspace.' },
+  // Booking pages (spec 0025): your own pages, and every page in the workspace (team pages, others').
+  'booking.manage': { message: 'Your role can’t make booking pages.' },
+  'booking.admin': { message: 'Only workspace owners and admins can change other people’s booking pages.' },
 } as const satisfies Record<string, { readonly message: string }>;
 
 /** Every permission's name, in catalog order. */
@@ -64,12 +67,12 @@ const OWNER_ONLY: readonly Permission[] = ['workspace.delete', 'workspace.export
 /**
  * Each role's permissions: the whole table, pinned by a test, so a change is
  * a reviewed change. The owner holds everything; an admin everything but the
- * owner only ones; a member exports what they can see.
+ * owner only ones; a member exports what they can see and makes their own booking pages.
  */
 export const ROLE_PERMISSIONS = {
   owner: PERMISSION_NAMES,
   admin: PERMISSION_NAMES.filter((permission) => !OWNER_ONLY.includes(permission)),
-  member: ['records.export'],
+  member: ['records.export', 'booking.manage'],
 } as const satisfies Record<Role, readonly Permission[]>;
 
 /**

@@ -158,7 +158,7 @@ describe('a member', () => {
       memberId: t.ids[0],
       role: 'member',
       roleLabel: 'Member',
-      permissions: ['records.export'],
+      permissions: ['records.export', 'booking.manage'],
     });
     expect(getMyAccess(t.as(t.owner, 'owner'))).toMatchObject({ role: 'owner', roleLabel: 'Owner' });
   });

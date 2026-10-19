@@ -18,7 +18,7 @@ export interface ConditionAttributeShape {
 
 /** Who is writing, for "is me": a member's id. */
 export interface ConditionActor {
-  readonly type: 'member' | 'api_key' | 'automation' | 'system';
+  readonly type: 'member' | 'api_key' | 'automation' | 'system' | 'booking';
   readonly id: string | null;
 }
 
@@ -71,7 +71,7 @@ function asActor(value: unknown): ConditionActor {
   const type = field(value, 'type');
   const id = field(value, 'id');
   return {
-    type: type === 'api_key' || type === 'automation' || type === 'system' ? type : 'member',
+    type: type === 'api_key' || type === 'automation' || type === 'system' || type === 'booking' ? type : 'member',
     id: typeof id === 'string' ? id : null,
   };
 }

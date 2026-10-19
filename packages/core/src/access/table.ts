@@ -20,7 +20,12 @@ export type AccessEntry =
   | { readonly anyMember: true }
   | { readonly system: true }
   /** A job's starter or a holder of `jobs.manage` (spec 0008, AC-114); anyone else finds no such job. */
-  | { readonly jobStarter: true };
+  | { readonly jobStarter: true }
+  /**
+   * Booking pages (spec 0025): `booking.manage` first (403 `FORBIDDEN`), then the reader's own pages, or anyone's
+   * with `booking.admin`; another's page answers as absent.
+   */
+  | { readonly bookingPages: true };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -140,4 +145,11 @@ export const ACCESS_TABLE = {
   createTask: { data: 'write' },
   updateTask: { data: 'write' },
   taskFacts: { system: true },
+  // Booking pages (spec 0025).
+  listBookingPages: { bookingPages: true },
+  getBookingPage: { bookingPages: true },
+  createBookingPage: { bookingPages: true },
+  updateBookingPage: { bookingPages: true },
+  deleteBookingPage: { bookingPages: true },
+  listBookings: { bookingPages: true },
 } as const satisfies Record<string, AccessEntry>;

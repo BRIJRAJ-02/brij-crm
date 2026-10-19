@@ -350,6 +350,20 @@ describe('the booking window, the daily limit and the range', () => {
     ]);
   });
 
+  it("counts only this page's bookings toward the limit; another page's only blocks its own time", () => {
+    const elsewhere = {
+      start: at(zone, '2026-06-16T09:00'),
+      end: at(zone, '2026-06-16T10:00'),
+      countsToLimit: false,
+    };
+    const input = { ...base, to: now.plus({ days: 2 }).toJSDate(), bookings: [elsewhere], dailyLimit: 1 };
+    expect(dates(input)).toEqual(['2026-06-15', '2026-06-16']);
+    const tuesday = computeSlots(input).filter(
+      (slot) => DateTime.fromJSDate(slot.start, { zone }).toISODate() === '2026-06-16',
+    );
+    expect(tuesday.map((slot) => local(slot.start, zone))).toEqual(['10:00', '11:00']);
+  });
+
   it('answers only starts inside [from, to)', () => {
     const slots = computeSlots({ ...base, from: at(zone, '2026-06-15T10:00'), to: at(zone, '2026-06-15T11:00') });
     expect(slots.map((slot) => local(slot.start, zone))).toEqual(['10:00']);

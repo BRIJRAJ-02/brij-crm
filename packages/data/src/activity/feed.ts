@@ -24,6 +24,7 @@ export const ACTOR_WORDS = {
   formerMember: 'Former member',
   apiKey: 'An API key',
   automation: 'An automation',
+  bookingPage: 'A booking page',
   system: 'System',
   /** A member the members list couldn't be read to name, or one hidden from the reader. */
   someone: 'Someone',
@@ -169,6 +170,7 @@ export function actorDisplay(
   }
   if (actor.type === 'api_key') return { type: 'api_key', id: actor.id, name: ACTOR_WORDS.apiKey };
   if (actor.type === 'automation') return { type: 'automation', id: actor.id, name: ACTOR_WORDS.automation };
+  if (actor.type === 'booking') return { type: 'booking', id: actor.id, name: ACTOR_WORDS.bookingPage };
   return { type: 'system', id: null, name: ACTOR_WORDS.system };
 }
 
@@ -183,7 +185,9 @@ function actorValueDisplay(value: unknown, members: readonly MemberSummary[] | u
   if (typeof value !== 'object' || value === null || !('type' in value)) return undefined;
   const type = (value as { readonly type: unknown }).type;
   const id = 'id' in value ? (value as { readonly id: unknown }).id : null;
-  if (type !== 'member' && type !== 'api_key' && type !== 'automation' && type !== 'system') return undefined;
+  if (type !== 'member' && type !== 'api_key' && type !== 'automation' && type !== 'system' && type !== 'booking') {
+    return undefined;
+  }
   return actorDisplay({ type, id: typeof id === 'string' ? id : null }, members);
 }
 

@@ -114,7 +114,9 @@ export function deletedByOf(members: readonly MemberSummary[]): (row: TrashRow) 
           ? strings.anApiKey
           : by.type === 'automation'
             ? strings.anAutomation
-            : ((by.id === null ? undefined : names.get(by.id)) ?? strings.removedMember);
+            : by.type === 'booking'
+              ? strings.aBookingPage
+              : ((by.id === null ? undefined : names.get(by.id)) ?? strings.removedMember);
     return { type: by.type, id: by.id, name };
   };
 }

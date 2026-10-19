@@ -14,7 +14,7 @@ import {
 } from './access.ts';
 
 describe('the permission catalog', () => {
-  it('lists the eighteen permissions of spec 0009, jobs.manage among them', () => {
+  it('lists the eighteen permissions of spec 0009, jobs.manage among them, and the booking two of spec 0025', () => {
     expect([...PERMISSION_NAMES]).toEqual([
       'workspace.manage',
       'workspace.delete',
@@ -34,6 +34,8 @@ describe('the permission catalog', () => {
       'workspace.export',
       'billing.manage',
       'support.grant',
+      'booking.manage',
+      'booking.admin',
     ]);
   });
 
@@ -72,6 +74,8 @@ describe('the role table', () => {
     'workspace.export': ['owner'],
     'billing.manage': ['owner'],
     'support.grant': ['owner'],
+    'booking.manage': ['owner', 'admin', 'member'],
+    'booking.admin': ['owner', 'admin'],
   };
 
   it('holds exactly the table, row by row', () => {

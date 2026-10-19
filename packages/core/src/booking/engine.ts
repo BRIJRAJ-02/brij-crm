@@ -44,6 +44,8 @@ export interface Span {
 export interface BookedSpan extends Span {
   readonly blockStart?: Date;
   readonly blockEnd?: Date;
+  /** Whether it counts toward this page's daily limit (a booking on another of the host's pages only blocks). Default true. */
+  readonly countsToLimit?: boolean;
 }
 
 /** Everything the engine reads. */
@@ -155,6 +157,7 @@ export function computeSlots(input: SlotEngineInput): readonly Span[] {
   // Confirmed bookings per host day, for the daily limit.
   const perDay = new Map<string, number>();
   for (const booking of input.bookings) {
+    if (booking.countsToLimit === false) continue;
     const date = DateTime.fromJSDate(booking.start, { zone: hostZone }).toISODate() ?? '';
     perDay.set(date, (perDay.get(date) ?? 0) + 1);
   }
