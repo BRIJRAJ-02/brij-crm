@@ -1,6 +1,8 @@
 # 0025. Booking pages: book time with a member or a team
 
 **Date**: 2026-10-19
+
+**Experience**: the visitor page, the guest page and the host builder follow [0025-experience.md](0025-experience.md); where it differs from this file (for example a month calendar rather than a week of days), it wins.
 **Status**: Proposed
 
 ## Summary
@@ -16,7 +18,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 | Feature | What this spec needs | When it is missing |
 |---|---|---|
 | #44 calendar sync (spec 0024) | `freeBusy`, `createEvent`, `moveEvent`, `cancelEvent`, and the `meetings` tables a booking links to | hard prerequisite (spec 0024 milestone 3) |
-| #48 forms (spec 0023) | the public bundle and hosted page shell, the question renderer, bot checks (reCAPTCHA v3, honeypot, rate limits), record matching by email and domain, the free email domain list | hard prerequisite (spec 0023 milestone 1) |
+| #48 forms (spec 0023) | the public bundle and hosted page shell, the question renderer, bot checks (honeypot, minimum fill time, rate limits; reCAPTCHA only when its keys are set), record matching by email and domain, the free email domain list | hard prerequisite (spec 0023 milestone 1) |
 | #8 background jobs (spec 0008) | reminders and emails as scheduled jobs | hard prerequisite |
 | #9 access (spec 0009) | `booking.manage` (own pages) and `booking.admin` (team pages, everyone's) permissions | hard prerequisite |
 | #58 round robin | `assignOwner` to pick the host of a rotating team page | the `round_robin` page kind waits for it; `pickHost` is the seam |
@@ -36,7 +38,7 @@ Reasoning and options: see [rationale.md](rationale.md).
 *Pages*
 - **AC-623**: A member with `booking.manage` creates a personal booking page: title, short description, a web address slug (unique in the workspace), meeting lengths offered (one or more of 15, 30, 45, 60, 90 minutes), location (the calendar's video link, a phone call the visitor gives a number for, an address, or custom text), and status (`live` or `paused`).
 - **AC-624**: Availability: weekly hours per day (several ranges a day) in a chosen time zone, date overrides (a day off, or different hours), buffers before and after (0 to 60 minutes), minimum notice (0 to 14 days), how far ahead people can book (1 to 365 days), a daily limit of bookings (optional), and the slot step (15, 30 or 60 minutes, default the meeting length).
-- **AC-625**: Questions: name and email always; up to 10 more, built with the forms question types (text, long text, phone, select, multi select, checkbox), each optionally mapped to a person attribute, with the same validation as forms.
+- **AC-625**: Questions: name and email always; up to 10 more, built with the forms answer types and the same question cards ([0023-experience.md](../0023-forms/0023-experience.md)), each optionally filed on a person attribute through Where it goes, with the same validation as forms.
 - **AC-626**: On booking, optionally create a deal (choose its stage), or move the person's company's open deal to a stage when one exists (an existing open deal is never duplicated).
 - **AC-627**: An admin with `booking.admin` creates a team page of kind `collective`: required members (2 to 8); a slot is offered only when every required member is free, and the event goes on the first member's calendar with the others as attendees.
 - **AC-628**: The `round_robin` team kind appears in the builder as "Coming soon" until #58 lands.
