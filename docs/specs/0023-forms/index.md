@@ -1,6 +1,6 @@
 # 0023. Forms: public forms that feed the CRM
 
-**Date**: 2026-10-15
+**Date**: 2026-10-15 (revised 2026-10-19: the builder, the visitor page and the bot checks follow [0023-experience.md](0023-experience.md))
 **Status**: Proposed
 
 ## Summary
@@ -9,6 +9,7 @@ A member builds a form from an object's attributes, publishes it, and shares it 
 
 ## Structure
 
+- [0023-experience.md](0023-experience.md): the builder, the visitor page and after submit: screens, interactions, copy, answer types and the contract changes they need. **Where it and this file differ, it wins.**
 - [0023-public-surface.md](0023-public-surface.md): everything a visitor's browser touches: the hosted page, the embed script (inline, popup, slide in), capturing a site's own forms, the bot checks, the browser retry, the counters and consented tracking.
 
 Reasoning and options: see [rationale.md](rationale.md).
@@ -320,7 +321,7 @@ Tracer Bullet: each milestone ends with something you can click in production. M
 3. Engine and core: `processSubmission` (match on the key with the advisory lock, create or update with fill or always, the form actor, `form_submission_records`), the `forms.process` job kind on the light lane with retries, satisfies **AC-557**, **AC-558**, **AC-561**, **AC-562**, **AC-564**, **AC-565**, **AC-566**
 4. API: member procedures for forms (create, saveDraft, publish, setStatus, rotateKey) and submissions (list, get, retry, delete); the public get and submit endpoints with key, Origin (hosted origin only for now), validation, idempotency, reCAPTCHA, honeypot, timing and in memory rate limits, satisfies **AC-546**, **AC-548**, **AC-549**, **AC-552**, **AC-553**, **AC-554**, **AC-583** to **AC-586**
 5. Public bundle: the hosted page renderer at `/f/<publicKey>` (one step forms), noindex, the browser idempotency key, satisfies **AC-587**
-6. Library and screens: FormBuilder (questions from the object's attributes and form only questions, blocks, preview), the forms list, the submissions list and detail, timeline entries for submissions on records; stories, guardian, satisfies **AC-545**, **AC-550**, **AC-561**, **AC-572**, **AC-573**
+6. Library and screens, as [0023-experience.md](0023-experience.md) designs them: the forms list, the editor (status line, questions as cards, the live preview, the publish check and the first publish dialog), the Settings, Install and Submissions tabs, timeline entries for submissions on records; stories, guardian, satisfies **AC-545**, **AC-550**, **AC-561**, **AC-572**, **AC-573**, **AC-649** to **AC-664**
 7. Deploy; Playwright: build, publish, submit from a second browser, see the person and the timeline entry; `security-access-reviewer`, `state-performance-reviewer`, `ux-interaction-reviewer`, satisfies **AC-545** to **AC-566** (the parts above)
 
 **Milestone 2: linked records, owners, notices, routing and consent**
@@ -374,6 +375,7 @@ Tracer Bullet: each milestone ends with something you can click in production. M
 - [ ] Measure the submit endpoint and the counters on the load harness (#12) with a busy site before milestone 4 ships.
 - [ ] Rate limits move to a shared store when the API runs more than one instance (#41).
 - [ ] Translations of a form into several languages (later).
+- [ ] Steps, layout blocks and show when conditions (AC-547), and the popup and slide in (AC-589): moved out by the 19 October revision, which keeps one calm page; bring back only when a customer asks.
 - [ ] Decide whether site visitor tracking grows into its own feature (anonymous company identification, page scoring); it stays here, consented only, for now.
 - [ ] The free email domain list is the `free-email-domains` package (maintained, MIT), pinned in the catalog. Discovery found no credible Agent Skills or MCP servers for reCAPTCHA v3 or the domain list; record that as declined in `AGENTS.md` at the next `/sync`.
 </content>
