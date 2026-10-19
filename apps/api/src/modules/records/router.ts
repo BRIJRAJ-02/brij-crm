@@ -5,6 +5,7 @@ import {
   editRecord,
   editRecords,
   getActivity,
+  queryGroups,
   queryRecords,
   readRecordsById,
   readTrashedRecord,
@@ -69,6 +70,31 @@ export const recordsRouter = member.records.router({
         )),
       ],
     })),
+  ),
+  // A board's first load (spec 0021): one place in the read gate for the whole call, cancelled with its request.
+  groups: member.records.groups.handler(({ context, input, signal }) =>
+    context.readGate.run(context.scope.workspaceId, async () => {
+      const answer = await queryGroups(
+        context.scope,
+        {
+          objectId: input.objectId,
+          groupBy: input.groupBy,
+          groupIds: input.groupIds,
+          ...(input.filter === undefined ? {} : { filter: input.filter }),
+          ...(input.sorts === undefined ? {} : { sorts: input.sorts }),
+          ...(input.attributeIds === undefined ? {} : { attributeIds: input.attributeIds }),
+          ...(input.limit === undefined ? {} : { limit: input.limit }),
+          ...(input.probeArchived === undefined ? {} : { probeArchived: input.probeArchived }),
+          ...(input.now === undefined ? {} : { now: input.now }),
+          ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+        },
+        signal,
+      );
+      const groups = answer.groups.map((group) => ({ ...group, records: [...group.records] }));
+      return answer.archivedHolding === undefined
+        ? { groups }
+        : { groups, archivedHolding: [...answer.archivedHolding] };
+    }),
   ),
   get: member.records.get.handler(({ context, input }) =>
     readRecordsById(context.scope, input.ids, input.attributeIds),

@@ -2,6 +2,9 @@
 export const strings = {
   /** A column's count, read after its title. */
   cards: (count: string, plural: Intl.LDMLPluralRule) => (plural === 'one' ? `${count} card` : `${count} cards`),
+  /** A count that is a floor (a filtered count past its cap), read after the column's title, and as it shows. */
+  cardsAtLeast: (count: string) => `${count} or more cards`,
+  atLeast: (count: string) => `${count}+`,
   noCards: 'No cards',
   /** Shown on an archived column while a card is moving. */
   archivedRefuses: 'Archived. Cards can’t move here.',

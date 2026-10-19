@@ -13,9 +13,9 @@ import { useWorkspaceName, WorkspacePage } from '../features/workspace/Workspace
 // with the unsaved filter and sorts in `?draft=` (base64url of their
 // canonical JSON, AC-466). The trailing underscore keeps it out of the
 // object address's own route. The loader reads the view and the object's
-// views, checks a link's draft (loading the schemas lazily), and warms the
-// records the view runs (its count and first block, reading only the columns
-// the table shows, waiting at most OPEN_GRACE_MS), all through the data
+// views, checks a link's draft (loading the schemas lazily), and for a table
+// warms the records the view runs (its count and first block, reading only
+// the columns the table shows, waiting at most OPEN_GRACE_MS), all through the data
 // layer; the screen reads them itself. A view the person can't see shows the
 // not found state, never saying why (AC-463). Only the view's id reloads it:
 // a draft changes on the screen, which keeps the rows it has until the next
@@ -72,13 +72,16 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')(
     const [members, records] = await Promise.all([
       membersLoading,
       // A quick load arrives with its rows; a slow one shows the table's own loading rows under its header.
-      context.data.records.open(
-        params.slug,
-        object.id,
-        recordsQuery,
-        viewReadIds(viewColumns(body.view, object, attributes), object, attributes),
-        OPEN_GRACE_MS,
-      ),
+      // A board view warms no table: its columns load their own first cards (spec 0021).
+      body.view.kind === 'board'
+        ? undefined
+        : context.data.records.open(
+            params.slug,
+            object.id,
+            recordsQuery,
+            viewReadIds(viewColumns(body.view, object, attributes), object, attributes),
+            OPEN_GRACE_MS,
+          ),
     ]);
     return {
       kind: 'view' as const,

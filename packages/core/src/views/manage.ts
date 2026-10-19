@@ -18,6 +18,7 @@ import {
   type ViewSummary,
   type ViewVisibility,
 } from '@crm/contracts';
+import { boardConfigProblem, type BoardSettings } from '@crm/contracts/board';
 import { mergeLayout, viewRule, type ViewAction, type ViewRuleReason } from '@crm/contracts/views';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { touched } from '../engine/definitions.ts';
@@ -237,6 +238,38 @@ function checkLayoutIds(
   }
 }
 
+/**
+ * Refuses board settings a board can't show (spec 0021, `boardConfigProblem`,
+ * `CONFIG_INVALID`): grouped by anything but a live status or single select
+ * of the object, more than 6 card fields, one twice, or the primary one. It
+ * judges what the caller sent against the attributes they see.
+ */
+async function checkBoard(
+  tx: WorkspaceTx,
+  scope: EngineScope,
+  objectId: string,
+  board: BoardSettings | undefined,
+): Promise<void> {
+  if (board === undefined) return;
+  const [object] = await tx
+    .select({ primaryAttributeId: objects.primaryAttributeId })
+    .from(objects)
+    .where(and(eq(objects.workspaceId, scope.workspaceId), eq(objects.id, objectId)));
+  const attributes = [...(await loadAttributes(tx, objectId)).values()]
+    .filter((attribute) => fieldLevel(scope.access, { id: attribute.id, objectId }) !== 'hidden')
+    .map((attribute) => ({
+      id: attribute.id,
+      type: attribute.type,
+      isMulti: attribute.isMulti,
+      isSystem: attribute.isSystem,
+      isPrimary: attribute.id === object?.primaryAttributeId,
+      isArchived: attribute.archivedAt !== null || attribute.archivedBy !== null,
+      position: attribute.position,
+    }));
+  const problem = boardConfigProblem(board, attributes);
+  if (problem !== undefined) throw refuse('CONFIG_INVALID', problem);
+}
+
 /** A layout with every attribute id in its canonical (lower case) spelling, so stored ids match the attributes'. */
 function canonicalLayout<L extends Pick<ViewLayout, 'columns' | 'board'>>(layout: L): L {
   return {
@@ -329,6 +362,7 @@ export async function createView(
       }
       const visible = await visibleAttributeIds(tx, scope, object.id);
       checkLayoutIds(config.data, visible.any, object.pluralName);
+      await checkBoard(tx, scope, object.id, config.data.board);
       const filter =
         config.data.filter === undefined || config.data.filter.conditions.length === 0 ? undefined : config.data.filter;
       await checkViewQuery(tx, scope, {
@@ -453,6 +487,7 @@ export async function setViewLayout(
       const visible = await visibleAttributeIds(tx, scope, row.objectId);
       const pluralName = await pluralOf(tx, scope, row.objectId);
       checkLayoutIds(layout, visible.any, pluralName);
+      await checkBoard(tx, scope, row.objectId, layout.board);
       const stored = configOf(row.config);
       const merged = mergeLayout(stored.columns, layout, visible.live);
       const board =

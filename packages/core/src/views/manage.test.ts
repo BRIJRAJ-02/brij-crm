@@ -8,6 +8,7 @@ import { sql } from 'drizzle-orm';
 import type { ViewConfig } from '@crm/contracts';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
+import { defineAttribute } from '../engine/definitions.ts';
 import { newId } from '../engine/ids.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { isRefusal } from '../engine/refusals.ts';
@@ -329,6 +330,59 @@ describe('setViewLayout (AC-470, AC-471, AC-476, AC-479)', () => {
       ),
     ).toEqual({ code: 'FORBIDDEN', message: VIEW_LOCKED });
     expect(await viewRows(w)).toHaveLength(before);
+  });
+});
+
+describe('board settings on a layout or a new view (spec 0021, boardConfigProblem)', () => {
+  it('saves a board kind with its settings, and refuses settings a board can’t show', async () => {
+    const w = await workspace();
+    const define = async (apiSlug: string, type: 'status' | 'select', isMulti = false) =>
+      (await defineAttribute(w.owner, { objectId: w.people, apiSlug, title: apiSlug, type, isMulti })).attributeId;
+    const stage = await define('stage', 'status');
+    const tags = await define('tags', 'select', true);
+    const name = w.attribute('name');
+    const jobTitle = w.attribute('job_title');
+    const layout = (board: { groupByAttributeId: string; cardFields: string[] }) => ({
+      kind: 'board' as const,
+      columns: [],
+      pinnedCount: 1,
+      board: { ...board, showEmptyColumns: true },
+    });
+    // A multi select doesn't group a board; the name is never a card field; a field shows once.
+    for (const board of [
+      { groupByAttributeId: tags, cardFields: [] },
+      { groupByAttributeId: stage, cardFields: [name] },
+      { groupByAttributeId: stage, cardFields: [jobTitle, jobTitle] },
+    ]) {
+      expect(
+        await refusalOf(setViewLayout(w.owner, { viewId: w.peopleView, layout: layout(board) }, hook())),
+      ).toMatchObject({ code: 'CONFIG_INVALID' });
+    }
+    const saved = await setViewLayout(
+      w.owner,
+      { viewId: w.peopleView, layout: layout({ groupByAttributeId: stage, cardFields: [jobTitle] }) },
+      hook(),
+    );
+    expect(saved.kind).toBe('board');
+    expect(saved.config.board).toEqual({ groupByAttributeId: stage, cardFields: [jobTitle], showEmptyColumns: true });
+    // Back to Table keeps the board, so switching again restores it (AC-492).
+    const table = await setViewLayout(
+      w.owner,
+      { viewId: w.peopleView, layout: { kind: 'table', columns: [], pinnedCount: 1 } },
+      hook(),
+    );
+    expect(table.kind).toBe('table');
+    expect(table.config.board?.groupByAttributeId).toBe(stage);
+    // A new view's board is checked the same way.
+    expect(
+      await refusalOf(
+        make(w.owner, w, {
+          name: 'Board',
+          visibility: 'private',
+          config: { ...CONFIG, board: { groupByAttributeId: tags, cardFields: [], showEmptyColumns: true } },
+        }),
+      ),
+    ).toMatchObject({ code: 'CONFIG_INVALID' });
   });
 });
 

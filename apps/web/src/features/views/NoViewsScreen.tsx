@@ -2,10 +2,10 @@
 // Purpose: an object with no view this person may open (spec 0020, AC-462) still lets them start one.
 // Main task: Create view, which opens once the server made it.
 // Leaves out: why the shared views are absent (hidden is absent, spec 0009).
-import type { AttributeDefinition, ObjectSummary } from '@crm/data';
+import { boardDefaults, type AttributeDefinition, type ObjectSummary } from '@crm/data';
 import { Button, EmptyState, TopBar } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { CreateViewDialog } from './CreateViewDialog.tsx';
 import { startingConfig } from './layout.ts';
@@ -23,6 +23,7 @@ export function NoViewsScreen({ slug, object, attributes }: NoViewsScreenProps) 
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
   const [isCreating, setCreating] = useState(false);
+  const newBoard = useMemo(() => boardDefaults(attributes), [attributes]);
   return (
     <WorkspacePage
       currentObject={object.apiSlug}
@@ -55,6 +56,8 @@ export function NoViewsScreen({ slug, object, attributes }: NoViewsScreenProps) 
               objectId={object.id}
               newId={data.views.newId}
               canStartFromView={false}
+              currentKind="table"
+              boardDefaults={newBoard}
               configFor={() => startingConfig(undefined, object, attributes)}
               onCreate={(input) => data.views.create(slug, input)}
               onCreated={(made) => {

@@ -36,8 +36,6 @@ export const strings = {
   /** An object with no view this person may open (AC-462). */
   noViewsTitle: 'No views are available to you',
   noViewsText: 'Create one for yourself, or ask a workspace owner or admin about the shared views here.',
-  /** A board before boards arrive (spec 0021). */
-  boardSoon: 'Boards arrive soon. This view shows as a table for now.',
   /** The column menu's Filter on a relationship, until record search (spec 0014). */
   referenceFilterSoon: 'Filtering by a relationship arrives soon. Filter by its other fields for now.',
   saveFailed: 'Couldn’t save this view. Try again in a moment.',
@@ -51,6 +49,10 @@ export const strings = {
   cancel: 'Cancel',
   viewName: 'Name',
   nameMissing: 'Give the view a name.',
+  /** Create view's Type (AC-472): a table, or a board (spec 0021). */
+  viewType: 'Type',
+  typeTable: 'Table',
+  typeBoard: 'Board',
   whoCanSee: 'Who can see it',
   onlyMe: 'Only me',
   everyone: 'Everyone in the workspace',
