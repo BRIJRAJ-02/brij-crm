@@ -211,6 +211,68 @@ describe('mapping (spec 0017, AC-378, AC-379, AC-382)', () => {
       toActivityEntry({ ...plain, kind: 'task', itemId: taskId, title: 'Call back', isDone: true }, context),
     ).toMatchObject({ kind: 'task', itemId: taskId, title: 'Call back', isDone: true });
     expect(toActivityEntry({ ...plain, kind: 'task', title: 'No id' }, context)).toBeUndefined();
+    // A meeting (spec 0024): its time, attendees (a person's chip, a member named from the list, an address), link.
+    const meetingId = '0199a6f2-0000-7000-8000-0000000009bb';
+    const person = { objectId: OBJECT, recordId: RECORD, name: 'Bea', kind: 'person' as const };
+    const meeting = {
+      id: meetingId,
+      title: 'Intro',
+      startsAt: '2026-10-20T09:00:00.000Z',
+      endsAt: '2026-10-20T09:30:00.000Z',
+      allDay: false,
+      status: 'confirmed' as const,
+      isPrivate: false,
+      detailsHidden: false,
+      videoUrl: 'https://meet.google.com/x',
+      attendees: [
+        {
+          email: 'ada@example.com',
+          response: 'accepted' as const,
+          isOrganizer: true,
+          match: 'member' as const,
+          memberId: ADA,
+        },
+        {
+          email: 'bea@globex.com',
+          response: 'tentative' as const,
+          isOrganizer: false,
+          match: 'linked' as const,
+          person,
+        },
+        {
+          email: 'new@initech.com',
+          name: 'New',
+          response: 'needs_action' as const,
+          isOrganizer: false,
+          match: 'unknown' as const,
+        },
+      ],
+    };
+    expect(toActivityEntry({ ...plain, kind: 'meeting', itemId: meetingId, title: 'Intro', meeting }, context)).toEqual(
+      {
+        id: plain.id,
+        at: plain.at,
+        actor: expect.anything() as unknown,
+        kind: 'meeting',
+        itemId: meetingId,
+        title: 'Intro',
+        startsAt: meeting.startsAt,
+        endsAt: meeting.endsAt,
+        allDay: false,
+        attendees: [
+          {
+            email: 'ada@example.com',
+            display: { type: 'member', id: ADA, name: 'Ada Lovelace', email: 'ada@example.com' },
+            response: 'accepted',
+          },
+          { email: 'bea@globex.com', display: person, response: 'tentative' },
+          { email: 'new@initech.com', name: 'New', response: 'needs_action' },
+        ],
+        videoUrl: 'https://meet.google.com/x',
+        detailsHidden: false,
+      },
+    );
+    expect(toActivityEntry({ ...plain, kind: 'meeting', itemId: meetingId }, context)).toBeUndefined();
   });
 });
 

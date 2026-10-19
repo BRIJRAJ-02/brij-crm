@@ -3,6 +3,7 @@
 // themselves.
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import type { ActivityFeed, ActivityState } from './activity/feed.ts';
+import type { CalendarState, CalendarView } from './calendar/store.ts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { LiveStatus } from './live/live.ts';
 import type { PendingOptions } from './options.ts';
@@ -165,4 +166,13 @@ export function useViewsList(source: ViewsListSource): ViewsListSnapshot {
 /** One saved view whole (spec 0020), re-rendering when it changes. Held while the screen is mounted. */
 export function useSavedView(source: SavedViewSource): SavedViewSnapshot {
   return useRetained(source);
+}
+
+/**
+ * The member's calendar connections (spec 0024, Settings › Calendar),
+ * re-rendering when they change. Held while the screen is mounted, so a
+ * connection still syncing its first window is read again until it is done.
+ */
+export function useCalendar(view: CalendarView): CalendarState {
+  return useRetained(view);
 }
