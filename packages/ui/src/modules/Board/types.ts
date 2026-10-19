@@ -26,6 +26,8 @@ export interface BoardColumn {
   readonly cards: ListSource<BoardCard>;
   /** An archived option: shown while it has cards, and never a drop target. */
   readonly isArchived?: boolean;
+  /** Never a drop target, for this reason, shown while a card is moving (a required field's "No <field>" column). */
+  readonly refusesDrop?: { readonly reason: string };
 }
 
 /** A card moved: where to, and (when the board can reorder) the card it now sits before. */

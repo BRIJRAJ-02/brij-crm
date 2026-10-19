@@ -219,6 +219,65 @@ export const Reorder: Story = {
   },
 };
 
+/** The story below: a required field's no value column next to Lead, saying whether a card is moving. */
+function RefusingBoard() {
+  const [moving, setMoving] = useState(false);
+  return (
+    <Stage height="grid">
+      <Board
+        label="Deals by stage"
+        columns={[
+          {
+            id: STAGE_IDS.lead,
+            title: 'Lead',
+            hue: 'gray',
+            count: 1,
+            cards: arraySource<BoardCard>(CARDS.slice(0, 1), (card) => card.id),
+          },
+          {
+            id: 'none',
+            title: 'No Stage',
+            count: 0,
+            refusesDrop: { reason: 'Stage is required, so cards can’t move here.' },
+            cards: arraySource<BoardCard>([], (card) => card.id),
+          },
+          {
+            id: 'won',
+            title: 'Won',
+            hue: 'green',
+            count: 0,
+            cards: arraySource<BoardCard>([], (card) => card.id),
+          },
+        ]}
+        cardFields={CARD_FIELDS}
+        showEmptyColumns
+        onMovingChange={setMoving}
+        onMove={() => undefined}
+      />
+      <output>{moving ? 'moving' : 'still'}</output>
+    </Stage>
+  );
+}
+
+/** A column that takes no card, with its reason shown while one moves (a required field's no value column). */
+export const RefusesDrop: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => <RefusingBoard />,
+  play: async ({ canvas, userEvent }) => {
+    const name = CARDS[0]?.record.name ?? '';
+    await userEvent.tab();
+    await userEvent.keyboard('{ArrowRight}');
+    const handle = canvas.getByRole('button', { name: `Move ${name}` });
+    await waitFor(() => expect(handle).toHaveFocus());
+    await userEvent.keyboard('{Enter}');
+    await waitFor(() => expect(handle).not.toHaveFocus());
+    await waitFor(() => expect(canvas.getByText('Stage is required, so cards can’t move here.')).toBeInTheDocument());
+    await expect(canvas.getByText('moving')).toBeInTheDocument();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(canvas.getByText('still')).toBeInTheDocument());
+  },
+};
+
 /** A filtered column past the count's cap: its count is a floor, "10,000+". */
 export const CountAtLeast: Story = {
   render: () => (

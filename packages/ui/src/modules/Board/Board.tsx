@@ -33,6 +33,8 @@ export interface BoardProps {
   readonly onShowEmptyColumnsChange?: (show: boolean) => void;
   /** Enter or a click on a card: open its record. */
   readonly onOpen?: (card: BoardCard) => void;
+  /** A card was picked up (true) or dropped or put back (false): the screen holds its columns still meanwhile. */
+  readonly onMovingChange?: (isMoving: boolean) => void;
   /** `loading` (skeleton columns after the loading delay), `error`, or `no-access`. */
   readonly status?: LoadStatus;
   /** Try again, when `status` is `error`. */
@@ -58,6 +60,7 @@ export function Board({
   showEmptyColumns,
   onShowEmptyColumnsChange,
   onOpen,
+  onMovingChange,
   status = 'ready',
   onRetry,
 }: BoardProps) {
@@ -127,7 +130,10 @@ export function Board({
           canMove={!isReadOnly}
           isReorderable={isReorderable}
           draggingFrom={draggingFrom}
-          onDragChange={setDraggingFrom}
+          onDragChange={(from) => {
+            setDraggingFrom(from);
+            onMovingChange?.(from !== undefined);
+          }}
           onMove={move}
           {...(onOpen === undefined ? {} : { onOpen })}
         />
