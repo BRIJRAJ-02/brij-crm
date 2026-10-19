@@ -162,7 +162,7 @@ function NewPersonDialog() {
   );
 }
 
-/** A form dialog sits at a fixed distance from the top: an error line grows it downwards and never moves it. */
+/** A form dialog sits in the middle of the viewport, across and up and down, and stays there when an error line grows it. */
 export const FormDialog: Story = {
   render: () => (
     <Stage>
@@ -177,11 +177,16 @@ export const FormDialog: Story = {
     await expect(dialog.querySelector('button[aria-label="Close"]')).not.toBeNull();
     // Settled after its entrance, then measured.
     await new Promise((resolve) => setTimeout(resolve, 400));
-    const top = dialog.getBoundingClientRect().top;
+    const centred = async (): Promise<void> => {
+      const box = dialog.getBoundingClientRect();
+      await expect(Math.abs(box.left + box.width / 2 - globalThis.innerWidth / 2)).toBeLessThanOrEqual(1);
+      await expect(Math.abs(box.top + box.height / 2 - globalThis.innerHeight / 2)).toBeLessThanOrEqual(1);
+    };
+    await centred();
     const create = [...dialog.querySelectorAll('button')].find((button) => button.textContent.includes('Create'));
     if (create === undefined) throw new globalThis.Error('no Create button');
     await userEvent.click(create);
     await waitFor(() => expect(dialog.querySelector('[aria-invalid="true"]')).not.toBeNull());
-    await expect(dialog.getBoundingClientRect().top).toBe(top);
+    await centred();
   },
 };

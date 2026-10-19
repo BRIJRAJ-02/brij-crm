@@ -31,7 +31,7 @@ Ported from the artifact's Modal card. Confirms, invites, exports, imports and m
 ```
 
 - `variant`: `dialog` (the default, `size-dialog`, 480px) for a question or a short form; `window` (`size-dialog-wide`, 780px) for a larger task, whose title bar also holds an `icon` and a `context` (the record or list). Both have a title bar over a hairline with the title and a close button; an alert (`tone="danger"`) asks with its buttons only, so it has no close button. `palette` (`size-palette`, 640px) is the command palette's: near the top, its `title` for screen readers only, its body flush. Like every modal it appears at once when opened from the keyboard, which is how ⌘K opens it.
-- Every modal but the palette sits at a fixed distance from the top (twice `size-bar`), never centred: an error line added inside grows it downwards, and the title and buttons never jump.
+- Every modal but the palette is centred in the viewport, across and up and down (the owner's call on 19 October 2026, replacing the earlier fixed distance from the top). The palette alone sits near the top (twice `size-bar`), as command palettes do.
 - `actions` is the footer: Cancel first (`slot="close"` closes the modal), the primary last. Give Cancel `kbd="ESC"` and a form's primary `kbd="⌘↵"`: a `Form` submits on ⌘↵ (Ctrl+Enter elsewhere) from any of its fields. A destructive confirm uses `tone="danger"` with a `danger` Button.
 - `tone="danger"` makes it an alert dialog with a warning icon; a click outside won't close it, so a destructive answer is always deliberate.
 - Open it from a `ModalTrigger`, or control it with `isOpen` and `onOpenChange`.
