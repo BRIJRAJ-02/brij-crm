@@ -1113,7 +1113,18 @@ export function createRecordsLayer({
     objectId: string,
     query: ViewQuery,
     warm: readonly string[],
-    column?: { readonly key: string; readonly seed: ColumnSeed },
+    column?: {
+      readonly key: string;
+      readonly seed: ColumnSeed;
+      /**
+       * A board column counts through `records.groups` (spec 0021), exact with no filter however large, so a
+       * settle never turns a column past 10,000 into "10,000+" as `records.count` would.
+       */
+      readonly count: (
+        clock: { readonly now: string; readonly timeZone: string },
+        signal: AbortSignal,
+      ) => Promise<{ readonly count: number; readonly atLeast: boolean }>;
+    },
   ): ViewEntry {
     const key = column?.key ?? keyOf(workspace, objectId, query);
     // A board's column (spec 0021) reads 25 cards a block, and starts from the cards its board's call brought.
@@ -1296,17 +1307,20 @@ export function createRecordsLayer({
       countController.abort();
       const controller = new AbortController();
       countController = controller;
+      const countColumn = column?.count;
       return whenFree(
         () =>
-          api.count(
-            {
-              workspace,
-              objectId,
-              ...(query.filter === undefined ? {} : { filter: query.filter }),
-              ...clockInput(),
-            },
-            controller.signal,
-          ),
+          countColumn === undefined
+            ? api.count(
+                {
+                  workspace,
+                  objectId,
+                  ...(query.filter === undefined ? {} : { filter: query.filter }),
+                  ...clockInput(),
+                },
+                controller.signal,
+              )
+            : countColumn(clockInput(), controller.signal),
         controller.signal,
       ).then(
         (told) => {
@@ -3066,8 +3080,29 @@ export function createRecordsLayer({
         column: (id, filter, sorts, seed) => {
           const columnQuery = { filter, ...(sorts === undefined ? {} : { sorts }) };
           const columnKey = `${keyOf(workspace, objectId, columnQuery)}\u0000board`;
+          // Its count after a settle: the column alone through `records.groups` (one card, the primary only).
+          const count = (clock: { readonly now: string; readonly timeZone: string }, signal: AbortSignal) =>
+            api
+              .groups(
+                {
+                  workspace,
+                  objectId,
+                  groupBy: query.groupBy,
+                  groupIds: [id],
+                  ...(query.filter === undefined ? {} : { filter: query.filter }),
+                  attributeIds: [],
+                  limit: 1,
+                  ...clock,
+                },
+                signal,
+              )
+              .then((answer) => {
+                const group = answer.groups.find((each) => each.id === id);
+                return { count: group?.count ?? 0, atLeast: group?.atLeast ?? false };
+              });
           const open =
-            views.get(columnKey) ?? openView(workspace, objectId, columnQuery, attributeIds, { key: columnKey, seed });
+            views.get(columnKey) ??
+            openView(workspace, objectId, columnQuery, attributeIds, { key: columnKey, seed, count });
           views.set(columnKey, open);
           columns.set(columnKeyOf(id), open);
           if (dragging > 0) open.view.holdSettle(true);

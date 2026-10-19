@@ -2588,17 +2588,41 @@ describe('moving a card (spec 0021, milestone 2)', () => {
   });
 
   it('holds every column still while a card is dragged', async () => {
-    const { board, layer, tick, counts, frame } = await readyBoard();
+    const { board, layer, tick, groups, frame } = await readyBoard();
+    const firstLoad = groups.length;
     board.holdStill(true);
     layer.changed(WS, PEOPLE, [idAt(9)], [NAME], { createdIds: [idAt(9)] });
     frame();
     tick(10_000);
     await settle();
     // No settle rereads a column (its count) under the drag.
-    expect(counts).toHaveLength(0);
+    expect(groups).toHaveLength(firstLoad);
     board.holdStill(false);
     tick(10_000);
     await settle();
-    expect(counts.length).toBeGreaterThan(0);
+    expect(groups.length).toBeGreaterThan(firstLoad);
+  });
+
+  it('settles a column count through records.groups, exact past 10,000, never records.count', async () => {
+    const { layer, tick, groups, counts, lead, frame } = await readyBoard();
+    const firstLoad = groups.length;
+    layer.changed(WS, PEOPLE, [idAt(9)], [NAME], { createdIds: [idAt(9)] });
+    frame();
+    tick(10_000);
+    await settle();
+    const asked = groups.slice(firstLoad);
+    const forLead = asked.find((call) => call.input.groupIds[0] === LEAD);
+    expect(forLead?.input).toMatchObject({ groupBy: STAGE, groupIds: [LEAD], attributeIds: [], limit: 1 });
+    expect(forLead?.input.filter).toBeUndefined();
+    for (const call of asked) {
+      const id = call.input.groupIds[0] ?? null;
+      call.answer({
+        groups: [{ id, records: [], count: id === LEAD ? 12_345 : 0, atLeast: false }],
+      });
+    }
+    await settle();
+    frame();
+    expect(counts).toHaveLength(0);
+    expect(lead.getSnapshot().count).toEqual({ count: 12_345, atLeast: false });
   });
 });
