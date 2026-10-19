@@ -57,4 +57,3 @@ Not in the artifact. Dragging on the grid to make a meeting comes with the new m
 ## Drawing (spec 0027)
 
 With `onDraw` set, empty time draws a span: a mouse or pen drags across one day (snapped to 15 minutes, never leaving the day, the cursor a crosshair), a click or a span under 15 minutes draws `drawMinutes`, a finger taps (a drag would fight scrolling), and Enter or Space on a day draws `drawMinutes` from `drawStartMinute(day)`. The screen gets the span from `onDraw`, sets it as `draft`, and passes `draftCard` (a SpanCard), which opens in a Popover beside the solid ghost; Escape or a press outside calls `onDraftClose`. `minuteLabel` names the ghost's start and end corners. Blocks keep their own presses, so a drag can only start on empty time.
-

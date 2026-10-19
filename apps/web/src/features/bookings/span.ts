@@ -1,5 +1,6 @@
 // A span drawn on Bookings' week (spec 0027), in the member's own zone (the
 // browser's): its instants, and its name for the card. Pure: the locale comes in.
+import type { BookingAvailability } from '@crm/data';
 import { strings } from './strings.ts';
 import { dayStart } from './week.ts';
 
@@ -35,4 +36,15 @@ export function spanNames(span: DrawnSpan, locale: string): { readonly title: st
     title: `${clock.format(start)} – ${clock.format(end)}`,
     meta: `${day.format(start)} · ${lengthLabel(span.endMinute - span.startMinute)}`,
   };
+}
+
+const WEEKDAY_KEYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+
+/** Where the member's day starts (their first range that weekday), for time drawn from the keyboard; else 9:00. */
+export function workingStartOf(availability: BookingAvailability | undefined, dayKey: string): number {
+  const weekday = WEEKDAY_KEYS[dayStart(dayKey).getDay()] ?? 'mon';
+  const first = availability?.weekly[weekday][0]?.[0];
+  if (first === undefined) return 9 * 60;
+  const [hours = 9, minutes = 0] = first.split(':').map(Number);
+  return hours * 60 + minutes;
 }

@@ -46,6 +46,7 @@ import {
   pickHost,
   type PageRecord,
 } from './slots.ts';
+import { hostLockKey, lockKey } from './locks.ts';
 import { buildBookingIcs } from './ics.ts';
 import { matchVisitor } from './visitor.ts';
 
@@ -146,11 +147,6 @@ export async function readPublicSlots(
     slots: slots.map((slot) => ({ start: slot.start.toISOString(), end: slot.end.toISOString() })),
     calendar: busy.blocked ? 'unreachable' : 'ok',
   };
-}
-
-/** A transaction scoped advisory lock on a text key (released when the transaction ends, however it ends). */
-async function lockKey(tx: WorkspaceTx, key: string): Promise<void> {
-  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
 }
 
 /** What a booking keeps of the visitor's answers: their number, note and guests (milestone 2 adds the questions). */
@@ -284,7 +280,7 @@ export async function bookPublicSlot(
     entry.scope,
     async (context) => {
       const { tx } = context;
-      for (const memberId of [...memberIds].sort()) await lockKey(tx, `booking:host:${workspaceId}:${memberId}`);
+      for (const memberId of [...memberIds].sort()) await lockKey(tx, hostLockKey(workspaceId, memberId));
       const again = await replay(tx, page);
       if (again !== undefined) return again;
       const held = await bookedSpans(tx, memberIds, page.id, dayFrom, dayTo);

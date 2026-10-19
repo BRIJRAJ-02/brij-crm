@@ -75,6 +75,7 @@ export const bookingsRouter = member.bookings.router({
     create: member.bookings.blocks.create.handler(({ context, input }) =>
       commitWrite(context, { mutationId: input.mutationId }, () =>
         createTimeBlock(context.scope, {
+          id: input.id,
           kind: input.kind,
           repeat: input.repeat,
           date: input.date,

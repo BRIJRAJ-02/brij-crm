@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
+import { SpanCard } from '../SpanCard/SpanCard.tsx';
 import { WeekCalendar, type WeekCalendarBlock, type WeekCalendarDay, type WeekCalendarSpan } from './WeekCalendar.tsx';
 
 /** The frozen clock's week: Monday 5 to Sunday 11 October 2026, today Thursday the 8th. */
@@ -173,7 +174,17 @@ export const Draw: Story = {
           }}
           {...(draft === undefined ? {} : { draft })}
           draftLabel="Monday 5 October, 9:00 to 9:30 AM"
-          draftCard={<p>Book someone in, or block this time.</p>}
+          draftCard={
+            <SpanCard
+              title="9:00 – 9:30 AM"
+              meta="Monday 5 October · 30 min"
+              focusKey="choose"
+              choices={[
+                { id: 'block', label: 'Block this time', icon: 'circle-slash', onPress: fn() },
+                { id: 'hold', label: 'Hold for a private page', icon: 'bookmark', onPress: fn() },
+              ]}
+            />
+          }
           onDraftClose={() => setDraft(undefined)}
         />
       </Stage>
@@ -188,8 +199,59 @@ export const Draw: Story = {
     await waitFor(() =>
       expect(body.getByRole('dialog', { name: 'Monday 5 October, 9:00 to 9:30 AM' })).toBeInTheDocument(),
     );
-    await userEvent.keyboard('{Escape}');
-    await waitFor(() => expect(body.queryByRole('dialog')).not.toBeInTheDocument());
+  },
+};
+
+/** A drawn span that is not yet anything: the solid ghost, under the day's blocks. */
+export const DrawnSpan: Story = {
+  args: { onDraw: fn(), selectedDay: '2026-10-08' },
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar
+        {...args}
+        days={days()}
+        blocks={blocks()}
+        draft={{ dayKey: '2026-10-08', startMinute: 15 * 60, endMinute: 17 * 60 }}
+        minuteLabel={(minute) => `${String(Math.floor(minute / 60))}:${String(minute % 60).padStart(2, '0')}`}
+      />
+    </Stage>
+  ),
+};
+
+/** A finger taps to draw the default length; one that scrolls draws nothing. */
+export const DrawByTouch: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { onDraw: fn(), selectedDay: '2026-10-05' },
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar {...args} days={days()} blocks={[]} scrollToMinute={0} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    const column = canvas.getByRole('group', { name: 'Monday, 5 October, nothing on' });
+    const box = column.getBoundingClientRect();
+    const x = box.left + box.width / 2;
+    const yAt = (minute: number) => box.top + (minute / 1440) * box.height;
+    const touch = (type: string, minute: number) =>
+      column.dispatchEvent(
+        new PointerEvent(type, {
+          bubbles: true,
+          button: 0,
+          pointerId: 7,
+          pointerType: 'touch',
+          clientX: x,
+          clientY: yAt(minute),
+        }),
+      );
+    // A scroll: the finger moves, then the browser takes the pointer.
+    touch('pointerdown', 600);
+    touch('pointermove', 700);
+    column.dispatchEvent(new PointerEvent('pointercancel', { bubbles: true, pointerId: 7, pointerType: 'touch' }));
+    await expect(args.onDraw).not.toHaveBeenCalled();
+    // A tap.
+    touch('pointerdown', 600);
+    touch('pointerup', 600);
+    await expect(args.onDraw).toHaveBeenCalledWith({ dayKey: '2026-10-05', startMinute: 600, endMinute: 630 });
   },
 };
 

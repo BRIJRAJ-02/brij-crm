@@ -13,7 +13,8 @@ import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { refuse, refuseOn } from '../engine/refusals.ts';
 import { actorRow } from '../engine/scope.ts';
-import type { Span } from './engine.ts';
+import { toInstant, type Span } from './engine.ts';
+import { hostLockKey, lockKey } from './locks.ts';
 
 const { bookingPageMembers, bookingPages, bookingTimeBlocks } = schema;
 
@@ -21,6 +22,8 @@ const NOT_FOUND_MESSAGE = 'That block could not be found.';
 
 /** What a block is drawn as: a date and local minutes in a zone. */
 export interface TimeBlockDraft {
+  /** Minted by the client once per draw, so a retry gives back the block the first try made. */
+  readonly id: string;
   readonly kind: 'block' | 'hold';
   readonly repeat: 'once' | 'weekly';
   readonly date: string;
@@ -39,10 +42,8 @@ function blockOwner(scope: EngineScope): string {
   return principal.memberId;
 }
 
-/** Local minutes on `day` (a start of day in its zone) to an instant; 1440 is the next midnight. */
-function at(day: DateTime, minute: number): DateTime {
-  return minute >= 1440 ? day.plus({ days: 1 }).startOf('day') : day.plus({ minutes: minute });
-}
+/** Local minutes on `day` (a start of day in its zone) to an instant, by the clock (a DST day too); 1440 is the next midnight. */
+const at = toInstant;
 
 /** A date's start of day in `zone`, or undefined for a date that isn't one. */
 function dayIn(date: string, zone: string): DateTime | undefined {
@@ -50,12 +51,9 @@ function dayIn(date: string, zone: string): DateTime | undefined {
   return day.isValid ? day : undefined;
 }
 
-type BlockRow = Omit<typeof bookingTimeBlocks.$inferSelect, 'during'> & {
-  readonly startsAt: string | null;
-  readonly endsAt: string | null;
-};
+type BlockRow = Omit<typeof bookingTimeBlocks.$inferSelect, 'during'>;
 
-const iso = (value: string) => new Date(value).toISOString();
+const iso = (value: Date) => value.toISOString();
 
 function viewOf(row: BlockRow): TimeBlockView {
   return {
@@ -73,11 +71,6 @@ function viewOf(row: BlockRow): TimeBlockView {
     ...(row.fromDate === null ? {} : { fromDate: row.fromDate }),
   };
 }
-
-const withSpan = {
-  startsAt: sql<string | null>`lower(${bookingTimeBlocks.during})`,
-  endsAt: sql<string | null>`upper(${bookingTimeBlocks.during})`,
-};
 
 /**
  * Closes a span on the caller's own calendar (AC-703, AC-704). A hold carved
@@ -100,6 +93,10 @@ export async function createTimeBlock(scope: EngineScope, draft: TimeBlockDraft)
   const label = draft.label?.trim() === '' ? undefined : draft.label?.trim();
   const by = actorRow(scope.actor);
   return inWorkspace(scope, async (tx) => {
+    // A visitor's booking rechecks under this lock: the block lands wholly before or after it, never between.
+    await lockKey(tx, hostLockKey(scope.workspaceId, member));
+    const again = await existing(tx, member, draft.id);
+    if (again !== undefined) return again;
     if (draft.pageId !== undefined) await requireOwnPage(tx, member, draft.pageId);
     const shape =
       draft.repeat === 'once'
@@ -117,6 +114,7 @@ export async function createTimeBlock(scope: EngineScope, draft: TimeBlockDraft)
       .insert(bookingTimeBlocks)
       .values({
         workspaceId: scope.workspaceId,
+        id: draft.id,
         memberId: member,
         kind: draft.kind,
         repeat: draft.repeat,
@@ -130,19 +128,28 @@ export async function createTimeBlock(scope: EngineScope, draft: TimeBlockDraft)
         updatedById: by.id,
         updatedByMemberId: by.memberId,
       })
-      .returning({ ...blockColumns(), ...withSpan });
+      .returning(blockColumns());
     if (row === undefined) throw new Error('booking_time_blocks insert returned no row');
     return viewOf(row);
   });
 }
 
-/** Every column of the table, for a `returning` or `select` beside the span. */
+/** Every column but the range itself (its ends are columns too), for a `returning` or `select`. */
 function blockColumns() {
   const { during: _during, ...columns } = getTableColumns(bookingTimeBlocks);
   return columns;
 }
 
-/** A hold names a live page the member books, or the hold is refused as if the page weren't there. */
+/** The member's block with this id, when a retry already made it. */
+async function existing(tx: WorkspaceTx, member: string, id: string): Promise<TimeBlockView | undefined> {
+  const [row] = await tx
+    .select(blockColumns())
+    .from(bookingTimeBlocks)
+    .where(and(eq(bookingTimeBlocks.id, id), eq(bookingTimeBlocks.memberId, member)));
+  return row === undefined ? undefined : viewOf(row);
+}
+
+/** A hold names a live private page the member books, or the hold is refused as if the page weren't there. */
 async function requireOwnPage(tx: WorkspaceTx, member: string, pageId: string): Promise<void> {
   const [page] = await tx
     .select({ id: bookingPages.id })
@@ -152,10 +159,17 @@ async function requireOwnPage(tx: WorkspaceTx, member: string, pageId: string): 
       and(eq(bookingPageMembers.workspaceId, bookingPages.workspaceId), eq(bookingPageMembers.pageId, bookingPages.id)),
     )
     .where(
-      and(eq(bookingPages.id, pageId), eq(bookingPageMembers.memberId, member), sql`${bookingPages.deletedAt} is null`),
+      and(
+        eq(bookingPages.id, pageId),
+        eq(bookingPageMembers.memberId, member),
+        eq(bookingPages.isPrivate, true),
+        sql`${bookingPages.deletedAt} is null`,
+      ),
     )
     .limit(1);
-  if (page === undefined) throw refuseOn('NOT_FOUND', 'That booking page doesn’t exist, or isn’t yours.', 'pageId');
+  if (page === undefined) {
+    throw refuseOn('NOT_FOUND', 'That booking page doesn’t exist, isn’t private, or isn’t yours.', 'pageId');
+  }
 }
 
 /** Reopens the time one of the caller's blocks closed (AC-705); a weekly block stops every week. */
@@ -176,14 +190,16 @@ export async function removeTimeBlock(
 
 /** A member's blocks that can touch `[from, to)`: once ones overlapping it, and every weekly one begun by its end. */
 async function blocksTouching(tx: WorkspaceTx, member: string, from: Date, to: Date): Promise<readonly BlockRow[]> {
-  const range = sql`tstzrange(${from.toISOString()}::timestamptz, ${to.toISOString()}::timestamptz, '[)')`;
   return tx
-    .select({ ...blockColumns(), ...withSpan })
+    .select(blockColumns())
     .from(bookingTimeBlocks)
     .where(
       and(
         eq(bookingTimeBlocks.memberId, member),
-        sql`((${bookingTimeBlocks.repeat} = 'once' and ${bookingTimeBlocks.during} && ${range})
+        // Plain comparisons on the stored ends, not `during &&`: under row level security only leakproof operators
+        // reach the index, and range overlap isn't one.
+        sql`((${bookingTimeBlocks.repeat} = 'once' and ${bookingTimeBlocks.endsAt} > ${from.toISOString()}::timestamptz
+            and ${bookingTimeBlocks.startsAt} < ${to.toISOString()}::timestamptz)
           or (${bookingTimeBlocks.repeat} = 'weekly' and ${bookingTimeBlocks.fromDate} <= ${to.toISOString().slice(0, 10)}::date + 1))`,
       ),
     )

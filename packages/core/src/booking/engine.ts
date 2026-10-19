@@ -92,7 +92,7 @@ export interface SlotEngineInput {
 }
 
 /** Wall clock minutes to an instant on `day`. 1440 is the following midnight; a time a DST gap skips moves forward. */
-function toInstant(day: DateTime, minute: number): DateTime {
+export function toInstant(day: DateTime, minute: number): DateTime {
   if (minute >= 1440) return day.plus({ days: 1 }).startOf('day');
   return day.set({ hour: Math.floor(minute / 60), minute: minute % 60, second: 0, millisecond: 0 });
 }

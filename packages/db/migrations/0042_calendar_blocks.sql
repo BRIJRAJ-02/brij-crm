@@ -1,7 +1,6 @@
 -- Calendar quick actions (spec 0027): `booking_time_blocks`, the time a member closed on their own calendar (a block
 -- for every page, a hold for every page but a private one), once as an absolute span or every week as local minutes,
--- and `booking_pages.is_private`. The standard tenant policy, and a GiST index for the slots read's range overlap,
--- are hand written at the end.
+-- and `booking_pages.is_private`. The standard tenant policy is hand written at the end.
 --
 -- The foreign keys briefly lock the tables they touch. Give up after 5 seconds rather than queue behind traffic, like
 -- 0041.
@@ -61,8 +60,3 @@ alter table booking_time_blocks force row level security;
 create policy booking_time_blocks_tenant on booking_time_blocks
   using (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid)
   with check (workspace_id = nullif(current_setting('app.workspace_id', true), '')::uuid);
---> statement-breakpoint
--- A member's one off blocks and holds overlapping a range (btree_gist, from 0041, gives uuid its `=` here).
-create index booking_time_blocks_once on booking_time_blocks
-  using gist (workspace_id, member_id, during)
-  where repeat = 'once';

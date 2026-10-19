@@ -725,6 +725,7 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
   'bookings.blocks.create': async (m, mutationId) => {
     await m.client.bookings.blocks.create({
       workspace: m.slug,
+      id: newId(),
       kind: 'block',
       repeat: 'once',
       date: '2026-11-02',
@@ -738,6 +739,7 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
   'bookings.blocks.remove': async (m, mutationId) => {
     const block = await m.client.bookings.blocks.create({
       workspace: m.slug,
+      id: newId(),
       kind: 'block',
       repeat: 'weekly',
       date: '2026-11-02',

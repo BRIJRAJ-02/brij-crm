@@ -77,6 +77,7 @@ async function mondayStarts(publicKey: string, day = '2026-11-02') {
 }
 
 const draft = (over: Partial<TimeBlockDraft> = {}): TimeBlockDraft => ({
+  id: newId(),
   kind: 'block',
   repeat: 'once',
   date: '2026-11-02',
@@ -166,6 +167,29 @@ describe('blocks close time (AC-703, AC-706)', () => {
   });
 });
 
+describe('the clock and retries', () => {
+  it('blocks by the clock on a clock change day, so 10:00 stays 10:00', async () => {
+    const w = await workspace();
+    const block = await createTimeBlock(w.owner, draft({ date: '2026-10-25', timeZone: 'Europe/London' }));
+    expect(block).toMatchObject({ startsAt: '2026-10-25T10:00:00.000Z', endsAt: '2026-10-25T11:00:00.000Z' });
+    const spring = await createTimeBlock(w.owner, draft({ date: '2026-03-29', timeZone: 'Europe/London' }));
+    expect(spring).toMatchObject({ startsAt: '2026-03-29T09:00:00.000Z', endsAt: '2026-03-29T10:00:00.000Z' });
+  });
+
+  it('a retry with the same id gives back the first block, not a second', async () => {
+    const w = await workspace();
+    const once = draft();
+    const first = await createTimeBlock(w.owner, once);
+    const again = await createTimeBlock(w.owner, once);
+    expect(again).toEqual(first);
+    const week = await readBookingsCalendar(w.owner, {
+      from: '2026-11-02T00:00:00.000Z',
+      to: '2026-11-03T00:00:00.000Z',
+    });
+    expect(week.blocks).toHaveLength(1);
+  });
+});
+
 describe('holds open only for a private page (AC-704, AC-707)', () => {
   it('closes a hold for an ordinary page, opens it for a private one, even outside the hours', async () => {
     const w = await workspace();
@@ -202,6 +226,15 @@ describe('holds open only for a private page (AC-704, AC-707)', () => {
     expect(changed.isPrivate).toBe(true);
     await createTimeBlock(w.owner, draft({ kind: 'hold', startMinute: 18 * 60, endMinute: 19 * 60 }));
     expect(await mondayStarts(page.publicKey)).toContain('18:00');
+  });
+
+  it('refuses a hold carved for a page that isn’t private', async () => {
+    const w = await workspace();
+    const { page } = await livePage(w.owner);
+    expect(await refusalOf(createTimeBlock(w.owner, draft({ kind: 'hold', pageId: page.id })))).toMatchObject({
+      code: 'NOT_FOUND',
+      field: 'pageId',
+    });
   });
 
   it('refuses a hold for a page the member doesn’t book', async () => {

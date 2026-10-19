@@ -28,6 +28,8 @@ export const TIME_BLOCK_MINUTES = { min: 5, max: 1440 } as const;
  * local midnight in `timeZone` (1440 is the next midnight).
  */
 export const CreateTimeBlockInput = WorkspaceScoped.extend({
+  /** Minted by the client once per draw: a retry with the same id gives back the block the first made. */
+  id: z.uuid(),
   kind: TimeBlockKind,
   repeat: TimeBlockRepeat,
   date: DateValue,

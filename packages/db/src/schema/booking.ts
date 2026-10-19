@@ -273,6 +273,9 @@ export const bookingTimeBlocks = pgTable(
     kind: text('kind').notNull(),
     repeat: text('repeat').notNull(),
     during: tstzrange('during'),
+    /** `during`'s ends, kept beside it: plain comparisons reach a btree index under row level security, `&&` doesn't. */
+    startsAt: timestamptz('starts_at').generatedAlwaysAs(sql`lower(during)`),
+    endsAt: timestamptz('ends_at').generatedAlwaysAs(sql`upper(during)`),
     weekday: smallint('weekday'),
     startMinute: smallint('start_minute'),
     endMinute: smallint('end_minute'),
@@ -290,6 +293,10 @@ export const bookingTimeBlocks = pgTable(
       columns: [t.workspaceId, t.memberId],
       foreignColumns: [members.workspaceId, members.id],
     }),
+    // The member's one off blocks ending after a range starts, read with every slots request.
+    index('booking_time_blocks_once')
+      .on(t.workspaceId, t.memberId, t.endsAt)
+      .where(sql`${t.repeat} = 'once'`),
     // The member's weekly blocks, read with every slots request.
     index('booking_time_blocks_weekly')
       .on(t.workspaceId, t.memberId)

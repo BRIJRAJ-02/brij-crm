@@ -1921,16 +1921,21 @@ export function createDataLayer({
          */
         create: async (
           workspace: string,
-          draft: Omit<CreateTimeBlockInput, 'workspace' | 'mutationId'>,
-          preview: readonly TimeBlockOccurrence[],
+          draft: Omit<CreateTimeBlockInput, 'workspace' | 'mutationId' | 'id'>,
+          preview: readonly Omit<TimeBlockOccurrence, 'key' | 'blockId'>[],
         ): Promise<TimeBlockView> => {
+          // One id for the preview and the block, so the preview can be opened (and removed) as the real thing.
+          const id = mintId();
           const restore = bookingsLists.patchRanges(workspace, (shown) => ({
             ...shown,
-            blocks: [...shown.blocks, ...preview],
+            blocks: [
+              ...shown.blocks,
+              ...preview.map((turn) => ({ ...turn, blockId: id, key: `${id}:${turn.startsAt}` })),
+            ],
           }));
           try {
             const made = await call((options) =>
-              api.bookings.blocks.create({ ...draft, workspace, mutationId: mintId() }, options),
+              api.bookings.blocks.create({ ...draft, id, workspace, mutationId: mintId() }, options),
             );
             bookingsLists.reloadAll(workspace);
             return made;

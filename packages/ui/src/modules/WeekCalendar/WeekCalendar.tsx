@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -61,6 +62,12 @@ export interface WeekCalendarSpan {
 
 /** Drawing snaps to the quarter hour: the finest span anybody drags on purpose. */
 const SNAP = 15;
+
+/** How far a finger may move, in CSS pixels, and still be a tap rather than a scroll. */
+const TAP_SLOP = 8;
+
+/** Time the member closed: it sits under bookings and events rather than in their lanes. */
+const isClosed = (block: WeekCalendarBlock) => block.kind === 'blocked' || block.kind === 'held';
 
 /** Props for WeekCalendar. */
 export interface WeekCalendarProps {
@@ -190,6 +197,35 @@ export function WeekCalendar({
   };
   const [ghost, setGhost] = useState<HTMLDivElement | null>(null);
   const ghostRef = useMemo(() => ({ current: ghost }), [ghost]);
+  // A span drawn out of view (from the keyboard, or moved with From and To) scrolls into it, its card beside it.
+  useLayoutEffect(() => {
+    ghost?.scrollIntoView({ block: 'nearest' });
+  }, [ghost, draft?.dayKey, draft?.startMinute, draft?.endMinute]);
+  // A finger's touch until it lifts: a tap draws, a scroll doesn't.
+  const tap = useRef<{ readonly dayKey: string; readonly minute: number; readonly y: number } | null>(null);
+  // The open block's day, so focus has somewhere to go when the block is gone (removed from its card).
+  const anchorDay = useRef(selectedDay);
+  /** After a card closes, focus its day when what it was anchored to is gone (a drawn span, a removed block). */
+  const focusDayLater = (dayKey: string, from: HTMLElement | null) => {
+    requestAnimationFrame(() => {
+      if (from?.isConnected === true) return;
+      if (document.activeElement !== null && document.activeElement !== document.body) return;
+      columns.current.get(dayKey)?.focus();
+    });
+  };
+  // A card closed by the screen (a removal, Done) rather than by Escape: focus the day when its anchor is gone.
+  const shownCard = useRef<{ readonly day: string; readonly from: HTMLElement | null } | null>(null);
+  useEffect(() => {
+    const card =
+      openId !== undefined
+        ? { day: anchorDay.current, from: anchor }
+        : draft !== undefined
+          ? { day: draft.dayKey, from: null }
+          : null;
+    const closed = shownCard.current;
+    shownCard.current = card;
+    if (card === null && closed !== null) focusDayLater(closed.day, closed.from);
+  });
 
   /** The minute under the pointer in `column`, snapped and clamped to the day. */
   const minuteAt = (column: HTMLElement, clientY: number): number => {
@@ -283,7 +319,11 @@ export function WeekCalendar({
             ))}
           </div>
           {days.map((day) => {
-            const dayBlocks = placeBlocks(blocks.filter((block) => block.dayKey === day.key));
+            const ofDay = blocks.filter((block) => block.dayKey === day.key);
+            // Closed time sits under bookings and events, full width, out of their lanes (AC-705).
+            const closed = ofDay.filter((block) => isClosed(block)).map((block) => ({ ...block, lane: 0, lanes: 1 }));
+            const placed = placeBlocks(ofDay.filter((block) => !isClosed(block)));
+            const dayBlocks = [...closed, ...placed];
             return (
               // A composite: the day takes focus, and the arrow keys move between days and their blocks.
               // eslint-disable-next-line jsx-a11y-x/no-noninteractive-element-interactions
@@ -295,6 +335,9 @@ export function WeekCalendar({
                 }}
                 role="group"
                 aria-label={strings.dayBlocks(day.label, dayBlocks.length)}
+                {...(onDraw === undefined
+                  ? {}
+                  : { 'aria-description': strings.drawHint, 'aria-keyshortcuts': 'Enter' })}
                 tabIndex={day.key === selectedDay ? 0 : -1}
                 className={styles.column}
                 data-selected={day.key === selectedDay || undefined}
@@ -309,9 +352,9 @@ export function WeekCalendar({
                         // Only the primary button, and never on a block: blocks keep their own presses.
                         if (event.button !== 0 || event.target !== event.currentTarget) return;
                         const at = minuteAt(event.currentTarget, event.clientY);
-                        // A finger taps (a drag would fight the scroll); a mouse or pen drags.
+                        // A finger taps (a drag would fight the scroll): it draws on lifting, unless it scrolled.
                         if (event.pointerType === 'touch') {
-                          onDraw(defaultSpan(day.key, at));
+                          tap.current = { dayKey: day.key, minute: at, y: event.clientY };
                           return;
                         }
                         // Keeps the drag when the pointer leaves the column; a pointer the browser no longer tracks can't be held.
@@ -325,6 +368,8 @@ export function WeekCalendar({
                         setDragging({ dayKey: day.key, from: at, startMinute: at, endMinute: at });
                       },
                       onPointerMove: (event: PointerEvent<HTMLDivElement>) => {
+                        if (tap.current !== null && Math.abs(event.clientY - tap.current.y) > TAP_SLOP)
+                          tap.current = null;
                         const current = drag.current;
                         if (current?.dayKey !== day.key) return;
                         const at = minuteAt(event.currentTarget, event.clientY);
@@ -335,6 +380,12 @@ export function WeekCalendar({
                         });
                       },
                       onPointerUp: (event: PointerEvent<HTMLDivElement>) => {
+                        const tapped = tap.current;
+                        tap.current = null;
+                        if (tapped?.dayKey === day.key && event.pointerType === 'touch') {
+                          onDraw(defaultSpan(day.key, tapped.minute));
+                          return;
+                        }
                         const current = drag.current;
                         if (current?.dayKey !== day.key) return;
                         const at = minuteAt(event.currentTarget, event.clientY);
@@ -348,13 +399,27 @@ export function WeekCalendar({
                             : { dayKey: day.key, startMinute, endMinute },
                         );
                       },
-                      onPointerCancel: () => setDragging(null),
+                      // A scroll took the pointer: no tap, no span.
+                      onPointerCancel: () => {
+                        tap.current = null;
+                        setDragging(null);
+                      },
                       // The browser let go of the pointer without a pointer up (a window switch): no span half drawn.
                       onLostPointerCapture: () => {
                         if (drag.current !== null) setDragging(null);
                       },
                     })}
               >
+                {/* The span drawn sits under bookings and events, so it never hides what it is drawn across. */}
+                {(dragging?.dayKey === day.key ? dragging : draft?.dayKey === day.key ? draft : undefined) !==
+                  undefined && (
+                  <Ghost
+                    span={dragging?.dayKey === day.key ? dragging : (draft ?? dragging)}
+                    isDrawing={dragging?.dayKey === day.key}
+                    minuteLabel={minuteLabel}
+                    ref={dragging?.dayKey === day.key ? undefined : setGhost}
+                  />
+                )}
                 {dayBlocks.map((block) => {
                   const length = block.endMinute - block.startMinute;
                   return (
@@ -387,6 +452,7 @@ export function WeekCalendar({
                           return;
                         }
                         setAnchor(event.currentTarget);
+                        anchorDay.current = block.dayKey;
                         onOpen(block.id);
                       }}
                     >
@@ -399,15 +465,6 @@ export function WeekCalendar({
                     </button>
                   );
                 })}
-                {(dragging?.dayKey === day.key ? dragging : draft?.dayKey === day.key ? draft : undefined) !==
-                  undefined && (
-                  <Ghost
-                    span={dragging?.dayKey === day.key ? dragging : (draft ?? dragging)}
-                    isDrawing={dragging?.dayKey === day.key}
-                    minuteLabel={minuteLabel}
-                    ref={dragging?.dayKey === day.key ? undefined : setGhost}
-                  />
-                )}
                 {now?.dayKey === day.key && (
                   <span className={styles.now} style={{ '--start': String(now.minute) }} aria-hidden="true" />
                 )}
@@ -421,9 +478,13 @@ export function WeekCalendar({
           triggerRef={ghostRef}
           isOpen
           onOpenChange={(isOpen) => {
-            if (!isOpen) onDraftClose?.();
+            if (!isOpen) {
+              onDraftClose?.();
+              focusDayLater(draft.dayKey, null);
+            }
           }}
           placement="end top"
+          width="menu"
           label={draftLabel ?? strings.details}
         >
           {draftCard}
@@ -434,7 +495,10 @@ export function WeekCalendar({
           triggerRef={anchorRef}
           isOpen
           onOpenChange={(isOpen) => {
-            if (!isOpen) onClose();
+            if (!isOpen) {
+              onClose();
+              focusDayLater(anchorDay.current, anchor);
+            }
           }}
           placement="end top"
           label={strings.details}

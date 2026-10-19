@@ -6,7 +6,7 @@ import { isDataError, type TimeBlockKind, type TimeBlockRepeat } from '@crm/data
 import { Button, Callout, Field, Radio, RadioGroup, Select, SpanCard, type SpanCardChoice } from '@crm/ui';
 import { useState } from 'react';
 import { strings } from './strings.ts';
-import { spanNames, type DrawnSpan } from './span.ts';
+import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import { dayStart } from './week.ts';
 
 /** What the member closes the span as. */
@@ -24,6 +24,10 @@ export interface DrawCardProps {
   readonly locale: string;
   /** The member's private pages, for a hold's choice. */
   readonly privatePages: readonly { readonly id: string; readonly title: string }[];
+  /** Confirmed bookings inside the span: they stay booked, and the card says so. */
+  readonly overlapping: number;
+  /** Moves or resizes the span (From and To, for the keyboard and for fine changes). */
+  readonly onSpanChange: (span: DrawnSpan) => void;
   /** Closes the time; settles once the server has it, throws a data error on a refusal. */
   readonly onClose: (input: CloseInput) => Promise<void>;
   /** Closes the card (Done). */
@@ -40,7 +44,7 @@ type Mode =
 const ANY_PAGE = 'any';
 
 /** The drawn span's card: its choices, then the picked one's form, then what happened. */
-export function DrawCard({ span, locale, privatePages, onClose, onDone }: DrawCardProps) {
+export function DrawCard({ span, locale, privatePages, overlapping, onSpanChange, onClose, onDone }: DrawCardProps) {
   const [mode, setMode] = useState<Mode>({ kind: 'choose' });
   const { title, meta } = spanNames(span, locale);
   const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(dayStart(span.dayKey));
@@ -48,7 +52,7 @@ export function DrawCard({ span, locale, privatePages, onClose, onDone }: DrawCa
 
   if (mode.kind === 'done') {
     return (
-      <SpanCard title={title} meta={meta}>
+      <SpanCard title={title} meta={meta} focusKey="done">
         <Callout tone="success" isAnnounced>
           {mode.message}
         </Callout>
@@ -59,7 +63,9 @@ export function DrawCard({ span, locale, privatePages, onClose, onDone }: DrawCa
   if (mode.kind === 'block' || mode.kind === 'hold') {
     const isHold = mode.kind === 'hold';
     return (
-      <SpanCard title={title} meta={meta} onBack={back}>
+      <SpanCard title={title} meta={meta} onBack={back} focusKey={mode.kind}>
+        {overlapping > 0 && <Callout tone="info">{strings.overlaps(overlapping)}</Callout>}
+        <SpanTimes span={span} locale={locale} onChange={onSpanChange} />
         <CloseForm
           weekday={weekday}
           isHold={isHold}
@@ -76,7 +82,44 @@ export function DrawCard({ span, locale, privatePages, onClose, onDone }: DrawCa
     { id: 'block', label: strings.blockThisTime, icon: 'circle-slash', onPress: () => setMode({ kind: 'block' }) },
     { id: 'hold', label: strings.holdThisTime, icon: 'bookmark', onPress: () => setMode({ kind: 'hold' }) },
   ];
-  return <SpanCard title={title} meta={meta} choices={choices} />;
+  return <SpanCard title={title} meta={meta} choices={choices} focusKey="choose" />;
+}
+
+/** The span's start and end in 15 minute steps, so it can be set exactly, from the keyboard too. */
+function SpanTimes({
+  span,
+  locale,
+  onChange,
+}: {
+  readonly span: DrawnSpan;
+  readonly locale: string;
+  readonly onChange: (span: DrawnSpan) => void;
+}) {
+  const clock = new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' });
+  const label = (minute: number) => clock.format(instantOf(span.dayKey, minute));
+  const steps = Array.from({ length: 96 }, (_, index) => index * 15);
+  return (
+    <>
+      <Select
+        label={strings.from}
+        items={steps.map((minute) => ({ id: String(minute), label: label(minute) }))}
+        value={String(span.startMinute)}
+        onChange={(id) => {
+          const startMinute = Number(id ?? span.startMinute);
+          const length = span.endMinute - span.startMinute;
+          onChange({ ...span, startMinute, endMinute: Math.min(1440, startMinute + length) });
+        }}
+      />
+      <Select
+        label={strings.to}
+        items={[...steps.slice(1), 1440]
+          .filter((minute) => minute > span.startMinute)
+          .map((minute) => ({ id: String(minute), label: label(minute) }))}
+        value={String(span.endMinute)}
+        onChange={(id) => onChange({ ...span, endMinute: Number(id ?? span.endMinute) })}
+      />
+    </>
+  );
 }
 
 /**
@@ -100,6 +143,8 @@ function CloseForm({
   const [pending, setPending] = useState(false);
   const [failure, setFailure] = useState<string | undefined>(undefined);
   const submit = () => {
+    // Enter in Why while saving would send it twice.
+    if (pending) return;
     setPending(true);
     setFailure(undefined);
     const trimmed = label.trim();

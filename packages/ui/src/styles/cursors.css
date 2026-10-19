@@ -5,7 +5,7 @@
    Components set no cursor of their own, except where only they know: the
    Field and DatePicker boxes (text), a column resizer (col-resize), a drag
    handle (grab), a read only Select, the current breadcrumb and an open
-   rule (the arrow).
+   rule (the arrow), and a week's drawing surface (crosshair, WeekCalendar).
 
    - default: the arrow, inherited from the body: static text, headings,
      labels that aren't tied to a control, empty areas, read only values, a

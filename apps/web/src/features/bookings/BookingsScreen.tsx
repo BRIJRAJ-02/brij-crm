@@ -37,9 +37,10 @@ import {
   WeekCalendar,
   type BookingListGroup,
   type Hue,
+  type Toasts,
   type WeekCalendarBlock,
 } from '@crm/ui';
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { browserZone } from '../booking/hours.ts';
 import { availabilityHref } from '../booking/links.ts';
@@ -273,7 +274,11 @@ function EventCard({
   );
 }
 
-/** A block's or hold's card: when, why, whether it repeats, and Remove (Release for a hold), which reopens the time. */
+/**
+ * A block's or hold's card: when, why, whether it repeats, what it does, and
+ * Remove (Release for a hold; for a weekly block, every week). Removing closes
+ * the card at once and says how it went in a toast, since the block is gone.
+ */
 function BlockCard({
   turn,
   locale,
@@ -281,9 +286,8 @@ function BlockCard({
 }: {
   readonly turn: TimeBlockOccurrence;
   readonly locale: string;
-  readonly onRemove: () => Promise<void>;
+  readonly onRemove: () => void;
 }) {
-  const [status, setStatus] = useState<'idle' | 'pending' | 'failed'>('idle');
   const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(new Date(turn.startsAt));
   return (
     <>
@@ -293,23 +297,15 @@ function BlockCard({
           { term: strings.when, description: whenOf(turn.startsAt, turn.endsAt, locale) },
           ...(turn.label === undefined ? [] : [{ term: strings.why, description: turn.label }]),
           ...(turn.repeat === 'weekly' ? [{ term: strings.repeats, description: strings.everyWeek(weekday) }] : []),
-          {
-            term: turn.kind === 'hold' ? strings.held : strings.blocked,
-            description: turn.kind === 'hold' ? strings.heldNote : strings.blockedNote,
-          },
+          { term: strings.bookingPages, description: turn.kind === 'hold' ? strings.heldNote : strings.blockedNote },
         ]}
       />
-      {status === 'failed' && <Callout tone="danger">{strings.removeFailed}</Callout>}
-      <Button
-        isPending={status === 'pending'}
-        onPress={() => {
-          setStatus('pending');
-          onRemove().catch(() => {
-            setStatus('failed');
-          });
-        }}
-      >
-        {turn.kind === 'hold' ? strings.releaseHold : strings.removeBlock}
+      <Button onPress={onRemove}>
+        {turn.kind === 'hold'
+          ? strings.releaseHold
+          : turn.repeat === 'weekly'
+            ? strings.removeEvery(weekday)
+            : strings.removeBlock}
       </Button>
     </>
   );
@@ -344,10 +340,10 @@ function useNow(): Date {
 }
 
 /** A drawn span to close, as the data layer takes it. */
-export type BlockDraft = Omit<CreateTimeBlockInput, 'workspace' | 'mutationId'>;
+export type BlockDraft = Omit<CreateTimeBlockInput, 'workspace' | 'mutationId' | 'id'>;
 
-/** A preview's block id, until the server names it (removing it waits for that). */
-const PREVIEW_BLOCK_ID = '00000000-0000-7000-8000-000000000000';
+/** A block's turn to show at once, before the server answers (the data layer names it). */
+export type BlockPreview = Omit<TimeBlockOccurrence, 'key' | 'blockId'>;
 
 /** Props for the calendar: its held week, the address, and what Filter offers. */
 export interface BookingsCalendarScreenProps {
@@ -365,7 +361,11 @@ export interface BookingsCalendarScreenProps {
    * Closes a drawn span (spec 0027): `preview` shows at once, and the promise
    * settles once the server has it, or throws a data error on a refusal.
    */
-  readonly onBlock: (draft: BlockDraft, preview: readonly TimeBlockOccurrence[]) => Promise<void>;
+  readonly onBlock: (draft: BlockDraft, preview: readonly BlockPreview[]) => Promise<void>;
+  /** Where the member's day starts, for a span drawn from the keyboard (their hours; 9:00 when unknown). */
+  readonly workingStart: (dayKey: string) => number;
+  /** Confirms and refuses what outlives its card (a removal, a refusal after the card closed). */
+  readonly toasts: Toasts;
 }
 
 /** Bookings › Calendar: the range, previous week, Today, next week and Filter, then the grid and the week's count. */
@@ -380,11 +380,19 @@ export function BookingsCalendarScreen(props: BookingsCalendarScreenProps) {
 /** The week view's toolbar, grid and count. */
 function WeekView(props: BookingsCalendarScreenProps) {
   const { slug, objects, search, week, pages, connections, locale, onSearch, onRemoveBlock, onBlock } = props;
+  const { workingStart, toasts } = props;
   const personHref = usePersonHref(slug, objects);
   const state = useBookingsCalendar(week);
   const now = useNow();
   const [openId, setOpenId] = useState<string | undefined>(undefined);
   const [draft, setDraft] = useState<DrawnSpan | undefined>(undefined);
+  // Each new drawing gets a fresh card; moving the span with From and To keeps the card as it is.
+  const [drawCount, setDrawCount] = useState(0);
+  // The draft as of the last render, so a save that settles later knows whether its card is still open.
+  const draftRef = useRef(draft);
+  useEffect(() => {
+    draftRef.current = draft;
+  }, [draft]);
   const days = weekDays(search.week);
   const today = dayKeyOf(now);
   const isThisWeek = weekOf(today) === search.week;
@@ -555,9 +563,12 @@ function WeekView(props: BookingsCalendarScreenProps) {
               key={openTurn.key}
               turn={openTurn}
               locale={locale}
-              onRemove={async () => {
-                await onRemoveBlock(openTurn.blockId);
+              onRemove={() => {
                 setOpenId(undefined);
+                onRemoveBlock(openTurn.blockId).then(
+                  () => toasts.toast({ tone: 'success', message: strings.reopened }),
+                  () => toasts.toast({ tone: 'danger', message: strings.removeFailed }),
+                );
               }}
             />
           ) : openBooking === undefined ? (
@@ -579,6 +590,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
         onClose={() => setOpenId(undefined)}
         onDraw={(span) => {
           setOpenId(undefined);
+          setDrawCount((count) => count + 1);
           setDraft(span);
         }}
         {...(draft === undefined
@@ -588,37 +600,45 @@ function WeekView(props: BookingsCalendarScreenProps) {
               draftLabel: strings.drawCard(spanNames(draft, locale).title),
               draftCard: (
                 <DrawCard
-                  key={`${draft.dayKey}:${String(draft.startMinute)}:${String(draft.endMinute)}`}
+                  key={drawCount}
                   span={draft}
                   locale={locale}
                   privatePages={pages
                     .filter((page) => page.isPrivate)
                     .map((page) => ({ id: page.id, title: page.title }))}
+                  overlapping={overlapping(bookings, draft)}
+                  onSpanChange={setDraft}
                   onClose={({ kind, repeat, label, pageId }) => {
-                    const startsAt = instantOf(draft.dayKey, draft.startMinute).toISOString();
-                    const endsAt = instantOf(draft.dayKey, draft.endMinute).toISOString();
-                    const preview: TimeBlockOccurrence = {
-                      key: `draft:${startsAt}`,
-                      blockId: PREVIEW_BLOCK_ID,
+                    const drawn = draft;
+                    const preview: BlockPreview = {
                       kind,
                       repeat,
                       ...(label === undefined ? {} : { label }),
-                      startsAt,
-                      endsAt,
+                      startsAt: instantOf(drawn.dayKey, drawn.startMinute).toISOString(),
+                      endsAt: instantOf(drawn.dayKey, drawn.endMinute).toISOString(),
                     };
                     return onBlock(
                       {
                         kind,
                         repeat,
-                        date: draft.dayKey,
-                        startMinute: draft.startMinute,
-                        endMinute: draft.endMinute,
+                        date: drawn.dayKey,
+                        startMinute: drawn.startMinute,
+                        endMinute: drawn.endMinute,
                         timeZone: browserZone(),
                         ...(label === undefined ? {} : { label }),
                         ...(pageId === undefined ? {} : { pageId }),
                       },
                       [preview],
-                    );
+                    ).catch((error: unknown) => {
+                      // The card shows a refusal while it is open; once closed, only a toast can.
+                      if (draftRef.current !== drawn) {
+                        toasts.toast({
+                          tone: 'danger',
+                          message: kind === 'hold' ? strings.holdFailed : strings.blockFailed,
+                        });
+                      }
+                      throw error;
+                    });
                   }}
                   onDone={() => setDraft(undefined)}
                 />
@@ -626,6 +646,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
             })}
         onDraftClose={() => setDraft(undefined)}
         drawMinutes={pages[0]?.durations[0] ?? 30}
+        drawStartMinute={workingStart}
         minuteLabel={(minute) => {
           const at = new Date(2000, 0, 1);
           at.setMinutes(minute);
@@ -635,6 +656,16 @@ function WeekView(props: BookingsCalendarScreenProps) {
       <p>{strings.weekSummary(live)}</p>
     </>
   );
+}
+
+/** How many confirmed bookings a drawn span overlaps (they stay booked; the card says so). */
+function overlapping(bookings: readonly BookingListItem[], span: DrawnSpan): number {
+  const start = instantOf(span.dayKey, span.startMinute).getTime();
+  const end = instantOf(span.dayKey, span.endMinute).getTime();
+  return bookings.filter(
+    (booking) =>
+      booking.status === 'confirmed' && Date.parse(booking.startsAt) < end && Date.parse(booking.endsAt) > start,
+  ).length;
 }
 
 /** The local day a booking starts on, as a key. */

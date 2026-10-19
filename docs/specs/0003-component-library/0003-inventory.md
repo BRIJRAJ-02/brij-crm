@@ -167,6 +167,7 @@ One display and one editor per attribute type: text, long text, number, currency
 | AutomationBuilder | New | 53 | Card, Select | trigger, conditions, actions, dry run results |
 | FormBuilder, PublicForm | New | 48 | the field set | PublicForm also renders outside the app (its embedding is #48's) |
 | AssistantPanel | New | 54 | Panel, ChangePreview | messages, proposed changes, confirm, undo |
+| SpanCard | New | 0027 | Button, Popover | a span drawn on WeekCalendar: its time and day, then Book, Block or Hold, then the picked one's form |
 
 **Visual** (`@crm/ui/charts`, `@crm/ui/schema-map`)
 
