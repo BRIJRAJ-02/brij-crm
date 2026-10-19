@@ -4,7 +4,14 @@ import { expect, fn, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { arraySource, type ListSource } from '../../lib/list-source.ts';
 import { SAMPLE_STAGES } from '../../workbench/field-samples.ts';
-import { ADA, GRACE, SAMPLE_ACTIVITY, SAMPLE_LINK_ACTIVITY, STAGE } from '../../workbench/record-samples.ts';
+import {
+  ADA,
+  GRACE,
+  SAMPLE_ACTIVITY,
+  SAMPLE_LINK_ACTIVITY,
+  SAMPLE_MEETING_ACTIVITY,
+  STAGE,
+} from '../../workbench/record-samples.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import type { LoadStatus } from '../../lib/load-status.ts';
 import { ActivityFeed, type ActivityEntry, type ActivityFeedLayout } from './ActivityFeed.tsx';
@@ -239,6 +246,32 @@ export const Links: Story = {
       '/records/0199a3c0-0000-7000-8000-00000000c101',
     );
     await expect(canvas.queryByRole('link', { name: 'Barbara Liskov' })).toBeNull();
+  },
+};
+
+/**
+ * Meetings (spec 0024) under Upcoming and their own day: the time in the
+ * provider's zone, who comes with each answer that isn't yes, the video
+ * link, an all day meeting's days, and a private one with its time only.
+ */
+export const Meetings: Story = {
+  args: { entries: arraySource(SAMPLE_MEETING_ACTIVITY, (entry) => entry.id) },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { name: 'Upcoming' })).toBeVisible();
+    const [renewal, offsite, hidden] = canvas.getAllByRole('article');
+    await expect(renewal).toHaveAccessibleName('Meeting: Renewal review with Northwind');
+    await expect(renewal).toHaveAccessibleDescription(/Tue, Oct 13, 10:00 – 10:45 AM/);
+    await expect(renewal).toHaveAccessibleDescription(/maybe/);
+    await expect(renewal).toHaveAccessibleDescription(/no reply/);
+    await expect(renewal).toHaveAccessibleDescription(/ops@northwind\.com declined/);
+    await expect(canvas.getByRole('link', { name: 'Join video call' })).toHaveAttribute(
+      'href',
+      'https://meet.google.com/abc-defg-hij',
+    );
+    await expect(canvas.getAllByRole('link', { name: 'Jane Doe' })[0]).toHaveAttribute('href', '/records/jane');
+    await expect(offsite).toHaveAccessibleDescription(/Mon, Oct 12 – Tue, Oct 13/);
+    await expect(hidden).toHaveAccessibleName('Meeting: Private meeting');
+    await expect(hidden).not.toHaveAccessibleDescription(/Join/);
   },
 };
 

@@ -3,7 +3,8 @@
    entry), the actor chip and verb in text-secondary with the time at the end,
    and under it the change (old value, an arrow, new value) or a card with the
    title and a two line excerpt. A links entry names its records as flat chips
-   in the line. Period headings are 11px labels. The inline layout draws a few
+   in the line. A meeting's card holds its time, its attendees and its video
+   link. Period headings are 11px labels. The inline layout draws a few
    entries in place, with no scroll of its own. */
 @layer components {
   .root {
@@ -187,6 +188,43 @@
     -webkit-box-orient: vertical;
     -webkit-line-clamp: 2;
     line-clamp: 2;
+  }
+
+  /* A meeting's time, its attendees (chips, or an address, each with its answer unless yes) and its video link. */
+  .when {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .attendees {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4) var(--space-8);
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .attendee {
+    display: inline-flex;
+    gap: var(--space-4);
+    align-items: center;
+    min-inline-size: 0;
+  }
+
+  .address {
+    overflow: hidden;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .response {
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
   }
 
   @media (forced-colors: active) {

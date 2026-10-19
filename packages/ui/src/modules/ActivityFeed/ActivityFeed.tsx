@@ -30,6 +30,7 @@ import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
 import { fieldTypeOf } from '../../fields/registry.ts';
 import type { FieldAttribute } from '../../fields/types.ts';
 import { isEmptyValue } from '../../fields/values.ts';
+import { formatTimeRange } from '../../lib/format.ts';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import type { ListSource } from '../../lib/list-source.ts';
 import type { LoadStatus } from '../../lib/load-status.ts';
@@ -80,14 +81,43 @@ export type ActivityEntry =
       readonly removedCount: number;
     })
   | (EntryBase & {
-      /** A note, task, comment, email or meeting: its title or subject, a line of its text, and its page. */
-      readonly kind: 'note' | 'task' | 'comment' | 'email' | 'meeting';
+      /** A note, task, comment or email: its title or subject, a line of its text, and its page. */
+      readonly kind: 'note' | 'task' | 'comment' | 'email';
       readonly title?: string;
       readonly excerpt?: string;
       readonly href?: string;
       /** Tasks only: it was completed, not added. */
       readonly isDone?: boolean;
+    })
+  | (EntryBase & {
+      /**
+       * A meeting with the record's people (spec 0024), at its start: its
+       * title, its time, who comes and their answers, and the video link.
+       * A private one the reader doesn't hold has `detailsHidden`: its time
+       * only, under the title it was given ("Private meeting").
+       */
+      readonly kind: 'meeting';
+      readonly title: string;
+      /** ISO 8601 in UTC. An all day meeting starts and ends at midnight UTC (its end the day after). */
+      readonly startsAt: string;
+      readonly endsAt: string;
+      readonly allDay?: boolean;
+      readonly attendees: readonly MeetingAttendee[];
+      readonly videoUrl?: string;
+      readonly detailsHidden?: boolean;
     });
+
+/** One attendee of a meeting entry: a person or member (their chip), or an address alone, and their answer. */
+export interface MeetingAttendee {
+  readonly email: string;
+  /** The name the calendar gives them, shown for an address with no chip. */
+  readonly name?: string;
+  /** A person in the CRM, or a member of the workspace. */
+  readonly display?: RecordRefDisplay | ActorDisplay;
+  /** The person's page, routed. */
+  readonly href?: string;
+  readonly response: 'accepted' | 'declined' | 'tentative' | 'needs_action';
+}
 
 /** How the feed lays out: scrolling inside its slot, or a few entries drawn in place. */
 export type ActivityFeedLayout = 'feed' | 'inline';
@@ -140,6 +170,8 @@ function verbOf(entry: ActivityEntry): string {
       return entry.addedCount > 0 ? strings.verbs.added : strings.verbs.removed;
     case 'task':
       return entry.isDone === true ? strings.verbs.taskDone : strings.verbs.task;
+    case 'meeting':
+      return strings.meeting;
     default:
       return strings.verbs[entry.kind];
   }
@@ -154,6 +186,7 @@ function usePeriodLabel(): (period: Period) => string {
     () => new Intl.DateTimeFormat('en', { timeZone, year: 'numeric' }),
   ).format(now);
   return (period) => {
+    if (period === 'upcoming') return strings.upcoming;
     if (period === 'today') return strings.today;
     if (period === 'yesterday') return strings.yesterday;
     if (period === 'week') return strings.week;
@@ -544,6 +577,55 @@ function LinksLine({ entry }: { readonly entry: Extract<ActivityEntry, { kind: '
   );
 }
 
+/** A meeting's detail: when, who comes (each one's chip, and their answer unless they accepted), and the video link. */
+function MeetingDetail({
+  entry,
+  detailId,
+}: {
+  readonly entry: Extract<ActivityEntry, { kind: 'meeting' }>;
+  readonly detailId: string;
+}) {
+  const { locale, timeZone } = useFormatSettings();
+  const when = formatTimeRange(entry.startsAt, entry.endsAt, entry.allDay === true, locale, timeZone);
+  return (
+    <span id={detailId} className={styles.card}>
+      <span className={styles.when}>{when}</span>
+      {entry.detailsHidden === true ? (
+        <span className={styles.excerpt}>{strings.privateMeeting}</span>
+      ) : (
+        <>
+          {entry.attendees.length > 0 && (
+            <span className={styles.attendees}>
+              <VisuallyHidden>{strings.attendees}</VisuallyHidden>
+              {entry.attendees.map((attendee) => (
+                <span key={attendee.email} className={styles.attendee}>
+                  {attendee.display === undefined ? (
+                    <span className={styles.address}>{attendee.name ?? attendee.email}</span>
+                  ) : (
+                    <RecordChip
+                      display={attendee.display}
+                      isFlat
+                      {...(attendee.href === undefined ? {} : { href: attendee.href })}
+                    />
+                  )}
+                  {attendee.response !== 'accepted' && (
+                    <span className={styles.response}>{strings.responses[attendee.response]}</span>
+                  )}
+                </span>
+              ))}
+            </span>
+          )}
+          {entry.videoUrl !== undefined && (
+            <span>
+              <Link href={entry.videoUrl}>{strings.joinVideo}</Link>
+            </span>
+          )}
+        </>
+      )}
+    </span>
+  );
+}
+
 /** What can take focus by Tab, for the feed's way out. */
 const TABBABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -558,9 +640,10 @@ function tabbableBeside(feed: HTMLElement, side: 'after' | 'before'): HTMLElemen
   return side === 'after' ? all.find(follows) : all.filter((element) => !follows(element)).at(-1);
 }
 
-/** Whether an entry draws a detail under its line: a change's values, or a note's or task's title and text. */
+/** Whether an entry draws a detail under its line: a change's values, a note's or task's title and text, a meeting. */
 function hasDetail(entry: ActivityEntry): boolean {
   if (entry.kind === 'change') return !isEmptyValue(entry.from) || !isEmptyValue(entry.to);
+  if (entry.kind === 'meeting') return true;
   if (entry.kind === 'created' || entry.kind === 'links') return false;
   return entry.title !== undefined || entry.excerpt !== undefined;
 }
@@ -596,6 +679,8 @@ const Entry = memo(function Entry({ entry, lineId, isLast }: EntryProps) {
         {(hasTo || hasFrom) && valueOf(hasTo ? entry.to : null, hasTo ? entry.toDisplay : undefined)}
       </span>
     );
+  } else if (entry.kind === 'meeting') {
+    detail = <MeetingDetail entry={entry} detailId={`${lineId}-detail`} />;
   } else if (
     entry.kind !== 'created' &&
     entry.kind !== 'links' &&
@@ -621,8 +706,14 @@ const Entry = memo(function Entry({ entry, lineId, isLast }: EntryProps) {
       <span className={styles.main}>
         <span className={styles.line}>
           <span id={lineId} className={styles.what}>
-            <RecordChip display={entry.actor} isFlat />
-            {entry.kind === 'links' ? (
+            {/* A meeting is nobody's doing on the record: "Meeting: Intro with Northwind". */}
+            {entry.kind !== 'meeting' && <RecordChip display={entry.actor} isFlat />}
+            {entry.kind === 'meeting' ? (
+              <span className={styles.phrase}>
+                <span>{verbOf(entry)}</span>
+                <span className={styles.attribute}>{entry.title}</span>
+              </span>
+            ) : entry.kind === 'links' ? (
               <LinksLine entry={entry} />
             ) : (
               // The verb and the attribute stay on one line, so a narrow feed never splits "set Owner".
