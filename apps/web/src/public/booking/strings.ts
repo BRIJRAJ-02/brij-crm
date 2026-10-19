@@ -3,7 +3,7 @@ export const strings = {
   // The visitor page.
   what: 'What',
   timeZone: 'Time zone',
-  madeWith: 'Made with CRM',
+  madeWith: 'Made with Timefix',
   minutesShort: (count: number) => `${String(count)} min`,
   minutes: (count: number) => `${String(count)} minutes`,
   length: 'Meeting length',

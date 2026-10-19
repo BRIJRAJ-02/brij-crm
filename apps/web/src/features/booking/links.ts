@@ -1,10 +1,13 @@
-// Where booking pages are (spec 0025): plain functions, no React, so loaders and the nav can use them.
+// Where booking pages are (spec 0025): plain functions, no React, so loaders can use them.
 
-/** Settings › Booking pages. */
-export const bookingPagesHref = (slug: string) => `/w/${slug}/settings/booking-pages`;
+/** Captures › Links: the booking pages list. */
+export const linksHref = (slug: string) => `/w/${slug}/captures/links`;
 
-/** One page's builder. */
-export const bookingPageHref = (slug: string, pageId: string) => `/w/${slug}/settings/booking-pages/${pageId}`;
+/** One page's editor, optionally at a group (`#hours`). */
+export const pageEditorHref = (slug: string, pageId: string) => `/w/${slug}/captures/links/${pageId}`;
+
+/** Bookings › Availability: the member's own hours and days off. */
+export const availabilityHref = (slug: string) => `/w/${slug}/bookings/availability`;
 
 /** The page's public link, on this app's origin (the public bundle answers `/b/<publicKey>`). */
 export const publicBookingUrl = (publicKey: string) => `${globalThis.location.origin}/b/${publicKey}`;

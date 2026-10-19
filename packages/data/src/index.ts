@@ -1624,7 +1624,10 @@ export function createDataLayer({
       get: (workspace: string, pageId: string): Promise<BookingPageView> =>
         call((options) => api.bookingPages.get({ workspace, pageId }, options)),
       /** A new page with defaults. Refusals: `ID_TAKEN`, `SLUG_TAKEN` (field `slug`). */
-      create: (workspace: string, input: { id: string; title: string; timeZone: string }): Promise<BookingPageView> =>
+      create: (
+        workspace: string,
+        input: { id: string; title: string; timeZone: string; settings?: Partial<BookingPageSettings> },
+      ): Promise<BookingPageView> =>
         call((options) => api.bookingPages.create({ workspace, ...input, mutationId: mintId() }, options)),
       /** Changes only the settings given. Refusals: `SLUG_TAKEN` (field `slug`), `INPUT_INVALID` (with issues). */
       update: (workspace: string, pageId: string, settings: Partial<BookingPageSettings>): Promise<BookingPageView> =>
