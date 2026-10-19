@@ -152,7 +152,7 @@ async function visibleForm(tx: WorkspaceTx, scope: EngineScope, formId: string, 
 export async function listForms(
   scope: EngineScope,
   input: { readonly archived: boolean },
-): Promise<{ readonly items: readonly FormSummary[] }> {
+): Promise<{ items: FormSummary[] }> {
   return inWorkspace(scope, async (tx) => {
     const rows = await tx
       .select({
@@ -194,7 +194,7 @@ export async function getForm(scope: EngineScope, input: { readonly formId: stri
 export async function formAttributes(
   scope: EngineScope,
   input: { readonly formId: string },
-): Promise<{ readonly items: readonly FormAttributeChoice[] }> {
+): Promise<{ items: FormAttributeChoice[] }> {
   return inWorkspace(scope, async (tx) => {
     const form = await visibleForm(tx, scope, input.formId);
     const attributes = await loadAttributes(tx, form.mainObjectId);

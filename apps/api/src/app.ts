@@ -7,7 +7,10 @@ import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { AUTH_BASE_PATH, AUTH_ROUTES, type Auth } from './auth/auth.ts';
 import { createEdgeGuard } from './edge.ts';
-import { wakesOnUse, type ApiEnv } from './env.ts';
+import { mountPublicForms } from './forms/public.ts';
+import { createRateLimiter, type RateLimiter } from './forms/limits.ts';
+import { createCaptchaVerifier, type CaptchaVerifier } from './forms/recaptcha.ts';
+import { LOCAL_FORMS_IP_SALT, wakesOnUse, type ApiEnv } from './env.ts';
 import { createReadGate } from './gate.ts';
 import { errorFields, log } from './log.ts';
 import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
@@ -92,6 +95,10 @@ export interface AppServices {
   readonly analytics?: Analytics;
   /** The job kinds this API knows (spec 0008): the environment's (`jobKinds`) unless a test passes its own. */
   readonly jobs?: JobRegistry;
+  /** The public forms' reCAPTCHA check (spec 0023): Google with `RECAPTCHA_SECRET_KEY` unless a test passes one. */
+  readonly captcha?: CaptchaVerifier;
+  /** The public forms' rate limits (spec 0023): this process's memory unless a test passes its own. */
+  readonly formLimits?: RateLimiter;
 }
 
 /** The API. `router` is the app's own unless a test passes one. */
@@ -160,9 +167,12 @@ export function createApp({
     }
   });
 
+  // The public form endpoints (spec 0023) check their own origin (the hosted page's), and need no session.
+  const formsOrigin = new URL(env.FORMS_PUBLIC_ORIGIN ?? env.APP_URL).origin;
   // The app and API share one origin, so a write from anywhere else is refused.
   app.use('*', async (c, next) => {
     if (SAFE_METHODS.has(c.req.method)) return next();
+    if (c.req.path.startsWith('/api/public/')) return next();
     const origin = c.get('origin');
     if (!origin || !allowedOrigins.has(origin)) {
       return errorResponse('FORBIDDEN_ORIGIN', 'This request came from an origin the API does not accept.');
@@ -208,6 +218,19 @@ export function createApp({
     });
     return matched ? c.newResponse(response.body, response) : c.notFound();
   }
+
+  mountPublicForms(app, {
+    db,
+    jobs,
+    wakeRelay,
+    captcha:
+      services.captcha ??
+      createCaptchaVerifier(env.RECAPTCHA_SECRET_KEY === undefined ? {} : { secret: env.RECAPTCHA_SECRET_KEY }),
+    limiter: services.formLimits ?? createRateLimiter(),
+    publicOrigin: formsOrigin,
+    ipSalt: env.FORMS_IP_SALT ?? LOCAL_FORMS_IP_SALT,
+    ...(env.RECAPTCHA_SITE_KEY === undefined ? {} : { recaptchaSiteKey: env.RECAPTCHA_SITE_KEY }),
+  });
 
   // Better Auth's own routes: only the ones sign in uses (`AUTH_ROUTES`), matched on the path as sent, so
   // an encoded or padded path never reaches a route we didn't list.

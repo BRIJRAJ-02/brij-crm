@@ -1,5 +1,6 @@
 import { accessRouter } from './modules/access/router.ts';
 import { attributesRouter } from './modules/attributes/router.ts';
+import { formsRouter } from './modules/forms/router.ts';
 import { jobsRouter } from './modules/jobs/router.ts';
 import { meRouter } from './modules/me/router.ts';
 import { membersRouter } from './modules/members/router.ts';
@@ -8,6 +9,7 @@ import { optionsRouter } from './modules/options/router.ts';
 import { realtimeRouter } from './modules/realtime/router.ts';
 import { recordsRouter } from './modules/records/router.ts';
 import { relationshipsRouter } from './modules/relationships/router.ts';
+import { submissionsRouter } from './modules/submissions/router.ts';
 import { systemRouter } from './modules/system/router.ts';
 import { trashRouter } from './modules/trash/router.ts';
 import { tasksRouter } from './modules/tasks/router.ts';
@@ -34,4 +36,6 @@ export const router = base.router({
   views: viewsRouter,
   trash: trashRouter,
   tasks: tasksRouter,
+  forms: formsRouter,
+  submissions: submissionsRouter,
 });

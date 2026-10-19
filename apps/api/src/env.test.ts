@@ -25,12 +25,29 @@ const production = {
   WORKER_INTERNAL_URL: 'http://worker.railway.internal:8080',
   WORKER_WAKE_SECRET: 'a-wake-secret-of-at-least-32-characters',
   CENTRIFUGO_TOKEN_SECRET: 'a-centrifugo-token-secret-of-32-characters',
+  RECAPTCHA_SITE_KEY: '6LcSiteKeyForTestsOnly000000000000000000',
+  RECAPTCHA_SECRET_KEY: '6LcSecretKeyForTestsOnly0000000000000000',
+  FORMS_IP_SALT: 'a-forms-ip-salt-of-at-least-32-characters',
 };
 
 function problems(input: Record<string, unknown>): string[] {
   const result = ApiEnv.safeParse(input);
   return result.success ? [] : result.error.issues.map((issue) => issue.path.join('.'));
 }
+
+describe('the forms environment (spec 0023)', () => {
+  it('boots locally with no reCAPTCHA keys and no salt (every submission unchecked)', () => {
+    expect(problems(local)).toEqual([]);
+  });
+
+  it('takes the reCAPTCHA keys together or not at all, and requires them and the salt in production', () => {
+    expect(problems({ ...local, RECAPTCHA_SITE_KEY: production.RECAPTCHA_SITE_KEY })).toEqual(['RECAPTCHA_SECRET_KEY']);
+    expect(problems(production)).toEqual([]);
+    const { RECAPTCHA_SITE_KEY: _site, RECAPTCHA_SECRET_KEY: _secret, FORMS_IP_SALT: _salt, ...bare } = production;
+    expect(problems(bare).sort()).toEqual(['FORMS_IP_SALT', 'RECAPTCHA_SECRET_KEY']);
+    expect(problems({ ...bare, APP_ENV: 'preview', FORMS_IP_SALT: production.FORMS_IP_SALT })).toEqual([]);
+  });
+});
 
 describe('the sign in environment', () => {
   it('boots locally on Mailpit, with an open sign up and a local sender', () => {

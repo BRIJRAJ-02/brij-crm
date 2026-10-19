@@ -120,6 +120,9 @@ describe('EDGE_SECRET in the api environment', () => {
     WORKER_INTERNAL_URL: 'http://worker.railway.internal:8080',
     WORKER_WAKE_SECRET: 'a-wake-secret-of-at-least-32-characters',
     CENTRIFUGO_TOKEN_SECRET: 'a-centrifugo-token-secret-of-32-characters',
+    RECAPTCHA_SITE_KEY: '6LcSiteKeyForTestsOnly000000000000000000',
+    RECAPTCHA_SECRET_KEY: '6LcSecretKeyForTestsOnly0000000000000000',
+    FORMS_IP_SALT: 'a-forms-ip-salt-of-at-least-32-characters',
     EDGE_SECRET: SECRET,
   };
 
