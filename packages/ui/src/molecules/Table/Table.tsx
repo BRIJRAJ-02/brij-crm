@@ -141,7 +141,12 @@ export function Table<T>({
         }
       >
         {(item) => (
-          <Row id={item.id} columns={shown} className={styles.row}>
+          <Row
+            id={item.id}
+            columns={shown}
+            className={styles.row}
+            data-pressable={onRowAction === undefined ? undefined : ''}
+          >
             {(column) =>
               column.id === HANDLE ? (
                 <Cell className={styles.cell} data-handle>

@@ -57,6 +57,8 @@
   .row[data-open] {
     padding-block-end: var(--space-12);
     background: var(--surface-subtle);
+    /* An open row is a form, not something to drag or press: the arrow. */
+    cursor: default;
   }
 
   .row[data-focus-visible] {

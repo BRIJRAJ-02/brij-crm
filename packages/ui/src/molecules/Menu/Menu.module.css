@@ -32,7 +32,6 @@
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
     text-decoration: none;
-    cursor: pointer;
     outline: none;
   }
 
@@ -50,7 +49,6 @@
 
   .item[data-disabled] {
     opacity: var(--opacity-disabled);
-    cursor: default;
   }
 
   .item[data-open] {

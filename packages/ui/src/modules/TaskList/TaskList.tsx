@@ -322,7 +322,7 @@ function TaskListContent({
     const task = tasks.getItem(row.index);
     if (task === undefined) {
       return (
-        <GridListItem id={row.id} className={styles.row} textValue="" isDisabled>
+        <GridListItem id={row.id} className={styles.row} textValue="" isDisabled data-loading="">
           <RowShown index={row.index} onShown={onShown} />
           <Skeleton width="long" />
         </GridListItem>
@@ -333,7 +333,13 @@ function TaskListContent({
     const records = task.records ?? [];
     const isNew = newIds?.has(task.id) === true;
     return (
-      <GridListItem id={row.id} className={styles.row} textValue={task.title} data-done={task.isDone || undefined}>
+      <GridListItem
+        id={row.id}
+        className={styles.row}
+        textValue={task.title}
+        data-done={task.isDone || undefined}
+        data-pressable={onAction === undefined ? undefined : ''}
+      >
         <RowShown index={row.index} onShown={onShown} />
         <Checkbox
           label={strings.markDone(task.title)}

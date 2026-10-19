@@ -56,7 +56,6 @@
     font: inherit;
     text-decoration: underline;
     text-decoration-color: var(--accent-border);
-    cursor: pointer;
     outline: none;
   }
 

@@ -102,7 +102,6 @@
     color: var(--text-secondary);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
-    cursor: pointer;
     outline: none;
     transition: background-color var(--duration-hover) var(--ease-hover);
   }

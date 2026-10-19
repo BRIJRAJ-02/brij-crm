@@ -136,7 +136,6 @@
     align-items: center;
     min-inline-size: 0;
     max-inline-size: 100%;
-    cursor: pointer;
   }
 
   @media (hover: hover) and (pointer: fine) {

@@ -13,7 +13,6 @@
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
-    cursor: pointer;
     -webkit-tap-highlight-color: transparent;
   }
 
@@ -56,11 +55,6 @@
   /* The control and its label fade; a description under it stays readable. */
   .root[data-disabled] {
     opacity: var(--opacity-disabled);
-    cursor: default;
-  }
-
-  .root[data-readonly] {
-    cursor: default;
   }
 
   .label[data-described] {

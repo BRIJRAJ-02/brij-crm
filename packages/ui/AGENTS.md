@@ -11,6 +11,7 @@ The component library every screen draws with. It holds the root stylesheet (cas
 | `src/index.ts` | The public surface screens import from `@crm/ui`: components and their types. `src/index.test.ts` pins the list |
 | `src/styles/index.css` | `@crm/ui/styles.css`: the layer order `reset, tokens, base, components, utilities`, then the tokens, the reset and the base styles |
 | `src/styles/reset.css`, `src/styles/base.css` | `@layer reset` and `@layer base`: the page background, and body type and colour, all from tokens |
+| `src/styles/cursors.css` | The one cursor rule, in `@layer base` with no specificity: pointer, text, the arrow, not-allowed, progress, grab and col-resize, by tag, role and React Aria's attributes |
 | `src/theme/theme.ts` | `@crm/ui/theme`: the `crm.theme` storage key, `parseThemeChoice`, `safeLocalStorage` and `createThemeController` |
 | `src/hue.ts` | `HUES` and `Hue`, the nine data hues used by tags and icon tiles |
 | `src/atoms/Icon/` | The Icon atom, its CSS module, its README, and `icons.ts` (the icon registry) |
@@ -41,6 +42,7 @@ pnpm ui:artifact                   # build the artifact files into .artifact/; -
 ## Conventions
 
 - Each component's CSS lives in a CSS module beside it, inside `@layer components`, using tokens only. Variants are data attributes (`data-size`, `data-tone`, `data-hue`) declared once in that module. Callers never pass a class name or a style.
+- Cursors come from `src/styles/cursors.css`, never a component module, unless only the component can know (the Field and DatePicker boxes, a column resizer, a drag handle, a read only Select). A row or card with an action sets `data-pressable`; a disabled placeholder that shows a Skeleton sets `data-loading`, so it keeps the arrow instead of not-allowed.
 - Every styled component has a `README.md` beside it (`pnpm house-rules` checks this). The README says where its API differs from the artifact's, and why.
 - Icons come only from Lucide, through `src/atoms/Icon/icons.ts`, the one file ESLint lets import `lucide-react`. To add an icon, add one import and one line there, under its lucide.dev name.
 - `src/hue.ts` must list exactly the hues that have `tag-<hue>-*` tokens. A test checks it against `tokens.json`.

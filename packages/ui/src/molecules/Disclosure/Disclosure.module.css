@@ -29,7 +29,6 @@
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
     text-align: start;
-    cursor: pointer;
     outline: none;
   }
 
@@ -45,7 +44,6 @@
 
   .trigger[data-disabled] {
     opacity: var(--opacity-disabled);
-    cursor: default;
   }
 
   .chevron {

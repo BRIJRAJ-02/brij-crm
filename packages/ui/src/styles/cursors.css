@@ -1,0 +1,125 @@
+/* The cursor rule, once for the whole app. A cursor says what pressing will
+   do, so it follows what an element is (its tag, its role, the attributes
+   React Aria sets), never which screen it sits on. A row or card with an
+   action carries data-pressable, and a loading placeholder data-loading.
+   Components set no cursor of their own, except where only they know: the
+   Field and DatePicker boxes (text), a column resizer (col-resize), a drag
+   handle (grab), a read only Select, the current breadcrumb and an open
+   rule (the arrow).
+
+   - default: the arrow, inherited from the body: static text, headings,
+     labels that aren't tied to a control, empty areas, read only values, a
+     grid cell that edits on double press (until it is editing).
+   - pointer: anything that does something when pressed.
+   - text: editable text, while it is editable.
+   - not-allowed: a disabled control. Pointer events stay on, so a tooltip
+     can still say why.
+   - progress: a control that is busy (a pending Button).
+   - col-resize: a column resizer, and the whole page while a column resizes.
+   - grab, then grabbing: a row or card that drags but doesn't open, and the
+     dragged item (on the whole page while it drags, so it doesn't flicker).
+     A card that both opens and drags shows pointer until the drag starts.
+
+   Everything is wrapped in :where(), so it has no specificity, and it sits in
+   the base layer, so a component's own rule always wins. The order below is
+   the precedence: later states beat earlier ones. Cursors need no hover
+   guard, since a touch screen shows none. */
+@layer base {
+  :where(body) {
+    cursor: default;
+  }
+
+  /* Rows and cards that drag but don't open on press. */
+  :where(
+    [data-allows-dragging]:is([role='row'], [role='option'], [role='gridcell'], [role='treeitem']),
+    [draggable='true']
+  ) {
+    cursor: grab;
+  }
+
+  /* Pressable. [data-pressable] marks a row or card with an action (a GridList
+     or Table item whose onAction is set); [data-href] marks one that links. */
+  :where(
+    button,
+    a[href],
+    summary,
+    select,
+    label:has(input[type='checkbox'], input[type='radio']),
+    input:is(
+      [type='checkbox'],
+      [type='radio'],
+      [type='button'],
+      [type='submit'],
+      [type='reset'],
+      [type='file'],
+      [type='color']
+    ),
+    [role='button'],
+    [role='link'],
+    [role='tab'],
+    [role='menuitem'],
+    [role='menuitemcheckbox'],
+    [role='menuitemradio'],
+    [role='option'],
+    [role='switch'],
+    [role='checkbox'],
+    [role='radio'],
+    [data-allows-sorting],
+    [data-pressable],
+    [data-href]
+  ) {
+    cursor: pointer;
+  }
+
+  /* Editable text. */
+  :where(
+    input:not(
+      [type='checkbox'],
+      [type='radio'],
+      [type='button'],
+      [type='submit'],
+      [type='reset'],
+      [type='file'],
+      [type='color'],
+      [type='range'],
+      [type='hidden']
+    ),
+    textarea,
+    [contenteditable='true'],
+    [contenteditable=''],
+    [contenteditable='plaintext-only']
+  ) {
+    cursor: text;
+  }
+
+  /* Read only: a value you can see but not change. */
+  :where(input[readonly], textarea[readonly], [data-readonly]) {
+    cursor: default;
+  }
+
+  /* Disabled. */
+  :where(:disabled, [data-disabled], [aria-disabled='true'], [data-unavailable]) {
+    cursor: not-allowed;
+  }
+
+  /* A placeholder row still loading (a disabled item that shows a Skeleton)
+     isn't a control you were refused, so it keeps the arrow. */
+  :where([data-loading]) {
+    cursor: default;
+  }
+
+  /* Busy. */
+  :where(button[data-pending], [role='button'][data-pending]) {
+    cursor: progress;
+  }
+
+  /* Resizing a column: col-resize on the whole page until the pointer lets go. */
+  :where(:root:has([data-resizing]), :root:has([data-resizing]) *) {
+    cursor: col-resize;
+  }
+
+  /* Dragging: the dragged item, and the whole page while anything drags. */
+  :where([data-dragging], :root:has([data-dragging]), :root:has([data-dragging]) *) {
+    cursor: grabbing;
+  }
+}

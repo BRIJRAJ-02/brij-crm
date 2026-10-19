@@ -387,7 +387,13 @@ export function RulesEditor({
             const errorOf = (name: string) => errors[`rules.${String(index)}.${name}`];
             const kindError = errorOf('kind');
             return (
-              <GridListItem id={id} textValue={summary} className={styles.row} data-open={isOpen || undefined}>
+              <GridListItem
+                id={id}
+                textValue={summary}
+                className={styles.row}
+                data-open={isOpen || undefined}
+                data-pressable={isReadOnly || isOpen ? undefined : ''}
+              >
                 <div className={styles.line}>
                   {!isReadOnly && <DragHandle label={strings.move(index + 1, kindName)} isDisabled={isOpen} />}
                   <span className={styles.summary}>

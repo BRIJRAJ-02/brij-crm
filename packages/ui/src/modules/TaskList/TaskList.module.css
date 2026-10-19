@@ -25,13 +25,7 @@
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
-    cursor: default;
     outline: none;
-  }
-
-  .row[data-href],
-  .row[data-pressable] {
-    cursor: pointer;
   }
 
   @media (hover: hover) and (pointer: fine) {

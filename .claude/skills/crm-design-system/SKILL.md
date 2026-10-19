@@ -58,6 +58,12 @@ Use those numbers through their tokens, never as literals.
      - Reduced motion keeps fades and drops movement.
    - **Exit animations live in `packages/ui`.** The artifact animates menus and dialogs in but not out, because exits need real open and close state. The code version must add them, using the exit duration token.
 9. **Icons are Lucide** (https://lucide.dev/icons/), the project's only icon library, drawn through the Icon atom with size and stroke from tokens. In code, `packages/ui/src/atoms/Icon/icons.ts` is the registry: add one import and one line for an icon you need, under its current 1.x lucide.dev name (`building`, `circle-question-mark`, `trash`). People pick object icons from the curated `ObjectIcon` set only. Never draw or import icons from anywhere else. One library keeps the line weight consistent, and one atom means a size or stroke change touches one place.
+10. **Cursors come from one rule,** `packages/ui/src/styles/cursors.css`, driven by what an element is (tag, role, React Aria's attributes), never by the screen:
+    - `pointer` on anything that does something when pressed; a row or card with an action gets `data-pressable`.
+    - `text` on editable text. The arrow on static text, read only values, and a grid cell until it is editing.
+    - `not-allowed` on disabled controls (`data-disabled`), with pointer events kept so a tooltip can say why. A loading placeholder gets `data-loading` and keeps the arrow.
+    - `progress` on a busy control, `grab` on drag handles and rows that only drag, `grabbing` while dragging, `col-resize` on column resizers.
+    - Don't write `cursor` in a component module unless only that component can know (the Field box, a resizer, a drag handle). Cursors need no hover guard.
 
 ## CSS that scales
 

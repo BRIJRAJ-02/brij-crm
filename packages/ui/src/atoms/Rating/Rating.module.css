@@ -28,7 +28,6 @@
 
   .choice {
     border-radius: var(--radius-xs);
-    cursor: pointer;
     outline: none;
     transition:
       color var(--duration-hover) var(--ease-hover),
@@ -62,10 +61,6 @@
 
   .root[data-disabled] {
     opacity: var(--opacity-disabled);
-  }
-
-  .root[data-disabled] .choice {
-    cursor: default;
   }
 
   @media (prefers-reduced-motion: reduce) {

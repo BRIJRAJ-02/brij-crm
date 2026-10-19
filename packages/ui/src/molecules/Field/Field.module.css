@@ -162,7 +162,7 @@
   .root[data-disabled] .box,
   .root[data-disabled] .label {
     opacity: var(--opacity-disabled);
-    cursor: default;
+    cursor: not-allowed;
   }
 
   .root[data-readonly] .box {
