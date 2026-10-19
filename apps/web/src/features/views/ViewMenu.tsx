@@ -31,6 +31,8 @@ export interface ViewMenuProps {
   readonly copyLinkReason: string | undefined;
   /** Duplicate: the screen makes the copy and opens it. */
   readonly onDuplicate: () => void;
+  /** A delete here starts (true) or was refused (false): the screen expects the view to go. */
+  readonly onDeleting: (isDeleting: boolean) => void;
   /** The view was deleted here: the screen goes to the default view. */
   readonly onDeleted: (name: string) => void;
 }
@@ -52,6 +54,7 @@ export function ViewMenu({
   canManage,
   copyLinkReason,
   onDuplicate,
+  onDeleting,
   onDeleted,
 }: ViewMenuProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
@@ -158,7 +161,7 @@ export function ViewMenu({
       icon: 'arrow-up',
       reason: moveReason('up'),
       onAction: () => {
-        run(data.views.move(slug, object.id, view.id, 'up'));
+        run(data.views.move(slug, object.id, view.id, 'up'), strings.movedUp(view.name));
       },
     },
     {
@@ -167,7 +170,7 @@ export function ViewMenu({
       icon: 'arrow-down',
       reason: moveReason('down'),
       onAction: () => {
-        run(data.views.move(slug, object.id, view.id, 'down'));
+        run(data.views.move(slug, object.id, view.id, 'down'), strings.movedDown(view.name));
       },
     },
     'separator',
@@ -288,6 +291,7 @@ export function ViewMenu({
               isPending={isBusy}
               onPress={() => {
                 setBusy(true);
+                onDeleting(true);
                 data.views.remove(slug, object.id, view.id).then(
                   () => {
                     setBusy(false);
@@ -297,6 +301,7 @@ export function ViewMenu({
                   (error: unknown) => {
                     setBusy(false);
                     setDeleting(false);
+                    onDeleting(false);
                     toasts.toast({
                       tone: 'danger',
                       message: isDataError(error) ? error.message : strings.actionFailed,
@@ -341,7 +346,7 @@ function RenameViewDialog({ isOpen, name, onClose, onRename }: RenameViewDialogP
             {strings.cancel}
           </Button>
           <Button variant="primary" type="submit" form={formId} isPending={isBusy} kbd="⌘↵">
-            {isBusy ? strings.saving : strings.save}
+            {isBusy ? strings.renaming : strings.rename}
           </Button>
         </>
       }

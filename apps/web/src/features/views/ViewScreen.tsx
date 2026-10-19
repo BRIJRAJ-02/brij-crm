@@ -296,8 +296,11 @@ export function ViewScreen(props: ViewScreenProps) {
       params: { slug, object: object.apiSlug, viewId: next.id },
     });
   };
+  const [isDuplicating, setDuplicating] = useState(false);
   const duplicate = () => {
-    if (view === undefined) return;
+    // One copy per press: a second press while the first is on its way adds nothing.
+    if (view === undefined || isDuplicating) return;
+    setDuplicating(true);
     const taken = list.views.filter((each) => each.visibility === 'private').map((each) => each.name);
     const name = copyName(view.name, taken);
     data.views
@@ -311,9 +314,11 @@ export function ViewScreen(props: ViewScreenProps) {
       })
       .then(
         (made) => {
+          setDuplicating(false);
           openView(made, strings.duplicated(made.name));
         },
         (error: unknown) => {
+          setDuplicating(false);
           toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.actionFailed });
         },
       );
@@ -378,7 +383,7 @@ export function ViewScreen(props: ViewScreenProps) {
           view === undefined ? undefined : (
             <>
               {view.visibility === 'workspace' && view.isLocked && (
-                <Callout placement="bar">
+                <Callout placement="bar" {...(isLockedForMe ? { isAnnounced: true } : {})}>
                   {isLockedForMe
                     ? strings.lockedUnsaved(memberName(members, view.lockedBy))
                     : strings.lockedBy(memberName(members, view.lockedBy))}
@@ -404,8 +409,11 @@ export function ViewScreen(props: ViewScreenProps) {
                 canManage={canManage}
                 copyLinkReason={draft.isDraft && !draft.isLinkable ? strings.linkTooLong : undefined}
                 onDuplicate={duplicate}
+                onDeleting={(isDeleting) => {
+                  // This tab's own delete: the view going away is no news here.
+                  leaving.current = isDeleting;
+                }}
                 onDeleted={(name) => {
-                  leaving.current = true;
                   toasts.toast({ tone: 'success', message: strings.deleted(name) });
                   void navigate({
                     to: '/w/$slug/objects/$object',
@@ -419,6 +427,12 @@ export function ViewScreen(props: ViewScreenProps) {
         }
         currentViewId={view?.id ?? ''}
         onViewChange={(viewId) => {
+          // The view already open: nothing changes, and its draft stays.
+          if (viewId === view?.id) return;
+          // Another view drops this one's draft (AC-466); Back brings it back.
+          if (draft.isDraft && view !== undefined) {
+            toasts.toast({ tone: 'info', message: strings.draftLeft(view.name) });
+          }
           void navigate({
             to: '/w/$slug/objects/$object/views/$viewId',
             params: { slug, object: object.apiSlug, viewId },

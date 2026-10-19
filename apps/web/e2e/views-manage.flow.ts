@@ -152,7 +152,7 @@ test.describe('saved views: many views and their layout', () => {
     await ada.getByRole('menuitem', { name: 'Save as new view' }).click();
     const saveAs = ada.getByRole('dialog', { name: 'Save as new view' });
     await saveAs.getByLabel('Name').fill('Oldest first');
-    await saveAs.getByRole('button', { name: 'Create view' }).click();
+    await saveAs.getByRole('button', { name: 'Save as new view' }).click();
     await expect(viewBarSwitcher(ada, 'Oldest first')).toBeVisible();
     await expect(ada).not.toHaveURL(/draft=/);
     const oldestUrl = new URL(ada.url()).pathname;
@@ -169,9 +169,11 @@ test.describe('saved views: many views and their layout', () => {
     await confirm.getByRole('button', { name: 'Delete view' }).click();
     await expect(ada).toHaveURL(new RegExp(`${defaultUrl}$`));
     await expect(ada.getByText('Deleted Pipeline.')).toBeVisible();
+    // This tab's own delete raises no "isn't available" notice.
+    await expect(ada.getByText('Pipeline isn’t available to you any more', { exact: false })).toHaveCount(0);
     if (LIVE) {
       await expect(bea).toHaveURL(new RegExp(`${defaultUrl}$`), { timeout: 10_000 });
-      await expect(bea.getByText('Pipeline was deleted, so you’re on All People.')).toBeVisible();
+      await expect(bea.getByText('Pipeline isn’t available to you any more, so you’re on All People.')).toBeVisible();
     } else {
       await bea.reload();
       await expect(bea.getByText('This view doesn’t exist or isn’t shared with you.')).toBeVisible();

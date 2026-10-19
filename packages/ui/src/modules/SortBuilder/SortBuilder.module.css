@@ -34,6 +34,13 @@
     outline: none;
   }
 
+  /* Read only: no handle, so the lead, attribute and direction keep their columns' widths from the start. */
+  .readOnly {
+    grid-template-columns:
+      calc(4 * var(--size-chip)) minmax(0, calc(10 * var(--size-chip)))
+      minmax(0, calc(7 * var(--size-chip)));
+  }
+
   .row[data-allows-dragging] {
     cursor: grab;
   }

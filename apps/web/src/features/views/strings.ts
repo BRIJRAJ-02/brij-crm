@@ -92,7 +92,13 @@ export const strings = {
   deletePrivateText: 'This view goes for good. Its records stay.',
   deleted: (name: string) => `Deleted ${name}.`,
   /** Another member deleted the view this tab was on (AC-474). */
-  deletedBy: (name: string, defaultName: string) => `${name} was deleted, so you’re on ${defaultName}.`,
+  deletedBy: (name: string, defaultName: string) =>
+    `${name} isn’t available to you any more, so you’re on ${defaultName}.`,
+  /** Opening another view dropped this one's unsaved filters and sorts (AC-466). */
+  draftLeft: (name: string) => `Your changes on ${name} weren’t saved. Back brings them back.`,
+  movedUp: (name: string) => `Moved ${name} up.`,
+  movedDown: (name: string) => `Moved ${name} down.`,
+  renaming: 'Renaming',
   actionFailed: 'That didn’t work. Try again in a moment.',
   nothingToDo: 'Nothing to change here.',
   /** The view menu's disabled reasons (spec 0020, the view menu table). */

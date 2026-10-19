@@ -129,7 +129,11 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
             );
           };
           return (
-            <GridListItem id={rule.attributeId} textValue={name} className={styles.row}>
+            <GridListItem
+              id={rule.attributeId}
+              textValue={name}
+              className={isReadOnly ? `${styles.row ?? ''} ${styles.readOnly ?? ''}` : styles.row}
+            >
               {!isReadOnly && <DragHandle label={strings.move(name)} />}
               <span className={styles.lead}>{index === 0 ? strings.sortBy : strings.thenBy}</span>
               {isReadOnly ? (
