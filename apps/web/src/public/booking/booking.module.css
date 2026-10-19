@@ -660,6 +660,8 @@
   }
 
   @media (width < 1024px) {
+    /* 16px on a phone, or iOS zooms the page when a field takes focus. No type token is 16px, so the
+       spacing step of that size stands in (owner call: a type token for it). */
     .input {
       font-size: var(--space-16);
     }

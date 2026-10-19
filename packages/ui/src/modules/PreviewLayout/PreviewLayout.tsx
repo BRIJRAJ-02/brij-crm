@@ -24,6 +24,8 @@ export interface PreviewLayoutProps {
    * it changes and once the frame loads, so the page can show unsaved edits.
    */
   readonly previewDraft?: unknown;
+  /** Said above the frame, when what it shows needs a word ("Turn the page on to preview it"). */
+  readonly previewNote?: ReactNode;
   /** A bar pinned to the editor's foot while it has something to say ("Unsaved changes", Save). */
   readonly footer?: ReactNode;
   readonly defaultDevice?: PreviewDevice;
@@ -57,6 +59,7 @@ function Preview({
   title,
   version,
   draft,
+  note,
 }: {
   readonly device: PreviewDevice;
   readonly onDevice: (device: PreviewDevice) => void;
@@ -64,6 +67,7 @@ function Preview({
   readonly title: string;
   readonly version: string | undefined;
   readonly draft: unknown;
+  readonly note: ReactNode;
 }) {
   const { ref, deviceWidth, scale } = useFit(device);
   const frame = useRef<HTMLIFrameElement>(null);
@@ -86,9 +90,12 @@ function Preview({
           if (value === 'phone' || value === 'tablet' || value === 'desktop') onDevice(value);
         }}
       />
+      {note}
       <div
         ref={ref}
         className={styles.viewport}
+        // A picture of the page, not a second copy to use: nothing in it takes focus or a press, so it never books.
+        inert
         style={{ '--device-width': `${String(deviceWidth)}px`, '--preview-scale': String(scale) }}
       >
         <iframe
@@ -97,6 +104,7 @@ function Preview({
           className={styles.frame}
           src={src}
           title={strings.previewOf(title)}
+          tabIndex={-1}
           loading="lazy"
           onLoad={post}
         />
@@ -121,6 +129,7 @@ export function PreviewLayout({
   previewTitle,
   previewVersion,
   previewDraft,
+  previewNote,
   footer,
   defaultDevice = 'phone',
 }: PreviewLayoutProps) {
@@ -133,6 +142,7 @@ export function PreviewLayout({
       title={previewTitle}
       version={previewVersion}
       draft={previewDraft}
+      note={previewNote}
     />
   );
   return (

@@ -63,7 +63,7 @@ export function AvailabilityScreen({ data, slug, availability: loaded }: Availab
             footer={
               isDirty || justSaved ? (
                 <Callout
-                  tone={isDirty ? 'info' : 'success'}
+                  tone={failure !== undefined ? 'danger' : isDirty ? 'info' : 'success'}
                   isAnnounced={!isDirty}
                   {...(isDirty
                     ? {
@@ -80,12 +80,11 @@ export function AvailabilityScreen({ data, slug, availability: loaded }: Availab
                       }
                     : {})}
                 >
-                  {isDirty ? strings.unsaved : strings.saved}
+                  {failure ?? (isDirty ? strings.unsaved : strings.saved)}
                 </Callout>
               ) : undefined
             }
           >
-            {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
             <Card title={strings.weeklyHours} description={strings.availabilityText}>
               <Select
                 label={strings.timeZone}

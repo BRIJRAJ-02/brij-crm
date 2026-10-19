@@ -144,6 +144,7 @@ export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProp
       },
       (error: unknown) => {
         setSaving(false);
+        if (patch.status !== undefined) setDraft((current) => ({ ...current, status: page.status }));
         const field = isDataError(error) ? error.data?.refusals?.[0]?.field : undefined;
         setFailure({
           message: isDataError(error) ? error.message : strings.somethingWrong,
@@ -185,6 +186,9 @@ export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProp
             previewSrc={`/b/${page.publicKey}`}
             previewTitle={page.title}
             previewVersion={page.updatedAt}
+            {...(page.status === 'paused'
+              ? { previewNote: <Callout tone="info">{strings.pausedPreview}</Callout> }
+              : {})}
             previewDraft={{
               title: draft.title,
               description: draft.description,
@@ -195,7 +199,7 @@ export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProp
               ? {
                   footer: (
                     <Callout
-                      tone="info"
+                      tone={failure !== undefined && slugError === undefined ? 'danger' : 'info'}
                       actions={
                         <Button
                           variant="primary"
@@ -207,7 +211,7 @@ export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProp
                         </Button>
                       }
                     >
-                      {strings.unsaved}
+                      {failure !== undefined && slugError === undefined ? failure.message : strings.unsaved}
                     </Callout>
                   ),
                 }
@@ -218,7 +222,6 @@ export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProp
                 {strings.readOnlyText}
               </Callout>
             )}
-            {failure !== undefined && slugError === undefined && <Callout tone="danger">{failure.message}</Callout>}
             <Callout tone="info" title={strings.noCalendarTitle}>
               {strings.noCalendar}
             </Callout>
@@ -234,7 +237,6 @@ export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProp
               />
               <Field
                 label={strings.address}
-                prefix="/b/"
                 value={draft.slug}
                 hint={strings.addressHint}
                 maxLength={60}
@@ -281,6 +283,7 @@ export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProp
                   maxLength={500}
                   isRequired
                   isReadOnly={isLocked}
+                  {...(location.value.trim() === '' ? { error: strings.whereRequired } : {})}
                   onChange={(value) => change({ location: { type: location.type, value } })}
                 />
               )}

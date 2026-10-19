@@ -188,6 +188,9 @@ export function Picker(props: PickerProps) {
   const openDays = [...byDay.keys()].filter((key) => (byDay.get(key)?.length ?? 0) > 0).sort();
   // On a phone, a new day scrolls its times into view, and a picked time the bar.
   const isNarrow = () => globalThis.matchMedia('(width < 1024px)').matches;
+  // Under reduced motion the page jumps rather than glides.
+  const glide = (): ScrollBehavior =>
+    globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
   return (
     <div className={styles.picker}>
       <div className={styles.pickerHead}>
@@ -209,7 +212,13 @@ export function Picker(props: PickerProps) {
       </div>
       <div className={view === 'month' ? styles.monthLayout : styles.listLayout}>
         {view === 'month' ? (
-          <MonthGrid {...props} />
+          <MonthGrid
+            {...props}
+            onDay={(key) => {
+              props.onDay(key);
+              if (isNarrow()) timesRef.current?.scrollIntoView({ block: 'nearest', behavior: glide() });
+            }}
+          />
         ) : (
           <div className={styles.chips} role="group" aria-label={strings.chooseTime}>
             {openDays.map((key) => {
@@ -223,7 +232,7 @@ export function Picker(props: PickerProps) {
                   aria-label={labels.label}
                   onClick={() => {
                     props.onDay(key);
-                    if (isNarrow()) timesRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                    if (isNarrow()) timesRef.current?.scrollIntoView({ block: 'nearest', behavior: glide() });
                   }}
                 >
                   <span className={styles.weekday}>{labels.weekday}</span>
@@ -263,7 +272,7 @@ export function Picker(props: PickerProps) {
                     aria-label={strings.timeName(label, dayLabel, duration)}
                     onClick={() => {
                       onTime(start);
-                      if (isNarrow()) commit.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                      if (isNarrow()) commit.current?.scrollIntoView({ block: 'nearest', behavior: glide() });
                     }}
                   >
                     {label}

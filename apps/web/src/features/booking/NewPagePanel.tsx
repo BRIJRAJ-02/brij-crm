@@ -100,7 +100,10 @@ export function NewPagePanel({ data, slug, isOpen, onClose, onCreated }: NewPage
       title={strings.addPage}
       isOpen={isOpen}
       onClose={() => {
-        if (!isBusy) onClose();
+        if (isBusy) return;
+        // Closed is cancelled: it opens empty next time.
+        reset();
+        onClose();
       }}
       footer={
         <Button variant="primary" isFullWidth isPending={isBusy} onPress={create}>
@@ -122,7 +125,6 @@ export function NewPagePanel({ data, slug, isOpen, onClose, onCreated }: NewPage
         />
         <Field
           label={strings.address}
-          prefix="/b/"
           hint={strings.addressHint}
           value={shownAddress}
           onChange={(value) => setAddress(value.toLowerCase())}
