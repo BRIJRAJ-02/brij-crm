@@ -86,7 +86,9 @@ describe('every tenant table', () => {
           !(
             row.first === 'workspace_id' ||
             (row.table === 'workspaces' && row.first === 'id') ||
-            row.index === 'workspaces_slug'
+            row.index === 'workspaces_slug' ||
+            // A booking page's public key finds it before the workspace is known (spec 0025), so it is unique everywhere.
+            row.index === 'booking_pages_public_key'
           ),
       )
       .map((row) => row.index);
@@ -123,7 +125,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly five security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly six security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -132,6 +134,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       order by 1
     `);
     expect(definers.rows).toEqual([
+      { name: 'crm_booking_page_by_key', owner: 'crm_booking_lookup' },
       { name: 'crm_enqueue_job', owner: 'crm_queue' },
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
@@ -147,6 +150,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       order by 1
     `);
     expect(hardening.rows).toEqual([
+      { name: 'crm_booking_page_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_enqueue_job', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
       { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -155,14 +159,14 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ]);
   });
 
-  it('lets no role but crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
+  it('lets no role but crm_booking_lookup, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
     const bypass = await owner.query<{ role: string }>(`
       select rolname as role from pg_roles
       where rolbypassrls and not rolsuper
         and rolname <> (select pg_get_userbyid(datdba) from pg_database where datname = current_database())
       order by rolname
     `);
-    expect(bypass.rows.map((row) => row.role)).toEqual(['crm_relay', 'crm_search', 'crm_sweep']);
+    expect(bypass.rows.map((row) => row.role)).toEqual(['crm_booking_lookup', 'crm_relay', 'crm_search', 'crm_sweep']);
   });
 
   // Each owner role, its functions, their signatures, and who calls each: the app (and so the worker, which
@@ -180,6 +184,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ],
     ['crm_queue', ['crm_enqueue_job'], ['crm_enqueue_job(uuid, timestamp with time zone)'], ['app']],
     ['crm_sweep', ['crm_workspace_ids'], ['crm_workspace_ids(uuid, integer)'], ['worker']],
+    ['crm_booking_lookup', ['crm_booking_page_by_key'], ['crm_booking_page_by_key(text)'], ['app']],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
     async (name, fns, signatures, callers) => {
@@ -854,6 +859,98 @@ describe('isolation', () => {
     await expect(
       db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'task_records_record' } });
+  });
+});
+
+describe('booking pages (spec 0025, milestone 1)', () => {
+  /** A personal page with its owner as its member, made inside the workspace. */
+  const pageIn = async (workspaceId: string, memberId: string) => {
+    const pageId = randomUUID();
+    const publicKey = randomUUID().replaceAll('-', '').slice(0, 16);
+    await db.withWorkspace(workspaceId, async (tx) => {
+      await tx.execute(
+        sql`insert into booking_pages (workspace_id, id, public_key, slug, owner_member_id, title, durations, location, availability, created_by_type, updated_by_type) values (${workspaceId}, ${pageId}, ${publicKey}, 'intro', ${memberId}, 'Intro call', '{30}', '{"type":"video"}', '{}', 'system', 'system')`,
+      );
+      await tx.execute(
+        sql`insert into booking_page_members (workspace_id, page_id, member_id, position) values (${workspaceId}, ${pageId}, ${memberId}, 0)`,
+      );
+    });
+    return { pageId, publicKey };
+  };
+  /** A booking on the page, `[from, to)` in UTC, blocking exactly the meeting. */
+  const book = (workspaceId: string, pageId: string, hostId: string, from: string, to: string, status = 'confirmed') =>
+    db.withWorkspace(workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into bookings (workspace_id, page_id, host_member_id, starts_at, ends_at, during, visitor_name, visitor_email, visitor_time_zone, status, manage_token_hash, idempotency_key, created_by_type, updated_by_type) values (${workspaceId}, ${pageId}, ${hostId}, ${from}::timestamptz, ${to}::timestamptz, tstzrange(${from}::timestamptz, ${to}::timestamptz), 'Ada', 'ada@example.com', 'UTC', ${status}, 'hash', ${randomUUID()}, 'system', 'system')`,
+      ),
+    );
+
+  it("reads none of another workspace's pages, members or bookings, and refuses a booking on its page", async () => {
+    const a = await workspaceWithMember('booking-a');
+    const b = await workspaceWithMember('booking-b');
+    const inA = await pageIn(a.workspaceId, a.memberId);
+    const inB = await pageIn(b.workspaceId, b.memberId);
+    await book(a.workspaceId, inA.pageId, a.memberId, '2026-11-02T09:00Z', '2026-11-02T09:30Z');
+    await book(b.workspaceId, inB.pageId, b.memberId, '2026-11-02T09:00Z', '2026-11-02T09:30Z');
+    for (const table of ['booking_pages', 'booking_page_members', 'bookings']) {
+      const rows = await db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute<{ workspace_id: string }>(sql.raw(`select workspace_id::text from ${table}`)),
+      );
+      expect(rows.rows, table).toEqual([{ workspace_id: a.workspaceId }]);
+    }
+    await expect(
+      book(a.workspaceId, inB.pageId, a.memberId, '2026-11-03T09:00Z', '2026-11-03T09:30Z'),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'bookings_page' } });
+  });
+
+  it('refuses two confirmed bookings of one host that overlap, but not touching ones, cancelled ones or another host', async () => {
+    const a = await workspaceWithMember('booking-overlap');
+    const inA = await pageIn(a.workspaceId, a.memberId);
+    await book(a.workspaceId, inA.pageId, a.memberId, '2026-11-02T09:00Z', '2026-11-02T10:00Z');
+    await expect(
+      book(a.workspaceId, inA.pageId, a.memberId, '2026-11-02T09:30Z', '2026-11-02T10:30Z'),
+    ).rejects.toMatchObject({ cause: { code: '23P01', constraint: 'bookings_no_overlap' } });
+    await book(a.workspaceId, inA.pageId, a.memberId, '2026-11-02T10:00Z', '2026-11-02T10:30Z');
+    await book(a.workspaceId, inA.pageId, a.memberId, '2026-11-02T09:30Z', '2026-11-02T10:30Z', 'cancelled');
+    const other = randomUUID();
+    await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into members (workspace_id, id, name, email, role, created_by_type, updated_by_type) values (${a.workspaceId}, ${other}, 'Other', ${`other-${other}@example.com`}, 'member', 'system', 'system')`,
+      ),
+    );
+    await book(a.workspaceId, inA.pageId, other, '2026-11-02T09:30Z', '2026-11-02T10:30Z');
+  });
+
+  it('finds a page by its public key across workspaces, answering ids only', async () => {
+    const a = await workspaceWithMember('booking-key');
+    const inA = await pageIn(a.workspaceId, a.memberId);
+    const found = await db.withWorkspace(randomUUID(), (tx) =>
+      tx.execute<{ workspace_id: string; page_id: string }>(
+        sql`select workspace_id::text, page_id::text from crm_booking_page_by_key(${inA.publicKey})`,
+      ),
+    );
+    expect(found.rows).toEqual([{ workspace_id: a.workspaceId, page_id: inA.pageId }]);
+    const missing = await db.withWorkspace(randomUUID(), (tx) =>
+      tx.execute(sql`select * from crm_booking_page_by_key('no-such-key-0000')`),
+    );
+    expect(missing.rows).toEqual([]);
+  });
+
+  it('takes a booking page as an actor on records, with an id and no member', async () => {
+    const a = await workspaceWithMember('booking-actor');
+    const inA = await pageIn(a.workspaceId, a.memberId);
+    const objectId = await objectIn(a.workspaceId);
+    const recordId = randomUUID();
+    await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute(
+        sql`insert into records (workspace_id, id, object_id, created_by_type, created_by_id, updated_by_type, updated_by_id) values (${a.workspaceId}, ${recordId}, ${objectId}, 'booking', ${inA.pageId}, 'booking', ${inA.pageId})`,
+      ),
+    );
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(sql`update records set updated_by_type = 'booking', updated_by_id = null where id = ${recordId}`),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23514', constraint: 'records_updated_by_actor' } });
   });
 });
 

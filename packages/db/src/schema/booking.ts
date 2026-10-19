@@ -1,0 +1,216 @@
+// Booking pages (spec 0025, milestone 1): a member's page, the members it
+// books (the owner alone for a personal page), and the bookings visitors make.
+// A page is found publicly by its random `public_key` before the workspace is
+// known (`crm_booking_page_by_key`, migration 0039), so that key is unique
+// everywhere. A booking's `during` is its meeting widened by the page's
+// buffers; the exclusion constraint `bookings_no_overlap` (hand written in the
+// migration, it needs btree_gist) refuses two confirmed bookings of one host
+// whose `during` overlap, the last guard under the per host advisory lock.
+// The record ids a booking names (person, company, deal) carry no foreign key:
+// a record removed for good leaves the booking naming nothing, never failing
+// the purge. `meeting_id` is spec 0024's meeting (its key arrives with it).
+import { sql } from 'drizzle-orm';
+import {
+  check,
+  customType,
+  foreignKey,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  primaryKey,
+  smallint,
+  text,
+  uniqueIndex,
+  uuid,
+} from 'drizzle-orm/pg-core';
+import { auditColumns, id, timestamptz, workspaceId } from './common.ts';
+import { actorConstraints, members } from './workspaces.ts';
+
+/** A `tstzrange`, read and written as Postgres' text form (`["2026-10-19 09:45:00+00","2026-10-19 10:45:00+00")`). */
+const tstzrange = customType<{ data: string }>({ dataType: () => 'tstzrange' });
+
+/** One booking page. Deleting one keeps its bookings (AC-648): it is hidden, its link answers no longer available. */
+export const bookingPages = pgTable(
+  'booking_pages',
+  {
+    workspaceId: workspaceId(),
+    id: id(),
+    /** Random, URL safe, 16 characters: the public link's key. */
+    publicKey: text('public_key').notNull(),
+    /** Unique per workspace among live pages. */
+    slug: text('slug').notNull(),
+    kind: text('kind').notNull().default('personal'),
+    ownerMemberId: uuid('owner_member_id').notNull(),
+    title: text('title').notNull(),
+    description: text('description').notNull().default(''),
+    /** Meeting lengths offered, in minutes: one or more of 15, 30, 45, 60, 90. */
+    durations: smallint('durations').array().notNull(),
+    /** `{ type: 'video' | 'phone' | 'address' | 'custom', value? }`. */
+    location: jsonb('location').notNull(),
+    /** `{ timeZone, weekly: { mon: [[start, end]], … }, overrides: [{ date, ranges }] }`, times `HH:MM`. */
+    availability: jsonb('availability').notNull(),
+    bufferBefore: smallint('buffer_before').notNull().default(0),
+    bufferAfter: smallint('buffer_after').notNull().default(0),
+    minNoticeMinutes: integer('min_notice_minutes').notNull().default(0),
+    windowDays: smallint('window_days').notNull().default(60),
+    dailyLimit: smallint('daily_limit'),
+    /** How often a slot starts; null steps by the chosen duration. */
+    slotStep: smallint('slot_step'),
+    /** The forms question shape (milestone 2). */
+    questions: jsonb('questions').notNull().default([]),
+    /** `{ mode: 'create' | 'move_open', stageOptionId }` (milestone 2). */
+    deal: jsonb('deal'),
+    status: text('status').notNull().default('live'),
+    ...auditColumns(),
+    deletedAt: timestamptz('deleted_at'),
+  },
+  (t) => [
+    primaryKey({ name: 'booking_pages_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({
+      name: 'booking_pages_owner',
+      columns: [t.workspaceId, t.ownerMemberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    uniqueIndex('booking_pages_public_key').on(t.publicKey),
+    uniqueIndex('booking_pages_slug')
+      .on(t.workspaceId, t.slug)
+      .where(sql`${t.deletedAt} is null`),
+    index('booking_pages_by_owner')
+      .on(t.workspaceId, t.ownerMemberId, t.createdAt)
+      .where(sql`${t.deletedAt} is null`),
+    check('booking_pages_public_key_shape', sql`${t.publicKey} ~ '^[A-Za-z0-9_-]{16}$'`),
+    check('booking_pages_slug_shape', sql`${t.slug} ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(${t.slug}) <= 60`),
+    check('booking_pages_kind', sql`${t.kind} in ('personal', 'collective', 'round_robin')`),
+    check('booking_pages_status', sql`${t.status} in ('live', 'paused')`),
+    check('booking_pages_title', sql`char_length(${t.title}) between 1 and 120`),
+    check('booking_pages_description', sql`char_length(${t.description}) <= 2000`),
+    check(
+      'booking_pages_durations',
+      sql`cardinality(${t.durations}) between 1 and 5 and ${t.durations} <@ '{15,30,45,60,90}'::smallint[]`,
+    ),
+    check('booking_pages_buffers', sql`${t.bufferBefore} between 0 and 60 and ${t.bufferAfter} between 0 and 60`),
+    check('booking_pages_notice', sql`${t.minNoticeMinutes} between 0 and 20160`),
+    check('booking_pages_window', sql`${t.windowDays} between 1 and 365`),
+    check('booking_pages_daily_limit', sql`${t.dailyLimit} is null or ${t.dailyLimit} between 1 and 50`),
+    check('booking_pages_slot_step', sql`${t.slotStep} is null or ${t.slotStep} in (15, 30, 60)`),
+    ...actorConstraints('booking_pages', 'created_by', t.workspaceId, {
+      type: t.createdByType,
+      id: t.createdById,
+      memberId: t.createdByMemberId,
+    }),
+    ...actorConstraints('booking_pages', 'updated_by', t.workspaceId, {
+      type: t.updatedByType,
+      id: t.updatedById,
+      memberId: t.updatedByMemberId,
+    }),
+  ],
+);
+
+/** The members a page books, in order: the owner alone for a personal page; 2 to 8 required members for a collective one. */
+export const bookingPageMembers = pgTable(
+  'booking_page_members',
+  {
+    workspaceId: workspaceId(),
+    pageId: uuid('page_id').notNull(),
+    memberId: uuid('member_id').notNull(),
+    position: smallint('position').notNull(),
+  },
+  (t) => [
+    primaryKey({ name: 'booking_page_members_pkey', columns: [t.workspaceId, t.pageId, t.memberId] }),
+    foreignKey({
+      name: 'booking_page_members_page',
+      columns: [t.workspaceId, t.pageId],
+      foreignColumns: [bookingPages.workspaceId, bookingPages.id],
+    }).onDelete('cascade'),
+    foreignKey({
+      name: 'booking_page_members_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    // A member's pages, and the member foreign key's check.
+    index('booking_page_members_by_member').on(t.workspaceId, t.memberId),
+    check('booking_page_members_position', sql`${t.position} between 0 and 7`),
+  ],
+);
+
+/** One booking a visitor made. Cancelled bookings stay, holding nothing. */
+export const bookings = pgTable(
+  'bookings',
+  {
+    workspaceId: workspaceId(),
+    id: id(),
+    pageId: uuid('page_id').notNull(),
+    hostMemberId: uuid('host_member_id').notNull(),
+    startsAt: timestamptz('starts_at').notNull(),
+    endsAt: timestamptz('ends_at').notNull(),
+    /** [starts_at − buffer before, ends_at + buffer after): what the exclusion constraint compares. */
+    during: tstzrange('during').notNull(),
+    visitorName: text('visitor_name').notNull(),
+    /** Trimmed and lowercased. */
+    visitorEmail: text('visitor_email').notNull(),
+    visitorTimeZone: text('visitor_time_zone').notNull(),
+    answers: jsonb('answers').notNull().default({}),
+    status: text('status').notNull().default('confirmed'),
+    cancelReason: text('cancel_reason'),
+    reschedules: smallint('reschedules').notNull().default(0),
+    /** SHA-256 of the cancel and reschedule link's token (milestone 2 sends the link). */
+    manageTokenHash: text('manage_token_hash').notNull(),
+    /** One booking per attempt: a retry of the same attempt answers the first booking. */
+    idempotencyKey: uuid('idempotency_key').notNull(),
+    meetingId: uuid('meeting_id'),
+    /** Set when the calendar event couldn't be made after the booking committed (spec: the booking stays). */
+    eventFailedAt: timestamptz('event_failed_at'),
+    personRecordId: uuid('person_record_id'),
+    companyRecordId: uuid('company_record_id'),
+    dealRecordId: uuid('deal_record_id'),
+    submissionId: uuid('submission_id'),
+    ...auditColumns(),
+  },
+  (t) => [
+    primaryKey({ name: 'bookings_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({
+      name: 'bookings_page',
+      columns: [t.workspaceId, t.pageId],
+      foreignColumns: [bookingPages.workspaceId, bookingPages.id],
+    }),
+    foreignKey({
+      name: 'bookings_host',
+      columns: [t.workspaceId, t.hostMemberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    uniqueIndex('bookings_attempt').on(t.workspaceId, t.pageId, t.idempotencyKey),
+    // The page's bookings list, newest first.
+    index('bookings_by_page').on(t.workspaceId, t.pageId, t.startsAt.desc(), t.id),
+    // A host's confirmed bookings in a range (the slots read; the exclusion constraint's index serves overlap).
+    index('bookings_by_host')
+      .on(t.workspaceId, t.hostMemberId, t.startsAt)
+      .where(sql`${t.status} = 'confirmed'`),
+    // A person's bookings, for their timeline.
+    index('bookings_by_person')
+      .on(t.workspaceId, t.personRecordId, t.createdAt)
+      .where(sql`${t.personRecordId} is not null`),
+    check('bookings_status', sql`${t.status} in ('confirmed', 'cancelled')`),
+    check('bookings_times', sql`${t.endsAt} > ${t.startsAt}`),
+    check(
+      'bookings_during',
+      sql`lower(${t.during}) <= ${t.startsAt} and upper(${t.during}) >= ${t.endsAt} and lower_inc(${t.during}) and not upper_inc(${t.during})`,
+    ),
+    check('bookings_cancelled', sql`${t.status} = 'cancelled' or ${t.cancelReason} is null`),
+    check(
+      'bookings_visitor',
+      sql`char_length(${t.visitorName}) between 1 and 200 and char_length(${t.visitorEmail}) between 3 and 254`,
+    ),
+    check('bookings_reschedules', sql`${t.reschedules} between 0 and 5`),
+    ...actorConstraints('bookings', 'created_by', t.workspaceId, {
+      type: t.createdByType,
+      id: t.createdById,
+      memberId: t.createdByMemberId,
+    }),
+    ...actorConstraints('bookings', 'updated_by', t.workspaceId, {
+      type: t.updatedByType,
+      id: t.updatedById,
+      memberId: t.updatedByMemberId,
+    }),
+  ],
+);

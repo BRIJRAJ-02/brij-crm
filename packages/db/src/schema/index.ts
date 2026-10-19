@@ -13,3 +13,4 @@ export { workspaceMilestones } from './milestones.ts';
 export { validationRuleKind, validationRules } from './validation.ts';
 export { memberViewState, viewKind, views, viewVisibility } from './views.ts';
 export { taskRecords, tasks } from './tasks.ts';
+export { bookingPageMembers, bookingPages, bookings } from './booking.ts';
