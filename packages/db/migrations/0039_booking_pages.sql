@@ -16,7 +16,9 @@
 --
 -- The public endpoints find a page by its public key before they know the workspace: crm_booking_page_by_key(key),
 -- owned by crm_booking_lookup (no login, bypasses row level security only to read three columns of booking_pages),
--- answers the workspace and page ids and nothing else, for crm_app only.
+-- answers the workspace and page ids and nothing else, for crm_app only. The guest page finds its booking the same
+-- way, by the SHA-256 of its manage token: crm_booking_by_token(hash), owned by the same role, which also reads three
+-- columns of bookings, answers the workspace, page and booking ids.
 --
 -- The rules' swap and the foreign keys briefly lock the tables they touch. Give up after 5 seconds rather than queue
 -- behind traffic, like 0020, 0023, 0026, 0029, 0033 and 0037.
@@ -103,6 +105,7 @@ CREATE TABLE "bookings" (
 	"manage_token_hash" text NOT NULL,
 	"idempotency_key" uuid NOT NULL,
 	"meeting_id" uuid,
+	"video_url" text,
 	"event_failed_at" timestamp (6) with time zone,
 	"person_record_id" uuid,
 	"company_record_id" uuid,
@@ -123,6 +126,7 @@ CREATE TABLE "bookings" (
 	CONSTRAINT "bookings_cancelled" CHECK ("bookings"."status" = 'cancelled' or "bookings"."cancel_reason" is null),
 	CONSTRAINT "bookings_visitor" CHECK (char_length("bookings"."visitor_name") between 1 and 200 and char_length("bookings"."visitor_email") between 3 and 254),
 	CONSTRAINT "bookings_reschedules" CHECK ("bookings"."reschedules" between 0 and 5),
+	CONSTRAINT "bookings_video_url" CHECK ("bookings"."video_url" is null or char_length("bookings"."video_url") <= 2000),
 	CONSTRAINT "bookings_created_by_actor" CHECK (("bookings"."created_by_type" is null and "bookings"."created_by_id" is null and "bookings"."created_by_member_id" is null)
       or ("bookings"."created_by_type" = 'system' and "bookings"."created_by_id" is null and "bookings"."created_by_member_id" is null)
       or ("bookings"."created_by_type" = 'member' and "bookings"."created_by_id" is not null and "bookings"."created_by_member_id" = "bookings"."created_by_id")
@@ -181,6 +185,7 @@ CREATE UNIQUE INDEX "booking_pages_public_key" ON "booking_pages" USING btree ("
 CREATE UNIQUE INDEX "booking_pages_slug" ON "booking_pages" USING btree ("workspace_id","slug") WHERE "booking_pages"."deleted_at" is null;--> statement-breakpoint
 CREATE INDEX "booking_pages_by_owner" ON "booking_pages" USING btree ("workspace_id","owner_member_id","created_at") WHERE "booking_pages"."deleted_at" is null;--> statement-breakpoint
 CREATE UNIQUE INDEX "bookings_attempt" ON "bookings" USING btree ("workspace_id","page_id","idempotency_key");--> statement-breakpoint
+CREATE UNIQUE INDEX "bookings_manage_token" ON "bookings" USING btree ("manage_token_hash");--> statement-breakpoint
 CREATE INDEX "bookings_by_page" ON "bookings" USING btree ("workspace_id","page_id","starts_at" DESC NULLS LAST,"id");--> statement-breakpoint
 CREATE INDEX "bookings_by_host" ON "bookings" USING btree ("workspace_id","host_member_id","starts_at") WHERE "bookings"."status" = 'confirmed';--> statement-breakpoint
 CREATE INDEX "bookings_by_person" ON "bookings" USING btree ("workspace_id","person_record_id","created_at") WHERE "bookings"."person_record_id" is not null;--> statement-breakpoint
@@ -373,6 +378,8 @@ grant usage on schema public to crm_booking_lookup;
 --> statement-breakpoint
 grant select (workspace_id, id, public_key) on booking_pages to crm_booking_lookup;
 --> statement-breakpoint
+grant select (workspace_id, id, page_id, manage_token_hash) on bookings to crm_booking_lookup;
+--> statement-breakpoint
 
 -- The workspace and page a public key names, or no row. Ids only: no title, status or hours, which the caller then
 -- reads inside withWorkspace() under row level security. Hardened as crm_workspace_ids in 0034: a standard SQL body
@@ -395,11 +402,33 @@ revoke all on function crm_booking_page_by_key(text) from public;
 --> statement-breakpoint
 grant execute on function crm_booking_page_by_key(text) to crm_app;
 --> statement-breakpoint
+
+-- The workspace, page and booking a manage token's hash names, or no row. Ids only, hardened the same way.
+create function crm_booking_by_token(token_hash text)
+  returns table (workspace_id uuid, page_id uuid, booking_id uuid)
+  language sql
+  stable
+  security definer
+  set search_path = pg_catalog, pg_temp
+  rows 1
+begin atomic
+  select b.workspace_id, b.page_id, b.id
+  from public.bookings b
+  where b.manage_token_hash = crm_booking_by_token.token_hash
+  limit 1;
+end;
+--> statement-breakpoint
+revoke all on function crm_booking_by_token(text) from public;
+--> statement-breakpoint
+grant execute on function crm_booking_by_token(text) to crm_app;
+--> statement-breakpoint
 grant crm_booking_lookup to current_user with inherit false, set true;
 --> statement-breakpoint
 grant create on schema public to crm_booking_lookup;
 --> statement-breakpoint
 alter function crm_booking_page_by_key(text) owner to crm_booking_lookup;
+--> statement-breakpoint
+alter function crm_booking_by_token(text) owner to crm_booking_lookup;
 --> statement-breakpoint
 revoke create on schema public from crm_booking_lookup;
 --> statement-breakpoint

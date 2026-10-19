@@ -142,7 +142,8 @@ describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {
 
     const booked = await visit(`${page.publicKey}/book`, { method: 'POST', body: booking() });
     expect(booked.status).toBe(200);
-    expect(await booked.json()).toEqual({
+    const answer = (await booked.json()) as { manageToken: string };
+    expect(answer).toMatchObject({
       booking: {
         start: MONDAY_9,
         end: '2026-11-02T09:30:00.000Z',
@@ -152,6 +153,13 @@ describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {
         timeZone: 'America/New_York',
       },
     });
+    // The guest page reads the booking by its token, and its calendar file.
+    const managed = await visit(`manage/${answer.manageToken}`);
+    expect(await managed.json()).toMatchObject({ state: 'confirmed', start: MONDAY_9, visitorName: 'Grace Hopper' });
+    const ics = await visit(`manage/${answer.manageToken}/ics`);
+    expect(ics.headers.get('content-type')).toBe('text/calendar; charset=utf-8');
+    expect(await ics.text()).toContain('METHOD:REQUEST');
+    expect((await visit('manage/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA')).status).toBe(404);
     expect(events.some((event) => event.start === MONDAY_9 && event.attendees[0]?.email === 'grace@navy.example')).toBe(
       true,
     );
@@ -188,7 +196,7 @@ describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {
     expect(unknown.status).toBe(404);
     expect(await unknown.json()).toMatchObject({ code: 'NOT_FOUND', message: 'This page is no longer available.' });
     const slotsQuery = await visit(
-      `${page.publicKey}/slots?from=2026-11-02T00:00:00.000Z&to=2026-12-02T00:00:00.000Z&duration=30&tz=UTC`,
+      `${page.publicKey}/slots?from=2026-11-02T00:00:00.000Z&to=2027-02-02T00:00:00.000Z&duration=30&tz=UTC`,
     );
     expect(slotsQuery.status).toBe(400);
   });

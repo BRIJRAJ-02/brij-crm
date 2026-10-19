@@ -88,7 +88,8 @@ describe('every tenant table', () => {
             (row.table === 'workspaces' && row.first === 'id') ||
             row.index === 'workspaces_slug' ||
             // A booking page's public key finds it before the workspace is known (spec 0025), so it is unique everywhere.
-            row.index === 'booking_pages_public_key'
+            row.index === 'booking_pages_public_key' ||
+            row.index === 'bookings_manage_token'
           ),
       )
       .map((row) => row.index);
@@ -125,7 +126,7 @@ describe('every tenant table', () => {
 });
 
 describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the outbox relay, spec 0005; the daily cleanup, spec 0008)', () => {
-  it('has exactly six security definer functions, each owned by its own narrow role', async () => {
+  it('has exactly seven security definer functions, each owned by its own narrow role', async () => {
     const definers = await owner.query<{ name: string; owner: string }>(`
       select p.proname as name, pg_get_userbyid(p.proowner) as owner
       from pg_proc p join pg_namespace n on n.oid = p.pronamespace
@@ -134,6 +135,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       order by 1
     `);
     expect(definers.rows).toEqual([
+      { name: 'crm_booking_by_token', owner: 'crm_booking_lookup' },
       { name: 'crm_booking_page_by_key', owner: 'crm_booking_lookup' },
       { name: 'crm_enqueue_job', owner: 'crm_queue' },
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
@@ -150,6 +152,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       order by 1
     `);
     expect(hardening.rows).toEqual([
+      { name: 'crm_booking_by_token', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_booking_page_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_enqueue_job', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
@@ -184,7 +187,12 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ],
     ['crm_queue', ['crm_enqueue_job'], ['crm_enqueue_job(uuid, timestamp with time zone)'], ['app']],
     ['crm_sweep', ['crm_workspace_ids'], ['crm_workspace_ids(uuid, integer)'], ['worker']],
-    ['crm_booking_lookup', ['crm_booking_page_by_key'], ['crm_booking_page_by_key(text)'], ['app']],
+    [
+      'crm_booking_lookup',
+      ['crm_booking_page_by_key', 'crm_booking_by_token'],
+      ['crm_booking_page_by_key(text)', 'crm_booking_by_token(text)'],
+      ['app', 'app'],
+    ],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
     async (name, fns, signatures, callers) => {
@@ -878,10 +886,18 @@ describe('booking pages (spec 0025, milestone 1)', () => {
     return { pageId, publicKey };
   };
   /** A booking on the page, `[from, to)` in UTC, blocking exactly the meeting. */
-  const book = (workspaceId: string, pageId: string, hostId: string, from: string, to: string, status = 'confirmed') =>
+  const book = (
+    workspaceId: string,
+    pageId: string,
+    hostId: string,
+    from: string,
+    to: string,
+    status = 'confirmed',
+    hash = randomUUID(),
+  ) =>
     db.withWorkspace(workspaceId, (tx) =>
       tx.execute(
-        sql`insert into bookings (workspace_id, page_id, host_member_id, starts_at, ends_at, during, visitor_name, visitor_email, visitor_time_zone, status, manage_token_hash, idempotency_key, created_by_type, updated_by_type) values (${workspaceId}, ${pageId}, ${hostId}, ${from}::timestamptz, ${to}::timestamptz, tstzrange(${from}::timestamptz, ${to}::timestamptz), 'Ada', 'ada@example.com', 'UTC', ${status}, 'hash', ${randomUUID()}, 'system', 'system')`,
+        sql`insert into bookings (workspace_id, page_id, host_member_id, starts_at, ends_at, during, visitor_name, visitor_email, visitor_time_zone, status, manage_token_hash, idempotency_key, created_by_type, updated_by_type) values (${workspaceId}, ${pageId}, ${hostId}, ${from}::timestamptz, ${to}::timestamptz, tstzrange(${from}::timestamptz, ${to}::timestamptz), 'Ada', 'ada@example.com', 'UTC', ${status}, ${hash}, ${randomUUID()}, 'system', 'system')`,
       ),
     );
 
@@ -932,6 +948,23 @@ describe('booking pages (spec 0025, milestone 1)', () => {
     expect(found.rows).toEqual([{ workspace_id: a.workspaceId, page_id: inA.pageId }]);
     const missing = await db.withWorkspace(randomUUID(), (tx) =>
       tx.execute(sql`select * from crm_booking_page_by_key('no-such-key-0000')`),
+    );
+    expect(missing.rows).toEqual([]);
+  });
+
+  it('finds a booking by its manage token’s hash across workspaces, answering ids only', async () => {
+    const a = await workspaceWithMember('booking-token');
+    const inA = await pageIn(a.workspaceId, a.memberId);
+    const hash = randomUUID();
+    await book(a.workspaceId, inA.pageId, a.memberId, '2026-11-04T09:00Z', '2026-11-04T09:30Z', 'confirmed', hash);
+    const found = await db.withWorkspace(randomUUID(), (tx) =>
+      tx.execute<{ workspace_id: string; page_id: string }>(
+        sql`select workspace_id::text, page_id::text from crm_booking_by_token(${hash})`,
+      ),
+    );
+    expect(found.rows).toEqual([{ workspace_id: a.workspaceId, page_id: inA.pageId }]);
+    const missing = await db.withWorkspace(randomUUID(), (tx) =>
+      tx.execute(sql`select * from crm_booking_by_token('no-such-hash')`),
     );
     expect(missing.rows).toEqual([]);
   });

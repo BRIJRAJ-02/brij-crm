@@ -6,7 +6,7 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { PublicBookInput } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
-import { enterBookingPage, type BookingEntry } from '../access/door.ts';
+import { enterBookingByToken, enterBookingPage, type BookingEntry } from '../access/door.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createRecord } from '../engine/records.ts';
@@ -21,7 +21,13 @@ import {
   listBookings,
   updateBookingPage,
 } from './pages.ts';
-import { bookPublicSlot, getPublicBookingPage, readPublicSlots } from './public.ts';
+import {
+  bookPublicSlot,
+  getPublicBookingPage,
+  managedBookingIcs,
+  readManagedBooking,
+  readPublicSlots,
+} from './public.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -433,5 +439,54 @@ describe('no double booking (AC-632)', () => {
         Date.parse(rows.rows[index - 1]?.ends_at ?? ''),
       );
     }
+  });
+});
+
+describe('the guest page (AC-674)', () => {
+  it('opens the booking by its token: state, time, facts, guests and note; a replay rotates the token', async () => {
+    const w = await workspace();
+    const { page, entry } = await livePage(w);
+    const input = bookInput({ guests: ['ann@navy.example', 'grace@navy.example'], note: 'About the compiler.' });
+    const booked = await bookPublicSlot(entry, deps(), input);
+    const guest = await enterBookingByToken({ db }, booked.manageToken);
+    expect(await readManagedBooking(guest, NOW)).toEqual({
+      state: 'confirmed',
+      publicKey: page.publicKey,
+      title: 'Intro call',
+      hostName: 'Ada Host',
+      start: MONDAY_9,
+      end: '2026-11-02T09:30:00.000Z',
+      timeZone: 'Europe/London',
+      location: { type: 'video' },
+      visitorName: 'Grace Hopper',
+      visitorEmail: 'grace@navy.example',
+      guests: ['ann@navy.example'],
+      note: 'About the compiler.',
+    });
+    expect((await readManagedBooking(guest, new Date('2026-11-03T00:00:00Z'))).state).toBe('past');
+    const origin = {
+      appOrigin: 'https://app.example',
+      organizerEmail: 'bookings@app.example',
+      organizerName: 'Bookings',
+    };
+    expect(await managedBookingIcs(guest, booked.manageToken, origin, NOW)).toContain(
+      `UID:${booked.bookingId}@app.example`,
+    );
+    // A retry of the same attempt answers the same booking with a new token; the old one stops opening it.
+    const again = await bookPublicSlot(entry, deps(), input);
+    expect(again.bookingId).toBe(booked.bookingId);
+    expect(again.manageToken).not.toBe(booked.manageToken);
+    expect(await refusalOf(enterBookingByToken({ db }, booked.manageToken))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(enterBookingByToken({ db }, 'short'))).toMatchObject({ code: 'NOT_FOUND' });
+  });
+
+  it('says the calendar is unreachable when it refuses us, and offers nothing', async () => {
+    const w = await workspace();
+    const { entry } = await livePage(w);
+    expect(await mondaySlots(entry, fakeCalendar({ status: 'blocked' }).calendar)).toEqual({
+      slots: [],
+      calendar: 'unreachable',
+    });
+    expect((await mondaySlots(entry)).calendar).toBe('ok');
   });
 });

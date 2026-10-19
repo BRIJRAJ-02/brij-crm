@@ -10,6 +10,7 @@
 // unknown address, a workspace the user isn't in, a removed member, a deleted
 // workspace and a role the code doesn't know are all refused the same way, so
 // nothing leaks whether a workspace exists.
+import { createHash } from 'node:crypto';
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { schema, type Database, type IdentityStore, type WorkspaceTx } from '@crm/db';
 import { isUuid } from '../engine/ids.ts';
@@ -244,4 +245,41 @@ export async function enterBookingPage(deps: { readonly db: Database }, publicKe
     access: bookingAccess(row.page_id, [people, companies]),
   });
   return { scope, pageId: row.page_id, people, companies };
+}
+
+/** The ids crm_booking_by_token reads past row level security. */
+interface TokenRow extends Record<string, unknown> {
+  readonly workspace_id: string;
+  readonly page_id: string;
+  readonly booking_id: string;
+}
+
+/**
+ * The guest page's entry (spec 0025, AC-674): the booking a manage token
+ * names, found by the token's SHA-256 (`crm_booking_by_token`, ids only), as
+ * its page's `booking` actor. The token is the only key; an unknown one is
+ * NOT_FOUND. Exported only from `@crm/core/public`.
+ */
+export async function enterBookingByToken(
+  deps: { readonly db: Database },
+  token: string,
+): Promise<BookingEntry & { readonly bookingId: string }> {
+  const missing = () => refuse('NOT_FOUND', 'This link doesn’t open a booking.');
+  if (!/^[A-Za-z0-9_-]{32}$/.test(token)) throw missing();
+  const hash = createHash('sha256').update(token).digest('hex');
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<TokenRow>(
+      sql`select workspace_id::text as workspace_id, page_id::text as page_id, booking_id::text as booking_id from crm_booking_by_token(${hash})`,
+    ),
+  );
+  const [row] = found.rows;
+  if (row === undefined) throw missing();
+  const scope = mintScope({
+    db: deps.db,
+    workspaceId: row.workspace_id,
+    actor: { type: 'booking', id: row.page_id },
+    // Reads its own booking only: no record access is needed.
+    access: bookingAccess(row.page_id, []),
+  });
+  return { scope, pageId: row.page_id, people: '', companies: '', bookingId: row.booking_id };
 }

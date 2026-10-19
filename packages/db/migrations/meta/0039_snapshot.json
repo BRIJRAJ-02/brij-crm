@@ -1,5 +1,5 @@
 {
-  "id": "4f296373-4807-4c51-826b-136d3b10b5b8",
+  "id": "0603a6ed-0170-486b-b6cf-3642becef73f",
   "prevId": "c2304fb2-61c6-479f-be6c-7b436d0468c3",
   "version": "7",
   "dialect": "postgresql",
@@ -1281,6 +1281,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "video_url": {
+          "name": "video_url",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "event_failed_at": {
           "name": "event_failed_at",
           "type": "timestamp (6) with time zone",
@@ -1382,6 +1388,21 @@
             },
             {
               "expression": "idempotency_key",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": true,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
+        },
+        "bookings_manage_token": {
+          "name": "bookings_manage_token",
+          "columns": [
+            {
+              "expression": "manage_token_hash",
               "isExpression": false,
               "asc": true,
               "nulls": "last"
@@ -1579,6 +1600,10 @@
         "bookings_reschedules": {
           "name": "bookings_reschedules",
           "value": "\"bookings\".\"reschedules\" between 0 and 5"
+        },
+        "bookings_video_url": {
+          "name": "bookings_video_url",
+          "value": "\"bookings\".\"video_url\" is null or char_length(\"bookings\".\"video_url\") <= 2000"
         },
         "bookings_created_by_actor": {
           "name": "bookings_created_by_actor",

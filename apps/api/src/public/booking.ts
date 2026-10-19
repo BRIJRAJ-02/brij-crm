@@ -7,11 +7,22 @@
 //
 //   GET  /api/public/booking/:publicKey          the page's facts
 //   GET  /api/public/booking/:publicKey/slots    ?from&to&duration&tz
-//   POST /api/public/booking/:publicKey/book     a visitor's booking
+//   POST /api/public/booking/:publicKey/book     a visitor's booking, with the guest page's token
+//   GET  /api/public/booking/manage/:token       the guest page's booking
+//   GET  /api/public/booking/manage/:token/ics   the booking as a calendar file (Add to calendar)
 import { createHash } from 'node:crypto';
 import { errorStatus, PublicBookInput, PublicSlotsQuery, type ErrorCode } from '@crm/contracts';
 import { outboxHook, type BookingCalendar, type BusyReader } from '@crm/core';
-import { bookPublicSlot, enterBookingPage, getPublicBookingPage, readPublicSlots } from '@crm/core/public';
+import {
+  bookPublicSlot,
+  enterBookingByToken,
+  enterBookingPage,
+  getPublicBookingPage,
+  managedBookingIcs,
+  readManagedBooking,
+  readPublicSlots,
+  type IcsOrigin,
+} from '@crm/core/public';
 import type { Database } from '@crm/db';
 import type { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -30,6 +41,8 @@ export interface PublicBookingServices {
   readonly limiter: PublicLimiter;
   readonly wakeRelay: WakeRelay;
   readonly now?: () => Date;
+  /** Where calendar files say they come from: the app's origin and the sending address. */
+  readonly ics: IcsOrigin;
 }
 
 interface Variables {
@@ -92,6 +105,37 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
     }
     return undefined;
   };
+
+  // The guest page (before the page routes, so `manage` is never read as a public key).
+  app.get('/public/booking/manage/:token', async (c) => {
+    const refused = limited([[`booking:manage:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.managePerAddress]]);
+    if (refused !== undefined) return refused;
+    try {
+      const entry = await enterBookingByToken({ db }, c.req.param('token'));
+      return ok(await readManagedBooking(entry, services.now?.() ?? new Date()));
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
+
+  app.get('/public/booking/manage/:token/ics', async (c) => {
+    const refused = limited([[`booking:manage:${addressKey(c.get('clientIp'))}`, BOOKING_LIMITS.managePerAddress]]);
+    if (refused !== undefined) return refused;
+    try {
+      const token = c.req.param('token');
+      const entry = await enterBookingByToken({ db }, token);
+      const body = await managedBookingIcs(entry, token, services.ics, services.now?.() ?? new Date());
+      return new Response(body, {
+        headers: {
+          'content-type': 'text/calendar; charset=utf-8',
+          'content-disposition': 'attachment; filename="booking.ics"',
+          'cache-control': 'no-store',
+        },
+      });
+    } catch (error) {
+      return refusalAnswer(error);
+    }
+  });
 
   app.get('/public/booking/:publicKey', async (c) => {
     const address = addressKey(c.get('clientIp'));
@@ -166,7 +210,7 @@ export function mountPublicBooking(app: Hono<{ Variables: Variables }>, services
       const booked = await bookPublicSlot(entry, deps, input.data, [outboxHook()]);
       // The records it made reach screens live: wake the relay once the write committed.
       if (!booked.replayed) wakeRelay();
-      return ok({ booking: booked.booking });
+      return ok({ booking: booked.booking, manageToken: booked.manageToken });
     } catch (error) {
       if (!toApiError(error).expected) {
         log.error('booking.failed', { requestId: c.get('requestId'), ...errorFields(error) });

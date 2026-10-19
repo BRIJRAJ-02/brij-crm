@@ -29,6 +29,12 @@ import type { RequestTiming } from './timing.ts';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
+/** The address in a sender (`CRM <sign-in@example.com>` or a bare address), for a calendar file's organizer. */
+function senderAddress(sender: string | undefined): string | undefined {
+  if (sender === undefined) return undefined;
+  return /<([^>]+)>/.exec(sender)?.[1] ?? sender;
+}
+
 /** Where `system.testFault` answers, when it is switched on. */
 const TEST_FAULT_PATH = '/api/rpc/system/testFault';
 
@@ -255,6 +261,11 @@ export function createApp({
     db,
     calendar: { busy: createBusyCache(calendar.busy), events: calendar.events },
     limiter: services.bookingLimiter ?? createMemoryLimiter(),
+    ics: {
+      appOrigin: new URL(env.APP_URL).origin,
+      organizerEmail: senderAddress(env.MAIL_FROM) ?? `bookings@${new URL(env.APP_URL).hostname}`,
+      organizerName: 'Bookings',
+    },
     wakeRelay,
     ...(services.now === undefined ? {} : { now: services.now }),
   });

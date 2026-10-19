@@ -159,6 +159,8 @@ export const bookings = pgTable(
     /** One booking per attempt: a retry of the same attempt answers the first booking. */
     idempotencyKey: uuid('idempotency_key').notNull(),
     meetingId: uuid('meeting_id'),
+    /** The video link the calendar event carries, for the guest page. */
+    videoUrl: text('video_url'),
     /** Set when the calendar event couldn't be made after the booking committed (spec: the booking stays). */
     eventFailedAt: timestamptz('event_failed_at'),
     personRecordId: uuid('person_record_id'),
@@ -180,6 +182,8 @@ export const bookings = pgTable(
       foreignColumns: [members.workspaceId, members.id],
     }),
     uniqueIndex('bookings_attempt').on(t.workspaceId, t.pageId, t.idempotencyKey),
+    // The guest page finds its booking by the hashed token before the workspace is known, so it is unique everywhere.
+    uniqueIndex('bookings_manage_token').on(t.manageTokenHash),
     // The page's bookings list, newest first.
     index('bookings_by_page').on(t.workspaceId, t.pageId, t.startsAt.desc(), t.id),
     // A host's confirmed bookings in a range (the slots read; the exclusion constraint's index serves overlap).
@@ -202,6 +206,7 @@ export const bookings = pgTable(
       sql`char_length(${t.visitorName}) between 1 and 200 and char_length(${t.visitorEmail}) between 3 and 254`,
     ),
     check('bookings_reschedules', sql`${t.reschedules} between 0 and 5`),
+    check('bookings_video_url', sql`${t.videoUrl} is null or char_length(${t.videoUrl}) <= 2000`),
     ...actorConstraints('bookings', 'created_by', t.workspaceId, {
       type: t.createdByType,
       id: t.createdById,

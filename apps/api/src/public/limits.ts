@@ -55,6 +55,8 @@ export const BOOKING_LIMITS = {
   readsPerAddress: { max: 60, windowMs: 60_000 },
   booksPerAddress: { max: 5, windowMs: 60_000 },
   readsPerPage: { max: 600, windowMs: 60_000 },
+  /** The guest page (spec 0025 experience): 20 a minute per address. */
+  managePerAddress: { max: 20, windowMs: 60_000 },
   booksPerPage: { max: 50, windowMs: 60_000 },
 } as const satisfies Record<string, LimitRule>;
 

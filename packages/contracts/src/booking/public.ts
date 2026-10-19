@@ -39,8 +39,8 @@ export const PublicBookingPage = z.object({
 /** The page's facts. */
 export type PublicBookingPage = z.infer<typeof PublicBookingPage>;
 
-/** The longest range one slots read covers: 14 days. */
-export const PUBLIC_SLOTS_MAX_DAYS = 14;
+/** The longest range one slots read covers: 62 days, two months of the month view. */
+export const PUBLIC_SLOTS_MAX_DAYS = 62;
 
 /** `GET /api/public/booking/:publicKey/slots?from&to&duration&tz`. */
 export const PublicSlotsQuery = z
@@ -65,8 +65,12 @@ export const PublicSlot = z.object({ start: Timestamp, end: Timestamp });
 /** One bookable slot. */
 export type PublicSlot = z.infer<typeof PublicSlot>;
 
-/** The slots in the range, chronological. */
-export const PublicSlots = z.object({ slots: z.array(PublicSlot) });
+/**
+ * The slots in the range, chronological. `calendar` is `unreachable` when the
+ * host's calendar refuses us until they reconnect: nothing is offered then, and
+ * the page says why (fail closed).
+ */
+export const PublicSlots = z.object({ slots: z.array(PublicSlot), calendar: z.enum(['ok', 'unreachable']) });
 /** The slots in the range. */
 export type PublicSlots = z.infer<typeof PublicSlots>;
 
@@ -89,6 +93,13 @@ export const PublicBookInput = z.object({
   timeZone: TimeZoneName,
   /** The visitor's number, for a phone location. */
   phone: z.string().trim().max(40).optional(),
+  /** More people to invite, at most 10. */
+  guests: z
+    .array(z.email({ error: 'Give each guest’s email address.' }).trim().toLowerCase().max(254))
+    .max(10, { error: 'Invite at most 10 guests.' })
+    .optional(),
+  /** Anything else the host should know. */
+  note: z.string().trim().max(2000, { error: 'Keep the note to 2,000 characters.' }).optional(),
   company_url: z.string().max(200).optional(),
   startedAt: z.number().int().nonnegative().optional(),
 });
@@ -106,3 +117,34 @@ export const PublicBooking = z.object({
 });
 /** A confirmed booking. */
 export type PublicBooking = z.infer<typeof PublicBooking>;
+
+/** The book answer: the booking, and the guest page's token (only this answer ever carries it). */
+export const PublicBooked = z.object({ booking: PublicBooking, manageToken: z.string() });
+/** The book answer. */
+export type PublicBooked = z.infer<typeof PublicBooked>;
+
+/** A manage token: 32 URL safe characters. */
+export const ManageToken = z.string().regex(/^[A-Za-z0-9_-]{32}$/, { error: 'That link isn’t right.' });
+/** A manage token. */
+export type ManageToken = z.infer<typeof ManageToken>;
+
+/** `GET /api/public/booking/manage/:token`: the booking as its guest sees it (AC-674). */
+export const PublicManagedBooking = z.object({
+  state: z.enum(['confirmed', 'cancelled', 'past']),
+  publicKey: z.string(),
+  title: z.string(),
+  hostName: z.string(),
+  start: Timestamp,
+  end: Timestamp,
+  /** The zone the visitor booked in. */
+  timeZone: z.string(),
+  location: PublicLocation,
+  /** The calendar event's video link, once the event exists. */
+  videoUrl: z.string().optional(),
+  visitorName: z.string(),
+  visitorEmail: z.string(),
+  guests: z.array(z.string()),
+  note: z.string().optional(),
+});
+/** The booking as its guest sees it. */
+export type PublicManagedBooking = z.infer<typeof PublicManagedBooking>;

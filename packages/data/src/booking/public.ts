@@ -4,13 +4,21 @@
 // origin, each failure a `DataError` with the API's code (`SLOT_TAKEN`,
 // `BOOKING_CLOSED`, `NOT_FOUND`, `RATE_LIMITED` with its wait, `INPUT_INVALID`
 // with issues), and being offline `API_UNAVAILABLE`.
-import type { PublicBookInput, PublicBooking, PublicBookingPage, PublicSlots } from '@crm/contracts/booking';
+import type {
+  PublicBooked,
+  PublicBookInput,
+  PublicBookingPage,
+  PublicManagedBooking,
+  PublicSlots,
+} from '@crm/contracts/booking';
 import { dataError, isFetchFailure, parseRetryAfter, toDataError, type DataError } from '../errors.ts';
 import type { FetchLike } from '../fetch.ts';
 
 export type {
+  PublicBooked,
   PublicBookInput,
   PublicBooking,
+  PublicManagedBooking,
   PublicBookingPage,
   PublicLocation,
   PublicSlot,
@@ -25,7 +33,12 @@ export interface BookingClient {
     query: { readonly from: string; readonly to: string; readonly duration: number; readonly tz: string },
     signal?: AbortSignal,
   ): Promise<PublicSlots>;
-  book(publicKey: string, input: PublicBookInput): Promise<PublicBooking>;
+  /** Books; the answer carries the guest page's token. */
+  book(publicKey: string, input: PublicBookInput): Promise<PublicBooked>;
+  /** The guest page's booking. */
+  managed(token: string): Promise<PublicManagedBooking>;
+  /** Where the booking's calendar file downloads from (a plain link: Add to calendar, Apple and .ics). */
+  icsUrl(token: string): string;
 }
 
 /** A failure answer as a DataError: the API's code and message, its wait, and its issues. */
@@ -79,13 +92,13 @@ export function createBookingClient(options: {
         }).toString()}`,
         signal === undefined ? {} : { signal },
       ),
-    book: async (publicKey, input) =>
-      (
-        await call<{ booking: PublicBooking }>(`${encodeURIComponent(publicKey)}/book`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify(input),
-        })
-      ).booking,
+    book: (publicKey, input) =>
+      call<PublicBooked>(`${encodeURIComponent(publicKey)}/book`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(input),
+      }),
+    managed: (token) => call<PublicManagedBooking>(`manage/${encodeURIComponent(token)}`),
+    icsUrl: (token) => `${base}/manage/${encodeURIComponent(token)}/ics`,
   };
 }

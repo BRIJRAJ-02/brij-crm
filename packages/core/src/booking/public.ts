@@ -22,6 +22,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import type {
   PublicBookInput,
   PublicBooking,
+  PublicManagedBooking,
   PublicBookingPage,
   PublicLocation,
   PublicSlots,
@@ -44,6 +45,7 @@ import {
   pickHost,
   type PageRecord,
 } from './slots.ts';
+import { buildBookingIcs } from './ics.ts';
 import { matchVisitor } from './visitor.ts';
 
 const { bookings, members } = schema;
@@ -134,12 +136,25 @@ export async function readPublicSlots(
   );
   const booked = await inWorkspace(entry.scope, (tx) => bookedSpans(tx, memberIds, page.id, from, to));
   const slots = pageSlots(page, { duration: query.duration, from, to, now, busy, bookings: booked });
-  return { slots: slots.map((slot) => ({ start: slot.start.toISOString(), end: slot.end.toISOString() })) };
+  return {
+    slots: slots.map((slot) => ({ start: slot.start.toISOString(), end: slot.end.toISOString() })),
+    calendar: busy.blocked ? 'unreachable' : 'ok',
+  };
 }
 
 /** A transaction scoped advisory lock on a text key (released when the transaction ends, however it ends). */
 async function lockKey(tx: WorkspaceTx, key: string): Promise<void> {
   await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
+}
+
+/** What a booking keeps of the visitor's answers: their number, note and guests (milestone 2 adds the questions). */
+function answersOf(input: PublicBookInput): Readonly<Record<string, unknown>> {
+  const guests = [...new Set((input.guests ?? []).filter((guest) => guest !== input.email))];
+  return {
+    ...(input.phone === undefined || input.phone === '' ? {} : { phone: input.phone }),
+    ...(input.note === undefined || input.note === '' ? {} : { note: input.note }),
+    ...(guests.length === 0 ? {} : { guests }),
+  };
 }
 
 /** The text the calendar event carries: who booked and how to reach them. */
@@ -150,6 +165,7 @@ function eventDescription(page: PageRecord, input: PublicBookInput): string {
     `Email: ${input.email}`,
     ...(input.phone === undefined || input.phone === '' ? [] : [`Phone: ${input.phone}`]),
     `Time zone: ${input.timeZone}`,
+    ...(input.note === undefined || input.note === '' ? [] : ['', input.note]),
   ].join('\n');
 }
 
@@ -170,8 +186,17 @@ interface Booked {
   readonly bookingId: string;
   readonly replayed: boolean;
   readonly booking: PublicBooking;
-  /** The cancel and reschedule link's token (milestone 2 mails it); absent on a replay, as only its hash is kept. */
-  readonly manageToken?: string;
+  /**
+   * The guest page's token. Only its hash is kept, so a replay mints a new one
+   * and the link the lost first answer carried stops working.
+   */
+  readonly manageToken: string;
+}
+
+/** A fresh manage token and the hash the row keeps. */
+function newManageToken(): { readonly token: string; readonly hash: string } {
+  const token = randomBytes(24).toString('base64url');
+  return { token, hash: createHash('sha256').update(token).digest('hex') };
 }
 
 /**
@@ -198,9 +223,12 @@ export async function bookPublicSlot(
       .from(bookings)
       .where(and(eq(bookings.pageId, page.id), eq(bookings.idempotencyKey, input.idempotencyKey)));
     if (row === undefined) return undefined;
+    const fresh = newManageToken();
+    await tx.update(bookings).set({ manageTokenHash: fresh.hash }).where(eq(bookings.id, row.id));
     return {
       bookingId: row.id,
       replayed: true,
+      manageToken: fresh.token,
       booking: {
         start: row.startsAt.toISOString(),
         end: row.endsAt.toISOString(),
@@ -244,8 +272,7 @@ export async function bookPublicSlot(
   if (busy.blocked) throw refuse('BOOKING_CLOSED', 'This page can’t take bookings right now. Try again later.');
 
   // 3. Check and reserve, atomically, under the hosts' locks.
-  const token = randomBytes(24).toString('base64url');
-  const tokenHash = createHash('sha256').update(token).digest('hex');
+  const { token, hash: tokenHash } = newManageToken();
   const name = await inWorkspace(entry.scope, (tx) => hostName(tx, host));
   const { result } = await runWrite(
     entry.scope,
@@ -283,7 +310,7 @@ export async function bookPublicSlot(
             visitorName: input.name,
             visitorEmail: input.email,
             visitorTimeZone: input.timeZone,
-            answers: input.phone === undefined || input.phone === '' ? {} : { phone: input.phone },
+            answers: answersOf(input),
             manageTokenHash: tokenHash,
             idempotencyKey: input.idempotencyKey,
             createdByType: actor.type,
@@ -347,7 +374,12 @@ export async function bookPublicSlot(
         description: eventDescription(page, input),
         start: start.toISOString(),
         end: end.toISOString(),
-        attendees: [{ email: input.email, name: input.name }],
+        attendees: [
+          { email: input.email, name: input.name },
+          ...(input.guests ?? [])
+            .filter((guest) => guest !== input.email)
+            .map((guest) => ({ email: guest, name: guest })),
+        ],
         video: page.location.type === 'video',
         ...(eventLocation(page, input) === undefined ? {} : { location: eventLocation(page, input) }),
       });
@@ -365,9 +397,90 @@ export async function bookPublicSlot(
       .set(
         written === undefined
           ? { eventFailedAt: sql`now()` }
-          : { meetingId: written.meetingId ?? null, updatedAt: sql`now()` },
+          : { meetingId: written.meetingId ?? null, videoUrl: written.videoUrl ?? null, updatedAt: sql`now()` },
       )
       .where(eq(bookings.id, result.bookingId)),
   );
   return result;
+}
+
+/** The answers a booking keeps, read back as the guest page shows them. */
+function storedAnswers(answers: unknown): { readonly note?: string; readonly guests: readonly string[] } {
+  if (typeof answers !== 'object' || answers === null) return { guests: [] };
+  const note = 'note' in answers && typeof answers.note === 'string' ? answers.note : undefined;
+  const guests =
+    'guests' in answers && Array.isArray(answers.guests)
+      ? answers.guests.filter((guest): guest is string => typeof guest === 'string')
+      : [];
+  return { ...(note === undefined ? {} : { note }), guests };
+}
+
+/**
+ * The booking a manage token opens, as its guest sees it (AC-674): its state
+ * (confirmed, cancelled, or past once it ended), the time, the page's facts,
+ * the visitor, guests and note. A deleted page still shows its bookings.
+ */
+export async function readManagedBooking(
+  entry: BookingEntry & { readonly bookingId: string },
+  now: Date = new Date(),
+): Promise<PublicManagedBooking> {
+  checkEntry(entry);
+  return inWorkspace(entry.scope, async (tx) => {
+    const [row] = await tx.select().from(bookings).where(eq(bookings.id, entry.bookingId));
+    const page = await loadPage(tx, entry.pageId);
+    if (row === undefined || page === undefined) throw refuse('NOT_FOUND', 'This link doesn’t open a booking.');
+    const answers = storedAnswers(row.answers);
+    return {
+      state: row.status === 'cancelled' ? 'cancelled' : row.endsAt.getTime() <= now.getTime() ? 'past' : 'confirmed',
+      publicKey: page.publicKey,
+      title: page.title,
+      hostName: await hostName(tx, row.hostMemberId),
+      start: row.startsAt.toISOString(),
+      end: row.endsAt.toISOString(),
+      timeZone: row.visitorTimeZone,
+      location: publicLocation(page),
+      ...(row.videoUrl === null ? {} : { videoUrl: row.videoUrl }),
+      visitorName: row.visitorName,
+      visitorEmail: row.visitorEmail,
+      guests: [...answers.guests],
+      ...(answers.note === undefined ? {} : { note: answers.note }),
+    };
+  });
+}
+
+/** Where the calendar entry is sent from, and the app it points back to. */
+export interface IcsOrigin {
+  /** The app's origin (`https://app.example`): the UID's domain and the guest page's address. */
+  readonly appOrigin: string;
+  readonly organizerEmail: string;
+  readonly organizerName: string;
+}
+
+/** The booking a manage token opens, as an `.ics` file for Add to calendar (AC-674). */
+export async function managedBookingIcs(
+  entry: BookingEntry & { readonly bookingId: string },
+  token: string,
+  origin: IcsOrigin,
+  now: Date = new Date(),
+): Promise<string> {
+  const booking = await readManagedBooking(entry, now);
+  const where =
+    booking.videoUrl ??
+    (booking.location.type === 'address' || booking.location.type === 'custom' ? booking.location.value : undefined);
+  return buildBookingIcs({
+    bookingId: entry.bookingId,
+    uidDomain: new URL(origin.appOrigin).host,
+    method: booking.state === 'cancelled' ? 'CANCEL' : 'REQUEST',
+    start: new Date(booking.start),
+    end: new Date(booking.end),
+    summary: `${booking.title} with ${booking.hostName}`,
+    description: booking.note ?? '',
+    ...(where === undefined ? {} : { location: where }),
+    url: `${origin.appOrigin}/b/${booking.publicKey}/manage?t=${token}`,
+    organizerEmail: origin.organizerEmail,
+    organizerName: origin.organizerName,
+    attendees: [{ name: booking.visitorName, email: booking.visitorEmail }],
+    sequence: 0,
+    now,
+  });
 }

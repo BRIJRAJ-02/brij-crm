@@ -24,7 +24,7 @@ describe('createBookingClient', () => {
     const { client, calls } = fake((url) =>
       Response.json(
         url.endsWith('/book')
-          ? { booking: { start: '2026-11-02T09:00:00.000Z' } }
+          ? { booking: { start: '2026-11-02T09:00:00.000Z' }, manageToken: 't' }
           : url.includes('/slots')
             ? { slots: [] }
             : { title: 'Intro' },
@@ -50,7 +50,8 @@ describe('createBookingClient', () => {
       email: 'grace@example.com',
       timeZone: 'Europe/London',
     });
-    expect(booked).toEqual({ start: '2026-11-02T09:00:00.000Z' });
+    expect(booked).toEqual({ booking: { start: '2026-11-02T09:00:00.000Z' }, manageToken: 't' });
+    expect(client.icsUrl('t')).toBe('https://app.test/api/public/booking/manage/t/ics');
     expect(calls[2]?.init).toMatchObject({ method: 'POST', credentials: 'omit' });
     const body = calls[2]?.init?.body;
     expect(JSON.parse(typeof body === 'string' ? body : '{}')).toMatchObject({ name: 'Grace' });
