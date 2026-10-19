@@ -51,7 +51,7 @@ export const Default: Story = {
     await expect(canvas.getByText('A preview of the form. It can’t be filled in here.')).toBeInTheDocument();
     const frame = canvasElement.querySelector('[inert]');
     await expect(frame).not.toBeNull();
-    await expect(canvas.queryByRole('button', { name: 'Send' })).toBeNull();
+    await expect(canvas.getByRole('button', { name: 'Send' }).closest('[inert]')).toBe(frame);
   },
 };
 
@@ -71,6 +71,11 @@ export const AsPage: Story = {
     await userEvent.type(canvas.getByLabelText('Work email'), 'ada@example.com');
     await userEvent.click(canvas.getByRole('button', { name: 'Send' }));
     await waitFor(() => expect(canvas.getByRole('heading', { name: 'Thank you. That is with us.' })).toHaveFocus());
+    // Send another starts again, with focus on the form's headline.
+    await userEvent.click(canvas.getByRole('button', { name: 'Send another' }));
+    await waitFor(() =>
+      expect(canvas.getByRole('heading', { name: 'Fill this in and we will come back to you' })).toHaveFocus(),
+    );
   },
 };
 

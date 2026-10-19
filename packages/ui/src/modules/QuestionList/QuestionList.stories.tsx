@@ -94,7 +94,7 @@ export const Default: Story = {
 /** Pressing a card's header opens its editor; pressing again closes it. */
 export const Opening: Story = {
   play: async ({ canvas }) => {
-    const toggle = canvas.getByRole('button', { name: /Budget/ });
+    const toggle = canvas.getByRole('button', { name: /^Budget/ });
     await expect(toggle).toHaveAttribute('aria-expanded', 'false');
     await userEvent.click(toggle);
     await waitFor(() => expect(toggle).toHaveAttribute('aria-expanded', 'true'));

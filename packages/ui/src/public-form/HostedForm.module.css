@@ -15,7 +15,6 @@
     color: var(--text);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
-    container-type: inline-size;
     --form-radius: var(--radius-md);
   }
 
@@ -222,7 +221,7 @@
     padding: 0;
     border: none;
     background: transparent;
-    color: var(--link);
+    color: var(--text-secondary);
     font: var(--text-body);
     text-decoration: underline;
     cursor: pointer;
@@ -264,9 +263,11 @@
     white-space: nowrap;
   }
 
-  /* On a phone the inputs read at the size phones don't zoom into (a spacing token stands in for a 16px type
+  /* On phones and tablets the inputs read at the size phones don't zoom into (a spacing token stands in for a 16px type
      token the system doesn't have yet). */
-  @container (width < 480px) {
+  /* A media query, not a container query (container-type on the frame hides its background from axe's contrast
+     check), at the compact page breakpoint, the one the system has. */
+  @media (width < 1024px) {
     .input {
       font-size: var(--space-16);
     }

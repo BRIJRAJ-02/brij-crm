@@ -105,6 +105,8 @@ export function QuestionList({
       <GridList
         aria-label={label}
         items={items}
+        // Rows draw again when what they show beside their item changes: which are open, and their editors.
+        dependencies={[openIds, renderOpen, renderFooter]}
         className={styles.list}
         keyboardNavigationBehavior="tab"
         {...(onMove === undefined ? {} : { dragAndDropHooks })}
