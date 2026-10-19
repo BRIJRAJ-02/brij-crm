@@ -100,6 +100,13 @@ export {
   type RecordWindow,
 } from './records/records.ts';
 export {
+  addRecordLinks,
+  removeRecordLinks,
+  type AddLinksInput,
+  type LinksAnswer,
+  type RemoveLinksInput,
+} from './records/links.ts';
+export {
   getView,
   listViews,
   saveViewQuery,

@@ -18,6 +18,7 @@ import {
   type RecordActivity,
   type RecordView,
   type RelationshipView,
+  type SearchResult,
   type Usage,
   type TrashedRecord,
   type View,
@@ -136,6 +137,8 @@ interface Behaviour {
   optionWrite: () => AttributeOption;
   /** What both relationship writes answer (spec 0014). */
   relationshipWrite: () => RelationshipView;
+  /** What `records.search` answers for a query (spec 0014). */
+  search: (query: string) => SearchResult[];
   /** Saved views (spec 0020): an object's list, one view, a save's answer. */
   viewsList: (objectId: string) => ViewsList;
   viewGet: (viewId: string) => View;
@@ -173,6 +176,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       Array.from({ length: Math.max(0, Math.min(limit, 3 - position)) }, (_, at) => personRow(position + at)),
     setValues: notServed,
     get: () => [],
+    search: () => [],
     head: () => 0,
     catchUp: () => ({ head: behaviour.head(), reset: false, events: [] }),
     jobsList: () => ({ jobs: [] }),
@@ -286,6 +290,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         return behaviour.attributeWrite();
       }),
     },
+    links: { add: os.links.add.handler(notServed), remove: os.links.remove.handler(notServed) },
     relationships: {
       create: os.relationships.create.handler(({ input }) => {
         mutationIds.push(input.mutationId);
@@ -344,6 +349,10 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       setValuesBatch: os.records.setValuesBatch.handler(notServed),
       activity: os.records.activity.handler(({ input }) => behaviour.activity(input.recordId, input.cursor)),
       getTrashed: os.records.getTrashed.handler(({ input }) => behaviour.trashed(input.recordId)),
+      search: os.records.search.handler(({ input }) => {
+        sent.push(input);
+        return { results: behaviour.search(input.query) };
+      }),
       deleteMany: os.records.deleteMany.handler(({ input }) => {
         mutationIds.push(input.mutationId);
         sent.push(input);
@@ -768,7 +777,7 @@ describe('members and attributes', () => {
     expect(count(api.calls, '/api/rpc/attributes/list')).toBe(6);
   });
 
-  it('maps an attribute to the field set’s, reading references and members as read only in this loop', () => {
+  it('maps an attribute to the field set’s, reading members and unlinkable references as read only', () => {
     expect(toFieldAttribute(TITLE)).toEqual({
       id: TITLE.id,
       name: 'Job title',
@@ -784,7 +793,20 @@ describe('members and attributes', () => {
       readOnlyReason: 'Set on the record page',
     });
     const company = { ...TITLE, type: 'record_reference' as const, isMulti: true };
+    // A side with no relationship the person can see (one way, or its far object hidden) can't link from here.
     expect(toFieldAttribute(company)).toMatchObject({ isReadOnly: true, cardinality: 'many', allowMultiple: true });
+    const linked = {
+      ...company,
+      relationship: {
+        id: TITLE.id,
+        cardinality: 'many_to_many' as const,
+        side: 'from' as const,
+        targetObjectIds: [COMPANIES_ID],
+        farHoldsOne: false,
+      },
+    };
+    expect(toFieldAttribute(linked)).toMatchObject({ isReadOnly: false, cardinality: 'many' });
+    expect(isEditableHere(linked)).toBe(false);
     const createdAt = { ...TITLE, type: 'timestamp' as const, isSystem: true };
     expect(toFieldAttribute(createdAt, 'unused')).toMatchObject({ isReadOnly: true });
     expect(toFieldAttribute(createdAt, 'unused').readOnlyReason).toBeUndefined();

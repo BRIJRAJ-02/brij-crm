@@ -4,8 +4,20 @@
 // it sits in the first load with the rest of the layer's surface.
 import type { ActorDisplay, AttributeDefinition, AttributeType, Hue, MemberSummary } from '@crm/contracts';
 
-/** The types this loop shows but never edits: a record reference (a company) and a member (Owner). */
-const READ_ONLY_IN_THIS_LOOP: readonly AttributeType[] = ['record_reference', 'actor_reference'];
+/** A member (Owner) shows but is never edited in this loop. */
+const READ_ONLY_IN_THIS_LOOP: readonly AttributeType[] = ['actor_reference'];
+
+/** The types a create form leaves out for now: members, and record references (linked from the table). */
+const NOT_IN_FORMS: readonly AttributeType[] = ['record_reference', 'actor_reference'];
+
+/**
+ * Whether a record reference can't be linked from here (spec 0014): one way
+ * references, and a side whose far object the person can't see (it lists no
+ * target), show but never edit.
+ */
+const isUnlinkable = (definition: Pick<AttributeDefinition, 'type' | 'relationship'>): boolean =>
+  definition.type === 'record_reference' &&
+  (definition.relationship === undefined || definition.relationship.targetObjectIds.length === 0);
 
 /**
  * An attribute as the field set reads it: structurally the library's
@@ -34,27 +46,29 @@ export interface FieldAttributeShape {
 }
 
 /**
- * Whether people can edit this attribute's values in this loop: not a system
- * attribute, a reference or a member, and not one the server says they may
- * only read (spec 0009, AC-142).
+ * Whether a create form edits this attribute's values in this loop: not a
+ * system attribute, a reference or a member, and not one the server says
+ * they may only read (spec 0009, AC-142).
  */
 export const isEditableHere = (definition: Pick<AttributeDefinition, 'type' | 'isSystem' | 'readOnly'>): boolean =>
-  !definition.isSystem && definition.readOnly === undefined && !READ_ONLY_IN_THIS_LOOP.includes(definition.type);
+  !definition.isSystem && definition.readOnly === undefined && !NOT_IN_FORMS.includes(definition.type);
 
 /**
  * An attribute definition as the field set's attribute: title to name,
  * `isMulti` to `allowMultiple`, a currency's default and a number's percent
  * display from its config, and
  * the options of a select or status attribute (archived ones marked), and
- * read only for references and members in this loop, with `readOnlyReason`
- * (the screen's words) as the reason. A system attribute is read only with
+ * read only for members in this loop and for a record reference that can't
+ * link (one way, or its far object hidden), with `readOnlyReason` (the
+ * screen's words) as the reason. A system attribute is read only with
  * the field set's own reason ("Set by the system"). An attribute the server
  * says the person may only read (`readOnly`, spec 0009, AC-142) is read only
  * with the server's reason, which wins over the screen's: the cell shows it
  * in the library's read only state. The server still checks every write.
  */
 export function toFieldAttribute(definition: AttributeDefinition, readOnlyReason?: string): FieldAttributeShape {
-  const isReference = READ_ONLY_IN_THIS_LOOP.includes(definition.type);
+  // Members stay read only here; a record reference edits through its picker (spec 0014) unless it can't link.
+  const isReference = READ_ONLY_IN_THIS_LOOP.includes(definition.type) || isUnlinkable(definition);
   const currency = definition.config.defaultCurrency;
   const ruled = definition.isSystem ? undefined : definition.readOnly?.reason;
   const reason = ruled ?? (isReference && !definition.isSystem ? readOnlyReason : undefined);

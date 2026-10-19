@@ -102,15 +102,51 @@ export interface CreateEntry {
   readonly recordName: string;
 }
 
-/** One user action on the undo stack: an edit of cells, a delete, or a create. */
-export type UndoEntry = CellsEntry | DeleteEntry | CreateEntry;
+/** One link delta an undo sends (spec 0014): add a far record on a side, or remove one. */
+export type LinkStep =
+  | {
+      readonly kind: 'add';
+      readonly recordId: string;
+      readonly attributeId: string;
+      readonly target: { readonly objectId: string; readonly recordId: string };
+      /** Takes the record back from whoever holds it now, on a far side that holds one. */
+      readonly move?: boolean;
+    }
+  | {
+      readonly kind: 'remove';
+      readonly recordId: string;
+      readonly attributeId: string;
+      readonly target: { readonly objectId: string; readonly recordId: string };
+    };
+
+/**
+ * A link added or removed from a cell (spec 0014, the data layer): undoing
+ * it sends its inverse (remove for add, add for remove; a move adds the
+ * record back to its old holder, moving it). Never pushed itself.
+ */
+export interface LinksEntry {
+  readonly id: string;
+  readonly kind: 'links';
+  readonly objectId: string;
+  /** The record and side the person changed, for the toast ("Undid Team on Acme"). */
+  readonly recordId: string;
+  readonly attributeId: string;
+  /** Whether the side holds many, and its pair: what the inverse shows at once and rereads. */
+  readonly isMulti: boolean;
+  readonly pairedAttributeId?: string;
+  readonly recordName: string;
+  readonly inverse: LinkStep;
+}
+
+/** One user action on the undo stack: an edit of cells, a delete, a create, or a link delta. */
+export type UndoEntry = CellsEntry | DeleteEntry | CreateEntry | LinksEntry;
 
 /** Whether an entry is an edit of cells (a cell, a paste or a range clear). */
 export function isCellsEntry(entry: UndoEntry): entry is CellsEntry {
-  return entry.kind !== 'delete' && entry.kind !== 'create';
+  return entry.kind !== 'delete' && entry.kind !== 'create' && entry.kind !== 'links';
 }
 
-/** How many cells an entry holds against the stack's budget: a delete or a create counts as one. */
+/** How many cells an entry holds against the stack's budget: a delete, a create or a link delta counts as one. */
 const sizeOf = (entry: UndoEntry): number => (isCellsEntry(entry) ? entry.cells.length : 1);
 
 /** A tab's undo stack, one per workspace, `depth` (50) entries each; the oldest goes first. */

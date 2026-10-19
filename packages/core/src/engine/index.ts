@@ -85,6 +85,15 @@ export {
   type RecordView,
   type ValueInput,
 } from './records.ts';
+export { changeLinks, LINKS_PER_DELTA, type DeltaOutcome, type LinksDelta } from './link-delta.ts';
+export {
+  searchRecords,
+  SEARCH_LIMIT_DEFAULT,
+  SEARCH_LIMIT_MAX,
+  SEARCH_QUERY_MAX,
+  type SearchInput,
+  type SearchResult,
+} from './record-search.ts';
 export { outboxEvents, outboxHook, type OutboxEvent, type OutboxHookOptions } from './outbox.ts';
 export {
   inputInvalid,

@@ -36,7 +36,7 @@ import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { memberDisplay } from './entries.ts';
 import { strings } from './strings.ts';
-import { useRecordSearch } from './useRecordSearch.ts';
+import { useRecordSearch } from '../records/links.ts';
 
 /** Props for the task dialog. */
 export interface TaskDialogProps {

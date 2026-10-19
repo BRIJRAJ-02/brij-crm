@@ -23,6 +23,8 @@ const SKIP_RULES = ['restoreRecord', 'restoreRecords', 'restoreBatch'] as const;
 const NO_RECORD_VALUES = [
   'addEntry',
   'archiveAttribute',
+  // A link delta (spec 0014) writes links only: no rule sits on or names a record reference (`checkRuleSettings`).
+  'changeLinks',
   'createUserWorkspace',
   'createWorkspace',
   'defineAttribute',
@@ -73,6 +75,7 @@ const NOT_WRITES = [
   'outboxHook',
   'queryPage',
   'queryTrash',
+  'searchRecords',
 ] as const;
 
 describe('the bypass walk', () => {

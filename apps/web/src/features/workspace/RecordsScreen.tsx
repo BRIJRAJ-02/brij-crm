@@ -9,6 +9,7 @@ import {
   toFieldAttribute,
   withPendingOptions,
   type AttributeDefinition,
+  type CellChange,
   type MemberSummary,
   type NameState,
   type ObjectSummary,
@@ -38,6 +39,7 @@ import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArchiveAttributeDialog } from '../settings/ArchiveAttributeDialog.tsx';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
+import { useLinkEditing } from '../records/links.ts';
 import { strings as attributeStrings } from '../settings/attribute-strings.ts';
 import { useBulkDelete, useTableSelection } from './BulkDeleteBar.tsx';
 import type { ShownColumn, ShownLayout } from '../views/layout.ts';
@@ -88,6 +90,9 @@ export interface RecordsScreenProps {
   /** What the table says when the view's filter matches nothing; the object's own empty state otherwise. */
   readonly filteredEmpty?: ReactNode;
 }
+
+/** What a column's editor gets when it needs nothing beyond its value (not a relation cell). */
+const NO_EDITOR_EXTRAS = {};
 
 /** A reference value's links, as a list: one link, several, or none. */
 function refsOf(value: unknown): readonly RecordRef[] {
@@ -290,6 +295,28 @@ export function RecordsScreen({
     () => new Set(attributes.filter((attribute) => attribute.type === 'record_reference').map((each) => each.id)),
     [attributes],
   );
+  // Relation cells (spec 0014): a picker per cell, and what it commits goes as link deltas, never a whole list.
+  const links = useLinkEditing(slug);
+  const references = useMemo(
+    () =>
+      new Map(
+        attributes.flatMap((attribute) => (attribute.type === 'record_reference' ? [[attribute.id, attribute]] : [])),
+      ),
+    [attributes],
+  );
+  /** A relation cell's commit: a pick or a removed chip, sent as one link delta each. */
+  const commitLink = (change: CellChange): void => {
+    const definition = references.get(change.columnId);
+    if (definition === undefined) return;
+    const at = view.indexOf(change.rowId);
+    const row = at === undefined ? undefined : state.source.getItem(at);
+    // Clearing a cell that shows only its first 20 links would leave the rest: those go from the record, one by one.
+    if (definition.isMulti && refsOf(change.value).length === 0 && row?.linkTotals[definition.id] !== undefined) {
+      toasts.toast({ tone: 'danger', message: strings.clearTooMany(definition.title) });
+      return;
+    }
+    void links.commit(definition, change.rowId, change.value);
+  };
   const [isCreating, setCreating] = useState(false);
   const [isAdding, setAdding] = useState(false);
   // The column menu's schema items (spec 0012): the attribute whose dialog or archive confirm is open.
@@ -462,7 +489,15 @@ export function RecordsScreen({
               onCellChange={(change) => {
                 data.records.setValue(slug, change);
               }}
-              onCellsChange={(changes) => {
+              onCellsChange={(asked) => {
+                const [only] = asked;
+                if (asked.length === 1 && only !== undefined && references.has(only.columnId)) {
+                  commitLink(only);
+                  return;
+                }
+                // A paste or a range clear leaves sides that hold many alone: they change one link at a time.
+                const changes = asked.filter((change) => references.get(change.columnId)?.isMulti !== true);
+                if (changes.length === 0) return;
                 // One action, one write (spec 0006, AC-50); a paste or clear of several cells says so, with Undo.
                 const kind =
                   changes.length === 1 ? 'cell' : isClear(changes.map((change) => change.value)) ? 'clear' : 'paste';
@@ -487,6 +522,13 @@ export function RecordsScreen({
               // What failed, in the data layer's words: "Can't reach the CRM" only when the network did.
               {...(state.error === undefined ? {} : { errorText: state.error.message })}
               members={memberDisplays}
+              editorProps={(column, rowId) => {
+                const definition = references.get(column.id);
+                return (
+                  (definition === undefined || rowId === undefined ? undefined : links.pickerFor(definition, rowId)) ??
+                  NO_EDITOR_EXTRAS
+                );
+              }}
               emptyState={
                 filteredEmpty ?? (
                   <EmptyState

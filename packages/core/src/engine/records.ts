@@ -501,6 +501,12 @@ async function updateOwner(
   visible?: ReadonlySet<string>,
   /** One record's write (`setValues`) may make an option from a cell (`newOption`, spec 0012, AC-238); a batch may not. */
   takesNewOptions = false,
+  /**
+   * The API's `records.setValues` (spec 0014, AC-294): a side that holds many
+   * changes only by `links.add` and `links.remove`, so a list the client only
+   * partly holds never replaces the whole one.
+   */
+  deltasOnly = false,
 ): Promise<{
   results: Record<string, AttributeResult>;
   objectId?: string;
@@ -511,6 +517,16 @@ async function updateOwner(
   const given = canonicalKeys(input.values);
   const values = takesNewOptions ? await resolveNewOptions(context, attributes, given) : given;
   const parsed = parseAll(attributes, values, context.scope);
+  if (deltasOnly) {
+    const [first, ...rest] = parsed
+      .filter(({ attribute }) => attribute.type === 'record_reference' && attribute.isMulti)
+      .map(({ attribute }): EngineRefusal => ({
+        code: 'ATTRIBUTE_VALUE_INVALID',
+        message: 'Add or remove links one at a time.',
+        attributeId: attribute.id,
+      }));
+    if (first !== undefined) throw refuseAll([first, ...rest]);
+  }
   // Under the owner's lock, before anything is written: a cell that moved on refuses the whole owner.
   await checkVersions(tx, context.scope.workspaceId, ownerId, parsed);
   // A record's rules (spec 0013): its definitions held still, then every rule the write touches checked, under the lock.
@@ -661,11 +677,17 @@ export async function setRecordValues(
   scope: EngineScope,
   input: RecordValues,
   hooks: readonly AfterWrite[] = [],
+  /** Refuse a side that holds many, as the API's `records.setValues` does (spec 0014, AC-294). */
+  options: { readonly deltasOnly?: boolean } = {},
 ): Promise<{
   readonly results: Record<string, AttributeResult>;
   readonly attributesByObject: ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>;
 }> {
-  const { result } = await runWrite(scope, (context) => updateOwner(context, input, undefined, true), hooks);
+  const { result } = await runWrite(
+    scope,
+    (context) => updateOwner(context, input, undefined, true, options.deltasOnly === true),
+    hooks,
+  );
   const { objectId } = result;
   return {
     results: result.results,
@@ -941,6 +963,8 @@ export async function readRecords(
           continue;
         }
         if (attribute.type === 'record_reference') {
+          // An effectively archived side is left out of the read (spec 0014, AC-308): a restore brings it back.
+          if (isArchivedNow(attribute)) continue;
           values[attribute.id] = links.values.get(row.id)?.get(attribute.id) ?? (attribute.isMulti ? [] : null);
           const total = links.totals.get(row.id)?.get(attribute.id);
           if (total !== undefined) linkTotals[attribute.id] = total;

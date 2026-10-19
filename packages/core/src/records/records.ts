@@ -155,7 +155,11 @@ type LoadedAttributes = ReadonlyMap<string, ReadonlyMap<string, AttributeDef>>;
  * went to the trash between the write and this read: the write committed,
  * and the client should drop the record.
  */
-async function freshRecord(scope: EngineScope, recordId: string, attributes?: LoadedAttributes): Promise<RecordView> {
+export async function freshRecord(
+  scope: EngineScope,
+  recordId: string,
+  attributes?: LoadedAttributes,
+): Promise<RecordView> {
   const [view] = await getRecords(scope, { ids: [recordId], ...(attributes === undefined ? {} : { attributes }) });
   if (view === undefined) throw refuse('RECORD_DELETED', 'That record is in the trash. Restore it first.');
   return view;
@@ -283,6 +287,7 @@ export async function editRecord(
       ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
     },
     hooks,
+    { deltasOnly: true },
   );
   return {
     record: await freshRecord(scope, canonicalId(input.recordId), attributesByObject),

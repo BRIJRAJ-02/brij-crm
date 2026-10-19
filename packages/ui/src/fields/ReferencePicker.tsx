@@ -34,6 +34,16 @@ export interface ObjectSwitcher {
   readonly onObjectChange: (objectId: string) => void;
 }
 
+/**
+ * What a search result says beside its name (spec 0014): a note read with it
+ * ("At Acme", "Linked elsewhere"), and whether it is linked already, which
+ * shows it as chosen.
+ */
+export interface ResultState {
+  readonly note?: string;
+  readonly isLinked?: boolean;
+}
+
 /** Props for ReferencePicker. */
 export interface ReferencePickerProps<D extends Reference> {
   /** The attribute's name, for the trigger and the menu. */
@@ -69,6 +79,12 @@ export interface ReferencePickerProps<D extends Reference> {
    * where nothing else names it); a cell or a panel row names it already.
    */
   readonly showLabel?: boolean;
+  /**
+   * Each result's note and chosen state (spec 0014): the note shows under
+   * its name and screen readers read it with the item; a linked one shows
+   * its check, and picking it again on a side of many changes nothing.
+   */
+  readonly describeResult?: (display: D) => ResultState | undefined;
 }
 
 /** Chosen references as removable chips, and a searchable menu to pick one. */
@@ -89,6 +105,7 @@ export function ReferencePicker<D extends Reference>({
   objectId,
   onObjectChange,
   showLabel = false,
+  describeResult,
 }: ReferencePickerProps<D>) {
   const labelId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -140,6 +157,8 @@ export function ReferencePicker<D extends Reference>({
       onChange([found]);
       return;
     }
+    // Linked already (perhaps past the chips a cell shows): nothing to add.
+    if (describeResult?.(found)?.isLinked === true) return;
     if (!chosen.some((item) => keyOf(item) === keyOf(found))) onChange([...chosen, found]);
   };
   const isMe = (display: D) => pinned.some((item) => keyOf(item) === keyOf(display));
@@ -153,12 +172,18 @@ export function ReferencePicker<D extends Reference>({
         ...(startQuery === undefined ? {} : { defaultQuery: startQuery }),
       }}
       source={offered}
-      renderItem={(display) => ({
-        children: display.name === '' ? strings.unknown : display.name,
-        ...(isMe(display) ? { meta: strings.me } : {}),
-        // A member's email tells two people with the same name apart.
-        ...('email' in display && display.email !== undefined ? { description: display.email } : {}),
-      })}
+      renderItem={(display) => {
+        const state = describeResult?.(display);
+        const email = 'email' in display ? display.email : undefined;
+        // A note ("At Acme") is the result's second line, read with it; a member's email tells two people apart.
+        const description = state?.note ?? email;
+        return {
+          children: display.name === '' ? strings.unknown : display.name,
+          ...(isMe(display) ? { meta: strings.me } : {}),
+          ...(description === undefined ? {} : { description }),
+          ...(state?.isLinked === true ? { isChecked: true } : {}),
+        };
+      }}
       onAction={pick}
     />
   );

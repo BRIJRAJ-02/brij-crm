@@ -19,6 +19,7 @@ export function RecordReferenceEditor({
   autoOpen = false,
   startText,
   objectSwitcher,
+  describeResult,
 }: EditorProps<'record_reference'>) {
   const displays = asList<RecordRefDisplay>(display);
   const [chosen, setChosen] = useState<readonly (typeof displays)[number][]>(() =>
@@ -47,6 +48,7 @@ export function RecordReferenceEditor({
       {...(onSearch === undefined ? {} : { onSearch })}
       {...(shown === undefined ? {} : { error: shown })}
       {...(objectSwitcher === undefined ? {} : objectSwitcher)}
+      {...(describeResult === undefined ? {} : { describeResult })}
       onChange={(next) => {
         const records = next.map((item) => ({ objectId: item.objectId, recordId: item.recordId }));
         const result = toCommittable<'record_reference'>(

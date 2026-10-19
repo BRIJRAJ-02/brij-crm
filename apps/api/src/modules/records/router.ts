@@ -9,6 +9,7 @@ import {
   readRecordsById,
   readTrashedRecord,
   restoreBatch,
+  searchRecords,
 } from '@crm/core';
 import { withInputFields } from '../../errors.ts';
 import { commitCounted } from '../../hooks.ts';
@@ -50,6 +51,24 @@ export const recordsRouter = member.records.router({
         signal,
       ),
     ),
+  ),
+  // The record picker's search (spec 0014): cancelled with its request, in the same read gate.
+  search: member.records.search.handler(({ context, input, signal }) =>
+    context.readGate.run(context.scope.workspaceId, async () => ({
+      results: [
+        ...(await searchRecords(
+          context.scope,
+          {
+            objectId: input.objectId,
+            query: input.query,
+            ...(input.limit === undefined ? {} : { limit: input.limit }),
+            ...(input.forAttributeId === undefined ? {} : { forAttributeId: input.forAttributeId }),
+            ...(input.forRecordId === undefined ? {} : { forRecordId: input.forRecordId }),
+          },
+          signal,
+        )),
+      ],
+    })),
   ),
   get: member.records.get.handler(({ context, input }) =>
     readRecordsById(context.scope, input.ids, input.attributeIds),

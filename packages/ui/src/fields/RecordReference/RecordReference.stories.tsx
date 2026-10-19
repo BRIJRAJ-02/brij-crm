@@ -166,3 +166,40 @@ export const ObjectSwitcherWithChosen: Story = {
     await expect(canvas.getByRole('alert')).toHaveTextContent('You can’t link a task to a record you can’t change.');
   },
 };
+
+/**
+ * Search results with what they say beside their names (spec 0014): one
+ * already linked shows its check, one held on a far side of one says where
+ * ("At Acme"), and one held by a record the reader can't see says "Linked
+ * elsewhere". Screen readers read each note with its item.
+ */
+export const ResultNotes: Story = {
+  args: {
+    attribute: { ...sample.attribute, name: 'Partners', allowMultiple: true },
+    onSearch: (() => arraySource(SAMPLE_COMPANIES.slice(0, 3), (company) => company.recordId)) as never,
+    describeResult: ((display: { readonly recordId: string }) => {
+      const [linked, taken, hidden] = SAMPLE_COMPANIES;
+      if (display.recordId === linked?.recordId) return { isLinked: true };
+      if (display.recordId === taken?.recordId) return { note: 'At Acme' };
+      if (display.recordId === hidden?.recordId) return { note: 'Linked elsewhere' };
+      return undefined;
+    }) as never,
+  },
+  render: (args) => (
+    <Stage width="narrow">
+      <AttributeEditor {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Choose Partners/ }));
+    const items = await waitFor(() => {
+      // This picker's own menu, never one another story left fading.
+      const found = [...document.querySelectorAll('[role="menu"][aria-label="Partners"] [role="menuitem"]')];
+      if (found.length < 3) throw new Error('the results are not in');
+      return found;
+    });
+    await expect(items[1]).toHaveAccessibleDescription('At Acme');
+    await expect(items[2]).toHaveAccessibleDescription('Linked elsewhere');
+    await expect(items[0]?.querySelector('[role="img"]')).not.toBeNull();
+  },
+};

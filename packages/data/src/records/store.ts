@@ -26,6 +26,9 @@ export interface RecordBody {
 /** Values by attribute id: what one edit changes. */
 export type RecordValues = Readonly<Record<string, unknown>>;
 
+/** A layer's link totals by attribute id (spec 0014): a number sets the cell's total, `null` takes it away. */
+export type LinkTotals = Readonly<Record<string, number | null>>;
+
 /**
  * One optimistic change, showing from the moment it's made until its own
  * answer arrives. Only its own response (or its own echo) ends it: `confirm`
@@ -77,8 +80,12 @@ export interface RecordStore<Row extends RecordBody> {
   readonly release: (ids: Iterable<string>) => void;
   /** Records gone on the server (trashed or out of reach): dropped with any layers. */
   readonly remove: (ids: readonly string[]) => void;
-  /** An optimistic edit, showing at once. `mutationId` is the one sent with it. */
-  readonly edit: (recordId: string, values: RecordValues, mutationId: string) => Layer<Row>;
+  /**
+   * An optimistic edit, showing at once. `mutationId` is the one sent with
+   * it. `linkTotals` moves a cut short link cell's total with it (a link
+   * delta, spec 0014): a number sets it, `null` takes it away.
+   */
+  readonly edit: (recordId: string, values: RecordValues, mutationId: string, linkTotals?: LinkTotals) => Layer<Row>;
   /**
    * An optimistic new record (a draft with no base yet), showing at once. A
    * refusal takes every edit made on the draft with it.
@@ -147,16 +154,28 @@ export function newerBase<Row extends RecordBody>(current: Row | undefined, inco
   };
 }
 
-/** The base with each layer's values on top, oldest first: the one composition rule both stores share. */
+/**
+ * The base with each layer's values on top, oldest first: the one
+ * composition rule both stores share. A layer's link totals (a link delta)
+ * go on top of the base's the same way.
+ */
 export function composeRecord<Row extends RecordBody>(
   base: Row | undefined,
-  layers: readonly { readonly draft?: Row; readonly values: RecordValues }[],
+  layers: readonly { readonly draft?: Row; readonly values: RecordValues; readonly linkTotals?: LinkTotals }[],
 ): Row | undefined {
   const start = base ?? layers.find((layer) => layer.draft !== undefined)?.draft;
   if (start === undefined) return undefined;
   if (layers.length === 0) return start;
   const values = layers.reduce<RecordValues>((merged, layer) => ({ ...merged, ...layer.values }), start.values);
-  return { ...start, values };
+  if (!layers.some((layer) => layer.linkTotals !== undefined)) return { ...start, values };
+  const totals = layers.reduce<Readonly<Record<string, number | null>>>(
+    (merged, layer) => ({ ...merged, ...layer.linkTotals }),
+    start.linkTotals ?? {},
+  );
+  const linkTotals = Object.fromEntries(
+    Object.entries(totals).flatMap(([attributeId, total]) => (total === null ? [] : [[attributeId, total] as const])),
+  );
+  return { ...start, values, linkTotals };
 }
 
 /**

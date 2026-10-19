@@ -3,8 +3,11 @@
 // and creates with rollback, cell refusals and toasts, retries when busy.
 import {
   MAX_BATCH_RECORDS as CONTRACT_MAX_BATCH,
+  type AddLinksInput,
   type AttributeDefinition,
   type BatchResults,
+  type LinksWritten,
+  type RemoveLinksInput,
   type ChangeEvent,
   type CreateRecordInput,
   type DeleteManyInput,
@@ -19,7 +22,14 @@ import { describe, expect, it } from 'vitest';
 import { dataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
 import { UNDO_DEPTH } from './history.ts';
-import { createRecordsLayer, MAX_BATCH_RECORDS, RECORD_WORDS, type RecordsApi, type ReplacedNotice } from './layer.ts';
+import {
+  createRecordsLayer,
+  MAX_BATCH_RECORDS,
+  RECORD_WORDS,
+  type RecordsApi,
+  type RecordsView,
+  type ReplacedNotice,
+} from './layer.ts';
 
 const WS = 'acme';
 /** This person's member id, and someone else's. */
@@ -97,6 +107,9 @@ function fakeApi() {
   const gets: Pending<readonly string[], RecordView[]>[] = [];
   const deletes: Pending<DeleteManyInput, DeleteManyResults['results']>[] = [];
   const restores: Pending<RestoreBatchInput, RestoreBatchResults['results']>[] = [];
+  // Link deltas (spec 0014): each answered with its record, the version it wrote and the records it changed.
+  const linkAdds: Pending<AddLinksInput, Omit<LinksWritten, 'echoes'>>[] = [];
+  const linkRemoves: Pending<RemoveLinksInput, Omit<LinksWritten, 'echoes'>>[] = [];
   // What each records.get asked for besides its ids: the attributes (spec 0006, AC-55).
   const getAttributes: (readonly string[] | undefined)[] = [];
   const queue =
@@ -146,8 +159,23 @@ function fakeApi() {
     // Spec 0022: each answers its results with one echo.
     deleteMany: async (input) => ({ results: await queue(deletes)(input), echoes: 1 }),
     restoreBatch: async (input) => ({ mode: 'inline' as const, results: await queue(restores)(input), echoes: 1 }),
+    linksAdd: async (input) => ({ ...(await queue(linkAdds)(input)), echoes: 2 }),
+    linksRemove: async (input) => ({ ...(await queue(linkRemoves)(input)), echoes: 2 }),
   };
-  return { api, queries, counts, creates, edits, batches, gets, getAttributes, deletes, restores };
+  return {
+    api,
+    queries,
+    counts,
+    creates,
+    edits,
+    batches,
+    gets,
+    getAttributes,
+    deletes,
+    restores,
+    linkAdds,
+    linkRemoves,
+  };
 }
 
 /** What a records.query carried, past its workspace and object. */
@@ -2132,5 +2160,149 @@ describe('deleting records, the state review (spec 0022)', () => {
     await settle();
     frame();
     expect([...view.getSnapshot().gone]).toEqual([idAt(1)]);
+  });
+});
+
+describe('link deltas (spec 0014, milestone 2)', () => {
+  const TEAM = 'attr-team';
+  const LEAD = 'attr-lead';
+  const ref = (index: number) => ({ objectId: PEOPLE, recordId: idAt(index) });
+  /** Three people whose Team (many) and Lead (one) cells were read, with P0's Team holding P1. */
+  async function linkedView(teamOfP0: readonly { objectId: string; recordId: string }[] = [ref(1)], total?: number) {
+    const context = setup();
+    const view = context.layer.view(WS, PEOPLE);
+    view.retain([TEAM, LEAD]);
+    await settle();
+    context.counts[0]?.answer(3);
+    await settle();
+    const rows = block(0, 3).map((row, index) => ({
+      ...row,
+      values: { ...row.values, [TEAM]: index === 0 ? teamOfP0 : [], [LEAD]: null },
+      ...(index === 0 && total !== undefined ? { linkTotals: { [TEAM]: total } } : {}),
+    }));
+    context.queries[0]?.answer(rows);
+    await settle();
+    await view.ready();
+    context.frame();
+    return { ...context, view, rows };
+  }
+  const shown = (view: RecordsView, index: number) => view.getSnapshot().source.getItem(index);
+  const first = (rows: readonly RecordView[]) => rows[0] ?? rowOf(idAt(0), {});
+
+  it('appends the chip at once, sends one links.add, then takes the answer and reads the far record again', async () => {
+    const { layer, view, rows, linkAdds, gets, frame, mutationLog } = await linkedView();
+    const done = layer.changeLink(WS, {
+      kind: 'add',
+      recordId: idAt(0),
+      attributeId: TEAM,
+      target: ref(2),
+      isMulti: true,
+      pairedAttributeId: LEAD,
+    });
+    frame();
+    expect(shown(view, 0)?.values[TEAM]).toEqual([ref(1), ref(2)]);
+    await settle();
+    expect(linkAdds[0]?.input).toMatchObject({
+      workspace: WS,
+      recordId: idAt(0),
+      attributeId: TEAM,
+      targets: [ref(2)],
+    });
+    expect(linkAdds[0]?.input.move).toBeUndefined();
+    const record = { ...first(rows), values: { [TEAM]: [ref(1), ref(2)] }, revision: 1 };
+    linkAdds[0]?.answer({ record, written: { [TEAM]: version(9) }, changedRecordIds: [idAt(2)] });
+    expect(await done).toEqual({ kind: 'done', changed: true, undoId: idAt(5001) });
+    frame();
+    // The far record (P2, on screen) is read again for its paired side, which this tab never hears echoed.
+    await settle();
+    expect(gets.at(-1)?.input).toEqual([idAt(2)]);
+    expect(mutationLog).toContain(`answered ${idAt(5001)} 2`);
+  });
+
+  it('raises a full cell’s total instead of drawing a 21st chip, and lowers it on remove', async () => {
+    const full = Array.from({ length: 20 }, (_, index) => ref(100 + index));
+    const { layer, view, frame } = await linkedView(full, 25);
+    void layer.changeLink(WS, { kind: 'add', recordId: idAt(0), attributeId: TEAM, target: ref(2), isMulti: true });
+    frame();
+    expect(shown(view, 0)?.values[TEAM]).toHaveLength(20);
+    expect(shown(view, 0)?.linkTotals[TEAM]).toBe(26);
+    void layer.changeLink(WS, {
+      kind: 'remove',
+      recordId: idAt(0),
+      attributeId: TEAM,
+      target: ref(100),
+      isMulti: true,
+    });
+    frame();
+    expect(shown(view, 0)?.values[TEAM]).toHaveLength(19);
+    expect(shown(view, 0)?.linkTotals[TEAM]).toBe(25);
+  });
+
+  it('rolls a refused link back, marks the cell, and raises a toast with Retry that sends it again', async () => {
+    const { layer, view, linkAdds, frame, notices } = await linkedView();
+    const done = layer.changeLink(WS, {
+      kind: 'add',
+      recordId: idAt(0),
+      attributeId: TEAM,
+      target: ref(2),
+      isMulti: true,
+    });
+    await settle();
+    linkAdds[0]?.fail(
+      dataError('RELATIONSHIP_TAKEN', 'P2 is already linked.', {
+        refusals: [{ code: 'RELATIONSHIP_TAKEN', message: 'P2 is already linked.', attributeId: TEAM }],
+      }),
+    );
+    expect((await done).kind).toBe('refused');
+    await settle();
+    frame();
+    expect(shown(view, 0)?.values[TEAM]).toEqual([ref(1)]);
+    expect(view.getSnapshot().cellErrors.get(`${idAt(0)}:${TEAM}`)).toBe('P2 is already linked.');
+    expect(notices[0]?.action?.label).toBe(RECORD_WORDS.retry);
+    notices[0]?.action?.onAction();
+    await settle();
+    expect(linkAdds).toHaveLength(2);
+  });
+
+  it('shows a side of one’s pick at once, names the version it started from, and moves with move', async () => {
+    const { layer, view, linkAdds, frame } = await linkedView();
+    void layer.changeLink(WS, {
+      kind: 'add',
+      recordId: idAt(1),
+      attributeId: LEAD,
+      target: ref(2),
+      isMulti: false,
+      move: true,
+    });
+    frame();
+    expect(shown(view, 1)?.values[LEAD]).toEqual(ref(2));
+    await settle();
+    // Read with no version: it held none.
+    expect(linkAdds[0]?.input).toMatchObject({ targets: [ref(2)], move: true, baseVersionId: null });
+  });
+
+  it('undoes a link by its inverse, as an undo of its own that goes on no stack', async () => {
+    const { layer, rows, linkAdds, linkRemoves } = await linkedView();
+    const done = layer.changeLink(WS, {
+      kind: 'add',
+      recordId: idAt(0),
+      attributeId: TEAM,
+      target: ref(2),
+      isMulti: true,
+    });
+    await settle();
+    const record = { ...first(rows), values: { [TEAM]: [ref(1), ref(2)] }, revision: 1 };
+    linkAdds[0]?.answer({ record, written: { [TEAM]: version(9) }, changedRecordIds: [] });
+    await done;
+    const undone = layer.undo.run(WS);
+    await settle();
+    expect(linkRemoves[0]?.input).toMatchObject({ recordId: idAt(0), attributeId: TEAM, targetRecordIds: [idAt(2)] });
+    linkRemoves[0]?.answer({
+      record: { ...record, values: { [TEAM]: [ref(1)] }, revision: 2 },
+      written: { [TEAM]: version(10) },
+      changedRecordIds: [],
+    });
+    expect(await undone).toMatchObject({ kind: 'undone', undone: 1, first: { recordId: idAt(0), attributeId: TEAM } });
+    expect(layer.undo.depth(WS)).toBe(0);
   });
 });
