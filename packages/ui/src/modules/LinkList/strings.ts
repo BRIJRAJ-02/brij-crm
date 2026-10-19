@@ -7,5 +7,6 @@ export const strings = {
   noAccess: 'You can’t see this list',
   noAccessBody: 'Ask a workspace admin for access.',
   noMatches: (query: string) => `Nothing matches “${query}”`,
-  noMatchesBody: 'Try another word from its title or address.',
+  noMatchesBody: 'Search by title, or by the address.',
+  clearSearch: 'Clear search',
 } as const;

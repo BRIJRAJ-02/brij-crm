@@ -4,7 +4,7 @@
 // Leaves out: editing a page (its editor), forms (their own tab) and the bookings list (Bookings).
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
-import { Button, CopyButton, Menu, MenuItem, MenuSeparator, MenuTrigger, Modal, type LinkRow } from '@crm/ui';
+import { Button, CopyButton, Menu, MenuItem, MenuSeparator, MenuTrigger, Modal, Tooltip, type LinkRow } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
@@ -34,23 +34,34 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
   const list = useCaptureList(data.bookingPages.view(slug));
   const [isCreating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<BookingPageView | undefined>(undefined);
-  const failed = (error: unknown) => {
-    toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.somethingWrong });
+  // A refusal says what was put back, then why.
+  const failed = (what: string) => (error: unknown) => {
+    toasts.toast({ tone: 'danger', message: `${what} ${isDataError(error) ? error.message : strings.somethingWrong}` });
   };
   const open = (pageId: string, hash?: string) =>
     void navigate({ to: pageEditorHref(slug, pageId), ...(hash === undefined ? {} : { hash }) });
   // Each change shows in the list at once; a refusal puts it back there, and the toast says why.
   const setStatus = (page: BookingPageView, status: 'live' | 'paused') => {
-    data.bookingPages.update(slug, page.id, { status }).catch(failed);
+    data.bookingPages
+      .update(slug, page.id, { status })
+      .catch(failed(status === 'paused' ? strings.turnOffFailed(page.title) : strings.turnOnFailed(page.title)));
   };
   const duplicate = (page: BookingPageView) => {
-    data.bookingPages.duplicate(slug, page, strings.copyOf(page.title)).catch(failed);
+    data.bookingPages.duplicate(slug, page, strings.copyOf(page.title)).then(
+      (copy) => {
+        toasts.toast({ tone: 'success', message: strings.duplicated(copy.title) });
+      },
+      failed(strings.duplicateFailed(page.title)),
+    );
   };
   const remove = (page: BookingPageView) => {
     setDeleting(undefined);
-    data.bookingPages.remove(slug, page.id).then(() => {
-      toasts.toast({ tone: 'success', message: strings.deleted(page.title) });
-    }, failed);
+    data.bookingPages.remove(slug, page.id).then(
+      () => {
+        toasts.toast({ tone: 'success', message: strings.deleted(page.title) });
+      },
+      failed(strings.deleteFailed(page.title)),
+    );
   };
   const pages = list.status === 'ready' ? list.items : [];
   const rows: readonly LinkRow[] = pages.map((page) => {
@@ -61,7 +72,8 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       address: `/${slug}/${page.slug}`,
       description: page.description,
       chips: chipsOf(page),
-      ...(page.status === 'paused' ? { badge: strings.offTag } : {}),
+      ...(isPending ? { badge: strings.copying } : page.status === 'paused' ? { badge: strings.offTag } : {}),
+      isOff: page.status === 'paused',
       toggle: {
         label: strings.isOn(page.title),
         isSelected: page.status === 'live',
@@ -69,29 +81,30 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
           setStatus(page, isOn ? 'live' : 'paused');
         },
         isDisabled: !page.canChange,
+        disabledReason: strings.notYours,
       },
       isPending,
       actions: (
         <>
-          <Button
-            variant="ghost"
-            icon="external-link"
-            label={strings.openPage(page.title)}
-            isDisabled={isPending || page.status === 'paused'}
-            onPress={() => {
-              globalThis.open(publicBookingUrl(page.publicKey), '_blank', 'noopener');
-            }}
-          />
+          <Tooltip content={strings.turnedOff} isDisabled={page.status !== 'paused' || isPending}>
+            <Button
+              icon="external-link"
+              label={strings.openPage(page.title)}
+              isDisabled={isPending || page.status === 'paused'}
+              onPress={() => {
+                globalThis.open(publicBookingUrl(page.publicKey), '_blank', 'noopener');
+              }}
+            />
+          </Tooltip>
           <CopyButton
             value={publicBookingUrl(page.publicKey)}
             label={strings.copyLinkTo(page.title)}
             isIconOnly
-            variant="ghost"
             isDisabled={isPending}
           />
           {page.canChange && (
             <MenuTrigger>
-              <Button variant="ghost" icon="ellipsis" label={strings.more(page.title)} isDisabled={isPending} />
+              <Button icon="ellipsis" label={strings.more(page.title)} isDisabled={isPending} />
               <Menu
                 label={strings.more(page.title)}
                 onAction={(key) => {

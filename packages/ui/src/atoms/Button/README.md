@@ -1,6 +1,6 @@
 # Button
 
-The one button: 26px tall with a 13px medium label, in five variants, built on React Aria so it works the same by mouse, touch and keyboard. This folder also holds `ToggleButton` (a button that stays pressed), `SplitButton` (a main action with a menu of its variants) and `CopyButton` (copies a value and says so in a toast).
+The one button: 26px tall with a 13px medium label, in five variants, built on React Aria so it works the same by mouse, touch and keyboard. This folder also holds `ToggleButton` (a button that stays pressed), `SplitButton` (a main action with a menu of its variants), `ButtonGroup` (a few buttons joined into one control) and `CopyButton` (copies a value and says so in a toast).
 
 ## Why it exists
 
@@ -26,6 +26,7 @@ Ported from the design system artifact's Button card. Every pressable control in
 - `ghost` for undo style actions that shouldn't compete, such as Discard changes, and for icon buttons inside dense rows.
 - `ghost-danger` for a quiet icon button that deletes at once and offers Undo (a form question's Delete): ghost at rest, the danger colour under the pointer and on keyboard focus. A variant rather than `danger`, whose red border at rest is too loud in a row of quiet icons.
 - `dashed` only for "add a condition" affordances: Filter, Add sort.
+- `ButtonGroup` joins a few secondary icon Buttons that act on one thing into one bordered control, sharing edges as SplitButton's halves do: a list row's Open, Copy link and More (LinkList). It takes Buttons, a CopyButton, or a MenuTrigger with its Button, each with its own `label`; `label` names the group for screen readers. Why not SplitButton: that is one action and its variants, this is several actions of equal weight. Added 20 October 2026 in place of LinkList's own joined box.
 - `SplitButton` when the primary action has variants (Save, Save as new view). Its `menu` is a `Menu`; the chevron is named "More options" unless `menuLabel` says otherwise.
 - Labels are verbs in sentence case: "Add to list", never "ADD" or "Submit".
 - `CopyButton` takes `isDisabled` when there is nothing to copy yet (a form never published, a row still on its way), so a row of actions keeps its shape.

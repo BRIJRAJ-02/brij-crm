@@ -3,7 +3,7 @@ import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
 import { expect, fn, waitFor } from 'storybook/test';
 import { hoverFresh, hoverUntilHovered, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { Button, SplitButton, ToggleButton } from './Button.tsx';
+import { Button, ButtonGroup, SplitButton, ToggleButton } from './Button.tsx';
 
 const meta = {
   title: 'Atoms/Button',
@@ -378,5 +378,22 @@ export const TooltipWhenCut: Story = {
   play: async ({ canvas, userEvent }) => {
     await hoverFresh(userEvent, canvas.getByRole('button', { name: 'Last email interaction with the account owner' }));
     await expect(await shownTooltip()).toHaveTextContent('Last email interaction with the account owner');
+  },
+};
+
+/** A group: Open, Copy link and More joined into one control, as a list row's actions. */
+export const Group: Story = {
+  render: () => (
+    <Stage>
+      <ButtonGroup label="Intro call">
+        <Button icon="external-link" label="Open Intro call in a new tab" />
+        <Button icon="copy" label="Copy link to Intro call" />
+        <Button icon="ellipsis" label="More for Intro call" />
+      </ButtonGroup>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('group', { name: 'Intro call' })).toBeInTheDocument();
+    await expect(canvas.getAllByRole('button')).toHaveLength(3);
   },
 };

@@ -290,3 +290,24 @@ export function SplitButton({
     </div>
   );
 }
+
+/** Props for ButtonGroup: a few icon Buttons that act on one thing, drawn as one control. */
+export interface ButtonGroupProps {
+  /** What the buttons act on, read as the group's name ("Intro call"). */
+  readonly label: string;
+  /** Secondary icon Buttons, a CopyButton, a MenuTrigger with its Button (a Tooltip around one is fine). */
+  readonly children: ReactNode;
+}
+
+/**
+ * Buttons joined into one bordered control, the way SplitButton joins its two
+ * halves: shared edges, one outer radius, one drop (a list row's Open, Copy
+ * link and More). A `group` for screen readers; Tab still stops at each one.
+ */
+export function ButtonGroup({ label, children }: ButtonGroupProps) {
+  return (
+    <div className={styles.group} role="group" aria-label={label}>
+      {children}
+    </div>
+  );
+}

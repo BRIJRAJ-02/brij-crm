@@ -18,7 +18,17 @@ export const strings = {
   backToForms: 'Back to forms',
 
   // The list (Captures › Forms draws the same rows as Links)
-  pausedTag: 'Paused',
+  offTag: 'Off',
+  copying: 'Copying…',
+  moreFor: (name: string) => `More for ${name}`,
+  publishFirst: 'Publish it first',
+  turnedOff: 'Turned off: turn it on to open it',
+  manageOnly: 'Only members who manage forms can change it',
+  createFailed: 'Couldn’t make the form.',
+  turnOffFailed: (name: string) => `Couldn’t turn off ${name}. It’s back on.`,
+  turnOnFailed: (name: string) => `Couldn’t turn on ${name}. It’s off again.`,
+  duplicateFailed: (name: string) => `Couldn’t duplicate ${name}.`,
+  deleteFailed: (name: string) => `Couldn’t delete ${name}. It’s back in the list.`,
   responses: (n: number) => count(n, 'response', 'responses'),
   copyLinkTo: (name: string) => `Copy link to ${name}`,
   openForm: (name: string) => `Open ${name} in a new tab`,
