@@ -6,7 +6,7 @@ import { ThemeSwitch } from '../../molecules/SegmentedControl/SegmentedControl.t
 import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { fakeThemeController } from '../../workbench/theme.ts';
-import { NavItem, NavSection, Sidebar } from './Sidebar.tsx';
+import { NavGroup, NavItem, NavSection, Sidebar } from './Sidebar.tsx';
 
 interface SampleSidebarProps {
   readonly isCollapsed?: boolean;
@@ -18,7 +18,7 @@ interface SampleSidebarProps {
   readonly isWorkspaceLoading?: boolean;
 }
 
-/** The sidebar as the app draws it: the fixed destinations, then Favorites, Records and Lists. */
+/** The sidebar as the app draws it: the fixed destinations, then Favorites, Records and Lists, then Bookings, Captures and the trash in a group of their own. */
 function SampleSidebar({
   isCollapsed = false,
   isWorkspaceBusy = false,
@@ -86,6 +86,17 @@ function SampleSidebar({
             </NavItem>
           )}
         </NavSection>
+        <NavGroup label="Scheduling">
+          <NavItem icon="calendar-days" href="/bookings">
+            Bookings
+          </NavItem>
+          <NavItem icon="link" href="/captures">
+            Captures
+          </NavItem>
+          <NavItem icon="trash" href="/trash">
+            Trash
+          </NavItem>
+        </NavGroup>
       </Sidebar>
     </Stage>
   );
@@ -107,6 +118,9 @@ export const Default: Story = {
     await expect(nav).toBeInTheDocument();
     await expect(canvas.getByRole('link', { name: 'Companies' })).toHaveAttribute('aria-current', 'page');
     await expect(canvas.getByRole('button', { name: 'Records' })).toHaveAttribute('aria-expanded', 'true');
+    // The group after the sections is named for screen readers, with no label on screen.
+    const group = canvas.getByRole('group', { name: 'Scheduling' });
+    await expect(group).toContainElement(canvas.getByRole('link', { name: 'Captures' }));
   },
 };
 

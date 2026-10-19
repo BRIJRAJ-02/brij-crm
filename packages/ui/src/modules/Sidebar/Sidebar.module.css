@@ -70,6 +70,7 @@
   .body,
   .foot,
   .items,
+  .group,
   .rail {
     display: flex;
     flex-direction: column;
@@ -85,7 +86,8 @@
     padding: var(--space-8);
   }
 
-  .section {
+  .section,
+  .group {
     margin-block-start: var(--space-12);
   }
 

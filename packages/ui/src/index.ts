@@ -156,7 +156,7 @@ export {
   type MeetingAttendee,
 } from './modules/ActivityFeed/ActivityFeed.tsx';
 export { AppShell, AppShellContext, type AppShellProps } from './modules/AppShell/AppShell.tsx';
-export { AuthLayout, type AuthLayoutProps } from './modules/AuthLayout/AuthLayout.tsx';
+export { AuthLayout, type AuthLayoutProps, type ProductLogo } from './modules/AuthLayout/AuthLayout.tsx';
 export {
   AttributeSettings,
   type AttributeSettingsAttribute,
@@ -212,9 +212,11 @@ export {
 } from './modules/ShortcutHelp/ShortcutHelp.tsx';
 export { GRID_SHORTCUTS } from './modules/DataGrid/shortcuts.ts';
 export {
+  NavGroup,
   NavItem,
   NavSection,
   Sidebar,
+  type NavGroupProps,
   type NavItemProps,
   type NavSectionProps,
   type SidebarProps,

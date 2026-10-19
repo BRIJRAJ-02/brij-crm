@@ -3,10 +3,20 @@ import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
 import { Card } from '../../molecules/Card/Card.tsx';
 import styles from './AuthLayout.module.css';
 
+/** The product's wordmark, one image per theme: dark ink for the light theme, white for the dark. */
+export interface ProductLogo {
+  /** The wordmark drawn on light surfaces. */
+  readonly light: string;
+  /** The wordmark drawn on dark surfaces. */
+  readonly dark: string;
+}
+
 /** Props for AuthLayout. */
 export interface AuthLayoutProps {
-  /** The product's name, shown with its mark above the card. */
+  /** The product's name, shown with its mark above the card (the wordmark's alt text when `logo` is given). */
   readonly productName: string;
+  /** The product's wordmark, in place of the mark and name. The one shown follows the theme (a saved choice, else the OS). */
+  readonly logo?: ProductLogo;
   /** The page's heading, its `h1`: "Sign in", "Check your email". */
   readonly title: string;
   /** A line under the heading. */
@@ -21,18 +31,36 @@ export interface AuthLayoutProps {
 
 /**
  * The frame for the pages before the app: sign in, verify, the welcome
- * screen. The product's mark and name, then the page card (`Card` with
+ * screen. The product's mark and name (or its wordmark), then the page card (`Card` with
  * `placement="page"`, the page's `main`), centred across the window at a
  * fixed offset from the top, so it holds still between steps and as its
  * content grows, and kept `space-16` from each edge on a phone. `isBusy`
  * marks the card busy while a Skeleton stands in for its task.
  */
-export function AuthLayout({ productName, title, description, children, footer, isBusy = false }: AuthLayoutProps) {
+export function AuthLayout({
+  productName,
+  logo,
+  title,
+  description,
+  children,
+  footer,
+  isBusy = false,
+}: AuthLayoutProps) {
   return (
     <div className={styles.root}>
       <header className={styles.brand}>
-        <Avatar name={productName} hue="ink" shape="square" size="md" isDecorative />
-        <span className={styles.name}>{productName}</span>
+        {logo === undefined ? (
+          <>
+            <Avatar name={productName} hue="ink" shape="square" size="md" isDecorative />
+            <span className={styles.name}>{productName}</span>
+          </>
+        ) : (
+          // Both are in the page; CSS shows the one for the theme, and the other is out of the accessibility tree.
+          <>
+            <img className={styles.logo} data-scheme="light" src={logo.light} alt={productName} />
+            <img className={styles.logo} data-scheme="dark" src={logo.dark} alt={productName} />
+          </>
+        )}
       </header>
       <Card
         placement="page"

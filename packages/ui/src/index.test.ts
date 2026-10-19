@@ -71,6 +71,7 @@ describe('@crm/ui', () => {
       'Meter',
       'Modal',
       'ModalTrigger',
+      'NavGroup',
       'NavItem',
       'NavSection',
       'OptionsEditor',

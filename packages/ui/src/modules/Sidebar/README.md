@@ -38,6 +38,7 @@ Ported from the artifact's Sidebar card. Every screen inside the app shell (#10 
 - It is the navigation landmark (`<nav>`, "Main navigation", or `label`).
 - `NavItem` is a routed link with `href` (`isCurrent` adds `aria-current="page"`), or a button with `onPress` (Invite teammates). Record objects and lists pass `hue` for their tile; a list may pass its emoji as `leading`. `meta` names a favourite's object; `badge` is for counts that need action, never totals.
 - `NavSection` folds under its label. `isLoading` draws skeleton rows after the loading delay, and on the rail a `tile` Skeleton where each icon will go, so a folded sidebar shows it is loading too (it used to stay blank); `emptyLabel` says what goes there when it has no items.
+- `NavGroup` sets fixed destinations apart after the sections without a label on screen (Bookings, Captures and Trash after Records): a section's space above it open, a section's hairline on the rail, and `role="group"` named by `label` for screen readers. Why a new part: a bare `NavItem` after a section sat flush under its last item and read as one of its rows, and a `NavSection` would add a label and a fold these destinations don't want.
 - `isWorkspaceLoading` draws the workspace's mark and name as skeletons (after the loading delay, so a quick load flashes nothing), with no menu, while its name isn't known, so no stand in name (the product's) flashes before the real one.
 - The workspace button is named "<workspace>, workspace menu". `isWorkspaceBusy` says something chosen from that menu is under way (signing out, once the menu has closed): a `Spinner` named by `workspaceBusyLabel` replaces the chevron (the mark, on the rail), and the button ignores presses while staying focusable. Why: the menu closes on the choice, so without it nothing on screen said the sign out was happening.
 - `onQuickActions` shows Quick actions with its ⌘K keycap. The screen answers the shortcut itself.
@@ -57,4 +58,4 @@ Tab moves through the workspace switcher, the collapse button, Quick actions, ea
 - `workspace` is the name; the switcher is the `Menu` you pass as `workspaceMenu`, which the name opens.
 - `search` became `onQuickActions`: the row shows only when the screen opens a palette.
 - `current` became `isCurrent`, and `NavItem` takes `href` or `onPress`.
-- New: the collapsed rail, section loading and empty states, and `footer` as a function of the folded state.
+- New: `NavGroup`, the collapsed rail, section loading and empty states, and `footer` as a function of the folded state.
