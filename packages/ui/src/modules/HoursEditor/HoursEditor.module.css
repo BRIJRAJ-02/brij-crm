@@ -1,14 +1,41 @@
-/* HoursEditor: one row per day, its switch and name in a fixed column, its
-   ranges stacked beside it, its add and remove buttons at the end; a day off
-   reads "Unavailable" in the secondary colour. Rows part with a hairline. */
+/* HoursEditor: All days start and end side by side at the top, then one row
+   per day: its switch and name in a fixed column, its windows stacked beside
+   it, Copy times to at the end; a day off reads "Unavailable" in the
+   secondary colour. Rows part with a hairline. */
 @layer components {
   .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    container-type: inline-size;
+  }
+
+  .all {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-12);
+  }
+
+  .rows {
     display: flex;
     flex-direction: column;
     margin: 0;
     padding: 0;
     list-style: none;
-    container-type: inline-size;
+  }
+
+  .copy {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    padding: var(--space-12);
+  }
+
+  .copyTitle {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
   }
 
   .row {
