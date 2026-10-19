@@ -104,8 +104,8 @@ function uploadSourceMaps(): Plugin[] {
   });
 }
 
-/** The public booking page's addresses (spec 0025): `/b/<publicKey>`, served book.html in dev and preview as Vercel does. */
-const BOOKING_PATH = /^\/b\/[^/?#]+\/?(?:[?#].*)?$/;
+/** The public booking pages' addresses (spec 0025): `/b/<publicKey>` and its `/manage`, served book.html as Vercel does. */
+const BOOKING_PATH = /^\/b\/[^/?#]+(?:\/manage)?\/?(?:[?#].*)?$/;
 
 /** Serves book.html for `/b/<publicKey>` locally, as vercel.json's rewrite does when deployed. */
 function publicBookingPage(): Plugin {

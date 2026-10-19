@@ -5,6 +5,7 @@
   "git": { "deploymentEnabled": false },
   "rewrites": [
     { "source": "/b/:publicKey", "destination": "/book.html" },
+    { "source": "/b/:publicKey/manage", "destination": "/book.html" },
     { "source": "/((?!api/|api$).*)", "destination": "/index.html" }
   ],
   "headers": [

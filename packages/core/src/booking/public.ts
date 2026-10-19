@@ -48,7 +48,7 @@ import {
 import { buildBookingIcs } from './ics.ts';
 import { matchVisitor } from './visitor.ts';
 
-const { bookings, members } = schema;
+const { bookings, members, workspaces } = schema;
 
 /** What the public services need: the calendar calls, and the clock. */
 export interface PublicBookingDeps {
@@ -96,6 +96,7 @@ export async function getPublicBookingPage(entry: BookingEntry): Promise<PublicB
       title: page.title,
       description: page.description,
       hostName: await hostName(tx, page.ownerMemberId),
+      workspaceName: (await tx.select({ name: workspaces.name }).from(workspaces).limit(1))[0]?.name ?? '',
       durations: page.durations,
       location: publicLocation(page),
       hostTimeZone: page.availability.timeZone,

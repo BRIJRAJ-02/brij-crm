@@ -1,30 +1,30 @@
 // Brief
-// Purpose: the public booking page at /b/<publicKey> (spec 0025, AC-630, AC-632, AC-636): a visitor books time with a member.
-// Main task: pick a day and a time in their own zone, give a name and email, book; a time taken meanwhile sends them back to fresh times.
-// Leaves out: questions (milestone 2), cancel and reschedule (milestone 2), analytics, captcha and the CRM app itself.
+// Purpose: the visitor's booking page at /b/<publicKey> (spec 0025, 0025-experience.md): book time with a member.
+// Main task: see the first open day's times at once, pick a time, press the bar that names it, give a name and email, confirm.
+// Leaves out: questions (milestone 2), the forms hand off's signed prefill (milestone 3, a seam), analytics and captcha.
 //
-// Spec 0023's visitor rules: plain inputs with the tokens compiled in (no library, no field editors), labels above
-// inputs, errors under their field with the first focused, one role="alert" line for anything else, a honeypot
-// and the load time instead of a captcha, and the thank you taking focus.
-import { createBookingClient, isDataError, type PublicBooking, type PublicBookingPage } from '@crm/data/booking';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// Built by hand with plain markup and the compiled tokens (spec 0023's public bundle rules): a sticky rail with
+// the host, What and the time zone beside the card on wide screens, stacked on a phone.
+import { createBookingClient, isDataError, type PublicBookingPage } from '@crm/data/booking';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import styles from './booking.module.css';
+import { Details } from './Details.tsx';
+import { Picker } from './Picker.tsx';
+import type { Prefill } from './prefill.ts';
+import { saveHour12, savedHour12, savedView, saveView, type SlotView } from './prefs.ts';
 import { strings } from './strings.ts';
-import { addDays, dayKey, dayLabels, momentLabel, startOfDay, timeLabel, weekLabel } from './time.ts';
+import { addDays, dayKey, localeUses12h, monthOf, startOfDay } from './time.ts';
+import { ZoneMenu } from './ZoneMenu.tsx';
 
-/** A visitor's name and email handed in by a form (spec 0023's "Book a quick meeting"); see `readPrefill`. */
-export interface Prefill {
-  readonly name?: string;
-  readonly email?: string;
-}
-
-/** Props for the page: its key from the address, the visitor's language and zone, the clock and any prefill. */
+/** Props for the page: its key, the visitor's language and zone, the clock, a prefill, and where success goes. */
 export interface BookingPageProps {
   readonly publicKey: string;
   readonly locale: string;
   readonly timeZone: string;
   readonly now: () => number;
   readonly prefill?: Prefill;
+  /** Opens the guest page once booked. */
+  readonly onBooked: (manageToken: string) => void;
 }
 
 type Client = ReturnType<typeof createBookingClient>;
@@ -34,32 +34,35 @@ type Loaded =
   | { readonly state: 'ready'; readonly page: PublicBookingPage }
   | { readonly state: 'gone' | 'closed' | 'failed' };
 
-type Step =
-  | { readonly step: 'pick'; readonly notice?: string }
-  | { readonly step: 'details'; readonly start: string; readonly attempt: string }
-  | { readonly step: 'done'; readonly booking: PublicBooking };
+/** One slots read covers 62 days (two months of the month view). */
+const CHUNK_DAYS = 62;
 
-/** Every zone this browser knows, the visitor's own first when it isn't listed. */
-function zones(current: string): readonly string[] {
-  const listed = typeof Intl.supportedValuesOf === 'function' ? Intl.supportedValuesOf('timeZone') : [];
-  return listed.includes(current) ? listed : [current, ...listed];
-}
+/** The host's initials, for the rail's avatar. */
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter((part) => part !== '')
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? '')
+    .join('');
 
-const zoneName = (zone: string) => zone.replaceAll('_', ' ');
-
-/** A heading that takes focus when it appears (a step's change, the thank you). */
-function FocusedTitle({ children }: { readonly children: string }) {
-  const ref = useRef<HTMLHeadingElement>(null);
-  useEffect(() => ref.current?.focus(), []);
+/** The location's icon: video, pin or phone. */
+function LocationIcon({ type }: { readonly type: PublicBookingPage['location']['type'] }) {
   return (
-    <h1 ref={ref} tabIndex={-1} className={styles.title}>
-      {children}
-    </h1>
+    <svg className={styles.icon} viewBox="0 0 24 24" aria-hidden="true">
+      {type === 'video' ? (
+        <path d="m22 8-6 4 6 4V8ZM2 7a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7Z" />
+      ) : type === 'phone' ? (
+        <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z" />
+      ) : (
+        <path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Zm-8 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+      )}
+    </svg>
   );
 }
 
-/** The page: its facts load once; then the week, the details and the thank you. */
-export function BookingPage({ publicKey, locale, timeZone, now, prefill }: BookingPageProps) {
+/** The page: its facts load once, then the steps; each state as the experience note writes it. */
+export function BookingPage({ publicKey, locale, timeZone, now, prefill, onBooked }: BookingPageProps) {
   const client = useMemo(() => createBookingClient({ origin: globalThis.location.origin }), []);
   const [startedAt] = useState(now);
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
@@ -74,69 +77,61 @@ export function BookingPage({ publicKey, locale, timeZone, now, prefill }: Booki
   }, [client, publicKey]);
   useEffect(load, [load]);
 
-  if (loaded.state === 'loading') {
+  if (loaded.state === 'ready') {
     return (
-      <main className={styles.page} aria-busy="true">
-        <div className={styles.card}>
-          <p className={styles.text}>{strings.loading}</p>
-        </div>
-      </main>
-    );
-  }
-  if (loaded.state !== 'ready') {
-    const [title, text] =
-      loaded.state === 'gone'
-        ? [strings.goneTitle, strings.goneText]
-        : loaded.state === 'closed'
-          ? [strings.closedTitle, strings.closedText]
-          : [strings.failedTitle, strings.failedText];
-    return (
-      <main className={styles.page}>
-        <div className={styles.card}>
-          <FocusedTitle>{title}</FocusedTitle>
-          <p className={styles.text}>{text}</p>
-          {loaded.state === 'failed' && (
-            <button
-              type="button"
-              className={styles.button}
-              onClick={() => {
-                setLoaded({ state: 'loading' });
-                load();
-              }}
-            >
-              {strings.retry}
-            </button>
-          )}
-        </div>
-      </main>
+      <Booking
+        client={client}
+        page={loaded.page}
+        locale={locale}
+        detected={timeZone}
+        now={now}
+        startedAt={startedAt}
+        onBooked={onBooked}
+        {...(prefill === undefined ? {} : { prefill })}
+      />
     );
   }
   return (
-    <Booking
-      client={client}
-      page={loaded.page}
-      locale={locale}
-      detected={timeZone}
-      now={now}
-      startedAt={startedAt}
-      {...(prefill === undefined ? {} : { prefill })}
-    />
+    <main className={styles.page}>
+      <div className={styles.solo}>
+        {loaded.state === 'loading' ? (
+          <div className={styles.card} aria-busy="true" aria-label={strings.loading}>
+            <div className={`${styles.skeleton} ${styles.skeletonTitle}`} />
+            <div className={`${styles.skeleton} ${styles.skeletonMonth}`} />
+            <div className={`${styles.skeleton} ${styles.skeletonBar}`} />
+          </div>
+        ) : (
+          <div className={styles.card}>
+            <h1 className={styles.title}>
+              {loaded.state === 'gone'
+                ? strings.notFoundTitle
+                : loaded.state === 'closed'
+                  ? strings.paused
+                  : strings.failedTitle}
+            </h1>
+            {loaded.state !== 'closed' && (
+              <p className={styles.muted}>{loaded.state === 'gone' ? strings.notFoundText : strings.failedText}</p>
+            )}
+            {loaded.state === 'failed' && (
+              <button
+                type="button"
+                className={styles.secondary}
+                onClick={() => {
+                  setLoaded({ state: 'loading' });
+                  load();
+                }}
+              >
+                {strings.retry}
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+    </main>
   );
 }
 
-/** Where the meeting happens, as one sentence. */
-function whereOf(page: PublicBookingPage): string {
-  switch (page.location.type) {
-    case 'video':
-      return strings.location.video;
-    case 'phone':
-      return strings.location.phone;
-    default:
-      return page.location.value;
-  }
-}
-
-/** The booking steps for a loaded page. */
+/** The loaded page: rail, headline, and the card with its two steps. */
 function Booking({
   client,
   page,
@@ -145,6 +140,7 @@ function Booking({
   now,
   startedAt,
   prefill,
+  onBooked,
 }: {
   readonly client: Client;
   readonly page: PublicBookingPage;
@@ -153,487 +149,256 @@ function Booking({
   readonly now: () => number;
   readonly startedAt: number;
   readonly prefill?: Prefill;
+  readonly onBooked: (manageToken: string) => void;
 }) {
   const [zone, setZone] = useState(detected);
+  const [hour12, setHour12] = useState(() => savedHour12() ?? localeUses12h(locale));
+  const [view, setView] = useState<SlotView>(savedView);
   const [duration, setDuration] = useState<number>(page.durations[0] ?? 30);
   const today = dayKey(now(), zone);
-  const [weekStart, setWeekStart] = useState(today);
-  const [step, setStep] = useState<Step>({ step: 'pick' });
-
-  if (step.step === 'done') {
-    return (
-      <main className={styles.page}>
-        <div className={styles.card}>
-          <p className={styles.host}>{page.hostName}</p>
-          <FocusedTitle>{strings.confirmedTitle}</FocusedTitle>
-          <p className={styles.text}>{strings.confirmedText(page.hostName)}</p>
-          <dl className={styles.details}>
-            <dt className={styles.term}>{strings.when}</dt>
-            <dd
-              className={styles.description}
-            >{`${momentLabel(step.booking.start, zone, locale)} (${zoneName(zone)})`}</dd>
-            <dt className={styles.term}>{strings.with}</dt>
-            <dd className={styles.description}>{page.hostName}</dd>
-            <dt className={styles.term}>{strings.where}</dt>
-            <dd className={styles.description}>{whereOf(page)}</dd>
-          </dl>
-        </div>
-      </main>
-    );
-  }
-
-  return (
-    <main className={styles.page}>
-      <div className={styles.card}>
-        <p className={styles.host}>{page.hostName}</p>
-        <h1 className={styles.title}>{page.title}</h1>
-        {page.description !== '' && <p className={styles.text}>{page.description}</p>}
-        <p className={styles.note}>{whereOf(page)}</p>
-        {step.step === 'pick' ? (
-          <>
-            {step.notice !== undefined && (
-              <p className={styles.alert} role="alert">
-                {step.notice}
-              </p>
-            )}
-            {page.durations.length > 1 && (
-              <div className={styles.field}>
-                <label className={styles.label} htmlFor="booking-length">
-                  {strings.length}
-                </label>
-                <select
-                  id="booking-length"
-                  className={styles.input}
-                  value={String(duration)}
-                  onChange={(event) => setDuration(Number(event.target.value))}
-                >
-                  {page.durations.map((minutes) => (
-                    <option key={minutes} value={String(minutes)}>
-                      {strings.minutes(minutes)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-            <div className={styles.field}>
-              <label className={styles.label} htmlFor="booking-zone">
-                {strings.zone}
-              </label>
-              <select
-                id="booking-zone"
-                className={styles.input}
-                value={zone}
-                onChange={(event) => setZone(event.target.value)}
-              >
-                {zones(zone).map((each) => (
-                  <option key={each} value={each}>
-                    {zoneName(each)}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <Week
-              client={client}
-              page={page}
-              zone={zone}
-              duration={duration}
-              locale={locale}
-              today={today}
-              horizon={dayKey(now() + page.windowDays * 86_400_000, zone)}
-              weekStart={weekStart}
-              onWeek={setWeekStart}
-              reloadKey={step.notice ?? ''}
-              onPick={(start) => setStep({ step: 'details', start, attempt: crypto.randomUUID() })}
-            />
-          </>
-        ) : (
-          <Details
-            client={client}
-            page={page}
-            start={step.start}
-            attempt={step.attempt}
-            duration={duration}
-            zone={zone}
-            locale={locale}
-            startedAt={startedAt}
-            {...(prefill === undefined ? {} : { prefill })}
-            onBack={(notice) => setStep(notice === undefined ? { step: 'pick' } : { step: 'pick', notice })}
-            onBooked={(booking) => setStep({ step: 'done', booking })}
-          />
-        )}
-      </div>
-    </main>
-  );
-}
-
-/** A week of days and the chosen day's times, read for the range shown; the next free day chosen. */
-function Week({
-  client,
-  page,
-  zone,
-  duration,
-  locale,
-  today,
-  horizon,
-  weekStart,
-  onWeek,
-  reloadKey,
-  onPick,
-}: {
-  readonly client: Client;
-  readonly page: PublicBookingPage;
-  readonly zone: string;
-  readonly duration: number;
-  readonly locale: string;
-  readonly today: string;
-  readonly horizon: string;
-  readonly weekStart: string;
-  readonly onWeek: (key: string) => void;
-  readonly reloadKey: string;
-  readonly onPick: (start: string) => void;
-}) {
-  const [reload, setReload] = useState(0);
-  const requestKey = `${weekStart}|${zone}|${String(duration)}|${String(reload)}|${reloadKey}`;
-  // The answer to the latest range asked for; another range still loading shows as loading.
-  const [slots, setSlots] = useState<{
+  const horizon = dayKey(now() + page.windowDays * 86_400_000, zone);
+  const chunks = Math.max(1, Math.ceil(page.windowDays / CHUNK_DAYS));
+  // Slots by chunk of 62 days from today, for the zone and length they were read in.
+  const [read, setRead] = useState<{
     readonly key: string;
-    readonly ok: boolean;
-    readonly starts: readonly string[];
+    readonly loaded: ReadonlyMap<number, readonly string[]>;
+    readonly unreachable: boolean;
+    readonly failed: boolean;
+  }>({ key: '', loaded: new Map(), unreachable: false, failed: false });
+  const [wanted, setWanted] = useState(0);
+  const [reload, setReload] = useState(0);
+  const readKey = `${zone}|${String(duration)}|${String(reload)}`;
+  const [day, setDay] = useState<string | undefined>(undefined);
+  const [month, setMonth] = useState(monthOf(today));
+  const [time, setTime] = useState<string | undefined>(undefined);
+  const [step, setStep] = useState<{
+    readonly step: 'pick' | 'details';
+    readonly attempt: string;
+    readonly back: boolean;
   }>({
-    key: '',
-    ok: true,
-    starts: [],
+    step: 'pick',
+    attempt: '',
+    back: false,
   });
-  const [chosen, setChosen] = useState<string | undefined>(undefined);
+  const [notice, setNotice] = useState<string | undefined>(undefined);
+
   useEffect(() => {
+    const current = read.key === readKey ? read.loaded : new Map<number, readonly string[]>();
+    if (current.has(wanted)) return;
     const controller = new AbortController();
+    const from = startOfDay(addDays(today, wanted * CHUNK_DAYS), zone);
+    const to = startOfDay(addDays(today, (wanted + 1) * CHUNK_DAYS), zone);
     client
       .slots(
         page.publicKey,
-        {
-          from: new Date(startOfDay(weekStart, zone)).toISOString(),
-          to: new Date(startOfDay(addDays(weekStart, 7), zone)).toISOString(),
-          duration,
-          tz: zone,
-        },
+        { from: new Date(Math.max(from, now())).toISOString(), to: new Date(to).toISOString(), duration, tz: zone },
         controller.signal,
       )
       .then(
         (answer) => {
-          const starts = answer.slots.map((slot) => slot.start);
-          setSlots({ key: requestKey, ok: true, starts });
-          const first = starts[0];
-          setChosen(first === undefined ? undefined : dayKey(Date.parse(first), zone));
+          const next = new Map(current);
+          next.set(
+            wanted,
+            answer.slots.map((slot) => slot.start),
+          );
+          setRead({ key: readKey, loaded: next, unreachable: answer.calendar === 'unreachable', failed: false });
+          // The first open day is chosen on arrival (AC-665); further chunks on until one has times.
+          const first = [...next.values()].flat().sort()[0];
+          if (first === undefined && wanted + 1 < chunks) setWanted(wanted + 1);
+          setDay((chosen) => chosen ?? (first === undefined ? undefined : dayKey(Date.parse(first), zone)));
+          if (first !== undefined)
+            setMonth((shown) => (shown === monthOf(today) ? monthOf(dayKey(Date.parse(first), zone)) : shown));
         },
         (error: unknown) => {
           if (error instanceof DOMException && error.name === 'AbortError') return;
-          setSlots({ key: requestKey, ok: false, starts: [] });
+          setRead({ key: readKey, loaded: current, unreachable: false, failed: true });
         },
       );
     return () => controller.abort();
-  }, [client, page.publicKey, weekStart, zone, duration, requestKey]);
-  const status = slots.key !== requestKey ? 'loading' : slots.ok ? 'ready' : 'error';
-  const days = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
+  }, [client, page.publicKey, zone, duration, wanted, readKey, read, today, chunks, now]);
+
+  const loaded = read.key === readKey ? read.loaded : new Map<number, readonly string[]>();
+  const starts = [...loaded.values()].flat().sort();
   const byDay = new Map<string, string[]>();
-  for (const start of status === 'ready' ? slots.starts : []) {
+  for (const start of starts) {
     const key = dayKey(Date.parse(start), zone);
     byDay.set(key, [...(byDay.get(key) ?? []), start]);
   }
-  const chosenTimes = chosen === undefined ? [] : (byDay.get(chosen) ?? []);
-  const chosenLabel = chosen === undefined ? '' : dayLabels(chosen, locale).label;
-  return (
-    <section className={styles.picker} aria-label={strings.days}>
-      <div className={styles.week}>
-        <button
-          type="button"
-          className={`${styles.button} ${styles.arrow}`}
-          aria-label={strings.previousWeek}
-          disabled={weekStart <= today || status === 'loading'}
-          onClick={() => onWeek(addDays(weekStart, -7) < today ? today : addDays(weekStart, -7))}
-        >
-          ‹
-        </button>
-        <h2 className={styles.weekLabel} aria-live="polite">
-          {weekLabel(weekStart, days[6] ?? weekStart, locale)}
-        </h2>
-        <button
-          type="button"
-          className={`${styles.button} ${styles.arrow}`}
-          aria-label={strings.nextWeek}
-          disabled={addDays(weekStart, 7) > horizon || status === 'loading'}
-          onClick={() => onWeek(addDays(weekStart, 7))}
-        >
-          ›
-        </button>
-      </div>
-      {status === 'loading' ? (
-        <p className={styles.text} aria-busy="true">
-          {strings.timesLoading}
+  const isLoading = !loaded.has(0) && !read.failed;
+  // Moving to a month past what's read asks for its chunk.
+  const showMonth = (next: string) => {
+    setMonth(next);
+    const offset = Math.floor((startOfDay(`${next}-01`, zone) - startOfDay(today, zone)) / 86_400_000 / CHUNK_DAYS);
+    for (let chunk = 0; chunk <= Math.min(offset + 1, chunks - 1); chunk += 1) {
+      if (!loaded.has(chunk)) {
+        setWanted(chunk);
+        break;
+      }
+    }
+  };
+  const resetChoice = () => {
+    setDay(undefined);
+    setTime(undefined);
+    setMonth(monthOf(today));
+    setWanted(0);
+  };
+
+  const card = (
+    <section className={styles.card} aria-label={page.title}>
+      {notice !== undefined && step.step === 'pick' && (
+        <p className={styles.errorLine} role="alert">
+          {notice}
         </p>
-      ) : status === 'error' ? (
-        <>
-          <p className={styles.alert} role="alert">
-            {strings.timesFailed}
-          </p>
-          <button type="button" className={styles.button} onClick={() => setReload((count) => count + 1)}>
+      )}
+      {page.durations.length > 1 && step.step === 'pick' && (
+        <div className={styles.segmented} role="radiogroup" aria-label={strings.length}>
+          {page.durations.map((minutes) => (
+            <button
+              key={minutes}
+              type="button"
+              role="radio"
+              aria-checked={duration === minutes}
+              className={styles.segment}
+              onClick={() => {
+                setDuration(minutes);
+                resetChoice();
+              }}
+            >
+              {strings.minutesShort(minutes)}
+            </button>
+          ))}
+        </div>
+      )}
+      {step.step === 'details' && time !== undefined ? (
+        <div className={styles.swap}>
+          <Details
+            client={client}
+            page={page}
+            start={time}
+            attempt={step.attempt}
+            duration={duration}
+            zone={zone}
+            locale={locale}
+            hour12={hour12}
+            startedAt={startedAt}
+            now={now()}
+            {...(prefill === undefined ? {} : { prefill })}
+            onBack={(taken) => {
+              setStep({ step: 'pick', attempt: '', back: true });
+              if (taken === true) {
+                setNotice(strings.errors.taken);
+                setTime(undefined);
+                setReload((count) => count + 1);
+              } else {
+                setNotice(undefined);
+              }
+            }}
+            onBooked={(booked) => onBooked(booked.manageToken)}
+          />
+        </div>
+      ) : isLoading ? (
+        <div aria-busy="true" aria-label={strings.loading}>
+          <div className={`${styles.skeleton} ${styles.skeletonMonth}`} />
+          <div className={`${styles.skeleton} ${styles.skeletonBar}`} />
+        </div>
+      ) : read.unreachable ? (
+        <p className={styles.state}>{strings.unreachable(page.hostName)}</p>
+      ) : read.failed ? (
+        <div className={styles.state}>
+          <p role="alert">{strings.errors.failed}</p>
+          <button type="button" className={styles.secondary} onClick={() => setReload((count) => count + 1)}>
             {strings.retry}
           </button>
-        </>
+        </div>
+      ) : starts.length === 0 && loaded.size >= Math.min(chunks, 2) ? (
+        <div className={styles.state}>
+          <p className={styles.stateTitle}>{strings.noTimesTitle}</p>
+          <p className={styles.muted}>{strings.noTimesText}</p>
+        </div>
       ) : (
-        <>
-          <fieldset className={styles.days}>
-            <legend className={styles.legend}>{strings.days}</legend>
-            {days.map((key) => {
-              const labels = dayLabels(key, locale);
-              const open = (byDay.get(key) ?? []).length > 0;
-              return (
-                <label key={key} className={styles.day}>
-                  <input
-                    type="radio"
-                    name="booking-day"
-                    className={styles.radio}
-                    value={key}
-                    checked={chosen === key}
-                    disabled={!open}
-                    aria-label={open ? labels.label : `${labels.label}, ${strings.noTimesDay}`}
-                    onChange={() => setChosen(key)}
-                  />
-                  <span className={styles.weekday} aria-hidden="true">
-                    {labels.weekday}
-                  </span>
-                  <span className={styles.dayNumber} aria-hidden="true">
-                    {labels.day}
-                  </span>
-                </label>
-              );
-            })}
-          </fieldset>
-          {byDay.size === 0 ? (
-            <p className={styles.text}>{strings.emptyWeek}</p>
-          ) : (
-            chosen !== undefined && (
-              <ul className={styles.times} aria-label={strings.timesOn(chosenLabel)}>
-                {chosenTimes.map((start) => (
-                  <li key={start}>
-                    <button type="button" className={styles.button} onClick={() => onPick(start)}>
-                      {timeLabel(start, zone, locale)}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )
-          )}
-        </>
+        <div className={styles.swap}>
+          <Picker
+            byDay={byDay}
+            today={today}
+            lastMonth={monthOf(horizon)}
+            zone={zone}
+            locale={locale}
+            hour12={hour12}
+            onHour12={(next) => {
+              setHour12(next);
+              saveHour12(next);
+            }}
+            view={view}
+            onView={(next) => {
+              setView(next);
+              saveView(next);
+            }}
+            duration={duration}
+            day={day}
+            onDay={(next) => {
+              setDay(next);
+              setTime(undefined);
+            }}
+            month={month}
+            onMonth={showMonth}
+            time={time}
+            onTime={setTime}
+            onCommit={() => {
+              setNotice(undefined);
+              setStep({ step: 'details', attempt: crypto.randomUUID(), back: false });
+            }}
+            focusDay={step.back}
+          />
+        </div>
       )}
     </section>
   );
-}
-
-type FieldName = 'name' | 'email' | 'phone';
-
-/** A rough email shape: the server checks it properly. */
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-/** The visitor's details for the chosen time, and Book. */
-function Details({
-  client,
-  page,
-  start,
-  attempt,
-  duration,
-  zone,
-  locale,
-  startedAt,
-  prefill,
-  onBack,
-  onBooked,
-}: {
-  readonly client: Client;
-  readonly page: PublicBookingPage;
-  readonly start: string;
-  readonly attempt: string;
-  readonly duration: number;
-  readonly zone: string;
-  readonly locale: string;
-  readonly startedAt: number;
-  readonly prefill?: Prefill;
-  readonly onBack: (notice?: string) => void;
-  readonly onBooked: (booking: PublicBooking) => void;
-}) {
-  const needsPhone = page.location.type === 'phone';
-  const [values, setValues] = useState<Record<FieldName, string>>({
-    name: prefill?.name ?? '',
-    email: prefill?.email ?? '',
-    phone: '',
-  });
-  const [trap, setTrap] = useState('');
-  const [errors, setErrors] = useState<Partial<Record<FieldName, string>>>({});
-  const [alert, setAlert] = useState<string | undefined>(undefined);
-  const [isBusy, setBusy] = useState(false);
-  const inputs = useRef<Partial<Record<FieldName, HTMLInputElement | null>>>({});
-  const order: readonly FieldName[] = needsPhone ? ['name', 'email', 'phone'] : ['name', 'email'];
-
-  const check = (next: Record<FieldName, string>): Partial<Record<FieldName, string>> => ({
-    ...(next.name.trim() === '' ? { name: strings.nameRequired } : {}),
-    ...(EMAIL.test(next.email.trim()) ? {} : { email: strings.emailRequired }),
-    ...(needsPhone && next.phone.trim() === '' ? { phone: strings.phoneRequired } : {}),
-  });
-  const focusFirst = (found: Partial<Record<FieldName, string>>) => {
-    const first = order.find((field) => found[field] !== undefined);
-    if (first !== undefined) inputs.current[first]?.focus();
-  };
-  const set = (field: FieldName, value: string) => {
-    const next = { ...values, [field]: value };
-    setValues(next);
-    // A field with an error is checked again on each change.
-    if (errors[field] !== undefined) setErrors((current) => ({ ...current, [field]: check(next)[field] }));
-  };
-
-  const book = () => {
-    if (isBusy) return;
-    const found = check(values);
-    setErrors(found);
-    setAlert(undefined);
-    if (Object.keys(found).length > 0) {
-      focusFirst(found);
-      return;
-    }
-    setBusy(true);
-    client
-      .book(page.publicKey, {
-        idempotencyKey: attempt,
-        start,
-        duration: duration as 15 | 30 | 45 | 60 | 90,
-        name: values.name.trim(),
-        email: values.email.trim(),
-        timeZone: zone,
-        ...(needsPhone ? { phone: values.phone.trim() } : {}),
-        company_url: trap,
-        startedAt,
-      })
-      .then(onBooked, (error: unknown) => {
-        setBusy(false);
-        if (!isDataError(error)) {
-          setAlert(strings.tryAgain);
-          return;
-        }
-        if (error.code === 'SLOT_TAKEN') {
-          onBack(strings.taken);
-          return;
-        }
-        const fromServer: Partial<Record<FieldName, string>> = {};
-        for (const issue of error.data?.issues ?? []) {
-          const field = issue.path[0];
-          if ((field === 'name' || field === 'email' || field === 'phone') && fromServer[field] === undefined) {
-            fromServer[field] = issue.message;
-          }
-        }
-        for (const refusal of error.data?.refusals ?? []) {
-          const field = refusal.field;
-          if ((field === 'name' || field === 'email' || field === 'phone') && fromServer[field] === undefined) {
-            fromServer[field] = refusal.message;
-          }
-        }
-        if (Object.keys(fromServer).length > 0) {
-          setErrors(fromServer);
-          focusFirst(fromServer);
-          return;
-        }
-        setAlert(
-          error.code === 'API_UNAVAILABLE'
-            ? strings.offline
-            : error.code === 'INPUT_INVALID'
-              ? strings.tryAgain
-              : error.message,
-        );
-      });
-  };
-
-  const field = (
-    name: FieldName,
-    label: string,
-    type: 'text' | 'email' | 'tel',
-    autoComplete: string,
-    hint?: string,
-  ) => {
-    const error = errors[name];
-    const describedBy = [
-      hint === undefined ? undefined : `booking-${name}-hint`,
-      error === undefined ? undefined : `booking-${name}-error`,
-    ]
-      .filter((id) => id !== undefined)
-      .join(' ');
-    return (
-      <div className={styles.field}>
-        <label className={styles.label} htmlFor={`booking-${name}`}>
-          {label}
-        </label>
-        {hint !== undefined && (
-          <p id={`booking-${name}-hint`} className={styles.text}>
-            {hint}
-          </p>
-        )}
-        <input
-          id={`booking-${name}`}
-          ref={(element) => {
-            inputs.current[name] = element;
-          }}
-          className={styles.input}
-          type={type}
-          name={name}
-          autoComplete={autoComplete}
-          maxLength={name === 'email' ? 254 : name === 'phone' ? 40 : 200}
-          value={values[name]}
-          aria-invalid={error === undefined ? undefined : true}
-          {...(describedBy === '' ? {} : { 'aria-describedby': describedBy })}
-          onChange={(event) => set(name, event.target.value)}
-        />
-        {error !== undefined && (
-          <p id={`booking-${name}-error`} className={styles.error}>
-            {error}
-          </p>
-        )}
-      </div>
-    );
-  };
 
   return (
-    <form
-      className={styles.field}
-      noValidate
-      onSubmit={(event) => {
-        event.preventDefault();
-        book();
-      }}
-    >
-      <p className={styles.note}>
-        {`${momentLabel(start, zone, locale)}, ${strings.minutes(duration)} (${zoneName(zone)})`}
-      </p>
-      {field('name', strings.name, 'text', 'name')}
-      {field('email', strings.email, 'email', 'email')}
-      {needsPhone && field('phone', strings.phone, 'tel', 'tel', strings.phoneHint)}
-      <div className={styles.trap} aria-hidden="true">
-        <label htmlFor="booking-company-url">{strings.trap}</label>
-        <input
-          id="booking-company-url"
-          name="company_url"
-          tabIndex={-1}
-          autoComplete="off"
-          value={trap}
-          onChange={(event) => setTrap(event.target.value)}
-        />
+    <main className={styles.page}>
+      <div className={styles.layout}>
+        <aside className={styles.rail}>
+          <div className={styles.host}>
+            <span className={styles.avatar} aria-hidden="true">
+              {initials(page.hostName)}
+            </span>
+            <span className={styles.hostName}>{page.hostName}</span>
+          </div>
+          <dl className={styles.facts}>
+            <dt className={styles.factTerm}>{strings.what}</dt>
+            <dd className={styles.factValue}>
+              <LocationIcon type={page.location.type} />
+              <span>{page.title}</span>
+            </dd>
+            <dt className={styles.factTerm}>{strings.timeZone}</dt>
+            <dd className={styles.factValue}>
+              <ZoneMenu
+                zone={zone}
+                now={now()}
+                onChange={(next) => {
+                  setZone(next);
+                  resetChoice();
+                }}
+              />
+            </dd>
+          </dl>
+          <footer className={styles.railFoot}>
+            {page.workspaceName !== '' && <p className={styles.muted}>{page.workspaceName}</p>}
+            <p className={styles.faint}>{strings.madeWith}</p>
+          </footer>
+        </aside>
+        <div className={styles.main}>
+          <h1 className={styles.headline} data-quiet={step.step === 'details' ? '' : undefined}>
+            {page.title}
+          </h1>
+          {page.description !== '' && step.step === 'pick' && <p className={styles.muted}>{page.description}</p>}
+          {card}
+        </div>
+        <footer className={styles.pageFoot}>
+          {page.workspaceName !== '' && <p className={styles.muted}>{page.workspaceName}</p>}
+          <p className={styles.faint}>{strings.madeWith}</p>
+        </footer>
       </div>
-      {alert !== undefined && (
-        <p className={styles.alert} role="alert">
-          {alert}
-        </p>
-      )}
-      <button type="submit" className={`${styles.button} ${styles.primary}`} disabled={isBusy}>
-        {isBusy ? strings.booking : strings.book}
-      </button>
-      <button type="button" className={styles.link} disabled={isBusy} onClick={() => onBack()}>
-        {strings.back}
-      </button>
-    </form>
+    </main>
   );
 }

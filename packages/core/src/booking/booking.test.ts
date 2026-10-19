@@ -205,6 +205,7 @@ describe('the public page and its slots (AC-629, AC-631, AC-644)', () => {
       title: 'Intro call',
       description: '',
       hostName: 'Ada Host',
+      workspaceName: 'Booking',
       durations: [30],
       location: { type: 'video' },
       hostTimeZone: 'UTC',

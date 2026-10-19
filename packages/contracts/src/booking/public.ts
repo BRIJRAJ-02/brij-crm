@@ -29,6 +29,8 @@ export const PublicBookingPage = z.object({
   description: z.string(),
   /** The host's name as the workspace shows it (never their email). */
   hostName: z.string(),
+  /** The workspace's name, for the page's foot. */
+  workspaceName: z.string(),
   durations: z.array(BookingDuration),
   location: PublicLocation,
   /** The host's zone, for "times shown in …" when the visitor changes theirs. */
