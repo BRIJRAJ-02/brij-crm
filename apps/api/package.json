@@ -19,6 +19,7 @@
     "@orpc/server": "catalog:",
     "@sentry/node": "catalog:",
     "better-auth": "catalog:",
+    "free-email-domains": "catalog:",
     "graphile-worker": "catalog:",
     "hono": "catalog:",
     "posthog-node": "catalog:",

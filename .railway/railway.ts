@@ -60,6 +60,13 @@ export default defineRailway(() => {
       // POSTHOG_HOST defaults to https://eu.i.posthog.com.
       POSTHOG_KEY: preserve(),
       POSTHOG_HOST: preserve(),
+      // Calendar sync (spec 0024): off until the owner sets CALENDAR_SYNC=on with the Google client, the token key
+      // and the public origin Google posts push notices to.
+      CALENDAR_SYNC: preserve(),
+      GOOGLE_CALENDAR_CLIENT_ID: preserve(),
+      GOOGLE_CALENDAR_CLIENT_SECRET: preserve(),
+      CALENDAR_TOKEN_KEY: preserve(),
+      CALENDAR_WEBHOOK_ORIGIN: preserve(),
     },
   });
 
@@ -83,6 +90,12 @@ export default defineRailway(() => {
       // and the worker sleeps after this many idle seconds (180 when unset, 0 never).
       JOBS_RUNNER: preserve(),
       WORKER_IDLE_SLEEP_SECONDS: preserve(),
+      // Calendar sync (spec 0024): the worker refreshes tokens and syncs, with the api's values.
+      CALENDAR_SYNC: api.env.CALENDAR_SYNC,
+      GOOGLE_CALENDAR_CLIENT_ID: api.env.GOOGLE_CALENDAR_CLIENT_ID,
+      GOOGLE_CALENDAR_CLIENT_SECRET: api.env.GOOGLE_CALENDAR_CLIENT_SECRET,
+      CALENDAR_TOKEN_KEY: api.env.CALENDAR_TOKEN_KEY,
+      CALENDAR_WEBHOOK_ORIGIN: api.env.CALENDAR_WEBHOOK_ORIGIN,
       // Graphile's cron is UTC whatever the zone; the logs' times and anything else local read UTC too.
       TZ: 'UTC',
       // SIGTERM to SIGKILL: time for the slices in hand to finish their batch and hand their jobs back.

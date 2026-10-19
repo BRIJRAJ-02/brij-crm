@@ -42,6 +42,7 @@ catalog:
   eslint: 10.11.0
   eslint-plugin-jsx-a11y-x: 0.2.0
   eslint-plugin-react-hooks: 7.1.1
+  free-email-domains: 1.15.2
   globals: 17.13.0
   graphile-worker: 0.18.0
   hono: 4.13.12
@@ -86,3 +87,5 @@ onlyBuiltDependencies:
 # (@sentry/cli-<platform>), so the source map upload never needs the script.
 ignoredBuiltDependencies:
   - "@sentry/cli"
+  # Its postinstall only prints; the domain list is the package's own JSON (spec 0024).
+  - free-email-domains

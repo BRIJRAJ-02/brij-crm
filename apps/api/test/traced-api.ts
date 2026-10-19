@@ -56,6 +56,7 @@ const apiEnv = {
   BETTER_AUTH_URL: APP_URL,
   MAIL_FROM: 'CRM <sign-in@crm.localhost>',
   MAILPIT_URL: 'http://127.0.0.1:1',
+  calendar: undefined,
 } as const;
 
 const codes: string[] = [];

@@ -117,6 +117,9 @@ catalogs:
     eslint-plugin-react-hooks:
       specifier: 7.1.1
       version: 7.1.1
+    free-email-domains:
+      specifier: 1.15.2
+      version: 1.15.2
     globals:
       specifier: 17.13.0
       version: 17.13.0
@@ -266,6 +269,9 @@ importers:
       better-auth:
         specifier: 'catalog:'
         version: 1.7.7(@opentelemetry/api@1.9.1)(drizzle-kit@0.31.11)(drizzle-orm@0.45.3(@cloudflare/workers-types@5.20260930.2)(@opentelemetry/api@1.9.1)(@types/pg@8.23.1)(kysely@0.29.6)(pg@8.23.1))(pg@8.23.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@5.0.3)
+      free-email-domains:
+        specifier: 'catalog:'
+        version: 1.15.2
       graphile-worker:
         specifier: 'catalog:'
         version: 0.18.0(typescript@6.0.3)
@@ -3932,6 +3938,10 @@ packages:
   for-each@0.3.5:
     resolution: {integrity: sha512-dKx12eRCVIzqCxFGplyFKJMPvLEWgmNtUrpTiJIR5u97zEhRG8ySrtboPHZXx7daLxQVrl643cTzbab2tkQjxg==}
     engines: {node: '>= 0.4'}
+
+  free-email-domains@1.15.2:
+    resolution: {integrity: sha512-haY2OZJknukzEVnoMXoxEaz/br3s5UXJeK2zutCLlpGuqMBAwFkhG/NUjJhZqxWVrbfdA8Yd5PR8Y/fuwo+JQA==}
+    engines: {node: '>= 18'}
 
   fsevents@2.3.3:
     resolution: {integrity: sha512-5xoDfX+fL7faATnagmWPpbFtwh/R77WmMMqqHGS65C3vvB0YHrgF+B1YmZ3441tMj5n63k0212XNoJwzlhffQw==}
@@ -8689,6 +8699,8 @@ snapshots:
   for-each@0.3.5:
     dependencies:
       is-callable: 1.2.7
+
+  free-email-domains@1.15.2: {}
 
   fsevents@2.3.3:
     optional: true

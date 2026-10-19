@@ -1,4 +1,5 @@
 import { AppEnvironment } from '@crm/contracts';
+import { decodeTokenKey, type TokenKey } from '@crm/core';
 import * as z from 'zod';
 
 const origins = z
@@ -129,6 +130,94 @@ const allowlist = z
     ]),
   );
 
+// Calendar sync (spec 0024): off unless `CALENDAR_SYNC=on`, so the app boots without it. On, it needs a Google
+// OAuth client with the Calendar API enabled (it may be sign in's client, with the redirect URI
+// `<APP_URL>/api/calendar/google/callback` added), the 32 byte key members' tokens are sealed with, and (outside
+// local) the public https origin Google posts push notices to. Both the api and the worker read them: the worker
+// refreshes tokens and syncs.
+const calendarFields = {
+  CALENDAR_SYNC: optional(z.enum(['on', 'off'])),
+  GOOGLE_CALENDAR_CLIENT_ID: optional(z.string().trim().min(1)),
+  GOOGLE_CALENDAR_CLIENT_SECRET: optional(z.string().trim().min(1)),
+  CALENDAR_TOKEN_KEY: optional(z.string()),
+  CALENDAR_WEBHOOK_ORIGIN: optional(z.url()),
+};
+
+/** The calendar variables as parsed, before they are checked together. */
+interface CalendarFields {
+  readonly CALENDAR_SYNC?: 'on' | 'off' | undefined;
+  readonly GOOGLE_CALENDAR_CLIENT_ID?: string | undefined;
+  readonly GOOGLE_CALENDAR_CLIENT_SECRET?: string | undefined;
+  readonly CALENDAR_TOKEN_KEY?: string | undefined;
+  readonly CALENDAR_WEBHOOK_ORIGIN?: string | undefined;
+}
+
+/** Calendar sync's settings once checked: its Google client, the token key, and where Google posts notices. */
+export interface CalendarSettings {
+  readonly clientId: string;
+  readonly clientSecret: string;
+  readonly tokenKey: TokenKey;
+  /** The public https origin for push notices (milestone 2); unset locally, where sync runs on the poll. */
+  readonly webhookOrigin: string | undefined;
+}
+
+/** Refuses calendar sync switched on without what it needs; nothing is asked of it while it is off. */
+function checkCalendar(
+  env: CalendarFields & { readonly APP_ENV: string },
+  missing: (path: string, message: string) => void,
+): void {
+  if (env.CALENDAR_SYNC !== 'on') return;
+  if (env.GOOGLE_CALENDAR_CLIENT_ID === undefined) {
+    missing(
+      'GOOGLE_CALENDAR_CLIENT_ID',
+      'CALENDAR_SYNC=on needs GOOGLE_CALENDAR_CLIENT_ID: a Google OAuth client with the Calendar API enabled.',
+    );
+  }
+  if (env.GOOGLE_CALENDAR_CLIENT_SECRET === undefined) {
+    missing('GOOGLE_CALENDAR_CLIENT_SECRET', 'CALENDAR_SYNC=on needs GOOGLE_CALENDAR_CLIENT_SECRET.');
+  }
+  if (env.CALENDAR_TOKEN_KEY === undefined) {
+    missing('CALENDAR_TOKEN_KEY', 'CALENDAR_SYNC=on needs CALENDAR_TOKEN_KEY. Make one: `openssl rand -base64 32`.');
+  } else {
+    try {
+      decodeTokenKey(env.CALENDAR_TOKEN_KEY);
+    } catch (error) {
+      missing('CALENDAR_TOKEN_KEY', error instanceof Error ? error.message : 'CALENDAR_TOKEN_KEY is not a key.');
+    }
+  }
+  const origin = env.CALENDAR_WEBHOOK_ORIGIN;
+  if (origin !== undefined && URL.canParse(origin) && new URL(origin).origin !== origin.replace(/\/$/, '')) {
+    missing('CALENDAR_WEBHOOK_ORIGIN', 'CALENDAR_WEBHOOK_ORIGIN is an origin only, such as https://api.example.com.');
+  }
+  if (env.APP_ENV === 'local') return;
+  if (origin === undefined) {
+    missing(
+      'CALENDAR_WEBHOOK_ORIGIN',
+      `CALENDAR_SYNC=on needs CALENDAR_WEBHOOK_ORIGIN in ${env.APP_ENV}: the public https origin Google posts to.`,
+    );
+  } else if (URL.canParse(origin) && new URL(origin).protocol !== 'https:') {
+    missing('CALENDAR_WEBHOOK_ORIGIN', `CALENDAR_WEBHOOK_ORIGIN must be https in ${env.APP_ENV}.`);
+  }
+}
+
+/** Calendar sync's settings, or undefined while it is off (the checks above already ran). */
+function calendarOf(env: CalendarFields): CalendarSettings | undefined {
+  if (
+    env.CALENDAR_SYNC !== 'on' ||
+    env.GOOGLE_CALENDAR_CLIENT_ID === undefined ||
+    env.GOOGLE_CALENDAR_CLIENT_SECRET === undefined ||
+    env.CALENDAR_TOKEN_KEY === undefined
+  ) {
+    return undefined;
+  }
+  return {
+    clientId: env.GOOGLE_CALENDAR_CLIENT_ID,
+    clientSecret: env.GOOGLE_CALENDAR_CLIENT_SECRET,
+    tokenKey: decodeTokenKey(env.CALENDAR_TOKEN_KEY),
+    webhookOrigin: env.CALENDAR_WEBHOOK_ORIGIN === undefined ? undefined : new URL(env.CALENDAR_WEBHOOK_ORIGIN).origin,
+  };
+}
+
 /** Locally, codes land in Mailpit unless a Resend key is set. */
 const DEFAULT_LOCAL_SENDER = 'CRM <sign-in@crm.localhost>';
 
@@ -178,9 +267,11 @@ export const ApiEnv = z
     // The load harness's timing header (spec 0011, AC-202): `on` adds `Server-Timing` (pool wait, database and
     // handler time) to every /api/rpc answer. Local only: it exposes internal timings, so it is refused elsewhere.
     LOAD_TIMING: optional(z.enum(['on', 'off'])),
+    ...calendarFields,
   })
   .superRefine((env, issues) => {
     const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });
+    checkCalendar(env, missing);
     if (env.LOAD_TIMING === 'on' && env.APP_ENV !== 'local') {
       missing(
         'LOAD_TIMING',
@@ -240,11 +331,13 @@ export const ApiEnv = z
       missing('BETTER_AUTH_URL', `BETTER_AUTH_URL must have the same origin as APP_URL in ${env.APP_ENV}.`);
     }
   })
-  .transform((env) => ({
+  .transform(({ CALENDAR_TOKEN_KEY, GOOGLE_CALENDAR_CLIENT_SECRET, ...env }) => ({
     ...env,
     MAIL_FROM: env.MAIL_FROM ?? DEFAULT_LOCAL_SENDER,
     // Mailpit is a laptop's inbox; a deployed API never sends there.
     MAILPIT_URL: env.APP_ENV === 'local' ? env.MAILPIT_URL : undefined,
+    // Calendar sync (spec 0024), when on: the key and the secret live only in here, the key decoded.
+    calendar: calendarOf({ ...env, CALENDAR_TOKEN_KEY, GOOGLE_CALENDAR_CLIENT_SECRET }),
   }));
 export type ApiEnv = z.infer<typeof ApiEnv>;
 
@@ -278,9 +371,11 @@ export const WorkerEnv = z
     // Spec 0008's sleep: seconds with no work before the worker (runners and relay) closes every connection, so
     // Neon's compute can suspend; 180 when unset, 0 never sleeps (a paid plan, or debugging). Only with the jobs on.
     WORKER_IDLE_SLEEP_SECONDS: optional(z.coerce.number().int().min(0).max(86_400)),
+    ...calendarFields,
   })
   .superRefine((env, issues) => {
     const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });
+    checkCalendar(env, missing);
     const url = env.CENTRIFUGO_API_URL === undefined;
     const key = env.CENTRIFUGO_API_KEY === undefined;
     // As on the api: `local` relaxes the key, the wake secret and the address checks, so a production build never
@@ -310,17 +405,30 @@ export const WorkerEnv = z
       missing('WORKER_WAKE_SECRET', 'That is the local placeholder. Generate one: `openssl rand -hex 32`.');
     }
   })
-  .transform(({ WORKER_PORT, PORT, CENTRIFUGO_API_URL, CENTRIFUGO_API_KEY, JOBS_RUNNER, ...rest }) => ({
-    ...rest,
-    WORKER_PORT: WORKER_PORT ?? PORT ?? 3001,
-    JOBS_RUNNER: JOBS_RUNNER ?? (rest.APP_ENV === 'production' ? 'off' : 'on'),
-    WORKER_IDLE_SLEEP_SECONDS: rest.WORKER_IDLE_SLEEP_SECONDS ?? DEFAULT_IDLE_SLEEP_SECONDS,
-    // The relay's Centrifugo, when it is on.
-    centrifugo:
-      CENTRIFUGO_API_URL === undefined || CENTRIFUGO_API_KEY === undefined
-        ? undefined
-        : { apiUrl: CENTRIFUGO_API_URL, apiKey: CENTRIFUGO_API_KEY },
-  }));
+  .transform(
+    ({
+      WORKER_PORT,
+      PORT,
+      CENTRIFUGO_API_URL,
+      CENTRIFUGO_API_KEY,
+      JOBS_RUNNER,
+      CALENDAR_TOKEN_KEY,
+      GOOGLE_CALENDAR_CLIENT_SECRET,
+      ...rest
+    }) => ({
+      ...rest,
+      // Calendar sync (spec 0024), when on: the worker refreshes tokens and syncs.
+      calendar: calendarOf({ ...rest, CALENDAR_TOKEN_KEY, GOOGLE_CALENDAR_CLIENT_SECRET }),
+      WORKER_PORT: WORKER_PORT ?? PORT ?? 3001,
+      JOBS_RUNNER: JOBS_RUNNER ?? (rest.APP_ENV === 'production' ? 'off' : 'on'),
+      WORKER_IDLE_SLEEP_SECONDS: rest.WORKER_IDLE_SLEEP_SECONDS ?? DEFAULT_IDLE_SLEEP_SECONDS,
+      // The relay's Centrifugo, when it is on.
+      centrifugo:
+        CENTRIFUGO_API_URL === undefined || CENTRIFUGO_API_KEY === undefined
+          ? undefined
+          : { apiUrl: CENTRIFUGO_API_URL, apiKey: CENTRIFUGO_API_KEY },
+    }),
+  );
 export type WorkerEnv = z.infer<typeof WorkerEnv>;
 
 /** Parses the environment, or stops the process with every missing or invalid variable named. */

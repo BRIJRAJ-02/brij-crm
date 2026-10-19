@@ -1,5 +1,6 @@
 import { accessRouter } from './modules/access/router.ts';
 import { attributesRouter } from './modules/attributes/router.ts';
+import { calendarRouter } from './modules/calendar/router.ts';
 import { jobsRouter } from './modules/jobs/router.ts';
 import { meRouter } from './modules/me/router.ts';
 import { membersRouter } from './modules/members/router.ts';
@@ -34,4 +35,5 @@ export const router = base.router({
   views: viewsRouter,
   trash: trashRouter,
   tasks: tasksRouter,
+  calendar: calendarRouter,
 });

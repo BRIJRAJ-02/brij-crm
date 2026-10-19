@@ -8,6 +8,7 @@ import { vi } from 'vitest';
 import * as z from 'zod';
 import { type AppServices, createApp } from './app.ts';
 import { createAuth } from './auth/auth.ts';
+import type { CalendarServices } from './calendar/services.ts';
 import type { ApiEnv } from './env.ts';
 import type { MailMessage, Mailer } from './mail/mailer.ts';
 import type { Analytics } from './monitoring/posthog.ts';
@@ -41,6 +42,7 @@ export function testEnv(overrides: Partial<ApiEnv> = {}): ApiEnv {
     MAIL_FROM: 'CRM <sign-in@crm.localhost>',
     MAILPIT_URL: 'http://127.0.0.1:1',
     EDGE_SECRET: TEST_EDGE_SECRET,
+    calendar: undefined,
     ...overrides,
   };
 }
@@ -76,6 +78,8 @@ export function testServices(
     rules?: RuleSource;
     analytics?: Analytics;
     jobs?: JobRegistry;
+    /** Calendar sync's services (spec 0024): none (off) unless given, the fake provider in tests. */
+    calendar?: CalendarServices;
   } = {},
 ): AppServices {
   const db = options.db ?? unreachableDatabase();
@@ -96,6 +100,7 @@ export function testServices(
     ...(options.rules === undefined ? {} : { rules: options.rules }),
     ...(options.analytics === undefined ? {} : { analytics: options.analytics }),
     ...(options.jobs === undefined ? {} : { jobs: options.jobs }),
+    ...(options.calendar === undefined ? {} : { calendar: options.calendar }),
   };
 }
 
