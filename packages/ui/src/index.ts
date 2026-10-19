@@ -184,10 +184,12 @@ export {
 export {
   WeekCalendar,
   type WeekCalendarBlock,
+  type WeekCalendarSpan,
   type WeekCalendarDay,
   type WeekCalendarProps,
 } from './modules/WeekCalendar/WeekCalendar.tsx';
 export { Pagination, type PaginationProps } from './molecules/Pagination/Pagination.tsx';
+export { SpanCard, type SpanCardChoice, type SpanCardProps } from './modules/SpanCard/SpanCard.tsx';
 export { SectionBar, type SectionBarProps } from './molecules/SectionBar/SectionBar.tsx';
 export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColumn.tsx';
 export { PreviewLayout, type PreviewDevice, type PreviewLayoutProps } from './modules/PreviewLayout/PreviewLayout.tsx';

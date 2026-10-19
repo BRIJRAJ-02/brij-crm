@@ -50,6 +50,9 @@ function CalendarRoute() {
       connections={connections}
       locale={navigator.languages[0] ?? 'en-GB'}
       onRemoveBlock={(blockId) => data.bookings.blocks.remove(slug, blockId)}
+      onBlock={async (draft, preview) => {
+        await data.bookings.blocks.create(slug, draft, preview);
+      }}
       onSearch={(next) =>
         void navigate({
           to: '/w/$slug/bookings/calendar',

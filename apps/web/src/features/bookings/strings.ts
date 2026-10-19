@@ -88,4 +88,16 @@ export const strings = {
   removeBlock: 'Remove',
   releaseHold: 'Release',
   removeFailed: 'That time couldn’t be opened again. Try again.',
+  // Drawing on the week (spec 0027).
+  drawCard: (span: string) => `${span}: what is this time for?`,
+  minutes: (count: number) => `${String(count)} min`,
+  hours: (count: number) => `${String(count)} hr`,
+  blockThisTime: 'Block this time',
+  howOften: 'How often',
+  justThis: (weekday: string) => `Just this ${weekday}`,
+  onlyYou: 'Only you see this.',
+  blockIt: 'Block it',
+  blockFailed: 'That time couldn’t be blocked. Try again.',
+  timeBlocked: 'Time blocked.',
+  done: 'Done',
 } as const;

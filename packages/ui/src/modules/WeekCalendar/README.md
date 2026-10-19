@@ -45,6 +45,7 @@ Blocks, none (an empty grid: the caller says "Nothing booked this week" under it
 - One day column is in the tab order.
 - Left and Right move to the previous or next day (and select it).
 - Up and Down move between that day's blocks.
+- Enter or Space on a day (not on a block) draws a span there, when drawing is on.
 - Enter or Space opens the focused block.
 - Escape closes its card.
 - The day header buttons select a day.
@@ -52,3 +53,8 @@ Blocks, none (an empty grid: the caller says "Nothing booked this week" under it
 ## Differences from the artifact
 
 Not in the artifact. Dragging on the grid to make a meeting comes with the new meeting dialog.
+
+## Drawing (spec 0027)
+
+With `onDraw` set, empty time draws a span: a mouse or pen drags across one day (snapped to 15 minutes, never leaving the day, the cursor a crosshair), a click or a span under 15 minutes draws `drawMinutes`, a finger taps (a drag would fight scrolling), and Enter or Space on a day draws `drawMinutes` from `drawStartMinute(day)`. The screen gets the span from `onDraw`, sets it as `draft`, and passes `draftCard` (a SpanCard), which opens in a Popover beside the solid ghost; Escape or a press outside calls `onDraftClose`. `minuteLabel` names the ghost's start and end corners. Blocks keep their own presses, so a drag can only start on empty time.
+

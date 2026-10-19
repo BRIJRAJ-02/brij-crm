@@ -11,6 +11,7 @@ import type {
   CalendarConnectionView,
   CalendarEventItem,
   ObjectSummary,
+  CreateTimeBlockInput,
   TimeBlockOccurrence,
 } from '@crm/data';
 import { useBookings, useBookingsCalendar } from '@crm/data/react';
@@ -40,9 +41,12 @@ import {
 } from '@crm/ui';
 import { useEffect, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
+import { browserZone } from '../booking/hours.ts';
 import { availabilityHref } from '../booking/links.ts';
 import { linksHref } from '../captures/tabs.ts';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';
+import { DrawCard } from './DrawCard.tsx';
+import { instantOf, spanNames, type DrawnSpan } from './span.ts';
 import { PAGE_SIZES, type BookingsSearch } from './search.ts';
 import { strings } from './strings.ts';
 import { useBookingsToolbarSlot } from './toolbarSlot.ts';
@@ -339,6 +343,12 @@ function useNow(): Date {
   return now;
 }
 
+/** A drawn span to close, as the data layer takes it. */
+export type BlockDraft = Omit<CreateTimeBlockInput, 'workspace' | 'mutationId'>;
+
+/** A preview's block id, until the server names it (removing it waits for that). */
+const PREVIEW_BLOCK_ID = '00000000-0000-7000-8000-000000000000';
+
 /** Props for the calendar: its held week, the address, and what Filter offers. */
 export interface BookingsCalendarScreenProps {
   readonly slug: string;
@@ -351,6 +361,11 @@ export interface BookingsCalendarScreenProps {
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
   /** Reopens the time a block closed (spec 0027); settles once the server has it, throws on a refusal. */
   readonly onRemoveBlock: (blockId: string) => Promise<void>;
+  /**
+   * Closes a drawn span (spec 0027): `preview` shows at once, and the promise
+   * settles once the server has it, or throws a data error on a refusal.
+   */
+  readonly onBlock: (draft: BlockDraft, preview: readonly TimeBlockOccurrence[]) => Promise<void>;
 }
 
 /** Bookings › Calendar: the range, previous week, Today, next week and Filter, then the grid and the week's count. */
@@ -364,11 +379,12 @@ export function BookingsCalendarScreen(props: BookingsCalendarScreenProps) {
 
 /** The week view's toolbar, grid and count. */
 function WeekView(props: BookingsCalendarScreenProps) {
-  const { slug, objects, search, week, pages, connections, locale, onSearch, onRemoveBlock } = props;
+  const { slug, objects, search, week, pages, connections, locale, onSearch, onRemoveBlock, onBlock } = props;
   const personHref = usePersonHref(slug, objects);
   const state = useBookingsCalendar(week);
   const now = useNow();
   const [openId, setOpenId] = useState<string | undefined>(undefined);
+  const [draft, setDraft] = useState<DrawnSpan | undefined>(undefined);
   const days = weekDays(search.week);
   const today = dayKeyOf(now);
   const isThisWeek = weekOf(today) === search.week;
@@ -556,8 +572,61 @@ function WeekView(props: BookingsCalendarScreenProps) {
             <BookingCard booking={openBooking} personHref={personHref(openBooking)} locale={locale} />
           )
         }
-        onOpen={setOpenId}
+        onOpen={(id) => {
+          setDraft(undefined);
+          setOpenId(id);
+        }}
         onClose={() => setOpenId(undefined)}
+        onDraw={(span) => {
+          setOpenId(undefined);
+          setDraft(span);
+        }}
+        {...(draft === undefined
+          ? {}
+          : {
+              draft,
+              draftLabel: strings.drawCard(spanNames(draft, locale).title),
+              draftCard: (
+                <DrawCard
+                  key={`${draft.dayKey}:${String(draft.startMinute)}:${String(draft.endMinute)}`}
+                  span={draft}
+                  locale={locale}
+                  onBlock={({ repeat, label }) => {
+                    const startsAt = instantOf(draft.dayKey, draft.startMinute).toISOString();
+                    const endsAt = instantOf(draft.dayKey, draft.endMinute).toISOString();
+                    const preview: TimeBlockOccurrence = {
+                      key: `draft:${startsAt}`,
+                      blockId: PREVIEW_BLOCK_ID,
+                      kind: 'block',
+                      repeat,
+                      ...(label === undefined ? {} : { label }),
+                      startsAt,
+                      endsAt,
+                    };
+                    return onBlock(
+                      {
+                        kind: 'block',
+                        repeat,
+                        date: draft.dayKey,
+                        startMinute: draft.startMinute,
+                        endMinute: draft.endMinute,
+                        timeZone: browserZone(),
+                        ...(label === undefined ? {} : { label }),
+                      },
+                      [preview],
+                    );
+                  }}
+                  onDone={() => setDraft(undefined)}
+                />
+              ),
+            })}
+        onDraftClose={() => setDraft(undefined)}
+        drawMinutes={pages[0]?.durations[0] ?? 30}
+        minuteLabel={(minute) => {
+          const at = new Date(2000, 0, 1);
+          at.setMinutes(minute);
+          return new Intl.DateTimeFormat(locale, { hour: 'numeric', minute: '2-digit' }).format(at);
+        }}
       />
       <p>{strings.weekSummary(live)}</p>
     </>

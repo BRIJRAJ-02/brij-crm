@@ -118,6 +118,7 @@ describe('@crm/ui', () => {
       'Skeleton',
       'SortBuilder',
       'SortChip',
+      'SpanCard',
       'Spinner',
       'SplitButton',
       'StatusDot',

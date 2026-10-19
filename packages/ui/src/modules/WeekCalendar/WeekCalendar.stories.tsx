@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
-import { WeekCalendar, type WeekCalendarBlock, type WeekCalendarDay } from './WeekCalendar.tsx';
+import { WeekCalendar, type WeekCalendarBlock, type WeekCalendarDay, type WeekCalendarSpan } from './WeekCalendar.tsx';
 
 /** The frozen clock's week: Monday 5 to Sunday 11 October 2026, today Thursday the 8th. */
 function days(): WeekCalendarDay[] {
@@ -149,5 +149,94 @@ export const Keyboard: Story = {
     canvas.getByRole('group', { name: 'Thursday, 8 October, 2 items' }).focus();
     await userEvent.keyboard('{ArrowRight}');
     await expect(args.onSelectDay).toHaveBeenCalledWith('2026-10-09');
+  },
+};
+
+/** Drawing on empty time: Enter on a day draws the default length from the working start, and its card opens beside it. */
+export const Draw: Story = {
+  render: function Render(args) {
+    const [draft, setDraft] = useState<WeekCalendarSpan | undefined>(undefined);
+    return (
+      <Stage width="fill">
+        <WeekCalendar
+          {...args}
+          days={days()}
+          blocks={blocks()}
+          now={{ dayKey: '2026-10-08', minute: 15 * 60 + 30 }}
+          scrollToMinute={8 * 60}
+          minuteLabel={(minute) =>
+            `${String(Math.floor(minute / 60) % 12 === 0 ? 12 : Math.floor(minute / 60) % 12)}:${String(minute % 60).padStart(2, '0')} ${minute < 720 ? 'AM' : 'PM'}`
+          }
+          onDraw={(span) => {
+            args.onDraw?.(span);
+            setDraft(span);
+          }}
+          {...(draft === undefined ? {} : { draft })}
+          draftLabel="Monday 5 October, 9:00 to 9:30 AM"
+          draftCard={<p>Book someone in, or block this time.</p>}
+          onDraftClose={() => setDraft(undefined)}
+        />
+      </Stage>
+    );
+  },
+  args: { onDraw: fn(), selectedDay: '2026-10-05' },
+  play: async ({ canvas, args, canvasElement }) => {
+    canvas.getByRole('group', { name: 'Monday, 5 October, nothing on' }).focus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onDraw).toHaveBeenCalledWith({ dayKey: '2026-10-05', startMinute: 540, endMinute: 570 });
+    const body = within(canvasElement.ownerDocument.body);
+    await waitFor(() =>
+      expect(body.getByRole('dialog', { name: 'Monday 5 October, 9:00 to 9:30 AM' })).toBeInTheDocument(),
+    );
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(body.queryByRole('dialog')).not.toBeInTheDocument());
+  },
+};
+
+/** A drag across a day draws the span between press and release, snapped to the quarter hour. */
+export const DrawByDragging: Story = {
+  parameters: { crm: { screenshot: false } },
+  args: { onDraw: fn(), selectedDay: '2026-10-05' },
+  render: (args) => (
+    <Stage width="fill">
+      <WeekCalendar {...args} days={days()} blocks={[]} scrollToMinute={0} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    const column = canvas.getByRole('group', { name: 'Monday, 5 October, nothing on' });
+    const box = column.getBoundingClientRect();
+    const yAt = (minute: number) => box.top + (minute / 1440) * box.height;
+    const x = box.left + box.width / 2;
+    column.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        pointerId: 1,
+        pointerType: 'mouse',
+        clientX: x,
+        clientY: yAt(62),
+      }),
+    );
+    column.dispatchEvent(
+      new PointerEvent('pointermove', {
+        bubbles: true,
+        pointerId: 1,
+        pointerType: 'mouse',
+        clientX: x,
+        clientY: yAt(148),
+      }),
+    );
+    column.dispatchEvent(
+      new PointerEvent('pointerup', {
+        bubbles: true,
+        pointerId: 1,
+        pointerType: 'mouse',
+        clientX: x,
+        clientY: yAt(148),
+      }),
+    );
+    await waitFor(() =>
+      expect(args.onDraw).toHaveBeenCalledWith({ dayKey: '2026-10-05', startMinute: 60, endMinute: 150 }),
+    );
   },
 };
