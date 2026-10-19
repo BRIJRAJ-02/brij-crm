@@ -44,6 +44,8 @@ export const forms = pgTable(
     draftVersionId: uuid('draft_version_id'),
     /** Null until the first publish. */
     liveVersionId: uuid('live_version_id'),
+    /** Up by one on every draft save, publish, status change and key rotation: a stale editor's save is refused. */
+    revision: integer('revision').notNull().default(1),
     /** The editors' warnings of AC-551 (milestone 2). */
     drift: jsonb('drift'),
     archivedAt: timestamptz('archived_at'),

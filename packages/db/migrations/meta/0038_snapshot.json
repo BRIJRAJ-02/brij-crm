@@ -206,14 +206,8 @@
           "name": "attribute_options_attribute",
           "tableFrom": "attribute_options",
           "tableTo": "attributes",
-          "columnsFrom": [
-            "workspace_id",
-            "attribute_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "attribute_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -221,14 +215,8 @@
           "name": "attribute_options_created_by",
           "tableFrom": "attribute_options",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "created_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -236,14 +224,8 @@
           "name": "attribute_options_updated_by",
           "tableFrom": "attribute_options",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "updated_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "updated_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -251,10 +233,7 @@
       "compositePrimaryKeys": {
         "attribute_options_pkey": {
           "name": "attribute_options_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
+          "columns": ["workspace_id", "id"]
         }
       },
       "uniqueConstraints": {},
@@ -575,14 +554,8 @@
           "name": "attributes_object",
           "tableFrom": "attributes",
           "tableTo": "objects",
-          "columnsFrom": [
-            "workspace_id",
-            "object_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "object_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -590,14 +563,8 @@
           "name": "attributes_list",
           "tableFrom": "attributes",
           "tableTo": "lists",
-          "columnsFrom": [
-            "workspace_id",
-            "list_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "list_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -605,14 +572,8 @@
           "name": "attributes_relationship",
           "tableFrom": "attributes",
           "tableTo": "relationships",
-          "columnsFrom": [
-            "workspace_id",
-            "relationship_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "relationship_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -620,14 +581,8 @@
           "name": "attributes_created_by",
           "tableFrom": "attributes",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "created_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -635,14 +590,8 @@
           "name": "attributes_updated_by",
           "tableFrom": "attributes",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "updated_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "updated_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -650,10 +599,7 @@
       "compositePrimaryKeys": {
         "attributes_pkey": {
           "name": "attributes_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
+          "columns": ["workspace_id", "id"]
         }
       },
       "uniqueConstraints": {},
@@ -772,14 +718,8 @@
           "name": "form_submission_records_submission",
           "tableFrom": "form_submission_records",
           "tableTo": "form_submissions",
-          "columnsFrom": [
-            "workspace_id",
-            "submission_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "submission_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -787,14 +727,8 @@
           "name": "form_submission_records_record",
           "tableFrom": "form_submission_records",
           "tableTo": "records",
-          "columnsFrom": [
-            "workspace_id",
-            "record_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "record_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -802,12 +736,7 @@
       "compositePrimaryKeys": {
         "form_submission_records_pkey": {
           "name": "form_submission_records_pkey",
-          "columns": [
-            "workspace_id",
-            "submission_id",
-            "record_id",
-            "role"
-          ]
+          "columns": ["workspace_id", "submission_id", "record_id", "role"]
         }
       },
       "uniqueConstraints": {},
@@ -1026,14 +955,8 @@
           "name": "form_submissions_form",
           "tableFrom": "form_submissions",
           "tableTo": "forms",
-          "columnsFrom": [
-            "workspace_id",
-            "form_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "form_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1041,14 +964,8 @@
           "name": "form_submissions_version",
           "tableFrom": "form_submissions",
           "tableTo": "form_versions",
-          "columnsFrom": [
-            "workspace_id",
-            "version_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "version_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1056,10 +973,7 @@
       "compositePrimaryKeys": {
         "form_submissions_pkey": {
           "name": "form_submissions_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
+          "columns": ["workspace_id", "id"]
         }
       },
       "uniqueConstraints": {},
@@ -1245,14 +1159,8 @@
           "name": "form_versions_form",
           "tableFrom": "form_versions",
           "tableTo": "forms",
-          "columnsFrom": [
-            "workspace_id",
-            "form_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "form_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -1260,14 +1168,8 @@
           "name": "form_versions_published_by",
           "tableFrom": "form_versions",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "published_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "published_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1275,14 +1177,8 @@
           "name": "form_versions_created_by",
           "tableFrom": "form_versions",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "created_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1290,14 +1186,8 @@
           "name": "form_versions_updated_by",
           "tableFrom": "form_versions",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "updated_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "updated_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1305,10 +1195,7 @@
       "compositePrimaryKeys": {
         "form_versions_pkey": {
           "name": "form_versions_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
+          "columns": ["workspace_id", "id"]
         }
       },
       "uniqueConstraints": {},
@@ -1396,6 +1283,13 @@
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
+        },
+        "revision": {
+          "name": "revision",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 1
         },
         "drift": {
           "name": "drift",
@@ -1511,14 +1405,8 @@
           "name": "forms_main_object",
           "tableFrom": "forms",
           "tableTo": "objects",
-          "columnsFrom": [
-            "workspace_id",
-            "main_object_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "main_object_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1526,14 +1414,8 @@
           "name": "forms_created_by",
           "tableFrom": "forms",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "created_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -1541,14 +1423,8 @@
           "name": "forms_updated_by",
           "tableFrom": "forms",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "updated_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "updated_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1556,10 +1432,7 @@
       "compositePrimaryKeys": {
         "forms_pkey": {
           "name": "forms_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
+          "columns": ["workspace_id", "id"]
         }
       },
       "uniqueConstraints": {},
@@ -1717,14 +1590,8 @@
           "name": "job_items_job",
           "tableFrom": "job_items",
           "tableTo": "jobs",
-          "columnsFrom": [
-            "workspace_id",
-            "job_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "job_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -1732,11 +1599,7 @@
       "compositePrimaryKeys": {
         "job_items_pkey": {
           "name": "job_items_pkey",
-          "columns": [
-            "workspace_id",
-            "job_id",
-            "position"
-          ]
+          "columns": ["workspace_id", "job_id", "position"]
         }
       },
       "uniqueConstraints": {},
@@ -2154,12 +2017,8 @@
           "name": "jobs_workspace",
           "tableFrom": "jobs",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -2167,14 +2026,8 @@
           "name": "jobs_cancel_requested_by",
           "tableFrom": "jobs",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "cancel_requested_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "cancel_requested_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2182,14 +2035,8 @@
           "name": "jobs_created_by",
           "tableFrom": "jobs",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "created_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2197,10 +2044,7 @@
       "compositePrimaryKeys": {
         "jobs_pkey": {
           "name": "jobs_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
+          "columns": ["workspace_id", "id"]
         }
       },
       "uniqueConstraints": {},
@@ -2418,14 +2262,8 @@
           "name": "list_entries_list",
           "tableFrom": "list_entries",
           "tableTo": "lists",
-          "columnsFrom": [
-            "workspace_id",
-            "list_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "list_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2433,14 +2271,8 @@
           "name": "list_entries_record",
           "tableFrom": "list_entries",
           "tableTo": "records",
-          "columnsFrom": [
-            "workspace_id",
-            "record_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "record_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2448,14 +2280,8 @@
           "name": "list_entries_created_by",
           "tableFrom": "list_entries",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "created_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2463,14 +2289,8 @@
           "name": "list_entries_updated_by",
           "tableFrom": "list_entries",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "updated_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "updated_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2478,14 +2298,8 @@
           "name": "list_entries_deleted_by",
           "tableFrom": "list_entries",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "deleted_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "deleted_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2493,21 +2307,14 @@
       "compositePrimaryKeys": {
         "list_entries_pkey": {
           "name": "list_entries_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
+          "columns": ["workspace_id", "id"]
         }
       },
       "uniqueConstraints": {
         "list_entries_record_key": {
           "name": "list_entries_record_key",
           "nullsNotDistinct": false,
-          "columns": [
-            "workspace_id",
-            "id",
-            "record_id"
-          ]
+          "columns": ["workspace_id", "id", "record_id"]
         }
       },
       "policies": {},
@@ -2667,14 +2474,8 @@
           "name": "lists_object",
           "tableFrom": "lists",
           "tableTo": "objects",
-          "columnsFrom": [
-            "workspace_id",
-            "object_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "object_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2682,14 +2483,8 @@
           "name": "lists_created_by",
           "tableFrom": "lists",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "created_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2697,14 +2492,8 @@
           "name": "lists_updated_by",
           "tableFrom": "lists",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "updated_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "updated_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2712,10 +2501,7 @@
       "compositePrimaryKeys": {
         "lists_pkey": {
           "name": "lists_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
+          "columns": ["workspace_id", "id"]
         }
       },
       "uniqueConstraints": {},
@@ -2891,12 +2677,8 @@
           "name": "members_workspace",
           "tableFrom": "members",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2904,14 +2686,8 @@
           "name": "members_created_by",
           "tableFrom": "members",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "created_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -2919,14 +2695,8 @@
           "name": "members_updated_by",
           "tableFrom": "members",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "updated_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "updated_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -2934,10 +2704,7 @@
       "compositePrimaryKeys": {
         "members_pkey": {
           "name": "members_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
+          "columns": ["workspace_id", "id"]
         }
       },
       "uniqueConstraints": {},
@@ -3210,14 +2977,8 @@
           "name": "objects_default_view",
           "tableFrom": "objects",
           "tableTo": "views",
-          "columnsFrom": [
-            "workspace_id",
-            "default_view_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "default_view_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3225,12 +2986,8 @@
           "name": "objects_workspace",
           "tableFrom": "objects",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3238,14 +2995,8 @@
           "name": "objects_primary_attribute",
           "tableFrom": "objects",
           "tableTo": "attributes",
-          "columnsFrom": [
-            "workspace_id",
-            "primary_attribute_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "primary_attribute_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3253,14 +3004,8 @@
           "name": "objects_created_by",
           "tableFrom": "objects",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "created_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3268,14 +3013,8 @@
           "name": "objects_updated_by",
           "tableFrom": "objects",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "updated_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "updated_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3283,10 +3022,7 @@
       "compositePrimaryKeys": {
         "objects_pkey": {
           "name": "objects_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
+          "columns": ["workspace_id", "id"]
         }
       },
       "uniqueConstraints": {},
@@ -3452,12 +3188,8 @@
           "name": "outbox_workspace",
           "tableFrom": "outbox",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -3465,14 +3197,8 @@
           "name": "outbox_object",
           "tableFrom": "outbox",
           "tableTo": "objects",
-          "columnsFrom": [
-            "workspace_id",
-            "object_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "object_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -3480,10 +3206,7 @@
       "compositePrimaryKeys": {
         "outbox_pkey": {
           "name": "outbox_pkey",
-          "columns": [
-            "workspace_id",
-            "seq"
-          ]
+          "columns": ["workspace_id", "seq"]
         }
       },
       "uniqueConstraints": {},
@@ -3908,14 +3631,8 @@
           "name": "record_links_relationship",
           "tableFrom": "record_links",
           "tableTo": "relationships",
-          "columnsFrom": [
-            "workspace_id",
-            "relationship_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "relationship_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3923,14 +3640,8 @@
           "name": "record_links_from_record",
           "tableFrom": "record_links",
           "tableTo": "records",
-          "columnsFrom": [
-            "workspace_id",
-            "from_record_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "from_record_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3938,14 +3649,8 @@
           "name": "record_links_to_record",
           "tableFrom": "record_links",
           "tableTo": "records",
-          "columnsFrom": [
-            "workspace_id",
-            "to_record_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "to_record_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3953,14 +3658,8 @@
           "name": "record_links_set_by",
           "tableFrom": "record_links",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "set_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "set_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -3968,14 +3667,8 @@
           "name": "record_links_ended_by",
           "tableFrom": "record_links",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "ended_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "ended_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -3983,10 +3676,7 @@
       "compositePrimaryKeys": {
         "record_links_pkey": {
           "name": "record_links_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
+          "columns": ["workspace_id", "id"]
         }
       },
       "uniqueConstraints": {},
@@ -4334,14 +4024,8 @@
           "name": "records_object",
           "tableFrom": "records",
           "tableTo": "objects",
-          "columnsFrom": [
-            "workspace_id",
-            "object_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "object_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -4349,14 +4033,8 @@
           "name": "records_created_by",
           "tableFrom": "records",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "created_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -4364,14 +4042,8 @@
           "name": "records_updated_by",
           "tableFrom": "records",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "updated_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "updated_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -4379,14 +4051,8 @@
           "name": "records_deleted_by",
           "tableFrom": "records",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "deleted_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "deleted_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -4394,10 +4060,7 @@
       "compositePrimaryKeys": {
         "records_pkey": {
           "name": "records_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
+          "columns": ["workspace_id", "id"]
         }
       },
       "uniqueConstraints": {},
@@ -4571,14 +4234,8 @@
           "name": "relationships_from_attribute",
           "tableFrom": "relationships",
           "tableTo": "attributes",
-          "columnsFrom": [
-            "workspace_id",
-            "from_attribute_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "from_attribute_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -4586,14 +4243,8 @@
           "name": "relationships_to_attribute",
           "tableFrom": "relationships",
           "tableTo": "attributes",
-          "columnsFrom": [
-            "workspace_id",
-            "to_attribute_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "to_attribute_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -4601,14 +4252,8 @@
           "name": "relationships_created_by",
           "tableFrom": "relationships",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "created_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -4616,14 +4261,8 @@
           "name": "relationships_updated_by",
           "tableFrom": "relationships",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "updated_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "updated_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -4631,10 +4270,7 @@
       "compositePrimaryKeys": {
         "relationships_pkey": {
           "name": "relationships_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
+          "columns": ["workspace_id", "id"]
         }
       },
       "uniqueConstraints": {},
@@ -5076,14 +4712,8 @@
           "name": "sort_keys_attribute",
           "tableFrom": "sort_keys",
           "tableTo": "attributes",
-          "columnsFrom": [
-            "workspace_id",
-            "attribute_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "attribute_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -5091,14 +4721,8 @@
           "name": "sort_keys_record",
           "tableFrom": "sort_keys",
           "tableTo": "records",
-          "columnsFrom": [
-            "workspace_id",
-            "record_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "record_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -5106,16 +4730,8 @@
           "name": "sort_keys_entry",
           "tableFrom": "sort_keys",
           "tableTo": "list_entries",
-          "columnsFrom": [
-            "workspace_id",
-            "entry_id",
-            "record_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id",
-            "record_id"
-          ],
+          "columnsFrom": ["workspace_id", "entry_id", "record_id"],
+          "columnsTo": ["workspace_id", "id", "record_id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -5123,16 +4739,8 @@
           "name": "sort_keys_option",
           "tableFrom": "sort_keys",
           "tableTo": "attribute_options",
-          "columnsFrom": [
-            "workspace_id",
-            "attribute_id",
-            "option_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "attribute_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "attribute_id", "option_id"],
+          "columnsTo": ["workspace_id", "attribute_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -5140,11 +4748,7 @@
       "compositePrimaryKeys": {
         "sort_keys_pkey": {
           "name": "sort_keys_pkey",
-          "columns": [
-            "workspace_id",
-            "owner_id",
-            "attribute_id"
-          ]
+          "columns": ["workspace_id", "owner_id", "attribute_id"]
         }
       },
       "uniqueConstraints": {},
@@ -5252,14 +4856,8 @@
           "name": "task_records_task",
           "tableFrom": "task_records",
           "tableTo": "tasks",
-          "columnsFrom": [
-            "workspace_id",
-            "task_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "task_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -5267,14 +4865,8 @@
           "name": "task_records_record",
           "tableFrom": "task_records",
           "tableTo": "records",
-          "columnsFrom": [
-            "workspace_id",
-            "record_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "record_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -5282,14 +4874,8 @@
           "name": "task_records_created_by",
           "tableFrom": "task_records",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "created_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -5297,11 +4883,7 @@
       "compositePrimaryKeys": {
         "task_records_pkey": {
           "name": "task_records_pkey",
-          "columns": [
-            "workspace_id",
-            "task_id",
-            "record_id"
-          ]
+          "columns": ["workspace_id", "task_id", "record_id"]
         }
       },
       "uniqueConstraints": {},
@@ -5701,14 +5283,8 @@
           "name": "tasks_assignee",
           "tableFrom": "tasks",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "assignee_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "assignee_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -5716,14 +5292,8 @@
           "name": "tasks_created_by",
           "tableFrom": "tasks",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "created_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -5731,14 +5301,8 @@
           "name": "tasks_updated_by",
           "tableFrom": "tasks",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "updated_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "updated_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -5746,14 +5310,8 @@
           "name": "tasks_done_by",
           "tableFrom": "tasks",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "done_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "done_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -5761,14 +5319,8 @@
           "name": "tasks_deleted_by",
           "tableFrom": "tasks",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "deleted_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "deleted_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -5776,10 +5328,7 @@
       "compositePrimaryKeys": {
         "tasks_pkey": {
           "name": "tasks_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
+          "columns": ["workspace_id", "id"]
         }
       },
       "uniqueConstraints": {},
@@ -6031,14 +5580,8 @@
           "name": "validation_rules_object",
           "tableFrom": "validation_rules",
           "tableTo": "objects",
-          "columnsFrom": [
-            "workspace_id",
-            "object_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "object_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -6046,14 +5589,8 @@
           "name": "validation_rules_attribute",
           "tableFrom": "validation_rules",
           "tableTo": "attributes",
-          "columnsFrom": [
-            "workspace_id",
-            "attribute_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "attribute_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -6061,14 +5598,8 @@
           "name": "validation_rules_counted_by",
           "tableFrom": "validation_rules",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "counted_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "counted_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -6076,14 +5607,8 @@
           "name": "validation_rules_created_by",
           "tableFrom": "validation_rules",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "created_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -6091,14 +5616,8 @@
           "name": "validation_rules_updated_by",
           "tableFrom": "validation_rules",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "updated_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "updated_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -6106,10 +5625,7 @@
       "compositePrimaryKeys": {
         "validation_rules_pkey": {
           "name": "validation_rules_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
+          "columns": ["workspace_id", "id"]
         }
       },
       "uniqueConstraints": {},
@@ -6758,14 +6274,8 @@
           "name": "values_attribute",
           "tableFrom": "values",
           "tableTo": "attributes",
-          "columnsFrom": [
-            "workspace_id",
-            "attribute_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "attribute_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -6773,14 +6283,8 @@
           "name": "values_record",
           "tableFrom": "values",
           "tableTo": "records",
-          "columnsFrom": [
-            "workspace_id",
-            "record_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "record_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -6788,14 +6292,8 @@
           "name": "values_entry",
           "tableFrom": "values",
           "tableTo": "list_entries",
-          "columnsFrom": [
-            "workspace_id",
-            "entry_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "entry_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -6803,16 +6301,8 @@
           "name": "values_option",
           "tableFrom": "values",
           "tableTo": "attribute_options",
-          "columnsFrom": [
-            "workspace_id",
-            "attribute_id",
-            "option_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "attribute_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "attribute_id", "option_id"],
+          "columnsTo": ["workspace_id", "attribute_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -6820,14 +6310,8 @@
           "name": "values_set_by",
           "tableFrom": "values",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "set_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "set_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -6835,14 +6319,8 @@
           "name": "values_actor",
           "tableFrom": "values",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "actor_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "actor_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -6850,10 +6328,7 @@
       "compositePrimaryKeys": {
         "values_pkey": {
           "name": "values_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
+          "columns": ["workspace_id", "id"]
         }
       },
       "uniqueConstraints": {},
@@ -7160,14 +6635,8 @@
           "name": "views_object",
           "tableFrom": "views",
           "tableTo": "objects",
-          "columnsFrom": [
-            "workspace_id",
-            "object_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "object_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -7175,14 +6644,8 @@
           "name": "views_list",
           "tableFrom": "views",
           "tableTo": "lists",
-          "columnsFrom": [
-            "workspace_id",
-            "list_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "list_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -7190,14 +6653,8 @@
           "name": "views_creator",
           "tableFrom": "views",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "creator_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "creator_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -7205,14 +6662,8 @@
           "name": "views_query_saved_by",
           "tableFrom": "views",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "query_saved_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "query_saved_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -7220,14 +6671,8 @@
           "name": "views_locked_by",
           "tableFrom": "views",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "locked_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "locked_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -7235,14 +6680,8 @@
           "name": "views_created_by",
           "tableFrom": "views",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "created_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "created_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -7250,14 +6689,8 @@
           "name": "views_updated_by",
           "tableFrom": "views",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "updated_by_member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "updated_by_member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -7265,10 +6698,7 @@
       "compositePrimaryKeys": {
         "views_pkey": {
           "name": "views_pkey",
-          "columns": [
-            "workspace_id",
-            "id"
-          ]
+          "columns": ["workspace_id", "id"]
         }
       },
       "uniqueConstraints": {},
@@ -7358,12 +6788,8 @@
           "name": "workspace_counters_workspace",
           "tableFrom": "workspace_counters",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -7404,12 +6830,8 @@
           "name": "workspace_milestones_workspace",
           "tableFrom": "workspace_milestones",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7417,10 +6839,7 @@
       "compositePrimaryKeys": {
         "workspace_milestones_pkey": {
           "name": "workspace_milestones_pkey",
-          "columns": [
-            "workspace_id",
-            "milestone"
-          ]
+          "columns": ["workspace_id", "milestone"]
         }
       },
       "uniqueConstraints": {},
@@ -7679,12 +7098,8 @@
           "tableFrom": "account",
           "tableTo": "user",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -7843,12 +7258,8 @@
           "tableFrom": "session",
           "tableTo": "user",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -8060,12 +7471,8 @@
           "name": "workspace_directory_workspace",
           "tableFrom": "workspace_directory",
           "tableTo": "workspaces",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -8134,12 +7541,8 @@
           "tableFrom": "workspace_membership",
           "tableTo": "user",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
@@ -8148,12 +7551,8 @@
           "tableFrom": "workspace_membership",
           "tableTo": "workspace_directory",
           "schemaTo": "auth",
-          "columnsFrom": [
-            "workspace_id"
-          ],
-          "columnsTo": [
-            "workspace_id"
-          ],
+          "columnsFrom": ["workspace_id"],
+          "columnsTo": ["workspace_id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -8161,14 +7560,8 @@
           "name": "workspace_membership_member",
           "tableFrom": "workspace_membership",
           "tableTo": "members",
-          "columnsFrom": [
-            "workspace_id",
-            "member_id"
-          ],
-          "columnsTo": [
-            "workspace_id",
-            "id"
-          ],
+          "columnsFrom": ["workspace_id", "member_id"],
+          "columnsTo": ["workspace_id", "id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -8176,10 +7569,7 @@
       "compositePrimaryKeys": {
         "workspace_membership_pkey": {
           "name": "workspace_membership_pkey",
-          "columns": [
-            "user_id",
-            "workspace_id"
-          ]
+          "columns": ["user_id", "workspace_id"]
         }
       },
       "uniqueConstraints": {},
@@ -8192,13 +7582,7 @@
     "public.actor_type": {
       "name": "actor_type",
       "schema": "public",
-      "values": [
-        "member",
-        "api_key",
-        "automation",
-        "system",
-        "form"
-      ]
+      "values": ["member", "api_key", "automation", "system", "form"]
     },
     "public.attribute_type": {
       "name": "attribute_type",
@@ -8229,96 +7613,47 @@
     "public.job_item_state": {
       "name": "job_item_state",
       "schema": "public",
-      "values": [
-        "pending",
-        "done",
-        "refused",
-        "skipped"
-      ]
+      "values": ["pending", "done", "refused", "skipped"]
     },
     "public.job_lane": {
       "name": "job_lane",
       "schema": "public",
-      "values": [
-        "heavy",
-        "light"
-      ]
+      "values": ["heavy", "light"]
     },
     "public.job_status": {
       "name": "job_status",
       "schema": "public",
-      "values": [
-        "preparing",
-        "ready",
-        "queued",
-        "running",
-        "cancelling",
-        "succeeded",
-        "failed",
-        "cancelled"
-      ]
+      "values": ["preparing", "ready", "queued", "running", "cancelling", "succeeded", "failed", "cancelled"]
     },
     "public.member_role": {
       "name": "member_role",
       "schema": "public",
-      "values": [
-        "owner",
-        "admin",
-        "member"
-      ]
+      "values": ["owner", "admin", "member"]
     },
     "public.member_status": {
       "name": "member_status",
       "schema": "public",
-      "values": [
-        "active",
-        "removed"
-      ]
+      "values": ["active", "removed"]
     },
     "public.option_outcome": {
       "name": "option_outcome",
       "schema": "public",
-      "values": [
-        "open",
-        "won",
-        "lost"
-      ]
+      "values": ["open", "won", "lost"]
     },
     "public.outbox_kind": {
       "name": "outbox_kind",
       "schema": "public",
-      "values": [
-        "records",
-        "definitions",
-        "entries",
-        "views",
-        "notes",
-        "tasks",
-        "members",
-        "access",
-        "jobs"
-      ]
+      "values": ["records", "definitions", "entries", "views", "notes", "tasks", "members", "access", "jobs"]
     },
     "public.relationship_cardinality": {
       "name": "relationship_cardinality",
       "schema": "public",
-      "values": [
-        "one_to_one",
-        "one_to_many",
-        "many_to_one",
-        "many_to_many"
-      ]
+      "values": ["one_to_one", "one_to_many", "many_to_one", "many_to_many"]
     },
     "public.system_column": {
       "name": "system_column",
       "schema": "public",
-      "values": [
-        "id",
-        "created_at",
-        "created_by",
-        "updated_at",
-        "updated_by"
-      ]
+      "values": ["id", "created_at", "created_by", "updated_at", "updated_by"]
     },
     "public.validation_rule_kind": {
       "name": "validation_rule_kind",
@@ -8339,18 +7674,12 @@
     "public.view_kind": {
       "name": "view_kind",
       "schema": "public",
-      "values": [
-        "table",
-        "board"
-      ]
+      "values": ["table", "board"]
     },
     "public.view_visibility": {
       "name": "view_visibility",
       "schema": "public",
-      "values": [
-        "private",
-        "workspace"
-      ]
+      "values": ["private", "workspace"]
     }
   },
   "schemas": {

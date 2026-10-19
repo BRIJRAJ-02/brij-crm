@@ -20,7 +20,9 @@ export type AccessEntry =
   | { readonly anyMember: true }
   | { readonly system: true }
   /** A job's starter or a holder of `jobs.manage` (spec 0008, AC-114); anyone else finds no such job. */
-  | { readonly jobStarter: true };
+  | { readonly jobStarter: true }
+  /** Only the scope a form's public key made (`enterPublicForm`, spec 0023), for that form. */
+  | { readonly publicForm: true };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -131,4 +133,21 @@ export const ACCESS_TABLE = {
   createTask: { data: 'write' },
   updateTask: { data: 'write' },
   taskFacts: { system: true },
+  // Forms (spec 0023): any member reads the forms on objects they can see; changing one, or acting on a
+  // submission, needs forms.manage. A submission reads through its main record. The public form and submit take
+  // only the scope the form's own public key made.
+  listForms: { data: 'read' },
+  getForm: { data: 'read' },
+  formAttributes: { data: 'read' },
+  createForm: { permission: 'forms.manage' },
+  saveFormDraft: { permission: 'forms.manage' },
+  publishForm: { permission: 'forms.manage' },
+  setFormStatus: { permission: 'forms.manage' },
+  rotateFormKey: { permission: 'forms.manage' },
+  listSubmissions: { data: 'read' },
+  getSubmission: { data: 'read' },
+  retrySubmission: { permission: 'forms.manage' },
+  deleteSubmission: { permission: 'forms.manage' },
+  getPublicForm: { publicForm: true },
+  submitForm: { publicForm: true },
 } as const satisfies Record<string, AccessEntry>;

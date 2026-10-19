@@ -100,6 +100,7 @@ CREATE TABLE "forms" (
 	"public_key" text NOT NULL,
 	"draft_version_id" uuid,
 	"live_version_id" uuid,
+	"revision" integer DEFAULT 1 NOT NULL,
 	"drift" jsonb,
 	"archived_at" timestamp (6) with time zone,
 	"created_at" timestamp (6) with time zone DEFAULT now() NOT NULL,

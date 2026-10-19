@@ -46,6 +46,8 @@ export const FORM_COUNT_CAP = 10_000;
  */
 export const FormView = FormSummary.extend({
   draftNumber: z.number().int().min(1),
+  /** Moves on every save, publish, status change and key rotation: a change names the one it started from. */
+  revision: z.number().int().min(1),
   draft: FormDocument,
   live: FormDocument.optional(),
   /** Whether the draft differs from what is live (a publish would change something). */
@@ -66,12 +68,12 @@ export const CreateFormInput = WorkspaceScoped.extend({
 /** A new form. */
 export type CreateFormInput = z.infer<typeof CreateFormInput>;
 
-/** Saves the draft. `expectedNumber` is the draft the editor started from: anything else is 409 `FORM_CHANGED`. */
+/** Saves the draft. `expectedRevision` is the form the editor started from: anything else is 409 `FORM_CHANGED`. */
 export const SaveFormDraftInput = WorkspaceScoped.extend({
   formId: z.uuid(),
   name: FormName.optional(),
   document: FormDocument,
-  expectedNumber: z.number().int().min(1),
+  expectedRevision: z.number().int().min(1),
   mutationId: z.uuid(),
 });
 /** Saves the draft. */
@@ -80,7 +82,7 @@ export type SaveFormDraftInput = z.infer<typeof SaveFormDraftInput>;
 /** Publishes the draft as the next live version (AC-548). */
 export const PublishFormInput = WorkspaceScoped.extend({
   formId: z.uuid(),
-  expectedNumber: z.number().int().min(1),
+  expectedRevision: z.number().int().min(1),
   mutationId: z.uuid(),
 });
 /** Publishes the draft. */

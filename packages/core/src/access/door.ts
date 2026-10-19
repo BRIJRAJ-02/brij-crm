@@ -15,8 +15,9 @@ import { schema, type Database, type IdentityStore, type WorkspaceTx } from '@cr
 import { isUuid } from '../engine/ids.ts';
 import { refuse, type RefusalError } from '../engine/refusals.ts';
 import { SYSTEM_ACTOR, type Actor } from '../engine/scope.ts';
-import { mintScope, type EngineScope } from './mint.ts';
-import { isRole, NO_RULES, roleAccess, SYSTEM_ACCESS, type AccessRules } from './policy.ts';
+import { sql } from 'drizzle-orm';
+import { mintScope, rescope, type EngineScope } from './mint.ts';
+import { formAccess, isRole, NO_RULES, roleAccess, SYSTEM_ACCESS, type Access, type AccessRules } from './policy.ts';
 
 /**
  * Where the door reads a workspace's object, field and record rules, inside
@@ -176,6 +177,57 @@ export function enterWithKey(
   _input: { readonly workspaceId: string; readonly keyId: string },
 ): Promise<EngineScope> {
   return Promise.reject(notFound());
+}
+
+/** The nil uuid: a workspace no row has, for the one read that finds a form's workspace by its public key. */
+const NO_WORKSPACE = '00000000-0000-0000-0000-000000000000';
+
+/** What a public key that names no form answers: the same for a malformed key and an unknown one. */
+function noForm(): RefusalError {
+  return refuse('NOT_FOUND', 'That form does not exist.');
+}
+
+/** A public key's shape (spec 0023, AC-552): anything else names no form and never reaches the database. */
+const PUBLIC_KEY = /^[A-Za-z0-9_-]{16,64}$/;
+
+/**
+ * The scope a public form endpoint acts in (spec 0023): the workspace and
+ * form a public key names, found through `crm_form_by_key` (ids only), the
+ * form as the actor, and no data access at all. NOT_FOUND for a malformed
+ * or unknown key. Whether the form is live is the caller's next read.
+ */
+export async function enterPublicForm(
+  deps: { readonly db: Database },
+  publicKey: string,
+): Promise<{ readonly scope: EngineScope; readonly formId: string }> {
+  if (!PUBLIC_KEY.test(publicKey)) throw noForm();
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<{ workspace_id: string; form_id: string }>(
+      sql`select workspace_id::text, form_id::text from crm_form_by_key(${publicKey})`,
+    ),
+  );
+  const [row] = found.rows;
+  if (row === undefined) throw noForm();
+  const scope = mintScope({
+    db: deps.db,
+    workspaceId: row.workspace_id,
+    actor: { type: 'form', id: row.form_id },
+    access: formAccess(row.form_id),
+  });
+  return { scope, formId: row.form_id };
+}
+
+/**
+ * System work acting as a form (spec 0023, processing a submission): the
+ * same workspace and database as the system's `scope`, the form as the
+ * actor, and the access its published mapping gives (`formAccess`). Refuses
+ * (a programming error) from any scope but the system's.
+ */
+export function enterAsForm(scope: EngineScope, formId: string, access: Access): EngineScope {
+  if (scope.actor.type !== 'system' || access.principal.kind !== 'form' || access.principal.formId !== formId) {
+    throw new Error('Only system work acts as a form, with that form’s own access.');
+  }
+  return rescope(scope, { type: 'form', id: formId }, access);
 }
 
 /**

@@ -386,6 +386,8 @@ async function removeRecords(tx: WorkspaceTx, recordIds: readonly string[]): Pro
   // Tasks keep living without the records removed for good; their links to them go first (spec 0019, AC-446),
   // until spec 0022's purge registry takes this step over.
   await tx.execute(sql`delete from task_records where record_id = any(${ids})`);
+  // A form submission's note of the record goes too (spec 0023); the submission itself stays, its answers kept.
+  await tx.execute(sql`delete from form_submission_records where record_id = any(${ids})`);
   const removed = await tx.execute<{ id: string; object_id: string }>(
     sql`delete from records where id = any(${ids}) returning id::text, object_id::text`,
   );

@@ -79,6 +79,16 @@ export function mintScope(fields: ScopeFields): EngineScope {
   return Object.freeze(scope) as EngineScope;
 }
 
+/**
+ * A scope on the same workspace and database as `scope` (checked first),
+ * acting as `actor` with `access`. Only the door calls it (`enterAsForm`), so
+ * system work can act as a form inside its own transaction (spec 0023).
+ */
+export function rescope(scope: EngineScope, actor: Actor, access: Access): EngineScope {
+  checkScope(scope);
+  return mintScope({ db: scope.db, workspaceId: scope.workspaceId, actor, access });
+}
+
 /** A scope that wasn't minted here: a programming error, answered as INTERNAL and logged. */
 function forged(reason: string): Error {
   return new Error(`Refused a scope the access door did not make (${reason}).`);

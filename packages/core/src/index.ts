@@ -3,6 +3,7 @@
 export { getSystemStatus, type SystemDeps } from './system/status.ts';
 export * from './engine/index.ts';
 export {
+  enterPublicForm,
   enterWithKey,
   enterWorkspace,
   type DoorDeps,
@@ -165,3 +166,43 @@ export {
   type RunnerLog,
   type SliceOutcome,
 } from './jobs/runner.ts';
+// Forms (spec 0023, milestone 1): building and publishing forms, their submissions, the public form and submit, and
+// processing a submission into records (the `forms.process` kind, registered in `jobKinds`).
+export {
+  createForm,
+  formAttributes,
+  getForm,
+  listForms,
+  newPublicKey,
+  publishForm,
+  rotateFormKey,
+  saveFormDraft,
+  setFormStatus,
+  UNKNOWN_FORM,
+  type CreateFormInput,
+  type SaveDraftInput,
+} from './forms/forms.ts';
+export {
+  FORM_CLOSED_MESSAGE,
+  getPublicForm,
+  submitForm,
+  type CaptchaVerdict,
+  type SubmitInput,
+  type SubmitOutcome,
+} from './forms/public.ts';
+export {
+  deleteSubmission,
+  getSubmission,
+  listSubmissions,
+  retrySubmission,
+  UNKNOWN_SUBMISSION,
+} from './forms/submissions.ts';
+export {
+  chooseOwner,
+  FORMS_PROCESS,
+  formsProcess,
+  processSubmission,
+  PROCESS_GAVE_UP,
+  type Assignment,
+} from './forms/process.ts';
+export { compilePattern } from './validation/pattern.ts';
