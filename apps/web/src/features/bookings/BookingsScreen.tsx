@@ -591,13 +591,16 @@ function WeekView(props: BookingsCalendarScreenProps) {
                   key={`${draft.dayKey}:${String(draft.startMinute)}:${String(draft.endMinute)}`}
                   span={draft}
                   locale={locale}
-                  onBlock={({ repeat, label }) => {
+                  privatePages={pages
+                    .filter((page) => page.isPrivate)
+                    .map((page) => ({ id: page.id, title: page.title }))}
+                  onClose={({ kind, repeat, label, pageId }) => {
                     const startsAt = instantOf(draft.dayKey, draft.startMinute).toISOString();
                     const endsAt = instantOf(draft.dayKey, draft.endMinute).toISOString();
                     const preview: TimeBlockOccurrence = {
                       key: `draft:${startsAt}`,
                       blockId: PREVIEW_BLOCK_ID,
-                      kind: 'block',
+                      kind,
                       repeat,
                       ...(label === undefined ? {} : { label }),
                       startsAt,
@@ -605,13 +608,14 @@ function WeekView(props: BookingsCalendarScreenProps) {
                     };
                     return onBlock(
                       {
-                        kind: 'block',
+                        kind,
                         repeat,
                         date: draft.dayKey,
                         startMinute: draft.startMinute,
                         endMinute: draft.endMinute,
                         timeZone: browserZone(),
                         ...(label === undefined ? {} : { label }),
+                        ...(pageId === undefined ? {} : { pageId }),
                       },
                       [preview],
                     );

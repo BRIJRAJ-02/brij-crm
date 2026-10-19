@@ -78,6 +78,8 @@ export const strings = {
   timeZone: 'Time zone',
   weeklyHours: 'Weekly hours',
   limits: 'Limits',
+  private: 'Private',
+  privateHint: 'Only people with the link book it. It may book inside the time you hold, and skips the minimum notice.',
   bufferBefore: 'Buffer before',
   bufferAfter: 'Buffer after',
   notice: 'Minimum notice',

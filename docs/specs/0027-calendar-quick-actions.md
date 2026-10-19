@@ -10,7 +10,7 @@ On Bookings › Calendar a member drags across empty time in a day (or clicks it
 
 - **Book someone in**: a New meeting dialog books a guest into that span as a real booking.
 - **Block this time**: the span closes on every booking page that books the member, once or every week.
-- **Hold for a private meeting type**: the span closes for everyone except private booking pages, which may book inside it even outside working hours.
+- **Hold for a private page**: the span closes for everyone except private booking pages, which may book inside it even outside working hours.
 
 The behaviour follows the timefix app's "draw on the calendar"; the look is ours. The owner chose all three on 20 October 2026 ("All three like timefix").
 
@@ -18,7 +18,7 @@ The behaviour follows the timefix app's "draw on the calendar"; the look is ours
 
 - **AC-700**: Dragging across empty time in a day column draws a ghost span snapped to 15 minutes, dashed while dragging and solid once released, with its start and end times at its corners. A drag never leaves its day.
 - **AC-701**: A click, a tap, or a span under 15 minutes becomes the default length (the member's first booking page's first duration, else 30 minutes), clamped to the day. On touch a tap opens the card at once (no drag, which would fight scrolling). From the keyboard, Enter or Space on a day opens it at the member's working start for that day.
-- **AC-702**: The card sits beside the span and flips when there is no room. It names the span ("10:00 – 10:30 AM", "Tuesday 20 October · 30 min") and offers Book someone in, Block this time and Hold for a private meeting type. Book someone in is left out on a past day. Escape, a press outside, or drawing again closes it; Back returns to the choices.
+- **AC-702**: The card sits beside the span and flips when there is no room. It names the span ("10:00 – 10:30 AM", "Tuesday 20 October · 30 min") and offers Book someone in, Block this time and Hold for a private page. Book someone in is left out on a past day. Escape, a press outside, or drawing again closes it; Back returns to the choices.
 - **AC-703**: Block offers "Just this Tuesday" (the default) or "Every Tuesday", and an optional label only the member sees ("Why? (only you see this)"). Block it saves, then the card says "Time blocked." with Done.
 - **AC-704**: Hold offers a choice of the member's private booking pages, defaulting to "Any private page", and the same label. Hold it saves, then the card says "Held. Only a private booking page can book it." with Done. A hold is always one span on one date.
 - **AC-705**: A block or hold shows on the week as a quiet hatched object under bookings and events: "Blocked" or "Held", with its label when there is room. Pressing it opens a card with the span, the label and Remove (a block) or Release (a hold), which reopens the time ("That time is open again.").

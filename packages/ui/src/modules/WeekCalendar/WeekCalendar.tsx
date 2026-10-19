@@ -446,7 +446,7 @@ export function WeekCalendar({
   );
 }
 
-/** The span being drawn, or drawn: an outline, dashed while dragging, with its start and end at opposite corners. */
+/** The span being drawn, or drawn: an outline, dashed while dragging, with its start, and from an hour its end, at opposite corners. */
 function Ghost({
   span,
   isDrawing,
@@ -471,7 +471,7 @@ function Ghost({
       {minuteLabel !== undefined && length >= SNAP && (
         <span className={styles.ghostStart}>{minuteLabel(span.startMinute)}</span>
       )}
-      {minuteLabel !== undefined && length >= 2 * SNAP && (
+      {minuteLabel !== undefined && length >= 4 * SNAP && (
         <span className={styles.ghostEnd}>{minuteLabel(span.endMinute)}</span>
       )}
     </div>

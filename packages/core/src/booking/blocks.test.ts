@@ -14,7 +14,7 @@ import { rescope, testScope } from '../testing.ts';
 import { createTimeBlock, removeTimeBlock, weeklyTurns, type TimeBlockDraft } from './blocks.ts';
 import { NO_CALENDAR } from './calendar.ts';
 import { readBookingsCalendar } from './list.ts';
-import { createBookingPage } from './pages.ts';
+import { createBookingPage, updateBookingPage } from './pages.ts';
 import { bookPublicSlot, readPublicSlots } from './public.ts';
 
 const { appUrl } = inject('testDatabase');
@@ -192,6 +192,16 @@ describe('holds open only for a private page (AC-704, AC-707)', () => {
     await createTimeBlock(w.owner, draft({ kind: 'hold', startMinute: 18 * 60, endMinute: 19 * 60, pageId: first.id }));
     expect(await mondayStarts(first.publicKey)).toContain('18:00');
     expect(await mondayStarts(second.publicKey)).not.toContain('18:00');
+  });
+
+  it('a page turns private through its settings, and says so (AC-708)', async () => {
+    const w = await workspace();
+    const { page } = await livePage(w.owner);
+    expect(page.isPrivate).toBe(false);
+    const changed = await updateBookingPage(w.owner, { pageId: page.id, settings: { isPrivate: true } }, NOW);
+    expect(changed.isPrivate).toBe(true);
+    await createTimeBlock(w.owner, draft({ kind: 'hold', startMinute: 18 * 60, endMinute: 19 * 60 }));
+    expect(await mondayStarts(page.publicKey)).toContain('18:00');
   });
 
   it('refuses a hold for a page the member doesn’t book', async () => {

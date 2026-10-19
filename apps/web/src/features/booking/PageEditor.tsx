@@ -86,6 +86,7 @@ const settingsOf = (page: BookingPageView): BookingPageSettings => ({
   slotStep: page.slotStep,
   status: page.status,
   hoursMode: page.hoursMode,
+  isPrivate: page.isPrivate,
 });
 
 /** The settings that differ between two drafts. */
@@ -391,6 +392,13 @@ export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProp
                 isReadOnly={isLocked}
                 value={draft.slotStep === null ? 'duration' : String(draft.slotStep)}
                 onChange={(id) => change({ slotStep: id === '15' ? 15 : id === '30' ? 30 : id === '60' ? 60 : null })}
+              />
+              <Switch
+                label={strings.private}
+                description={strings.privateHint}
+                isSelected={draft.isPrivate}
+                isReadOnly={isLocked}
+                onChange={(isPrivate) => change({ isPrivate })}
               />
             </Disclosure>
           </PreviewLayout>

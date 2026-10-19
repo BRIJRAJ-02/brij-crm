@@ -113,6 +113,7 @@ function viewOf(scope: EngineScope, page: PageRecord, count: number): BookingPag
     slotStep: page.slotStep,
     status: page.status,
     hoursMode: page.hoursMode,
+    isPrivate: page.isPrivate,
     bookingsThisMonth: count,
     canChange: mayChange(scope, page),
     createdAt: page.createdAt.toISOString(),
@@ -212,6 +213,7 @@ export async function createBookingPage(
       slotStep: given.slotStep ?? null,
       status: given.status ?? 'live',
       hoursMode: given.hoursMode ?? 'own',
+      isPrivate: given.isPrivate ?? false,
     };
     const by = actorRow(scope.actor);
     try {
@@ -237,6 +239,7 @@ export async function createBookingPage(
           slotStep: settings.slotStep,
           status: settings.status,
           hoursMode: settings.hoursMode,
+          isPrivate: settings.isPrivate,
           createdByType: by.type,
           createdById: by.id,
           createdByMemberId: by.memberId,
@@ -286,6 +289,7 @@ export async function updateBookingPage(
           ...(settings.slotStep === undefined ? {} : { slotStep: settings.slotStep }),
           ...(settings.status === undefined ? {} : { status: settings.status }),
           ...(settings.hoursMode === undefined ? {} : { hoursMode: settings.hoursMode }),
+          ...(settings.isPrivate === undefined ? {} : { isPrivate: settings.isPrivate }),
           updatedAt: sql`now()`,
           updatedByType: by.type,
           updatedById: by.id,

@@ -72,7 +72,13 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       address: `/${slug}/${page.slug}`,
       description: page.description,
       chips: chipsOf(page),
-      ...(isPending ? { badge: strings.copying } : page.status === 'paused' ? { badge: strings.offTag } : {}),
+      ...(isPending
+        ? { badge: strings.copying }
+        : page.status === 'paused'
+          ? { badge: strings.offTag }
+          : page.isPrivate
+            ? { badge: strings.private }
+            : {}),
       isOff: page.status === 'paused',
       toggle: {
         label: strings.isOn(page.title),

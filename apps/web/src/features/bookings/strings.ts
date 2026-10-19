@@ -99,5 +99,13 @@ export const strings = {
   blockIt: 'Block it',
   blockFailed: 'That time couldn’t be blocked. Try again.',
   timeBlocked: 'Time blocked.',
+  holdThisTime: 'Hold for a private page',
+  holdFor: 'For',
+  anyPrivatePage: 'Any private page',
+  holdHint: 'Only that private page can book inside it, even outside your hours.',
+  noPrivatePages: 'No page is private yet: turn on Private in a page’s Limits to book inside this hold.',
+  holdIt: 'Hold it',
+  holdFailed: 'That time couldn’t be held. Try again.',
+  timeHeld: 'Held. Only a private booking page can book it.',
   done: 'Done',
 } as const;

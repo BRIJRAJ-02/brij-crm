@@ -191,6 +191,8 @@ export const BookingPageSettings = z.object({
   status: BookingPageStatus,
   /** `mine` follows the owner's own hours (Bookings › Availability); `own` uses `availability`. */
   hoursMode: z.enum(['mine', 'own']),
+  /** A private page (spec 0027, AC-708): reached by its link, it books inside its host's holds and waives notice. */
+  isPrivate: z.boolean(),
 });
 /** Every setting a member edits. */
 export type BookingPageSettings = z.infer<typeof BookingPageSettings>;

@@ -100,7 +100,13 @@ import type {
   ViewQuery,
 } from './records/layer.ts';
 
-export type { CreateTimeBlockInput, TimeBlockOccurrence, TimeBlockRepeat, TimeBlockView } from '@crm/contracts';
+export type {
+  CreateTimeBlockInput,
+  TimeBlockKind,
+  TimeBlockOccurrence,
+  TimeBlockRepeat,
+  TimeBlockView,
+} from '@crm/contracts';
 export type {
   CalendarConnectionView,
   CalendarConnections,
