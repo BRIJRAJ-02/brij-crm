@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'r
 import type { BoardStatus, BoardStore } from './records/board.ts';
 import type { DataError } from './errors.ts';
 import type { ActivityFeed, ActivityState } from './activity/feed.ts';
+import type { BookingsState, BookingsView } from './bookings/store.ts';
 import type { CalendarState, CalendarView } from './calendar/store.ts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { LiveStatus } from './live/live.ts';
@@ -249,6 +250,15 @@ export function useViewsList(source: ViewsListSource): ViewsListSnapshot {
 /** One saved view whole (spec 0020), re-rendering when it changes. Held while the screen is mounted. */
 export function useSavedView(source: SavedViewSource): SavedViewSnapshot {
   return useRetained(source);
+}
+
+/**
+ * Bookings, the workspace's upcoming or past list (spec 0025), re-rendering
+ * when it changes. Held while the screen is mounted, so it is read again when
+ * the person comes back to the page.
+ */
+export function useBookings(view: BookingsView): BookingsState {
+  return useRetained(view);
 }
 
 /**

@@ -158,6 +158,12 @@ export {
 } from './modules/ActivityFeed/ActivityFeed.tsx';
 export { AppShell, AppShellContext, type AppShellProps } from './modules/AppShell/AppShell.tsx';
 export { AuthLayout, type AuthLayoutProps, type ProductLogo } from './modules/AuthLayout/AuthLayout.tsx';
+export {
+  BookingList,
+  type BookingListGroup,
+  type BookingListProps,
+  type BookingListRow,
+} from './modules/BookingList/BookingList.tsx';
 export { LinkList, type LinkListProps, type LinkRow } from './modules/LinkList/LinkList.tsx';
 export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColumn.tsx';
 export { PreviewLayout, type PreviewDevice, type PreviewLayoutProps } from './modules/PreviewLayout/PreviewLayout.tsx';

@@ -1,0 +1,123 @@
+/* BookingList: day bands in small capitals on the subtle surface, each over
+   its rows; a row is the date column (half a measure wide: the day bold, the
+   time muted, Join), the title, note and who, then the actions. On a narrow
+   container the date column sits above the rest. */
+@layer components {
+  .root {
+    overflow: hidden;
+    border: var(--border-width-hairline) solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    container-type: inline-size;
+  }
+
+  .group + .group {
+    border-block-start: var(--border-width-hairline) solid var(--border);
+  }
+
+  .band {
+    margin: 0;
+    padding: var(--space-6) var(--space-16);
+    border-block-end: var(--border-width-hairline) solid var(--border);
+    background: var(--surface-subtle);
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    font-variant-caps: all-small-caps;
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .rows {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-16);
+    padding: var(--space-12) var(--space-16);
+    border-block-end: var(--border-width-hairline) solid var(--border);
+  }
+
+  .rows > .row:last-child {
+    border-block-end: none;
+  }
+
+  .when {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: var(--space-2);
+    inline-size: calc(var(--size-measure) / 2);
+  }
+
+  .date {
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .time {
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .join {
+    display: flex;
+    align-items: center;
+    gap: var(--space-4);
+    color: var(--link);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-2);
+    min-inline-size: 0;
+  }
+
+  .titleLine {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+    margin-inline-start: calc(-1 * var(--space-8));
+  }
+
+  .note {
+    overflow: hidden;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .who {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-4);
+  }
+
+  @container (inline-size < 480px) {
+    .row {
+      flex-direction: column;
+      gap: var(--space-6);
+    }
+
+    .when {
+      inline-size: auto;
+    }
+  }
+}
