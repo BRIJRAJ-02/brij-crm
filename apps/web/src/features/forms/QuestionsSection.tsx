@@ -189,7 +189,8 @@ export function QuestionsSection(props: QuestionsSectionProps) {
             draft={draft}
             attributes={attributes}
             isReadOnly={isReadOnly}
-            isJustAdded={justAdded === id}
+            // A question just added, or one a publish refused, takes focus and comes into view.
+            isJustAdded={justAdded === id || problem?.questionId === id}
             {...(problem?.questionId === id ? { problem: problem.message } : {})}
             onChange={(change) => {
               onChange((before) => changeQuestion(before, id, change, liveIds));

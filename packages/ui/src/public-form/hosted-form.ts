@@ -198,7 +198,14 @@ function drawQuestion(
     }
     case 'choice': {
       const radios = (question.choices ?? []).map((choice, index) =>
-        h('input', { class: cls('tick'), type: 'radio', name: question.key, value: choice, id: `${id}-${index}` }),
+        h('input', {
+          class: cls('tick'),
+          type: 'radio',
+          name: question.key,
+          value: choice,
+          id: `${id}-${index}`,
+          ...describe,
+        }),
       );
       for (const radio of radios) listen(radio);
       const list = h(
@@ -372,7 +379,7 @@ export function mountHostedForm(root: HTMLElement, initial: PublicForm, options:
     const again = h('button', { class: cls('quiet'), type: 'button' }, [words.sendAnother]);
     again.addEventListener('click', () => {
       round += 1;
-      drawForm();
+      drawForm(true);
     });
     node.append(
       heading,
@@ -385,13 +392,16 @@ export function mountHostedForm(root: HTMLElement, initial: PublicForm, options:
     heading.focus();
   };
 
-  const drawForm = () => {
+  /** Draws the form (or its closed message); `takesFocus` when it replaces what the visitor was on. */
+  const drawForm = (takesFocus = false) => {
     const words = formStrings(form.language);
     startedAt = now();
     if (form.status === 'paused') {
       const node = frame(options.mode, form.look);
-      node.append(h(headingTag(options.mode), { class: cls('headline') }, [words.closed]));
+      const closed = h(headingTag(options.mode), { class: cls('headline'), tabindex: '-1' }, [words.closed]);
+      node.append(closed);
       draw(node);
+      if (takesFocus) closed.focus();
       return;
     }
     let checking = false;
@@ -474,7 +484,7 @@ export function mountHostedForm(root: HTMLElement, initial: PublicForm, options:
               return;
             case 'closed':
               form = { ...form, status: 'paused' };
-              drawForm();
+              drawForm(true);
               return;
             case 'offline':
               alert.textContent = words.offline;
@@ -489,12 +499,14 @@ export function mountHostedForm(root: HTMLElement, initial: PublicForm, options:
         });
     });
     const node = frame(options.mode, form.look);
+    const headline = h(headingTag(options.mode), { class: cls('headline'), tabindex: '-1' }, [form.headline]);
     node.append(
-      h(headingTag(options.mode), { class: cls('headline') }, [form.headline]),
+      headline,
       ...(form.subheading === undefined ? [] : [h('p', { class: cls('subheading') }, [form.subheading])]),
       body,
     );
     draw(node);
+    if (takesFocus) headline.focus();
   };
 
   drawForm();

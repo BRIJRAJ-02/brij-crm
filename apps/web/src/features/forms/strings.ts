@@ -142,6 +142,8 @@ export const strings = {
     `Create ${name} with ${count(attributes, 'attribute', 'attributes')}`,
   building: 'Making the object…',
   liveText: 'Share the link, or put it on your site.',
+  ownFormLater: 'To use your own design, take the form HTML from Install.',
+  ownFormThanks: 'Thank you. That is with us.',
 
   // Settings tab
   basics: 'The basics',
@@ -167,7 +169,7 @@ export const strings = {
   ownerHint: 'New records get this owner; a record that already has one keeps it.',
   nobody: 'Nobody',
   settingsFailed: 'That didn’t save.',
-  draftNote: 'Changes to what visitors see go live when you publish.',
+  draftNote: 'The headline, sub heading and button text go live when you publish; the name and address change at once.',
 
   // Install tab
   shareLink: 'Share a link',

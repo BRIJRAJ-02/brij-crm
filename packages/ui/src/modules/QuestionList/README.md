@@ -24,6 +24,17 @@ New. The form builder (spec 0023, `0023-experience.md`, Questions) needs cards t
 - `hasProblem` marks the card a publish refused; the caller keeps it open until it is fixed.
 - Without `onMove` the list is read only and shows no handles.
 
+## States
+
+- Closed (the default), open (its editor under a hairline, Duplicate and Delete at the end), refused (`hasProblem`: the danger border and "Needs a fix"), untitled ("Untitled question", muted), dragging (faded, with the drop line), and read only (no handles).
+- No questions: the header alone, with its count at 0 and its actions.
+
+## Keyboard
+
+- Tab moves through each card's handle, its header and, when open, its fields; Enter or Space on the header opens and closes it.
+- On the handle: Enter picks the card up, arrows choose the drop line, Enter drops it, Esc cancels. The move is announced.
+- Keys typed in an open card's fields stay in the field: the list is in `tab` mode, so a row never takes arrows or type ahead from its children.
+
 ## Differs from the spec
 
 The spec names dnd-kit for drag (decided 13 October). This repo's lists still reorder with React Aria's drag and drop and `DragHandle`, so this one does too, and picks up with Enter rather than Space; it moves with the others when they change.

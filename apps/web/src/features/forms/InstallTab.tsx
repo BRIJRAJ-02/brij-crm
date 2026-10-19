@@ -7,6 +7,7 @@ import { Button, Card, Code, CopyButton, Field, Switch } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { firstRefusal } from './refusals.ts';
+import { embedSnippet, ownFormHtml } from './snippets.ts';
 import { strings } from './strings.ts';
 
 /** Props for the Install tab. */
@@ -17,40 +18,12 @@ export interface InstallTabProps {
   readonly onFormChange: (view: FormView) => void;
 }
 
-/** A plain HTML form for the site's own design: one field per question, named by `data-crm-field`. */
-function ownFormHtml(form: FormView, script: string): string {
-  const inputType = (type: string) =>
-    type === 'email' ? 'email' : type === 'phone' ? 'tel' : type === 'website' ? 'url' : 'text';
-  const fields = form.draft.questions.map((question) => {
-    const required = question.required ? ' required' : '';
-    if (question.answerType === 'long_text') {
-      return `  <label>${question.label}\n    <textarea data-crm-field="${question.key}"${required}></textarea>\n  </label>`;
-    }
-    if (question.answerType === 'checkbox' || question.answerType === 'yes_no') {
-      return `  <label><input type="checkbox" data-crm-field="${question.key}"${required}> ${question.label}</label>`;
-    }
-    if (question.answerType === 'dropdown' || question.answerType === 'choice') {
-      const options = (question.choices ?? []).map((choice) => `      <option>${choice}</option>`).join('\n');
-      return `  <label>${question.label}\n    <select data-crm-field="${question.key}"${required}>\n${options}\n    </select>\n  </label>`;
-    }
-    return `  <label>${question.label}\n    <input type="${inputType(question.answerType)}" data-crm-field="${question.key}"${required}>\n  </label>`;
-  });
-  return [
-    `<form data-crm-form-post="${form.publicKey}">`,
-    ...fields,
-    `  <button type="submit">${form.draft.buttonText}</button>`,
-    `  <p data-crm-thanks hidden>Thank you. That is with us.</p>`,
-    '</form>',
-    `<script src="${script}" async></script>`,
-  ].join('\n');
-}
-
 /** Three Cards: Share a link, Embed on your site, Your own form. */
 export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const link = data.forms.hostedUrl(form.publicKey);
   const script = data.forms.embedUrl();
-  const embed = `<script src="${script}" async></script>\n<div data-crm-form="${form.publicKey}"></div>`;
+  const embed = embedSnippet(script, form.publicKey, (form.live ?? form.draft).headline);
   const own = ownFormHtml(form, script);
   const [sites, setSites] = useState(form.allowedOrigins.join('\n'));
   const [sitesError, setSitesError] = useState<string | undefined>(undefined);

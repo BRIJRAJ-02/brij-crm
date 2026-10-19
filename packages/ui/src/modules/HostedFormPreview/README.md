@@ -17,6 +17,11 @@ New. The builder must show exactly what goes live (spec 0023, `0023-experience.m
 - `page` checks the answers as the server would and shows the thank you, but sends nothing.
 - The look is the form's own (`look.colour`, `look.corners`), whatever the app's theme.
 
+## States and keyboard
+
+- `preview`: nothing in it is reachable; the note is read once.
+- `page`: Tab follows the question order, Enter in a single line field submits, errors sit under their fields with the first one focused, the alert line sits over the button, and the thank you takes focus on its heading.
+
 ## Differs from the artifact
 
 The artifact has no form preview; this draws the public renderer's markup, styled by `HostedForm.module.css` beside it.

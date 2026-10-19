@@ -72,7 +72,9 @@ export function FormEditor(props: FormEditorProps) {
   const [target, setTarget] = useState(props.target);
   const [draft, setDraft] = useState<FormDocument>(props.form.draft);
   const [conflict, setConflict] = useState(false);
-  const [problem, setProblem] = useState<PublishProblem | undefined>(undefined);
+  // A refused publish: the check's problem, or the server's (kept with the draft it refused).
+  const [problem, setProblem] = useState<(PublishProblem & { readonly atDraft?: FormDocument }) | undefined>(undefined);
+  const [isDeletingNow, setDeletingNow] = useState(false);
   const [isPublishing, setPublishing] = useState(false);
   const [isFirstPublish, setFirstPublish] = useState(false);
   const [isDeleting, setDeleting] = useState(false);
@@ -128,16 +130,18 @@ export function FormEditor(props: FormEditorProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [draft, canManage, conflict]);
 
-  // A fixed question lets go of its refusal: the refusal shows only while the check still finds it.
+  // A fixed problem lets go of its refusal: the check's own shows while the check still finds it, the server's
+  // until the draft changes.
   const shown = useMemo(() => {
-    if (problem?.questionId === undefined) return problem;
+    if (problem === undefined) return undefined;
+    if (problem.atDraft !== undefined) return problem.atDraft === draft ? problem : undefined;
     const still = publishProblem({
       name: form.name,
       slug: form.publicKey,
       document: draft,
       attributes: publishAttributesOf(target),
     });
-    return still?.questionId === problem.questionId ? problem : undefined;
+    return still?.code === problem.code && still.questionId === problem.questionId ? problem : undefined;
   }, [draft, problem, form.name, form.publicKey, target]);
 
   const apply = (view: FormView) => {
@@ -203,9 +207,11 @@ export function FormEditor(props: FormEditorProps) {
           const questionId = draft.questions.some((question) => question.id === refusal.field)
             ? refusal.field
             : undefined;
+          // The server's refusal, shown until the draft changes; its code is the server's own.
           setProblem({
             code: 'LABEL_MISSING',
             message: refusal.message,
+            atDraft: draft,
             ...(questionId === undefined ? {} : { questionId }),
           });
         },
@@ -291,8 +297,13 @@ export function FormEditor(props: FormEditorProps) {
       <Button
         icon="eye"
         onPress={() => {
-          void flush().catch(() => undefined);
-          window.open(formPreviewHref(slug, form.id), '_blank', 'noopener');
+          // The tab opens at once (a popup must come from the press), and loads once the draft is saved.
+          const opened = window.open('', '_blank');
+          if (opened !== null) opened.opener = null;
+          const go = () => {
+            if (opened !== null) opened.location.href = formPreviewHref(slug, form.id);
+          };
+          flush().then(go, go);
         }}
       >
         {strings.previewOpen}
@@ -519,14 +530,25 @@ export function FormEditor(props: FormEditorProps) {
               onOpenChange={setDeleting}
               actions={
                 <>
-                  <Button slot="close">{strings.cancel}</Button>
+                  <Button slot="close" isDisabled={isDeletingNow}>
+                    {strings.cancel}
+                  </Button>
                   <Button
                     variant="danger-solid"
+                    isPending={isDeletingNow}
                     onPress={() => {
-                      data.forms.delete(slug, form.id).then(() => {
-                        toasts.toast({ tone: 'success', message: strings.deleted(form.name) });
-                        void navigate({ href: formsHref(slug) });
-                      }, failed);
+                      if (isDeletingNow) return;
+                      setDeletingNow(true);
+                      data.forms.delete(slug, form.id).then(
+                        () => {
+                          toasts.toast({ tone: 'success', message: strings.deleted(form.name) });
+                          void navigate({ href: formsHref(slug) });
+                        },
+                        (error: unknown) => {
+                          setDeletingNow(false);
+                          failed(error);
+                        },
+                      );
                     }}
                   >
                     {strings.delete}

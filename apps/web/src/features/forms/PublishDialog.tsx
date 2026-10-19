@@ -16,6 +16,7 @@ import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useState } from 'react';
 import { changeQuestion, fileByLabel, fittingAttributes, publishAttributesOf } from './draft.ts';
 import { firstRefusal } from './refusals.ts';
+import { embedSnippet } from './snippets.ts';
 import { strings } from './strings.ts';
 
 /** Props for the first publish. */
@@ -224,6 +225,7 @@ export function PublishDialog(props: PublishDialogProps) {
           <>
             <Button slot="close">{strings.cancel}</Button>
             <Button
+              key="next"
               variant="primary"
               onPress={goToAnswers}
               isDisabled={name.trim() === '' || addressError !== undefined}
@@ -241,12 +243,18 @@ export function PublishDialog(props: PublishDialogProps) {
             >
               {strings.back}
             </Button>
-            <Button variant="primary" onPress={goLive} isPending={busy === 'publish'} isDisabled={busy !== undefined}>
+            <Button
+              key="publish"
+              variant="primary"
+              onPress={goLive}
+              isPending={busy === 'publish'}
+              isDisabled={busy !== undefined}
+            >
               {busy === 'publish' ? strings.publishing : strings.publish}
             </Button>
           </>
         ) : (
-          <Button variant="primary" slot="close">
+          <Button key="close" variant="primary" slot="close">
             {strings.close}
           </Button>
         )
@@ -291,6 +299,9 @@ export function PublishDialog(props: PublishDialogProps) {
           <Select
             label={strings.fileOnto}
             hint={strings.fileOntoHint}
+            // Step 2 opens on its first choice, so a second press of Next never lands on Publish.
+            // eslint-disable-next-line jsx-a11y-x/no-autofocus
+            autoFocus
             items={[
               ...objects
                 .filter((object) => !object.isArchived)
@@ -344,6 +355,18 @@ export function PublishDialog(props: PublishDialogProps) {
             isReadOnly
             suffix={<CopyButton value={link} label={strings.copy} isIconOnly />}
           />
+          <Field
+            label={strings.embedSnippet}
+            hint={strings.embedText}
+            isMultiline
+            isReadOnly
+            value={embedSnippet(
+              data.forms.embedUrl(),
+              live?.publicKey ?? address,
+              live?.draft.headline ?? draft.headline,
+            )}
+          />
+          <p>{strings.ownFormLater}</p>
         </>
       )}
     </Modal>
