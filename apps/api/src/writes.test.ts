@@ -50,6 +50,13 @@ const READS: ReadonlySet<string> = new Set([
   'tasks.list',
   'calendar.connections.list',
   'calendar.meetings.forRecord',
+  'forms.list',
+  'forms.get',
+  'forms.attributes',
+  'forms.preview',
+  'forms.slugAvailable',
+  'submissions.list',
+  'submissions.get',
 ]);
 
 let db: Database;
@@ -700,6 +707,120 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
   },
 };
 
+/** A form on People, made through the procedures: draft, or published. */
+async function formOn(m: Member, publish = false) {
+  const form = await m.client.forms.create({
+    workspace: m.slug,
+    id: newId(),
+    name: 'Contact us',
+    mainObjectId: m.people.id,
+    mutationId: newId(),
+  });
+  if (!publish) return form;
+  return m.client.forms.publish({
+    workspace: m.slug,
+    formId: form.id,
+    expectedRevision: form.revision,
+    mutationId: newId(),
+  });
+}
+
+/** A submission of the form, stored straight in the table as the owner, in `state`. */
+async function storedSubmission(m: Member, formId: string, state: string): Promise<string> {
+  const [row] = await testQuery<{ id: string }>(
+    ownerUrl,
+    `insert into form_submissions (workspace_id, form_id, version_id, idempotency_key, answers, state)
+     select f.workspace_id, f.id, f.live_version_id, gen_random_uuid(), '{}', $2 from forms f where f.id = $1
+     returning id::text`,
+    [formId, state],
+  );
+  if (row === undefined) throw new Error('No submission stored.');
+  return row.id;
+}
+
+// Forms (spec 0023): their writes store no outbox row of their own; a retry queues its job, whose row names it.
+Object.assign(WRITES, {
+  'forms.create': async (m: Member) => {
+    await formOn(m);
+    return [];
+  },
+  'forms.saveDraft': async (m: Member, mutationId: string) => {
+    const form = await formOn(m);
+    await m.client.forms.saveDraft({
+      workspace: m.slug,
+      formId: form.id,
+      document: form.draft,
+      expectedRevision: form.revision,
+      mutationId,
+    });
+    return [];
+  },
+  'forms.publish': async (m: Member) => {
+    await formOn(m, true);
+    return [];
+  },
+  'forms.setStatus': async (m: Member, mutationId: string) => {
+    const form = await formOn(m, true);
+    await m.client.forms.setStatus({ workspace: m.slug, formId: form.id, status: 'paused', mutationId });
+    return [];
+  },
+  'forms.updateSettings': async (m: Member, mutationId: string) => {
+    const form = await formOn(m);
+    await m.client.forms.updateSettings({
+      workspace: m.slug,
+      formId: form.id,
+      slug: `a-${newId().slice(-8)}`,
+      mutationId,
+    });
+    return [];
+  },
+  'forms.setTarget': async (m: Member, mutationId: string) => {
+    const form = await formOn(m);
+    await m.client.forms.setTarget({
+      workspace: m.slug,
+      formId: form.id,
+      mainObjectId: m.companies.id,
+      expectedRevision: form.revision,
+      mutationId,
+    });
+    return [];
+  },
+  'forms.duplicate': async (m: Member, mutationId: string) => {
+    const form = await formOn(m);
+    await m.client.forms.duplicate({ workspace: m.slug, formId: form.id, id: newId(), mutationId });
+    return [];
+  },
+  'forms.delete': async (m: Member, mutationId: string) => {
+    const form = await formOn(m);
+    await m.client.forms.delete({ workspace: m.slug, formId: form.id, mutationId });
+    return [];
+  },
+  'submissions.release': async (m: Member, mutationId: string) => {
+    const form = await formOn(m, true);
+    const submissionId = await storedSubmission(m, form.id, 'spam');
+    await m.client.submissions.release({ workspace: m.slug, submissionId, mutationId });
+    return [{ kind: 'jobs', mutation_id: mutationId }];
+  },
+  'submissions.markSpam': async (m: Member, mutationId: string) => {
+    const form = await formOn(m, true);
+    const submissionId = await storedSubmission(m, form.id, 'failed');
+    await m.client.submissions.markSpam({ workspace: m.slug, submissionId, mutationId });
+    return [];
+  },
+  'submissions.retry': async (m: Member, mutationId: string) => {
+    const form = await formOn(m, true);
+    const submissionId = await storedSubmission(m, form.id, 'failed');
+    await m.client.submissions.retry({ workspace: m.slug, submissionId, mutationId });
+    return [{ kind: 'jobs', mutation_id: mutationId }];
+  },
+  'submissions.delete': async (m: Member, mutationId: string) => {
+    const form = await formOn(m, true);
+    const submissionId = await storedSubmission(m, form.id, 'spam');
+    await m.client.submissions.delete({ workspace: m.slug, submissionId, mutationId });
+    return [];
+  },
+});
+
 /** How many writes (each one poke) a case in WRITES makes before and with its own. */
 const WRITES_MADE: Readonly<Record<string, number>> = {
   'views.update': 2,
@@ -727,6 +848,17 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'options.reorder': 2,
   'options.archive': 2,
   'options.restore': 3,
+  'forms.saveDraft': 2,
+  'forms.publish': 2,
+  'forms.setStatus': 3,
+  'forms.updateSettings': 2,
+  'forms.setTarget': 2,
+  'forms.duplicate': 2,
+  'forms.delete': 2,
+  'submissions.release': 3,
+  'submissions.markSpam': 3,
+  'submissions.retry': 3,
+  'submissions.delete': 3,
 };
 
 describe('the one write path', () => {

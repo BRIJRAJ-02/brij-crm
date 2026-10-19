@@ -82,6 +82,8 @@ export type Principal =
       readonly teamIds: readonly string[];
     }
   | { readonly kind: 'api_key'; readonly keyId: string; readonly scopes: readonly string[] }
+  /** A form writing its submissions' records (spec 0023): only what its published mapping names. */
+  | { readonly kind: 'form'; readonly formId: string }
   | { readonly kind: 'system' };
 
 /** A member principal. */
@@ -280,6 +282,37 @@ export function keyAccess(keyId: string, scopes: readonly string[]): Access {
       defaultObject: level,
       objects: frozenRecord([]),
       fields: frozenRecord([]),
+      records: frozenRecord([]),
+    }),
+  });
+}
+
+/**
+ * A form's access (spec 0023, security model): no permission at all; write
+ * on its main object, and on that object's attributes only those its
+ * published mapping names (`writable`); every other attribute of the object
+ * hidden, and every other object out of reach. With no object (the public
+ * endpoints, before processing) it reaches no data at all.
+ */
+export function formAccess(
+  formId: string,
+  target?: {
+    readonly objectId: string;
+    readonly attributeIds: readonly string[];
+    readonly writable: ReadonlySet<string>;
+  },
+): Access {
+  const fields =
+    target === undefined
+      ? []
+      : target.attributeIds.flatMap((id): [string, FieldLevel][] => (target.writable.has(id) ? [] : [[id, 'hidden']]));
+  return Object.freeze({
+    principal: Object.freeze({ kind: 'form', formId }),
+    permissions: Object.freeze([]),
+    data: sealPolicy({
+      defaultObject: 'none',
+      objects: frozenRecord(target === undefined ? [] : [[target.objectId, 'write' as const]]),
+      fields: frozenRecord(fields),
       records: frozenRecord([]),
     }),
   });

@@ -12,7 +12,7 @@ export type ErrorCode = z.infer<typeof ErrorCode>;
 
 /** How one code travels: its HTTP status, and the `Retry-After` seconds when a retry may succeed. */
 export interface ErrorMapEntry {
-  readonly status: 400 | 401 | 403 | 404 | 409 | 413 | 422 | 429 | 500 | 503;
+  readonly status: 400 | 401 | 403 | 404 | 409 | 410 | 413 | 422 | 429 | 500 | 503;
   readonly retryAfterSeconds?: number;
 }
 
@@ -60,6 +60,11 @@ export const ERROR_MAP = {
   // Saved views (spec 0020, AC-469, AC-474).
   VIEW_CHANGED: CONFLICT,
   VIEW_IS_DEFAULT: CONFLICT,
+  // Forms (spec 0023): a stale draft, a status change or submission action that doesn't fit; a paused or
+  // archived form at its public address (410 Gone).
+  FORM_CHANGED: CONFLICT,
+  FORM_STATE: CONFLICT,
+  FORM_CLOSED: { status: 410 },
   PAYLOAD_TOO_LARGE: { status: 413 },
   ATTRIBUTE_VALUE_INVALID: UNPROCESSABLE,
   VALUE_REQUIRED: UNPROCESSABLE,

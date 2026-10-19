@@ -25,6 +25,8 @@ export const ACTOR_WORDS = {
   apiKey: 'An API key',
   automation: 'An automation',
   system: 'System',
+  /** A form whose name this page of the timeline doesn't carry (spec 0023). */
+  form: 'A form',
   /** A member the members list couldn't be read to name, or one hidden from the reader. */
   someone: 'Someone',
 } as const;
@@ -103,6 +105,15 @@ export type ActivityEntryShape =
       readonly attendees: readonly MeetingAttendeeShape[];
       readonly videoUrl?: string;
       readonly detailsHidden: boolean;
+    })
+  | (EntryBase & {
+      /** A form submission that touched the record (spec 0023): the form is the actor, with what it did. */
+      readonly kind: 'submission';
+      /** The submission's id. */
+      readonly itemId: string;
+      readonly action: 'created' | 'updated' | 'matched' | 'linked';
+      /** The submission's address, which the screen adds. */
+      readonly href?: string;
     });
 
 /** A meeting's attendee as the library's `MeetingAttendee`: a person's or member's chip (the screen adds its page), else an address. */
@@ -181,6 +192,7 @@ export interface ActivityFeedsOptions {
 export function actorDisplay(
   actor: ActivityItem['actor'],
   members: readonly MemberSummary[] | undefined,
+  forms: ReadonlyMap<string, string> = new Map(),
 ): ActorDisplay {
   // Hidden from this person (a field rule on Created by): nobody named.
   if (actor === undefined) return { type: 'member', id: null, name: ACTOR_WORDS.someone };
@@ -194,12 +206,22 @@ export function actorDisplay(
   }
   if (actor.type === 'api_key') return { type: 'api_key', id: actor.id, name: ACTOR_WORDS.apiKey };
   if (actor.type === 'automation') return { type: 'automation', id: actor.id, name: ACTOR_WORDS.automation };
+  // A form by its name, which the page's own submission entries carry (spec 0023, AC-564).
+  if (actor.type === 'form') {
+    return {
+      type: 'form',
+      id: actor.id,
+      name: (actor.id === null ? undefined : forms.get(actor.id)) ?? ACTOR_WORDS.form,
+    };
+  }
   return { type: 'system', id: null, name: ACTOR_WORDS.system };
 }
 
 /** What mapping an item needs: the members (undefined when they couldn't be read) and the object's attributes. */
 export interface EntryContext {
   readonly members: readonly MemberSummary[] | undefined;
+  /** Forms' names by id, from the page's submission entries, so a form's writes name it. */
+  readonly forms?: ReadonlyMap<string, string>;
   readonly attributes: ReadonlyMap<string, AttributeDefinition>;
 }
 
@@ -218,8 +240,12 @@ function actorValueDisplay(value: unknown, members: readonly MemberSummary[] | u
  * (archived or hidden since: a definitions change reads the feed again).
  */
 export function toActivityEntry(item: ActivityItem, context: EntryContext): ActivityEntryShape | undefined {
-  const base = { id: item.id, at: item.at, actor: actorDisplay(item.actor, context.members) };
+  const base = { id: item.id, at: item.at, actor: actorDisplay(item.actor, context.members, context.forms) };
   if (item.kind === 'created') return { ...base, kind: 'created' };
+  if (item.kind === 'submission') {
+    if (item.itemId === undefined || item.action === undefined) return undefined;
+    return { ...base, kind: 'submission', itemId: item.itemId, action: item.action };
+  }
   if (item.kind === 'task') {
     if (item.itemId === undefined) return undefined;
     return { ...base, kind: 'task', itemId: item.itemId, title: item.title ?? '', isDone: item.isDone === true };
@@ -450,7 +476,15 @@ export function createActivityFeeds({
           ? Promise.resolve<readonly AttributeDefinition[]>([])
           : attributes(workspace, objectId).catch((): readonly AttributeDefinition[] => []),
       ]);
-      const context = { members: known, attributes: new Map(defined.map((each) => [each.id, each])) };
+      // The forms this page names, from its submission entries (each carries its form's id and name).
+      const forms = new Map(
+        sorted.flatMap((item) =>
+          item.kind === 'submission' && item.formId !== undefined && item.title !== undefined
+            ? [[item.formId, item.title] as const]
+            : [],
+        ),
+      );
+      const context = { members: known, forms, attributes: new Map(defined.map((each) => [each.id, each])) };
       const rows = sorted.flatMap((item) => {
         const entry = toActivityEntry(item, context);
         return entry === undefined ? [] : [{ key: item.key, entry }];

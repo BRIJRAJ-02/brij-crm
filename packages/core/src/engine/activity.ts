@@ -32,6 +32,7 @@ import { linkSource, toMillis, valueSource } from './activity-sources.ts';
 import { isArchivedNow, loadAttributes, type AttributeDef } from './values.ts';
 import { meetingSource } from '../calendar/activity.ts';
 import { taskSource } from '../tasks/activity.ts';
+import { submissionSource } from '../forms/activity.ts';
 
 /** What a cursor the server can't read answers, on the `cursor` field. */
 export const ACTIVITY_CURSOR_MESSAGE = 'That activity cursor is not valid here. Start again from the top.';
@@ -132,13 +133,14 @@ const creationSource: ActivitySource = ({ record, after }) => {
   });
 };
 
-/** The timeline's sources, read in this order and merged by key. #19, #29 and spec 0024 add theirs here. */
+/** The timeline's sources, read in this order and merged by key. #19, #29, spec 0024 and spec 0023 add theirs here. */
 export const ACTIVITY_SOURCES: readonly ActivitySource[] = [
   creationSource,
   valueSource,
   linkSource,
   taskSource,
   meetingSource,
+  submissionSource,
 ];
 
 /** Encodes where a page ended as the opaque cursor: base64url JSON. */

@@ -631,8 +631,8 @@ async function checkVersions(
   if (first !== undefined) throw refuseAll([first, ...rest]);
 }
 
-/** `updateOwner`, answering only each attribute's result. */
-async function updateRecord(
+/** `updateOwner`, answering only each attribute's result: one record's or entry's values, inside a write. */
+export async function updateRecord(
   context: WriteContext,
   input: RecordValues | EntryValues,
   visible?: ReadonlySet<string>,

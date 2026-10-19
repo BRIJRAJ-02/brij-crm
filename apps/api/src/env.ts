@@ -274,10 +274,30 @@ export const ApiEnv = z
     // handler time) to every /api/rpc answer. Local only: it exposes internal timings, so it is refused elsewhere.
     LOAD_TIMING: optional(z.enum(['on', 'off'])),
     ...calendarFields,
+    // Forms (spec 0023): reCAPTCHA v3's keys, the site key sent to browsers and the secret the API verifies tokens
+    // with. Both or neither, and optional everywhere: unset, the honeypot, the fill time and the rate limits decide
+    // alone; set, the score is one more spam signal.
+    RECAPTCHA_SITE_KEY: optional(
+      z.string().regex(/^[A-Za-z0-9_-]{20,100}$/, 'RECAPTCHA_SITE_KEY is a reCAPTCHA v3 site key.'),
+    ),
+    RECAPTCHA_SECRET_KEY: optional(
+      z.string().regex(/^[A-Za-z0-9_-]{20,100}$/, 'RECAPTCHA_SECRET_KEY is a reCAPTCHA v3 secret key.'),
+    ),
+    // The salt client addresses are hashed with for the form rate limits and abuse review (rotating it only resets
+    // rate limit history). Required outside local; locally a fixed placeholder stands in.
+    FORMS_IP_SALT: optional(z.string().min(32, 'FORMS_IP_SALT must be at least 32 characters.')),
+    // The origin hosted form pages are served from, when it differs from APP_URL (it defaults to APP_URL).
+    FORMS_PUBLIC_ORIGIN: optional(z.url()),
   })
   .superRefine((env, issues) => {
     const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });
     checkCalendar(env, missing);
+    if ((env.RECAPTCHA_SITE_KEY === undefined) !== (env.RECAPTCHA_SECRET_KEY === undefined)) {
+      missing('RECAPTCHA_SECRET_KEY', 'Set RECAPTCHA_SITE_KEY and RECAPTCHA_SECRET_KEY together, or neither.');
+    }
+    if (env.APP_ENV !== 'local' && env.FORMS_IP_SALT === undefined) {
+      missing('FORMS_IP_SALT', `FORMS_IP_SALT is required in ${env.APP_ENV}. Generate one: \`openssl rand -hex 32\`.`);
+    }
     if (env.LOAD_TIMING === 'on' && env.APP_ENV !== 'local') {
       missing(
         'LOAD_TIMING',
@@ -346,6 +366,9 @@ export const ApiEnv = z
     calendar: calendarOf({ ...env, CALENDAR_TOKEN_KEY, GOOGLE_CALENDAR_CLIENT_SECRET }),
   }));
 export type ApiEnv = z.infer<typeof ApiEnv>;
+
+/** A laptop's salt for hashed client addresses: never a deployed one (the env check requires a real one there). */
+export const LOCAL_FORMS_IP_SALT = 'local-only-forms-ip-salt-not-for-deployment';
 
 /** Whether signed in requests wake the worker (spec 0008): `WORKER_WAKE_ON_USE`, else on outside production. */
 export function wakesOnUse(env: Pick<ApiEnv, 'APP_ENV' | 'WORKER_WAKE_ON_USE'>): boolean {

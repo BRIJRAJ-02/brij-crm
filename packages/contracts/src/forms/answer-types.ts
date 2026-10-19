@@ -1,0 +1,131 @@
+// The answer types a form question takes (spec 0023, 0023-experience.md), as
+// plain lists with no Zod, so the hosted page, the builder and the server
+// share them. Every type yields exactly one value: that is the test for any
+// new one. Each files onto the attribute types listed in `FILES_ONTO`.
+import type { AttributeType } from '../values/attribute-values.ts';
+
+/** Every answer type, in the order the builder lists them. */
+export const ANSWER_TYPES = [
+  'short_text',
+  'long_text',
+  'email',
+  'phone',
+  'website',
+  'number',
+  'dropdown',
+  'choice',
+  'checkbox',
+  'yes_no',
+  'country',
+  'file',
+] as const;
+/** One answer type. */
+export type AnswerType = (typeof ANSWER_TYPES)[number];
+
+/** The types answered by picking one of the question's own choices. */
+export const CHOICE_TYPES: readonly AnswerType[] = ['dropdown', 'choice'];
+
+/** The types answered yes or no (a boolean). */
+export const BOOLEAN_TYPES: readonly AnswerType[] = ['checkbox', 'yes_no'];
+
+/** The types that take no placeholder: their control shows no empty box to hint inside. */
+export const NO_PLACEHOLDER_TYPES: readonly AnswerType[] = [
+  'dropdown',
+  'choice',
+  'checkbox',
+  'yes_no',
+  'country',
+  'file',
+];
+
+/** The attribute types each answer type may be filed onto (spec 0023, Answer types). */
+export const FILES_ONTO: Readonly<Record<AnswerType, readonly AttributeType[]>> = {
+  // A name answer files onto a person's name too, split into first and last.
+  short_text: ['text', 'personal_name'],
+  long_text: ['text', 'long_text'],
+  email: ['email'],
+  phone: ['phone'],
+  website: ['url', 'domain'],
+  number: ['number'],
+  dropdown: ['select', 'status'],
+  choice: ['select', 'status'],
+  checkbox: ['checkbox'],
+  yes_no: ['checkbox'],
+  country: ['text', 'select'],
+  file: ['file'],
+};
+
+/** Whether an answer of `answerType` may be filed onto an attribute of `attributeType` (AC-658). */
+export function fitsAttribute(answerType: AnswerType, attributeType: AttributeType): boolean {
+  return FILES_ONTO[answerType].includes(attributeType);
+}
+
+/** True when `value` is one of the answer types. */
+export function isAnswerType(value: unknown): value is AnswerType {
+  return typeof value === 'string' && (ANSWER_TYPES as readonly string[]).includes(value);
+}
+
+/** The most questions one form holds. */
+export const FORM_QUESTIONS_MAX = 30;
+
+/** The most choices one choice question holds. */
+export const FORM_CHOICES_MAX = 40;
+
+/** The longest short text answer. */
+export const SHORT_ANSWER_MAX = 200;
+
+/** The longest long text answer. */
+export const LONG_ANSWER_MAX = 2_000;
+
+/** The honeypot's input name: a person never fills it (spec 0023, bots and abuse). */
+export const HONEYPOT_KEY = 'company_url';
+
+/** The least time from the page loading to a submit, below which it is spam. */
+export const MIN_FILL_MS = 2_000;
+
+/** A form's public address: 2 to 40 lowercase letters, numbers or hyphens, not starting or ending with one. */
+export const FORM_SLUG = /^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$/;
+
+/** A question's key: lowercase, snake case, 1 to 40, starting with a letter (an input name, a JSON key). */
+export const QUESTION_KEY = /^[a-z][a-z0-9_]{0,39}$/;
+
+/** The address a new form gets: `form-` and six random letters or digits. */
+export function generatedSlug(random: (bytes: number) => Uint8Array): string {
+  const alphabet = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  return `form-${[...random(6)].map((byte) => alphabet[byte % alphabet.length] ?? 'a').join('')}`;
+}
+
+/** An address suggested from a name: lowercased, words joined by hyphens, cut to 40. */
+export function slugFromName(name: string): string {
+  return name
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 40)
+    .replace(/-+$/g, '');
+}
+
+/** A question key made from a label: `What is your budget?` gives `what_is_your_budget`. */
+export function keyFromLabel(label: string): string {
+  const key = label
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+    .slice(0, 40)
+    .replace(/_+$/g, '');
+  return /^[a-z]/.test(key) ? key : `q_${key}`.slice(0, 40).replace(/_+$/g, '') || 'question';
+}
+
+/** A key not yet in `taken`: `key`, else `key_2`, `key_3`, … */
+export function freeKey(key: string, taken: ReadonlySet<string>): string {
+  if (!taken.has(key)) return key;
+  const stem = key.replace(/_\d+$/, '').slice(0, 36);
+  for (let n = 2; ; n += 1) {
+    const next = `${stem}_${String(n)}`;
+    if (!taken.has(next)) return next;
+  }
+}

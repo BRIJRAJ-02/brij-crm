@@ -2,6 +2,7 @@ import { accessContract } from './access.ts';
 import { attributesContract } from './attributes.ts';
 import { bulkRecordsContract } from './bulk.ts';
 import { calendarContract } from './calendar.ts';
+import { formsContract, submissionsContract } from './forms/forms.ts';
 import { jobsContract } from './jobs.ts';
 import { meContract } from './me.ts';
 import { membersContract } from './members.ts';
@@ -25,6 +26,7 @@ export * from './bulk.ts';
 export * from './calendar.ts';
 export * from './change-event.ts';
 export * from './errors.ts';
+export * from './forms/index.ts';
 export * from './jobs.ts';
 export * from './me.ts';
 export * from './members.ts';
@@ -68,4 +70,6 @@ export const contract = {
   trash: trashContract,
   tasks: tasksContract,
   calendar: calendarContract,
+  forms: formsContract,
+  submissions: submissionsContract,
 };

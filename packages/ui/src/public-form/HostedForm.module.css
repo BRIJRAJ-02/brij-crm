@@ -1,0 +1,282 @@
+/* The hosted form (spec 0023, 0023-experience.md, The visitor): one calm
+   page, labels over full width inputs, errors under their fields, one
+   alert line over the button. Plain HTML controls drawn with the library's
+   own tokens and the same look as Field, Checkbox and Switch, since the
+   page loads no React. `data-theme` on the root swaps the token values
+   (Colour), `data-corners` the radii (Corners). */
+@layer components {
+  .root {
+    box-sizing: border-box;
+    inline-size: 100%;
+    max-inline-size: var(--size-page-card);
+    margin-inline: auto;
+    padding: var(--space-24) var(--space-16);
+    background: var(--surface);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    --form-radius: var(--radius-md);
+  }
+
+  .root[data-page] {
+    min-block-size: 100dvb;
+    padding-block-start: var(--space-32);
+  }
+
+  .root[data-corners='square'] {
+    --form-radius: var(--radius-xs);
+  }
+
+  .headline {
+    margin: 0;
+    color: var(--text);
+    font: var(--text-heading);
+    letter-spacing: var(--tracking-heading);
+  }
+
+  .headline:focus {
+    outline: none;
+  }
+
+  .subheading {
+    margin: var(--space-8) 0 0;
+    color: var(--text-secondary);
+  }
+
+  .form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    margin-block-start: var(--space-24);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    min-inline-size: 0;
+    margin: 0;
+    padding: 0;
+    border: none;
+  }
+
+  .label {
+    padding: 0;
+    color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .untitled {
+    color: var(--text-tertiary);
+  }
+
+  .optional {
+    color: var(--text-secondary);
+    font: var(--text-body);
+  }
+
+  .input {
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-block-size: var(--size-input);
+    margin: 0;
+    padding: var(--space-6) var(--space-8);
+    border: var(--border-width-hairline) solid var(--control-border);
+    border-radius: var(--form-radius);
+    background: var(--surface-raised);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    transition: border-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .input::placeholder {
+    color: var(--text-tertiary);
+  }
+
+  .input:focus-visible {
+    border-color: var(--accent-line);
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
+  .input[aria-invalid='true'] {
+    border-color: var(--danger);
+  }
+
+  .area {
+    min-block-size: calc(var(--size-input) * 3);
+    field-sizing: content;
+    resize: vertical;
+  }
+
+  .phone {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    gap: var(--space-8);
+  }
+
+  /* Wide enough for a flag and a code; the number takes the rest. */
+  .dial {
+    inline-size: calc(var(--size-input) * 3);
+  }
+
+  .choices {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+  }
+
+  .choice {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    cursor: pointer;
+  }
+
+  .tick {
+    flex: none;
+    inline-size: var(--space-16);
+    block-size: var(--space-16);
+    margin: 0;
+    accent-color: var(--accent);
+  }
+
+  .tick:focus-visible {
+    border-radius: var(--radius-xs);
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
+  .error {
+    margin: 0;
+    color: var(--danger);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .error:empty {
+    display: none;
+  }
+
+  .alert {
+    margin: 0;
+    color: var(--danger);
+  }
+
+  .alert:empty {
+    display: none;
+  }
+
+  .trap {
+    position: absolute;
+    inline-size: var(--space-2);
+    block-size: var(--space-2);
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .button {
+    box-sizing: border-box;
+    inline-size: 100%;
+    min-block-size: var(--size-input);
+    padding: var(--space-6) var(--space-16);
+    border: var(--border-width-hairline) solid transparent;
+    border-radius: var(--form-radius);
+    background: var(--accent);
+    box-shadow: var(--shadow-primary);
+    color: var(--on-accent);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+    cursor: pointer;
+    transition:
+      background-color var(--duration-hover) var(--ease-hover),
+      scale var(--duration-press) var(--ease-out);
+  }
+
+  .button:focus-visible {
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
+  .button:disabled {
+    opacity: var(--opacity-busy);
+    cursor: progress;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .button:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+  }
+
+  .button:active:not(:disabled) {
+    scale: var(--scale-press);
+  }
+
+  .quiet {
+    align-self: flex-start;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    text-decoration: underline;
+    cursor: pointer;
+  }
+
+  .quiet:focus-visible {
+    border-radius: var(--radius-xs);
+    outline: none;
+    box-shadow: var(--shadow-focus);
+  }
+
+  @media (forced-colors: active) {
+    .input:focus-visible,
+    .tick:focus-visible,
+    .button:focus-visible,
+    .quiet:focus-visible {
+      outline: var(--border-width-thick) solid Highlight;
+    }
+  }
+
+  .text {
+    margin: 0;
+    color: var(--text-secondary);
+  }
+
+  .notice {
+    margin: 0;
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .hidden {
+    position: absolute;
+    inline-size: var(--space-2);
+    block-size: var(--space-2);
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  /* On phones and tablets the inputs read at the size phones don't zoom into (a spacing token stands in for a 16px type
+     token the system doesn't have yet). */
+  /* A media query, not a container query (container-type on the frame hides its background from axe's contrast
+     check), at the compact page breakpoint, the one the system has. */
+  @media (width < 1024px) {
+    .input {
+      font-size: var(--space-16);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .input,
+    .button {
+      transition: none;
+    }
+  }
+}

@@ -20,13 +20,15 @@ import { Route as WSlugBookingsRouteImport } from './routes/w.$slug.bookings.tsx
 import { Route as WSlugCapturesRouteImport } from './routes/w.$slug.captures.tsx'
 import { Route as WSlugTrashRouteImport } from './routes/w.$slug.trash.tsx'
 import { Route as WSlugCapturesIndexRouteImport } from './routes/w.$slug.captures.index.tsx'
-import { Route as WSlugCapturesFormsRouteImport } from './routes/w.$slug.captures.forms.tsx'
 import { Route as WSlugCapturesLinksRouteImport } from './routes/w.$slug.captures.links.tsx'
 import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects.$object.tsx'
 import { Route as WSlugSettingsIndexRouteImport } from './routes/w.$slug.settings.index.tsx'
 import { Route as WSlugSettingsCalendarRouteImport } from './routes/w.$slug.settings.calendar.tsx'
 import { Route as WSlugSettingsJobsRouteImport } from './routes/w.$slug.settings.jobs.tsx'
+import { Route as WSlugCapturesFormsIndexRouteImport } from './routes/w.$slug.captures.forms.index.tsx'
+import { Route as WSlugCapturesFormsFormIdRouteImport } from './routes/w.$slug.captures_.forms.$formId.tsx'
 import { Route as WSlugSettingsObjectsIndexRouteImport } from './routes/w.$slug.settings.objects.index.tsx'
+import { Route as WSlugCapturesFormsFormIdPreviewRouteImport } from './routes/w.$slug.captures_.forms.$formId_.preview.tsx'
 import { Route as WSlugObjectsObjectRecordIdIndexRouteImport } from './routes/w.$slug.objects.$object_.$recordId.index.tsx'
 import { Route as WSlugObjectsObjectRecordIdTabRouteImport } from './routes/w.$slug.objects.$object_.$recordId.$tab.tsx'
 import { Route as WSlugObjectsObjectViewsViewIdRouteImport } from './routes/w.$slug.objects.$object_.views.$viewId.tsx'
@@ -88,11 +90,6 @@ const WSlugCapturesIndexRoute = WSlugCapturesIndexRouteImport.update({
   path: '/',
   getParentRoute: () => WSlugCapturesRoute,
 } as any)
-const WSlugCapturesFormsRoute = WSlugCapturesFormsRouteImport.update({
-  id: '/forms',
-  path: '/forms',
-  getParentRoute: () => WSlugCapturesRoute,
-} as any)
 const WSlugCapturesLinksRoute = WSlugCapturesLinksRouteImport.update({
   id: '/links',
   path: '/links',
@@ -118,10 +115,27 @@ const WSlugSettingsJobsRoute = WSlugSettingsJobsRouteImport.update({
   path: '/settings/jobs',
   getParentRoute: () => WSlugRoute,
 } as any)
+const WSlugCapturesFormsIndexRoute = WSlugCapturesFormsIndexRouteImport.update({
+  id: '/forms/',
+  path: '/forms/',
+  getParentRoute: () => WSlugCapturesRoute,
+} as any)
+const WSlugCapturesFormsFormIdRoute =
+  WSlugCapturesFormsFormIdRouteImport.update({
+    id: '/captures_/forms/$formId',
+    path: '/captures/forms/$formId',
+    getParentRoute: () => WSlugRoute,
+  } as any)
 const WSlugSettingsObjectsIndexRoute =
   WSlugSettingsObjectsIndexRouteImport.update({
     id: '/settings/objects/',
     path: '/settings/objects/',
+    getParentRoute: () => WSlugRoute,
+  } as any)
+const WSlugCapturesFormsFormIdPreviewRoute =
+  WSlugCapturesFormsFormIdPreviewRouteImport.update({
+    id: '/captures_/forms/$formId_/preview',
+    path: '/captures/forms/$formId/preview',
     getParentRoute: () => WSlugRoute,
   } as any)
 const WSlugObjectsObjectRecordIdIndexRoute =
@@ -166,14 +180,16 @@ export interface FileRoutesByFullPath {
   '/w/$slug/captures': typeof WSlugCapturesRouteWithChildren
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug/': typeof WSlugIndexRoute
-  '/w/$slug/captures/forms': typeof WSlugCapturesFormsRoute
   '/w/$slug/captures/links': typeof WSlugCapturesLinksRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
   '/w/$slug/captures/': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
+  '/w/$slug/captures/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
+  '/w/$slug/captures/forms/': typeof WSlugCapturesFormsIndexRoute
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
+  '/w/$slug/captures/forms/$formId/preview': typeof WSlugCapturesFormsFormIdPreviewRoute
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
   '/w/$slug/objects/$object/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
   '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
@@ -189,14 +205,16 @@ export interface FileRoutesByTo {
   '/w/$slug/bookings': typeof WSlugBookingsRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug': typeof WSlugIndexRoute
-  '/w/$slug/captures/forms': typeof WSlugCapturesFormsRoute
   '/w/$slug/captures/links': typeof WSlugCapturesLinksRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
   '/w/$slug/captures': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings': typeof WSlugSettingsIndexRoute
+  '/w/$slug/captures/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
+  '/w/$slug/captures/forms': typeof WSlugCapturesFormsIndexRoute
   '/w/$slug/settings/objects': typeof WSlugSettingsObjectsIndexRoute
+  '/w/$slug/captures/forms/$formId/preview': typeof WSlugCapturesFormsFormIdPreviewRoute
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
   '/w/$slug/objects/$object/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
   '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
@@ -215,14 +233,16 @@ export interface FileRoutesById {
   '/w/$slug/captures': typeof WSlugCapturesRouteWithChildren
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug/': typeof WSlugIndexRoute
-  '/w/$slug/captures/forms': typeof WSlugCapturesFormsRoute
   '/w/$slug/captures/links': typeof WSlugCapturesLinksRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
   '/w/$slug/captures/': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
+  '/w/$slug/captures_/forms/$formId': typeof WSlugCapturesFormsFormIdRoute
+  '/w/$slug/captures/forms/': typeof WSlugCapturesFormsIndexRoute
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
+  '/w/$slug/captures_/forms/$formId_/preview': typeof WSlugCapturesFormsFormIdPreviewRoute
   '/w/$slug/objects/$object_/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
   '/w/$slug/objects/$object_/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
   '/w/$slug/settings/objects/$object/$tab': typeof WSlugSettingsObjectsObjectTabRoute
@@ -242,14 +262,16 @@ export interface FileRouteTypes {
     | '/w/$slug/captures'
     | '/w/$slug/trash'
     | '/w/$slug/'
-    | '/w/$slug/captures/forms'
     | '/w/$slug/captures/links'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/jobs'
     | '/w/$slug/captures/'
     | '/w/$slug/settings/'
+    | '/w/$slug/captures/forms/$formId'
+    | '/w/$slug/captures/forms/'
     | '/w/$slug/settings/objects/'
+    | '/w/$slug/captures/forms/$formId/preview'
     | '/w/$slug/objects/$object/$recordId/$tab'
     | '/w/$slug/objects/$object/views/$viewId'
     | '/w/$slug/settings/objects/$object/$tab'
@@ -265,14 +287,16 @@ export interface FileRouteTypes {
     | '/w/$slug/bookings'
     | '/w/$slug/trash'
     | '/w/$slug'
-    | '/w/$slug/captures/forms'
     | '/w/$slug/captures/links'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/jobs'
     | '/w/$slug/captures'
     | '/w/$slug/settings'
+    | '/w/$slug/captures/forms/$formId'
+    | '/w/$slug/captures/forms'
     | '/w/$slug/settings/objects'
+    | '/w/$slug/captures/forms/$formId/preview'
     | '/w/$slug/objects/$object/$recordId/$tab'
     | '/w/$slug/objects/$object/views/$viewId'
     | '/w/$slug/settings/objects/$object/$tab'
@@ -290,14 +314,16 @@ export interface FileRouteTypes {
     | '/w/$slug/captures'
     | '/w/$slug/trash'
     | '/w/$slug/'
-    | '/w/$slug/captures/forms'
     | '/w/$slug/captures/links'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/jobs'
     | '/w/$slug/captures/'
     | '/w/$slug/settings/'
+    | '/w/$slug/captures_/forms/$formId'
+    | '/w/$slug/captures/forms/'
     | '/w/$slug/settings/objects/'
+    | '/w/$slug/captures_/forms/$formId_/preview'
     | '/w/$slug/objects/$object_/$recordId/$tab'
     | '/w/$slug/objects/$object_/views/$viewId'
     | '/w/$slug/settings/objects/$object/$tab'
@@ -393,13 +419,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugCapturesIndexRouteImport
       parentRoute: typeof WSlugCapturesRoute
     }
-    '/w/$slug/captures/forms': {
-      id: '/w/$slug/captures/forms'
-      path: '/forms'
-      fullPath: '/w/$slug/captures/forms'
-      preLoaderRoute: typeof WSlugCapturesFormsRouteImport
-      parentRoute: typeof WSlugCapturesRoute
-    }
     '/w/$slug/captures/links': {
       id: '/w/$slug/captures/links'
       path: '/links'
@@ -435,11 +454,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsJobsRouteImport
       parentRoute: typeof WSlugRoute
     }
+    '/w/$slug/captures/forms/': {
+      id: '/w/$slug/captures/forms/'
+      path: '/forms'
+      fullPath: '/w/$slug/captures/forms/'
+      preLoaderRoute: typeof WSlugCapturesFormsIndexRouteImport
+      parentRoute: typeof WSlugCapturesRoute
+    }
+    '/w/$slug/captures_/forms/$formId': {
+      id: '/w/$slug/captures_/forms/$formId'
+      path: '/captures/forms/$formId'
+      fullPath: '/w/$slug/captures/forms/$formId'
+      preLoaderRoute: typeof WSlugCapturesFormsFormIdRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/settings/objects/': {
       id: '/w/$slug/settings/objects/'
       path: '/settings/objects'
       fullPath: '/w/$slug/settings/objects/'
       preLoaderRoute: typeof WSlugSettingsObjectsIndexRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/captures_/forms/$formId_/preview': {
+      id: '/w/$slug/captures_/forms/$formId_/preview'
+      path: '/captures/forms/$formId/preview'
+      fullPath: '/w/$slug/captures/forms/$formId/preview'
+      preLoaderRoute: typeof WSlugCapturesFormsFormIdPreviewRouteImport
       parentRoute: typeof WSlugRoute
     }
     '/w/$slug/objects/$object_/$recordId/': {
@@ -481,15 +521,15 @@ declare module '@tanstack/react-router' {
 }
 
 interface WSlugCapturesRouteChildren {
-  WSlugCapturesFormsRoute: typeof WSlugCapturesFormsRoute
   WSlugCapturesLinksRoute: typeof WSlugCapturesLinksRoute
   WSlugCapturesIndexRoute: typeof WSlugCapturesIndexRoute
+  WSlugCapturesFormsIndexRoute: typeof WSlugCapturesFormsIndexRoute
 }
 
 const WSlugCapturesRouteChildren: WSlugCapturesRouteChildren = {
-  WSlugCapturesFormsRoute: WSlugCapturesFormsRoute,
   WSlugCapturesLinksRoute: WSlugCapturesLinksRoute,
   WSlugCapturesIndexRoute: WSlugCapturesIndexRoute,
+  WSlugCapturesFormsIndexRoute: WSlugCapturesFormsIndexRoute,
 }
 
 const WSlugCapturesRouteWithChildren = WSlugCapturesRoute._addFileChildren(
@@ -505,7 +545,9 @@ interface WSlugRouteChildren {
   WSlugSettingsCalendarRoute: typeof WSlugSettingsCalendarRoute
   WSlugSettingsJobsRoute: typeof WSlugSettingsJobsRoute
   WSlugSettingsIndexRoute: typeof WSlugSettingsIndexRoute
+  WSlugCapturesFormsFormIdRoute: typeof WSlugCapturesFormsFormIdRoute
   WSlugSettingsObjectsIndexRoute: typeof WSlugSettingsObjectsIndexRoute
+  WSlugCapturesFormsFormIdPreviewRoute: typeof WSlugCapturesFormsFormIdPreviewRoute
   WSlugObjectsObjectRecordIdTabRoute: typeof WSlugObjectsObjectRecordIdTabRoute
   WSlugObjectsObjectViewsViewIdRoute: typeof WSlugObjectsObjectViewsViewIdRoute
   WSlugSettingsObjectsObjectTabRoute: typeof WSlugSettingsObjectsObjectTabRoute
@@ -522,7 +564,9 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugSettingsCalendarRoute: WSlugSettingsCalendarRoute,
   WSlugSettingsJobsRoute: WSlugSettingsJobsRoute,
   WSlugSettingsIndexRoute: WSlugSettingsIndexRoute,
+  WSlugCapturesFormsFormIdRoute: WSlugCapturesFormsFormIdRoute,
   WSlugSettingsObjectsIndexRoute: WSlugSettingsObjectsIndexRoute,
+  WSlugCapturesFormsFormIdPreviewRoute: WSlugCapturesFormsFormIdPreviewRoute,
   WSlugObjectsObjectRecordIdTabRoute: WSlugObjectsObjectRecordIdTabRoute,
   WSlugObjectsObjectViewsViewIdRoute: WSlugObjectsObjectViewsViewIdRoute,
   WSlugSettingsObjectsObjectTabRoute: WSlugSettingsObjectsObjectTabRoute,

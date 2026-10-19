@@ -3,6 +3,7 @@ import type { AppEnvironment } from '@crm/contracts';
 import { createRegistry, type AnyKind, type JobRegistry } from '../registry.ts';
 import { devSimulate, type Sleep } from './dev-simulate.ts';
 import { maintenanceDaily, type QueueRows } from './maintenance-daily.ts';
+import { formsProcess } from '../../forms/process.ts';
 
 /** What the kinds a process runs depend on: where it runs, and (for the test kind) how it waits. */
 export interface JobKindsOptions {
@@ -28,5 +29,5 @@ export interface JobKindsOptions {
 export function jobKinds(options: JobKindsOptions): JobRegistry {
   const local = options.environment === 'local' || options.environment === 'preview';
   const tests = local ? [devSimulate(options.sleep) as AnyKind, devSimulate(options.sleep, 'light') as AnyKind] : [];
-  return createRegistry([maintenanceDaily(options.queue), ...tests, ...(options.extra ?? [])]);
+  return createRegistry([maintenanceDaily(options.queue), formsProcess(), ...tests, ...(options.extra ?? [])]);
 }

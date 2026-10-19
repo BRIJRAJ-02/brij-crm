@@ -24,6 +24,7 @@ Ported from the design system artifact's Button card. Every pressable control in
 - `danger` for a control that starts a destructive action, such as Delete in the bulk bar or Archive in settings: red label and edge on the raised surface, so it holds 4.5:1 in both themes.
 - `danger-solid` for the final commit that destroys, such as Delete or Archive in a confirm dialog: a `danger-fill` with an `on-danger` label (5.3:1 light, 5.4:1 dark). One per dialog, in place of the primary.
 - `ghost` for undo style actions that shouldn't compete, such as Discard changes, and for icon buttons inside dense rows.
+- `ghost-danger` for a quiet icon button that deletes at once and offers Undo (a form question's Delete): ghost at rest, the danger colour under the pointer and on keyboard focus. A variant rather than `danger`, whose red border at rest is too loud in a row of quiet icons.
 - `dashed` only for "add a condition" affordances: Filter, Add sort.
 - `SplitButton` when the primary action has variants (Save, Save as new view). Its `menu` is a `Menu`; the chevron is named "More options" unless `menuLabel` says otherwise.
 - Labels are verbs in sentence case: "Add to list", never "ADD" or "Submit".

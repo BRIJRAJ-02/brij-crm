@@ -1,0 +1,219 @@
+// What the forms services share (spec 0023): reading a form and its versions,
+// the target object's attributes as filing choices and as the publish check
+// sees them, and turning a version's document into what a visitor's page
+// renders (`PublicForm`): no attribute ids, filing, owner or routing.
+import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { FormDocument, type PublicForm, type PublishAttribute } from '@crm/contracts';
+import { Hue } from '@crm/contracts/values';
+import { schema, type WorkspaceTx } from '@crm/db';
+import { isArchivedNow, loadAttributes, type AttributeDef } from '../engine/values.ts';
+import { fieldLevel, objectLevel, type Access } from '../access/policy.ts';
+
+const { attributeOptions, forms, formVersions, objects } = schema;
+
+/** A form row as the services read it. */
+export interface FormRow {
+  readonly id: string;
+  readonly kind: string;
+  readonly status: 'draft' | 'live' | 'paused' | 'archived';
+  readonly name: string;
+  readonly mainObjectId: string;
+  readonly publicKey: string;
+  readonly draftVersionId: string | null;
+  readonly liveVersionId: string | null;
+  readonly revision: number;
+  readonly ownerMemberId: string | null;
+  readonly allowedOrigins: readonly string[];
+  readonly requireSignature: boolean;
+  readonly signingSecret: string;
+  readonly createdById: string | null;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+/** A moment as fixed width UTC text with milliseconds, as the views carry it. */
+export const millis = (column: string) =>
+  sql.raw(`to_char(${column} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`);
+
+const FORM_COLUMNS = {
+  id: forms.id,
+  kind: forms.kind,
+  status: sql<FormRow['status']>`${forms.status}`,
+  name: forms.name,
+  mainObjectId: forms.mainObjectId,
+  publicKey: forms.publicKey,
+  draftVersionId: forms.draftVersionId,
+  liveVersionId: forms.liveVersionId,
+  revision: forms.revision,
+  ownerMemberId: forms.ownerMemberId,
+  allowedOrigins: forms.allowedOrigins,
+  requireSignature: forms.requireSignature,
+  signingSecret: forms.signingSecret,
+  createdById: forms.createdById,
+  createdAt: sql<string>`to_char(${forms.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+  updatedAt: sql<string>`to_char(${forms.updatedAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
+};
+
+/** One form, locked against other writers when `lock` says so, or undefined. */
+export async function loadForm(tx: WorkspaceTx, formId: string, lock = false): Promise<FormRow | undefined> {
+  const query = tx.select(FORM_COLUMNS).from(forms).where(eq(forms.id, formId));
+  const [row] = lock ? await query.for('update') : await query;
+  return row;
+}
+
+/** A version as the services read it: its number, its document (parsed), who saved it last, and whether it is published. */
+export interface VersionRow {
+  readonly id: string;
+  readonly number: number;
+  readonly document: FormDocument;
+  readonly published: boolean;
+  readonly updatedByMemberId: string | null;
+}
+
+/** Parses a stored document. One that no longer parses is a programming error (documents are checked on save). */
+export function parseDocument(stored: unknown): FormDocument {
+  return FormDocument.parse(stored);
+}
+
+/** Versions by id. */
+export async function loadVersions(tx: WorkspaceTx, ids: readonly string[]): Promise<ReadonlyMap<string, VersionRow>> {
+  if (ids.length === 0) return new Map();
+  const rows = await tx
+    .select({
+      id: formVersions.id,
+      number: formVersions.number,
+      document: formVersions.document,
+      publishedAt: formVersions.publishedAt,
+      updatedByMemberId: formVersions.updatedByMemberId,
+    })
+    .from(formVersions)
+    .where(inArray(formVersions.id, [...ids]));
+  return new Map(
+    rows.map((row) => [
+      row.id,
+      {
+        id: row.id,
+        number: row.number,
+        document: parseDocument(row.document),
+        published: row.publishedAt !== null,
+        updatedByMemberId: row.updatedByMemberId,
+      },
+    ]),
+  );
+}
+
+/** One version of a form by its number, or undefined. */
+export async function versionByNumber(
+  tx: WorkspaceTx,
+  formId: string,
+  number: number,
+): Promise<VersionRow | undefined> {
+  const [row] = await tx
+    .select({ id: formVersions.id })
+    .from(formVersions)
+    .where(and(eq(formVersions.formId, formId), eq(formVersions.number, number)));
+  return row === undefined ? undefined : (await loadVersions(tx, [row.id])).get(row.id);
+}
+
+/** An object's live, non system attributes a question may be filed on, in their order. */
+export function fileable(attributes: ReadonlyMap<string, AttributeDef>): readonly AttributeDef[] {
+  return [...attributes.values()]
+    .filter((attribute) => !attribute.isSystem && !isArchivedNow(attribute))
+    .sort((a, b) => a.position - b.position);
+}
+
+/** An object's singular name. */
+export async function objectName(tx: WorkspaceTx, objectId: string): Promise<string> {
+  const [row] = await tx.select({ name: objects.singularName }).from(objects).where(eq(objects.id, objectId));
+  return row?.name ?? 'Record';
+}
+
+/** The target's attributes as the publish check sees them: live ones, the reader's write access on each (AC-546). */
+export async function publishAttributes(
+  tx: WorkspaceTx,
+  access: Access,
+  objectId: string,
+): Promise<ReadonlyMap<string, PublishAttribute>> {
+  const attributes = fileable(await loadAttributes(tx, objectId));
+  const name = await objectName(tx, objectId);
+  const writesObject = objectLevel(access, objectId) === 'write';
+  return new Map(
+    attributes.map((attribute) => [
+      attribute.id,
+      {
+        id: attribute.id,
+        title: attribute.title,
+        type: attribute.type,
+        objectName: name,
+        canWrite: writesObject && fieldLevel(access, { id: attribute.id, objectId }) === 'write',
+      },
+    ]),
+  );
+}
+
+/** The live options of select and status attributes, in their order, by attribute. */
+export async function liveOptions(
+  tx: WorkspaceTx,
+  attributeIds: readonly string[],
+): Promise<ReadonlyMap<string, readonly { id: string; label: string; hue?: Hue }[]>> {
+  if (attributeIds.length === 0) return new Map();
+  const rows = await tx
+    .select({
+      id: attributeOptions.id,
+      attributeId: attributeOptions.attributeId,
+      label: attributeOptions.label,
+      hue: attributeOptions.hue,
+    })
+    .from(attributeOptions)
+    .where(and(inArray(attributeOptions.attributeId, [...attributeIds]), isNull(attributeOptions.archivedAt)))
+    .orderBy(asc(attributeOptions.position), asc(attributeOptions.id));
+  const byAttribute = new Map<string, { id: string; label: string; hue?: Hue }[]>();
+  for (const row of rows) {
+    const list = byAttribute.get(row.attributeId) ?? [];
+    const hue = Hue.safeParse(row.hue);
+    list.push({ id: row.id, label: row.label, ...(hue.success ? { hue: hue.data } : {}) });
+    byAttribute.set(row.attributeId, list);
+  }
+  return byAttribute;
+}
+
+/** What `publicFormOf` reads besides the document. */
+export interface PublicFormContext {
+  readonly publicKey: string;
+  readonly status: 'live' | 'paused';
+  readonly versionNumber: number;
+  readonly recaptchaSiteKey?: string;
+}
+
+/**
+ * A version's document as the visitor's page renders it: every question with
+ * its key, label, type, choices and placeholder, the words and the look; no
+ * attribute ids, filing, owner or routing. "Book a quick meeting" stays off
+ * until booking pages exist (#59): the seam is `offersMeeting`.
+ */
+export function publicFormOf(document: FormDocument, context: PublicFormContext): PublicForm {
+  return {
+    key: context.publicKey,
+    status: context.status,
+    versionNumber: context.versionNumber,
+    headline: document.headline,
+    ...(document.subheading === undefined || document.subheading === '' ? {} : { subheading: document.subheading }),
+    buttonText: document.buttonText,
+    language: document.language,
+    look: document.look,
+    questions: document.questions.map((question) => ({
+      id: question.id,
+      key: question.key,
+      label: question.label,
+      answerType: question.answerType,
+      ...(question.choices === undefined ? {} : { choices: question.choices.filter((choice) => choice.trim() !== '') }),
+      ...(question.placeholder === undefined || question.placeholder === ''
+        ? {}
+        : { placeholder: question.placeholder }),
+      required: question.required,
+    })),
+    ...(document.after.kind === 'message' && document.after.message !== '' ? { thanks: document.after.message } : {}),
+    offersMeeting: false,
+    ...(context.recaptchaSiteKey === undefined ? {} : { recaptchaSiteKey: context.recaptchaSiteKey }),
+  };
+}

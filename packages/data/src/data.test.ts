@@ -417,6 +417,29 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       },
       meetings: { forRecord: os.calendar.meetings.forRecord.handler(() => ({ items: [] })) },
     },
+    forms: {
+      list: os.forms.list.handler(notServed),
+      get: os.forms.get.handler(notServed),
+      attributes: os.forms.attributes.handler(notServed),
+      preview: os.forms.preview.handler(notServed),
+      create: os.forms.create.handler(notServed),
+      saveDraft: os.forms.saveDraft.handler(notServed),
+      publish: os.forms.publish.handler(notServed),
+      setStatus: os.forms.setStatus.handler(notServed),
+      slugAvailable: os.forms.slugAvailable.handler(notServed),
+      updateSettings: os.forms.updateSettings.handler(notServed),
+      setTarget: os.forms.setTarget.handler(notServed),
+      duplicate: os.forms.duplicate.handler(notServed),
+      delete: os.forms.delete.handler(notServed),
+    },
+    submissions: {
+      list: os.submissions.list.handler(notServed),
+      get: os.submissions.get.handler(notServed),
+      release: os.submissions.release.handler(notServed),
+      markSpam: os.submissions.markSpam.handler(notServed),
+      retry: os.submissions.retry.handler(notServed),
+      delete: os.submissions.delete.handler(notServed),
+    },
   });
   const handler = new RPCHandler(router);
   const fetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {

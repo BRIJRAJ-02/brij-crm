@@ -38,6 +38,8 @@ export const PERMISSIONS = {
   'schema.manage': { message: 'Only workspace owners and admins can change objects and attributes.' },
   'views.manage': { message: 'Only workspace owners and admins can lock or change locked views.' },
   'records.purge': { message: 'Only workspace owners and admins can delete records forever.' },
+  // Forms (spec 0023): building, publishing and pausing forms, and acting on their submissions.
+  'forms.manage': { message: 'Only workspace owners and admins can change forms and their submissions.' },
   'records.export': { message: 'Your role can’t export records.' },
   'api_keys.manage': { message: 'Only workspace owners and admins can manage API keys.' },
   'webhooks.manage': { message: 'Only workspace owners and admins can manage webhooks.' },
