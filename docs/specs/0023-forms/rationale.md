@@ -82,3 +82,11 @@ Calls made in this spec without a separate question, each with its runner up:
 - The visitor cookie value is stored only as a salted hash.
 </content>
 </invoke>
+
+## Revision, 19 October 2026
+
+The owner asked for forms to follow the model of their earlier scheduling product, whose forms ran in production: questions in plain words with an optional filing per question, one deliberate Publish with a status line that always says what is live, one page for the visitor with no captcha, and a thank you that hands the visitor to a booking. The data model, the store first rule and the processing job stay. What changed and why is in [0023-experience.md](0023-experience.md). Calls made without a question, each with its runner up:
+- The draft is still saved on the server, quietly (runner up: an in memory draft with Publish as the only write, as the earlier product did), because a CRM has teammates and a closed tab must lose nothing; the status line still never says "Saved".
+- reCAPTCHA becomes optional (runner up: keep it required), since the honeypot, timing, rate limits and idempotency held up without it and it sends visitor data to Google.
+- The embed is an iframe sized by the script (runner up: shadow DOM), so the form looks the same on every site and the hosted page is the only renderer.
+- Steps, conditions and popups are deferred (runner up: keep them in milestone 2): one page converts and is simpler to build well.
