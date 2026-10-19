@@ -520,7 +520,10 @@ export interface TrashEntry {
   readonly display: RecordView['display'];
   readonly deletedAt: string;
   /** Absent where a field rule hides Created by or Updated by on the object from the reader (spec 0017). */
-  readonly deletedBy?: { readonly type: 'member' | 'api_key' | 'automation' | 'system'; readonly id: string | null };
+  readonly deletedBy?: {
+    readonly type: 'member' | 'api_key' | 'automation' | 'system' | 'form';
+    readonly id: string | null;
+  };
   /** When the daily cleanup removes it for good: 30 days after the delete. */
   readonly expiresAt: string;
 }
@@ -645,7 +648,7 @@ export async function queryTrash(
         at: string;
         deleted_at: string;
         expires_at: string;
-        by_type: 'member' | 'api_key' | 'automation' | 'system';
+        by_type: 'member' | 'api_key' | 'automation' | 'system' | 'form';
         by_id: string | null;
       }>(trashPageQuery(where, after, limit + 1))
       .catch((error: unknown) => {

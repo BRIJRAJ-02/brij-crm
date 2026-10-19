@@ -27,6 +27,8 @@ export const ACTIVITY_RANKS = {
   comment: 3,
   note: 4,
   task: 5,
+  // A form submission that touched the record (spec 0023, AC-561).
+  submission: 6,
   created: 9,
 } as const;
 

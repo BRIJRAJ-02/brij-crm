@@ -90,6 +90,7 @@ export const strings = {
   someone: 'Someone',
   anApiKey: 'An API key',
   anAutomation: 'An automation',
+  aForm: 'A form submission',
   /** ShortcutHelp, opened with ? anywhere in the workspace. */
   shortcutsEverywhere: 'Everywhere',
   /** The new record dialog's one email field: one address here, more in the table. */

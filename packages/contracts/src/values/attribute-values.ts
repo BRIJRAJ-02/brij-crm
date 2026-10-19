@@ -295,12 +295,13 @@ export const PersonalNameValue = z
 export type PersonalNameValue = z.infer<typeof PersonalNameValue>;
 
 /**
- * Who did something: a member, an API key, an automation (each by its uuid),
- * or the system (whose id is `null`). People can only set members.
+ * Who did something: a member, an API key, an automation, a form (spec 0023:
+ * what its submissions wrote; each by its uuid), or the system (whose id is
+ * `null`). People can only set members.
  */
 export const ActorReferenceValue = z
   .object({
-    type: z.enum(['member', 'api_key', 'automation', 'system'], { error: 'Pick who it was.' }),
+    type: z.enum(['member', 'api_key', 'automation', 'system', 'form'], { error: 'Pick who it was.' }),
     id: id('Pick who it was.').nullable(),
   })
   .refine((actor) => (actor.type === 'system') === (actor.id === null), {

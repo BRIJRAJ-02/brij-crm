@@ -329,7 +329,7 @@ export interface ReplacedNotice {
   readonly recordId: string;
   readonly recordName: string;
   readonly attributeIds: readonly string[];
-  readonly by: { readonly type: 'member' | 'api_key' | 'automation'; readonly id: string | null };
+  readonly by: { readonly type: 'member' | 'api_key' | 'automation' | 'form'; readonly id: string | null };
   readonly useMine: () => void;
 }
 

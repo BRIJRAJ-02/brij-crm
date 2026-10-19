@@ -37,6 +37,11 @@ export const ENGINE_REFUSAL_CODES = [
   // view can't be deleted or made private.
   'VIEW_CHANGED',
   'VIEW_IS_DEFAULT',
+  // Forms (spec 0023): the draft was saved by someone else since the editor began; a status change or a
+  // submission action that doesn't fit where it is; a form that isn't taking responses.
+  'FORM_CHANGED',
+  'FORM_STATE',
+  'FORM_CLOSED',
 ] as const;
 
 /** One of the engine's refusal codes. */
