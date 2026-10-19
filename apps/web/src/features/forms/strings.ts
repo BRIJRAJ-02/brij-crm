@@ -17,7 +17,13 @@ export const strings = {
   missingText: 'This form doesn’t exist, or it was deleted.',
   backToForms: 'Back to forms',
 
-  // The list
+  // The list (Captures › Forms draws the same rows as Links)
+  pausedTag: 'Paused',
+  responses: (n: number) => count(n, 'response', 'responses'),
+  copyLinkTo: (name: string) => `Copy link to ${name}`,
+  openForm: (name: string) => `Open ${name} in a new tab`,
+  searchForms: 'Search forms',
+  addressPending: '/f/…',
   thisMonth: (n: number) => `${count(n, 'enquiry', 'enquiries')} this month`,
   spam: (n: number) => `${new Intl.NumberFormat().format(n)} spam`,
   lastEnquiry: (when: string) => `Last enquiry ${when}`,

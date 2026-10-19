@@ -164,7 +164,7 @@ export {
   type BookingListProps,
   type BookingListRow,
 } from './modules/BookingList/BookingList.tsx';
-export { LinkList, type LinkListProps, type LinkRow } from './modules/LinkList/LinkList.tsx';
+export { LinkList, type LinkListProps, type LinkRow, type LinkToggle } from './modules/LinkList/LinkList.tsx';
 export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColumn.tsx';
 export { PreviewLayout, type PreviewDevice, type PreviewLayoutProps } from './modules/PreviewLayout/PreviewLayout.tsx';
 export {

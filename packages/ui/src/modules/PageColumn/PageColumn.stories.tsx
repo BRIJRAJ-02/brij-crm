@@ -48,3 +48,41 @@ export const WithFooter: Story = {
     await expect(canvas.getByRole('button', { name: 'Save' })).toBeInTheDocument();
   },
 };
+
+/** The whole width inside the padding, for a list of rows (Captures › Links and Forms). */
+export const FullWidth: Story = {
+  args: { width: 'full' },
+  render: (args) => (
+    <Stage>
+      <PageColumn
+        {...args}
+        actions={
+          <Button variant="primary" icon="plus">
+            New form
+          </Button>
+        }
+      >
+        <Card title="Contact us">3 enquiries this month.</Card>
+      </PageColumn>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'New form' })).toBeInTheDocument();
+  },
+};
+
+/** Alone on the page: the whole height, its child in the middle (a list's empty state). */
+export const Centered: Story = {
+  args: { width: 'full', align: 'center' },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage>
+      <PageColumn {...args}>
+        <Card title="No forms yet">Make one and share its link.</Card>
+      </PageColumn>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('No forms yet')).toBeInTheDocument();
+  },
+};

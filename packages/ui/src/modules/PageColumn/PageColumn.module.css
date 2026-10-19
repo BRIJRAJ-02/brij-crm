@@ -1,4 +1,4 @@
-/* PageColumn: the body's padding, a readable width, children stacked, and an
+/* PageColumn: the body's padding, a readable width (or the whole width), children stacked, and an
    optional footer bar that sticks to the view's foot. */
 @layer components {
   .root {
@@ -13,6 +13,16 @@
 
   .root[data-width='narrow'] {
     max-inline-size: var(--size-page-card);
+  }
+
+  .root[data-width='full'] {
+    max-inline-size: none;
+  }
+
+  /* Alone on the page (a list's empty state): the view's whole height, its children in the middle. */
+  .root[data-align='center'] {
+    justify-content: center;
+    min-block-size: 100%;
   }
 
   .actions {

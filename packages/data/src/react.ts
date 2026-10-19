@@ -7,6 +7,7 @@ import type { DataError } from './errors.ts';
 import type { ActivityFeed, ActivityState } from './activity/feed.ts';
 import type { BookingsState, BookingsView } from './bookings/store.ts';
 import type { CalendarState, CalendarView } from './calendar/store.ts';
+import type { CaptureListState, CaptureListView } from './captures/list.ts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { LiveStatus } from './live/live.ts';
 import type { PendingOptions } from './options.ts';
@@ -267,5 +268,14 @@ export function useBookings(view: BookingsView): BookingsState {
  * connection still syncing its first window is read again until it is done.
  */
 export function useCalendar(view: CalendarView): CalendarState {
+  return useRetained(view);
+}
+
+/**
+ * A Captures list (Links' booking pages, Forms' forms), re-rendering when a
+ * write anywhere changes it. Held while the screen is mounted: read again
+ * when held after a while away, so another tab's changes show on return.
+ */
+export function useCaptureList<Item>(view: CaptureListView<Item>): CaptureListState<Item> {
   return useRetained(view);
 }

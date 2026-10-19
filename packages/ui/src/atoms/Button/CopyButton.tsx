@@ -14,6 +14,8 @@ export interface CopyButtonProps {
   readonly variant?: ButtonVariant;
   /** The element showing the text. If the copy fails, its text is selected so it can be copied by hand. */
   readonly sourceRef?: RefObject<HTMLElement | null>;
+  /** Nothing to copy yet (a form never published, a copy still on its way). */
+  readonly isDisabled?: boolean;
 }
 
 function selectText(element: HTMLElement | null | undefined) {
@@ -36,6 +38,7 @@ export function CopyButton({
   isIconOnly = false,
   variant = 'secondary',
   sourceRef,
+  isDisabled = false,
 }: CopyButtonProps) {
   const toasts = useToasts();
   const copy = async () => {
@@ -51,9 +54,9 @@ export function CopyButton({
     void copy();
   };
   return isIconOnly ? (
-    <Button variant={variant} icon="copy" label={label} onPress={onPress} />
+    <Button variant={variant} icon="copy" label={label} onPress={onPress} isDisabled={isDisabled} />
   ) : (
-    <Button variant={variant} icon="copy" onPress={onPress}>
+    <Button variant={variant} icon="copy" onPress={onPress} isDisabled={isDisabled}>
       {label}
     </Button>
   );

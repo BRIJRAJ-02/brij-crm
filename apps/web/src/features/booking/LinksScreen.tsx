@@ -1,35 +1,21 @@
 // Brief
-// Purpose: Captures › Links (spec 0025, 0025-experience.md, AC-645): the member's booking pages as rows (an admin sees everyone's).
-// Main task: open a page, copy its link, or make a new one in the side panel and land in its editor.
-// Leaves out: editing a page (its editor), forms' links (spec 0023 joins this list) and the bookings list (Bookings).
+// Purpose: Captures › Links (spec 0025, 0025-experience.md, AC-645): the member's booking pages as rows (an admin sees everyone's), the same rows as Forms.
+// Main task: open a page, copy its link, or make a new one in the dialog and land in its editor.
+// Leaves out: editing a page (its editor), forms (their own tab) and the bookings list (Bookings).
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
-import {
-  Button,
-  Callout,
-  CopyButton,
-  EmptyState,
-  LinkList,
-  Menu,
-  MenuItem,
-  MenuSection,
-  MenuSeparator,
-  MenuTrigger,
-  Modal,
-  PageColumn,
-  Skeleton,
-  type LinkRow,
-} from '@crm/ui';
-import { useNavigate } from '@tanstack/react-router';
+import { useCaptureList } from '@crm/data/react';
+import { Button, CopyButton, Menu, MenuItem, MenuSeparator, MenuTrigger, Modal, type LinkRow } from '@crm/ui';
+import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
+import { CapturesList } from '../captures/CapturesList.tsx';
 import { pageEditorHref, publicBookingUrl } from './links.ts';
 import { NewPagePanel } from './NewPagePanel.tsx';
 import { strings } from './strings.ts';
 
-/** Props for the list: what its route loaded through the data layer. */
+/** Props for the list: the data layer, whose held list of pages the route loaded. */
 export interface LinksScreenProps {
   readonly data: DataLayer;
   readonly slug: string;
-  readonly pages: readonly BookingPageView[];
 }
 
 /** A page's chips: its lengths, own hours, and a location that isn't video. */
@@ -41,93 +27,79 @@ function chipsOf(page: BookingPageView): readonly string[] {
   ];
 }
 
-/** The rows, New booking page, and each row's Copy link and menu. */
-export function LinksScreen({ data, slug, pages: loaded }: LinksScreenProps) {
+/** The rows, New booking page, and each row's Copy link and menu, read from the data layer's held list. */
+export function LinksScreen({ data, slug }: LinksScreenProps) {
+  const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
-  const [pages, setPages] = useState(loaded);
+  const list = useCaptureList(data.bookingPages.view(slug));
   const [isCreating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<BookingPageView | undefined>(undefined);
-  const [failure, setFailure] = useState<string | undefined>(undefined);
-  const replace = (page: BookingPageView) =>
-    setPages((current) => current.map((each) => (each.id === page.id ? page : each)));
+  const failed = (error: unknown) => {
+    toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.somethingWrong });
+  };
   const open = (pageId: string, hash?: string) =>
     void navigate({ to: pageEditorHref(slug, pageId), ...(hash === undefined ? {} : { hash }) });
+  // Each change shows in the list at once; a refusal puts it back there, and the toast says why.
   const setStatus = (page: BookingPageView, status: 'live' | 'paused') => {
-    setFailure(undefined);
-    // Shown at once; the server's answer replaces it, a refusal puts it back.
-    replace({ ...page, status });
-    data.bookingPages.update(slug, page.id, { status }).then(replace, (error: unknown) => {
-      replace(page);
-      setFailure(isDataError(error) ? error.message : strings.somethingWrong);
-    });
+    data.bookingPages.update(slug, page.id, { status }).catch(failed);
   };
   const duplicate = (page: BookingPageView) => {
-    setFailure(undefined);
-    const {
-      id: _id,
-      publicKey: _key,
-      kind: _kind,
-      ownerMemberId: _owner,
-      bookingsThisMonth: _count,
-      canChange: _can,
-      createdAt: _created,
-      updatedAt: _updated,
-      slug: _slug,
-      ...settings
-    } = page;
-    data.bookingPages
-      .create(slug, {
-        id: data.bookingPages.newId(),
-        title: strings.copyOf(page.title),
-        timeZone: page.availability.timeZone,
-        settings: { ...settings, title: strings.copyOf(page.title) },
-      })
-      .then(
-        (copy) => setPages((current) => [copy, ...current]),
-        (error: unknown) => setFailure(isDataError(error) ? error.message : strings.somethingWrong),
-      );
+    data.bookingPages.duplicate(slug, page, strings.copyOf(page.title)).catch(failed);
   };
-  const rows: readonly LinkRow[] = pages.map((page) => ({
-    id: page.id,
-    title: page.title,
-    ...(page.status === 'paused' ? { tag: strings.offTag } : {}),
-    address: `/b/${page.publicKey}`,
-    chips: chipsOf(page),
-    actions: (
-      <>
-        <CopyButton
-          value={publicBookingUrl(page.publicKey)}
-          label={strings.copyLinkTo(page.title)}
-          isIconOnly
-          variant="ghost"
-        />
-        <MenuTrigger>
-          <Button variant="ghost" icon="ellipsis" label={strings.more(page.title)} />
-          <Menu
-            label={strings.more(page.title)}
-            onAction={(key) => {
-              if (key === 'tab') globalThis.open(publicBookingUrl(page.publicKey), '_blank', 'noopener');
-              if (key === 'on') setStatus(page, 'live');
-              if (key === 'off') setStatus(page, 'paused');
-              if (key === 'duplicate') duplicate(page);
-              if (key === 'hours') open(page.id, 'hours');
-              if (key === 'delete') setDeleting(page);
+  const remove = (page: BookingPageView) => {
+    setDeleting(undefined);
+    data.bookingPages.remove(slug, page.id).then(() => {
+      toasts.toast({ tone: 'success', message: strings.deleted(page.title) });
+    }, failed);
+  };
+  const pages = list.status === 'ready' ? list.items : [];
+  const rows: readonly LinkRow[] = pages.map((page) => {
+    const isPending = list.status === 'ready' && list.pendingIds.has(page.id);
+    return {
+      id: page.id,
+      title: page.title,
+      address: `/${slug}/${page.slug}`,
+      description: page.description,
+      chips: chipsOf(page),
+      ...(page.status === 'paused' ? { badge: strings.offTag } : {}),
+      toggle: {
+        label: strings.isOn(page.title),
+        isSelected: page.status === 'live',
+        onChange: (isOn: boolean) => {
+          setStatus(page, isOn ? 'live' : 'paused');
+        },
+        isDisabled: !page.canChange,
+      },
+      isPending,
+      actions: (
+        <>
+          <Button
+            variant="ghost"
+            icon="external-link"
+            label={strings.openPage(page.title)}
+            isDisabled={isPending || page.status === 'paused'}
+            onPress={() => {
+              globalThis.open(publicBookingUrl(page.publicKey), '_blank', 'noopener');
             }}
-          >
-            <MenuItem id="tab" icon="external-link">
-              {strings.openNewTab}
-            </MenuItem>
-            {page.canChange && (
-              <>
-                <MenuSection label={strings.visibility}>
-                  <MenuItem id="on" icon={page.status === 'live' ? 'check' : undefined}>
-                    {strings.on}
-                  </MenuItem>
-                  <MenuItem id="off" icon={page.status === 'paused' ? 'check' : undefined}>
-                    {strings.off}
-                  </MenuItem>
-                </MenuSection>
-                <MenuSeparator />
+          />
+          <CopyButton
+            value={publicBookingUrl(page.publicKey)}
+            label={strings.copyLinkTo(page.title)}
+            isIconOnly
+            variant="ghost"
+            isDisabled={isPending}
+          />
+          {page.canChange && (
+            <MenuTrigger>
+              <Button variant="ghost" icon="ellipsis" label={strings.more(page.title)} isDisabled={isPending} />
+              <Menu
+                label={strings.more(page.title)}
+                onAction={(key) => {
+                  if (key === 'duplicate') duplicate(page);
+                  if (key === 'hours') open(page.id, 'hours');
+                  if (key === 'delete') setDeleting(page);
+                }}
+              >
                 <MenuItem id="duplicate" icon="copy">
                   {strings.duplicate}
                 </MenuItem>
@@ -138,138 +110,108 @@ export function LinksScreen({ data, slug, pages: loaded }: LinksScreenProps) {
                 <MenuItem id="delete" icon="trash" isDanger>
                   {strings.delete}
                 </MenuItem>
-              </>
-            )}
-          </Menu>
-        </MenuTrigger>
-      </>
-    ),
-  }));
-  const dialogs = (
-    <>
-      <NewPagePanel
-        data={data}
-        slug={slug}
-        isOpen={isCreating}
-        onClose={() => setCreating(false)}
-        onCreated={(page) => {
-          setCreating(false);
-          open(page.id);
-        }}
-      />
-      <DeletePageDialog
-        data={data}
-        slug={slug}
-        page={deleting}
-        onClose={() => setDeleting(undefined)}
-        onDeleted={(pageId) => {
-          setDeleting(undefined);
-          setPages((current) => current.filter((page) => page.id !== pageId));
-        }}
-      />
-    </>
-  );
-  // With no pages, the empty state takes the whole view, centred, like Bookings and Forms; the column is for the list.
-  if (pages.length === 0) {
-    return (
-      <>
-        {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
-        <EmptyState
-          title={strings.emptyTitle}
-          icon="calendar-clock"
-          actions={
-            <Button variant="primary" icon="plus" onPress={() => setCreating(true)}>
-              {strings.newPage}
-            </Button>
-          }
-        >
-          {strings.emptyText}
-        </EmptyState>
-        {dialogs}
-      </>
-    );
-  }
+              </Menu>
+            </MenuTrigger>
+          )}
+        </>
+      ),
+    };
+  });
   return (
-    <PageColumn
-      actions={
+    <CapturesList
+      label={strings.listLabel}
+      searchLabel={strings.searchPages}
+      status={list.status}
+      rows={rows}
+      onOpen={(id) => {
+        open(id);
+      }}
+      newAction={
         <Button variant="primary" icon="plus" onPress={() => setCreating(true)}>
           {strings.newPage}
         </Button>
       }
-    >
-      {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
-      <LinkList label={strings.listLabel} rows={rows} onOpen={(id) => open(id)} />
-      {dialogs}
-    </PageColumn>
+      empty={{ title: strings.emptyTitle, text: strings.emptyText, icon: 'calendar-clock' }}
+      errorTitle={strings.failedTitle}
+      onRetry={() => {
+        data.bookingPages.view(slug).reload();
+      }}
+      dialogs={
+        <>
+          <NewPagePanel
+            data={data}
+            slug={slug}
+            isOpen={isCreating}
+            onClose={() => setCreating(false)}
+            onCreated={(page) => {
+              setCreating(false);
+              open(page.id);
+            }}
+          />
+          <DeletePageDialog page={deleting} onClose={() => setDeleting(undefined)} onDelete={remove} />
+        </>
+      }
+    />
   );
 }
 
-/** Delete <title>?: its link stops working (AC-648); its bookings stay. */
+/** Delete <title>?: its link stops working (AC-648); its bookings stay. The row leaves at once, back on a refusal. */
 function DeletePageDialog({
-  data,
-  slug,
   page,
   onClose,
-  onDeleted,
+  onDelete,
 }: {
-  readonly data: DataLayer;
-  readonly slug: string;
   readonly page: BookingPageView | undefined;
   readonly onClose: () => void;
-  readonly onDeleted: (pageId: string) => void;
+  readonly onDelete: (page: BookingPageView) => void;
 }) {
   // The last page stays while the Modal plays its exit.
   const [last, setLast] = useState(page);
   if (page !== undefined && page !== last) setLast(page);
   const shown = page ?? last;
-  const [isBusy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<string | undefined>(undefined);
   if (shown === undefined) return null;
-  const remove = () => {
-    if (isBusy) return;
-    setBusy(true);
-    setFailure(undefined);
-    data.bookingPages.remove(slug, shown.id).then(
-      () => {
-        setBusy(false);
-        onDeleted(shown.id);
-      },
-      (error: unknown) => {
-        setBusy(false);
-        setFailure(isDataError(error) ? error.message : strings.somethingWrong);
-      },
-    );
-  };
   return (
     <Modal
       title={strings.deleteTitle(shown.title)}
       tone="danger"
       isOpen={page !== undefined}
       onOpenChange={(isOpen) => {
-        if (!isOpen && !isBusy) onClose();
+        if (!isOpen) onClose();
       }}
       actions={
         <>
-          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+          <Button slot="close" kbd="ESC">
             {strings.cancel}
           </Button>
-          <Button variant="danger-solid" icon="trash" isPending={isBusy} onPress={remove}>
-            {isBusy ? strings.deleting : strings.deleteAction}
+          <Button
+            variant="danger-solid"
+            icon="trash"
+            onPress={() => {
+              onDelete(shown);
+            }}
+          >
+            {strings.deleteAction}
           </Button>
         </>
       }
     >
-      {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
       {strings.deleteText}
     </Modal>
   );
 }
 
-/** The list while its pages load, inside the Captures layout. */
+/** The list while its pages load, inside the Captures layout: skeleton rows in the rows' shape. */
 export function LinksPending() {
   return (
-    <PageColumn>
-      <Skeleton lines={6} />
-    </PageColumn>
+    <CapturesList
+      label={strings.listLabel}
+      searchLabel={strings.searchPages}
+      status="loading"
+      rows={[]}
+      onOpen={() => undefined}
+      empty={{ title: strings.emptyTitle, text: strings.emptyText, icon: 'calendar-clock' }}
+      errorTitle={strings.failedTitle}
+      onRetry={() => undefined}
+    />
   );
 }

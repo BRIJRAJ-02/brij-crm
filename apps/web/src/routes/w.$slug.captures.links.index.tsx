@@ -4,15 +4,17 @@ import { createFileRoute, useRouter, type ErrorComponentProps } from '@tanstack/
 import { LinksPending, LinksScreen } from '../features/booking/LinksScreen.tsx';
 import { strings } from '../features/booking/strings.ts';
 
-// Captures › Links (spec 0025): the member's booking pages, everyone's with `booking.admin`, read through the data
-// layer. The Captures layout draws the frame, the TopBar and the Links · Forms strip; this route fills Links.
+// Captures › Links (spec 0025): the member's booking pages, everyone's with `booking.admin`, from the data layer's
+// held list (`bookingPages.view`), which every page write patches, so a create, a copy, a pause or a rename in the
+// editor shows here without a refresh. The loader waits for the first read only; coming back, the held rows show at
+// once and are read again behind them. The Captures layout draws the frame, the TopBar and the Links · Forms strip.
 export const Route = createFileRoute('/w/$slug/captures/links/')({
   loader: async ({ context, params }) => {
     try {
-      return { pages: await context.data.bookingPages.list(params.slug) };
+      await context.data.bookingPages.view(params.slug).ready();
     } catch (error) {
       // The frame above shows "workspace not found" for this one.
-      if (isDataError(error) && error.code === 'NOT_FOUND') return { pages: [] };
+      if (isDataError(error) && error.code === 'NOT_FOUND') return;
       throw error;
     }
   },
@@ -22,16 +24,15 @@ export const Route = createFileRoute('/w/$slug/captures/links/')({
 });
 
 function LinksRoute() {
-  const { pages } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const { data } = Route.useRouteContext();
-  return <LinksScreen data={data} slug={slug} pages={pages} />;
+  return <LinksScreen data={data} slug={slug} />;
 }
 
 function LinksError({ error }: ErrorComponentProps) {
   const router = useRouter();
   return (
-    <PageColumn>
+    <PageColumn width="full">
       <EmptyState tone="error" title={strings.failedTitle} onRetry={() => void router.invalidate()}>
         {isDataError(error) ? error.message : strings.failedText}
       </EmptyState>

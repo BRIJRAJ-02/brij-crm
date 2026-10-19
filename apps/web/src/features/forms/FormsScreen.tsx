@@ -1,32 +1,20 @@
 // Brief
-// Purpose: Captures, Forms: the workspace's forms as cards, with their enquiries and whether they accept more (spec 0023).
-// Main task: open a form, make a new one at once, or pause and resume one with its Accepting switch.
+// Purpose: Captures › Forms: the workspace's forms as rows, the same rows as Links, with their enquiries and whether they take more (spec 0023).
+// Main task: open a form, make a new one at once, copy its link, or pause and resume it from its menu.
 // Leaves out: anything inside one form (its builder), and archived forms (a later pass).
 import { isDataError, type FormSummary } from '@crm/data';
-import {
-  Badge,
-  Button,
-  Card,
-  EmptyState,
-  FormEditorLayout,
-  Link,
-  Menu,
-  MenuItem,
-  MenuSeparator,
-  MenuTrigger,
-  Modal,
-  Switch,
-} from '@crm/ui';
-import { useNavigate, useRouter, useRouteContext } from '@tanstack/react-router';
+import { useCaptureList } from '@crm/data/react';
+import { Button, CopyButton, Menu, MenuItem, MenuSeparator, MenuTrigger, Modal, type LinkRow } from '@crm/ui';
+import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
+import { CapturesList } from '../captures/CapturesList.tsx';
 import { useCan } from '../workspace/WorkspacePage.tsx';
 import { formHref } from './paths.ts';
 import { strings } from './strings.ts';
 
-/** Props for Captures, Forms: what its route loaded through the data layer. */
+/** Props for Captures › Forms: the workspace, whose held list of forms the route loaded. */
 export interface FormsScreenProps {
   readonly slug: string;
-  readonly forms: readonly FormSummary[];
 }
 
 /** "Tue, Sep 1 · 1:44 PM", in the reader's language. */
@@ -37,18 +25,31 @@ function when(iso: string): string {
   return `${day} · ${time}`;
 }
 
-/** Captures, Forms: New form, then one card per form, newest change first. */
-export function FormsScreen({ slug, forms }: FormsScreenProps) {
+/** A form's chips: its responses, spam when there is some, and the last enquiry. */
+function chipsOf(form: FormSummary): readonly string[] {
+  return [
+    strings.responses(form.submissionCount),
+    ...(form.spamCount > 0 ? [strings.spam(form.spamCount)] : []),
+    ...(form.lastSubmissionAt === undefined ? [] : [strings.lastEnquiry(when(form.lastSubmissionAt))]),
+  ];
+}
+
+/** Its grey badge, only when it isn't taking enquiries: Not published until its first publish, then Paused. */
+function badgeOf(form: FormSummary): { readonly badge?: string } {
+  if (form.liveVersionNumber === undefined) return { badge: strings.notPublishedYet };
+  return form.status === 'paused' ? { badge: strings.pausedTag } : {};
+}
+
+/** Captures › Forms: New form, then one row per form, newest change first, read from the data layer's held list. */
+export function FormsScreen({ slug }: FormsScreenProps) {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
-  const router = useRouter();
   const canManage = useCan('forms.manage');
+  const list = useCaptureList(data.forms.view(slug));
   const [creating, setCreating] = useState<string | undefined>(undefined);
   const [deleting, setDeleting] = useState<FormSummary | undefined>(undefined);
-  const [busy, setBusy] = useState<string | undefined>(undefined);
 
   const failed = (error: unknown) => {
-    setBusy(undefined);
     toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
   };
 
@@ -73,152 +74,167 @@ export function FormsScreen({ slug, forms }: FormsScreenProps) {
     );
   };
 
+  // Each change shows in the list at once; a refusal puts it back there, and the toast says why.
   const setAccepting = (form: FormSummary, isAccepting: boolean) => {
-    setBusy(form.id);
-    data.forms.setStatus(slug, form.id, isAccepting ? 'live' : 'paused').then(() => {
-      setBusy(undefined);
-      toasts.toast({ tone: 'success', message: isAccepting ? strings.resumed(form.name) : strings.paused(form.name) });
-      void router.invalidate();
-    }, failed);
-  };
-
-  const copyAddress = (form: FormSummary) => {
-    void navigator.clipboard.writeText(data.forms.hostedUrl(form.publicKey)).then(
-      () => {
-        toasts.toast({ tone: 'success', message: strings.addressCopied });
-      },
-      () => undefined,
-    );
+    data.forms.setStatus(slug, form.id, isAccepting ? 'live' : 'paused').catch(failed);
   };
 
   const duplicate = (form: FormSummary) => {
-    setBusy(form.id);
-    data.forms.duplicate(slug, form.id).then((copy) => {
-      setBusy(undefined);
-      toasts.toast({ tone: 'success', message: strings.duplicated(copy.name) });
-      void router.invalidate();
-    }, failed);
+    data.forms.duplicate(slug, form.id).catch(failed);
   };
 
   const remove = (form: FormSummary) => {
-    setBusy(form.id);
+    setDeleting(undefined);
     data.forms.delete(slug, form.id).then(() => {
-      setBusy(undefined);
-      setDeleting(undefined);
       toasts.toast({ tone: 'success', message: strings.deleted(form.name) });
-      void router.invalidate();
     }, failed);
   };
 
-  const newForm = (
-    <Button variant="primary" icon="plus" onPress={create} isPending={creating !== undefined}>
-      {creating === undefined ? strings.newForm : strings.creating}
-    </Button>
-  );
+  const forms = list.status === 'ready' ? list.items : [];
+  const rows: readonly LinkRow[] = forms.map((form) => {
+    const isPending = list.status === 'ready' && list.pendingIds.has(form.id);
+    const isPublished = form.liveVersionNumber !== undefined;
+    return {
+      id: form.id,
+      title: form.name,
+      address: isPending ? strings.addressPending : `/f/${form.publicKey}`,
+      chips: chipsOf(form),
+      ...badgeOf(form),
+      toggle: {
+        label: strings.acceptingOf(form.name),
+        isSelected: isPublished && form.status === 'live',
+        onChange: (isOn: boolean) => {
+          setAccepting(form, isOn);
+        },
+        isDisabled: !canManage || !isPublished,
+      },
+      isPending,
+      actions: (
+        <>
+          <Button
+            variant="ghost"
+            icon="external-link"
+            label={strings.openForm(form.name)}
+            isDisabled={isPending || !isPublished}
+            onPress={() => {
+              globalThis.open(data.forms.hostedUrl(form.publicKey), '_blank', 'noopener');
+            }}
+          />
+          <CopyButton
+            value={data.forms.hostedUrl(form.publicKey)}
+            label={strings.copyLinkTo(form.name)}
+            isIconOnly
+            variant="ghost"
+            isDisabled={isPending || !isPublished}
+          />
+          {canManage && (
+            <MenuTrigger>
+              <Button variant="ghost" icon="ellipsis" label={strings.formActions(form.name)} isDisabled={isPending} />
+              <Menu
+                label={strings.formActions(form.name)}
+                onAction={(key) => {
+                  if (key === 'duplicate') duplicate(form);
+                  if (key === 'delete') setDeleting(form);
+                }}
+              >
+                <MenuItem id="duplicate" icon="copy">
+                  {strings.duplicate}
+                </MenuItem>
+                <MenuSeparator />
+                <MenuItem id="delete" icon="trash" isDanger>
+                  {strings.delete}
+                </MenuItem>
+              </Menu>
+            </MenuTrigger>
+          )}
+        </>
+      ),
+    };
+  });
 
-  const cards =
-    forms.length === 0 ? (
-      <EmptyState icon="clipboard-list" title={strings.noForms} {...(canManage ? { actions: newForm } : {})}>
-        {strings.noFormsText}
-      </EmptyState>
-    ) : (
-      forms.map((form) => {
-        const isPublished = form.liveVersionNumber !== undefined;
-        const isAccepting = form.status === 'live';
-        return (
-          <Card
-            key={form.id}
-            title={form.name}
-            actions={
-              <>
-                {isPublished ? (
-                  <Switch
-                    label={strings.accepting}
-                    isSelected={isAccepting}
-                    isDisabled={!canManage || busy === form.id}
-                    onChange={(next) => {
-                      setAccepting(form, next);
-                    }}
-                  />
-                ) : (
-                  <Badge text={strings.notPublishedYet} />
-                )}
-                <MenuTrigger>
-                  <Button variant="ghost" icon="ellipsis" label={strings.formActions(form.name)} />
-                  <Menu
-                    label={strings.formActions(form.name)}
-                    onAction={(key) => {
-                      if (key === 'open') open(form.id);
-                      if (key === 'copy') copyAddress(form);
-                      if (key === 'duplicate') duplicate(form);
-                      if (key === 'delete') setDeleting(form);
-                    }}
-                  >
-                    <MenuItem id="open" icon="arrow-right">
-                      {strings.open}
-                    </MenuItem>
-                    <MenuItem id="copy" icon="copy" isDisabled={!isPublished}>
-                      {strings.copyAddress}
-                    </MenuItem>
-                    {canManage && (
-                      <MenuItem id="duplicate" icon="layers">
-                        {strings.duplicate}
-                      </MenuItem>
-                    )}
-                    {canManage && <MenuSeparator />}
-                    {canManage && (
-                      <MenuItem id="delete" icon="trash" isDanger>
-                        {strings.delete}
-                      </MenuItem>
-                    )}
-                  </Menu>
-                </MenuTrigger>
-              </>
-            }
-            footer={<Link href={formHref(slug, form.id)}>{strings.open}</Link>}
-          >
-            <Badge text={strings.thisMonth(form.submissionsThisMonth)} />{' '}
-            {form.spamCount > 0 && (
-              <>
-                <Badge text={strings.spam(form.spamCount)} />{' '}
-              </>
-            )}
-            {form.lastSubmissionAt !== undefined && <Badge text={strings.lastEnquiry(when(form.lastSubmissionAt))} />}
-          </Card>
-        );
-      })
-    );
-
-  // The Captures layout draws the frame, its TopBar and the Links · Forms strip; this is the Forms tab's panel.
   return (
-    <FormEditorLayout {...(canManage && forms.length > 0 ? { actions: newForm } : {})}>
-      {cards}
-      <Modal
-        title={deleting === undefined ? strings.deleteForm : strings.deleteTitle(deleting.name)}
-        tone="danger"
-        isOpen={deleting !== undefined}
-        onOpenChange={(isOpen) => {
-          if (!isOpen && busy === undefined) setDeleting(undefined);
-        }}
-        actions={
-          <>
-            <Button slot="close" isDisabled={busy !== undefined}>
-              {strings.cancel}
-            </Button>
-            <Button
-              variant="danger-solid"
-              isPending={busy !== undefined}
-              onPress={() => {
-                if (deleting !== undefined) remove(deleting);
-              }}
-            >
-              {strings.delete}
-            </Button>
-          </>
-        }
-      >
-        <p>{strings.deleteText(deleting?.submissionCount ?? 0)}</p>
-      </Modal>
-    </FormEditorLayout>
+    <CapturesList
+      label={strings.forms}
+      searchLabel={strings.searchForms}
+      status={list.status}
+      rows={rows}
+      onOpen={open}
+      {...(canManage
+        ? {
+            newAction: (
+              <Button variant="primary" icon="plus" onPress={create} isPending={creating !== undefined}>
+                {creating === undefined ? strings.newForm : strings.creating}
+              </Button>
+            ),
+          }
+        : {})}
+      empty={{ title: strings.noForms, text: strings.noFormsText, icon: 'clipboard-list' }}
+      errorTitle={strings.failedTitle}
+      onRetry={() => {
+        data.forms.view(slug).reload();
+      }}
+      dialogs={<DeleteFormDialog form={deleting} onClose={() => setDeleting(undefined)} onDelete={remove} />}
+    />
+  );
+}
+
+/** Delete “<name>”?: its address stops working and its submissions go; the row leaves at once, back on a refusal. */
+function DeleteFormDialog({
+  form,
+  onClose,
+  onDelete,
+}: {
+  readonly form: FormSummary | undefined;
+  readonly onClose: () => void;
+  readonly onDelete: (form: FormSummary) => void;
+}) {
+  // The last form stays while the Modal plays its exit.
+  const [last, setLast] = useState(form);
+  if (form !== undefined && form !== last) setLast(form);
+  const shown = form ?? last;
+  if (shown === undefined) return null;
+  return (
+    <Modal
+      title={strings.deleteTitle(shown.name)}
+      tone="danger"
+      isOpen={form !== undefined}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) onClose();
+      }}
+      actions={
+        <>
+          <Button slot="close" kbd="ESC">
+            {strings.cancel}
+          </Button>
+          <Button
+            variant="danger-solid"
+            icon="trash"
+            onPress={() => {
+              onDelete(shown);
+            }}
+          >
+            {strings.delete}
+          </Button>
+        </>
+      }
+    >
+      {strings.deleteText(shown.submissionCount)}
+    </Modal>
+  );
+}
+
+/** The list while its forms load, inside the Captures layout: skeleton rows in the rows' shape. */
+export function FormsPending() {
+  return (
+    <CapturesList
+      label={strings.forms}
+      searchLabel={strings.searchForms}
+      status="loading"
+      rows={[]}
+      onOpen={() => undefined}
+      empty={{ title: strings.noForms, text: strings.noFormsText, icon: 'clipboard-list' }}
+      errorTitle={strings.failedTitle}
+      onRetry={() => undefined}
+    />
   );
 }
