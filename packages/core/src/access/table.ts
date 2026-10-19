@@ -139,6 +139,7 @@ export const ACCESS_TABLE = {
   listForms: { data: 'read' },
   getForm: { data: 'read' },
   formAttributes: { data: 'read' },
+  previewForm: { data: 'read' },
   createForm: { permission: 'forms.manage' },
   saveFormDraft: { permission: 'forms.manage' },
   publishForm: { permission: 'forms.manage' },

@@ -381,6 +381,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       list: os.forms.list.handler(notServed),
       get: os.forms.get.handler(notServed),
       attributes: os.forms.attributes.handler(notServed),
+      preview: os.forms.preview.handler(notServed),
       create: os.forms.create.handler(notServed),
       saveDraft: os.forms.saveDraft.handler(notServed),
       publish: os.forms.publish.handler(notServed),

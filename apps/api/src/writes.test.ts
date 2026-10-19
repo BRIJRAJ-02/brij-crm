@@ -47,6 +47,7 @@ const READS: ReadonlySet<string> = new Set([
   'forms.list',
   'forms.get',
   'forms.attributes',
+  'forms.preview',
   'submissions.list',
   'submissions.get',
 ]);

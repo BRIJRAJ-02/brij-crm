@@ -8,6 +8,7 @@
 import { randomBytes } from 'node:crypto';
 import { and, desc, eq, max, ne, sql } from 'drizzle-orm';
 import {
+  type PublicForm,
   FORM_COUNT_CAP,
   FORMS_LIST_MAX,
   isFormQuestionType,
@@ -30,7 +31,7 @@ import { requirePermission } from '../access/check.ts';
 import { can, fieldLevel, objectLevel } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkObject, UNKNOWN_OBJECT } from '../access/visibility.ts';
-import { loadForm, loadVersions, millis, type FormRow } from './shared.ts';
+import { loadForm, loadVersions, millis, publicFormOf, type FormRow } from './shared.ts';
 
 const { forms, formSubmissions, formVersions, members, objects } = schema;
 
@@ -188,6 +189,25 @@ export async function listForms(
 /** One form, with its draft and live documents (spec 0023: mappings and owner rules too, to any reader). */
 export async function getForm(scope: EngineScope, input: { readonly formId: string }): Promise<FormView> {
   return inWorkspace(scope, async (tx) => viewOf(tx, scope, await visibleForm(tx, scope, input.formId)));
+}
+
+/**
+ * The draft as visitors would see it (AC-550): the same shape the hosted
+ * page renders, from the attributes as they are now, so the builder's
+ * preview draws it with the same renderer and sends nothing.
+ */
+export async function previewForm(scope: EngineScope, input: { readonly formId: string }): Promise<PublicForm> {
+  return inWorkspace(scope, async (tx) => {
+    const form = await visibleForm(tx, scope, input.formId);
+    if (form.draftVersionId === null) throw new Error('A form always has a draft version.');
+    const draft = (await loadVersions(tx, [form.draftVersionId])).get(form.draftVersionId);
+    if (draft === undefined) throw new Error('The draft version went away.');
+    return publicFormOf(tx, form.mainObjectId, draft.document, {
+      publicKey: form.publicKey,
+      status: 'live',
+      versionNumber: draft.number,
+    });
+  });
 }
 
 /** The attributes a question of this form may map to, with whether the reader may write each (AC-546). */

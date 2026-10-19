@@ -446,6 +446,7 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   listForms: empty((scope) => core.listForms(scope, { archived: false }).then((page) => page.items)),
   getForm: refused('NOT_FOUND', (scope, world) => core.getForm(scope, { formId: world.formId })),
   formAttributes: refused('NOT_FOUND', (scope, world) => core.formAttributes(scope, { formId: world.formId })),
+  previewForm: refused('NOT_FOUND', (scope, world) => core.previewForm(scope, { formId: world.formId })),
   listSubmissions: refused('NOT_FOUND', (scope, world) => core.listSubmissions(scope, { formId: world.formId })),
   getSubmission: refused('NOT_FOUND', (scope, world) =>
     core.getSubmission(scope, { submissionId: world.submissionId }),

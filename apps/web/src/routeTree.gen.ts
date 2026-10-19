@@ -20,6 +20,8 @@ import { Route as WSlugTrashRouteImport } from './routes/w.$slug.trash.tsx'
 import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects.$object.tsx'
 import { Route as WSlugSettingsIndexRouteImport } from './routes/w.$slug.settings.index.tsx'
 import { Route as WSlugSettingsJobsRouteImport } from './routes/w.$slug.settings.jobs.tsx'
+import { Route as WSlugSettingsFormsIndexRouteImport } from './routes/w.$slug.settings.forms.index.tsx'
+import { Route as WSlugSettingsFormsFormIdRouteImport } from './routes/w.$slug.settings.forms.$formId.tsx'
 import { Route as WSlugSettingsObjectsIndexRouteImport } from './routes/w.$slug.settings.objects.index.tsx'
 import { Route as WSlugObjectsObjectRecordIdIndexRouteImport } from './routes/w.$slug.objects.$object_.$recordId.index.tsx'
 import { Route as WSlugObjectsObjectRecordIdTabRouteImport } from './routes/w.$slug.objects.$object_.$recordId.$tab.tsx'
@@ -82,6 +84,17 @@ const WSlugSettingsJobsRoute = WSlugSettingsJobsRouteImport.update({
   path: '/settings/jobs',
   getParentRoute: () => WSlugRoute,
 } as any)
+const WSlugSettingsFormsIndexRoute = WSlugSettingsFormsIndexRouteImport.update({
+  id: '/settings/forms/',
+  path: '/settings/forms/',
+  getParentRoute: () => WSlugRoute,
+} as any)
+const WSlugSettingsFormsFormIdRoute =
+  WSlugSettingsFormsFormIdRouteImport.update({
+    id: '/settings/forms/$formId',
+    path: '/settings/forms/$formId',
+    getParentRoute: () => WSlugRoute,
+  } as any)
 const WSlugSettingsObjectsIndexRoute =
   WSlugSettingsObjectsIndexRouteImport.update({
     id: '/settings/objects/',
@@ -131,6 +144,8 @@ export interface FileRoutesByFullPath {
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
+  '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
+  '/w/$slug/settings/forms/': typeof WSlugSettingsFormsIndexRoute
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
   '/w/$slug/objects/$object/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
@@ -149,6 +164,8 @@ export interface FileRoutesByTo {
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
   '/w/$slug/settings': typeof WSlugSettingsIndexRoute
+  '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
+  '/w/$slug/settings/forms': typeof WSlugSettingsFormsIndexRoute
   '/w/$slug/settings/objects': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
   '/w/$slug/objects/$object/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
@@ -169,6 +186,8 @@ export interface FileRoutesById {
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
+  '/w/$slug/settings/forms/$formId': typeof WSlugSettingsFormsFormIdRoute
+  '/w/$slug/settings/forms/': typeof WSlugSettingsFormsIndexRoute
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/objects/$object_/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
   '/w/$slug/objects/$object_/views/$viewId': typeof WSlugObjectsObjectViewsViewIdRoute
@@ -190,6 +209,8 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/jobs'
     | '/w/$slug/settings/'
+    | '/w/$slug/settings/forms/$formId'
+    | '/w/$slug/settings/forms/'
     | '/w/$slug/settings/objects/'
     | '/w/$slug/objects/$object/$recordId/$tab'
     | '/w/$slug/objects/$object/views/$viewId'
@@ -208,6 +229,8 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/jobs'
     | '/w/$slug/settings'
+    | '/w/$slug/settings/forms/$formId'
+    | '/w/$slug/settings/forms'
     | '/w/$slug/settings/objects'
     | '/w/$slug/objects/$object/$recordId/$tab'
     | '/w/$slug/objects/$object/views/$viewId'
@@ -227,6 +250,8 @@ export interface FileRouteTypes {
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/jobs'
     | '/w/$slug/settings/'
+    | '/w/$slug/settings/forms/$formId'
+    | '/w/$slug/settings/forms/'
     | '/w/$slug/settings/objects/'
     | '/w/$slug/objects/$object_/$recordId/$tab'
     | '/w/$slug/objects/$object_/views/$viewId'
@@ -323,6 +348,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsJobsRouteImport
       parentRoute: typeof WSlugRoute
     }
+    '/w/$slug/settings/forms/': {
+      id: '/w/$slug/settings/forms/'
+      path: '/settings/forms'
+      fullPath: '/w/$slug/settings/forms/'
+      preLoaderRoute: typeof WSlugSettingsFormsIndexRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/settings/forms/$formId': {
+      id: '/w/$slug/settings/forms/$formId'
+      path: '/settings/forms/$formId'
+      fullPath: '/w/$slug/settings/forms/$formId'
+      preLoaderRoute: typeof WSlugSettingsFormsFormIdRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/settings/objects/': {
       id: '/w/$slug/settings/objects/'
       path: '/settings/objects'
@@ -374,6 +413,8 @@ interface WSlugRouteChildren {
   WSlugObjectsObjectRoute: typeof WSlugObjectsObjectRoute
   WSlugSettingsJobsRoute: typeof WSlugSettingsJobsRoute
   WSlugSettingsIndexRoute: typeof WSlugSettingsIndexRoute
+  WSlugSettingsFormsFormIdRoute: typeof WSlugSettingsFormsFormIdRoute
+  WSlugSettingsFormsIndexRoute: typeof WSlugSettingsFormsIndexRoute
   WSlugSettingsObjectsIndexRoute: typeof WSlugSettingsObjectsIndexRoute
   WSlugObjectsObjectRecordIdTabRoute: typeof WSlugObjectsObjectRecordIdTabRoute
   WSlugObjectsObjectViewsViewIdRoute: typeof WSlugObjectsObjectViewsViewIdRoute
@@ -388,6 +429,8 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugObjectsObjectRoute: WSlugObjectsObjectRoute,
   WSlugSettingsJobsRoute: WSlugSettingsJobsRoute,
   WSlugSettingsIndexRoute: WSlugSettingsIndexRoute,
+  WSlugSettingsFormsFormIdRoute: WSlugSettingsFormsFormIdRoute,
+  WSlugSettingsFormsIndexRoute: WSlugSettingsFormsIndexRoute,
   WSlugSettingsObjectsIndexRoute: WSlugSettingsObjectsIndexRoute,
   WSlugObjectsObjectRecordIdTabRoute: WSlugObjectsObjectRecordIdTabRoute,
   WSlugObjectsObjectViewsViewIdRoute: WSlugObjectsObjectViewsViewIdRoute,

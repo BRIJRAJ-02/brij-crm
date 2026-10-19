@@ -129,7 +129,7 @@ export function questionType(
 }
 
 /** The live options of select attributes, in their order, by attribute. */
-async function liveOptions(
+export async function liveOptions(
   tx: WorkspaceTx,
   attributeIds: readonly string[],
 ): Promise<ReadonlyMap<string, readonly { id: string; label: string; hue?: Hue }[]>> {

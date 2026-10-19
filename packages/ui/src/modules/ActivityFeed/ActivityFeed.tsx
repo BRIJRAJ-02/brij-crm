@@ -87,6 +87,16 @@ export type ActivityEntry =
       readonly href?: string;
       /** Tasks only: it was completed, not added. */
       readonly isDone?: boolean;
+    })
+  | (EntryBase & {
+      /**
+       * A form submission that touched the record (spec 0023): the form is
+       * the actor ("Contact us created this record from a submission").
+       */
+      readonly kind: 'submission';
+      readonly action: 'created' | 'updated' | 'matched' | 'linked';
+      /** The submission's page, routed. */
+      readonly href?: string;
     });
 
 /** How the feed lays out: scrolling inside its slot, or a few entries drawn in place. */
@@ -121,6 +131,7 @@ const KIND_ICONS: Readonly<Record<Exclude<ActivityEntry['kind'], 'change' | 'lin
   comment: 'message-square',
   email: 'mail',
   meeting: 'calendar',
+  submission: 'clipboard-list',
 };
 
 const OVERSCAN = 4;
@@ -140,6 +151,8 @@ function verbOf(entry: ActivityEntry): string {
       return entry.addedCount > 0 ? strings.verbs.added : strings.verbs.removed;
     case 'task':
       return entry.isDone === true ? strings.verbs.taskDone : strings.verbs.task;
+    case 'submission':
+      return strings.verbs.submission[entry.action];
     default:
       return strings.verbs[entry.kind];
   }
@@ -561,7 +574,7 @@ function tabbableBeside(feed: HTMLElement, side: 'after' | 'before'): HTMLElemen
 /** Whether an entry draws a detail under its line: a change's values, or a note's or task's title and text. */
 function hasDetail(entry: ActivityEntry): boolean {
   if (entry.kind === 'change') return !isEmptyValue(entry.from) || !isEmptyValue(entry.to);
-  if (entry.kind === 'created' || entry.kind === 'links') return false;
+  if (entry.kind === 'created' || entry.kind === 'links' || entry.kind === 'submission') return false;
   return entry.title !== undefined || entry.excerpt !== undefined;
 }
 
@@ -599,6 +612,7 @@ const Entry = memo(function Entry({ entry, lineId, isLast }: EntryProps) {
   } else if (
     entry.kind !== 'created' &&
     entry.kind !== 'links' &&
+    entry.kind !== 'submission' &&
     (entry.title !== undefined || entry.excerpt !== undefined)
   ) {
     detail = (

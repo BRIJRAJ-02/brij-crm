@@ -2,6 +2,7 @@ import {
   createForm,
   formAttributes,
   getForm,
+  previewForm,
   listForms,
   publishForm,
   rotateFormKey,
@@ -21,6 +22,7 @@ export const formsRouter = member.forms.router({
   attributes: member.forms.attributes.handler(({ context, input }) =>
     formAttributes(context.scope, { formId: input.formId }),
   ),
+  preview: member.forms.preview.handler(({ context, input }) => previewForm(context.scope, { formId: input.formId })),
   create: member.forms.create.handler(async ({ context, input }) => {
     try {
       return await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>

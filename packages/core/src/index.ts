@@ -174,6 +174,7 @@ export {
   getForm,
   listForms,
   newPublicKey,
+  previewForm,
   publishForm,
   rotateFormKey,
   saveFormDraft,

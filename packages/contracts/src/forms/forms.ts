@@ -5,10 +5,11 @@
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { Timestamp } from '../values/attribute-values.ts';
+import { Hue } from '../values/hues.ts';
 import { RecordRefDisplay } from '../values/options.ts';
 import { WorkspaceScoped } from '../workspaces.ts';
 import { FormDocument } from './document.ts';
-import { FORM_QUESTION_TYPES } from './public.ts';
+import { FORM_QUESTION_TYPES, PublicForm } from './public.ts';
 
 /** Where a form is (spec 0023, state transitions). */
 export const FormStatus = z.enum(['draft', 'live', 'paused', 'archived']);
@@ -176,6 +177,8 @@ export const SubmissionAnswer = z.object({
   /** The mapped attribute, when the question writes one. */
   attributeId: z.uuid().optional(),
   value: z.unknown(),
+  /** A select's live options, so the answer shows by its labels. */
+  options: z.array(z.object({ id: z.uuid(), label: z.string(), hue: Hue.optional() })).optional(),
 });
 /** One answer as members read it. */
 export type SubmissionAnswer = z.infer<typeof SubmissionAnswer>;
@@ -236,6 +239,8 @@ export const formsContract = {
   list: oc.input(ListFormsInput).output(z.object({ items: z.array(FormSummary) })),
   get: oc.input(FormIdInput).output(FormView),
   attributes: oc.input(FormIdInput).output(z.object({ items: z.array(FormAttributeChoice) })),
+  /** The draft as visitors would see it (AC-550): the hosted page's shape, sending nothing. */
+  preview: oc.input(FormIdInput).output(PublicForm),
   create: oc.input(CreateFormInput).output(FormView),
   saveDraft: oc.input(SaveFormDraftInput).output(FormView),
   publish: oc.input(PublishFormInput).output(FormView),

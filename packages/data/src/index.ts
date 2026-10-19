@@ -86,6 +86,7 @@ export type {
   FormStatus,
   FormSummary,
   FormView,
+  PublicForm,
   QuestionBlock,
   InputIssue,
   JobStatus,
@@ -2162,6 +2163,9 @@ export function createDataLayer({
       /** The main object's attributes a question may map to, with whether the member may write each (AC-546). */
       attributes: (workspace: string, formId: string) =>
         call((options) => api.forms.attributes({ workspace, formId }, options)).then((page) => page.items),
+      /** The draft as visitors would see it (AC-550), for the builder's preview; sends nothing. */
+      preview: (workspace: string, formId: string) =>
+        call((options) => api.forms.preview({ workspace, formId }, options)),
       /** A new form id: mint it once when the dialog opens, and send the same one on a retry. */
       newId: (): string => mintId(),
       /** Creates a form, waiting for the server (`forms.manage`). */

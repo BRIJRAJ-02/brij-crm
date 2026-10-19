@@ -1,3 +1,4 @@
+// Brief
 // Purpose: the hosted form a visitor fills in at /f/<publicKey> (spec 0023, AC-587), outside the CRM app.
 // Main task: answer the questions and send them, then read the thank you (or go where the form sends them).
 // Leaves out: steps, conditions, consent, prefill, the offline retry queue and branding (later milestones).
@@ -7,19 +8,10 @@ import {
   formStrings,
   type PublicForm,
   type PublicFormClient,
-  type PublicQuestion,
 } from '@crm/data/public-form';
-import {
-  AttributeEditor,
-  AuthLayout,
-  Form,
-  Separator,
-  Skeleton,
-  VisuallyHidden,
-  type FieldAttribute,
-  type FormRefusal,
-} from '@crm/ui';
+import { AuthLayout, Skeleton, VisuallyHidden, type FormRefusal } from '@crm/ui';
 import { useEffect, useRef, useState } from 'react';
+import { FormFields } from './FormFields.tsx';
 import { strings } from './strings.ts';
 
 /** What the page shows. */
@@ -30,30 +22,6 @@ type Shown =
   | { readonly kind: 'closed'; readonly title: string; readonly message: string }
   | { readonly kind: 'form'; readonly form: PublicForm }
   | { readonly kind: 'done'; readonly title: string; readonly message: string };
-
-/** A question as the field set's attribute: its one editor, asked for on submit. */
-function attributeOf(question: PublicQuestion): FieldAttribute {
-  return {
-    id: question.id,
-    name: question.label,
-    type: question.type,
-    allowMultiple: question.isMulti,
-    ...(question.options === undefined
-      ? {}
-      : {
-          options: question.options.map((option) => ({
-            id: option.id,
-            label: option.label,
-            hue: option.hue ?? 'gray',
-            archived: false,
-          })),
-        }),
-    isRequired: question.required,
-    isRequiredOnSubmit: true,
-    isUnique: false,
-    isReadOnly: false,
-  };
-}
 
 /** UTM tags, the page's address without other query values, and the referrer (AC-591). */
 function hiddenFields(): Record<string, string> {
@@ -72,7 +40,7 @@ function hiddenFields(): Record<string, string> {
 }
 
 /** Where a redirect may go: an absolute http(s) address only. */
-function safeRedirect(url: string): string | undefined {
+export function safeRedirect(url: string): string | undefined {
   try {
     const parsed = new URL(url);
     return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? parsed.href : undefined;
@@ -81,6 +49,7 @@ function safeRedirect(url: string): string | undefined {
   }
 }
 
+/** Props for the hosted form page. */
 export interface PublicFormPageProps {
   readonly publicKey: string;
   readonly client: PublicFormClient;
@@ -91,12 +60,9 @@ export interface PublicFormPageProps {
 /** The hosted form page. */
 export function PublicFormPage({ publicKey, client, captcha }: PublicFormPageProps) {
   const [shown, setShown] = useState<Shown>({ kind: 'loading' });
-  const [values, setValues] = useState<Readonly<Record<string, unknown>>>({});
   const [fieldErrors, setFieldErrors] = useState<Readonly<Record<string, string>>>({});
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
   const [isBusy, setBusy] = useState(false);
-  // Answers as committed, read at submit (a blur's commit lands just before).
-  const answers = useRef<Record<string, unknown>>({});
   // One key per attempt, kept for every retry of it (AC-555).
   const attempt = useRef<string | undefined>(undefined);
   const firstTouch = useRef<number | undefined>(undefined);
@@ -154,9 +120,9 @@ export function PublicFormPage({ publicKey, client, captcha }: PublicFormPagePro
   const { form } = shown;
   const words = formStrings(form.language);
 
-  const send = async () => {
+  const send = async (given: Readonly<Record<string, unknown>>) => {
     if (isBusy) return;
-    const checked = checkAnswers(form, answers.current, { pattern: browserPattern });
+    const checked = checkAnswers(form, given, { pattern: browserPattern });
     if (!checked.ok) {
       setRefusals([]);
       setFieldErrors(checked.fields);
@@ -182,8 +148,8 @@ export function PublicFormPage({ publicKey, client, captcha }: PublicFormPagePro
         if (outcome.next.kind === 'redirect') {
           const to = safeRedirect(outcome.next.url);
           if (to !== undefined) {
-            window.location.assign(to);
             setShown({ kind: 'done', title: form.title, message: strings.redirecting });
+            window.location.assign(to);
             return;
           }
         }
@@ -221,57 +187,28 @@ export function PublicFormPage({ publicKey, client, captcha }: PublicFormPagePro
 
   return (
     <AuthLayout title={form.title} {...(form.description === undefined ? {} : { description: form.description })}>
-      <div onFocusCapture={touch} onInputCapture={touch}>
-        <Form
-          submitLabel={form.buttonText}
-          busyLabel={words.sending}
+      <div onFocusCapture={touch} onInputCapture={touch} onPointerDownCapture={touch}>
+        <FormFields
+          form={form}
           isBusy={isBusy}
           refusals={refusals}
-          onSubmit={() => {
-            void send();
+          fieldErrors={fieldErrors}
+          onAnswered={(questionId) => {
+            if (fieldErrors[questionId] !== undefined) {
+              setFieldErrors(({ [questionId]: _dropped, ...rest }) => rest);
+            }
           }}
-          label={form.title}
+          onSubmit={(answers) => {
+            void send(answers);
+          }}
         >
-          {form.steps.flatMap((step) =>
-            step.blocks.map((block) => {
-              switch (block.kind) {
-                case 'heading':
-                  return <h2 key={block.id}>{block.text}</h2>;
-                case 'text':
-                  return <p key={block.id}>{block.text}</p>;
-                case 'divider':
-                  return <Separator key={block.id} />;
-                case 'question': {
-                  const error = fieldErrors[block.id];
-                  return (
-                    <div key={block.id}>
-                      <AttributeEditor
-                        attribute={attributeOf(block)}
-                        value={values[block.id] ?? null}
-                        surface="form"
-                        onCommit={(value) => {
-                          answers.current = { ...answers.current, [block.id]: value };
-                          setValues((held) => ({ ...held, [block.id]: value }));
-                          if (fieldErrors[block.id] !== undefined) {
-                            setFieldErrors(({ [block.id]: _dropped, ...rest }) => rest);
-                          }
-                        }}
-                        {...(error === undefined ? {} : { error })}
-                      />
-                      {block.help !== undefined && <p>{block.help}</p>}
-                    </div>
-                  );
-                }
-              }
-            }),
-          )}
           {/* The honeypot (AC-584): out of sight and out of the tab order; a person never fills it. */}
           <VisuallyHidden>
             <span aria-hidden="true">
               <input ref={honeypot} name="crm_hp" tabIndex={-1} autoComplete="off" defaultValue="" />
             </span>
           </VisuallyHidden>
-        </Form>
+        </FormFields>
       </div>
       {form.recaptchaSiteKey !== undefined && <p>{words.recaptchaNotice}</p>}
     </AuthLayout>

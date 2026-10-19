@@ -32,7 +32,7 @@ import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
 import { UNKNOWN_FORM } from './forms.ts';
 import { FORMS_PROCESS } from './process.ts';
-import { loadForm, loadVersions, millis, questionAttribute, questionType } from './shared.ts';
+import { liveOptions, loadForm, loadVersions, millis, questionAttribute, questionType } from './shared.ts';
 
 const { formSubmissionRecords, formSubmissions } = schema;
 
@@ -132,6 +132,7 @@ function answersOf(
   document: FormDocument,
   attributes: Awaited<ReturnType<typeof loadAttributes>>,
   stored: unknown,
+  options: Awaited<ReturnType<typeof liveOptions>> = new Map(),
 ): SubmissionAnswer[] {
   const answers = record(stored);
   return document.steps.flatMap((step) =>
@@ -143,6 +144,7 @@ function answersOf(
       const attribute = questionAttribute(block, attributes);
       const type = questionType(block, attribute);
       if (type === undefined) return [];
+      const choices = attribute === undefined ? undefined : options.get(attribute.id);
       return [
         {
           questionId: block.id,
@@ -150,6 +152,7 @@ function answersOf(
           type,
           ...(mappedId === undefined ? {} : { attributeId: mappedId }),
           value: answers[block.id],
+          ...(choices === undefined ? {} : { options: [...choices] }),
         },
       ];
     }),
@@ -255,8 +258,12 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
   if (visible === undefined) throw refuse('NOT_FOUND', UNKNOWN_SUBMISSION);
   const version = (await loadVersions(tx, [row.versionId])).get(row.versionId);
   const attributes = await loadAttributes(tx, form.mainObjectId);
+  const selects = [...attributes.values()].filter((attribute) => attribute.type === 'select').map((each) => each.id);
+  const options = await liveOptions(tx, selects);
   const answers =
-    version === undefined ? [] : answersOf(scope, form.mainObjectId, version.document, attributes, row.answers);
+    version === undefined
+      ? []
+      : answersOf(scope, form.mainObjectId, version.document, attributes, row.answers, options);
   const touched = await tx
     .select({
       recordId: formSubmissionRecords.recordId,
