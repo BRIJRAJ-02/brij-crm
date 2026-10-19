@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, Ref } from 'react';
 import { Button as AriaButton } from 'react-aria-components';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
@@ -29,8 +29,14 @@ export interface FilterChipProps {
   readonly onPressOperator?: () => void;
   /** Opens the value editor. */
   readonly onPressValue?: () => void;
-  /** Removes the filter. */
+  /** Removes the filter. Without it the chip has no remove part (a view you can't edit). */
   readonly onRemove?: () => void;
+  /** The group's name for screen readers; "Filter: Stage is" by default. Another chip in this shape (the sort chip) names itself. */
+  readonly label?: string;
+  /** The remove part's name; "Remove filter" by default. */
+  readonly removeLabel?: string;
+  /** The chip's root, for a popover the screen opens from it (spec 0020: the sort builder). */
+  readonly ref?: Ref<HTMLSpanElement>;
 }
 
 /**
@@ -49,9 +55,17 @@ export function FilterChip({
   onPressOperator,
   onPressValue,
   onRemove,
+  label,
+  removeLabel = strings.remove,
+  ref,
 }: FilterChipProps) {
   return (
-    <span className={styles.root} role="group" aria-label={strings.filter(attribute.join(' '), operator ?? '')}>
+    <span
+      ref={ref}
+      className={styles.root}
+      role="group"
+      aria-label={label ?? strings.filter(attribute.join(' '), operator ?? '')}
+    >
       <AriaButton className={styles.segment} {...(onPressAttribute === undefined ? {} : { onPress: onPressAttribute })}>
         {icon !== undefined && <Icon name={icon} size="sm" tone="muted" />}
         <Path parts={attribute} />
@@ -74,14 +88,11 @@ export function FilterChip({
           {value ?? <span className={styles.placeholder}>{placeholder}</span>}
         </AriaButton>
       )}
-      <AriaButton
-        className={styles.segment}
-        data-part="remove"
-        aria-label={strings.remove}
-        {...(onRemove === undefined ? {} : { onPress: onRemove })}
-      >
-        <Icon name="x" size="sm" />
-      </AriaButton>
+      {onRemove !== undefined && (
+        <AriaButton className={styles.segment} data-part="remove" aria-label={removeLabel} onPress={onRemove}>
+          <Icon name="x" size="sm" />
+        </AriaButton>
+      )}
     </span>
   );
 }

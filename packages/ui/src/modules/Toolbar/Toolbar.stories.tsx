@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, waitFor, within } from 'storybook/test';
 import { AvatarStack } from '../../atoms/Avatar/Avatar.tsx';
 import { Button, SplitButton } from '../../atoms/Button/Button.tsx';
 import { Tag } from '../../atoms/Tag/Tag.tsx';
@@ -99,7 +99,7 @@ export const Default: Story = {
     await expect(canvas.getByRole('heading', { level: 1, name: 'Companies' })).toBeInTheDocument();
     await expect(canvas.getByRole('toolbar', { name: 'View options' })).toBeInTheDocument();
     await expect(
-      canvas.getByRole('button', { name: 'Sorted by Funding raised, descending, and 1 more' }),
+      canvas.getByRole('group', { name: 'Sort: Funding raised, descending, and 1 more' }),
     ).toBeInTheDocument();
   },
 };
@@ -121,7 +121,7 @@ export const SwitchView: Story = {
 export const Keyboard: Story = {
   parameters: { crm: { screenshot: false } },
   play: async ({ canvas, userEvent }) => {
-    const sort = canvas.getByRole('button', { name: /Sorted by/ });
+    const sort = canvas.getByRole('button', { name: 'Funding raised' });
     sort.focus();
     await userEvent.keyboard('{ArrowRight}');
     await expect(sort).not.toHaveFocus();
@@ -216,5 +216,58 @@ export const MatchStatus: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('status')).toHaveTextContent('124 people match');
+  },
+};
+
+/** Shared views, then a Private section, with a locked view marked by its lock (spec 0020, milestone 2). */
+export const GroupedAndLocked: Story = {
+  render: () => (
+    <ViewBar
+      views={[
+        { id: 'all', name: 'All companies' },
+        { id: 'pipeline', name: 'Pipeline', isLocked: true },
+        { id: 'mine', name: 'My accounts', section: 'Private' },
+        { id: 'later', name: 'Follow up', section: 'Private' },
+      ]}
+      currentViewId="pipeline"
+      onViewChange={fn()}
+      onCreateView={fn()}
+    />
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: 'Pipeline' }));
+    const menu = await waitFor(() => {
+      const found = document.querySelector('[role="menu"]');
+      if (found === null) throw new Error('No menu yet.');
+      return found as HTMLElement;
+    });
+    await expect(within(menu).getByRole('group', { name: 'Private' })).toBeInTheDocument();
+    await expect(within(menu).getByRole('menuitemradio', { name: /Pipeline/ })).toHaveTextContent('Locked');
+    await expect(within(menu).getByRole('menuitemradio', { name: 'Create view' })).toBeInTheDocument();
+  },
+};
+
+/** The sort chip in the filter chips' shape: one sort, more, a long name, and read only. */
+export const SortChips: Story = {
+  render: () => (
+    <Toolbar label="View options">
+      <SortChip attribute="Created at" direction="descending" onPress={fn()} onRemove={fn()} />
+      <SortChip attribute="Name" direction="ascending" more={2} onPress={fn()} onRemove={fn()} />
+      <SortChip
+        attribute="Last email interaction with the account owner"
+        direction="ascending"
+        onPress={fn()}
+        onRemove={fn()}
+      />
+      <SortChip attribute="Updated by" direction="descending" />
+    </Toolbar>
+  ),
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.getByRole('group', { name: 'Sort: Name, ascending, and 2 more' })).toBeInTheDocument();
+    await expect(canvas.getAllByRole('button', { name: 'Remove sorts' })).toHaveLength(1);
+    await expect(canvas.getAllByRole('button', { name: 'Remove sort' })).toHaveLength(2);
+    const readOnly = canvas.getByRole('group', { name: 'Sort: Updated by, descending' });
+    await expect(within(readOnly).queryByRole('button', { name: /Remove/ })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: '+2' }));
   },
 };

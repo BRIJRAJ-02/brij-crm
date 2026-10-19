@@ -1,7 +1,7 @@
 // Brief
 // Purpose: any live object's records (People, Companies, a custom Projects) as a fast table, under its name and tile.
 // Main task: read and edit records in place (a paste or clear is one change, undone with ⌘Z), add a record and a column, live.
-// Leaves out: which filter and sorts run and saving them (the view screen, spec 0020, hands them in), and presence.
+// Leaves out: which filter, sorts and columns run and saving them (the view screen, spec 0020, hands them in), and presence.
 import {
   isEditableHere,
   queryKey,
@@ -21,7 +21,18 @@ import {
   type WindowCount,
 } from '@crm/data';
 import { useLiveStatus, usePendingOptions, useView } from '@crm/data/react';
-import { Badge, Button, Callout, EmptyState, isSystemOnly, Spinner, TopBar, useDelayedLoading, ViewBar } from '@crm/ui';
+import {
+  Badge,
+  Button,
+  Callout,
+  EmptyState,
+  isSystemOnly,
+  Spinner,
+  TopBar,
+  useDelayedLoading,
+  ViewBar,
+  type ViewChoice,
+} from '@crm/ui';
 import { columnWidthFor, DataGrid, type GridColumn } from '@crm/ui/grid';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
@@ -29,7 +40,8 @@ import { ArchiveAttributeDialog } from '../settings/ArchiveAttributeDialog.tsx';
 import { AttributeDialog } from '../settings/AttributeDialog.tsx';
 import { strings as attributeStrings } from '../settings/attribute-strings.ts';
 import { useBulkDelete, useTableSelection } from './BulkDeleteBar.tsx';
-import { avatarAttribute, listedAttributes } from './columns.ts';
+import type { ShownColumn, ShownLayout } from '../views/layout.ts';
+import { avatarAttribute } from './columns.ts';
 import { NewRecordDialog } from './NewRecordDialog.tsx';
 import { strings } from './strings.ts';
 import { editToast, isClear } from './undo.ts';
@@ -52,10 +64,20 @@ export interface RecordsScreenProps {
   readonly onSort: (rule: SortRule) => void;
   /** A column menu's Filter: the view opens its filter builder on that column. */
   readonly onFilter?: (columnId: string) => void;
-  /** The view switcher: the object's views, the one shown, and opening another. */
-  readonly views: readonly { readonly id: string; readonly name: string }[];
+  /** The view switcher: the object's views (grouped, locked ones marked), the one shown, and opening another. */
+  readonly views: readonly ViewChoice[];
   readonly currentViewId: string;
   readonly onViewChange?: (viewId: string) => void;
+  /** The switcher's Create view. */
+  readonly onCreateView?: () => void;
+  /** The view's own actions in the view bar (View settings, the view menu, the lock line), before Add attribute. */
+  readonly viewActions?: ReactNode;
+  /** The view's columns (spec 0020): their order, widths, which are hidden, and how many are pinned. */
+  readonly layout: ShownLayout;
+  /** A column moved, resized, pinned, hidden or shown in the grid. */
+  readonly onLayoutChange: (next: ShownLayout) => void;
+  /** An attribute made here (Add attribute, the grid's "+"): the view shows it (AC-471). */
+  readonly onAttributeCreated?: (attributeId: string) => void;
   /**
    * The view's Toolbar (its sorts, filters and Save), and any notice under it, given what to say to screen
    * readers: `announce`'s words for the count, once the rows for a new question are in (never for the first,
@@ -88,33 +110,25 @@ function displayOf(ref: RecordRef, state: NameState): RecordRefDisplay {
 const isCellKnown = (row: RecordView, columnId: string) => Object.hasOwn(row.values, columnId);
 
 /**
- * The grid's columns: the ones the person laid out (order and widths), with
- * any new attribute at its type's width before Created at, where it sits
- * when nothing was moved. A standard object opens with its opening columns
- * shown and the rest hidden (`listedAttributes`).
+ * The grid's columns for a view's layout (spec 0020): each attribute in the
+ * view's order, at its kept width or its type's, hidden as the view says.
+ * An attribute the layout names that isn't live any more is left out.
  */
-function columnsFor(
-  object: ObjectSummary,
-  attributes: readonly AttributeDefinition[],
-  laidOut: readonly GridColumn[],
-): readonly GridColumn[] {
-  const listed = listedAttributes(object, attributes);
-  const shown = listed.map((each) => each.definition);
-  const fresh = listed.map(({ definition, isHidden }) => {
+function columnsFor(attributes: readonly AttributeDefinition[], layout: readonly ShownColumn[]): readonly GridColumn[] {
+  const byId = new Map(attributes.filter((each) => !each.isArchived).map((each) => [each.id, each]));
+  return layout.flatMap((column) => {
+    const definition = byId.get(column.id);
+    if (definition === undefined) return [];
     const attribute = toFieldAttribute(definition, strings.referenceReadOnly);
-    return { id: definition.id, attribute, width: columnWidthFor(attribute), ...(isHidden ? { isHidden } : {}) };
+    return [
+      {
+        id: definition.id,
+        attribute,
+        width: column.width ?? columnWidthFor(attribute),
+        ...(column.isHidden ? { isHidden: true } : {}),
+      },
+    ];
   });
-  if (laidOut.length === 0) return fresh;
-  const byId = new Map(fresh.map((column) => [column.id, column]));
-  const kept = laidOut.flatMap((column) => {
-    const current = byId.get(column.id);
-    return current === undefined ? [] : [{ ...column, attribute: current.attribute }];
-  });
-  const placed = new Set(kept.map((column) => column.id));
-  const added = fresh.filter((column) => !placed.has(column.id));
-  const createdAt = shown.find((definition) => definition.isSystem)?.id;
-  const at = kept.findIndex((column) => column.id === createdAt);
-  return at === -1 ? [...kept, ...added] : [...kept.slice(0, at), ...added, ...kept.slice(at)];
 }
 
 /**
@@ -158,6 +172,11 @@ export function RecordsScreen({
   views,
   currentViewId,
   onViewChange,
+  onCreateView,
+  viewActions,
+  layout,
+  onLayoutChange,
+  onAttributeCreated,
   toolbar,
   announce,
   filteredEmpty,
@@ -177,11 +196,7 @@ export function RecordsScreen({
   }
   // Asks for the wanted records again after their first rows failed to load (the toast's Retry).
   const [attempt, setAttempt] = useState(0);
-  const [layout, setLayout] = useState<{ readonly columns: readonly GridColumn[]; readonly pinnedCount: number }>({
-    columns: [],
-    pinnedCount: 1,
-  });
-  const columns = useMemo(() => columnsFor(object, attributes, layout.columns), [object, attributes, layout.columns]);
+  const columns = useMemo(() => columnsFor(attributes, layout.columns), [attributes, layout.columns]);
   // Options a cell just made (spec 0012, AC-238) show by their label until the attribute lists them.
   const pendingOptions = usePendingOptions(data.options.pending);
   const gridColumns = useMemo(
@@ -357,7 +372,12 @@ export function RecordsScreen({
           </TopBar>
         ),
         viewBar: (
-          <ViewBar views={views} currentViewId={currentViewId} onViewChange={onViewChange ?? (() => undefined)}>
+          <ViewBar
+            views={views}
+            currentViewId={currentViewId}
+            onViewChange={onViewChange ?? (() => undefined)}
+            {...(onCreateView === undefined ? {} : { onCreateView })}
+          >
             {isReordering && <Spinner label={strings.updating} />}
             {/* In the bar, so the table never moves when the connection drops and comes back. */}
             {live === 'paused' && (
@@ -365,6 +385,7 @@ export function RecordsScreen({
                 {strings.livePaused}
               </Callout>
             )}
+            {viewActions}
             {canChangeSchema && (
               <Button variant="ghost" icon="plus" onPress={() => setAdding(true)}>
                 {strings.addAttribute}
@@ -429,7 +450,14 @@ export function RecordsScreen({
                     },
                   })}
               onColumnsChange={(next, pinnedCount) => {
-                setLayout({ columns: next, pinnedCount });
+                onLayoutChange({
+                  columns: next.map((column) => ({
+                    id: column.id,
+                    isHidden: column.isHidden === true,
+                    width: column.width,
+                  })),
+                  pinnedCount,
+                });
               }}
               onCellChange={(change) => {
                 data.records.setValue(slug, change);
@@ -560,8 +588,11 @@ export function RecordsScreen({
                   tone: 'success',
                   message: isNew ? strings.attributeAdded(attribute.title) : attributeStrings.saved(attribute.title),
                 });
-                // The new column's header takes focus once the reloaded columns draw it.
-                if (isNew) setFocusColumn({ id: attribute.id });
+                // The new column joins the view, and its header takes focus once the reloaded columns draw it.
+                if (isNew) {
+                  onAttributeCreated?.(attribute.id);
+                  setFocusColumn({ id: attribute.id });
+                }
               }}
             />
             <ArchiveAttributeDialog

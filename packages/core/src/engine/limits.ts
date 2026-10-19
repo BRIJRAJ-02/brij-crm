@@ -24,6 +24,10 @@ export const LIMITS = {
   jobItems: 1_000_000,
   /** Rules on one attribute, its own only: rules elsewhere whose condition names it don't count (spec 0013, AC-252). */
   rulesPerAttribute: 20,
+  /** Shared views on one object (spec 0020, AC-472; owner decision 4). */
+  sharedViewsPerObject: 100,
+  /** One member's private views on one object (spec 0020, AC-472). */
+  privateViewsPerObject: 50,
 } as const;
 
 /** One set of limits. */

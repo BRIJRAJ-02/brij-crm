@@ -385,25 +385,27 @@ function ConditionRow({ builder, item, path, index }: ConditionRowProps) {
         }}
       />
       {resolved !== undefined && (
-        <MenuTrigger>
-          <Button variant="secondary" iconRight="chevron-down">
-            {operatorLabel}
-          </Button>
-          <Menu
-            label={strings.operators}
-            selectionMode="single"
-            selectedKeys={[leaf.operator]}
-            onAction={(key: MenuKey) => {
-              replace(conditionOn(resolved.attribute, String(key) as FilterOperator));
-            }}
-          >
-            {operatorsFor(resolved.attribute).map((each) => (
-              <MenuItem key={each.operator} id={each.operator}>
-                {fieldStrings.operators[each.operator]}
-              </MenuItem>
-            ))}
-          </Menu>
-        </MenuTrigger>
+        <span className={styles.operatorPick}>
+          <MenuTrigger>
+            <Button variant="secondary" iconRight="chevron-down" isFullWidth>
+              {operatorLabel}
+            </Button>
+            <Menu
+              label={strings.operators}
+              selectionMode="single"
+              selectedKeys={[leaf.operator]}
+              onAction={(key: MenuKey) => {
+                replace(conditionOn(resolved.attribute, String(key) as FilterOperator));
+              }}
+            >
+              {operatorsFor(resolved.attribute).map((each) => (
+                <MenuItem key={each.operator} id={each.operator}>
+                  {fieldStrings.operators[each.operator]}
+                </MenuItem>
+              ))}
+            </Menu>
+          </MenuTrigger>
+        </span>
       )}
       {resolved !== undefined && (
         <OperandEditor builder={builder} attribute={resolved.attribute} leaf={leaf} onChange={replace} />
@@ -713,11 +715,11 @@ function AttributeTrigger({ builder, current, label, onPick }: AttributeTriggerP
         {label ?? strings.addFilter}
       </Button>
     ) : (
-      <Button variant="secondary" icon={current.icon} iconRight="chevron-down">
+      <Button variant="secondary" icon={current.icon} iconRight="chevron-down" isFullWidth tooltipWhenCut>
         {current.names.join(strings.pathJoin)}
       </Button>
     );
-  return (
+  const menuTrigger = (
     <MenuTrigger>
       {trigger}
       <Menu label={strings.attributes} search={{ label: strings.searchAttributes }} onAction={pick}>
@@ -751,6 +753,8 @@ function AttributeTrigger({ builder, current, label, onPick }: AttributeTriggerP
       </Menu>
     </MenuTrigger>
   );
+  // A condition's attribute sits at a fixed width, as SortBuilder's does, so the rows line up; Add filter keeps its own.
+  return current === undefined ? menuTrigger : <span className={styles.pick}>{menuTrigger}</span>;
 }
 
 /** Props for ConditionChip. */

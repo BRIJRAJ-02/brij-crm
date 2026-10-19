@@ -1,6 +1,10 @@
-/* SortBuilder: a list of size-input tall rows, space-4 apart: the drag
-   handle, "Sort by" or "then by", the attribute, the direction and Remove.
-   A row being dragged fades; the drop line is the accent. */
+/* SortBuilder: a list of size-input tall rows, space-4 apart, laid out as
+   FilterBuilder's rows are: the drag handle, the lead ("Sort by" or "then
+   by") in FilterBuilder's lead width, then the attribute and the direction
+   at fixed widths (shrinking together in a narrow slot), so the rows line up
+   as columns, then Remove. A row drags by its handle or anywhere on it: the
+   grab cursor says so. A row being dragged fades; the drop line is the
+   accent. */
 @layer components {
   .root {
     display: flex;
@@ -17,21 +21,37 @@
   }
 
   .row {
-    display: flex;
+    display: grid;
+    grid-template-columns:
+      auto calc(4 * var(--size-chip)) minmax(0, calc(10 * var(--size-chip)))
+      minmax(0, calc(7 * var(--size-chip))) auto;
     gap: var(--space-8);
     align-items: center;
+    justify-content: start;
     min-block-size: var(--size-input);
     padding-inline: var(--space-4);
     border-radius: var(--radius-sm);
     outline: none;
   }
 
-  .row[data-focus-visible] {
-    box-shadow: var(--shadow-focus-inset);
+  /* Read only: no handle, so the lead, attribute and direction keep their columns' widths from the start. */
+  .readOnly {
+    grid-template-columns:
+      calc(4 * var(--size-chip)) minmax(0, calc(10 * var(--size-chip)))
+      minmax(0, calc(7 * var(--size-chip)));
+  }
+
+  .row[data-allows-dragging] {
+    cursor: grab;
   }
 
   .row[data-dragging] {
+    cursor: grabbing;
     opacity: var(--opacity-busy);
+  }
+
+  .row[data-focus-visible] {
+    box-shadow: var(--shadow-focus-inset);
   }
 
   .row[data-drop-target] {
@@ -43,14 +63,29 @@
   }
 
   .lead {
-    inline-size: calc(3 * var(--size-chip));
     color: var(--text-secondary);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
   }
 
-  .text {
+  /* A picker's cell: the Button inside fills it and cuts a long name. */
+  .pick {
+    display: flex;
+    min-inline-size: 0;
+  }
+
+  .attribute {
+    display: inline-flex;
+    gap: var(--space-4);
+    align-items: center;
+    min-inline-size: 0;
     color: var(--text);
+    font: var(--text-body-strong);
+    letter-spacing: var(--tracking-body-strong);
+  }
+
+  .direction {
+    color: var(--text-secondary);
     font: var(--text-body);
     letter-spacing: var(--tracking-body);
   }

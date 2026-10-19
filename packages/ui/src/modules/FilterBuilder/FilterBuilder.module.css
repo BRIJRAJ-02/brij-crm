@@ -1,6 +1,7 @@
 /* FilterBuilder: rows space-8 apart, each a lead column (Where, the and or or
    switch, or the conjunction as text) and its controls wrapping at
-   space-8. A nested group sits in a surface-subtle box with a hairline. In a
+   space-8: the attribute at a fixed width and the operator at least the
+   direction's, as SortBuilder's rows are. A nested group sits in a surface-subtle box with a hairline. In a
    slot narrower than bp-container-md, each row's lead sits above its
    controls. */
 @layer components {
@@ -61,6 +62,19 @@
   .operand {
     display: inline-flex;
     min-inline-size: 0;
+  }
+
+  /* A condition's attribute at SortBuilder's attribute width, so the rows line up; a long name is cut. */
+  .pick {
+    display: flex;
+    inline-size: calc(10 * var(--size-chip));
+    max-inline-size: 100%;
+  }
+
+  /* The operator at least the direction's width; its words are never cut. */
+  .operatorPick {
+    display: flex;
+    min-inline-size: calc(7 * var(--size-chip));
   }
 
   .attribute {

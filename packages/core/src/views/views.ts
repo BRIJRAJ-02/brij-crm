@@ -1,6 +1,7 @@
-// Saved views (spec 0020, milestone 1): an object's views as the switcher
-// lists them, one view whole, and saving a draft as a view's filter and sorts
-// for everyone who sees it. Every read goes through the scope the door made;
+// Saved views (spec 0020): an object's views as the switcher lists them (with
+// the one the member last opened), one view whole, and saving a draft as a
+// view's filter and sorts for everyone who sees it; `manage.ts` holds the
+// other writes and shares the reads here. Every read goes through the scope the door made;
 // the save runs inside `runWrite` and records the view in `Change.views`, so
 // `outboxHook` stores its `views` row in the same transaction.
 import { and, asc, eq, isNotNull, or, sql } from 'drizzle-orm';
@@ -22,9 +23,10 @@ import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { can, fieldLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { checkObject } from '../access/visibility.ts';
+import { viewRule, type ViewRuleCaller } from '@crm/contracts/views';
 import { defaultViewConfig } from './seed.ts';
 
-const { members, objects, views } = schema;
+const { memberViewState, members, objects, views } = schema;
 
 /** What every call naming a view the caller can't see answers, whichever reason it was (AC-463). */
 export const VIEW_NOT_FOUND = "This view doesn't exist or isn't shared with you.";
@@ -33,7 +35,7 @@ export const VIEW_NOT_FOUND = "This view doesn't exist or isn't shared with you.
 export const VIEW_LOCKED = 'This view is locked. Ask an owner or admin to unlock it.';
 
 /** The columns every view read selects. */
-const VIEW_COLUMNS = {
+export const VIEW_COLUMNS = {
   id: views.id,
   objectId: views.objectId,
   name: views.name,
@@ -52,7 +54,7 @@ const VIEW_COLUMNS = {
 } as const;
 
 /** One view row as the reads select it, with its object's default view. */
-interface ViewRow {
+export interface ViewRow {
   readonly id: string;
   readonly objectId: string | null;
   readonly name: string;
@@ -71,7 +73,7 @@ interface ViewRow {
 }
 
 /** The caller's member id, when a member calls (an API key sees shared views only). */
-const memberOf = (scope: EngineScope): string | undefined =>
+export const memberOf = (scope: EngineScope): string | undefined =>
   scope.actor.type === 'member' && scope.actor.id !== null ? scope.actor.id : undefined;
 
 /** Whether the caller sees a view by who made it: shared, or their own private one (spec 0020, the rules table). */
@@ -85,13 +87,27 @@ export function seesView(caller: string | undefined, view: Pick<ViewRow, 'visibi
  * a shared view anyone, unless it is locked, which needs `views.manage`.
  * Answers the refusal's message, or undefined when allowed.
  */
-export function editRefusal(access: Access, view: Pick<ViewRow, 'visibility' | 'isLocked'>): string | undefined {
-  if (view.visibility === 'workspace' && view.isLocked && !can(access, 'views.manage')) return VIEW_LOCKED;
-  return undefined;
+export function editRefusal(
+  scope: EngineScope,
+  view: Pick<ViewRow, 'visibility' | 'isLocked' | 'creatorMemberId'>,
+): string | undefined {
+  const reason = viewRule('edit', callerOf(scope), {
+    visibility: view.visibility,
+    creatorMemberId: view.creatorMemberId ?? undefined,
+    isLocked: view.isLocked,
+    isDefault: false,
+  });
+  if (reason === 'locked') return VIEW_LOCKED;
+  return reason === undefined ? undefined : VIEW_NOT_FOUND;
+}
+
+/** The caller as the view rules see them: their member id, and whether they hold `views.manage`. */
+export function callerOf(scope: EngineScope): ViewRuleCaller {
+  return { memberId: memberOf(scope), canManage: can(scope.access, 'views.manage') };
 }
 
 /** A stored config as it parses, or the default config when it doesn't (a bug, a downgrade): never an error. */
-function configOf(stored: unknown): ViewConfig {
+export function configOf(stored: unknown): ViewConfig {
   const parsed = ViewConfig.safeParse(stored);
   return parsed.success ? parsed.data : defaultViewConfig(undefined);
 }
@@ -107,7 +123,7 @@ function visibleConfig(access: Access, objectId: string, config: ViewConfig): Vi
   return { ...config, columns, board: { ...config.board, cardFields: config.board.cardFields.filter(shown) } };
 }
 
-function summaryOf(row: ViewRow & { readonly objectId: string }): ViewSummary {
+export function summaryOf(row: ViewRow & { readonly objectId: string }): ViewSummary {
   return {
     id: row.id,
     objectId: row.objectId,
@@ -123,7 +139,7 @@ function summaryOf(row: ViewRow & { readonly objectId: string }): ViewSummary {
   };
 }
 
-function viewOf(access: Access, row: ViewRow & { readonly objectId: string }): View {
+export function viewOf(access: Access, row: ViewRow & { readonly objectId: string }): View {
   return {
     ...summaryOf(row),
     config: visibleConfig(access, row.objectId, configOf(row.config)),
@@ -133,7 +149,7 @@ function viewOf(access: Access, row: ViewRow & { readonly objectId: string }): V
   };
 }
 
-const onObject = (row: ViewRow): row is ViewRow & { readonly objectId: string } => row.objectId !== null;
+export const onObject = (row: ViewRow): row is ViewRow & { readonly objectId: string } => row.objectId !== null;
 
 /**
  * One view the caller may see, read inside `tx` (`for update` when a write
@@ -141,7 +157,7 @@ const onObject = (row: ViewRow): row is ViewRow & { readonly objectId: string } 
  * another member's private view, on an object they can't see, or on a list
  * (#51).
  */
-async function readView(
+export async function readView(
   tx: WorkspaceTx,
   scope: EngineScope,
   viewId: string,
@@ -152,7 +168,8 @@ async function readView(
     .from(views)
     .leftJoin(objects, and(eq(objects.workspaceId, views.workspaceId), eq(objects.id, views.objectId)))
     .where(and(eq(views.workspaceId, scope.workspaceId), eq(views.id, viewId)));
-  const [row] = lock ? await query.for('update', { of: views }) : await query;
+  // No key update: it serialises view writers, and never blocks a member_view_state row's key check on it.
+  const [row] = lock ? await query.for('no key update', { of: views }) : await query;
   if (row === undefined || !onObject(row) || !seesView(memberOf(scope), row)) {
     throw refuse('NOT_FOUND', VIEW_NOT_FOUND);
   }
@@ -170,8 +187,10 @@ export async function listViews(scope: EngineScope, objectId: string): Promise<V
   const caller = memberOf(scope);
   return inWorkspace(scope, async (tx) => {
     await checkObject(tx, scope.access, objectId, 'read');
+    // The summaries only: no config (up to 64 kB a view), which the switcher never shows.
+    const { config: _config, ...summaryColumns } = VIEW_COLUMNS;
     const rows = await tx
-      .select(VIEW_COLUMNS)
+      .select({ ...summaryColumns, config: sql<unknown>`null` })
       .from(views)
       .innerJoin(objects, and(eq(objects.workspaceId, views.workspaceId), eq(objects.id, views.objectId)))
       .where(
@@ -194,9 +213,25 @@ export async function listViews(scope: EngineScope, objectId: string): Promise<V
       );
     const listed = rows.filter(onObject);
     const defaultViewId = listed.find((row) => row.defaultViewId === row.id)?.id;
+    // The member's last opened view of this object (AC-478), only while it is still theirs to see.
+    const [state] =
+      caller === undefined
+        ? []
+        : await tx
+            .select({ viewId: memberViewState.viewId })
+            .from(memberViewState)
+            .where(
+              and(
+                eq(memberViewState.workspaceId, scope.workspaceId),
+                eq(memberViewState.memberId, caller),
+                eq(memberViewState.parentId, objectId),
+              ),
+            );
+    const lastOpenedViewId = listed.some((row) => row.id === state?.viewId) ? state?.viewId : undefined;
     return {
       views: listed.map(summaryOf),
       ...(defaultViewId === undefined ? {} : { defaultViewId }),
+      ...(lastOpenedViewId === undefined ? {} : { lastOpenedViewId }),
     };
   });
 }
@@ -244,8 +279,8 @@ export async function saveViewQuery(
     async (context) => {
       const { tx } = context;
       const row = await readView(tx, scope, input.viewId, true);
-      const refusal = editRefusal(scope.access, row);
-      if (refusal !== undefined) throw refuse('FORBIDDEN', refusal);
+      const refusal = editRefusal(scope, row);
+      if (refusal !== undefined) throw refuse(refusal === VIEW_LOCKED ? 'FORBIDDEN' : 'NOT_FOUND', refusal);
       if (input.force !== true && input.baseQueryVersion !== row.queryVersion) {
         const name = await saverName(tx, row.querySavedByMemberId);
         throw refuse('VIEW_CHANGED', `${name} changed this view’s filters since you started.`);

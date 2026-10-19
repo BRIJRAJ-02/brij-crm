@@ -1,7 +1,7 @@
 // Brief
 // Purpose: never save over someone else's filters silently (spec 0020, AC-469).
-// Main task: choose Replace (mine over theirs) or Cancel (keep my draft, unsaved).
-// Leaves out: Save as new view, which arrives with milestone 2's create dialog.
+// Main task: choose Replace (mine over theirs), Save as new view (keep both), or Cancel (keep my draft, unsaved).
+// Leaves out: merging the two filters.
 import { Button, Modal } from '@crm/ui';
 import { strings } from './strings.ts';
 
@@ -11,11 +11,13 @@ export interface ViewChangedDialogProps {
   readonly sentence: string | undefined;
   readonly isReplacing: boolean;
   readonly onReplace: () => void;
+  /** Opens the create dialog with the draft, as a new view; absent when the person may not make one. */
+  readonly onSaveAsNew?: () => void;
   readonly onCancel: () => void;
 }
 
-/** "This view changed": Cancel first (focus starts there, Esc), then Replace. */
-export function ViewChangedDialog({ sentence, isReplacing, onReplace, onCancel }: ViewChangedDialogProps) {
+/** "This view changed": Cancel first (focus starts there, Esc), then Save as new view, then Replace. */
+export function ViewChangedDialog({ sentence, isReplacing, onReplace, onSaveAsNew, onCancel }: ViewChangedDialogProps) {
   return (
     <Modal
       title={strings.changedTitle}
@@ -30,6 +32,11 @@ export function ViewChangedDialog({ sentence, isReplacing, onReplace, onCancel }
           <Button slot="close" isDisabled={isReplacing} kbd="ESC" autoFocus>
             {strings.keepMine}
           </Button>
+          {onSaveAsNew !== undefined && (
+            <Button isDisabled={isReplacing} onPress={onSaveAsNew}>
+              {strings.saveAsNew}
+            </Button>
+          )}
           <Button variant="primary" isPending={isReplacing} onPress={onReplace}>
             {strings.replace}
           </Button>

@@ -3,7 +3,7 @@
 // Toolbar with the sorts and filters that shape the view, and Save when the
 // view has unsaved changes.
 import type { ReactNode, Ref } from 'react';
-import { Button as AriaButton, Toolbar as AriaToolbar } from 'react-aria-components';
+import { Toolbar as AriaToolbar } from 'react-aria-components';
 import { Button } from '../../atoms/Button/Button.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
@@ -11,7 +11,8 @@ import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { Hue } from '../../hue.ts';
 import { Breadcrumbs, type Crumb } from '../../molecules/Breadcrumbs/Breadcrumbs.tsx';
-import { Menu, MenuItem, MenuSeparator, MenuTrigger, type MenuKey } from '../../molecules/Menu/Menu.tsx';
+import { FilterChip } from '../../molecules/FilterChip/FilterChip.tsx';
+import { Menu, MenuItem, MenuSection, MenuSeparator, MenuTrigger, type MenuKey } from '../../molecules/Menu/Menu.tsx';
 import { useDelayedLoading } from '../../provider/useDelayedLoading.ts';
 import styles from './Toolbar.module.css';
 import { strings } from './strings.ts';
@@ -84,6 +85,23 @@ export interface ViewChoice {
   readonly id: string;
   readonly name: string;
   readonly icon?: IconName;
+  /**
+   * The group it is listed under ("Private"), in the order the groups first
+   * appear; choices with none come first, under no heading.
+   */
+  readonly section?: string;
+  /** A locked view (spec 0020): the lock icon in place of its own, and "Locked" at the end of its menu item. */
+  readonly isLocked?: boolean;
+}
+
+/** A choice's icon: the lock on a locked view. */
+const choiceIcon = (view: ViewChoice): IconName => (view.isLocked === true ? 'lock' : (view.icon ?? 'layout-grid'));
+
+/** The choices as the menu lists them: the ones with no section, then each section in order of first appearance. */
+function sectionsOf(views: readonly ViewChoice[]) {
+  const loose = views.filter((view) => view.section === undefined);
+  const named = [...new Set(views.flatMap((view) => (view.section === undefined ? [] : [view.section])))];
+  return { loose, named: named.map((label) => ({ label, views: views.filter((view) => view.section === label) })) };
 }
 
 /** Props for ViewBar. */
@@ -114,6 +132,17 @@ export function ViewBar({
     if (key === CREATE) onCreateView?.();
     else onViewChange(String(key));
   };
+  const { loose, named } = sectionsOf(views);
+  const item = (view: ViewChoice) => (
+    <MenuItem
+      key={view.id}
+      id={view.id}
+      icon={choiceIcon(view)}
+      {...(view.isLocked === true ? { meta: strings.locked } : {})}
+    >
+      {view.name}
+    </MenuItem>
+  );
   return (
     <div className={styles.view}>
       {isLoading || current === undefined ? (
@@ -123,14 +152,15 @@ export function ViewBar({
         </span>
       ) : (
         <MenuTrigger>
-          <Button variant="ghost" icon={current.icon ?? 'layout-grid'} iconRight="chevron-down">
+          <Button variant="ghost" icon={choiceIcon(current)} iconRight="chevron-down">
             {current.name}
           </Button>
           <Menu label={strings.views} selectionMode="single" selectedKeys={[current.id]} onAction={onAction}>
-            {views.map((view) => (
-              <MenuItem key={view.id} id={view.id} icon={view.icon ?? 'layout-grid'}>
-                {view.name}
-              </MenuItem>
+            {loose.map(item)}
+            {named.map((section) => (
+              <MenuSection key={section.label} label={section.label}>
+                {section.views.map(item)}
+              </MenuSection>
             ))}
             {onCreateView !== undefined && <MenuSeparator />}
             {onCreateView !== undefined && (
@@ -184,25 +214,35 @@ export interface SortChipProps {
   readonly direction: 'ascending' | 'descending';
   /** How many further sorts follow it: "+1". */
   readonly more?: number;
-  /** Opens the sort builder. */
+  /** Opens the sort builder: every part of the chip does. */
   readonly onPress?: () => void;
-  /** The button, for a popover the screen opens from it (spec 0020: the sort builder). */
-  readonly ref?: Ref<HTMLButtonElement>;
+  /** Takes every sort away. Without it the chip has no remove part (a view you can't edit). */
+  readonly onRemove?: () => void;
+  /** The chip, for a popover the screen opens from it (spec 0020: the sort builder). */
+  readonly ref?: Ref<HTMLSpanElement>;
 }
 
-/** The toolbar's statement of the sort: "Sorted by Funding raised", with its direction's arrow. A button that opens the sort builder. */
-export function SortChip({ attribute, direction, more = 0, onPress, ref }: SortChipProps) {
+/**
+ * The toolbar's statement of the sort, in the filter chips' shape (spec 0020,
+ * the owner's "filter and sort can be similar"): the direction's arrow and the
+ * attribute, the direction in words, "+N" for the further sorts, and remove.
+ * Every part opens the sort builder.
+ */
+export function SortChip({ attribute, direction, more = 0, onPress, onRemove, ref }: SortChipProps) {
+  const press =
+    onPress === undefined ? {} : { onPressAttribute: onPress, onPressOperator: onPress, onPressValue: onPress };
   return (
-    <AriaButton
-      ref={ref}
-      className={styles.sort}
-      aria-label={strings.sortName(attribute, direction, more)}
-      {...(onPress === undefined ? {} : { onPress })}
-    >
-      <Icon name={direction === 'ascending' ? 'arrow-up-narrow-wide' : 'arrow-down-wide-narrow'} size="sm" />
-      <span className={styles.sortKey}>{strings.sortedBy}</span>
-      <span className={styles.sortName}>{attribute}</span>
-      {more > 0 && <span className={styles.sortKey}>{strings.more(more)}</span>}
-    </AriaButton>
+    <FilterChip
+      icon={direction === 'ascending' ? 'arrow-up-narrow-wide' : 'arrow-down-wide-narrow'}
+      attribute={[attribute]}
+      operator={strings.directions[direction]}
+      hasValue={more > 0}
+      {...(more > 0 ? { value: strings.more(more) } : {})}
+      label={strings.sortName(attribute, direction, more)}
+      removeLabel={strings.removeSorts(more + 1)}
+      {...press}
+      {...(onRemove === undefined ? {} : { onRemove })}
+      {...(ref === undefined ? {} : { ref })}
+    />
   );
 }

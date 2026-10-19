@@ -108,6 +108,18 @@ export {
   type SaveViewQueryInput,
 } from './views/views.ts';
 export {
+  createView,
+  deleteView,
+  markViewOpened,
+  moveView,
+  setDefaultView,
+  setViewLayout,
+  setViewLocked,
+  updateView,
+  type CreateViewInput,
+  type UpdateViewInput,
+} from './views/manage.ts';
+export {
   createTask,
   getTasks,
   listTasks,

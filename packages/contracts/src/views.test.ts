@@ -7,7 +7,9 @@ import {
   encodeDraft,
   decodeDraftText,
   isSortable,
+  mergeLayout,
   sameQuery,
+  viewRule,
   SORTABLE_TYPES,
   type ViewAttribute,
 } from './view-model.ts';
@@ -210,5 +212,75 @@ describe('ViewConfig', () => {
     expect(
       ViewConfig.safeParse({ ...seeded, columns: [{ attributeId: NAME.id }, { attributeId: NAME.id }] }).success,
     ).toBe(false);
+  });
+});
+
+describe('viewRule (spec 0020, the rules table)', () => {
+  const me = id(900);
+  const other = id(901);
+  const shared = { visibility: 'workspace' as const, creatorMemberId: other, isLocked: false, isDefault: false };
+  const member = { memberId: me, canManage: false };
+  const admin = { memberId: me, canManage: true };
+
+  it('lets any member edit an unlocked shared view, and only views.manage a locked one', () => {
+    expect(viewRule('edit', member, shared)).toBeUndefined();
+    expect(viewRule('edit', member, { ...shared, isLocked: true })).toBe('locked');
+    expect(viewRule('edit', admin, { ...shared, isLocked: true })).toBeUndefined();
+    expect(viewRule('edit', member, { ...shared, visibility: 'private' })).toBe('notCreator');
+  });
+
+  it('never deletes or moves the default, and never makes it private', () => {
+    const fallback = { ...shared, isDefault: true, creatorMemberId: undefined };
+    expect(viewRule('delete', admin, fallback)).toBe('default');
+    expect(viewRule('move', admin, fallback)).toBe('defaultFirst');
+    expect(viewRule('makePrivate', admin, fallback)).toBe('default');
+  });
+
+  it('makes a shared view private for its creator only, unlocked, never a seeded one, and says when the creator left', () => {
+    expect(viewRule('makePrivate', member, { ...shared, creatorMemberId: me })).toBeUndefined();
+    expect(viewRule('makePrivate', member, { ...shared, creatorMemberId: me, isLocked: true })).toBe('unlockFirst');
+    expect(viewRule('makePrivate', member, shared)).toBe('notCreator');
+    expect(viewRule('makePrivate', { ...member, isActiveMember: () => false }, shared)).toBe('creatorGone');
+    expect(viewRule('makePrivate', admin, { ...shared, creatorMemberId: undefined })).toBe('seeded');
+  });
+
+  it('locks and sets the default for views.manage on a shared view only', () => {
+    expect(viewRule('lock', member, shared)).toBe('manage');
+    expect(viewRule('lock', admin, { ...shared, visibility: 'private', creatorMemberId: me })).toBe('private');
+    expect(viewRule('setDefault', admin, shared)).toBeUndefined();
+    expect(viewRule('setDefault', admin, { ...shared, isDefault: true })).toBe('already');
+    expect(viewRule('share', member, { ...shared, visibility: 'private', creatorMemberId: me })).toBeUndefined();
+  });
+});
+
+describe('mergeLayout (spec 0020, a layout from someone who can’t see everything)', () => {
+  const [a, b, c, d] = [id(1), id(2), id(3), id(4)];
+  const visible = new Set([a, c, d]);
+
+  it('puts a column the writer can’t see back after its stored predecessor', () => {
+    const merged = mergeLayout(
+      [{ attributeId: a }, { attributeId: b, width: 99 }, { attributeId: c }],
+      { columns: [{ attributeId: c }, { attributeId: a }], pinnedCount: 1 },
+      visible,
+    );
+    expect(merged.columns.map((column) => column.attributeId)).toEqual([c, a, b]);
+    expect(merged.columns[2]).toEqual({ attributeId: b, width: 99 });
+    expect(merged.pinnedCount).toBe(1);
+  });
+
+  it('falls back to the nearest earlier kept column when the predecessor was removed, or the start', () => {
+    const merged = mergeLayout(
+      [{ attributeId: b }, { attributeId: a }, { attributeId: d }, { attributeId: id(5) }],
+      { columns: [{ attributeId: a }], pinnedCount: 1 },
+      visible,
+    );
+    // b sat first (before any column) and stays first, inside the pinned edge; 5 followed d, which went, so it follows a.
+    expect(merged.columns.map((column) => column.attributeId)).toEqual([b, a, id(5)]);
+    expect(merged.pinnedCount).toBe(2);
+  });
+
+  it('changes nothing when the writer sees every stored column', () => {
+    const incoming = { columns: [{ attributeId: c }], pinnedCount: 1 };
+    expect(mergeLayout([{ attributeId: a }, { attributeId: c }], incoming, visible)).toEqual(incoming);
   });
 });

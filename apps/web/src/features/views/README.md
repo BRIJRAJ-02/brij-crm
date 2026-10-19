@@ -6,7 +6,7 @@ One screen shows any view of any object (spec 0020): the TopBar, the ViewBar wit
 
 - **Purpose**: slice one object the way you work and keep it.
 - **Main task**: filter and sort the table, then save it.
-- **Leaves out**: grouping inside the table, view search, charts, sharing outside the workspace. Until milestone 2: creating and managing views, and saving columns.
+- **Leaves out**: grouping inside the table, view search, charts, sharing outside the workspace.
 
 ## Files
 
@@ -16,6 +16,10 @@ One screen shows any view of any object (spec 0020): the TopBar, the ViewBar wit
 | `ViewToolbar.tsx`       | The Toolbar: a SortChip (or the dashed Sort) opening SortBuilder, a ConditionChip per top level filter item and the dashed Filter opening FilterBuilder, each in a Popover; Discard changes and Save while there is a draft. An operand typed applies 300 ms after the last keystroke (`FILTER_EDIT_MS`); an attribute, operator, group or removal at once; the first change of a Popover adds a history entry, the rest replace it |
 | `useViewDraft.ts`       | The draft over the route's `draft` search param (base64url of its canonical JSON), or only in memory past 6,000 characters; equal to the saved query it is no draft; it keeps the view's query version from when it began                                                                                                                                                                                                           |
 | `ViewChangedDialog.tsx` | "This view changed" (AC-469): Cancel first, then Replace                                                                                                                                                                                                                                                                                                                                                                            |
+| `ViewMenu.tsx` | "More view actions" (AC-473 to AC-477): Rename (a Modal), Duplicate, Copy link, Move up and down, Share with everyone or Make private, Lock or Unlock and Set as default (owners and admins), Delete (a danger confirm). Each item the person can't take stays, disabled, with its reason as its second line, worded from `viewRule` (`@crm/data`), the rule the server refuses by |
+| `CreateViewDialog.tsx` | Create view and Save as new view (AC-472): Name, who can see it, and (Create view only) "Start from this view's columns and filters"; waits for the server, `NAME_TAKEN` on the name, `LIMIT_REACHED` in the banner, then opens the new view |
+| `NoViewsScreen.tsx` | An object with no view for this person (AC-462): the empty state with Create view |
+| `layout.ts` | Plain helpers the loader shares: the columns a view shows (the seeded default keeps the object's opening columns until its first column change, every other view runs `effectiveColumns`), what a column change saves, the config a new view starts from, and a duplicate's name |
 | `query.ts`              | Plain helpers the route's loader shares: the saved query, what runs, what Save writes, a reference's far object (spec 0014's relationship block, once attributes carry it), and which view an object's address opens                                                                                                                                                                                                                |
 | `strings.ts`            | The copy                                                                                                                                                                                                                                                                                                                                                                                                                            |
 

@@ -1,7 +1,8 @@
 import { isDataError } from '@crm/data';
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { ArchivedObjectScreen } from '../features/workspace/ArchivedObjectScreen.tsx';
-import { failedPage, missingPage, noViewsPage, objectPendingPage } from '../features/workspace/ObjectScreen.tsx';
+import { NoViewsScreen } from '../features/views/NoViewsScreen.tsx';
+import { failedPage, missingPage, objectPendingPage } from '../features/workspace/ObjectScreen.tsx';
 import { navObjects } from '../features/workspace/objects.ts';
 import { strings } from '../features/workspace/strings.ts';
 import { useWorkspaceName, WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
@@ -9,9 +10,9 @@ import { landingView } from '../features/views/query.ts';
 
 // Any live object's address (`people`, `projects`; spec 0012, AC-240) opens
 // one of its views (spec 0020, AC-462): the address is replaced with the
-// object's default view (milestone 2 adds the last one the person opened),
-// else the first in switcher order. An object with no view for this person
-// says so. An archived object's address says it is archived (AC-226). The
+// last view the person opened there, else its default view, else the first in
+// switcher order. An object with no view for this person says so, with
+// Create view. An archived object's address says it is archived (AC-226). The
 // views come through the data layer; the screens load with this route's
 // component, outside the first load.
 export const Route = createFileRoute('/w/$slug/objects/$object')({
@@ -22,10 +23,12 @@ export const Route = createFileRoute('/w/$slug/objects/$object')({
       throw error;
     });
     const object = object_(objects, params.object);
-    if (object === undefined) return { missing: true as const, archived: undefined, object: undefined };
+    if (object === undefined) {
+      return { missing: true as const, archived: undefined, object: undefined, attributes: [] };
+    }
     if (object.isArchived) {
       const [firstLive] = navObjects(objects);
-      return { missing: false as const, archived: { object, firstLive }, object: undefined };
+      return { missing: false as const, archived: { object, firstLive }, object: undefined, attributes: [] };
     }
     const views = context.data.views.list(params.slug, object.id);
     await views.ready();
@@ -39,7 +42,9 @@ export const Route = createFileRoute('/w/$slug/objects/$object')({
         replace: true,
       });
     }
-    return { missing: false as const, archived: undefined, object };
+    // No view for this person: Create view starts from the object's attributes.
+    const attributes = await context.data.attributes.list(params.slug, object.id);
+    return { missing: false as const, archived: undefined, object, attributes };
   },
   pendingComponent: () => <WorkspacePage page={objectPendingPage()} />,
   errorComponent: ObjectError,
@@ -52,13 +57,13 @@ function object_<T extends { readonly apiSlug: string }>(objects: readonly T[], 
 }
 
 function ObjectRoute() {
-  const { archived, object } = Route.useLoaderData();
+  const { archived, object, attributes } = Route.useLoaderData();
   const params = Route.useParams();
   if (archived !== undefined) return <ArchivedObjectScreen slug={params.slug} {...archived} />;
   if (object === undefined) {
     return <WorkspacePage page={missingPage(strings.pageMissingTitle, strings.pageMissingText)} />;
   }
-  return <WorkspacePage currentObject={object.apiSlug} page={noViewsPage(object)} />;
+  return <NoViewsScreen slug={params.slug} object={object} attributes={attributes} />;
 }
 
 function ObjectError({ error }: ErrorComponentProps) {

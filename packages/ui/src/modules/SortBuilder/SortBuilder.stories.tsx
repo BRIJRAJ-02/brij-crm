@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
 import type { FieldAttribute } from '../../fields/types.ts';
 import { attributeOf } from '../../workbench/attributes.ts';
+import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { SortBuilder } from './SortBuilder.tsx';
 
@@ -12,6 +13,7 @@ const ATTRIBUTES: readonly FieldAttribute[] = [
   attributeOf('currency', 'Funding raised'),
   attributeOf('status', 'Stage'),
   attributeOf('date', 'Close date'),
+  attributeOf('timestamp', 'Last email interaction with the account owner'),
 ];
 
 const SORTS: readonly SortRule[] = [
@@ -29,7 +31,7 @@ interface SampleProps {
 function SampleSorts({ initial = SORTS, isReadOnly = false, onChange }: SampleProps) {
   const [value, setValue] = useState(initial);
   return (
-    <Stage width="narrow">
+    <Stage>
       <SortBuilder
         attributes={ATTRIBUTES}
         value={value}
@@ -97,7 +99,7 @@ export const Add: Story = {
       if (found === null) throw new globalThis.Error('No menu.');
       return found;
     });
-    await expect(menu.querySelectorAll('[role="menuitem"]')).toHaveLength(2);
+    await expect(menu.querySelectorAll('[role="menuitem"]')).toHaveLength(3);
     await userEvent.keyboard('{ArrowDown}{Enter}');
     await expect(args.onChange).toHaveBeenLastCalledWith([...SORTS, { attributeId: 'stage', direction: 'ascending' }]);
     // Focus moves to the new sort's attribute.
@@ -131,6 +133,44 @@ export const ReadOnly: Story = {
   args: { isReadOnly: true },
   play: async ({ canvas }) => {
     await expect(canvas.queryByRole('button', { name: 'Add sort' })).toBeNull();
-    await expect(canvas.getByText('Funding raised, Descending')).toBeInTheDocument();
+    await expect(canvas.getByText('Funding raised')).toBeInTheDocument();
+    await expect(canvas.getByText('Descending')).toBeInTheDocument();
+  },
+};
+
+/** Rows line up as columns whatever the names; a long name is cut, and shows whole in a tooltip on hover. */
+export const Columns: Story = {
+  args: {
+    initial: [
+      { attributeId: 'name', direction: 'ascending' },
+      { attributeId: 'last_email_interaction_with_the_account_owner', direction: 'descending' },
+      { attributeId: 'stage', direction: 'ascending' },
+    ],
+  },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ canvas, userEvent }) => {
+    const long = canvas.getByRole('button', { name: 'Last email interaction with the account owner' });
+    const short = canvas.getByRole('button', { name: 'Name' });
+    await expect(long.getBoundingClientRect().width).toBe(short.getBoundingClientRect().width);
+    await expect(long.getBoundingClientRect().left).toBe(short.getBoundingClientRect().left);
+    await hoverFresh(userEvent, long);
+    await expect(await shownTooltip()).toHaveTextContent('Last email interaction with the account owner');
+  },
+};
+
+/** The direction is a menu, like a filter's operator. */
+export const Direction: Story = {
+  args: { onChange: fn() },
+  parameters: { crm: { screenshot: false } },
+  play: async ({ args, canvas, userEvent }) => {
+    await userEvent.click(canvas.getAllByRole('button', { name: 'Descending' })[0] ?? canvas.getByRole('grid'));
+    await waitFor(() => expect(document.querySelector('[role="menu"]')).not.toBeNull());
+    await userEvent.keyboard('{ArrowUp}{Enter}');
+    await expect(args.onChange).toHaveBeenLastCalledWith([
+      { attributeId: 'funding_raised', direction: 'ascending' },
+      { attributeId: 'name', direction: 'ascending' },
+    ]);
+    // Focus comes back to the direction, so Esc then closes the Popover holding the builder.
+    await waitFor(() => expect(canvas.getAllByRole('button', { name: 'Ascending' })[0]).toHaveFocus());
   },
 };

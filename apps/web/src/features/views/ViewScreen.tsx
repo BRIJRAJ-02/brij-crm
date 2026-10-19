@@ -1,11 +1,12 @@
 // Brief
 // Purpose: slice one object the way you work and keep it (spec 0020).
-// Main task: filter and sort the table, then save it for everyone who sees the view.
-// Leaves out: grouping inside the table, view search, charts, and (until milestone 2) more views and their columns.
+// Main task: filter and sort the table, lay out its columns, then save it, or keep it as a view of its own.
+// Leaves out: grouping inside the table, view search, charts, and sharing outside the workspace.
 import {
   isDataError,
   isSortable,
   toActorDisplays,
+  toFieldAttribute,
   type AttributeDefinition,
   type DraftQuery,
   type MemberSummary,
@@ -14,17 +15,21 @@ import {
   type ViewQuery,
   type SavedViewSource,
   type ViewsListSource,
+  type View,
 } from '@crm/data';
 import { useSavedView, useViewsList } from '@crm/data/react';
-import { Button, Callout, EmptyState } from '@crm/ui';
+import { Button, Callout, EmptyState, Popover, ViewSettings, type ViewChoice } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { RecordsScreen } from '../workspace/RecordsScreen.tsx';
 import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
+import { CreateViewDialog } from './CreateViewDialog.tsx';
+import { copyName, layoutOf, startingConfig, viewColumns, withColumn, type ShownLayout } from './layout.ts';
 import { farAttributesFrom, relationTarget, runningQuery, savableQuery, savedQuery, toViewQuery } from './query.ts';
 import { strings } from './strings.ts';
 import { useViewDraft } from './useViewDraft.ts';
 import { ViewChangedDialog } from './ViewChangedDialog.tsx';
+import { memberName, ViewMenu } from './ViewMenu.tsx';
 import { ViewToolbar } from './ViewToolbar.tsx';
 
 /** What the route opened with: the link's draft, read and checked, and what became of it. */
@@ -90,11 +95,31 @@ export function ViewScreen(props: ViewScreenProps) {
   const body = useSavedView(props.view);
   const list = useViewsList(props.views);
   const view = body.view;
-  // The view went away while open (deleted, or no longer shared): the object's address picks another.
+  // The name shown last, for the notice when the view goes away.
+  const shownName = useRef(view?.name);
+  const currentName = view?.name;
   useEffect(() => {
-    if (body.status !== 'not-found') return;
+    if (currentName !== undefined) shownName.current = currentName;
+  }, [currentName]);
+  // This tab deleted it, and is already on its way to the default view.
+  const leaving = useRef(false);
+  // The view went away while open (deleted, or no longer shared, AC-474): the default view, with a notice saying so.
+  useEffect(() => {
+    if (body.status !== 'not-found' || leaving.current) return;
+    const fallback = list.views.find((each) => each.id === list.defaultViewId && each.id !== view?.id);
+    toasts.toast({
+      tone: 'info',
+      message: strings.deletedBy(shownName.current ?? strings.thisView, fallback?.name ?? object.pluralName),
+    });
     void navigate({ to: '/w/$slug/objects/$object', params: { slug, object: object.apiSlug }, replace: true });
-  }, [body.status, navigate, slug, object.apiSlug]);
+    // Only the view going away moves the screen.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [body.status]);
+  // The view is the person's last opened one for its object (AC-478), at most once per 10 seconds.
+  const openedId = view?.id;
+  useEffect(() => {
+    if (openedId !== undefined) data.views.markOpened(slug, openedId);
+  }, [data, slug, openedId]);
 
   const latestSaved = useMemo(() => (view === undefined ? { sorts: [] } : savedQuery(view)), [view]);
   const access = useMyAccess();
@@ -126,6 +151,8 @@ export function ViewScreen(props: ViewScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [latestSaved]);
   const canManage = useCan('views.manage');
+  // A locked view the person may not change (AC-476): their filters, sorts and columns stay in this tab, unsaved.
+  const isLockedForMe = view !== undefined && view.visibility === 'workspace' && view.isLocked && !canManage;
   const draft = useViewDraft({
     saved,
     savedVersion: followed.version,
@@ -228,6 +255,75 @@ export function ViewScreen(props: ViewScreenProps) {
       );
   };
 
+  // The view's columns (AC-470): a change shows at once and saves for everyone on the view, or stays in this tab on
+  // a locked view. Leaving the view drops what stayed here.
+  const layout = useMemo(() => viewColumns(view, object, attributes), [view, object, attributes]);
+  const changeLayout = (next: ShownLayout) => {
+    if (view === undefined) return;
+    data.views.setLayout(slug, view.id, layoutOf(next.columns, next.pinnedCount), { isLocal: isLockedForMe });
+  };
+  const viewId = view?.id;
+  useEffect(
+    () => () => {
+      if (viewId !== undefined) data.views.dropLocalLayout(slug, viewId);
+    },
+    [data, slug, viewId],
+  );
+  const settingsAnchor = useRef<HTMLButtonElement>(null);
+  const [isSettingsOpen, setSettingsOpen] = useState(false);
+  const fields = useMemo(() => {
+    const byId = new Map(attributes.map((attribute) => [attribute.id, attribute]));
+    return layout.columns.flatMap((column) => {
+      const definition = byId.get(column.id);
+      return definition === undefined
+        ? []
+        : [
+            {
+              attribute: toFieldAttribute(definition),
+              isShown: !column.isHidden,
+              ...(definition.id === object.primaryAttributeId ? { isLocked: true } : {}),
+            },
+          ];
+    });
+  }, [layout, attributes, object.primaryAttributeId]);
+
+  // Create view, and Save as new view (the Save menu, the clash dialog, a locked view's only Save).
+  const [createMode, setCreateMode] = useState<'create' | 'save-as' | undefined>(undefined);
+  const openView = (next: View, message: string) => {
+    toasts.toast({ tone: 'success', message });
+    void navigate({
+      to: '/w/$slug/objects/$object/views/$viewId',
+      params: { slug, object: object.apiSlug, viewId: next.id },
+    });
+  };
+  const [isDuplicating, setDuplicating] = useState(false);
+  const duplicate = () => {
+    // One copy per press: a second press while the first is on its way adds nothing.
+    if (view === undefined || isDuplicating) return;
+    setDuplicating(true);
+    const taken = list.views.filter((each) => each.visibility === 'private').map((each) => each.name);
+    const name = copyName(view.name, taken);
+    data.views
+      .create(slug, {
+        id: data.views.newId(),
+        objectId: object.id,
+        name,
+        kind: view.kind,
+        visibility: 'private',
+        config: view.config,
+      })
+      .then(
+        (made) => {
+          setDuplicating(false);
+          openView(made, strings.duplicated(made.name));
+        },
+        (error: unknown) => {
+          setDuplicating(false);
+          toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.actionFailed });
+        },
+      );
+  };
+
   const memberDisplays = useMemo(() => toActorDisplays(members), [members]);
   const me = memberDisplays.find((member) => member.id === access?.memberId);
   const sortable = useMemo(
@@ -235,9 +331,17 @@ export function ViewScreen(props: ViewScreenProps) {
     [attributes],
   );
   const [filterOn, setFilterOn] = useState<{ readonly attributeId: string } | undefined>(undefined);
-  const canSave = view !== undefined && (!view.isLocked || canManage);
+  const canSave = view !== undefined && !isLockedForMe;
   const filtered = running?.filter !== undefined;
-  const choices = list.views.length > 0 ? list.views : view === undefined ? [] : [view];
+  // The switcher (AC-473): the default, the other shared views, then a Private section; locked ones marked.
+  const choices: readonly ViewChoice[] = (list.views.length > 0 ? list.views : view === undefined ? [] : [view]).map(
+    (each) => ({
+      id: each.id,
+      name: each.name,
+      ...(each.visibility === 'workspace' && each.isLocked ? { isLocked: true } : {}),
+      ...(each.visibility === 'private' ? { section: strings.privateSection } : {}),
+    }),
+  );
 
   return (
     <>
@@ -263,9 +367,72 @@ export function ViewScreen(props: ViewScreenProps) {
           }
           setFilterOn({ attributeId });
         }}
-        views={choices.map((each) => ({ id: each.id, name: each.name }))}
+        views={choices}
+        onCreateView={() => {
+          setCreateMode('create');
+        }}
+        layout={layout}
+        onLayoutChange={changeLayout}
+        onAttributeCreated={(attributeId) => {
+          // A view that lists its columns shows the new one at its end; a seeded default shows it already.
+          if (view !== undefined && (view.config.columns.length > 0 || !view.config.showNewAttributes)) {
+            changeLayout(withColumn(layout, attributeId));
+          }
+        }}
+        viewActions={
+          view === undefined ? undefined : (
+            <>
+              {view.visibility === 'workspace' && view.isLocked && (
+                <Callout placement="bar" {...(isLockedForMe ? { isAnnounced: true } : {})}>
+                  {isLockedForMe
+                    ? strings.lockedUnsaved(memberName(members, view.lockedBy))
+                    : strings.lockedBy(memberName(members, view.lockedBy))}
+                </Callout>
+              )}
+              <Button
+                ref={settingsAnchor}
+                variant="ghost"
+                icon="settings"
+                onPress={() => {
+                  setSettingsOpen(true);
+                }}
+              >
+                {strings.viewSettings}
+              </Button>
+              <ViewMenu
+                slug={slug}
+                object={object}
+                view={view}
+                list={list}
+                members={members}
+                memberId={access?.memberId}
+                canManage={canManage}
+                copyLinkReason={draft.isDraft && !draft.isLinkable ? strings.linkTooLong : undefined}
+                onDuplicate={duplicate}
+                onDeleting={(isDeleting) => {
+                  // This tab's own delete: the view going away is no news here.
+                  leaving.current = isDeleting;
+                }}
+                onDeleted={(name) => {
+                  toasts.toast({ tone: 'success', message: strings.deleted(name) });
+                  void navigate({
+                    to: '/w/$slug/objects/$object',
+                    params: { slug, object: object.apiSlug },
+                    replace: true,
+                  });
+                }}
+              />
+            </>
+          )
+        }
         currentViewId={view?.id ?? ''}
         onViewChange={(viewId) => {
+          // The view already open: nothing changes, and its draft stays.
+          if (viewId === view?.id) return;
+          // Another view drops this one's draft (AC-466); Back brings it back.
+          if (draft.isDraft && view !== undefined) {
+            toasts.toast({ tone: 'info', message: strings.draftLeft(view.name) });
+          }
           void navigate({
             to: '/w/$slug/objects/$object/views/$viewId',
             params: { slug, object: object.apiSlug, viewId },
@@ -295,6 +462,9 @@ export function ViewScreen(props: ViewScreenProps) {
               onDiscard={discard}
               onSave={() => {
                 save(false);
+              }}
+              onSaveAsNew={() => {
+                setCreateMode('save-as');
               }}
               {...(filterOn === undefined ? {} : { filterOn })}
               {...(focusRequest === undefined ? {} : { focusRequest })}
@@ -358,10 +528,60 @@ export function ViewScreen(props: ViewScreenProps) {
         onReplace={() => {
           save(true);
         }}
+        onSaveAsNew={() => {
+          setClash(undefined);
+          setCreateMode('save-as');
+        }}
         onCancel={() => {
           setClash(undefined);
         }}
       />
+      <CreateViewDialog
+        mode={createMode}
+        onClose={() => {
+          setCreateMode(undefined);
+        }}
+        objectId={object.id}
+        newId={data.views.newId}
+        canStartFromView={view !== undefined}
+        configFor={(fromThisView) =>
+          startingConfig(
+            fromThisView && running !== undefined ? { layout, query: savableQuery(draft.query, running) } : undefined,
+            object,
+            attributes,
+          )
+        }
+        onCreate={(input) => data.views.create(slug, input)}
+        onCreated={(made) => {
+          setCreateMode(undefined);
+          openView(made, strings.created(made.name));
+        }}
+      />
+      <Popover
+        triggerRef={settingsAnchor}
+        isOpen={isSettingsOpen}
+        onOpenChange={setSettingsOpen}
+        label={strings.viewSettings}
+      >
+        <ViewSettings
+          label={strings.columns}
+          fields={fields}
+          onChange={(next) => {
+            const widths = new Map(layout.columns.map((column) => [column.id, column.width]));
+            changeLayout({
+              columns: next.map((field) => {
+                const width = widths.get(field.attribute.id);
+                return {
+                  id: field.attribute.id,
+                  isHidden: !field.isShown && field.isLocked !== true,
+                  ...(width === undefined ? {} : { width }),
+                };
+              }),
+              pinnedCount: layout.pinnedCount,
+            });
+          }}
+        />
+      </Popover>
     </>
   );
 }

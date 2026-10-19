@@ -793,6 +793,22 @@ describe('isolation', () => {
         ),
       ),
     ).rejects.toMatchObject({ cause: { code: '23514', constraint: 'views_private' } });
+    // The last opened view (milestone 2): each workspace reads only its own bookmarks, and one in A can't name B's view.
+    const bookmark = (workspaceId: string, memberId: string, objectId: string, viewId: string) =>
+      db.withWorkspace(workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into member_view_state (workspace_id, member_id, parent_id, view_id) values (${workspaceId}, ${memberId}, ${objectId}, ${viewId})`,
+        ),
+      );
+    await bookmark(a.workspaceId, a.memberId, inA.objectId, inA.viewId);
+    await bookmark(b.workspaceId, b.memberId, inB.objectId, inB.viewId);
+    const statesFromA = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ view_id: string }>(sql`select view_id from member_view_state`),
+    );
+    expect(statesFromA.rows).toEqual([{ view_id: inA.viewId }]);
+    await expect(bookmark(a.workspaceId, a.memberId, inB.objectId, inB.viewId)).rejects.toMatchObject({
+      cause: { code: '23503', constraint: 'member_view_state_view' },
+    });
   });
 
   it("reads none of another workspace's tasks or task links, and refuses a link to its record (spec 0019)", async () => {

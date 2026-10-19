@@ -68,3 +68,16 @@ export const WithoutValue: Story = {
     await expect(canvas.getByRole('group', { name: 'Filter: 2 conditions' })).toBeInTheDocument();
   },
 };
+
+/** Read only: no remove part, for a view you can't edit. */
+export const ReadOnly: Story = {
+  args: { onRemove: undefined },
+  render: (args) => (
+    <Stage>
+      <FilterChip {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.queryByRole('button', { name: 'Remove filter' })).toBeNull();
+  },
+};

@@ -21,6 +21,7 @@ import {
   type Usage,
   type TrashedRecord,
   type View,
+  type ViewLayout,
   type ViewsList,
 } from '@crm/contracts';
 import { implement, ORPCError } from '@orpc/server';
@@ -139,6 +140,7 @@ interface Behaviour {
   viewsList: (objectId: string) => ViewsList;
   viewGet: (viewId: string) => View;
   viewSave: (input: { readonly viewId: string; readonly baseQueryVersion: number; readonly force?: boolean }) => View;
+  viewLayout: (input: { readonly viewId: string; readonly layout: ViewLayout }) => View;
   /** Bulk delete and its undo (spec 0022): each record's outcome. */
   deleteMany: (recordIds: readonly string[]) => DeleteManyResults['results'];
   restoreBatch: (batchId: string) => RestoreResults['results'];
@@ -186,6 +188,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     viewsList: notServed,
     viewGet: notServed,
     viewSave: notServed,
+    viewLayout: notServed,
     deleteMany: notServed,
     restoreBatch: notServed,
     trashQuery: () => ({ items: [] }),
@@ -242,6 +245,20 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         mutationIds.push(input.mutationId);
         sent.push(input);
         return behaviour.viewSave(input);
+      }),
+      create: os.views.create.handler(() => notServed()),
+      update: os.views.update.handler(() => notServed()),
+      setLayout: os.views.setLayout.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        sent.push(input);
+        return behaviour.viewLayout(input);
+      }),
+      move: os.views.move.handler(() => notServed()),
+      setLocked: os.views.setLocked.handler(() => notServed()),
+      setDefault: os.views.setDefault.handler(() => notServed()),
+      delete: os.views.delete.handler(() => notServed()),
+      markOpened: os.views.markOpened.handler(({ input }) => {
+        sent.push(input);
       }),
     },
     attributes: {

@@ -1,7 +1,7 @@
 // Brief
 // Purpose: say how the view is shaped (its sorts and filters) and change it, as an unsaved draft until Save.
-// Main task: open the sort or filter builder from its chip or button, then Save or Discard the draft.
-// Leaves out: the view switcher, columns and view settings (the view bar, milestone 2).
+// Main task: open the sort or filter builder from its chip or button, then Save, Save as new view, or Discard the draft.
+// Leaves out: the view switcher, columns and view settings (the view bar).
 import {
   FILTER_EDIT_MS,
   toFieldAttribute,
@@ -18,9 +18,12 @@ import {
   conditionOn,
   FilterBuilder,
   focusLater,
+  Menu,
+  MenuItem,
   Popover,
   SortBuilder,
   SortChip,
+  SplitButton,
   Toolbar,
 } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
@@ -56,6 +59,8 @@ export interface ViewToolbarProps {
   readonly onChange: (next: DraftQuery, how: 'push' | 'replace') => void;
   readonly onDiscard: () => void;
   readonly onSave: () => void;
+  /** Save as new view: the create dialog with the draft. */
+  readonly onSaveAsNew: () => void;
   /** What the filter matches, for screen readers ("124 people match"). */
   readonly status?: string;
   /** Asks for focus on the Filter button (after Discard, Save or Replace took the focused control away). A new object each time. */
@@ -78,6 +83,7 @@ export function ViewToolbar({
   onChange,
   onDiscard,
   onSave,
+  onSaveAsNew,
   filterOn,
   status,
   focusRequest,
@@ -89,7 +95,8 @@ export function ViewToolbar({
   const sortFields = useMemo(() => sortable.map((attribute) => toFieldAttribute(attribute)), [sortable]);
   const titleOf = (id: string) => attributes.find((attribute) => attribute.id === id)?.title ?? id;
   const filterAnchor = useRef<HTMLButtonElement>(null);
-  const sortAnchor = useRef<HTMLButtonElement>(null);
+  // The sort chip, or the dashed Sort button when the view has no sorts: the sort builder opens from either.
+  const sortAnchor = useRef<HTMLElement>(null);
   const [isSortOpen, setSortOpen] = useState(false);
   const [isFilterOpen, setFilterOpen] = useState(false);
   // What the builder holds while it is open: incomplete rows included, which filter nothing until complete.
@@ -174,9 +181,25 @@ export function ViewToolbar({
                   <Button variant="ghost" onPress={onDiscard} isDisabled={isSaving}>
                     {strings.discard}
                   </Button>
-                  {canSave && (
-                    <Button variant="primary" onPress={onSave} isPending={isSaving}>
+                  {canSave ? (
+                    <SplitButton
+                      onPress={onSave}
+                      isPending={isSaving}
+                      menuLabel={strings.saveMore}
+                      menu={
+                        <Menu label={strings.saveMore} onAction={onSaveAsNew}>
+                          <MenuItem id="save-as-new" icon="plus">
+                            {strings.saveAsNew}
+                          </MenuItem>
+                        </Menu>
+                      }
+                    >
                       {isSaving ? strings.saving : strings.save}
+                    </SplitButton>
+                  ) : (
+                    // A locked view the person may not change (AC-476): their draft can only become a view of its own.
+                    <Button variant="primary" icon="plus" onPress={onSaveAsNew}>
+                      {strings.saveAsNew}
                     </Button>
                   )}
                 </>
@@ -186,7 +209,9 @@ export function ViewToolbar({
       >
         {first === undefined ? (
           <Button
-            ref={sortAnchor}
+            ref={(element) => {
+              sortAnchor.current = element;
+            }}
             variant="dashed"
             icon="arrow-up-narrow-wide"
             onPress={() => {
@@ -205,6 +230,12 @@ export function ViewToolbar({
             onPress={() => {
               pushed.current = false;
               setSortOpen(true);
+            }}
+            onRemove={() => {
+              pushed.current = false;
+              commit({ ...(query.filter === undefined ? {} : { filter: query.filter }), sorts: [] });
+              // The chip leaves with its remove part: focus goes to the dashed Sort that takes its place.
+              focusLater(() => sortAnchor.current);
             }}
           />
         )}
