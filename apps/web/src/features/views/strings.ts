@@ -49,6 +49,10 @@ export const strings = {
   cancel: 'Cancel',
   viewName: 'Name',
   nameMissing: 'Give the view a name.',
+  /** Create view's Type (AC-472): a table, or a board (spec 0021). */
+  viewType: 'Type',
+  typeTable: 'Table',
+  typeBoard: 'Board',
   whoCanSee: 'Who can see it',
   onlyMe: 'Only me',
   everyone: 'Everyone in the workspace',

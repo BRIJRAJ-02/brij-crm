@@ -1,8 +1,16 @@
 // Brief
 // Purpose: make a view of an object, for yourself or the workspace (spec 0020, AC-472), or save a draft as one.
-// Main task: name it, choose who sees it, start from this view or afresh, then Create view.
-// Leaves out: the Board type until boards arrive (spec 0021), and every setting the view menu and the bars change later.
-import { isDataError, type NewView, type View, type ViewConfig, type ViewVisibility } from '@crm/data';
+// Main task: name it, pick Table or Board, choose who sees it, start from this view or afresh, then Create view.
+// Leaves out: the board's own settings (they start from the defaults, spec 0021), and what the bars change later.
+import {
+  isDataError,
+  type BoardSettings,
+  type NewView,
+  type View,
+  type ViewConfig,
+  type ViewKind,
+  type ViewVisibility,
+} from '@crm/data';
 import { Button, Checkbox, Field, Form, Modal, Radio, RadioGroup, type FormRefusal } from '@crm/ui';
 import { useId, useState } from 'react';
 import { strings } from './strings.ts';
@@ -22,6 +30,10 @@ export interface CreateViewDialogProps {
   readonly configFor: (fromThisView: boolean) => ViewConfig;
   /** Whether there is a view to start from (none on an object with no view for this person). */
   readonly canStartFromView: boolean;
+  /** The kind of the view open now: Save as new view keeps it. */
+  readonly currentKind: ViewKind;
+  /** A new board's settings when it starts with none (spec 0021, AC-492); undefined when nothing can group. */
+  readonly boardDefaults: BoardSettings | undefined;
   /** Makes it and waits for the server; rejects with the refusal. */
   readonly onCreate: (input: NewView) => Promise<View>;
   /** The server made it: close, and open it. */
@@ -78,12 +90,15 @@ function CreateViewForm({
   newId,
   configFor,
   canStartFromView,
+  currentKind,
+  boardDefaults,
   onCreate,
   onCreated,
 }: CreateViewFormProps) {
   // One id per opening, sent again on every press.
   const [id] = useState(newId);
   const [name, setName] = useState('');
+  const [kind, setKind] = useState<ViewKind>(mode === 'save-as' ? currentKind : 'table');
   const [visibility, setVisibility] = useState<ViewVisibility>('private');
   const [fromThisView, setFromThisView] = useState(canStartFromView);
   const [refusals, setRefusals] = useState<readonly FormRefusal[]>([]);
@@ -96,13 +111,18 @@ function CreateViewForm({
     }
     onBusyChange(true);
     setRefusals([]);
+    const config = configFor(mode === 'save-as' || fromThisView);
     onCreate({
       id,
       objectId,
       name: name.trim(),
-      kind: 'table',
+      kind,
       visibility,
-      config: configFor(mode === 'save-as' || fromThisView),
+      // A board starts from the defaults unless it brings this view's; with nothing to group by it has none.
+      config:
+        kind === 'board' && config.board === undefined && boardDefaults !== undefined
+          ? { ...config, board: { ...boardDefaults, cardFields: [...boardDefaults.cardFields] } }
+          : config,
     }).then(
       (view) => {
         onBusyChange(false);
@@ -149,6 +169,18 @@ function CreateViewForm({
         value={name}
         onChange={setName}
       />
+      {mode === 'create' && (
+        <RadioGroup
+          label={strings.viewType}
+          value={kind}
+          onChange={(next) => {
+            if (next === 'table' || next === 'board') setKind(next);
+          }}
+        >
+          <Radio value="table">{strings.typeTable}</Radio>
+          <Radio value="board">{strings.typeBoard}</Radio>
+        </RadioGroup>
+      )}
       <RadioGroup
         label={strings.whoCanSee}
         value={visibility}

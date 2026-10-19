@@ -4,8 +4,10 @@
 // or library imports, so the route's loader (in the first load) reads the same
 // columns the screen shows.
 import {
+  boardDefaults,
   effectiveColumns,
   type AttributeDefinition,
+  type BoardSettings,
   type DraftQuery,
   type ObjectSummary,
   type View,
@@ -145,4 +147,43 @@ export function copyName(name: string, taken: readonly string[]): string {
     const candidate = `${base.slice(0, 100 - suffix.length).trimEnd()}${suffix}`;
     if (!held.has(candidate.toLocaleLowerCase())) return candidate;
   }
+}
+
+/** What a board change sets (spec 0021): the kind, the board settings, or both. */
+export interface BoardPatch {
+  readonly kind?: 'table' | 'board';
+  readonly board?: BoardSettings;
+}
+
+/**
+ * The layout a kind or board change saves (spec 0021, AC-492, AC-497): the
+ * view's columns as they are, with the patch on top. A layout kept in this tab
+ * (`isLocal`, a locked view the person may not change) replaces the one
+ * before it, so it carries the kind and board shown now as well.
+ */
+export function boardLayout(view: View, patch: BoardPatch, isLocal: boolean): ViewLayout {
+  const board = patch.board ?? (isLocal ? view.config.board : undefined);
+  const kind = patch.kind ?? (isLocal ? view.kind : undefined);
+  return {
+    ...(kind === undefined ? {} : { kind }),
+    columns: view.config.columns,
+    pinnedCount: view.config.pinnedCount,
+    ...(board === undefined ? {} : { board: { ...board, cardFields: [...board.cardFields] } }),
+  };
+}
+
+/**
+ * The Table and Board switch (AC-492): the kind picked, and the first time a
+ * view becomes a board, the defaults (none when nothing can group, so the kind
+ * goes alone). Back to Table keeps the board settings. Undefined when the
+ * view already is that kind.
+ */
+export function switchPatch(
+  view: View,
+  next: 'table' | 'board',
+  attributes: readonly AttributeDefinition[],
+): BoardPatch | undefined {
+  if (next === view.kind) return undefined;
+  const defaults = next === 'board' && view.config.board === undefined ? boardDefaults(attributes) : undefined;
+  return { kind: next, ...(defaults === undefined ? {} : { board: defaults }) };
 }

@@ -2,7 +2,16 @@
 // change; any other view runs its own; what a change saves; the config a new view starts from; a duplicate's name.
 import type { AttributeDefinition, ObjectSummary, View } from '@crm/data';
 import { describe, expect, it } from 'vitest';
-import { copyName, layoutOf, startingConfig, viewColumns, viewReadIds, withColumn } from './layout.ts';
+import {
+  boardLayout,
+  copyName,
+  layoutOf,
+  startingConfig,
+  switchPatch,
+  viewColumns,
+  viewReadIds,
+  withColumn,
+} from './layout.ts';
 
 const attribute = (
   apiSlug: string,
@@ -158,5 +167,47 @@ describe('copyName', () => {
     expect(copyName('Pipeline', [])).toBe('Pipeline copy');
     expect(copyName('Pipeline', ['pipeline COPY', 'Pipeline copy 2'])).toBe('Pipeline copy 3');
     expect(copyName('x'.repeat(100), []).length).toBeLessThanOrEqual(100);
+  });
+});
+
+describe('the Table and Board switch (spec 0021, AC-492, AC-497)', () => {
+  const stage = attribute('stage', 2, { type: 'status' });
+  const WITH_STAGE = [...ATTRIBUTES, stage];
+  const BOARD = { groupByAttributeId: 'id-stage', cardFields: ['id-job_title'], showEmptyColumns: true };
+
+  it('fills the defaults the first time a view becomes a board, and saves the kind alone with nothing to group', () => {
+    expect(switchPatch(view({}), 'board', WITH_STAGE)).toEqual({
+      kind: 'board',
+      board: {
+        groupByAttributeId: 'id-stage',
+        cardFields: ['id-email_addresses', 'id-job_title', 'id-description'],
+        showEmptyColumns: true,
+      },
+    });
+    expect(switchPatch(view({}), 'board', ATTRIBUTES)).toEqual({ kind: 'board' });
+    // A view that was a board keeps its settings: the kind goes alone, both ways.
+    expect(switchPatch(view({ board: BOARD }), 'board', WITH_STAGE)).toEqual({ kind: 'board' });
+    expect(switchPatch({ ...view({ board: BOARD }), kind: 'board' }, 'table', WITH_STAGE)).toEqual({ kind: 'table' });
+    expect(switchPatch(view({}), 'table', WITH_STAGE)).toBeUndefined();
+  });
+
+  it('saves the columns as they are with the patch, and a tab only layout carries the kind and board shown', () => {
+    const shown: View = {
+      ...view({ columns: [{ attributeId: 'id-name' }], pinnedCount: 1, board: BOARD }),
+      kind: 'board',
+    };
+    const off = { ...BOARD, showEmptyColumns: false };
+    expect(boardLayout(shown, { board: off }, false)).toEqual({
+      columns: [{ attributeId: 'id-name' }],
+      pinnedCount: 1,
+      board: off,
+    });
+    expect(boardLayout(shown, { kind: 'table' }, true)).toEqual({
+      kind: 'table',
+      columns: [{ attributeId: 'id-name' }],
+      pinnedCount: 1,
+      board: BOARD,
+    });
+    expect(boardLayout(shown, {}, false)).toEqual({ columns: [{ attributeId: 'id-name' }], pinnedCount: 1 });
   });
 });

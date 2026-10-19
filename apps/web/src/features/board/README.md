@@ -22,5 +22,4 @@ Loading (the Board's skeleton columns after the loading delay, and three skeleto
 
 ## Not yet
 
-- The Table and Board switch changes this visit only: saving the kind (and the board's defaults the first time) for everyone needs `views.setLayout` from spec 0020 milestone 2.
-- Show empty columns is kept for this visit only, for the same reason.
+- The Table and Board switch and Show empty columns save through `views.setLayout` (the view screen's `switchPatch` and `boardLayout`): for everyone at once, or in this tab only on a locked view the person may not change. The first time a view shows as a board with something to group by, its defaults are saved the same way.

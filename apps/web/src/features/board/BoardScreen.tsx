@@ -62,6 +62,8 @@ export interface BoardScreenProps {
   readonly layoutSwitch: ReactNode;
   /** The view's Toolbar (sorts, filters, Save) and any notice under it, given what to say to screen readers. */
   readonly toolbar: (announced: string | undefined) => ReactNode;
+  /** Show empty columns turned on or off: saved with the view's board settings (AC-497). */
+  readonly onShowEmptyColumnsChange: (show: boolean) => void;
 }
 
 /** One object's view as a board: the bars, then the board or why there is none. */
@@ -226,6 +228,7 @@ function BoardBody({
   members,
   plan,
   query,
+  onShowEmptyColumnsChange,
   onAnnounce,
 }: BoardScreenProps & { readonly plan: BoardPlan; readonly onAnnounce: (text: string) => void }) {
   const navigate = useNavigate();
@@ -238,8 +241,8 @@ function BoardBody({
     () => plan.cardFields.map((field) => toFieldAttribute(field, workspaceStrings.referenceReadOnly)),
     [plan.cardFields],
   );
-  // Show empty columns, for this visit until View settings saves it with the view (milestone 3, AC-497).
-  const [showEmpty, setShowEmpty] = useState(plan.settings.showEmptyColumns);
+  // Show empty columns (AC-497): the view's setting, changed through the view's layout save.
+  const showEmpty = plan.settings.showEmptyColumns;
   const label = strings.label(object.pluralName, plan.groupBy.title);
   if (store === undefined) {
     return (
@@ -264,7 +267,7 @@ function BoardBody({
       plan={plan}
       fields={fields}
       showEmpty={showEmpty}
-      onShowEmptyChange={setShowEmpty}
+      onShowEmptyChange={onShowEmptyColumnsChange}
       onAnnounce={onAnnounce}
       onOpen={(card) => {
         void navigate({

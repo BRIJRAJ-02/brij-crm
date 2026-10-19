@@ -3,6 +3,7 @@
 // Main task: filter and sort the table, lay out its columns, then save it, or keep it as a view of its own.
 // Leaves out: grouping inside the table, view search, charts, and sharing outside the workspace.
 import {
+  boardDefaults,
   isDataError,
   isSortable,
   toActorDisplays,
@@ -25,9 +26,21 @@ import { BoardScreen } from '../board/BoardScreen.tsx';
 import { planBoard } from '../board/plan.ts';
 import { strings as boardStrings } from '../board/strings.ts';
 import { RecordsScreen } from '../workspace/RecordsScreen.tsx';
-import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
+import { objectPendingPage } from '../workspace/ObjectScreen.tsx';
+import { useCan, useMyAccess, WorkspacePage } from '../workspace/WorkspacePage.tsx';
 import { CreateViewDialog } from './CreateViewDialog.tsx';
-import { copyName, layoutOf, startingConfig, viewColumns, withColumn, type ShownLayout } from './layout.ts';
+import {
+  boardLayout,
+  copyName,
+  layoutOf,
+  startingConfig,
+  viewColumns,
+  viewReadIds,
+  switchPatch,
+  withColumn,
+  type BoardPatch,
+  type ShownLayout,
+} from './layout.ts';
 import { farAttributesFrom, relationTarget, runningQuery, savableQuery, savedQuery, toViewQuery } from './query.ts';
 import { strings } from './strings.ts';
 import { useViewDraft } from './useViewDraft.ts';
@@ -52,8 +65,8 @@ export interface ViewScreenProps {
   readonly members: readonly MemberSummary[];
   readonly view: SavedViewSource;
   readonly views: ViewsListSource;
-  /** The records the loader warmed, and the question they answer. */
-  readonly records: RecordsView;
+  /** The records the loader warmed (none for a board view: its columns load their own), and their question. */
+  readonly records: RecordsView | undefined;
   readonly recordsQuery: ViewQuery;
   readonly opened: OpenedDraft;
   /** The `draft` search param now, and how to write it. */
@@ -86,6 +99,9 @@ function useFarAttributes(slug: string, objectIds: readonly string[]) {
   }, [data, slug, wanted]);
   return loaded;
 }
+
+/** How long switching a board to Table waits for the first rows before showing the table loading in place. */
+const TABLE_GRACE_MS = 300;
 
 /** The longest a tab waits before following someone else's save (spec 0020, AC-468's 1 second at p95). */
 const FOLLOW_SPREAD_MS = 600;
@@ -263,7 +279,19 @@ export function ViewScreen(props: ViewScreenProps) {
   const layout = useMemo(() => viewColumns(view, object, attributes), [view, object, attributes]);
   const changeLayout = (next: ShownLayout) => {
     if (view === undefined) return;
-    data.views.setLayout(slug, view.id, layoutOf(next.columns, next.pinnedCount), { isLocal: isLockedForMe });
+    // A layout kept in this tab replaces the one before it, so it carries the kind and board shown now.
+    data.views.setLayout(
+      slug,
+      view.id,
+      { ...boardLayout(view, {}, isLockedForMe), ...layoutOf(next.columns, next.pinnedCount) },
+      { isLocal: isLockedForMe },
+    );
+  };
+  // The kind and the board settings (spec 0021, AC-492, AC-497), saved as any layout change is: for everyone at
+  // once, or in this tab only on a locked view the person may not change. The columns go as they are.
+  const changeBoardLayout = (patch: BoardPatch) => {
+    if (view === undefined) return;
+    data.views.setLayout(slug, view.id, boardLayout(view, patch, isLockedForMe), { isLocal: isLockedForMe });
   };
   const viewId = view?.id;
   useEffect(
@@ -346,11 +374,10 @@ export function ViewScreen(props: ViewScreenProps) {
     }),
   );
 
-  // Table or Board (spec 0021, AC-492): the view's kind, or the one picked on this visit. Saving the kind for
-  // everyone arrives with the views' layout save (spec 0020 milestone 2, `views.setLayout`); until then the
-  // switch changes this visit only, as it does on a locked view for a member without views.manage.
-  const [pickedKind, setPickedKind] = useState<'table' | 'board' | undefined>(undefined);
-  const kind = pickedKind ?? view?.kind ?? 'table';
+  // Table or Board (spec 0021, AC-492): the view's kind, switched for everyone on it through `views.setLayout`
+  // (on a locked view the person may not change, for this tab only). The first switch to Board fills the
+  // defaults; with nothing to group by it saves the kind alone. Back to Table keeps the board settings.
+  const kind = view?.kind ?? 'table';
   const layoutSwitch = (
     <SegmentedControl
       label={boardStrings.layout}
@@ -359,8 +386,10 @@ export function ViewScreen(props: ViewScreenProps) {
         { value: 'board', label: boardStrings.board },
       ]}
       value={kind}
-      onChange={(next) => {
-        setPickedKind(next === 'board' ? 'board' : 'table');
+      onChange={(picked) => {
+        const patch =
+          view === undefined ? undefined : switchPatch(view, picked === 'board' ? 'board' : 'table', attributes);
+        if (patch !== undefined) changeBoardLayout(patch);
       }}
     />
   );
@@ -369,6 +398,45 @@ export function ViewScreen(props: ViewScreenProps) {
     () => (kind === 'board' ? planBoard(attributes, storedBoard) : undefined),
     [kind, attributes, storedBoard],
   );
+  // A board view showing defaults it never stored (saved with nothing to group by, or its grouping field gone):
+  // the first time it can group, the defaults are saved like any layout change, once per visit (AC-492).
+  const filledFor = useRef<string | undefined>(undefined);
+  const toFill = boardOutcome?.kind === 'board' && !boardOutcome.isStored ? boardOutcome.settings : undefined;
+  useEffect(() => {
+    if (toFill === undefined || view === undefined || filledFor.current === view.id) return;
+    filledFor.current = view.id;
+    changeBoardLayout({ board: toFill });
+    // Only defaults appearing fill them.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toFill]);
+  // A view opened as a board warmed no table (the route skips it): switching to Table opens its records here.
+  const [lateTable, setLateTable] = useState<{ readonly records: RecordsView; readonly query: ViewQuery }>();
+  const needsTable = kind === 'table' && records === undefined && lateTable === undefined;
+  useEffect(() => {
+    if (!needsTable) return;
+    let isCurrent = true;
+    const asked = query;
+    data.records.open(slug, object.id, asked, viewReadIds(layout, object, attributes), TABLE_GRACE_MS).then(
+      (opened) => {
+        if (isCurrent) setLateTable({ records: opened, query: asked });
+      },
+      () => {
+        if (isCurrent) toasts.toast({ tone: 'danger', message: strings.actionFailed });
+      },
+    );
+    return () => {
+      isCurrent = false;
+    };
+    // Opened once, for the question asked when the table first shows; the table follows later changes itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [needsTable]);
+  const table = records === undefined ? lateTable : { records, query: props.recordsQuery };
+  // Create view's Board starts from these (AC-472, AC-492).
+  const newBoard = useMemo(() => boardDefaults(attributes), [attributes]);
+  const showEmptyColumns = (show: boolean) => {
+    if (boardOutcome?.kind !== 'board') return;
+    changeBoardLayout({ board: { ...boardOutcome.settings, showEmptyColumns: show } });
+  };
   const switchView = (viewId: string) => {
     // The view already open: nothing changes, and its draft stays.
     if (viewId === view?.id) return;
@@ -502,13 +570,18 @@ export function ViewScreen(props: ViewScreenProps) {
         objectId={object.id}
         newId={data.views.newId}
         canStartFromView={view !== undefined}
-        configFor={(fromThisView) =>
-          startingConfig(
+        currentKind={kind}
+        boardDefaults={newBoard}
+        configFor={(fromThisView) => {
+          const config = startingConfig(
             fromThisView && running !== undefined ? { layout, query: savableQuery(draft.query, running) } : undefined,
             object,
             attributes,
-          )
-        }
+          );
+          // From this view: its board settings come too, so a board saved as new shows the same board.
+          const board = fromThisView ? view?.config.board : undefined;
+          return board === undefined ? config : { ...config, board };
+        }}
         onCreate={(input) => data.views.create(slug, input)}
         onCreated={(made) => {
           setCreateMode(undefined);
@@ -560,10 +633,15 @@ export function ViewScreen(props: ViewScreenProps) {
           viewActions={viewActionsFor(false)}
           layoutSwitch={layoutSwitch}
           toolbar={toolbarFor}
+          onShowEmptyColumnsChange={showEmptyColumns}
         />
         {dialogs}
       </>
     );
+  }
+
+  if (table === undefined) {
+    return <WorkspacePage currentObject={object.apiSlug} page={objectPendingPage()} />;
   }
 
   return (
@@ -573,8 +651,8 @@ export function ViewScreen(props: ViewScreenProps) {
         object={object}
         attributes={attributes}
         members={members}
-        view={records}
-        viewQuery={props.recordsQuery}
+        view={table.records}
+        viewQuery={table.query}
         query={query}
         onSort={(rule) => {
           draft.set(
