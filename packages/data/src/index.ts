@@ -146,6 +146,15 @@ export {
   type FarAttributes,
   type ViewAttribute,
 } from '@crm/contracts/views';
+export {
+  BOARD_MAX_COLUMNS,
+  boardColumnIds,
+  boardDefaults,
+  groupableAttributes,
+  isGroupable,
+  liveOptionCount,
+  type BoardSettings,
+} from '@crm/contracts/board';
 export { DRAFT_LINK_MAX, FILTER_EDIT_MS, type DraftQuery } from './views/draft.ts';
 export type {
   SavedViewSnapshot,

@@ -16,9 +16,12 @@ import {
   type ViewsListSource,
 } from '@crm/data';
 import { useSavedView, useViewsList } from '@crm/data/react';
-import { Button, Callout, EmptyState } from '@crm/ui';
+import { Button, Callout, EmptyState, SegmentedControl } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { BoardScreen } from '../board/BoardScreen.tsx';
+import { planBoard } from '../board/plan.ts';
+import { strings as boardStrings } from '../board/strings.ts';
 import { RecordsScreen } from '../workspace/RecordsScreen.tsx';
 import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
 import { farAttributesFrom, relationTarget, runningQuery, savableQuery, savedQuery, toViewQuery } from './query.ts';
@@ -239,6 +242,112 @@ export function ViewScreen(props: ViewScreenProps) {
   const filtered = running?.filter !== undefined;
   const choices = list.views.length > 0 ? list.views : view === undefined ? [] : [view];
 
+  // Table or Board (spec 0021, AC-492): the view's kind, or the one picked on this visit. Saving the kind for
+  // everyone arrives with the views' layout save (spec 0020 milestone 2, `views.setLayout`); until then the
+  // switch changes this visit only, as it does on a locked view for a member without views.manage.
+  const [pickedKind, setPickedKind] = useState<'table' | 'board' | undefined>(undefined);
+  const kind = pickedKind ?? view?.kind ?? 'table';
+  const layoutSwitch = (
+    <SegmentedControl
+      label={boardStrings.layout}
+      segments={[
+        { value: 'table', label: boardStrings.table },
+        { value: 'board', label: boardStrings.board },
+      ]}
+      value={kind}
+      onChange={(next) => {
+        setPickedKind(next === 'board' ? 'board' : 'table');
+      }}
+    />
+  );
+  const storedBoard = view?.config.board;
+  const boardOutcome = useMemo(
+    () => (kind === 'board' ? planBoard(attributes, storedBoard) : undefined),
+    [kind, attributes, storedBoard],
+  );
+  const viewChoices = choices.map((each) => ({ id: each.id, name: each.name }));
+  const openView = (viewId: string) => {
+    void navigate({
+      to: '/w/$slug/objects/$object/views/$viewId',
+      params: { slug, object: object.apiSlug, viewId },
+    });
+  };
+  const toolbarFor = (announced: string | undefined): ReactNode => (
+    <>
+      <ViewToolbar
+        query={draft.query}
+        filter={running?.filter}
+        attributes={attributes}
+        sortable={sortable}
+        members={memberDisplays}
+        me={me}
+        isDraft={draft.isDraft}
+        canSave={canSave}
+        isSaving={isSaving}
+        onChange={draft.set}
+        onDiscard={discard}
+        onSave={() => {
+          save(false);
+        }}
+        {...(filterOn === undefined ? {} : { filterOn })}
+        {...(focusRequest === undefined ? {} : { focusRequest })}
+        {...(announced === undefined ? {} : { status: announced })}
+      />
+      {showDropped && draft.isDraft && (
+        <Callout
+          tone="warning"
+          placement="banner"
+          isAnnounced
+          actions={
+            <Button
+              variant="ghost"
+              onPress={() => {
+                setShowDropped(false);
+              }}
+            >
+              {strings.dismiss}
+            </Button>
+          }
+        >
+          {strings.draftDropped}
+        </Callout>
+      )}
+    </>
+  );
+  const clashDialog = (
+    <ViewChangedDialog
+      sentence={clash}
+      isReplacing={isSaving}
+      onReplace={() => {
+        save(true);
+      }}
+      onCancel={() => {
+        setClash(undefined);
+      }}
+    />
+  );
+
+  if (boardOutcome !== undefined) {
+    return (
+      <>
+        <BoardScreen
+          slug={slug}
+          object={object}
+          attributes={attributes}
+          members={members}
+          outcome={boardOutcome}
+          query={query}
+          views={viewChoices}
+          currentViewId={view?.id ?? ''}
+          onViewChange={openView}
+          layoutSwitch={layoutSwitch}
+          toolbar={toolbarFor(undefined)}
+        />
+        {clashDialog}
+      </>
+    );
+  }
+
   return (
     <>
       <RecordsScreen
@@ -263,14 +372,10 @@ export function ViewScreen(props: ViewScreenProps) {
           }
           setFilterOn({ attributeId });
         }}
-        views={choices.map((each) => ({ id: each.id, name: each.name }))}
+        views={viewChoices}
         currentViewId={view?.id ?? ''}
-        onViewChange={(viewId) => {
-          void navigate({
-            to: '/w/$slug/objects/$object/views/$viewId',
-            params: { slug, object: object.apiSlug, viewId },
-          });
-        }}
+        onViewChange={openView}
+        viewBarEnd={layoutSwitch}
         announce={(count) =>
           filtered
             ? strings.matching(
@@ -279,53 +384,7 @@ export function ViewScreen(props: ViewScreenProps) {
               )
             : undefined
         }
-        toolbar={(announced) => (
-          <>
-            <ViewToolbar
-              query={draft.query}
-              filter={running?.filter}
-              attributes={attributes}
-              sortable={sortable}
-              members={memberDisplays}
-              me={me}
-              isDraft={draft.isDraft}
-              canSave={canSave}
-              isSaving={isSaving}
-              onChange={draft.set}
-              onDiscard={discard}
-              onSave={() => {
-                save(false);
-              }}
-              {...(filterOn === undefined ? {} : { filterOn })}
-              {...(focusRequest === undefined ? {} : { focusRequest })}
-              {...(announced === undefined ? {} : { status: announced })}
-            />
-            {showDropped && draft.isDraft && (
-              <Callout
-                tone="warning"
-                placement="banner"
-                isAnnounced
-                actions={
-                  <Button
-                    variant="ghost"
-                    onPress={() => {
-                      setShowDropped(false);
-                    }}
-                  >
-                    {strings.dismiss}
-                  </Button>
-                }
-              >
-                {strings.draftDropped}
-              </Callout>
-            )}
-            {view?.kind === 'board' && (
-              <Callout tone="info" placement="banner">
-                {strings.boardSoon}
-              </Callout>
-            )}
-          </>
-        )}
+        toolbar={toolbarFor}
         {...(filtered
           ? {
               filteredEmpty: (
@@ -352,16 +411,7 @@ export function ViewScreen(props: ViewScreenProps) {
             }
           : {})}
       />
-      <ViewChangedDialog
-        sentence={clash}
-        isReplacing={isSaving}
-        onReplace={() => {
-          save(true);
-        }}
-        onCancel={() => {
-          setClash(undefined);
-        }}
-      />
+      {clashDialog}
     </>
   );
 }

@@ -56,6 +56,8 @@ export interface RecordsScreenProps {
   readonly views: readonly { readonly id: string; readonly name: string }[];
   readonly currentViewId: string;
   readonly onViewChange?: (viewId: string) => void;
+  /** At the end of the view bar: the Table and Board switch (spec 0021). */
+  readonly viewBarEnd?: ReactNode;
   /**
    * The view's Toolbar (its sorts, filters and Save), and any notice under it, given what to say to screen
    * readers: `announce`'s words for the count, once the rows for a new question are in (never for the first,
@@ -158,6 +160,7 @@ export function RecordsScreen({
   views,
   currentViewId,
   onViewChange,
+  viewBarEnd,
   toolbar,
   announce,
   filteredEmpty,
@@ -370,6 +373,7 @@ export function RecordsScreen({
                 {strings.addAttribute}
               </Button>
             )}
+            {viewBarEnd}
           </ViewBar>
         ),
         ...(toolbar === undefined ? {} : { toolbar: toolbar(announced.text) }),

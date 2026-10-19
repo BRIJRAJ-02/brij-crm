@@ -44,7 +44,7 @@ export interface BoardSettings {
 }
 
 /** Whether a board may group by `attribute`: a live status, or a live select holding one value (AC-508). */
-export function isGroupable(attribute: Omit<BoardAttribute, 'isSystem' | 'isPrimary' | 'position'>): boolean {
+export function isGroupable(attribute: Pick<BoardAttribute, 'type' | 'isMulti' | 'isArchived'>): boolean {
   if (attribute.isArchived) return false;
   return attribute.type === 'status' || (attribute.type === 'select' && !attribute.isMulti);
 }

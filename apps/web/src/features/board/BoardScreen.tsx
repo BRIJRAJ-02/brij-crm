@@ -1,0 +1,340 @@
+// Brief
+// Purpose: see one object's records as a pipeline, a column per option of a status or select field (spec 0021).
+// Main task: read where every record stands, column by column, with each column's count, live.
+// Leaves out: moving cards (milestone 2), the board's View settings and the stuck badge (milestone 3), and creating records.
+import {
+  toActorDisplays,
+  toFieldAttribute,
+  type AttributeDefinition,
+  type BoardStore,
+  type MemberSummary,
+  type NameState,
+  type ObjectSummary,
+  type RecordRef,
+  type RecordRefDisplay,
+  type RecordsView,
+  type RecordView,
+  type ViewQuery,
+  type ViewState,
+} from '@crm/data';
+import { useBoard, useLiveStatus, type BoardView } from '@crm/data/react';
+import {
+  Board,
+  Button,
+  Callout,
+  EmptyState,
+  TopBar,
+  ViewBar,
+  type BoardCard,
+  type BoardColumn,
+  type ListSource,
+} from '@crm/ui';
+import { useNavigate, useRouteContext } from '@tanstack/react-router';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { AttributeDialog } from '../settings/AttributeDialog.tsx';
+import { strings as workspaceStrings } from '../workspace/strings.ts';
+import { useCan, WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import type { BoardOutcome, BoardPlan } from './plan.ts';
+import { strings } from './strings.ts';
+
+/** The column id the Board gets for records with no value: never an option id (those are uuids). */
+const NO_VALUE_COLUMN = 'no-value';
+
+/** Props for the board screen: what the view screen worked out, and the bars it shares with the table. */
+export interface BoardScreenProps {
+  readonly slug: string;
+  readonly object: ObjectSummary;
+  readonly attributes: readonly AttributeDefinition[];
+  readonly members: readonly MemberSummary[];
+  readonly outcome: BoardOutcome;
+  /** The view's effective filter and sorts (spec 0020): every column runs them. */
+  readonly query: ViewQuery;
+  readonly views: readonly { readonly id: string; readonly name: string }[];
+  readonly currentViewId: string;
+  readonly onViewChange: (viewId: string) => void;
+  /** The Table and Board switch, at the end of the view bar. */
+  readonly layoutSwitch: ReactNode;
+  /** The view's Toolbar (sorts, filters, Save) and any notice under it. */
+  readonly toolbar: ReactNode;
+}
+
+/** One object's view as a board: the bars, then the board or why there is none. */
+export function BoardScreen(props: BoardScreenProps) {
+  const { slug, object, attributes, members, outcome, views, currentViewId, onViewChange, layoutSwitch, toolbar } =
+    props;
+  const { data } = useRouteContext({ from: '__root__' });
+  const live = useLiveStatus(data.live);
+  const canChangeSchema = useCan('schema.manage');
+  const [isAdding, setAdding] = useState(false);
+  return (
+    <WorkspacePage
+      currentObject={object.apiSlug}
+      page={{
+        topBar: <TopBar title={object.pluralName} icon={object.icon} hue={object.hue} />,
+        viewBar: (
+          <ViewBar views={views} currentViewId={currentViewId} onViewChange={onViewChange}>
+            {live === 'paused' && (
+              <Callout placement="bar" isAnnounced>
+                {workspaceStrings.livePaused}
+              </Callout>
+            )}
+            {layoutSwitch}
+          </ViewBar>
+        ),
+        toolbar,
+        body: (
+          <>
+            {outcome.kind === 'board' ? (
+              <BoardBody {...props} plan={outcome} />
+            ) : outcome.kind === 'nothing-to-group' ? (
+              <EmptyState
+                icon="kanban"
+                title={strings.nothingToGroupTitle(object.pluralName)}
+                // Only owners and admins change the schema (spec 0009, AC-136); others see the sentence alone.
+                {...(canChangeSchema
+                  ? {
+                      actions: (
+                        <Button icon="plus" onPress={() => setAdding(true)}>
+                          {strings.addAttribute}
+                        </Button>
+                      ),
+                    }
+                  : {})}
+              >
+                {strings.nothingToGroupText}
+              </EmptyState>
+            ) : outcome.kind === 'group-archived' ? (
+              <EmptyState icon="archive" title={strings.groupArchivedTitle(outcome.title)}>
+                {strings.groupArchivedText}
+              </EmptyState>
+            ) : (
+              <EmptyState icon="kanban" title={strings.tooManyTitle}>
+                {strings.tooManyText(outcome.title, outcome.count.toLocaleString())}
+              </EmptyState>
+            )}
+            <AttributeDialog
+              slug={slug}
+              objectId={object.id}
+              isOpen={isAdding}
+              members={members}
+              canManage={canChangeSchema}
+              objectAttributes={attributes}
+              onClose={() => {
+                setAdding(false);
+              }}
+              onSaved={() => {
+                // The route reads the attributes again: a status or select field makes the board.
+                setAdding(false);
+              }}
+            />
+          </>
+        ),
+      }}
+    />
+  );
+}
+
+/**
+ * The board store for a question, opened through the data layer: the one
+ * already shown stays until the next one exists, so the board never blanks
+ * while the filter or sorts change.
+ */
+function useBoardStore(
+  slug: string,
+  objectId: string,
+  plan: BoardPlan,
+  query: ViewQuery,
+  attributeIds: readonly string[],
+): BoardStore<RecordsView> | undefined {
+  const { data } = useRouteContext({ from: '__root__' });
+  const asked = useMemo(
+    () => ({
+      groupBy: plan.groupBy.id,
+      columnIds: plan.columnIds,
+      archivedIds: plan.archivedIds,
+      ...(query.filter === undefined ? {} : { filter: query.filter }),
+      ...(query.sorts === undefined ? {} : { sorts: query.sorts }),
+    }),
+    [plan.groupBy.id, plan.columnIds, plan.archivedIds, query.filter, query.sorts],
+  );
+  const key = JSON.stringify([objectId, asked]);
+  const [held, setHeld] = useState<{ readonly key: string; readonly store: BoardStore<RecordsView> }>();
+  useEffect(() => {
+    let isCurrent = true;
+    void data.records.board(slug, objectId, asked, attributeIds).then((store) => {
+      if (isCurrent) setHeld({ key, store });
+    });
+    return () => {
+      isCurrent = false;
+    };
+    // The question is `key`; the card fields reach the columns through useBoard.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data, slug, key]);
+  return held?.store;
+}
+
+/** A reference value's links, as a list: one link, several, or none. */
+function refsOf(value: unknown): readonly RecordRef[] {
+  const list: readonly unknown[] = Array.isArray(value) ? value : value === null || value === undefined ? [] : [value];
+  return list.flatMap((each) => {
+    if (typeof each !== 'object' || each === null) return [];
+    const { objectId, recordId } = each as { readonly objectId?: unknown; readonly recordId?: unknown };
+    return typeof objectId === 'string' && typeof recordId === 'string' ? [{ objectId, recordId }] : [];
+  });
+}
+
+/** How a linked record shows while its name loads, or when it can't be read. */
+function displayOf(ref: RecordRef, state: NameState): RecordRefDisplay {
+  if (state === 'loading') return { ...ref, name: '', kind: 'other' };
+  if (state === 'unknown') return { ...ref, name: workspaceStrings.unavailableRecord, kind: 'other' };
+  return state;
+}
+
+/** A column still waiting for its first cards: three skeleton cards. */
+const LOADING_CARDS: ListSource<BoardCard> = { count: 3, getItem: () => undefined, getKey: (card) => card.id };
+
+/** The board itself: its columns from the store, each column's cards from its window. */
+function BoardBody({ slug, object, members, plan, query }: BoardScreenProps & { readonly plan: BoardPlan }) {
+  const navigate = useNavigate();
+  const attributeIds = useMemo(
+    () => [...plan.cardFields.map((field) => field.id), plan.groupBy.id],
+    [plan.cardFields, plan.groupBy.id],
+  );
+  const store = useBoardStore(slug, object.id, plan, query, attributeIds);
+  const fields = useMemo(
+    () => plan.cardFields.map((field) => toFieldAttribute(field, workspaceStrings.referenceReadOnly)),
+    [plan.cardFields],
+  );
+  // Show empty columns, for this visit until View settings saves it with the view (milestone 3, AC-497).
+  const [showEmpty, setShowEmpty] = useState(plan.settings.showEmptyColumns);
+  const label = strings.label(object.pluralName, plan.groupBy.title);
+  if (store === undefined) {
+    return (
+      <Board
+        label={label}
+        columns={[]}
+        cardFields={fields}
+        onMove={() => undefined}
+        isReadOnly
+        showEmptyColumns={showEmpty}
+        status="loading"
+      />
+    );
+  }
+  return (
+    <LoadedBoard
+      store={store}
+      attributeIds={attributeIds}
+      label={label}
+      object={object}
+      members={members}
+      plan={plan}
+      fields={fields}
+      showEmpty={showEmpty}
+      onShowEmptyChange={setShowEmpty}
+      onOpen={(card) => {
+        void navigate({
+          to: '/w/$slug/objects/$object/$recordId/$tab',
+          params: { slug, object: object.apiSlug, recordId: card.id, tab: 'overview' },
+        });
+      }}
+    />
+  );
+}
+
+interface LoadedBoardProps {
+  readonly store: BoardStore<RecordsView>;
+  readonly attributeIds: readonly string[];
+  readonly label: string;
+  readonly object: ObjectSummary;
+  readonly members: readonly MemberSummary[];
+  readonly plan: BoardPlan;
+  readonly fields: ReturnType<typeof toFieldAttribute>[];
+  readonly showEmpty: boolean;
+  readonly onShowEmptyChange: (show: boolean) => void;
+  readonly onOpen: (card: BoardCard) => void;
+}
+
+function LoadedBoard({
+  store,
+  attributeIds,
+  label,
+  object,
+  members,
+  plan,
+  fields,
+  showEmpty,
+  onShowEmptyChange,
+  onOpen,
+}: LoadedBoardProps) {
+  const board: BoardView = useBoard(store, attributeIds);
+  const memberDisplays = useMemo(() => toActorDisplays(members), [members]);
+  const options = useMemo(
+    () => new Map((plan.groupBy.options ?? []).map((option) => [option.id, option])),
+    [plan.groupBy.options],
+  );
+  const kinds = useMemo(() => new Map(plan.cardFields.map((field) => [field.id, field.type])), [plan.cardFields]);
+  const unnamed = workspaceStrings.unnamed(object.singularName);
+  // One card per record body: a body the store keeps the same keeps its card, so a card redraws only when it changed.
+  const cards = useRef(new WeakMap<RecordView, BoardCard>());
+  const cardOf = (row: RecordView, state: ViewState): BoardCard => {
+    const held = cards.current.get(row);
+    if (held !== undefined) return held;
+    const displays: Record<string, unknown> = {};
+    for (const [id, type] of kinds) {
+      if (type === 'actor_reference') displays[id] = memberDisplays;
+      if (type !== 'record_reference') continue;
+      const refs = refsOf(row.values[id]);
+      if (refs.length === 0) continue;
+      const names = state.referenceDisplays(refs);
+      displays[id] = refs.map((ref, index) => displayOf(ref, names[index] ?? 'loading'));
+    }
+    const card: BoardCard = {
+      id: row.id,
+      record: row.display.name === '' ? { ...row.display, name: unnamed } : row.display,
+      values: row.values,
+      displays,
+    };
+    cards.current.set(row, card);
+    return card;
+  };
+  const columns: readonly BoardColumn[] = board.columns.map((column) => {
+    const option = column.id === null ? undefined : options.get(column.id);
+    const { state } = column;
+    return {
+      id: column.id ?? NO_VALUE_COLUMN,
+      title: option?.label ?? strings.noValue(plan.groupBy.title),
+      ...(option === undefined ? {} : { hue: option.hue }),
+      count: state?.count.count ?? 0,
+      ...(state?.count.atLeast === true ? { isCountAtLeast: true } : {}),
+      ...(option?.isArchived === true ? { isArchived: true } : {}),
+      cards:
+        state === undefined
+          ? LOADING_CARDS
+          : {
+              count: state.source.count,
+              getItem: (index: number) => {
+                const row = state.source.getItem(index);
+                return row === undefined ? undefined : cardOf(row, state);
+              },
+              getKey: (card: BoardCard) => card.id,
+              onRangeChange: state.source.onRangeChange,
+            },
+    };
+  });
+  return (
+    <Board
+      label={label}
+      columns={columns}
+      cardFields={fields}
+      // Moving cards arrives with milestone 2: until then the board shows no handles.
+      isReadOnly
+      onMove={() => undefined}
+      showEmptyColumns={showEmpty}
+      onShowEmptyColumnsChange={onShowEmptyChange}
+      onOpen={onOpen}
+      status={board.status}
+      onRetry={store.retry}
+    />
+  );
+}
