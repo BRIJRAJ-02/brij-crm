@@ -109,18 +109,18 @@ function refusalAnswer(error: unknown, headers?: Record<string, string>): Respon
   return answer('NOT_FOUND', words.notFound, extra);
 }
 
-/** Whose post this is, by the form's rules: the hosted page, a listed site (signed when it must be), or nobody. */
+/** Whose post this is, by the form's posting settings: the hosted page, a listed site (signed when it must be), or nobody. */
 function postFrom(
-  rules: PostingRules,
+  posting: PostingRules,
   publicOrigin: string,
   origin: string | undefined,
   body: string,
   signature: string | null,
 ): { readonly allowed: boolean; readonly cors?: string } {
   if (origin === publicOrigin) return { allowed: true };
-  const signed = isSigned(rules.signingSecret, body, signature);
-  if (origin !== undefined && rules.allowedOrigins.includes(origin)) {
-    return { allowed: !rules.requireSignature || signed, cors: origin };
+  const signed = isSigned(posting.signingSecret, body, signature);
+  if (origin !== undefined && posting.allowedOrigins.includes(origin)) {
+    return { allowed: !posting.requireSignature || signed, cors: origin };
   }
   // A site's server posting with no Origin at all: only with the form's signature.
   return { allowed: origin === undefined && signed };
@@ -149,8 +149,8 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
     const origin = c.get('origin');
     try {
       const { scope, formId } = await enterPublicForm({ db: deps.db }, c.req.param('publicKey'));
-      const rules = await postingRules(scope, { formId });
-      if (origin === undefined || !rules.allowedOrigins.includes(origin)) return c.body(null, 403);
+      const posting = await postingRules(scope, { formId });
+      if (origin === undefined || !posting.allowedOrigins.includes(origin)) return c.body(null, 403);
       return c.body(null, 204, corsHeaders(origin));
     } catch {
       return c.body(null, 404);
@@ -170,16 +170,16 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
         return answer('RATE_LIMITED', words.tooMany, { headers: { 'retry-after': String(ceiling.retryAfterSeconds) } });
       }
       let entered: Awaited<ReturnType<typeof enterPublicForm>>;
-      let rules: PostingRules;
+      let posting: PostingRules;
       try {
         entered = await enterPublicForm({ db: deps.db }, c.req.param('publicKey') ?? '');
-        rules = await postingRules(entered.scope, { formId: entered.formId });
+        posting = await postingRules(entered.scope, { formId: entered.formId });
       } catch (error) {
         return refusalAnswer(error);
       }
       const { scope, formId } = entered;
       const text = await c.req.text();
-      const from = postFrom(rules, deps.publicOrigin, c.get('origin'), text, c.req.header(SIGNATURE_HEADER) ?? null);
+      const from = postFrom(posting, deps.publicOrigin, c.get('origin'), text, c.req.header(SIGNATURE_HEADER) ?? null);
       const cors = from.cors === undefined ? undefined : corsHeaders(from.cors);
       const headers = (more: Record<string, string> = {}) => ({ ...(cors ?? {}), ...more });
       if (!from.allowed)

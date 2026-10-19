@@ -2031,6 +2031,19 @@ select "id", "object_id", "list_id", "api_slug", "title", "type", "is_multi", "i
   
   ["<id 2>",51]
 
+
+    select l.submission_id::text, l.role, f.id::text as form_id, f.name as form_name, l.action,
+      to_char(l.created_at at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as at
+    from form_submission_records l
+    join forms f on f.workspace_id = l.workspace_id
+      and f.id = (select s.form_id from form_submissions s where s.workspace_id = l.workspace_id and s.id = l.submission_id)
+    where l.record_id = $1::uuid
+      and true and true
+    order by l.created_at desc, ('submission:' || l.submission_id::text || ':' || l.role) collate "C"
+    limit $2
+  
+  ["<id 2>",51]
+
 commit
   []
 
