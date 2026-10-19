@@ -249,7 +249,12 @@ describe('the walk: a principal without the access is refused', () => {
         code: 'FORBIDDEN',
         message: PERMISSIONS['booking.manage'].message,
       });
-      if (['listBookingPages', 'createBookingPage', 'getMemberHours', 'setMemberHours'].includes(name)) return;
+      if (
+        ['listBookingPages', 'listWorkspaceBookings', 'createBookingPage', 'getMemberHours', 'setMemberHours'].includes(
+          name,
+        )
+      )
+        return;
       const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });
       const page = await core.createBookingPage(owner, { id: core.newId(), title: 'Intro', timeZone: 'UTC' });
       expect(await refusalOf(service(name)(scope, { pageId: page.id, settings: {}, when: 'upcoming' }))).toMatchObject({
