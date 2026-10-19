@@ -27,7 +27,7 @@ Skills by area: crm-design-system, crm-frontend-state, react-aria, semantic-html
 | 6 | Forms | The builder, the hosted form and embed with the library's own inputs, phone and country pickers, the meeting hand off, forms milestone 2 | F24 to F27 |
 | 7 | Settings | Spec 0026: the grouped settings area, the theme switch out of the sidebar, Calendar under Account, brand marks | F28 to F30 |
 | 8 | Sign in, sign up, onboarding | The timefix flows in our look, the Google mark, focus on the first field, the theme colour for phones | F31 to F34 |
-| 9 | Calendar sync | Milestones 2 and 3, and the owner's open question on showing solo events as Busy | F35 |
+| 9 | Calendar sync | Milestones 2 and 3, and solo Google events shown as Busy blocks (decided) | F35 |
 | 10 | Booking milestone 2 | Guest move, add guests and cancel, emails with .ics, reminders, questions, host actions | F36 |
 | 11 | Records | The testing pass's findings: the cut off cell error, phone and country fields, the board count and New deal, and the rest | F37 to F39 |
 | 12 | The testing batch | Screenshot baselines, Playwright flows, a full verification pass, the design system artifact publish | F40 |
@@ -87,7 +87,7 @@ Work that was in flight when the lanes stopped is kept on its lane branches (a `
 - F34. "make a check on each one of it": every flow driven and checked.
 
 ### Calendar sync
-- F35. Should Google events with nobody else invited show as Busy blocks? Waiting on the owner.
+- F35. Google events with nobody else invited show as Busy blocks (owner, 20 Oct: "yes blocked"). Open.
 
 ### Booking milestone 2
 - F36. Guest and host actions, emails and reminders. Open.
