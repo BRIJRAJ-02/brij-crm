@@ -18,4 +18,10 @@ export const strings = {
   /** The grouping field was archived (AC-506). */
   groupArchivedTitle: (title: string) => `${title} is archived.`,
   groupArchivedText: 'Pick another field to group by.',
+  /** A required field's no value column, while a card moves (AC-502). */
+  requiredRefuses: (title: string) => `${title} is required, so cards can’t move here.`,
+  /** An object the member may only read: why no card moves. */
+  readOnly: (plural: string) => `You can view ${plural.toLowerCase()} but not change them.`,
+  /** After a move, for screen readers (AC-509). */
+  moved: (name: string, column: string) => `Moved ${name} to ${column}.`,
 } as const;

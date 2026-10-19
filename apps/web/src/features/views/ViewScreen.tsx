@@ -341,7 +341,7 @@ export function ViewScreen(props: ViewScreenProps) {
           currentViewId={view?.id ?? ''}
           onViewChange={openView}
           layoutSwitch={layoutSwitch}
-          toolbar={toolbarFor(undefined)}
+          toolbar={toolbarFor}
         />
         {clashDialog}
       </>

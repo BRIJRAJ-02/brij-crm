@@ -1,7 +1,7 @@
 // Brief
 // Purpose: see one object's records as a pipeline, a column per option of a status or select field (spec 0021).
-// Main task: read where every record stands, column by column, with each column's count, live.
-// Leaves out: moving cards (milestone 2), the board's View settings and the stuck badge (milestone 3), and creating records.
+// Main task: see where every record stands and drag a card to its next column, live for everyone.
+// Leaves out: the board's View settings and the stuck badge (milestone 3), and creating records from the board.
 import {
   toActorDisplays,
   toFieldAttribute,
@@ -54,8 +54,8 @@ export interface BoardScreenProps {
   readonly onViewChange: (viewId: string) => void;
   /** The Table and Board switch, at the end of the view bar. */
   readonly layoutSwitch: ReactNode;
-  /** The view's Toolbar (sorts, filters, Save) and any notice under it. */
-  readonly toolbar: ReactNode;
+  /** The view's Toolbar (sorts, filters, Save) and any notice under it, given what to say to screen readers. */
+  readonly toolbar: (announced: string | undefined) => ReactNode;
 }
 
 /** One object's view as a board: the bars, then the board or why there is none. */
@@ -66,6 +66,8 @@ export function BoardScreen(props: BoardScreenProps) {
   const live = useLiveStatus(data.live);
   const canChangeSchema = useCan('schema.manage');
   const [isAdding, setAdding] = useState(false);
+  // What a move says to screen readers ("Moved Acme renewal to Won."), through the Toolbar's status.
+  const [announced, setAnnounced] = useState<string | undefined>(undefined);
   return (
     <WorkspacePage
       currentObject={object.apiSlug}
@@ -81,11 +83,11 @@ export function BoardScreen(props: BoardScreenProps) {
             {layoutSwitch}
           </ViewBar>
         ),
-        toolbar,
+        toolbar: toolbar(announced),
         body: (
           <>
             {outcome.kind === 'board' ? (
-              <BoardBody {...props} plan={outcome} />
+              <BoardBody {...props} plan={outcome} onAnnounce={setAnnounced} />
             ) : outcome.kind === 'nothing-to-group' ? (
               <EmptyState
                 icon="kanban"
@@ -194,7 +196,14 @@ function displayOf(ref: RecordRef, state: NameState): RecordRefDisplay {
 const LOADING_CARDS: ListSource<BoardCard> = { count: 3, getItem: () => undefined, getKey: (card) => card.id };
 
 /** The board itself: its columns from the store, each column's cards from its window. */
-function BoardBody({ slug, object, members, plan, query }: BoardScreenProps & { readonly plan: BoardPlan }) {
+function BoardBody({
+  slug,
+  object,
+  members,
+  plan,
+  query,
+  onAnnounce,
+}: BoardScreenProps & { readonly plan: BoardPlan; readonly onAnnounce: (text: string) => void }) {
   const navigate = useNavigate();
   const attributeIds = useMemo(
     () => [...plan.cardFields.map((field) => field.id), plan.groupBy.id],
@@ -232,6 +241,7 @@ function BoardBody({ slug, object, members, plan, query }: BoardScreenProps & { 
       fields={fields}
       showEmpty={showEmpty}
       onShowEmptyChange={setShowEmpty}
+      onAnnounce={onAnnounce}
       onOpen={(card) => {
         void navigate({
           to: '/w/$slug/objects/$object/$recordId/$tab',
@@ -252,6 +262,7 @@ interface LoadedBoardProps {
   readonly fields: ReturnType<typeof toFieldAttribute>[];
   readonly showEmpty: boolean;
   readonly onShowEmptyChange: (show: boolean) => void;
+  readonly onAnnounce: (text: string) => void;
   readonly onOpen: (card: BoardCard) => void;
 }
 
@@ -265,6 +276,7 @@ function LoadedBoard({
   fields,
   showEmpty,
   onShowEmptyChange,
+  onAnnounce,
   onOpen,
 }: LoadedBoardProps) {
   const board: BoardView = useBoard(store, attributeIds);
@@ -275,6 +287,12 @@ function LoadedBoard({
   );
   const kinds = useMemo(() => new Map(plan.cardFields.map((field) => [field.id, field.type])), [plan.cardFields]);
   const unnamed = workspaceStrings.unnamed(object.singularName);
+  // Read only (spec 0009, AC-502): a field the member can't write, or an object they may only read. No handles;
+  // each card's lock says why. The server refuses a move anyway.
+  const readOnlyReason =
+    plan.groupBy.readOnly?.reason ?? (object.access === 'write' ? undefined : strings.readOnly(object.pluralName));
+  const titleOf = (id: string | null) =>
+    id === null ? strings.noValue(plan.groupBy.title) : (options.get(id)?.label ?? '');
   // One card per record body: a body the store keeps the same keeps its card, so a card redraws only when it changed.
   const cards = useRef(new WeakMap<RecordView, BoardCard>());
   const cardOf = (row: RecordView, state: ViewState): BoardCard => {
@@ -294,6 +312,7 @@ function LoadedBoard({
       record: row.display.name === '' ? { ...row.display, name: unnamed } : row.display,
       values: row.values,
       displays,
+      ...(readOnlyReason === undefined ? {} : { readOnlyReason }),
     };
     cards.current.set(row, card);
     return card;
@@ -308,6 +327,10 @@ function LoadedBoard({
       count: state?.count.count ?? 0,
       ...(state?.count.atLeast === true ? { isCountAtLeast: true } : {}),
       ...(option?.isArchived === true ? { isArchived: true } : {}),
+      // A required field's no value column takes no card (AC-502).
+      ...(column.id === null && plan.groupBy.isRequired
+        ? { refusesDrop: { reason: strings.requiredRefuses(plan.groupBy.title) } }
+        : {}),
       cards:
         state === undefined
           ? LOADING_CARDS
@@ -327,9 +350,23 @@ function LoadedBoard({
       label={label}
       columns={columns}
       cardFields={fields}
-      // Moving cards arrives with milestone 2: until then the board shows no handles.
-      isReadOnly
-      onMove={() => undefined}
+      isReadOnly={readOnlyReason !== undefined}
+      onMove={({ cardId, toColumnId }) => {
+        const to = toColumnId === NO_VALUE_COLUMN ? null : toColumnId;
+        const name = store.getSnapshot().columns.flatMap((column) => {
+          const source = column.view?.getSnapshot().source;
+          if (source === undefined) return [];
+          for (let index = 0; index < source.count; index += 1) {
+            const row = source.getItem(index);
+            if (row?.id === cardId) return [row.display.name === '' ? unnamed : row.display.name];
+          }
+          return [];
+        })[0];
+        void store.move(cardId, to).then((landed) => {
+          if (landed && name !== undefined) onAnnounce(strings.moved(name, titleOf(to)));
+        });
+      }}
+      onMovingChange={store.holdStill}
       showEmptyColumns={showEmpty}
       onShowEmptyColumnsChange={onShowEmptyChange}
       onOpen={onOpen}
