@@ -1,7 +1,9 @@
 // `@crm/data/react`: the data layer's React binding (spec 0005). Screens read
 // a view and the live status through it, so they never subscribe to the store
 // themselves.
-import { useEffect, useRef, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import type { BoardStatus, BoardStore } from './records/board.ts';
+import type { DataError } from './errors.ts';
 import type { ActivityFeed, ActivityState } from './activity/feed.ts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
 import type { LiveStatus } from './live/live.ts';
@@ -43,6 +45,77 @@ export function useView(view: RecordsView, attributeIds: readonly string[] = [])
 }
 
 const split = (columns: string): readonly string[] => (columns === '' ? [] : columns.split('\u0000'));
+
+/** One column of a board as a screen reads it: its option (or `null`), and its window's state once its cards came. */
+export interface BoardColumnView {
+  readonly id: string | null;
+  readonly view?: RecordsView;
+  readonly state?: ViewState;
+}
+
+/** A board as a screen reads it: its status, what failed, and each column with its window's state. */
+export interface BoardView {
+  readonly status: BoardStatus;
+  readonly error?: DataError;
+  readonly columns: readonly BoardColumnView[];
+}
+
+/**
+ * A board's state (spec 0021), re-rendering when it or any column changes.
+ * While the screen is mounted it holds the board and every column's window
+ * with the card fields it shows (`attributeIds`), so each column keeps its
+ * cards; once no screen shows them for a while, the layer lets them go.
+ */
+export function useBoard(board: BoardStore<RecordsView>, attributeIds: readonly string[] = []): BoardView {
+  useEffect(() => board.retain(), [board]);
+  const state = useSyncExternalStore(board.subscribe, board.getSnapshot);
+  const views = useMemo(
+    () => state.columns.flatMap((column) => (column.view === undefined ? [] : [column.view])),
+    [state.columns],
+  );
+  const columns = attributeIds.join('\u0000');
+  useEffect(() => {
+    const readers = views.map((view) => view.retain(split(columns)));
+    return () => {
+      for (const reader of readers) reader.release();
+    };
+  }, [views, columns]);
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      const stops = views.map((view) => view.subscribe(listener));
+      return () => {
+        for (const stop of stops) stop();
+      };
+    },
+    [views],
+  );
+  // The same array while no column's state changed, so React sees a stable snapshot.
+  const last = useRef<readonly ViewState[]>([]);
+  const getSnapshot = useCallback(() => {
+    const next = views.map((view) => view.getSnapshot());
+    if (next.length === last.current.length && next.every((each, index) => each === last.current[index])) {
+      return last.current;
+    }
+    last.current = next;
+    return next;
+  }, [views]);
+  const states = useSyncExternalStore(subscribe, getSnapshot);
+  return useMemo(() => {
+    const byView = new Map(views.map((view, index) => [view, states[index]]));
+    return {
+      status: state.status,
+      ...(state.error === undefined ? {} : { error: state.error }),
+      columns: state.columns.map((column) => {
+        const columnState = column.view === undefined ? undefined : byView.get(column.view);
+        return {
+          id: column.id,
+          ...(column.view === undefined ? {} : { view: column.view }),
+          ...(columnState === undefined ? {} : { state: columnState }),
+        };
+      }),
+    };
+  }, [state, states, views]);
+}
 
 /** What `useLiveStatus` reads: the data layer's `live`. */
 export interface LiveSource {

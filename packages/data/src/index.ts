@@ -49,6 +49,7 @@ import { createPendingOptions } from './options.ts';
 import { nextHue } from '@crm/contracts/picker';
 import type { UndoKind } from './records/history.ts';
 import type { RecordAttributes, RecordSubscription } from './records/one.ts';
+import type { BoardQuery, BoardStore } from './records/board.ts';
 import type { RestoreSummary, Trash, TrashView } from './trash/store.ts';
 import type {
   CellChange,
@@ -178,6 +179,7 @@ export type {
   ViewStatus,
 } from './records/layer.ts';
 export type { RecordAttributes, RecordState, RecordStatus, RecordSubscription } from './records/one.ts';
+export type { BoardColumnState, BoardQuery, BoardState, BoardStatus, BoardStore } from './records/board.ts';
 export type { TrashedSource, TrashedState } from './records/trashed.ts';
 export type { RowNote } from './records/view.ts';
 export type { RestoreSummary, TrashRow, TrashState, TrashStatus, TrashView } from './trash/store.ts';
@@ -1078,6 +1080,20 @@ export function createDataLayer({
     query: (input, signal) =>
       call((options) => api.records.query({ ...input, attributeIds: [...input.attributeIds] }, options), signal),
     count: (input, signal) => call((options) => api.records.count(input, options), signal),
+    groups: (input, signal) =>
+      call(
+        (options) =>
+          api.records.groups(
+            {
+              ...input,
+              groupIds: [...input.groupIds],
+              attributeIds: [...input.attributeIds],
+              ...(input.sorts === undefined ? {} : { sorts: [...input.sorts] }),
+            },
+            options,
+          ),
+        signal,
+      ),
     get: (input) =>
       call((options) =>
         api.records.get(
@@ -1934,6 +1950,19 @@ export function createDataLayer({
           clearTimeout(timer);
         }
         return view;
+      },
+      /**
+       * A board on an object (spec 0021): a window per column, each the view's
+       * filter and one option of the grouping attribute, first loaded through
+       * `records.groups`. The screen reads it through `useBoard`.
+       */
+      async board(
+        workspace: string,
+        objectId: string,
+        query: BoardQuery,
+        attributeIds: readonly string[] = [],
+      ): Promise<BoardStore<RecordsView>> {
+        return (await recordsLayer()).board(workspace, objectId, query, attributeIds);
       },
       /** A new record's id: mint it once per form, and send the same one on every try, so nothing is made twice. */
       newId: () => mintId(),

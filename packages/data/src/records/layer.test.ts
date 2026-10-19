@@ -18,6 +18,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { dataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
+import type { GroupsAnswer, GroupsRequest } from './board.ts';
 import { UNDO_DEPTH } from './history.ts';
 import { createRecordsLayer, MAX_BATCH_RECORDS, RECORD_WORDS, type RecordsApi, type ReplacedNotice } from './layer.ts';
 
@@ -97,6 +98,7 @@ function fakeApi() {
   const gets: Pending<readonly string[], RecordView[]>[] = [];
   const deletes: Pending<DeleteManyInput, DeleteManyResults['results']>[] = [];
   const restores: Pending<RestoreBatchInput, RestoreBatchResults['results']>[] = [];
+  const groups: Pending<GroupsRequest, GroupsAnswer>[] = [];
   // What each records.get asked for besides its ids: the attributes (spec 0006, AC-55).
   const getAttributes: (readonly string[] | undefined)[] = [];
   const queue =
@@ -146,8 +148,10 @@ function fakeApi() {
     // Spec 0022: each answers its results with one echo.
     deleteMany: async (input) => ({ results: await queue(deletes)(input), echoes: 1 }),
     restoreBatch: async (input) => ({ mode: 'inline' as const, results: await queue(restores)(input), echoes: 1 }),
+    // Spec 0021: a board's first cards and counts.
+    groups: (input, signal) => queue(groups)(input, signal),
   };
-  return { api, queries, counts, creates, edits, batches, gets, getAttributes, deletes, restores };
+  return { api, queries, counts, creates, edits, batches, gets, getAttributes, deletes, restores, groups };
 }
 
 /** What a records.query carried, past its workspace and object. */
@@ -2132,5 +2136,177 @@ describe('deleting records, the state review (spec 0022)', () => {
     await settle();
     frame();
     expect([...view.getSnapshot().gone]).toEqual([idAt(1)]);
+  });
+});
+
+describe('a board (spec 0021)', () => {
+  const STAGE = 'attr-stage';
+  const option = (n: number) => `0199a6f2-0000-7000-8000-${(0xa000 + n).toString(16).padStart(12, '0')}`;
+  /** 13 options and the no value column: 14 columns, the 4th option archived. */
+  const OPTIONS = Array.from({ length: 13 }, (_, n) => option(n));
+  const ARCHIVED = option(3);
+  const COLUMNS = [null, ...OPTIONS];
+  const QUERY = {
+    groupBy: STAGE,
+    columnIds: COLUMNS,
+    archivedIds: [ARCHIVED],
+    sorts: [{ attributeId: CREATED, direction: 'descending' as const }],
+  };
+  /** A column's first cards: `count` of them, from `from`, the cursor after when more remain. */
+  const seed = (id: string | null, from: number, count: number, total = count) => ({
+    id,
+    records: block(from, count),
+    ...(total > count ? { nextCursor: `after-${String(from + count - 1)}` } : {}),
+    count: total,
+    atLeast: false,
+  });
+
+  it('asks for 12 columns a call, one call after another, the first probing archived options', async () => {
+    const { layer, groups, queries, counts, frame } = setup();
+    const board = layer.board(WS, PEOPLE, QUERY, [CITY]);
+    board.retain();
+    await settle();
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.input).toEqual({
+      workspace: WS,
+      objectId: PEOPLE,
+      groupBy: STAGE,
+      groupIds: COLUMNS.slice(0, 12),
+      sorts: QUERY.sorts,
+      attributeIds: [CITY, STAGE],
+      limit: 25,
+      probeArchived: true,
+      now: at(30),
+      timeZone: 'Europe/London',
+    });
+    expect(board.getSnapshot().status).toBe('loading');
+    // Archived options hide until the probe says a live record holds them.
+    expect(board.getSnapshot().columns.map((column) => column.id)).not.toContain(ARCHIVED);
+    groups[0]?.answer({
+      groups: COLUMNS.slice(0, 12).map((id, n) => seed(id, n * 10, 1)),
+      archivedHolding: [],
+    });
+    await settle();
+    // The second call waits for the first, and asks for what is left, the unheld archived option dropped.
+    expect(groups).toHaveLength(2);
+    expect(groups[1]?.input.groupIds).toEqual(COLUMNS.slice(12));
+    expect(groups[1]?.input.probeArchived).toBeUndefined();
+    const snapshot = board.getSnapshot();
+    expect(snapshot.status).toBe('ready');
+    expect(snapshot.columns.map((column) => column.id)).toEqual(COLUMNS.filter((id) => id !== ARCHIVED));
+    expect(snapshot.columns.filter((column) => column.view !== undefined)).toHaveLength(11);
+    groups[1]?.answer({ groups: COLUMNS.slice(12).map((id, n) => seed(id, 200 + n * 10, 1)) });
+    await settle();
+    frame();
+    expect(board.getSnapshot().columns.every((column) => column.view !== undefined)).toBe(true);
+    // Seeded: no column asked for its own count or first block.
+    expect(queries).toHaveLength(0);
+    expect(counts).toHaveLength(0);
+  });
+
+  it('seeds each column window, which pages on by cursor 25 at a time', async () => {
+    const { layer, groups, queries, frame } = setup();
+    const board = layer.board(WS, PEOPLE, { ...QUERY, columnIds: [null, option(0)], archivedIds: [] }, [CITY]);
+    await settle();
+    groups[0]?.answer({ groups: [seed(null, 0, 0), seed(option(0), 100, 25, 40)], archivedHolding: [] });
+    await settle();
+    const view = board.getSnapshot().columns[1]?.view;
+    if (view === undefined) throw new Error('No column.');
+    view.retain([CITY]);
+    await view.ready();
+    frame();
+    const state = view.getSnapshot();
+    expect(state.status).toBe('ready');
+    expect(state.mode).toBe('cursor');
+    expect(state.count).toEqual({ count: 40, atLeast: false });
+    expect(state.source.getItem(0)?.id).toBe(idAt(100));
+    expect(state.source.getItem(24)?.id).toBe(idAt(124));
+    state.source.onRangeChange({ start: 20, end: 35 });
+    await settle();
+    expect(queries).toHaveLength(1);
+    expect(queries[0]?.input).toMatchObject({
+      cursor: 'after-124',
+      limit: 25,
+      filter: { conjunction: 'and', conditions: [{ attributeId: STAGE, operator: 'is', value: option(0) }] },
+      sorts: QUERY.sorts,
+    });
+    // The empty column is ready with nothing to load.
+    const empty = board.getSnapshot().columns[0]?.view;
+    await empty?.ready();
+    expect(empty?.getSnapshot().count).toEqual({ count: 0, atLeast: false });
+  });
+
+  it('shows an archived option still held, in its place', async () => {
+    const { layer, groups } = setup();
+    const board = layer.board(WS, PEOPLE, { ...QUERY, columnIds: COLUMNS.slice(0, 6) }, [CITY]);
+    await settle();
+    groups[0]?.answer({
+      groups: COLUMNS.slice(0, 6).map((id, n) => seed(id, n * 10, 1)),
+      archivedHolding: [ARCHIVED],
+    });
+    await settle();
+    expect(board.getSnapshot().columns.map((column) => column.id)).toEqual(COLUMNS.slice(0, 6));
+    expect(groups).toHaveLength(1);
+  });
+
+  it('keeps the columns already in when a later call fails, and Retry sends again from that call', async () => {
+    const { layer, groups } = setup();
+    const board = layer.board(WS, PEOPLE, QUERY, [CITY]);
+    await settle();
+    groups[0]?.answer({ groups: COLUMNS.slice(0, 12).map((id, n) => seed(id, n * 10, 1)), archivedHolding: [] });
+    await settle();
+    groups[1]?.fail(dataError('QUERY_CANCELLED', 'The board took too long to load.'));
+    await settle();
+    const failed = board.getSnapshot();
+    expect(failed.status).toBe('error');
+    expect(failed.error?.code).toBe('QUERY_CANCELLED');
+    expect(failed.columns.filter((column) => column.view !== undefined)).toHaveLength(11);
+    board.retry();
+    await settle();
+    expect(groups).toHaveLength(3);
+    expect(groups[2]?.input.groupIds).toEqual(COLUMNS.slice(12));
+    groups[2]?.answer({ groups: COLUMNS.slice(12).map((id, n) => seed(id, 200 + n * 10, 1)) });
+    await settle();
+    expect(board.getSnapshot().status).toBe('ready');
+    expect(board.getSnapshot().columns.every((column) => column.view !== undefined)).toBe(true);
+  });
+
+  it('fails whole when its first call fails, and loads on Retry', async () => {
+    const { layer, groups } = setup();
+    const board = layer.board(WS, PEOPLE, { ...QUERY, columnIds: [null], archivedIds: [] });
+    await settle();
+    groups[0]?.fail(dataError('API_UNAVAILABLE', 'Can’t reach the CRM.'));
+    await settle();
+    expect(board.getSnapshot()).toMatchObject({ status: 'error', columns: [{ id: null }] });
+    board.retry();
+    expect(board.getSnapshot().status).toBe('loading');
+    await settle();
+    groups[1]?.answer({ groups: [seed(null, 0, 2)], archivedHolding: [] });
+    await settle();
+    expect(board.getSnapshot().status).toBe('ready');
+  });
+
+  it('is one board for every screen asking the same thing, and aborts its call when the records are cleared', async () => {
+    const { layer, groups } = setup();
+    const board = layer.board(WS, PEOPLE, QUERY, [CITY]);
+    expect(layer.board(WS, PEOPLE, QUERY, [CITY])).toBe(board);
+    expect(layer.board(WS, PEOPLE, { ...QUERY, filter: { conjunction: 'and', conditions: [] }, sorts: [] })).not.toBe(
+      board,
+    );
+    await settle();
+    layer.clear();
+    expect(groups[0]?.signal?.aborted).toBe(true);
+  });
+
+  it('waits out a busy server before its first call lands', async () => {
+    const { layer, groups, waits } = setup();
+    const board = layer.board(WS, PEOPLE, { ...QUERY, columnIds: [null], archivedIds: [] });
+    await settle();
+    groups[0]?.fail(dataError('TOO_MANY_REQUESTS', 'Busy.', undefined, 1));
+    await settle();
+    expect(waits).toEqual([1000]);
+    groups[1]?.answer({ groups: [seed(null, 0, 1)], archivedHolding: [] });
+    await settle();
+    expect(board.getSnapshot().status).toBe('ready');
   });
 });

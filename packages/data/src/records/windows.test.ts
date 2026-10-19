@@ -391,3 +391,39 @@ describe('cursor mode', () => {
     expect(idsIn(windows, 9_960, 10_000)).toEqual(rows.slice(9_960, 10_000));
   });
 });
+
+describe('a seeded first block (spec 0021, a board column)', () => {
+  it('holds block 0 from another read and pages on from its cursor, asking for no block 0', async () => {
+    const rows = sample(60);
+    const { windows, server } = windowsOver(rows, 'cursor', { blockSize: 25 });
+    windows.setCount({ count: 60, atLeast: false });
+    windows.seed({ ids: rows.slice(0, 25), nextCursor: `after:${rows[24] ?? ''}` });
+    expect(idsIn(windows, 0, 25)).toEqual(rows.slice(0, 25));
+    windows.show({ start: 0, end: 60 });
+    await server.answerAll();
+    // Block 0 is never asked for: every read goes on from the seed's cursor.
+    expect(server.calls[0]?.from.cursor).toBe(`after:${rows[24] ?? ''}`);
+    expect(server.calls.every((call) => call.from.cursor !== undefined)).toBe(true);
+    expect(idsIn(windows, 0, 60)).toEqual(rows);
+  });
+
+  it('ends the chain at a short seed with no cursor', async () => {
+    const rows = sample(3);
+    const { windows, server } = windowsOver(rows, 'cursor', { blockSize: 25 });
+    windows.setCount({ count: 3, atLeast: false });
+    windows.seed({ ids: rows });
+    windows.show({ start: 0, end: 10 });
+    await server.answerAll();
+    expect(server.calls).toHaveLength(0);
+    expect(windows.told()).toEqual({ count: 3, atLeast: false });
+    expect(idsIn(windows, 0, 3)).toEqual(rows);
+  });
+
+  it('lets go of the ids at once when the windows are gone', () => {
+    const rows = sample(3);
+    const { windows, released } = windowsOver(rows, 'cursor', { blockSize: 25 });
+    windows.dispose();
+    windows.seed({ ids: rows });
+    expect(released).toEqual(rows);
+  });
+});
