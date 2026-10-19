@@ -69,7 +69,6 @@
     border: var(--border-width-hairline) solid transparent;
     border-radius: var(--radius-sm);
     color: var(--text-secondary);
-    cursor: pointer;
     outline: none;
   }
 

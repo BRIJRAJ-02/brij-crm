@@ -38,7 +38,6 @@
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
     white-space: nowrap;
-    cursor: pointer;
     outline: none;
     transition: color var(--duration-hover) var(--ease-hover);
     -webkit-tap-highlight-color: transparent;
@@ -77,7 +76,6 @@
 
   .segment[data-disabled] {
     opacity: var(--opacity-disabled);
-    cursor: default;
   }
 
   .thumb {

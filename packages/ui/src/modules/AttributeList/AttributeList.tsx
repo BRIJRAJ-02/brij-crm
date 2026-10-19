@@ -213,6 +213,7 @@ function Row({ item, onCommit, editorProps }: RowProps) {
         <span
           className={styles.value}
           data-editable=""
+          data-pressable=""
           onClick={(event) => {
             if (!(event.target instanceof Element) || event.target.closest('a, button') === null) open();
           }}

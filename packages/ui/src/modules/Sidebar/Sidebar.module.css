@@ -42,10 +42,6 @@
     outline: none;
   }
 
-  .switcher {
-    cursor: pointer;
-  }
-
   .name,
   .label {
     flex: 1;
@@ -113,7 +109,6 @@
     letter-spacing: var(--tracking-body-strong);
     text-align: start;
     text-decoration: none;
-    cursor: pointer;
     outline: none;
   }
 

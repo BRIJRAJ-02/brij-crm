@@ -83,10 +83,6 @@
     letter-spacing: var(--tracking-body);
   }
 
-  .value[data-editable] {
-    cursor: pointer;
-  }
-
   @media (hover: hover) and (pointer: fine) {
     .value[data-editable]:hover {
       background: var(--surface-hover);

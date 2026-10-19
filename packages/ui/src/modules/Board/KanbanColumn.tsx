@@ -215,7 +215,7 @@ export function KanbanColumn({
             const card = column.cards.getItem(row.index);
             if (card === undefined) {
               return (
-                <GridListItem className={styles.card} textValue="" isDisabled>
+                <GridListItem className={styles.card} textValue="" isDisabled data-loading="">
                   <RowShown index={row.index} onShown={onShown} />
                   <span className={styles.skeleton}>
                     <Skeleton width="medium" />
@@ -228,6 +228,7 @@ export function KanbanColumn({
               <GridListItem
                 className={styles.card}
                 textValue={card.record.name}
+                data-pressable={onOpen === undefined ? undefined : ''}
                 data-locked={card.readOnlyReason === undefined ? undefined : ''}
               >
                 <RowShown index={row.index} onShown={onShown} />

@@ -41,12 +41,7 @@
       minmax(0, calc(7 * var(--size-chip)));
   }
 
-  .row[data-allows-dragging] {
-    cursor: grab;
-  }
-
   .row[data-dragging] {
-    cursor: grabbing;
     opacity: var(--opacity-busy);
   }
 

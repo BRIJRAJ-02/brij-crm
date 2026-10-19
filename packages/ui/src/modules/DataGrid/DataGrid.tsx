@@ -1426,6 +1426,7 @@ export function DataGrid<Row>({
           aria-colindex={1}
           className={styles.check}
           data-cell={keyOf(row, 0)}
+          data-pressable=""
           data-focused={isFocusedAt(row, 0) || undefined}
           data-active={(isWithin && isFocusedAt(row, 0)) || undefined}
           tabIndex={isFocusedAt(row, 0) ? 0 : -1}
@@ -1779,6 +1780,7 @@ const GridHeader = memo(function GridHeader({
         aria-colindex={1}
         className={styles.check}
         data-cell={keyOf(-1, 0)}
+        data-pressable={isEmpty ? undefined : ''}
         data-focused={focusCol === 0 || undefined}
         tabIndex={focusCol === 0 ? 0 : -1}
         onClick={handlers.toggleScreen}

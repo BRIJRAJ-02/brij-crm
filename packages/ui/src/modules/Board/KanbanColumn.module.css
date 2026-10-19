@@ -89,11 +89,6 @@
     outline: none;
   }
 
-  .card[data-href],
-  .card[data-pressable] {
-    cursor: pointer;
-  }
-
   .card[data-focus-visible] {
     box-shadow: var(--shadow-focus-inset);
   }

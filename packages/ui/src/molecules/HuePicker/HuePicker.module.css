@@ -30,7 +30,6 @@
     block-size: var(--size-tile);
     border: var(--border-width-hairline) solid;
     border-radius: var(--radius-sm);
-    cursor: pointer;
     outline: none;
     transition: scale var(--duration-press) var(--ease-out);
   }
@@ -107,14 +106,8 @@
     border-color: var(--control-border);
   }
 
-  /* The compact picker read only: the hue, with nothing to press. */
-  .swatch[data-static] {
-    cursor: default;
-  }
-
   .swatch[data-disabled] {
     opacity: var(--opacity-disabled);
-    cursor: default;
   }
 
   @media (prefers-reduced-motion: reduce) {

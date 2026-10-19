@@ -50,7 +50,6 @@
     color: var(--text-secondary);
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
-    cursor: pointer;
     outline: none;
   }
 

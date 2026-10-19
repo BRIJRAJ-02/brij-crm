@@ -2,10 +2,11 @@
 // its heavy entries (the grid),
 // plus the pieces previews draw with (Stage, FieldSurfaces, the icon registry, a frozen
 // clock, and CheckboxMark, which stays off the public entry since screens draw
-// a checkbox value through the field set). The reset and base layers come along, since the preview frame loads
+// a checkbox value through the field set). The reset, base and cursor rules come along, since the preview frame loads
 // only the artifact's tokens.css before bundle.css.
 import '../../src/styles/reset.css';
 import '../../src/styles/base.css';
+import '../../src/styles/cursors.css';
 
 export * from '../../src/index.ts';
 export * from '../../src/grid.ts';

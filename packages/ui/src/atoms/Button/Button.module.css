@@ -20,7 +20,6 @@
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
     white-space: nowrap;
-    cursor: pointer;
     outline: none;
     user-select: none;
     -webkit-tap-highlight-color: transparent;
@@ -176,12 +175,10 @@
 
   .root[data-disabled] {
     opacity: var(--opacity-disabled);
-    cursor: default;
   }
 
   .root[data-pending] {
     opacity: var(--opacity-busy);
-    cursor: progress;
   }
 
   /* SplitButton: two buttons sharing one edge */

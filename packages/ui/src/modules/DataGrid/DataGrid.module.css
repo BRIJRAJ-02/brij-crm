@@ -119,7 +119,6 @@
 
   .check {
     position: sticky;
-    cursor: pointer;
     inset-inline-start: 0;
     z-index: var(--z-sticky);
     display: flex;
@@ -147,10 +146,6 @@
   .spacer {
     flex: none;
     inline-size: var(--spacer-width);
-  }
-
-  .footer > .check {
-    cursor: default;
   }
 
   .footer {
@@ -203,10 +198,6 @@
     padding-inline: var(--space-8);
     border-block-end: var(--border-width-hairline) solid var(--border-subtle);
     border-inline-end: var(--border-width-hairline) solid var(--border-subtle);
-  }
-
-  .skeletonRow > .check {
-    cursor: default;
   }
 
   /* With no rows the grid is only its header, and the empty state sits under it. */

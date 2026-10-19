@@ -30,7 +30,6 @@
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
     white-space: nowrap;
-    cursor: pointer;
     outline: none;
     transition: color var(--duration-hover) var(--ease-hover);
   }
@@ -51,7 +50,6 @@
 
   .tab[data-disabled] {
     opacity: var(--opacity-disabled);
-    cursor: default;
   }
 
   .indicator {

@@ -35,11 +35,6 @@
     outline: none;
   }
 
-  .row[data-href],
-  .row[data-action] {
-    cursor: pointer;
-  }
-
   @media (hover: hover) and (pointer: fine) {
     .row[data-hovered] {
       background: var(--surface-hover);

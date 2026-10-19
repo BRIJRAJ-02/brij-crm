@@ -15,7 +15,6 @@
     letter-spacing: var(--tracking-body);
     text-decoration: none;
     white-space: nowrap;
-    cursor: pointer;
     outline: none;
   }
 
@@ -28,7 +27,6 @@
     border-color: var(--border);
     background: var(--surface-hover);
     color: var(--text);
-    cursor: default;
   }
 
   @media (hover: hover) and (pointer: fine) {

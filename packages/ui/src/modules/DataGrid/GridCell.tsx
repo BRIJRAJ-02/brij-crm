@@ -180,7 +180,7 @@ export function GridCell({
   } else if (mode === 'cell' || mode === 'list') content = editor;
   else if (action !== undefined) {
     content = (
-      <span className={styles.hit} data-hit="" data-kind={toggle === undefined ? 'open' : 'toggle'}>
+      <span className={styles.hit} data-hit="" data-pressable="" data-kind={toggle === undefined ? 'open' : 'toggle'}>
         {content}
       </span>
     );

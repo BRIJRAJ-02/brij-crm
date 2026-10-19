@@ -17,6 +17,12 @@
     gap: var(--space-4);
   }
 
+  /* The current page is where you are, not a refused link: React Aria marks it
+     disabled, and it keeps the arrow rather than not-allowed. */
+  .crumb[data-current] {
+    cursor: default;
+  }
+
   .link {
     display: inline-flex;
     align-items: center;
@@ -27,7 +33,6 @@
     letter-spacing: var(--tracking-body-strong);
     text-decoration: none;
     outline: none;
-    cursor: pointer;
   }
 
   .link[data-current] {
