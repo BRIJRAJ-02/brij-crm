@@ -1,0 +1,46 @@
+/* ProviderMark: a brand's own artwork at icon size (size-icon, or
+   size-icon-sm), never recoloured: the same image in light and dark, except
+   Timefix's, whose light and dark files swap by theme the way the wordmark
+   does (a saved choice on the root, else the OS). */
+@layer components {
+  .mark {
+    display: inline-block;
+    flex: none;
+    inline-size: var(--size-icon);
+    block-size: var(--size-icon);
+    object-fit: contain;
+    vertical-align: middle;
+  }
+
+  .mark[data-size='sm'] {
+    inline-size: var(--size-icon-sm);
+    block-size: var(--size-icon-sm);
+  }
+
+  .pair {
+    display: inline-flex;
+    flex: none;
+  }
+
+  .mark[data-scheme='dark'] {
+    display: none;
+  }
+
+  :root[data-theme='dark'] .mark[data-scheme='light'] {
+    display: none;
+  }
+
+  :root[data-theme='dark'] .mark[data-scheme='dark'] {
+    display: inline-block;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .mark[data-scheme='light'] {
+      display: none;
+    }
+
+    :root:not([data-theme='light']) .mark[data-scheme='dark'] {
+      display: inline-block;
+    }
+  }
+}

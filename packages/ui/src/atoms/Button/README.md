@@ -31,7 +31,7 @@ Ported from the design system artifact's Button card. Every pressable control in
 - Labels are verbs in sentence case: "Add to list", never "ADD" or "Submit".
 - `CopyButton` takes `isDisabled` when there is nothing to copy yet (a form never published, a row still on its way), so a row of actions keeps its shape.
 
-Props: `children` (the label, a string) or `icon` with `label` (icon only); `icon`, `iconRight`; `variant`; `size` (`md` 26px, `lg` 30px, to sit beside an input); `kbd` (one keycap or several); `onPress`; `isDisabled`; `isPending`; `type`; `form`; `aria-describedby`; `isFullWidth`; `tooltipWhenCut`; `slot`; `ref`.
+Props: `children` (the label, a string) or `icon` with `label` (icon only); `icon`, `iconRight`; `provider` (a brand's mark in the icon's place); `variant`; `size` (`md` 26px, `lg` 30px, to sit beside an input); `kbd` (one keycap or several); `onPress`; `isDisabled`; `isPending`; `type`; `form`; `aria-describedby`; `isFullWidth`; `tooltipWhenCut`; `slot`; `ref`.
 
 - `isFullWidth` fills the row, with the label at the start and the keycaps at the end, for the sidebar's Quick actions. `isFullWidth="center"` fills the row with the label in the middle: a Form's submit on a sign in page, and the other ways to go on under it (Continue with Google). A container never stretches a button itself; it asks for this.
 - `form` is the `id` of the form a `type="submit"` button sends when it sits outside it: a Modal's footer submitting the Form in its body (see Form's README).
@@ -59,6 +59,7 @@ Props: `children` (the label, a string) or `icon` with `label` (icon only); `ico
 
 - `onPress` replaces `onClick`, and `isDisabled` and `isPending` replace `disabled` and `loading` (React Aria's names, so props pass straight through). Pending keeps the button focusable, where the artifact disabled it.
 - `icon` and `iconRight` take registry names (`IconName`), so a typo is a type error.
+- `provider` puts a brand's own mark (ProviderMark) where the icon goes, for an action named after that brand: `<Button provider="google">Continue with Google</Button>`, Add to Google Calendar. It is decorative there, since the label names the brand. Why a prop and not an `icon`: the marks are the brands' own artwork, not Lucide glyphs, so they never join the icon registry.
 - The label is `children: string`. An icon only button takes `label` instead, and TypeScript refuses one without it.
 - No `className`, `style` or other HTML attributes pass through: one look, set here.
 - `ToggleButton` is new (the artifact had no pressed state), for format toolbars and view toggles.

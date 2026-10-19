@@ -8,6 +8,7 @@ import {
 import { Icon } from '../Icon/Icon.tsx';
 import type { IconName } from '../Icon/icons.ts';
 import { Kbd } from '../Kbd/Kbd.tsx';
+import { ProviderMark, type ProviderName } from '../ProviderMark/ProviderMark.tsx';
 import { keyShortcuts, type KeyboardPlatform } from '../Kbd/shortcuts.ts';
 import { useKeyboardPlatform } from '../../provider/context.ts';
 import { Spinner } from '../Spinner/Spinner.tsx';
@@ -46,12 +47,18 @@ interface LabelledFace {
   readonly children: string;
   /** A leading icon. */
   readonly icon?: IconName;
+  /**
+   * A brand's own mark in the icon's place (Continue with Google, Add to
+   * Google Calendar), drawn by ProviderMark as the brand publishes it.
+   */
+  readonly provider?: ProviderName;
   readonly label?: never;
 }
 
 interface IconOnlyFace {
   readonly children?: never;
   readonly icon: IconName;
+  readonly provider?: never;
   /** The accessible name, required because the icon is the only content. */
   readonly label: string;
 }
@@ -136,7 +143,13 @@ function Face({ face, look, isPending }: { face: ButtonFace; look: ButtonLook; i
   const variant = look.variant ?? 'secondary';
   return (
     <>
-      {isPending ? <Spinner /> : face.icon !== undefined && <Icon name={face.icon} size="sm" />}
+      {isPending ? (
+        <Spinner />
+      ) : face.icon !== undefined ? (
+        <Icon name={face.icon} size="sm" />
+      ) : (
+        face.provider !== undefined && <ProviderMark provider={face.provider} size={look.size === 'lg' ? 'md' : 'sm'} />
+      )}
       {face.children !== undefined && <span className={styles.label}>{face.children}</span>}
       {keycaps(look.kbd, variant)}
       {look.iconRight !== undefined && <Icon name={look.iconRight} size="sm" />}

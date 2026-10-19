@@ -36,6 +36,12 @@ export { Mention, type MentionProps } from './atoms/Mention/Mention.tsx';
 export { Meter, type MeterProps } from './atoms/Meter/Meter.tsx';
 export { Path, type PathProps } from './atoms/Path/Path.tsx';
 export { ProgressBar, type ProgressBarProps } from './atoms/ProgressBar/ProgressBar.tsx';
+export {
+  ProviderMark,
+  type ProviderMarkProps,
+  type ProviderMarkSize,
+  type ProviderName,
+} from './atoms/ProviderMark/ProviderMark.tsx';
 export { Radio, RadioGroup, type RadioGroupProps, type RadioProps } from './atoms/Radio/Radio.tsx';
 export { Rating, type RatingProps } from './atoms/Rating/Rating.tsx';
 export { RecordChip, type RecordChipProps } from './atoms/RecordChip/RecordChip.tsx';
