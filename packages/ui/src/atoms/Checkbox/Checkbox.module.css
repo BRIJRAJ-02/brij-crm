@@ -7,7 +7,10 @@
     flex-direction: column;
   }
 
+  /* Positioned, so React Aria's visually hidden input stays inside the control
+     and never stretches a scrolling ancestor or the page. */
   .root {
+    position: relative;
     display: inline-flex;
     align-items: flex-start;
     gap: var(--space-8);

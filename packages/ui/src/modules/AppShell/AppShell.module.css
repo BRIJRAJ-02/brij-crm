@@ -54,7 +54,10 @@
     min-block-size: 0;
   }
 
+  /* The view and the panel are positioned, so an absolutely placed descendant
+     (a visually hidden input) scrolls inside them and never grows the page. */
   .view {
+    position: relative;
     display: flex;
     flex: 1;
     flex-direction: column;
@@ -64,6 +67,7 @@
   }
 
   .panel {
+    position: relative;
     display: flex;
     flex: none;
     flex-direction: column;

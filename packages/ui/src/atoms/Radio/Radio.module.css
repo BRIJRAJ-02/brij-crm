@@ -29,7 +29,9 @@
     flex-direction: column;
   }
 
+  /* Positioned, so the visually hidden input stays inside the control. */
   .radio {
+    position: relative;
     display: inline-flex;
     align-items: flex-start;
     gap: var(--space-8);
