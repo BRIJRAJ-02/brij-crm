@@ -1,11 +1,11 @@
-/* SpanCard: a drawn span's card, the sidebar's width: the span and its day,
+/* SpanCard: a drawn span's card, a menu's width: the span and its day,
    then its choices as full width quiet buttons, or the picked one's form. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
     gap: var(--space-12);
-    inline-size: var(--size-sidebar);
+    inline-size: var(--size-menu);
   }
 
   .head {

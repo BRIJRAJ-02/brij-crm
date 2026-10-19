@@ -23,7 +23,7 @@ Drawing on Bookings › Calendar (timefix's "draw on the calendar") opens one sm
 
 - `choices` draws the list of quiet full width buttons; leave it off and pass the picked choice's form as children.
 - `onBack` shows Back before the title.
-- It is the sidebar's width, like timefix's 264px card.
+- It is a menu's width (240px), close to timefix's 264px card.
 
 ## States
 
