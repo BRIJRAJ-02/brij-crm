@@ -145,37 +145,8 @@ export function LinksScreen({ data, slug, pages: loaded }: LinksScreenProps) {
       </>
     ),
   }));
-  return (
-    <PageColumn
-      {...(pages.length > 0
-        ? {
-            actions: (
-              <Button variant="primary" icon="plus" onPress={() => setCreating(true)}>
-                {strings.newPage}
-              </Button>
-            ),
-          }
-        : {})}
-    >
-      {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
-      <LinkList
-        label={strings.listLabel}
-        rows={rows}
-        onOpen={(id) => open(id)}
-        emptyState={
-          <EmptyState
-            title={strings.emptyTitle}
-            icon="calendar-clock"
-            actions={
-              <Button variant="primary" icon="plus" onPress={() => setCreating(true)}>
-                {strings.newPage}
-              </Button>
-            }
-          >
-            {strings.emptyText}
-          </EmptyState>
-        }
-      />
+  const dialogs = (
+    <>
       <NewPagePanel
         data={data}
         slug={slug}
@@ -196,6 +167,39 @@ export function LinksScreen({ data, slug, pages: loaded }: LinksScreenProps) {
           setPages((current) => current.filter((page) => page.id !== pageId));
         }}
       />
+    </>
+  );
+  // With no pages, the empty state takes the whole view, centred, like Bookings and Forms; the column is for the list.
+  if (pages.length === 0) {
+    return (
+      <>
+        {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
+        <EmptyState
+          title={strings.emptyTitle}
+          icon="calendar-clock"
+          actions={
+            <Button variant="primary" icon="plus" onPress={() => setCreating(true)}>
+              {strings.newPage}
+            </Button>
+          }
+        >
+          {strings.emptyText}
+        </EmptyState>
+        {dialogs}
+      </>
+    );
+  }
+  return (
+    <PageColumn
+      actions={
+        <Button variant="primary" icon="plus" onPress={() => setCreating(true)}>
+          {strings.newPage}
+        </Button>
+      }
+    >
+      {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
+      <LinkList label={strings.listLabel} rows={rows} onOpen={(id) => open(id)} />
+      {dialogs}
     </PageColumn>
   );
 }

@@ -1,9 +1,9 @@
 // Brief
-// Purpose: New booking page (spec 0025 experience, AC-678): a side panel, "Add a booking page".
+// Purpose: New booking page (spec 0025 experience, AC-678): a centred dialog, "Add a booking page" (the owner's call on 19 October 2026, over the side panel).
 // Main task: a title, the address it suggests, the lengths and the hours, then Continue into the editor.
 // Leaves out: everything else a page has (its editor), and Make it private (pages are on or off until a public profile lists them).
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
-import { Button, Callout, ChoiceChips, Field, Panel, SegmentedControl, SettingsStack } from '@crm/ui';
+import { Button, Callout, ChoiceChips, Field, Modal, Radio, RadioGroup, SettingsStack } from '@crm/ui';
 import { useState } from 'react';
 import { anyTime, browserZone } from './hours.ts';
 import { strings } from './strings.ts';
@@ -24,7 +24,7 @@ function slugOf(title: string): string {
   return slug;
 }
 
-/** Props for the panel. */
+/** Props for the dialog. */
 export interface NewPagePanelProps {
   readonly data: DataLayer;
   readonly slug: string;
@@ -33,7 +33,7 @@ export interface NewPagePanelProps {
   readonly onCreated: (page: BookingPageView) => void;
 }
 
-/** The panel: Title, Address, Duration, Hours, Continue. The id is minted once per panel, so a retry makes one page. */
+/** The dialog: Title, Address, Duration, Hours, then Cancel or Continue. The id is minted once per opening, so a retry makes one page. */
 export function NewPagePanel({ data, slug, isOpen, onClose, onCreated }: NewPagePanelProps) {
   const [title, setTitle] = useState('');
   const [address, setAddress] = useState<string | undefined>(undefined);
@@ -95,20 +95,29 @@ export function NewPagePanel({ data, slug, isOpen, onClose, onCreated }: NewPage
         },
       );
   };
+  const close = () => {
+    if (isBusy) return;
+    // Closed is cancelled: it opens empty next time.
+    reset();
+    onClose();
+  };
   return (
-    <Panel
+    <Modal
       title={strings.addPage}
       isOpen={isOpen}
-      onClose={() => {
-        if (isBusy) return;
-        // Closed is cancelled: it opens empty next time.
-        reset();
-        onClose();
+      // While the server answers, the dialog stays: a refusal has to land on its field.
+      onOpenChange={(open) => {
+        if (!open) close();
       }}
-      footer={
-        <Button variant="primary" isFullWidth isPending={isBusy} onPress={create}>
-          {isBusy ? strings.creating : strings.continue}
-        </Button>
+      actions={
+        <>
+          <Button slot="close" isDisabled={isBusy} kbd="ESC">
+            {strings.cancel}
+          </Button>
+          <Button variant="primary" isPending={isBusy} onPress={create}>
+            {isBusy ? strings.creating : strings.continue}
+          </Button>
+        </>
       }
     >
       <SettingsStack>
@@ -138,19 +147,18 @@ export function NewPagePanel({ data, slug, isOpen, onClose, onCreated }: NewPage
           onChange={(ids) => setDurations(DURATIONS.filter((minutes) => ids.includes(String(minutes))))}
           {...(errors.durations === undefined ? {} : { error: errors.durations })}
         />
-        <SegmentedControl
+        <RadioGroup
           label={strings.hours}
-          segments={[
-            { value: 'mine', label: strings.hoursChoice.mine },
-            { value: 'any', label: strings.hoursChoice.any },
-            { value: 'custom', label: strings.hoursChoice.custom },
-          ]}
           value={hours}
           onChange={(value) => {
             if (value === 'mine' || value === 'any' || value === 'custom') setHours(value);
           }}
-        />
+        >
+          <Radio value="mine">{strings.hoursChoice.mine}</Radio>
+          <Radio value="any">{strings.hoursChoice.any}</Radio>
+          <Radio value="custom">{strings.hoursChoice.custom}</Radio>
+        </RadioGroup>
       </SettingsStack>
-    </Panel>
+    </Modal>
   );
 }
