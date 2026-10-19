@@ -28,6 +28,7 @@ Ported from the design system artifact's Button card. Every pressable control in
 - `dashed` only for "add a condition" affordances: Filter, Add sort.
 - `SplitButton` when the primary action has variants (Save, Save as new view). Its `menu` is a `Menu`; the chevron is named "More options" unless `menuLabel` says otherwise.
 - Labels are verbs in sentence case: "Add to list", never "ADD" or "Submit".
+- `CopyButton` takes `isDisabled` when there is nothing to copy yet (a form never published, a row still on its way), so a row of actions keeps its shape.
 
 Props: `children` (the label, a string) or `icon` with `label` (icon only); `icon`, `iconRight`; `variant`; `size` (`md` 26px, `lg` 30px, to sit beside an input); `kbd` (one keycap or several); `onPress`; `isDisabled`; `isPending`; `type`; `form`; `aria-describedby`; `isFullWidth`; `tooltipWhenCut`; `slot`; `ref`.
 

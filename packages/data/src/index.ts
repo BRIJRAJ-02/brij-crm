@@ -17,6 +17,8 @@ import type {
   contract,
   FormDocument,
   FormStatus,
+  FormSummary,
+  FormView,
   JobView,
   Me,
   MemberSummary,
@@ -48,6 +50,15 @@ import {
 import type { FetchLike } from './fetch.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import { connectUrl, createCalendarStore, type CalendarView } from './calendar/store.ts';
+import {
+  createCaptureList,
+  dropItem,
+  patchItem,
+  shownDrop,
+  shownPatch,
+  upsertFirst,
+  type CaptureListView,
+} from './captures/list.ts';
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
 import {
   createViewsStore,
@@ -160,6 +171,7 @@ export type {
   MeetingAttendeeShape,
 } from './activity/feed.ts';
 export type { CalendarState, CalendarView } from './calendar/store.ts';
+export type { CaptureListState, CaptureListView } from './captures/list.ts';
 export { connectUrl } from './calendar/store.ts';
 export type { Hue, ObjectIcon } from '@crm/contracts/values';
 // The API name rule and the new object's defaults (spec 0012): plain modules with no Zod, so the dialogs share
@@ -501,6 +513,23 @@ export interface DataLayerOptions {
   readonly random?: () => number;
 }
 
+/** A form's list row from any form answer: the summary's fields only, so the list holds no drafts. */
+function toFormSummary(form: FormView): FormSummary {
+  return {
+    id: form.id,
+    name: form.name,
+    status: form.status,
+    mainObjectId: form.mainObjectId,
+    publicKey: form.publicKey,
+    ...(form.liveVersionNumber === undefined ? {} : { liveVersionNumber: form.liveVersionNumber }),
+    submissionsThisMonth: form.submissionsThisMonth,
+    spamCount: form.spamCount,
+    ...(form.lastSubmissionAt === undefined ? {} : { lastSubmissionAt: form.lastSubmissionAt }),
+    submissionCount: form.submissionCount,
+    updatedAt: form.updatedAt,
+  };
+}
+
 /**
  * The one client data layer. Screens read and write through it and never
  * call the network themselves. Every failure rejects with a DataError
@@ -618,6 +647,8 @@ export function createDataLayer({
       held.clear();
     });
     pendingOptions.clear();
+    bookingPageLists.clear();
+    formLists.clear();
   };
   const reset = () => {
     forget();
@@ -1136,6 +1167,21 @@ export function createDataLayer({
     mintId,
     notify,
   });
+
+  // Captures › Links and Forms: one held list per workspace each, patched by every write below (the list's menu, the
+  // New dialog, the editors), so the list never needs a refresh to show a change.
+  const bookingPageLists = createCaptureList<BookingPageView>({
+    read: (workspace) => call((options) => api.bookingPages.list({ workspace }, options)),
+  });
+  const formLists = createCaptureList<FormSummary>({
+    read: (workspace) =>
+      call((options) => api.forms.list({ workspace, archived: false }, options)).then((page) => page.items),
+  });
+  /** A form write's answer as the list's row: the active list drops an archived form. */
+  const landForm =
+    (formId: string) =>
+    (items: readonly FormSummary[], form: FormView): readonly FormSummary[] =>
+      form.status === 'archived' ? dropItem<FormSummary>(formId)(items) : upsertFirst(toFormSummary(form))(items);
 
   // Saved views (spec 0020): one store for the app, a list per object and a body per view.
   const views = createViewsStore({
@@ -1711,16 +1757,21 @@ export function createDataLayer({
       },
     },
     /**
-     * Booking pages (spec 0025): settings, not CRM data, so each call waits for
-     * the server (no optimistic layer, no live event). The builder saves as you
-     * go by calling `update` with the settings that changed.
+     * Booking pages (spec 0025): settings, not CRM data, with no live event.
+     * Captures › Links reads the held list (`view`), the one copy every write
+     * here patches: `update` (a pause from the list, the builder saving as you
+     * go), `remove` and `duplicate` show at once and put it back on a refusal,
+     * which they reject with for the caller to say; `create` waits for the
+     * server (its dialog checks the address), then the page is first in the list.
      */
     bookingPages: {
       /** A new page's id: mint it once per New page, and send the same one again on a retry. */
       newId: () => mintId(),
-      /** The reader's pages (their own; everyone's with `booking.admin`), newest first. */
+      /** The reader's pages (their own; everyone's with `booking.admin`), newest first, read once. */
       list: (workspace: string): Promise<BookingPageView[]> =>
         call((options) => api.bookingPages.list({ workspace }, options)),
+      /** The reader's pages as the held list Captures › Links shows; `useCaptureList` reads it. */
+      view: (workspace: string): CaptureListView<BookingPageView> => bookingPageLists.view(workspace),
       /** One page. `NOT_FOUND` for one the reader may not change. */
       get: (workspace: string, pageId: string): Promise<BookingPageView> =>
         call((options) => api.bookingPages.get({ workspace, pageId }, options)),
@@ -1729,13 +1780,79 @@ export function createDataLayer({
         workspace: string,
         input: { id: string; title: string; timeZone: string; settings?: Partial<BookingPageSettings> },
       ): Promise<BookingPageView> =>
-        call((options) => api.bookingPages.create({ workspace, ...input, mutationId: mintId() }, options)),
-      /** Changes only the settings given. Refusals: `SLUG_TAKEN` (field `slug`), `INPUT_INVALID` (with issues). */
+        bookingPageLists.write(workspace, {
+          send: () =>
+            call((options) => api.bookingPages.create({ workspace, ...input, mutationId: mintId() }, options)),
+          land: (items, page) => upsertFirst(page)(items),
+        }),
+      /** Changes only the settings given, in the list at once. Refusals: `SLUG_TAKEN` (field `slug`), `INPUT_INVALID` (with issues). */
       update: (workspace: string, pageId: string, settings: Partial<BookingPageSettings>): Promise<BookingPageView> =>
-        call((options) => api.bookingPages.update({ workspace, pageId, settings, mutationId: mintId() }, options)),
-      /** Deletes a page: its link stops working, its bookings stay. */
+        bookingPageLists.write(workspace, {
+          send: () =>
+            call((options) => api.bookingPages.update({ workspace, pageId, settings, mutationId: mintId() }, options)),
+          ...shownPatch(bookingPageLists.items(workspace), pageId, (page) => ({ ...page, ...settings })),
+          land: (items, page) => patchItem<BookingPageView>(pageId, () => page)(items),
+        }),
+      /**
+       * A copy of a page the list holds, titled `title`: first in the list at
+       * once (pending until the server made it), gone again on a refusal.
+       */
+      duplicate: (workspace: string, page: BookingPageView, title: string): Promise<BookingPageView> => {
+        const id = mintId();
+        const {
+          id: _id,
+          publicKey: _key,
+          kind: _kind,
+          ownerMemberId: _owner,
+          bookingsThisMonth: _count,
+          canChange: _can,
+          createdAt: _created,
+          updatedAt: _updated,
+          slug: _slug,
+          ...settings
+        } = page;
+        const at = new Date().toISOString();
+        const draft: BookingPageView = {
+          ...page,
+          id,
+          title,
+          // The address the server will make from the title, until its answer says.
+          slug: title
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, ''),
+          publicKey: '',
+          bookingsThisMonth: 0,
+          createdAt: at,
+          updatedAt: at,
+        };
+        return bookingPageLists.write(workspace, {
+          send: () =>
+            call((options) =>
+              api.bookingPages.create(
+                {
+                  workspace,
+                  id,
+                  title,
+                  timeZone: page.availability.timeZone,
+                  settings: { ...settings, title },
+                  mutationId: mintId(),
+                },
+                options,
+              ),
+            ),
+          show: upsertFirst(draft),
+          pendingId: id,
+          undo: dropItem<BookingPageView>(id),
+          land: (items, copy) => upsertFirst(copy)(items),
+        });
+      },
+      /** Deletes a page, gone from the list at once and back on a refusal: its link stops working, its bookings stay. */
       remove: (workspace: string, pageId: string): Promise<{ pageId: string }> =>
-        call((options) => api.bookingPages.delete({ workspace, pageId, mutationId: mintId() }, options)),
+        bookingPageLists.write(workspace, {
+          send: () => call((options) => api.bookingPages.delete({ workspace, pageId, mutationId: mintId() }, options)),
+          ...shownDrop(bookingPageLists.items(workspace), pageId),
+        }),
     },
     bookings: {
       /** A page's bookings: upcoming soonest first, or past latest first, at most 100. */
@@ -2357,10 +2474,17 @@ export function createDataLayer({
       /**
        * The workspace's forms on objects the member can see (spec 0023), newest
        * first: the active ones, or the archived ones, with this month's
-       * counts. Read through the route loader; screens reload it after changes.
+       * counts, read once.
        */
       list: (workspace: string, archived = false) =>
         call((options) => api.forms.list({ workspace, archived }, options)).then((page) => page.items),
+      /**
+       * The active forms as the held list Captures › Forms shows
+       * (`useCaptureList`): every form write here patches it, so a create, a
+       * rename in the builder, a publish, a pause, a copy or a delete shows in
+       * the list without reading it again.
+       */
+      view: (workspace: string): CaptureListView<FormSummary> => formLists.view(workspace),
       /** One form with its draft and live documents and its settings. */
       get: (workspace: string, formId: string) => call((options) => api.forms.get({ workspace, formId }, options)),
       /** The target object and the attributes a question may be filed on (AC-658). */
@@ -2380,18 +2504,31 @@ export function createDataLayer({
       create: (
         workspace: string,
         form: { readonly id: string; readonly name?: string; readonly mainObjectId?: string },
-      ) => call((options) => api.forms.create({ workspace, ...form, mutationId: mintId() }, options)),
+      ) =>
+        formLists.write(workspace, {
+          send: () => call((options) => api.forms.create({ workspace, ...form, mutationId: mintId() }, options)),
+          land: (items, made) => landForm(made.id)(items, made),
+        }),
       /** Saves the draft quietly. Rejects `FORM_CHANGED` when someone saved since `expectedRevision`. */
       saveDraft: (workspace: string, formId: string, document: FormDocument, expectedRevision: number) =>
-        call((options) =>
-          api.forms.saveDraft({ workspace, formId, document, expectedRevision, mutationId: mintId() }, options),
-        ),
+        formLists.write(workspace, {
+          send: () =>
+            call((options) =>
+              api.forms.saveDraft({ workspace, formId, document, expectedRevision, mutationId: mintId() }, options),
+            ),
+          land: landForm(formId),
+        }),
       /** Publishes the draft as the next live version; the first publish names the form and its address. */
       publish: (
         workspace: string,
         formId: string,
         input: { readonly expectedRevision: number; readonly name?: string; readonly slug?: string },
-      ) => call((options) => api.forms.publish({ workspace, formId, ...input, mutationId: mintId() }, options)),
+      ) =>
+        formLists.write(workspace, {
+          send: () =>
+            call((options) => api.forms.publish({ workspace, formId, ...input, mutationId: mintId() }, options)),
+          land: landForm(formId),
+        }),
       /** The settings that apply at once: name, address, owner, the sites that may post, signatures. */
       updateSettings: (
         workspace: string,
@@ -2404,32 +2541,80 @@ export function createDataLayer({
           readonly requireSignature?: boolean;
         },
       ) =>
-        call((options) =>
-          api.forms.updateSettings(
-            {
-              workspace,
-              formId,
-              ...settings,
-              allowedOrigins: settings.allowedOrigins === undefined ? undefined : [...settings.allowedOrigins],
-              mutationId: mintId(),
-            },
-            options,
-          ),
-        ),
-      /** Pauses or resumes (Accepting), archives or restores a form (AC-549). */
+        formLists.write(workspace, {
+          send: () =>
+            call((options) =>
+              api.forms.updateSettings(
+                {
+                  workspace,
+                  formId,
+                  ...settings,
+                  allowedOrigins: settings.allowedOrigins === undefined ? undefined : [...settings.allowedOrigins],
+                  mutationId: mintId(),
+                },
+                options,
+              ),
+            ),
+          ...(settings.name === undefined
+            ? {}
+            : shownPatch(formLists.items(workspace), formId, (form) => ({
+                ...form,
+                name: settings.name ?? form.name,
+              }))),
+          land: landForm(formId),
+        }),
+      /** Pauses or resumes (Accepting), archives or restores a form (AC-549): in the list at once, put back on a refusal. */
       setStatus: (workspace: string, formId: string, status: FormStatus) =>
-        call((options) => api.forms.setStatus({ workspace, formId, status, mutationId: mintId() }, options)),
+        formLists.write(workspace, {
+          send: () =>
+            call((options) => api.forms.setStatus({ workspace, formId, status, mutationId: mintId() }, options)),
+          ...shownPatch(formLists.items(workspace), formId, (form) => ({ ...form, status })),
+          land: landForm(formId),
+        }),
       /** Points a never published form at another object. */
       setTarget: (workspace: string, formId: string, mainObjectId: string, expectedRevision: number) =>
-        call((options) =>
-          api.forms.setTarget({ workspace, formId, mainObjectId, expectedRevision, mutationId: mintId() }, options),
-        ),
-      /** Copies a form's draft as a new, never published form. */
-      duplicate: (workspace: string, formId: string) =>
-        call((options) => api.forms.duplicate({ workspace, formId, id: mintId(), mutationId: mintId() }, options)),
-      /** Deletes a form and its submissions; the records they made stay. */
+        formLists.write(workspace, {
+          send: () =>
+            call((options) =>
+              api.forms.setTarget({ workspace, formId, mainObjectId, expectedRevision, mutationId: mintId() }, options),
+            ),
+          land: landForm(formId),
+        }),
+      /**
+       * Copies a form's draft as a new, never published form ("<name> copy",
+       * as the server names it): first in the list at once, pending until the
+       * server made it, gone again on a refusal.
+       */
+      duplicate: (workspace: string, formId: string) => {
+        const id = mintId();
+        const source = formLists.items(workspace)?.find((form) => form.id === formId);
+        const draft: FormSummary | undefined =
+          source === undefined
+            ? undefined
+            : {
+                id,
+                name: `${source.name} copy`.slice(0, 80),
+                status: 'draft',
+                mainObjectId: source.mainObjectId,
+                publicKey: '',
+                submissionsThisMonth: 0,
+                spamCount: 0,
+                submissionCount: 0,
+                updatedAt: new Date().toISOString(),
+              };
+        return formLists.write(workspace, {
+          send: () => call((options) => api.forms.duplicate({ workspace, formId, id, mutationId: mintId() }, options)),
+          ...(draft === undefined ? {} : { show: upsertFirst(draft), pendingId: id }),
+          undo: dropItem<FormSummary>(id),
+          land: landForm(id),
+        });
+      },
+      /** Deletes a form and its submissions, gone from the list at once and back on a refusal; the records they made stay. */
       delete: (workspace: string, formId: string) =>
-        call((options) => api.forms.delete({ workspace, formId, mutationId: mintId() }, options)),
+        formLists.write(workspace, {
+          send: () => call((options) => api.forms.delete({ workspace, formId, mutationId: mintId() }, options)),
+          ...shownDrop(formLists.items(workspace), formId),
+        }),
       /** The hosted page's address for a form's address, on this origin. */
       hostedUrl: (publicKey: string): string => `${origin}/f/${encodeURIComponent(publicKey)}`,
       /** The embed script's address, on this origin. */
