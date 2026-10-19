@@ -170,5 +170,7 @@ export const Direction: Story = {
       { attributeId: 'funding_raised', direction: 'ascending' },
       { attributeId: 'name', direction: 'ascending' },
     ]);
+    // Focus comes back to the direction, so Esc then closes the Popover holding the builder.
+    await waitFor(() => expect(canvas.getAllByRole('button', { name: 'Ascending' })[0]).toHaveFocus());
   },
 };

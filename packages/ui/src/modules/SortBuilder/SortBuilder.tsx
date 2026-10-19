@@ -42,9 +42,11 @@ const DIRECTIONS = [
  */
 export function SortBuilder({ attributes, value, onChange, isReadOnly = false }: SortBuilderProps) {
   // A control that leaves with its change (a row's old attribute, a removed row,
-  // Add sort at the limit) hands focus on: to the row now in its place, or to Add sort.
+  // Add sort at the limit) hands focus on: to the row now in its place, or to Add sort. A direction chosen keeps
+  // focus on its own picker, which the list would otherwise let fall to the page.
   const rootRef = useRef<HTMLDivElement>(null);
-  const focusNext = useRef<{ readonly row: string } | 'add' | undefined>(undefined);
+  type FocusTarget = { readonly row: string; readonly part?: 'direction' } | 'add';
+  const focusNext = useRef<FocusTarget | undefined>(undefined);
   useEffect(() => {
     const target = focusNext.current;
     const root = rootRef.current;
@@ -52,14 +54,16 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
     focusNext.current = undefined;
     focusLater(() => {
       const row = target === 'add' ? undefined : root.querySelector(`[data-key="${CSS.escape(target.row)}"]`);
+      const pickers =
+        row === null || row === undefined ? [] : [...row.querySelectorAll<HTMLElement>('button[aria-haspopup]')];
       return (
-        row?.querySelector<HTMLElement>('button[aria-haspopup]') ??
+        (target !== 'add' && target.part === 'direction' ? pickers[1] : pickers[0]) ??
         root.querySelector<HTMLElement>('[data-adder] button') ??
         root.querySelector<HTMLElement>('button[aria-haspopup]')
       );
     });
   });
-  const change = (next: readonly SortRule[], focus: { readonly row: string } | 'add') => {
+  const change = (next: readonly SortRule[], focus: FocusTarget) => {
     focusNext.current = focus;
     onChange(next);
   };
@@ -119,7 +123,10 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
           const name = nameOf(rule.attributeId);
           const attribute = attributes.find((each) => each.id === rule.attributeId);
           const replace = (next: SortRule) => {
-            onChange(value.map((each) => (each.attributeId === rule.attributeId ? next : each)));
+            change(
+              value.map((each) => (each.attributeId === rule.attributeId ? next : each)),
+              { row: rule.attributeId, part: 'direction' },
+            );
           };
           return (
             <GridListItem id={rule.attributeId} textValue={name} className={styles.row}>

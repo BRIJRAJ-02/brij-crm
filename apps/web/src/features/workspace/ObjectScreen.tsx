@@ -43,18 +43,6 @@ export function objectPendingPage() {
   };
 }
 
-/** An object with no view this person may open (spec 0020, AC-462): its bar, and a plain empty state. */
-export function noViewsPage(object: ObjectSummary) {
-  return {
-    topBar: <TopBar title={object.pluralName} icon={object.icon} hue={object.hue} />,
-    body: (
-      <EmptyState icon="layout-grid" title={viewStrings.noViewsTitle}>
-        {viewStrings.noViewsText}
-      </EmptyState>
-    ),
-  };
-}
-
 /**
  * A view this person can't open (spec 0020, AC-463), never saying whether it
  * is unknown, deleted or private: the object's bar, and the way to its

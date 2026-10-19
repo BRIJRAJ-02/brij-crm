@@ -3,7 +3,7 @@ import { createFileRoute, useNavigate, useRouter, type ErrorComponentProps } fro
 import { runningQuery, savedQuery, toViewQuery } from '../features/views/query.ts';
 import { ViewScreen } from '../features/views/ViewScreen.tsx';
 import { ArchivedObjectScreen } from '../features/workspace/ArchivedObjectScreen.tsx';
-import { readAttributeIds } from '../features/workspace/columns.ts';
+import { viewColumns, viewReadIds } from '../features/views/layout.ts';
 import { failedPage, missingPage, objectPendingPage, viewNotFoundPage } from '../features/workspace/ObjectScreen.tsx';
 import { navObjects } from '../features/workspace/objects.ts';
 import { strings } from '../features/workspace/strings.ts';
@@ -76,7 +76,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/views/$viewId')(
         params.slug,
         object.id,
         recordsQuery,
-        readAttributeIds(object, attributes),
+        viewReadIds(viewColumns(body.view, object, attributes), object, attributes),
         OPEN_GRACE_MS,
       ),
     ]);
