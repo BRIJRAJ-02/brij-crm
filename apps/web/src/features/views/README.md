@@ -25,4 +25,4 @@ One screen shows any view of any object (spec 0020): the TopBar, the ViewBar wit
 
 ## States
 
-Loading (the object page's skeleton bars), not found (`viewNotFoundPage`, never saying why), no view available (`noViewsPage`), error with Retry (the route's error page, or the grid's own when its rows fail), an object with no records, a filter matching nothing ("No people match these filters" with Discard changes on a draft or Edit filters on a saved view), a board before spec 0021 (the table with a Callout), and an archived object (spec 0012's page).
+Loading (the object page's skeleton bars), not found (`viewNotFoundPage`, never saying why), no view available (`noViewsPage`), error with Retry (the route's error page, or the grid's own when its rows fail), an object with no records, a filter matching nothing ("No people match these filters" with Discard changes on a draft or Edit filters on a saved view), and an archived object (spec 0012's page).

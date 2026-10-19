@@ -100,6 +100,8 @@ export function KanbanColumn({
   const number = memoIntl(`plain:${locale}`, () => new Intl.NumberFormat(locale)).format(column.count);
   const plural = memoIntl(`plural:${locale}`, () => new Intl.PluralRules(locale)).select(column.count);
   const isArchived = column.isArchived === true;
+  // Why the column takes no card: its own reason, or the archived option's.
+  const refusal = column.refusesDrop?.reason ?? (isArchived ? strings.archivedRefuses : undefined);
 
   const cardAt = (key: Key) => itemOfKey(column.cards, rows, key);
   const { dragAndDropHooks } = useDragAndDrop({
@@ -115,7 +117,7 @@ export function KanbanColumn({
       }),
     acceptedDragTypes: [CARD_TYPE],
     getDropOperation: (target) => {
-      if (isArchived) return 'cancel';
+      if (refusal !== undefined) return 'cancel';
       // Between cards only where order means something; otherwise the column as a whole.
       if (target.type === 'item' && !isReorderable) return 'cancel';
       if (draggingFrom === column.id && !isReorderable) return 'cancel';
@@ -164,7 +166,7 @@ export function KanbanColumn({
       className={styles.root}
       aria-labelledby={titleId}
       data-archived={isArchived || undefined}
-      data-refusing={(isArchived && draggingFrom !== undefined) || undefined}
+      data-refusing={(refusal !== undefined && draggingFrom !== undefined) || undefined}
       // A locked card never starts a drag: its native drag is cancelled before React Aria sees it.
       onDragStartCapture={(event) => {
         if (event.target instanceof Element && event.target.closest('[data-locked]') !== null) {
@@ -181,11 +183,14 @@ export function KanbanColumn({
             {column.title}
           </StatusDot>
         )}
-        <span className={styles.count} aria-label={strings.cards(number, plural)}>
-          {number}
+        <span
+          className={styles.count}
+          aria-label={column.isCountAtLeast === true ? strings.cardsAtLeast(number) : strings.cards(number, plural)}
+        >
+          {column.isCountAtLeast === true ? strings.atLeast(number) : number}
         </span>
       </h3>
-      {isArchived && draggingFrom !== undefined && <p className={styles.refusal}>{strings.archivedRefuses}</p>}
+      {refusal !== undefined && draggingFrom !== undefined && <p className={styles.refusal}>{refusal}</p>}
       <Virtualizer
         layout={ListLayout}
         layoutOptions={{ estimatedRowHeight: 3 * sizeToken('size-row'), gap: spaceToken('space-8') }}

@@ -21,6 +21,7 @@ import {
 import { describe, expect, it } from 'vitest';
 import { dataError, type DataError } from '../errors.ts';
 import type { Notice } from '../notice.ts';
+import type { GroupsAnswer, GroupsRequest } from './board.ts';
 import { UNDO_DEPTH } from './history.ts';
 import {
   createRecordsLayer,
@@ -110,6 +111,7 @@ function fakeApi() {
   // Link deltas (spec 0014): each answered with its record, the version it wrote and the records it changed.
   const linkAdds: Pending<AddLinksInput, Omit<LinksWritten, 'echoes'>>[] = [];
   const linkRemoves: Pending<RemoveLinksInput, Omit<LinksWritten, 'echoes'>>[] = [];
+  const groups: Pending<GroupsRequest, GroupsAnswer>[] = [];
   // What each records.get asked for besides its ids: the attributes (spec 0006, AC-55).
   const getAttributes: (readonly string[] | undefined)[] = [];
   const queue =
@@ -161,6 +163,8 @@ function fakeApi() {
     restoreBatch: async (input) => ({ mode: 'inline' as const, results: await queue(restores)(input), echoes: 1 }),
     linksAdd: async (input) => ({ ...(await queue(linkAdds)(input)), echoes: 2 }),
     linksRemove: async (input) => ({ ...(await queue(linkRemoves)(input)), echoes: 2 }),
+    // Spec 0021: a board's first cards and counts.
+    groups: (input, signal) => queue(groups)(input, signal),
   };
   return {
     api,
@@ -175,6 +179,7 @@ function fakeApi() {
     restores,
     linkAdds,
     linkRemoves,
+    groups,
   };
 }
 
@@ -2304,5 +2309,296 @@ describe('link deltas (spec 0014, milestone 2)', () => {
     });
     expect(await undone).toMatchObject({ kind: 'undone', undone: 1, first: { recordId: idAt(0), attributeId: TEAM } });
     expect(layer.undo.depth(WS)).toBe(0);
+  });
+});
+
+describe('a board (spec 0021)', () => {
+  const STAGE = 'attr-stage';
+  const option = (n: number) => `0199a6f2-0000-7000-8000-${(0xa000 + n).toString(16).padStart(12, '0')}`;
+  /** 13 options and the no value column: 14 columns, the 4th option archived. */
+  const OPTIONS = Array.from({ length: 13 }, (_, n) => option(n));
+  const ARCHIVED = option(3);
+  const COLUMNS = [null, ...OPTIONS];
+  const QUERY = {
+    groupBy: STAGE,
+    columnIds: COLUMNS,
+    archivedIds: [ARCHIVED],
+    sorts: [{ attributeId: CREATED, direction: 'descending' as const }],
+  };
+  /** A column's first cards: `count` of them, from `from`, the cursor after when more remain. */
+  const seed = (id: string | null, from: number, count: number, total = count) => ({
+    id,
+    records: block(from, count),
+    ...(total > count ? { nextCursor: `after-${String(from + count - 1)}` } : {}),
+    count: total,
+    atLeast: false,
+  });
+
+  it('asks for 12 columns a call, one call after another, the first probing archived options', async () => {
+    const { layer, groups, queries, counts, frame } = setup();
+    const board = layer.board(WS, PEOPLE, QUERY, [CITY]);
+    board.retain();
+    await settle();
+    expect(groups).toHaveLength(1);
+    expect(groups[0]?.input).toEqual({
+      workspace: WS,
+      objectId: PEOPLE,
+      groupBy: STAGE,
+      groupIds: COLUMNS.slice(0, 12),
+      sorts: QUERY.sorts,
+      attributeIds: [CITY, STAGE],
+      limit: 25,
+      probeArchived: true,
+      now: at(30),
+      timeZone: 'Europe/London',
+    });
+    expect(board.getSnapshot().status).toBe('loading');
+    // Archived options hide until the probe says a live record holds them.
+    expect(board.getSnapshot().columns.map((column) => column.id)).not.toContain(ARCHIVED);
+    groups[0]?.answer({
+      groups: COLUMNS.slice(0, 12).map((id, n) => seed(id, n * 10, 1)),
+      archivedHolding: [],
+    });
+    await settle();
+    // The second call waits for the first, and asks for what is left, the unheld archived option dropped.
+    expect(groups).toHaveLength(2);
+    expect(groups[1]?.input.groupIds).toEqual(COLUMNS.slice(12));
+    expect(groups[1]?.input.probeArchived).toBeUndefined();
+    const snapshot = board.getSnapshot();
+    expect(snapshot.status).toBe('ready');
+    expect(snapshot.columns.map((column) => column.id)).toEqual(COLUMNS.filter((id) => id !== ARCHIVED));
+    expect(snapshot.columns.filter((column) => column.view !== undefined)).toHaveLength(11);
+    groups[1]?.answer({ groups: COLUMNS.slice(12).map((id, n) => seed(id, 200 + n * 10, 1)) });
+    await settle();
+    frame();
+    expect(board.getSnapshot().columns.every((column) => column.view !== undefined)).toBe(true);
+    // Seeded: no column asked for its own count or first block.
+    expect(queries).toHaveLength(0);
+    expect(counts).toHaveLength(0);
+  });
+
+  it('seeds each column window, which pages on by cursor 25 at a time', async () => {
+    const { layer, groups, queries, frame } = setup();
+    const board = layer.board(WS, PEOPLE, { ...QUERY, columnIds: [null, option(0)], archivedIds: [] }, [CITY]);
+    await settle();
+    groups[0]?.answer({ groups: [seed(null, 0, 0), seed(option(0), 100, 25, 40)], archivedHolding: [] });
+    await settle();
+    const view = board.getSnapshot().columns[1]?.view;
+    if (view === undefined) throw new Error('No column.');
+    view.retain([CITY]);
+    await view.ready();
+    frame();
+    const state = view.getSnapshot();
+    expect(state.status).toBe('ready');
+    expect(state.mode).toBe('cursor');
+    expect(state.count).toEqual({ count: 40, atLeast: false });
+    expect(state.source.getItem(0)?.id).toBe(idAt(100));
+    expect(state.source.getItem(24)?.id).toBe(idAt(124));
+    state.source.onRangeChange({ start: 20, end: 35 });
+    await settle();
+    expect(queries).toHaveLength(1);
+    expect(queries[0]?.input).toMatchObject({
+      cursor: 'after-124',
+      limit: 25,
+      filter: { conjunction: 'and', conditions: [{ attributeId: STAGE, operator: 'is', value: option(0) }] },
+      sorts: QUERY.sorts,
+    });
+    // The empty column is ready with nothing to load.
+    const empty = board.getSnapshot().columns[0]?.view;
+    await empty?.ready();
+    expect(empty?.getSnapshot().count).toEqual({ count: 0, atLeast: false });
+  });
+
+  it('shows an archived option still held, in its place', async () => {
+    const { layer, groups } = setup();
+    const board = layer.board(WS, PEOPLE, { ...QUERY, columnIds: COLUMNS.slice(0, 6) }, [CITY]);
+    await settle();
+    groups[0]?.answer({
+      groups: COLUMNS.slice(0, 6).map((id, n) => seed(id, n * 10, 1)),
+      archivedHolding: [ARCHIVED],
+    });
+    await settle();
+    expect(board.getSnapshot().columns.map((column) => column.id)).toEqual(COLUMNS.slice(0, 6));
+    expect(groups).toHaveLength(1);
+  });
+
+  it('keeps the columns already in when a later call fails, and Retry sends again from that call', async () => {
+    const { layer, groups } = setup();
+    const board = layer.board(WS, PEOPLE, QUERY, [CITY]);
+    await settle();
+    groups[0]?.answer({ groups: COLUMNS.slice(0, 12).map((id, n) => seed(id, n * 10, 1)), archivedHolding: [] });
+    await settle();
+    groups[1]?.fail(dataError('QUERY_CANCELLED', 'The board took too long to load.'));
+    await settle();
+    const failed = board.getSnapshot();
+    expect(failed.status).toBe('error');
+    expect(failed.error?.code).toBe('QUERY_CANCELLED');
+    expect(failed.columns.filter((column) => column.view !== undefined)).toHaveLength(11);
+    board.retry();
+    await settle();
+    expect(groups).toHaveLength(3);
+    expect(groups[2]?.input.groupIds).toEqual(COLUMNS.slice(12));
+    groups[2]?.answer({ groups: COLUMNS.slice(12).map((id, n) => seed(id, 200 + n * 10, 1)) });
+    await settle();
+    expect(board.getSnapshot().status).toBe('ready');
+    expect(board.getSnapshot().columns.every((column) => column.view !== undefined)).toBe(true);
+  });
+
+  it('fails whole when its first call fails, and loads on Retry', async () => {
+    const { layer, groups } = setup();
+    const board = layer.board(WS, PEOPLE, { ...QUERY, columnIds: [null], archivedIds: [] });
+    await settle();
+    groups[0]?.fail(dataError('API_UNAVAILABLE', 'Can’t reach the CRM.'));
+    await settle();
+    expect(board.getSnapshot()).toMatchObject({ status: 'error', columns: [{ id: null }] });
+    board.retry();
+    expect(board.getSnapshot().status).toBe('loading');
+    await settle();
+    groups[1]?.answer({ groups: [seed(null, 0, 2)], archivedHolding: [] });
+    await settle();
+    expect(board.getSnapshot().status).toBe('ready');
+  });
+
+  it('is one board for every screen asking the same thing, and aborts its call when the records are cleared', async () => {
+    const { layer, groups } = setup();
+    const board = layer.board(WS, PEOPLE, QUERY, [CITY]);
+    expect(layer.board(WS, PEOPLE, QUERY, [CITY])).toBe(board);
+    expect(layer.board(WS, PEOPLE, { ...QUERY, filter: { conjunction: 'and', conditions: [] }, sorts: [] })).not.toBe(
+      board,
+    );
+    await settle();
+    layer.clear();
+    expect(groups[0]?.signal?.aborted).toBe(true);
+  });
+
+  it('waits out a busy server before its first call lands', async () => {
+    const { layer, groups, waits } = setup();
+    const board = layer.board(WS, PEOPLE, { ...QUERY, columnIds: [null], archivedIds: [] });
+    await settle();
+    groups[0]?.fail(dataError('TOO_MANY_REQUESTS', 'Busy.', undefined, 1));
+    await settle();
+    expect(waits).toEqual([1000]);
+    groups[1]?.answer({ groups: [seed(null, 0, 1)], archivedHolding: [] });
+    await settle();
+    expect(board.getSnapshot().status).toBe('ready');
+  });
+});
+
+describe('moving a card (spec 0021, milestone 2)', () => {
+  const STAGE = 'attr-stage';
+  const LEAD = '0199a6f2-0000-7000-8000-00000000b001';
+  const WON = '0199a6f2-0000-7000-8000-00000000b002';
+  const OLD = '0199a6f2-0000-7000-8000-00000000b003';
+  const card = (n: number, stage: string | null) =>
+    rowOf(idAt(n), { [NAME]: `P${String(n)}`, [STAGE]: stage }, { [STAGE]: version(1) });
+
+  /** A board of three columns (no value, Lead with two cards, Won empty), every column shown. */
+  async function readyBoard() {
+    const context = setup();
+    const board = context.layer.board(
+      WS,
+      PEOPLE,
+      { groupBy: STAGE, columnIds: [null, LEAD, WON, OLD], archivedIds: [OLD] },
+      [STAGE],
+    );
+    await settle();
+    context.groups[0]?.answer({
+      groups: [
+        { id: null, records: [], count: 0, atLeast: false },
+        { id: LEAD, records: [card(1, LEAD), card(2, LEAD)], count: 2, atLeast: false },
+        { id: WON, records: [], count: 0, atLeast: false },
+        { id: OLD, records: [card(3, OLD)], count: 1, atLeast: false },
+      ],
+      archivedHolding: [OLD],
+    });
+    await settle();
+    const views = board.getSnapshot().columns.map((column) => column.view);
+    const [none, lead, won, old] = views;
+    if (none === undefined || lead === undefined || won === undefined || old === undefined) {
+      throw new Error('No columns.');
+    }
+    const shown = [none, lead, won, old];
+    for (const view of shown) view.retain([STAGE]);
+    await Promise.all(shown.map((view) => view.ready()));
+    context.frame();
+    return { ...context, board, none, lead, won, old };
+  }
+  const idsOf = (view: {
+    getSnapshot: () => { source: { count: number; getItem: (i: number) => RecordView | undefined } };
+  }) => {
+    const { source } = view.getSnapshot();
+    return Array.from({ length: source.count }, (_, index) => source.getItem(index)?.id);
+  };
+
+  it('shows the card first in its new column at once, both counts moving, and writes the grouping value', async () => {
+    const { board, lead, won, edits, frame } = await readyBoard();
+    const moved = board.move(idAt(1), WON);
+    await settle();
+    frame();
+    expect(idsOf(lead)).toEqual([idAt(2)]);
+    expect(lead.getSnapshot().count).toEqual({ count: 1, atLeast: false });
+    expect(idsOf(won)).toEqual([idAt(1)]);
+    expect(won.getSnapshot().count).toEqual({ count: 1, atLeast: false });
+    // One ordinary value write, naming the version it replaces (spec 0006).
+    expect(edits[0]?.input.values).toEqual({ [STAGE]: { value: WON, baseVersionId: version(1) } });
+    edits[0]?.answer(rowOf(idAt(1), { [NAME]: 'P1', [STAGE]: WON }, { [STAGE]: version(2) }));
+    expect(await moved).toBe(true);
+    frame();
+    expect(idsOf(won)).toEqual([idAt(1)]);
+    expect(idsOf(lead)).toEqual([idAt(2)]);
+  });
+
+  it('puts a refused move back in its old place, restores the counts, and says why with Retry', async () => {
+    const { board, lead, won, edits, frame, notices } = await readyBoard();
+    const moved = board.move(idAt(1), WON);
+    await settle();
+    edits[0]?.fail(dataError('OPTION_ARCHIVED', 'Won is archived. Pick another stage.'));
+    expect(await moved).toBe(false);
+    frame();
+    expect(idsOf(lead)).toEqual([idAt(1), idAt(2)]);
+    expect(lead.getSnapshot().count).toEqual({ count: 2, atLeast: false });
+    expect(idsOf(won)).toEqual([]);
+    expect(won.getSnapshot().count).toEqual({ count: 0, atLeast: false });
+    expect(notices.at(-1)).toMatchObject({ tone: 'danger', action: { label: RECORD_WORDS.retry } });
+    // Retry sends the same move again.
+    notices.at(-1)?.action?.onAction();
+    await settle();
+    expect(edits).toHaveLength(2);
+    expect(edits[1]?.input.values[STAGE]?.value).toBe(WON);
+  });
+
+  it('refuses before sending a move to an archived column or the card own column', async () => {
+    const { board, edits } = await readyBoard();
+    expect(await board.move(idAt(1), OLD)).toBe(false);
+    expect(await board.move(idAt(1), LEAD)).toBe(false);
+    expect(edits).toHaveLength(0);
+  });
+
+  it('moves a card someone else moved as soon as its new value is read back', async () => {
+    const { layer, lead, none, gets, frame } = await readyBoard();
+    layer.changed(WS, PEOPLE, [idAt(2)], [STAGE]);
+    frame();
+    await settle();
+    gets[0]?.answer([rowOf(idAt(2), { [NAME]: 'P2', [STAGE]: null }, { [STAGE]: version(3) })]);
+    await settle();
+    frame();
+    expect(idsOf(lead)).toEqual([idAt(1)]);
+    expect(idsOf(none)).toEqual([idAt(2)]);
+    expect(none.getSnapshot().count).toEqual({ count: 1, atLeast: false });
+  });
+
+  it('holds every column still while a card is dragged', async () => {
+    const { board, layer, tick, counts, frame } = await readyBoard();
+    board.holdStill(true);
+    layer.changed(WS, PEOPLE, [idAt(9)], [NAME], { createdIds: [idAt(9)] });
+    frame();
+    tick(10_000);
+    await settle();
+    // No settle rereads a column (its count) under the drag.
+    expect(counts).toHaveLength(0);
+    board.holdStill(false);
+    tick(10_000);
+    await settle();
+    expect(counts.length).toBeGreaterThan(0);
   });
 });

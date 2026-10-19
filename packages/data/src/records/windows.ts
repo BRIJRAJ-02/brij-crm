@@ -102,6 +102,12 @@ export interface Windows {
   /** Starts a cursor chain again from block 0, forgetting every block and checkpoint (a refused cursor). */
   readonly restart: () => void;
   /**
+   * Block 0 as another read already answered it (a board's `records.groups`,
+   * spec 0021): its ids, each already held in the store once, and the cursor
+   * after it. Set the count first. Replaces any block 0 loading.
+   */
+  readonly seed: (read: BlockRead) => void;
+  /**
    * Reads the blocks on screen again in one go and lets go of the other
    * loaded blocks (settle, spec 0006, AC-56): by position from the first
    * block on screen, or by cursor from its checkpoint (the nearest one
@@ -389,6 +395,20 @@ export function createWindows({
     notify();
   };
 
+  const seed = ({ ids, nextCursor }: BlockRead) => {
+    if (isDisposed) {
+      release(ids);
+      return;
+    }
+    loading.get(0)?.abort();
+    loading.delete(0);
+    if (isCursor()) chainAfter(0, ids.length, nextCursor, 1);
+    const room = isCursor() ? ids.length : Math.min(ids.length, told.count);
+    if (ids.length > room) release(ids.slice(room));
+    setBlock(0, ids.slice(0, room), true);
+    notify();
+  };
+
   const abortAll = () => {
     for (const controller of loading.values()) controller.abort();
     loading.clear();
@@ -537,6 +557,7 @@ export function createWindows({
       loadShown();
     },
     reread,
+    seed,
     stats: () => ({ loaded: blocks.size, loading: loading.size, checkpoints: checkpoints.size }),
     subscribe: (listener) => {
       listeners.add(listener);

@@ -26,6 +26,7 @@ import type {
   SetValuesInput,
   WrittenRecord,
 } from '@crm/contracts';
+import { BOARD_BLOCK } from '@crm/contracts/board';
 import { canJump, type JumpAttribute } from '@crm/contracts/jump';
 import type { FilterGroup, Hue, RecordRefDisplay, SortRules } from '@crm/contracts/values';
 import type { PatternCompiler, RuleFailure } from '@crm/contracts/validation';
@@ -49,6 +50,14 @@ import type { Layer, LinkTotals } from './store.ts';
 type RecordsEvent = Extract<ChangeEvent, { kind: 'records' }>;
 import { createRecordView, nextFrame, type Pin, type RecordSource, type RowNote, type Scheduler } from './view.ts';
 import { createWindows, type ReadFrom, type WindowCount, type WindowMode, type Windows } from './windows.ts';
+import {
+  createBoard,
+  type BoardQuery,
+  type BoardStore,
+  type ColumnSeed,
+  type GroupsAnswer,
+  type GroupsRequest,
+} from './board.ts';
 import {
   checkInBrowser,
   needsPattern,
@@ -189,6 +198,8 @@ export interface RecordsApi {
     },
     signal: AbortSignal,
   ) => Promise<RecordCount>;
+  /** A board's first cards and counts, up to 12 columns a call (spec 0021). */
+  readonly groups: (input: GroupsRequest, signal: AbortSignal) => Promise<GroupsAnswer>;
   /** Records by id; with `attributeIds`, only those and the primary. */
   readonly get: (input: {
     readonly workspace: string;
@@ -660,6 +671,15 @@ interface ViewEntry {
   readonly created: (id: string) => void;
   /** A record made here was refused: it leaves. */
   readonly withdrawn: (id: string) => void;
+  /**
+   * A board column (spec 0021): where a card is now, by its grouping value.
+   * `here` true shows it in this column (in its place when the windows hold
+   * it, else first, until the member leaves the board); false hides it here
+   * (moved to another column), out of the count too.
+   */
+  readonly placeMoved: (id: string, here: boolean) => void;
+  /** Whether this column hides the card as moved elsewhere. */
+  readonly hidesMoved: (id: string) => boolean;
   readonly isRetained: () => boolean;
   /** Whether a loaded block or a pin holds `id`. */
   readonly shows: (id: string) => boolean;
@@ -1088,8 +1108,17 @@ export function createRecordsLayer({
     noteGone(workspace, ids);
   };
 
-  function openView(workspace: string, objectId: string, query: ViewQuery, warm: readonly string[]): ViewEntry {
-    const key = keyOf(workspace, objectId, query);
+  function openView(
+    workspace: string,
+    objectId: string,
+    query: ViewQuery,
+    warm: readonly string[],
+    column?: { readonly key: string; readonly seed: ColumnSeed },
+  ): ViewEntry {
+    const key = column?.key ?? keyOf(workspace, objectId, query);
+    // A board's column (spec 0021) reads 25 cards a block, and starts from the cards its board's call brought.
+    const blockSize = column === undefined ? BLOCK_SIZE : BOARD_BLOCK;
+    let seed = column?.seed;
     let status: ViewStatus = 'loading';
     let error: DataError | undefined;
     let isCounted = false;
@@ -1108,6 +1137,17 @@ export function createRecordsLayer({
     // A refused cursor restarts the chain once; a read that lands allows it again.
     let hasRestarted = false;
     const isOpen = () => views.get(key)?.view === view;
+    // A board column's moved cards (spec 0021): those moved elsewhere (hidden here) and those moved in (first here).
+    let movedOut: ReadonlySet<string> = new Set();
+    const movedIn = new Set<string>();
+    // The ids this view skips: records on their way to the trash, and its cards moved to another column.
+    let goneFor = { leaving, movedOut, all: leaving };
+    const goneHere = (): ReadonlySet<string> => {
+      if (goneFor.leaving !== leaving || goneFor.movedOut !== movedOut) {
+        goneFor = { leaving, movedOut, all: movedOut.size === 0 ? leaving : new Set([...leaving, ...movedOut]) };
+      }
+      return goneFor.all;
+    };
 
     // Visible attributes (spec 0006, AC-55): each reader's columns, unioned, plus the primary.
     const readers = new Map<symbol, readonly string[]>();
@@ -1182,7 +1222,7 @@ export function createRecordsLayer({
 
     const windows = createWindows({
       mode: () => mode,
-      blockSize: BLOCK_SIZE,
+      blockSize,
       read: async (from, limit, signal) => {
         const asked = now();
         readSet = attributeSet();
@@ -1235,13 +1275,19 @@ export function createRecordsLayer({
       store,
       windows,
       schedule,
-      gone: () => leaving,
+      gone: goneHere,
       onShown: (range) => {
         // An edited row held in place lets go once it scrolls out of sight (spec 0006, AC-56).
-        const kept = inner
-          .pins()
-          .filter((pin) => created.has(pin.id) || (pin.index >= range.start && pin.index < range.end));
-        if (kept.length !== inner.pins().length) inner.setPins(kept);
+        const kept = inner.pins().filter(
+          (pin) =>
+            created.has(pin.id) ||
+            // A card moved in stays until its column's windows hold it (spec 0021).
+            (movedIn.has(pin.id) && !windows.has(pin.id)) ||
+            (pin.index >= range.start && pin.index < range.end),
+        );
+        if (kept.length === inner.pins().length) return;
+        for (const pin of inner.pins()) if (!kept.includes(pin)) movedIn.delete(pin.id);
+        inner.setPins(kept);
       },
     });
     windows.subscribe(checkReady);
@@ -1271,7 +1317,7 @@ export function createRecordsLayer({
           windows.setCount(told);
           // The first block, so the grid has rows the moment it mounts (the router loader waits for this).
           // Only the first time: a later count must never move the windows back to the top.
-          if (isFirst && windows.count() > 0) windows.show({ start: 0, end: Math.min(windows.count(), BLOCK_SIZE) });
+          if (isFirst && windows.count() > 0) windows.show({ start: 0, end: Math.min(windows.count(), blockSize) });
           checkReady();
           inner.invalidate();
         },
@@ -1402,12 +1448,14 @@ export function createRecordsLayer({
           lastGone = goneIds;
           const told = windows.told();
           // Rows on their way to the trash already left the count (spec 0022, AC-525).
-          const goneHere = [...leaving].filter((id) => windows.has(id)).length;
+          const skipped = [...goneHere()].filter((id) => windows.has(id)).length;
+          // Cards moved in from another column, not yet in its windows, join its count (spec 0021).
+          const added = [...movedIn].filter((id) => !windows.has(id)).length;
           snapshot = {
             source,
             status,
             cellErrors,
-            count: goneHere === 0 ? told : { ...told, count: Math.max(0, told.count - goneHere) },
+            count: skipped === 0 && added === 0 ? told : { ...told, count: Math.max(0, told.count - skipped + added) },
             mode,
             rowNotes: rowNotesOf(),
             referenceDisplays,
@@ -1471,6 +1519,7 @@ export function createRecordsLayer({
               created.clear();
               edited.clear();
               inner.setPins([]);
+              movedIn.clear();
               letGoLater();
             }
           },
@@ -1563,12 +1612,30 @@ export function createRecordsLayer({
           const byId = new Map(described.attributes.map((attribute) => [attribute.id, attribute]));
           mode = canJump(query.filter, query.sorts, (id) => byId.get(id)) ? 'position' : 'cursor';
           readSet = attributeSet();
+          // A board's column: its count and first block came with the board's call, and are used once.
+          const seeded = seed;
+          seed = undefined;
+          if (seeded !== undefined && !isCounted && isOpen()) {
+            applySeed(seeded);
+            return;
+          }
           if (!isCounted && isOpen()) void refreshCount();
         },
         (failure: unknown) => {
           if (isOpen()) fail(failure);
         },
       );
+    }
+    /** The count and first block a board's call brought, placed as a count and a read would place them. */
+    function applySeed(seeded: ColumnSeed) {
+      const ids = seeded.records.map((record) => record.id);
+      store.receive(seeded.records, { hold: true });
+      backAgain(ids);
+      isCounted = true;
+      windows.setCount({ count: seeded.count, atLeast: seeded.atLeast });
+      windows.seed(seeded.nextCursor === undefined ? { ids } : { ids, nextCursor: seeded.nextCursor });
+      checkReady();
+      inner.invalidate();
     }
     start();
     // A view the router warmed but no screen ever showed goes too.
@@ -1603,6 +1670,29 @@ export function createRecordsLayer({
         inner.setPins([{ id, index: 0, note: 'new' }, ...made, ...others]);
         markDirty();
       },
+      placeMoved: (id, here) => {
+        if (here) {
+          if (movedOut.has(id)) movedOut = new Set([...movedOut].filter((each) => each !== id));
+          // In its windows: shown in its place. Else first, as the member's own row (spec 0006's rule).
+          if (!windows.has(id) && !inner.pins().some((pin) => pin.id === id)) {
+            movedIn.add(id);
+            inner.setPins([{ id, index: 0 }, ...inner.pins().map((pin) => ({ ...pin, index: pin.index + 1 }))]);
+          }
+        } else {
+          if (movedIn.delete(id)) {
+            const at = inner.pins().find((pin) => pin.id === id)?.index ?? 0;
+            inner.setPins(
+              inner
+                .pins()
+                .filter((pin) => pin.id !== id)
+                .map((pin) => (pin.index > at ? { ...pin, index: pin.index - 1 } : pin)),
+            );
+          }
+          if (windows.has(id) && !movedOut.has(id)) movedOut = new Set([...movedOut, id]);
+        }
+        inner.invalidate();
+      },
+      hidesMoved: (id) => movedOut.has(id),
       withdrawn: (id) => {
         if (!created.delete(id)) return;
         const rest = inner.pins().filter((pin) => pin.id !== id);
@@ -2920,7 +3010,135 @@ export function createRecordsLayer({
     }
   }
 
+  // Boards (spec 0021), one per question, shared by every screen asking it, gone 30 seconds after the last.
+  const boards = new Map<string, { readonly board: BoardStore<RecordsView>; unused?: ReturnType<typeof setTimeout> }>();
+  const boardKeyOf = (workspace: string, objectId: string, query: BoardQuery) =>
+    `${keyOf(workspace, objectId, { ...(query.filter === undefined ? {} : { filter: query.filter }), ...(query.sorts === undefined ? {} : { sorts: query.sorts }) })}\u0000${canonicalJson({ groupBy: query.groupBy, columns: query.columnIds, archived: [...(query.archivedIds ?? [])].sort() })}`;
+
   const records = {
+    /**
+     * A board (spec 0021): one window per column, each the view's filter and
+     * one option of `groupBy` (or no value), in the view's sorts, its first
+     * 25 cards and count from `records.groups` (12 columns a call, one call
+     * at a time), then paging on by itself 25 at a time. Every screen asking
+     * the same board shares it; it goes 30 seconds after the last screen
+     * lets go. `attributeIds` are what the cards read (the primary always
+     * comes).
+     */
+    board: (
+      workspace: string,
+      objectId: string,
+      query: BoardQuery,
+      attributeIds: readonly string[] = [],
+    ): BoardStore<RecordsView> => {
+      const key = boardKeyOf(workspace, objectId, query);
+      const held = boards.get(key);
+      if (held !== undefined) return held.board;
+      // Each column's window by option id ('' for no value), for placing moved cards.
+      const columns = new Map<string, ViewEntry>();
+      const columnKeyOf = (id: string | null) => id ?? '';
+      /**
+       * Where a card shows (spec 0021): in the column of its grouping value as
+       * the store holds it now (an own move's layer, a rollback, an undo, or
+       * someone else's move read back), hidden from every other column. Only
+       * cards a column holds or hides are placed; the rest wait for a settle.
+       */
+      const place = (id: string) => {
+        const entries = [...columns.values()];
+        if (!entries.some((entry) => entry.shows(id) || entry.hidesMoved(id))) return;
+        const body = store.get(id);
+        if (body === undefined || !Object.hasOwn(body.values, query.groupBy)) return;
+        const value = body.values[query.groupBy];
+        const here = typeof value === 'string' ? value : '';
+        for (const [key, entry] of columns) entry.placeMoved(id, key === here);
+      };
+      const stopPlacing = store.subscribe((ids) => {
+        for (const id of ids) place(id);
+      });
+      let dragging = 0;
+      const archived = new Set(query.archivedIds ?? []);
+      const board = createBoard<RecordsView>({
+        workspace,
+        objectId,
+        query,
+        attributeIds: [...new Set([...attributeIds, query.groupBy])],
+        groups: (request, signal) => whenFree(() => api.groups(request, signal), signal),
+        column: (id, filter, sorts, seed) => {
+          const columnQuery = { filter, ...(sorts === undefined ? {} : { sorts }) };
+          const columnKey = `${keyOf(workspace, objectId, columnQuery)}\u0000board`;
+          const open =
+            views.get(columnKey) ?? openView(workspace, objectId, columnQuery, attributeIds, { key: columnKey, seed });
+          views.set(columnKey, open);
+          columns.set(columnKeyOf(id), open);
+          if (dragging > 0) open.view.holdSettle(true);
+          return open.view;
+        },
+        move: async (recordId, toColumnId) => {
+          const to = columns.get(columnKeyOf(toColumnId));
+          const from = [...columns.values()].find((entry) => entry.shows(recordId));
+          // Refused here, with nothing sent: an archived option, a column not loaded, or the card's own column.
+          if (to === undefined || from === undefined || to === from) return false;
+          if (toColumnId !== null && archived.has(toColumnId)) return false;
+          const outcome = await edit(
+            workspace,
+            undefined,
+            [{ rowId: recordId, columnId: query.groupBy, value: toColumnId }],
+            'cell',
+          );
+          if (outcome.kind !== 'done' || outcome.landed > 0) return outcome.kind === 'done';
+          // Refused: the card is back where it was (its layer went); say why, with Retry, instead of a cell's mark.
+          const cell = `${recordId}:${query.groupBy}`;
+          const message = cellErrors.get(cell);
+          if (message !== undefined) {
+            setCellErrors([[cell, undefined]]);
+            notify({
+              tone: 'danger',
+              message,
+              action: {
+                label: RECORD_WORDS.retry,
+                onAction: () => {
+                  void shared.move(recordId, toColumnId);
+                },
+              },
+            });
+          }
+          return false;
+        },
+        holdStill: (isHeld) => {
+          dragging = Math.max(0, dragging + (isHeld ? 1 : -1));
+          for (const entry of columns.values()) entry.view.holdSettle(isHeld);
+        },
+        beforeRead: () => beforeRead(workspace),
+        now,
+        timeZone,
+      });
+      const entry: { readonly board: BoardStore<RecordsView>; unused?: ReturnType<typeof setTimeout> } = { board };
+      const letGo = () => {
+        clearTimeout(entry.unused);
+        entry.unused = setTimeout(() => {
+          if (board.isRetained()) return;
+          if (boards.get(key)?.board === shared) boards.delete(key);
+          stopPlacing();
+          board.dispose();
+        }, keepUnusedViewMs);
+      };
+      const retain = board.retain;
+      const shared: BoardStore<RecordsView> = {
+        ...board,
+        retain: () => {
+          clearTimeout(entry.unused);
+          const release = retain();
+          return () => {
+            release();
+            if (!board.isRetained()) letGo();
+          };
+        },
+      };
+      boards.set(key, { board: shared });
+      letGo();
+      return shared;
+    },
+
     /**
      * An object's records as one question asks for them (spec 0006, AC-51):
      * its filter and sorts. Every screen asking the same question shares one
@@ -3198,6 +3416,8 @@ export function createRecordsLayer({
       subscriptions.clear();
       for (const entry of views.values()) entry.dispose();
       views.clear();
+      for (const held of boards.values()) held.board.dispose();
+      boards.clear();
       incoming = new Map();
       recent = new Map();
       creating.clear();

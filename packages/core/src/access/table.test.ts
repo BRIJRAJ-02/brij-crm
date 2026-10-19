@@ -374,6 +374,9 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   queryRecords: refused('NOT_FOUND', (scope, world) => core.queryRecords(scope, { objectId: world.people })),
   queryPage: refused('NOT_FOUND', (scope, world) => core.queryPage(scope, { objectId: world.people })),
   countMatches: refused('NOT_FOUND', (scope, world) => core.countMatches(scope, { objectId: world.people })),
+  queryGroups: refused('NOT_FOUND', (scope, world) =>
+    core.queryGroups(scope, { objectId: world.people, groupBy: world.stage, groupIds: [null] }),
+  ),
   getHistory: refused('NOT_FOUND', (scope, world) =>
     core.getHistory(scope, { recordId: world.recordId, attributeId: world.jobTitle }),
   ),

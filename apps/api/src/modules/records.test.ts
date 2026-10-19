@@ -586,6 +586,102 @@ describe('cancelling a read', () => {
   });
 });
 
+describe('records.groups (spec 0021)', () => {
+  it('answers a Deals board by Stage: columns in the order asked, each column its cards and exact count', async () => {
+    const m = await memberWithWorkspace(app);
+    const objects = await m.client.objects.list({ workspace: m.slug });
+    const deals = objects.find((object) => object.standardKey === 'deals');
+    if (deals === undefined) throw new Error('The template has no Deals.');
+    const attributes = await m.client.attributes.list({ workspace: m.slug, objectId: deals.id });
+    const stage = attributes.find((attribute) => attribute.apiSlug === 'stage');
+    const name = attributes.find((attribute) => attribute.isPrimary);
+    const [first, second] = stage?.options ?? [];
+    if (stage === undefined || name === undefined || first === undefined || second === undefined) {
+      throw new Error('Deals has no Stage with two stages.');
+    }
+    const make = async (title: string, optionId?: string) =>
+      m.client.records.create({
+        workspace: m.slug,
+        objectId: deals.id,
+        id: newId(),
+        values: { [name.id]: title, ...(optionId === undefined ? {} : { [stage.id]: optionId }) },
+        mutationId: newId(),
+      });
+    const a = await make('Acme renewal', first.id);
+    const b = await make('Globex pilot', first.id);
+    const c = await make('Initech', second.id);
+    // Stage is required, with the first stage as its default: the no value column stays empty.
+    const d = await make('Defaulted to the first stage');
+
+    const answer = await m.client.records.groups({
+      workspace: m.slug,
+      objectId: deals.id,
+      groupBy: stage.id,
+      groupIds: [second.id, null, first.id],
+      attributeIds: [stage.id],
+      limit: 1,
+      probeArchived: true,
+    });
+    expect(answer.archivedHolding).toEqual([]);
+    expect(answer.groups.map((group) => [group.id, group.count, group.atLeast])).toEqual([
+      [second.id, 1, false],
+      [null, 0, false],
+      [first.id, 3, false],
+    ]);
+    // With no sorts the server answers in creation order; the screen sends the view's effective sorts.
+    expect(answer.groups.map((group) => group.records.map((record) => record.id))).toEqual([[c.id], [], [a.id]]);
+    expect(answer.groups[2]?.nextCursor).toEqual(expect.any(String));
+    // Only the attributes asked for, plus the primary.
+    expect(Object.keys(answer.groups[0]?.records[0]?.values ?? {}).sort()).toEqual([name.id, stage.id].sort());
+
+    // The column pages on with records.query, on its own filter.
+    const rest = await m.client.records.query({
+      workspace: m.slug,
+      objectId: deals.id,
+      filter: { conjunction: 'and', conditions: [{ attributeId: stage.id, operator: 'is', value: first.id }] },
+      cursor: answer.groups[2]?.nextCursor ?? '',
+      limit: 1,
+    });
+    expect(rest.records.map((record) => record.id)).toEqual([b.id]);
+    expect(rest.nextCursor).toEqual(expect.any(String));
+    expect(d.values[stage.id]).toBe(first.id);
+  });
+
+  it('refuses what can not group, a 13th column and an option of another attribute', async () => {
+    const m = await memberWithWorkspace(app);
+    const scope = { workspace: m.slug, objectId: m.people.id };
+    expect(
+      await refusal(() => m.client.records.groups({ ...scope, groupBy: m.attribute('job_title'), groupIds: [null] })),
+    ).toMatchObject({
+      code: 'CONFIG_INVALID',
+      status: 422,
+      message: 'Boards group by a status or single select field.',
+    });
+    const thirteen = Array.from({ length: 13 }, () => newId());
+    expect(
+      await refusal(() => m.client.records.groups({ ...scope, groupBy: m.attribute('job_title'), groupIds: thirteen })),
+    ).toMatchObject({ code: 'INPUT_INVALID', status: 400 });
+    expect(
+      await refusal(() => m.client.records.groups({ ...scope, objectId: newId(), groupBy: newId(), groupIds: [null] })),
+    ).toMatchObject({ code: 'NOT_FOUND', status: 404 });
+  });
+
+  it('is refused to someone outside the workspace', async () => {
+    const m = await memberWithWorkspace(app);
+    const stranger = await memberWithWorkspace(app);
+    expect(
+      await refusal(() =>
+        stranger.client.records.groups({
+          workspace: m.slug,
+          objectId: m.people.id,
+          groupBy: m.attribute('job_title'),
+          groupIds: [null],
+        }),
+      ),
+    ).toMatchObject(NOT_A_MEMBER);
+  });
+});
+
 describe('the read gate', () => {
   it('runs at most 6 queries and counts at once per workspace, answers the seventh 429, and frees places on abort', async () => {
     const m = await memberWithWorkspace(app);

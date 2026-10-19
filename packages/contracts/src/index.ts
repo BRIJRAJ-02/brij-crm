@@ -19,6 +19,7 @@ import { workspacesContract } from './workspaces.ts';
 export * from './access.ts';
 export * from './activity.ts';
 export * from './attributes.ts';
+export * from './board-model.ts';
 export * from './bulk.ts';
 export * from './change-event.ts';
 export * from './errors.ts';

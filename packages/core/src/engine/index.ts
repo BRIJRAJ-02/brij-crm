@@ -70,6 +70,14 @@ export {
   type ViewSource,
 } from './query/page.ts';
 export {
+  GROUPS_DEADLINE_MS,
+  queryGroups,
+  type Groups,
+  type GroupsQuery,
+  type GroupsTuning,
+  type RecordGroup,
+} from './query/groups.ts';
+export {
   createRecord,
   getRecords,
   MAX_BATCH,

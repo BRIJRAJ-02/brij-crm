@@ -18,9 +18,12 @@ import {
   type View,
 } from '@crm/data';
 import { useSavedView, useViewsList } from '@crm/data/react';
-import { Button, Callout, EmptyState, Popover, ViewSettings, type ViewChoice } from '@crm/ui';
+import { Button, Callout, EmptyState, Popover, SegmentedControl, ViewSettings, type ViewChoice } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { BoardScreen } from '../board/BoardScreen.tsx';
+import { planBoard } from '../board/plan.ts';
+import { strings as boardStrings } from '../board/strings.ts';
 import { RecordsScreen } from '../workspace/RecordsScreen.tsx';
 import { useCan, useMyAccess } from '../workspace/WorkspacePage.tsx';
 import { CreateViewDialog } from './CreateViewDialog.tsx';
@@ -343,185 +346,140 @@ export function ViewScreen(props: ViewScreenProps) {
     }),
   );
 
-  return (
-    <>
-      <RecordsScreen
-        slug={slug}
-        object={object}
-        attributes={attributes}
-        members={members}
-        view={records}
-        viewQuery={props.recordsQuery}
-        query={query}
-        onSort={(rule) => {
-          draft.set(
-            { ...(draft.query.filter === undefined ? {} : { filter: draft.query.filter }), sorts: [rule] },
-            'push',
-          );
-        }}
-        onFilter={(attributeId) => {
-          // A relationship's filter needs record search, which arrives with relationships (spec 0014).
-          if (attributes.find((attribute) => attribute.id === attributeId)?.type === 'record_reference') {
-            toasts.toast({ tone: 'info', message: strings.referenceFilterSoon });
-            return;
-          }
-          setFilterOn({ attributeId });
-        }}
-        views={choices}
-        onCreateView={() => {
-          setCreateMode('create');
-        }}
-        layout={layout}
-        onLayoutChange={changeLayout}
-        onAttributeCreated={(attributeId) => {
-          // A view that lists its columns shows the new one at its end; a seeded default shows it already.
-          if (view !== undefined && (view.config.columns.length > 0 || !view.config.showNewAttributes)) {
-            changeLayout(withColumn(layout, attributeId));
-          }
-        }}
-        viewActions={
-          view === undefined ? undefined : (
-            <>
-              {view.visibility === 'workspace' && view.isLocked && (
-                <Callout placement="bar" {...(isLockedForMe ? { isAnnounced: true } : {})}>
-                  {isLockedForMe
-                    ? strings.lockedUnsaved(memberName(members, view.lockedBy))
-                    : strings.lockedBy(memberName(members, view.lockedBy))}
-                </Callout>
-              )}
-              <Button
-                ref={settingsAnchor}
-                variant="ghost"
-                icon="settings"
-                onPress={() => {
-                  setSettingsOpen(true);
-                }}
-              >
-                {strings.viewSettings}
-              </Button>
-              <ViewMenu
-                slug={slug}
-                object={object}
-                view={view}
-                list={list}
-                members={members}
-                memberId={access?.memberId}
-                canManage={canManage}
-                copyLinkReason={draft.isDraft && !draft.isLinkable ? strings.linkTooLong : undefined}
-                onDuplicate={duplicate}
-                onDeleting={(isDeleting) => {
-                  // This tab's own delete: the view going away is no news here.
-                  leaving.current = isDeleting;
-                }}
-                onDeleted={(name) => {
-                  toasts.toast({ tone: 'success', message: strings.deleted(name) });
-                  void navigate({
-                    to: '/w/$slug/objects/$object',
-                    params: { slug, object: object.apiSlug },
-                    replace: true,
-                  });
-                }}
-              />
-            </>
-          )
-        }
-        currentViewId={view?.id ?? ''}
-        onViewChange={(viewId) => {
-          // The view already open: nothing changes, and its draft stays.
-          if (viewId === view?.id) return;
-          // Another view drops this one's draft (AC-466); Back brings it back.
-          if (draft.isDraft && view !== undefined) {
-            toasts.toast({ tone: 'info', message: strings.draftLeft(view.name) });
-          }
-          void navigate({
-            to: '/w/$slug/objects/$object/views/$viewId',
-            params: { slug, object: object.apiSlug, viewId },
-          });
-        }}
-        announce={(count) =>
-          filtered
-            ? strings.matching(
-                count.atLeast ? `${count.count.toLocaleString()}+` : count.count.toLocaleString(),
-                object.pluralName,
-              )
-            : undefined
-        }
-        toolbar={(announced) => (
-          <>
-            <ViewToolbar
-              query={draft.query}
-              filter={running?.filter}
-              attributes={attributes}
-              sortable={sortable}
-              members={memberDisplays}
-              me={me}
-              isDraft={draft.isDraft}
-              canSave={canSave}
-              isSaving={isSaving}
-              onChange={draft.set}
-              onDiscard={discard}
-              onSave={() => {
-                save(false);
-              }}
-              onSaveAsNew={() => {
-                setCreateMode('save-as');
-              }}
-              {...(filterOn === undefined ? {} : { filterOn })}
-              {...(focusRequest === undefined ? {} : { focusRequest })}
-              {...(announced === undefined ? {} : { status: announced })}
-            />
-            {showDropped && draft.isDraft && (
-              <Callout
-                tone="warning"
-                placement="banner"
-                isAnnounced
-                actions={
-                  <Button
-                    variant="ghost"
-                    onPress={() => {
-                      setShowDropped(false);
-                    }}
-                  >
-                    {strings.dismiss}
-                  </Button>
-                }
-              >
-                {strings.draftDropped}
-              </Callout>
-            )}
-            {view?.kind === 'board' && (
-              <Callout tone="info" placement="banner">
-                {strings.boardSoon}
-              </Callout>
-            )}
-          </>
+  // Table or Board (spec 0021, AC-492): the view's kind, or the one picked on this visit. Saving the kind for
+  // everyone arrives with the views' layout save (spec 0020 milestone 2, `views.setLayout`); until then the
+  // switch changes this visit only, as it does on a locked view for a member without views.manage.
+  const [pickedKind, setPickedKind] = useState<'table' | 'board' | undefined>(undefined);
+  const kind = pickedKind ?? view?.kind ?? 'table';
+  const layoutSwitch = (
+    <SegmentedControl
+      label={boardStrings.layout}
+      segments={[
+        { value: 'table', label: boardStrings.table },
+        { value: 'board', label: boardStrings.board },
+      ]}
+      value={kind}
+      onChange={(next) => {
+        setPickedKind(next === 'board' ? 'board' : 'table');
+      }}
+    />
+  );
+  const storedBoard = view?.config.board;
+  const boardOutcome = useMemo(
+    () => (kind === 'board' ? planBoard(attributes, storedBoard) : undefined),
+    [kind, attributes, storedBoard],
+  );
+  const switchView = (viewId: string) => {
+    // The view already open: nothing changes, and its draft stays.
+    if (viewId === view?.id) return;
+    // Another view drops this one's draft (AC-466); Back brings it back.
+    if (draft.isDraft && view !== undefined) {
+      toasts.toast({ tone: 'info', message: strings.draftLeft(view.name) });
+    }
+    void navigate({
+      to: '/w/$slug/objects/$object/views/$viewId',
+      params: { slug, object: object.apiSlug, viewId },
+    });
+  };
+  const createView = () => {
+    setCreateMode('create');
+  };
+  // The view's own actions in the view bar: the lock line, View settings (the table's columns) and the view menu.
+  const viewActionsFor = (withSettings: boolean): ReactNode =>
+    view === undefined ? undefined : (
+      <>
+        {view.visibility === 'workspace' && view.isLocked && (
+          <Callout placement="bar" {...(isLockedForMe ? { isAnnounced: true } : {})}>
+            {isLockedForMe
+              ? strings.lockedUnsaved(memberName(members, view.lockedBy))
+              : strings.lockedBy(memberName(members, view.lockedBy))}
+          </Callout>
         )}
-        {...(filtered
-          ? {
-              filteredEmpty: (
-                <EmptyState
-                  icon="list-filter"
-                  title={strings.noMatchesTitle(object.pluralName)}
-                  actions={
-                    draft.isDraft ? (
-                      <Button onPress={discard}>{strings.discard}</Button>
-                    ) : (
-                      <Button
-                        onPress={() => {
-                          setFilterOn({ attributeId: '' });
-                        }}
-                      >
-                        {strings.editFilters}
-                      </Button>
-                    )
-                  }
-                >
-                  {strings.noMatchesText}
-                </EmptyState>
-              ),
-            }
-          : {})}
+        {withSettings && (
+          <Button
+            ref={settingsAnchor}
+            variant="ghost"
+            icon="settings"
+            onPress={() => {
+              setSettingsOpen(true);
+            }}
+          >
+            {strings.viewSettings}
+          </Button>
+        )}
+        <ViewMenu
+          slug={slug}
+          object={object}
+          view={view}
+          list={list}
+          members={members}
+          memberId={access?.memberId}
+          canManage={canManage}
+          copyLinkReason={draft.isDraft && !draft.isLinkable ? strings.linkTooLong : undefined}
+          onDuplicate={duplicate}
+          onDeleting={(isDeleting) => {
+            // This tab's own delete: the view going away is no news here.
+            leaving.current = isDeleting;
+          }}
+          onDeleted={(name) => {
+            toasts.toast({ tone: 'success', message: strings.deleted(name) });
+            void navigate({
+              to: '/w/$slug/objects/$object',
+              params: { slug, object: object.apiSlug },
+              replace: true,
+            });
+          }}
+        />
+      </>
+    );
+  const toolbarFor = (announced: string | undefined): ReactNode => (
+    <>
+      <ViewToolbar
+        query={draft.query}
+        filter={running?.filter}
+        attributes={attributes}
+        sortable={sortable}
+        members={memberDisplays}
+        me={me}
+        isDraft={draft.isDraft}
+        canSave={canSave}
+        isSaving={isSaving}
+        onChange={draft.set}
+        onDiscard={discard}
+        onSave={() => {
+          save(false);
+        }}
+        onSaveAsNew={() => {
+          setCreateMode('save-as');
+        }}
+        {...(filterOn === undefined ? {} : { filterOn })}
+        {...(focusRequest === undefined ? {} : { focusRequest })}
+        {...(announced === undefined ? {} : { status: announced })}
       />
+      {showDropped && draft.isDraft && (
+        <Callout
+          tone="warning"
+          placement="banner"
+          isAnnounced
+          actions={
+            <Button
+              variant="ghost"
+              onPress={() => {
+                setShowDropped(false);
+              }}
+            >
+              {strings.dismiss}
+            </Button>
+          }
+        >
+          {strings.draftDropped}
+        </Callout>
+      )}
+    </>
+  );
+  // The clash dialog, Create view (and Save as new view), and the table's View settings: one set for both layouts.
+  const dialogs = (
+    <>
       <ViewChangedDialog
         sentence={clash}
         isReplacing={isSaving}
@@ -582,6 +540,106 @@ export function ViewScreen(props: ViewScreenProps) {
           }}
         />
       </Popover>
+    </>
+  );
+
+  if (boardOutcome !== undefined) {
+    return (
+      <>
+        <BoardScreen
+          slug={slug}
+          object={object}
+          attributes={attributes}
+          members={members}
+          outcome={boardOutcome}
+          query={query}
+          views={choices}
+          currentViewId={view?.id ?? ''}
+          onViewChange={switchView}
+          onCreateView={createView}
+          viewActions={viewActionsFor(false)}
+          layoutSwitch={layoutSwitch}
+          toolbar={toolbarFor}
+        />
+        {dialogs}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <RecordsScreen
+        slug={slug}
+        object={object}
+        attributes={attributes}
+        members={members}
+        view={records}
+        viewQuery={props.recordsQuery}
+        query={query}
+        onSort={(rule) => {
+          draft.set(
+            { ...(draft.query.filter === undefined ? {} : { filter: draft.query.filter }), sorts: [rule] },
+            'push',
+          );
+        }}
+        onFilter={(attributeId) => {
+          // A relationship's filter needs record search, which arrives with relationships (spec 0014).
+          if (attributes.find((attribute) => attribute.id === attributeId)?.type === 'record_reference') {
+            toasts.toast({ tone: 'info', message: strings.referenceFilterSoon });
+            return;
+          }
+          setFilterOn({ attributeId });
+        }}
+        views={choices}
+        onCreateView={createView}
+        layout={layout}
+        onLayoutChange={changeLayout}
+        onAttributeCreated={(attributeId) => {
+          // A view that lists its columns shows the new one at its end; a seeded default shows it already.
+          if (view !== undefined && (view.config.columns.length > 0 || !view.config.showNewAttributes)) {
+            changeLayout(withColumn(layout, attributeId));
+          }
+        }}
+        viewActions={viewActionsFor(true)}
+        currentViewId={view?.id ?? ''}
+        onViewChange={switchView}
+        viewBarEnd={layoutSwitch}
+        announce={(count) =>
+          filtered
+            ? strings.matching(
+                count.atLeast ? `${count.count.toLocaleString()}+` : count.count.toLocaleString(),
+                object.pluralName,
+              )
+            : undefined
+        }
+        toolbar={toolbarFor}
+        {...(filtered
+          ? {
+              filteredEmpty: (
+                <EmptyState
+                  icon="list-filter"
+                  title={strings.noMatchesTitle(object.pluralName)}
+                  actions={
+                    draft.isDraft ? (
+                      <Button onPress={discard}>{strings.discard}</Button>
+                    ) : (
+                      <Button
+                        onPress={() => {
+                          setFilterOn({ attributeId: '' });
+                        }}
+                      >
+                        {strings.editFilters}
+                      </Button>
+                    )
+                  }
+                >
+                  {strings.noMatchesText}
+                </EmptyState>
+              ),
+            }
+          : {})}
+      />
+      {dialogs}
     </>
   );
 }

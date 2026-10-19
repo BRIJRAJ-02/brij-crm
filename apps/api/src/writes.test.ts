@@ -29,6 +29,7 @@ const READS: ReadonlySet<string> = new Set([
   'access.mine',
   'records.query',
   'records.count',
+  'records.groups',
   'records.get',
   'records.activity',
   'records.getTrashed',

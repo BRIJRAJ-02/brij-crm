@@ -80,6 +80,8 @@ export interface RecordsScreenProps {
   readonly onLayoutChange: (next: ShownLayout) => void;
   /** An attribute made here (Add attribute, the grid's "+"): the view shows it (AC-471). */
   readonly onAttributeCreated?: (attributeId: string) => void;
+  /** At the end of the view bar: the Table and Board switch (spec 0021). */
+  readonly viewBarEnd?: ReactNode;
   /**
    * The view's Toolbar (its sorts, filters and Save), and any notice under it, given what to say to screen
    * readers: `announce`'s words for the count, once the rows for a new question are in (never for the first,
@@ -182,6 +184,7 @@ export function RecordsScreen({
   layout,
   onLayoutChange,
   onAttributeCreated,
+  viewBarEnd,
   toolbar,
   announce,
   filteredEmpty,
@@ -418,6 +421,7 @@ export function RecordsScreen({
                 {strings.addAttribute}
               </Button>
             )}
+            {viewBarEnd}
           </ViewBar>
         ),
         ...(toolbar === undefined ? {} : { toolbar: toolbar(announced.text) }),
