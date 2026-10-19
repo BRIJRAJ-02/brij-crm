@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
-import { expect, fn, userEvent, within } from 'storybook/test';
+import { expect, fn, userEvent, waitFor, within } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { HoursEditor, type HoursRange, type HoursRow } from './HoursEditor.tsx';
 
@@ -79,6 +79,8 @@ export const CopyTimes: Story = {
     await userEvent.click(body.getByRole('button', { name: 'Apply' }));
     await expect(args.onChange).toHaveBeenCalledWith('mon', [['09:00', '15:00']]);
     await expect(args.onChange).toHaveBeenCalledWith('tue', [['09:00', '15:00']]);
+    // The accessibility check runs after this; a popover still fading out reads as low contrast.
+    await waitFor(() => expect(body.queryByRole('dialog')).toBeNull());
   },
 };
 
