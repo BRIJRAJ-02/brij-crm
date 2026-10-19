@@ -17,7 +17,7 @@ import { isAborted, withCancel } from './cancel.ts';
 import { countIn, countsWhole, readPage, type MatchCount } from './page.ts';
 import { attributeVisible, checkObject } from '../../access/visibility.ts';
 
-const { attributeOptions, sortKeys } = schema;
+const { attributeOptions, objects, sortKeys } = schema;
 
 /** How long one `records.groups` call may take in all, every column together (spec 0021). */
 export const GROUPS_DEADLINE_MS = 10_000;
@@ -109,6 +109,9 @@ async function readGroups(
   if (!isUuid(query.objectId)) throw refuse('NOT_FOUND', 'That object does not exist.');
   const objectId = canonicalId(query.objectId);
   await limitTime();
+  const [object] = await tx.select({ id: objects.id }).from(objects).where(eq(objects.id, objectId));
+  if (object === undefined) throw refuse('NOT_FOUND', 'That object does not exist.');
+  // A hidden object answers as an unknown one (spec 0009, AC-140).
   await checkObject(tx, scope.access, objectId, 'read');
   // 1. The grouping attribute: a hidden one answers as any filter naming it would.
   const attributes = await loadAttributes(tx, objectId);
