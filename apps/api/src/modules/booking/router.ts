@@ -5,6 +5,7 @@ import {
   getMemberHours,
   listBookingPages,
   listBookings,
+  listWorkspaceBookings,
   setMemberHours,
   updateBookingPage,
 } from '@crm/core';
@@ -48,6 +49,10 @@ export const bookingPagesRouter = member.bookingPages.router({
 export const bookingsRouter = member.bookings.router({
   list: member.bookings.list.handler(async ({ context, input }) => [
     ...(await listBookings(context.scope, { pageId: input.pageId, when: input.when })),
+  ]),
+  // Bookings, the workspace's list: every booking the reader may see, upcoming or past.
+  listAll: member.bookings.listAll.handler(async ({ context, input }) => [
+    ...(await listWorkspaceBookings(context.scope, { when: input.when })),
   ]),
   // The member's own hours and days off (Bookings › Availability), which their pages may follow.
   hours: member.bookings.hours.handler(({ context, input }) =>

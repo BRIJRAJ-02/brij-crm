@@ -8,6 +8,7 @@
 import type {
   AttributeDefinition,
   BookingAvailability,
+  BookingsTab,
   BookingPageSettings,
   BookingPageView,
   BookingView,
@@ -47,6 +48,7 @@ import {
 } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
+import { createBookingsStore, type BookingsView } from './bookings/store.ts';
 import { connectUrl, createCalendarStore, type CalendarView } from './calendar/store.ts';
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
 import {
@@ -96,7 +98,9 @@ export type {
   ApiRefusal,
   AttributeValidation,
   BookingAvailability,
+  BookingListItem,
   BookingLocation,
+  BookingsTab,
   BookingPageSettings,
   BookingPageView,
   BookingView,
@@ -159,6 +163,7 @@ export type {
   LinkedRecordShape,
   MeetingAttendeeShape,
 } from './activity/feed.ts';
+export type { BookingsState, BookingsView } from './bookings/store.ts';
 export type { CalendarState, CalendarView } from './calendar/store.ts';
 export { connectUrl } from './calendar/store.ts';
 export type { Hue, ObjectIcon } from '@crm/contracts/values';
@@ -1125,6 +1130,14 @@ export function createDataLayer({
     onFinished: onJobFinished,
   });
 
+  // Bookings (spec 0025): the workspace's upcoming and past lists, read again when the person comes back.
+  const bookingsLists = createBookingsStore({
+    api: {
+      listAll: (input) =>
+        beforeRead(input.workspace).then(() => call((options) => api.bookings.listAll(input, options))),
+    },
+  });
+
   // Calendar sync (spec 0024): the member's connections, Settings › Calendar's one list per workspace.
   const calendar = createCalendarStore({
     api: {
@@ -1741,6 +1754,12 @@ export function createDataLayer({
       /** A page's bookings: upcoming soonest first, or past latest first, at most 100. */
       list: (workspace: string, pageId: string, when: 'upcoming' | 'past'): Promise<BookingView[]> =>
         call((options) => api.bookings.list({ workspace, pageId, when }, options)),
+      /**
+       * Bookings, the workspace's list: every booking the reader may see,
+       * upcoming or past, held while a screen shows it (`useBookings`) and
+       * read again whenever the person comes back to the page.
+       */
+      view: (workspace: string, when: BookingsTab): BookingsView => bookingsLists.view(workspace, when),
       /** The member's own hours and days off; never set yet, weekdays 09:00 to 17:00 in `timeZone`. */
       hours: (workspace: string, timeZone: string): Promise<{ availability: BookingAvailability }> =>
         call((options) => api.bookings.hours({ workspace, timeZone }, options)),

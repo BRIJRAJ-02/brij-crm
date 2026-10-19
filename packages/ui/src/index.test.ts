@@ -24,6 +24,7 @@ describe('@crm/ui', () => {
       'AvatarStack',
       'Badge',
       'Board',
+      'BookingList',
       'Breadcrumbs',
       'BulkActionBar',
       'Button',

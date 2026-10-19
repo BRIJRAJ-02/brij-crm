@@ -6,7 +6,7 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { Timestamp } from '../values/attribute-values.ts';
 import { WorkspaceScoped } from '../workspaces.ts';
-import { BookingPageSettings } from './settings.ts';
+import { BookingLocation, BookingPageSettings } from './settings.ts';
 
 /** A page as a member sees it in Settings › Booking pages. */
 export const BookingPageView = BookingPageSettings.extend({
@@ -124,9 +124,44 @@ export const UpdateMemberHoursInput = WorkspaceScoped.extend({
 /** Replaces the caller's own hours. */
 export type UpdateMemberHoursInput = z.infer<typeof UpdateMemberHoursInput>;
 
+/**
+ * A booking in Bookings, the workspace's list (spec 0025, AC-646): the
+ * booking, its page's title and location, the meeting's video link once the
+ * event has one, the visitor's guests and note, and why it was cancelled.
+ */
+export const BookingListItem = BookingView.extend({
+  pageTitle: z.string(),
+  location: BookingLocation,
+  videoUrl: z.string().optional(),
+  guests: z.array(z.string()),
+  note: z.string().optional(),
+  cancelReason: z.string().optional(),
+});
+/** A booking in Bookings. */
+export type BookingListItem = z.infer<typeof BookingListItem>;
+
+/** At most this many bookings in one read of Bookings. */
+export const BOOKINGS_LIST_MAX = 200;
+
+/** Bookings' tabs: confirmed and not yet ended, confirmed and ended, and cancelled. */
+export const BookingsTab = z.enum(['upcoming', 'past', 'cancelled']);
+/** One of Bookings' tabs. */
+export type BookingsTab = z.infer<typeof BookingsTab>;
+
+/**
+ * Bookings, the workspace's list: upcoming (confirmed, not yet ended, soonest
+ * first), past (confirmed and ended, latest first) or cancelled (latest
+ * first), across every page the reader may see (their own, and the ones they
+ * host; everyone's with `booking.admin`).
+ */
+export const ListWorkspaceBookingsInput = WorkspaceScoped.extend({ when: BookingsTab });
+/** Bookings, the workspace's list. */
+export type ListWorkspaceBookingsInput = z.infer<typeof ListWorkspaceBookingsInput>;
+
 /** Member procedures for bookings. */
 export const bookingsContract = {
   list: oc.input(ListBookingsInput).output(z.array(BookingView)),
+  listAll: oc.input(ListWorkspaceBookingsInput).output(z.array(BookingListItem)),
   hours: oc.input(GetMemberHoursInput).output(MemberHours),
   setHours: oc.input(UpdateMemberHoursInput).output(MemberHours),
 };
