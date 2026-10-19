@@ -1,0 +1,13 @@
+/* CountryPicker: Select draws the trigger, the list and the search; this
+   only sizes the flag, an emoji drawn from the country's two letters, to the
+   icon's box so every row lines up. */
+@layer components {
+  .flag {
+    display: inline-grid;
+    flex: none;
+    place-items: center;
+    inline-size: var(--size-icon);
+    block-size: var(--size-icon);
+    font: var(--text-body);
+  }
+}

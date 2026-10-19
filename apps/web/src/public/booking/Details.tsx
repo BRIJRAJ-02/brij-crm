@@ -52,7 +52,13 @@ export function Details(props: DetailsProps) {
   const [isPrefilled, setPrefilled] = useState(prefill?.name !== undefined && prefill.name !== '');
   const form = useRef<HTMLFormElement>(null);
   const back = useRef<HTMLButtonElement>(null);
+  const addGuest = useRef<HTMLButtonElement>(null);
   useEffect(() => back.current?.focus(), []);
+  /** Focuses a guest row once it is drawn. */
+  const focusGuest = (index: number) =>
+    globalThis.requestAnimationFrame(() =>
+      form.current?.querySelector<HTMLInputElement>(`[data-field="guest-${String(index)}"]`)?.focus(),
+    );
 
   const check = (next: Record<FieldName, string>, nextGuests: readonly string[]): Partial<Record<string, string>> => {
     const found: Record<string, string> = {};
@@ -245,34 +251,68 @@ export function Details(props: DetailsProps) {
           placeholder: strings.emailPlaceholder,
           maxLength: 254,
         },
-        guests.length < 10 ? (
-          <button type="button" className={styles.ghost} onClick={() => setGuests((current) => [...current, ''])}>
+        // "+ Add guest" opens the first guest row, and goes once the rows are open.
+        guests.length === 0 ? (
+          <button
+            ref={addGuest}
+            type="button"
+            className={styles.ghost}
+            onClick={() => {
+              setGuests(['']);
+              focusGuest(0);
+            }}
+          >
             {strings.addGuest}
           </button>
         ) : undefined,
       )}
       {guests.map((guest, index) => (
-        <div key={`guest-${String(index)}`}>
+        <div key={`guest-${String(index)}`} className={styles.guestRow}>
           {field(
             `guest-${String(index)}`,
             strings.guest(index + 1),
             {
               value: guest,
               onChange: (value) => setGuests((current) => current.map((each, at) => (at === index ? value : each))),
-              type: 'email',
-              placeholder: strings.emailPlaceholder,
+              type: 'text',
+              placeholder: strings.guestPlaceholder,
               maxLength: 254,
             },
-            <button
-              type="button"
-              className={styles.iconButton}
-              aria-label={strings.removeGuest(index + 1)}
-              onClick={() => setGuests((current) => current.filter((_, at) => at !== index))}
-            >
-              <svg className={styles.icon} viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M5 12h14" />
-              </svg>
-            </button>,
+            <>
+              <button
+                type="button"
+                className={styles.roundButton}
+                data-tone="remove"
+                aria-label={strings.removeGuest(index + 1)}
+                onClick={() => {
+                  setGuests((current) => current.filter((_, at) => at !== index));
+                  // The last row gone folds the guests away, and focus goes back to "+ Add guest".
+                  if (guests.length === 1) globalThis.requestAnimationFrame(() => addGuest.current?.focus());
+                  else focusGuest(Math.max(0, index - 1));
+                }}
+              >
+                <svg className={styles.icon} viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+              {guests.length < 10 && (
+                <button
+                  type="button"
+                  className={styles.roundButton}
+                  data-tone="add"
+                  aria-label={strings.addAnotherGuest}
+                  onClick={() => {
+                    // A new row lands right after this one, and takes focus.
+                    setGuests((current) => [...current.slice(0, index + 1), '', ...current.slice(index + 1)]);
+                    focusGuest(index + 1);
+                  }}
+                >
+                  <svg className={styles.icon} viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                </button>
+              )}
+            </>,
           )}
         </div>
       ))}

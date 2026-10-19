@@ -180,6 +180,16 @@ export function slotLabel(instant: string, zone: string, locale: string, hour12?
   }).format(new Date(instant));
 }
 
+/** A meeting's span in the zone, written as the locale writes a range of times. */
+export function rangeLabel(start: string, end: string, zone: string, locale: string, hour12?: boolean): string {
+  return new Intl.DateTimeFormat(locale, {
+    timeZone: zone,
+    hour: hour12 === false ? '2-digit' : 'numeric',
+    minute: '2-digit',
+    ...(hour12 === undefined ? {} : { hour12 }),
+  }).formatRange(new Date(start), new Date(end));
+}
+
 /** The whole date: "Thursday, 20 August 2026". */
 export function longDate(instant: string, zone: string, locale: string): string {
   return new Intl.DateTimeFormat(locale, {

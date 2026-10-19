@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode, type Ref } from 'react';
 import {
   Autocomplete,
   Button as AriaButton,
@@ -36,6 +36,8 @@ export interface SelectItem {
   readonly isArchived?: boolean;
   /** Anything else to draw before the label: an Avatar for people. */
   readonly leading?: ReactNode;
+  /** What the `prefix` trigger shows instead of the label, beside `leading`: a country's "+91". */
+  readonly short?: string;
 }
 
 /** Props for Select. */
@@ -67,9 +69,22 @@ export interface SelectProps {
    * ring of its own (the cell draws the one ring), and the list opens at
    * least a menu wide.
    */
-  readonly variant?: 'default' | 'cell';
+  /**
+   * `prefix` is the compact trigger joined to the start of a Field's box (a
+   * phone number's country code): no box of its own, a hairline after it,
+   * `leading` and `short` in place of the label, and the list a menu wide.
+   */
+  readonly variant?: 'default' | 'cell' | 'prefix';
   /** A search field over the options, for long lists such as countries. */
   readonly isSearchable?: boolean;
+  /**
+   * Which options a search keeps, when matching the label is not enough: a
+   * country by its name, its ISO code or its dial code. The default keeps an
+   * option whose label holds what is typed, ignoring case and accents.
+   */
+  readonly filter?: (item: SelectItem, query: string) => boolean;
+  /** The trigger's element, for a field that puts focus back after a choice. */
+  readonly triggerRef?: Ref<HTMLButtonElement>;
   /** The search field's name. Defaults to "Search". */
   readonly searchLabel?: string;
   /**
@@ -143,6 +158,8 @@ export function Select({
   onOpenChange,
   isSearchable = false,
   searchLabel = strings.search,
+  filter,
+  triggerRef,
   onCreate,
   defaultSearch,
 }: SelectProps) {
@@ -186,6 +203,12 @@ export function Select({
     ...(canCreate ? [{ id: CREATE, label: strings.create(typed), icon: 'plus' as const }] : []),
   ];
   const hasSearch = isSearchable || onCreate !== undefined;
+  // A caller's filter sees the option itself; Create and Clear always stay, since their words hold the search.
+  const keeps = (textValue: string, input: string, node: { readonly key: unknown; readonly value: unknown }) => {
+    if (filter === undefined || node.key === CREATE || node.key === CLEAR) return contains(textValue, input);
+    const item = options.find((option) => option.id === node.key);
+    return item === undefined ? contains(textValue, input) : filter(item, input);
+  };
 
   const list = (
     <ListBox
@@ -245,12 +268,17 @@ export function Select({
       }}
     >
       {!isLabelHidden && <Label className={styles.label}>{label}</Label>}
-      <AriaButton className={styles.trigger}>
+      <AriaButton className={styles.trigger} {...(triggerRef === undefined ? {} : { ref: triggerRef })}>
         <SelectValue<SelectItem> className={styles.value}>
           {({ selectedItems, isPlaceholder, defaultChildren }) => {
             const selected = selectedItems[0];
-            return isPlaceholder || selected === undefined || selected === null ? (
-              <span className={styles.placeholder}>{defaultChildren}</span>
+            if (isPlaceholder || selected === undefined || selected === null)
+              return <span className={styles.placeholder}>{defaultChildren}</span>;
+            return variant === 'prefix' && selected.short !== undefined ? (
+              <>
+                {selected.leading}
+                <span className={styles.short}>{selected.short}</span>
+              </>
             ) : (
               <Face item={selected} optionStyle={optionStyle} />
             );
@@ -267,11 +295,11 @@ export function Select({
         <Icon name="circle-alert" size="xs" />
         {error}
       </FieldError>
-      <Popover width={variant === 'cell' ? 'menu' : 'trigger'}>
+      <Popover width={variant === 'default' ? 'trigger' : 'menu'}>
         {hasSearch ? (
           <div className={styles.searchable}>
             <Autocomplete
-              filter={contains}
+              filter={keeps}
               inputValue={query}
               onInputChange={setQuery}
               // Create alone in the list waits for an arrow: one Enter on a typo never makes an option.

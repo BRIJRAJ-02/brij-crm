@@ -24,16 +24,19 @@ export interface FirstLoad {
   readonly css: readonly string[];
 }
 
-/** Walks the static import graph from index.html. Throws if the manifest has no index.html entry. */
-export function firstLoad(manifest: Manifest): FirstLoad {
-  if (manifest['index.html']?.isEntry !== true) throw new Error('The manifest has no index.html entry.');
+/**
+ * Walks the static import graph from an HTML entry: index.html (the app) by
+ * default, or form.html (the hosted form). Throws if the manifest has no such entry.
+ */
+export function firstLoad(manifest: Manifest, entry = 'index.html'): FirstLoad {
+  if (manifest[entry]?.isEntry !== true) throw new Error(`The manifest has no ${entry} entry.`);
   const chunks: string[] = [];
   const visit = (key: string) => {
     if (chunks.includes(key)) return;
     chunks.push(key);
     for (const imported of manifest[key]?.imports ?? []) visit(imported);
   };
-  visit('index.html');
+  visit(entry);
   const js = chunks.flatMap((key) => manifest[key]?.file ?? []);
   const css = [...new Set(chunks.flatMap((key) => manifest[key]?.css ?? []))];
   return { chunks, js, css };

@@ -52,6 +52,12 @@ function MonthGrid({
 }: Pick<PickerProps, 'byDay' | 'today' | 'lastMonth' | 'locale' | 'day' | 'onDay' | 'month' | 'onMonth' | 'focusDay'>) {
   const grid = useRef<HTMLDivElement>(null);
   const [focused, setFocused] = useState<string | undefined>(undefined);
+  // Which way the month moved, so the new grid slides in from that side (none on first paint).
+  const [shown, setShown] = useState<{ readonly month: string; readonly direction: 'none' | 'forward' | 'back' }>({
+    month,
+    direction: 'none',
+  });
+  if (shown.month !== month) setShown({ month, direction: month > shown.month ? 'forward' : 'back' });
   const cells = monthCells(month, locale);
   const open = cells.filter((key): key is string => key !== undefined && (byDay.get(key)?.length ?? 0) > 0);
   const tabbable =
@@ -126,7 +132,9 @@ function MonthGrid({
       </div>
       <div
         ref={grid}
+        key={month}
         className={styles.monthGrid}
+        data-direction={shown.direction}
         role="group"
         aria-label={monthLabel(month, locale)}
         onTouchStart={(event) => {
@@ -185,6 +193,15 @@ export function Picker(props: PickerProps) {
   const dayLabel = day === undefined ? '' : dayLabels(day, locale).short;
   const commit = useRef<HTMLButtonElement>(null);
   const timesRef = useRef<HTMLDivElement>(null);
+  const chipsRef = useRef<HTMLDivElement>(null);
+  // In List, the chosen day's chip slides into view, and Back from the details puts focus on it.
+  useEffect(() => {
+    if (view !== 'list' || day === undefined) return;
+    const chip = chipsRef.current?.querySelector<HTMLButtonElement>(`button[data-day="${day}"]`);
+    const reduced = globalThis.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    chip?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: reduced ? 'auto' : 'smooth' });
+    if (props.focusDay === true) chip?.focus({ preventScroll: true });
+  }, [view, day, props.focusDay]);
   const openDays = [...byDay.keys()].filter((key) => (byDay.get(key)?.length ?? 0) > 0).sort();
   // On a phone, a new day scrolls its times into view, and a picked time the bar.
   const isNarrow = () => globalThis.matchMedia('(width < 1024px)').matches;
@@ -220,13 +237,14 @@ export function Picker(props: PickerProps) {
             }}
           />
         ) : (
-          <div className={styles.chips} role="group" aria-label={strings.chooseTime}>
+          <div ref={chipsRef} className={styles.chips} role="group" aria-label={strings.chooseTime}>
             {openDays.map((key) => {
               const labels = dayLabels(key, locale);
               return (
                 <button
                   key={key}
                   type="button"
+                  data-day={key}
                   className={styles.chip}
                   aria-pressed={key === day}
                   aria-label={labels.label}
@@ -235,7 +253,7 @@ export function Picker(props: PickerProps) {
                     if (isNarrow()) timesRef.current?.scrollIntoView({ block: 'nearest', behavior: glide() });
                   }}
                 >
-                  <span className={styles.weekday}>{labels.weekday}</span>
+                  <span className={styles.chipWeekday}>{labels.weekday}</span>
                   <span className={styles.chipDate}>{labels.day}</span>
                 </button>
               );
@@ -244,7 +262,7 @@ export function Picker(props: PickerProps) {
         )}
         <div ref={timesRef} className={view === 'month' ? styles.timesColumn : styles.timesBlock}>
           <div className={styles.timesHead}>
-            <span className={styles.timesDay}>{dayLabel}</span>
+            <h3 className={styles.timesDay}>{dayLabel}</h3>
             <div className={styles.segmented} role="radiogroup" aria-label={strings.clock}>
               {[true, false].map((each) => (
                 <button
@@ -260,7 +278,7 @@ export function Picker(props: PickerProps) {
               ))}
             </div>
           </div>
-          <ul key={`${day ?? ''}|${zone}`} className={view === 'month' ? styles.timesScroll : styles.timesGrid}>
+          <ul key={`${day ?? ''}|${zone}|${view}`} className={view === 'month' ? styles.timesScroll : styles.timesGrid}>
             {times.map((start, index) => {
               const label = timeLabel(start, zone, locale, hour12);
               return (
@@ -286,11 +304,13 @@ export function Picker(props: PickerProps) {
       <p className={styles.visuallyHidden} role="status">
         {day === undefined ? '' : strings.timesOn(times.length, dayLabel)}
       </p>
-      <button ref={commit} type="button" className={styles.commit} disabled={time === undefined} onClick={onCommit}>
-        <span key={time ?? 'none'} className={styles.commitLabel}>
-          {time === undefined ? strings.book : strings.bookAt(timeLabel(time, zone, locale, hour12))}
-        </span>
-      </button>
+      <div className={styles.commitBand}>
+        <button ref={commit} type="button" className={styles.commit} disabled={time === undefined} onClick={onCommit}>
+          <span key={time ?? 'none'} className={styles.commitLabel}>
+            {time === undefined ? strings.book : strings.bookAt(dayLabel, timeLabel(time, zone, locale, hour12))}
+          </span>
+        </button>
+      </div>
     </div>
   );
 }
