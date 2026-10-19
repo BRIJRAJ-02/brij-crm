@@ -14,11 +14,11 @@ New. Screens may not carry CSS, and the frame's body is edge to edge for grids. 
 </PageColumn>
 ```
 
-`width="narrow"` keeps a form to about the page card's width.
+`width="narrow"` keeps a form to the page card's width. `footer` takes a bar (an "Unsaved changes" Callout with Save) that sticks to the foot of the view while the column scrolls, so it stays in sight wherever the person is editing.
 
 ## States
 
-None of its own.
+With or without a footer bar.
 
 ## Keyboard
 

@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect } from 'storybook/test';
+import { Button } from '../../atoms/Button/Button.tsx';
+import { Callout } from '../../molecules/Callout/Callout.tsx';
 import { Card } from '../../molecules/Card/Card.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { PageColumn } from './PageColumn.tsx';
@@ -26,5 +28,22 @@ export const Default: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByText('Weekly hours')).toBeInTheDocument();
+  },
+};
+
+/** With a sticky footer bar while something is unsaved. */
+export const WithFooter: Story = {
+  render: (args) => (
+    <Stage>
+      <PageColumn
+        {...args}
+        footer={<Callout actions={<Button variant="primary">Save</Button>}>Unsaved changes</Callout>}
+      >
+        <Card title="Weekly hours">Monday to Friday, 09:00 to 17:00.</Card>
+      </PageColumn>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('button', { name: 'Save' })).toBeInTheDocument();
   },
 };

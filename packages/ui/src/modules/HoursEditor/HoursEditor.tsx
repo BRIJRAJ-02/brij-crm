@@ -32,6 +32,8 @@ export interface HoursEditorProps {
   /** The times a window may start or end on, every this many minutes. Default 30. */
   readonly stepMinutes?: number;
   readonly isDisabled?: boolean;
+  /** Shows the week as text, no controls: hours that come from elsewhere (a page that follows its member's). */
+  readonly isReadOnly?: boolean;
 }
 
 /** `HH:MM` for minutes from midnight. */
@@ -132,7 +134,15 @@ function CopyTo({
  * Selects on a 30 minute step ("Midnight" the last end) with + to add another
  * and − to remove one, and Copy times to puts this day's windows on others.
  */
-export function HoursEditor({ label, rows, onChange, stepMinutes = 30, isDisabled = false }: HoursEditorProps) {
+export function HoursEditor({
+  label,
+  rows,
+  onChange,
+  stepMinutes = 30,
+  isDisabled = false,
+  isReadOnly = false,
+}: HoursEditorProps) {
+  if (isReadOnly) return <ReadOnlyWeek label={label} rows={rows} />;
   const step = stepMinutes > 0 ? stepMinutes : 30;
   const starts: SelectItem[] = [];
   const ends: SelectItem[] = [];
@@ -278,6 +288,34 @@ export function HoursEditor({ label, rows, onChange, stepMinutes = 30, isDisable
         })}
       </ul>
     </div>
+  );
+}
+
+/** A window as text, "09:00 to 17:00" ("Midnight" at its end). */
+const rangeText = ([start, end]: HoursRange): string =>
+  `${start} ${strings.to} ${end === '24:00' ? strings.midnight : end}`;
+
+/** The week as text: each day's windows, or Unavailable. */
+function ReadOnlyWeek({ label, rows }: { readonly label: string; readonly rows: readonly HoursRow[] }) {
+  return (
+    <ul className={styles.rows} aria-label={label} data-read-only="">
+      {rows.map((row) => (
+        <li key={row.id} className={styles.row} data-off={row.ranges.length > 0 ? undefined : ''}>
+          <span className={styles.dayName}>{row.label}</span>
+          <span className={styles.ranges}>
+            {row.ranges.length > 0 ? (
+              row.ranges.map((range) => (
+                <span key={range[0]} className={styles.rangeText}>
+                  {rangeText(range)}
+                </span>
+              ))
+            ) : (
+              <span className={styles.offLabel}>{strings.unavailable}</span>
+            )}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 

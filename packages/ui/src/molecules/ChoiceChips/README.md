@@ -4,7 +4,7 @@ A labelled row of chips for choosing one or several short options: a booking pag
 
 ## Why it exists
 
-New. The experience note shows durations as chips, more than one allowed. SegmentedControl is single choice and switches views; Checkbox lists read as a form of settings rather than a handful of lengths; Select with several values needs a popover for five short words. A multiple selection ToggleButtonGroup with a visible label is what fits.
+New. The experience note shows durations as chips, more than one allowed. SegmentedControl is single choice and switches views; Checkbox lists read as a form of settings rather than a handful of lengths; Select with several values needs a popover for five short words. A multiple selection ToggleButtonGroup with a visible label is what fits. The chips are the library's `ToggleButton`, so a held chip looks as any held toggle does; the label is a Field's label, so the group lines up with the fields around it. Only the layout and the label are its own CSS.
 
 ## Use
 

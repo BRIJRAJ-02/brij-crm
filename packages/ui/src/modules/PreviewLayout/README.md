@@ -13,6 +13,7 @@ New. The booking page editor shows the real public page beside its groups, stick
   previewSrc={`/b/${page.publicKey}`}
   previewTitle={page.title}
   previewVersion={page.updatedAt}
+  previewDraft={draft}
   footer={isDirty ? <UnsavedBar /> : undefined}
 >
   <Card title="Meeting">…</Card>
@@ -20,7 +21,8 @@ New. The booking page editor shows the real public page beside its groups, stick
 ```
 
 - The preview loads `previewSrc` in a frame titled "Preview of {title}", and loads again when `previewVersion` changes (after a save).
-- The switch sets the preview's width: phone, tablet or desktop.
+- The switch sets the width the page is laid out at (phone 390, tablet 768, desktop 1280 CSS pixels); the frame scales that down to fit the side column (24rem, or 40% of a small screen), so the page never scrolls sideways.
+- `previewDraft` is posted to the frame (`{ type: 'crm:preview', draft }`, same origin only) when it changes and when the frame loads, so the page can show unsaved edits.
 - Below the page breakpoint, the preview sits under a "Show preview" Disclosure after the editor.
 - `footer` sticks to the editor's foot while given.
 

@@ -1,5 +1,6 @@
 import { useId } from 'react';
-import { ToggleButton, ToggleButtonGroup, type Key } from 'react-aria-components';
+import { ToggleButtonGroup, type Key } from 'react-aria-components';
+import { ToggleButton } from '../../atoms/Button/Button.tsx';
 import styles from './ChoiceChips.module.css';
 
 /** One choice. */
@@ -24,8 +25,8 @@ export interface ChoiceChipsProps {
 
 /**
  * A labelled row of chips for choosing one or several short options
- * (a booking page's durations, spec 0025 experience): pressed chips carry the
- * accent edge and fill, arrows move between chips, Space toggles one.
+ * (a booking page's durations, spec 0025 experience): library ToggleButtons
+ * in a group, held ones pressed, arrows move between them, Space toggles one.
  */
 export function ChoiceChips({
   label,
@@ -39,7 +40,7 @@ export function ChoiceChips({
   const labelId = useId();
   const errorId = useId();
   return (
-    <div className={styles.root}>
+    <div className={styles.root} data-disabled={isDisabled || undefined}>
       <span id={labelId} className={styles.label}>
         {label}
       </span>
@@ -56,7 +57,7 @@ export function ChoiceChips({
         }}
       >
         {choices.map((choice) => (
-          <ToggleButton key={choice.id} id={choice.id} className={styles.chip}>
+          <ToggleButton key={choice.id} id={choice.id}>
             {choice.label}
           </ToggleButton>
         ))}

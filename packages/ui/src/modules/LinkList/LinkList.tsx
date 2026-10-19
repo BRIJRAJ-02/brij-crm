@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { Button } from '../../atoms/Button/Button.tsx';
-import { Tag } from '../../atoms/Tag/Tag.tsx';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import styles from './LinkList.module.css';
 
 /** One link's row. */
@@ -45,14 +45,14 @@ export function LinkList({ label, rows, onOpen, emptyState }: LinkListProps) {
               <Button variant="ghost" onPress={() => onOpen(row.id)}>
                 {row.title}
               </Button>
-              {row.tag !== undefined && <Tag>{row.tag}</Tag>}
+              {row.tag !== undefined && <Badge text={row.tag} />}
             </div>
             <span className={styles.address}>{row.address}</span>
             {row.chips.length > 0 && (
               <ul className={styles.chips}>
                 {row.chips.map((chip) => (
-                  <li key={chip} className={styles.chip}>
-                    {chip}
+                  <li key={chip}>
+                    <Badge text={chip} />
                   </li>
                 ))}
               </ul>

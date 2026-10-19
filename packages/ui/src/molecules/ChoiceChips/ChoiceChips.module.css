@@ -1,16 +1,20 @@
-/* ChoiceChips: a label over a wrapping row of pill chips; a pressed chip has
-   the accent edge and the soft accent fill, as a held ToggleButton does. */
+/* ChoiceChips: a label (as a Field's) over a wrapping row of ToggleButtons,
+   and the error under them. The buttons bring their own look. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
-    gap: var(--space-6);
+    gap: var(--space-4);
   }
 
   .label {
-    color: var(--text);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .root[data-disabled] .label {
+    opacity: var(--opacity-disabled);
   }
 
   .chips {
@@ -19,57 +23,10 @@
     gap: var(--space-6);
   }
 
-  .chip {
-    min-block-size: var(--size-control);
-    padding-inline: var(--space-12);
-    border: var(--border-width-hairline) solid var(--border);
-    border-radius: var(--radius-full);
-    background: var(--surface-raised);
-    color: var(--text);
-    font: var(--text-body-strong);
-    letter-spacing: var(--tracking-body-strong);
-    cursor: pointer;
-    outline: none;
-    transition:
-      background-color var(--duration-hover) var(--ease-hover),
-      scale var(--duration-press) var(--ease-out);
-  }
-
-  .chip[data-selected] {
-    border-color: var(--accent);
-    background: var(--accent-soft);
-  }
-
-  .chip[data-disabled] {
-    opacity: var(--opacity-disabled);
-    cursor: default;
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    .chip:not([data-selected], [data-disabled])[data-hovered] {
-      background: var(--surface-hover);
-    }
-  }
-
-  .chip[data-pressed] {
-    scale: var(--scale-press);
-  }
-
-  .chip[data-focus-visible] {
-    border-color: var(--accent-line);
-    box-shadow: var(--shadow-focus);
-  }
-
   .error {
     margin: 0;
     color: var(--danger);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .chip[data-pressed] {
-      scale: none;
-    }
   }
 }

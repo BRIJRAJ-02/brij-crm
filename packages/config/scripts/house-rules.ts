@@ -2,7 +2,8 @@
 // by the pre push hook and CI). Each check returns the problems it found.
 //   1. Screens carry no CSS: apps/web has no stylesheet of its own (but the public pages' bundle in src/public).
 //   2. A component's CSS module is used by that component only: imported by
-//      exactly one file, in the same folder.
+//      exactly one file, in the same folder. A public page's one stylesheet
+//      (apps/web/src/public/<page>/) may be shared by the files of that page.
 //   3. Every component with styles records why it exists, in a README.md
 //      beside it (the "think before a new component" rule).
 //   4. Every library component folder (atoms, molecules, modules, fields) has
@@ -47,6 +48,10 @@ function screensHaveNoCss(files: string[]): string[] {
   );
 }
 
+// The public pages' bundle (specs 0023 and 0025) is plain markup with no library, so one page's
+// files share that page's stylesheet, within its own folder only.
+const isPublicPage = (file: string): boolean => file.startsWith(path.join('apps', 'web', 'src', 'public') + path.sep);
+
 function cssModulesStayInTheirComponent(files: string[]): string[] {
   const importers = new Map<string, string[]>();
   for (const file of files.filter((f) => SOURCE_FILE.test(f))) {
@@ -62,7 +67,9 @@ function cssModulesStayInTheirComponent(files: string[]): string[] {
   const problems = modules.flatMap((module) => {
     const users = importers.get(module) ?? [];
     if (users.length === 0) return [`${module}: no component imports it. Delete it, or import it from its component.`];
-    if (users.length > 1) return [`${module}: imported by ${users.join(', ')}. One component owns its styles.`];
+    const shared = isPublicPage(module) && users.every((user) => path.dirname(user) === path.dirname(module));
+    if (users.length > 1 && !shared)
+      return [`${module}: imported by ${users.join(', ')}. One component owns its styles.`];
     const [user] = users;
     return user !== undefined && path.dirname(user) !== path.dirname(module)
       ? [`${module}: imported from ${user}. Only the component in the same folder may use it.`]

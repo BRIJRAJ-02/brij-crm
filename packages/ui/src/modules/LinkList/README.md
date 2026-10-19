@@ -18,7 +18,7 @@ New. The experience note asks for rows (a title that opens the link, a quiet tag
 ```
 
 - The title is a ghost Button; `onOpen` gets the row's id.
-- `tag` shows a Tag after the title; `chips` are plain text chips (not values, so not the field set's Tag).
+- `tag` ("Off") and `chips` show as Badges with a short label: facts, not values, so not the field set's Tag.
 - `actions` sits at the row's end; below 480px of its container it moves under the facts.
 
 ## States

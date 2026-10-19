@@ -57,6 +57,25 @@ describe('house rules check', () => {
     expect(status).toBe(0);
   });
 
+  it('lets a public page’s files share its stylesheet, but not another folder', () => {
+    const shared = runHouseRules({
+      'apps/web/src/public/booking/booking.module.css': '.root {}\n',
+      'apps/web/src/public/booking/README.md': README,
+      'apps/web/src/public/booking/Page.tsx': "import styles from './booking.module.css';\nexport const s = styles;\n",
+      'apps/web/src/public/booking/Picker.tsx':
+        "import styles from './booking.module.css';\nexport const s = styles;\n",
+    });
+    expect(shared.status).toBe(0);
+    const outside = runHouseRules({
+      'apps/web/src/public/booking/booking.module.css': '.root {}\n',
+      'apps/web/src/public/booking/README.md': README,
+      'apps/web/src/public/booking/Page.tsx': "import styles from './booking.module.css';\nexport const s = styles;\n",
+      'apps/web/src/public/form/Form.tsx':
+        "import styles from '../booking/booking.module.css';\nexport const s = styles;\n",
+    });
+    expect(outside.status).toBe(1);
+  });
+
   it('refuses a CSS module used by a component in another folder', () => {
     const { status, output } = runHouseRules({
       'packages/ui/src/Button/Button.module.css': '.root {}\n',

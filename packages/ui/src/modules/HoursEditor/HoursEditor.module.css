@@ -76,6 +76,20 @@
     letter-spacing: var(--tracking-body);
   }
 
+  .dayName,
+  .rangeText {
+    display: flex;
+    align-items: center;
+    min-block-size: var(--size-control);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .rows[data-read-only] .row {
+    grid-template-columns: var(--size-column-narrow) minmax(0, 1fr);
+  }
+
   .offLabel {
     display: flex;
     align-items: center;

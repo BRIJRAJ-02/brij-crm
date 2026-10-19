@@ -108,3 +108,27 @@ export const ErrorAndDisabled: Story = {
     await expect(canvas.getByRole('switch', { name: 'Monday' })).toBeDisabled();
   },
 };
+
+/** Read only: the week as text, as a page that follows its member's hours shows it. */
+export const ReadOnly: Story = {
+  args: {
+    label: 'Weekly hours',
+    isReadOnly: true,
+    rows: [
+      {
+        id: 'mon',
+        label: 'Monday',
+        ranges: [
+          ['09:00', '12:00'],
+          ['13:00', '24:00'],
+        ],
+      },
+      { id: 'sat', label: 'Saturday', ranges: [] },
+    ],
+    onChange: fn(),
+  },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('13:00 to Midnight')).toBeInTheDocument();
+    await expect(canvas.queryByRole('switch')).not.toBeInTheDocument();
+  },
+};

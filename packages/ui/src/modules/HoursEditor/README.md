@@ -30,11 +30,12 @@ New. A booking page needs several windows a day (split shifts), a day turned off
 - The switch turns a day on (09:00 to 17:00) or off; a day with no window is off and reads "Unavailable".
 - Each window is a pair of time Selects every `stepMinutes` (30 by default), the last end "Midnight". **+** on the first window adds the hour after the last (at most 6 a day); **−** on any other removes it.
 - **Copy times to** opens a Popover of the other days with Select all and **Apply**, and calls `onChange` for each day chosen with this day's windows.
+- `isReadOnly` shows the week as text, each day's windows or "Unavailable", with no controls: hours that come from elsewhere, such as a page that follows its member's hours.
 - `error` on a row shows under its windows as an alert (overlapping windows, an end before its start: the caller checks).
 
 ## States
 
-On, off, several windows, Mixed, a row's error, disabled; the controls' own hover, focus and pressed states.
+On, off, several windows, Mixed, a row's error, disabled, read only; the controls' own hover, focus and pressed states.
 
 ## Keyboard
 
