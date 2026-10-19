@@ -1,6 +1,8 @@
 # 0025. Booking pages: book time with a member or a team
 
 **Date**: 2026-10-19
+
+**Experience**: the visitor page, the guest page and the host builder follow [0025-experience.md](0025-experience.md); where it differs from this file (for example a month calendar rather than a week of days), it wins.
 **Status**: Proposed
 
 ## Summary
