@@ -1,6 +1,6 @@
 // Brief
 // Purpose: the frame every page inside a workspace sits in: the sidebar beside the page.
-// Main task: move between the workspace's objects and the trash, open Settings, switch the theme and sign out; undo (⌘Z).
+// Main task: move between the workspace's objects, Bookings, Captures and the trash, open Settings, switch the theme and sign out; undo (⌘Z).
 // Leaves out: switching or creating workspaces, Quick actions, favourites and lists (#23 and later).
 import type { DataLayer, ObjectSummary } from '@crm/data';
 import {
@@ -9,6 +9,7 @@ import {
   Menu,
   MenuItem,
   MenuSection,
+  NavGroup,
   NavItem,
   NavSection,
   ShortcutHelp,
@@ -19,10 +20,13 @@ import {
 import type { ThemeController } from '@crm/ui/theme';
 import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useState, type ReactNode } from 'react';
-import { navObjects, objectHref, settingsHref, trashHref } from './objects.ts';
+import { bookingsHref, capturesHref, navObjects, objectHref, settingsHref, trashHref } from './objects.ts';
 import { strings } from './strings.ts';
 import { UNDO_KEYS } from './undo.ts';
 import { useUndoShortcut } from './useUndoShortcut.ts';
+
+/** A page the sidebar lists that isn't an object's. */
+export type SidebarPage = 'bookings' | 'captures' | 'trash';
 
 /** Props for the workspace frame. */
 export interface WorkspaceFrameProps {
@@ -41,8 +45,8 @@ export interface WorkspaceFrameProps {
   readonly isMissing?: boolean;
   /** The `apiSlug` of the object whose page is open. */
   readonly currentObject?: string;
-  /** A page of the sidebar's that isn't an object's: the trash (spec 0022). */
-  readonly currentPage?: 'trash';
+  /** A page of the sidebar's that isn't an object's: Bookings, Captures or the trash (spec 0022). */
+  readonly currentPage?: SidebarPage;
   /** The page's TopBar. */
   readonly topBar?: ReactNode;
   /** The view's ViewBar, on an object's page. */
@@ -159,13 +163,21 @@ export function WorkspaceFrame({
                   {object.pluralName}
                 </NavItem>
               ))}
-              {/* The trash, at the foot of Records, for every member (spec 0022, AC-533). */}
-              {listed !== undefined && (
-                <NavItem icon="trash" href={trashHref(slug)} isCurrent={currentPage === 'trash'}>
-                  {strings.trash}
-                </NavItem>
-              )}
             </NavSection>
+          )}
+          {/* After Records, as Timefix's rail has them: Bookings, Captures (Links and Forms), then the trash, for every member (spec 0022, AC-533). */}
+          {!isMissing && listed !== undefined && (
+            <NavGroup label={strings.destinations}>
+              <NavItem icon="calendar-days" href={bookingsHref(slug)} isCurrent={currentPage === 'bookings'}>
+                {strings.bookings}
+              </NavItem>
+              <NavItem icon="link" href={capturesHref(slug)} isCurrent={currentPage === 'captures'}>
+                {strings.captures}
+              </NavItem>
+              <NavItem icon="trash" href={trashHref(slug)} isCurrent={currentPage === 'trash'}>
+                {strings.trash}
+              </NavItem>
+            </NavGroup>
           )}
         </Sidebar>
       }

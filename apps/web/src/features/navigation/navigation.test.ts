@@ -13,7 +13,7 @@ function fakeDocument(
   const focused: string[] = [];
   const body = {};
   const doc = {
-    title: 'CRM',
+    title: 'Timefix',
     body,
     activeElement: active === 'body' ? body : {},
     querySelector: (selector: string) => {
@@ -101,17 +101,17 @@ describe('focusFirstLoad', () => {
 
 describe('the document title', () => {
   it('is the page title, then the product', () => {
-    expect(documentTitle('People')).toBe('People · CRM');
-    expect(documentTitle('  Name your\n workspace ')).toBe('Name your workspace · CRM');
+    expect(documentTitle('People')).toBe('People · Timefix');
+    expect(documentTitle('  Name your\n workspace ')).toBe('Name your workspace · Timefix');
   });
 
   it('is the product alone while the page has no title', () => {
-    expect(documentTitle(undefined)).toBe('CRM');
-    expect(documentTitle('   ')).toBe('CRM');
+    expect(documentTitle(undefined)).toBe('Timefix');
+    expect(documentTitle('   ')).toBe('Timefix');
   });
 
   it('says the product once when the page is named after it (a failed load before the workspace is known)', () => {
-    expect(documentTitle('CRM')).toBe('CRM');
+    expect(documentTitle('Timefix')).toBe('Timefix');
   });
 
   it('follows the h1 from the first load, at most once a frame', () => {
@@ -130,13 +130,13 @@ describe('the document title', () => {
       },
       nextFrame: (run) => frames.push(run),
     });
-    expect(doc.title).toBe('Sign in · CRM');
+    expect(doc.title).toBe('Sign in · Timefix');
     h1.textContent = 'Check your email';
     onChange();
     onChange();
     expect(frames).toHaveLength(1);
     frames.shift()?.();
-    expect(doc.title).toBe('Check your email · CRM');
+    expect(doc.title).toBe('Check your email · Timefix');
     stop();
     expect(stopped).toBe(true);
   });

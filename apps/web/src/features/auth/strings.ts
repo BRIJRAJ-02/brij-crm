@@ -11,11 +11,11 @@ function duration(seconds: number): string {
 
 /** The sign in and verify screens' copy. */
 export const strings = {
-  product: 'CRM',
+  product: 'Timefix',
   signInTitle: 'Sign in',
   signInDescription: 'Enter your email to get a sign in code.',
   verifyTitle: 'Check your email',
-  failedTitle: 'Can’t reach the CRM',
+  failedTitle: 'Can’t reach Timefix',
   failedText: 'Check your connection, then try again.',
   /** `/` while it works out where to send you. */
   openingTitle: 'Opening your workspace',

@@ -11,7 +11,7 @@ const meta = {
   title: 'Modules/AuthLayout',
   component: AuthLayout,
   args: {
-    productName: 'CRM',
+    productName: 'Timefix',
     title: 'Name your workspace',
     description: 'You can change both later.',
     children: null,
@@ -39,7 +39,7 @@ export const Default: Story = {
     await expect(canvas.getByRole('main')).toBeInTheDocument();
     const title = canvas.getByRole('heading', { level: 1, name: 'Name your workspace' });
     await expect(title).toHaveAttribute('tabindex', '-1');
-    await expect(canvas.getByText('CRM')).toBeVisible();
+    await expect(canvas.getByText('Timefix')).toBeVisible();
   },
 };
 
@@ -56,6 +56,22 @@ export const Loading: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('main')).toHaveAttribute('aria-busy', 'true');
     await expect(canvas.getByRole('heading', { level: 1, name: 'Name your workspace' })).toBeInTheDocument();
+  },
+};
+
+/** A stand in wordmark, 860 by 210 like the product's, drawn in one fill. */
+const wordmark = (fill: string) =>
+  `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 210"><rect x="0" y="40" width="130" height="130" rx="65" fill="${fill}"/><rect x="170" y="70" width="660" height="70" rx="12" fill="${fill}"/></svg>`,
+  )}`;
+
+/** With the product's wordmark in place of the mark and name: the image for the theme shows, named by `productName`, and the other one is out of the accessibility tree. */
+export const WithLogo: Story = {
+  args: { logo: { light: wordmark('black'), dark: wordmark('white') } },
+  play: async ({ canvas }) => {
+    const shown = canvas.getAllByRole('img', { name: 'Timefix' });
+    await expect(shown).toHaveLength(1);
+    await expect(shown[0]).toBeVisible();
   },
 };
 

@@ -1,6 +1,6 @@
 /** The workspace frame's and the object page's copy. */
 export const strings = {
-  product: 'CRM',
+  product: 'Timefix',
   workspaceMenu: 'Workspace',
   signOut: 'Sign out',
   /** An archived object's address (spec 0012, AC-226). */
@@ -17,6 +17,12 @@ export const strings = {
   records: 'Records',
   /** The sidebar's way to the trash, at the foot of Records (spec 0022). */
   trash: 'Trash',
+  /** The sidebar's way to the upcoming bookings, after Records. */
+  bookings: 'Bookings',
+  /** The sidebar's way to the booking links and the forms, after Bookings. */
+  captures: 'Captures',
+  /** The group holding Bookings, Captures and Trash after Records, for screen readers. */
+  destinations: 'Workspace pages',
   /** The workspace menu's way into settings (spec 0012), above Sign out. */
   settings: 'Settings',
   noObjects: 'No objects yet',

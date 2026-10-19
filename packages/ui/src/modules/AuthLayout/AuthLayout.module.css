@@ -29,4 +29,36 @@
     font: var(--text-body-strong);
     letter-spacing: var(--tracking-body-strong);
   }
+
+  /* The wordmark: one image per theme, at control height, its width from its
+     own aspect. Light shows unless the theme is dark: a saved Dark choice
+     (data-theme on the root), or the OS when nothing is saved, the same rule
+     the tokens follow. */
+  .logo {
+    display: block;
+    block-size: var(--size-control);
+    inline-size: auto;
+  }
+
+  .logo[data-scheme='dark'] {
+    display: none;
+  }
+
+  :root[data-theme='dark'] .logo[data-scheme='light'] {
+    display: none;
+  }
+
+  :root[data-theme='dark'] .logo[data-scheme='dark'] {
+    display: block;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) .logo[data-scheme='light'] {
+      display: none;
+    }
+
+    :root:not([data-theme='light']) .logo[data-scheme='dark'] {
+      display: block;
+    }
+  }
 }

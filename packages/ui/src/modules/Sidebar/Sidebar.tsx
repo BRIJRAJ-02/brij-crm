@@ -1,6 +1,6 @@
 // The app's left column (spec 0003, the app shell): the workspace switcher,
-// Quick actions, the fixed destinations, and folding Favorites, Records and
-// Lists sections. Collapsed, it is a rail of icons, each named in a tooltip.
+// Quick actions, the fixed destinations, folding Favorites, Records and
+// Lists sections, and unlabelled groups of destinations after them. Collapsed, it is a rail of icons, each named in a tooltip.
 import { Children, createContext, useContext, type ReactElement, type ReactNode } from 'react';
 import { Button as AriaButton, Link as AriaLink } from 'react-aria-components';
 import { Avatar } from '../../atoms/Avatar/Avatar.tsx';
@@ -311,6 +311,28 @@ export function NavSection({
           {body}
         </div>
       </Disclosure>
+    </div>
+  );
+}
+
+/** Props for NavGroup. */
+export interface NavGroupProps {
+  /** What the group holds, read by screen readers ("Scheduling"). */
+  readonly label: string;
+  /** Its `NavItem`s. */
+  readonly children: ReactNode;
+}
+
+/**
+ * Fixed destinations after a section, set apart from it without a label of
+ * their own: Bookings, Captures and the trash after Records. Open, it takes a
+ * section's space above; on the rail, a section's hairline.
+ */
+export function NavGroup({ label, children }: NavGroupProps) {
+  const { isCollapsed } = useContext(SidebarContext);
+  return (
+    <div role="group" aria-label={label} className={isCollapsed ? styles.rail : styles.group}>
+      {children}
     </div>
   );
 }

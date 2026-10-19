@@ -313,7 +313,7 @@ export function createAuth({ env, identity, mailer, analytics = NO_ANALYTICS }: 
   }
 
   const auth = betterAuth({
-    appName: 'CRM',
+    appName: 'Timefix',
     baseURL: env.BETTER_AUTH_URL,
     basePath: AUTH_BASE_PATH,
     secret: env.BETTER_AUTH_SECRET,

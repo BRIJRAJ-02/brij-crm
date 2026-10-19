@@ -18,6 +18,12 @@ export const objectHref = (slug: string, object: Pick<ObjectSummary, 'apiSlug'>)
 
 /** The workspace's trash (spec 0022). */
 export const trashHref = (slug: string) => `/w/${slug}/trash`;
+
+/** The upcoming bookings' address. */
+export const bookingsHref = (slug: string) => `/w/${slug}/bookings`;
+
+/** The Captures page's address; it opens on its Links tab. */
+export const capturesHref = (slug: string) => `/w/${slug}/captures`;
 /** Settings, Background jobs (spec 0008). */
 export const jobsHref = (slug: string) => `/w/${slug}/settings/jobs`;
 /** Settings, Objects (spec 0012): where a workspace with no live object opens, and the workspace menu's Settings. */

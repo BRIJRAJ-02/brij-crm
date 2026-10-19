@@ -11,6 +11,7 @@ import { clearPending, saveLastEmail, savePending, sessionStore, type PendingSig
 import { safeRedirect } from './redirect.ts';
 import { strings } from './strings.ts';
 import { useSecondsLeft } from './useSecondsLeft.ts';
+import { PRODUCT_LOGO } from '../../brand.ts';
 
 /** How long to wait between code sends (spec 0005, AC-27). */
 export const RESEND_WAIT_SECONDS = 60;
@@ -95,7 +96,7 @@ export function VerifyScreen({ data, pending, redirect }: VerifyScreenProps) {
   };
 
   return (
-    <AuthLayout productName={strings.product} title={strings.verifyTitle}>
+    <AuthLayout productName={strings.product} logo={PRODUCT_LOGO} title={strings.verifyTitle}>
       <VerifyEmail
         email={pending.email}
         onVerify={verify}

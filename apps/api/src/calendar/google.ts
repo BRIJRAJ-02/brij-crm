@@ -242,14 +242,14 @@ export function createGoogleCalendar(options: GoogleCalendarOptions): CalendarPr
       const { status, answer } = await token({ grant_type: 'authorization_code', code, redirect_uri: redirectUri });
       if (status >= 500) throw providerError('CALENDAR_UNAVAILABLE', 'Google didn’t answer the sign in.');
       if (status === 401 || answer.error === 'invalid_client') {
-        throw providerError('CALENDAR_UNAVAILABLE', 'Google refused the CRM’s own calendar client.');
+        throw providerError('CALENDAR_UNAVAILABLE', 'Google refused Timefix’s own calendar client.');
       }
       if (status >= 400 || answer.access_token === undefined) {
         throw providerError('CALENDAR_AUTH', 'Google didn’t accept that sign in. Try connecting again.');
       }
       // What Google granted, not what we asked for: a partial grant is a failed connection.
       if (missingCalendarCapabilities(parseGrantedScopes(answer.scope)).length > 0) {
-        throw providerError('CALENDAR_SCOPE_DECLINED', 'The calendar was connected without the access the CRM needs.');
+        throw providerError('CALENDAR_SCOPE_DECLINED', 'The calendar was connected without the access Timefix needs.');
       }
       if (answer.refresh_token === undefined) {
         throw providerError('CALENDAR_AUTH', 'Google gave no lasting access. Try connecting again.');
@@ -274,7 +274,7 @@ export function createGoogleCalendar(options: GoogleCalendarOptions): CalendarPr
         throw providerError('CALENDAR_UNAVAILABLE', 'Google didn’t answer the refresh.');
       // Our own client refused (a wrong secret in this deploy) is ours to fix, never the member's.
       if (status === 401 || answer.error === 'invalid_client' || answer.error === 'unauthorized_client') {
-        throw providerError('CALENDAR_UNAVAILABLE', 'Google refused the CRM’s own calendar client.');
+        throw providerError('CALENDAR_UNAVAILABLE', 'Google refused Timefix’s own calendar client.');
       }
       if (answer.error === 'invalid_grant') {
         throw providerError('CALENDAR_AUTH_REVOKED', 'Google no longer accepts this calendar’s access.');

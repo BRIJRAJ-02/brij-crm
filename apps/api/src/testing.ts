@@ -39,7 +39,7 @@ export function testEnv(overrides: Partial<ApiEnv> = {}): ApiEnv {
     APP_URL,
     BETTER_AUTH_SECRET: 'local-only-test-secret-that-is-long-enough',
     BETTER_AUTH_URL: APP_URL,
-    MAIL_FROM: 'CRM <sign-in@crm.localhost>',
+    MAIL_FROM: 'Timefix <sign-in@crm.localhost>',
     MAILPIT_URL: 'http://127.0.0.1:1',
     EDGE_SECRET: TEST_EDGE_SECRET,
     calendar: undefined,

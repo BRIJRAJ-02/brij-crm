@@ -8,6 +8,7 @@ import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { addressAsTyped, SLUG_MAX, SLUG_RULE, slugFrom, suggestedWorkspaceName } from './names.ts';
 import { strings } from './strings.ts';
+import { PRODUCT_LOGO } from '../../brand.ts';
 
 /** A refusal for this form: the field it is about by `name`, or none (shown above the fields). */
 interface WelcomeRefusal {
@@ -99,6 +100,7 @@ export function WelcomeScreen({ data, toasts, user }: WelcomeScreenProps) {
   return (
     <AuthLayout
       productName={strings.product}
+      logo={PRODUCT_LOGO}
       title={strings.title}
       description={strings.description}
       footer={

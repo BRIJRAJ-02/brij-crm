@@ -16,7 +16,12 @@ import { Route as VerifyRouteImport } from './routes/verify.tsx'
 import { Route as WelcomeRouteImport } from './routes/welcome.tsx'
 import { Route as WSlugRouteImport } from './routes/w.$slug.tsx'
 import { Route as WSlugIndexRouteImport } from './routes/w.$slug.index.tsx'
+import { Route as WSlugBookingsRouteImport } from './routes/w.$slug.bookings.tsx'
+import { Route as WSlugCapturesRouteImport } from './routes/w.$slug.captures.tsx'
 import { Route as WSlugTrashRouteImport } from './routes/w.$slug.trash.tsx'
+import { Route as WSlugCapturesIndexRouteImport } from './routes/w.$slug.captures.index.tsx'
+import { Route as WSlugCapturesFormsRouteImport } from './routes/w.$slug.captures.forms.tsx'
+import { Route as WSlugCapturesLinksRouteImport } from './routes/w.$slug.captures.links.tsx'
 import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects.$object.tsx'
 import { Route as WSlugSettingsIndexRouteImport } from './routes/w.$slug.settings.index.tsx'
 import { Route as WSlugSettingsCalendarRouteImport } from './routes/w.$slug.settings.calendar.tsx'
@@ -63,10 +68,35 @@ const WSlugIndexRoute = WSlugIndexRouteImport.update({
   path: '/',
   getParentRoute: () => WSlugRoute,
 } as any)
+const WSlugBookingsRoute = WSlugBookingsRouteImport.update({
+  id: '/bookings',
+  path: '/bookings',
+  getParentRoute: () => WSlugRoute,
+} as any)
+const WSlugCapturesRoute = WSlugCapturesRouteImport.update({
+  id: '/captures',
+  path: '/captures',
+  getParentRoute: () => WSlugRoute,
+} as any)
 const WSlugTrashRoute = WSlugTrashRouteImport.update({
   id: '/trash',
   path: '/trash',
   getParentRoute: () => WSlugRoute,
+} as any)
+const WSlugCapturesIndexRoute = WSlugCapturesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => WSlugCapturesRoute,
+} as any)
+const WSlugCapturesFormsRoute = WSlugCapturesFormsRouteImport.update({
+  id: '/forms',
+  path: '/forms',
+  getParentRoute: () => WSlugCapturesRoute,
+} as any)
+const WSlugCapturesLinksRoute = WSlugCapturesLinksRouteImport.update({
+  id: '/links',
+  path: '/links',
+  getParentRoute: () => WSlugCapturesRoute,
 } as any)
 const WSlugObjectsObjectRoute = WSlugObjectsObjectRouteImport.update({
   id: '/objects/$object',
@@ -132,11 +162,16 @@ export interface FileRoutesByFullPath {
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
   '/w/$slug': typeof WSlugRouteWithChildren
+  '/w/$slug/bookings': typeof WSlugBookingsRoute
+  '/w/$slug/captures': typeof WSlugCapturesRouteWithChildren
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug/': typeof WSlugIndexRoute
+  '/w/$slug/captures/forms': typeof WSlugCapturesFormsRoute
+  '/w/$slug/captures/links': typeof WSlugCapturesLinksRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
+  '/w/$slug/captures/': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
@@ -151,11 +186,15 @@ export interface FileRoutesByTo {
   '/status': typeof StatusRoute
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
+  '/w/$slug/bookings': typeof WSlugBookingsRoute
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug': typeof WSlugIndexRoute
+  '/w/$slug/captures/forms': typeof WSlugCapturesFormsRoute
+  '/w/$slug/captures/links': typeof WSlugCapturesLinksRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
+  '/w/$slug/captures': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings': typeof WSlugSettingsIndexRoute
   '/w/$slug/settings/objects': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/objects/$object/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
@@ -172,11 +211,16 @@ export interface FileRoutesById {
   '/verify': typeof VerifyRoute
   '/welcome': typeof WelcomeRoute
   '/w/$slug': typeof WSlugRouteWithChildren
+  '/w/$slug/bookings': typeof WSlugBookingsRoute
+  '/w/$slug/captures': typeof WSlugCapturesRouteWithChildren
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug/': typeof WSlugIndexRoute
+  '/w/$slug/captures/forms': typeof WSlugCapturesFormsRoute
+  '/w/$slug/captures/links': typeof WSlugCapturesLinksRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
   '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
+  '/w/$slug/captures/': typeof WSlugCapturesIndexRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
   '/w/$slug/objects/$object_/$recordId/$tab': typeof WSlugObjectsObjectRecordIdTabRoute
@@ -194,11 +238,16 @@ export interface FileRouteTypes {
     | '/verify'
     | '/welcome'
     | '/w/$slug'
+    | '/w/$slug/bookings'
+    | '/w/$slug/captures'
     | '/w/$slug/trash'
     | '/w/$slug/'
+    | '/w/$slug/captures/forms'
+    | '/w/$slug/captures/links'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/jobs'
+    | '/w/$slug/captures/'
     | '/w/$slug/settings/'
     | '/w/$slug/settings/objects/'
     | '/w/$slug/objects/$object/$recordId/$tab'
@@ -213,11 +262,15 @@ export interface FileRouteTypes {
     | '/status'
     | '/verify'
     | '/welcome'
+    | '/w/$slug/bookings'
     | '/w/$slug/trash'
     | '/w/$slug'
+    | '/w/$slug/captures/forms'
+    | '/w/$slug/captures/links'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/jobs'
+    | '/w/$slug/captures'
     | '/w/$slug/settings'
     | '/w/$slug/settings/objects'
     | '/w/$slug/objects/$object/$recordId/$tab'
@@ -233,11 +286,16 @@ export interface FileRouteTypes {
     | '/verify'
     | '/welcome'
     | '/w/$slug'
+    | '/w/$slug/bookings'
+    | '/w/$slug/captures'
     | '/w/$slug/trash'
     | '/w/$slug/'
+    | '/w/$slug/captures/forms'
+    | '/w/$slug/captures/links'
     | '/w/$slug/objects/$object'
     | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/jobs'
+    | '/w/$slug/captures/'
     | '/w/$slug/settings/'
     | '/w/$slug/settings/objects/'
     | '/w/$slug/objects/$object_/$recordId/$tab'
@@ -307,12 +365,47 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugIndexRouteImport
       parentRoute: typeof WSlugRoute
     }
+    '/w/$slug/bookings': {
+      id: '/w/$slug/bookings'
+      path: '/bookings'
+      fullPath: '/w/$slug/bookings'
+      preLoaderRoute: typeof WSlugBookingsRouteImport
+      parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/captures': {
+      id: '/w/$slug/captures'
+      path: '/captures'
+      fullPath: '/w/$slug/captures'
+      preLoaderRoute: typeof WSlugCapturesRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/trash': {
       id: '/w/$slug/trash'
       path: '/trash'
       fullPath: '/w/$slug/trash'
       preLoaderRoute: typeof WSlugTrashRouteImport
       parentRoute: typeof WSlugRoute
+    }
+    '/w/$slug/captures/': {
+      id: '/w/$slug/captures/'
+      path: '/'
+      fullPath: '/w/$slug/captures/'
+      preLoaderRoute: typeof WSlugCapturesIndexRouteImport
+      parentRoute: typeof WSlugCapturesRoute
+    }
+    '/w/$slug/captures/forms': {
+      id: '/w/$slug/captures/forms'
+      path: '/forms'
+      fullPath: '/w/$slug/captures/forms'
+      preLoaderRoute: typeof WSlugCapturesFormsRouteImport
+      parentRoute: typeof WSlugCapturesRoute
+    }
+    '/w/$slug/captures/links': {
+      id: '/w/$slug/captures/links'
+      path: '/links'
+      fullPath: '/w/$slug/captures/links'
+      preLoaderRoute: typeof WSlugCapturesLinksRouteImport
+      parentRoute: typeof WSlugCapturesRoute
     }
     '/w/$slug/objects/$object': {
       id: '/w/$slug/objects/$object'
@@ -387,7 +480,25 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface WSlugCapturesRouteChildren {
+  WSlugCapturesFormsRoute: typeof WSlugCapturesFormsRoute
+  WSlugCapturesLinksRoute: typeof WSlugCapturesLinksRoute
+  WSlugCapturesIndexRoute: typeof WSlugCapturesIndexRoute
+}
+
+const WSlugCapturesRouteChildren: WSlugCapturesRouteChildren = {
+  WSlugCapturesFormsRoute: WSlugCapturesFormsRoute,
+  WSlugCapturesLinksRoute: WSlugCapturesLinksRoute,
+  WSlugCapturesIndexRoute: WSlugCapturesIndexRoute,
+}
+
+const WSlugCapturesRouteWithChildren = WSlugCapturesRoute._addFileChildren(
+  WSlugCapturesRouteChildren,
+)
+
 interface WSlugRouteChildren {
+  WSlugBookingsRoute: typeof WSlugBookingsRoute
+  WSlugCapturesRoute: typeof WSlugCapturesRouteWithChildren
   WSlugTrashRoute: typeof WSlugTrashRoute
   WSlugIndexRoute: typeof WSlugIndexRoute
   WSlugObjectsObjectRoute: typeof WSlugObjectsObjectRoute
@@ -403,6 +514,8 @@ interface WSlugRouteChildren {
 }
 
 const WSlugRouteChildren: WSlugRouteChildren = {
+  WSlugBookingsRoute: WSlugBookingsRoute,
+  WSlugCapturesRoute: WSlugCapturesRouteWithChildren,
   WSlugTrashRoute: WSlugTrashRoute,
   WSlugIndexRoute: WSlugIndexRoute,
   WSlugObjectsObjectRoute: WSlugObjectsObjectRoute,
