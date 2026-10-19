@@ -44,5 +44,6 @@ export const strings = {
   anApiKey: 'An API key',
   anAutomation: 'An automation',
   aForm: 'A form',
+  aBookingPage: 'A booking page',
   removedMember: 'Someone removed from this workspace',
 } as const;

@@ -134,9 +134,11 @@ export function replacedToast(replaced: ReplacedValue): ToastContent {
         ? strings.anAutomation
         : replaced.by.kind === 'form'
           ? strings.aForm
-          : replaced.by.name === undefined || replaced.by.name === ''
-            ? strings.someone
-            : replaced.by.name;
+          : replaced.by.kind === 'booking'
+            ? strings.aBookingPage
+            : replaced.by.name === undefined || replaced.by.name === ''
+              ? strings.someone
+              : replaced.by.name;
   return {
     tone: 'danger',
     message: strings.replaced(who, replaced.attributeTitle, replaced.others, replaced.recordName),

@@ -69,7 +69,10 @@ export interface OutboxRow {
  * 2026): who replaced it, named once, and the cells, ids only, at most 200.
  */
 export interface OutboxReplaced {
-  readonly by: { readonly type: 'member' | 'api_key' | 'automation' | 'system' | 'form'; readonly id: string | null };
+  readonly by: {
+    readonly type: 'member' | 'api_key' | 'automation' | 'system' | 'form' | 'booking';
+    readonly id: string | null;
+  };
   readonly cells: readonly {
     readonly recordId: string;
     readonly attributeId: string;
@@ -334,7 +337,7 @@ export function outboxRowOf(row: RawOutboxRow): OutboxRow {
   };
 }
 
-const ACTOR_TYPES: ReadonlySet<unknown> = new Set(['member', 'api_key', 'automation', 'system', 'form']);
+const ACTOR_TYPES: ReadonlySet<unknown> = new Set(['member', 'api_key', 'automation', 'system', 'form', 'booking']);
 
 /**
  * The stored `replaced`, or undefined when it names no cell. Only the shape

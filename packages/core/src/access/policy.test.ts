@@ -62,10 +62,10 @@ describe('roles', () => {
     expect(recordRule(access, OBJECT)).toBeUndefined();
   });
 
-  it('never inherits: an admin holds no owner only permission, a member nothing but export', () => {
+  it('never inherits: an admin holds no owner only permission, a member nothing but export and their booking pages', () => {
     expect(can(roleAccess(member('admin')), 'billing.manage')).toBe(false);
     expect(can(roleAccess(member('owner')), 'billing.manage')).toBe(true);
-    expect(roleAccess(member('member')).permissions).toEqual(['records.export']);
+    expect(roleAccess(member('member')).permissions).toEqual(['records.export', 'booking.manage']);
     expect(can(roleAccess(member('member')), 'schema.manage')).toBe(false);
     expect(can(roleAccess(member('admin')), 'schema.manage')).toBe(true);
   });

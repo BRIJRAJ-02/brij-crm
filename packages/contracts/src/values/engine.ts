@@ -42,6 +42,10 @@ export const ENGINE_REFUSAL_CODES = [
   'FORM_CHANGED',
   'FORM_STATE',
   'FORM_CLOSED',
+  // Booking pages (spec 0025): the slot went to someone else between the offer and the booking; the page is paused
+  // or deleted, or the host can't be booked.
+  'SLOT_TAKEN',
+  'BOOKING_CLOSED',
 ] as const;
 
 /** One of the engine's refusal codes. */

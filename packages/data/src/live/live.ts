@@ -161,7 +161,7 @@ const isStringArray = (value: unknown): value is string[] => Array.isArray(value
 /** What a records event's write replaced: who, named once, and which version of which cells (spec 0006). */
 type Replaced = NonNullable<Extract<ChangeEvent, { kind: 'records' }>['replaced']>;
 
-const ACTOR_TYPES: ReadonlySet<unknown> = new Set(['member', 'api_key', 'automation', 'system', 'form']);
+const ACTOR_TYPES: ReadonlySet<unknown> = new Set(['member', 'api_key', 'automation', 'system', 'form', 'booking']);
 
 /** The most cells a `replaced` names (`MAX_REPLACED_CELLS`, owner decision of 8 Oct 2026); a longer one is dropped. */
 const MAX_REPLACED_CELLS = 200;

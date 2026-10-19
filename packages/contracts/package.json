@@ -17,7 +17,8 @@
     "./events": "./src/monitoring/events.ts",
     "./views": "./src/view-model.ts",
     "./board": "./src/board-model.ts",
-    "./forms": "./src/forms/browser.ts"
+    "./forms": "./src/forms/browser.ts",
+    "./booking": "./src/booking/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

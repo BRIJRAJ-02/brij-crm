@@ -332,7 +332,14 @@ const testingEntry = {
   group: ['@crm/core/testing'],
   message: 'Scopes built by hand are for tests and scripts only. Everything else gets its scope from the door.',
 };
+// Spec 0025: `@crm/core/public` (the booking page door and its services, the `booking` actor's narrow scope) only
+// in the api's public routes and in tests.
+const publicEntry = {
+  group: ['@crm/core/public'],
+  message: 'The public booking door is for the public routes: only src/public/** and tests import it.',
+};
 const SYSTEM_IMPORTERS = ['src/worker.ts', 'src/jobs/**', 'src/realtime/**', 'scripts/**'];
+const PUBLIC_IMPORTERS = ['src/public/**'];
 const TESTING_IMPORTERS = ['**/*.test.ts', 'test/**', 'scripts/**'];
 /** Files that may import both: scripts, and the tests of the code that may import system power. */
 const BOTH_IMPORTERS = ['scripts/**', 'src/worker.test.ts', 'src/jobs/**/*.test.ts', 'src/realtime/**/*.test.ts'];
@@ -346,6 +353,7 @@ function serverImports(databaseDriver, allow = []) {
   const patterns = [
     ...(allow.includes('system') ? [] : [systemEntry]),
     ...(allow.includes('testing') ? [] : [testingEntry]),
+    ...(allow.includes('public') ? [] : [publicEntry]),
     // Spec 0011: the load harness's scripts, only from tests and scripts (the testing importers), and from the
     // harness itself (`harness`), which still may not mint.
     ...(allow.includes('load') ? [] : allow.includes('harness') ? [loadMintingImports] : [loadScriptImports]),
@@ -376,8 +384,9 @@ export function server({ root, databaseDriver = false, loadHarness = false, vend
     { languageOptions: { globals: globals.node } },
     serverImports(databaseDriver, harness),
     { files: SYSTEM_IMPORTERS, ...serverImports(databaseDriver, ['system', ...harness]) },
-    { files: TESTING_IMPORTERS, ...serverImports(databaseDriver, ['testing', 'load']) },
-    { files: BOTH_IMPORTERS, ...serverImports(databaseDriver, ['system', 'testing', 'load']) },
+    { files: PUBLIC_IMPORTERS, ...serverImports(databaseDriver, ['public', ...harness]) },
+    { files: TESTING_IMPORTERS, ...serverImports(databaseDriver, ['testing', 'load', 'public']) },
+    { files: BOTH_IMPORTERS, ...serverImports(databaseDriver, ['system', 'testing', 'load', 'public']) },
     restrictSyntax([syntax.defaultExport, ...syntax.classes, ...syntax.extensions]),
     wrapperExceptions(vendorWrappers),
   );
@@ -422,6 +431,9 @@ export function client({ root, library = false, collaboration: allowCollaboratio
   );
 }
 
+/** The public pages' own bundle in apps/web (specs 0023 and 0025). */
+const PUBLIC_BUNDLE = ['src/public/**/*.{ts,tsx}'];
+
 /**
  * apps/web: screens and routes under src/, plus the Vercel middleware at the
  * root. `vendorWrappers` names each vendor's one wrapper module and the
@@ -460,6 +472,36 @@ export function screens({ root, vendorWrappers = [] }) {
       },
     },
     restrictSyntax([syntax.defaultExport, ...syntax.classes, ...syntax.extensions, syntax.screenStyling]),
+    // The public pages' bundle (specs 0023 and 0025, `src/public/**`): plain HTML inputs and its own small
+    // stylesheet with the tokens compiled in, under a 40 kB budget, so it may style its markup and import its own
+    // CSS, and never imports the component library (the CRM's field editors and the app shell stay out of it).
+    {
+      files: PUBLIC_BUNDLE,
+      rules: {
+        'no-restricted-imports': [
+          'error',
+          {
+            paths: [
+              ...databaseDrivers,
+              ...screenDataImports.paths,
+              {
+                name: '@crm/ui',
+                message: 'The public bundle uses plain inputs and its own stylesheet, never the library.',
+              },
+              {
+                name: '@crm/data',
+                message: 'The public bundle reaches the API through its own entry (@crm/data/booking).',
+              },
+            ],
+            patterns: screenDataImports.patterns.filter((pattern) => pattern.regex === undefined),
+          },
+        ],
+      },
+    },
+    {
+      files: PUBLIC_BUNDLE,
+      rules: { 'no-restricted-syntax': ['error', syntax.defaultExport, ...syntax.classes, ...syntax.extensions] },
+    },
     // Files in public/ ship as is: plain browser scripts, outside any tsconfig.
     { files: ['public/**/*.js'], languageOptions: { globals: globals.browser, sourceType: 'script' } },
     wrapperExceptions(vendorWrappers),

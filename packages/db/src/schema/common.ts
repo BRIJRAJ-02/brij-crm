@@ -6,12 +6,21 @@ import { AttributeType } from '@crm/contracts/values';
 
 /**
  * Who did something: a member, an API key, an automation, a form (spec 0023:
- * its submissions' writes), the system (whose id is null), or calendar sync
- * (spec 0024, whose id is null too). A table's actor checks admit `calendar`
- * only where calendar sync writes (`actorCheck`'s `withCalendar`), so nothing
- * else can store it by mistake.
+ * its submissions' writes), a booking page (spec 0025: the records a
+ * visitor's booking writes, its id the page's), the system (whose id is
+ * null), or calendar sync (spec 0024, whose id is null too). A table's actor
+ * checks admit `calendar` only where calendar sync writes (`actorCheck`'s
+ * `withCalendar`), so nothing else can store it by mistake.
  */
-export const actorType = pgEnum('actor_type', ['member', 'api_key', 'automation', 'system', 'calendar', 'form']);
+export const actorType = pgEnum('actor_type', [
+  'member',
+  'api_key',
+  'automation',
+  'system',
+  'calendar',
+  'form',
+  'booking',
+]);
 
 /** Every attribute type the field set knows (spec 0003), mirrored from `@crm/contracts/values`. */
 export const attributeType = pgEnum('attribute_type', AttributeType.options as [AttributeType, ...AttributeType[]]);
@@ -34,9 +43,10 @@ export const timestamptz = (name: string) => timestamp(name, { withTimezone: tru
 /**
  * The actor types a table stores when its checks don't admit calendar sync:
  * every table but calendar sync's own. A form (spec 0023) writes the records
- * and values its submissions make, so it is one of them.
+ * and values its submissions make, and a booking page (spec 0025) the people
+ * and companies a visitor's booking makes, so both are among them.
  */
-export type StoredActorType = 'member' | 'api_key' | 'automation' | 'system' | 'form';
+export type StoredActorType = 'member' | 'api_key' | 'automation' | 'system' | 'form' | 'booking';
 
 /** Every actor type, calendar sync's too (spec 0024): what calendar sync's own tables store. */
 export type CalendarActorType = StoredActorType | 'calendar';
@@ -82,7 +92,7 @@ export function auditColumns() {
 /**
  * The rule one actor's columns obey: an absent actor has nothing set; the system has
  * no id; a member's id is repeated in `*_member_id` (which carries the
- * foreign key); any other actor (an API key, an automation, a form) has an id
+ * foreign key); any other actor (an API key, an automation, a form, a booking page) has an id
  * and no member id. The last branch names only the two types it excludes, so a
  * new actor type needs no constraint rewritten (and a migration that adds the
  * type never uses its new value in the same transaction). With `withCalendar`,

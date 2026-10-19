@@ -1,0 +1,330 @@
+import { useRef, useState } from 'react';
+import { DialogTrigger } from 'react-aria-components';
+import { Button } from '../../atoms/Button/Button.tsx';
+import { Checkbox } from '../../atoms/Checkbox/Checkbox.tsx';
+import { Switch } from '../../atoms/Switch/Switch.tsx';
+import { Popover } from '../../molecules/Popover/Popover.tsx';
+import { Select, type SelectItem } from '../../molecules/Select/Select.tsx';
+import styles from './HoursEditor.module.css';
+import { strings } from './strings.ts';
+
+/** One window of a day, local `HH:MM` times (`24:00` is midnight at its end), the end after the start. */
+export type HoursRange = readonly [start: string, end: string];
+
+/** One weekday's row. */
+export interface HoursRow {
+  readonly id: string;
+  /** "Monday". */
+  readonly label: string;
+  /** Its windows; none is a day off. */
+  readonly ranges: readonly HoursRange[];
+  /** What's wrong with the row, said under it. */
+  readonly error?: string;
+}
+
+/** Props for HoursEditor. */
+export interface HoursEditorProps {
+  /** What the rows are ("Weekly hours"), for screen readers. */
+  readonly label: string;
+  readonly rows: readonly HoursRow[];
+  /** A row's new windows: one added, changed or removed, or none for a day off. */
+  readonly onChange: (rowId: string, ranges: readonly HoursRange[]) => void;
+  /** The times a window may start or end on, every this many minutes. Default 30. */
+  readonly stepMinutes?: number;
+  readonly isDisabled?: boolean;
+  /** Shows the week as text, no controls: hours that come from elsewhere (a page that follows its member's). */
+  readonly isReadOnly?: boolean;
+}
+
+/** `HH:MM` for minutes from midnight. */
+function clock(minutes: number): string {
+  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+}
+
+function minutesOf(time: string): number {
+  const [hours = '0', minutes = '0'] = time.split(':');
+  return Number(hours) * 60 + Number(minutes);
+}
+
+/** The window a new one takes: an hour after the day's last, an hour long, inside the day. */
+function nextRange(ranges: readonly HoursRange[]): HoursRange {
+  const last = ranges.at(-1);
+  if (last === undefined) return ['09:00', '17:00'];
+  const start = Math.min(minutesOf(last[1]) + 60, 1380);
+  return [clock(start), clock(Math.min(start + 60, 1440))];
+}
+
+/** The one value every on day shares, or undefined when they differ ("Mixed"). */
+function shared(values: readonly string[]): string | undefined {
+  const [first] = values;
+  return first !== undefined && values.every((value) => value === first) ? first : undefined;
+}
+
+/** Copy times to: the other days as checkboxes, Select all, and Apply. */
+function CopyTo({
+  from,
+  rows,
+  onApply,
+  isDisabled,
+}: {
+  readonly from: HoursRow;
+  readonly rows: readonly HoursRow[];
+  readonly onApply: (rowIds: readonly string[]) => void;
+  readonly isDisabled: boolean;
+}) {
+  const others = rows.filter((row) => row.id !== from.id);
+  const [chosen, setChosen] = useState<ReadonlySet<string>>(new Set());
+  const [isOpen, setOpen] = useState(false);
+  const trigger = useRef<HTMLButtonElement>(null);
+  const all = chosen.size === others.length;
+  return (
+    <DialogTrigger
+      isOpen={isOpen}
+      onOpenChange={(open) => {
+        setOpen(open);
+        if (!open) setChosen(new Set());
+      }}
+    >
+      <Button ref={trigger} variant="ghost" icon="copy" label={strings.copyTo(from.label)} isDisabled={isDisabled} />
+      <Popover label={strings.copyTo(from.label)} triggerRef={trigger} placement="bottom end">
+        <div className={styles.copy}>
+          <p className={styles.copyTitle}>{strings.copyTitle}</p>
+          <Checkbox
+            label={strings.selectAll}
+            isSelected={all}
+            isIndeterminate={chosen.size > 0 && !all}
+            onChange={(isOn) => setChosen(isOn ? new Set(others.map((row) => row.id)) : new Set())}
+          />
+          {others.map((row) => (
+            <Checkbox
+              key={row.id}
+              label={row.label}
+              isSelected={chosen.has(row.id)}
+              onChange={(isOn) =>
+                setChosen((current) => {
+                  const next = new Set(current);
+                  if (isOn) next.add(row.id);
+                  else next.delete(row.id);
+                  return next;
+                })
+              }
+            />
+          ))}
+          <Button
+            variant="primary"
+            isDisabled={chosen.size === 0}
+            onPress={() => {
+              onApply([...chosen]);
+              setOpen(false);
+              setChosen(new Set());
+            }}
+          >
+            {strings.apply}
+          </Button>
+        </div>
+      </Popover>
+    </DialogTrigger>
+  );
+}
+
+/**
+ * Weekly hours (spec 0025 experience, AC-624, AC-680): All days start and All
+ * days end at the top ("Mixed" while days differ), then one row per day: a
+ * switch turns it on (09:00 to 17:00) or off, each window is a pair of time
+ * Selects on a 30 minute step ("Midnight" the last end) with + to add another
+ * and − to remove one, and Copy times to puts this day's windows on others.
+ */
+export function HoursEditor({
+  label,
+  rows,
+  onChange,
+  stepMinutes = 30,
+  isDisabled = false,
+  isReadOnly = false,
+}: HoursEditorProps) {
+  if (isReadOnly) return <ReadOnlyWeek label={label} rows={rows} />;
+  const step = stepMinutes > 0 ? stepMinutes : 30;
+  const starts: SelectItem[] = [];
+  const ends: SelectItem[] = [];
+  for (let minutes = 0; minutes <= 1440; minutes += step) {
+    if (minutes < 1440) starts.push({ id: clock(minutes), label: clock(minutes) });
+    if (minutes > 0) ends.push({ id: clock(minutes), label: minutes === 1440 ? strings.midnight : clock(minutes) });
+  }
+  const on = rows.filter((row) => row.ranges.length > 0);
+  const allStart = shared(on.map((row) => row.ranges[0]?.[0] ?? ''));
+  const allEnd = shared(on.map((row) => row.ranges.at(-1)?.[1] ?? ''));
+  const setAll = (edge: 'start' | 'end', time: string) => {
+    for (const row of on) {
+      const ranges = row.ranges.map((range, index): HoursRange => {
+        if (edge === 'start' && index === 0)
+          return [time, minutesOf(range[1]) > minutesOf(time) ? range[1] : nextEnd(time)];
+        if (edge === 'end' && index === row.ranges.length - 1)
+          return [minutesOf(range[0]) < minutesOf(time) ? range[0] : prevStart(time), time];
+        return range;
+      });
+      onChange(row.id, ranges);
+    }
+  };
+  return (
+    <div className={styles.root}>
+      <div className={styles.all}>
+        <Select
+          label={strings.allStart}
+          size="sm"
+          items={starts}
+          value={allStart ?? null}
+          placeholder={strings.mixed}
+          isDisabled={isDisabled || on.length === 0}
+          onChange={(id) => {
+            if (id !== null) setAll('start', id);
+          }}
+        />
+        <Select
+          label={strings.allEnd}
+          size="sm"
+          items={ends}
+          value={allEnd ?? null}
+          placeholder={strings.mixed}
+          isDisabled={isDisabled || on.length === 0}
+          onChange={(id) => {
+            if (id !== null) setAll('end', id);
+          }}
+        />
+      </div>
+      <ul className={styles.rows} aria-label={label}>
+        {rows.map((row) => {
+          const isOn = row.ranges.length > 0;
+          const replace = (index: number, range: HoursRange) =>
+            onChange(
+              row.id,
+              row.ranges.map((each, at) => (at === index ? range : each)),
+            );
+          return (
+            <li key={row.id} className={styles.row} data-off={isOn ? undefined : ''}>
+              <div className={styles.day}>
+                <Switch
+                  label={row.label}
+                  isSelected={isOn}
+                  isDisabled={isDisabled}
+                  onChange={(selected) => onChange(row.id, selected ? [nextRange([])] : [])}
+                />
+              </div>
+              <div className={styles.ranges}>
+                {isOn ? (
+                  row.ranges.map((range, index) => (
+                    <div key={`${String(index)}-${range[0]}`} className={styles.range}>
+                      <Select
+                        label={strings.from(row.label)}
+                        isLabelHidden
+                        size="sm"
+                        items={starts}
+                        value={range[0]}
+                        isDisabled={isDisabled}
+                        onChange={(id) => {
+                          if (id !== null) replace(index, [id, range[1]]);
+                        }}
+                      />
+                      <span className={styles.to} aria-hidden="true">
+                        {strings.to}
+                      </span>
+                      <Select
+                        label={strings.until(row.label)}
+                        isLabelHidden
+                        size="sm"
+                        items={ends}
+                        value={range[1]}
+                        isDisabled={isDisabled}
+                        onChange={(id) => {
+                          if (id !== null) replace(index, [range[0], id]);
+                        }}
+                      />
+                      {index === 0 ? (
+                        <Button
+                          variant="ghost"
+                          icon="plus"
+                          label={strings.addRange(row.label)}
+                          isDisabled={isDisabled || row.ranges.length >= 6}
+                          onPress={() => onChange(row.id, [...row.ranges, nextRange(row.ranges)])}
+                        />
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          icon="minus"
+                          label={strings.removeRange(row.label, range[0], range[1])}
+                          isDisabled={isDisabled}
+                          onPress={() =>
+                            onChange(
+                              row.id,
+                              row.ranges.filter((_, at) => at !== index),
+                            )
+                          }
+                        />
+                      )}
+                    </div>
+                  ))
+                ) : (
+                  <span className={styles.offLabel}>{strings.unavailable}</span>
+                )}
+                {row.error !== undefined && (
+                  <p className={styles.error} role="alert">
+                    {row.error}
+                  </p>
+                )}
+              </div>
+              <div className={styles.actions}>
+                {isOn && (
+                  <CopyTo
+                    from={row}
+                    rows={rows}
+                    isDisabled={isDisabled}
+                    onApply={(ids) => {
+                      for (const id of ids) onChange(id, row.ranges);
+                    }}
+                  />
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/** A window as text, "09:00 to 17:00" ("Midnight" at its end). */
+const rangeText = ([start, end]: HoursRange): string =>
+  `${start} ${strings.to} ${end === '24:00' ? strings.midnight : end}`;
+
+/** The week as text: each day's windows, or Unavailable. */
+function ReadOnlyWeek({ label, rows }: { readonly label: string; readonly rows: readonly HoursRow[] }) {
+  return (
+    <ul className={styles.rows} aria-label={label} data-read-only="">
+      {rows.map((row) => (
+        <li key={row.id} className={styles.row} data-off={row.ranges.length > 0 ? undefined : ''}>
+          <span className={styles.dayName}>{row.label}</span>
+          <span className={styles.ranges}>
+            {row.ranges.length > 0 ? (
+              row.ranges.map((range) => (
+                <span key={range[0]} className={styles.rangeText}>
+                  {rangeText(range)}
+                </span>
+              ))
+            ) : (
+              <span className={styles.offLabel}>{strings.unavailable}</span>
+            )}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** The step after a start, for an end moved before it. */
+function nextEnd(start: string): string {
+  return clock(Math.min(minutesOf(start) + 60, 1440));
+}
+
+/** The step before an end, for a start moved after it. */
+function prevStart(end: string): string {
+  return clock(Math.max(minutesOf(end) - 60, 0));
+}

@@ -1,0 +1,225 @@
+// A page's slots (spec 0025, AC-629, AC-631): the page row read inside the
+// workspace, its hours turned into the engine's minutes, the host's calendars
+// read through the `BusyReader`, the host's confirmed bookings read from
+// Postgres, then the pure engine. Shared by the public slots read and the
+// booking's recheck under the host lock.
+import { and, asc, eq, gt, inArray, lt, sql } from 'drizzle-orm';
+import {
+  BookingAvailability,
+  BookingLocation,
+  defaultAvailability,
+  minutesOf,
+  WEEKDAYS,
+  type BookingPageSettings,
+} from '@crm/contracts';
+import { schema, type WorkspaceTx } from '@crm/db';
+import { refuse } from '../engine/refusals.ts';
+import type { BusyReader } from './calendar.ts';
+import { computeSlots, type BookedSpan, type DateOverride, type Span, type WeeklyRule } from './engine.ts';
+
+const { bookingMemberHours, bookingPageMembers, bookingPages, bookings } = schema;
+
+/** A page as the services read it: its row, the settings parsed. */
+export interface PageRecord extends BookingPageSettings {
+  readonly id: string;
+  readonly publicKey: string;
+  readonly kind: 'personal' | 'collective' | 'round_robin';
+  readonly ownerMemberId: string;
+  readonly isDeleted: boolean;
+  readonly createdAt: Date;
+  readonly updatedAt: Date;
+}
+
+const SLOT_STEPS = new Set([15, 30, 60]);
+const KINDS = new Set(['personal', 'collective', 'round_robin']);
+
+/** A stored row as a `PageRecord`: settings parsed with the shared schemas, a damaged one refused loudly. */
+export function pageOf(row: typeof bookingPages.$inferSelect): PageRecord {
+  const step = row.slotStep;
+  return {
+    id: row.id,
+    publicKey: row.publicKey,
+    kind: KINDS.has(row.kind) ? (row.kind as PageRecord['kind']) : 'personal',
+    ownerMemberId: row.ownerMemberId,
+    title: row.title,
+    description: row.description,
+    slug: row.slug,
+    durations: row.durations.filter((minutes): minutes is 15 | 30 | 45 | 60 | 90 =>
+      [15, 30, 45, 60, 90].includes(minutes),
+    ),
+    location: BookingLocation.parse(row.location),
+    availability: BookingAvailability.parse(row.availability),
+    bufferBefore: row.bufferBefore,
+    bufferAfter: row.bufferAfter,
+    minNoticeMinutes: row.minNoticeMinutes,
+    windowDays: row.windowDays,
+    dailyLimit: row.dailyLimit,
+    slotStep: step !== null && SLOT_STEPS.has(step) ? (step as 15 | 30 | 60) : null,
+    status: row.status === 'paused' ? 'paused' : 'live',
+    hoursMode: row.hoursMode === 'mine' ? 'mine' : 'own',
+    isDeleted: row.deletedAt !== null,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+/**
+ * One page by id, deleted ones too, or undefined, with the hours it books by:
+ * a page that follows its owner's hours takes theirs (in their zone), or
+ * weekdays 09:00 to 17:00 in the page's zone until they set any.
+ */
+export async function loadPage(tx: WorkspaceTx, pageId: string): Promise<PageRecord | undefined> {
+  const [row] = await tx.select().from(bookingPages).where(eq(bookingPages.id, pageId));
+  if (row === undefined) return undefined;
+  const page = pageOf(row);
+  if (page.hoursMode === 'own') return page;
+  const [hours] = await tx
+    .select({ availability: bookingMemberHours.availability })
+    .from(bookingMemberHours)
+    .where(eq(bookingMemberHours.memberId, page.ownerMemberId));
+  const parsed = hours === undefined ? undefined : BookingAvailability.safeParse(hours.availability);
+  return {
+    ...page,
+    availability: parsed?.success === true ? parsed.data : defaultAvailability(page.availability.timeZone),
+  };
+}
+
+/** The page's hours as the engine takes them: weekday ranges (0 Sunday) and date overrides, in minutes. */
+export function engineHours(availability: BookingAvailability): {
+  readonly rules: readonly WeeklyRule[];
+  readonly overrides: readonly DateOverride[];
+} {
+  const rules = WEEKDAYS.flatMap((day, index) =>
+    availability.weekly[day].map(([start, end]) => ({
+      // WEEKDAYS is Monday first; the engine's 0 is Sunday.
+      dayOfWeek: (index + 1) % 7,
+      startMinute: minutesOf(start),
+      endMinute: minutesOf(end),
+    })),
+  );
+  const overrides = availability.overrides.map((override) => ({
+    date: override.date,
+    windows: override.ranges.map(([start, end]) => ({ startMinute: minutesOf(start), endMinute: minutesOf(end) })),
+  }));
+  return { rules, overrides };
+}
+
+/** The page's required members in order (the owner alone on a personal page). */
+export async function membersOf(tx: WorkspaceTx, page: PageRecord): Promise<readonly string[]> {
+  const rows = await tx
+    .select({ memberId: bookingPageMembers.memberId })
+    .from(bookingPageMembers)
+    .where(eq(bookingPageMembers.pageId, page.id))
+    .orderBy(asc(bookingPageMembers.position));
+  return rows.length === 0 ? [page.ownerMemberId] : rows.map((row) => row.memberId);
+}
+
+/**
+ * Who hosts a slot: the owner of a personal page, the first required member
+ * (the event's organiser) of a collective one. Round robin waits for #58's
+ * `assignOwner`, so it is refused.
+ */
+export function pickHost(page: PageRecord, members: readonly string[]): string {
+  if (page.kind === 'round_robin') throw refuse('BOOKING_CLOSED', 'This page can’t take bookings yet.');
+  return page.kind === 'collective' ? (members[0] ?? page.ownerMemberId) : page.ownerMemberId;
+}
+
+/** The members' confirmed bookings whose blocked range touches [from, to), as the engine reads them. */
+export async function bookedSpans(
+  tx: WorkspaceTx,
+  memberIds: readonly string[],
+  pageId: string,
+  from: Date,
+  to: Date,
+): Promise<readonly BookedSpan[]> {
+  const rows = await tx
+    .select({
+      pageId: bookings.pageId,
+      startsAt: bookings.startsAt,
+      endsAt: bookings.endsAt,
+      blockStart: sql<string>`lower(${bookings.during})`,
+      blockEnd: sql<string>`upper(${bookings.during})`,
+    })
+    .from(bookings)
+    .where(
+      and(
+        inArray(bookings.hostMemberId, [...memberIds]),
+        eq(bookings.status, 'confirmed'),
+        lt(bookings.startsAt, new Date(to.getTime() + 86_400_000)),
+        gt(bookings.endsAt, new Date(from.getTime() - 86_400_000)),
+      ),
+    );
+  return rows.map((row) => ({
+    start: row.startsAt,
+    end: row.endsAt,
+    blockStart: new Date(row.blockStart),
+    blockEnd: new Date(row.blockEnd),
+    countsToLimit: row.pageId === pageId,
+  }));
+}
+
+/** What the members' calendars said, together: their busy spans, and whether any refused us until reconnected. */
+export interface MembersBusy {
+  readonly busy: readonly Span[];
+  readonly blocked: boolean;
+  /** No member has a calendar connected (AC-631: the builder warns). */
+  readonly noCalendar: boolean;
+}
+
+/** Every member's busy times over [from, to), each read once, through the reader the api passed in. */
+export async function membersBusy(
+  read: BusyReader,
+  workspaceId: string,
+  memberIds: readonly string[],
+  from: Date,
+  to: Date,
+): Promise<MembersBusy> {
+  const answers = await Promise.all(
+    memberIds.map((memberId) => read({ workspaceId, memberId, from: from.toISOString(), to: to.toISOString() })),
+  );
+  return {
+    busy: answers.flatMap((answer) =>
+      answer.status === 'read'
+        ? answer.busy.map((each) => ({ start: new Date(each.start), end: new Date(each.end) }))
+        : [],
+    ),
+    blocked: answers.some((answer) => answer.status === 'blocked'),
+    noCalendar: answers.every((answer) => answer.status === 'none'),
+  };
+}
+
+/** The margin read around a range for busy times and bookings: a slot's buffers reach past it. */
+export const BUSY_MARGIN_MS = 3 * 60 * 60_000;
+
+/** The page's slots of one length in [from, to): its hours, minus busy times and bookings, by the engine. */
+export function pageSlots(
+  page: PageRecord,
+  input: {
+    readonly duration: number;
+    readonly from: Date;
+    readonly to: Date;
+    readonly now: Date;
+    readonly busy: MembersBusy;
+    readonly bookings: readonly BookedSpan[];
+  },
+): readonly Span[] {
+  if (input.busy.blocked) return [];
+  const { rules, overrides } = engineHours(page.availability);
+  return computeSlots({
+    rules,
+    overrides,
+    busy: input.busy.busy,
+    bookings: input.bookings,
+    durationMinutes: input.duration,
+    bufferBefore: page.bufferBefore,
+    bufferAfter: page.bufferAfter,
+    hostZone: page.availability.timeZone,
+    now: input.now,
+    from: input.from,
+    to: input.to,
+    minNoticeMinutes: page.minNoticeMinutes,
+    windowDays: page.windowDays,
+    ...(page.dailyLimit === null ? {} : { dailyLimit: page.dailyLimit }),
+    ...(page.slotStep === null ? {} : { slotStepMinutes: page.slotStep }),
+  });
+}

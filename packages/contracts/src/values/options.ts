@@ -53,7 +53,7 @@ export type RecordRefDisplay = z.infer<typeof RecordRefDisplay>;
 
 /** How an actor shows. The system shows as "System"; an automation or key under its own name. */
 export const ActorDisplay = z.object({
-  type: z.enum(['member', 'api_key', 'automation', 'system', 'form']),
+  type: z.enum(['member', 'api_key', 'automation', 'system', 'form', 'booking']),
   id: z.string().min(1).nullable(),
   name: z.string(),
   /** Members only: shown in the member picker, and matched first when a member is pasted. */

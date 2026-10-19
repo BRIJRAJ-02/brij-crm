@@ -1,0 +1,61 @@
+import {
+  createBookingPage,
+  deleteBookingPage,
+  getBookingPage,
+  getMemberHours,
+  listBookingPages,
+  listBookings,
+  setMemberHours,
+  updateBookingPage,
+} from '@crm/core';
+import { withInputFields } from '../../errors.ts';
+import { commitWrite } from '../../hooks.ts';
+import { member } from '../../orpc.ts';
+
+// Booking pages (spec 0025), inside a workspace: the door has let in an active member, and `context.scope` is theirs.
+// The services check `booking.manage` and whose page it is. A page is settings, not CRM data: its writes store no
+// outbox row, but still go through `commitWrite`, the one write path.
+export const bookingPagesRouter = member.bookingPages.router({
+  list: member.bookingPages.list.handler(async ({ context }) => [...(await listBookingPages(context.scope))]),
+  get: member.bookingPages.get.handler(({ context, input }) => getBookingPage(context.scope, { pageId: input.pageId })),
+  create: member.bookingPages.create.handler(async ({ context, input }) => {
+    try {
+      return await commitWrite(context, { mutationId: input.mutationId }, () =>
+        createBookingPage(context.scope, {
+          id: input.id,
+          title: input.title,
+          timeZone: input.timeZone,
+          ...(input.settings === undefined ? {} : { settings: input.settings }),
+        }),
+      );
+    } catch (error) {
+      throw withInputFields(error, { ID_TAKEN: 'id' });
+    }
+  }),
+  update: member.bookingPages.update.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      updateBookingPage(context.scope, { pageId: input.pageId, settings: input.settings }),
+    ),
+  ),
+  delete: member.bookingPages.delete.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      deleteBookingPage(context.scope, { pageId: input.pageId }),
+    ),
+  ),
+});
+
+/** A page's bookings (AC-646), for whoever may change the page. */
+export const bookingsRouter = member.bookings.router({
+  list: member.bookings.list.handler(async ({ context, input }) => [
+    ...(await listBookings(context.scope, { pageId: input.pageId, when: input.when })),
+  ]),
+  // The member's own hours and days off (Bookings › Availability), which their pages may follow.
+  hours: member.bookings.hours.handler(({ context, input }) =>
+    getMemberHours(context.scope, { timeZone: input.timeZone }),
+  ),
+  setHours: member.bookings.setHours.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, () =>
+      setMemberHours(context.scope, { availability: input.availability }),
+    ),
+  ),
+});

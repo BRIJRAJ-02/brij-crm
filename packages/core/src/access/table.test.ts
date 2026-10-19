@@ -94,6 +94,10 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'processSubmission',
   'chooseOwner',
   'newPublicKey',
+  // Booking pages (spec 0025): the busy cache wraps the reader the api passes in; it takes no scope. The connected
+  // calendar reads a host's connections as the system for the public page, which has no scope of its own.
+  'createBusyCache',
+  'connectedCalendar',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;
@@ -233,6 +237,24 @@ describe('the walk: a principal without the access is refused', () => {
       await expect(
         service(name)(scope, core.jobKinds({ environment: 'local' }), { formId: core.newId() }),
       ).rejects.toThrow(/Only the form’s own public scope/);
+    },
+  );
+
+  it.each(entries.filter(([, entry]) => 'bookingPages' in entry).map(([name]) => name))(
+    '%s refuses a principal without booking.manage, and answers another member’s page as absent',
+    async (name) => {
+      const { scope, workspaceId, ownerId } = await memberOf('member');
+      const key = testScope({ db, workspaceId, actor: { type: 'api_key', id: core.newId() }, scopes: [] });
+      expect(await refusalOf(service(name)(key, {}))).toEqual({
+        code: 'FORBIDDEN',
+        message: PERMISSIONS['booking.manage'].message,
+      });
+      if (['listBookingPages', 'createBookingPage', 'getMemberHours', 'setMemberHours'].includes(name)) return;
+      const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });
+      const page = await core.createBookingPage(owner, { id: core.newId(), title: 'Intro', timeZone: 'UTC' });
+      expect(await refusalOf(service(name)(scope, { pageId: page.id, settings: {}, when: 'upcoming' }))).toMatchObject({
+        code: 'NOT_FOUND',
+      });
     },
   );
 

@@ -1,0 +1,29 @@
+/* PageColumn: the body's padding, a readable width, children stacked, and an
+   optional footer bar that sticks to the view's foot. */
+@layer components {
+  .root {
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-16);
+    inline-size: 100%;
+    max-inline-size: var(--size-dialog-wide);
+    padding: var(--space-24);
+  }
+
+  .root[data-width='narrow'] {
+    max-inline-size: var(--size-page-card);
+  }
+
+  .actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--space-8);
+  }
+
+  .footer {
+    position: sticky;
+    z-index: var(--z-sticky);
+    inset-block-end: var(--space-16);
+  }
+}

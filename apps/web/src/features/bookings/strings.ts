@@ -6,4 +6,6 @@ export const strings = {
   emptyText: 'Bookings people make through your links show here.',
   /** The way to the booking links, under Captures. */
   openLinks: 'Go to your booking links',
+  /** The way to the member's own weekly hours and days off. */
+  openAvailability: 'Set your availability',
 } as const;

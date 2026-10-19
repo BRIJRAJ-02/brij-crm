@@ -11,7 +11,15 @@
       "destination": "/form.html"
     },
     {
-      "source": "/((?!api/|api$|f/).*)",
+      "source": "/b/:publicKey",
+      "destination": "/book.html"
+    },
+    {
+      "source": "/b/:publicKey/manage",
+      "destination": "/book.html"
+    },
+    {
+      "source": "/((?!api/|api$|f/|b/).*)",
       "destination": "/index.html"
     }
   ],
@@ -21,7 +29,7 @@
       "headers": [
         {
           "key": "Content-Security-Policy",
-          "value": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' wss://centrifugo-production-68df.up.railway.app; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
+          "value": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' wss://centrifugo-production-68df.up.railway.app; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self'"
         },
         {
           "key": "X-Content-Type-Options",

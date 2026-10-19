@@ -27,7 +27,12 @@ export type AccessEntry =
    */
   | { readonly ownConnection: true }
   /** Only the scope a form's public key made (`enterPublicForm`, spec 0023), for that form. */
-  | { readonly publicForm: true };
+  | { readonly publicForm: true }
+  /**
+   * Booking pages (spec 0025): `booking.manage` first (403 `FORBIDDEN`), then the reader's own pages, or anyone's
+   * with `booking.admin`; another's page answers as absent.
+   */
+  | { readonly bookingPages: true };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -187,4 +192,13 @@ export const ACCESS_TABLE = {
   getPublicForm: { publicForm: true },
   submitForm: { publicForm: true },
   postingRules: { publicForm: true },
+  // Booking pages (spec 0025).
+  listBookingPages: { bookingPages: true },
+  getBookingPage: { bookingPages: true },
+  createBookingPage: { bookingPages: true },
+  updateBookingPage: { bookingPages: true },
+  deleteBookingPage: { bookingPages: true },
+  listBookings: { bookingPages: true },
+  getMemberHours: { bookingPages: true },
+  setMemberHours: { bookingPages: true },
 } as const satisfies Record<string, AccessEntry>;

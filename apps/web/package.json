@@ -14,6 +14,7 @@
   "dependencies": {
     "@crm/contracts": "workspace:*",
     "@crm/data": "workspace:*",
+    "@crm/tokens": "workspace:*",
     "@crm/ui": "workspace:*",
     "@sentry/react": "catalog:",
     "@tanstack/react-router": "catalog:",

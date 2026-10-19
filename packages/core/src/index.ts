@@ -167,6 +167,29 @@ export {
 } from './calendar/provider.ts';
 export { deriveKey, signValue, verifyValue } from './calendar/signing.ts';
 export { decodeTokenKey, type TokenKey } from './calendar/tokens.ts';
+// Booking pages (spec 0025): members' pages and bookings, and the calendar calls the api passes in.
+export {
+  createBookingPage,
+  deleteBookingPage,
+  getBookingPage,
+  getMemberHours,
+  listBookingPages,
+  listBookings,
+  setMemberHours,
+  updateBookingPage,
+} from './booking/pages.ts';
+export {
+  createBusyCache,
+  NO_CALENDAR,
+  type BookingCalendar,
+  type BookingEvent,
+  type BusyAnswer,
+  type BusyReader,
+  type EventAttendee,
+  type EventWriter,
+  type WrittenEvent,
+} from './booking/calendar.ts';
+export { connectedCalendar, type ConnectedCalendarDeps } from './booking/connected.ts';
 export { getMyAccess, listMembers, removeMember, setMemberRole, type MemberWithRole } from './members/members.ts';
 export { outboxEvent, stubEvent, wireEvent } from './realtime/events.ts';
 export {

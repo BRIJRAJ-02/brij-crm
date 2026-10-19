@@ -57,6 +57,11 @@ const READS: ReadonlySet<string> = new Set([
   'forms.slugAvailable',
   'submissions.list',
   'submissions.get',
+  // Booking pages (spec 0025).
+  'bookingPages.list',
+  'bookingPages.get',
+  'bookings.list',
+  'bookings.hours',
 ]);
 
 let db: Database;
@@ -678,6 +683,43 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'meetings', item_ids: [meetingId], record_ids: [recordId], mutation_id: mutationId },
     ];
   },
+  // Booking pages (spec 0025): settings, not CRM data, so no outbox row; still one poke per write.
+  'bookingPages.create': async (m, mutationId) => {
+    await m.client.bookingPages.create({ workspace: m.slug, id: newId(), title: 'Intro', timeZone: 'UTC', mutationId });
+    return [];
+  },
+  'bookingPages.update': async (m, mutationId) => {
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    await m.client.bookingPages.update({
+      workspace: m.slug,
+      pageId: page.id,
+      settings: { title: 'Hello' },
+      mutationId,
+    });
+    return [];
+  },
+  'bookingPages.delete': async (m, mutationId) => {
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    await m.client.bookingPages.delete({ workspace: m.slug, pageId: page.id, mutationId });
+    return [];
+  },
+  'bookings.setHours': async (m, mutationId) => {
+    const { availability } = await m.client.bookings.hours({ workspace: m.slug, timeZone: 'UTC' });
+    await m.client.bookings.setHours({ workspace: m.slug, availability, mutationId });
+    return [];
+  },
   // Background jobs (spec 0008): one jobs row per write, naming the job.
   'jobs.startTest': async (m, mutationId) => {
     const job = await m.client.jobs.startTest({ workspace: m.slug, id: newId(), items: 3, mutationId });
@@ -839,6 +881,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'tasks.update': 2,
   'calendar.connections.update': 2,
   'calendar.connections.remove': 2,
+  'bookingPages.update': 2,
+  'bookingPages.delete': 2,
   'attributes.restore': 2,
   'relationships.update': 2,
   'links.add': 3,

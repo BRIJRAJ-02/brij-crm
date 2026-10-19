@@ -7,6 +7,10 @@
 // while a screen shows a workspace (the realtime client loads with the first).
 import type {
   AttributeDefinition,
+  BookingAvailability,
+  BookingPageSettings,
+  BookingPageView,
+  BookingView,
   AttributeOption,
   PickerAttributeType,
   CreateWorkspaceInput,
@@ -91,6 +95,14 @@ export type {
   ActorDisplay,
   ApiRefusal,
   AttributeValidation,
+  BookingAvailability,
+  BookingLocation,
+  BookingPageSettings,
+  BookingPageView,
+  BookingView,
+  DateOverride,
+  TimeRange,
+  Weekday,
   ValidationRuleInput,
   ValidationRuleView,
   AttributeDefinition,
@@ -266,7 +278,8 @@ export interface ReplacedValue {
     | { readonly kind: 'member'; readonly name: string | undefined }
     | { readonly kind: 'api_key' }
     | { readonly kind: 'automation' }
-    | { readonly kind: 'form' };
+    | { readonly kind: 'form' }
+    | { readonly kind: 'booking' };
   readonly useMine: () => void;
 }
 
@@ -1696,6 +1709,47 @@ export function createDataLayer({
         me = undefined;
         return created;
       },
+    },
+    /**
+     * Booking pages (spec 0025): settings, not CRM data, so each call waits for
+     * the server (no optimistic layer, no live event). The builder saves as you
+     * go by calling `update` with the settings that changed.
+     */
+    bookingPages: {
+      /** A new page's id: mint it once per New page, and send the same one again on a retry. */
+      newId: () => mintId(),
+      /** The reader's pages (their own; everyone's with `booking.admin`), newest first. */
+      list: (workspace: string): Promise<BookingPageView[]> =>
+        call((options) => api.bookingPages.list({ workspace }, options)),
+      /** One page. `NOT_FOUND` for one the reader may not change. */
+      get: (workspace: string, pageId: string): Promise<BookingPageView> =>
+        call((options) => api.bookingPages.get({ workspace, pageId }, options)),
+      /** A new page with defaults. Refusals: `ID_TAKEN`, `SLUG_TAKEN` (field `slug`). */
+      create: (
+        workspace: string,
+        input: { id: string; title: string; timeZone: string; settings?: Partial<BookingPageSettings> },
+      ): Promise<BookingPageView> =>
+        call((options) => api.bookingPages.create({ workspace, ...input, mutationId: mintId() }, options)),
+      /** Changes only the settings given. Refusals: `SLUG_TAKEN` (field `slug`), `INPUT_INVALID` (with issues). */
+      update: (workspace: string, pageId: string, settings: Partial<BookingPageSettings>): Promise<BookingPageView> =>
+        call((options) => api.bookingPages.update({ workspace, pageId, settings, mutationId: mintId() }, options)),
+      /** Deletes a page: its link stops working, its bookings stay. */
+      remove: (workspace: string, pageId: string): Promise<{ pageId: string }> =>
+        call((options) => api.bookingPages.delete({ workspace, pageId, mutationId: mintId() }, options)),
+    },
+    bookings: {
+      /** A page's bookings: upcoming soonest first, or past latest first, at most 100. */
+      list: (workspace: string, pageId: string, when: 'upcoming' | 'past'): Promise<BookingView[]> =>
+        call((options) => api.bookings.list({ workspace, pageId, when }, options)),
+      /** The member's own hours and days off; never set yet, weekdays 09:00 to 17:00 in `timeZone`. */
+      hours: (workspace: string, timeZone: string): Promise<{ availability: BookingAvailability }> =>
+        call((options) => api.bookings.hours({ workspace, timeZone }, options)),
+      /** Replaces the member's own hours and days off; their pages that follow them book by them at once. */
+      setHours: (
+        workspace: string,
+        availability: BookingAvailability,
+      ): Promise<{ availability: BookingAvailability }> =>
+        call((options) => api.bookings.setHours({ workspace, availability, mutationId: mintId() }, options)),
     },
     objects: {
       /**

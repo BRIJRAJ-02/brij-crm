@@ -24,6 +24,7 @@ export const ACTOR_WORDS = {
   formerMember: 'Former member',
   apiKey: 'An API key',
   automation: 'An automation',
+  bookingPage: 'A booking page',
   system: 'System',
   /** A form whose name this page of the timeline doesn't carry (spec 0023). */
   form: 'A form',
@@ -214,6 +215,7 @@ export function actorDisplay(
       name: (actor.id === null ? undefined : forms.get(actor.id)) ?? ACTOR_WORDS.form,
     };
   }
+  if (actor.type === 'booking') return { type: 'booking', id: actor.id, name: ACTOR_WORDS.bookingPage };
   return { type: 'system', id: null, name: ACTOR_WORDS.system };
 }
 
@@ -230,7 +232,9 @@ function actorValueDisplay(value: unknown, members: readonly MemberSummary[] | u
   if (typeof value !== 'object' || value === null || !('type' in value)) return undefined;
   const type = (value as { readonly type: unknown }).type;
   const id = 'id' in value ? (value as { readonly id: unknown }).id : null;
-  if (type !== 'member' && type !== 'api_key' && type !== 'automation' && type !== 'system') return undefined;
+  if (type !== 'member' && type !== 'api_key' && type !== 'automation' && type !== 'system' && type !== 'booking') {
+    return undefined;
+  }
   return actorDisplay({ type, id: typeof id === 'string' ? id : null }, members);
 }
 

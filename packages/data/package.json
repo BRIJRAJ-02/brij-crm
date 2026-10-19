@@ -7,7 +7,8 @@
     "./records": "./src/records/index.ts",
     "./react": "./src/react.ts",
     "./public-form": "./src/public-form/client.ts",
-    "./forms": "./src/forms/builder.ts"
+    "./forms": "./src/forms/builder.ts",
+    "./booking": "./src/booking/public.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

@@ -1,5 +1,6 @@
 import { accessContract } from './access.ts';
 import { attributesContract } from './attributes.ts';
+import { bookingPagesContract, bookingsContract } from './booking/pages.ts';
 import { bulkRecordsContract } from './bulk.ts';
 import { calendarContract } from './calendar.ts';
 import { formsContract, submissionsContract } from './forms/forms.ts';
@@ -22,6 +23,8 @@ export * from './access.ts';
 export * from './activity.ts';
 export * from './attributes.ts';
 export * from './board-model.ts';
+export * from './booking/index.ts';
+export * from './booking/pages.ts';
 export * from './bulk.ts';
 export * from './calendar.ts';
 export * from './change-event.ts';
@@ -72,4 +75,6 @@ export const contract = {
   calendar: calendarContract,
   forms: formsContract,
   submissions: submissionsContract,
+  bookingPages: bookingPagesContract,
+  bookings: bookingsContract,
 };

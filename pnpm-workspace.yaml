@@ -25,6 +25,7 @@ catalog:
   "@tanstack/react-router": 1.170.41
   "@tanstack/react-virtual": 3.14.13
   "@tanstack/router-plugin": 1.168.42
+  "@types/luxon": 3.7.5
   "@types/node": 24.19.0
   "@types/pg": 8.23.1
   "@types/react": 19.3.0
@@ -49,6 +50,7 @@ catalog:
   lefthook: 2.1.15
   libphonenumber-js: 1.13.14
   lucide-react: 1.49.0
+  luxon: 3.7.2
   pg: 8.23.1
   playwright: 1.63.0
   posthog-node: 5.54.1

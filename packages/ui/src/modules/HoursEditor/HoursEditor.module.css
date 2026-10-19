@@ -1,0 +1,125 @@
+/* HoursEditor: All days start and end side by side at the top, then one row
+   per day: its switch and name in a fixed column, its windows stacked beside
+   it, Copy times to at the end; a day off reads "Unavailable" in the
+   secondary colour. Rows part with a hairline. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-12);
+    container-type: inline-size;
+  }
+
+  .all {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--space-12);
+  }
+
+  .rows {
+    display: flex;
+    flex-direction: column;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .copy {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-8);
+    padding: var(--space-12);
+  }
+
+  .copyTitle {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-label-strong);
+    letter-spacing: var(--tracking-label-strong);
+  }
+
+  .row {
+    display: grid;
+    grid-template-columns: var(--size-column-narrow) minmax(0, 1fr) auto;
+    align-items: start;
+    gap: var(--space-8);
+    padding-block: var(--space-8);
+    border-block-end: var(--border-width-hairline) solid var(--border);
+  }
+
+  .row:last-child {
+    border-block-end: none;
+  }
+
+  .day {
+    display: flex;
+    align-items: center;
+    min-block-size: var(--size-control);
+  }
+
+  .ranges {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-6);
+    min-inline-size: 0;
+  }
+
+  .range {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
+  .to {
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .dayName,
+  .rangeText {
+    display: flex;
+    align-items: center;
+    min-block-size: var(--size-control);
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .rows[data-read-only] .row {
+    grid-template-columns: var(--size-column-narrow) minmax(0, 1fr);
+  }
+
+  .offLabel {
+    display: flex;
+    align-items: center;
+    min-block-size: var(--size-control);
+    color: var(--text-secondary);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .error {
+    margin: 0;
+    color: var(--danger);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .actions {
+    display: flex;
+    gap: var(--space-2);
+  }
+
+  /* A narrow card: the ranges move under the day. */
+  @container (inline-size < 480px) {
+    .row {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .ranges {
+      grid-column: 1 / -1;
+      grid-row: 2;
+    }
+  }
+}

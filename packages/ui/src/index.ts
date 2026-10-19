@@ -144,6 +144,7 @@ export {
   type ThemeSwitchProps,
 } from './molecules/SegmentedControl/SegmentedControl.tsx';
 export { Select, type SelectItem, type SelectOptionStyle, type SelectProps } from './molecules/Select/Select.tsx';
+export { ChoiceChips, type ChoiceChip, type ChoiceChipsProps } from './molecules/ChoiceChips/ChoiceChips.tsx';
 export { Steps, type Step, type StepsProps } from './molecules/Steps/Steps.tsx';
 export { Table, type TableColumn, type TableProps } from './molecules/Table/Table.tsx';
 export { TabPanel, Tabs, type TabItem, type TabPanelProps, type TabsProps } from './molecules/Tabs/Tabs.tsx';
@@ -157,6 +158,15 @@ export {
 } from './modules/ActivityFeed/ActivityFeed.tsx';
 export { AppShell, AppShellContext, type AppShellProps } from './modules/AppShell/AppShell.tsx';
 export { AuthLayout, type AuthLayoutProps, type ProductLogo } from './modules/AuthLayout/AuthLayout.tsx';
+export { LinkList, type LinkListProps, type LinkRow } from './modules/LinkList/LinkList.tsx';
+export { PageColumn, type PageColumnProps } from './modules/PageColumn/PageColumn.tsx';
+export { PreviewLayout, type PreviewDevice, type PreviewLayoutProps } from './modules/PreviewLayout/PreviewLayout.tsx';
+export {
+  HoursEditor,
+  type HoursEditorProps,
+  type HoursRange,
+  type HoursRow,
+} from './modules/HoursEditor/HoursEditor.tsx';
 export {
   AttributeSettings,
   type AttributeSettingsAttribute,

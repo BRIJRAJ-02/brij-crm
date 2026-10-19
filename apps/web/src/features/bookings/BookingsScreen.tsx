@@ -1,9 +1,10 @@
 // Brief
 // Purpose: the workspace's upcoming bookings, a sidebar destination after Records.
-// Main task: see what is coming up; until the booking lane lands, find the way to the booking links.
-// Leaves out: the upcoming list itself, availability and booking pages (the booking lane brings them).
+// Main task: see what is coming up; until the list lands, find the way to the booking links and Availability.
+// Leaves out: the upcoming list itself (spec 0025, milestone 2).
 import { EmptyState, Link, TopBar } from '@crm/ui';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { availabilityHref } from '../booking/links.ts';
 import { linksHref } from '../captures/tabs.ts';
 import { strings } from './strings.ts';
 
@@ -18,7 +19,12 @@ export function BookingsScreen({ slug }: { readonly slug: string }) {
           <EmptyState
             icon="calendar-days"
             title={strings.emptyTitle}
-            actions={<Link href={linksHref(slug)}>{strings.openLinks}</Link>}
+            actions={
+              <>
+                <Link href={linksHref(slug)}>{strings.openLinks}</Link>
+                <Link href={availabilityHref(slug)}>{strings.openAvailability}</Link>
+              </>
+            }
           >
             {strings.emptyText}
           </EmptyState>

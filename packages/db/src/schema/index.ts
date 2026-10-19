@@ -29,3 +29,4 @@ export {
   meetingStatus,
 } from './calendar.ts';
 export { formSubmissionRecords, formSubmissions, formVersions, forms } from './forms.ts';
+export { bookingMemberHours, bookingPageMembers, bookingPages, bookings } from './booking.ts';

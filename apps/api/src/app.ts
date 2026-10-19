@@ -1,6 +1,15 @@
 import { randomUUID } from 'node:crypto';
 import { type ErrorCode, errorStatus } from '@crm/contracts';
-import { enterWorkspace, jobKinds, type JobRegistry, type RuleSource } from '@crm/core';
+import {
+  connectedCalendar,
+  createBusyCache,
+  enterWorkspace,
+  jobKinds,
+  NO_CALENDAR,
+  type BookingCalendar,
+  type JobRegistry,
+  type RuleSource,
+} from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import type { AnyRouter } from '@orpc/server';
 import { Hono, type Context } from 'hono';
@@ -17,6 +26,8 @@ import { createReadGate } from './gate.ts';
 import { errorFields, log } from './log.ts';
 import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
+import { mountPublicBooking } from './public/booking.ts';
+import { createMemoryLimiter, type PublicLimiter } from './public/limits.ts';
 import { createRealtimeTokens } from './realtime/tokens.ts';
 import { NO_WAKE, OVERDUE_WAKE_MS, throttleWake, type WakeRelay } from './realtime/wake.ts';
 import { router as appRouter } from './router.ts';
@@ -24,6 +35,12 @@ import { createRpcHandler } from './rpc.ts';
 import type { RequestTiming } from './timing.ts';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
+
+/** The address in a sender (`CRM <sign-in@example.com>` or a bare address), for a calendar file's organizer. */
+function senderAddress(sender: string | undefined): string | undefined {
+  if (sender === undefined) return undefined;
+  return /<([^>]+)>/.exec(sender)?.[1] ?? sender;
+}
 
 /** Where `system.testFault` answers, when it is switched on. */
 const TEST_FAULT_PATH = '/api/rpc/system/testFault';
@@ -106,6 +123,17 @@ export interface AppServices {
   readonly captcha?: CaptchaVerifier;
   /** The public forms' rate limits (spec 0023): this process's memory unless a test passes its own. */
   readonly formLimits?: RateLimiter;
+  /**
+   * The calendar calls booking pages make (spec 0025): busy times and the
+   * booking's event, over spec 0024's connections when calendar sync is on,
+   * none (`NO_CALENDAR`) when it is off; tests pass a fake. Busy answers are
+   * kept 60 seconds per member and range.
+   */
+  readonly bookingCalendar?: BookingCalendar;
+  /** The public booking routes' limiter (spec 0025, AC-643): this process's memory unless a test passes its own. */
+  readonly bookingLimiter?: PublicLimiter;
+  /** The clock the public booking routes read, for tests. */
+  readonly now?: () => Date;
 }
 
 /** The API. `router` is the app's own unless a test passes one. */
@@ -193,7 +221,8 @@ export function createApp({
   // The app and API share one origin, so a write from anywhere else is refused.
   app.use('*', async (c, next) => {
     if (SAFE_METHODS.has(c.req.method)) return next();
-    if (c.req.path.startsWith('/api/public/')) return next();
+    // The forms' public writes check the hosted page's own origin; booking's stay on the app's (spec 0025).
+    if (c.req.path.startsWith('/api/public/forms/')) return next();
     const origin = c.get('origin');
     if (!origin || !allowedOrigins.has(origin)) {
       return errorResponse('FORBIDDEN_ORIGIN', 'This request came from an origin the API does not accept.');
@@ -277,6 +306,25 @@ export function createApp({
 
   // It sees only the client IP the edge guard trusted.
   app.on(['GET', 'POST'], '/auth/*', (c) => auth.handle(c.req.raw, c.get('clientIp'), c.get('origin')));
+
+  // Booking pages' public routes (spec 0025): a page's public key, no session; writes passed the Origin check above.
+  const booking =
+    services.bookingCalendar ??
+    (calendar === undefined
+      ? NO_CALENDAR
+      : connectedCalendar({ db, providers: calendar.providers, tokenKey: calendar.tokenKey }));
+  mountPublicBooking(app, {
+    db,
+    calendar: { busy: createBusyCache(booking.busy), events: booking.events },
+    limiter: services.bookingLimiter ?? createMemoryLimiter(),
+    ics: {
+      appOrigin: new URL(env.APP_URL).origin,
+      organizerEmail: senderAddress(env.MAIL_FROM) ?? `bookings@${new URL(env.APP_URL).hostname}`,
+      organizerName: 'Bookings',
+    },
+    wakeRelay,
+    ...(services.now === undefined ? {} : { now: services.now }),
+  });
 
   app.notFound(() => errorResponse('NOT_FOUND', 'There is nothing at this address.'));
   app.onError((error, c) => {

@@ -10,15 +10,24 @@
 // unknown address, a workspace the user isn't in, a removed member, a deleted
 // workspace and a role the code doesn't know are all refused the same way, so
 // nothing leaks whether a workspace exists.
-import { and, eq, isNull } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import { schema, type Database, type IdentityStore, type WorkspaceTx } from '@crm/db';
 import { isUuid } from '../engine/ids.ts';
 import { refuse, type RefusalError } from '../engine/refusals.ts';
 import { SYSTEM_ACTOR, type Actor } from '../engine/scope.ts';
-import { sql } from 'drizzle-orm';
 import { FORM_SLUG } from '@crm/contracts';
 import { mintScope, rescope, type EngineScope } from './mint.ts';
-import { formAccess, isRole, NO_RULES, roleAccess, SYSTEM_ACCESS, type Access, type AccessRules } from './policy.ts';
+import {
+  bookingAccess,
+  formAccess,
+  isRole,
+  NO_RULES,
+  roleAccess,
+  SYSTEM_ACCESS,
+  type Access,
+  type AccessRules,
+} from './policy.ts';
 
 /**
  * Where the door reads a workspace's object, field and record rules, inside
@@ -35,7 +44,7 @@ export type RuleSource = (
 /** No rules at all, with no query: production's source until #24. */
 export const NO_RULE_SOURCE: RuleSource = () => Promise.resolve(NO_RULES);
 
-const { members, workspaces } = schema;
+const { members, objects, workspaces } = schema;
 
 /** Where the door reports a member row it refused for a role the code doesn't know (the member id only). */
 export interface DoorLog {
@@ -180,7 +189,7 @@ export function enterWithKey(
   return Promise.reject(notFound());
 }
 
-/** The nil uuid: a workspace no row has, for the one read that finds a form's workspace by its public key. */
+/** The nil uuid: a workspace no row has, for the reads that find a form's or a booking page's workspace by a key. */
 const NO_WORKSPACE = '00000000-0000-0000-0000-000000000000';
 
 /** What a public key that names no form answers: the same for a malformed key and an unknown one. */
@@ -239,4 +248,96 @@ export function enterAsForm(scope: EngineScope, formId: string, access: Access):
  */
 export function systemScope(db: Database, workspaceId: string): EngineScope {
   return mintScope({ db, workspaceId, actor: SYSTEM_ACTOR, access: SYSTEM_ACCESS });
+}
+
+/** The ids crm_booking_page_by_key reads past row level security: a page's workspace and id, nothing else. */
+interface PageKeyRow extends Record<string, unknown> {
+  readonly workspace_id: string;
+  readonly page_id: string;
+}
+
+/** The page a visitor's booking acts as, and the People and Companies objects it may write. */
+export interface BookingEntry {
+  readonly scope: EngineScope;
+  readonly pageId: string;
+  readonly people: string;
+  readonly companies: string;
+}
+
+/**
+ * The scope a visitor's booking acts with (spec 0025): the page found by its
+ * public key (`crm_booking_page_by_key`, ids only), as the `booking` actor,
+ * with write on People and Companies and nothing else (`bookingAccess`). An
+ * unknown key, a deleted workspace, or a workspace without both standard
+ * objects is NOT_FOUND. Whether the page takes bookings is the services'
+ * question. Exported only from `@crm/core/public`.
+ */
+export async function enterBookingPage(deps: { readonly db: Database }, publicKey: string): Promise<BookingEntry> {
+  const missing = () => refuse('NOT_FOUND', 'This page is no longer available.');
+  if (!/^[A-Za-z0-9_-]{16}$/.test(publicKey)) throw missing();
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<PageKeyRow>(
+      sql`select workspace_id::text as workspace_id, page_id::text as page_id from crm_booking_page_by_key(${publicKey})`,
+    ),
+  );
+  const [row] = found.rows;
+  if (row === undefined) throw missing();
+  const standard = await deps.db.withWorkspace(row.workspace_id, async (tx) => {
+    const [workspace] = await tx
+      .select({ id: workspaces.id })
+      .from(workspaces)
+      .where(and(eq(workspaces.id, row.workspace_id), isNull(workspaces.deletedAt)));
+    if (workspace === undefined) return [];
+    return tx
+      .select({ id: objects.id, key: objects.standardKey })
+      .from(objects)
+      .where(and(inArray(objects.standardKey, ['people', 'companies']), isNull(objects.archivedAt)));
+  });
+  const people = standard.find((object) => object.key === 'people')?.id;
+  const companies = standard.find((object) => object.key === 'companies')?.id;
+  if (people === undefined || companies === undefined) throw missing();
+  const scope = mintScope({
+    db: deps.db,
+    workspaceId: row.workspace_id,
+    actor: { type: 'booking', id: row.page_id },
+    access: bookingAccess(row.page_id, [people, companies]),
+  });
+  return { scope, pageId: row.page_id, people, companies };
+}
+
+/** The ids crm_booking_by_token reads past row level security. */
+interface TokenRow extends Record<string, unknown> {
+  readonly workspace_id: string;
+  readonly page_id: string;
+  readonly booking_id: string;
+}
+
+/**
+ * The guest page's entry (spec 0025, AC-674): the booking a manage token
+ * names, found by the token's SHA-256 (`crm_booking_by_token`, ids only), as
+ * its page's `booking` actor. The token is the only key; an unknown one is
+ * NOT_FOUND. Exported only from `@crm/core/public`.
+ */
+export async function enterBookingByToken(
+  deps: { readonly db: Database },
+  token: string,
+): Promise<BookingEntry & { readonly bookingId: string }> {
+  const missing = () => refuse('NOT_FOUND', 'This link doesn’t open a booking.');
+  if (!/^[A-Za-z0-9_-]{32}$/.test(token)) throw missing();
+  const hash = createHash('sha256').update(token).digest('hex');
+  const found = await deps.db.withWorkspace(NO_WORKSPACE, (tx) =>
+    tx.execute<TokenRow>(
+      sql`select workspace_id::text as workspace_id, page_id::text as page_id, booking_id::text as booking_id from crm_booking_by_token(${hash})`,
+    ),
+  );
+  const [row] = found.rows;
+  if (row === undefined) throw missing();
+  const scope = mintScope({
+    db: deps.db,
+    workspaceId: row.workspace_id,
+    actor: { type: 'booking', id: row.page_id },
+    // Reads its own booking only: no record access is needed.
+    access: bookingAccess(row.page_id, []),
+  });
+  return { scope, pageId: row.page_id, people: '', companies: '', bookingId: row.booking_id };
 }

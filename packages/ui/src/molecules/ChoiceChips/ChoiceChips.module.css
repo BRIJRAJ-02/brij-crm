@@ -1,0 +1,32 @@
+/* ChoiceChips: a label (as a Field's) over a wrapping row of ToggleButtons,
+   and the error under them. The buttons bring their own look. */
+@layer components {
+  .root {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+  }
+
+  .label {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+
+  .root[data-disabled] .label {
+    opacity: var(--opacity-disabled);
+  }
+
+  .chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-6);
+  }
+
+  .error {
+    margin: 0;
+    color: var(--danger);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+  }
+}

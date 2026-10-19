@@ -127,12 +127,12 @@ export function retryDelay(failingSince: string, now: Date): number {
   return Math.min(POLL_INTERVAL_MS, Math.max(RETRY_FIRST_MS, Number.isFinite(lasted) ? lasted : RETRY_FIRST_MS));
 }
 
-/** The connection's live tokens: refreshed (and stored sealed) when they expire within 5 minutes. */
-async function liveTokens(
-  deps: CalendarSyncDeps,
+/** The connection's live tokens: refreshed (and stored sealed) when they expire within 5 minutes (booking reads them too). */
+export async function liveTokens(
+  deps: Pick<CalendarSyncDeps, 'tokenKey'>,
   scope: EngineScope,
   provider: CalendarProvider,
-  row: ConnectionRow,
+  row: Pick<ConnectionRow, 'id' | 'tokens'>,
   binding: TokenBinding,
   now: Date,
 ): Promise<CalendarTokens> {

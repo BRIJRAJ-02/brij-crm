@@ -84,6 +84,8 @@ export type Principal =
   | { readonly kind: 'api_key'; readonly keyId: string; readonly scopes: readonly string[] }
   /** A form writing its submissions' records (spec 0023): only what its published mapping names. */
   | { readonly kind: 'form'; readonly formId: string }
+  /** A visitor booking through a page (spec 0025): the page acts, on People and Companies only. */
+  | { readonly kind: 'booking'; readonly pageId: string }
   | { readonly kind: 'system' };
 
 /** A member principal. */
@@ -313,6 +315,24 @@ export function formAccess(
       defaultObject: 'none',
       objects: frozenRecord(target === undefined ? [] : [[target.objectId, 'write' as const]]),
       fields: frozenRecord(fields),
+      records: frozenRecord([]),
+    }),
+  });
+}
+
+/**
+ * A booking page's access (spec 0025, AC-634): no permission, and write on
+ * the objects a booking matches and makes records on (People and Companies),
+ * nothing on any other. Only the door's `enterBookingPage` builds one.
+ */
+export function bookingAccess(pageId: string, objectIds: readonly string[]): Access {
+  return Object.freeze({
+    principal: Object.freeze({ kind: 'booking', pageId }),
+    permissions: Object.freeze([]),
+    data: sealPolicy({
+      defaultObject: 'none',
+      objects: frozenRecord(objectIds.map((objectId) => [objectId, 'write' as const])),
+      fields: frozenRecord([]),
       records: frozenRecord([]),
     }),
   });

@@ -85,6 +85,8 @@ export type ToggleButtonProps = Omit<ButtonLook, 'kbd'> &
     readonly isSelected?: boolean;
     readonly defaultSelected?: boolean;
     readonly onChange?: (isSelected: boolean) => void;
+    /** Its key inside a toggle group (ChoiceChips), which then holds whether it is selected. */
+    readonly id?: string;
   };
 
 /** The data attributes that pick a look from the CSS module. */
@@ -209,11 +211,12 @@ function PlainButton(props: ButtonProps) {
 
 /** A button that stays pressed until pressed again, for toggles such as Bold or Show archived. */
 export function ToggleButton(props: ToggleButtonProps) {
-  const { isSelected, defaultSelected, onChange, isDisabled, slot, ref } = props;
+  const { isSelected, defaultSelected, onChange, isDisabled, slot, ref, id } = props;
   const face: ButtonFace = props;
   return (
     <AriaToggleButton
       ref={ref}
+      {...(id === undefined ? {} : { id })}
       className={styles.root}
       isDisabled={isDisabled ?? false}
       {...(isSelected === undefined ? {} : { isSelected })}
