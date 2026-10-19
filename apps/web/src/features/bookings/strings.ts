@@ -1,19 +1,21 @@
 /** The Bookings page's copy. */
 export const strings = {
   title: 'Bookings',
+  viewLabel: 'View',
+  views: { week: 'Calendar', list: 'List' },
   tabsLabel: 'Which bookings',
   tabs: { upcoming: 'Upcoming', past: 'Past', cancelled: 'Canceled' },
   listLabel: { upcoming: 'Upcoming bookings', past: 'Past bookings', cancelled: 'Canceled bookings' },
   /** Each tab's own empty state. */
   empty: {
     upcoming: {
-      title: 'No upcoming bookings',
-      text: 'You have no upcoming bookings. Bookings people make through your links will show up here.',
+      title: 'Nothing coming up',
+      text: 'Bookings made through your links will appear here.',
     },
-    past: { title: 'No past bookings', text: 'You have no past bookings. Meetings that have ended will show up here.' },
+    past: { title: 'Nothing behind you yet', text: 'Bookings move here once they have happened.' },
     cancelled: {
-      title: 'No canceled bookings',
-      text: 'You have no canceled bookings. Bookings that are canceled will show up here.',
+      title: 'Nothing has been called off',
+      text: 'Bookings you or your guests cancel are kept here rather than deleted.',
     },
   },
   /** The way to the booking links, under Captures. */
@@ -23,26 +25,55 @@ export const strings = {
   failedTitle: 'Bookings didn’t load',
   failedText: 'Check your connection and try again.',
   today: 'Today',
+  todayOn: (day: string) => `Today · ${day}`,
   tomorrow: 'Tomorrow',
+  previousWeek: 'Previous week',
+  nextWeek: 'Next week',
+  weekLabel: (range: string) => `Bookings, ${range}`,
+  weekSummary: (count: number) =>
+    count === 0
+      ? 'Nothing booked this week.'
+      : count === 1
+        ? '1 booking this week.'
+        : `${String(count)} bookings this week.`,
+  weekLoading: 'Loading this week…',
   cancelled: 'Canceled',
   /** Who provides a meeting link, by its host. */
   providers: { google: 'Google Meet', microsoft: 'Microsoft Teams', zoom: 'Zoom', other: 'the call' },
-  /** The details panel. */
+  /** Filters. */
+  filter: 'Filter',
+  filterCount: (count: number) => `Filter (${String(count)})`,
+  filterMenu: 'Filter bookings',
+  links: 'Link',
+  allLinks: 'All links',
+  calendars: 'Calendars',
+  clearFilters: 'Clear filters',
+  noCalendarsTitle: 'No calendars selected',
+  noCalendarsText: 'Choose at least one calendar in Filter to see its events.',
+  /** Sort. */
+  sortSoonest: 'Soonest first',
+  sortLatest: 'Latest first',
+  sortRecent: 'Most recent first',
+  sortOldest: 'Oldest first',
+  sortLabel: (current: string) => `Sort: ${current}. Change`,
+  /** The details card. */
   details: 'Booking',
+  status: { confirmed: 'Confirmed', cancelled: 'Canceled' },
   when: 'When',
+  who: 'Who',
   page: 'Booking page',
-  guest: 'Guest',
-  email: 'Email',
   guests: 'Also invited',
   timeZone: 'Their time zone',
   where: 'Where',
-  note: 'Their note',
-  status: 'Status',
-  confirmed: 'Confirmed',
+  note: 'Note',
+  quoted: (note: string) => `“${note}”`,
   cancelReason: 'Why it was canceled',
-  person: 'Person',
   openPerson: 'Open their page',
+  joinCall: 'Join call',
   eventFailed: 'This booking isn’t on your calendar: the event couldn’t be made. Add it by hand.',
   video: 'Video call',
   phone: 'Phone call to their number',
+  calendar: 'Calendar',
+  fromCalendar: 'From your calendar. Timefix keeps the time blocked but doesn’t manage this event.',
+  allDay: 'All day',
 } as const;

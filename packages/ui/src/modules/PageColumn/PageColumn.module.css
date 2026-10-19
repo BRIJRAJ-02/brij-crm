@@ -15,6 +15,10 @@
     max-inline-size: var(--size-page-card);
   }
 
+  .root[data-width='full'] {
+    max-inline-size: none;
+  }
+
   .actions {
     display: flex;
     justify-content: flex-end;

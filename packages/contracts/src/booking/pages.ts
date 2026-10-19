@@ -158,10 +158,54 @@ export const ListWorkspaceBookingsInput = WorkspaceScoped.extend({ when: Booking
 /** Bookings, the workspace's list. */
 export type ListWorkspaceBookingsInput = z.infer<typeof ListWorkspaceBookingsInput>;
 
+/** The longest range one calendar read covers: 42 days (a month view's six weeks). */
+export const BOOKING_CALENDAR_MAX_DAYS = 42;
+
+/**
+ * Bookings' calendar for a range (the week view): every booking the reader
+ * may see that overlaps it, cancelled ones too, and the reader's own calendar
+ * events from their connected calendars (spec 0024), so the week shows what
+ * else they have on.
+ */
+export const BookingCalendarInput = WorkspaceScoped.extend({ from: Timestamp, to: Timestamp }).refine(
+  ({ from, to }) => {
+    const span = Date.parse(to) - Date.parse(from);
+    return span > 0 && span <= BOOKING_CALENDAR_MAX_DAYS * 86_400_000;
+  },
+  { error: `Ask for a range of at most ${String(BOOKING_CALENDAR_MAX_DAYS)} days.`, path: ['to'] },
+);
+/** A calendar read. */
+export type BookingCalendarInput = z.infer<typeof BookingCalendarInput>;
+
+/** One of the reader's own calendar events (not a booking): spec 0024's meeting, from one of their connections. */
+export const CalendarEventItem = z.object({
+  id: z.uuid(),
+  /** Which of the reader's connections holds it (the per connection filter). */
+  connectionId: z.uuid(),
+  title: z.string(),
+  startsAt: Timestamp,
+  endsAt: Timestamp,
+  allDay: z.boolean(),
+  status: z.enum(['confirmed', 'tentative', 'cancelled']),
+  location: z.string().optional(),
+  videoUrl: z.string().optional(),
+});
+/** One of the reader's calendar events. */
+export type CalendarEventItem = z.infer<typeof CalendarEventItem>;
+
+/** A calendar read's answer: the bookings and the reader's other events in the range, each by start. */
+export const BookingsCalendarView = z.object({
+  bookings: z.array(BookingListItem),
+  events: z.array(CalendarEventItem),
+});
+/** A calendar read's answer. */
+export type BookingsCalendarView = z.infer<typeof BookingsCalendarView>;
+
 /** Member procedures for bookings. */
 export const bookingsContract = {
   list: oc.input(ListBookingsInput).output(z.array(BookingView)),
   listAll: oc.input(ListWorkspaceBookingsInput).output(z.array(BookingListItem)),
+  calendar: oc.input(BookingCalendarInput).output(BookingsCalendarView),
   hours: oc.input(GetMemberHoursInput).output(MemberHours),
   setHours: oc.input(UpdateMemberHoursInput).output(MemberHours),
 };

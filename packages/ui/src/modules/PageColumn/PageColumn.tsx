@@ -4,8 +4,11 @@ import styles from './PageColumn.module.css';
 /** Props for PageColumn. */
 export interface PageColumnProps {
   readonly children: ReactNode;
-  /** `default` reads like a document (the wide dialog's width at most); `narrow` like a form (the page card's width). */
-  readonly width?: 'default' | 'narrow';
+  /**
+   * `default` reads like a document (the wide dialog's width at most); `narrow` like a form (the page card's
+   * width); `full` fills the view (a calendar).
+   */
+  readonly width?: 'default' | 'narrow' | 'full';
   /** The column's own actions ("New booking page"), at its top end, when the page's TopBar belongs to a layout. */
   readonly actions?: ReactNode;
   /** A bar that sticks to the foot of the view while it has something to say ("Unsaved changes", Save). */

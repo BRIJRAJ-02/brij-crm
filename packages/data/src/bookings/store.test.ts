@@ -24,6 +24,8 @@ const booking = (id: string): BookingListItem => ({
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
+const noCalendar = () => Promise.resolve({ bookings: [], events: [] });
+
 describe('the bookings store', () => {
   it('reads when held, again on return, keeps the list on a later failure, and stops listening when let go', async () => {
     const answers: (readonly BookingListItem[] | Error)[] = [
@@ -38,7 +40,7 @@ describe('the bookings store', () => {
     let comeBack: (() => void) | undefined;
     const stopped = vi.fn();
     const store = createBookingsStore({
-      api: { listAll },
+      api: { listAll, calendar: noCalendar },
       onReturn: (refresh) => {
         comeBack = refresh;
         return stopped;
@@ -69,12 +71,36 @@ describe('the bookings store', () => {
       .fn<() => Promise<readonly BookingListItem[]>>()
       .mockRejectedValueOnce(new Error('down'))
       .mockResolvedValueOnce([]);
-    const store = createBookingsStore({ api: { listAll }, onReturn: () => () => undefined });
+    const store = createBookingsStore({ api: { listAll, calendar: noCalendar }, onReturn: () => () => undefined });
     const view = store.view('acme', 'past');
     await view.ready();
     expect(view.getSnapshot().status).toBe('error');
     view.reload();
     await settle();
     expect(view.getSnapshot()).toEqual({ status: 'ready', bookings: [] });
+  });
+
+  it('holds a range with its bookings and events, and reloadAll reads every held one of the workspace again', async () => {
+    const calendar = vi.fn(() => Promise.resolve({ bookings: [booking('a')], events: [] }));
+    const listAll = vi.fn(() => Promise.resolve([booking('a')]));
+    const store = createBookingsStore({ api: { listAll, calendar }, onReturn: () => () => undefined });
+    const week = store.calendar('acme', '2026-11-02T00:00:00.000Z', '2026-11-09T00:00:00.000Z');
+    expect(store.calendar('acme', '2026-11-02T00:00:00.000Z', '2026-11-09T00:00:00.000Z')).toBe(week);
+    const release = week.retain();
+    await settle();
+    expect(week.getSnapshot()).toMatchObject({ status: 'ready', bookings: [{ id: 'a' }], events: [] });
+    expect(calendar).toHaveBeenCalledWith({
+      workspace: 'acme',
+      from: '2026-11-02T00:00:00.000Z',
+      to: '2026-11-09T00:00:00.000Z',
+    });
+    store.view('acme', 'upcoming').retain();
+    await settle();
+    store.reloadAll('acme');
+    store.reloadAll('other');
+    await settle();
+    expect(calendar).toHaveBeenCalledTimes(2);
+    expect(listAll).toHaveBeenCalledTimes(2);
+    release();
   });
 });

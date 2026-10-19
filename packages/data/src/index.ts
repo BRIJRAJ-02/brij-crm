@@ -48,7 +48,7 @@ import {
 } from './errors.ts';
 import type { FetchLike } from './fetch.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
-import { createBookingsStore, type BookingsView } from './bookings/store.ts';
+import { createBookingsStore, type BookingsCalendarHeld, type BookingsView } from './bookings/store.ts';
 import { connectUrl, createCalendarStore, type CalendarView } from './calendar/store.ts';
 import { draftParam, isSameQuery, readDraft, type DraftQuery } from './views/draft.ts';
 import {
@@ -100,7 +100,9 @@ export type {
   BookingAvailability,
   BookingListItem,
   BookingLocation,
+  BookingsCalendarView,
   BookingsTab,
+  CalendarEventItem,
   BookingPageSettings,
   BookingPageView,
   BookingView,
@@ -163,7 +165,7 @@ export type {
   LinkedRecordShape,
   MeetingAttendeeShape,
 } from './activity/feed.ts';
-export type { BookingsState, BookingsView } from './bookings/store.ts';
+export type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
 export type { CalendarState, CalendarView } from './calendar/store.ts';
 export { connectUrl } from './calendar/store.ts';
 export type { Hue, ObjectIcon } from '@crm/contracts/values';
@@ -1135,6 +1137,8 @@ export function createDataLayer({
     api: {
       listAll: (input) =>
         beforeRead(input.workspace).then(() => call((options) => api.bookings.listAll(input, options))),
+      calendar: (input) =>
+        beforeRead(input.workspace).then(() => call((options) => api.bookings.calendar(input, options))),
     },
   });
 
@@ -1760,6 +1764,17 @@ export function createDataLayer({
        * read again whenever the person comes back to the page.
        */
       view: (workspace: string, when: BookingsTab): BookingsView => bookingsLists.view(workspace, when),
+      /**
+       * Bookings' week: a range's bookings (cancelled too) and the reader's own
+       * calendar events, held while a screen shows it (`useBookingsCalendar`)
+       * and read again whenever the person comes back to the page.
+       */
+      calendar: (workspace: string, from: string, to: string): BookingsCalendarHeld =>
+        bookingsLists.calendar(workspace, from, to),
+      /** Reads every bookings list and range a screen holds again. */
+      reloadAll: (workspace: string): void => {
+        bookingsLists.reloadAll(workspace);
+      },
       /** The member's own hours and days off; never set yet, weekdays 09:00 to 17:00 in `timeZone`. */
       hours: (workspace: string, timeZone: string): Promise<{ availability: BookingAvailability }> =>
         call((options) => api.bookings.hours({ workspace, timeZone }, options)),

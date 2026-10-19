@@ -1,16 +1,23 @@
 // Bookings, the workspace's list (spec 0025, AC-646), against the real
 // Postgres: upcoming soonest first and past latest first, with the page's
 // title and location; a member sees their own pages' bookings and the ones
-// they host, an admin everyone's, a member without either nothing.
+// they host, an admin everyone's, a member without either nothing. The week
+// read: a range's bookings, cancelled ones too, and the reader's own calendar
+// events synced from the fake provider (never another member's).
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { createDatabase, type Database } from '@crm/db';
-import { enterBookingPage } from '../access/door.ts';
+import { enterBookingPage, systemScope } from '../access/door.ts';
+import { connectCalendar } from '../calendar/connections.ts';
+import { createFakeCalendarProvider } from '../calendar/fake.ts';
+import { syncConnection } from '../calendar/sync.ts';
+import { decodeTokenKey } from '../calendar/tokens.ts';
+import { outboxHook } from '../engine/outbox.ts';
 import { newId } from '../engine/ids.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { rescope, testScope } from '../testing.ts';
 import { NO_CALENDAR } from './calendar.ts';
-import { listWorkspaceBookings } from './list.ts';
+import { listWorkspaceBookings, readBookingsCalendar } from './list.ts';
 import { createBookingPage } from './pages.ts';
 import { bookPublicSlot } from './public.ts';
 
@@ -136,5 +143,67 @@ describe('the bookings list (AC-646)', () => {
       'Ada’s',
       'Bea’s',
     ]);
+  });
+
+  it('reads a week: its bookings, cancelled too, and the reader’s own calendar events, never another member’s', async () => {
+    const w = await workspace();
+    const bea = await w.addMember('Bea', 'member');
+    const page = await createBookingPage(w.owner, { id: newId(), title: 'Quick chat', timeZone: 'UTC' }, NOW);
+    const kept = await book(page.publicKey, '2026-11-02T09:00:00.000Z', 'Kept');
+    const gone = await book(page.publicKey, '2026-11-03T09:00:00.000Z', 'Gone');
+    await book(page.publicKey, '2026-11-12T09:00:00.000Z', 'Later');
+    await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute(sql`update bookings set status = 'cancelled' where id = ${gone.bookingId}`),
+    );
+    const week = await readBookingsCalendar(w.owner, {
+      from: '2026-11-02T00:00:00.000Z',
+      to: '2026-11-09T00:00:00.000Z',
+    });
+    expect(week.bookings.map((each) => [each.id, each.status])).toEqual([
+      [kept.bookingId, 'confirmed'],
+      [gone.bookingId, 'cancelled'],
+    ]);
+    expect(week.events).toEqual([]);
+
+    // The owner's calendar, through the fake provider and a real sync (a meeting with someone else is stored).
+    const tokenKey = decodeTokenKey(Buffer.alloc(32, 7).toString('base64'));
+    const fake = createFakeCalendarProvider();
+    const exchanged = await fake.provider.exchangeCode('code:ada@example.com', 'https://crm.test/callback');
+    const connection = await connectCalendar(w.owner, { provider: 'google', exchanged, tokenKey });
+    const start = new Date();
+    start.setUTCHours(10, 0, 0, 0);
+    start.setTime(start.getTime() + 2 * 86_400_000);
+    fake.put('ada@example.com', {
+      id: 'review',
+      status: 'confirmed',
+      icalUid: 'review@google.com',
+      title: 'Design review',
+      start: { at: start.toISOString(), allDay: false },
+      end: { at: new Date(start.getTime() + 3_600_000).toISOString(), allDay: false },
+      organizerEmail: 'ada@example.com',
+      attendees: [
+        { email: 'ada@example.com', response: 'accepted', isOrganizer: true, isSelf: true },
+        { email: 'zed@globex.com', response: 'accepted', isOrganizer: false, isSelf: false },
+      ],
+      isPrivate: false,
+    });
+    await syncConnection(
+      {
+        providers: { google: fake.provider },
+        tokenKey,
+        systemScope: (workspaceId) => systemScope(db, workspaceId),
+        hooks: [outboxHook()],
+        isFreeDomain: () => false,
+      },
+      { workspaceId: w.workspaceId, connectionId: connection.id },
+    );
+    const range = {
+      from: new Date(start.getTime() - 86_400_000).toISOString(),
+      to: new Date(start.getTime() + 86_400_000).toISOString(),
+    };
+    expect((await readBookingsCalendar(w.owner, range)).events).toMatchObject([
+      { connectionId: connection.id, title: 'Design review', startsAt: start.toISOString(), allDay: false },
+    ]);
+    expect((await readBookingsCalendar(bea, range)).events).toEqual([]);
   });
 });
