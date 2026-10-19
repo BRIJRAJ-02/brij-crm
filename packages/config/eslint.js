@@ -431,6 +431,9 @@ export function client({ root, library = false, collaboration: allowCollaboratio
   );
 }
 
+/** The public pages' own bundle in apps/web (specs 0023 and 0025). */
+const PUBLIC_BUNDLE = ['src/public/**/*.{ts,tsx}'];
+
 /**
  * apps/web: screens and routes under src/, plus the Vercel middleware at the
  * root. `vendorWrappers` names each vendor's one wrapper module and the
@@ -469,6 +472,36 @@ export function screens({ root, vendorWrappers = [] }) {
       },
     },
     restrictSyntax([syntax.defaultExport, ...syntax.classes, ...syntax.extensions, syntax.screenStyling]),
+    // The public pages' bundle (specs 0023 and 0025, `src/public/**`): plain HTML inputs and its own small
+    // stylesheet with the tokens compiled in, under a 40 kB budget, so it may style its markup and import its own
+    // CSS, and never imports the component library (the CRM's field editors and the app shell stay out of it).
+    {
+      files: PUBLIC_BUNDLE,
+      rules: {
+        'no-restricted-imports': [
+          'error',
+          {
+            paths: [
+              ...databaseDrivers,
+              ...screenDataImports.paths,
+              {
+                name: '@crm/ui',
+                message: 'The public bundle uses plain inputs and its own stylesheet, never the library.',
+              },
+              {
+                name: '@crm/data',
+                message: 'The public bundle reaches the API through its own entry (@crm/data/booking).',
+              },
+            ],
+            patterns: screenDataImports.patterns.filter((pattern) => pattern.regex === undefined),
+          },
+        ],
+      },
+    },
+    {
+      files: PUBLIC_BUNDLE,
+      rules: { 'no-restricted-syntax': ['error', syntax.defaultExport, ...syntax.classes, ...syntax.extensions] },
+    },
     // Files in public/ ship as is: plain browser scripts, outside any tsconfig.
     { files: ['public/**/*.js'], languageOptions: { globals: globals.browser, sourceType: 'script' } },
     wrapperExceptions(vendorWrappers),

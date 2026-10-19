@@ -1,6 +1,6 @@
 // House rule checks that lint can't express, run by `pnpm house-rules` (and so
 // by the pre push hook and CI). Each check returns the problems it found.
-//   1. Screens carry no CSS: apps/web has no stylesheet of its own.
+//   1. Screens carry no CSS: apps/web has no stylesheet of its own (but the public pages' bundle in src/public).
 //   2. A component's CSS module is used by that component only: imported by
 //      exactly one file, in the same folder.
 //   3. Every component with styles records why it exists, in a README.md
@@ -36,11 +36,15 @@ function listFiles(): string[] {
 }
 
 function screensHaveNoCss(files: string[]): string[] {
-  return files
-    .filter((file) => file.startsWith(path.join('apps', 'web') + path.sep) && file.endsWith('.css'))
-    .map(
-      (file) => `${file}: screens carry no CSS. Move the styles into a packages/ui component (or a variant of one).`,
-    );
+  return (
+    files
+      .filter((file) => file.startsWith(path.join('apps', 'web') + path.sep) && file.endsWith('.css'))
+      // The public pages' bundle (specs 0023 and 0025) styles its plain inputs with its own small stylesheet.
+      .filter((file) => !file.startsWith(path.join('apps', 'web', 'src', 'public') + path.sep))
+      .map(
+        (file) => `${file}: screens carry no CSS. Move the styles into a packages/ui component (or a variant of one).`,
+      )
+  );
 }
 
 function cssModulesStayInTheirComponent(files: string[]): string[] {

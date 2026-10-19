@@ -87,6 +87,11 @@ describe('screens preset (apps/web)', () => {
       'src/with-extension.ts': "import { greet } from './clean.ts';\nexport const g = greet;\n",
       'src/Store.ts': 'class Store {\n  readonly count = 0;\n}\nexport const store = new Store();\n',
       'src/errors.ts': 'export class NotFoundError extends Error {}\n',
+      // The public pages' bundle (specs 0023 and 0025): its own stylesheet and markup, never the library.
+      'src/public/Page.tsx':
+        "import styles from './page.module.css';\nexport function Page() {\n  return <p className={styles.root}>Hi</p>;\n}\n",
+      'src/public/library.ts': "import { Button } from '@crm/ui';\nexport const b = Button;\n",
+      'src/public/fetches.ts': "export const load = (): Promise<Response> => fetch('/api/records');\n",
       // The router's redirect, as its package declares it.
       'node_modules/@tanstack/router-core/package.json':
         '{ "name": "@tanstack/router-core", "version": "1.0.0", "types": "index.d.ts" }',
@@ -179,6 +184,12 @@ describe('screens preset (apps/web)', () => {
     ['style, even with a custom property', 'src/Inline.tsx'],
   ])('refuses %s on a screen element', (_name, file) => {
     expect(messagesFor(messages, file).join()).toMatch(/built only from library components/);
+  });
+
+  it('lets the public bundle style its plain markup with its own stylesheet, and keeps the library and the network out', () => {
+    expect(messagesFor(messages, 'src/public/Page.tsx').join()).not.toMatch(/library components|carry no CSS/);
+    expect(messagesFor(messages, 'src/public/library.ts').join()).toMatch(/plain inputs and its own stylesheet/);
+    expect(rulesFor(messages, 'src/public/fetches.ts')).toContain('no-restricted-globals');
   });
 
   it('refuses a default export in screen code', () => {

@@ -1,20 +1,33 @@
 // Brief
 // Purpose: the public booking page at /b/<publicKey> (spec 0025, AC-630, AC-632, AC-636): a visitor books time with a member.
 // Main task: pick a day and a time in their own zone, give a name and email, book; a time taken meanwhile sends them back to fresh times.
-// Leaves out: questions and prefill (milestones 2 and 3), cancel and reschedule (milestone 2) and the CRM app itself.
-import { createBookingClient, isDataError, type PublicBookingPage, type PublicBooking } from '@crm/data/booking';
-import { AuthLayout, Button, Callout, DescriptionList, EmptyState, Field, Select, Skeleton, SlotPicker } from '@crm/ui';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+// Leaves out: questions (milestone 2), cancel and reschedule (milestone 2), analytics, captcha and the CRM app itself.
+//
+// Spec 0023's visitor rules: plain inputs with the tokens compiled in (no library, no field editors), labels above
+// inputs, errors under their field with the first focused, one role="alert" line for anything else, a honeypot
+// and the load time instead of a captcha, and the thank you taking focus.
+import { createBookingClient, isDataError, type PublicBooking, type PublicBookingPage } from '@crm/data/booking';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import styles from './booking.module.css';
 import { strings } from './strings.ts';
 import { addDays, dayKey, dayLabels, momentLabel, startOfDay, timeLabel, weekLabel } from './time.ts';
 
-/** Props for the page: its key from the address, the visitor's language and zone, and the clock. */
+/** A visitor's name and email handed in by a form (spec 0023's "Book a quick meeting"); see `readPrefill`. */
+export interface Prefill {
+  readonly name?: string;
+  readonly email?: string;
+}
+
+/** Props for the page: its key from the address, the visitor's language and zone, the clock and any prefill. */
 export interface BookingPageProps {
   readonly publicKey: string;
   readonly locale: string;
   readonly timeZone: string;
   readonly now: () => number;
+  readonly prefill?: Prefill;
 }
+
+type Client = ReturnType<typeof createBookingClient>;
 
 type Loaded =
   | { readonly state: 'loading' }
@@ -32,8 +45,21 @@ function zones(current: string): readonly string[] {
   return listed.includes(current) ? listed : [current, ...listed];
 }
 
-/** The page: its facts load once; then the week, the details and the confirmation. */
-export function BookingPage({ publicKey, locale, timeZone: detected, now }: BookingPageProps) {
+const zoneName = (zone: string) => zone.replaceAll('_', ' ');
+
+/** A heading that takes focus when it appears (a step's change, the thank you). */
+function FocusedTitle({ children }: { readonly children: string }) {
+  const ref = useRef<HTMLHeadingElement>(null);
+  useEffect(() => ref.current?.focus(), []);
+  return (
+    <h1 ref={ref} tabIndex={-1} className={styles.title}>
+      {children}
+    </h1>
+  );
+}
+
+/** The page: its facts load once; then the week, the details and the thank you. */
+export function BookingPage({ publicKey, locale, timeZone, now, prefill }: BookingPageProps) {
   const client = useMemo(() => createBookingClient({ origin: globalThis.location.origin }), []);
   const [startedAt] = useState(now);
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
@@ -50,9 +76,11 @@ export function BookingPage({ publicKey, locale, timeZone: detected, now }: Book
 
   if (loaded.state === 'loading') {
     return (
-      <AuthLayout productName={strings.loading} title={strings.loading} isBusy>
-        <Skeleton lines={4} />
-      </AuthLayout>
+      <main className={styles.page} aria-busy="true">
+        <div className={styles.card}>
+          <p className={styles.text}>{strings.loading}</p>
+        </div>
+      </main>
     );
   }
   if (loaded.state !== 'ready') {
@@ -63,27 +91,49 @@ export function BookingPage({ publicKey, locale, timeZone: detected, now }: Book
           ? [strings.closedTitle, strings.closedText]
           : [strings.failedTitle, strings.failedText];
     return (
-      <AuthLayout productName={title} title={title}>
-        <EmptyState
-          title={title}
-          tone={loaded.state === 'failed' ? 'error' : 'empty'}
-          {...(loaded.state === 'failed'
-            ? {
-                onRetry: () => {
-                  setLoaded({ state: 'loading' });
-                  load();
-                },
-              }
-            : {})}
-        >
-          {text}
-        </EmptyState>
-      </AuthLayout>
+      <main className={styles.page}>
+        <div className={styles.card}>
+          <FocusedTitle>{title}</FocusedTitle>
+          <p className={styles.text}>{text}</p>
+          {loaded.state === 'failed' && (
+            <button
+              type="button"
+              className={styles.button}
+              onClick={() => {
+                setLoaded({ state: 'loading' });
+                load();
+              }}
+            >
+              {strings.retry}
+            </button>
+          )}
+        </div>
+      </main>
     );
   }
   return (
-    <Booking client={client} page={loaded.page} locale={locale} detected={detected} now={now} startedAt={startedAt} />
+    <Booking
+      client={client}
+      page={loaded.page}
+      locale={locale}
+      detected={timeZone}
+      now={now}
+      startedAt={startedAt}
+      {...(prefill === undefined ? {} : { prefill })}
+    />
   );
+}
+
+/** Where the meeting happens, as one sentence. */
+function whereOf(page: PublicBookingPage): string {
+  switch (page.location.type) {
+    case 'video':
+      return strings.location.video;
+    case 'phone':
+      return strings.location.phone;
+    default:
+      return page.location.value;
+  }
 }
 
 /** The booking steps for a loaded page. */
@@ -94,31 +144,167 @@ function Booking({
   detected,
   now,
   startedAt,
+  prefill,
 }: {
-  readonly client: ReturnType<typeof createBookingClient>;
+  readonly client: Client;
   readonly page: PublicBookingPage;
   readonly locale: string;
   readonly detected: string;
   readonly now: () => number;
   readonly startedAt: number;
+  readonly prefill?: Prefill;
 }) {
   const [zone, setZone] = useState(detected);
   const [duration, setDuration] = useState<number>(page.durations[0] ?? 30);
   const today = dayKey(now(), zone);
   const [weekStart, setWeekStart] = useState(today);
+  const [step, setStep] = useState<Step>({ step: 'pick' });
+
+  if (step.step === 'done') {
+    return (
+      <main className={styles.page}>
+        <div className={styles.card}>
+          <p className={styles.host}>{page.hostName}</p>
+          <FocusedTitle>{strings.confirmedTitle}</FocusedTitle>
+          <p className={styles.text}>{strings.confirmedText(page.hostName)}</p>
+          <dl className={styles.details}>
+            <dt className={styles.term}>{strings.when}</dt>
+            <dd
+              className={styles.description}
+            >{`${momentLabel(step.booking.start, zone, locale)} (${zoneName(zone)})`}</dd>
+            <dt className={styles.term}>{strings.with}</dt>
+            <dd className={styles.description}>{page.hostName}</dd>
+            <dt className={styles.term}>{strings.where}</dt>
+            <dd className={styles.description}>{whereOf(page)}</dd>
+          </dl>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className={styles.page}>
+      <div className={styles.card}>
+        <p className={styles.host}>{page.hostName}</p>
+        <h1 className={styles.title}>{page.title}</h1>
+        {page.description !== '' && <p className={styles.text}>{page.description}</p>}
+        <p className={styles.note}>{whereOf(page)}</p>
+        {step.step === 'pick' ? (
+          <>
+            {step.notice !== undefined && (
+              <p className={styles.alert} role="alert">
+                {step.notice}
+              </p>
+            )}
+            {page.durations.length > 1 && (
+              <div className={styles.field}>
+                <label className={styles.label} htmlFor="booking-length">
+                  {strings.length}
+                </label>
+                <select
+                  id="booking-length"
+                  className={styles.input}
+                  value={String(duration)}
+                  onChange={(event) => setDuration(Number(event.target.value))}
+                >
+                  {page.durations.map((minutes) => (
+                    <option key={minutes} value={String(minutes)}>
+                      {strings.minutes(minutes)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className={styles.field}>
+              <label className={styles.label} htmlFor="booking-zone">
+                {strings.zone}
+              </label>
+              <select
+                id="booking-zone"
+                className={styles.input}
+                value={zone}
+                onChange={(event) => setZone(event.target.value)}
+              >
+                {zones(zone).map((each) => (
+                  <option key={each} value={each}>
+                    {zoneName(each)}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <Week
+              client={client}
+              page={page}
+              zone={zone}
+              duration={duration}
+              locale={locale}
+              today={today}
+              horizon={dayKey(now() + page.windowDays * 86_400_000, zone)}
+              weekStart={weekStart}
+              onWeek={setWeekStart}
+              reloadKey={step.notice ?? ''}
+              onPick={(start) => setStep({ step: 'details', start, attempt: crypto.randomUUID() })}
+            />
+          </>
+        ) : (
+          <Details
+            client={client}
+            page={page}
+            start={step.start}
+            attempt={step.attempt}
+            duration={duration}
+            zone={zone}
+            locale={locale}
+            startedAt={startedAt}
+            {...(prefill === undefined ? {} : { prefill })}
+            onBack={(notice) => setStep(notice === undefined ? { step: 'pick' } : { step: 'pick', notice })}
+            onBooked={(booking) => setStep({ step: 'done', booking })}
+          />
+        )}
+      </div>
+    </main>
+  );
+}
+
+/** A week of days and the chosen day's times, read for the range shown; the next free day chosen. */
+function Week({
+  client,
+  page,
+  zone,
+  duration,
+  locale,
+  today,
+  horizon,
+  weekStart,
+  onWeek,
+  reloadKey,
+  onPick,
+}: {
+  readonly client: Client;
+  readonly page: PublicBookingPage;
+  readonly zone: string;
+  readonly duration: number;
+  readonly locale: string;
+  readonly today: string;
+  readonly horizon: string;
+  readonly weekStart: string;
+  readonly onWeek: (key: string) => void;
+  readonly reloadKey: string;
+  readonly onPick: (start: string) => void;
+}) {
+  const [reload, setReload] = useState(0);
+  const requestKey = `${weekStart}|${zone}|${String(duration)}|${String(reload)}|${reloadKey}`;
   // The answer to the latest range asked for; another range still loading shows as loading.
   const [slots, setSlots] = useState<{
     readonly key: string;
-    readonly status: 'ready' | 'error';
+    readonly ok: boolean;
     readonly starts: readonly string[];
-  }>({ key: '', status: 'ready', starts: [] });
-  const [chosenDay, setChosenDay] = useState<string | undefined>(undefined);
-  const [step, setStep] = useState<Step>({ step: 'pick' });
-  const [reload, setReload] = useState(0);
-  const days = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)), [weekStart]);
-  const lastDay = days[6] ?? weekStart;
-
-  const requestKey = `${weekStart}|${zone}|${String(duration)}|${String(reload)}`;
+  }>({
+    key: '',
+    ok: true,
+    starts: [],
+  });
+  const [chosen, setChosen] = useState<string | undefined>(undefined);
   useEffect(() => {
     const controller = new AbortController();
     client
@@ -135,134 +321,118 @@ function Booking({
       .then(
         (answer) => {
           const starts = answer.slots.map((slot) => slot.start);
-          setSlots({ key: requestKey, status: 'ready', starts });
-          // The next free day, chosen for the visitor.
+          setSlots({ key: requestKey, ok: true, starts });
           const first = starts[0];
-          setChosenDay(first === undefined ? undefined : dayKey(Date.parse(first), zone));
+          setChosen(first === undefined ? undefined : dayKey(Date.parse(first), zone));
         },
         (error: unknown) => {
           if (error instanceof DOMException && error.name === 'AbortError') return;
-          setSlots({ key: requestKey, status: 'error', starts: [] });
+          setSlots({ key: requestKey, ok: false, starts: [] });
         },
       );
     return () => controller.abort();
   }, [client, page.publicKey, weekStart, zone, duration, requestKey]);
-  const status = slots.key !== requestKey ? 'loading' : slots.status;
-
+  const status = slots.key !== requestKey ? 'loading' : slots.ok ? 'ready' : 'error';
+  const days = Array.from({ length: 7 }, (_, index) => addDays(weekStart, index));
   const byDay = new Map<string, string[]>();
   for (const start of status === 'ready' ? slots.starts : []) {
     const key = dayKey(Date.parse(start), zone);
     byDay.set(key, [...(byDay.get(key) ?? []), start]);
   }
-  const horizon = dayKey(now() + page.windowDays * 86_400_000, zone);
-
-  if (step.step === 'done') {
-    return (
-      <AuthLayout
-        productName={page.hostName}
-        title={strings.confirmedTitle}
-        description={strings.confirmedText(page.hostName)}
-      >
-        <DescriptionList
-          layout="stacked"
-          items={[
-            {
-              term: page.title,
-              description: `${momentLabel(step.booking.start, zone, locale)} (${zone.replaceAll('_', ' ')})`,
-            },
-            { term: strings.with, description: page.hostName },
-            { term: strings.where, description: whereOf(page) },
-          ]}
-        />
-      </AuthLayout>
-    );
-  }
-
+  const chosenTimes = chosen === undefined ? [] : (byDay.get(chosen) ?? []);
+  const chosenLabel = chosen === undefined ? '' : dayLabels(chosen, locale).label;
   return (
-    <AuthLayout
-      productName={page.hostName}
-      title={page.title}
-      {...(page.description === '' ? {} : { description: page.description })}
-    >
-      {step.step === 'pick' ? (
+    <section className={styles.picker} aria-label={strings.days}>
+      <div className={styles.week}>
+        <button
+          type="button"
+          className={`${styles.button} ${styles.arrow}`}
+          aria-label={strings.previousWeek}
+          disabled={weekStart <= today || status === 'loading'}
+          onClick={() => onWeek(addDays(weekStart, -7) < today ? today : addDays(weekStart, -7))}
+        >
+          ‹
+        </button>
+        <h2 className={styles.weekLabel} aria-live="polite">
+          {weekLabel(weekStart, days[6] ?? weekStart, locale)}
+        </h2>
+        <button
+          type="button"
+          className={`${styles.button} ${styles.arrow}`}
+          aria-label={strings.nextWeek}
+          disabled={addDays(weekStart, 7) > horizon || status === 'loading'}
+          onClick={() => onWeek(addDays(weekStart, 7))}
+        >
+          ›
+        </button>
+      </div>
+      {status === 'loading' ? (
+        <p className={styles.text} aria-busy="true">
+          {strings.timesLoading}
+        </p>
+      ) : status === 'error' ? (
         <>
-          {step.notice !== undefined && <Callout tone="warning">{step.notice}</Callout>}
-          <Callout tone="info">{whereOf(page)}</Callout>
-          {page.durations.length > 1 && (
-            <Select
-              label={strings.length}
-              items={page.durations.map((minutes) => ({ id: String(minutes), label: strings.minutes(minutes) }))}
-              value={String(duration)}
-              onChange={(id) => {
-                if (id !== null) setDuration(Number(id));
-              }}
-            />
-          )}
-          <Select
-            label={strings.zone}
-            isSearchable
-            items={zones(zone).map((each) => ({ id: each, label: each.replaceAll('_', ' ') }))}
-            value={zone}
-            onChange={(id) => {
-              if (id !== null) setZone(id);
-            }}
-          />
-          <SlotPicker
-            weekLabel={weekLabel(weekStart, lastDay, locale)}
-            days={days.map((key) => ({
-              id: key,
-              ...dayLabels(key, locale),
-              hasSlots: (byDay.get(key) ?? []).length > 0,
-            }))}
-            {...(chosenDay === undefined ? {} : { selectedDayId: chosenDay })}
-            onSelectDay={setChosenDay}
-            slots={(chosenDay === undefined ? [] : (byDay.get(chosenDay) ?? [])).map((start) => ({
-              id: start,
-              label: timeLabel(start, zone, locale),
-            }))}
-            onPickSlot={(start) => setStep({ step: 'details', start, attempt: crypto.randomUUID() })}
-            onPreviousWeek={() =>
-              setWeekStart((current) => (addDays(current, -7) < today ? today : addDays(current, -7)))
-            }
-            onNextWeek={() => setWeekStart((current) => addDays(current, 7))}
-            canGoBack={weekStart > today}
-            canGoForward={addDays(weekStart, 7) <= horizon}
-            status={status}
-            onRetry={() => setReload((count) => count + 1)}
-          />
+          <p className={styles.alert} role="alert">
+            {strings.timesFailed}
+          </p>
+          <button type="button" className={styles.button} onClick={() => setReload((count) => count + 1)}>
+            {strings.retry}
+          </button>
         </>
       ) : (
-        <Details
-          client={client}
-          page={page}
-          start={step.start}
-          attempt={step.attempt}
-          duration={duration}
-          zone={zone}
-          locale={locale}
-          startedAt={startedAt}
-          onBack={(notice) => {
-            setStep(notice === undefined ? { step: 'pick' } : { step: 'pick', notice });
-            setReload((count) => count + 1);
-          }}
-          onBooked={(booking) => setStep({ step: 'done', booking })}
-        />
+        <>
+          <fieldset className={styles.days}>
+            <legend className={styles.legend}>{strings.days}</legend>
+            {days.map((key) => {
+              const labels = dayLabels(key, locale);
+              const open = (byDay.get(key) ?? []).length > 0;
+              return (
+                <label key={key} className={styles.day}>
+                  <input
+                    type="radio"
+                    name="booking-day"
+                    className={styles.radio}
+                    value={key}
+                    checked={chosen === key}
+                    disabled={!open}
+                    aria-label={open ? labels.label : `${labels.label}, ${strings.noTimesDay}`}
+                    onChange={() => setChosen(key)}
+                  />
+                  <span className={styles.weekday} aria-hidden="true">
+                    {labels.weekday}
+                  </span>
+                  <span className={styles.dayNumber} aria-hidden="true">
+                    {labels.day}
+                  </span>
+                </label>
+              );
+            })}
+          </fieldset>
+          {byDay.size === 0 ? (
+            <p className={styles.text}>{strings.emptyWeek}</p>
+          ) : (
+            chosen !== undefined && (
+              <ul className={styles.times} aria-label={strings.timesOn(chosenLabel)}>
+                {chosenTimes.map((start) => (
+                  <li key={start}>
+                    <button type="button" className={styles.button} onClick={() => onPick(start)}>
+                      {timeLabel(start, zone, locale)}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )
+          )}
+        </>
       )}
-    </AuthLayout>
+    </section>
   );
 }
 
-/** Where the meeting happens, as one sentence. */
-function whereOf(page: PublicBookingPage): string {
-  switch (page.location.type) {
-    case 'video':
-      return strings.location.video;
-    case 'phone':
-      return strings.location.phone;
-    default:
-      return page.location.value;
-  }
-}
+type FieldName = 'name' | 'email' | 'phone';
+
+/** A rough email shape: the server checks it properly. */
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /** The visitor's details for the chosen time, and Book. */
 function Details({
@@ -274,10 +444,11 @@ function Details({
   zone,
   locale,
   startedAt,
+  prefill,
   onBack,
   onBooked,
 }: {
-  readonly client: ReturnType<typeof createBookingClient>;
+  readonly client: Client;
   readonly page: PublicBookingPage;
   readonly start: string;
   readonly attempt: string;
@@ -285,103 +456,184 @@ function Details({
   readonly zone: string;
   readonly locale: string;
   readonly startedAt: number;
+  readonly prefill?: Prefill;
   readonly onBack: (notice?: string) => void;
   readonly onBooked: (booking: PublicBooking) => void;
 }) {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
+  const needsPhone = page.location.type === 'phone';
+  const [values, setValues] = useState<Record<FieldName, string>>({
+    name: prefill?.name ?? '',
+    email: prefill?.email ?? '',
+    phone: '',
+  });
+  const [trap, setTrap] = useState('');
+  const [errors, setErrors] = useState<Partial<Record<FieldName, string>>>({});
+  const [alert, setAlert] = useState<string | undefined>(undefined);
   const [isBusy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<string | undefined>(undefined);
-  const [fieldErrors, setFieldErrors] = useState<Readonly<Record<string, string>>>({});
+  const inputs = useRef<Partial<Record<FieldName, HTMLInputElement | null>>>({});
+  const order: readonly FieldName[] = needsPhone ? ['name', 'email', 'phone'] : ['name', 'email'];
+
+  const check = (next: Record<FieldName, string>): Partial<Record<FieldName, string>> => ({
+    ...(next.name.trim() === '' ? { name: strings.nameRequired } : {}),
+    ...(EMAIL.test(next.email.trim()) ? {} : { email: strings.emailRequired }),
+    ...(needsPhone && next.phone.trim() === '' ? { phone: strings.phoneRequired } : {}),
+  });
+  const focusFirst = (found: Partial<Record<FieldName, string>>) => {
+    const first = order.find((field) => found[field] !== undefined);
+    if (first !== undefined) inputs.current[first]?.focus();
+  };
+  const set = (field: FieldName, value: string) => {
+    const next = { ...values, [field]: value };
+    setValues(next);
+    // A field with an error is checked again on each change.
+    if (errors[field] !== undefined) setErrors((current) => ({ ...current, [field]: check(next)[field] }));
+  };
+
   const book = () => {
     if (isBusy) return;
+    const found = check(values);
+    setErrors(found);
+    setAlert(undefined);
+    if (Object.keys(found).length > 0) {
+      focusFirst(found);
+      return;
+    }
     setBusy(true);
-    setFailure(undefined);
-    setFieldErrors({});
     client
       .book(page.publicKey, {
         idempotencyKey: attempt,
         start,
         duration: duration as 15 | 30 | 45 | 60 | 90,
-        name,
-        email,
+        name: values.name.trim(),
+        email: values.email.trim(),
         timeZone: zone,
-        ...(page.location.type === 'phone' ? { phone } : {}),
-        website: '',
+        ...(needsPhone ? { phone: values.phone.trim() } : {}),
+        company_url: trap,
         startedAt,
       })
       .then(onBooked, (error: unknown) => {
         setBusy(false);
         if (!isDataError(error)) {
-          setFailure(strings.failedText);
+          setAlert(strings.tryAgain);
           return;
         }
         if (error.code === 'SLOT_TAKEN') {
           onBack(strings.taken);
           return;
         }
-        const issues = error.data?.issues ?? [];
-        const refusals = error.data?.refusals ?? [];
-        const byField: Record<string, string> = {};
-        for (const issue of issues) {
+        const fromServer: Partial<Record<FieldName, string>> = {};
+        for (const issue of error.data?.issues ?? []) {
           const field = issue.path[0];
-          if (typeof field === 'string' && byField[field] === undefined) byField[field] = issue.message;
+          if ((field === 'name' || field === 'email' || field === 'phone') && fromServer[field] === undefined) {
+            fromServer[field] = issue.message;
+          }
         }
-        for (const refusal of refusals) {
-          if (refusal.field !== undefined && byField[refusal.field] === undefined)
-            byField[refusal.field] = refusal.message;
+        for (const refusal of error.data?.refusals ?? []) {
+          const field = refusal.field;
+          if ((field === 'name' || field === 'email' || field === 'phone') && fromServer[field] === undefined) {
+            fromServer[field] = refusal.message;
+          }
         }
-        setFieldErrors(byField);
-        if (Object.keys(byField).length === 0) setFailure(error.message);
+        if (Object.keys(fromServer).length > 0) {
+          setErrors(fromServer);
+          focusFirst(fromServer);
+          return;
+        }
+        setAlert(
+          error.code === 'API_UNAVAILABLE'
+            ? strings.offline
+            : error.code === 'INPUT_INVALID'
+              ? strings.tryAgain
+              : error.message,
+        );
       });
   };
-  return (
-    <>
-      <Callout tone="info" title={momentLabel(start, zone, locale)}>
-        {`${strings.minutes(duration)}, ${zone.replaceAll('_', ' ')}`}
-      </Callout>
-      {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
-      <Field
-        label={strings.name}
-        value={name}
-        onChange={setName}
-        autoComplete="name"
-        maxLength={200}
-        isRequired
-        {...(fieldErrors.name === undefined ? {} : { error: fieldErrors.name })}
-      />
-      <Field
-        label={strings.email}
-        type="email"
-        value={email}
-        onChange={setEmail}
-        autoComplete="email"
-        maxLength={254}
-        isRequired
-        onSubmit={page.location.type === 'phone' ? undefined : book}
-        {...(fieldErrors.email === undefined ? {} : { error: fieldErrors.email })}
-      />
-      {page.location.type === 'phone' && (
-        <Field
-          label={strings.phone}
-          hint={strings.phoneHint}
-          type="tel"
-          value={phone}
-          onChange={setPhone}
-          autoComplete="tel"
-          maxLength={40}
-          isRequired
-          onSubmit={book}
-          {...(fieldErrors.phone === undefined ? {} : { error: fieldErrors.phone })}
+
+  const field = (
+    name: FieldName,
+    label: string,
+    type: 'text' | 'email' | 'tel',
+    autoComplete: string,
+    hint?: string,
+  ) => {
+    const error = errors[name];
+    const describedBy = [
+      hint === undefined ? undefined : `booking-${name}-hint`,
+      error === undefined ? undefined : `booking-${name}-error`,
+    ]
+      .filter((id) => id !== undefined)
+      .join(' ');
+    return (
+      <div className={styles.field}>
+        <label className={styles.label} htmlFor={`booking-${name}`}>
+          {label}
+        </label>
+        {hint !== undefined && (
+          <p id={`booking-${name}-hint`} className={styles.text}>
+            {hint}
+          </p>
+        )}
+        <input
+          id={`booking-${name}`}
+          ref={(element) => {
+            inputs.current[name] = element;
+          }}
+          className={styles.input}
+          type={type}
+          name={name}
+          autoComplete={autoComplete}
+          maxLength={name === 'email' ? 254 : name === 'phone' ? 40 : 200}
+          value={values[name]}
+          aria-invalid={error === undefined ? undefined : true}
+          {...(describedBy === '' ? {} : { 'aria-describedby': describedBy })}
+          onChange={(event) => set(name, event.target.value)}
         />
+        {error !== undefined && (
+          <p id={`booking-${name}-error`} className={styles.error}>
+            {error}
+          </p>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <form
+      className={styles.field}
+      noValidate
+      onSubmit={(event) => {
+        event.preventDefault();
+        book();
+      }}
+    >
+      <p className={styles.note}>
+        {`${momentLabel(start, zone, locale)}, ${strings.minutes(duration)} (${zoneName(zone)})`}
+      </p>
+      {field('name', strings.name, 'text', 'name')}
+      {field('email', strings.email, 'email', 'email')}
+      {needsPhone && field('phone', strings.phone, 'tel', 'tel', strings.phoneHint)}
+      <div className={styles.trap} aria-hidden="true">
+        <label htmlFor="booking-company-url">{strings.trap}</label>
+        <input
+          id="booking-company-url"
+          name="company_url"
+          tabIndex={-1}
+          autoComplete="off"
+          value={trap}
+          onChange={(event) => setTrap(event.target.value)}
+        />
+      </div>
+      {alert !== undefined && (
+        <p className={styles.alert} role="alert">
+          {alert}
+        </p>
       )}
-      <Button variant="primary" isFullWidth="center" size="lg" isPending={isBusy} onPress={book}>
+      <button type="submit" className={`${styles.button} ${styles.primary}`} disabled={isBusy}>
         {isBusy ? strings.booking : strings.book}
-      </Button>
-      <Button variant="ghost" icon="chevron-left" isDisabled={isBusy} onPress={() => onBack()}>
+      </button>
+      <button type="button" className={styles.link} disabled={isBusy} onClick={() => onBack()}>
         {strings.back}
-      </Button>
-    </>
+      </button>
+    </form>
   );
 }

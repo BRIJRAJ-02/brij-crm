@@ -16,6 +16,6 @@ Built from Table, Badge, CopyButton, Button, Modal (new page, and the delete con
 
 Cards of Switch, Field, Checkbox, Select, DatePicker and HoursEditor (weekly hours, and date overrides with a remove per date). A range that ends before it starts or overlaps another is said on its row and holds the save back. Until calendar sync is wired in, a Callout says the page offers your hours minus its bookings (AC-631).
 
-## The public page (`/b/<publicKey>`, `src/public/booking/`)
+## The public page (`/b/<publicKey>`)
 
-A second Vite input (`book.html`) that never loads the app shell: AuthLayout with the host's name, the page's facts, the meeting length and the visitor's zone (detected, changeable), SlotPicker for the week (the next free day chosen), then name, email (and a phone number for a phone page), Book, and a confirmation. A time taken meanwhile sends the visitor back to fresh times with "That time was just taken". It reads the API only through `@crm/data/booking`. Vercel serves it by a rewrite of `/b/:publicKey`; Vite's dev and preview servers do the same (`publicBookingPage()` in `vite.config.ts`).
+See `src/public/booking/README.md`: its own small bundle with plain inputs and the tokens compiled in, per spec 0023's visitor rules.

@@ -99,7 +99,6 @@ describe('@crm/ui', () => {
       'Sidebar',
       'SignInForm',
       'Skeleton',
-      'SlotPicker',
       'SortBuilder',
       'SortChip',
       'Spinner',

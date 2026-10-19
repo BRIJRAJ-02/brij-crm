@@ -76,7 +76,7 @@ export const VISITOR_NAME_MAX = 200;
 /**
  * `POST /api/public/booking/:publicKey/book`. `idempotencyKey` is minted once
  * per chosen slot, so a retry, a double click or a second tab answers the
- * first booking. `website` is the honeypot (a field people never see, which
+ * first booking. `company_url` is the honeypot (spec 0023's name) (a field people never see, which
  * must stay empty) and `startedAt` when the page loaded (advisory, for the
  * minimum fill time).
  */
@@ -89,7 +89,7 @@ export const PublicBookInput = z.object({
   timeZone: TimeZoneName,
   /** The visitor's number, for a phone location. */
   phone: z.string().trim().max(40).optional(),
-  website: z.string().max(200).optional(),
+  company_url: z.string().max(200).optional(),
   startedAt: z.number().int().nonnegative().optional(),
 });
 /** A visitor's booking. */

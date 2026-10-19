@@ -336,6 +336,9 @@ importers:
       '@crm/data':
         specifier: workspace:*
         version: link:../../packages/data
+      '@crm/tokens':
+        specifier: workspace:*
+        version: link:../../packages/tokens
       '@crm/ui':
         specifier: workspace:*
         version: link:../../packages/ui

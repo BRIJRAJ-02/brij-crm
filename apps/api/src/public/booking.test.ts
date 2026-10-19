@@ -75,7 +75,7 @@ const booking = (over: Record<string, unknown> = {}) => ({
   name: 'Grace Hopper',
   email: 'grace@navy.example',
   timeZone: 'America/New_York',
-  website: '',
+  company_url: '',
   startedAt: NOW.getTime() - 60_000,
   ...over,
 });
@@ -175,7 +175,7 @@ describe('the public page (AC-629, AC-632 to AC-634, AC-643, AC-644)', () => {
     const m = await memberWithWorkspace(app);
     const page = await pageOf(m);
     const path = `${page.publicKey}/book`;
-    expect((await visit(path, { method: 'POST', body: booking({ website: 'spam.example' }) })).status).toBe(400);
+    expect((await visit(path, { method: 'POST', body: booking({ company_url: 'spam.example' }) })).status).toBe(400);
     expect((await visit(path, { method: 'POST', body: booking({ startedAt: NOW.getTime() - 500 }) })).status).toBe(400);
     const bad = await visit(path, { method: 'POST', body: booking({ email: 'not an email' }) });
     expect(bad.status).toBe(400);

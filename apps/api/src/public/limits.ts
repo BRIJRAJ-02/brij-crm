@@ -50,7 +50,7 @@ export function createMemoryLimiter(
   };
 }
 
-/** AC-643: per client address, 60 slot reads and 5 bookings a minute; per page, ten times that. */
+/** AC-643 and spec 0023: per client address, 60 slot reads and 5 bookings a minute; per page, more. */
 export const BOOKING_LIMITS = {
   readsPerAddress: { max: 60, windowMs: 60_000 },
   booksPerAddress: { max: 5, windowMs: 60_000 },
@@ -59,14 +59,17 @@ export const BOOKING_LIMITS = {
 } as const satisfies Record<string, LimitRule>;
 
 /** The least time a person takes from opening the page to booking. */
-export const MIN_FILL_MS = 3_000;
+export const MIN_FILL_MS = 2_000;
 
 /**
  * The bot checks a booking passes (AC-643): the honeypot left empty, and not
  * sent faster than a person could (when the page said when it loaded).
  * reCAPTCHA v3 joins with spec 0023's module.
  */
-export function looksLikeBot(input: { readonly website?: string; readonly startedAt?: number }, now: number): boolean {
-  if (input.website !== undefined && input.website !== '') return true;
+export function looksLikeBot(
+  input: { readonly company_url?: string; readonly startedAt?: number },
+  now: number,
+): boolean {
+  if (input.company_url !== undefined && input.company_url !== '') return true;
   return input.startedAt !== undefined && now - input.startedAt < MIN_FILL_MS;
 }

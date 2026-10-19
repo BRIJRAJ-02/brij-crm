@@ -48,6 +48,15 @@ describe('house rules check', () => {
     expect(output).toContain('apps/web/src/features/records/table.css: screens carry no CSS');
   });
 
+  it('lets the public pages’ bundle keep its own stylesheet', () => {
+    const { status } = runHouseRules({
+      'apps/web/src/public/booking/booking.module.css': '.root {}\n',
+      'apps/web/src/public/booking/README.md': README,
+      'apps/web/src/public/booking/Page.tsx': "import styles from './booking.module.css';\nexport const s = styles;\n",
+    });
+    expect(status).toBe(0);
+  });
+
   it('refuses a CSS module used by a component in another folder', () => {
     const { status, output } = runHouseRules({
       'packages/ui/src/Button/Button.module.css': '.root {}\n',
