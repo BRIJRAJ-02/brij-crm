@@ -250,9 +250,14 @@ describe('the walk: a principal without the access is refused', () => {
         message: PERMISSIONS['booking.manage'].message,
       });
       if (
-        ['listBookingPages', 'listWorkspaceBookings', 'createBookingPage', 'getMemberHours', 'setMemberHours'].includes(
-          name,
-        )
+        [
+          'listBookingPages',
+          'listWorkspaceBookings',
+          'readBookingsCalendar',
+          'createBookingPage',
+          'getMemberHours',
+          'setMemberHours',
+        ].includes(name)
       )
         return;
       const owner = testScope({ db, workspaceId, actor: { type: 'member', id: ownerId } });

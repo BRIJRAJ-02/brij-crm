@@ -62,6 +62,7 @@ const READS: ReadonlySet<string> = new Set([
   'bookingPages.get',
   'bookings.list',
   'bookings.listAll',
+  'bookings.calendar',
   'bookings.hours',
 ]);
 
