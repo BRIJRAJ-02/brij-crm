@@ -7,13 +7,22 @@ import { strings } from '../features/booking/strings.ts';
 import { WorkspacePage } from '../features/workspace/WorkspacePage.tsx';
 
 // One booking page's editor (spec 0025, AC-623, AC-624): the page read through the data layer; one that was
-// deleted or isn't the reader's answers NOT_FOUND, said in the page with the way back.
+// deleted or isn't the reader's answers NOT_FOUND, said in the page with the way back. On the reader's own page
+// their hours load too, so "Follow my hours" shows the week it follows.
 export const Route = createFileRoute('/w/$slug/captures/links/$pageId')({
   loader: async ({ context, params }) => {
     try {
-      return { page: await context.data.bookingPages.get(params.slug, params.pageId) };
+      const [page, mine] = await Promise.all([
+        context.data.bookingPages.get(params.slug, params.pageId),
+        context.data.access.mine(params.slug),
+      ]);
+      const myHours =
+        page.ownerMemberId === mine.memberId
+          ? (await context.data.bookings.hours(params.slug, page.availability.timeZone)).availability
+          : undefined;
+      return { page, myHours };
     } catch (error) {
-      if (isDataError(error) && error.code === 'NOT_FOUND') return { page: undefined };
+      if (isDataError(error) && error.code === 'NOT_FOUND') return { page: undefined, myHours: undefined };
       throw error;
     }
   },
@@ -61,12 +70,14 @@ function Missing({
 }
 
 function EditorRoute() {
-  const { page } = Route.useLoaderData();
+  const { page, myHours } = Route.useLoaderData();
   const { slug } = Route.useParams();
   const { data } = Route.useRouteContext();
   if (page === undefined) return <Missing title={strings.notFoundTitle} text={strings.notFoundText} />;
   // A page of its own per id, so its draft starts afresh.
-  return <PageEditor key={page.id} data={data} slug={slug} page={page} />;
+  return (
+    <PageEditor key={page.id} data={data} slug={slug} page={page} {...(myHours === undefined ? {} : { myHours })} />
+  );
 }
 
 function EditorError({ error }: ErrorComponentProps) {

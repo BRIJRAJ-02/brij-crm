@@ -16,6 +16,7 @@ import {
   MenuTrigger,
   Modal,
   PageColumn,
+  Skeleton,
   TopBar,
   type LinkRow,
 } from '@crm/ui';
@@ -271,7 +272,11 @@ export function LinksPending() {
     <WorkspacePage
       page={{
         topBar: <TopBar title={strings.linksTitle} icon="link" isLoading />,
-        body: <PageColumn>{null}</PageColumn>,
+        body: (
+          <PageColumn>
+            <Skeleton lines={6} />
+          </PageColumn>
+        ),
       }}
     />
   );

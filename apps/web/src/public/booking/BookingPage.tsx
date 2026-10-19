@@ -5,7 +5,7 @@
 //
 // Built by hand with plain markup and the compiled tokens (spec 0023's public bundle rules): a sticky rail with
 // the host, What and the time zone beside the card on wide screens, stacked on a phone.
-import { createBookingClient, isDataError, type PublicBookingPage } from '@crm/data/booking';
+import { createBookingClient, isDataError, withPreviewDraft, type PublicBookingPage } from '@crm/data/booking';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import styles from './booking.module.css';
 import { Details } from './Details.tsx';
@@ -66,6 +66,8 @@ export function BookingPage({ publicKey, locale, timeZone, now, prefill, onBooke
   const client = useMemo(() => createBookingClient({ origin: globalThis.location.origin }), []);
   const [startedAt] = useState(now);
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' });
+  // The last preview message, kept until the page loads to lay it over.
+  const [preview, setPreview] = useState<unknown>(undefined);
   const load = useCallback(() => {
     client.page(publicKey).then(
       (page) => setLoaded({ state: 'ready', page }),
@@ -76,12 +78,25 @@ export function BookingPage({ publicKey, locale, timeZone, now, prefill, onBooke
     );
   }, [client, publicKey]);
   useEffect(load, [load]);
+  // Inside the editor's preview frame, the editor's unsaved draft shows over the saved page (AC-679):
+  // only from the parent window on this same origin.
+  useEffect(() => {
+    if (globalThis.parent === globalThis.window) return;
+    const listen = (event: MessageEvent) => {
+      if (event.origin !== globalThis.location.origin || event.source !== globalThis.parent) return;
+      setPreview(event.data);
+    };
+    globalThis.addEventListener('message', listen);
+    return () => {
+      globalThis.removeEventListener('message', listen);
+    };
+  }, []);
 
   if (loaded.state === 'ready') {
     return (
       <Booking
         client={client}
-        page={loaded.page}
+        page={withPreviewDraft(loaded.page, preview) ?? loaded.page}
         locale={locale}
         detected={timeZone}
         now={now}
@@ -154,7 +169,9 @@ function Booking({
   const [zone, setZone] = useState(detected);
   const [hour12, setHour12] = useState(() => savedHour12() ?? localeUses12h(locale));
   const [view, setView] = useState<SlotView>(savedView);
-  const [duration, setDuration] = useState<number>(page.durations[0] ?? 30);
+  const [chosen, setDuration] = useState<number>(page.durations[0] ?? 30);
+  // A length the page no longer offers (the editor's preview changed them) falls back to its first.
+  const duration = page.durations.some((minutes) => minutes === chosen) ? chosen : (page.durations[0] ?? 30);
   const today = dayKey(now(), zone);
   const horizon = dayKey(now() + page.windowDays * 86_400_000, zone);
   const chunks = Math.max(1, Math.ceil(page.windowDays / CHUNK_DAYS));

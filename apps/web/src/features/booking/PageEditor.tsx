@@ -19,9 +19,11 @@ import {
   Field,
   HoursEditor,
   Link,
+  PageColumn,
   PreviewLayout,
   SegmentedControl,
   Select,
+  Skeleton,
   Switch,
   TopBar,
   type SelectItem,
@@ -39,6 +41,8 @@ export interface PageEditorProps {
   readonly data: DataLayer;
   readonly slug: string;
   readonly page: BookingPageView;
+  /** The reader's own hours, on their own page: what "Follow my hours" follows. */
+  readonly myHours?: BookingAvailability;
 }
 
 const DURATIONS = [15, 30, 45, 60, 90] as const;
@@ -105,14 +109,16 @@ function sendable(draft: BookingPageSettings): boolean {
 }
 
 /** The editor. */
-export function PageEditor({ data, slug, page: loaded }: PageEditorProps) {
+export function PageEditor({ data, slug, page: loaded, myHours }: PageEditorProps) {
   const [page, setPage] = useState(loaded);
+  // A page the reader can't change shows as it is, every control read only, with no Save.
+  const isLocked = !page.canChange;
   const saved = settingsOf(page);
   const [draft, setDraft] = useState(saved);
   const [isSaving, setSaving] = useState(false);
   const [failure, setFailure] = useState<{ readonly message: string; readonly field?: string } | undefined>(undefined);
   const dirty = changed(saved, draft);
-  const isDirty = Object.keys(dirty).length > 0;
+  const isDirty = !isLocked && Object.keys(dirty).length > 0;
   const change = (patch: Partial<BookingPageSettings>) => setDraft((current) => ({ ...current, ...patch }));
   const setAvailability = (availability: BookingAvailability) => change({ availability });
 
@@ -163,6 +169,7 @@ export function PageEditor({ data, slug, page: loaded }: PageEditorProps) {
               label={strings.live}
               isSelected={page.status === 'live'}
               isDisabled={isSaving}
+              isReadOnly={isLocked}
               onChange={(isLive) => {
                 // The switch saves at once, apart from the other groups.
                 const status = isLive ? 'live' : 'paused';
@@ -178,12 +185,17 @@ export function PageEditor({ data, slug, page: loaded }: PageEditorProps) {
             previewSrc={`/b/${page.publicKey}`}
             previewTitle={page.title}
             previewVersion={page.updatedAt}
+            previewDraft={{
+              title: draft.title,
+              description: draft.description,
+              durations: draft.durations,
+              location: draft.location,
+            }}
             {...(isDirty
               ? {
                   footer: (
                     <Callout
                       tone="info"
-                      title={strings.unsaved}
                       actions={
                         <Button
                           variant="primary"
@@ -195,12 +207,17 @@ export function PageEditor({ data, slug, page: loaded }: PageEditorProps) {
                         </Button>
                       }
                     >
-                      {null}
+                      {strings.unsaved}
                     </Callout>
                   ),
                 }
               : {})}
           >
+            {isLocked && (
+              <Callout tone="info" title={strings.readOnlyTitle}>
+                {strings.readOnlyText}
+              </Callout>
+            )}
             {failure !== undefined && slugError === undefined && <Callout tone="danger">{failure.message}</Callout>}
             <Callout tone="info" title={strings.noCalendarTitle}>
               {strings.noCalendar}
@@ -212,6 +229,7 @@ export function PageEditor({ data, slug, page: loaded }: PageEditorProps) {
                 isMultiline
                 maxLength={2000}
                 showCounter
+                isReadOnly={isLocked}
                 onChange={(description) => change({ description })}
               />
               <Field
@@ -221,6 +239,7 @@ export function PageEditor({ data, slug, page: loaded }: PageEditorProps) {
                 hint={strings.addressHint}
                 maxLength={60}
                 isRequired
+                isReadOnly={isLocked}
                 onChange={(value) => change({ slug: value.toLowerCase() })}
                 {...(slugError === undefined ? {} : { error: slugError })}
               />
@@ -232,6 +251,7 @@ export function PageEditor({ data, slug, page: loaded }: PageEditorProps) {
                 value={draft.title}
                 maxLength={120}
                 isRequired
+                isReadOnly={isLocked}
                 onChange={(title) => change({ title })}
                 {...(draft.title.trim() === '' ? { error: strings.titleRequired } : {})}
               />
@@ -239,6 +259,7 @@ export function PageEditor({ data, slug, page: loaded }: PageEditorProps) {
                 label={strings.durations}
                 choices={DURATIONS.map((minutes) => ({ id: String(minutes), label: strings.minutesShort(minutes) }))}
                 selected={draft.durations.map(String)}
+                isDisabled={isLocked}
                 onChange={(ids) => change({ durations: DURATIONS.filter((minutes) => ids.includes(String(minutes))) })}
                 {...(draft.durations.length === 0 ? { error: strings.durationRequired } : {})}
               />
@@ -246,6 +267,7 @@ export function PageEditor({ data, slug, page: loaded }: PageEditorProps) {
                 label={strings.location}
                 items={LOCATIONS.map((type) => ({ id: type, label: strings.locations[type] }))}
                 value={location.type}
+                isReadOnly={isLocked}
                 onChange={(type) => {
                   if (type === 'video' || type === 'phone') change({ location: { type } });
                   if (type === 'address' || type === 'custom')
@@ -258,6 +280,7 @@ export function PageEditor({ data, slug, page: loaded }: PageEditorProps) {
                   value={location.value}
                   maxLength={500}
                   isRequired
+                  isReadOnly={isLocked}
                   onChange={(value) => change({ location: { type: location.type, value } })}
                 />
               )}
@@ -271,20 +294,34 @@ export function PageEditor({ data, slug, page: loaded }: PageEditorProps) {
                     { value: 'own', label: strings.ownHoursMode },
                   ]}
                   value={draft.hoursMode}
+                  isDisabled={isLocked}
                   onChange={(value) => {
                     if (value === 'mine' || value === 'own') change({ hoursMode: value });
                   }}
                 />
                 {draft.hoursMode === 'mine' ? (
-                  <Callout tone="info" actions={<Link href={availabilityHref(slug)}>{strings.editMyHours}</Link>}>
-                    {strings.followHint}
-                  </Callout>
+                  myHours === undefined ? (
+                    <Callout tone="info">{strings.followOwnerHint}</Callout>
+                  ) : (
+                    <>
+                      <Callout tone="info" actions={<Link href={availabilityHref(slug)}>{strings.editMyHours}</Link>}>
+                        {strings.followHint}
+                      </Callout>
+                      <HoursEditor
+                        label={strings.weeklyHours}
+                        rows={weekRows(myHours)}
+                        isReadOnly
+                        onChange={() => undefined}
+                      />
+                    </>
+                  )
                 ) : (
                   <>
                     <Select
                       label={strings.timeZone}
                       items={zones}
                       isSearchable
+                      isReadOnly={isLocked}
                       value={draft.availability.timeZone}
                       onChange={(zone) => {
                         if (zone !== null) setAvailability({ ...draft.availability, timeZone: zone });
@@ -293,6 +330,7 @@ export function PageEditor({ data, slug, page: loaded }: PageEditorProps) {
                     <HoursEditor
                       label={strings.weeklyHours}
                       rows={weekRows(draft.availability)}
+                      isReadOnly={isLocked}
                       onChange={(day, ranges) =>
                         setDraft((current) => ({
                           ...current,
@@ -304,41 +342,49 @@ export function PageEditor({ data, slug, page: loaded }: PageEditorProps) {
                 )}
               </Card>
             </div>
-            {draft.hoursMode === 'own' && <DaysOff availability={draft.availability} onChange={setAvailability} />}
+            {draft.hoursMode === 'own' && (
+              <DaysOff availability={draft.availability} isReadOnly={isLocked} onChange={setAvailability} />
+            )}
             <Disclosure title={strings.limits}>
               <Select
                 label={strings.bufferBefore}
                 items={BUFFERS}
+                isReadOnly={isLocked}
                 value={String(draft.bufferBefore)}
                 onChange={(id) => change({ bufferBefore: Number(id ?? 0) })}
               />
               <Select
                 label={strings.bufferAfter}
                 items={BUFFERS}
+                isReadOnly={isLocked}
                 value={String(draft.bufferAfter)}
                 onChange={(id) => change({ bufferAfter: Number(id ?? 0) })}
               />
               <Select
                 label={strings.notice}
                 items={NOTICE}
+                isReadOnly={isLocked}
                 value={String(draft.minNoticeMinutes)}
                 onChange={(id) => change({ minNoticeMinutes: Number(id ?? 0) })}
               />
               <Select
                 label={strings.window}
                 items={WINDOW}
+                isReadOnly={isLocked}
                 value={String(draft.windowDays)}
                 onChange={(id) => change({ windowDays: Number(id ?? 60) })}
               />
               <Select
                 label={strings.dailyLimit}
                 items={DAILY}
+                isReadOnly={isLocked}
                 value={draft.dailyLimit === null ? 'none' : String(draft.dailyLimit)}
                 onChange={(id) => change({ dailyLimit: id === null || id === 'none' ? null : Number(id) })}
               />
               <Select
                 label={strings.step}
                 items={STEPS}
+                isReadOnly={isLocked}
                 value={draft.slotStep === null ? 'duration' : String(draft.slotStep)}
                 onChange={(id) => change({ slotStep: id === '15' ? 15 : id === '30' ? 30 : id === '60' ? 60 : null })}
               />
@@ -352,5 +398,16 @@ export function PageEditor({ data, slug, page: loaded }: PageEditorProps) {
 
 /** The editor while its page loads. */
 export function PageEditorPending() {
-  return <WorkspacePage page={{ topBar: <TopBar title={strings.listLabel} icon="link" isLoading />, body: null }} />;
+  return (
+    <WorkspacePage
+      page={{
+        topBar: <TopBar title={strings.listLabel} icon="link" isLoading />,
+        body: (
+          <PageColumn>
+            <Skeleton lines={10} />
+          </PageColumn>
+        ),
+      }}
+    />
+  );
 }

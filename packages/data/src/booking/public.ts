@@ -102,3 +102,44 @@ export function createBookingClient(options: {
     icsUrl: (token) => `${base}/manage/${encodeURIComponent(token)}/ics`,
   };
 }
+
+/** The message the editor's preview posts to its frame: `{ type: 'crm:preview', draft }`. */
+export const PREVIEW_MESSAGE = 'crm:preview';
+
+const isRecord = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  typeof value === 'object' && value !== null;
+
+const PREVIEW_DURATIONS: readonly number[] = [15, 30, 45, 60, 90];
+
+const isDuration = (value: unknown): value is PublicBookingPage['durations'][number] =>
+  typeof value === 'number' && PREVIEW_DURATIONS.includes(value);
+
+/** A draft's location, when it is one the page can show. */
+function previewLocation(value: unknown): PublicBookingPage['location'] | undefined {
+  if (!isRecord(value)) return undefined;
+  if (value.type === 'video' || value.type === 'phone') return { type: value.type };
+  if ((value.type === 'address' || value.type === 'custom') && typeof value.value === 'string') {
+    return { type: value.type, value: value.value };
+  }
+  return undefined;
+}
+
+/**
+ * The page with the editor's unsaved draft laid over it (spec 0025, AC-679),
+ * from a preview message: only the title, description, durations and location,
+ * each taken only when it has the right shape, so a stray message changes
+ * nothing. Anything that isn't a preview message answers `undefined`.
+ */
+export function withPreviewDraft(page: PublicBookingPage, message: unknown): PublicBookingPage | undefined {
+  if (!isRecord(message) || message.type !== PREVIEW_MESSAGE || !isRecord(message.draft)) return undefined;
+  const { title, description, durations, location } = message.draft;
+  const lengths = Array.isArray(durations) ? durations.filter(isDuration) : [];
+  const place = previewLocation(location);
+  return {
+    ...page,
+    ...(typeof title === 'string' && title.trim() !== '' ? { title } : {}),
+    ...(typeof description === 'string' ? { description } : {}),
+    ...(lengths.length > 0 ? { durations: lengths } : {}),
+    ...(place === undefined ? {} : { location: place }),
+  };
+}

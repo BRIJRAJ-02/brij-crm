@@ -18,19 +18,23 @@ const COLUMNS: readonly TableColumn[] = [
 export function DaysOff({
   availability,
   onChange,
+  isReadOnly = false,
 }: {
   readonly availability: BookingAvailability;
   readonly onChange: (availability: BookingAvailability) => void;
+  /** Lists the days off with nothing to change (a page the reader can't change). */
+  readonly isReadOnly?: boolean;
 }) {
   const [date, setDate] = useState<string | null>(null);
   const [why, setWhy] = useState('');
   const upcoming = upcomingDaysOff(availability, todayIn(availability.timeZone));
+  const columns = isReadOnly ? COLUMNS.filter((column) => column.id !== 'actions') : COLUMNS;
   return (
     <Card title={strings.daysOff} description={strings.daysOffCount(upcoming.length)}>
       {upcoming.length > 0 && (
         <Table
           label={strings.daysOff}
-          columns={COLUMNS}
+          columns={columns}
           rows={upcoming}
           getRowId={(day) => day.date}
           renderCell={(day, column) =>
@@ -46,20 +50,24 @@ export function DaysOff({
           }
         />
       )}
-      <DatePicker label={strings.dayOffDate} value={date} onChange={setDate} />
-      <Field label={strings.why} value={why} onChange={setWhy} maxLength={120} />
-      <Button
-        icon="plus"
-        isDisabled={date === null}
-        onPress={() => {
-          if (date === null) return;
-          onChange(withDayOff(availability, date, why.trim()));
-          setDate(null);
-          setWhy('');
-        }}
-      >
-        {strings.addDayOff}
-      </Button>
+      {!isReadOnly && (
+        <>
+          <DatePicker label={strings.dayOffDate} value={date} onChange={setDate} />
+          <Field label={strings.why} value={why} onChange={setWhy} maxLength={120} />
+          <Button
+            icon="plus"
+            isDisabled={date === null}
+            onPress={() => {
+              if (date === null) return;
+              onChange(withDayOff(availability, date, why.trim()));
+              setDate(null);
+              setWhy('');
+            }}
+          >
+            {strings.addDayOff}
+          </Button>
+        </>
+      )}
     </Card>
   );
 }

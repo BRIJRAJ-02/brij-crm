@@ -1,7 +1,7 @@
 // The public booking client (spec 0025) against a fake fetch: the paths it
 // calls, its body, and each failure as a DataError with the API's code.
 import { describe, expect, it } from 'vitest';
-import { createBookingClient, isDataError } from './public.ts';
+import { createBookingClient, isDataError, withPreviewDraft, type PublicBookingPage } from './public.ts';
 
 function fake(answer: (url: string, init?: RequestInit) => Response) {
   const calls: { url: string; init?: RequestInit }[] = [];
@@ -92,5 +92,42 @@ describe('createBookingClient', () => {
       fetch: () => Promise.reject(new TypeError('Failed to fetch')),
     });
     await expect(client.page(KEY)).rejects.toMatchObject({ code: 'API_UNAVAILABLE' });
+  });
+});
+
+describe('withPreviewDraft', () => {
+  const page: PublicBookingPage = {
+    publicKey: KEY,
+    title: 'Intro',
+    description: '',
+    hostName: 'Ada',
+    workspaceName: 'Acme',
+    durations: [30],
+    location: { type: 'video' },
+    hostTimeZone: 'Europe/London',
+    windowDays: 60,
+  };
+
+  it('lays the draft’s title, description, lengths and place over the page', () => {
+    const draft = {
+      title: 'Quick chat',
+      description: 'Hi',
+      durations: [15, 60],
+      location: { type: 'custom', value: 'Cafe' },
+    };
+    expect(withPreviewDraft(page, { type: 'crm:preview', draft })).toEqual({
+      ...page,
+      title: 'Quick chat',
+      description: 'Hi',
+      durations: [15, 60],
+      location: { type: 'custom', value: 'Cafe' },
+    });
+  });
+
+  it('keeps the page’s own values for anything malformed, and ignores other messages', () => {
+    const draft = { title: ' ', durations: [7, '30'], location: { type: 'address' }, hostName: 'Eve' };
+    expect(withPreviewDraft(page, { type: 'crm:preview', draft })).toEqual(page);
+    expect(withPreviewDraft(page, { type: 'other', draft })).toBeUndefined();
+    expect(withPreviewDraft(page, 'crm:preview')).toBeUndefined();
   });
 });

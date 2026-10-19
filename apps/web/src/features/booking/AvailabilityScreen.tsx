@@ -3,7 +3,7 @@
 // Main task: set the week's windows (all days at once, per day, or copied across) and the days off, then Save.
 // Leaves out: a page's own hours (its editor) and anyone else's hours.
 import { isDataError, type BookingAvailability, type DataLayer } from '@crm/data';
-import { Button, Callout, Card, HoursEditor, PageColumn, Select, TopBar } from '@crm/ui';
+import { Button, Callout, Card, HoursEditor, PageColumn, Select, Skeleton, TopBar } from '@crm/ui';
 import { useBlocker } from '@tanstack/react-router';
 import { useState } from 'react';
 import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
@@ -59,7 +59,32 @@ export function AvailabilityScreen({ data, slug, availability: loaded }: Availab
           <TopBar title={strings.availability} icon="clock" crumbs={[{ id: 'bookings', label: strings.bookings }]} />
         ),
         body: (
-          <PageColumn width="narrow">
+          <PageColumn
+            footer={
+              isDirty || justSaved ? (
+                <Callout
+                  tone={isDirty ? 'info' : 'success'}
+                  isAnnounced={!isDirty}
+                  {...(isDirty
+                    ? {
+                        actions: (
+                          <Button
+                            variant="primary"
+                            isPending={isSaving}
+                            isDisabled={!availabilityIsValid(draft)}
+                            onPress={save}
+                          >
+                            {isSaving ? strings.saving : strings.save}
+                          </Button>
+                        ),
+                      }
+                    : {})}
+                >
+                  {isDirty ? strings.unsaved : strings.saved}
+                </Callout>
+              ) : undefined
+            }
+          >
             {failure !== undefined && <Callout tone="danger">{failure}</Callout>}
             <Card title={strings.weeklyHours} description={strings.availabilityText}>
               <Select
@@ -81,28 +106,6 @@ export function AvailabilityScreen({ data, slug, availability: loaded }: Availab
               />
             </Card>
             <DaysOff availability={draft} onChange={update} />
-            {(isDirty || justSaved) && (
-              <Callout
-                tone={isDirty ? 'info' : 'success'}
-                title={isDirty ? strings.unsaved : strings.saved}
-                {...(isDirty
-                  ? {
-                      actions: (
-                        <Button
-                          variant="primary"
-                          isPending={isSaving}
-                          isDisabled={!availabilityIsValid(draft)}
-                          onPress={save}
-                        >
-                          {isSaving ? strings.saving : strings.save}
-                        </Button>
-                      ),
-                    }
-                  : {})}
-              >
-                {null}
-              </Callout>
-            )}
           </PageColumn>
         ),
       }}
@@ -116,7 +119,11 @@ export function AvailabilityPending() {
     <WorkspacePage
       page={{
         topBar: <TopBar title={strings.availability} icon="clock" isLoading />,
-        body: <PageColumn width="narrow">{null}</PageColumn>,
+        body: (
+          <PageColumn>
+            <Skeleton lines={8} />
+          </PageColumn>
+        ),
       }}
     />
   );
