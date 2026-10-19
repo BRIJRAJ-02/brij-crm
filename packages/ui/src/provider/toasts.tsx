@@ -78,9 +78,15 @@ function withViewTransition(update: () => void): void {
     update();
     return;
   }
-  document.startViewTransition(() => {
+  const transition = document.startViewTransition(() => {
     flushSync(update);
   });
+  // A newer change starting before this one finished skips its animation: the
+  // update still runs, but `ready` and `finished` reject with an AbortError
+  // nobody waits for. Those rejections are expected, so they are let go.
+  const letGo = (): void => undefined;
+  transition.ready.catch(letGo);
+  transition.finished.catch(letGo);
 }
 
 /** Makes the app's toast queue: at most three at once, each timed by `toastTimeout`. Timers pause while hovered or focused. */

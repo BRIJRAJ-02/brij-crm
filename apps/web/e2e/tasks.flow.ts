@@ -133,19 +133,14 @@ test('tasks on a record: quick add, the dialog, links, ticks and the timeline, l
   await expect(feed.getByRole('article').first()).toHaveAccessibleName(/added a task/);
   await expect(feed).toContainText('Send the proposal');
 
-  // Ticked in the second browser: the first sees it struck through, then in Completed once the list settles.
+  // Ticked in the second browser: the first sees it leave the open list for Completed, live. It may show struck
+  // through for a moment first, or go straight there when the list settles at once, so the flow waits for the end.
   await page.goto(tasksPath);
   if (!isLive) await reader.reload();
   // React Aria's label sits over the hidden input: the click lands on it, as a person's would.
   await reader.getByRole('checkbox', { name: 'Mark “Send the proposal” as done' }).click({ force: true });
-  if (isLive) {
-    await expect(page.getByRole('checkbox', { name: 'Mark “Send the proposal” as done' })).toBeChecked({
-      timeout: 5_000,
-    });
-  } else {
-    await expect(reader.getByRole('checkbox', { name: 'Mark “Send the proposal” as done' })).toBeChecked();
-    await page.reload();
-  }
+  await expect(reader.getByRole('checkbox', { name: 'Mark “Send the proposal” as done' })).toBeChecked();
+  if (!isLive) await page.reload();
   await expect(page.getByText('No open tasks. Add one above.')).toBeVisible({ timeout: 10_000 });
   await page.getByRole('button', { name: /Completed/ }).click();
   await expect(

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { FieldSurfaces } from '../../workbench/FieldSurfaces/FieldSurfaces.tsx';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES } from '../../workbench/field-samples.ts';
 import { AttributeEditor } from '../AttributeEditor.tsx';
@@ -56,14 +57,13 @@ export const ValueFromOutside: Story = {
     return (
       <Stage width="narrow">
         <AttributeEditor {...args} value={value} />
-        <button
-          type="button"
-          onClick={() => {
+        <Button
+          onPress={() => {
             setValue('2026-12-25');
           }}
         >
           Change from outside
-        </button>
+        </Button>
       </Stage>
     );
   },

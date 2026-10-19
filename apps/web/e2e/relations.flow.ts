@@ -14,21 +14,44 @@ import { checkScreen, newWorkspace, signInAgain } from './people.ts';
 /** How long a change may take to show in the other browser (AC-282 says 1 second; the flow allows for a busy machine). */
 const LIVE_MS = 5_000;
 
-/** Scrolls an object's grid sideways until a column's header is drawn, and answers that header. */
-async function header(page: Page, grid: string, column: string) {
+/**
+ * Scrolls an object's grid sideways until a column's header is drawn, and answers that header. A column that
+ * arrives late (a busy machine, a live change from the other browser) is looked for again from the left until
+ * `timeout` runs out, since the grid draws only the columns in view.
+ */
+async function header(page: Page, grid: string, column: string, timeout = 10_000) {
   const table = page.getByRole('grid', { name: grid });
-  await table.evaluate((element) => {
-    element.scrollLeft = 0;
-  });
-  for (let step = 0; step < 40; step += 1) {
-    const found = table.getByRole('columnheader', { name: new RegExp(`^${column}`) });
-    if ((await found.count()) > 0) return found.first();
+  const named = table.getByRole('columnheader', { name: new RegExp(`^${column}`) });
+  const deadline = Date.now() + timeout;
+  do {
     await table.evaluate((element) => {
-      element.scrollLeft += 300;
+      element.scrollLeft = 0;
     });
-    await page.waitForTimeout(50);
-  }
-  return table.getByRole('columnheader', { name: new RegExp(`^${column}`) }).first();
+    for (let step = 0; step < 40; step += 1) {
+      if ((await named.count()) > 0) return named.first();
+      const atEnd = await table.evaluate((element) => {
+        const before = element.scrollLeft;
+        element.scrollLeft += 300;
+        return element.scrollLeft === before;
+      });
+      if (atEnd) break;
+      await page.waitForTimeout(50);
+    }
+    if ((await named.count()) > 0) return named.first();
+    await page.waitForTimeout(250);
+  } while (Date.now() < deadline);
+  return named.first();
+}
+
+/**
+ * Waits until a column's header shows in an object's grid. The table may reload more than once after a schema
+ * change (its own write, then the live echo), and each reload starts scrolled to the left, so the whole find
+ * (scroll, then look) is tried again until it holds.
+ */
+async function expectHeader(page: Page, grid: string, column: string, timeout = 10_000) {
+  await expect(async () => {
+    await expect(await header(page, grid, column, 1_000)).toBeVisible({ timeout: 500 });
+  }).toPass({ timeout });
 }
 
 /** Opens Add attribute, types a name, and picks Relationship: the relationship dialog takes over. */
@@ -113,10 +136,10 @@ test.describe('relations', () => {
     await expect(dialog).toBeHidden();
     const created = Date.now();
     await expect(page.getByText('Investors added.')).toBeVisible();
-    await expect(await header(page, 'Companies', 'Investors')).toBeVisible();
+    await expectHeader(page, 'Companies', 'Investors');
 
     // The other object's table, in the other browser, shows its side without a reload.
-    await expect(await header(reader, 'People', 'Investments')).toBeVisible({ timeout: LIVE_MS });
+    await expectHeader(reader, 'People', 'Investments', LIVE_MS);
     testInfo.annotations.push({ type: 'live column', description: `${String(Date.now() - created)} ms` });
 
     // A relationship from People to itself: two names alike are refused before anything is sent (AC-283).
@@ -162,8 +185,8 @@ test.describe('relations', () => {
     await checkScreen(page, 'relations-edit');
     await edit.getByRole('button', { name: 'Save' }).click();
     await expect(edit).toBeHidden();
-    await expect(await header(page, 'Companies', 'Backers')).toBeVisible();
-    await expect(await header(reader, 'People', 'Holdings')).toBeVisible({ timeout: LIVE_MS });
+    await expectHeader(page, 'Companies', 'Backers');
+    await expectHeader(reader, 'People', 'Holdings', LIVE_MS);
     await readerContext.close();
   });
 });

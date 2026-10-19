@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { arraySource } from '../../lib/list-source.ts';
 import { FieldSurfaces } from '../../workbench/FieldSurfaces/FieldSurfaces.tsx';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { FIELD_SAMPLES, SAMPLE_MEMBERS } from '../../workbench/field-samples.ts';
 import { SAMPLE_IDS } from '../../workbench/sample-ids.ts';
@@ -100,14 +101,13 @@ export const ValueFromOutside: Story = {
             setValue(Array.isArray(next) ? (next as readonly { type: 'member'; id: string }[]) : []);
           }}
         />
-        <button
-          type="button"
-          onClick={() => {
+        <Button
+          onPress={() => {
             setValue(team.map((member) => ({ type: 'member' as const, id: member.id ?? '' })));
           }}
         >
           Put back
-        </button>
+        </Button>
       </Stage>
     );
   },
