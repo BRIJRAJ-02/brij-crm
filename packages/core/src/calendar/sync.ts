@@ -98,11 +98,11 @@ interface ConnectionRow extends Record<string, unknown> {
 
 /** The failure messages a connection shows in Settings: plain, and never the provider's own words. */
 const FAILURE_MESSAGES: Readonly<Record<CalendarErrorCode, string>> = {
-  CALENDAR_AUTH_REVOKED: 'Google no longer lets the CRM read this calendar. Reconnect it.',
+  CALENDAR_AUTH_REVOKED: 'Google no longer lets Timefix read this calendar. Reconnect it.',
   CALENDAR_AUTH: 'Google refused the calendar request. If it keeps happening, reconnect it.',
   CALENDAR_SYNC_TOKEN_GONE: 'The calendar asked for a full sync.',
-  CALENDAR_UNAVAILABLE: 'Google’s calendar didn’t answer. The CRM tries again shortly.',
-  CALENDAR_SCOPE_DECLINED: 'The calendar was connected without the access the CRM needs. Reconnect it.',
+  CALENDAR_UNAVAILABLE: 'Google’s calendar didn’t answer. Timefix tries again shortly.',
+  CALENDAR_SCOPE_DECLINED: 'The calendar was connected without the access Timefix needs. Reconnect it.',
 };
 
 /** Records a failure on the connection: its code and message, since when, and `expired` for a refused grant. */

@@ -21,7 +21,7 @@ test('a record opens from the table, edits in place, and keeps its tab', async (
     .click();
   await expect(page).toHaveURL(RECORD_URL);
   const recordId = RECORD_URL.exec(page.url())?.[1] ?? '';
-  await expect(page).toHaveTitle('Grace Hopper · CRM');
+  await expect(page).toHaveTitle('Grace Hopper · Timefix');
   await expect(page.getByRole('link', { name: 'People' }).first()).toBeVisible();
   await expect(page.getByRole('heading', { level: 2, name: 'Grace Hopper' })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
@@ -51,7 +51,7 @@ test('a record opens from the table, edits in place, and keeps its tab', async (
   await first.fill('Amazing Grace');
   await first.press('Enter');
   await expect(page.getByRole('heading', { level: 2, name: 'Amazing Grace Hopper' })).toBeVisible();
-  await expect(page).toHaveTitle('Amazing Grace Hopper · CRM');
+  await expect(page).toHaveTitle('Amazing Grace Hopper · Timefix');
 
   // Copy link puts the page's address on the clipboard.
   await context.grantPermissions(['clipboard-read', 'clipboard-write']);

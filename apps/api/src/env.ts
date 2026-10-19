@@ -110,7 +110,7 @@ const sender = z
   .string()
   .regex(
     /^(?:[^<>@\n]+ <[^<>\s@]+@[^<>\s@]+>|[^<>\s@]+@[^<>\s@]+)$/,
-    'MAIL_FROM must be an address, or a name and an address like "CRM <sign-in@example.com>".',
+    'MAIL_FROM must be an address, or a name and an address like "Timefix <sign-in@example.com>".',
   );
 
 // Emails allowed to sign up: comma separated, compared lowercased. `*` alone opens sign up to every email
@@ -218,8 +218,14 @@ function calendarOf(env: CalendarFields): CalendarSettings | undefined {
   };
 }
 
+/** The name every email is sent under when MAIL_FROM gives only an address. */
+const SENDER_NAME = 'Timefix';
+
 /** Locally, codes land in Mailpit unless a Resend key is set. */
-const DEFAULT_LOCAL_SENDER = 'CRM <sign-in@crm.localhost>';
+const DEFAULT_LOCAL_SENDER = `${SENDER_NAME} <sign-in@crm.localhost>`;
+
+/** A sender with a name: a bare address goes out as "Timefix <address>"; a named one is kept as it is. */
+const namedSender = (sender: string) => (sender.includes('<') ? sender : `${SENDER_NAME} <${sender}>`);
 
 export const ApiEnv = z
   .object({
@@ -333,7 +339,7 @@ export const ApiEnv = z
   })
   .transform(({ CALENDAR_TOKEN_KEY, GOOGLE_CALENDAR_CLIENT_SECRET, ...env }) => ({
     ...env,
-    MAIL_FROM: env.MAIL_FROM ?? DEFAULT_LOCAL_SENDER,
+    MAIL_FROM: namedSender(env.MAIL_FROM ?? DEFAULT_LOCAL_SENDER),
     // Mailpit is a laptop's inbox; a deployed API never sends there.
     MAILPIT_URL: env.APP_ENV === 'local' ? env.MAILPIT_URL : undefined,
     // Calendar sync (spec 0024), when on: the key and the secret live only in here, the key decoded.

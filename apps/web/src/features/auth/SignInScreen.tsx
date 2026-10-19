@@ -10,6 +10,7 @@ import { googleRefusal, isAboutAddress, sendRefusal } from './messages.ts';
 import { savePending, sessionStore } from './pending.ts';
 import type { SignedOut } from './redirect.ts';
 import { strings } from './strings.ts';
+import { PRODUCT_LOGO } from '../../brand.ts';
 
 /** Props for the sign in screen. */
 export interface SignInScreenProps {
@@ -95,7 +96,12 @@ export function SignInScreen({ data, google, redirect, returnTo, googleError, si
   };
 
   return (
-    <AuthLayout productName={strings.product} title={strings.signInTitle} description={strings.signInDescription}>
+    <AuthLayout
+      productName={strings.product}
+      logo={PRODUCT_LOGO}
+      title={strings.signInTitle}
+      description={strings.signInDescription}
+    >
       <SignInForm
         status={status}
         onContinue={sendCode}

@@ -37,7 +37,7 @@ describe('the sign in environment', () => {
     const env = ApiEnv.parse(local);
     expect(env.MAILPIT_URL).toBe('http://localhost:8025');
     expect(env.SIGNUP_ALLOWLIST).toBeUndefined();
-    expect(env.MAIL_FROM).toBe('CRM <sign-in@crm.localhost>');
+    expect(env.MAIL_FROM).toBe('Timefix <sign-in@crm.localhost>');
     expect(env.GOOGLE_CLIENT_ID).toBeUndefined();
   });
 
@@ -61,6 +61,8 @@ describe('the sign in environment', () => {
       'RESEND_API_KEY',
     ]);
     expect(ApiEnv.parse(production).MAILPIT_URL).toBeUndefined();
+    // A bare address goes out under the product's name.
+    expect(ApiEnv.parse(production).MAIL_FROM).toBe('Timefix <onboarding@resend.dev>');
     expect(ApiEnv.parse({ ...production, MAIL_FROM: 'CRM <onboarding@resend.dev>' }).MAIL_FROM).toBe(
       'CRM <onboarding@resend.dev>',
     );

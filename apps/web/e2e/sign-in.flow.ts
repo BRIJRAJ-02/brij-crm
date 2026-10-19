@@ -132,7 +132,7 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await page.goto('/');
   await expect(page).toHaveURL(/\/sign-in$/);
   await expect(page.getByRole('button', { name: 'Continue', exact: true })).toBeVisible();
-  await expect(page).toHaveTitle('Sign in · CRM');
+  await expect(page).toHaveTitle('Sign in · Timefix');
   // A one field page puts focus in its field on the first load too.
   await expect(page.getByLabel('Email')).toBeFocused();
   await checkScreen(page, '1-sign-in');
@@ -143,7 +143,7 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await expect(page).toHaveURL(/\/verify$/);
   await expect(page.getByText(email)).toBeVisible();
   await expect(page.getByLabel('Code')).toBeFocused();
-  await expect(page).toHaveTitle('Check your email · CRM');
+  await expect(page).toHaveTitle('Check your email · Timefix');
   await expect(page.getByRole('button', { name: 'Send a new code' })).toBeDisabled();
   await expect(page.getByText(/You can send another in/)).toBeVisible();
   await checkScreen(page, '2-verify');
@@ -159,7 +159,7 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   await page.getByLabel('Code').fill(code);
   await expect(page).toHaveURL(/\/welcome$/);
   await expect(page.getByRole('heading', { level: 1, name: 'Name your workspace' })).toBeFocused();
-  await expect(page).toHaveTitle('Name your workspace · CRM');
+  await expect(page).toHaveTitle('Name your workspace · Timefix');
 
   // The workspace name follows "Your name", and the address follows the workspace name.
   await page.getByLabel('Your name').fill('Ada Lovelace');
@@ -178,7 +178,7 @@ test('signs in by code, names the workspace, lands on People, signs out, and com
   const title = page.getByRole('heading', { level: 1, name: 'People' });
   await expect(title).toBeVisible();
   await expect(title).toBeFocused();
-  await expect(page).toHaveTitle('People · CRM');
+  await expect(page).toHaveTitle('People · Timefix');
   await expect(page.getByText('No people yet')).toBeVisible();
   const nav = page.getByRole('navigation', { name: 'Main navigation' });
   await expect(nav.getByRole('link', { name: 'People' })).toHaveAttribute('aria-current', 'page');
@@ -333,9 +333,9 @@ test('a workspace that fails to load says so, with no Records section, and Try a
   await page.route('**/api/rpc/me/get', (route) => route.abort('connectionrefused'));
   await page.reload();
   await expect(page.getByRole('alert')).toContainText('Couldn’t load this workspace');
-  await expect(page.getByRole('heading', { level: 1, name: 'CRM' })).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1, name: 'Timefix' })).toBeVisible();
   await expect(page.getByText('Couldn’t load this workspace')).toHaveCount(1);
-  await expect(page).toHaveTitle('CRM');
+  await expect(page).toHaveTitle('Timefix');
   await checkScreen(page, '8b-workspace-failed-signed-in-unknown');
   await page.unroute('**/api/rpc/me/get');
 });
@@ -424,14 +424,14 @@ test('keeps the status screen at /status, open to anyone, and says plainly when 
 }) => {
   await page.goto('/status');
   await expect(page.getByRole('heading', { level: 1, name: 'System status' })).toBeVisible();
-  await expect(page).toHaveTitle('System status · CRM');
+  await expect(page).toHaveTitle('System status · Timefix');
   // A first load elsewhere leaves focus where the browser starts, not on the title.
   await expect(page.getByRole('heading', { level: 1, name: 'System status' })).not.toBeFocused();
   await expect(page.getByText('Healthy')).toBeVisible();
   await checkScreen(page, '9-status');
   await page.goto('/nowhere');
   await expect(page.getByRole('heading', { level: 1, name: 'Page not found' })).toBeVisible();
-  await expect(page).toHaveTitle('Page not found · CRM');
+  await expect(page).toHaveTitle('Page not found · Timefix');
   // Signed out, / leads to sign in, so the way back doesn't promise a workspace.
   await expect(page.getByRole('link', { name: 'Back to the start' })).toBeVisible();
   await checkScreen(page, '10-not-found');

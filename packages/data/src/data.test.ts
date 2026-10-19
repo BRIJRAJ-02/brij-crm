@@ -1425,7 +1425,7 @@ describe('failures that never reached the API', () => {
     });
     expect(await failure(data.system.status())).toMatchObject({
       code: 'API_UNAVAILABLE',
-      message: 'Can’t reach the CRM. Check your connection, then try again.',
+      message: 'Can’t reach Timefix. Check your connection, then try again.',
     });
   });
 

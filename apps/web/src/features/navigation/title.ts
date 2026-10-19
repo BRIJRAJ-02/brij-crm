@@ -5,9 +5,9 @@
 import { pageHeading } from './focus.ts';
 
 /** The product's name, after the page's in every title. */
-export const PRODUCT = 'CRM';
+export const PRODUCT = 'Timefix';
 
-/** "<page title> · CRM", or "CRM" alone while the page has no title, or its title is the product's name. */
+/** "<page title> · Timefix", or "Timefix" alone while the page has no title, or its title is the product's name. */
 export function documentTitle(pageTitle: string | undefined): string {
   const title = pageTitle?.replaceAll(/\s+/g, ' ').trim() ?? '';
   return title === '' || title === PRODUCT ? PRODUCT : `${title} · ${PRODUCT}`;

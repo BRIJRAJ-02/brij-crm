@@ -9,7 +9,7 @@ export const strings = {
   connectGoogle: 'Connect Google calendar',
   /** Calendar sync isn't set up on this deployment. */
   offTitle: 'Calendar sync isn’t set up for this workspace',
-  offText: 'Ask whoever runs this CRM to switch it on.',
+  offText: 'Ask whoever runs Timefix for you to switch it on.',
   emptyTitle: 'No calendar connected',
   emptyText: 'Connect one and your meetings with contacts appear on their records.',
   failedTitle: 'Couldn’t load your calendars',
@@ -56,15 +56,19 @@ export const strings = {
     denied: {
       tone: 'info',
       title: 'Calendar not connected',
-      text: 'You didn’t give the CRM access. Connect again whenever you like.',
+      text: 'You didn’t give Timefix access. Connect again whenever you like.',
     },
     scope: {
       tone: 'warning',
       title: 'Calendar not connected',
-      text: 'The CRM needs to see your events and when you’re busy. Connect again and leave both boxes ticked.',
+      text: 'Timefix needs to see your events and when you’re busy. Connect again and leave both boxes ticked.',
     },
     limit: { tone: 'warning', title: 'Calendar not connected', text: 'You’ve connected the most calendars you can.' },
-    off: { tone: 'info', title: 'Calendar sync isn’t set up', text: 'Ask whoever runs this CRM to switch it on.' },
+    off: {
+      tone: 'info',
+      title: 'Calendar sync isn’t set up',
+      text: 'Ask whoever runs Timefix for you to switch it on.',
+    },
     failed: {
       tone: 'danger',
       title: 'Calendar not connected',
