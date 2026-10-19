@@ -43,9 +43,9 @@ Work that was in flight when the lanes stopped is kept on its lane branches (a `
 - F4. "this is same why two? check": a booking and its own Google event showed twice. Fixed.
 - F5. "show active day": tint today's column. Done.
 - F6. "fix this and padding": one strip, then content.
-- F7. "tab is still not changed in here": the underline stays on Calendar on the Availability tab. Open.
+- F7. "tab is still not changed in here": the underline stays on Calendar on the Availability tab. Done (checked 20 Oct, the tabs rework fixed it).
 - F8. "quick action to block, book, etc from here": a card on an empty slot to book or block time. Open.
-- F9. "calendar logo", "also a timefix next to timefix booking": the Timefix mark on bookings, the Google Calendar mark on synced events. Open.
+- F9. "calendar logo", "also a timefix next to timefix booking": the Timefix mark on bookings, the Google Calendar mark on synced events. Done.
 
 ### Availability
 - F10. "full width". Open.
