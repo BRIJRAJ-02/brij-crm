@@ -21,6 +21,8 @@ export interface BoardColumn {
   readonly hue?: Hue;
   /** Every card in the column, loaded or not, from the screen. */
   readonly count: number;
+  /** The count is a floor (a filtered count past its cap): it shows as "10,000+". */
+  readonly isCountAtLeast?: boolean;
   readonly cards: ListSource<BoardCard>;
   /** An archived option: shown while it has cards, and never a drop target. */
   readonly isArchived?: boolean;

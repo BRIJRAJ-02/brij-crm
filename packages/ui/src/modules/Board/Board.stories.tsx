@@ -219,6 +219,35 @@ export const Reorder: Story = {
   },
 };
 
+/** A filtered column past the count's cap: its count is a floor, "10,000+". */
+export const CountAtLeast: Story = {
+  render: () => (
+    <Stage height="grid">
+      <Board
+        label="Deals by stage"
+        columns={[
+          {
+            id: STAGE_IDS.lead,
+            title: 'Lead',
+            hue: 'gray',
+            count: 10_000,
+            isCountAtLeast: true,
+            cards: arraySource<BoardCard>(CARDS.slice(0, 2), (card) => card.id),
+          },
+        ]}
+        cardFields={CARD_FIELDS}
+        showEmptyColumns
+        isReadOnly
+        onMove={() => undefined}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('10,000+')).toBeInTheDocument();
+    await expect(canvas.getByLabelText('10,000 or more cards')).toBeInTheDocument();
+  },
+};
+
 /** A column of 2,000 cards draws only those on screen; the source hears the range. */
 export const LongColumn: Story = {
   parameters: { crm: { screenshot: false } },

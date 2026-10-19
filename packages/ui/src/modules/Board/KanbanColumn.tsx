@@ -181,8 +181,11 @@ export function KanbanColumn({
             {column.title}
           </StatusDot>
         )}
-        <span className={styles.count} aria-label={strings.cards(number, plural)}>
-          {number}
+        <span
+          className={styles.count}
+          aria-label={column.isCountAtLeast === true ? strings.cardsAtLeast(number) : strings.cards(number, plural)}
+        >
+          {column.isCountAtLeast === true ? strings.atLeast(number) : number}
         </span>
       </h3>
       {isArchived && draggingFrom !== undefined && <p className={styles.refusal}>{strings.archivedRefuses}</p>}
