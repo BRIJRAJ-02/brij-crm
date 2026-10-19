@@ -5,7 +5,10 @@
 // column change in her tab only and offers her only Save as new view; Save
 // as new view from Ada's Save menu opens a view of its own; the object's
 // address reopens the view last opened; and a deleted view leaves Bea's tab
-// on the default view (AC-470, AC-472 to AC-478, AC-489).
+// on the default view (AC-470, AC-472 to AC-478, AC-489). Then a schema change
+// (a column or a relationship made from the "+" header, here or in another
+// tab) reloads the table without remounting it: its scroll and focus stay, and
+// the writer's own change reads the attributes once.
 import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
@@ -174,5 +177,118 @@ test.describe('saved views: many views and their layout', () => {
       await expect(bea.getByText('This view doesn’t exist or isn’t shared with you.')).toBeVisible();
     }
     await beaContext.close();
+  });
+});
+
+test.describe('a schema change keeps the table where it was', () => {
+  test.skip(({ viewport }) => (viewport?.width ?? 0) < 1000, 'The table flow runs at desktop width.');
+
+  test('a column made from the "+" header stays in sight and focused as the table reloads', async ({ page }) => {
+    test.setTimeout(120_000);
+    const tag = randomUUID().slice(0, 8);
+    const slug = `views-scroll-${tag}`;
+    await newWorkspace(page, `scroll-${tag}@example.com`, slug);
+    await addPerson(page, 'Grace', 'Hopper', `grace-${tag}@acme.com`);
+    const table = grid(page);
+    await expect(table.getByText('Grace Hopper', { exact: true })).toBeVisible();
+    // Scrolled to the far right, where the "+" header sits; the grid's element is marked to tell a remount.
+    await table.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+      element.setAttribute('data-probe', 'kept');
+    });
+    const plus = table.getByRole('columnheader').getByRole('button', { name: 'Add attribute' });
+    let attributeReads = 0;
+    page.on('request', (request) => {
+      if (request.url().includes('/rpc/attributes/list')) attributeReads += 1;
+    });
+    await plus.click();
+    const dialog = page.getByRole('dialog', { name: 'New attribute' });
+    await dialog.getByLabel('Name', { exact: true }).fill('Nickname');
+    await dialog.getByRole('button', { name: 'Create attribute' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('[role="columnheader"]:focus')).toContainText('Nickname');
+    // Past every reload the write brings (its own, and its echo when live): still scrolled, still focused, in sight.
+    await page.waitForTimeout(3000);
+    await expect(page.locator('[role="columnheader"]:focus')).toContainText('Nickname');
+    await expect(table.getByRole('columnheader', { name: /Nickname/ })).toBeInViewport();
+    expect(await table.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+    await expect(table).toHaveAttribute('data-probe', 'kept');
+    // One reload for the write: its echo (live) is skipped as this tab's own.
+    expect(attributeReads).toBe(1);
+  });
+
+  test('a column made in another tab reloads this one without moving its scroll or focus', async ({
+    browser,
+    page,
+  }, testInfo) => {
+    test.setTimeout(120_000);
+    const tag = randomUUID().slice(0, 8);
+    const slug = `views-scroll2-${tag}`;
+    const email = `scroll2-${tag}@example.com`;
+    const code = await newWorkspace(page, email, slug);
+    await addPerson(page, 'Grace', 'Hopper', `grace-${tag}@acme.com`);
+    const table = grid(page);
+    await expect(table.getByText('Grace Hopper', { exact: true })).toBeVisible();
+    const other = await browser.newContext({
+      baseURL: testInfo.project.use.baseURL,
+      viewport: testInfo.project.use.viewport ?? null,
+    });
+    const second = await other.newPage();
+    await signInAgain(second, email, new URL(page.url()).pathname, [code]);
+    await expect(grid(second).getByText('Grace Hopper', { exact: true })).toBeVisible();
+    await table.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+      element.setAttribute('data-probe', 'kept');
+    });
+    const before = await table.evaluate((element) => element.scrollLeft);
+    await table.getByRole('columnheader', { name: /Created at/ }).focus();
+    await grid(second).getByRole('columnheader').getByRole('button', { name: 'Add attribute' }).click();
+    const dialog = second.getByRole('dialog', { name: 'New attribute' });
+    await dialog.getByLabel('Name', { exact: true }).fill('Nickname');
+    await dialog.getByRole('button', { name: 'Create attribute' }).click();
+    await expect(dialog).toBeHidden();
+    if (LIVE) await expect(table.getByRole('columnheader', { name: /Nickname/ })).toHaveCount(1, { timeout: 10_000 });
+    await page.waitForTimeout(3000);
+    expect(await table.evaluate((element) => element.scrollLeft)).toBeGreaterThanOrEqual(before - 1);
+    await expect(table).toHaveAttribute('data-probe', 'kept');
+    await expect(page.locator('[role="columnheader"]:focus')).toContainText('Created at');
+    await other.close();
+  });
+
+  test('a relationship made from the "+" header reloads the table once and keeps its new column in sight', async ({
+    page,
+  }) => {
+    test.setTimeout(120_000);
+    const tag = randomUUID().slice(0, 8);
+    const slug = `views-scroll3-${tag}`;
+    await newWorkspace(page, `scroll3-${tag}@example.com`, slug);
+    await addPerson(page, 'Grace', 'Hopper', `grace-${tag}@acme.com`);
+    const table = grid(page);
+    await expect(table.getByText('Grace Hopper', { exact: true })).toBeVisible();
+    await table.evaluate((element) => {
+      element.scrollLeft = element.scrollWidth;
+      element.setAttribute('data-probe', 'kept');
+    });
+    let attributeReads = 0;
+    page.on('request', (request) => {
+      if (request.url().includes('/rpc/attributes/list')) attributeReads += 1;
+    });
+    await table.getByRole('columnheader').getByRole('button', { name: 'Add attribute' }).click();
+    const attribute = page.getByRole('dialog', { name: 'New attribute' });
+    await attribute.getByLabel('Name', { exact: true }).fill('Employers');
+    await attribute.getByRole('button', { name: /Type$/ }).click();
+    await page.getByRole('option', { name: 'Relationship', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'New relationship' });
+    await dialog.getByRole('button', { name: /Related object/ }).click();
+    await page.getByRole('option', { name: 'Companies', exact: true }).click();
+    await dialog.getByRole('button', { name: 'Create relationship' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.locator('[role="columnheader"]:focus')).toContainText('Employers');
+    await page.waitForTimeout(3000);
+    await expect(page.locator('[role="columnheader"]:focus')).toContainText('Employers');
+    await expect(table.getByRole('columnheader', { name: /Employers/ })).toBeInViewport();
+    await expect(table).toHaveAttribute('data-probe', 'kept');
+    // Its own write reads People's attributes once; its echo (live) is skipped as this tab's own.
+    expect(attributeReads).toBe(1);
   });
 });
