@@ -469,3 +469,46 @@ describe('saving a query on a view a member made', () => {
     expect((await viewRows(w)).at(-1)).toEqual({ object_id: w.people, item_ids: [mine.id] });
   });
 });
+
+describe('a member who may not act on a view (the rules, denied)', () => {
+  it('finds no other member’s private view to rename, lay out, move or delete, and writes nothing', async () => {
+    const w = await workspace();
+    const hers = await make(w.bea.scope, w, { name: 'Hers', visibility: 'private' });
+    const before = (await viewRows(w)).length;
+    const notFound = { code: 'NOT_FOUND', message: VIEW_NOT_FOUND };
+    expect(await refusalOf(updateView(w.cy.scope, { viewId: hers.id, name: 'Mine now' }, hook()))).toEqual(notFound);
+    expect(
+      await refusalOf(setViewLayout(w.cy.scope, { viewId: hers.id, layout: { columns: [], pinnedCount: 1 } }, hook())),
+    ).toEqual(notFound);
+    expect(await refusalOf(moveView(w.cy.scope, { viewId: hers.id, direction: 'up' }, hook()))).toEqual(notFound);
+    expect(await refusalOf(deleteView(w.cy.scope, { viewId: hers.id }, hook()))).toEqual(notFound);
+    expect(await refusalOf(setViewLocked(w.cy.scope, { viewId: w.peopleView, locked: true }, hook()))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(
+      await refusalOf(setDefaultView(w.cy.scope, { objectId: w.people, viewId: w.peopleView }, hook())),
+    ).toMatchObject({ code: 'FORBIDDEN' });
+    expect(await viewRows(w)).toHaveLength(before);
+    expect(await getView(w.bea.scope, hers.id)).toMatchObject({ name: 'Hers', version: 1 });
+  });
+
+  it('keeps a removed member’s private view and bookmark from landing after the removal', async () => {
+    const w = await workspace();
+    await removeMember(w.owner, { memberId: w.bea.id }, hook());
+    expect(await refusalOf(make(w.bea.scope, w, { name: 'Late', visibility: 'private' }))).toMatchObject({
+      code: 'FORBIDDEN',
+    });
+    expect(await refusalOf(markViewOpened(w.bea.scope, { viewId: w.peopleView }))).toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('stores lower case attribute ids whatever the spelling sent', async () => {
+    const w = await workspace();
+    const name = w.attribute('name');
+    const saved = await setViewLayout(
+      w.owner,
+      { viewId: w.peopleView, layout: { columns: [{ attributeId: name.toUpperCase() }], pinnedCount: 1 } },
+      hook(),
+    );
+    expect(saved.config.columns).toEqual([{ attributeId: name }]);
+  });
+});

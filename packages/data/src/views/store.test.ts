@@ -315,4 +315,19 @@ describe('the views store’s writes (milestone 2)', () => {
     h.store.markOpened('acme', A);
     expect(h.writes).toEqual([`opened ${A}`, `opened ${A}`]);
   });
+
+  it('marks the view switched back to, and the held list lands on the last one opened', async () => {
+    const h = harness();
+    const list = h.store.list('acme', OBJECT);
+    list.retain();
+    await list.ready();
+    await h.store.get('acme', A).ready();
+    await h.store.get('acme', B).ready();
+    h.store.markOpened('acme', A);
+    h.store.markOpened('acme', B);
+    h.store.markOpened('acme', A);
+    expect(h.writes).toEqual([`opened ${A}`, `opened ${B}`, `opened ${A}`]);
+    h.store.markOpened('acme', B);
+    expect(list.getSnapshot().lastOpenedViewId).toBe(B);
+  });
 });

@@ -168,7 +168,8 @@ export async function readView(
     .from(views)
     .leftJoin(objects, and(eq(objects.workspaceId, views.workspaceId), eq(objects.id, views.objectId)))
     .where(and(eq(views.workspaceId, scope.workspaceId), eq(views.id, viewId)));
-  const [row] = lock ? await query.for('update', { of: views }) : await query;
+  // No key update: it serialises view writers, and never blocks a member_view_state row's key check on it.
+  const [row] = lock ? await query.for('no key update', { of: views }) : await query;
   if (row === undefined || !onObject(row) || !seesView(memberOf(scope), row)) {
     throw refuse('NOT_FOUND', VIEW_NOT_FOUND);
   }
@@ -186,8 +187,10 @@ export async function listViews(scope: EngineScope, objectId: string): Promise<V
   const caller = memberOf(scope);
   return inWorkspace(scope, async (tx) => {
     await checkObject(tx, scope.access, objectId, 'read');
+    // The summaries only: no config (up to 64 kB a view), which the switcher never shows.
+    const { config: _config, ...summaryColumns } = VIEW_COLUMNS;
     const rows = await tx
-      .select(VIEW_COLUMNS)
+      .select({ ...summaryColumns, config: sql<unknown>`null` })
       .from(views)
       .innerJoin(objects, and(eq(objects.workspaceId, views.workspaceId), eq(objects.id, views.objectId)))
       .where(

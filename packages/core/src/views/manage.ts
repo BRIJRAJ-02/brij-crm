@@ -44,7 +44,22 @@ import {
   type ViewRow,
 } from './views.ts';
 
-const { memberViewState, objects, views } = schema;
+const { memberViewState, members, objects, views } = schema;
+
+/**
+ * Takes a share lock on the caller's own member row and refuses when they are
+ * no longer active: a private view or a bookmark written while their removal
+ * runs waits for it, then is refused, so the removal leaves nothing of theirs
+ * (AC-490).
+ */
+async function stillMember(tx: WorkspaceTx, scope: EngineScope, memberId: string): Promise<void> {
+  const [row] = await tx
+    .select({ status: members.status })
+    .from(members)
+    .where(and(eq(members.workspaceId, scope.workspaceId), eq(members.id, memberId)))
+    .for('share');
+  if (row?.status !== 'active') throw refuse('FORBIDDEN', 'You are no longer a member of this workspace.');
+}
 
 /** A view row as the reads give it, on an object. */
 type ObjectViewRow = ViewRow & { readonly objectId: string };
@@ -76,7 +91,8 @@ async function lockObject(
     })
     .from(objects)
     .where(and(eq(objects.workspaceId, scope.workspaceId), eq(objects.id, objectId)))
-    .for('update');
+    // No key update: view writers take turns, while record writes' key checks on the object never wait.
+    .for('no key update');
   if (row === undefined || row.archivedAt !== null) throw refuse('NOT_FOUND', message);
   await checkObject(tx, scope.access, row.id, 'read', message);
   return row;
@@ -221,6 +237,23 @@ function checkLayoutIds(
   }
 }
 
+/** A layout with every attribute id in its canonical (lower case) spelling, so stored ids match the attributes'. */
+function canonicalLayout<L extends Pick<ViewLayout, 'columns' | 'board'>>(layout: L): L {
+  return {
+    ...layout,
+    columns: layout.columns.map((column) => ({ ...column, attributeId: column.attributeId.toLowerCase() })),
+    ...(layout.board === undefined
+      ? {}
+      : {
+          board: {
+            ...layout.board,
+            groupByAttributeId: layout.board.groupByAttributeId.toLowerCase(),
+            cardFields: layout.board.cardFields.map((id) => id.toLowerCase()),
+          },
+        }),
+  };
+}
+
 /** Refuses a config past 64 kB, serialised. */
 function checkSize(config: ViewConfig): void {
   if (new TextEncoder().encode(JSON.stringify(config)).length > MAX_VIEW_CONFIG_BYTES) {
@@ -277,7 +310,7 @@ export async function createView(
   if (input.visibility === 'private' && caller === undefined) {
     throw refuse('FORBIDDEN', 'Only a member can keep a private view.');
   }
-  const config = ViewConfig.safeParse(input.config);
+  const config = ViewConfig.safeParse(canonicalLayout(input.config));
   if (!config.success) throw refuse('CONFIG_INVALID', 'This view’s settings are not valid.');
   const { result } = await runWrite(
     scope,
@@ -307,6 +340,7 @@ export async function createView(
       const stored: ViewConfig = { ...rest, ...(filter === undefined ? {} : { filter }) };
       checkSize(stored);
       const creator = caller ?? null;
+      if (input.visibility === 'private' && creator !== null) await stillMember(tx, scope, creator);
       const position = await nextPosition(tx, scope, object, input.visibility, creator);
       const by = touched(scope);
       await nameGuard(object.pluralName, () =>
@@ -415,21 +449,22 @@ export async function setViewLayout(
       const { tx } = context;
       const row = await readView(tx, scope, viewId, true);
       check(scope, 'edit', row);
+      const layout = canonicalLayout(input.layout);
       const visible = await visibleAttributeIds(tx, scope, row.objectId);
       const pluralName = await pluralOf(tx, scope, row.objectId);
-      checkLayoutIds(input.layout, visible.any, pluralName);
+      checkLayoutIds(layout, visible.any, pluralName);
       const stored = configOf(row.config);
-      const merged = mergeLayout(stored.columns, input.layout, visible.live);
+      const merged = mergeLayout(stored.columns, layout, visible.live);
       const board =
-        input.layout.board === undefined
+        layout.board === undefined
           ? stored.board
           : {
-              ...input.layout.board,
-              cardFields: [
-                ...input.layout.board.cardFields,
-                // Card fields the caller can't see stay, after theirs.
-                ...(stored.board?.cardFields ?? []).filter((id) => !visible.live.has(id)),
-              ].slice(0, 6),
+              ...layout.board,
+              // Card fields the caller can't see stay, after theirs; theirs give way to keep them (at most 6).
+              cardFields: (() => {
+                const kept = (stored.board?.cardFields ?? []).filter((id) => !visible.live.has(id));
+                return [...layout.board.cardFields.slice(0, Math.max(0, 6 - kept.length)), ...kept];
+              })(),
             };
       const next = ViewConfig.safeParse({
         ...stored,
@@ -444,7 +479,7 @@ export async function setViewLayout(
           .update(views)
           .set({
             config: next.data,
-            ...(input.layout.kind === undefined ? {} : { kind: input.layout.kind }),
+            ...(layout.kind === undefined ? {} : { kind: layout.kind }),
             version: sql`${views.version} + 1`,
             ...touched(scope),
           })
@@ -490,21 +525,36 @@ export async function moveView(
       const at = group.findIndex((each) => each.id === row.id);
       const other = group[input.direction === 'up' ? at - 1 : at + 1];
       if (at === -1 || other === undefined) return object.id;
-      // Swapped by place: the group is numbered afresh in its new order, so equal positions still move.
-      const order = group.map((each) => each.id);
-      order[at] = other.id;
-      order[input.direction === 'up' ? at - 1 : at + 1] = row.id;
-      const start = row.visibility === 'workspace' ? 1 : 0;
-      const changed: string[] = [];
-      for (const [index, id] of order.entries()) {
-        const position = start + index;
-        if (group.find((each) => each.id === id)?.position === position) continue;
-        changed.push(id);
-        await tx
-          .update(views)
-          .set({ position, version: sql`${views.version} + 1`, ...touched(scope) })
-          .where(and(eq(views.workspaceId, scope.workspaceId), eq(views.id, id)));
-      }
+      const mine = group[at];
+      if (mine === undefined) return object.id;
+      // The two swap positions. Only when they share one (rows seeded alike) is the group numbered afresh, in one
+      // statement, so a move costs two row writes however long the group is.
+      const moves: { readonly id: string; readonly position: number }[] =
+        mine.position !== other.position
+          ? [
+              { id: mine.id, position: other.position },
+              { id: other.id, position: mine.position },
+            ]
+          : (() => {
+              const order = group.map((each) => each.id);
+              order[at] = other.id;
+              order[input.direction === 'up' ? at - 1 : at + 1] = row.id;
+              const start = row.visibility === 'workspace' ? 1 : 0;
+              return order
+                .map((id, index) => ({ id, position: start + index }))
+                .filter((move) => group.find((each) => each.id === move.id)?.position !== move.position);
+            })();
+      const values = sql.join(
+        moves.map((move) => sql`(${move.id}::uuid, ${move.position}::int)`),
+        sql`, `,
+      );
+      // Only the two that swapped move a version; a renumbered neighbour keeps its body.
+      await tx.execute(sql`
+        update ${views} set position = moved.position,
+          version = ${views.version} + case when ${views.id} in (${mine.id}::uuid, ${other.id}::uuid) then 1 else 0 end
+        from (values ${values}) as moved(id, position)
+        where ${views.workspaceId} = ${scope.workspaceId} and ${views.id} = moved.id`);
+      const changed = [mine.id, other.id];
       context.record({ views: changed.map((id) => ({ viewId: id, objectId: object.id })) });
       return object.id;
     },
@@ -606,8 +656,11 @@ export async function deleteView(
     scope,
     async (context) => {
       const { tx } = context;
+      // The object first, then the view (the one lock order): a default set meanwhile is seen, never a stale one.
+      const found = await readView(tx, scope, viewId, false);
+      const object = await lockObject(tx, scope, found.objectId, VIEW_NOT_FOUND);
       const row = await readView(tx, scope, viewId, true);
-      check(scope, 'delete', row, await pluralOf(tx, scope, row.objectId));
+      check(scope, 'delete', row, object.pluralName);
       await tx.delete(views).where(and(eq(views.workspaceId, scope.workspaceId), eq(views.id, row.id)));
       context.record({ views: [{ viewId: row.id, objectId: row.objectId }] });
     },
@@ -628,6 +681,7 @@ export async function markViewOpened(scope: EngineScope, input: { readonly viewI
   await inWorkspace(scope, async (tx) => {
     const row = await readView(tx, scope, viewId, false);
     if (caller === undefined) return;
+    await stillMember(tx, scope, caller);
     await tx
       .insert(memberViewState)
       .values({ workspaceId: scope.workspaceId, memberId: caller, parentId: row.objectId, viewId: row.id })

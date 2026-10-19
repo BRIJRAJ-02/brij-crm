@@ -325,7 +325,7 @@ export function createViewsStore(deps: ViewsDeps) {
   const servers = new Map<string, View>();
   const layers = new Map<string, { readonly layout: ViewLayout; readonly isLocal: boolean }>();
   const saves = new Map<string, { queued?: ViewLayout; inFlight: boolean; lastSent: number; cancel?: () => void }>();
-  const opened = new Map<string, number>();
+  const opened = new Map<string, { readonly viewId: string; readonly at: number }>();
   const now = deps.now ?? Date.now;
 
   /** The body as shown: the server's view with this tab's layout on top. */
@@ -368,6 +368,19 @@ export function createViewsStore(deps: ViewsDeps) {
     const list = lists.get(key(workspace, objectId));
     if (list?.isRetained() === true) void list.reread();
     else list?.markStale();
+  };
+
+  /** A write's answer as the object's views in switcher order: the held list takes it, with no second read. */
+  const takeSummaries = (workspace: string, objectId: string, summaries: readonly ViewSummary[]) => {
+    const list = lists.get(key(workspace, objectId));
+    const held = list?.get();
+    if (list === undefined || held?.status !== 'ready') {
+      list?.markStale();
+      return;
+    }
+    const defaultViewId = summaries.find((each) => each.isDefault)?.id;
+    const { defaultViewId: _old, ...rest } = held;
+    list.set({ ...rest, views: summaries, ...(defaultViewId === undefined ? {} : { defaultViewId }) });
   };
 
   /** One server confirmed write: its mutation id is logged for its echo, and forgotten on a refusal. */
@@ -606,8 +619,11 @@ export function createViewsStore(deps: ViewsDeps) {
     },
     /** Swaps a view with its neighbour in its group, waiting for the server; the list takes the new order. */
     async move(workspace: string, objectId: string, viewId: string, direction: 'up' | 'down'): Promise<void> {
-      await confirmed((mutationId) => deps.api.move({ workspace, viewId, direction, mutationId }));
-      refreshList(workspace, objectId);
+      takeSummaries(
+        workspace,
+        objectId,
+        await confirmed((mutationId) => deps.api.move({ workspace, viewId, direction, mutationId })),
+      );
     },
     /** Locks or unlocks a shared view (`views.manage`), waiting for the server. */
     async setLocked(workspace: string, viewId: string, locked: boolean): Promise<View> {
@@ -618,8 +634,11 @@ export function createViewsStore(deps: ViewsDeps) {
     },
     /** Makes a shared view the object's default (`views.manage`), waiting for the server. */
     async setDefault(workspace: string, objectId: string, viewId: string): Promise<void> {
-      await confirmed((mutationId) => deps.api.setDefault({ workspace, objectId, viewId, mutationId }));
-      refreshList(workspace, objectId);
+      takeSummaries(
+        workspace,
+        objectId,
+        await confirmed((mutationId) => deps.api.setDefault({ workspace, objectId, viewId, mutationId })),
+      );
       // Both the old default and the new one changed: the held bodies of the object are read again.
       for (const body of bodiesOn(workspace, objectId)) {
         if (body.isRetained()) void body.reread();
@@ -641,10 +660,18 @@ export function createViewsStore(deps: ViewsDeps) {
      * quiet (the next open marks it again).
      */
     markOpened(workspace: string, viewId: string) {
-      const markKey = key(workspace, viewId);
+      const objectId = servers.get(key(workspace, viewId))?.objectId;
+      // The held list lands on this view next time the object's address opens, in this tab too.
+      const list = objectId === undefined ? undefined : lists.get(key(workspace, objectId));
+      const held = list?.get();
+      if (list !== undefined && held?.status === 'ready' && held.lastOpenedViewId !== viewId) {
+        list.set({ ...held, lastOpenedViewId: viewId });
+      }
+      // Skipped only when this view is already the object's last mark, made under 10 seconds ago.
+      const markKey = key(workspace, objectId ?? viewId);
       const last = opened.get(markKey);
-      if (last !== undefined && now() - last < MARK_OPENED_MS) return;
-      opened.set(markKey, now());
+      if (last !== undefined && last.viewId === viewId && now() - last.at < MARK_OPENED_MS) return;
+      opened.set(markKey, { viewId, at: now() });
       deps.api.markOpened({ workspace, viewId }).catch(() => {
         opened.delete(markKey);
       });
