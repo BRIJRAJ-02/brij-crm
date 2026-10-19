@@ -53,7 +53,7 @@ describe('access.mine', () => {
       memberId: expect.any(String) as string,
       role: 'member',
       roleLabel: 'Member',
-      permissions: ['records.export'],
+      permissions: ['records.export', 'booking.manage'],
     });
     const stranger = await memberWithWorkspace(app);
     expect(await refusal(() => stranger.client.access.mine({ workspace: slug }))).toMatchObject({

@@ -46,6 +46,10 @@ const READS: ReadonlySet<string> = new Set([
   'trash.count',
   'tasks.get',
   'tasks.list',
+  // Booking pages (spec 0025).
+  'bookingPages.list',
+  'bookingPages.get',
+  'bookings.list',
 ]);
 
 let db: Database;
@@ -533,6 +537,38 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'tasks', item_ids: [task.id], record_ids: [], mutation_id: mutationId },
     ];
   },
+  // Booking pages (spec 0025): settings, not CRM data, so no outbox row; still one poke per write.
+  'bookingPages.create': async (m, mutationId) => {
+    await m.client.bookingPages.create({ workspace: m.slug, id: newId(), title: 'Intro', timeZone: 'UTC', mutationId });
+    return [];
+  },
+  'bookingPages.update': async (m, mutationId) => {
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    await m.client.bookingPages.update({
+      workspace: m.slug,
+      pageId: page.id,
+      settings: { title: 'Hello' },
+      mutationId,
+    });
+    return [];
+  },
+  'bookingPages.delete': async (m, mutationId) => {
+    const page = await m.client.bookingPages.create({
+      workspace: m.slug,
+      id: newId(),
+      title: 'Intro',
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    await m.client.bookingPages.delete({ workspace: m.slug, pageId: page.id, mutationId });
+    return [];
+  },
   // Background jobs (spec 0008): one jobs row per write, naming the job.
   'jobs.startTest': async (m, mutationId) => {
     const job = await m.client.jobs.startTest({ workspace: m.slug, id: newId(), items: 3, mutationId });
@@ -578,6 +614,8 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'jobs.confirm': 2,
   'tasks.create': 2,
   'tasks.update': 2,
+  'bookingPages.update': 2,
+  'bookingPages.delete': 2,
   'attributes.restore': 2,
   'relationships.update': 2,
   'options.create': 2,

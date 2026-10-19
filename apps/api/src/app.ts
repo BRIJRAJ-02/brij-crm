@@ -1,6 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { type ErrorCode, errorStatus } from '@crm/contracts';
-import { jobKinds, type JobRegistry, type RuleSource } from '@crm/core';
+import {
+  createBusyCache,
+  jobKinds,
+  NO_CALENDAR,
+  type BookingCalendar,
+  type JobRegistry,
+  type RuleSource,
+} from '@crm/core';
 import type { Database, IdentityStore } from '@crm/db';
 import type { AnyRouter } from '@orpc/server';
 import { Hono, type Context } from 'hono';
@@ -12,6 +19,8 @@ import { createReadGate } from './gate.ts';
 import { errorFields, log } from './log.ts';
 import { type Analytics, NO_ANALYTICS } from './monitoring/posthog.ts';
 import { captureFault, nameRequest, withRequestScope } from './monitoring/sentry.ts';
+import { mountPublicBooking } from './public/booking.ts';
+import { createMemoryLimiter, type PublicLimiter } from './public/limits.ts';
 import { createRealtimeTokens } from './realtime/tokens.ts';
 import { NO_WAKE, OVERDUE_WAKE_MS, throttleWake, type WakeRelay } from './realtime/wake.ts';
 import { router as appRouter } from './router.ts';
@@ -92,6 +101,16 @@ export interface AppServices {
   readonly analytics?: Analytics;
   /** The job kinds this API knows (spec 0008): the environment's (`jobKinds`) unless a test passes its own. */
   readonly jobs?: JobRegistry;
+  /**
+   * The calendar calls booking pages make (spec 0025): busy times and the
+   * booking's event. None (`NO_CALENDAR`) until spec 0024's provider is wired
+   * in; tests pass a fake. Busy answers are kept 60 seconds per member and range.
+   */
+  readonly calendar?: BookingCalendar;
+  /** The public booking routes' limiter (spec 0025, AC-643): this process's memory unless a test passes its own. */
+  readonly bookingLimiter?: PublicLimiter;
+  /** The clock the public booking routes read, for tests. */
+  readonly now?: () => Date;
 }
 
 /** The API. `router` is the app's own unless a test passes one. */
@@ -229,6 +248,16 @@ export function createApp({
 
   // It sees only the client IP the edge guard trusted.
   app.on(['GET', 'POST'], '/auth/*', (c) => auth.handle(c.req.raw, c.get('clientIp'), c.get('origin')));
+
+  // Booking pages' public routes (spec 0025): a page's public key, no session; writes passed the Origin check above.
+  const calendar = services.calendar ?? NO_CALENDAR;
+  mountPublicBooking(app, {
+    db,
+    calendar: { busy: createBusyCache(calendar.busy), events: calendar.events },
+    limiter: services.bookingLimiter ?? createMemoryLimiter(),
+    wakeRelay,
+    ...(services.now === undefined ? {} : { now: services.now }),
+  });
 
   app.notFound(() => errorResponse('NOT_FOUND', 'There is nothing at this address.'));
   app.onError((error, c) => {
