@@ -87,6 +87,12 @@ interface DrawnQuestion {
   focus(): void;
 }
 
+/** A country's flag, from its two regional indicator letters. */
+function flagOf(code: string): string {
+  const upper = code.toUpperCase();
+  return String.fromCodePoint(0x1f1e6 + upper.charCodeAt(0) - 65, 0x1f1e6 + upper.charCodeAt(1) - 65);
+}
+
 /** Countries by code with their names in the form's language, sorted by name. */
 function countriesIn(language: string): readonly { readonly code: string; readonly name: string }[] {
   let names: Intl.DisplayNames | undefined;
@@ -115,9 +121,12 @@ function drawQuestion(
   const id = `${context.prefix}-${question.key}`;
   const errorId = `${id}-error`;
   const error = h('p', { class: cls('error'), id: errorId });
-  const optional = question.required || question.answerType === 'checkbox' || question.answerType === 'yes_no';
+  const noMarker = question.required || question.answerType === 'checkbox' || question.answerType === 'yes_no';
+  // A question with no label yet (only in the builder's preview) reads "Untitled question", muted.
+  const named = (): Node | string =>
+    question.label.trim() === '' ? h('span', { class: cls('untitled') }, [words.untitledQuestion]) : question.label;
   const labelText = (): (Node | string)[] =>
-    optional ? [question.label] : [question.label, ' ', h('span', { class: cls('optional') }, [words.optional])];
+    noMarker ? [named()] : [named(), ' ', h('span', { class: cls('optional') }, [words.optional])];
   const describe = { 'aria-describedby': errorId };
   const listen = (control: HTMLElement) => {
     control.addEventListener('input', context.onInput);
@@ -219,23 +228,37 @@ function drawQuestion(
       });
       listen(box);
       const node = h('div', { class: cls('field') }, [
-        h('label', { class: cls('choice'), for: id }, [box, h('span', { class: cls('label') }, [question.label])]),
+        h('label', { class: cls('choice'), for: id }, [box, h('span', { class: cls('label') }, [named()])]),
         error,
       ]);
       return { question, node, read: () => box.checked, setError: invalidOn([box]), focus: () => box.focus() };
     }
     case 'phone': {
-      const codes = countriesIn(context.language).map((country) =>
-        h('option', { value: country.code, selected: country.code === context.countryGuess }, [
-          `${country.name} +${DIAL_CODES.get(country.code) ?? ''}`,
-        ]),
+      // Closed, the picker shows the flag and code ("🇺🇸 +1"); its list and its name carry the country.
+      const countries = countriesIn(context.language);
+      const named = new Map(countries.map((country) => [country.code, country.name]));
+      const full = (code: string) => `${flagOf(code)} ${named.get(code) ?? code} +${DIAL_CODES.get(code) ?? ''}`;
+      const short = (code: string) => `${flagOf(code)} +${DIAL_CODES.get(code) ?? ''}`;
+      const codes = countries.map((country) =>
+        h('option', { value: country.code, selected: country.code === context.countryGuess }, [full(country.code)]),
       );
-      const dial = h(
-        'select',
-        { class: cls('input'), 'aria-label': words.dialCode, name: `${question.key}_country` },
-        codes,
-      );
+      const dial = h('select', { class: `${cls('input')} ${cls('dial')}`, name: `${question.key}_country` }, codes);
       if (context.countryGuess === undefined || !DIAL_CODES.has(context.countryGuess)) dial.value = 'US';
+      let shortened: HTMLOptionElement | undefined;
+      const compact = () => {
+        if (shortened !== undefined) shortened.textContent = full(shortened.value);
+        shortened = dial.selectedOptions[0];
+        if (shortened !== undefined) shortened.textContent = short(shortened.value);
+        dial.setAttribute('aria-label', words.dialCodeOf(named.get(dial.value) ?? dial.value));
+      };
+      const expand = () => {
+        if (shortened !== undefined) shortened.textContent = full(shortened.value);
+        shortened = undefined;
+      };
+      compact();
+      dial.addEventListener('mousedown', expand);
+      dial.addEventListener('change', compact);
+      dial.addEventListener('blur', compact);
       const input = h('input', {
         class: cls('input'),
         id,

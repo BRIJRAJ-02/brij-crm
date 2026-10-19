@@ -68,6 +68,10 @@
     letter-spacing: var(--tracking-body-strong);
   }
 
+  .untitled {
+    color: var(--text-tertiary);
+  }
+
   .optional {
     color: var(--text-secondary);
     font: var(--text-body);
@@ -110,8 +114,13 @@
 
   .phone {
     display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    grid-template-columns: auto minmax(0, 1fr);
     gap: var(--space-8);
+  }
+
+  /* Wide enough for a flag and a code; the number takes the rest. */
+  .dial {
+    inline-size: calc(var(--size-input) * 3);
   }
 
   .choices {

@@ -1,30 +1,17 @@
 # Forms
 
-Spec 0023, milestone 1. Public forms that turn what visitors send into records: built and published in Settings, filled in at a hosted link, processed into records by a background job.
+Captures, Forms (spec 0023, `0023-experience.md`): forms that make a person from every enquiry. The routes are `/w/$slug/captures/forms` (the list) and `/w/$slug/captures/forms/$formId` (the editor); the Captures frame and its Links · Forms tabs come from the shell.
 
-## Settings, Forms (`/w/$slug/settings/forms`, FormsScreen)
+## Screens
 
-- **Purpose**: the workspace's forms, live, paused and draft, and the archived ones apart.
-- **Main task**: owners and admins make a new form (its name and the object it fills, People first), or open one.
-- **Leaves out**: analytics, sites and embeds (milestones 3 and 4), and anything about one form.
+- **The list** (`FormsScreen.tsx`): one Card per form, with its enquiries this month, spam and last enquiry as Badges, the Accepting switch (pause and resume), and a menu (Open, Copy the address, Duplicate, Delete, which names the submissions that go with it). New form makes "Untitled form" at once and opens it.
+- **The editor** (`FormEditor.tsx`): the TopBar holds the name (renamed in place from the pencil), Preview (the draft in a new tab, marked Preview, not live), Publish and the menu. FormEditorLayout holds the status line, the tabs once published (Form · Settings · Install · Submissions), notices, and the live preview with Colour and Corners. The draft saves itself a second after the last change; a teammate's save first shows "Bea changed this form. Load their version".
+- **Questions** (`QuestionsSection.tsx`): QuestionList cards, closed until opened, with Add a question, presets, Close all, Duplicate, Delete with Undo, and reorder by handle or keyboard.
+- **The first publish** (`PublishDialog.tsx`): Step 1 of 2, name and address (checked as typed); step 2, the object and each question's Where it goes, prefilled by label, or Build one out of this form for `schema.manage`; then Your form is live.
+- **Settings, Install, Submissions** (`SettingsTab.tsx`, `InstallTab.tsx`, `SubmissionsTab.tsx`).
 
-## A form (`/w/$slug/settings/forms/$formId?tab=build|submissions`, FormScreen)
+## Rules
 
-- **Purpose**: one form's builder and its submissions, with its public link, status and publish.
-- **Main task**: shape the draft, preview it, publish it, share its link, and read what comes in.
-- **Leaves out**: steps and conditions, consent blocks, linked person, company and deal targets, round robin, notices, booking (milestone 2).
-
-## The hosted page (`/f/<publicKey>`, `src/public/`)
-
-- **Purpose**: the form a visitor fills in, outside the CRM app (its own build entry, `form.html`).
-- **Main task**: answer the questions and send them, then read the thank you or go where the form sends them.
-- **Leaves out**: steps, prefill, the offline retry queue, branding and custom domains (later milestones).
-
-## Notes
-
-- Every question draws through its type's one editor (`AttributeEditor`, surface `form`) in the hosted page and the builder's preview alike (`FormFields`), so a form asks exactly what the record would take. Form only questions take a type from a short list (`FORM_ONLY_CHOICES`).
-- The builder edits a local copy of the draft (`draft.ts`, plain functions over the document). Save draft and Publish wait for the server; the route then reloads the form, and the screen is keyed by the form's revision, so it starts again from what the server holds. A save someone else's change beat (`FORM_CHANGED`) says so and reloads.
-- Publish names every refusal in a danger Callout: a field the person can only read (AC-546), the match field no required question asks, an owner who left.
-- Preview saves the draft, then draws it in a Modal through the same fields as the hosted page; Submit checks the answers and sends nothing (AC-550).
-- Submissions: a Table newest first with a state filter (`&state=`), Show more for older pages, and the open one (`&submission=`) in a Panel: its answers through each type's display, the records it touched (links to their pages), the bot check's verdict, the owner it gave, refused answers and why it failed. Retry (failed only) and Delete need `forms.manage`.
-- Not live yet: the submissions list doesn't update while open (no `forms` change event in milestone 1); Refresh is reloading the page.
+- `draft.ts` holds every change to a draft as a plain function; `draft.test.ts` checks them.
+- The publish check is `publishProblem` from `@crm/data/forms`, the server's own.
+- The visitor's page is `src/public/main.ts`, drawn by `@crm/ui/public-form` with no React (about 12 kB gzipped).

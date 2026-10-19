@@ -12,9 +12,7 @@ import {
   QUESTION_PRESETS,
 } from '@crm/data/forms';
 import {
-  Badge,
   Button,
-  Card,
   Checkbox,
   Field,
   LockReason,
@@ -25,6 +23,7 @@ import {
   QuestionList,
   Select,
   SubmenuTrigger,
+  Tooltip,
   type QuestionListItem,
   type Toasts,
 } from '@crm/ui';
@@ -121,11 +120,10 @@ export function QuestionsSection(props: QuestionsSectionProps) {
   }));
 
   return (
-    <Card
-      title={strings.questions}
+    <QuestionList
+      label={strings.questions}
       actions={
         <>
-          <Badge count={draft.questions.length} label={strings.questions} />
           {!isReadOnly && (
             <>
               <Button icon="plus" onPress={add} isDisabled={isFull}>
@@ -170,55 +168,77 @@ export function QuestionsSection(props: QuestionsSectionProps) {
           )}
         </>
       }
-    >
-      <QuestionList
-        label={strings.questions}
-        items={items}
-        openIds={openIds}
-        onOpenChange={(id, isOpen) => {
-          // The question a publish refused stays open until it is fixed.
-          if (!isOpen && problem?.questionId === id) return;
-          setOpen((before) => {
-            const next = new Set(before);
-            if (isOpen) next.add(id);
-            else next.delete(id);
-            return next;
-          });
-        }}
-        renderOpen={(id) => {
-          const question = draft.questions.find((each) => each.id === id);
-          if (question === undefined) return null;
-          return (
-            <QuestionEditor
-              question={question}
-              draft={draft}
-              attributes={attributes}
-              isReadOnly={isReadOnly}
-              isJustAdded={justAdded === id}
-              {...(problem?.questionId === id ? { problem: problem.message } : {})}
-              onChange={(change) => {
-                onChange((before) => changeQuestion(before, id, change, liveIds));
-              }}
-              onDuplicate={() => {
-                const copy = newId();
-                onChange((before) => duplicateQuestion(before, id, copy));
-                opened(copy);
-              }}
-              onDelete={() => {
-                remove(question);
-              }}
-            />
-          );
-        }}
-        {...(isReadOnly
-          ? {}
-          : {
-              onMove: (id: string, index: number) => {
-                onChange((before) => moveQuestion(before, id, index));
-              },
-            })}
-      />
-    </Card>
+      items={items}
+      openIds={openIds}
+      onOpenChange={(id, isOpen) => {
+        // The question a publish refused stays open until it is fixed.
+        if (!isOpen && problem?.questionId === id) return;
+        setOpen((before) => {
+          const next = new Set(before);
+          if (isOpen) next.add(id);
+          else next.delete(id);
+          return next;
+        });
+      }}
+      renderOpen={(id) => {
+        const question = draft.questions.find((each) => each.id === id);
+        if (question === undefined) return null;
+        return (
+          <QuestionEditor
+            question={question}
+            draft={draft}
+            attributes={attributes}
+            isReadOnly={isReadOnly}
+            isJustAdded={justAdded === id}
+            {...(problem?.questionId === id ? { problem: problem.message } : {})}
+            onChange={(change) => {
+              onChange((before) => changeQuestion(before, id, change, liveIds));
+            }}
+          />
+        );
+      }}
+      renderFooter={(id) => {
+        const question = draft.questions.find((each) => each.id === id);
+        if (question === undefined || isReadOnly) return null;
+        return (
+          <>
+            <Tooltip content={strings.duplicateQuestion}>
+              <Button
+                variant="ghost"
+                icon="copy"
+                label={strings.duplicateQuestion}
+                onPress={() => {
+                  const copy = newId();
+                  onChange((before) => duplicateQuestion(before, id, copy));
+                  opened(copy);
+                }}
+              />
+            </Tooltip>
+            {isMatchQuestion(draft, question) ? (
+              <LockReason reason={strings.emailStays} />
+            ) : (
+              <Tooltip content={strings.deleteQuestion}>
+                <Button
+                  variant="ghost-danger"
+                  icon="trash"
+                  label={strings.deleteQuestion}
+                  onPress={() => {
+                    remove(question);
+                  }}
+                />
+              </Tooltip>
+            )}
+          </>
+        );
+      }}
+      {...(isReadOnly
+        ? {}
+        : {
+            onMove: (id: string, index: number) => {
+              onChange((before) => moveQuestion(before, id, index));
+            },
+          })}
+    />
   );
 }
 
@@ -232,11 +252,9 @@ interface QuestionEditorProps {
   readonly isJustAdded: boolean;
   readonly problem?: string;
   readonly onChange: (change: QuestionChange) => void;
-  readonly onDuplicate: () => void;
-  readonly onDelete: () => void;
 }
 
-/** One question open: Question, Answer type, Choices, Placeholder, Where it goes, Visitors must answer, then its actions. */
+/** One question open: Question, Answer type, Choices, Placeholder, Where it goes, Visitors must answer. */
 function QuestionEditor({
   question,
   draft,
@@ -245,8 +263,6 @@ function QuestionEditor({
   isJustAdded,
   problem,
   onChange,
-  onDuplicate,
-  onDelete,
 }: QuestionEditorProps) {
   const labelRef = useRef<HTMLInputElement & HTMLTextAreaElement>(null);
 
@@ -342,16 +358,6 @@ function QuestionEditor({
           onChange({ required });
         }}
       />
-      {!isReadOnly && (
-        <div>
-          <Button variant="ghost" icon="copy" label={strings.duplicateQuestion} onPress={onDuplicate} />
-          {isLocked ? (
-            <LockReason reason={strings.emailStays} />
-          ) : (
-            <Button variant="ghost" icon="trash" label={strings.deleteQuestion} onPress={onDelete} />
-          )}
-        </div>
-      )}
     </>
   );
 }

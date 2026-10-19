@@ -53,6 +53,7 @@ describe('@crm/ui', () => {
       'FilterChip',
       'Form',
       'FormEditorLayout',
+      'FormEditorStatus',
       'GRID_SHORTCUTS',
       'HUES',
       'HostedFormPreview',

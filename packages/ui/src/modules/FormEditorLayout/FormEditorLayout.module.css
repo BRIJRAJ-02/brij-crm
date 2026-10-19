@@ -13,7 +13,8 @@
   }
 
   .status {
-    display: flex;
+    display: inline-flex;
+    flex: none;
     gap: var(--space-6);
     align-items: center;
     margin: 0;

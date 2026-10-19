@@ -1,6 +1,7 @@
-/* QuestionList: cards on the raised surface, space-8 apart, each a
+/* QuestionList: a plain section (its heading, count and actions on one
+   centred row, no frame of its own), then cards on the raised surface, space-8 apart, each a
    hairline border and radius-md. The header is one row: the handle, then
-   the question (muted while untitled), its type Tag and its facts, with
+   the question (muted while untitled), its type Badge and its facts, with
    where it is filed under them in text-secondary, then a chevron. No hover
    fill. An open card shows its editor under a hairline. A card a publish
    refused takes the danger border. A dragged card fades; the drop line is
@@ -9,7 +10,37 @@
   .root {
     display: flex;
     flex-direction: column;
+    gap: var(--space-12);
     min-inline-size: 0;
+  }
+
+  /* The section's own header, not a card: the heading and its count, then the actions at the end, one centred row. */
+  .header {
+    display: flex;
+    gap: var(--space-8);
+    align-items: center;
+    min-block-size: var(--size-input);
+  }
+
+  .heading {
+    margin: 0;
+    color: var(--text);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .actions {
+    display: flex;
+    gap: var(--space-4);
+    align-items: center;
+    margin-inline-start: auto;
+  }
+
+  /* An open card's Duplicate and Delete, at the end of its body. */
+  .footer {
+    display: flex;
+    gap: var(--space-4);
+    justify-content: flex-end;
   }
 
   .list {

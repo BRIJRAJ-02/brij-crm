@@ -134,7 +134,7 @@ export function FormsScreen({ slug, forms }: FormsScreenProps) {
               <>
                 {isPublished ? (
                   <Switch
-                    label={isAccepting ? strings.accepting : strings.notAccepting}
+                    label={strings.accepting}
                     isSelected={isAccepting}
                     isDisabled={!canManage || busy === form.id}
                     onChange={(next) => {

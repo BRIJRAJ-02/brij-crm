@@ -36,6 +36,10 @@ export interface FormStrings {
   readonly previewNote: string;
   readonly recaptchaNotice: string;
   readonly honeypot: string;
+  /** A question with no label yet, in the builder's preview. */
+  readonly untitledQuestion: string;
+  /** The dial code picker's name with the country picked: "Country code, United States". */
+  readonly dialCodeOf: (country: string) => string;
 }
 
 const EN: FormStrings = {
@@ -70,6 +74,8 @@ const EN: FormStrings = {
   previewNote: 'A preview of the form. It can’t be filled in here.',
   recaptchaNotice: 'This form is protected by reCAPTCHA. Google’s Privacy Policy and Terms of Service apply.',
   honeypot: 'Leave this empty',
+  untitledQuestion: 'Untitled question',
+  dialCodeOf: (country) => `Country code, ${country}`,
 };
 
 const CATALOGUE: Readonly<Record<FormLanguage, Partial<FormStrings>>> = {

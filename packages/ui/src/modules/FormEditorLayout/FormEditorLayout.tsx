@@ -27,6 +27,19 @@ export interface FormEditorLayoutProps {
   readonly children: ReactNode;
 }
 
+/**
+ * The status line on its own: for the TopBar's meta, beside the form's name,
+ * so the header stays one line ("● Published · v7", "○ Not published").
+ */
+export function FormEditorStatus({ tone, text }: { readonly tone: FormEditorTone; readonly text: string }) {
+  return (
+    <span className={styles.status}>
+      <span className={styles.dot} data-tone={tone} aria-hidden="true" />
+      {text}
+    </span>
+  );
+}
+
 /** The narrowest width that holds the body beside the 400px preview. */
 const TWO_COLUMNS_MIN = 880;
 
@@ -63,12 +76,7 @@ export function FormEditorLayout({ status, tabs, notices, preview, previewContro
 
   return (
     <div ref={rootRef} className={styles.root}>
-      {status !== undefined && (
-        <p className={styles.status}>
-          <span className={styles.dot} data-tone={status.tone} aria-hidden="true" />
-          {status.text}
-        </p>
-      )}
+      {status !== undefined && <FormEditorStatus tone={status.tone} text={status.text} />}
       {tabs !== undefined && <div className={styles.tabs}>{tabs}</div>}
       {notices}
       <div className={styles.body} data-columns={(preview !== undefined && isWide) || undefined}>

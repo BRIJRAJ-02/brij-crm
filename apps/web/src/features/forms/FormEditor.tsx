@@ -19,6 +19,7 @@ import {
   Callout,
   Field,
   FormEditorLayout,
+  FormEditorStatus,
   HostedFormPreview,
   Menu,
   MenuItem,
@@ -281,10 +282,11 @@ export function FormEditor(props: FormEditorProps) {
                     }}
                   />
                 </Popover>
+                <FormEditorStatus tone={status.tone} text={status.text} />
               </>
             ),
           }
-        : {})}
+        : { meta: <FormEditorStatus tone={status.tone} text={status.text} /> })}
     >
       <Button
         icon="eye"
@@ -420,7 +422,6 @@ export function FormEditor(props: FormEditorProps) {
         topBar,
         body: (
           <FormEditorLayout
-            status={status}
             notices={notices}
             {...(isPublished
               ? {

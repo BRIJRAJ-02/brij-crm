@@ -1,8 +1,8 @@
-import { useState, type KeyboardEvent, type ReactNode } from 'react';
+import { useId, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { Button as AriaButton, DropIndicator, GridList, GridListItem, useDragAndDrop } from 'react-aria-components';
+import { Badge } from '../../atoms/Badge/Badge.tsx';
 import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
-import { Tag } from '../../atoms/Tag/Tag.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import { reorder } from '../../lib/reorder.ts';
 import styles from './QuestionList.module.css';
@@ -13,7 +13,7 @@ export interface QuestionListItem {
   readonly id: string;
   /** The question; empty shows "Untitled question", muted. */
   readonly label: string;
-  /** The answer type's name, shown as a Tag. */
+  /** The answer type's name, shown as a quiet Badge, so the question leads. */
   readonly typeLabel: string;
   readonly isRequired: boolean;
   /** For a choice question: how many choices it has. */
@@ -26,8 +26,12 @@ export interface QuestionListItem {
 
 /** Props for QuestionList. */
 export interface QuestionListProps {
-  /** The list's name for assistive tech ("Questions"). */
+  /** The list's name, and the section's heading ("Questions"), with the count beside it. */
   readonly label: string;
+  /** The section header's end: Add a question and its menu. */
+  readonly actions?: ReactNode;
+  /** An open card's footer, at its end: Duplicate and Delete. */
+  readonly renderFooter?: (id: string) => ReactNode;
   readonly items: readonly QuestionListItem[];
   /** The questions shown open. */
   readonly openIds: ReadonlySet<string>;
@@ -48,8 +52,18 @@ export interface QuestionListProps {
  * to pick up, arrows to move, Enter to drop, Esc to cancel), and each move is
  * announced: "Budget, moved to position 3 of 6".
  */
-export function QuestionList({ label, items, openIds, onOpenChange, renderOpen, onMove }: QuestionListProps) {
+export function QuestionList({
+  label,
+  items,
+  openIds,
+  onOpenChange,
+  renderOpen,
+  onMove,
+  actions,
+  renderFooter,
+}: QuestionListProps) {
   const [said, setSaid] = useState('');
+  const headingId = useId();
 
   const { dragAndDropHooks } = useDragAndDrop({
     getItems: (keys) => [...keys].map((key) => ({ 'text/plain': String(key) })),
@@ -80,7 +94,14 @@ export function QuestionList({ label, items, openIds, onOpenChange, renderOpen, 
   };
 
   return (
-    <div className={styles.root} onKeyDownCapture={keepEnter}>
+    <section className={styles.root} aria-labelledby={headingId} onKeyDownCapture={keepEnter}>
+      <header className={styles.header}>
+        <h2 className={styles.heading} id={headingId}>
+          {label}
+        </h2>
+        <Badge count={items.length} label={label} />
+        {actions !== undefined && <span className={styles.actions}>{actions}</span>}
+      </header>
       <GridList
         aria-label={label}
         items={items}
@@ -112,7 +133,7 @@ export function QuestionList({ label, items, openIds, onOpenChange, renderOpen, 
                     <span className={styles.name} data-untitled={item.label === '' || undefined}>
                       {name}
                     </span>
-                    <Tag>{item.typeLabel}</Tag>
+                    <Badge text={item.typeLabel} />
                     {item.isRequired && <span className={styles.fact}>{strings.required}</span>}
                     {item.choiceCount !== undefined && (
                       <span className={styles.fact}>
@@ -132,7 +153,12 @@ export function QuestionList({ label, items, openIds, onOpenChange, renderOpen, 
                   <Icon name={isOpen ? 'chevron-up' : 'chevron-down'} size="sm" />
                 </span>
               </div>
-              {isOpen && <div className={styles.body}>{renderOpen(item.id)}</div>}
+              {isOpen && (
+                <div className={styles.body}>
+                  {renderOpen(item.id)}
+                  {renderFooter !== undefined && <div className={styles.footer}>{renderFooter(item.id)}</div>}
+                </div>
+              )}
             </GridListItem>
           );
         }}
@@ -140,6 +166,6 @@ export function QuestionList({ label, items, openIds, onOpenChange, renderOpen, 
       <VisuallyHidden>
         <span role="status">{said}</span>
       </VisuallyHidden>
-    </div>
+    </section>
   );
 }
