@@ -8,9 +8,9 @@ import { LinkList, type LinkRow } from './LinkList.tsx';
 function icons(title: string, isOff = false) {
   return (
     <>
-      <Button icon="external-link" label={`Open ${title}`} isDisabled={isOff} />
-      <Button icon="copy" label={`Copy link to ${title}`} />
-      <Button icon="ellipsis" label={`More for ${title}`} />
+      <Button variant="ghost" icon="external-link" label={`Open ${title}`} isDisabled={isOff} />
+      <Button variant="ghost" icon="copy" label={`Copy link to ${title}`} />
+      <Button variant="ghost" icon="ellipsis" label={`More for ${title}`} />
     </>
   );
 }

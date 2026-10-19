@@ -45,7 +45,7 @@ On 19 October 2026 the owner asked for Links and Forms to look the same, since a
 - `badge` is a grey Badge before the switch, only when the row isn't taking people ("Off", "Not published"), or "Copying…" on a pending row. Links and forms use the same words.
 - `isOff` draws the title in the secondary colour, so an off row reads as off before the switch is read (timefix's links list does the same).
 - `toggle` is the row's Switch, its label hidden (read by screen readers): a page's visibility, a form's Accepting. `isDisabled` when it can't be switched, with `disabledReason` in a tooltip on it ("Publish it first").
-- `actions` are secondary icon Buttons (a disabled one in a Tooltip saying why), joined into one `ButtonGroup` named by the row's title. A press on a disabled control never opens the row.
+- `actions` are ghost icon Buttons (a disabled one in a Tooltip saying why), in a group named by the row's title. The owner asked on 20 October 2026 for our own quiet row actions rather than timefix's framed group. A press on a disabled control never opens the row.
 - `isPending` draws a row that isn't made yet (a copy on its way) in the tertiary colour; it can't be opened or focused until it lands.
 - The search field narrows the rows by title or address as you type, and says when nothing matches, with Clear search. `actions` sit at the other end of its row.
 - `status`: `loading` (the search row, then three skeleton rows in the rows' shape, after the loading delay), `error` (the search row stays, so New still works, then an EmptyState with Try again from `onRetry`, titled `errorTitle`) or `no-access`.
@@ -62,4 +62,4 @@ Tab reaches the search field, the list's action, then the list on a row. The up 
 
 ## Differences from the artifact
 
-Not in the artifact yet. Spec 0025's `tag` gave way to `badge` and `toggle`, the title is no longer a Button, `searchLabel` and `actions` are new, and the joined actions are a ButtonGroup (20 October 2026) rather than this module's own box.
+Not in the artifact yet. Spec 0025's `tag` gave way to `badge` and `toggle`, the title is no longer a Button, `searchLabel` and `actions` are new, and the actions are ghost icon Buttons with no frame (20 October 2026).

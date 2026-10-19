@@ -1,5 +1,5 @@
 /* CodeInput: one transparent input over a row of boxes outlined in
-   control-border, so a paste or the phone's suggestion fills them all. While
+   field-border, so a paste or the phone's suggestion fills them all. While
    the field is focused, the next box to fill takes the 1px accent-line border
    and the faint focus halo, with a blinking caret bar where the next
    character goes (steady under reduced motion); once all are filled, the
@@ -43,7 +43,7 @@
     place-items: center;
     inline-size: var(--size-input);
     block-size: calc(var(--size-input) + var(--space-8));
-    border: var(--border-width-hairline) solid var(--control-border);
+    border: var(--border-width-hairline) solid var(--field-border);
     border-radius: var(--radius-md);
     background: var(--surface-raised);
     box-shadow: var(--shadow-control);

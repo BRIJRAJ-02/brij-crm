@@ -155,6 +155,13 @@
     gap: var(--space-12);
   }
 
+  /* The row's quiet icon actions, close together, with no frame of their own. */
+  .rowActions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
   .toggle {
     display: inline-flex;
   }

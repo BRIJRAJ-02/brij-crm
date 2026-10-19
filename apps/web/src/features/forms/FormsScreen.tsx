@@ -127,6 +127,7 @@ export function FormsScreen({ slug }: FormsScreenProps) {
         <>
           <Tooltip content={isPublished ? strings.turnedOff : strings.publishFirst} isDisabled={isLive || isPending}>
             <Button
+              variant="ghost"
               icon="external-link"
               label={strings.openForm(form.name)}
               isDisabled={isPending || !isLive}
@@ -137,6 +138,7 @@ export function FormsScreen({ slug }: FormsScreenProps) {
           </Tooltip>
           <Tooltip content={strings.publishFirst} isDisabled={isPublished || isPending}>
             <CopyButton
+              variant="ghost"
               value={data.forms.hostedUrl(form.publicKey)}
               label={strings.copyLinkTo(form.name)}
               isIconOnly
@@ -145,7 +147,7 @@ export function FormsScreen({ slug }: FormsScreenProps) {
           </Tooltip>
           {canManage && (
             <MenuTrigger>
-              <Button icon="ellipsis" label={strings.moreFor(form.name)} isDisabled={isPending} />
+              <Button variant="ghost" icon="ellipsis" label={strings.moreFor(form.name)} isDisabled={isPending} />
               <Menu
                 label={strings.moreFor(form.name)}
                 onAction={(key) => {

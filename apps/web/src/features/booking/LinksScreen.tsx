@@ -88,6 +88,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
         <>
           <Tooltip content={strings.turnedOff} isDisabled={page.status !== 'paused' || isPending}>
             <Button
+              variant="ghost"
               icon="external-link"
               label={strings.openPage(page.title)}
               isDisabled={isPending || page.status === 'paused'}
@@ -97,6 +98,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
             />
           </Tooltip>
           <CopyButton
+            variant="ghost"
             value={publicBookingUrl(page.publicKey)}
             label={strings.copyLinkTo(page.title)}
             isIconOnly
@@ -104,7 +106,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
           />
           {page.canChange && (
             <MenuTrigger>
-              <Button icon="ellipsis" label={strings.more(page.title)} isDisabled={isPending} />
+              <Button variant="ghost" icon="ellipsis" label={strings.more(page.title)} isDisabled={isPending} />
               <Menu
                 label={strings.more(page.title)}
                 onAction={(key) => {

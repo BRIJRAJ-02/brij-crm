@@ -1,7 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { GridList, GridListItem } from 'react-aria-components';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
-import { Button, ButtonGroup } from '../../atoms/Button/Button.tsx';
+import { Button } from '../../atoms/Button/Button.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
@@ -40,7 +40,7 @@ export interface LinkRow {
   /** Off (not taking people): the title reads in the secondary colour, as the switch says. */
   readonly isOff?: boolean;
   readonly toggle?: LinkToggle;
-  /** Open, Copy link and the row menu: secondary icon Buttons, joined into one ButtonGroup at the end. */
+  /** Open, Copy link and the row menu: quiet (ghost) icon Buttons at the row's end, the way the app's rows carry their actions. */
   readonly actions: ReactNode;
   /** Shown before the server made it (a copy on its way): drawn quieter, and it doesn't open yet. */
   readonly isPending?: boolean;
@@ -269,7 +269,9 @@ export function LinkList({
               <div className={styles.end}>
                 {row.badge !== undefined && <Badge text={row.badge} />}
                 {row.toggle !== undefined && <RowSwitch toggle={row.toggle} isPending={row.isPending === true} />}
-                <ButtonGroup label={row.title}>{row.actions}</ButtonGroup>
+                <div className={styles.rowActions} role="group" aria-label={row.title}>
+                  {row.actions}
+                </div>
               </div>
             </GridListItem>
           )}
