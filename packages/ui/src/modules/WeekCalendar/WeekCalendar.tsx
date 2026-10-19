@@ -1,4 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { ProviderMark, type ProviderName } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { Popover } from '../../molecules/Popover/Popover.tsx';
 import type { Hue } from '../../hue.ts';
 import styles from './WeekCalendar.module.css';
@@ -33,6 +34,8 @@ export interface WeekCalendarBlock {
   /** An event's calendar hue (each connection keeps one). */
   readonly hue?: Hue;
   readonly isCancelled?: boolean;
+  /** Where the block came from, as a small mark before its title: Timefix for a booking, the calendar's brand for an event. */
+  readonly provider?: ProviderName;
 }
 
 /** Props for WeekCalendar. */
@@ -257,7 +260,10 @@ export function WeekCalendar({
                         onOpen(block.id);
                       }}
                     >
-                      <span className={styles.blockTitle}>{block.title}</span>
+                      <span className={styles.blockHead}>
+                        {block.provider !== undefined && <ProviderMark provider={block.provider} size="sm" />}
+                        <span className={styles.blockTitle}>{block.title}</span>
+                      </span>
                       <span className={styles.blockTime}>{block.time}</span>
                       {block.detail !== undefined && <span className={styles.blockDetail}>{block.detail}</span>}
                     </button>

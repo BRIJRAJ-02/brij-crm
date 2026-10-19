@@ -111,6 +111,15 @@ const preview: Preview = {
     },
   },
   initialGlobals: { theme: 'light', locale: 'en-US', platform: 'mac' },
+  // Storybook runs project afterEach hooks last registered first, so this runs before the a11y addon's axe pass.
+  // An overlay still fading in or out reads at part opacity, which axe takes for low contrast (Firefox ran it
+  // mid fade often enough to fail CI), so finish every finite animation and let React settle first.
+  afterEach: async () => {
+    for (const animation of document.getAnimations()) {
+      if (animation.effect?.getComputedTiming().iterations !== Infinity) animation.finish();
+    }
+    await new Promise((resolve) => requestAnimationFrame(resolve));
+  },
   parameters: {
     layout: 'fullscreen',
     // Any axe violation fails the story's test (AC-6).

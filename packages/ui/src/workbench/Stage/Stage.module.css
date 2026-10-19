@@ -13,6 +13,12 @@
     max-inline-size: var(--size-sidebar);
   }
 
+  .root[data-width='fill'] {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    align-items: stretch;
+  }
+
   .root[data-height='grid'] {
     box-sizing: content-box;
     flex-wrap: nowrap;

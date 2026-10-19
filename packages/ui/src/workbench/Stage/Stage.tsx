@@ -5,8 +5,11 @@ import styles from './Stage.module.css';
 export interface StageProps {
   /** `row` wraps pieces side by side (the default); `column` stacks them. */
   readonly direction?: 'row' | 'column';
-  /** `narrow` holds the pieces to the sidebar's width, to show how they cut long text. */
-  readonly width?: 'auto' | 'narrow';
+  /**
+   * `narrow` holds the pieces to the sidebar's width, to show how they cut long text. `fill` stretches one piece
+   * across the stage, for modules that take their container's width (a container query root has none of its own).
+   */
+  readonly width?: 'auto' | 'narrow' | 'fill';
   /** `grid` gives a table a fixed height to scroll in: a header and twelve rows. `page` is an app window's height, for the shell, with no padding. */
   readonly height?: 'auto' | 'grid' | 'page';
   readonly children: ReactNode;

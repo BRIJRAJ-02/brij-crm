@@ -54,7 +54,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   render: (args) => (
-    <Stage>
+    <Stage width="fill">
       <BookingList {...args} groups={groups()} />
     </Stage>
   ),
@@ -71,7 +71,7 @@ export const Default: Story = {
 export const Empty: Story = {
   parameters: { crm: { screenshot: false } },
   render: (args) => (
-    <Stage>
+    <Stage width="fill">
       <BookingList
         {...args}
         emptyState={<EmptyState title="No upcoming bookings">Bookings people make show here.</EmptyState>}

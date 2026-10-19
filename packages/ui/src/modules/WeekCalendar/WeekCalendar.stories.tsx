@@ -29,6 +29,7 @@ function blocks(): WeekCalendarBlock[] {
       time: '3:30 – 4:00 PM',
       detail: 'Quick chat',
       kind: 'booking',
+      provider: 'timefix',
     },
     {
       id: 'standup',
@@ -39,6 +40,7 @@ function blocks(): WeekCalendarBlock[] {
       time: '3:00 – 4:00 PM',
       kind: 'event',
       hue: 'green',
+      provider: 'google-calendar',
     },
     {
       id: 'alan',
@@ -49,6 +51,7 @@ function blocks(): WeekCalendarBlock[] {
       time: '10:00 – 11:00 AM',
       detail: 'Site visit',
       kind: 'booking',
+      provider: 'timefix',
       isCancelled: true,
     },
   ];
@@ -77,7 +80,7 @@ type Story = StoryObj<typeof meta>;
 export const Default: Story = {
   parameters: { crm: { preview: true } },
   render: (args) => (
-    <Stage>
+    <Stage width="fill">
       <WeekCalendar {...args} days={days()} blocks={blocks()} now={{ dayKey: '2026-10-08', minute: 15 * 60 + 30 }} />
     </Stage>
   ),
@@ -90,7 +93,7 @@ export const OpenCard: Story = {
     const [open, setOpen] = useState<string | undefined>(undefined);
     const [day, setDay] = useState(args.selectedDay);
     return (
-      <Stage>
+      <Stage width="fill">
         <WeekCalendar
           {...args}
           days={days()}
@@ -119,7 +122,7 @@ export const OpenCard: Story = {
 export const Keyboard: Story = {
   parameters: { crm: { screenshot: false } },
   render: (args) => (
-    <Stage>
+    <Stage width="fill">
       <WeekCalendar {...args} days={days()} blocks={blocks()} />
     </Stage>
   ),

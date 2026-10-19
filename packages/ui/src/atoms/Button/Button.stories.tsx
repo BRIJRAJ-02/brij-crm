@@ -384,8 +384,9 @@ export const TooltipWhenCut: Story = {
     </Stage>
   ),
   play: async ({ canvas, userEvent }) => {
-    // Until the tooltip's code has loaded the plain button stands in; wait for the wrapped one.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    // Until the tooltip's code has loaded the plain button stands in; React swaps in the wrapped one a render
+    // later, which took over 50 ms on a busy machine, so give it half a second.
+    await new Promise((resolve) => setTimeout(resolve, 500));
     await hoverFresh(userEvent, canvas.getByRole('button', { name: 'Last email interaction with the account owner' }));
     await expect(await shownTooltip()).toHaveTextContent('Last email interaction with the account owner');
   },

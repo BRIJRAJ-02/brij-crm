@@ -331,6 +331,11 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const hueOf = new Map(
     connections.map((connection, index) => [connection.id, CALENDAR_HUES[index % CALENDAR_HUES.length] ?? 'blue']),
   );
+  const providerOf = new Map(
+    connections.map(
+      (connection) => [connection.id, connection.provider === 'google' ? 'google-calendar' : 'outlook'] as const,
+    ),
+  );
   const toolbar = (
     <SectionBar
       title={range}
@@ -401,6 +406,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
           time: timeRange(booking.startsAt, booking.endsAt, locale),
           detail: booking.visitorName,
           kind: 'booking',
+          provider: 'timefix',
           isCancelled: booking.status === 'cancelled',
         },
       ];
@@ -408,6 +414,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
     const event = byEvent.get(piece.sourceId);
     if (event === undefined) return [];
     const hue = hueOf.get(event.connectionId);
+    const provider = providerOf.get(event.connectionId);
     return [
       {
         id: piece.id,
@@ -418,6 +425,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
         time: timeRange(event.startsAt, event.endsAt, locale),
         kind: 'event',
         ...(hue === undefined ? {} : { hue }),
+        ...(provider === undefined ? {} : { provider }),
       },
     ];
   });
