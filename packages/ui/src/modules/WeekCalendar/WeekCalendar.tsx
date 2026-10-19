@@ -18,7 +18,7 @@ export interface WeekCalendarDay {
   readonly isPast: boolean;
 }
 
-/** One block on the grid: a booking, or one of the member's own calendar events (quieter, in its calendar's hue). */
+/** One block on the grid: a booking, one of the member's own calendar events, or time they closed. */
 export interface WeekCalendarBlock {
   readonly id: string;
   readonly dayKey: string;
@@ -30,7 +30,12 @@ export interface WeekCalendarBlock {
   readonly time: string;
   /** A third line when the block is tall enough (the page's title). */
   readonly detail?: string;
-  readonly kind: 'booking' | 'event';
+  /**
+   * `booking` is accent; `event` quieter, in its calendar's hue; `blocked` and
+   * `held` are time the member closed (spec 0027), hatched and quiet, a solid
+   * edge for a block and a dashed one for a hold.
+   */
+  readonly kind: 'booking' | 'event' | 'blocked' | 'held';
   /** An event's calendar hue (each connection keeps one). */
   readonly hue?: Hue;
   readonly isCancelled?: boolean;

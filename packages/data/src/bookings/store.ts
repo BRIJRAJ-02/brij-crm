@@ -82,7 +82,13 @@ const UNHELD_RANGES_MAX = 12;
 export function createBookingsStore(deps: BookingsDeps) {
   const onReturn = deps.onReturn ?? browserReturn;
   const lists = new Map<string, BookingsView>();
-  const ranges = new Map<string, BookingsCalendarHeld & { readonly isHeld: () => boolean }>();
+  const ranges = new Map<
+    string,
+    BookingsCalendarHeld & {
+      readonly isHeld: () => boolean;
+      readonly patch: (edit: (shown: BookingsCalendarView) => BookingsCalendarView) => () => void;
+    }
+  >();
 
   function makeView<T extends object>(load: () => Promise<T>) {
     let state: HeldState<T> = { status: 'loading' };
@@ -135,6 +141,15 @@ export function createBookingsStore(deps: BookingsDeps) {
       reload() {
         void read();
       },
+      /** Shows `edit` of what is shown at once (a ready state only); answers how to put it back. */
+      patch(edit: (shown: T) => T): () => void {
+        if (state.status !== 'ready') return () => undefined;
+        const before = state;
+        set({ ...before, ...edit(before) });
+        return () => {
+          if (state !== before) set(before);
+        };
+      },
       isHeld: () => held > 0,
     };
   }
@@ -159,6 +174,18 @@ export function createBookingsStore(deps: BookingsDeps) {
       const unheld = [...ranges.entries()].filter(([, view]) => !view.isHeld());
       for (const [old] of unheld.slice(0, Math.max(0, unheld.length - UNHELD_RANGES_MAX))) ranges.delete(old);
       return made;
+    },
+    /**
+     * Shows `edit` on every range of the workspace at once (an optimistic block
+     * or removal, spec 0027); answers how to put them all back on a refusal.
+     */
+    patchRanges(workspace: string, edit: (shown: BookingsCalendarView) => BookingsCalendarView): () => void {
+      const restores = [...ranges.entries()]
+        .filter(([key]) => key.startsWith(`${workspace}:`))
+        .map(([, view]) => view.patch(edit));
+      return () => {
+        for (const restore of restores) restore();
+      };
     },
     /** Reads every list and range a screen holds again (after the member changed a booking). */
     reloadAll(workspace: string): void {

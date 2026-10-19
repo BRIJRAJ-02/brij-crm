@@ -40,6 +40,7 @@ import {
   bookedSpans,
   loadPage,
   membersBusy,
+  membersClosed,
   membersOf,
   pageSlots,
   pickHost,
@@ -135,8 +136,12 @@ export async function readPublicSlots(
     new Date(from.getTime() - BUSY_MARGIN_MS),
     new Date(to.getTime() + BUSY_MARGIN_MS),
   );
-  const booked = await inWorkspace(entry.scope, (tx) => bookedSpans(tx, memberIds, page.id, from, to));
-  const slots = pageSlots(page, { duration: query.duration, from, to, now, busy, bookings: booked });
+  const margin = { from: new Date(from.getTime() - BUSY_MARGIN_MS), to: new Date(to.getTime() + BUSY_MARGIN_MS) };
+  const { booked, closed } = await inWorkspace(entry.scope, async (tx) => ({
+    booked: await bookedSpans(tx, memberIds, page.id, from, to),
+    closed: await membersClosed(tx, memberIds, page, margin.from, margin.to),
+  }));
+  const slots = pageSlots(page, { duration: query.duration, from, to, now, busy, bookings: booked, closed });
   return {
     slots: slots.map((slot) => ({ start: slot.start.toISOString(), end: slot.end.toISOString() })),
     calendar: busy.blocked ? 'unreachable' : 'ok',
@@ -283,6 +288,13 @@ export async function bookPublicSlot(
       const again = await replay(tx, page);
       if (again !== undefined) return again;
       const held = await bookedSpans(tx, memberIds, page.id, dayFrom, dayTo);
+      const closed = await membersClosed(
+        tx,
+        memberIds,
+        page,
+        new Date(dayFrom.getTime() - BUSY_MARGIN_MS),
+        new Date(dayTo.getTime() + BUSY_MARGIN_MS),
+      );
       const offered = pageSlots(page, {
         duration: input.duration,
         from: dayFrom,
@@ -290,6 +302,7 @@ export async function bookPublicSlot(
         now,
         busy,
         bookings: held,
+        closed,
       });
       if (!offered.some((slot) => slot.start.getTime() === start.getTime())) {
         throw refuse('SLOT_TAKEN', 'That time was just taken. Pick another.');

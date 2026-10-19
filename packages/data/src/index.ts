@@ -8,6 +8,9 @@
 import type {
   AttributeDefinition,
   BookingAvailability,
+  CreateTimeBlockInput,
+  TimeBlockOccurrence,
+  TimeBlockView,
   BookingsTab,
   BookingPageSettings,
   BookingPageView,
@@ -97,6 +100,7 @@ import type {
   ViewQuery,
 } from './records/layer.ts';
 
+export type { CreateTimeBlockInput, TimeBlockOccurrence, TimeBlockView } from '@crm/contracts';
 export type {
   CalendarConnectionView,
   CalendarConnections,
@@ -1901,6 +1905,51 @@ export function createDataLayer({
         availability: BookingAvailability,
       ): Promise<{ availability: BookingAvailability }> =>
         call((options) => api.bookings.setHours({ workspace, availability, mutationId: mintId() }, options)),
+      /** Time the member closes on their own calendar (spec 0027): blocks, and holds for private pages. */
+      blocks: {
+        /**
+         * Closes a span: `preview` (its turns in the ranges shown) shows at
+         * once, every range is read again once the server has it, and a
+         * refusal (`CONFIG_INVALID` on its field, `NOT_FOUND` on `pageId`)
+         * takes the preview back off.
+         */
+        create: async (
+          workspace: string,
+          draft: Omit<CreateTimeBlockInput, 'workspace' | 'mutationId'>,
+          preview: readonly TimeBlockOccurrence[],
+        ): Promise<TimeBlockView> => {
+          const restore = bookingsLists.patchRanges(workspace, (shown) => ({
+            ...shown,
+            blocks: [...shown.blocks, ...preview],
+          }));
+          try {
+            const made = await call((options) =>
+              api.bookings.blocks.create({ ...draft, workspace, mutationId: mintId() }, options),
+            );
+            bookingsLists.reloadAll(workspace);
+            return made;
+          } catch (error) {
+            restore();
+            throw error;
+          }
+        },
+        /** Reopens a block's time (a weekly one every week): gone at once, back on a refusal. */
+        remove: async (workspace: string, blockId: string): Promise<void> => {
+          const restore = bookingsLists.patchRanges(workspace, (shown) => ({
+            ...shown,
+            blocks: shown.blocks.filter((turn) => turn.blockId !== blockId),
+          }));
+          try {
+            await call((options) =>
+              api.bookings.blocks.remove({ workspace, id: blockId, mutationId: mintId() }, options),
+            );
+            bookingsLists.reloadAll(workspace);
+          } catch (error) {
+            restore();
+            throw error;
+          }
+        },
+      },
     },
     objects: {
       /**

@@ -722,6 +722,33 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
     await m.client.bookings.setHours({ workspace: m.slug, availability, mutationId });
     return [];
   },
+  'bookings.blocks.create': async (m, mutationId) => {
+    await m.client.bookings.blocks.create({
+      workspace: m.slug,
+      kind: 'block',
+      repeat: 'once',
+      date: '2026-11-02',
+      startMinute: 600,
+      endMinute: 660,
+      timeZone: 'UTC',
+      mutationId,
+    });
+    return [];
+  },
+  'bookings.blocks.remove': async (m, mutationId) => {
+    const block = await m.client.bookings.blocks.create({
+      workspace: m.slug,
+      kind: 'block',
+      repeat: 'weekly',
+      date: '2026-11-02',
+      startMinute: 600,
+      endMinute: 660,
+      timeZone: 'UTC',
+      mutationId: newId(),
+    });
+    await m.client.bookings.blocks.remove({ workspace: m.slug, id: block.id, mutationId });
+    return [];
+  },
   // Background jobs (spec 0008): one jobs row per write, naming the job.
   'jobs.startTest': async (m, mutationId) => {
     const job = await m.client.jobs.startTest({ workspace: m.slug, id: newId(), items: 3, mutationId });
@@ -885,6 +912,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'calendar.connections.remove': 2,
   'bookingPages.update': 2,
   'bookingPages.delete': 2,
+  'bookings.blocks.remove': 2,
   'attributes.restore': 2,
   'relationships.update': 2,
   'links.add': 3,

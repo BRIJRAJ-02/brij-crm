@@ -11,6 +11,9 @@
 //         − days that reached the daily limit
 //         stepped by the slot step, each slot `durationMinutes` long
 //
+// `extraWindows` (a private page's holds, spec 0027) join a day's windows
+// before anything is taken out.
+//
 // Rules and overrides are integer minutes from LOCAL midnight in the host's
 // zone (DST proof by construction); everything else is an absolute instant.
 // Wall clock to instant happens in one place (`toInstant`), through Luxon,
@@ -80,6 +83,12 @@ export interface SlotEngineInput {
    * back to the duration rather than looping forever.
    */
   readonly slotStepMinutes?: number;
+  /**
+   * Absolute spans open on top of the hours (a private page's holds, spec 0027,
+   * AC-707): merged into each day's windows, clipped to the day, before busy
+   * times, bookings, buffers and notice are taken out like any window.
+   */
+  readonly extraWindows?: readonly Span[];
 }
 
 /** Wall clock minutes to an instant on `day`. 1440 is the following midnight; a time a DST gap skips moves forward. */
@@ -176,8 +185,15 @@ export function computeSlots(input: SlotEngineInput): readonly Span[] {
       .map((window) => ({
         start: toInstant(day, window.startMinute).toMillis(),
         end: toInstant(day, window.endMinute).toMillis(),
-      }))
-      .sort((a, b) => a.start - b.start);
+      }));
+    const dayStart = day.toMillis();
+    const dayEnd = day.plus({ days: 1 }).startOf('day').toMillis();
+    for (const extra of input.extraWindows ?? []) {
+      const start = Math.max(extra.start.getTime(), dayStart);
+      const end = Math.min(extra.end.getTime(), dayEnd);
+      if (end > start) spans.push({ start, end });
+    }
+    spans.sort((a, b) => a.start - b.start);
     // Merge overlapping and touching spans (`<=`): 08–12 and 12–20 join, 08–12 and 14–20 stay two.
     const merged: { start: number; end: number }[] = [];
     for (const span of spans) {

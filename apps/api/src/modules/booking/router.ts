@@ -1,5 +1,6 @@
 import {
   createBookingPage,
+  createTimeBlock,
   deleteBookingPage,
   getBookingPage,
   getMemberHours,
@@ -7,6 +8,7 @@ import {
   listBookings,
   listWorkspaceBookings,
   readBookingsCalendar,
+  removeTimeBlock,
   setMemberHours,
   updateBookingPage,
 } from '@crm/core';
@@ -68,4 +70,24 @@ export const bookingsRouter = member.bookings.router({
       setMemberHours(context.scope, { availability: input.availability }),
     ),
   ),
+  // Time the member closes on their own calendar (spec 0027): a block, or a hold for private pages.
+  blocks: {
+    create: member.bookings.blocks.create.handler(({ context, input }) =>
+      commitWrite(context, { mutationId: input.mutationId }, () =>
+        createTimeBlock(context.scope, {
+          kind: input.kind,
+          repeat: input.repeat,
+          date: input.date,
+          startMinute: input.startMinute,
+          endMinute: input.endMinute,
+          timeZone: input.timeZone,
+          label: input.label,
+          pageId: input.pageId,
+        }),
+      ),
+    ),
+    remove: member.bookings.blocks.remove.handler(({ context, input }) =>
+      commitWrite(context, { mutationId: input.mutationId }, () => removeTimeBlock(context.scope, { id: input.id })),
+    ),
+  },
 });

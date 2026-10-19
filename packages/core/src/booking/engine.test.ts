@@ -389,3 +389,25 @@ describe('subtractBlocked', () => {
     ]);
   });
 });
+
+describe('extra windows: a private page’s holds (spec 0027, AC-707)', () => {
+  const zone = 'Europe/London';
+
+  it('opens a span outside the hours, merged with the day and clipped to it', () => {
+    const slots = slotsOn(zone, '2026-06-15', {
+      extraWindows: [{ start: at(zone, '2026-06-15T17:00'), end: at(zone, '2026-06-15T19:00') }],
+    });
+    // 09:00 to 17:00 and the hold join into one window, so the last hour is 18:00.
+    expect(slots.map((slot) => local(slot.start, zone)).at(-1)).toBe('18:00');
+    expect(slots).toHaveLength(10);
+  });
+
+  it('still takes busy time and bookings out of a hold', () => {
+    const slots = slotsOn(zone, '2026-06-15', {
+      rules: [],
+      extraWindows: [{ start: at(zone, '2026-06-15T18:00'), end: at(zone, '2026-06-15T21:00') }],
+      busy: [{ start: at(zone, '2026-06-15T19:00'), end: at(zone, '2026-06-15T20:00') }],
+    });
+    expect(slots.map((slot) => local(slot.start, zone))).toEqual(['18:00', '20:00']);
+  });
+});

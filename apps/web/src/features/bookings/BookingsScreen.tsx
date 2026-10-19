@@ -11,6 +11,7 @@ import type {
   CalendarConnectionView,
   CalendarEventItem,
   ObjectSummary,
+  TimeBlockOccurrence,
 } from '@crm/data';
 import { useBookings, useBookingsCalendar } from '@crm/data/react';
 import {
@@ -50,6 +51,7 @@ import {
   bookingPieces,
   dayKeyOf,
   eventPieces,
+  piecesOf,
   rangeLabel,
   scrollMinute,
   timeRange,
@@ -267,6 +269,48 @@ function EventCard({
   );
 }
 
+/** A block's or hold's card: when, why, whether it repeats, and Remove (Release for a hold), which reopens the time. */
+function BlockCard({
+  turn,
+  locale,
+  onRemove,
+}: {
+  readonly turn: TimeBlockOccurrence;
+  readonly locale: string;
+  readonly onRemove: () => Promise<void>;
+}) {
+  const [status, setStatus] = useState<'idle' | 'pending' | 'failed'>('idle');
+  const weekday = new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(new Date(turn.startsAt));
+  return (
+    <>
+      <DescriptionList
+        layout="stacked"
+        items={[
+          { term: strings.when, description: whenOf(turn.startsAt, turn.endsAt, locale) },
+          ...(turn.label === undefined ? [] : [{ term: strings.why, description: turn.label }]),
+          ...(turn.repeat === 'weekly' ? [{ term: strings.repeats, description: strings.everyWeek(weekday) }] : []),
+          {
+            term: turn.kind === 'hold' ? strings.held : strings.blocked,
+            description: turn.kind === 'hold' ? strings.heldNote : strings.blockedNote,
+          },
+        ]}
+      />
+      {status === 'failed' && <Callout tone="danger">{strings.removeFailed}</Callout>}
+      <Button
+        isPending={status === 'pending'}
+        onPress={() => {
+          setStatus('pending');
+          onRemove().catch(() => {
+            setStatus('failed');
+          });
+        }}
+      >
+        {turn.kind === 'hold' ? strings.releaseHold : strings.removeBlock}
+      </Button>
+    </>
+  );
+}
+
 /** A tab's tools: at the end of the Bookings strip once the layout has drawn it, else at the top of the tab. */
 function Toolbar({ children }: { readonly children: ReactNode }) {
   const slot = useBookingsToolbarSlot();
@@ -305,6 +349,8 @@ export interface BookingsCalendarScreenProps {
   readonly connections: readonly CalendarConnectionView[];
   readonly locale: string;
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
+  /** Reopens the time a block closed (spec 0027); settles once the server has it, throws on a refusal. */
+  readonly onRemoveBlock: (blockId: string) => Promise<void>;
 }
 
 /** Bookings › Calendar: the range, previous week, Today, next week and Filter, then the grid and the week's count. */
@@ -318,7 +364,7 @@ export function BookingsCalendarScreen(props: BookingsCalendarScreenProps) {
 
 /** The week view's toolbar, grid and count. */
 function WeekView(props: BookingsCalendarScreenProps) {
-  const { slug, objects, search, week, pages, connections, locale, onSearch } = props;
+  const { slug, objects, search, week, pages, connections, locale, onSearch, onRemoveBlock } = props;
   const personHref = usePersonHref(slug, objects);
   const state = useBookingsCalendar(week);
   const now = useNow();
@@ -388,9 +434,13 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const events = state.events.filter((event) => shownConnections.has(event.connectionId));
   const byBooking = new Map(bookings.map((booking) => [booking.id, booking]));
   const byEvent = new Map(events.map((event) => [event.id, event]));
+  const byTurn = new Map(state.blocks.map((turn) => [turn.key, turn]));
   const pieces = [
     ...bookingPieces(bookings, days).map((piece) => ({ piece, kind: 'booking' as const })),
     ...eventPieces(events, days).map((piece) => ({ piece, kind: 'event' as const })),
+    ...state.blocks
+      .flatMap((turn) => piecesOf(turn.key, turn.startsAt, turn.endsAt, days))
+      .map((piece) => ({ piece, kind: 'closed' as const })),
   ];
   const blocks: WeekCalendarBlock[] = pieces.flatMap(({ piece, kind }): WeekCalendarBlock[] => {
     if (kind === 'booking') {
@@ -408,6 +458,22 @@ function WeekView(props: BookingsCalendarScreenProps) {
           kind: 'booking',
           provider: 'timefix',
           isCancelled: booking.status === 'cancelled',
+        },
+      ];
+    }
+    if (kind === 'closed') {
+      const turn = byTurn.get(piece.sourceId);
+      if (turn === undefined) return [];
+      return [
+        {
+          id: piece.id,
+          dayKey: piece.dayKey,
+          startMinute: piece.startMinute,
+          endMinute: piece.endMinute,
+          title: turn.kind === 'hold' ? strings.held : strings.blocked,
+          time: timeRange(turn.startsAt, turn.endsAt, locale),
+          ...(turn.label === undefined ? {} : { detail: turn.label }),
+          kind: turn.kind === 'hold' ? 'held' : 'blocked',
         },
       ];
     }
@@ -432,6 +498,7 @@ function WeekView(props: BookingsCalendarScreenProps) {
   const open = pieces.find(({ piece }) => piece.id === openId);
   const openBooking = open?.kind === 'booking' ? byBooking.get(open.piece.sourceId) : undefined;
   const openEvent = open?.kind === 'event' ? byEvent.get(open.piece.sourceId) : undefined;
+  const openTurn = open?.kind === 'closed' ? byTurn.get(open.piece.sourceId) : undefined;
   const live = bookings.filter((booking) => booking.status === 'confirmed').length;
   const hourFormat = new Intl.DateTimeFormat(locale, { hour: 'numeric' });
   return (
@@ -467,7 +534,17 @@ function WeekView(props: BookingsCalendarScreenProps) {
         )}
         {...(openId === undefined ? {} : { openId })}
         detail={
-          openBooking === undefined ? (
+          openTurn !== undefined ? (
+            <BlockCard
+              key={openTurn.key}
+              turn={openTurn}
+              locale={locale}
+              onRemove={async () => {
+                await onRemoveBlock(openTurn.blockId);
+                setOpenId(undefined);
+              }}
+            />
+          ) : openBooking === undefined ? (
             openEvent === undefined ? undefined : (
               <EventCard
                 event={openEvent}

@@ -20,6 +20,7 @@ import { requirePermission } from '../access/check.ts';
 import type { EngineScope } from '../access/mint.ts';
 import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
+import { blockOccurrences } from './blocks.ts';
 
 const { bookingPages, bookings } = schema;
 
@@ -140,7 +141,7 @@ export async function readBookingsCalendar(
   input: { readonly from: string; readonly to: string },
 ): Promise<BookingsCalendarView> {
   const reader = readerOf(scope);
-  if (reader === undefined) return { bookings: [], events: [] };
+  if (reader === undefined) return { bookings: [], events: [], blocks: [] };
   const from = new Date(input.from);
   const to = new Date(input.to);
   return inWorkspace(scope, async (tx) => {
@@ -196,6 +197,8 @@ export async function readBookingsCalendar(
         ...(row.video_url === null ? {} : { videoUrl: row.video_url }),
       }))
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
-    return { bookings: rows.map(itemOf), events };
+    // The reader's own closed time only (AC-712): another member's blocks never show, whatever the reader may see.
+    const blocks = member === undefined ? [] : await blockOccurrences(tx, member, from, to);
+    return { bookings: rows.map(itemOf), events, blocks: [...blocks] };
   });
 }

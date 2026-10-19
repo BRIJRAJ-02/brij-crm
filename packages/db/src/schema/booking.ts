@@ -11,8 +11,10 @@
 // the purge. `meeting_id` is spec 0024's meeting (its key arrives with it).
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   customType,
+  date,
   foreignKey,
   index,
   integer,
@@ -64,6 +66,8 @@ export const bookingPages = pgTable(
     status: text('status').notNull().default('live'),
     /** `mine` follows the owner's hours (`booking_member_hours`); `own` uses `availability` above. */
     hoursMode: text('hours_mode').notNull().default('own'),
+    /** A private page (spec 0027, AC-707, AC-708): it may book inside the host's holds, and waives its minimum notice. */
+    isPrivate: boolean('is_private').notNull().default(false),
     ...auditColumns(),
     deletedAt: timestamptz('deleted_at'),
   },
@@ -246,6 +250,67 @@ export const bookings = pgTable(
       memberId: t.createdByMemberId,
     }),
     ...actorConstraints('bookings', 'updated_by', t.workspaceId, {
+      type: t.updatedByType,
+      id: t.updatedById,
+      memberId: t.updatedByMemberId,
+    }),
+  ],
+);
+
+/**
+ * Time a member closed on their own calendar (spec 0027): a `block` closes it
+ * for every page that books them, a `hold` for every page but a private one.
+ * A `once` row is an absolute span (`during`); a `weekly` row is local minutes
+ * on a weekday in the zone it was made in, from `from_date` on, subtracted
+ * from that day's hours rather than rewriting them. A hold is always `once`.
+ */
+export const bookingTimeBlocks = pgTable(
+  'booking_time_blocks',
+  {
+    workspaceId: workspaceId(),
+    id: id(),
+    memberId: uuid('member_id').notNull(),
+    kind: text('kind').notNull(),
+    repeat: text('repeat').notNull(),
+    during: tstzrange('during'),
+    weekday: smallint('weekday'),
+    startMinute: smallint('start_minute'),
+    endMinute: smallint('end_minute'),
+    timeZone: text('time_zone'),
+    fromDate: date('from_date', { mode: 'string' }),
+    /** A hold carved for one private page; null is any private page. */
+    pageId: uuid('page_id'),
+    label: text('label'),
+    ...auditColumns(),
+  },
+  (t) => [
+    primaryKey({ name: 'booking_time_blocks_pkey', columns: [t.workspaceId, t.id] }),
+    foreignKey({
+      name: 'booking_time_blocks_member',
+      columns: [t.workspaceId, t.memberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
+    // The member's weekly blocks, read with every slots request.
+    index('booking_time_blocks_weekly')
+      .on(t.workspaceId, t.memberId)
+      .where(sql`${t.repeat} = 'weekly'`),
+    check('booking_time_blocks_kind', sql`${t.kind} in ('block', 'hold')`),
+    check(
+      'booking_time_blocks_shape',
+      sql`(${t.repeat} = 'once' and ${t.during} is not null and not isempty(${t.during}) and lower_inc(${t.during}) and not upper_inc(${t.during})
+        and ${t.weekday} is null and ${t.startMinute} is null and ${t.endMinute} is null and ${t.timeZone} is null and ${t.fromDate} is null)
+      or (${t.repeat} = 'weekly' and ${t.kind} = 'block' and ${t.during} is null and ${t.weekday} between 0 and 6
+        and ${t.startMinute} >= 0 and ${t.endMinute} > ${t.startMinute} and ${t.endMinute} <= 1440
+        and ${t.timeZone} is not null and ${t.fromDate} is not null)`,
+    ),
+    check('booking_time_blocks_page', sql`${t.pageId} is null or ${t.kind} = 'hold'`),
+    check('booking_time_blocks_label', sql`${t.label} is null or char_length(${t.label}) between 1 and 200`),
+    ...actorConstraints('booking_time_blocks', 'created_by', t.workspaceId, {
+      type: t.createdByType,
+      id: t.createdById,
+      memberId: t.createdByMemberId,
+    }),
+    ...actorConstraints('booking_time_blocks', 'updated_by', t.workspaceId, {
       type: t.updatedByType,
       id: t.updatedById,
       memberId: t.updatedByMemberId,

@@ -178,6 +178,7 @@ export {
   setMemberHours,
   updateBookingPage,
 } from './booking/pages.ts';
+export { createTimeBlock, removeTimeBlock, type TimeBlockDraft } from './booking/blocks.ts';
 export { listWorkspaceBookings, readBookingsCalendar } from './booking/list.ts';
 export {
   createBusyCache,

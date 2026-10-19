@@ -22,7 +22,6 @@
     background: var(--surface-subtle);
     color: var(--text-secondary);
     font: var(--text-label-strong);
-    font-variant-caps: all-small-caps;
     letter-spacing: var(--tracking-label-strong);
   }
 

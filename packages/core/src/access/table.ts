@@ -203,4 +203,6 @@ export const ACCESS_TABLE = {
   readBookingsCalendar: { bookingPages: true },
   getMemberHours: { bookingPages: true },
   setMemberHours: { bookingPages: true },
+  createTimeBlock: { bookingPages: true },
+  removeTimeBlock: { bookingPages: true },
 } as const satisfies Record<string, AccessEntry>;

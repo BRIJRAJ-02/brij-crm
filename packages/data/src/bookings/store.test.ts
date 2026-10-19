@@ -24,7 +24,8 @@ const booking = (id: string): BookingListItem => ({
 
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
-const noCalendar = () => Promise.resolve({ bookings: [], events: [] });
+const noList = () => Promise.resolve([]);
+const noCalendar = () => Promise.resolve({ bookings: [], events: [], blocks: [] });
 
 describe('the bookings store', () => {
   it('reads when held, again on return, keeps the list on a later failure, and stops listening when let go', async () => {
@@ -81,7 +82,7 @@ describe('the bookings store', () => {
   });
 
   it('holds a range with its bookings and events, and reloadAll reads every held one of the workspace again', async () => {
-    const calendar = vi.fn(() => Promise.resolve({ bookings: [booking('a')], events: [] }));
+    const calendar = vi.fn(() => Promise.resolve({ bookings: [booking('a')], events: [], blocks: [] }));
     const listAll = vi.fn(() => Promise.resolve([booking('a')]));
     const store = createBookingsStore({ api: { listAll, calendar }, onReturn: () => () => undefined });
     const week = store.calendar('acme', '2026-11-02T00:00:00.000Z', '2026-11-09T00:00:00.000Z');
@@ -102,5 +103,34 @@ describe('the bookings store', () => {
     expect(calendar).toHaveBeenCalledTimes(2);
     expect(listAll).toHaveBeenCalledTimes(2);
     release();
+  });
+
+  it('patches every ready range of the workspace at once, and puts each back on restore (spec 0027)', async () => {
+    const turn = {
+      key: 'b1',
+      blockId: '01a154ac-ad7a-766e-85e9-46253892be47',
+      kind: 'block' as const,
+      repeat: 'once' as const,
+      startsAt: '2026-11-02T10:00:00.000Z',
+      endsAt: '2026-11-02T11:00:00.000Z',
+    };
+    const store = createBookingsStore({
+      api: { listAll: noList, calendar: noCalendar },
+      onReturn: () => () => undefined,
+    });
+    const week = store.calendar('acme', '2026-11-02T00:00:00.000Z', '2026-11-09T00:00:00.000Z');
+    const loading = store.calendar('acme', '2026-11-09T00:00:00.000Z', '2026-11-16T00:00:00.000Z');
+    const other = store.calendar('other', '2026-11-02T00:00:00.000Z', '2026-11-09T00:00:00.000Z');
+    week.retain();
+    other.retain();
+    await settle();
+
+    const restore = store.patchRanges('acme', (shown) => ({ ...shown, blocks: [...shown.blocks, turn] }));
+    expect(week.getSnapshot()).toMatchObject({ status: 'ready', blocks: [turn] });
+    expect(other.getSnapshot()).toMatchObject({ status: 'ready', blocks: [] });
+    // A range still loading is left to its read.
+    expect(loading.getSnapshot()).toEqual({ status: 'loading' });
+    restore();
+    expect(week.getSnapshot()).toMatchObject({ status: 'ready', blocks: [] });
   });
 });

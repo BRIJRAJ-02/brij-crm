@@ -77,4 +77,15 @@ export const strings = {
   calendar: 'Calendar',
   fromCalendar: 'From your calendar. Timefix keeps the time blocked but doesn’t manage this event.',
   allDay: 'All day',
+  // Time the member closed (spec 0027).
+  blocked: 'Blocked',
+  held: 'Held',
+  why: 'Why',
+  repeats: 'Repeats',
+  everyWeek: (weekday: string) => `Every ${weekday}`,
+  heldNote: 'Only a private booking page can book it.',
+  blockedNote: 'No booking page offers this time.',
+  removeBlock: 'Remove',
+  releaseHold: 'Release',
+  removeFailed: 'That time couldn’t be opened again. Try again.',
 } as const;

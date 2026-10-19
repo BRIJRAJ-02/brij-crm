@@ -2,7 +2,8 @@
    axis column then seven day columns. An hour is --size-toolbar tall; a
    block's place comes from its minutes (--start, --length) and its lane
    (--lane of --lanes). Bookings are accent, the member's own calendar events
-   quieter in their calendar's hue, cancelled ones struck through; today's
+   quieter in their calendar's hue, the time they closed hatched (a solid
+   edge for a block, dashed for a hold), cancelled ones struck through; today's
    column is tinted and its date solid accent. Below
    480px of its container only the selected day's column shows. */
 @layer components {
@@ -199,6 +200,22 @@
     border-inline-start-color: var(--tag-lime-border);
     background: var(--tag-lime-bg);
     color: var(--tag-lime-text);
+  }
+
+  .block[data-kind='blocked'],
+  .block[data-kind='held'] {
+    border: var(--border-width-hairline) solid var(--border-strong);
+    background: repeating-linear-gradient(
+      45deg,
+      var(--border) 0 var(--border-width-hairline),
+      transparent var(--border-width-hairline) var(--space-6)
+    );
+    background-color: var(--surface-subtle);
+    color: var(--text-secondary);
+  }
+
+  .block[data-kind='held'] {
+    border-style: dashed;
   }
 
   .block[data-cancelled] {

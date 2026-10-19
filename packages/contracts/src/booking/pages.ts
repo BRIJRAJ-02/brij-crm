@@ -6,6 +6,7 @@ import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { Timestamp } from '../values/attribute-values.ts';
 import { WorkspaceScoped } from '../workspaces.ts';
+import { CreateTimeBlockInput, RemoveTimeBlockInput, TimeBlockOccurrence, TimeBlockView } from './blocks.ts';
 import { BookingLocation, BookingPageSettings } from './settings.ts';
 
 /** A page as a member sees it in Settings › Booking pages. */
@@ -193,10 +194,11 @@ export const CalendarEventItem = z.object({
 /** One of the reader's calendar events. */
 export type CalendarEventItem = z.infer<typeof CalendarEventItem>;
 
-/** A calendar read's answer: the bookings and the reader's other events in the range, each by start. */
+/** A calendar read's answer: the bookings, the reader's other events and the time they closed in the range, each by start. */
 export const BookingsCalendarView = z.object({
   bookings: z.array(BookingListItem),
   events: z.array(CalendarEventItem),
+  blocks: z.array(TimeBlockOccurrence),
 });
 /** A calendar read's answer. */
 export type BookingsCalendarView = z.infer<typeof BookingsCalendarView>;
@@ -208,4 +210,9 @@ export const bookingsContract = {
   calendar: oc.input(BookingCalendarInput).output(BookingsCalendarView),
   hours: oc.input(GetMemberHoursInput).output(MemberHours),
   setHours: oc.input(UpdateMemberHoursInput).output(MemberHours),
+  /** Time the caller closed on their own calendar (spec 0027). */
+  blocks: {
+    create: oc.input(CreateTimeBlockInput).output(TimeBlockView),
+    remove: oc.input(RemoveTimeBlockInput).output(z.object({ id: z.uuid() })),
+  },
 };

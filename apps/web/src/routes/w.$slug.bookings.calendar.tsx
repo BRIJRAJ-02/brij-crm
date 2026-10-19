@@ -39,6 +39,7 @@ function CalendarRoute() {
   const { slug } = Route.useParams();
   const search = bookingsSearchOf(Route.useSearch());
   const navigate = useNavigate();
+  const { data } = Route.useRouteContext();
   return (
     <BookingsCalendarScreen
       slug={slug}
@@ -48,6 +49,7 @@ function CalendarRoute() {
       pages={pages}
       connections={connections}
       locale={navigator.languages[0] ?? 'en-GB'}
+      onRemoveBlock={(blockId) => data.bookings.blocks.remove(slug, blockId)}
       onSearch={(next) =>
         void navigate({
           to: '/w/$slug/bookings/calendar',

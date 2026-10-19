@@ -14,6 +14,7 @@ import {
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { refuse } from '../engine/refusals.ts';
+import { blockedTime } from './blocks.ts';
 import type { BusyReader } from './calendar.ts';
 import { computeSlots, type BookedSpan, type DateOverride, type Span, type WeeklyRule } from './engine.ts';
 
@@ -26,6 +27,8 @@ export interface PageRecord extends BookingPageSettings {
   readonly kind: 'personal' | 'collective' | 'round_robin';
   readonly ownerMemberId: string;
   readonly isDeleted: boolean;
+  /** A private page books inside its host's holds and waives its minimum notice (spec 0027, AC-707). */
+  readonly isPrivate: boolean;
   readonly createdAt: Date;
   readonly updatedAt: Date;
 }
@@ -58,6 +61,7 @@ export function pageOf(row: typeof bookingPages.$inferSelect): PageRecord {
     status: row.status === 'paused' ? 'paused' : 'live',
     hoursMode: row.hoursMode === 'mine' ? 'mine' : 'own',
     isDeleted: row.deletedAt !== null,
+    isPrivate: row.isPrivate,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -158,6 +162,28 @@ export async function bookedSpans(
   }));
 }
 
+/** The time the members closed themselves (spec 0027): busy for this page, and the holds it may book inside. */
+export interface MembersClosed {
+  readonly busy: readonly Span[];
+  readonly openHolds: readonly Span[];
+}
+
+/** Every member's blocks and holds touching [from, to), as they apply to `page` (AC-706, AC-707). */
+export async function membersClosed(
+  tx: WorkspaceTx,
+  memberIds: readonly string[],
+  page: Pick<PageRecord, 'id' | 'isPrivate'>,
+  from: Date,
+  to: Date,
+): Promise<MembersClosed> {
+  const each = await Promise.all(memberIds.map((member) => blockedTime(tx, member, from, to, page)));
+  return {
+    busy: each.flatMap((closed) => closed.busy),
+    // A collective page's hold must be every member's: only the first member's (the host's) holds open anything.
+    openHolds: page.isPrivate && memberIds.length === 1 ? (each[0]?.openHolds ?? []) : [],
+  };
+}
+
 /** What the members' calendars said, together: their busy spans, and whether any refused us until reconnected. */
 export interface MembersBusy {
   readonly busy: readonly Span[];
@@ -201,14 +227,18 @@ export function pageSlots(
     readonly now: Date;
     readonly busy: MembersBusy;
     readonly bookings: readonly BookedSpan[];
+    /** The members' own blocks and holds; none when absent. */
+    readonly closed?: MembersClosed;
   },
 ): readonly Span[] {
   if (input.busy.blocked) return [];
   const { rules, overrides } = engineHours(page.availability);
+  const closed = input.closed ?? { busy: [], openHolds: [] };
   return computeSlots({
     rules,
     overrides,
-    busy: input.busy.busy,
+    busy: [...input.busy.busy, ...closed.busy],
+    extraWindows: closed.openHolds,
     bookings: input.bookings,
     durationMinutes: input.duration,
     bufferBefore: page.bufferBefore,
@@ -217,7 +247,7 @@ export function pageSlots(
     now: input.now,
     from: input.from,
     to: input.to,
-    minNoticeMinutes: page.minNoticeMinutes,
+    minNoticeMinutes: page.isPrivate ? 0 : page.minNoticeMinutes,
     windowDays: page.windowDays,
     ...(page.dailyLimit === null ? {} : { dailyLimit: page.dailyLimit }),
     ...(page.slotStep === null ? {} : { slotStepMinutes: page.slotStep }),
