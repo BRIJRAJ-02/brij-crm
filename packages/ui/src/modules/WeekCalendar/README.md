@@ -1,0 +1,50 @@
+# WeekCalendar
+
+A week of days as columns of hours, with bookings and the member's own calendar events as blocks placed by time: the Bookings page's calendar (spec 0025, laid out after the reference product's bookings week).
+
+## Why it exists
+
+New. Nothing in the library places things on a time axis. Board and DataGrid are rows and columns of records; DatePicker is a month of days with no hours.
+
+## Use
+
+```tsx
+<WeekCalendar
+  label="Bookings, 19 – 25 October 2026"
+  days={days}            // seven { key, weekday, dayNumber, label, isToday, isPast }
+  blocks={blocks}        // { id, dayKey, startMinute, endMinute, title, time, detail?, kind, hue?, isCancelled? }
+  selectedDay={day}
+  onSelectDay={setDay}
+  hourLabel={(hour) => format(hour)}
+  now={{ dayKey: today, minute: 15 * 60 + 20 }}
+  scrollToMinute={15 * 60}
+  openId={openId}
+  detail={<BookingCard … />}
+  onOpen={setOpenId}
+  onClose={() => setOpenId(undefined)}
+/>
+```
+
+- An hour is `--size-toolbar` tall; the body shows twelve hours at a time and scrolls. It opens centred on `scrollToMinute`.
+- Blocks that overlap share their cluster's width side by side (`placeBlocks`: sorted by start, each in the first lane free at its start).
+- `kind: 'booking'` is accent; `kind: 'event'` is quieter, in the tag colours of its `hue` (one per connected calendar). `isCancelled` is struck through.
+- The now line shows in today's column only.
+- The open block's card is a Popover anchored to the block: it sits beside it and flips when there's no room. Escape, or pressing outside, closes it and puts focus back on the block.
+- Below 480px of its container, the header stays as seven day buttons and the grid shows the selected day alone.
+
+## States
+
+Blocks, none (an empty grid: the caller says "Nothing booked this week" under it), an open block (ringed, its card open), focused day and block rings. Loading and failure belong to the screen.
+
+## Keyboard
+
+- One day column is in the tab order.
+- Left and Right move to the previous or next day (and select it).
+- Up and Down move between that day's blocks.
+- Enter or Space opens the focused block.
+- Escape closes its card.
+- The day header buttons select a day.
+
+## Differences from the artifact
+
+Not in the artifact. Dragging on the grid to make a meeting comes with the new meeting dialog.

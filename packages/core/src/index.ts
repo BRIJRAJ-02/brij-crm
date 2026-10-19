@@ -178,7 +178,7 @@ export {
   setMemberHours,
   updateBookingPage,
 } from './booking/pages.ts';
-export { listWorkspaceBookings } from './booking/list.ts';
+export { listWorkspaceBookings, readBookingsCalendar } from './booking/list.ts';
 export {
   createBusyCache,
   NO_CALENDAR,

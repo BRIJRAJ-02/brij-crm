@@ -1,0 +1,26 @@
+/* Pagination: rows per page at the start, the range and the two buttons at
+   the end, one row that wraps on a narrow container. */
+@layer components {
+  .root {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-8);
+    padding-block: var(--space-6);
+  }
+
+  .size,
+  .pages {
+    display: flex;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
+  .caption {
+    color: var(--text-secondary);
+    font: var(--text-label);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-label);
+  }
+}

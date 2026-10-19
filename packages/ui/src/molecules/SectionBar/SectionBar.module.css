@@ -1,0 +1,29 @@
+/* SectionBar: the start controls, the heading, and the end controls pushed to
+   the end, wrapping on a narrow container. */
+@layer components {
+  .root {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-8) var(--space-12);
+  }
+
+  .group,
+  .end {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-6);
+  }
+
+  .end {
+    margin-inline-start: auto;
+  }
+
+  .title {
+    margin: 0;
+    color: var(--text);
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+}

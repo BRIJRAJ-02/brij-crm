@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'r
 import type { BoardStatus, BoardStore } from './records/board.ts';
 import type { DataError } from './errors.ts';
 import type { ActivityFeed, ActivityState } from './activity/feed.ts';
-import type { BookingsState, BookingsView } from './bookings/store.ts';
+import type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
 import type { CalendarState, CalendarView } from './calendar/store.ts';
 import type { CaptureListState, CaptureListView } from './captures/list.ts';
 import type { JobsSnapshot, JobsView } from './jobs/store.ts';
@@ -259,6 +259,15 @@ export function useSavedView(source: SavedViewSource): SavedViewSnapshot {
  * the person comes back to the page.
  */
 export function useBookings(view: BookingsView): BookingsState {
+  return useRetained(view);
+}
+
+/**
+ * Bookings' week (spec 0025): a range's bookings and the reader's calendar
+ * events, re-rendering when they change. Held while the screen is mounted,
+ * so it is read again when the person comes back to the page.
+ */
+export function useBookingsCalendar(view: BookingsCalendarHeld): BookingsCalendarState {
   return useRetained(view);
 }
 
