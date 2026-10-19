@@ -1157,12 +1157,12 @@ export async function countIn(
       level.listId === null
         ? sql`select count(*)::int as n from records r where r.object_id = ${level.objectId} and r.deleted_at is null`
         : sql`
-          select l.entry_count - (
-            select count(*)::int from records t
-            join list_entries e on e.workspace_id = t.workspace_id and e.record_id = t.id
-            where t.deleted_at is not null and e.list_id = ${level.listId} and e.deleted_at is null
-          ) as n from lists l where l.id = ${level.listId}
-        `;
+              select l.entry_count - (
+                select count(*)::int from records t
+                join list_entries e on e.workspace_id = t.workspace_id and e.record_id = t.id
+                where t.deleted_at is not null and e.list_id = ${level.listId} and e.deleted_at is null
+              ) as n from lists l where l.id = ${level.listId}
+            `;
     const result = await tx.execute<{ n: number }>(total);
     return { count: result.rows[0]?.n ?? 0, atLeast: false };
   }
