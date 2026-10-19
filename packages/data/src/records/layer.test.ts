@@ -2310,3 +2310,122 @@ describe('a board (spec 0021)', () => {
     expect(board.getSnapshot().status).toBe('ready');
   });
 });
+
+describe('moving a card (spec 0021, milestone 2)', () => {
+  const STAGE = 'attr-stage';
+  const LEAD = '0199a6f2-0000-7000-8000-00000000b001';
+  const WON = '0199a6f2-0000-7000-8000-00000000b002';
+  const OLD = '0199a6f2-0000-7000-8000-00000000b003';
+  const card = (n: number, stage: string | null) =>
+    rowOf(idAt(n), { [NAME]: `P${String(n)}`, [STAGE]: stage }, { [STAGE]: version(1) });
+
+  /** A board of three columns (no value, Lead with two cards, Won empty), every column shown. */
+  async function readyBoard() {
+    const context = setup();
+    const board = context.layer.board(
+      WS,
+      PEOPLE,
+      { groupBy: STAGE, columnIds: [null, LEAD, WON, OLD], archivedIds: [OLD] },
+      [STAGE],
+    );
+    await settle();
+    context.groups[0]?.answer({
+      groups: [
+        { id: null, records: [], count: 0, atLeast: false },
+        { id: LEAD, records: [card(1, LEAD), card(2, LEAD)], count: 2, atLeast: false },
+        { id: WON, records: [], count: 0, atLeast: false },
+        { id: OLD, records: [card(3, OLD)], count: 1, atLeast: false },
+      ],
+      archivedHolding: [OLD],
+    });
+    await settle();
+    const views = board.getSnapshot().columns.map((column) => column.view);
+    const [none, lead, won, old] = views;
+    if (none === undefined || lead === undefined || won === undefined || old === undefined) {
+      throw new Error('No columns.');
+    }
+    const shown = [none, lead, won, old];
+    for (const view of shown) view.retain([STAGE]);
+    await Promise.all(shown.map((view) => view.ready()));
+    context.frame();
+    return { ...context, board, none, lead, won, old };
+  }
+  const idsOf = (view: {
+    getSnapshot: () => { source: { count: number; getItem: (i: number) => RecordView | undefined } };
+  }) => {
+    const { source } = view.getSnapshot();
+    return Array.from({ length: source.count }, (_, index) => source.getItem(index)?.id);
+  };
+
+  it('shows the card first in its new column at once, both counts moving, and writes the grouping value', async () => {
+    const { board, lead, won, edits, frame } = await readyBoard();
+    const moved = board.move(idAt(1), WON);
+    await settle();
+    frame();
+    expect(idsOf(lead)).toEqual([idAt(2)]);
+    expect(lead.getSnapshot().count).toEqual({ count: 1, atLeast: false });
+    expect(idsOf(won)).toEqual([idAt(1)]);
+    expect(won.getSnapshot().count).toEqual({ count: 1, atLeast: false });
+    // One ordinary value write, naming the version it replaces (spec 0006).
+    expect(edits[0]?.input.values).toEqual({ [STAGE]: { value: WON, baseVersionId: version(1) } });
+    edits[0]?.answer(rowOf(idAt(1), { [NAME]: 'P1', [STAGE]: WON }, { [STAGE]: version(2) }));
+    expect(await moved).toBe(true);
+    frame();
+    expect(idsOf(won)).toEqual([idAt(1)]);
+    expect(idsOf(lead)).toEqual([idAt(2)]);
+  });
+
+  it('puts a refused move back in its old place, restores the counts, and says why with Retry', async () => {
+    const { board, lead, won, edits, frame, notices } = await readyBoard();
+    const moved = board.move(idAt(1), WON);
+    await settle();
+    edits[0]?.fail(dataError('OPTION_ARCHIVED', 'Won is archived. Pick another stage.'));
+    expect(await moved).toBe(false);
+    frame();
+    expect(idsOf(lead)).toEqual([idAt(1), idAt(2)]);
+    expect(lead.getSnapshot().count).toEqual({ count: 2, atLeast: false });
+    expect(idsOf(won)).toEqual([]);
+    expect(won.getSnapshot().count).toEqual({ count: 0, atLeast: false });
+    expect(notices.at(-1)).toMatchObject({ tone: 'danger', action: { label: RECORD_WORDS.retry } });
+    // Retry sends the same move again.
+    notices.at(-1)?.action?.onAction();
+    await settle();
+    expect(edits).toHaveLength(2);
+    expect(edits[1]?.input.values[STAGE]?.value).toBe(WON);
+  });
+
+  it('refuses before sending a move to an archived column or the card own column', async () => {
+    const { board, edits } = await readyBoard();
+    expect(await board.move(idAt(1), OLD)).toBe(false);
+    expect(await board.move(idAt(1), LEAD)).toBe(false);
+    expect(edits).toHaveLength(0);
+  });
+
+  it('moves a card someone else moved as soon as its new value is read back', async () => {
+    const { layer, lead, none, gets, frame } = await readyBoard();
+    layer.changed(WS, PEOPLE, [idAt(2)], [STAGE]);
+    frame();
+    await settle();
+    gets[0]?.answer([rowOf(idAt(2), { [NAME]: 'P2', [STAGE]: null }, { [STAGE]: version(3) })]);
+    await settle();
+    frame();
+    expect(idsOf(lead)).toEqual([idAt(1)]);
+    expect(idsOf(none)).toEqual([idAt(2)]);
+    expect(none.getSnapshot().count).toEqual({ count: 1, atLeast: false });
+  });
+
+  it('holds every column still while a card is dragged', async () => {
+    const { board, layer, tick, counts, frame } = await readyBoard();
+    board.holdStill(true);
+    layer.changed(WS, PEOPLE, [idAt(9)], [NAME], { createdIds: [idAt(9)] });
+    frame();
+    tick(10_000);
+    await settle();
+    // No settle rereads a column (its count) under the drag.
+    expect(counts).toHaveLength(0);
+    board.holdStill(false);
+    tick(10_000);
+    await settle();
+    expect(counts.length).toBeGreaterThan(0);
+  });
+});

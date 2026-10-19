@@ -81,6 +81,16 @@ export interface BoardStore<View> {
   readonly retain: () => () => void;
   /** Whether a screen holds it. */
   readonly isRetained: () => boolean;
+  /**
+   * Moves a card to another column (spec 0021, AC-500): the grouping value
+   * written through the one value write path, optimistic, with undo; the card
+   * shows first in its new column at once and both counts move. Answers
+   * whether the move landed (false when refused, rolled back with a toast, or
+   * refused before anything was sent).
+   */
+  readonly move: (recordId: string, toColumnId: string | null) => Promise<boolean>;
+  /** Holds every column still while a card is being dragged (no settle moves a drop target). */
+  readonly holdStill: (isHeld: boolean) => void;
   /** Aborts its call on the way and forgets it. */
   readonly dispose: () => void;
 }
@@ -94,8 +104,10 @@ export interface BoardDeps<View> {
   readonly attributeIds: readonly string[];
   /** One `records.groups` call, waiting out a busy server (429) as every read does. */
   readonly groups: (request: GroupsRequest, signal: AbortSignal) => Promise<GroupsAnswer>;
-  /** The column's window over `filter` and `sorts`, seeded with its first cards (an open one is shared as is). */
-  readonly column: (filter: FilterGroup, sorts: SortRules | undefined, seed: ColumnSeed) => View;
+  /** Column `id`'s window over `filter` and `sorts`, seeded with its first cards (an open one is shared as is). */
+  readonly column: (id: string | null, filter: FilterGroup, sorts: SortRules | undefined, seed: ColumnSeed) => View;
+  readonly move?: (recordId: string, toColumnId: string | null) => Promise<boolean>;
+  readonly holdStill?: (isHeld: boolean) => void;
   /** Waits for the workspace's head before the first read (live updates). */
   readonly beforeRead: () => Promise<void>;
   readonly now: () => number;
@@ -167,7 +179,7 @@ export function createBoard<View>(deps: BoardDeps<View>): BoardStore<View> {
           if (!shown.has(group.id) || views.has(keyOf(group.id))) continue;
           views.set(
             keyOf(group.id),
-            deps.column(columnFilter(query.filter, query.groupBy, group.id), query.sorts, group),
+            deps.column(group.id, columnFilter(query.filter, query.groupBy, group.id), query.sorts, group),
           );
         }
         status = 'ready';
@@ -224,6 +236,10 @@ export function createBoard<View>(deps: BoardDeps<View>): BoardStore<View> {
       };
     },
     isRetained: () => retains > 0,
+    move: (recordId, toColumnId) => deps.move?.(recordId, toColumnId) ?? Promise.resolve(false),
+    holdStill: (isHeld) => {
+      deps.holdStill?.(isHeld);
+    },
     dispose: () => {
       isDisposed = true;
       controller.abort();

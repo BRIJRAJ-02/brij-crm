@@ -604,6 +604,15 @@ interface ViewEntry {
   readonly created: (id: string) => void;
   /** A record made here was refused: it leaves. */
   readonly withdrawn: (id: string) => void;
+  /**
+   * A board column (spec 0021): where a card is now, by its grouping value.
+   * `here` true shows it in this column (in its place when the windows hold
+   * it, else first, until the member leaves the board); false hides it here
+   * (moved to another column), out of the count too.
+   */
+  readonly placeMoved: (id: string, here: boolean) => void;
+  /** Whether this column hides the card as moved elsewhere. */
+  readonly hidesMoved: (id: string) => boolean;
   readonly isRetained: () => boolean;
   /** Whether a loaded block or a pin holds `id`. */
   readonly shows: (id: string) => boolean;
@@ -1061,6 +1070,17 @@ export function createRecordsLayer({
     // A refused cursor restarts the chain once; a read that lands allows it again.
     let hasRestarted = false;
     const isOpen = () => views.get(key)?.view === view;
+    // A board column's moved cards (spec 0021): those moved elsewhere (hidden here) and those moved in (first here).
+    let movedOut: ReadonlySet<string> = new Set();
+    const movedIn = new Set<string>();
+    // The ids this view skips: records on their way to the trash, and its cards moved to another column.
+    let goneFor = { leaving, movedOut, all: leaving };
+    const goneHere = (): ReadonlySet<string> => {
+      if (goneFor.leaving !== leaving || goneFor.movedOut !== movedOut) {
+        goneFor = { leaving, movedOut, all: movedOut.size === 0 ? leaving : new Set([...leaving, ...movedOut]) };
+      }
+      return goneFor.all;
+    };
 
     // Visible attributes (spec 0006, AC-55): each reader's columns, unioned, plus the primary.
     const readers = new Map<symbol, readonly string[]>();
@@ -1188,13 +1208,19 @@ export function createRecordsLayer({
       store,
       windows,
       schedule,
-      gone: () => leaving,
+      gone: goneHere,
       onShown: (range) => {
         // An edited row held in place lets go once it scrolls out of sight (spec 0006, AC-56).
-        const kept = inner
-          .pins()
-          .filter((pin) => created.has(pin.id) || (pin.index >= range.start && pin.index < range.end));
-        if (kept.length !== inner.pins().length) inner.setPins(kept);
+        const kept = inner.pins().filter(
+          (pin) =>
+            created.has(pin.id) ||
+            // A card moved in stays until its column's windows hold it (spec 0021).
+            (movedIn.has(pin.id) && !windows.has(pin.id)) ||
+            (pin.index >= range.start && pin.index < range.end),
+        );
+        if (kept.length === inner.pins().length) return;
+        for (const pin of inner.pins()) if (!kept.includes(pin)) movedIn.delete(pin.id);
+        inner.setPins(kept);
       },
     });
     windows.subscribe(checkReady);
@@ -1355,12 +1381,14 @@ export function createRecordsLayer({
           lastGone = goneIds;
           const told = windows.told();
           // Rows on their way to the trash already left the count (spec 0022, AC-525).
-          const goneHere = [...leaving].filter((id) => windows.has(id)).length;
+          const skipped = [...goneHere()].filter((id) => windows.has(id)).length;
+          // Cards moved in from another column, not yet in its windows, join its count (spec 0021).
+          const added = [...movedIn].filter((id) => !windows.has(id)).length;
           snapshot = {
             source,
             status,
             cellErrors,
-            count: goneHere === 0 ? told : { ...told, count: Math.max(0, told.count - goneHere) },
+            count: skipped === 0 && added === 0 ? told : { ...told, count: Math.max(0, told.count - skipped + added) },
             mode,
             rowNotes: rowNotesOf(),
             referenceDisplays,
@@ -1424,6 +1452,7 @@ export function createRecordsLayer({
               created.clear();
               edited.clear();
               inner.setPins([]);
+              movedIn.clear();
               letGoLater();
             }
           },
@@ -1574,6 +1603,29 @@ export function createRecordsLayer({
         inner.setPins([{ id, index: 0, note: 'new' }, ...made, ...others]);
         markDirty();
       },
+      placeMoved: (id, here) => {
+        if (here) {
+          if (movedOut.has(id)) movedOut = new Set([...movedOut].filter((each) => each !== id));
+          // In its windows: shown in its place. Else first, as the member's own row (spec 0006's rule).
+          if (!windows.has(id) && !inner.pins().some((pin) => pin.id === id)) {
+            movedIn.add(id);
+            inner.setPins([{ id, index: 0 }, ...inner.pins().map((pin) => ({ ...pin, index: pin.index + 1 }))]);
+          }
+        } else {
+          if (movedIn.delete(id)) {
+            const at = inner.pins().find((pin) => pin.id === id)?.index ?? 0;
+            inner.setPins(
+              inner
+                .pins()
+                .filter((pin) => pin.id !== id)
+                .map((pin) => (pin.index > at ? { ...pin, index: pin.index - 1 } : pin)),
+            );
+          }
+          if (windows.has(id) && !movedOut.has(id)) movedOut = new Set([...movedOut, id]);
+        }
+        inner.invalidate();
+      },
+      hidesMoved: (id) => movedOut.has(id),
       withdrawn: (id) => {
         if (!created.delete(id)) return;
         const rest = inner.pins().filter((pin) => pin.id !== id);
@@ -2615,20 +2667,79 @@ export function createRecordsLayer({
       const key = boardKeyOf(workspace, objectId, query);
       const held = boards.get(key);
       if (held !== undefined) return held.board;
+      // Each column's window by option id ('' for no value), for placing moved cards.
+      const columns = new Map<string, ViewEntry>();
+      const columnKeyOf = (id: string | null) => id ?? '';
+      /**
+       * Where a card shows (spec 0021): in the column of its grouping value as
+       * the store holds it now (an own move's layer, a rollback, an undo, or
+       * someone else's move read back), hidden from every other column. Only
+       * cards a column holds or hides are placed; the rest wait for a settle.
+       */
+      const place = (id: string) => {
+        const entries = [...columns.values()];
+        if (!entries.some((entry) => entry.shows(id) || entry.hidesMoved(id))) return;
+        const body = store.get(id);
+        if (body === undefined || !Object.hasOwn(body.values, query.groupBy)) return;
+        const value = body.values[query.groupBy];
+        const here = typeof value === 'string' ? value : '';
+        for (const [key, entry] of columns) entry.placeMoved(id, key === here);
+      };
+      const stopPlacing = store.subscribe((ids) => {
+        for (const id of ids) place(id);
+      });
+      let dragging = 0;
+      const archived = new Set(query.archivedIds ?? []);
       const board = createBoard<RecordsView>({
         workspace,
         objectId,
         query,
         attributeIds: [...new Set([...attributeIds, query.groupBy])],
         groups: (request, signal) => whenFree(() => api.groups(request, signal), signal),
-        column: (filter, sorts, seed) => {
+        column: (id, filter, sorts, seed) => {
           const columnQuery = { filter, ...(sorts === undefined ? {} : { sorts }) };
           const columnKey = `${keyOf(workspace, objectId, columnQuery)}\u0000board`;
-          const open = views.get(columnKey);
-          if (open !== undefined) return open.view;
-          const entry = openView(workspace, objectId, columnQuery, attributeIds, { key: columnKey, seed });
-          views.set(columnKey, entry);
-          return entry.view;
+          const open =
+            views.get(columnKey) ?? openView(workspace, objectId, columnQuery, attributeIds, { key: columnKey, seed });
+          views.set(columnKey, open);
+          columns.set(columnKeyOf(id), open);
+          if (dragging > 0) open.view.holdSettle(true);
+          return open.view;
+        },
+        move: async (recordId, toColumnId) => {
+          const to = columns.get(columnKeyOf(toColumnId));
+          const from = [...columns.values()].find((entry) => entry.shows(recordId));
+          // Refused here, with nothing sent: an archived option, a column not loaded, or the card's own column.
+          if (to === undefined || from === undefined || to === from) return false;
+          if (toColumnId !== null && archived.has(toColumnId)) return false;
+          const outcome = await edit(
+            workspace,
+            undefined,
+            [{ rowId: recordId, columnId: query.groupBy, value: toColumnId }],
+            'cell',
+          );
+          if (outcome.kind !== 'done' || outcome.landed > 0) return outcome.kind === 'done';
+          // Refused: the card is back where it was (its layer went); say why, with Retry, instead of a cell's mark.
+          const cell = `${recordId}:${query.groupBy}`;
+          const message = cellErrors.get(cell);
+          if (message !== undefined) {
+            setCellErrors([[cell, undefined]]);
+            notify({
+              tone: 'danger',
+              message,
+              action: {
+                label: RECORD_WORDS.retry,
+                onAction: () => {
+                  void shared.move(recordId, toColumnId);
+                },
+              },
+            });
+          }
+          return false;
+        },
+        holdStill: (isHeld) => {
+          dragging = Math.max(0, dragging + (isHeld ? 1 : -1));
+          for (const entry of columns.values()) entry.view.holdSettle(isHeld);
         },
         beforeRead: () => beforeRead(workspace),
         now,
@@ -2640,6 +2751,7 @@ export function createRecordsLayer({
         entry.unused = setTimeout(() => {
           if (board.isRetained()) return;
           if (boards.get(key)?.board === shared) boards.delete(key);
+          stopPlacing();
           board.dispose();
         }, keepUnusedViewMs);
       };
