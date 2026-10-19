@@ -4,6 +4,7 @@
 // the browser. The procedures sit in the records namespace (`records.ts`).
 import * as z from 'zod';
 import { ACTIVITY_PAGE } from './activity-keys.ts';
+import { MeetingView } from './calendar.ts';
 import { ActorReferenceValue, Timestamp } from './values/attribute-values.ts';
 import { RecordRefDisplay } from './values/options.ts';
 import { WorkspaceScoped } from './workspaces.ts';
@@ -23,8 +24,11 @@ export {
 /** The longest cursor `records.activity` takes. */
 export const MAX_ACTIVITY_CURSOR = 512;
 
-/** The kinds of timeline entry: #19 adds notes and tasks, #29 comments; a client ignores a kind it doesn't map. */
-export const ActivityKind = z.enum(['created', 'change', 'links', 'note', 'task', 'comment']);
+/**
+ * The kinds of timeline entry: #19 adds notes and tasks, #29 comments, spec
+ * 0024 meetings; a client ignores a kind it doesn't map.
+ */
+export const ActivityKind = z.enum(['created', 'change', 'links', 'note', 'task', 'comment', 'meeting']);
 /** A kind of timeline entry. */
 export type ActivityKind = z.infer<typeof ActivityKind>;
 
@@ -58,6 +62,7 @@ export const ActivityItem = z.object({
   title: z.string().optional(),
   excerpt: z.string().optional(),
   isDone: z.boolean().optional(),
+  meeting: MeetingView.optional(),
 });
 /** One entry of a record's timeline. */
 export type ActivityItem = z.infer<typeof ActivityItem>;

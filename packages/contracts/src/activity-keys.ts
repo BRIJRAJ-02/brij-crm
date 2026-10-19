@@ -18,7 +18,7 @@ export const LINKS_SHOWN_PER_ENTRY = 3;
 
 /**
  * Each kind's rank, which breaks a tie at one moment: links, then changes,
- * comments, notes and tasks, and the creation last, so it is always the
+ * comments, notes, tasks and meetings, and the creation last, so it is always the
  * oldest entry of its moment.
  */
 export const ACTIVITY_RANKS = {
@@ -27,6 +27,7 @@ export const ACTIVITY_RANKS = {
   comment: 3,
   note: 4,
   task: 5,
+  meeting: 6,
   created: 9,
 } as const;
 
