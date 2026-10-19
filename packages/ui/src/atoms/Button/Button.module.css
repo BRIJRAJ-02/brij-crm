@@ -1,4 +1,4 @@
-/* Button, ToggleButton and SplitButton: 26px controls with a 13px medium label.
+/* Button, ToggleButton, SplitButton and ButtonGroup: 26px controls with a 13px medium label.
    Every look is a data attribute declared once, here. States read React Aria's
    attributes (data-hovered, data-pressed, data-focus-visible, data-disabled,
    data-pending, data-selected). */
@@ -213,6 +213,39 @@
   }
 
   .root[data-split][data-focus-visible] {
+    position: relative;
+    z-index: var(--z-raised);
+  }
+
+  /* ButtonGroup: buttons joined as SplitButton's halves are, every inner edge
+     shared, one outer radius and one drop for the whole group. */
+  .group {
+    display: inline-flex;
+    flex: none;
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-control);
+  }
+
+  .group > .root {
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .group > .root:not(:first-child) {
+    margin-inline-start: calc(var(--border-width-hairline) * -1);
+  }
+
+  .group > .root:first-child {
+    border-start-start-radius: var(--radius-md);
+    border-end-start-radius: var(--radius-md);
+  }
+
+  .group > .root:last-child {
+    border-start-end-radius: var(--radius-md);
+    border-end-end-radius: var(--radius-md);
+  }
+
+  .group > .root[data-focus-visible] {
     position: relative;
     z-index: var(--z-raised);
   }

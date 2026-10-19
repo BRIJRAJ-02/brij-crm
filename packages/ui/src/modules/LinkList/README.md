@@ -25,8 +25,8 @@ On 19 October 2026 the owner asked for Links and Forms to look the same, since a
         toggle: { label: 'Intro call is on', isSelected: true, onChange: setOn },
         actions: (
           <>
-            <Button variant="ghost" icon="external-link" label="Open Intro call in a new tab" onPress={openIt} />
-            <CopyButton value={url} label="Copy link to Intro call" isIconOnly variant="ghost" />
+            <Button icon="external-link" label="Open Intro call in a new tab" onPress={openIt} />
+            <CopyButton value={url} label="Copy link to Intro call" isIconOnly />
             <MenuTrigger>…</MenuTrigger>
           </>
         ),
@@ -42,12 +42,13 @@ On 19 October 2026 the owner asked for Links and Forms to look the same, since a
 - Pressing anywhere on a row, or Enter on it, calls `onOpen` with its id. The controls inside it (the switch, Open, Copy link, the menu) do their own thing and don't open it.
 - `address` sits inline after the title, muted (a page's `/<workspace>/<short name>`, a form's `/f/<address>`). `description` adds up to two lines under them.
 - `chips` show as neutral Badges with a short label under the title: facts, not values, so not the field set's Tag ("30 min"; "12 responses", "2 spam").
-- `badge` is a grey Badge before the switch, only when the row isn't taking people ("Off", "Paused", "Not published"). Links and forms use the same one.
-- `toggle` is the row's Switch, its label hidden (read by screen readers): a page's visibility, a form's Accepting. `isDisabled` when it can't be switched.
-- `actions` are ghost icon Buttons, drawn as one joined group in a hairline box.
+- `badge` is a grey Badge before the switch, only when the row isn't taking people ("Off", "Not published"), or "Copying…" on a pending row. Links and forms use the same words.
+- `isOff` draws the title in the secondary colour, so an off row reads as off before the switch is read (timefix's links list does the same).
+- `toggle` is the row's Switch, its label hidden (read by screen readers): a page's visibility, a form's Accepting. `isDisabled` when it can't be switched, with `disabledReason` in a tooltip on it ("Publish it first").
+- `actions` are secondary icon Buttons (a disabled one in a Tooltip saying why), joined into one `ButtonGroup` named by the row's title. A press on a disabled control never opens the row.
 - `isPending` draws a row that isn't made yet (a copy on its way) in the tertiary colour; it can't be opened or focused until it lands.
-- The search field narrows the rows by title or address as you type, and says when nothing matches. `actions` sit at the other end of its row.
-- `status`: `loading` (the search row, then three skeleton rows in the rows' shape, after the loading delay), `error` (an EmptyState with Try again from `onRetry`, titled `errorTitle`) or `no-access`.
+- The search field narrows the rows by title or address as you type, and says when nothing matches, with Clear search. `actions` sit at the other end of its row.
+- `status`: `loading` (the search row, then three skeleton rows in the rows' shape, after the loading delay), `error` (the search row stays, so New still works, then an EmptyState with Try again from `onRetry`, titled `errorTitle`) or `no-access`.
 - `emptyState` shows with no rows at all, with no search. A screen whose list is empty draws its EmptyState in a centred PageColumn (`align="center"`), with the New button in it.
 
 ## States
@@ -60,4 +61,4 @@ Tab reaches the search field, the list's action, then the list on a row. The up 
 
 ## Differences from the artifact
 
-Not in the artifact yet. Spec 0025's `tag` gave way to `badge` and `toggle`, the title is no longer a Button, and `searchLabel` and `actions` are new.
+Not in the artifact yet. Spec 0025's `tag` gave way to `badge` and `toggle`, the title is no longer a Button, `searchLabel` and `actions` are new, and the joined actions are a ButtonGroup (20 October 2026) rather than this module's own box.

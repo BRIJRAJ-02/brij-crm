@@ -28,6 +28,7 @@ describe('@crm/ui', () => {
       'Breadcrumbs',
       'BulkActionBar',
       'Button',
+      'ButtonGroup',
       'Callout',
       'Card',
       'Checkbox',

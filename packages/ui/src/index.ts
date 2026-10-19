@@ -10,8 +10,10 @@ export {
 export { Badge, type BadgeProps, type BadgeTone } from './atoms/Badge/Badge.tsx';
 export {
   Button,
+  ButtonGroup,
   SplitButton,
   ToggleButton,
+  type ButtonGroupProps,
   type ButtonProps,
   type ButtonSize,
   type ButtonVariant,

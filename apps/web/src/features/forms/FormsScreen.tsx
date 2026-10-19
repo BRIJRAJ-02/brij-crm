@@ -4,7 +4,7 @@
 // Leaves out: anything inside one form (its builder), and archived forms (a later pass).
 import { isDataError, type FormSummary } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
-import { Button, CopyButton, Menu, MenuItem, MenuSeparator, MenuTrigger, Modal, type LinkRow } from '@crm/ui';
+import { Button, CopyButton, Menu, MenuItem, MenuSeparator, MenuTrigger, Modal, Tooltip, type LinkRow } from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
@@ -34,10 +34,10 @@ function chipsOf(form: FormSummary): readonly string[] {
   ];
 }
 
-/** Its grey badge, only when it isn't taking enquiries: Not published until its first publish, then Paused. */
+/** Its grey badge, only when it isn't taking enquiries: Not published until its first publish, then Off (as a page). */
 function badgeOf(form: FormSummary): { readonly badge?: string } {
   if (form.liveVersionNumber === undefined) return { badge: strings.notPublishedYet };
-  return form.status === 'paused' ? { badge: strings.pausedTag } : {};
+  return form.status === 'paused' ? { badge: strings.offTag } : {};
 }
 
 /** Captures › Forms: New form, then one row per form, newest change first, read from the data layer's held list. */
@@ -49,8 +49,9 @@ export function FormsScreen({ slug }: FormsScreenProps) {
   const [creating, setCreating] = useState<string | undefined>(undefined);
   const [deleting, setDeleting] = useState<FormSummary | undefined>(undefined);
 
-  const failed = (error: unknown) => {
-    toasts.toast({ tone: 'danger', message: isDataError(error) ? error.message : strings.failedText });
+  // A refusal says what was put back, then why.
+  const failed = (what: string) => (error: unknown) => {
+    toasts.toast({ tone: 'danger', message: `${what} ${isDataError(error) ? error.message : strings.failedText}` });
   };
 
   const open = (formId: string) => {
@@ -69,69 +70,84 @@ export function FormsScreen({ slug }: FormsScreenProps) {
       },
       (error: unknown) => {
         setCreating(undefined);
-        failed(error);
+        failed(strings.createFailed)(error);
       },
     );
   };
 
   // Each change shows in the list at once; a refusal puts it back there, and the toast says why.
   const setAccepting = (form: FormSummary, isAccepting: boolean) => {
-    data.forms.setStatus(slug, form.id, isAccepting ? 'live' : 'paused').catch(failed);
+    data.forms
+      .setStatus(slug, form.id, isAccepting ? 'live' : 'paused')
+      .catch(failed(isAccepting ? strings.turnOnFailed(form.name) : strings.turnOffFailed(form.name)));
   };
 
   const duplicate = (form: FormSummary) => {
-    data.forms.duplicate(slug, form.id).catch(failed);
+    data.forms.duplicate(slug, form.id).then(
+      (copy) => {
+        toasts.toast({ tone: 'success', message: strings.duplicated(copy.name) });
+      },
+      failed(strings.duplicateFailed(form.name)),
+    );
   };
 
   const remove = (form: FormSummary) => {
     setDeleting(undefined);
-    data.forms.delete(slug, form.id).then(() => {
-      toasts.toast({ tone: 'success', message: strings.deleted(form.name) });
-    }, failed);
+    data.forms.delete(slug, form.id).then(
+      () => {
+        toasts.toast({ tone: 'success', message: strings.deleted(form.name) });
+      },
+      failed(strings.deleteFailed(form.name)),
+    );
   };
 
   const forms = list.status === 'ready' ? list.items : [];
   const rows: readonly LinkRow[] = forms.map((form) => {
     const isPending = list.status === 'ready' && list.pendingIds.has(form.id);
     const isPublished = form.liveVersionNumber !== undefined;
+    const isLive = isPublished && form.status === 'live';
     return {
       id: form.id,
       title: form.name,
       address: isPending ? strings.addressPending : `/f/${form.publicKey}`,
       chips: chipsOf(form),
-      ...badgeOf(form),
+      ...(isPending ? { badge: strings.copying } : badgeOf(form)),
+      isOff: !isLive,
       toggle: {
         label: strings.acceptingOf(form.name),
-        isSelected: isPublished && form.status === 'live',
+        isSelected: isLive,
         onChange: (isOn: boolean) => {
           setAccepting(form, isOn);
         },
         isDisabled: !canManage || !isPublished,
+        disabledReason: isPublished ? strings.manageOnly : strings.publishFirst,
       },
       isPending,
       actions: (
         <>
-          <Button
-            variant="ghost"
-            icon="external-link"
-            label={strings.openForm(form.name)}
-            isDisabled={isPending || !isPublished}
-            onPress={() => {
-              globalThis.open(data.forms.hostedUrl(form.publicKey), '_blank', 'noopener');
-            }}
-          />
-          <CopyButton
-            value={data.forms.hostedUrl(form.publicKey)}
-            label={strings.copyLinkTo(form.name)}
-            isIconOnly
-            variant="ghost"
-            isDisabled={isPending || !isPublished}
-          />
+          <Tooltip content={isPublished ? strings.turnedOff : strings.publishFirst} isDisabled={isLive || isPending}>
+            <Button
+              icon="external-link"
+              label={strings.openForm(form.name)}
+              isDisabled={isPending || !isLive}
+              onPress={() => {
+                globalThis.open(data.forms.hostedUrl(form.publicKey), '_blank', 'noopener');
+              }}
+            />
+          </Tooltip>
+          <Tooltip content={strings.publishFirst} isDisabled={isPublished || isPending}>
+            <CopyButton
+              value={data.forms.hostedUrl(form.publicKey)}
+              label={strings.copyLinkTo(form.name)}
+              isIconOnly
+              isDisabled={isPending || !isPublished}
+            />
+          </Tooltip>
           {canManage && (
             <MenuTrigger>
-              <Button variant="ghost" icon="ellipsis" label={strings.formActions(form.name)} isDisabled={isPending} />
+              <Button icon="ellipsis" label={strings.moreFor(form.name)} isDisabled={isPending} />
               <Menu
-                label={strings.formActions(form.name)}
+                label={strings.moreFor(form.name)}
                 onAction={(key) => {
                   if (key === 'duplicate') duplicate(form);
                   if (key === 'delete') setDeleting(form);

@@ -8,9 +8,9 @@ import { LinkList, type LinkRow } from './LinkList.tsx';
 function icons(title: string, isOff = false) {
   return (
     <>
-      <Button variant="ghost" icon="external-link" label={`Open ${title}`} isDisabled={isOff} />
-      <Button variant="ghost" icon="copy" label={`Copy link to ${title}`} />
-      <Button variant="ghost" icon="ellipsis" label={`More for ${title}`} />
+      <Button icon="external-link" label={`Open ${title}`} isDisabled={isOff} />
+      <Button icon="copy" label={`Copy link to ${title}`} />
+      <Button icon="ellipsis" label={`More for ${title}`} />
     </>
   );
 }
@@ -32,6 +32,7 @@ function pages(onToggle: (isOn: boolean) => void = () => undefined): LinkRow[] {
       description: 'A walk round the site with the project lead, then questions.',
       chips: ['90 min', 'Own hours', 'In person'],
       badge: 'Off',
+      isOff: true,
       toggle: { label: 'Site visit is on', isSelected: false, onChange: () => undefined },
       actions: icons('Site visit', true),
     },
@@ -45,7 +46,7 @@ function forms(): LinkRow[] {
       title: 'Contact us',
       address: '/f/contact-us',
       chips: ['12 responses', '2 spam'],
-      toggle: { label: 'Contact us is accepting enquiries', isSelected: true, onChange: () => undefined },
+      toggle: { label: 'Accepting enquiries on Contact us', isSelected: true, onChange: () => undefined },
       actions: icons('Contact us'),
     },
     {
@@ -53,8 +54,9 @@ function forms(): LinkRow[] {
       title: 'Book a demo',
       address: '/f/book-a-demo',
       chips: ['0 responses'],
-      badge: 'Paused',
-      toggle: { label: 'Book a demo is accepting enquiries', isSelected: false, onChange: () => undefined },
+      badge: 'Off',
+      isOff: true,
+      toggle: { label: 'Accepting enquiries on Book a demo', isSelected: false, onChange: () => undefined },
       actions: icons('Book a demo'),
     },
     {
@@ -63,11 +65,13 @@ function forms(): LinkRow[] {
       address: '/f/untitled-form',
       chips: ['0 responses'],
       badge: 'Not published',
+      isOff: true,
       toggle: {
-        label: 'Untitled form is accepting enquiries',
+        label: 'Accepting enquiries on Untitled form',
         isSelected: false,
         onChange: () => undefined,
         isDisabled: true,
+        disabledReason: 'Publish it first',
       },
       actions: icons('Untitled form', true),
     },
@@ -110,7 +114,7 @@ export const Default: Story = {
   },
 };
 
-/** Forms in the same rows: on, Paused and Not published, with their responses as chips. */
+/** Forms in the same rows: on, Off and Not published, with their responses as chips. */
 export const Forms: Story = {
   args: { label: 'Forms', searchLabel: 'Search forms' },
   render: (args) => (
@@ -119,8 +123,8 @@ export const Forms: Story = {
     </Stage>
   ),
   play: async ({ canvas }) => {
-    await expect(canvas.getByText('Paused')).toBeInTheDocument();
-    await expect(canvas.getByRole('switch', { name: 'Untitled form is accepting enquiries' })).toBeDisabled();
+    await expect(canvas.getAllByText('Off')).toHaveLength(1);
+    await expect(canvas.getByRole('switch', { name: 'Accepting enquiries on Untitled form' })).toBeDisabled();
   },
 };
 
@@ -244,4 +248,36 @@ export const Empty: Story = {
       />
     </Stage>
   ),
+};
+
+/** Pressing a disabled control (an unpublished form's switch, Open and Copy link) never opens the row. */
+export const DisabledControls: Story = {
+  args: { label: 'Forms', searchLabel: 'Search forms', onOpen: fn() },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage>
+      <LinkList {...args} rows={forms()} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('switch', { name: 'Accepting enquiries on Untitled form' }), {
+      pointerEventsCheck: 0,
+    });
+    await userEvent.click(canvas.getByRole('button', { name: 'Open Untitled form' }), { pointerEventsCheck: 0 });
+    await expect(args.onOpen).not.toHaveBeenCalled();
+  },
+};
+
+/** No access: the locked state, in the library's words. */
+export const NoAccess: Story = {
+  args: { status: 'no-access' },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage>
+      <LinkList {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('You can’t see this list')).toBeInTheDocument();
+  },
 };

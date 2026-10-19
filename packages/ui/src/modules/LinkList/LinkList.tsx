@@ -1,8 +1,10 @@
 import { useState, type ReactNode } from 'react';
 import { GridList, GridListItem } from 'react-aria-components';
 import { Badge } from '../../atoms/Badge/Badge.tsx';
+import { Button, ButtonGroup } from '../../atoms/Button/Button.tsx';
 import { Skeleton } from '../../atoms/Skeleton/Skeleton.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
+import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { VisuallyHidden } from '../../atoms/VisuallyHidden/VisuallyHidden.tsx';
 import type { LoadStatus } from '../../lib/load-status.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
@@ -19,6 +21,8 @@ export interface LinkToggle {
   readonly onChange: (isSelected: boolean) => void;
   /** Can't be switched (never published, no permission, still on its way). */
   readonly isDisabled?: boolean;
+  /** Why it can't, shown in a tooltip on the switch ("Publish it first"). */
+  readonly disabledReason?: string;
 }
 
 /** One link's row. */
@@ -31,10 +35,12 @@ export interface LinkRow {
   readonly description?: string;
   /** Short facts as chips under the title ("30 min", "60 min"; "4 questions", "12 responses"). */
   readonly chips: readonly string[];
-  /** A grey badge before the switch, only when it isn't taking people ("Off", "Paused", "Not published"). */
+  /** A grey badge before the switch, only when it isn't taking people ("Off", "Not published", "Copying…"). */
   readonly badge?: string;
+  /** Off (not taking people): the title reads in the secondary colour, as the switch says. */
+  readonly isOff?: boolean;
   readonly toggle?: LinkToggle;
-  /** Open, Copy link and the row menu: ghost icon Buttons, drawn as one joined group at the end. */
+  /** Open, Copy link and the row menu: secondary icon Buttons, joined into one ButtonGroup at the end. */
   readonly actions: ReactNode;
   /** Shown before the server made it (a copy on its way): drawn quieter, and it doesn't open yet. */
   readonly isPending?: boolean;
@@ -92,11 +98,6 @@ export function LinkList({
 }: LinkListProps) {
   const [query, setQuery] = useState('');
   const showSkeleton = useDelayedLoading(status === 'loading');
-  if (status === 'error') {
-    return (
-      <EmptyState tone="error" title={errorTitle ?? strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />
-    );
-  }
   if (status === 'no-access') {
     return (
       <EmptyState tone="locked" title={strings.noAccess}>
@@ -106,6 +107,7 @@ export function LinkList({
   }
   if (status === 'ready' && rows.length === 0) return <>{emptyState}</>;
   const isLoading = status === 'loading';
+  const isFailed = status === 'error';
   const shown = rows.filter((row) => matches(row, query));
   const toolbar = (
     <div className={styles.toolbar}>
@@ -118,12 +120,21 @@ export function LinkList({
           type="search"
           value={query}
           onChange={setQuery}
-          isDisabled={isLoading}
+          isDisabled={isLoading || isFailed}
         />
       </span>
       {!isLoading && actions !== undefined && <div className={styles.listActions}>{actions}</div>}
     </div>
   );
+  // A list that didn't load keeps its toolbar (New still works), the failure where the rows go.
+  if (isFailed) {
+    return (
+      <div className={styles.frame}>
+        {toolbar}
+        <EmptyState tone="error" title={errorTitle ?? strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />
+      </div>
+    );
+  }
   if (isLoading) {
     return (
       <div className={styles.frame}>
@@ -151,7 +162,19 @@ export function LinkList({
     <div className={styles.frame}>
       {toolbar}
       {shown.length === 0 ? (
-        <EmptyState icon="search" title={strings.noMatches(query.trim())}>
+        <EmptyState
+          icon="search"
+          title={strings.noMatches(query.trim())}
+          actions={
+            <Button
+              onPress={() => {
+                setQuery('');
+              }}
+            >
+              {strings.clearSearch}
+            </Button>
+          }
+        >
           {strings.noMatchesBody}
         </EmptyState>
       ) : (
@@ -171,6 +194,7 @@ export function LinkList({
               textValue={row.title}
               data-pressable={row.isPending === true ? undefined : ''}
               data-pending={row.isPending === true || undefined}
+              data-off={row.isOff === true || undefined}
             >
               <div className={styles.main}>
                 <div className={styles.titleLine}>
@@ -192,23 +216,33 @@ export function LinkList({
               </div>
               <div className={styles.end}>
                 {row.badge !== undefined && <Badge text={row.badge} />}
-                {row.toggle !== undefined && (
-                  <span className={styles.toggle}>
-                    <Switch
-                      label={row.toggle.label}
-                      isLabelHidden
-                      isSelected={row.toggle.isSelected}
-                      onChange={row.toggle.onChange}
-                      isDisabled={row.isPending === true || row.toggle.isDisabled === true}
-                    />
-                  </span>
-                )}
-                <div className={styles.group}>{row.actions}</div>
+                {row.toggle !== undefined && <RowSwitch toggle={row.toggle} isPending={row.isPending === true} />}
+                <ButtonGroup label={row.title}>{row.actions}</ButtonGroup>
               </div>
             </GridListItem>
           )}
         </GridList>
       )}
     </div>
+  );
+}
+
+/** A row's switch, with the reason it is off limits in a tooltip when it is. */
+function RowSwitch({ toggle, isPending }: { readonly toggle: LinkToggle; readonly isPending: boolean }) {
+  const isDisabled = isPending || toggle.isDisabled === true;
+  const control = (
+    <Switch
+      label={toggle.label}
+      isLabelHidden
+      isSelected={toggle.isSelected}
+      onChange={toggle.onChange}
+      isDisabled={isDisabled}
+    />
+  );
+  if (!isDisabled || toggle.disabledReason === undefined) return <span className={styles.toggle}>{control}</span>;
+  return (
+    <Tooltip content={toggle.disabledReason} isTextTrigger>
+      <span className={styles.toggle}>{control}</span>
+    </Tooltip>
   );
 }
