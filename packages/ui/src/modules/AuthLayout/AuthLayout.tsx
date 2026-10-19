@@ -5,8 +5,12 @@ import styles from './AuthLayout.module.css';
 
 /** Props for AuthLayout. */
 export interface AuthLayoutProps {
-  /** The product's name, shown with its mark above the card. */
-  readonly productName: string;
+  /**
+   * The product's name, shown with its mark above the card. Left out (a
+   * hosted form, spec 0023, which speaks for the workspace, not the product),
+   * the card stands alone at the same place.
+   */
+  readonly productName?: string;
   /** The page's heading, its `h1`: "Sign in", "Check your email". */
   readonly title: string;
   /** A line under the heading. */
@@ -30,10 +34,12 @@ export interface AuthLayoutProps {
 export function AuthLayout({ productName, title, description, children, footer, isBusy = false }: AuthLayoutProps) {
   return (
     <div className={styles.root}>
-      <header className={styles.brand}>
-        <Avatar name={productName} hue="ink" shape="square" size="md" isDecorative />
-        <span className={styles.name}>{productName}</span>
-      </header>
+      {productName !== undefined && (
+        <header className={styles.brand}>
+          <Avatar name={productName} hue="ink" shape="square" size="md" isDecorative />
+          <span className={styles.name}>{productName}</span>
+        </header>
+      )}
       <Card
         placement="page"
         title={title}

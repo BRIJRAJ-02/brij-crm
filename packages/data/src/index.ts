@@ -11,6 +11,8 @@ import type {
   PickerAttributeType,
   CreateWorkspaceInput,
   contract,
+  FormDocument,
+  FormStatus,
   JobView,
   Me,
   MemberSummary,
@@ -19,6 +21,7 @@ import type {
   RecordRefDisplay,
   RecordView,
   RelationshipView,
+  SubmissionState,
   Usage,
   ValidationRuleInput,
 } from '@crm/contracts';
@@ -77,6 +80,13 @@ export type {
   PickerAttributeType,
   CreatedWorkspace,
   CreateWorkspaceInput,
+  FormAttributeChoice,
+  FormBlock,
+  FormDocument,
+  FormStatus,
+  FormSummary,
+  FormView,
+  QuestionBlock,
   InputIssue,
   JobStatus,
   JobView,
@@ -89,6 +99,12 @@ export type {
   RecordView,
   RelationshipView,
   SignedInUser,
+  SubmissionAnswer,
+  SubmissionPage,
+  SubmissionRecord,
+  SubmissionState,
+  SubmissionSummary,
+  SubmissionView,
   TaskTotal,
   TaskView,
   SystemStatus,
@@ -2132,6 +2148,64 @@ export function createDataLayer({
         }
         return summary;
       },
+    },
+    forms: {
+      /**
+       * The workspace's forms on objects the member can see (spec 0023),
+       * newest first: the active ones, or the archived ones. Read through the
+       * route loader; the screens reload it after their own changes.
+       */
+      list: (workspace: string, archived = false) =>
+        call((options) => api.forms.list({ workspace, archived }, options)).then((page) => page.items),
+      /** One form with its draft and live documents. */
+      get: (workspace: string, formId: string) => call((options) => api.forms.get({ workspace, formId }, options)),
+      /** The main object's attributes a question may map to, with whether the member may write each (AC-546). */
+      attributes: (workspace: string, formId: string) =>
+        call((options) => api.forms.attributes({ workspace, formId }, options)).then((page) => page.items),
+      /** A new form id: mint it once when the dialog opens, and send the same one on a retry. */
+      newId: (): string => mintId(),
+      /** Creates a form, waiting for the server (`forms.manage`). */
+      create: (
+        workspace: string,
+        form: { readonly id: string; readonly name: string; readonly mainObjectId: string },
+      ) => call((options) => api.forms.create({ workspace, ...form, mutationId: mintId() }, options)),
+      /**
+       * Saves the draft, waiting for the server. Rejects `FORM_CHANGED` when
+       * someone saved since `expectedRevision`: the builder reloads the form.
+       */
+      saveDraft: (
+        workspace: string,
+        formId: string,
+        draft: { readonly document: FormDocument; readonly name?: string; readonly expectedRevision: number },
+      ) => call((options) => api.forms.saveDraft({ workspace, formId, ...draft, mutationId: mintId() }, options)),
+      /** Publishes the draft as the next live version (AC-548); refusals name the field (AC-546). */
+      publish: (workspace: string, formId: string, expectedRevision: number) =>
+        call((options) => api.forms.publish({ workspace, formId, expectedRevision, mutationId: mintId() }, options)),
+      /** Pauses, resumes, archives or restores a form (AC-549). */
+      setStatus: (workspace: string, formId: string, status: FormStatus) =>
+        call((options) => api.forms.setStatus({ workspace, formId, status, mutationId: mintId() }, options)),
+      /** Gives the form a new public key: its old link stops working (AC-552). */
+      rotateKey: (workspace: string, formId: string) =>
+        call((options) => api.forms.rotateKey({ workspace, formId, mutationId: mintId() }, options)),
+      /** The hosted page's address for a public key, on this origin. */
+      hostedUrl: (publicKey: string): string => `${origin}/f/${encodeURIComponent(publicKey)}`,
+    },
+    submissions: {
+      /** A page of a form's submissions, newest first, optionally one state (AC-572). */
+      list: (
+        workspace: string,
+        formId: string,
+        query: { readonly state?: SubmissionState; readonly cursor?: string } = {},
+      ) => call((options) => api.submissions.list({ workspace, formId, ...query }, options)),
+      /** One submission in full: answers the member may see, the records it touched (AC-561, AC-573). */
+      get: (workspace: string, submissionId: string) =>
+        call((options) => api.submissions.get({ workspace, submissionId }, options)),
+      /** Processes a failed submission again (AC-566), waiting for the server. */
+      retry: (workspace: string, submissionId: string) =>
+        call((options) => api.submissions.retry({ workspace, submissionId, mutationId: mintId() }, options)),
+      /** Deletes a submission; the records it made stay (AC-575). */
+      delete: (workspace: string, submissionId: string) =>
+        call((options) => api.submissions.delete({ workspace, submissionId, mutationId: mintId() }, options)),
     },
     jobs: {
       /**

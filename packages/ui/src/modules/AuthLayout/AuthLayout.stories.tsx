@@ -76,3 +76,12 @@ export const Narrow: Story = {
     </Stage>
   ),
 };
+
+/** No product mark (a hosted form, spec 0023): the card stands alone at the same offset. */
+export const WithoutBrand: Story = {
+  args: { productName: undefined, title: 'Contact us', description: 'We answer within a day.' },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('heading', { level: 1, name: 'Contact us' })).toBeInTheDocument();
+    await expect(canvas.queryByText('CRM')).toBeNull();
+  },
+};

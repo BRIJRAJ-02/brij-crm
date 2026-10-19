@@ -14,6 +14,7 @@ New (spec 0005, pulled forward from spec 0003's milestone 4). Sign in, verify an
 </AuthLayout>
 ```
 
+- `productName` is optional: a hosted form (spec 0023) leaves it out, since the page speaks for the workspace rather than the product, and the card stands alone at the same offset.
 - `title` is the page's heading; screens move focus to it on a route change.
 - `description` is a line under it; `footer` a way back or terms, under a hairline.
 - `isBusy` marks the card busy while a `Skeleton` stands in for its task (the screen is still checking the session), so assistive tech waits for it. Show the Skeleton through `useDelayedLoading`, so a fast check never flashes it.

@@ -65,6 +65,30 @@ function deleteSourceMaps(): Plugin {
   };
 }
 
+/**
+ * The hosted form page (spec 0023): `/f/<publicKey>` serves `form.html`, the
+ * second entry, in the dev server and `vite preview`, as vercel.json's rewrite
+ * does when deployed.
+ */
+function hostedForms(): Plugin {
+  const rewrite = (url: string | undefined) => (url !== undefined && /^\/f\/[^/?#]+/.test(url) ? '/form.html' : url);
+  return {
+    name: 'crm:hosted-forms',
+    configureServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        request.url = rewrite(request.url);
+        next();
+      });
+    },
+    configurePreviewServer(server) {
+      server.middlewares.use((request, _response, next) => {
+        request.url = rewrite(request.url);
+        next();
+      });
+    },
+  };
+}
+
 /** A build carrying a web DSN must be one the CSP lets through, on Sentry's EU ingest (AC-167). */
 function checkSentryDsn(): Plugin {
   return {
@@ -134,6 +158,7 @@ export default defineConfig({
     checkSentryDsn(),
     uploadSourceMaps(),
     deleteSourceMaps(),
+    hostedForms(),
   ],
   server: {
     port: 5173,
@@ -147,5 +172,12 @@ export default defineConfig({
     sourcemap: 'hidden',
     // dist/.vite/manifest.json: the first load budget reads the index route's static graph from it.
     manifest: true,
+    // The app, and the hosted form page (spec 0023), which shares nothing with the app's shell.
+    rollupOptions: {
+      input: {
+        index: path.join(import.meta.dirname, 'index.html'),
+        form: path.join(import.meta.dirname, 'form.html'),
+      },
+    },
   },
 });
