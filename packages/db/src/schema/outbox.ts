@@ -19,7 +19,7 @@ import { workspaces } from './workspaces.ts';
 /**
  * What an outbox row names (spec 0007, `ChangeEvent` in `@crm/contracts`):
  * `records`, `definitions`, `entries`, `views`, `notes`, `tasks`, `members`,
- * `access` and `jobs`. Postgres can't drop an enum value, so a kind is only
+ * `access`, `jobs` and (spec 0024) `meetings`. Postgres can't drop an enum value, so a kind is only
  * ever added.
  */
 export const outboxKind = pgEnum('outbox_kind', [
@@ -32,6 +32,7 @@ export const outboxKind = pgEnum('outbox_kind', [
   'members',
   'access',
   'jobs',
+  'meetings',
 ]);
 
 /**
@@ -63,8 +64,8 @@ export const outbox = pgTable(
       .notNull()
       .default(sql`'{}'::uuid[]`),
     /**
-     * The ids of the row's own items: entry ids for `entries`, view, note, task
-     * or job ids, member ids for `members` and `access`; empty for the rest.
+     * The ids of the row's own items: entry ids for `entries`, view, note, task,
+     * job or meeting ids, member ids for `members` and `access`; empty for the rest.
      */
     itemIds: uuid('item_ids')
       .array()

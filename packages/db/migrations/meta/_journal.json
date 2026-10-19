@@ -274,6 +274,13 @@
       "when": 1792161772531,
       "tag": "0038_member_view_state",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1792401057957,
+      "tag": "0039_calendar_sync",
+      "breakpoints": true
     }
   ]
 }

@@ -4,8 +4,13 @@ import { sql } from 'drizzle-orm';
 import { check, pgEnum, timestamp, uuid, type AnyPgColumn } from 'drizzle-orm/pg-core';
 import { AttributeType } from '@crm/contracts/values';
 
-/** Who did something: a member, an API key, an automation, or the system (whose id is null). */
-export const actorType = pgEnum('actor_type', ['member', 'api_key', 'automation', 'system']);
+/**
+ * Who did something: a member, an API key, an automation, the system (whose id
+ * is null), or calendar sync (spec 0024, whose id is null too). A table's
+ * actor checks admit `calendar` only where calendar sync writes (`actorCheck`'s
+ * `withCalendar`), so nothing else can store it by mistake.
+ */
+export const actorType = pgEnum('actor_type', ['member', 'api_key', 'automation', 'system', 'calendar']);
 
 /** Every attribute type the field set knows (spec 0003), mirrored from `@crm/contracts/values`. */
 export const attributeType = pgEnum('attribute_type', AttributeType.options as [AttributeType, ...AttributeType[]]);
@@ -25,13 +30,32 @@ export const workspaceId = () => uuid('workspace_id').notNull();
 /** A timestamp with time zone and microseconds. */
 export const timestamptz = (name: string) => timestamp(name, { withTimezone: true, precision: 6 });
 
-/** The three columns of one actor: its type, its id, and the id again when it's a member, for the foreign key. */
+/** The actor types a table stores when its checks don't admit calendar sync: every table but calendar sync's own. */
+export type StoredActorType = 'member' | 'api_key' | 'automation' | 'system';
+
+/** Every actor type, calendar sync's too (spec 0024): what calendar sync's own tables store. */
+export type CalendarActorType = StoredActorType | 'calendar';
+
+/**
+ * The three columns of one actor: its type, its id, and the id again when it's
+ * a member, for the foreign key. The type reads as `StoredActorType` unless the
+ * table's checks admit calendar sync (`withCalendar`, with `actorCheck`'s option).
+ */
 export function actorColumns<P extends string>(prefix: P) {
   return {
-    type: actorType(`${prefix}_type`),
+    type: actorType(`${prefix}_type`).$type<StoredActorType>(),
     id: uuid(`${prefix}_id`),
     memberId: uuid(`${prefix}_member_id`),
   };
+}
+
+/**
+ * An actor's type on a calendar sync table (spec 0024), whose checks admit the
+ * `calendar` actor: put in place of `auditColumns()`'s `createdByType` or
+ * `updatedByType`.
+ */
+export function calendarActorType(prefix: 'created_by' | 'updated_by') {
+  return actorType(`${prefix}_type`).$type<CalendarActorType>().notNull();
 }
 
 /** Created and updated, with who, on every definition, record, entry and link row. */
@@ -53,14 +77,22 @@ export function auditColumns() {
 /**
  * The rule one actor's columns obey: an absent actor has nothing set; the system has
  * no id; a member's id is repeated in `*_member_id` (which carries the
- * foreign key); an API key or automation has an id and no member id.
+ * foreign key); an API key or automation has an id and no member id. With
+ * `withCalendar`, calendar sync (spec 0024) may act too, with no id like the
+ * system: compared as text, so the check never names the enum value it was
+ * added beside in one migration.
  */
-export function actorCheck(name: string, actor: { type: AnyPgColumn; id: AnyPgColumn; memberId: AnyPgColumn }) {
+export function actorCheck(
+  name: string,
+  actor: { type: AnyPgColumn; id: AnyPgColumn; memberId: AnyPgColumn },
+  options: { readonly withCalendar?: boolean } = {},
+) {
   const { type, id, memberId } = actor;
+  const noId = options.withCalendar === true ? sql`${type}::text in ('system', 'calendar')` : sql`${type} = 'system'`;
   return check(
     name,
     sql`(${type} is null and ${id} is null and ${memberId} is null)
-      or (${type} = 'system' and ${id} is null and ${memberId} is null)
+      or (${noId} and ${id} is null and ${memberId} is null)
       or (${type} = 'member' and ${id} is not null and ${memberId} = ${id})
       or (${type} in ('api_key', 'automation') and ${id} is not null and ${memberId} is null)`,
   );

@@ -159,6 +159,87 @@ describe('crm_enqueue_job', () => {
   });
 });
 
+describe('crm_enqueue_calendar_sync (spec 0024)', () => {
+  /** A connection in `status`, as the app writes one. */
+  const connectionIn = async (workspaceId: string, memberId: string, status: string, email = 'ada@example.com') => {
+    const id = randomUUID();
+    await db.withWorkspace(workspaceId, (tx) =>
+      tx.execute(sql`
+        insert into calendar_connections (workspace_id, id, member_id, provider, account_email, status, tokens,
+          created_by_type, created_by_id, created_by_member_id, updated_by_type, updated_by_id, updated_by_member_id)
+        values (${workspaceId}, ${id}, ${memberId}, 'google', ${email}, ${status}, '\\x00'::bytea,
+          'member', ${memberId}, ${memberId}, 'member', ${memberId}, ${memberId})
+      `),
+    );
+    return id;
+  };
+  const queueSync = (workspaceId: string, connectionId: string) =>
+    db.withWorkspace(workspaceId, async (tx) => {
+      const result = await tx.execute<{ queued: boolean }>(
+        sql`select crm_enqueue_calendar_sync(${connectionId}::uuid) as queued`,
+      );
+      return result.rows[0]?.queued;
+    });
+  const syncRows = (connectionId: string) =>
+    owner
+      .query<{ key: string; task: string; queue: string; payload: unknown; max_attempts: number }>(
+        `select v.key, task_identifier as task, queue_name as queue, j.payload, j.max_attempts
+         from ${QUEUE_SCHEMA}.jobs v join ${QUEUE_SCHEMA}._private_jobs j on j.id = v.id
+         where j.payload->>'connectionId' = $1`,
+        [connectionId],
+      )
+      .then((result) => result.rows);
+
+  it('queues a connection of the caller’s workspace, ids only, one row per connection on its own queue', async () => {
+    const { workspaceId, memberId } = await workspaceWithMember('calendar-queue');
+    const connectionId = await connectionIn(workspaceId, memberId, 'syncing');
+    expect(await queueSync(workspaceId, connectionId)).toBe(true);
+    expect(await queueSync(workspaceId, connectionId)).toBe(true);
+    expect(await syncRows(connectionId)).toEqual([
+      {
+        key: `crm-calendar:${workspaceId}:${connectionId}`,
+        task: 'crm_calendar_sync',
+        queue: `calendar:${workspaceId}:${connectionId}`,
+        payload: { workspaceId, connectionId },
+        max_attempts: 25,
+      },
+    ]);
+  });
+
+  it('refuses another workspace’s connection, a stopped one, and one outside any workspace', async () => {
+    const a = await workspaceWithMember('calendar-queue-a');
+    const b = await workspaceWithMember('calendar-queue-b');
+    const theirs = await connectionIn(b.workspaceId, b.memberId, 'connected');
+    expect(await queueSync(a.workspaceId, theirs)).toBe(false);
+    for (const status of ['expired', 'revoked', 'failed']) {
+      const stopped = await connectionIn(a.workspaceId, a.memberId, status, `${status}@example.com`);
+      expect(await queueSync(a.workspaceId, stopped), status).toBe(false);
+      expect(await syncRows(stopped), status).toEqual([]);
+    }
+    const app = new pg.Client({ connectionString: appUrl });
+    await app.connect();
+    try {
+      const outside = await app.query<{ queued: boolean }>('select crm_enqueue_calendar_sync($1) as queued', [theirs]);
+      expect(outside.rows).toEqual([{ queued: false }]);
+      // The app reads no queue row itself.
+      await expect(app.query(`select * from ${QUEUE_SCHEMA}._private_jobs`)).rejects.toMatchObject({ code: '42501' });
+    } finally {
+      await app.end();
+    }
+    expect(await syncRows(theirs)).toEqual([]);
+  });
+
+  it('lets crm_queue read three columns of a connection and never its tokens', async () => {
+    const columns = await owner.query<{ column: string }>(`
+      select att.attname as column from pg_attribute att cross join lateral aclexplode(att.attacl) a
+      where a.grantee = 'crm_queue'::regrole and att.attrelid = 'public.calendar_connections'::regclass
+        and a.privilege_type = 'SELECT'
+      order by 1
+    `);
+    expect(columns.rows.map((row) => row.column)).toEqual(['id', 'status', 'workspace_id']);
+  });
+});
+
 describe('queue keys against Graphile 0.18.0 (spec 0008, Queue keys)', () => {
   /** A job's queue rows with what decides whether Graphile runs them. */
   const rows = (jobId: string) =>
