@@ -144,6 +144,7 @@ export {
   type ThemeSwitchProps,
 } from './molecules/SegmentedControl/SegmentedControl.tsx';
 export { Select, type SelectItem, type SelectOptionStyle, type SelectProps } from './molecules/Select/Select.tsx';
+export { SlotPicker, type SlotDay, type SlotPickerProps, type SlotTime } from './molecules/SlotPicker/SlotPicker.tsx';
 export { Steps, type Step, type StepsProps } from './molecules/Steps/Steps.tsx';
 export { Table, type TableColumn, type TableProps } from './molecules/Table/Table.tsx';
 export { TabPanel, Tabs, type TabItem, type TabPanelProps, type TabsProps } from './molecules/Tabs/Tabs.tsx';
@@ -156,6 +157,12 @@ export {
 } from './modules/ActivityFeed/ActivityFeed.tsx';
 export { AppShell, AppShellContext, type AppShellProps } from './modules/AppShell/AppShell.tsx';
 export { AuthLayout, type AuthLayoutProps } from './modules/AuthLayout/AuthLayout.tsx';
+export {
+  HoursEditor,
+  type HoursEditorProps,
+  type HoursRange,
+  type HoursRow,
+} from './modules/HoursEditor/HoursEditor.tsx';
 export {
   AttributeSettings,
   type AttributeSettingsAttribute,
