@@ -5,12 +5,13 @@ import { check, pgEnum, timestamp, uuid, type AnyPgColumn } from 'drizzle-orm/pg
 import { AttributeType } from '@crm/contracts/values';
 
 /**
- * Who did something: a member, an API key, an automation, the system (whose id
- * is null), or calendar sync (spec 0024, whose id is null too). A table's
- * actor checks admit `calendar` only where calendar sync writes (`actorCheck`'s
- * `withCalendar`), so nothing else can store it by mistake.
+ * Who did something: a member, an API key, an automation, a form (spec 0023:
+ * its submissions' writes), the system (whose id is null), or calendar sync
+ * (spec 0024, whose id is null too). A table's actor checks admit `calendar`
+ * only where calendar sync writes (`actorCheck`'s `withCalendar`), so nothing
+ * else can store it by mistake.
  */
-export const actorType = pgEnum('actor_type', ['member', 'api_key', 'automation', 'system', 'calendar']);
+export const actorType = pgEnum('actor_type', ['member', 'api_key', 'automation', 'system', 'calendar', 'form']);
 
 /** Every attribute type the field set knows (spec 0003), mirrored from `@crm/contracts/values`. */
 export const attributeType = pgEnum('attribute_type', AttributeType.options as [AttributeType, ...AttributeType[]]);
@@ -30,8 +31,12 @@ export const workspaceId = () => uuid('workspace_id').notNull();
 /** A timestamp with time zone and microseconds. */
 export const timestamptz = (name: string) => timestamp(name, { withTimezone: true, precision: 6 });
 
-/** The actor types a table stores when its checks don't admit calendar sync: every table but calendar sync's own. */
-export type StoredActorType = 'member' | 'api_key' | 'automation' | 'system';
+/**
+ * The actor types a table stores when its checks don't admit calendar sync:
+ * every table but calendar sync's own. A form (spec 0023) writes the records
+ * and values its submissions make, so it is one of them.
+ */
+export type StoredActorType = 'member' | 'api_key' | 'automation' | 'system' | 'form';
 
 /** Every actor type, calendar sync's too (spec 0024): what calendar sync's own tables store. */
 export type CalendarActorType = StoredActorType | 'calendar';
@@ -77,10 +82,13 @@ export function auditColumns() {
 /**
  * The rule one actor's columns obey: an absent actor has nothing set; the system has
  * no id; a member's id is repeated in `*_member_id` (which carries the
- * foreign key); an API key or automation has an id and no member id. With
- * `withCalendar`, calendar sync (spec 0024) may act too, with no id like the
- * system: compared as text, so the check never names the enum value it was
- * added beside in one migration.
+ * foreign key); any other actor (an API key, an automation, a form) has an id
+ * and no member id. The last branch names only the two types it excludes, so a
+ * new actor type needs no constraint rewritten (and a migration that adds the
+ * type never uses its new value in the same transaction). With `withCalendar`,
+ * calendar sync (spec 0024) may act too, with no id like the system. Both
+ * compare as text, so a check never names an enum value added beside it in
+ * one migration.
  */
 export function actorCheck(
   name: string,
@@ -94,6 +102,6 @@ export function actorCheck(
     sql`(${type} is null and ${id} is null and ${memberId} is null)
       or (${noId} and ${id} is null and ${memberId} is null)
       or (${type} = 'member' and ${id} is not null and ${memberId} = ${id})
-      or (${type} in ('api_key', 'automation') and ${id} is not null and ${memberId} is null)`,
+      or (${type}::text not in ('member', 'system', 'calendar') and ${id} is not null and ${memberId} is null)`,
   );
 }

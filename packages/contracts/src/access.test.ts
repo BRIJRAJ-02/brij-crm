@@ -14,7 +14,7 @@ import {
 } from './access.ts';
 
 describe('the permission catalog', () => {
-  it('lists the eighteen permissions of spec 0009, jobs.manage among them', () => {
+  it('lists the eighteen permissions of spec 0009, jobs.manage among them, and forms.manage of spec 0023', () => {
     expect([...PERMISSION_NAMES]).toEqual([
       'workspace.manage',
       'workspace.delete',
@@ -26,6 +26,7 @@ describe('the permission catalog', () => {
       'schema.manage',
       'views.manage',
       'records.purge',
+      'forms.manage',
       'records.export',
       'api_keys.manage',
       'webhooks.manage',
@@ -64,6 +65,7 @@ describe('the role table', () => {
     'schema.manage': ['owner', 'admin'],
     'views.manage': ['owner', 'admin'],
     'records.purge': ['owner', 'admin'],
+    'forms.manage': ['owner', 'admin'],
     'records.export': ['owner', 'admin', 'member'],
     'api_keys.manage': ['owner', 'admin'],
     'webhooks.manage': ['owner', 'admin'],

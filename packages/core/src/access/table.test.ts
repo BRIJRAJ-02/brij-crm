@@ -87,6 +87,13 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'verifyValue',
   'deriveKey',
   'decodeTokenKey',
+  // Forms (spec 0023): the public key's door, the form job's parts (the kind, its step and the owner seam, which
+  // run inside the job's write as the system), a new key, and the pattern engine the submit check runs with.
+  'enterPublicForm',
+  'formsProcess',
+  'processSubmission',
+  'chooseOwner',
+  'newPublicKey',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;
@@ -219,6 +226,16 @@ describe('the walk: a principal without the access is refused', () => {
     },
   );
 
+  it.each(entries.filter(([, entry]) => 'publicForm' in entry).map(([name]) => name))(
+    '%s refuses any scope but its form’s public one',
+    async (name) => {
+      const { scope } = await memberOf('admin');
+      await expect(
+        service(name)(scope, core.jobKinds({ environment: 'local' }), { formId: core.newId() }),
+      ).rejects.toThrow(/Only the form’s own public scope/);
+    },
+  );
+
   it.each(entries.filter(([, entry]) => 'anyMember' in entry).map(([name]) => name))(
     '%s answers any member',
     async (name) => {
@@ -313,11 +330,34 @@ async function dataWorld() {
     role: 'member',
     rules: { levels: [objectRule(people, 'read'), objectRule(listId, 'read')], records: [] },
   });
+  // A form on People with one submission (spec 0023).
+  const form = await core.createForm(owner, { id: core.newId(), name: 'Pilot form', mainObjectId: people });
+  const live = await core.publishForm(owner, { formId: form.id, expectedRevision: form.revision });
+  const visitor = await core.enterPublicForm({ db }, live.publicKey);
+  await core.submitForm(visitor.scope, core.jobKinds({ environment: 'local' }), {
+    formId: form.id,
+    body: {
+      idempotencyKey: core.newId(),
+      versionNumber: 1,
+      answers: { name: 'Pilot', email: 'pilot@example.com' },
+      hidden: {},
+      fillMs: 10_000,
+    },
+    captcha: { kind: 'off' },
+  });
+  const submissionId =
+    (
+      await db.withWorkspace(workspaceId, (tx) =>
+        tx.execute<{ id: string }>(sql`select id::text from form_submissions where form_id = ${form.id}`),
+      )
+    ).rows[0]?.id ?? '';
   return {
     owner,
     hidden,
     readOnly,
     people,
+    formId: form.id,
+    submissionId,
     name: attribute('name'),
     jobTitle: attribute('job_title'),
     company: attribute('company'),
@@ -461,6 +501,18 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   ),
   // Tasks (spec 0019): a task whose only record is hidden is absent; its record's list is NOT_FOUND.
   getTasks: empty((scope, world) => core.getTasks(scope, { ids: [world.taskId] })),
+  // Forms (spec 0023): a form on an object the principal can't see is absent, and so are its submissions.
+  listForms: empty((scope) => core.listForms(scope, { archived: false }).then((page) => page.items)),
+  getForm: refused('NOT_FOUND', (scope, world) => core.getForm(scope, { formId: world.formId })),
+  formAttributes: refused('NOT_FOUND', (scope, world) => core.formAttributes(scope, { formId: world.formId })),
+  previewForm: refused('NOT_FOUND', (scope, world) => core.previewForm(scope, { formId: world.formId })),
+  isSlugAvailable: refused('NOT_FOUND', (scope, world) =>
+    core.isSlugAvailable(scope, { formId: world.formId, slug: 'contact-us' }),
+  ),
+  listSubmissions: refused('NOT_FOUND', (scope, world) => core.listSubmissions(scope, { formId: world.formId })),
+  getSubmission: refused('NOT_FOUND', (scope, world) =>
+    core.getSubmission(scope, { submissionId: world.submissionId }),
+  ),
   listTasks: refused('NOT_FOUND', (scope, world) =>
     core.listTasks(scope, { scope: { recordId: world.recordId }, status: 'open' }),
   ),

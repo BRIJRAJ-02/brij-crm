@@ -86,7 +86,9 @@ describe('every tenant table', () => {
           !(
             row.first === 'workspace_id' ||
             (row.table === 'workspaces' && row.first === 'id') ||
-            row.index === 'workspaces_slug'
+            row.index === 'workspaces_slug' ||
+            // A form's public key finds it before the workspace is known (spec 0023), so it is unique everywhere.
+            row.index === 'forms_public_key'
           ),
       )
       .map((row) => row.index);
@@ -134,6 +136,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     expect(definers.rows).toEqual([
       { name: 'crm_enqueue_calendar_sync', owner: 'crm_queue' },
       { name: 'crm_enqueue_job', owner: 'crm_queue' },
+      { name: 'crm_form_by_key', owner: 'crm_form_lookup' },
       { name: 'crm_outbox_prune', owner: 'crm_relay' },
       { name: 'crm_outbox_workspaces', owner: 'crm_relay' },
       { name: 'crm_search_text', owner: 'crm_search' },
@@ -150,6 +153,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     expect(hardening.rows).toEqual([
       { name: 'crm_enqueue_calendar_sync', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
       { name: 'crm_enqueue_job', config: ['search_path=pg_catalog, pg_temp'], atomic: false },
+      { name: 'crm_form_by_key', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_outbox_prune', config: ['search_path=pg_catalog, pg_temp', 'lock_timeout=1s'], atomic: true },
       { name: 'crm_outbox_workspaces', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
       { name: 'crm_search_text', config: ['search_path=pg_catalog, pg_temp'], atomic: true },
@@ -157,14 +161,14 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
     ]);
   });
 
-  it('lets no role but crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
+  it('lets no role but crm_form_lookup, crm_relay, crm_search, crm_sweep and the owner bypass it, outside the superusers', async () => {
     const bypass = await owner.query<{ role: string }>(`
       select rolname as role from pg_roles
       where rolbypassrls and not rolsuper
         and rolname <> (select pg_get_userbyid(datdba) from pg_database where datname = current_database())
       order by rolname
     `);
-    expect(bypass.rows.map((row) => row.role)).toEqual(['crm_relay', 'crm_search', 'crm_sweep']);
+    expect(bypass.rows.map((row) => row.role)).toEqual(['crm_form_lookup', 'crm_relay', 'crm_search', 'crm_sweep']);
   });
 
   // Each owner role, its functions, their signatures, and who calls each: the app (and so the worker, which
@@ -187,6 +191,7 @@ describe('the holes in row level security (crm_search_text, spec 0004 AC-24; the
       ['app', 'app'],
     ],
     ['crm_sweep', ['crm_workspace_ids'], ['crm_workspace_ids(uuid, integer)'], ['worker']],
+    ['crm_form_lookup', ['crm_form_by_key'], ['crm_form_by_key(text)'], ['app']],
   ])(
     'keeps %s unable to log in, owning only %s, and out of the app’s reach',
     async (name, fns, signatures, callers) => {
@@ -949,6 +954,105 @@ describe('isolation', () => {
         ),
       ),
     ).rejects.toMatchObject({ cause: { code: '23514', constraint: 'tasks_created_by_actor' } });
+  });
+});
+
+describe('forms (spec 0023, milestone 1)', () => {
+  /** A form with one version, one submission and one record it touched, made inside the workspace. */
+  const formIn = async (workspaceId: string) => {
+    const objectId = await objectIn(workspaceId);
+    const recordId = randomUUID();
+    const formId = randomUUID();
+    const versionId = randomUUID();
+    const submissionId = randomUUID();
+    const publicKey = `key${randomUUID().replaceAll('-', '')}`;
+    await db.withWorkspace(workspaceId, async (tx) => {
+      await tx.execute(
+        sql`insert into records (workspace_id, id, object_id, created_by_type, updated_by_type) values (${workspaceId}, ${recordId}, ${objectId}, 'system', 'system')`,
+      );
+      await tx.execute(
+        sql`insert into forms (workspace_id, id, name, main_object_id, public_key, signing_secret, created_by_type, updated_by_type) values (${workspaceId}, ${formId}, 'Contact us', ${objectId}, ${publicKey}, 'secret', 'system', 'system')`,
+      );
+      await tx.execute(
+        sql`insert into form_versions (workspace_id, id, form_id, number, document, created_by_type, updated_by_type) values (${workspaceId}, ${versionId}, ${formId}, 1, '{}', 'system', 'system')`,
+      );
+      await tx.execute(
+        sql`insert into form_submissions (workspace_id, id, form_id, version_id, idempotency_key, answers) values (${workspaceId}, ${submissionId}, ${formId}, ${versionId}, ${randomUUID()}, '{}')`,
+      );
+      await tx.execute(
+        sql`insert into form_submission_records (workspace_id, submission_id, object_id, record_id, action, role) values (${workspaceId}, ${submissionId}, ${objectId}, ${recordId}, 'created', 'main')`,
+      );
+    });
+    return { objectId, recordId, formId, versionId, submissionId, publicKey };
+  };
+
+  it("reads none of another workspace's forms, versions, submissions or touched records", async () => {
+    const a = await workspaceWithMember('forms-a');
+    const b = await workspaceWithMember('forms-b');
+    const inA = await formIn(a.workspaceId);
+    const inB = await formIn(b.workspaceId);
+    for (const table of ['forms', 'form_versions', 'form_submissions']) {
+      const rows = await db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute<{ id: string }>(sql.raw(`select id::text as id from ${table}`)),
+      );
+      expect(rows.rows, table).toEqual([
+        { id: table === 'forms' ? inA.formId : table === 'form_versions' ? inA.versionId : inA.submissionId },
+      ]);
+    }
+    const touched = await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute<{ record_id: string }>(sql`select record_id::text from form_submission_records`),
+    );
+    expect(touched.rows).toEqual([{ record_id: inA.recordId }]);
+    // A's submission naming B's record: the composite key finds no such record in A.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into form_submission_records (workspace_id, submission_id, object_id, record_id, action, role) values (${a.workspaceId}, ${inA.submissionId}, ${inA.objectId}, ${inB.recordId}, 'matched', 'person')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'form_submission_records_record' } });
+    // One submission per attempt: the same idempotency key twice is refused by the database.
+    await expect(
+      db.withWorkspace(a.workspaceId, async (tx) => {
+        const key = randomUUID();
+        for (let i = 0; i < 2; i += 1) {
+          await tx.execute(
+            sql`insert into form_submissions (workspace_id, form_id, version_id, idempotency_key, answers) values (${a.workspaceId}, ${inA.formId}, ${inA.versionId}, ${key}, '{}')`,
+          );
+        }
+      }),
+    ).rejects.toMatchObject({ cause: { code: '23505', constraint: 'form_submissions_attempt' } });
+  });
+
+  it('finds a form by its public key across workspaces, answering ids only', async () => {
+    const a = await workspaceWithMember('forms-key');
+    const inA = await formIn(a.workspaceId);
+    // Outside any workspace, as the public endpoint asks before it knows one.
+    const found = await db.withWorkspace(randomUUID(), (tx) =>
+      tx.execute<{ workspace_id: string; form_id: string }>(
+        sql`select workspace_id::text, form_id::text from crm_form_by_key(${inA.publicKey})`,
+      ),
+    );
+    expect(found.rows).toEqual([{ workspace_id: a.workspaceId, form_id: inA.formId }]);
+    const missing = await db.withWorkspace(randomUUID(), (tx) =>
+      tx.execute(sql`select * from crm_form_by_key('no-such-key-at-all')`),
+    );
+    expect(missing.rows).toEqual([]);
+  });
+
+  it('takes a form as an actor on records and values (AC-564), with an id and no member', async () => {
+    const a = await workspaceWithMember('forms-actor');
+    const inA = await formIn(a.workspaceId);
+    await db.withWorkspace(a.workspaceId, (tx) =>
+      tx.execute(
+        sql`update records set updated_by_type = 'form', updated_by_id = ${inA.formId} where id = ${inA.recordId}`,
+      ),
+    );
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(sql`update records set updated_by_type = 'form', updated_by_id = null where id = ${inA.recordId}`),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23514', constraint: 'records_updated_by_actor' } });
   });
 });
 

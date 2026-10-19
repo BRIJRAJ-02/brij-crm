@@ -25,6 +25,13 @@ export const strings = {
     comment: 'commented',
     email: 'sent an email',
     meeting: 'had a meeting',
+    /** A form's submission (spec 0023), the form being the actor. */
+    submission: {
+      created: 'created this record from a submission',
+      updated: 'updated this record from a submission',
+      matched: 'received a submission for this record',
+      linked: 'linked this record from a submission',
+    },
     added: 'added',
     removed: 'removed',
   },

@@ -19,6 +19,8 @@ export const JOB_KINDS = {
   'dev.simulate_light': { label: 'Light test job', lane: 'light', cancellable: true },
   // The daily cleanup (milestone 3, AC-112): one per workspace a day, the system's, never cancelled.
   'maintenance.daily': { label: 'Daily cleanup', lane: 'heavy', cancellable: false },
+  // A form submission turned into records (spec 0023, AC-554, AC-566): the system's, on the light lane.
+  'forms.process': { label: 'Form submission', lane: 'light', cancellable: false },
 } as const satisfies Record<
   string,
   { readonly label: string; readonly lane: 'heavy' | 'light'; readonly cancellable: boolean }

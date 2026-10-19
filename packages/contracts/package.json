@@ -16,7 +16,8 @@
     "./monitoring": "./src/monitoring/index.ts",
     "./events": "./src/monitoring/events.ts",
     "./views": "./src/view-model.ts",
-    "./board": "./src/board-model.ts"
+    "./board": "./src/board-model.ts",
+    "./forms": "./src/forms/browser.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

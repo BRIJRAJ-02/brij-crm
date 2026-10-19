@@ -392,6 +392,8 @@ async function removeRecords(tx: WorkspaceTx, recordIds: readonly string[]): Pro
   await tx.execute(
     sql`update meeting_attendees set person_record_id = null, match = 'unknown' where person_record_id = any(${ids})`,
   );
+  // A form submission's note of the record goes too (spec 0023); the submission itself stays, its answers kept.
+  await tx.execute(sql`delete from form_submission_records where record_id = any(${ids})`);
   const removed = await tx.execute<{ id: string; object_id: string }>(
     sql`delete from records where id = any(${ids}) returning id::text, object_id::text`,
   );

@@ -189,12 +189,20 @@ export {
 } from './modules/FilterBuilder/FilterBuilder.tsx';
 export { completeFilters, conditionOn, countFilters } from './modules/FilterBuilder/filter-model.ts';
 export {
+  FormEditorLayout,
+  FormEditorStatus,
+  type FormEditorLayoutProps,
+  type FormEditorTone,
+} from './modules/FormEditorLayout/FormEditorLayout.tsx';
+export { HostedFormPreview, type HostedFormPreviewProps } from './modules/HostedFormPreview/HostedFormPreview.tsx';
+export {
   OptionsEditor,
   type OptionOutcome,
   type OptionsEditorChange,
   type OptionsEditorOption,
   type OptionsEditorProps,
 } from './modules/OptionsEditor/OptionsEditor.tsx';
+export { QuestionList, type QuestionListItem, type QuestionListProps } from './modules/QuestionList/QuestionList.tsx';
 export {
   editorRuleOf,
   ruleOf,

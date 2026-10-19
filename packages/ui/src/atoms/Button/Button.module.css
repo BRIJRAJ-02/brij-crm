@@ -99,7 +99,8 @@
     color: var(--on-danger);
   }
 
-  .root[data-variant='ghost'] {
+  .root[data-variant='ghost'],
+  .root[data-variant='ghost-danger'] {
     border-color: transparent;
     background: transparent;
     box-shadow: none;
@@ -136,6 +137,10 @@
       background: var(--danger-fill-hover);
     }
 
+    .root[data-variant='ghost-danger'][data-hovered] {
+      color: var(--danger);
+    }
+
     .root[data-variant='ghost'][data-hovered],
     .root[data-variant='dashed'][data-hovered] {
       color: var(--text);
@@ -153,6 +158,10 @@
 
   .root[data-variant='danger'][data-focus-visible] {
     border-color: var(--danger);
+  }
+
+  .root[data-variant='ghost-danger'][data-focus-visible] {
+    color: var(--danger);
   }
 
   .root[data-variant='danger-solid'][data-focus-visible] {

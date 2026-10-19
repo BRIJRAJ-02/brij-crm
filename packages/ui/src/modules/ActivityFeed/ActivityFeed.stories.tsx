@@ -366,3 +366,32 @@ export const LeaveByKeyboard: Story = {
     await expect(canvas.getByRole('button', { name: 'Add newer' })).toHaveFocus();
   },
 };
+
+/** A record a form made (spec 0023): the form is the actor, named, on its creation and on the submission. */
+export const FromAForm: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: () => {
+    const form = { type: 'form' as const, id: '0199f0a0-0000-7000-8000-0000000000f1', name: 'Contact us' };
+    const entries: ActivityEntry[] = [
+      {
+        id: 'submission',
+        at: '2026-10-08T12:00:00.000Z',
+        actor: form,
+        kind: 'submission',
+        action: 'created',
+        href: '#submission',
+      },
+      { id: 'created', at: '2026-10-08T12:00:00.000Z', actor: form, kind: 'created' },
+    ];
+    return (
+      <Stage height="page">
+        <ActivityFeed label="Activity" entries={arraySource(entries, (entry) => entry.id)} />
+      </Stage>
+    );
+  },
+  play: async ({ canvas }) => {
+    const [submission, created] = canvas.getAllByRole('article');
+    await expect(submission).toHaveAccessibleName(/Contact us created this record from a submission/);
+    await expect(created).toHaveAccessibleName(/Contact us created this record/);
+  },
+};

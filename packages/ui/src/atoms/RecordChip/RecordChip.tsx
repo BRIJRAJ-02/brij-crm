@@ -17,10 +17,12 @@ export interface RecordChipProps {
   readonly isFlat?: boolean;
 }
 
-const ACTOR_ICONS: Readonly<Record<'api_key' | 'automation' | 'system', IconName>> = {
+const ACTOR_ICONS: Readonly<Record<'api_key' | 'automation' | 'system' | 'form', IconName>> = {
   api_key: 'key',
   automation: 'zap',
   system: 'server',
+  // A form's submissions (spec 0023).
+  form: 'clipboard-list',
 };
 
 function isRecord(display: RecordRefDisplay | ActorDisplay): display is RecordRefDisplay {

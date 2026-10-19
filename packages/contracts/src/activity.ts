@@ -26,9 +26,9 @@ export const MAX_ACTIVITY_CURSOR = 512;
 
 /**
  * The kinds of timeline entry: #19 adds notes and tasks, #29 comments, spec
- * 0024 meetings; a client ignores a kind it doesn't map.
+ * 0024 meetings, spec 0023 form submissions; a client ignores a kind it doesn't map.
  */
-export const ActivityKind = z.enum(['created', 'change', 'links', 'note', 'task', 'comment', 'meeting']);
+export const ActivityKind = z.enum(['created', 'change', 'links', 'note', 'task', 'comment', 'meeting', 'submission']);
 /** A kind of timeline entry. */
 export type ActivityKind = z.infer<typeof ActivityKind>;
 
@@ -63,6 +63,9 @@ export const ActivityItem = z.object({
   excerpt: z.string().optional(),
   isDone: z.boolean().optional(),
   meeting: MeetingView.optional(),
+  /** A submission entry (spec 0023): the form, and what the submission did to this record. */
+  formId: z.uuid().optional(),
+  action: z.enum(['created', 'updated', 'matched', 'linked']).optional(),
 });
 /** One entry of a record's timeline. */
 export type ActivityItem = z.infer<typeof ActivityItem>;

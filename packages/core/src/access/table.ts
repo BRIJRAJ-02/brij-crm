@@ -25,7 +25,9 @@ export type AccessEntry =
    * A member's own calendar connection (spec 0024): anyone else's is
    * `NOT_FOUND`, and a principal that isn't a member is `FORBIDDEN`.
    */
-  | { readonly ownConnection: true };
+  | { readonly ownConnection: true }
+  /** Only the scope a form's public key made (`enterPublicForm`, spec 0023), for that form. */
+  | { readonly publicForm: true };
 
 /** Every exported service that takes a scope, and what it checks. */
 export const ACCESS_TABLE = {
@@ -160,4 +162,29 @@ export const ACCESS_TABLE = {
   removeCalendarConnection: { ownConnection: true },
   listMeetingsForRecord: { data: 'read' },
   meetingFacts: { system: true },
+  // Forms (spec 0023): any member reads the forms on objects they can see; changing one, or acting on a
+  // submission, needs forms.manage. A submission reads through its main record. The public form and submit take
+  // only the scope the form's own public key made.
+  listForms: { data: 'read' },
+  getForm: { data: 'read' },
+  formAttributes: { data: 'read' },
+  previewForm: { data: 'read' },
+  createForm: { permission: 'forms.manage' },
+  saveFormDraft: { permission: 'forms.manage' },
+  publishForm: { permission: 'forms.manage' },
+  setFormStatus: { permission: 'forms.manage' },
+  updateFormSettings: { permission: 'forms.manage' },
+  setFormTarget: { permission: 'forms.manage' },
+  duplicateForm: { permission: 'forms.manage' },
+  deleteForm: { permission: 'forms.manage' },
+  isSlugAvailable: { data: 'read' },
+  listSubmissions: { data: 'read' },
+  getSubmission: { data: 'read' },
+  retrySubmission: { permission: 'forms.manage' },
+  releaseSubmission: { permission: 'forms.manage' },
+  markSubmissionSpam: { permission: 'forms.manage' },
+  deleteSubmission: { permission: 'forms.manage' },
+  getPublicForm: { publicForm: true },
+  submitForm: { publicForm: true },
+  postingRules: { publicForm: true },
 } as const satisfies Record<string, AccessEntry>;

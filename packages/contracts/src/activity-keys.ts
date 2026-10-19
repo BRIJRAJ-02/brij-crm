@@ -18,7 +18,7 @@ export const LINKS_SHOWN_PER_ENTRY = 3;
 
 /**
  * Each kind's rank, which breaks a tie at one moment: links, then changes,
- * comments, notes, tasks and meetings, and the creation last, so it is always the
+ * comments, notes, tasks, meetings and form submissions, and the creation last, so it is always the
  * oldest entry of its moment.
  */
 export const ACTIVITY_RANKS = {
@@ -28,6 +28,8 @@ export const ACTIVITY_RANKS = {
   note: 4,
   task: 5,
   meeting: 6,
+  // A form submission that touched the record (spec 0023, AC-561).
+  submission: 7,
   created: 9,
 } as const;
 

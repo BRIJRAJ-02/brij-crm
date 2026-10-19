@@ -10,7 +10,8 @@
     "./styles.css": "./src/styles/index.css",
     "./theme": "./src/theme/theme.ts",
     "./vite": "./src/vite.ts",
-    "./grid": "./src/grid.ts"
+    "./grid": "./src/grid.ts",
+    "./public-form": "./src/public-form/hosted-form.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
