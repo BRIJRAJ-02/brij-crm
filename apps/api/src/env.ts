@@ -179,8 +179,8 @@ export const ApiEnv = z
     // handler time) to every /api/rpc answer. Local only: it exposes internal timings, so it is refused elsewhere.
     LOAD_TIMING: optional(z.enum(['on', 'off'])),
     // Forms (spec 0023): reCAPTCHA v3's keys, the site key sent to browsers and the secret the API verifies tokens
-    // with. Both or neither; required in production. Unset (a laptop, a preview), every submission is stored as
-    // unchecked, as during a Google outage.
+    // with. Both or neither, and optional everywhere: unset, the honeypot, the fill time and the rate limits decide
+    // alone; set, the score is one more spam signal.
     RECAPTCHA_SITE_KEY: optional(
       z.string().regex(/^[A-Za-z0-9_-]{20,100}$/, 'RECAPTCHA_SITE_KEY is a reCAPTCHA v3 site key.'),
     ),
@@ -197,9 +197,6 @@ export const ApiEnv = z
     const missing = (path: string, message: string) => issues.addIssue({ code: 'custom', path: [path], message });
     if ((env.RECAPTCHA_SITE_KEY === undefined) !== (env.RECAPTCHA_SECRET_KEY === undefined)) {
       missing('RECAPTCHA_SECRET_KEY', 'Set RECAPTCHA_SITE_KEY and RECAPTCHA_SECRET_KEY together, or neither.');
-    }
-    if (env.APP_ENV === 'production' && env.RECAPTCHA_SECRET_KEY === undefined) {
-      missing('RECAPTCHA_SECRET_KEY', 'RECAPTCHA_SITE_KEY and RECAPTCHA_SECRET_KEY are required in production.');
     }
     if (env.APP_ENV !== 'local' && env.FORMS_IP_SALT === undefined) {
       missing('FORMS_IP_SALT', `FORMS_IP_SALT is required in ${env.APP_ENV}. Generate one: \`openssl rand -hex 32\`.`);

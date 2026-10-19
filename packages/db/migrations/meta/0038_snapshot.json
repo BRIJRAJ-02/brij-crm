@@ -1272,6 +1272,32 @@
           "primaryKey": false,
           "notNull": true
         },
+        "owner_member_id": {
+          "name": "owner_member_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "allowed_origins": {
+          "name": "allowed_origins",
+          "type": "text[]",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'{}'::text[]"
+        },
+        "require_signature": {
+          "name": "require_signature",
+          "type": "boolean",
+          "primaryKey": false,
+          "notNull": true,
+          "default": false
+        },
+        "signing_secret": {
+          "name": "signing_secret",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
         "draft_version_id": {
           "name": "draft_version_id",
           "type": "uuid",
@@ -1410,6 +1436,15 @@
           "onDelete": "no action",
           "onUpdate": "no action"
         },
+        "forms_owner": {
+          "name": "forms_owner",
+          "tableFrom": "forms",
+          "tableTo": "members",
+          "columnsFrom": ["workspace_id", "owner_member_id"],
+          "columnsTo": ["workspace_id", "id"],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
         "forms_created_by": {
           "name": "forms_created_by",
           "tableFrom": "forms",
@@ -1452,7 +1487,7 @@
         },
         "forms_public_key_shape": {
           "name": "forms_public_key_shape",
-          "value": "\"forms\".\"public_key\" ~ '^[A-Za-z0-9_-]{16,64}$'"
+          "value": "\"forms\".\"public_key\" ~ '^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$'"
         },
         "forms_live_version": {
           "name": "forms_live_version",

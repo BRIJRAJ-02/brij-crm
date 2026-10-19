@@ -84,7 +84,6 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   'processSubmission',
   'chooseOwner',
   'newPublicKey',
-  'compilePattern',
 ]);
 
 const exported = { ...core, ...system } as Record<string, unknown>;
@@ -305,12 +304,11 @@ async function dataWorld() {
     body: {
       idempotencyKey: core.newId(),
       versionNumber: 1,
-      answers: { name: { firstName: 'Pilot' }, email: 'pilot@example.com' },
+      answers: { name: 'Pilot', email: 'pilot@example.com' },
       hidden: {},
       fillMs: 10_000,
     },
-    captcha: { kind: 'unavailable' },
-    pattern: core.compilePattern,
+    captcha: { kind: 'off' },
   });
   const submissionId =
     (
@@ -447,6 +445,9 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   getForm: refused('NOT_FOUND', (scope, world) => core.getForm(scope, { formId: world.formId })),
   formAttributes: refused('NOT_FOUND', (scope, world) => core.formAttributes(scope, { formId: world.formId })),
   previewForm: refused('NOT_FOUND', (scope, world) => core.previewForm(scope, { formId: world.formId })),
+  isSlugAvailable: refused('NOT_FOUND', (scope, world) =>
+    core.isSlugAvailable(scope, { formId: world.formId, slug: 'contact-us' }),
+  ),
   listSubmissions: refused('NOT_FOUND', (scope, world) => core.listSubmissions(scope, { formId: world.formId })),
   getSubmission: refused('NOT_FOUND', (scope, world) =>
     core.getSubmission(scope, { submissionId: world.submissionId }),

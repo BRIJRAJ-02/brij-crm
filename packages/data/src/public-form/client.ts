@@ -1,40 +1,12 @@
 // `@crm/data/public-form`: what the hosted form page (spec 0023,
-// 0023-public-surface.md) reads and sends, and nothing else: the live form
-// by its public key, and a submission. Plain `fetch` to the public endpoints,
-// no session, no oRPC, so the page loads none of the app's data layer. It
-// also loads reCAPTCHA v3's script and asks it for a token, the one place
-// the page reaches Google. Every answer is a plain union a screen switches
-// on; nothing throws for an answer the endpoint gives on purpose.
-import { PublicForm, SubmitErrors, SubmitResult, type SubmitBody, type SubmitNext } from '@crm/contracts/forms';
+// 0023-experience.md, The visitor) reads and sends, and nothing else: the
+// live form by its address, and a submission. Plain `fetch` to the public
+// endpoints, no session, no oRPC and no Zod, so the page's bundle stays
+// small. With reCAPTCHA on (optional everywhere), it also loads Google's
+// script and asks it for a token. Every answer is a plain union a screen
+// switches on; nothing throws for an answer the endpoint gives on purpose.
+import type { PublicForm, SubmitBody, SubmitNext } from '@crm/contracts/forms';
 import type { FetchLike } from '../fetch.ts';
-
-export {
-  checkAnswers,
-  formStrings,
-  isEmptyAnswer,
-  publicQuestions,
-  type FormStrings,
-  type PublicBlock,
-  type PublicForm,
-  type PublicQuestion,
-  type SubmitBody,
-  type SubmitNext,
-} from '@crm/contracts/forms';
-
-/**
- * The pattern engine the page's answer check runs rules with: the browser's
- * own RegExp, close enough for a first look (the server checks again with
- * RE2, so a pattern the two read differently is caught there). A pattern the
- * browser can't compile passes here.
- */
-export function browserPattern(source: string, ignoreCase: boolean): { readonly test: (text: string) => boolean } {
-  try {
-    const compiled = new RegExp(source, ignoreCase ? 'iu' : 'u');
-    return { test: (text) => compiled.test(text) };
-  } catch {
-    return { test: () => true };
-  }
-}
 
 /** What reading a form answered. */
 export type FormLoad =
@@ -43,63 +15,79 @@ export type FormLoad =
 /** What sending a submission answered. */
 export type SubmitOutcome =
   | { readonly kind: 'done'; readonly next: SubmitNext }
-  /** Field errors by question id (422): nothing was stored. */
+  /** Field errors by question key (422): nothing was stored. */
   | { readonly kind: 'invalid'; readonly fields: Readonly<Record<string, string>> }
-  /** The form stopped taking responses (410). */
+  /** The form stopped taking enquiries (410). */
   | { readonly kind: 'closed' }
-  /** The form changed since the page loaded (409): reload it. */
-  | { readonly kind: 'changed' }
   /** Too many in a short time (429). */
   | { readonly kind: 'limited' }
-  /** The endpoint couldn't be reached, or failed: the same attempt may be sent again. */
-  | { readonly kind: 'failed' };
+  /** The endpoint failed: the same attempt may be sent again. */
+  | { readonly kind: 'failed' }
+  /** The endpoint couldn't be reached at all. */
+  | { readonly kind: 'offline' };
 
 /** The hosted page's client. */
 export interface PublicFormClient {
-  load(publicKey: string): Promise<FormLoad>;
-  submit(publicKey: string, body: SubmitBody): Promise<SubmitOutcome>;
+  load(address: string): Promise<FormLoad>;
+  submit(address: string, body: SubmitBody): Promise<SubmitOutcome>;
 }
 
-const path = (publicKey: string) => `/api/public/forms/${encodeURIComponent(publicKey)}`;
+const path = (address: string) => `/api/public/forms/${encodeURIComponent(address)}`;
 
-/** A client on the page's own origin, through `fetch` (a fake one in tests). */
-export function createPublicFormClient(options: { readonly fetch?: FetchLike } = {}): PublicFormClient {
+const isObject = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+
+/** Whether the endpoint's answer looks like a form (our own API's; a light check, not a parse). */
+function isForm(value: unknown): value is PublicForm {
+  return (
+    isObject(value) &&
+    typeof value.key === 'string' &&
+    Array.isArray(value.questions) &&
+    typeof value.buttonText === 'string'
+  );
+}
+
+/** A client on `base` (the page's own origin by default), through `fetch` (a fake one in tests). */
+export function createPublicFormClient(
+  options: { readonly fetch?: FetchLike; readonly base?: string } = {},
+): PublicFormClient {
   const call: FetchLike = options.fetch ?? ((input, init) => fetch(input, init));
+  const base = options.base ?? '';
   return {
-    async load(publicKey) {
+    async load(address) {
       try {
-        const response = await call(path(publicKey), { headers: { accept: 'application/json' } });
+        const response = await call(`${base}${path(address)}`, { headers: { accept: 'application/json' } });
         if (response.status === 404 || response.status === 410) return { kind: 'missing' };
         if (!response.ok) return { kind: 'failed' };
-        const parsed = PublicForm.safeParse(await response.json());
-        return parsed.success ? { kind: 'form', form: parsed.data } : { kind: 'failed' };
+        const body: unknown = await response.json();
+        return isForm(body) ? { kind: 'form', form: body } : { kind: 'failed' };
       } catch {
         return { kind: 'failed' };
       }
     },
-    async submit(publicKey, body) {
+    async submit(address, body) {
       let response: Response;
       try {
-        response = await call(`${path(publicKey)}/submissions`, {
+        response = await call(`${base}${path(address)}/submissions`, {
           method: 'POST',
           headers: { 'content-type': 'application/json', accept: 'application/json' },
           body: JSON.stringify(body),
         });
       } catch {
-        return { kind: 'failed' };
+        return { kind: 'offline' };
       }
       try {
-        if (response.ok) {
-          const parsed = SubmitResult.safeParse(await response.json());
-          return parsed.success ? { kind: 'done', next: parsed.data.next } : { kind: 'failed' };
-        }
+        const answer: unknown = await response.json();
+        if (response.ok && isObject(answer) && isObject(answer.next))
+          return { kind: 'done', next: answer.next as SubmitNext };
         if (response.status === 410 || response.status === 404) return { kind: 'closed' };
-        if (response.status === 409) return { kind: 'changed' };
         if (response.status === 429) return { kind: 'limited' };
-        if (response.status === 422) {
-          const parsed = SubmitErrors.safeParse(await response.json());
-          if (parsed.success && parsed.data.fields !== undefined)
-            return { kind: 'invalid', fields: parsed.data.fields };
+        if (response.status === 422 && isObject(answer) && isObject(answer.fields)) {
+          const fields = Object.fromEntries(
+            Object.entries(answer.fields).flatMap(([key, message]) =>
+              typeof message === 'string' ? [[key, message]] : [],
+            ),
+          );
+          return { kind: 'invalid', fields };
         }
         return { kind: 'failed' };
       } catch {
@@ -120,9 +108,7 @@ export const CAPTCHA_ACTION = 'form_submit';
 
 /**
  * Loads reCAPTCHA v3 for `siteKey` and answers a function that asks it for a
- * token, or undefined when it couldn't load or answer within 3 seconds (the
- * API then stores the submission as spam, AC-583, so a page with no token
- * never loses a visitor's answers silently: it still sends).
+ * token, or undefined when it couldn't load or answer within 3 seconds.
  */
 export function loadCaptcha(siteKey: string): () => Promise<string | undefined> {
   const ready = new Promise<Grecaptcha | undefined>((resolve) => {

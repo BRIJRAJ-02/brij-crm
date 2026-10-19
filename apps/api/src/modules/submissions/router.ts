@@ -1,4 +1,11 @@
-import { deleteSubmission, getSubmission, listSubmissions, retrySubmission } from '@crm/core';
+import {
+  deleteSubmission,
+  getSubmission,
+  listSubmissions,
+  markSubmissionSpam,
+  releaseSubmission,
+  retrySubmission,
+} from '@crm/core';
 import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
 
@@ -16,6 +23,16 @@ export const submissionsRouter = member.submissions.router({
   ),
   get: member.submissions.get.handler(({ context, input }) =>
     getSubmission(context.scope, { submissionId: input.submissionId }),
+  ),
+  release: member.submissions.release.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      releaseSubmission(context.scope, context.jobs, { submissionId: input.submissionId }, hooks),
+    ),
+  ),
+  markSpam: member.submissions.markSpam.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      markSubmissionSpam(context.scope, { submissionId: input.submissionId }, hooks),
+    ),
   ),
   retry: member.submissions.retry.handler(({ context, input }) =>
     commitWrite(context, { mutationId: input.mutationId }, (hooks) =>

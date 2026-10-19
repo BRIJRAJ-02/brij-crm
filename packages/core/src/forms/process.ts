@@ -14,7 +14,7 @@
 // once, and anything unexpected is retried by the job, then `failed` (AC-566).
 import { sql } from 'drizzle-orm';
 import * as z from 'zod';
-import { questionsOf, type EngineRefusal, type FormDocument, type FormOwner } from '@crm/contracts';
+import { fitsAttribute, type EngineRefusal, type FormDocument } from '@crm/contracts';
 import { parseAttributeValue } from '@crm/contracts/values';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { decodeValue, encodeValue } from '../engine/columns.ts';
@@ -26,7 +26,7 @@ import type { WriteContext } from '../engine/write.ts';
 import { enterAsForm } from '../access/door.ts';
 import { formAccess } from '../access/policy.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition } from '../jobs/registry.ts';
-import { loadForm, loadVersions, questionAttribute } from './shared.ts';
+import { liveOptions, loadForm, loadVersions } from './shared.ts';
 
 const { formSubmissionRecords, formSubmissions, members } = schema;
 
@@ -53,13 +53,13 @@ export interface Assignment {
  * will call `assignOwner(rotationId, record)` here, once, inside this
  * transaction, its answer stored in `assignment` before records are written.
  */
-export async function chooseOwner(tx: WorkspaceTx, owner: FormOwner): Promise<Assignment> {
-  if (owner.kind === 'none') return { reason: 'none' };
+export async function chooseOwner(tx: WorkspaceTx, ownerMemberId: string | null): Promise<Assignment> {
+  if (ownerMemberId === null) return { reason: 'none' };
   const [active] = await tx
     .select({ id: members.id })
     .from(members)
-    .where(sql`${members.id} = ${owner.memberId} and ${members.status} = 'active'`);
-  return active === undefined ? { reason: 'owner_removed' } : { memberId: owner.memberId, reason: 'fixed_member' };
+    .where(sql`${members.id} = ${ownerMemberId} and ${members.status} = 'active'`);
+  return active === undefined ? { reason: 'owner_removed' } : { memberId: ownerMemberId, reason: 'fixed_member' };
 }
 
 /** The object's owner attribute, the standard `owner` actor reference, when it has a live one. */
@@ -94,20 +94,81 @@ interface Planned {
   readonly always: boolean;
 }
 
-/** The answers a version's questions map to live attributes, parsed again for the attribute as it is now. */
-function plan(
+/** A name typed as one line, as a person's name: the last word the last name, the rest the first. */
+function personalName(text: string): { firstName?: string; lastName?: string; fullName: string } {
+  const words = text.trim().split(/\s+/);
+  const lastName = words.length > 1 ? words.at(-1) : undefined;
+  const firstName = words.slice(0, words.length > 1 ? -1 : undefined).join(' ');
+  return {
+    ...(firstName === '' ? {} : { firstName }),
+    ...(lastName === undefined ? {} : { lastName }),
+    fullName: text.trim(),
+  };
+}
+
+/**
+ * An answer as the value its attribute takes (spec 0023, Answer types): text
+ * as itself (a name split into first and last), a choice or a country by the
+ * option of that label, a website as its domain for a domain, a phone as its
+ * number and country. A choice the attribute has no option for is refused
+ * with why, and the rest of the submission still lands (AC-565).
+ */
+function valueFor(
+  attribute: AttributeDef,
+  answer: unknown,
+  options: ReadonlyMap<string, readonly { id: string; label: string }[]>,
+): { value: unknown } | { refused: string } {
+  switch (attribute.type) {
+    case 'personal_name':
+      return typeof answer === 'string' ? { value: personalName(answer) } : { refused: 'That isn’t a name.' };
+    case 'select':
+    case 'status': {
+      const label = typeof answer === 'string' ? answer.trim().toLowerCase() : '';
+      const option = (options.get(attribute.id) ?? []).find((each) => each.label.trim().toLowerCase() === label);
+      if (option === undefined) return { refused: `${attribute.title} has no option called “${String(answer)}”.` };
+      return { value: attribute.isMulti ? [option.id] : option.id };
+    }
+    case 'domain': {
+      if (typeof answer !== 'string') return { refused: 'That isn’t a web address.' };
+      try {
+        return { value: new URL(answer).hostname.replace(/^www\./, '') };
+      } catch {
+        return { refused: 'That isn’t a web address.' };
+      }
+    }
+    default:
+      return { value: answer };
+  }
+}
+
+/** The answers a version's questions file on live attributes, as each attribute takes them now. */
+async function plan(
+  tx: WorkspaceTx,
   document: FormDocument,
   attributes: ReadonlyMap<string, AttributeDef>,
   answers: Readonly<Record<string, unknown>>,
-): { readonly planned: readonly Planned[]; readonly refused: { questionId: string; message: string }[] } {
+): Promise<{ readonly planned: readonly Planned[]; readonly refused: { questionId: string; message: string }[] }> {
   const planned: Planned[] = [];
   const refused: { questionId: string; message: string }[] = [];
-  for (const question of questionsOf(document)) {
-    if (!Object.hasOwn(answers, question.id)) continue;
-    const attribute = questionAttribute(question, attributes);
-    // An answer to an attribute archived, deleted or changed since stays on the submission only (AC-551).
-    if (attribute === undefined) continue;
-    const raw = answers[question.id];
+  const filedSelects = document.questions.flatMap((question) => {
+    const attribute = question.filedOn === undefined ? undefined : attributes.get(question.filedOn.attributeId);
+    return attribute !== undefined && (attribute.type === 'select' || attribute.type === 'status')
+      ? [attribute.id]
+      : [];
+  });
+  const options = await liveOptions(tx, filedSelects);
+  for (const question of document.questions) {
+    if (question.filedOn === undefined || !Object.hasOwn(answers, question.key)) continue;
+    const attribute = attributes.get(question.filedOn.attributeId);
+    // An answer filed on an attribute archived, deleted or changed since stays on the submission only (AC-551).
+    if (attribute === undefined || attribute.isSystem || isArchivedNow(attribute)) continue;
+    if (!fitsAttribute(question.answerType, attribute.type)) continue;
+    const converted = valueFor(attribute, answers[question.key], options);
+    if ('refused' in converted) {
+      refused.push({ questionId: question.id, message: converted.refused });
+      continue;
+    }
+    const raw = converted.value;
     // A visitor answers one email, domain or address: the attribute holds it as one item of its list.
     const asList = attribute.isMulti && attribute.type !== 'select' && !Array.isArray(raw) ? [raw] : raw;
     const parsed = parseAttributeValue(attribute.type, asList, { allowMultiple: attribute.isMulti });
@@ -124,7 +185,7 @@ function plan(
 /** The normalised key the main record is matched on, from its planned answer (AC-557). */
 function matchKey(
   planned: readonly Planned[],
-  matchAttributeId: string,
+  matchAttributeId: string | undefined,
 ): { attribute: AttributeDef; key: string } | undefined {
   const answer = planned.find((each) => each.attribute.id === matchAttributeId);
   if (answer === undefined) return undefined;
@@ -234,10 +295,10 @@ export async function processSubmission(context: WriteContext, submissionId: str
       ? (submission.answers as Record<string, unknown>)
       : {};
   const attributes = await loadAttributes(tx, form.mainObjectId);
-  const { planned, refused } = plan(document, attributes, answers);
+  const { planned, refused } = await plan(tx, document, attributes, answers);
 
   // Who owns a new record: chosen once, before anything is written (round robin's seam).
-  const assignment = await chooseOwner(tx, document.owner);
+  const assignment = await chooseOwner(tx, form.ownerMemberId);
   const owner = ownerAttribute(attributes);
   const ownerValue = assignment.memberId === undefined ? undefined : { type: 'member', id: assignment.memberId };
 

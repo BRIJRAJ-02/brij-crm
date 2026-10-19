@@ -860,7 +860,7 @@ describe('forms (spec 0023, milestone 1)', () => {
         sql`insert into records (workspace_id, id, object_id, created_by_type, updated_by_type) values (${workspaceId}, ${recordId}, ${objectId}, 'system', 'system')`,
       );
       await tx.execute(
-        sql`insert into forms (workspace_id, id, name, main_object_id, public_key, created_by_type, updated_by_type) values (${workspaceId}, ${formId}, 'Contact us', ${objectId}, ${publicKey}, 'system', 'system')`,
+        sql`insert into forms (workspace_id, id, name, main_object_id, public_key, signing_secret, created_by_type, updated_by_type) values (${workspaceId}, ${formId}, 'Contact us', ${objectId}, ${publicKey}, 'secret', 'system', 'system')`,
       );
       await tx.execute(
         sql`insert into form_versions (workspace_id, id, form_id, number, document, created_by_type, updated_by_type) values (${workspaceId}, ${versionId}, ${formId}, 1, '{}', 'system', 'system')`,

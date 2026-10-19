@@ -1,10 +1,10 @@
 // The public form rate limits (spec 0023, AC-585, 0023-public-surface.md),
 // held in this process's memory: right while the API runs one instance; a
 // shared store comes with #41. Each limit is a fixed window counter, which
-// is enough at these sizes: 10 a minute per form and client address, 30 an
-// hour per client address across the workspace, 5 an hour per form and
-// email, and 50 a second across the whole instance. Keys are hashes and ids,
-// never an address or an email in the clear.
+// is enough at these sizes: 5 a minute per client address, 120 an hour per
+// form (0023-experience.md, Bots and abuse, adjusted), and 50 a second across
+// the whole instance; beyond one, 429 with `Retry-After`. Keys are hashes and
+// ids, never an address in the clear.
 
 /** One limit: how many in how long. */
 export interface Limit {
@@ -14,16 +14,15 @@ export interface Limit {
 
 /** The limits of spec 0023. */
 export const FORM_LIMITS = {
-  perFormAddress: { max: 10, windowMs: 60_000 },
-  perWorkspaceAddress: { max: 30, windowMs: 3_600_000 },
-  perFormEmail: { max: 5, windowMs: 3_600_000 },
+  perAddress: { max: 5, windowMs: 60_000 },
+  perForm: { max: 120, windowMs: 3_600_000 },
   perInstance: { max: 50, windowMs: 1_000 },
 } as const satisfies Record<string, Limit>;
 
 /** Counts hits per key in fixed windows. */
 export interface RateLimiter {
-  /** Counts a hit on `key` under `limit`, and answers whether it is within it. */
-  hit(key: string, limit: Limit): boolean;
+  /** Counts a hit on `key` under `limit`: `true` within it, else the seconds until its window ends. */
+  hit(key: string, limit: Limit): true | { readonly retryAfterSeconds: number };
 }
 
 /** The most keys held before the oldest windows are dropped, so memory stays bounded under a flood. */
@@ -46,26 +45,8 @@ export function createRateLimiter(now: () => number = Date.now): RateLimiter {
         return true;
       }
       held.count += 1;
-      return held.count <= limit.max;
+      if (held.count <= limit.max) return true;
+      return { retryAfterSeconds: Math.max(1, Math.ceil((held.start + limit.windowMs - at) / 1000)) };
     },
   };
-}
-
-/**
- * An email as the per email limit counts it (spec 0023, abuse rules):
- * trimmed, lowercased, with any `+tag` in its local part dropped.
- */
-export function limitEmail(email: string): string {
-  const trimmed = email.trim().toLowerCase();
-  const at = trimmed.lastIndexOf('@');
-  if (at <= 0) return trimmed;
-  const local = trimmed.slice(0, at).replace(/\+.*$/, '');
-  return `${local}${trimmed.slice(at)}`;
-}
-
-/** The answers that look like emails, as the per email limit counts them. */
-export function emailsIn(answers: Readonly<Record<string, unknown>>): readonly string[] {
-  return Object.values(answers).flatMap((value) =>
-    typeof value === 'string' && /^[^\s@]+@[^\s@]+$/.test(value.trim()) ? [limitEmail(value)] : [],
-  );
 }

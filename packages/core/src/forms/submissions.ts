@@ -22,7 +22,6 @@ import { checkId } from '../engine/ids.ts';
 import { readRecords } from '../engine/records.ts';
 import { inputInvalid, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
-import { loadAttributes } from '../engine/values.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
 import { can, fieldLevel, objectLevel } from '../access/policy.ts';
@@ -32,7 +31,7 @@ import type { JobRegistry } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
 import { UNKNOWN_FORM } from './forms.ts';
 import { FORMS_PROCESS } from './process.ts';
-import { liveOptions, loadForm, loadVersions, millis, questionAttribute, questionType } from './shared.ts';
+import { loadForm, loadVersions, millis } from './shared.ts';
 
 const { formSubmissionRecords, formSubmissions } = schema;
 
@@ -125,48 +124,31 @@ async function displays(
   return new Map(views.map((view) => [view.id, view.display]));
 }
 
-/** The answers the reader may see, in the version's question order, with their labels and types. */
-function answersOf(
-  scope: EngineScope,
-  objectId: string,
-  document: FormDocument,
-  attributes: Awaited<ReturnType<typeof loadAttributes>>,
-  stored: unknown,
-  options: Awaited<ReturnType<typeof liveOptions>> = new Map(),
-): SubmissionAnswer[] {
+/** The answers the reader may see, in the form's question order (AC-573: one filed on a field hidden from them is absent). */
+function answersOf(scope: EngineScope, objectId: string, document: FormDocument, stored: unknown): SubmissionAnswer[] {
   const answers = record(stored);
-  return document.steps.flatMap((step) =>
-    step.blocks.flatMap((block): SubmissionAnswer[] => {
-      if (block.kind !== 'question' || !Object.hasOwn(answers, block.id)) return [];
-      const mappedId = 'attributeId' in block.target ? block.target.attributeId : undefined;
-      // An answer to a field the reader can't see is absent (AC-573).
-      if (mappedId !== undefined && fieldLevel(scope.access, { id: mappedId, objectId }) === 'hidden') return [];
-      const attribute = questionAttribute(block, attributes);
-      const type = questionType(block, attribute);
-      if (type === undefined) return [];
-      const choices = attribute === undefined ? undefined : options.get(attribute.id);
-      return [
-        {
-          questionId: block.id,
-          label: block.label,
-          type,
-          ...(mappedId === undefined ? {} : { attributeId: mappedId }),
-          value: answers[block.id],
-          ...(choices === undefined ? {} : { options: [...choices] }),
-        },
-      ];
-    }),
-  );
+  return document.questions.flatMap((question): SubmissionAnswer[] => {
+    if (!Object.hasOwn(answers, question.key)) return [];
+    const attributeId = question.filedOn?.attributeId;
+    if (attributeId !== undefined && fieldLevel(scope.access, { id: attributeId, objectId }) === 'hidden') return [];
+    return [
+      {
+        questionId: question.id,
+        key: question.key,
+        label: question.label,
+        answerType: question.answerType,
+        ...(attributeId === undefined ? {} : { attributeId }),
+        value: answers[question.key],
+      },
+    ];
+  });
 }
 
-/** A short line from the answers the reader may see: the first text or email. */
-function previewOf(answers: readonly SubmissionAnswer[]): string | undefined {
-  for (const answer of answers) {
-    if (typeof answer.value === 'string' && answer.value.trim() !== '') return answer.value.slice(0, 120);
-    const full = record(answer.value).fullName;
-    if (typeof full === 'string' && full !== '') return full;
-  }
-  return undefined;
+/** The email answer, and the first two answers beside it, for a list row. */
+function summaryOf(answers: readonly SubmissionAnswer[]): { email?: string; firstAnswers: SubmissionAnswer[] } {
+  const email = answers.find((answer) => answer.answerType === 'email' && typeof answer.value === 'string');
+  const firstAnswers = answers.filter((answer) => answer !== email).slice(0, 2);
+  return { ...(typeof email?.value === 'string' ? { email: email.value } : {}), firstAnswers };
 }
 
 /** A form the reader may see, or NOT_FOUND. */
@@ -218,12 +200,9 @@ export async function listSubmissions(
       shown.flatMap((row) => (row.mainRecordId === null ? [] : [row.mainRecordId])),
     );
     const versions = await loadVersions(tx, [...new Set(shown.map((row) => row.versionId))]);
-    const attributes = await loadAttributes(tx, form.mainObjectId);
     const items = shown.map((row): SubmissionSummary => {
       const version = versions.get(row.versionId);
-      const answers =
-        version === undefined ? [] : answersOf(scope, form.mainObjectId, version.document, attributes, row.answers);
-      const preview = previewOf(answers);
+      const answers = version === undefined ? [] : answersOf(scope, form.mainObjectId, version.document, row.answers);
       const main = row.mainRecordId === null ? undefined : names.get(row.mainRecordId);
       return {
         id: row.id,
@@ -233,7 +212,7 @@ export async function listSubmissions(
         ...(row.processedAt === null ? {} : { processedAt: row.processedAt }),
         verdict: verdictOf(row.spam),
         ...(main === undefined ? {} : { mainRecord: main }),
-        ...(preview === undefined ? {} : { preview }),
+        ...summaryOf(answers),
       };
     });
     return {
@@ -257,13 +236,7 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
   const [visible] = await visibleRows(tx, scope, form.mainObjectId, [row]);
   if (visible === undefined) throw refuse('NOT_FOUND', UNKNOWN_SUBMISSION);
   const version = (await loadVersions(tx, [row.versionId])).get(row.versionId);
-  const attributes = await loadAttributes(tx, form.mainObjectId);
-  const selects = [...attributes.values()].filter((attribute) => attribute.type === 'select').map((each) => each.id);
-  const options = await liveOptions(tx, selects);
-  const answers =
-    version === undefined
-      ? []
-      : answersOf(scope, form.mainObjectId, version.document, attributes, row.answers, options);
+  const answers = version === undefined ? [] : answersOf(scope, form.mainObjectId, version.document, row.answers);
   const touched = await tx
     .select({
       recordId: formSubmissionRecords.recordId,
@@ -301,7 +274,6 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
       : [];
   });
   const assignment = record(row.assignment);
-  const preview = previewOf(answers);
   return {
     id: row.id,
     formId: row.formId,
@@ -310,7 +282,7 @@ async function viewIn(tx: WorkspaceTx, scope: EngineScope, submissionId: string)
     ...(row.processedAt === null ? {} : { processedAt: row.processedAt }),
     verdict: verdictOf(row.spam),
     ...(main === undefined ? {} : { mainRecord: main }),
-    ...(preview === undefined ? {} : { preview }),
+    ...summaryOf(answers),
     versionNumber: version?.number ?? 1,
     answers,
     hidden,
@@ -350,20 +322,22 @@ async function lockedSubmission(tx: WorkspaceTx, scope: EngineScope, submissionI
   return row;
 }
 
-/** Processes a failed submission again (AC-566): back to `received`, with a new job. */
-export async function retrySubmission(
+/** Moves a submission back to `received` with a new job: a release from spam, or a retry of a failed one. */
+async function requeue(
   scope: EngineScope,
   registry: JobRegistry,
-  input: { readonly submissionId: string },
-  hooks: readonly AfterWrite[] = [],
+  submissionId: string,
+  from: SubmissionState,
+  wrong: string,
+  hooks: readonly AfterWrite[],
 ): Promise<SubmissionView> {
   requirePermission(scope, 'forms.manage');
   const { result } = await runWrite(
     scope,
     async (context) => {
       const { tx } = context;
-      const row = await lockedSubmission(tx, scope, input.submissionId);
-      if (row.state !== 'failed') throw refuse('FORM_STATE', 'Only a failed submission can be retried.');
+      const row = await lockedSubmission(tx, scope, submissionId);
+      if (row.state !== from) throw refuse('FORM_STATE', wrong);
       await tx
         .update(formSubmissions)
         .set({ state: 'received', failure: null, updatedAt: sql`now()` })
@@ -374,6 +348,66 @@ export async function retrySubmission(
     hooks,
   );
   return result;
+}
+
+/** Releases a spam submission (AC-574): it is processed as any other. */
+export async function releaseSubmission(
+  scope: EngineScope,
+  registry: JobRegistry,
+  input: { readonly submissionId: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<SubmissionView> {
+  requirePermission(scope, 'forms.manage');
+  return requeue(
+    scope,
+    registry,
+    input.submissionId,
+    'spam',
+    'Only a submission marked as spam can be released.',
+    hooks,
+  );
+}
+
+/**
+ * Marks a submission as spam (AC-574). Records it already made stay (moving
+ * them to the trash waits for milestone 2); a waiting one is never processed.
+ */
+export async function markSubmissionSpam(
+  scope: EngineScope,
+  input: { readonly submissionId: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<SubmissionView> {
+  requirePermission(scope, 'forms.manage');
+  const { result } = await runWrite(
+    scope,
+    async ({ tx }) => {
+      const row = await lockedSubmission(tx, scope, input.submissionId);
+      if (row.state === 'spam') throw refuse('FORM_STATE', 'This submission is already marked as spam.');
+      await tx
+        .update(formSubmissions)
+        .set({
+          state: 'spam',
+          processedAt: null,
+          spam: sql`${formSubmissions.spam} || '{"verdict":"spam","marked":true}'::jsonb`,
+          updatedAt: sql`now()`,
+        })
+        .where(eq(formSubmissions.id, row.id));
+      return viewIn(tx, scope, row.id);
+    },
+    hooks,
+  );
+  return result;
+}
+
+/** Processes a failed submission again (AC-566): back to `received`, with a new job. */
+export async function retrySubmission(
+  scope: EngineScope,
+  registry: JobRegistry,
+  input: { readonly submissionId: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<SubmissionView> {
+  requirePermission(scope, 'forms.manage');
+  return requeue(scope, registry, input.submissionId, 'failed', 'Only a failed submission can be retried.', hooks);
 }
 
 /** Deletes a submission (AC-575): its answers go; the records it created stay. */

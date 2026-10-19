@@ -40,11 +40,11 @@ describe('the forms environment (spec 0023)', () => {
     expect(problems(local)).toEqual([]);
   });
 
-  it('takes the reCAPTCHA keys together or not at all, and requires them and the salt in production', () => {
+  it('takes the reCAPTCHA keys together or not at all, never requires them, and requires the salt outside local', () => {
     expect(problems({ ...local, RECAPTCHA_SITE_KEY: production.RECAPTCHA_SITE_KEY })).toEqual(['RECAPTCHA_SECRET_KEY']);
     expect(problems(production)).toEqual([]);
     const { RECAPTCHA_SITE_KEY: _site, RECAPTCHA_SECRET_KEY: _secret, FORMS_IP_SALT: _salt, ...bare } = production;
-    expect(problems(bare).sort()).toEqual(['FORMS_IP_SALT', 'RECAPTCHA_SECRET_KEY']);
+    expect(problems(bare)).toEqual(['FORMS_IP_SALT']);
     expect(problems({ ...bare, APP_ENV: 'preview', FORMS_IP_SALT: production.FORMS_IP_SALT })).toEqual([]);
   });
 });

@@ -2,8 +2,9 @@
 // verify endpoint. A token is checked for its action (`form_submit`), its
 // hostname (one of the allowed origins) and its score. Google failing to
 // answer within 2 seconds, or more than 20 checks in flight in this process,
-// is `unavailable`: the submission is stored unchecked, never refused. With
-// no secret set (a laptop, a preview), every check is `unavailable`. The
+// is `unavailable`: the submission is stored unchecked, never refused.
+// reCAPTCHA is optional everywhere: with no secret set every check is `off`,
+// and the honeypot, the fill time and the rate limits decide alone. The
 // secret never leaves this module and is never logged.
 import type { CaptchaVerdict } from '@crm/core';
 import * as z from 'zod';
@@ -47,7 +48,7 @@ export function createCaptchaVerifier(deps: CaptchaDeps): CaptchaVerifier {
   let inFlight = 0;
   return {
     async verify(token, allowedHosts) {
-      if (deps.secret === undefined) return { kind: 'unavailable' };
+      if (deps.secret === undefined) return { kind: 'off' };
       if (token === undefined || token.trim() === '') return { kind: 'missing' };
       if (inFlight >= VERIFY_IN_FLIGHT) return { kind: 'unavailable' };
       inFlight += 1;

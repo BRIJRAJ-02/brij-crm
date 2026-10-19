@@ -8,6 +8,7 @@
 // workspaces, and only ever answers ids.
 import { sql } from 'drizzle-orm';
 import {
+  boolean,
   check,
   foreignKey,
   index,
@@ -22,7 +23,7 @@ import {
 import { actorColumns, auditColumns, timestamptz, workspaceId } from './common.ts';
 import { objects } from './definitions.ts';
 import { records } from './records.ts';
-import { actorConstraints } from './workspaces.ts';
+import { actorConstraints, members } from './workspaces.ts';
 
 /** One form. Its documents live in `form_versions`; `draft_version_id` is the one being edited. */
 export const forms = pgTable(
@@ -39,8 +40,23 @@ export const forms = pgTable(
     name: text('name').notNull(),
     /** The object a submission's main record is on (People by default). */
     mainObjectId: uuid('main_object_id').notNull(),
-    /** Random, URL safe, in every public link: internal ids never appear publicly (AC-552). */
+    /**
+     * The form's public address, after `/f/` (`form-a1b2c3`, or one the member
+     * chose): unique across every workspace, in every link and embed; internal
+     * ids never appear publicly (AC-552). Changing it stops the old link.
+     */
     publicKey: text('public_key').notNull(),
+    /** Who owns a record the form creates (AC-567); applies at once. Null: nobody. */
+    ownerMemberId: uuid('owner_member_id'),
+    /** The sites that may post their own form's answers here ("Your own form"), as origins. */
+    allowedOrigins: text('allowed_origins')
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    /** Refuse posts from those sites unless signed with `signing_secret`. */
+    requireSignature: boolean('require_signature').notNull().default(false),
+    /** The secret a site's server signs its posts with (HMAC SHA-256 of the body). */
+    signingSecret: text('signing_secret').notNull(),
     draftVersionId: uuid('draft_version_id'),
     /** Null until the first publish. */
     liveVersionId: uuid('live_version_id'),
@@ -65,7 +81,12 @@ export const forms = pgTable(
     check('forms_kind', sql`${t.kind} in ('built', 'capture')`),
     check('forms_status', sql`${t.status} in ('draft', 'live', 'paused', 'archived')`),
     check('forms_name', sql`char_length(${t.name}) between 1 and 200`),
-    check('forms_public_key_shape', sql`${t.publicKey} ~ '^[A-Za-z0-9_-]{16,64}$'`),
+    check('forms_public_key_shape', sql`${t.publicKey} ~ '^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$'`),
+    foreignKey({
+      name: 'forms_owner',
+      columns: [t.workspaceId, t.ownerMemberId],
+      foreignColumns: [members.workspaceId, members.id],
+    }),
     check(
       'forms_live_version',
       sql`(${t.status} = 'draft') = (${t.liveVersionId} is null) or ${t.status} = 'archived'`,

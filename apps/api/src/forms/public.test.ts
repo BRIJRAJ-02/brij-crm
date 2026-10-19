@@ -11,7 +11,8 @@ import { signInApp, testConnections } from '../../test/sign-in.ts';
 import { memberWithWorkspace } from '../../test/workspace.ts';
 import { EDGE_HEADER, ORIGIN_HEADER } from '../edge.ts';
 import { APP_URL, TEST_EDGE_SECRET } from '../testing.ts';
-import { createRateLimiter, emailsIn, FORM_LIMITS, limitEmail } from './limits.ts';
+import { createRateLimiter, FORM_LIMITS } from './limits.ts';
+import { SIGNATURE_HEADER, signatureOf } from './public.ts';
 import { CAPTCHA_ACTION, createCaptchaVerifier, VERIFY_IN_FLIGHT } from './recaptcha.ts';
 
 const { ownerUrl } = inject('testDatabase');
@@ -31,19 +32,24 @@ afterAll(async () => {
 });
 
 /** A request to the public endpoints as Vercel's middleware sends it from the hosted page. */
-function call(path: string, init: { method?: string; body?: unknown; origin?: string; ip?: string } = {}) {
+function call(
+  path: string,
+  init: { method?: string; body?: unknown; origin?: string | null; ip?: string; headers?: Record<string, string> } = {},
+) {
   return Promise.resolve(
     app.fetch(
       new Request(`${APP_URL}/api/public${path}`, {
         method: init.method ?? 'GET',
         headers: {
           [EDGE_HEADER]: TEST_EDGE_SECRET,
-          [ORIGIN_HEADER]: init.origin ?? APP_URL,
-          origin: init.origin ?? APP_URL,
+          ...(init.origin === null ? {} : { [ORIGIN_HEADER]: init.origin ?? APP_URL, origin: init.origin ?? APP_URL }),
           'x-forwarded-for': init.ip ?? '203.0.113.7',
           'content-type': 'application/json',
+          ...init.headers,
         },
-        ...(init.body === undefined ? {} : { body: JSON.stringify(init.body) }),
+        ...(init.body === undefined
+          ? {}
+          : { body: typeof init.body === 'string' ? init.body : JSON.stringify(init.body) }),
       }),
     ),
   );
@@ -67,7 +73,7 @@ async function liveForm() {
   return { m, live };
 }
 
-const answers = { name: { firstName: 'Ada', lastName: 'Lovelace' }, email: 'ada@example.com' };
+const answers = { name: 'Ada Lovelace', email: 'ada@example.com' };
 const submission = (extra: Record<string, unknown> = {}) => ({
   idempotencyKey: newId(),
   versionNumber: 1,
@@ -84,12 +90,15 @@ describe('GET /api/public/forms/:publicKey', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('x-robots-tag')).toBe('noindex');
     expect(response.headers.get('cache-control')).toBe('public, max-age=60');
-    const body = (await response.json()) as { title: string; status: string; steps: { blocks: unknown[] }[] };
-    expect(body).toMatchObject({ title: 'Contact us', status: 'live' });
+    const body = (await response.json()) as { headline: string; status: string };
+    expect(body).toMatchObject({ headline: 'Fill this in and we will come back to you', status: 'live' });
     expect(JSON.stringify(body)).not.toContain(live.mainObjectId);
-    const missing = await call('/forms/AAAAAAAAAAAAAAAAAAAAAAAA');
+    const missing = await call('/forms/no-such-form');
     expect(missing.status).toBe(404);
-    expect(await missing.json()).toEqual({ code: 'NOT_FOUND', message: 'This form does not exist.' });
+    expect(await missing.json()).toEqual({
+      code: 'NOT_FOUND',
+      message: 'This form doesn’t exist, or its address changed.',
+    });
   });
 });
 
@@ -100,7 +109,7 @@ describe('POST /api/public/forms/:publicKey/submissions', () => {
     const before = pokes;
     const first = await call(`/forms/${live.publicKey}/submissions`, { method: 'POST', body });
     expect(first.status).toBe(200);
-    expect(await first.json()).toEqual({ next: { kind: 'message', text: 'Thanks, we got your message.' } });
+    expect(await first.json()).toEqual({ next: { kind: 'message', text: '', offersMeeting: false } });
     expect(pokes - before).toBe(1);
     const again = await call(`/forms/${live.publicKey}/submissions`, { method: 'POST', body });
     expect(again.status).toBe(200);
@@ -109,13 +118,13 @@ describe('POST /api/public/forms/:publicKey/submissions', () => {
       `select state, hidden, ip_hash, spam->>'verdict' as verdict from form_submissions where form_id = $1`,
       [live.id],
     );
-    // No reCAPTCHA secret in tests: stored unchecked, still processed.
+    // reCAPTCHA is off in tests: the honeypot, timing and limits decided, and it passed.
     expect(stored).toEqual([
       {
         state: 'received',
         hidden: { utm_source: 'newsletter' },
         ip_hash: expect.stringMatching(/^[0-9a-f]{32}$/) as string,
-        verdict: 'unchecked',
+        verdict: 'passed',
       },
     ]);
     expect(stored[0]?.ip_hash).not.toContain('203.0.113.7');
@@ -147,34 +156,62 @@ describe('POST /api/public/forms/:publicKey/submissions', () => {
     const paused = await call(path, { method: 'POST', body: submission() });
     expect(paused.status).toBe(410);
     expect(await paused.json()).toMatchObject({ code: 'FORM_CLOSED' });
-    const read = (await (await call(`/forms/${live.publicKey}`)).json()) as { status: string; closedMessage: string };
-    expect(read).toMatchObject({ status: 'paused', closedMessage: 'This form is not taking responses right now.' });
+    const read = (await (await call(`/forms/${live.publicKey}`)).json()) as { status: string; questions: unknown[] };
+    expect(read).toMatchObject({ status: 'paused', questions: [] });
   });
 
-  it('answers 429 past 10 a minute from one address, and past 5 an hour for one email', async () => {
+  it('answers 429 with Retry-After past 5 a minute from one address', async () => {
     const { live } = await liveForm();
     const path = `/forms/${live.publicKey}/submissions`;
     const statuses: number[] = [];
-    for (let index = 0; index < 11; index += 1) {
+    let retryAfter: string | null = null;
+    for (let index = 0; index < 6; index += 1) {
       const response = await call(path, {
         method: 'POST',
         ip: '198.51.100.9',
         body: submission({ answers: { ...answers, email: `person${String(index)}@example.com` } }),
       });
       statuses.push(response.status);
+      retryAfter = response.headers.get('retry-after');
     }
-    expect(statuses.slice(0, 10).every((status) => status === 200)).toBe(true);
-    expect(statuses[10]).toBe(429);
-    const emails: number[] = [];
-    for (let index = 0; index < 6; index += 1) {
-      const response = await call(path, {
-        method: 'POST',
-        ip: `192.0.2.${String(index + 10)}`,
-        body: submission({ answers: { ...answers, email: `same+${String(index)}@example.com` } }),
-      });
-      emails.push(response.status);
-    }
-    expect(emails).toEqual([200, 200, 200, 200, 200, 429]);
+    expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
+    expect(Number(retryAfter)).toBeGreaterThan(0);
+  });
+
+  it('takes a listed site’s post with CORS, refuses an unlisted one, and needs a signature when the form says so', async () => {
+    const { m, live } = await liveForm();
+    const path = `/forms/${live.publicKey}/submissions`;
+    const site = 'https://acme.example';
+    expect((await call(path, { method: 'POST', body: submission(), origin: site, ip: '192.0.2.1' })).status).toBe(403);
+    const listed = await m.client.forms.updateSettings({
+      workspace: m.slug,
+      formId: live.id,
+      allowedOrigins: ['acme.example'],
+      mutationId: newId(),
+    });
+    expect(listed.allowedOrigins).toEqual([site]);
+    const preflight = await call(path, { method: 'OPTIONS', origin: site, ip: '192.0.2.1' });
+    expect(preflight.status).toBe(204);
+    expect(preflight.headers.get('access-control-allow-origin')).toBe(site);
+    const posted = await call(path, { method: 'POST', body: submission(), origin: site, ip: '192.0.2.2' });
+    expect(posted.status).toBe(200);
+    expect(posted.headers.get('access-control-allow-origin')).toBe(site);
+    const signed = await m.client.forms.updateSettings({
+      workspace: m.slug,
+      formId: live.id,
+      requireSignature: true,
+      mutationId: newId(),
+    });
+    expect((await call(path, { method: 'POST', body: submission(), origin: site, ip: '192.0.2.3' })).status).toBe(403);
+    const text = JSON.stringify(submission());
+    const server = await call(path, {
+      method: 'POST',
+      body: text,
+      origin: null,
+      ip: '192.0.2.4',
+      headers: { [SIGNATURE_HEADER]: signatureOf(signed.signingSecret ?? '', text) },
+    });
+    expect(server.status).toBe(200);
   });
 });
 
@@ -183,8 +220,8 @@ describe('the reCAPTCHA verifier (AC-583)', () => {
   const google = (answer: unknown, status = 200) =>
     (() => Promise.resolve(Response.json(answer, { status }))) as unknown as typeof fetch;
 
-  it('is unavailable with no secret, and judges a token by its action, host and score', async () => {
-    expect(await createCaptchaVerifier({}).verify('token', hosts)).toEqual({ kind: 'unavailable' });
+  it('is off with no secret, and judges a token by its action, host and score', async () => {
+    expect(await createCaptchaVerifier({}).verify('token', hosts)).toEqual({ kind: 'off' });
     const secret = 'a-test-secret-for-recaptcha-of-length';
     const ok = createCaptchaVerifier({
       secret,
@@ -230,18 +267,14 @@ describe('the reCAPTCHA verifier (AC-583)', () => {
 });
 
 describe('the rate limiter (AC-585)', () => {
-  it('counts per key in fixed windows', () => {
+  it('counts per key in fixed windows, and says when the window ends', () => {
     let now = 0;
     const limiter = createRateLimiter(() => now);
-    const limit = FORM_LIMITS.perFormAddress;
-    const results = Array.from({ length: 11 }, () => limiter.hit('k', limit));
-    expect(results.filter(Boolean)).toHaveLength(10);
+    const limit = FORM_LIMITS.perAddress;
+    const results = Array.from({ length: 6 }, () => limiter.hit('k', limit));
+    expect(results.filter((result) => result === true)).toHaveLength(5);
+    expect(results[5]).toEqual({ retryAfterSeconds: 60 });
     now += limit.windowMs;
     expect(limiter.hit('k', limit)).toBe(true);
-  });
-
-  it('counts an email lowercased, trimmed and without its +tag', () => {
-    expect(limitEmail(' Ada+news@Example.com ')).toBe('ada@example.com');
-    expect(emailsIn({ a: 'x@y.co', b: 3, c: 'not one', d: { e: 'z@w.co' } })).toEqual(['x@y.co']);
   });
 });

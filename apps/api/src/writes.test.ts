@@ -48,6 +48,7 @@ const READS: ReadonlySet<string> = new Set([
   'forms.get',
   'forms.attributes',
   'forms.preview',
+  'forms.slugAvailable',
   'submissions.list',
   'submissions.get',
 ]);
@@ -538,9 +539,47 @@ Object.assign(WRITES, {
     await m.client.forms.setStatus({ workspace: m.slug, formId: form.id, status: 'paused', mutationId });
     return [];
   },
-  'forms.rotateKey': async (m: Member, mutationId: string) => {
+  'forms.updateSettings': async (m: Member, mutationId: string) => {
     const form = await formOn(m);
-    await m.client.forms.rotateKey({ workspace: m.slug, formId: form.id, mutationId });
+    await m.client.forms.updateSettings({
+      workspace: m.slug,
+      formId: form.id,
+      slug: `a-${newId().slice(-8)}`,
+      mutationId,
+    });
+    return [];
+  },
+  'forms.setTarget': async (m: Member, mutationId: string) => {
+    const form = await formOn(m);
+    await m.client.forms.setTarget({
+      workspace: m.slug,
+      formId: form.id,
+      mainObjectId: m.companies.id,
+      expectedRevision: form.revision,
+      mutationId,
+    });
+    return [];
+  },
+  'forms.duplicate': async (m: Member, mutationId: string) => {
+    const form = await formOn(m);
+    await m.client.forms.duplicate({ workspace: m.slug, formId: form.id, id: newId(), mutationId });
+    return [];
+  },
+  'forms.delete': async (m: Member, mutationId: string) => {
+    const form = await formOn(m);
+    await m.client.forms.delete({ workspace: m.slug, formId: form.id, mutationId });
+    return [];
+  },
+  'submissions.release': async (m: Member, mutationId: string) => {
+    const form = await formOn(m, true);
+    const submissionId = await storedSubmission(m, form.id, 'spam');
+    await m.client.submissions.release({ workspace: m.slug, submissionId, mutationId });
+    return [{ kind: 'jobs', mutation_id: mutationId }];
+  },
+  'submissions.markSpam': async (m: Member, mutationId: string) => {
+    const form = await formOn(m, true);
+    const submissionId = await storedSubmission(m, form.id, 'failed');
+    await m.client.submissions.markSpam({ workspace: m.slug, submissionId, mutationId });
     return [];
   },
   'submissions.retry': async (m: Member, mutationId: string) => {
@@ -578,7 +617,12 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'forms.saveDraft': 2,
   'forms.publish': 2,
   'forms.setStatus': 3,
-  'forms.rotateKey': 2,
+  'forms.updateSettings': 2,
+  'forms.setTarget': 2,
+  'forms.duplicate': 2,
+  'forms.delete': 2,
+  'submissions.release': 3,
+  'submissions.markSpam': 3,
   'submissions.retry': 3,
   'submissions.delete': 3,
 };

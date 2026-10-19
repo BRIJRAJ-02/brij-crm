@@ -1,15 +1,16 @@
 import { describe, expect, it } from 'vitest';
-import { browserPattern, createPublicFormClient } from './client.ts';
+import { createPublicFormClient } from './client.ts';
 
 const form = {
-  key: 'abcdefghijklmnopqrstuvwx',
+  key: 'contact-us',
   status: 'live',
   versionNumber: 1,
-  title: 'Contact us',
+  headline: 'Talk to us',
   buttonText: 'Send',
   language: 'en',
-  steps: [{ id: 'main', blocks: [] }],
-  indexing: false,
+  look: { colour: 'light', corners: 'rounded' },
+  questions: [],
+  offersMeeting: false,
 };
 
 /** A fake endpoint answering `status` and `body` to every call, and keeping what it was sent. */
@@ -53,7 +54,6 @@ describe('the hosted page’s client (spec 0023)', () => {
         { kind: 'invalid', fields: { email: 'Bad.' } },
       ],
       [410, { code: 'FORM_CLOSED', message: 'x' }, { kind: 'closed' }],
-      [409, { code: 'FORM_CHANGED', message: 'x' }, { kind: 'changed' }],
       [429, { code: 'RATE_LIMITED', message: 'x' }, { kind: 'limited' }],
       [500, { code: 'INTERNAL', message: 'x' }, { kind: 'failed' }],
     ];
@@ -62,12 +62,6 @@ describe('the hosted page’s client (spec 0023)', () => {
       expect(await createPublicFormClient({ fetch: answer.fetch }).submit(form.key, submission)).toEqual(expected);
     }
     const offline = createPublicFormClient({ fetch: () => Promise.reject(new TypeError('Failed to fetch')) });
-    expect(await offline.submit(form.key, submission)).toEqual({ kind: 'failed' });
-  });
-
-  it('checks patterns with the browser’s engine, passing one it can’t compile', () => {
-    expect(browserPattern('^(?:[A-Z]{3})$', false).test('ABC')).toBe(true);
-    expect(browserPattern('^(?:[A-Z]{3})$', true).test('abc')).toBe(true);
-    expect(browserPattern('(', false).test('anything')).toBe(true);
+    expect(await offline.submit(form.key, submission)).toEqual({ kind: 'offline' });
   });
 });

@@ -81,13 +81,15 @@ export type {
   CreatedWorkspace,
   CreateWorkspaceInput,
   FormAttributeChoice,
-  FormBlock,
   FormDocument,
+  FormLook,
+  FormQuestion,
   FormStatus,
   FormSummary,
+  FormTargetChoices,
   FormView,
   PublicForm,
-  QuestionBlock,
+  AnswerType,
   InputIssue,
   JobStatus,
   JobView,
@@ -2152,47 +2154,88 @@ export function createDataLayer({
     },
     forms: {
       /**
-       * The workspace's forms on objects the member can see (spec 0023),
-       * newest first: the active ones, or the archived ones. Read through the
-       * route loader; the screens reload it after their own changes.
+       * The workspace's forms on objects the member can see (spec 0023), newest
+       * first: the active ones, or the archived ones, with this month's
+       * counts. Read through the route loader; screens reload it after changes.
        */
       list: (workspace: string, archived = false) =>
         call((options) => api.forms.list({ workspace, archived }, options)).then((page) => page.items),
-      /** One form with its draft and live documents. */
+      /** One form with its draft and live documents and its settings. */
       get: (workspace: string, formId: string) => call((options) => api.forms.get({ workspace, formId }, options)),
-      /** The main object's attributes a question may map to, with whether the member may write each (AC-546). */
+      /** The target object and the attributes a question may be filed on (AC-658). */
       attributes: (workspace: string, formId: string) =>
-        call((options) => api.forms.attributes({ workspace, formId }, options)).then((page) => page.items),
-      /** The draft as visitors would see it (AC-550), for the builder's preview; sends nothing. */
+        call((options) => api.forms.attributes({ workspace, formId }, options)),
+      /** The draft as visitors would see it (AC-657); sends nothing. */
       preview: (workspace: string, formId: string) =>
         call((options) => api.forms.preview({ workspace, formId }, options)),
-      /** A new form id: mint it once when the dialog opens, and send the same one on a retry. */
+      /** Whether an address is free for this form. */
+      slugAvailable: (workspace: string, formId: string, slug: string) =>
+        call((options) => api.forms.slugAvailable({ workspace, formId, slug }, options)).then(
+          (answer) => answer.available,
+        ),
+      /** A new form id: mint it once, and send the same one on a retry. */
       newId: (): string => mintId(),
-      /** Creates a form, waiting for the server (`forms.manage`). */
+      /** Creates an untitled form at once (AC-649), waiting for the server (`forms.manage`). */
       create: (
         workspace: string,
-        form: { readonly id: string; readonly name: string; readonly mainObjectId: string },
+        form: { readonly id: string; readonly name?: string; readonly mainObjectId?: string },
       ) => call((options) => api.forms.create({ workspace, ...form, mutationId: mintId() }, options)),
-      /**
-       * Saves the draft, waiting for the server. Rejects `FORM_CHANGED` when
-       * someone saved since `expectedRevision`: the builder reloads the form.
-       */
-      saveDraft: (
+      /** Saves the draft quietly. Rejects `FORM_CHANGED` when someone saved since `expectedRevision`. */
+      saveDraft: (workspace: string, formId: string, document: FormDocument, expectedRevision: number) =>
+        call((options) =>
+          api.forms.saveDraft({ workspace, formId, document, expectedRevision, mutationId: mintId() }, options),
+        ),
+      /** Publishes the draft as the next live version; the first publish names the form and its address. */
+      publish: (
         workspace: string,
         formId: string,
-        draft: { readonly document: FormDocument; readonly name?: string; readonly expectedRevision: number },
-      ) => call((options) => api.forms.saveDraft({ workspace, formId, ...draft, mutationId: mintId() }, options)),
-      /** Publishes the draft as the next live version (AC-548); refusals name the field (AC-546). */
-      publish: (workspace: string, formId: string, expectedRevision: number) =>
-        call((options) => api.forms.publish({ workspace, formId, expectedRevision, mutationId: mintId() }, options)),
-      /** Pauses, resumes, archives or restores a form (AC-549). */
+        input: { readonly expectedRevision: number; readonly name?: string; readonly slug?: string },
+      ) => call((options) => api.forms.publish({ workspace, formId, ...input, mutationId: mintId() }, options)),
+      /** The settings that apply at once: name, address, owner, the sites that may post, signatures. */
+      updateSettings: (
+        workspace: string,
+        formId: string,
+        settings: {
+          readonly name?: string;
+          readonly slug?: string;
+          readonly ownerMemberId?: string | null;
+          readonly allowedOrigins?: readonly string[];
+          readonly requireSignature?: boolean;
+        },
+      ) =>
+        call((options) =>
+          api.forms.updateSettings(
+            {
+              workspace,
+              formId,
+              ...settings,
+              allowedOrigins: settings.allowedOrigins === undefined ? undefined : [...settings.allowedOrigins],
+              mutationId: mintId(),
+            },
+            options,
+          ),
+        ),
+      /** Pauses or resumes (Accepting), archives or restores a form (AC-549). */
       setStatus: (workspace: string, formId: string, status: FormStatus) =>
         call((options) => api.forms.setStatus({ workspace, formId, status, mutationId: mintId() }, options)),
-      /** Gives the form a new public key: its old link stops working (AC-552). */
-      rotateKey: (workspace: string, formId: string) =>
-        call((options) => api.forms.rotateKey({ workspace, formId, mutationId: mintId() }, options)),
-      /** The hosted page's address for a public key, on this origin. */
+      /** Points a never published form at another object. */
+      setTarget: (workspace: string, formId: string, mainObjectId: string, expectedRevision: number) =>
+        call((options) =>
+          api.forms.setTarget({ workspace, formId, mainObjectId, expectedRevision, mutationId: mintId() }, options),
+        ),
+      /** Copies a form's draft as a new, never published form. */
+      duplicate: (workspace: string, formId: string) =>
+        call((options) => api.forms.duplicate({ workspace, formId, id: mintId(), mutationId: mintId() }, options)),
+      /** Deletes a form and its submissions; the records they made stay. */
+      delete: (workspace: string, formId: string) =>
+        call((options) => api.forms.delete({ workspace, formId, mutationId: mintId() }, options)),
+      /** The hosted page's address for a form's address, on this origin. */
       hostedUrl: (publicKey: string): string => `${origin}/f/${encodeURIComponent(publicKey)}`,
+      /** The embed script's address, on this origin. */
+      embedUrl: (): string => `${origin}/embed.js`,
+      /** The public submit endpoint, for a site's own form or server. */
+      submitUrl: (publicKey: string): string =>
+        `${origin}/api/public/forms/${encodeURIComponent(publicKey)}/submissions`,
     },
     submissions: {
       /** A page of a form's submissions, newest first, optionally one state (AC-572). */
@@ -2204,7 +2247,13 @@ export function createDataLayer({
       /** One submission in full: answers the member may see, the records it touched (AC-561, AC-573). */
       get: (workspace: string, submissionId: string) =>
         call((options) => api.submissions.get({ workspace, submissionId }, options)),
-      /** Processes a failed submission again (AC-566), waiting for the server. */
+      /** Releases a spam submission: it is processed (AC-574). */
+      release: (workspace: string, submissionId: string) =>
+        call((options) => api.submissions.release({ workspace, submissionId, mutationId: mintId() }, options)),
+      /** Marks a submission as spam (AC-574). */
+      markSpam: (workspace: string, submissionId: string) =>
+        call((options) => api.submissions.markSpam({ workspace, submissionId, mutationId: mintId() }, options)),
+      /** Processes a failed submission again (AC-566). */
       retry: (workspace: string, submissionId: string) =>
         call((options) => api.submissions.retry({ workspace, submissionId, mutationId: mintId() }, options)),
       /** Deletes a submission; the records it made stay (AC-575). */

@@ -98,6 +98,10 @@ CREATE TABLE "forms" (
 	"name" text NOT NULL,
 	"main_object_id" uuid NOT NULL,
 	"public_key" text NOT NULL,
+	"owner_member_id" uuid,
+	"allowed_origins" text[] DEFAULT '{}'::text[] NOT NULL,
+	"require_signature" boolean DEFAULT false NOT NULL,
+	"signing_secret" text NOT NULL,
 	"draft_version_id" uuid,
 	"live_version_id" uuid,
 	"revision" integer DEFAULT 1 NOT NULL,
@@ -115,7 +119,7 @@ CREATE TABLE "forms" (
 	CONSTRAINT "forms_kind" CHECK ("forms"."kind" in ('built', 'capture')),
 	CONSTRAINT "forms_status" CHECK ("forms"."status" in ('draft', 'live', 'paused', 'archived')),
 	CONSTRAINT "forms_name" CHECK (char_length("forms"."name") between 1 and 200),
-	CONSTRAINT "forms_public_key_shape" CHECK ("forms"."public_key" ~ '^[A-Za-z0-9_-]{16,64}$'),
+	CONSTRAINT "forms_public_key_shape" CHECK ("forms"."public_key" ~ '^[a-z0-9][a-z0-9-]{0,38}[a-z0-9]$'),
 	CONSTRAINT "forms_live_version" CHECK (("forms"."status" = 'draft') = ("forms"."live_version_id" is null) or "forms"."status" = 'archived'),
 	CONSTRAINT "forms_archived" CHECK (("forms"."status" = 'archived') = ("forms"."archived_at" is not null)),
 	CONSTRAINT "forms_created_by_actor" CHECK (("forms"."created_by_type" is null and "forms"."created_by_id" is null and "forms"."created_by_member_id" is null)
@@ -170,6 +174,7 @@ ALTER TABLE "form_versions" ADD CONSTRAINT "form_versions_form" FOREIGN KEY ("wo
 ALTER TABLE "form_versions" ADD CONSTRAINT "form_versions_published_by" FOREIGN KEY ("workspace_id","published_by_member_id") REFERENCES "public"."members"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "form_versions" ADD CONSTRAINT "form_versions_created_by" FOREIGN KEY ("workspace_id","created_by_member_id") REFERENCES "public"."members"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "form_versions" ADD CONSTRAINT "form_versions_updated_by" FOREIGN KEY ("workspace_id","updated_by_member_id") REFERENCES "public"."members"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "forms" ADD CONSTRAINT "forms_owner" FOREIGN KEY ("workspace_id","owner_member_id") REFERENCES "public"."members"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "forms" ADD CONSTRAINT "forms_main_object" FOREIGN KEY ("workspace_id","main_object_id") REFERENCES "public"."objects"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "forms" ADD CONSTRAINT "forms_created_by" FOREIGN KEY ("workspace_id","created_by_member_id") REFERENCES "public"."members"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "forms" ADD CONSTRAINT "forms_updated_by" FOREIGN KEY ("workspace_id","updated_by_member_id") REFERENCES "public"."members"("workspace_id","id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint

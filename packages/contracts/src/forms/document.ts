@@ -1,94 +1,54 @@
-// The form document (spec 0023, `FormDocument`): one versioned JSON document
-// per form version, holding its questions, blocks, targets, owner choice and
-// what happens after a submit. Milestone 1's shape: one step, the main target
-// only, an owner that is a fixed member or nobody, and a thank you message or
-// a redirect after submitting. Later milestones widen the unions; a document
-// saved now still parses then.
+// The form document (spec 0023, 0023-experience.md, Contract changes): one
+// versioned JSON document per form version. A form is a short list of
+// questions, each with a plain answer type, filed onto an attribute of the
+// form's target only where the member says so; then how the page looks, its
+// words, and what follows a submit. The form's name, address, owner and the
+// sites that may post to it live on the form itself and apply at once.
 import * as z from 'zod';
-import { FORM_QUESTION_TYPES, FORM_ONLY_TYPES, FORM_LANGUAGES } from './public.ts';
+import { ANSWER_TYPES, CHOICE_TYPES, FORM_CHOICES_MAX, FORM_QUESTIONS_MAX, QUESTION_KEY } from './answer-types.ts';
+import { FORM_LANGUAGES } from './public.ts';
 
-/** The most blocks one form holds. */
-export const FORM_BLOCKS_MAX = 60;
-
-/** The longest question label. */
-export const FORM_LABEL_MAX = 200;
-
-/** A block's id inside its document: short, lower case, stable across versions (a submission's answers key on it). */
-export const BlockId = z
+/** A question's id inside its document: stable across versions, never shown. */
+export const QuestionId = z
   .string()
-  .regex(/^[a-z0-9][a-z0-9_-]{0,39}$/, { error: 'A block id is 1 to 40 lower case letters, digits, - or _.' });
-/** A block's id inside its document. */
-export type BlockId = z.infer<typeof BlockId>;
+  .regex(/^[a-z0-9][a-z0-9_-]{0,39}$/, { error: 'A question id is 1 to 40 lower case letters, digits, - or _.' });
 
-/** Where a question's answer goes: an attribute of the main record, or kept on the submission only. */
-export const QuestionTarget = z.union([
-  z.strictObject({ role: z.literal('main'), attributeId: z.uuid() }),
-  z.strictObject({ formOnly: z.literal(true), type: z.enum(FORM_ONLY_TYPES) }),
-]);
-/** Where a question's answer goes. */
-export type QuestionTarget = z.infer<typeof QuestionTarget>;
+/** A question's key: its input name and the key its answer is stored under. */
+export const QuestionKey = z.string().regex(QUESTION_KEY, { error: 'Use lowercase letters, numbers and underscores.' });
 
-/** A question: an attribute of a target record (its one editor and its rules), or a form only question. */
-export const QuestionBlock = z.strictObject({
-  kind: z.literal('question'),
-  id: BlockId,
-  label: z
-    .string()
-    .trim()
-    .min(1, { error: 'Give the question a label.' })
-    .max(FORM_LABEL_MAX, { error: `Keep a label to ${String(FORM_LABEL_MAX)} characters.` }),
-  help: z.string().trim().max(500, { error: 'Keep the help text to 500 characters.' }).optional(),
+/** Where an answer is filed: an attribute of the form's main target (later milestones add person, company, deal). */
+export const FiledOn = z.strictObject({ objectRole: z.literal('main'), attributeId: z.uuid() });
+/** Where an answer is filed. */
+export type FiledOn = z.infer<typeof FiledOn>;
+
+/** One question. A draft may hold an empty label; publishing refuses it (`publishProblem`). */
+export const FormQuestion = z.strictObject({
+  id: QuestionId,
+  key: QuestionKey,
+  label: z.string().trim().max(200, { error: 'Keep a question to 200 characters.' }),
+  answerType: z.enum(ANSWER_TYPES),
+  /** Only for the choice types; kept when the type changes, so switching back loses nothing. */
+  choices: z
+    .array(z.string().trim().max(80, { error: 'Keep a choice to 80 characters.' }))
+    .max(FORM_CHOICES_MAX, { error: `A question holds at most ${String(FORM_CHOICES_MAX)} choices.` })
+    .optional(),
+  placeholder: z.string().trim().max(80, { error: 'Keep a placeholder to 80 characters.' }).optional(),
   required: z.boolean(),
-  target: QuestionTarget,
+  /** Absent: not filed, kept with the enquiry. */
+  filedOn: FiledOn.optional(),
   /** `fill` writes only an empty value (the default, AC-558); `always` overwrites. */
   update: z.enum(['fill', 'always']).default('fill'),
-  /** The query parameter that prefills it on the hosted page (milestone 3 reads it). */
-  prefillKey: z
-    .string()
-    .regex(/^[a-z0-9_]{1,40}$/)
-    .optional(),
 });
-/** A question. */
-export type QuestionBlock = z.infer<typeof QuestionBlock>;
+/** One question. */
+export type FormQuestion = z.infer<typeof FormQuestion>;
 
-const layoutText = z.string().trim().min(1).max(2_000, { error: 'Keep a text block to 2,000 characters.' });
-
-/** A block of a step: a question, or a layout block (heading, text, divider). Consent blocks arrive with milestone 2. */
-export const FormBlock = z.discriminatedUnion('kind', [
-  QuestionBlock,
-  z.strictObject({ kind: z.literal('heading'), id: BlockId, text: layoutText.max(200) }),
-  z.strictObject({ kind: z.literal('text'), id: BlockId, text: layoutText }),
-  z.strictObject({ kind: z.literal('divider'), id: BlockId }),
-]);
-/** A block of a step. */
-export type FormBlock = z.infer<typeof FormBlock>;
-
-/** One step of a form. Milestone 1 has exactly one; conditions (`showWhen`) arrive with milestone 2. */
-export const FormStep = z.strictObject({
-  id: BlockId,
-  title: z.string().trim().max(200).optional(),
-  blocks: z.array(FormBlock).max(FORM_BLOCKS_MAX, { error: `A form holds at most ${String(FORM_BLOCKS_MAX)} blocks.` }),
+/** How the page looks: two axes and nothing else, each mapped onto tokens, so no unreadable pair exists. */
+export const FormLook = z.strictObject({
+  colour: z.enum(['light', 'dark']).default('light'),
+  corners: z.enum(['rounded', 'square']).default('rounded'),
 });
-/** One step of a form. */
-export type FormStep = z.infer<typeof FormStep>;
-
-/** The records a submission writes: the main one, matched on its object's unique attribute (AC-557). */
-export const FormTargets = z.strictObject({
-  main: z.strictObject({ objectId: z.uuid(), matchAttributeId: z.uuid() }),
-});
-/** The records a submission writes. */
-export type FormTargets = z.infer<typeof FormTargets>;
-
-/**
- * Who owns a new main record (AC-567): a fixed member, or nobody. Round
- * robin (`{ kind: 'rotation' }`, #58) arrives with milestone 2.
- */
-export const FormOwner = z.discriminatedUnion('kind', [
-  z.strictObject({ kind: z.literal('member'), memberId: z.uuid() }),
-  z.strictObject({ kind: z.literal('none') }),
-]);
-/** Who owns a new main record. */
-export type FormOwner = z.infer<typeof FormOwner>;
+/** How the page looks. */
+export type FormLook = z.infer<typeof FormLook>;
 
 /** A redirect after submitting: an absolute https address (http only for localhost, for local testing). */
 export const RedirectUrl = z
@@ -102,53 +62,135 @@ export const RedirectUrl = z
     { error: 'Give a full address that starts with https://.' },
   );
 
-/** What the visitor sees after submitting (AC-570): the thank you message, or a redirect. Booking (#59) arrives later. */
+/**
+ * What follows a submit (AC-570): the thank you, optionally offering a meeting
+ * on a booking page (#59, hidden until booking pages exist), or a redirect.
+ */
 export const FormAfter = z.discriminatedUnion('kind', [
   z.strictObject({
     kind: z.literal('message'),
-    text: z.string().trim().min(1, { error: 'Write the thank you message.' }).max(2_000),
+    message: z.string().trim().max(2_000).default(''),
+    offerMeeting: z.strictObject({ bookingPageId: z.uuid() }).optional(),
   }),
   z.strictObject({ kind: z.literal('redirect'), url: RedirectUrl }),
 ]);
-/** What the visitor sees after submitting. */
+/** What follows a submit. */
 export type FormAfter = z.infer<typeof FormAfter>;
 
-/** How the hosted page looks and reads. Colours, logo and indexing arrive with later milestones. */
-export const FormStyle = z.strictObject({
-  title: z.string().trim().min(1, { error: 'Give the form a title.' }).max(200),
-  description: z.string().trim().max(2_000).optional(),
-  buttonText: z.string().trim().min(1).max(40).default('Submit'),
-  language: z.enum(FORM_LANGUAGES).default('en'),
-});
-/** How the hosted page looks and reads. */
-export type FormStyle = z.infer<typeof FormStyle>;
-
-/** The bot checks' settings (AC-583, AC-584). */
+/** The bot checks' settings: the minimum fill time and, when reCAPTCHA is on, the score below which it is spam. */
 export const FormSpam = z.strictObject({
-  minFillMs: z.number().int().min(0).max(60_000).default(2_500),
+  minFillMs: z.number().int().min(0).max(60_000).default(2_000),
   scoreThreshold: z.number().min(0).max(1).default(0.3),
 });
 /** The bot checks' settings. */
 export type FormSpam = z.infer<typeof FormSpam>;
 
-/** One form version's whole document (spec 0023). */
-export const FormDocument = z.strictObject({
-  steps: z.array(FormStep).min(1).max(1, { error: 'Forms have one step for now.' }),
-  targets: FormTargets,
-  owner: FormOwner.default({ kind: 'none' }),
-  after: FormAfter,
-  style: FormStyle,
-  spam: FormSpam.default({ minFillMs: 2_500, scoreThreshold: 0.3 }),
-});
+/** The default headline. */
+export const DEFAULT_HEADLINE = 'Fill this in and we will come back to you';
+
+/** The default button text. */
+export const DEFAULT_BUTTON_TEXT = 'Send';
+
+/** One form version's whole document (spec 0023, 0023-experience.md). */
+export const FormDocument = z
+  .strictObject({
+    questions: z
+      .array(FormQuestion)
+      .max(FORM_QUESTIONS_MAX, { error: `A form holds at most ${String(FORM_QUESTIONS_MAX)} questions.` }),
+    targets: z.strictObject({
+      main: z.strictObject({ objectId: z.uuid(), matchAttributeId: z.uuid().optional() }),
+    }),
+    look: FormLook.default({ colour: 'light', corners: 'rounded' }),
+    headline: z.string().trim().max(120).default(DEFAULT_HEADLINE),
+    subheading: z.string().trim().max(240).optional(),
+    buttonText: z.string().trim().min(1, { error: 'Give the button some text.' }).max(40).default(DEFAULT_BUTTON_TEXT),
+    language: z.enum(FORM_LANGUAGES).default('en'),
+    after: FormAfter.default({ kind: 'message', message: '' }),
+    spam: FormSpam.default({ minFillMs: 2_000, scoreThreshold: 0.3 }),
+  })
+  .superRefine((document, context) => {
+    const seen = { ids: new Set<string>(), keys: new Set<string>(), attributes: new Set<string>() };
+    let files = 0;
+    document.questions.forEach((question, index) => {
+      const at = ['questions', index];
+      if (seen.ids.has(question.id))
+        context.addIssue({ code: 'custom', path: [...at, 'id'], message: 'Two questions share one id.' });
+      if (seen.keys.has(question.key)) {
+        context.addIssue({
+          code: 'custom',
+          path: [...at, 'key'],
+          message: `Two questions both use the key “${question.key}”.`,
+        });
+      }
+      const attributeId = question.filedOn?.attributeId;
+      if (attributeId !== undefined && seen.attributes.has(attributeId)) {
+        context.addIssue({
+          code: 'custom',
+          path: [...at, 'filedOn'],
+          message: 'Two questions are filed on one attribute.',
+        });
+      }
+      if (question.answerType === 'file') files += 1;
+      seen.ids.add(question.id);
+      seen.keys.add(question.key);
+      if (attributeId !== undefined) seen.attributes.add(attributeId);
+    });
+    if (files > 1) {
+      context.addIssue({
+        code: 'custom',
+        path: ['questions'],
+        message: 'A form can ask for one file. Remove the other file question first.',
+      });
+    }
+  });
 /** One form version's whole document. */
 export type FormDocument = z.infer<typeof FormDocument>;
 /** A document as written, before defaults fill in. */
 export type FormDocumentInput = z.input<typeof FormDocument>;
 
-/** Every question of a document, in order. */
-export function questionsOf(document: Pick<FormDocument, 'steps'>): readonly QuestionBlock[] {
-  return document.steps.flatMap((step) => step.blocks.flatMap((block) => (block.kind === 'question' ? [block] : [])));
+/** True when a question's answer is picked from its own choices. */
+export function isChoiceQuestion(question: Pick<FormQuestion, 'answerType'>): boolean {
+  return CHOICE_TYPES.includes(question.answerType);
 }
 
-/** The attribute types a question may map to (the public editors), re-exported for the builder. */
-export { FORM_QUESTION_TYPES };
+/** The questions of a new form: Name, Email and Phone (AC-649), with the email filed on the match attribute when known. */
+export function defaultQuestions(filing: {
+  readonly nameAttributeId?: string;
+  readonly emailAttributeId?: string;
+  readonly phoneAttributeId?: string;
+}): FormQuestion[] {
+  const filed = (attributeId: string | undefined) =>
+    attributeId === undefined ? {} : { filedOn: { objectRole: 'main' as const, attributeId } };
+  return [
+    {
+      id: 'name',
+      key: 'name',
+      label: 'Your name',
+      answerType: 'short_text',
+      placeholder: 'John Doe',
+      required: true,
+      update: 'fill',
+      ...filed(filing.nameAttributeId),
+    },
+    {
+      id: 'email',
+      key: 'email',
+      label: 'Work email',
+      answerType: 'email',
+      placeholder: 'john@acme.com',
+      required: true,
+      update: 'fill',
+      ...filed(filing.emailAttributeId),
+    },
+    {
+      id: 'phone',
+      key: 'phone',
+      label: 'Phone or WhatsApp',
+      answerType: 'phone',
+      placeholder: '555 000 1234',
+      required: false,
+      update: 'fill',
+      ...filed(filing.phoneAttributeId),
+    },
+  ];
+}

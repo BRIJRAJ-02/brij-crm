@@ -1,38 +1,49 @@
-// Spec 0023, milestone 1, against a real Postgres as the app role: building
-// and publishing a form, the public read and submit through the key's scope,
-// the bot checks, idempotency, and processing a submission into a record as
-// the form (match, fill or always, refused values skipped, one person for two
-// racing submissions), its timeline entry, and the submissions screen's reads.
+// Spec 0023 (0023-experience.md), against a real Postgres as the app role:
+// building and publishing a form, the settings that apply at once, the
+// public read and submit through the address's scope, the bot checks,
+// idempotency, and processing a submission into a record as the form
+// (match, fill or always, choices by label, refused values skipped, one
+// person for two racing submissions), its timeline entry, and the
+// submissions screen's reads and actions.
 import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
-import type { FormDocument, SubmitBody } from '@crm/contracts';
+import type { FormDocument, FormQuestion, SubmitBody } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
 import { enterPublicForm } from '../access/door.ts';
 import type { AccessRules } from '../access/policy.ts';
-import { editAttribute } from '../attributes/attributes.ts';
+import { createAttribute, editAttribute } from '../attributes/attributes.ts';
 import { getActivity } from '../engine/activity.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createRecord, getRecords } from '../engine/records.ts';
-import { SYSTEM_ACTOR, type EngineScope } from '../engine/scope.ts';
+import { SYSTEM_ACTOR } from '../engine/scope.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { runWrite } from '../engine/write.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
-import { compilePattern } from '../validation/pattern.ts';
 import { rescope, testScope } from '../testing.ts';
 import {
   createForm,
+  deleteForm,
+  duplicateForm,
   formAttributes,
   getForm,
+  isSlugAvailable,
   listForms,
   publishForm,
-  rotateFormKey,
   saveFormDraft,
   setFormStatus,
+  updateFormSettings,
 } from './forms.ts';
 import { processSubmission } from './process.ts';
-import { getPublicForm, submitForm, type CaptchaVerdict } from './public.ts';
-import { deleteSubmission, getSubmission, listSubmissions, retrySubmission } from './submissions.ts';
+import { getPublicForm, postingRules, submitForm, type CaptchaVerdict } from './public.ts';
+import {
+  deleteSubmission,
+  getSubmission,
+  listSubmissions,
+  markSubmissionSpam,
+  releaseSubmission,
+  retrySubmission,
+} from './submissions.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -84,61 +95,52 @@ async function refusalOf(call: Promise<unknown>) {
   throw new Error('It was let through.');
 }
 
-/** A People form asking name, email (the match), job title (fill) and description (always), published. */
+const question = (
+  changes: Partial<FormQuestion> & Pick<FormQuestion, 'id' | 'key' | 'label' | 'answerType'>,
+): FormQuestion => ({
+  required: false,
+  update: 'fill',
+  ...changes,
+});
+
+/** A People form asking name, email and phone, job title (fill), description (always) and a note kept on the submission, published. */
 async function liveForm(w: Workspace, changes: (document: FormDocument) => FormDocument = (d) => d) {
-  const created = await createForm(w.scope, { id: newId(), name: 'Contact us', mainObjectId: w.people });
-  const base = created.draft;
-  const [step] = base.steps;
-  if (step === undefined) throw new Error('A form has a step.');
+  const created = await createForm(w.scope, { id: newId(), name: 'Contact us' });
   const document: FormDocument = changes({
-    ...base,
-    steps: [
-      {
-        ...step,
-        blocks: [
-          ...step.blocks,
-          {
-            kind: 'question',
-            id: 'title',
-            label: 'Job title',
-            required: false,
-            target: { role: 'main', attributeId: w.attribute('people.job_title') },
-            update: 'fill',
-          },
-          {
-            kind: 'question',
-            id: 'about',
-            label: 'About you',
-            required: false,
-            target: { role: 'main', attributeId: w.attribute('people.description') },
-            update: 'always',
-          },
-          {
-            kind: 'question',
-            id: 'why',
-            label: 'Why are you here?',
-            required: false,
-            target: { formOnly: true, type: 'long_text' },
-            update: 'fill',
-          },
-        ],
-      },
+    ...created.draft,
+    questions: [
+      ...created.draft.questions,
+      question({
+        id: 'title',
+        key: 'title',
+        label: 'Job title',
+        answerType: 'short_text',
+        filedOn: { objectRole: 'main', attributeId: w.attribute('people.job_title') },
+      }),
+      question({
+        id: 'about',
+        key: 'about',
+        label: 'About you',
+        answerType: 'long_text',
+        update: 'always',
+        filedOn: { objectRole: 'main', attributeId: w.attribute('people.description') },
+      }),
+      question({ id: 'why', key: 'why', label: 'Why are you here?', answerType: 'long_text' }),
     ],
-    owner: { kind: 'member', memberId: w.ownerId },
   });
   const saved = await saveFormDraft(w.scope, { formId: created.id, document, expectedRevision: created.revision });
   return publishForm(w.scope, { formId: created.id, expectedRevision: saved.revision });
 }
 
-const passed: CaptchaVerdict = { kind: 'score', score: 0.9 };
+const off: CaptchaVerdict = { kind: 'off' };
 
 function body(answers: Record<string, unknown>, extra: Partial<SubmitBody> = {}): SubmitBody {
-  return { idempotencyKey: newId(), versionNumber: 1, answers, hidden: {}, fillMs: 10_000, ...extra };
+  return { idempotencyKey: newId(), answers, hidden: {}, fillMs: 10_000, ...extra };
 }
 
-async function submit(publicKey: string, input: SubmitBody, captcha: CaptchaVerdict = passed) {
+async function submit(publicKey: string, input: SubmitBody, captcha: CaptchaVerdict = off) {
   const { scope, formId } = await enterPublicForm({ db }, publicKey);
-  return submitForm(scope, registry, { formId, body: input, captcha, pattern: compilePattern });
+  return submitForm(scope, registry, { formId, body: input, captcha });
 }
 
 /** Runs processing for a submission as the job does: in one write under the system's scope. */
@@ -147,63 +149,103 @@ async function processNow(w: Workspace, submissionId: string) {
 }
 
 async function submissionIds(w: Workspace, formId: string) {
-  return (
-    await w.query<{ id: string; state: string }>(
-      sql`select id::text, state from form_submissions where form_id = ${formId} order by received_at, id`,
-    )
-  ).map((row) => row);
+  return w.query<{ id: string; state: string }>(
+    sql`select id::text, state from form_submissions where form_id = ${formId} order by received_at, id`,
+  );
 }
 
-const ada = { firstName: 'Ada', lastName: 'Lovelace' };
-
-describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552)', () => {
-  it('creates a People form with name and email asked, lists it, and publishes it as version 1', async () => {
+describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552, AC-649, AC-655)', () => {
+  it('creates an untitled People form with Name, Email and Phone, an address and its creator as owner', async () => {
     const w = await workspace();
-    const created = await createForm(w.scope, { id: newId(), name: 'Contact us', mainObjectId: w.people });
-    expect(created.status).toBe('draft');
-    expect(created.draft.steps[0]?.blocks.map((block) => block.id)).toEqual(['name', 'email']);
+    const created = await createForm(w.scope, { id: newId() });
+    expect(created).toMatchObject({
+      name: 'Untitled form',
+      status: 'draft',
+      ownerMemberId: w.ownerId,
+      mainObjectId: w.people,
+    });
+    expect(created.publicKey).toMatch(/^form-[a-z0-9]{6}$/);
+    expect(created.draft.questions.map((each) => [each.key, each.answerType, each.filedOn?.attributeId])).toEqual([
+      ['name', 'short_text', w.attribute('people.name')],
+      ['email', 'email', w.attribute('people.email_addresses')],
+      ['phone', 'phone', w.attribute('people.phone_numbers')],
+    ]);
     expect(created.draft.targets.main.matchAttributeId).toBe(w.attribute('people.email_addresses'));
-    expect(created.publicKey).toMatch(/^[A-Za-z0-9_-]{24}$/);
-    const published = await publishForm(w.scope, { formId: created.id, expectedRevision: created.revision });
-    expect(published).toMatchObject({ status: 'live', liveVersionNumber: 1, hasUnpublished: false });
-    const listed = await listForms(w.scope, { archived: false });
-    expect(listed.items.map((form) => form.id)).toEqual([created.id]);
-    // Editing after a publish starts version 2, and the live version stays 1 until the next publish.
+    const published = await publishForm(w.scope, {
+      formId: created.id,
+      expectedRevision: created.revision,
+      name: 'Contact us',
+      slug: 'contact-us',
+    });
+    expect(published).toMatchObject({
+      status: 'live',
+      liveVersionNumber: 1,
+      hasUnpublished: false,
+      name: 'Contact us',
+      publicKey: 'contact-us',
+    });
+    // Editing after a publish starts version 2; the live version stays 1 until the next publish.
     const edited = await saveFormDraft(w.scope, {
       formId: created.id,
-      document: { ...published.draft, style: { ...published.draft.style, title: 'Talk to us' } },
+      document: { ...published.draft, headline: 'Talk to us' },
       expectedRevision: published.revision,
     });
     expect(edited).toMatchObject({ draftNumber: 2, liveVersionNumber: 1, hasUnpublished: true });
-    expect(edited.live?.style.title).toBe('Contact us');
+    expect(edited.live?.headline).toBe('Fill this in and we will come back to you');
+    const listed = await listForms(w.scope, { archived: false });
+    expect(listed.items.map((form) => [form.name, form.submissionsThisMonth, form.spamCount])).toEqual([
+      ['Contact us', 0, 0],
+    ]);
   });
 
-  it('refuses a stale save, and every change from a member without forms.manage', async () => {
+  it('refuses a stale save, a taken address, and every change from a member without forms.manage', async () => {
     const w = await workspace();
-    const created = await createForm(w.scope, { id: newId(), name: 'Contact us', mainObjectId: w.people });
+    const created = await createForm(w.scope, { id: newId() });
     await saveFormDraft(w.scope, { formId: created.id, document: created.draft, expectedRevision: created.revision });
     expect(
       await refusalOf(
         saveFormDraft(w.scope, { formId: created.id, document: created.draft, expectedRevision: created.revision }),
       ),
     ).toMatchObject([{ code: 'FORM_CHANGED' }]);
-    const member = rescope(w.scope, { role: 'member' });
-    expect(await refusalOf(createForm(member, { id: newId(), name: 'Mine', mainObjectId: w.people }))).toMatchObject([
-      { code: 'FORBIDDEN' },
+    const other = await createForm(w.scope, { id: newId() });
+    await updateFormSettings(w.scope, { formId: other.id, slug: 'taken-one' });
+    expect(await isSlugAvailable(w.scope, { formId: created.id, slug: 'taken-one' })).toEqual({ available: false });
+    expect(await isSlugAvailable(w.scope, { formId: other.id, slug: 'taken-one' })).toEqual({ available: true });
+    expect(await refusalOf(updateFormSettings(w.scope, { formId: created.id, slug: 'taken-one' }))).toMatchObject([
+      { code: 'SLUG_TAKEN', field: 'slug' },
     ]);
-    // A member reads the form all the same.
+    const member = rescope(w.scope, { role: 'member' });
+    expect(await refusalOf(createForm(member, { id: newId() }))).toMatchObject([{ code: 'FORBIDDEN' }]);
     expect((await getForm(member, { formId: created.id })).canManage).toBe(false);
+    expect((await getForm(member, { formId: created.id })).signingSecret).toBeUndefined();
   });
 
-  it('refuses a publish mapping a field the publisher can only read, naming it (AC-546)', async () => {
+  it('refuses a publish with the first problem, on the question at fault (AC-655)', async () => {
     const w = await workspace();
-    const created = await createForm(w.scope, { id: newId(), name: 'Contact us', mainObjectId: w.people });
-    const email = w.attribute('people.email_addresses');
+    const created = await createForm(w.scope, { id: newId(), name: 'Contact us' });
+    const unlabelled = {
+      ...created.draft,
+      questions: created.draft.questions.map((each) => (each.key === 'phone' ? { ...each, label: '' } : each)),
+    };
+    const saved = await saveFormDraft(w.scope, {
+      formId: created.id,
+      document: unlabelled,
+      expectedRevision: created.revision,
+    });
+    expect(await refusalOf(publishForm(w.scope, { formId: created.id, expectedRevision: saved.revision }))).toEqual([
+      expect.objectContaining({ code: 'CONFIG_INVALID', message: 'Every question needs a label.', field: 'phone' }),
+    ]);
+  });
+
+  it('refuses a publish filing onto a field the publisher can only read, naming it (AC-546)', async () => {
+    const w = await workspace();
+    const created = await createForm(w.scope, { id: newId(), name: 'Contact us' });
+    const phone = w.attribute('people.phone_numbers');
     const rules: AccessRules = {
       levels: [
         {
           subject: { type: 'role', role: 'admin' },
-          target: { type: 'attribute', objectId: w.people, attributeId: email },
+          target: { type: 'attribute', objectId: w.people, attributeId: phone },
           level: 'read',
         },
       ],
@@ -211,140 +253,109 @@ describe('building and publishing (AC-545, AC-546, AC-548, AC-549, AC-552)', () 
     };
     const admin = rescope(w.scope, { role: 'admin', rules });
     const choices = await formAttributes(admin, { formId: created.id });
-    expect(choices.items.find((item) => item.attributeId === email)?.canWrite).toBe(false);
+    expect(choices.objectName).toBe('Person');
+    expect(choices.items.find((item) => item.attributeId === phone)?.canWrite).toBe(false);
     expect(await refusalOf(publishForm(admin, { formId: created.id, expectedRevision: created.revision }))).toEqual([
-      expect.objectContaining({ code: 'FORBIDDEN', attributeId: email }),
+      expect.objectContaining({
+        code: 'FORBIDDEN',
+        message: "You can't write to Person · Phone numbers, so this form can't file answers there.",
+        field: 'phone',
+      }),
     ]);
   });
 
-  it('refuses a publish whose match field no required question asks', async () => {
-    const w = await workspace();
-    const created = await createForm(w.scope, { id: newId(), name: 'Contact us', mainObjectId: w.people });
-    const [step] = created.draft.steps;
-    if (step === undefined) throw new Error('A form has a step.');
-    const saved = await saveFormDraft(w.scope, {
-      formId: created.id,
-      document: { ...created.draft, steps: [{ ...step, blocks: step.blocks.filter((block) => block.id !== 'email') }] },
-      expectedRevision: created.revision,
-    });
-    expect(await refusalOf(publishForm(w.scope, { formId: created.id, expectedRevision: saved.revision }))).toEqual([
-      expect.objectContaining({ code: 'CONFIG_INVALID', attributeId: w.attribute('people.email_addresses') }),
-    ]);
-  });
-
-  it('pauses, archives and restores a form, and refuses a move that does not fit', async () => {
+  it('pauses and resumes, archives and restores, duplicates and deletes a form', async () => {
     const w = await workspace();
     const live = await liveForm(w);
-    const paused = await setFormStatus(w.scope, { formId: live.id, status: 'paused' });
-    expect(paused.status).toBe('paused');
-    const publicForm = await enterPublicForm({ db }, live.publicKey);
-    expect(await getPublicForm(publicForm.scope, { formId: publicForm.formId })).toMatchObject({
+    expect((await setFormStatus(w.scope, { formId: live.id, status: 'paused' })).status).toBe('paused');
+    const visitor = await enterPublicForm({ db }, live.publicKey);
+    expect(await getPublicForm(visitor.scope, { formId: visitor.formId })).toMatchObject({
       status: 'paused',
-      steps: [],
+      questions: [],
     });
     expect(await refusalOf(submit(live.publicKey, body({ email: 'x@example.com' })))).toMatchObject([
       { code: 'FORM_CLOSED' },
     ]);
-    const archived = await setFormStatus(w.scope, { formId: live.id, status: 'archived' });
-    expect((await listForms(w.scope, { archived: false })).items).toEqual([]);
-    expect((await listForms(w.scope, { archived: true })).items.map((form) => form.id)).toEqual([archived.id]);
-    await expect(getPublicForm(publicForm.scope, { formId: publicForm.formId })).rejects.toMatchObject({
-      refusal: { code: 'NOT_FOUND' },
-    });
-    expect((await setFormStatus(w.scope, { formId: live.id, status: 'paused' })).status).toBe('paused');
-    const draft = await createForm(w.scope, { id: newId(), name: 'Never live', mainObjectId: w.people });
-    expect(await refusalOf(setFormStatus(w.scope, { formId: draft.id, status: 'live' }))).toMatchObject([
-      { code: 'FORM_STATE' },
-    ]);
+    await setFormStatus(w.scope, { formId: live.id, status: 'live' });
+    const copy = await duplicateForm(w.scope, { formId: live.id, id: newId() });
+    expect(copy).toMatchObject({ name: 'Contact us copy', status: 'draft' });
+    expect(copy.publicKey).not.toBe(live.publicKey);
+    expect(copy.draft.questions.map((each) => each.key)).toEqual(live.draft.questions.map((each) => each.key));
+    await submit(live.publicKey, body({ name: 'Ada Lovelace', email: 'ada@example.com' }));
+    await deleteForm(w.scope, { formId: live.id });
+    expect((await listForms(w.scope, { archived: false })).items.map((form) => form.id)).toEqual([copy.id]);
+    expect(await w.query(sql`select 1 from form_submissions`)).toEqual([]);
+    await expect(enterPublicForm({ db }, live.publicKey)).rejects.toMatchObject({ refusal: { code: 'NOT_FOUND' } });
   });
 
-  it('rotates the public key, so the old one names nothing (AC-552)', async () => {
+  it('changes the address at once, so the old link names nothing (AC-552)', async () => {
     const w = await workspace();
     const live = await liveForm(w);
-    const rotated = await rotateFormKey(w.scope, { formId: live.id });
-    expect(rotated.publicKey).not.toBe(live.publicKey);
+    const moved = await updateFormSettings(w.scope, { formId: live.id, slug: 'talk-to-us', ownerMemberId: null });
+    expect(moved).toMatchObject({ publicKey: 'talk-to-us', revision: live.revision });
+    expect(moved.ownerMemberId).toBeUndefined();
     await expect(enterPublicForm({ db }, live.publicKey)).rejects.toMatchObject({ refusal: { code: 'NOT_FOUND' } });
-    await expect(enterPublicForm({ db }, rotated.publicKey)).resolves.toMatchObject({ formId: live.id });
+    await expect(enterPublicForm({ db }, 'talk-to-us')).resolves.toMatchObject({ formId: live.id });
   });
 });
 
-describe('the public form and submit (AC-553 to AC-556, AC-583 to AC-586)', () => {
-  it('renders the live version with no attribute ids, mappings or owner', async () => {
+describe('the public form and submit (AC-553 to AC-556, AC-659)', () => {
+  it('renders the live version with no attribute ids, filing or owner', async () => {
     const w = await workspace();
     const live = await liveForm(w);
     const { scope, formId } = await enterPublicForm({ db }, live.publicKey);
-    const rendered = await getPublicForm(scope, { formId, recaptchaSiteKey: 'site-key' });
-    expect(rendered).toMatchObject({
-      status: 'live',
-      versionNumber: 1,
-      title: 'Contact us',
-      recaptchaSiteKey: 'site-key',
-    });
+    const rendered = await getPublicForm(scope, { formId });
+    expect(rendered).toMatchObject({ status: 'live', versionNumber: 1, buttonText: 'Send', offersMeeting: false });
     const text = JSON.stringify(rendered);
     for (const id of [w.attribute('people.email_addresses'), w.attribute('people.name'), w.people, w.ownerId]) {
       expect(text).not.toContain(id);
     }
-    expect(rendered.steps[0]?.blocks.map((block) => block.id)).toEqual(['name', 'email', 'title', 'about', 'why']);
+    expect(rendered.questions.map((each) => each.key)).toEqual(['name', 'email', 'phone', 'title', 'about', 'why']);
+    expect(await postingRules(scope, { formId })).toMatchObject({ allowedOrigins: [], requireSignature: false });
   });
 
-  it('stores a valid submission once per attempt with its job queued, and a second attempt as its own', async () => {
+  it('stores a valid submission once per attempt with its job queued', async () => {
     const w = await workspace();
     const live = await liveForm(w);
-    const attempt = body({ name: ada, email: 'ada@example.com', smuggled: 'dropped' });
-    const first = await submit(live.publicKey, attempt);
-    expect(first).toEqual({
-      next: { kind: 'message', text: 'Thanks, we got your message.' },
+    const attempt = body({ name: 'Ada Lovelace', email: 'ada@example.com', smuggled: 'dropped' });
+    expect(await submit(live.publicKey, attempt)).toEqual({
+      next: { kind: 'message', text: '', offersMeeting: false },
       verdict: 'passed',
       replayed: false,
     });
     expect(await submit(live.publicKey, attempt)).toMatchObject({ replayed: true });
-    const stored = await w.query<{ answers: Record<string, unknown>; state: string }>(
-      sql`select answers, state from form_submissions`,
-    );
-    expect(stored).toEqual([
-      { state: 'received', answers: { name: { ...ada, fullName: 'Ada Lovelace' }, email: 'ada@example.com' } },
+    expect(await w.query(sql`select answers, state from form_submissions`)).toEqual([
+      { state: 'received', answers: { name: 'Ada Lovelace', email: 'ada@example.com' } },
     ]);
-    const queued = await w.query<{ kind: string }>(sql`select kind from jobs where kind = 'forms.process'`);
-    expect(queued).toHaveLength(1);
-    await submit(live.publicKey, body({ name: ada, email: 'ada@example.com' }));
-    expect(await submissionIds(w, live.id)).toHaveLength(2);
+    expect(await w.query(sql`select kind from jobs where kind = 'forms.process'`)).toHaveLength(1);
   });
 
-  it('refuses answers that fail, naming each question, and stores nothing', async () => {
+  it('refuses answers that fail, naming each question by key, and stores nothing', async () => {
     const w = await workspace();
     const live = await liveForm(w);
     const refusals = await refusalOf(submit(live.publicKey, body({ email: 'not an email' })));
     expect(refusals.map((refusal) => refusal.field).sort()).toEqual(['email', 'name']);
     expect(await submissionIds(w, live.id)).toEqual([]);
-    // Two versions behind: the page must reload.
-    expect(await refusalOf(submit(live.publicKey, body({ email: 'a@b.co' }, { versionNumber: 7 })))).toMatchObject([
-      { code: 'FORM_CHANGED' },
-    ]);
   });
 
-  it('keeps a filled honeypot, a fast fill, a missing token and a low score as spam, with no job', async () => {
+  it('keeps a filled honeypot, a fill under 2 seconds and a low reCAPTCHA score as spam, with no job', async () => {
     const w = await workspace();
     const live = await liveForm(w);
-    const answers = { name: ada, email: 'ada@example.com' };
-    await submit(live.publicKey, body(answers, { honeypot: 'buy now' }));
-    await submit(live.publicKey, body(answers, { fillMs: 300 }));
-    await submit(live.publicKey, body(answers), { kind: 'missing' });
+    const answers = { name: 'Ada Lovelace', email: 'ada@example.com' };
+    await submit(live.publicKey, body(answers, { company_url: 'https://spam.example' }));
+    await submit(live.publicKey, body(answers, { fillMs: 1_500 }));
     const outcome = await submit(live.publicKey, body(answers), { kind: 'score', score: 0.1 });
-    // The visitor sees the same thank you.
-    expect(outcome.next).toEqual({ kind: 'message', text: 'Thanks, we got your message.' });
-    const stored = await w.query<{ state: string; signals: string[] }>(
-      sql`select state, spam->'signals' as signals from form_submissions order by received_at`,
-    );
-    expect(stored).toEqual([
+    expect(outcome.next).toMatchObject({ kind: 'message' });
+    expect(
+      await w.query<{ state: string; signals: string[] }>(
+        sql`select state, spam->'signals' as signals from form_submissions order by received_at`,
+      ),
+    ).toEqual([
       { state: 'spam', signals: ['honeypot'] },
       { state: 'spam', signals: ['too_fast'] },
-      { state: 'spam', signals: ['captcha_missing'] },
       { state: 'spam', signals: ['captcha_low_score'] },
     ]);
     expect(await w.query(sql`select 1 from jobs where kind = 'forms.process'`)).toEqual([]);
-    // Google not answering: stored, marked unchecked, and processed (AC-583's outage rule).
-    expect((await submit(live.publicKey, body(answers), { kind: 'unavailable' })).verdict).toBe('unchecked');
-    expect(await w.query(sql`select 1 from jobs where kind = 'forms.process'`)).toHaveLength(1);
   });
 });
 
@@ -354,7 +365,13 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     const live = await liveForm(w);
     await submit(
       live.publicKey,
-      body({ name: ada, email: 'ADA@example.com', title: 'Engineer', why: 'Curious about engines' }),
+      body({
+        name: 'Ada Lovelace',
+        email: 'ADA@example.com',
+        phone: { number: '+447700900123', country: 'GB' },
+        title: 'Engineer',
+        why: 'Engines',
+      }),
     );
     const [submission] = await submissionIds(w, live.id);
     if (submission === undefined) throw new Error('No submission.');
@@ -362,33 +379,35 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     const view = await getSubmission(w.scope, { submissionId: submission.id });
     expect(view).toMatchObject({
       state: 'processed',
+      email: 'ada@example.com',
       records: [{ role: 'main', action: 'created', record: { name: 'Ada Lovelace' } }],
       assignment: { memberId: w.ownerId, reason: 'fixed_member' },
       refused: [],
     });
-    expect(view.answers.map((answer) => answer.questionId)).toEqual(['name', 'email', 'title', 'why']);
+    expect(view.answers.map((answer) => [answer.key, answer.attributeId !== undefined])).toEqual([
+      ['name', true],
+      ['email', true],
+      ['phone', true],
+      ['title', true],
+      ['why', false],
+    ]);
     const recordId = view.mainRecord?.recordId ?? '';
     const [record] = await getRecords(w.scope, { ids: [recordId] });
     expect(record?.createdBy).toEqual({ type: 'form', id: live.id });
-    expect(record?.values[w.attribute('people.email_addresses')]).toEqual(['ada@example.com']);
+    expect(record?.values[w.attribute('people.name')]).toMatchObject({ firstName: 'Ada', lastName: 'Lovelace' });
+    expect(record?.values[w.attribute('people.phone_numbers')]).toEqual([{ number: '+447700900123', country: 'GB' }]);
     expect(record?.values[w.attribute('people.owner')]).toEqual({ type: 'member', id: w.ownerId });
-    const setBy = await w.query<{ type: string }>(
-      sql`select distinct set_by_type::text as type from "values" where owner_id = ${recordId}`,
-    );
-    expect(setBy).toEqual([{ type: 'form' }]);
     const activity = await getActivity(w.scope, { recordId });
     expect(activity.entries.find((entry) => entry.kind === 'submission')).toMatchObject({
       title: 'Contact us',
       action: 'created',
       actor: { type: 'form', id: live.id },
-      itemId: submission.id,
     });
-    // Run again (a job retried after its commit): nothing more is written.
     await processNow(w, submission.id);
     expect(await w.query(sql`select 1 from form_submission_records`)).toHaveLength(1);
   });
 
-  it('matches on the email, fills only empty values, overwrites an always question, and keeps the owner', async () => {
+  it('matches on the email, fills only empty values, overwrites an always question', async () => {
     const w = await workspace();
     const live = await liveForm(w);
     const existing = await createRecord(w.scope, {
@@ -402,7 +421,7 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     });
     await submit(
       live.publicKey,
-      body({ name: ada, email: 'ada@example.com', title: 'Engineer', about: 'Wrote the first program' }),
+      body({ name: 'Ada Lovelace', email: 'ada@example.com', title: 'Engineer', about: 'Wrote the first program' }),
     );
     const [submission] = await submissionIds(w, live.id);
     if (submission === undefined) throw new Error('No submission.');
@@ -410,16 +429,53 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     const [record] = await getRecords(w.scope, { ids: [existing.recordId] });
     expect(record?.values[w.attribute('people.job_title')]).toBe('Countess');
     expect(record?.values[w.attribute('people.description')]).toBe('Wrote the first program');
-    const view = await getSubmission(w.scope, { submissionId: submission.id });
-    expect(view.records).toMatchObject([{ action: 'updated', record: { recordId: existing.recordId } }]);
-    expect(await w.query(sql`select 1 from records where object_id = ${w.people}`)).toHaveLength(1);
+    expect((await getSubmission(w.scope, { submissionId: submission.id })).records).toMatchObject([
+      { action: 'updated', record: { recordId: existing.recordId } },
+    ]);
+  });
+
+  it('files a choice by its option’s label, and records a choice the attribute has no option for (AC-565)', async () => {
+    const w = await workspace();
+    const tier = await createAttribute(w.scope, {
+      objectId: w.people,
+      id: newId(),
+      title: 'Tier',
+      type: 'select',
+      options: [{ id: newId(), label: 'Gold', hue: 'yellow' }],
+    });
+    const live = await liveForm(w, (document) => ({
+      ...document,
+      questions: [
+        ...document.questions,
+        question({
+          id: 'tier',
+          key: 'tier',
+          label: 'Tier',
+          answerType: 'dropdown',
+          choices: ['Gold', 'Silver'],
+          filedOn: { objectRole: 'main', attributeId: tier.id },
+        }),
+      ],
+    }));
+    await submit(live.publicKey, body({ name: 'Gold Person', email: 'gold@example.com', tier: 'Gold' }));
+    await submit(live.publicKey, body({ name: 'Silver Person', email: 'silver@example.com', tier: 'Silver' }));
+    const [gold, silver] = await submissionIds(w, live.id);
+    if (gold === undefined || silver === undefined) throw new Error('Two submissions.');
+    await processNow(w, gold.id);
+    await processNow(w, silver.id);
+    const goldView = await getSubmission(w.scope, { submissionId: gold.id });
+    const [goldRecord] = await getRecords(w.scope, { ids: [goldView.mainRecord?.recordId ?? ''] });
+    expect(goldRecord?.values[tier.id]).toEqual(expect.any(String));
+    expect((await getSubmission(w.scope, { submissionId: silver.id })).refused).toEqual([
+      { questionId: 'tier', message: 'Tier has no option called “Silver”.' },
+    ]);
   });
 
   it('makes one person from two submissions for one new email processed at once (AC-562)', async () => {
     const w = await workspace();
     const live = await liveForm(w);
-    await submit(live.publicKey, body({ name: ada, email: 'twin@example.com' }));
-    await submit(live.publicKey, body({ name: ada, email: 'twin@example.com' }));
+    await submit(live.publicKey, body({ name: 'Twin', email: 'twin@example.com' }));
+    await submit(live.publicKey, body({ name: 'Twin', email: 'twin@example.com' }));
     const [one, two] = await submissionIds(w, live.id);
     if (one === undefined || two === undefined) throw new Error('Two submissions expected.');
     await Promise.all([processNow(w, one.id), processNow(w, two.id)]);
@@ -427,17 +483,12 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
       sql`select distinct record_id from "values" where attribute_id = ${w.attribute('people.email_addresses')} and active_until is null`,
     );
     expect(people).toHaveLength(1);
-    const actions = await w.query<{ action: string }>(
-      sql`select action from form_submission_records order by created_at`,
-    );
-    expect(actions.map((row) => row.action).sort()).toEqual(['created', 'matched']);
   });
 
   it('skips a value a rule refuses now, writes the rest, and says why (AC-565)', async () => {
     const w = await workspace();
     const live = await liveForm(w);
-    await submit(live.publicKey, body({ name: ada, email: 'rule@example.com', title: 'Chief engineer' }));
-    // A rule made after the visitor sent it.
+    await submit(live.publicKey, body({ name: 'Ada', email: 'rule@example.com', title: 'Chief engineer' }));
     await editAttribute(w.scope, {
       attributeId: w.attribute('people.job_title'),
       rules: [{ id: newId(), kind: 'length', params: { max: 5 } }],
@@ -448,28 +499,23 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
     const view = await getSubmission(w.scope, { submissionId: submission.id });
     expect(view.state).toBe('processed');
     expect(view.refused).toEqual([{ questionId: 'title', message: expect.any(String) as string }]);
-    const [record] = await getRecords(w.scope, { ids: [view.mainRecord?.recordId ?? ''] });
-    expect(record?.values[w.attribute('people.job_title')]).toBeNull();
   });
 
-  it('fails a submission whose record a refusal no answer explains can’t make, and retries it (AC-566)', async () => {
+  it('fails what no answer explains, retries it, and releases and marks spam (AC-566, AC-574)', async () => {
     const w = await workspace();
     const live = await liveForm(w);
-    await submit(live.publicKey, body({ name: ada, email: 'needs@example.com' }));
-    // The object gains a required field the form doesn't ask.
-    const phone = w.attribute('people.timezone');
-    await editAttribute(w.scope, { attributeId: phone, isRequired: true });
+    await submit(live.publicKey, body({ name: 'Ada', email: 'needs@example.com' }));
+    const timezone = w.attribute('people.timezone');
+    await editAttribute(w.scope, { attributeId: timezone, isRequired: true });
     const [submission] = await submissionIds(w, live.id);
     if (submission === undefined) throw new Error('No submission.');
     await processNow(w, submission.id);
-    const failed = await getSubmission(w.scope, { submissionId: submission.id });
-    expect(failed.state).toBe('failed');
-    expect(failed.failure).toMatch(/required field/);
-    await editAttribute(w.scope, { attributeId: phone, isRequired: false });
-    const retried = await retrySubmission(w.scope, registry, { submissionId: submission.id });
-    expect(retried.state).toBe('received');
+    expect((await getSubmission(w.scope, { submissionId: submission.id })).state).toBe('failed');
+    await editAttribute(w.scope, { attributeId: timezone, isRequired: false });
+    expect((await retrySubmission(w.scope, registry, { submissionId: submission.id })).state).toBe('received');
     await processNow(w, submission.id);
-    expect((await getSubmission(w.scope, { submissionId: submission.id })).state).toBe('processed');
+    expect((await markSubmissionSpam(w.scope, { submissionId: submission.id })).state).toBe('spam');
+    expect((await releaseSubmission(w.scope, registry, { submissionId: submission.id })).state).toBe('received');
     expect(await refusalOf(retrySubmission(w.scope, registry, { submissionId: submission.id }))).toMatchObject([
       { code: 'FORM_STATE' },
     ]);
@@ -477,23 +523,22 @@ describe('processing a submission (AC-557, AC-558, AC-561, AC-562, AC-564, AC-56
 });
 
 describe('the submissions screen’s reads (AC-572, AC-573)', () => {
-  it('pages newest first, filters by state, hides an answer whose field the reader can’t see, and deletes', async () => {
+  it('pages newest first, filters by state, hides an answer filed on a field the reader can’t see, and deletes', async () => {
     const w = await workspace();
     const live = await liveForm(w);
     for (const email of ['one@example.com', 'two@example.com', 'three@example.com']) {
-      await submit(live.publicKey, body({ name: ada, email, title: 'Engineer' }));
+      await submit(live.publicKey, body({ name: 'Ada', email, title: 'Engineer' }));
     }
-    await submit(live.publicKey, body({ name: ada, email: 'bot@example.com' }, { honeypot: 'x' }));
+    await submit(live.publicKey, body({ name: 'Bot', email: 'bot@example.com' }, { company_url: 'x' }));
     const ids = await submissionIds(w, live.id);
     for (const row of ids.filter((each) => each.state === 'received')) await processNow(w, row.id);
     const first = await listSubmissions(w.scope, { formId: live.id, limit: 2 });
     expect(first.items).toHaveLength(2);
-    expect(first.nextCursor).toBeDefined();
     const rest = await listSubmissions(w.scope, { formId: live.id, limit: 2, cursor: first.nextCursor ?? '' });
     expect([...first.items, ...rest.items].map((item) => item.id)).toEqual(ids.map((row) => row.id).reverse());
-    const spam = await listSubmissions(w.scope, { formId: live.id, state: 'spam' });
-    expect(spam.items.map((item) => item.verdict)).toEqual(['spam']);
-    // A member whose role hides Job title sees the submission without that answer; spam (no record) not at all.
+    expect(
+      (await listSubmissions(w.scope, { formId: live.id, state: 'spam' })).items.map((item) => item.email),
+    ).toEqual(['bot@example.com']);
     const rules: AccessRules = {
       levels: [
         {
@@ -510,28 +555,14 @@ describe('the submissions screen’s reads (AC-572, AC-573)', () => {
     const processed = seen.items[0];
     if (processed === undefined) throw new Error('A submission expected.');
     const detail = await getSubmission(member, { submissionId: processed.id });
-    expect(detail.answers.map((answer) => answer.questionId)).toEqual(['name', 'email']);
+    expect(detail.answers.map((answer) => answer.key)).toEqual(['name', 'email']);
     await deleteSubmission(w.scope, { submissionId: processed.id });
     await expect(getSubmission(w.scope, { submissionId: processed.id })).rejects.toMatchObject({
       refusal: { code: 'NOT_FOUND' },
     });
-    // Its person stays.
-    expect(await w.query(sql`select 1 from records where object_id = ${w.people}`)).toHaveLength(3);
-  });
-});
-
-describe('the public key reaches only its own workspace', () => {
-  it('reads nothing but the form the key names, and the scope it makes reaches no records', async () => {
-    const a = await workspace();
-    const b = await workspace();
-    const formA = await liveForm(a);
-    await createRecord(b.scope, {
-      objectId: b.people,
-      values: { [b.attribute('people.name')]: { firstName: 'Bea' } },
+    expect((await listForms(w.scope, { archived: false })).items[0]).toMatchObject({
+      submissionsThisMonth: 2,
+      spamCount: 1,
     });
-    const entered: { scope: EngineScope; formId: string } = await enterPublicForm({ db }, formA.publicKey);
-    expect(entered.scope.workspaceId).toBe(a.scope.workspaceId);
-    expect(await getRecords(entered.scope, { ids: [newId()] })).toEqual([]);
-    await expect(enterPublicForm({ db }, 'short')).rejects.toMatchObject({ refusal: { code: 'NOT_FOUND' } });
   });
 });

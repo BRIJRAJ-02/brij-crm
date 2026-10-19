@@ -16,6 +16,7 @@ import { isUuid } from '../engine/ids.ts';
 import { refuse, type RefusalError } from '../engine/refusals.ts';
 import { SYSTEM_ACTOR, type Actor } from '../engine/scope.ts';
 import { sql } from 'drizzle-orm';
+import { FORM_SLUG } from '@crm/contracts';
 import { mintScope, rescope, type EngineScope } from './mint.ts';
 import { formAccess, isRole, NO_RULES, roleAccess, SYSTEM_ACCESS, type Access, type AccessRules } from './policy.ts';
 
@@ -187,8 +188,8 @@ function noForm(): RefusalError {
   return refuse('NOT_FOUND', 'That form does not exist.');
 }
 
-/** A public key's shape (spec 0023, AC-552): anything else names no form and never reaches the database. */
-const PUBLIC_KEY = /^[A-Za-z0-9_-]{16,64}$/;
+/** A form address's shape (spec 0023, AC-552): anything else names no form and never reaches the database. */
+const PUBLIC_KEY = FORM_SLUG;
 
 /**
  * The scope a public form endpoint acts in (spec 0023): the workspace and
