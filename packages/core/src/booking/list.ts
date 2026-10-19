@@ -130,8 +130,9 @@ const iso = (value: Date | string) => new Date(value).toISOString();
  * Bookings' week (the calendar view): every booking the reader may see that
  * overlaps [from, to), cancelled ones too, and the reader's own calendar
  * events in it from their connected calendars (spec 0024's meetings held by
- * one of their connections), leaving out the ones a booking made, so a
- * booking never shows twice. Only the reader's own events: another member's
+ * one of their connections), leaving out the ones a booking made (marked
+ * so, or the booking's own event synced back: same host, start and end, and
+ * its video link or its visitor), so a booking never shows twice. Only the reader's own events: another member's
  * calendar never shows here, private or not.
  */
 export async function readBookingsCalendar(
@@ -164,6 +165,20 @@ export async function readBookingsCalendar(
               where c.member_id = ${member}::uuid
                 and m.starts_at < ${to.toISOString()}::timestamptz and m.ends_at > ${from.toISOString()}::timestamptz
                 and m.booking_id is null and not m.created_by_crm and m.status <> 'cancelled'
+                -- A booking's own event, synced back from the calendar it was written to: the same host, start and
+                -- end, and the booking's video link or its visitor among the attendees. The booking shows instead.
+                and not exists (
+                  select 1 from bookings b
+                  where b.workspace_id = m.workspace_id and b.host_member_id = c.member_id
+                    and b.status = 'confirmed' and b.starts_at = m.starts_at and b.ends_at = m.ends_at
+                    and (
+                      (b.video_url is not null and b.video_url = m.video_url)
+                      or exists (
+                        select 1 from meeting_attendees a
+                        where a.workspace_id = m.workspace_id and a.meeting_id = m.id and a.email = b.visitor_email
+                      )
+                    )
+                )
               order by m.id, c.created_at
               limit ${CALENDAR_EVENTS_MAX}
             `)

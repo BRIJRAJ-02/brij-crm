@@ -2,7 +2,8 @@
    axis column then seven day columns. An hour is --size-toolbar tall; a
    block's place comes from its minutes (--start, --length) and its lane
    (--lane of --lanes). Bookings are accent, the member's own calendar events
-   quieter in their calendar's hue, cancelled ones struck through. Below
+   quieter in their calendar's hue, cancelled ones struck through; today's
+   column is tinted and its date solid accent. Below
    480px of its container only the selected day's column shows. */
 @layer components {
   .root {
@@ -61,8 +62,9 @@
     background: var(--surface-selected);
   }
 
-  .dayButton[data-today] .dayNumber {
-    color: var(--accent);
+  .dayButton[data-today] {
+    background: var(--accent);
+    color: var(--on-accent);
   }
 
   .dayButton:focus-visible {
@@ -73,6 +75,10 @@
     color: var(--text-secondary);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
+  }
+
+  .dayButton[data-today] .weekday {
+    color: var(--on-accent);
   }
 
   .scroller {
@@ -110,8 +116,8 @@
     );
   }
 
-  .column[data-past] {
-    background-color: var(--surface-subtle);
+  .column[data-today] {
+    background-color: var(--surface-column);
   }
 
   .column:focus-visible {
@@ -226,7 +232,16 @@
     white-space: nowrap;
   }
 
-  .block[data-size='compact'] .blockTime,
+  .block[data-size='compact'] {
+    flex-direction: row;
+    gap: var(--space-4);
+  }
+
+  .block[data-size='compact'] .blockTitle {
+    flex: none;
+    max-inline-size: 60%;
+  }
+
   .block[data-size='compact'] .blockDetail,
   .block[data-size='short'] .blockDetail {
     display: none;

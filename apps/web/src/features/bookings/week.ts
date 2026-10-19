@@ -96,17 +96,26 @@ export function timeRange(startsAt: string, endsAt: string, locale: string): str
   return `${clock.format(new Date(startsAt))} – ${clock.format(new Date(endsAt))}`;
 }
 
-/** The minute the week opens centred on: now when today is in it, else the middle of what it holds, else 13:00. */
+/** The working day the grid opens on: 8 AM to 8 PM. */
+const DAY_START = 8 * 60;
+const DAY_END = 20 * 60;
+
+/**
+ * The minute the week opens with at its top: this week, an hour before now
+ * within the working day (8 AM to 8 PM), else 8 AM; another week, an hour
+ * before its first booking or event when that is earlier than 8 AM, else 8 AM.
+ */
 export function scrollMinute(
   days: readonly string[],
   now: Date,
   pieces: readonly Pick<DayPiece, 'startMinute' | 'endMinute'>[],
 ): number {
-  if (days.includes(dayKeyOf(now))) return now.getHours() * 60 + now.getMinutes();
-  if (pieces.length === 0) return 13 * 60;
-  const first = Math.min(...pieces.map((piece) => piece.startMinute));
-  const last = Math.max(...pieces.map((piece) => piece.endMinute));
-  return Math.round((first + last) / 2);
+  if (days.includes(dayKeyOf(now))) {
+    const minute = now.getHours() * 60 + now.getMinutes();
+    return minute >= DAY_START && minute < DAY_END ? Math.max(0, minute - 60) : DAY_START;
+  }
+  const first = pieces.length === 0 ? DAY_START : Math.min(...pieces.map((piece) => piece.startMinute));
+  return first < DAY_START ? Math.max(0, first - 60) : DAY_START;
 }
 
 /** The bookings of the week a list shows, by day piece, for the grid (cancelled ones too). */

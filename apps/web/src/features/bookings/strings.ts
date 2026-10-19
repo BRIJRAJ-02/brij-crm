@@ -1,8 +1,9 @@
 /** The Bookings page's copy. */
 export const strings = {
   title: 'Bookings',
-  viewLabel: 'View',
-  views: { week: 'Calendar', list: 'List' },
+  /** The page's tab strip, as Captures has: its name, read by screen readers, and each tab. */
+  pageTabsLabel: 'Bookings',
+  pageTabs: { calendar: 'Calendar', list: 'List', availability: 'Availability' },
   tabsLabel: 'Which bookings',
   tabs: { upcoming: 'Upcoming', past: 'Past', cancelled: 'Canceled' },
   listLabel: { upcoming: 'Upcoming bookings', past: 'Past bookings', cancelled: 'Canceled bookings' },

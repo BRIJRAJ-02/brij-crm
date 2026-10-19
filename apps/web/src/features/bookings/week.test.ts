@@ -50,13 +50,16 @@ describe('the week', () => {
     expect(piecesOf('c', local('2026-10-30', 9), local('2026-10-30', 10), days)).toEqual([]);
   });
 
-  it('opens on now this week, else the middle of what the week holds', () => {
+  it('opens an hour before now in the working day, else at 8 AM, or before an early first booking', () => {
     const days = weekDays('2026-10-19');
     const now = new Date(2026, 9, 21, 15, 20);
     expect(dayKeyOf(now)).toBe('2026-10-21');
-    expect(scrollMinute(days, now, [])).toBe(920);
+    expect(scrollMinute(days, now, [])).toBe(860);
+    expect(scrollMinute(days, new Date(2026, 9, 21, 23, 40), [])).toBe(480);
+    expect(scrollMinute(days, new Date(2026, 9, 21, 6, 0), [])).toBe(480);
     const later = new Date(2026, 10, 2, 9);
-    expect(scrollMinute(days, later, [{ startMinute: 540, endMinute: 660 }])).toBe(600);
-    expect(scrollMinute(days, later, [])).toBe(780);
+    expect(scrollMinute(days, later, [{ startMinute: 540, endMinute: 660 }])).toBe(480);
+    expect(scrollMinute(days, later, [{ startMinute: 420, endMinute: 450 }])).toBe(360);
+    expect(scrollMinute(days, later, [])).toBe(480);
   });
 });

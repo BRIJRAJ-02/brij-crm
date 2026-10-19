@@ -1,5 +1,5 @@
 // Brief
-// Purpose: Bookings (spec 0025, AC-646), on the reference product's bookings page: a week calendar (bookings and the member's own calendar events) and a list (Upcoming, Past, Canceled) with sort and pages.
+// Purpose: Bookings › Calendar and Bookings › List (spec 0025, AC-646), on the reference product's bookings page: a week calendar (bookings and the member's own calendar events) and a list (Upcoming, Past, Canceled) with sort and pages.
 // Main task: see the week at a glance, open a booking or an event for its details, or page through the list.
 // Leaves out: changing a booking from here (the actions arrive next), the new meeting dialog, team views and filing, and live arrival (it reads again when the page is shown again).
 import type {
@@ -32,20 +32,19 @@ import {
   SectionBar,
   SegmentedControl,
   Skeleton,
-  TabPanel,
-  Tabs,
-  TopBar,
   WeekCalendar,
   type BookingListGroup,
   type Hue,
   type WeekCalendarBlock,
 } from '@crm/ui';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { availabilityHref } from '../booking/links.ts';
 import { linksHref } from '../captures/tabs.ts';
 import { recordLinks, type RecordLink } from '../records/timeline.ts';
-import { WorkspacePage } from '../workspace/WorkspacePage.tsx';
+import { PAGE_SIZES, type BookingsSearch } from './search.ts';
 import { strings } from './strings.ts';
+import { useBookingsToolbarSlot } from './toolbarSlot.ts';
 import {
   addDays,
   bookingPieces,
@@ -59,43 +58,10 @@ import {
 } from './week.ts';
 
 export type { BookingsTab };
+export type { BookingsSearch };
 
 /** The list's tabs, in order. */
 export const TABS: readonly BookingsTab[] = ['upcoming', 'past', 'cancelled'];
-
-/** Rows per page the list offers. */
-export const PAGE_SIZES = [10, 25, 50, 100] as const;
-
-/** What the address holds: the view, the week and day, the tab, the page, the sort and the filters. */
-export interface BookingsSearch {
-  readonly view: 'week' | 'list';
-  /** The Monday of the week shown (`yyyy-MM-dd`). */
-  readonly week: string;
-  /** The day selected (a narrow screen shows it alone). */
-  readonly day: string;
-  readonly tab: BookingsTab;
-  readonly page: number;
-  readonly per: number;
-  /** `asc` soonest first; `desc` latest first. Upcoming defaults to asc, Past to desc. */
-  readonly sort?: 'asc' | 'desc';
-  /** One booking page's bookings only. */
-  readonly link?: string;
-  /** The connections whose events show; absent is all of them. */
-  readonly conn?: readonly string[];
-}
-
-/** Props for Bookings: the held reads, the address, and what the filters offer. */
-export interface BookingsScreenProps {
-  readonly slug: string;
-  readonly search: BookingsSearch;
-  readonly lists: Readonly<Record<BookingsTab, BookingsView>>;
-  readonly week: BookingsCalendarHeld;
-  readonly objects: readonly ObjectSummary[];
-  readonly pages: readonly BookingPageView[];
-  readonly connections: readonly CalendarConnectionView[];
-  readonly locale: string;
-  readonly onSearch: (next: Partial<BookingsSearch>) => void;
-}
 
 /** Each connection's hue, in the order they were connected. */
 const CALENDAR_HUES: readonly Hue[] = ['blue', 'green', 'purple', 'orange', 'sky', 'yellow', 'red', 'lime'];
@@ -301,25 +267,10 @@ function EventCard({
   );
 }
 
-/** Calendar | List. */
-function ViewSwitch({
-  view,
-  onSearch,
-}: {
-  readonly view: 'week' | 'list';
-  readonly onSearch: (next: Partial<BookingsSearch>) => void;
-}) {
-  return (
-    <SegmentedControl
-      label={strings.viewLabel}
-      value={view}
-      onChange={(value) => onSearch({ view: value === 'list' ? 'list' : 'week' })}
-      segments={[
-        { value: 'week', label: strings.views.week, icon: 'calendar-days' },
-        { value: 'list', label: strings.views.list, icon: 'list' },
-      ]}
-    />
-  );
+/** A tab's tools: at the end of the Bookings strip once the layout has drawn it, else at the top of the tab. */
+function Toolbar({ children }: { readonly children: ReactNode }) {
+  const slot = useBookingsToolbarSlot();
+  return slot === null ? <>{children}</> : createPortal(children, slot);
 }
 
 /** The minute now, kept up to date while the week shows: on the minute, and when the tab is shown again. */
@@ -344,11 +295,31 @@ function useNow(): Date {
   return now;
 }
 
-/** The week view: Today, previous and next, the range, Filter, then the grid and the week's count. */
-function WeekView(
-  props: BookingsScreenProps & { readonly personHref: (booking: BookingListItem) => string | undefined },
-) {
-  const { search, week, pages, connections, locale, onSearch, personHref } = props;
+/** Props for the calendar: its held week, the address, and what Filter offers. */
+export interface BookingsCalendarScreenProps {
+  readonly slug: string;
+  readonly search: BookingsSearch;
+  readonly week: BookingsCalendarHeld;
+  readonly objects: readonly ObjectSummary[];
+  readonly pages: readonly BookingPageView[];
+  readonly connections: readonly CalendarConnectionView[];
+  readonly locale: string;
+  readonly onSearch: (next: Partial<BookingsSearch>) => void;
+}
+
+/** Bookings › Calendar: the range, previous week, Today, next week and Filter, then the grid and the week's count. */
+export function BookingsCalendarScreen(props: BookingsCalendarScreenProps) {
+  return (
+    <PageColumn width="full">
+      <WeekView {...props} />
+    </PageColumn>
+  );
+}
+
+/** The week view's toolbar, grid and count. */
+function WeekView(props: BookingsCalendarScreenProps) {
+  const { slug, objects, search, week, pages, connections, locale, onSearch } = props;
+  const personHref = usePersonHref(slug, objects);
   const state = useBookingsCalendar(week);
   const now = useNow();
   const [openId, setOpenId] = useState<string | undefined>(undefined);
@@ -362,7 +333,6 @@ function WeekView(
   );
   const toolbar = (
     <SectionBar
-      start={<ViewSwitch view="week" onSearch={onSearch} />}
       title={range}
       end={
         <>
@@ -394,7 +364,7 @@ function WeekView(
   if (state.status === 'loading') {
     return (
       <>
-        {toolbar}
+        <Toolbar>{toolbar}</Toolbar>
         <Skeleton shape="block" />
       </>
     );
@@ -402,7 +372,7 @@ function WeekView(
   if (state.status === 'error') {
     return (
       <>
-        {toolbar}
+        <Toolbar>{toolbar}</Toolbar>
         <EmptyState tone="error" title={strings.failedTitle} onRetry={() => week.reload()}>
           {state.message === '' ? strings.failedText : state.message}
         </EmptyState>
@@ -427,9 +397,9 @@ function WeekView(
           dayKey: piece.dayKey,
           startMinute: piece.startMinute,
           endMinute: piece.endMinute,
-          title: booking.visitorName,
+          title: booking.pageTitle,
           time: timeRange(booking.startsAt, booking.endsAt, locale),
-          detail: booking.pageTitle,
+          detail: booking.visitorName,
           kind: 'booking',
           isCancelled: booking.status === 'cancelled',
         },
@@ -458,7 +428,7 @@ function WeekView(
   const hourFormat = new Intl.DateTimeFormat(locale, { hour: 'numeric' });
   return (
     <>
-      {toolbar}
+      <Toolbar>{toolbar}</Toolbar>
       {search.conn !== undefined && search.conn.length === 0 && connections.length > 0 && (
         <Callout tone="info" title={strings.noCalendarsTitle}>
           {strings.noCalendarsText}
@@ -558,223 +528,185 @@ function groupsOf(
   return groups;
 }
 
-/** One tab's list: loading, failed, its own empty state, or a page of bookings under their day bands. */
-function ListTab({
-  slug,
-  tab,
-  view,
+/** The list's bar: Upcoming · Past · Canceled, then the sort (when there is something to sort) and Filter. */
+function ListBar({
   search,
-  locale,
-  personHref,
+  pages,
+  sort,
   onSearch,
-  onOpen,
 }: {
-  readonly slug: string;
-  readonly tab: BookingsTab;
-  readonly view: BookingsView;
   readonly search: BookingsSearch;
-  readonly locale: string;
-  readonly personHref: (booking: BookingListItem) => string | undefined;
+  readonly pages: readonly BookingPageView[];
+  readonly sort?: { readonly label: string; readonly next: 'asc' | 'desc' };
   readonly onSearch: (next: Partial<BookingsSearch>) => void;
-  readonly onOpen: (booking: BookingListItem) => void;
 }) {
-  const state = useBookings(view);
-  if (state.status === 'loading') return <Skeleton shape="block" />;
-  if (state.status === 'error') {
-    return (
-      <EmptyState tone="error" title={strings.failedTitle} onRetry={() => view.reload()}>
-        {state.message === '' ? strings.failedText : state.message}
-      </EmptyState>
-    );
-  }
-  // The server answers upcoming soonest first, past and canceled latest first; the toggle flips it.
-  const natural = tab === 'upcoming' ? 'asc' : 'desc';
-  const sort = tab === 'cancelled' ? 'desc' : (search.sort ?? natural);
-  const filtered = state.bookings.filter((booking) => search.link === undefined || booking.pageId === search.link);
-  const ordered = sort === natural ? filtered : [...filtered].reverse();
-  const pages = Math.max(1, Math.ceil(ordered.length / search.per));
-  const page = Math.min(search.page, pages);
-  const shown = ordered.slice((page - 1) * search.per, page * search.per);
-  const byId = new Map(shown.map((booking) => [booking.id, booking]));
-  const sortLabel =
-    tab === 'upcoming'
-      ? sort === 'asc'
-        ? strings.sortSoonest
-        : strings.sortLatest
-      : sort === 'desc'
-        ? strings.sortRecent
-        : strings.sortOldest;
   return (
-    <>
-      {tab !== 'cancelled' && ordered.length >= 2 && (
-        <Button
-          variant="ghost"
-          icon="chevrons-up-down"
-          onPress={() => onSearch({ sort: sort === 'asc' ? 'desc' : 'asc', page: 1 })}
-        >
-          {sortLabel}
-        </Button>
-      )}
-      <BookingList
-        label={strings.listLabel[tab]}
-        groups={groupsOf(shown, personHref, locale)}
-        onOpen={(id) => {
-          const booking = byId.get(id);
-          if (booking !== undefined) onOpen(booking);
-        }}
-        emptyState={
-          <EmptyState
-            icon="calendar-days"
-            title={strings.empty[tab].title}
-            {...(tab === 'upcoming'
-              ? {
-                  actions: (
-                    <>
-                      <Link href={linksHref(slug)}>{strings.openLinks}</Link>
-                      <Link href={availabilityHref(slug)}>{strings.openAvailability}</Link>
-                    </>
-                  ),
-                }
-              : {})}
-          >
-            {strings.empty[tab].text}
-          </EmptyState>
-        }
-      />
-      <Pagination
-        label={strings.listLabel[tab]}
-        page={page}
-        pageSize={search.per}
-        total={ordered.length}
-        pageSizes={PAGE_SIZES}
-        onPage={(next) => onSearch({ page: next })}
-        onPageSize={(per) => onSearch({ per, page: 1 })}
-      />
-    </>
+    <SectionBar
+      start={
+        <SegmentedControl
+          label={strings.tabsLabel}
+          value={search.tab}
+          onChange={(value) => {
+            const tab = TABS.find((each) => each === value);
+            if (tab !== undefined && tab !== search.tab) onSearch({ tab, page: 1, sort: undefined });
+          }}
+          segments={TABS.map((id) => ({ value: id, label: strings.tabs[id] }))}
+        />
+      }
+      end={
+        <>
+          {sort !== undefined && (
+            <Button variant="ghost" icon="chevrons-up-down" onPress={() => onSearch({ sort: sort.next, page: 1 })}>
+              {sort.label}
+            </Button>
+          )}
+          <FilterMenu search={search} pages={pages} connections={[]} onSearch={onSearch} />
+        </>
+      }
+    />
   );
 }
 
-/** The list view: the view switch, the tabs, Filter, then the tab's list. */
-function ListView(
-  props: BookingsScreenProps & { readonly personHref: (booking: BookingListItem) => string | undefined },
-) {
-  const { slug, search, lists, pages, locale, onSearch, personHref } = props;
-  const [open, setOpen] = useState<BookingListItem | undefined>(undefined);
-  return (
-    <>
-      <SectionBar
-        start={<ViewSwitch view="list" onSearch={onSearch} />}
-        end={<FilterMenu search={search} pages={pages} connections={[]} onSearch={onSearch} />}
-      />
-      <Tabs
-        label={strings.tabsLabel}
-        selectedKey={search.tab}
-        onSelectionChange={(next) => {
-          const tab = TABS.find((each) => each === next);
-          if (tab !== undefined && tab !== search.tab) onSearch({ tab, page: 1, sort: undefined });
-        }}
-        tabs={TABS.map((id) => ({ id, label: strings.tabs[id] }))}
-      >
-        {TABS.map((id) => (
-          <TabPanel key={id} id={id}>
-            {search.tab === id && (
-              <ListTab
-                slug={slug}
-                tab={id}
-                view={lists[id]}
-                search={search}
-                locale={locale}
-                personHref={personHref}
-                onSearch={onSearch}
-                onOpen={setOpen}
-              />
-            )}
-          </TabPanel>
-        ))}
-      </Tabs>
-      {open !== undefined && (
-        <DetailPanel booking={open} personHref={personHref(open)} locale={locale} onClose={() => setOpen(undefined)} />
-      )}
-    </>
-  );
-}
-
-/** A list row's details, in the page's side panel. */
-function DetailPanel({
-  booking,
-  personHref,
-  locale,
-  onClose,
-}: {
-  readonly booking: BookingListItem;
-  readonly personHref: string | undefined;
+/** Props for the list: its three held reads, the address, and what Filter offers. */
+export interface BookingsListScreenProps {
+  readonly slug: string;
+  readonly search: BookingsSearch;
+  readonly lists: Readonly<Record<BookingsTab, BookingsView>>;
+  readonly objects: readonly ObjectSummary[];
+  readonly pages: readonly BookingPageView[];
   readonly locale: string;
-  readonly onClose: () => void;
-}) {
+  readonly onSearch: (next: Partial<BookingsSearch>) => void;
+}
+
+/**
+ * Bookings › List: Upcoming, Past or Canceled, each with its own empty state,
+ * a page of bookings under day bands, the sort and the pages; a row opens its
+ * card in a Panel.
+ */
+export function BookingsListScreen({ slug, search, lists, objects, pages, locale, onSearch }: BookingsListScreenProps) {
+  const personHref = usePersonHref(slug, objects);
+  const [open, setOpen] = useState<BookingListItem | undefined>(undefined);
+  const tab = search.tab;
+  const view = lists[tab];
+  const state = useBookings(view);
+  const body = (() => {
+    if (state.status === 'loading')
+      return { bar: <ListBar search={search} pages={pages} onSearch={onSearch} />, list: <Skeleton shape="block" /> };
+    if (state.status === 'error') {
+      return {
+        bar: <ListBar search={search} pages={pages} onSearch={onSearch} />,
+        list: (
+          <EmptyState tone="error" title={strings.failedTitle} onRetry={() => view.reload()}>
+            {state.message === '' ? strings.failedText : state.message}
+          </EmptyState>
+        ),
+      };
+    }
+    // The server answers upcoming soonest first, past and canceled latest first; the toggle flips it.
+    const natural = tab === 'upcoming' ? 'asc' : 'desc';
+    const sort = tab === 'cancelled' ? 'desc' : (search.sort ?? natural);
+    const filtered = state.bookings.filter((booking) => search.link === undefined || booking.pageId === search.link);
+    const ordered = sort === natural ? filtered : [...filtered].reverse();
+    const count = Math.max(1, Math.ceil(ordered.length / search.per));
+    const page = Math.min(search.page, count);
+    const shown = ordered.slice((page - 1) * search.per, page * search.per);
+    const byId = new Map(shown.map((booking) => [booking.id, booking]));
+    const sortLabel =
+      tab === 'upcoming'
+        ? sort === 'asc'
+          ? strings.sortSoonest
+          : strings.sortLatest
+        : sort === 'desc'
+          ? strings.sortRecent
+          : strings.sortOldest;
+    return {
+      bar: (
+        <ListBar
+          search={search}
+          pages={pages}
+          onSearch={onSearch}
+          {...(tab !== 'cancelled' && ordered.length >= 2
+            ? { sort: { label: sortLabel, next: sort === 'asc' ? ('desc' as const) : ('asc' as const) } }
+            : {})}
+        />
+      ),
+      list: (
+        <>
+          <BookingList
+            label={strings.listLabel[tab]}
+            groups={groupsOf(shown, personHref, locale)}
+            onOpen={(id) => {
+              const booking = byId.get(id);
+              if (booking !== undefined) setOpen(booking);
+            }}
+            emptyState={
+              <EmptyState
+                icon="calendar-days"
+                title={strings.empty[tab].title}
+                {...(tab === 'upcoming'
+                  ? {
+                      actions: (
+                        <>
+                          <Link href={linksHref(slug)}>{strings.openLinks}</Link>
+                          <Link href={availabilityHref(slug)}>{strings.openAvailability}</Link>
+                        </>
+                      ),
+                    }
+                  : {})}
+              >
+                {strings.empty[tab].text}
+              </EmptyState>
+            }
+          />
+          <Pagination
+            label={strings.listLabel[tab]}
+            page={page}
+            pageSize={search.per}
+            total={ordered.length}
+            pageSizes={PAGE_SIZES}
+            onPage={(next) => onSearch({ page: next })}
+            onPageSize={(per) => onSearch({ per, page: 1 })}
+          />
+        </>
+      ),
+    };
+  })();
   return (
-    <Panel title={strings.details} isOpen onClose={onClose}>
-      <BookingCard booking={booking} personHref={personHref} locale={locale} />
-    </Panel>
+    <PageColumn width="full">
+      <Toolbar>{body.bar}</Toolbar>
+      {body.list}
+      {open !== undefined && (
+        <Panel title={strings.details} isOpen onClose={() => setOpen(undefined)}>
+          <BookingCard booking={open} personHref={personHref(open)} locale={locale} />
+        </Panel>
+      )}
+    </PageColumn>
   );
 }
 
-/** Bookings: the week calendar or the list, filling the page's width. */
-export function BookingsScreen(props: BookingsScreenProps) {
-  const { slug, objects, search } = props;
+/** The person's page for a booking, from the workspace's objects. */
+function usePersonHref(slug: string, objects: readonly ObjectSummary[]) {
   const link = recordLinks(slug, objects);
   const people = objects.find((object) => object.standardKey === 'people');
-  const personHref = (booking: BookingListItem) => personHrefOf(booking, link, people);
-  return (
-    <WorkspacePage
-      currentPage="bookings"
-      page={{
-        topBar: <TopBar title={strings.title} icon="calendar-days" />,
-        body: (
-          <PageColumn width="full">
-            {search.view === 'week' ? (
-              <WeekView {...props} personHref={personHref} />
-            ) : (
-              <ListView {...props} personHref={personHref} />
-            )}
-          </PageColumn>
-        ),
-      }}
-    />
-  );
+  return (booking: BookingListItem) => personHrefOf(booking, link, people);
 }
 
-/** Bookings while its first read loads. */
+/** A Bookings tab while its first read loads. */
 export function BookingsPending() {
   return (
-    <WorkspacePage
-      currentPage="bookings"
-      page={{
-        topBar: <TopBar title={strings.title} icon="calendar-days" />,
-        body: (
-          <PageColumn width="full">
-            <Skeleton shape="block" />
-          </PageColumn>
-        ),
-      }}
-    />
+    <PageColumn width="full">
+      <Skeleton shape="block" />
+    </PageColumn>
   );
 }
 
-/** Bookings when its first read failed, with Try again. */
+/** A Bookings tab when its first read failed, with Try again. */
 export function BookingsFailed({ message, onRetry }: { readonly message: string; readonly onRetry: () => void }) {
   return (
-    <WorkspacePage
-      currentPage="bookings"
-      page={{
-        topBar: <TopBar title={strings.title} icon="calendar-days" />,
-        body: (
-          <PageColumn width="full">
-            <EmptyState tone="error" title={strings.failedTitle} onRetry={onRetry}>
-              {message}
-            </EmptyState>
-          </PageColumn>
-        ),
-      }}
-    />
+    <PageColumn width="full">
+      <EmptyState tone="error" title={strings.failedTitle} onRetry={onRetry}>
+        {message}
+      </EmptyState>
+    </PageColumn>
   );
 }
