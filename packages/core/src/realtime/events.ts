@@ -80,6 +80,14 @@ export function outboxEvent(row: OutboxRow): EventRow | undefined {
       };
     case 'tasks':
       return { ...place, kind: 'tasks', recordIds: copy(row.recordIds), taskIds: copy(row.itemIds), ...coarse };
+    case 'meetings':
+      return {
+        ...place,
+        kind: 'meetings',
+        recordIds: copy(row.recordIds),
+        meetingIds: copy(row.itemIds),
+        ...coarse,
+      };
     case 'members':
       return { ...place, kind: 'members', memberIds: copy(row.itemIds) };
     case 'access':

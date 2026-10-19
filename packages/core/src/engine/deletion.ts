@@ -386,6 +386,12 @@ async function removeRecords(tx: WorkspaceTx, recordIds: readonly string[]): Pro
   // Tasks keep living without the records removed for good; their links to them go first (spec 0019, AC-446),
   // until spec 0022's purge registry takes this step over.
   await tx.execute(sql`delete from task_records where record_id = any(${ids})`);
+  // Meetings keep living too (spec 0024): they leave the removed records' timelines, and an attendee who was one
+  // of them is unknown again.
+  await tx.execute(sql`delete from meeting_records where record_id = any(${ids})`);
+  await tx.execute(
+    sql`update meeting_attendees set person_record_id = null, match = 'unknown' where person_record_id = any(${ids})`,
+  );
   const removed = await tx.execute<{ id: string; object_id: string }>(
     sql`delete from records where id = any(${ids}) returning id::text, object_id::text`,
   );

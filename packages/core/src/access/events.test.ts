@@ -74,10 +74,11 @@ const records: EventRow = {
 };
 
 describe('every kind has a rule', () => {
-  it('names the nine kinds of spec 0007, and asks for facts only for views and tasks', () => {
+  it('names the nine kinds of spec 0007 and spec 0024’s meetings, and asks for facts only for views, tasks and meetings', () => {
     expect([...EVENT_KINDS].sort()).toEqual(
-      ['access', 'definitions', 'entries', 'jobs', 'members', 'notes', 'records', 'tasks', 'views'].sort(),
+      ['access', 'definitions', 'entries', 'jobs', 'meetings', 'members', 'notes', 'records', 'tasks', 'views'].sort(),
     );
+    expect(eventFacts({ seq: 1, at, kind: 'meetings', recordIds: [], meetingIds: [] })).toEqual(['meetings']);
     expect(eventFacts({ seq: 1, at, kind: 'views', viewIds: [], coarse: false })).toEqual(['views']);
     expect(eventFacts({ seq: 1, at, kind: 'tasks', recordIds: [], taskIds: [] })).toEqual(['tasks']);
     expect(eventFacts(records)).toEqual([]);
@@ -255,6 +256,62 @@ describe('entries, definitions, views and notes', () => {
     expect(filterEvent(open, notes)).toEqual(notes);
     expect(filterEvent(hiddenObject, notes)).toBeUndefined();
     expect(filterEvent(ownRecords, notes)).toEqual({ ...notes, recordIds: [], noteIds: [], coarse: true });
+  });
+});
+
+describe('meetings (spec 0024)', () => {
+  const meetings: EventRow = {
+    seq: 47,
+    at,
+    kind: 'meetings',
+    recordIds: ['r1', 'x1'],
+    meetingIds: ['m1', 'm2'],
+    mutationId: 'm',
+  };
+  const facts = {
+    meetings: {
+      m1: { isPrivate: false, holderMemberIds: [BEA], records: [{ objectId: OBJECT, recordId: 'r1' }] },
+      m2: { isPrivate: true, holderMemberIds: [BEA], records: [{ objectId: OTHER, recordId: 'x1' }] },
+    },
+  };
+
+  it('keeps a private meeting’s id only for an audience of its holders, and every record id under the open policy', () => {
+    // Ada doesn't hold the private one: its id goes, its record stays (it shows there as "Private meeting").
+    expect(filterEvent(open, meetings, facts)).toEqual({
+      seq: 47,
+      at,
+      kind: 'meetings',
+      recordIds: ['r1', 'x1'],
+      meetingIds: ['m1'],
+    });
+    const holder = audience([{ id: BEA, role: 'member' }]);
+    expect(filterEvent(holder, meetings, facts)).toEqual(meetings);
+  });
+
+  it('keeps only readable records for a restricted audience, coarse, and a removed meeting’s records for the open one', () => {
+    expect(filterEvent(hiddenObject, meetings, facts)).toEqual({
+      seq: 47,
+      at,
+      kind: 'meetings',
+      recordIds: ['x1'],
+      meetingIds: ['m1'],
+      coarse: true,
+    });
+    // A meeting removed (no fact): its records still hear of it under the open policy, and nobody gets its id.
+    const removed: EventRow = { ...meetings, meetingIds: ['gone'] };
+    expect(filterEvent(open, removed, {})).toMatchObject({ recordIds: ['r1', 'x1'], meetingIds: [] });
+    // A restricted audience can't judge it: nothing named, coarse.
+    expect(filterEvent(hiddenObject, removed, {})).toMatchObject({ recordIds: [], meetingIds: [], coarse: true });
+    // A record in the trash shows its meetings to nobody restricted.
+    const trashed = {
+      meetings: {
+        m1: { isPrivate: false, holderMemberIds: [], records: [{ objectId: OTHER, recordId: 'x1', trashed: true }] },
+      },
+    };
+    expect(filterEvent(hiddenObject, { ...meetings, meetingIds: ['m1'], recordIds: ['x1'] }, trashed)).toMatchObject({
+      recordIds: [],
+      coarse: true,
+    });
   });
 });
 

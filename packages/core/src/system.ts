@@ -19,3 +19,11 @@ export {
 } from './jobs/daily.ts';
 export { viewFacts } from './views/facts.ts';
 export { taskFacts } from './tasks/facts.ts';
+export { meetingFacts } from './calendar/facts.ts';
+export {
+  POLL_INTERVAL_MS,
+  syncConnection,
+  type CalendarSyncDeps,
+  type CalendarSyncInput,
+  type CalendarSyncOutcome,
+} from './calendar/sync.ts';

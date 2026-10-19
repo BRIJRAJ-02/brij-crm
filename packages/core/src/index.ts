@@ -19,6 +19,7 @@ export {
   type AudienceMember,
   type EventFacts,
   type EventRow,
+  type MeetingFact,
   type TaskFact,
 } from './access/events.ts';
 export {
@@ -128,6 +129,36 @@ export {
   type ListTasksInput,
   type UpdateTaskInput,
 } from './tasks/tasks.ts';
+export {
+  connectCalendar,
+  listCalendarConnections,
+  removeCalendarConnection,
+  updateCalendarConnection,
+  type ConnectCalendarInput,
+  type UpdateCalendarConnectionInput,
+} from './calendar/connections.ts';
+export { listMeetingsForRecord, type ListMeetingsInput } from './calendar/meetings.ts';
+export {
+  isProviderError,
+  normaliseEmail,
+  providerError,
+  type BusyInterval,
+  type CalendarChannel,
+  type CalendarErrorCode,
+  type CalendarProvider,
+  type CalendarProviderError,
+  type CalendarTokens,
+  type ExchangedTokens,
+  type NewEvent,
+  type ProviderAttendee,
+  type ProviderChanges,
+  type ProviderEvent,
+  type ProviderResponse,
+  type ProviderTime,
+  type SyncWindow,
+} from './calendar/provider.ts';
+export { deriveKey, signValue, verifyValue } from './calendar/signing.ts';
+export { decodeTokenKey, type TokenKey } from './calendar/tokens.ts';
 export { getMyAccess, listMembers, removeMember, setMemberRole, type MemberWithRole } from './members/members.ts';
 export { outboxEvent, stubEvent, wireEvent } from './realtime/events.ts';
 export {

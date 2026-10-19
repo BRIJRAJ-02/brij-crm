@@ -95,3 +95,5 @@ export async function startJobForTest(
   const { result } = await runWrite(scope, (context) => startJob(context, registry, input), hooks);
   return result;
 }
+
+export { createFakeCalendarProvider, type FakeCalendar } from './calendar/fake.ts';
