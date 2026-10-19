@@ -205,5 +205,41 @@ describe('the bookings list (AC-646)', () => {
       { connectionId: connection.id, title: 'Design review', startsAt: start.toISOString(), allDay: false },
     ]);
     expect((await readBookingsCalendar(bea, range)).events).toEqual([]);
+
+    // The booking's own event, synced back from the host's calendar: one block, the booking's.
+    fake.put('ada@example.com', {
+      id: 'mirror',
+      status: 'confirmed',
+      icalUid: 'mirror@google.com',
+      title: 'Quick chat with Kept',
+      start: { at: '2026-11-02T09:00:00.000Z', allDay: false },
+      end: { at: '2026-11-02T09:30:00.000Z', allDay: false },
+      organizerEmail: 'ada@example.com',
+      attendees: [
+        { email: 'ada@example.com', response: 'accepted', isOrganizer: true, isSelf: true },
+        { email: 'kept@example.org', response: 'accepted', isOrganizer: false, isSelf: false },
+      ],
+      isPrivate: false,
+    });
+    await syncConnection(
+      {
+        providers: { google: fake.provider },
+        tokenKey,
+        systemScope: (workspaceId) => systemScope(db, workspaceId),
+        hooks: [outboxHook()],
+        isFreeDomain: () => false,
+      },
+      { workspaceId: w.workspaceId, connectionId: connection.id },
+    );
+    const stored = await db.withWorkspace(w.workspaceId, (tx) =>
+      tx.execute<{ id: string }>(sql`select id::text from meetings where ical_uid = 'mirror@google.com'`),
+    );
+    expect(stored.rows).toHaveLength(1);
+    const mirrored = await readBookingsCalendar(w.owner, {
+      from: '2026-11-02T00:00:00.000Z',
+      to: '2026-11-09T00:00:00.000Z',
+    });
+    expect(mirrored.bookings.map((each) => each.id)).toEqual([kept.bookingId, gone.bookingId]);
+    expect(mirrored.events).toEqual([]);
   });
 });

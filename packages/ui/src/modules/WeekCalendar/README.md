@@ -17,7 +17,7 @@ New. Nothing in the library places things on a time axis. Board and DataGrid are
   onSelectDay={setDay}
   hourLabel={(hour) => format(hour)}
   now={{ dayKey: today, minute: 15 * 60 + 20 }}
-  scrollToMinute={15 * 60}
+  scrollToMinute={14 * 60}
   openId={openId}
   detail={<BookingCard … />}
   onOpen={setOpenId}
@@ -25,7 +25,9 @@ New. Nothing in the library places things on a time axis. Board and DataGrid are
 />
 ```
 
-- An hour is `--size-toolbar` tall; the body shows twelve hours at a time and scrolls. It opens centred on `scrollToMinute`.
+- An hour is `--size-toolbar` tall; the body shows twelve hours at a time and scrolls. It opens with `scrollToMinute` a quarter hour below its top (the screen passes an hour before now, or 8 AM).
+- Today's column is tinted all the way down (`--surface-column`) and its date is solid accent; on another week nothing is.
+- A short block (under 45 minutes) puts its title and time on one line; from 75 minutes it shows `detail` (the guest) on a third.
 - Blocks that overlap share their cluster's width side by side (`placeBlocks`: sorted by start, each in the first lane free at its start).
 - `kind: 'booking'` is accent; `kind: 'event'` is quieter, in the tag colours of its `hue` (one per connected calendar). `isCancelled` is struck through.
 - The now line shows in today's column only.

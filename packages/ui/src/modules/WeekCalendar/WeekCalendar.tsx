@@ -48,7 +48,7 @@ export interface WeekCalendarProps {
   readonly hourLabel: (hour: number) => string;
   /** Today's column and the minute now, for the now line. */
   readonly now?: { readonly dayKey: string; readonly minute: number };
-  /** The minute the grid opens centred on (now, or the middle of the working day). */
+  /** The minute the grid opens with at its top (an hour before now, or 8 AM). */
   readonly scrollToMinute: number;
   /** The block whose card is open, and the card. */
   readonly openId?: string;
@@ -100,7 +100,8 @@ const HOURS = Array.from({ length: 24 }, (_, hour) => hour);
  * A week of days as columns of hours (the Bookings page's calendar, spec
  * 0025): bookings and the member's other calendar events as blocks placed by
  * time, overlapping ones side by side, a now line in today's column, and a
- * card anchored to the open block. It opens centred on `scrollToMinute`. On
+ * card anchored to the open block. Today's column is tinted all the way
+ * down, and its date is solid accent. It opens with `scrollToMinute` at its top. On
  * a narrow container the header stays a row of seven days and the grid shows
  * the selected day alone. One day column is in the tab order: Left and Right
  * move between days, Up and Down between a day's blocks, Enter opens one,
@@ -127,7 +128,7 @@ export function WeekCalendar({
   const [anchor, setAnchor] = useState<HTMLButtonElement | null>(null);
   const anchorRef = useMemo(() => ({ current: anchor }), [anchor]);
 
-  // Opens centred on the minute asked for, once laid out (it tries again next frame when not yet).
+  // Opens with the minute asked for at its top, once laid out (it tries again next frame when not yet).
   useLayoutEffect(() => {
     let frame = 0;
     const place = (tries: number) => {
@@ -138,8 +139,9 @@ export function WeekCalendar({
         frame = requestAnimationFrame(() => place(tries + 1));
         return;
       }
-      const centre = (scrollToMinute / 60) * hour;
-      box.scrollTop = Math.max(0, Math.min(centre - box.clientHeight / 2, box.scrollHeight - box.clientHeight));
+      // A quarter hour above the minute, so its hour's label shows whole.
+      const top = (scrollToMinute / 60) * hour - hour / 4;
+      box.scrollTop = Math.max(0, Math.min(top, box.scrollHeight - box.clientHeight));
     };
     place(0);
     return () => cancelAnimationFrame(frame);
@@ -216,6 +218,7 @@ export function WeekCalendar({
                 tabIndex={day.key === selectedDay ? 0 : -1}
                 className={styles.column}
                 data-selected={day.key === selectedDay || undefined}
+                data-today={day.isToday || undefined}
                 data-past={day.isPast || undefined}
                 onKeyDown={(event) => onColumnKey(event, day, dayBlocks)}
               >
