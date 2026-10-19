@@ -19,6 +19,7 @@ import { Route as WSlugIndexRouteImport } from './routes/w.$slug.index.tsx'
 import { Route as WSlugTrashRouteImport } from './routes/w.$slug.trash.tsx'
 import { Route as WSlugObjectsObjectRouteImport } from './routes/w.$slug.objects.$object.tsx'
 import { Route as WSlugSettingsIndexRouteImport } from './routes/w.$slug.settings.index.tsx'
+import { Route as WSlugSettingsCalendarRouteImport } from './routes/w.$slug.settings.calendar.tsx'
 import { Route as WSlugSettingsJobsRouteImport } from './routes/w.$slug.settings.jobs.tsx'
 import { Route as WSlugSettingsObjectsIndexRouteImport } from './routes/w.$slug.settings.objects.index.tsx'
 import { Route as WSlugObjectsObjectRecordIdIndexRouteImport } from './routes/w.$slug.objects.$object_.$recordId.index.tsx'
@@ -77,6 +78,11 @@ const WSlugSettingsIndexRoute = WSlugSettingsIndexRouteImport.update({
   path: '/settings/',
   getParentRoute: () => WSlugRoute,
 } as any)
+const WSlugSettingsCalendarRoute = WSlugSettingsCalendarRouteImport.update({
+  id: '/settings/calendar',
+  path: '/settings/calendar',
+  getParentRoute: () => WSlugRoute,
+} as any)
 const WSlugSettingsJobsRoute = WSlugSettingsJobsRouteImport.update({
   id: '/settings/jobs',
   path: '/settings/jobs',
@@ -129,6 +135,7 @@ export interface FileRoutesByFullPath {
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug/': typeof WSlugIndexRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
@@ -147,6 +154,7 @@ export interface FileRoutesByTo {
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug': typeof WSlugIndexRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
   '/w/$slug/settings': typeof WSlugSettingsIndexRoute
   '/w/$slug/settings/objects': typeof WSlugSettingsObjectsIndexRoute
@@ -167,6 +175,7 @@ export interface FileRoutesById {
   '/w/$slug/trash': typeof WSlugTrashRoute
   '/w/$slug/': typeof WSlugIndexRoute
   '/w/$slug/objects/$object': typeof WSlugObjectsObjectRoute
+  '/w/$slug/settings/calendar': typeof WSlugSettingsCalendarRoute
   '/w/$slug/settings/jobs': typeof WSlugSettingsJobsRoute
   '/w/$slug/settings/': typeof WSlugSettingsIndexRoute
   '/w/$slug/settings/objects/': typeof WSlugSettingsObjectsIndexRoute
@@ -188,6 +197,7 @@ export interface FileRouteTypes {
     | '/w/$slug/trash'
     | '/w/$slug/'
     | '/w/$slug/objects/$object'
+    | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/jobs'
     | '/w/$slug/settings/'
     | '/w/$slug/settings/objects/'
@@ -206,6 +216,7 @@ export interface FileRouteTypes {
     | '/w/$slug/trash'
     | '/w/$slug'
     | '/w/$slug/objects/$object'
+    | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/jobs'
     | '/w/$slug/settings'
     | '/w/$slug/settings/objects'
@@ -225,6 +236,7 @@ export interface FileRouteTypes {
     | '/w/$slug/trash'
     | '/w/$slug/'
     | '/w/$slug/objects/$object'
+    | '/w/$slug/settings/calendar'
     | '/w/$slug/settings/jobs'
     | '/w/$slug/settings/'
     | '/w/$slug/settings/objects/'
@@ -316,6 +328,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WSlugSettingsIndexRouteImport
       parentRoute: typeof WSlugRoute
     }
+    '/w/$slug/settings/calendar': {
+      id: '/w/$slug/settings/calendar'
+      path: '/settings/calendar'
+      fullPath: '/w/$slug/settings/calendar'
+      preLoaderRoute: typeof WSlugSettingsCalendarRouteImport
+      parentRoute: typeof WSlugRoute
+    }
     '/w/$slug/settings/jobs': {
       id: '/w/$slug/settings/jobs'
       path: '/settings/jobs'
@@ -372,6 +391,7 @@ interface WSlugRouteChildren {
   WSlugTrashRoute: typeof WSlugTrashRoute
   WSlugIndexRoute: typeof WSlugIndexRoute
   WSlugObjectsObjectRoute: typeof WSlugObjectsObjectRoute
+  WSlugSettingsCalendarRoute: typeof WSlugSettingsCalendarRoute
   WSlugSettingsJobsRoute: typeof WSlugSettingsJobsRoute
   WSlugSettingsIndexRoute: typeof WSlugSettingsIndexRoute
   WSlugSettingsObjectsIndexRoute: typeof WSlugSettingsObjectsIndexRoute
@@ -386,6 +406,7 @@ const WSlugRouteChildren: WSlugRouteChildren = {
   WSlugTrashRoute: WSlugTrashRoute,
   WSlugIndexRoute: WSlugIndexRoute,
   WSlugObjectsObjectRoute: WSlugObjectsObjectRoute,
+  WSlugSettingsCalendarRoute: WSlugSettingsCalendarRoute,
   WSlugSettingsJobsRoute: WSlugSettingsJobsRoute,
   WSlugSettingsIndexRoute: WSlugSettingsIndexRoute,
   WSlugSettingsObjectsIndexRoute: WSlugSettingsObjectsIndexRoute,

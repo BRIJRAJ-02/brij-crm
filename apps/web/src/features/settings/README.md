@@ -1,6 +1,6 @@
 # Settings
 
-Spec 0012, milestone 1 (objects and attributes, #13), and spec 0008 (background jobs, #8). Every settings page sits in the workspace frame through `SettingsPage`: the TopBar holds the trail and the page's h1, then the library's `SettingsLayout` holds the settings navigation (Objects and Background jobs; #23 and later add theirs) beside the page. Settings opens from the workspace menu, above Sign out, the one way in. The routes load lazily, outside the first load. Each page keeps its own copy: `strings.ts` for the objects pages, `jobs-strings.ts` for Background jobs.
+Spec 0012, milestone 1 (objects and attributes, #13), and spec 0008 (background jobs, #8). Every settings page sits in the workspace frame through `SettingsPage`: the TopBar holds the trail and the page's h1, then the library's `SettingsLayout` holds the settings navigation (Objects, Background jobs and Calendar; #23 and later add theirs) beside the page. Settings opens from the workspace menu, above Sign out, the one way in. The routes load lazily, outside the first load. Each page keeps its own copy: `strings.ts` for the objects pages, `jobs-strings.ts` for Background jobs.
 
 ## Settings, Objects (`/w/$slug/settings/objects`, ObjectsScreen)
 
@@ -63,6 +63,14 @@ The library's RelationshipSettings, connected. Creating (`useRelationshipCreate`
 - **Leaves out**: confirming a prepared job and retry controls (spec 0008 milestone 2), the daily cleanup's details (milestone 3). It sits in `SettingsPage` beside Objects, its table and states inside SettingsLayout's body.
 
 Built from library parts only: SettingsLayout (through `SettingsPage`), Table, Badge (the status), ProgressBar ("done of total", indeterminate when the size isn't known), RelativeTime, Button, Modal (the cancel confirm, `tone="danger"`) and EmptyState (empty, and error with Try again); while it loads, the frame, the header and the Table's skeleton rows hold their places (`JobsPending`). Members see their own jobs without the Started by column, which would always name them. "Run a test job" shows for `jobs.manage` locally and in previews (AC-123): 20,000 synthetic items, every 50th refused, so the bar and the refusal summary both show.
+
+## Settings, Calendar (`/w/$slug/settings/calendar`, CalendarScreen)
+
+- **Purpose**: Settings, Calendar (spec 0024): the member's own calendar connections, so their meetings reach the people and companies they meet.
+- **Main task**: connect a Google calendar (the browser goes to the API's start address, on to Google's consent and back with `?calendar=` saying how it went, shown once in a Callout), see each connection's account, status and last sync, choose who sees its meetings (Shared or Private, a SegmentedControl), make one the default, and disconnect one (a danger confirm).
+- **Leaves out**: other members' connections, Outlook (milestone 4), the disconnected banner, the workspace's "Create people for unknown attendees" setting and Add as person (milestone 2).
+
+Built from library parts only: SettingsLayout (through `SettingsPage`), Card per connection (its account as the title, Google and Default as the line under it, Make default and Disconnect in its footer), DescriptionList (Status as a Badge with the last error, Last synced as a RelativeTime, the sharing control with a line saying what it means), Callout (how connecting went; the limit of 3 reached), Modal (the disconnect confirm) and EmptyState (no calendar yet, with Connect Google calendar; calendar sync not set up; error with Try again). Changes show at once through `data.calendar` and come back with a toast when refused; a connection still syncing is read again until it is done.
 
 ## The finish toast (toast.ts)
 
