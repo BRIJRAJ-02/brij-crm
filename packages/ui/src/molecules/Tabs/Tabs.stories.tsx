@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn } from 'storybook/test';
+import { Button } from '../../atoms/Button/Button.tsx';
+import { Field } from '../Field/Field.tsx';
 import { Tabs, TabPanel } from './Tabs.tsx';
 
 const TABS = [
@@ -58,5 +60,32 @@ export const LargeCounts: Story = {
   play: async ({ canvas }) => {
     await expect(canvas.getByRole('tab', { name: /Notes/ })).toHaveTextContent('1,250');
     await expect(canvas.getByRole('tab', { name: /Tasks/ })).toHaveTextContent('10,000+');
+  },
+};
+
+/** With the chosen tab's tools at the strip's far end (Captures' search and New), on the same hairline. */
+export const WithEnd: Story = {
+  render: (args) => (
+    <Tabs
+      {...args}
+      end={
+        <>
+          <Field label="Search booking pages" isLabelHidden variant="search" type="search" size="sm" />
+          <Button variant="primary" icon="plus">
+            New booking page
+          </Button>
+        </>
+      }
+    >
+      <TabPanel id="activity">Field changes, notes and emails, newest first.</TabPanel>
+      <TabPanel id="notes">12 notes.</TabPanel>
+      <TabPanel id="tasks">3 open tasks.</TabPanel>
+      <TabPanel id="files">No files.</TabPanel>
+    </Tabs>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByRole('tablist', { name: 'Record' })).toBeInTheDocument();
+    await expect(canvas.getByRole('searchbox', { name: 'Search booking pages' })).toBeInTheDocument();
+    await expect(canvas.getByRole('button', { name: 'New booking page' })).toBeInTheDocument();
   },
 };

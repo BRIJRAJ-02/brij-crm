@@ -44,7 +44,6 @@
   }
 
   .root[data-variant='search'] .box {
-    border-radius: var(--radius-full);
     background: var(--surface-sunken);
   }
 

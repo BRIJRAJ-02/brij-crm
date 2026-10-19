@@ -9,13 +9,30 @@
     min-block-size: 0;
   }
 
+  /* The tab list and, at its far end, the chosen tab's tools, on one hairline. */
+  .bar {
+    display: flex;
+    gap: var(--space-12);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
   .list {
     display: flex;
+    flex: 1;
+    align-items: flex-end;
     gap: var(--space-4);
+    min-inline-size: 0;
     padding-inline: var(--space-16);
     overflow-x: auto;
-    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
     scrollbar-width: none;
+  }
+
+  .end {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--space-8);
+    padding-inline-end: var(--space-16);
   }
 
   .tab {

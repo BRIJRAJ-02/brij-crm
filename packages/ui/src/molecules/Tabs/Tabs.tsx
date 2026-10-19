@@ -35,6 +35,8 @@ export interface TabsProps {
   readonly selectedKey?: string;
   readonly defaultSelectedKey?: string;
   readonly onSelectionChange?: (id: string) => void;
+  /** At the strip's far end, on its hairline: the chosen tab's own tools (a search, New). */
+  readonly end?: ReactNode;
   /** One TabPanel per tab, with the same ids. */
   readonly children: ReactNode;
 }
@@ -42,9 +44,10 @@ export interface TabsProps {
 /**
  * Sections of one page, one at a time: a record's Activity, Notes, Tasks and
  * Files. An underline slides to the chosen tab (at once for the keyboard).
- * The arrow keys move between tabs; Tab moves into the panel.
+ * The arrow keys move between tabs; Tab moves into the panel. `end` puts the
+ * chosen tab's own tools (Captures' search and New) at the strip's far end.
  */
-export function Tabs({ label, tabs, selectedKey, defaultSelectedKey, onSelectionChange, children }: TabsProps) {
+export function Tabs({ label, tabs, selectedKey, defaultSelectedKey, onSelectionChange, end, children }: TabsProps) {
   const { isFocusVisible } = useFocusVisible();
   return (
     <AriaTabs
@@ -59,26 +62,29 @@ export function Tabs({ label, tabs, selectedKey, defaultSelectedKey, onSelection
             },
           })}
     >
-      <TabList className={styles.list} aria-label={label} items={tabs} data-instant={isFocusVisible || undefined}>
-        {(tab) => (
-          <Tab
-            id={tab.id}
-            className={styles.tab}
-            {...(tab.isDisabled === undefined ? {} : { isDisabled: tab.isDisabled })}
-          >
-            {tab.icon !== undefined && <Icon name={tab.icon} size="sm" />}
-            <span>{tab.label}</span>
-            {tab.count !== undefined && (
-              <Badge
-                count={tab.count}
-                {...(tab.countMax === undefined ? {} : { max: tab.countMax })}
-                {...(tab.isCountAtLeast === true ? { isAtLeast: true } : {})}
-              />
-            )}
-            <SelectionIndicator className={styles.indicator} />
-          </Tab>
-        )}
-      </TabList>
+      <div className={styles.bar}>
+        <TabList className={styles.list} aria-label={label} items={tabs} data-instant={isFocusVisible || undefined}>
+          {(tab) => (
+            <Tab
+              id={tab.id}
+              className={styles.tab}
+              {...(tab.isDisabled === undefined ? {} : { isDisabled: tab.isDisabled })}
+            >
+              {tab.icon !== undefined && <Icon name={tab.icon} size="sm" />}
+              <span>{tab.label}</span>
+              {tab.count !== undefined && (
+                <Badge
+                  count={tab.count}
+                  {...(tab.countMax === undefined ? {} : { max: tab.countMax })}
+                  {...(tab.isCountAtLeast === true ? { isAtLeast: true } : {})}
+                />
+              )}
+              <SelectionIndicator className={styles.indicator} />
+            </Tab>
+          )}
+        </TabList>
+        {end !== undefined && <div className={styles.end}>{end}</div>}
+      </div>
       {children}
     </AriaTabs>
   );

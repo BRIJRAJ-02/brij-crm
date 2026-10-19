@@ -69,6 +69,7 @@ describe('@crm/ui', () => {
       'Link',
       'LinkChip',
       'LinkList',
+      'LinkListToolbar',
       'LockReason',
       'Mention',
       'Menu',

@@ -65,6 +65,61 @@ export interface LinkListProps {
   readonly errorTitle?: string;
   /** Shown with no rows at all: usually an EmptyState. */
   readonly emptyState?: ReactNode;
+  /**
+   * The search, held by the page when it draws the toolbar elsewhere (Captures puts LinkListToolbar in its tab
+   * strip); left out, the list keeps its own.
+   */
+  readonly query?: string;
+  /** With `query`: the search changed. */
+  readonly onQueryChange?: (query: string) => void;
+  /** The page draws the toolbar itself (LinkListToolbar), so the list leaves its own out. */
+  readonly isToolbarHidden?: boolean;
+}
+
+/** Props for LinkListToolbar. */
+export interface LinkListToolbarProps {
+  /** The search field's name ("Search booking pages"). */
+  readonly searchLabel: string;
+  readonly query: string;
+  readonly onQueryChange: (query: string) => void;
+  /** After the search: the list's own action (New booking page, New form). */
+  readonly actions?: ReactNode;
+  /** While the list loads or failed, the search waits. */
+  readonly isSearchDisabled?: boolean;
+  /** `sm` sits in a tab strip; `md` (the default) above the rows. */
+  readonly size?: 'sm' | 'md';
+}
+
+/**
+ * LinkList's search and action, for a page that draws them elsewhere: Captures puts them at the end of its
+ * Links · Forms strip (the owner's call, 20 October 2026), with the list's `query` held by the page.
+ */
+export function LinkListToolbar({
+  searchLabel,
+  query,
+  onQueryChange,
+  actions,
+  isSearchDisabled = false,
+  size = 'md',
+}: LinkListToolbarProps) {
+  return (
+    <div className={styles.toolbar} data-size={size}>
+      <span className={styles.search}>
+        <Field
+          label={searchLabel}
+          isLabelHidden
+          placeholder={strings.search}
+          variant="search"
+          type="search"
+          size={size}
+          value={query}
+          onChange={onQueryChange}
+          isDisabled={isSearchDisabled}
+        />
+      </span>
+      {actions !== undefined && <div className={styles.listActions}>{actions}</div>}
+    </div>
+  );
 }
 
 /** How many skeleton rows stand in while the list loads. */
@@ -95,8 +150,13 @@ export function LinkList({
   onRetry,
   errorTitle,
   emptyState,
+  query: heldQuery,
+  onQueryChange,
+  isToolbarHidden = false,
 }: LinkListProps) {
-  const [query, setQuery] = useState('');
+  const [ownQuery, setOwnQuery] = useState('');
+  const query = heldQuery ?? ownQuery;
+  const setQuery = onQueryChange ?? setOwnQuery;
   const showSkeleton = useDelayedLoading(status === 'loading');
   if (status === 'no-access') {
     return (
@@ -109,22 +169,14 @@ export function LinkList({
   const isLoading = status === 'loading';
   const isFailed = status === 'error';
   const shown = rows.filter((row) => matches(row, query));
-  const toolbar = (
-    <div className={styles.toolbar}>
-      <span className={styles.search}>
-        <Field
-          label={searchLabel}
-          isLabelHidden
-          placeholder={strings.search}
-          variant="search"
-          type="search"
-          value={query}
-          onChange={setQuery}
-          isDisabled={isLoading || isFailed}
-        />
-      </span>
-      {!isLoading && actions !== undefined && <div className={styles.listActions}>{actions}</div>}
-    </div>
+  const toolbar = isToolbarHidden ? undefined : (
+    <LinkListToolbar
+      searchLabel={searchLabel}
+      query={query}
+      onQueryChange={setQuery}
+      isSearchDisabled={isLoading || isFailed}
+      {...(isLoading || actions === undefined ? {} : { actions })}
+    />
   );
   // A list that didn't load keeps its toolbar (New still works), the failure where the rows go.
   if (isFailed) {

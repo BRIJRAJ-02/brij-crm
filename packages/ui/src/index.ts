@@ -166,7 +166,14 @@ export {
   type BookingListProps,
   type BookingListRow,
 } from './modules/BookingList/BookingList.tsx';
-export { LinkList, type LinkListProps, type LinkRow, type LinkToggle } from './modules/LinkList/LinkList.tsx';
+export {
+  LinkList,
+  LinkListToolbar,
+  type LinkListProps,
+  type LinkListToolbarProps,
+  type LinkRow,
+  type LinkToggle,
+} from './modules/LinkList/LinkList.tsx';
 export {
   WeekCalendar,
   type WeekCalendarBlock,

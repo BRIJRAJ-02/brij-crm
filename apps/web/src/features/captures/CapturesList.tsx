@@ -1,9 +1,11 @@
 // Brief
 // Purpose: the one shape both Captures tabs draw (Links' booking pages, Forms' forms), so they read as one kind of thing.
-// Main task: a search and New above the rows across the view; or, with none, the empty state centred in the view.
+// Main task: rows across the view, with the search and New at the end of the tabs strip; or, with none, the empty state centred in the view.
 // Leaves out: what a row says and does (each tab builds its rows), and the tabs header (the Captures layout).
-import { EmptyState, LinkList, PageColumn, type IconName, type LinkRow } from '@crm/ui';
-import type { ReactNode } from 'react';
+import { EmptyState, LinkList, LinkListToolbar, PageColumn, type IconName, type LinkRow } from '@crm/ui';
+import { useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
+import { useCapturesToolbarSlot } from './toolbarSlot.ts';
 
 /** Props for CapturesList. */
 export interface CapturesListProps {
@@ -25,7 +27,7 @@ export interface CapturesListProps {
   readonly dialogs?: ReactNode;
 }
 
-/** A Captures tab's list: search and New, then full width rows; or the empty state centred in the view. */
+/** A Captures tab's list: full width rows, its search and New at the strip's end; or the empty state centred in the view. */
 export function CapturesList({
   label,
   searchLabel,
@@ -38,6 +40,8 @@ export function CapturesList({
   onRetry,
   dialogs,
 }: CapturesListProps) {
+  const slot = useCapturesToolbarSlot();
+  const [query, setQuery] = useState('');
   if (status === 'ready' && rows.length === 0) {
     return (
       <PageColumn width="full" align="center">
@@ -48,9 +52,25 @@ export function CapturesList({
       </PageColumn>
     );
   }
+  const isBusy = status !== 'ready';
   return (
     <PageColumn width="full">
+      {slot !== null &&
+        createPortal(
+          <LinkListToolbar
+            searchLabel={searchLabel}
+            query={query}
+            onQueryChange={setQuery}
+            size="sm"
+            isSearchDisabled={isBusy}
+            {...(newAction === undefined || status === 'loading' ? {} : { actions: newAction })}
+          />,
+          slot,
+        )}
       <LinkList
+        query={query}
+        onQueryChange={setQuery}
+        isToolbarHidden={slot !== null}
         label={label}
         searchLabel={searchLabel}
         rows={rows}
