@@ -9,6 +9,7 @@ import { ActorReferenceValue, Timestamp } from './values/attribute-values.ts';
 import { FilterGroup } from './values/filters.ts';
 import { RecordRefDisplay } from './values/options.ts';
 import { SortRules } from './values/sorts.ts';
+import { BOARD_GROUPS_PER_CALL, BOARD_MAX_GROUP_LIMIT } from './board-model.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 
 /** The most rows one `records.query` answers. */
@@ -152,6 +153,59 @@ export const RecordCount = z.object({
 });
 /** A count of records. */
 export type RecordCount = z.infer<typeof RecordCount>;
+
+/**
+ * The first cards of a board's columns (spec 0021): the object's records in
+ * the view's `filter` and `sorts`, split by the grouping attribute `groupBy`
+ * (a status, or a select holding one value). `groupIds` names 1 to 12
+ * columns, each an option id of `groupBy`, or `null` for the records with no
+ * value. Each group answers up to `limit` records (25 when not given) and
+ * the count as `records.count` would: exact with no filter, however large;
+ * with a filter, exact up to 10,000, else 10,000 with `atLeast`. With
+ * `probeArchived`, the answer also names the archived options of `groupBy`
+ * that some live record still holds, so their columns show.
+ */
+export const RecordGroupsInput = WorkspaceScoped.extend({
+  objectId: z.uuid(),
+  groupBy: z.uuid(),
+  groupIds: z
+    .array(z.uuid().nullable())
+    .min(1, 'Name at least one column.')
+    .max(BOARD_GROUPS_PER_CALL, `Read at most ${String(BOARD_GROUPS_PER_CALL)} columns at once.`)
+    .refine((ids) => new Set(ids).size === ids.length, { error: 'Name each column once.' }),
+  filter: FilterGroup.optional(),
+  sorts: SortRules.optional(),
+  attributeIds: ReadAttributeIds.optional(),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(BOARD_MAX_GROUP_LIMIT, `Ask for at most ${String(BOARD_MAX_GROUP_LIMIT)} cards a column.`)
+    .optional(),
+  probeArchived: z.boolean().optional(),
+  ...QueryClock,
+});
+/** The first cards of a board's columns. */
+export type RecordGroupsInput = z.infer<typeof RecordGroupsInput>;
+
+/** One column's first cards, the cursor for its next page, and its count. */
+export const RecordGroup = z.object({
+  id: z.uuid().nullable(),
+  records: z.array(RecordView),
+  nextCursor: z.string().optional(),
+  count: z.number().int().min(0),
+  atLeast: z.boolean(),
+});
+/** One column's first cards and count. */
+export type RecordGroup = z.infer<typeof RecordGroup>;
+
+/** A board's columns in the order asked, and (when probed) the archived options still held. */
+export const RecordGroups = z.object({
+  groups: z.array(RecordGroup),
+  archivedHolding: z.array(z.uuid()).optional(),
+});
+/** A board's columns. */
+export type RecordGroups = z.infer<typeof RecordGroups>;
 
 /** Records by id, up to 500, in the order asked. */
 export const GetRecordsInput = WorkspaceScoped.extend({
@@ -327,10 +381,18 @@ export type TrashedRecord = z.infer<typeof TrashedRecord>;
  * that doesn't decode is 400 `INPUT_INVALID` on `cursor` (start again from
  * the top). `getTrashed` answers a record in the trash; a live, missing or
  * hidden one is `NOT_FOUND`.
+ *
+ * Spec 0021: `groups` answers a board's first cards and counts, every group
+ * or none: 422 `CONFIG_INVALID` when `groupBy` is not a live status or single
+ * select, has more than 50 live options, or a group id is not one of its
+ * options; `FILTER_INVALID` as `query` (a hidden grouping attribute too);
+ * 503 `QUERY_CANCELLED` when the whole call passes its 10 second deadline. It
+ * shares `query`'s 6 places per workspace.
  */
 export const recordsContract = {
   query: oc.input(QueryRecordsInput).output(RecordPage),
   count: oc.input(CountRecordsInput).output(RecordCount),
+  groups: oc.input(RecordGroupsInput).output(RecordGroups),
   get: oc.input(GetRecordsInput).output(z.array(RecordView)),
   create: oc.input(CreateRecordInput).output(WrittenRecord),
   setValues: oc.input(SetValuesInput).output(WrittenRecord),
