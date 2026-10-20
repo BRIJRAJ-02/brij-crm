@@ -9,6 +9,7 @@ import type {
   PublicBookInput,
   PublicBookingPage,
   PublicManagedBooking,
+  PublicPrefill,
   PublicSlots,
   PublicViewerAnswer,
 } from '@crm/contracts/booking';
@@ -24,6 +25,7 @@ export type {
   PublicManagedBooking,
   PublicBookingPage,
   PublicLocation,
+  PublicPrefill,
   PublicSlot,
   PublicSlots,
   PublicViewer,
@@ -52,6 +54,8 @@ export interface BookingClient {
   connectUrl(publicKey: string, returnPath: string): string;
   /** Forgets a guest's connected calendar at once. */
   forget(): Promise<void>;
+  /** The name and email a form's signed hand off carries for this page (spec 0023 AC-1058); empty for anything else. */
+  prefill(publicKey: string, token: string): Promise<PublicPrefill>;
 }
 
 /** A failure answer as a DataError: the API's code and message, its wait, and its issues. */
@@ -135,6 +139,8 @@ export function createBookingClient(options: PublicClientOptions): BookingClient
     forget: async () => {
       await call<unknown>('connect/forget', { method: 'POST', credentials: 'same-origin' });
     },
+    prefill: (publicKey, token) =>
+      call<PublicPrefill>(`${encodeURIComponent(publicKey)}/prefill?${new URLSearchParams({ p: token }).toString()}`),
   };
 }
 

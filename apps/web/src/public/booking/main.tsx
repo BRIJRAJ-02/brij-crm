@@ -8,7 +8,7 @@ import { BookingMessage, BookingProvider } from '@crm/ui/public-booking';
 import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BookingPage } from './BookingPage.tsx';
-import { readPrefill } from './prefill.ts';
+import { readHandoff } from './prefill.ts';
 import { strings } from './strings.ts';
 
 // The guest page loads on its own: a visitor booking never downloads its changes (move, guests, cancel).
@@ -24,7 +24,7 @@ const publicKey = decodeURIComponent(path?.[1] ?? '');
 const isManage = path?.[2] !== undefined;
 const locale = navigator.languages[0] ?? 'en-US';
 const now = () => Date.now();
-const prefill = readPrefill(address);
+const handoff = readHandoff(address);
 
 const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
@@ -46,7 +46,7 @@ createRoot(root).render(
           locale={locale}
           timeZone={timeZone}
           now={now}
-          {...(prefill === undefined ? {} : { prefill })}
+          {...(handoff === undefined ? {} : { handoff })}
           onBooked={(token) =>
             globalThis.location.assign(
               `/b/${encodeURIComponent(publicKey)}/manage?${new URLSearchParams({ t: token, welcome: '1' }).toString()}`,
