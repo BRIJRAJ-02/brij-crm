@@ -148,6 +148,13 @@ export {
   type ValueChange,
 } from './write.ts';
 export {
+  BULK_EDIT_WORDS,
+  updateMany,
+  type BulkEditChange,
+  type BulkEditInput,
+  type BulkEditOutcome,
+} from './bulk-edit.ts';
+export {
   countTrash,
   deleteRecords,
   MAX_INLINE_RECORDS,

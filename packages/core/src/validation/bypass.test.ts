@@ -14,7 +14,7 @@ import { createObject } from '../objects/objects.ts';
 import { testScope } from '../testing.ts';
 
 /** Writes of record values, which run every rule they touch (AC-254). */
-const RUN_RULES = ['createRecord', 'setValues', 'setRecordValues', 'setValuesBatch'] as const;
+const RUN_RULES = ['createRecord', 'setValues', 'setRecordValues', 'setValuesBatch', 'updateMany'] as const;
 
 /** The writes allowed to skip rules (AC-259). Type change jobs (milestone 3) and computed writes (spec 0015) join later. */
 const SKIP_RULES = ['restoreRecord', 'restoreRecords', 'restoreBatch'] as const;
@@ -131,6 +131,12 @@ describe('every write that runs rules', () => {
             each.ok ? [] : (each.refusals ?? []).map((refusal) => refusal.code),
           );
         }
+        // A bulk edit (spec 0022) answers each record's state.
+        if (typeof answer === 'object' && answer !== null && 'outcomes' in answer && Array.isArray(answer.outcomes)) {
+          return (answer.outcomes as { state: string; refusals?: { code: string }[] }[]).flatMap((each) =>
+            each.state === 'refused' ? (each.refusals ?? []).map((refusal) => refusal.code) : [],
+          );
+        }
         return [];
       } catch (error) {
         if (isRefusal(error)) return error.refusals.map((refusal) => refusal.code);
@@ -142,6 +148,12 @@ describe('every write that runs rules', () => {
       setValues: () => engine.setValues(scope, { recordId, values: bad }),
       setRecordValues: () => engine.setRecordValues(scope, { recordId, values: bad }),
       setValuesBatch: () => engine.setValuesBatch(scope, { items: [{ recordId, values: bad }] }),
+      updateMany: () =>
+        engine.updateMany(scope, {
+          objectId,
+          recordIds: [recordId],
+          edit: { attributeId: code.id, op: 'set', value: 'abcd' },
+        }),
     };
     for (const name of RUN_RULES) expect(await codes(calls[name]), name).toEqual(['VALIDATION_FAILED']);
     // A record that broke the rule before it existed goes to the trash and comes back as it was.

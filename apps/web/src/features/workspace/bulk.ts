@@ -2,7 +2,7 @@
 // delete confirm and their toasts, and the rules the screen applies before
 // anything is sent. Pure, so the node tests cover them; BulkDeleteBar does
 // the showing.
-import type { DeleteResult, UndoResult } from '@crm/data';
+import type { BulkEditResult, BulkOp, DeleteResult, UndoResult } from '@crm/data';
 import type { ToastContent } from '@crm/ui';
 
 /** The most records one request changes; past it, background jobs (milestone 3) take over. */
@@ -69,6 +69,39 @@ export const bulkStrings = {
   nothingLeft: 'Nothing from that delete is still in the trash.',
   /** After an undo of a create (AC-541). */
   undidCreate: (name: string) => `Undid the create of ${name}.`,
+  /** The bulk edit (AC-529, AC-530). */
+  edit: 'Edit',
+  editTitle: (records: string) => `Edit ${records}`,
+  field: 'Field',
+  fieldPlaceholder: 'Choose a field',
+  change: 'Change',
+  value: 'Value',
+  ops: {
+    set: 'Set',
+    clear: 'Clear',
+    add: 'Add',
+    remove: 'Remove',
+    replace: 'Replace',
+  } satisfies Record<BulkOp, string>,
+  checked: 'Checked',
+  unchecked: 'Unchecked',
+  clearsValue: (title: string, records: string) => `${title} will be emptied on ${records}.`,
+  /** AC-529: a unique attribute can't be Set on several records. */
+  uniqueRule: (title: string) => `${title} is unique, so several records can’t share one value.`,
+  noFields: (pluralName: string) => `${pluralName} have no fields you can change in bulk.`,
+  needsField: 'Choose a field to change.',
+  needsValue: 'Give a value, or choose Clear.',
+  apply: (records: string) => `Apply to ${records}`,
+  applying: 'Applying…',
+  updated: (records: string) => `Updated ${records}.`,
+  updatedSome: (records: string, refused: number) =>
+    `Updated ${records}. ${count(refused)} ${refused === 1 ? 'was' : 'were'} refused.`,
+  noneUpdated: (refused: number) =>
+    refused === 1
+      ? '1 record was refused. Its cell says why.'
+      : `${count(refused)} records were refused. Each cell says why.`,
+  nothingChanged: 'Nothing changed: every record already held that value.',
+  undidBulk: (cells: string) => `Undid the edit of ${cells} records.`,
   couldNotUndoCreate: (name: string) => `Couldn’t undo the create of ${name}.`,
 } as const;
 
@@ -172,4 +205,51 @@ export function lifecycleUndoToast(result: UndoResult): ToastContent | undefined
       ? restored
       : `${restored} ${bulkStrings.stillInTrash(result.kept, reasonWords(result.reason, result.kept))}`;
   return { tone: result.kept === 0 ? 'success' : 'danger', message };
+}
+
+/**
+ * The toast after a bulk edit lands (AC-530): "Updated 48 people." with Undo;
+ * "Updated 46 people. 2 were refused." with Retry, which sends the refused
+ * ones again (their cells say why); the failure's own words when the whole
+ * edit was refused (the dialog shows those, so none here).
+ */
+export function editToast(
+  result: BulkEditResult,
+  names: ObjectNames,
+  onUndo: (undoId: string) => void,
+  onRetry?: () => void,
+): ToastContent | undefined {
+  if (result.kind === 'too-many') return { tone: 'danger', message: bulkStrings.tooMany };
+  if (result.kind === 'failed') return undefined;
+  if (result.updated === 0 && result.refused === 0) return { tone: 'success', message: bulkStrings.nothingChanged };
+  if (result.updated === 0 && result.refused > 0) {
+    return {
+      tone: 'danger',
+      message:
+        result.refused === 1 && result.reason !== undefined ? result.reason : bulkStrings.noneUpdated(result.refused),
+    };
+  }
+  const records = recordsWord(result.updated, names);
+  if (result.refused > 0) {
+    return {
+      tone: 'danger',
+      message: bulkStrings.updatedSome(records, result.refused),
+      ...(onRetry === undefined ? {} : { action: { label: bulkStrings.retry, onAction: onRetry } }),
+    };
+  }
+  const { undoId } = result;
+  return {
+    tone: 'success',
+    message: bulkStrings.updated(records),
+    ...(undoId === undefined
+      ? {}
+      : {
+          action: {
+            label: bulkStrings.undo,
+            onAction: () => {
+              onUndo(undoId);
+            },
+          },
+        }),
+  };
 }

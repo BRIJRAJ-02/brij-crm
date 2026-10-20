@@ -15,6 +15,8 @@ import {
   type RecordView,
   type RestoreBatchInput,
   type RestoreBatchResults,
+  type UpdateManyInput,
+  type UpdateManyResults,
   type SetValuesBatchInput,
   type SetValuesInput,
 } from '@crm/contracts';
@@ -108,6 +110,7 @@ function fakeApi() {
   const gets: Pending<readonly string[], RecordView[]>[] = [];
   const deletes: Pending<DeleteManyInput, DeleteManyResults['results']>[] = [];
   const restores: Pending<RestoreBatchInput, RestoreBatchResults['results']>[] = [];
+  const bulkEdits: Pending<UpdateManyInput, UpdateManyResults['results']>[] = [];
   // Link deltas (spec 0014): each answered with its record, the version it wrote and the records it changed.
   const linkAdds: Pending<AddLinksInput, Omit<LinksWritten, 'echoes'>>[] = [];
   const linkRemoves: Pending<RemoveLinksInput, Omit<LinksWritten, 'echoes'>>[] = [];
@@ -161,6 +164,7 @@ function fakeApi() {
     // Spec 0022: each answers its results with one echo.
     deleteMany: async (input) => ({ results: await queue(deletes)(input), echoes: 1 }),
     restoreBatch: async (input) => ({ mode: 'inline' as const, results: await queue(restores)(input), echoes: 1 }),
+    updateMany: async (input) => ({ results: await queue(bulkEdits)(input), echoes: 1 }),
     linksAdd: async (input) => ({ ...(await queue(linkAdds)(input)), echoes: 2 }),
     linksRemove: async (input) => ({ ...(await queue(linkRemoves)(input)), echoes: 2 }),
     // Spec 0021: a board's first cards and counts.
@@ -177,6 +181,7 @@ function fakeApi() {
     getAttributes,
     deletes,
     restores,
+    bulkEdits,
     linkAdds,
     linkRemoves,
     groups,
@@ -1929,6 +1934,102 @@ describe('validation rules in the browser (spec 0013, AC-256, AC-257)', () => {
     frame();
     expect(creates).toEqual([]);
     expect(view.getSnapshot().source.count).toBe(3);
+  });
+});
+
+describe('bulk edit (spec 0022, AC-530, AC-540)', () => {
+  const edited = (row: number, city: string, second: number) =>
+    rowOf(idAt(row), { [NAME]: `P${String(row)}`, [CITY]: city }, { [CITY]: version(second) }, second);
+
+  it('shows the value on loaded rows at once, lands, and undoes with the before the server read', async () => {
+    const { layer, view, bulkEdits, batches, frame } = await readyView();
+    const editing = layer.bulkEdit(WS, PEOPLE, [idAt(0), idAt(1)], {
+      attributeId: CITY,
+      type: 'text',
+      isMulti: false,
+      op: 'set',
+      value: 'Paris',
+    });
+    frame();
+    expect(view.getSnapshot().source.getItem(0)?.values[CITY]).toBe('Paris');
+    await settle();
+    expect(bulkEdits[0]?.input).toMatchObject({
+      workspace: WS,
+      objectId: PEOPLE,
+      recordIds: [idAt(0), idAt(1)],
+      edit: { attributeId: CITY, op: 'set', value: 'Paris' },
+    });
+    bulkEdits[0]?.answer([
+      { recordId: idAt(0), record: edited(0, 'Paris', 4), written: { [CITY]: version(4) }, before: 'London' },
+      { recordId: idAt(1), record: edited(1, 'Paris', 5), written: { [CITY]: version(5) }, before: 'Leeds' },
+    ]);
+    const outcome = await editing;
+    expect(outcome).toMatchObject({ kind: 'done', updated: 2, unchanged: 0, refused: 0 });
+    expect(outcome.kind === 'done' ? outcome.undoId : undefined).toBeDefined();
+    const undone = layer.undo.run(WS);
+    await settle();
+    expect(batches[0]?.input.items).toEqual([
+      { recordId: idAt(0), values: { [CITY]: { value: 'London', ifVersionId: version(4) } } },
+      { recordId: idAt(1), values: { [CITY]: { value: 'Leeds', ifVersionId: version(5) } } },
+    ]);
+    batches[0]?.answer({
+      results: [
+        { recordId: idAt(0), record: edited(0, 'London', 6) },
+        { recordId: idAt(1), record: edited(1, 'Leeds', 7) },
+      ],
+      echoes: 1,
+    });
+    expect(await undone).toMatchObject({ kind: 'undone', action: 'bulk', cells: 2, undone: 2 });
+  });
+
+  it('rolls a refused record back with its cell marked, and a retry that changed nothing pushes no undo', async () => {
+    const { layer, view, bulkEdits, frame } = await readyView();
+    const editing = layer.bulkEdit(WS, PEOPLE, [idAt(0), idAt(1)], {
+      attributeId: CITY,
+      type: 'text',
+      isMulti: false,
+      op: 'set',
+      value: 'Paris',
+    });
+    await settle();
+    bulkEdits[0]?.answer([
+      { recordId: idAt(0), record: edited(0, 'Paris', 4) },
+      {
+        recordId: idAt(1),
+        refusals: [{ code: 'VALIDATION_FAILED', message: 'City must be in Europe.', attributeId: CITY }],
+      },
+    ]);
+    expect(await editing).toEqual({
+      kind: 'done',
+      updated: 0,
+      unchanged: 1,
+      refused: 1,
+      reason: 'City must be in Europe.',
+    });
+    frame();
+    expect(view.getSnapshot().source.getItem(1)?.values[CITY]).not.toBe('Paris');
+    expect(view.getSnapshot().cellErrors.get(`${idAt(1)}:${CITY}`)).toBe('City must be in Europe.');
+    expect(layer.undo.depth(WS)).toBe(0);
+  });
+
+  it('rolls every row back when the whole edit is refused, and refuses more than 500 before anything shows', async () => {
+    const { layer, view, bulkEdits, frame } = await readyView();
+    const editing = layer.bulkEdit(WS, PEOPLE, [idAt(0)], {
+      attributeId: CITY,
+      type: 'text',
+      isMulti: false,
+      op: 'clear',
+    });
+    await settle();
+    bulkEdits[0]?.fail(dataError('FORBIDDEN', 'You can view People but not change them.'));
+    expect(await editing).toMatchObject({ kind: 'failed', error: { code: 'FORBIDDEN' } });
+    frame();
+    expect(view.getSnapshot().source.getItem(0)?.values[CITY]).not.toBeNull();
+    const ids = Array.from({ length: 501 }, (_, at) => idAt(at));
+    expect(
+      await layer.bulkEdit(WS, PEOPLE, ids, { attributeId: CITY, type: 'text', isMulti: false, op: 'clear' }),
+    ).toEqual({ kind: 'too-many', limit: 500 });
+    expect(bulkEdits).toHaveLength(1);
   });
 });
 

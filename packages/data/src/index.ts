@@ -89,6 +89,8 @@ import { createRecordSearch, type RecordSearch } from './records/search.ts';
 import type { BoardQuery, BoardStore } from './records/board.ts';
 import type { RestoreSummary, Trash, TrashView } from './trash/store.ts';
 import type {
+  BulkEditRequest,
+  BulkEditResult,
   CellChange,
   DeleteResult,
   EditOutcome,
@@ -283,6 +285,8 @@ export type { LiveStatus } from './live/live.ts';
 export type { Notice } from './notice.ts';
 export type { UndoKind } from './records/history.ts';
 export type {
+  BulkEditRequest,
+  BulkEditResult,
   CellChange,
   DeleteResult,
   EditOutcome,
@@ -302,6 +306,16 @@ export type { TrashedSource, TrashedState } from './records/trashed.ts';
 export type { RowNote } from './records/view.ts';
 export type { RestoreSummary, TrashRow, TrashState, TrashStatus, TrashView } from './trash/store.ts';
 export { TRASH_NAME_COLUMN } from './trash/columns.ts';
+export {
+  applyOp,
+  bulkExclusion,
+  bulkOpsFor,
+  holdsList,
+  opTakesValue,
+  type BulkAttribute,
+  type BulkExclusion,
+  type BulkOp,
+} from '@crm/contracts/bulk-ops';
 export type { NameState, RecordRef } from './records/names.ts';
 export type { WindowCount, WindowMode } from './records/windows.ts';
 export type { FilterGroup, SortRule, SortRules } from '@crm/contracts/values';
@@ -1354,6 +1368,11 @@ export function createDataLayer({
       landed(
         input.workspace,
         call((options) => api.records.restoreBatch(input, options)),
+      ),
+    updateMany: (input) =>
+      landed(
+        input.workspace,
+        call((options) => api.records.updateMany({ ...input, recordIds: [...input.recordIds] }, options)),
       ),
     linksAdd: (input) =>
       landed(
@@ -2590,6 +2609,19 @@ export function createDataLayer({
         if (result.kind === 'done' && result.deleted > 0) trashMoved(workspace);
         return result;
       },
+      /**
+       * Edits one attribute of up to 500 records of one object as one action
+       * (spec 0022, AC-530): the rows this tab holds show the new value at
+       * once; one `records.updateMany` computes each record's value under its
+       * lock. A refused record rolls back with its cell marked; what changed
+       * can be undone (Cmd+Z, or `undo.run` with the answer's `undoId`).
+       */
+      bulkEdit: async (
+        workspace: string,
+        objectId: string,
+        recordIds: readonly string[],
+        request: BulkEditRequest,
+      ): Promise<BulkEditResult> => (await recordsLayer()).bulkEdit(workspace, objectId, recordIds, request),
       /**
        * One record with the attributes a screen shows (spec 0006, `records.one`;
        * the record page, spec 0017): served from the store every table reads

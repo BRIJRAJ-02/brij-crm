@@ -3,9 +3,10 @@
 // it), and setting values, each write answering the fresh record. Every read
 // and write goes through the scope the access door made.
 import { and, eq, isNotNull } from 'drizzle-orm';
-import type { BatchRecordResult, RecordPage, RecordView, TrashedRecord } from '@crm/contracts';
+import type { BatchRecordResult, RecordPage, RecordView, TrashedRecord, UpdateOutcome } from '@crm/contracts';
 import type { FilterGroup, SortRules } from '@crm/contracts/values';
 import { schema } from '@crm/db';
+import { updateMany, type BulkEditInput } from '../engine/bulk-edit.ts';
 import { canonicalId, checkId, isUuidV7, uuidV7Time } from '../engine/ids.ts';
 import { queryPage } from '../engine/query/page.ts';
 import {
@@ -343,5 +344,46 @@ export async function editRecords(
     return record === undefined
       ? { recordId: outcome.recordId, refusals: [{ code: 'RECORD_DELETED', message: TRASHED_SINCE }] }
       : { recordId: outcome.recordId, record, written: writtenOf(outcome.results) };
+  });
+}
+
+/**
+ * Edits one attribute of up to 500 records of one object in one write (spec
+ * 0022, AC-530): `updateMany` in the engine computes each record's value
+ * under its lock, and this answers each record in the order asked: fresh
+ * when it landed (read back in one read, reusing the attributes the write
+ * loaded), with `written` and `before` only when the call changed it (a
+ * retry after a lost answer changes nothing, so carries neither, AC-540); or
+ * its refusals.
+ */
+export async function bulkEditRecords(
+  scope: EngineScope,
+  input: BulkEditInput,
+  hooks: readonly AfterWrite[] = [],
+): Promise<UpdateOutcome[]> {
+  const { outcomes, attributes } = await updateMany(scope, input, hooks);
+  const landed = outcomes.flatMap((outcome) => (outcome.state === 'refused' ? [] : [outcome.recordId]));
+  const views = landed.length === 0 ? [] : await getRecords(scope, { ids: landed, attributes });
+  const byId = new Map(views.map((view) => [view.id, view]));
+  const attributeId = canonicalId(input.edit.attributeId);
+  return outcomes.map((outcome): UpdateOutcome => {
+    if (outcome.state === 'refused') {
+      return {
+        recordId: outcome.recordId,
+        refusals: outcome.refusals.map((refusal) => ({
+          code: refusal.code,
+          message: refusal.message,
+          ...(refusal.attributeId === undefined ? {} : { attributeId: refusal.attributeId }),
+          ...(refusal.ruleId === undefined ? {} : { ruleId: refusal.ruleId }),
+        })),
+      };
+    }
+    const record = byId.get(outcome.recordId);
+    if (record === undefined) {
+      return { recordId: outcome.recordId, refusals: [{ code: 'RECORD_DELETED', message: TRASHED_SINCE }] };
+    }
+    return outcome.state === 'changed'
+      ? { recordId: outcome.recordId, record, written: { [attributeId]: outcome.versionId }, before: outcome.before }
+      : { recordId: outcome.recordId, record };
   });
 }

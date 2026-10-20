@@ -28,6 +28,7 @@ export * from './booking/index.ts';
 export * from './booking/blocks.ts';
 export * from './booking/pages.ts';
 export * from './bulk.ts';
+export * from './bulk-ops.ts';
 export * from './calendar.ts';
 export * from './change-event.ts';
 export * from './errors.ts';

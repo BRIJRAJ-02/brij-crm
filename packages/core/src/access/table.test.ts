@@ -654,6 +654,20 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   restoreBatch: refused('FORBIDDEN', async (scope, world) =>
     core.restoreBatch(scope, { batchId: await batchOf(world) }).then(refusedOutcome),
   ),
+  updateMany: refused('FORBIDDEN', (scope, world) =>
+    core.updateMany(scope, {
+      objectId: world.people,
+      recordIds: [world.recordId],
+      edit: { attributeId: world.jobTitle, op: 'set', value: 'Pilot' },
+    }),
+  ),
+  bulkEditRecords: refused('FORBIDDEN', (scope, world) =>
+    core.bulkEditRecords(scope, {
+      objectId: world.people,
+      recordIds: [world.recordId],
+      edit: { attributeId: world.jobTitle, op: 'clear' },
+    }),
+  ),
   // Link deltas (spec 0014): a record the principal may only read refuses before any far record is looked at.
   changeLinks: refused('FORBIDDEN', (scope, world) =>
     core.changeLinks(scope, {

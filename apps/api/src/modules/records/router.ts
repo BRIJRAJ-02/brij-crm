@@ -1,5 +1,6 @@
 import {
   addRecord,
+  bulkEditRecords,
   countMatches,
   deleteRecords,
   editRecord,
@@ -174,5 +175,25 @@ export const recordsRouter = member.records.router({
       restoreBatch(context.scope, { batchId: input.batchId }, hooks),
     );
     return { mode: 'inline' as const, results: [...result], echoes };
+  }),
+  // Bulk edit (spec 0022, milestone 2): one attribute of up to 500 records, each computed under its lock.
+  updateMany: member.records.updateMany.handler(async ({ context, input }) => {
+    const { result, echoes } = await commitCounted(context, { mutationId: input.mutationId }, (hooks) =>
+      bulkEditRecords(
+        context.scope,
+        {
+          objectId: input.objectId,
+          recordIds: input.recordIds,
+          edit: {
+            attributeId: input.edit.attributeId,
+            op: input.edit.op,
+            ...(input.edit.value === undefined ? {} : { value: input.edit.value }),
+          },
+          ...(input.timeZone === undefined ? {} : { timeZone: input.timeZone }),
+        },
+        hooks,
+      ),
+    );
+    return { results: result, echoes };
   }),
 });

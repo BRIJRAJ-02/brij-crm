@@ -24,9 +24,12 @@ import type {
   ChangeEvent,
   SetValuesBatchInput,
   SetValuesInput,
+  UpdateManyInput,
+  UpdateManyResults,
   WrittenRecord,
 } from '@crm/contracts';
 import { BOARD_BLOCK } from '@crm/contracts/board';
+import { applyOp, type BulkOp } from '@crm/contracts/bulk-ops';
 import { canJump, type JumpAttribute } from '@crm/contracts/jump';
 import type { FilterGroup, Hue, RecordRefDisplay, SortRules } from '@crm/contracts/values';
 import type { PatternCompiler, RuleFailure } from '@crm/contracts/validation';
@@ -213,6 +216,8 @@ export interface RecordsApi {
   readonly deleteMany: (input: DeleteManyInput) => Promise<DeleteManyResults>;
   /** Undoes a delete by its batch (spec 0022). */
   readonly restoreBatch: (input: RestoreBatchInput) => Promise<RestoreBatchResults>;
+  /** Edits one attribute of up to 500 records of one object (spec 0022, milestone 2). */
+  readonly updateMany: (input: UpdateManyInput) => Promise<UpdateManyResults>;
   /** Link deltas (spec 0014): one side of one record, never the whole list. */
   readonly linksAdd: (input: AddLinksInput) => Promise<LinksWritten>;
   readonly linksRemove: (input: RemoveLinksInput) => Promise<LinksWritten>;
@@ -295,6 +300,39 @@ export type DeleteResult =
       readonly refused: number;
       readonly reason?: string;
       readonly recordName?: string;
+      readonly undoId?: string;
+    };
+
+/**
+ * A bulk edit as a screen asks for it (spec 0022, AC-529): the attribute with
+ * its type and whether it holds a list (what the rows on screen show at once
+ * is computed from them), the operation, and the value (absent for Clear).
+ */
+export interface BulkEditRequest {
+  readonly attributeId: string;
+  readonly type: string;
+  readonly isMulti: boolean;
+  readonly op: BulkOp;
+  readonly value?: unknown;
+}
+
+/**
+ * What a bulk edit came to (spec 0022, AC-530), for the screen's toast:
+ * refused whole over 500 records (before anything showed), failed whole (a
+ * read only object or field, the attribute's rules for the call, the
+ * network), or how many records changed, already held the value, and were
+ * refused (rolled back with their cell marked, the first reason given), with
+ * the undo entry it pushed when it changed any.
+ */
+export type BulkEditResult =
+  | { readonly kind: 'too-many'; readonly limit: number }
+  | { readonly kind: 'failed'; readonly error: DataError }
+  | {
+      readonly kind: 'done';
+      readonly updated: number;
+      readonly unchanged: number;
+      readonly refused: number;
+      readonly reason?: string;
       readonly undoId?: string;
     };
 
@@ -2694,6 +2732,128 @@ export function createRecordsLayer({
   }
 
   /**
+   * Edits one attribute of up to 500 records of one object as one action
+   * (spec 0022, AC-530): the rows this tab holds with the attribute show the
+   * new value at once (`applyOp`, the function the server runs under each
+   * record's lock), then one `records.updateMany`. Each record lands or rolls
+   * back on its own; a refused one's cell says why, and a record gone on the
+   * server leaves every window. The cells it changed go on the undo stack as
+   * one entry, each with the value the server read under its lock (`before`)
+   * and the version it wrote, so Cmd+Z puts them back as a paste's undo does,
+   * keeping cells someone changed since. A retry after a lost answer changes
+   * nothing, carries no `before`, and pushes nothing (AC-540).
+   */
+  async function bulkEdit(
+    workspace: string,
+    objectId: string,
+    recordIds: readonly string[],
+    request: BulkEditRequest,
+  ): Promise<BulkEditResult> {
+    const ids = [...new Set(recordIds)];
+    if (ids.length > MAX_BATCH_RECORDS) return { kind: 'too-many', limit: MAX_BATCH_RECORDS };
+    if (ids.length === 0) return { kind: 'done', updated: 0, unchanged: 0, refused: 0 };
+    const { attributeId } = request;
+    const cellOf = (recordId: string) => `${recordId}:${attributeId}`;
+    const mutationId = mintId();
+    setCellErrors(ids.map((id) => [cellOf(id), undefined] as const));
+    // What shows at once: only rows whose value this tab read; the others change when the answer lands.
+    const layers = new Map<string, Layer<RecordView>>();
+    for (const id of ids) {
+      const shown = store.get(id);
+      if (shown === undefined || !Object.hasOwn(shown.values, attributeId)) continue;
+      const next = applyOp(request, request.op, shown.values[attributeId] ?? null, request.value);
+      layers.set(id, store.edit(id, { [attributeId]: next }, mutationId));
+    }
+    mutations.sent(mutationId);
+    const answer = delivered(() =>
+      api.updateMany({
+        workspace,
+        objectId,
+        recordIds: ids,
+        edit: {
+          attributeId,
+          op: request.op,
+          ...(request.value === undefined ? {} : { value: request.value }),
+        },
+        timeZone: timeZone(),
+        mutationId,
+      }),
+    );
+    // An undo pressed meanwhile waits for this answer, so it undoes the edit rather than what came before.
+    holdUndo(workspace, answer);
+    let results: UpdateManyResults['results'];
+    try {
+      const { echoes, results: answered } = await answer;
+      mutations.answered(mutationId, echoes);
+      results = answered;
+    } catch (error) {
+      mutations.forget(mutationId);
+      for (const layer of layers.values()) layer.refuse();
+      return { kind: 'failed', error: toDataError(error) };
+    }
+    const landed: RecordView[] = [];
+    const gone: string[] = [];
+    const marks: (readonly [string, string])[] = [];
+    const cells: UndoCell[] = [];
+    let updated = 0;
+    let firstReason: string | undefined;
+    for (const result of results) {
+      const layer = layers.get(result.recordId);
+      if (result.record !== undefined) {
+        const row = result.record;
+        if (layer === undefined) store.receive([row]);
+        else layer.confirm(row);
+        landed.push(row);
+        const versionId = result.written?.[attributeId];
+        if (versionId === undefined) continue;
+        updated += 1;
+        own.add(versionId, {
+          workspace,
+          objectId,
+          recordId: row.id,
+          attributeId,
+          value: row.values[attributeId] ?? null,
+          recordName: row.display.name,
+        });
+        // Only what the server read under the lock: the client never invents `before` from its own rows.
+        if (Object.hasOwn(result, 'before')) {
+          cells.push({ recordId: row.id, attributeId, before: result.before ?? null, writtenVersionId: versionId });
+        }
+        continue;
+      }
+      layer?.refuse();
+      const [first] = result.refusals ?? [];
+      if (first?.code === 'RECORD_DELETED' || first?.code === 'NOT_FOUND') {
+        gone.push(result.recordId);
+        continue;
+      }
+      const message = first?.message ?? RECORD_WORDS.notSaved(1);
+      firstReason ??= message;
+      marks.push([cellOf(result.recordId), message] as const);
+    }
+    dropRecords(workspace, gone);
+    setCellErrors(marks);
+    const landedIds = landed.map((row) => row.id);
+    for (const entry of viewsOf(workspace)) {
+      if (entry.objectId !== objectId || !landedIds.some((id) => entry.shows(id))) continue;
+      entry.edited(landedIds);
+      const order = entry.orderAttributes();
+      if (order.any || order.ids.has(attributeId)) entry.markDirty();
+    }
+    const pushed = cells.length > 0;
+    if (pushed) undo.push(workspace, { id: mutationId, kind: 'bulk', objectId, cells });
+    const refused = marks.length + gone.length;
+    return {
+      kind: 'done',
+      updated,
+      unchanged: landed.length - updated,
+      refused,
+      ...(firstReason === undefined ? {} : { reason: firstReason }),
+      ...(pushed ? { undoId: mutationId } : {}),
+    };
+  }
+
+  /**
    * Undoes a delete (spec 0022, AC-526): `records.restoreBatch` brings back
    * the records still in the trash with its batch, and every view of the
    * object settles at once so they return to their rows. Records that can't
@@ -3359,6 +3519,18 @@ export function createRecordsLayer({
      */
     deleteMany: (workspace: string, objectId: string, recordIds: readonly string[]): Promise<DeleteResult> =>
       trashRecords(workspace, objectId, recordIds, { undoable: true }),
+
+    /**
+     * Edits one attribute of up to 500 records as one undoable action (spec
+     * 0022): loaded rows show it at once, the answer says how many changed and
+     * how many were refused (see `bulkEdit`).
+     */
+    bulkEdit: (
+      workspace: string,
+      objectId: string,
+      recordIds: readonly string[],
+      request: BulkEditRequest,
+    ): Promise<BulkEditResult> => bulkEdit(workspace, objectId, recordIds, request),
 
     undo: {
       /**

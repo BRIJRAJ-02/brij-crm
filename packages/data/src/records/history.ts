@@ -66,8 +66,8 @@ export interface UndoCell {
   readonly replacedVersionId?: string;
 }
 
-/** What one action was, for the toast that names it: one cell, a paste, or a range clear. */
-export type UndoKind = 'cell' | 'paste' | 'clear';
+/** What one action was, for the toast that names it: one cell, a paste, a range clear, or a bulk edit (spec 0022). */
+export type UndoKind = 'cell' | 'paste' | 'clear' | 'bulk';
 
 /** One edit on the undo stack: its kind, its object, and every cell of it that landed. */
 export interface CellsEntry {

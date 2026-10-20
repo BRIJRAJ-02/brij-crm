@@ -1,13 +1,14 @@
 // Brief
-// Purpose: act on the rows ticked in an object's table: how many, and Delete (spec 0022, milestone 1).
-// Main task: tick rows, press Delete (one goes at once, several after a confirm), and undo it from the toast or ⌘Z.
-// Leaves out: Edit (milestone 2), "Select all matching" and anything over 500 records (background jobs, milestone 3).
-import type { ObjectSummary, RecordsView, ViewState } from '@crm/data';
+// Purpose: act on the rows ticked in an object's table: how many, Edit and Delete (spec 0022, milestones 1 and 2).
+// Main task: tick rows, press Edit (one field on all of them) or Delete (one at once, several after a confirm), undo from the toast or ⌘Z.
+// Leaves out: "Select all matching" and anything over 500 records (background jobs, milestone 3).
+import type { AttributeDefinition, ObjectSummary, RecordsView, ViewState } from '@crm/data';
 import { BulkActionBar, Button, Callout, Modal } from '@crm/ui';
 import { noRows, selectedCount, type GridSelection } from '@crm/ui/grid';
 import { useRouteContext } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { bulkStrings, deleteOffer, deleteToast, needsConfirm, recordsWord } from './bulk.ts';
+import { BulkEditDialog, type BulkEditChoice } from './BulkEditDialog.tsx';
+import { bulkStrings, deleteOffer, deleteToast, editToast, needsConfirm, recordsWord } from './bulk.ts';
 import { runUndo } from './useUndoShortcut.ts';
 
 /** A table's ticked rows, and what changes them. */
@@ -55,11 +56,11 @@ export function useTableSelection(view: RecordsView, state: Pick<ViewState, 'gon
   };
 }
 
-/** What the table's bulk delete hands the screen. */
+/** What the table's bulk actions hand the screen. */
 export interface BulkDelete {
   /** The floating bar while rows are ticked (the DataGrid's `floatingBar`), or nothing. */
   readonly bar: ReactNode;
-  /** The confirm for two or more: always mounted, so it plays its exit. */
+  /** The delete confirm and the edit dialog: always mounted, so they play their exits. */
   readonly dialog: ReactNode;
 }
 
@@ -67,6 +68,8 @@ export interface BulkDelete {
 export interface BulkDeleteOptions {
   readonly slug: string;
   readonly object: ObjectSummary;
+  /** The object's attributes: what the edit dialog offers (AC-529). */
+  readonly attributes: readonly AttributeDefinition[];
   readonly selection: GridSelection;
   /** How many records the view holds, for the bar. */
   readonly total: number;
@@ -81,7 +84,15 @@ export interface BulkDeleteOptions {
  * and Clear; Delete of several asks first, in a danger confirm, and every
  * delete ends in one toast with Undo.
  */
-export function useBulkDelete({ slug, object, selection, total, onClear, onDeleting }: BulkDeleteOptions): BulkDelete {
+export function useBulkDelete({
+  slug,
+  object,
+  attributes,
+  selection,
+  total,
+  onClear,
+  onDeleting,
+}: BulkDeleteOptions): BulkDelete {
   const { data, toasts } = useRouteContext({ from: '__root__' });
   // The ids the confirm asks about, kept while it plays its exit.
   const [asking, setAsking] = useState<readonly string[] | undefined>(undefined);
@@ -117,6 +128,37 @@ export function useBulkDelete({ slug, object, selection, total, onClear, onDelet
     );
   };
 
+  // The ids the edit dialog changes, fixed when it opens, so a row leaving meanwhile doesn't change what Apply says.
+  const [editing, setEditing] = useState<readonly string[] | undefined>(undefined);
+  const [lastEdited, setLastEdited] = useState<readonly string[]>([]);
+  if (editing !== undefined && editing !== lastEdited) setLastEdited(editing);
+  const lastEditToast = useRef<string | undefined>(undefined);
+
+  const edit = async (recordIds: readonly string[], choice: BulkEditChoice) => {
+    const result = await data.records.bulkEdit(slug, object.id, recordIds, {
+      attributeId: choice.definition.id,
+      type: choice.definition.type,
+      isMulti: choice.definition.isMulti,
+      op: choice.op,
+      ...(Object.hasOwn(choice, 'value') ? { value: choice.value } : {}),
+    });
+    const toast = editToast(
+      result,
+      object,
+      (undoId) => {
+        runUndo(data, toasts, slug, undoId);
+      },
+      () => {
+        void edit(recordIds, choice);
+      },
+    );
+    if (toast !== undefined) {
+      if (lastEditToast.current !== undefined) toasts.dismiss(lastEditToast.current);
+      lastEditToast.current = toasts.toast(toast);
+    }
+    return result;
+  };
+
   const shownAsk = asking ?? lastAsked;
   const words = recordsWord(shownAsk.length, object);
   const bar =
@@ -132,48 +174,71 @@ export function useBulkDelete({ slug, object, selection, total, onClear, onDelet
             {bulkStrings.tooMany}
           </Callout>
         ) : (
-          <Button
-            variant="danger"
-            icon="trash"
-            onPress={() => {
-              if (needsConfirm(ids.length)) setAsking(ids);
-              else remove(ids);
-            }}
-          >
-            {bulkStrings.delete}
-          </Button>
+          <>
+            <Button
+              icon="pencil"
+              onPress={() => {
+                setEditing(ids);
+              }}
+            >
+              {bulkStrings.edit}
+            </Button>
+            <Button
+              variant="danger"
+              icon="trash"
+              onPress={() => {
+                if (needsConfirm(ids.length)) setAsking(ids);
+                else remove(ids);
+              }}
+            >
+              {bulkStrings.delete}
+            </Button>
+          </>
         )}
       </BulkActionBar>
     );
+  const editIds = editing ?? lastEdited;
   const dialog = (
-    <Modal
-      title={bulkStrings.confirmTitle(words)}
-      tone="danger"
-      isOpen={asking !== undefined}
-      onOpenChange={(open) => {
-        if (!open) setAsking(undefined);
-      }}
-      actions={
-        <>
-          <Button slot="close" kbd="ESC">
-            {bulkStrings.cancel}
-          </Button>
-          <Button
-            variant="danger-solid"
-            icon="trash"
-            onPress={() => {
-              const confirmed = asking;
-              setAsking(undefined);
-              if (confirmed !== undefined) remove(confirmed);
-            }}
-          >
-            {bulkStrings.confirmAction(words)}
-          </Button>
-        </>
-      }
-    >
-      {bulkStrings.confirmText}
-    </Modal>
+    <>
+      <BulkEditDialog
+        isOpen={editing !== undefined}
+        onOpenChange={(open) => {
+          if (!open) setEditing(undefined);
+        }}
+        object={object}
+        attributes={attributes}
+        count={editIds.length}
+        onApply={(choice) => edit(editIds, choice)}
+      />
+      <Modal
+        title={bulkStrings.confirmTitle(words)}
+        tone="danger"
+        isOpen={asking !== undefined}
+        onOpenChange={(open) => {
+          if (!open) setAsking(undefined);
+        }}
+        actions={
+          <>
+            <Button slot="close" kbd="ESC">
+              {bulkStrings.cancel}
+            </Button>
+            <Button
+              variant="danger-solid"
+              icon="trash"
+              onPress={() => {
+                const confirmed = asking;
+                setAsking(undefined);
+                if (confirmed !== undefined) remove(confirmed);
+              }}
+            >
+              {bulkStrings.confirmAction(words)}
+            </Button>
+          </>
+        }
+      >
+        {bulkStrings.confirmText}
+      </Modal>
+    </>
   );
   return { bar, dialog };
 }

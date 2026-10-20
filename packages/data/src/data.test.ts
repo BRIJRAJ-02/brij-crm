@@ -9,6 +9,7 @@ import {
   type ChangeEvent,
   type DeleteManyResults,
   type RestoreResults,
+  type UpdateManyResults,
   type TrashPage,
   type JobView,
   type Me,
@@ -147,6 +148,8 @@ interface Behaviour {
   /** Bulk delete and its undo (spec 0022): each record's outcome. */
   deleteMany: (recordIds: readonly string[]) => DeleteManyResults['results'];
   restoreBatch: (batchId: string) => RestoreResults['results'];
+  /** Bulk edit (spec 0022, milestone 2): each record's outcome. */
+  updateMany: (recordIds: readonly string[]) => UpdateManyResults['results'];
   /** The trash (spec 0022): a page, the count, a restore's outcomes. */
   trashQuery: () => TrashPage;
   trashCount: () => { count: number; atLeast: boolean };
@@ -195,6 +198,7 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
     viewLayout: notServed,
     deleteMany: notServed,
     restoreBatch: notServed,
+    updateMany: notServed,
     trashQuery: () => ({ items: [] }),
     trashCount: () => ({ count: 0, atLeast: false }),
     trashRestore: notServed,
@@ -363,6 +367,11 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         mutationIds.push(input.mutationId);
         sent.push(input);
         return { mode: 'inline' as const, results: behaviour.restoreBatch(input.batchId), echoes: 1 };
+      }),
+      updateMany: os.records.updateMany.handler(({ input }) => {
+        mutationIds.push(input.mutationId);
+        sent.push(input);
+        return { results: behaviour.updateMany(input.recordIds), echoes: 1 };
       }),
     },
     trash: {

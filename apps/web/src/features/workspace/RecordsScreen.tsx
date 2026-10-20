@@ -352,6 +352,7 @@ export function RecordsScreen({
   const bulk = useBulkDelete({
     slug,
     object,
+    attributes,
     selection: ticked.selection,
     total: state.count.count,
     onClear: () => {

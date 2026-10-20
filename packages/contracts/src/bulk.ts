@@ -1,9 +1,11 @@
-// Bulk actions (spec 0022): deleting many records of one object at once, and
-// undoing a delete by its batch. Milestone 1 is inline only, up to 500
-// records; bigger selections wait for background jobs (milestone 3).
+// Bulk actions (spec 0022): deleting or editing many records of one object at
+// once, and undoing a delete by its batch. Up to 500 records go inline in one
+// write; bigger selections run as background jobs.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
+import { BULK_OPS } from './bulk-ops.ts';
 import { ApiRefusal } from './errors.ts';
+import { RecordView } from './records.ts';
 import { WorkspaceScoped } from './workspaces.ts';
 import { Uuid, uuidV7 } from './values/ids.ts';
 
@@ -96,14 +98,77 @@ export const RestoreBatchResults = RestoreResults.extend({ mode: z.literal('inli
 /** An undone delete's outcomes. */
 export type RestoreBatchResults = z.infer<typeof RestoreBatchResults>;
 
+/** One bulk edit operation (AC-529): Set or Clear a single value; Add, Remove, Replace or Clear a list. */
+export const BulkOpName = z.enum(BULK_OPS);
+
+/**
+ * What a bulk edit changes (AC-529): one attribute, the operation, and the
+ * value (absent for Clear), checked by the attribute type's schema on the
+ * server. Strict, as a job's params hold it.
+ */
+export const BulkEdit = z.strictObject({
+  attributeId: z.uuid(),
+  op: BulkOpName,
+  value: z.unknown().optional(),
+});
+/** What a bulk edit changes. */
+export type BulkEdit = z.infer<typeof BulkEdit>;
+
+/**
+ * Edits one attribute of up to 500 records of one object in one write
+ * (AC-530): each record's new value is computed from its current one under
+ * its lock (`applyOp`), and an unchanged record writes nothing.
+ */
+export const UpdateManyInput = WorkspaceScoped.extend({
+  objectId: z.uuid(),
+  recordIds: z
+    .array(z.uuid())
+    .min(1, 'Choose at least one record.')
+    .max(BULK_INLINE_MAX * 2, BULK_TOO_MANY_MESSAGE),
+  edit: BulkEdit,
+  timeZone: z.string().min(1).max(64).optional(),
+  mutationId: z.uuid(),
+});
+/** Records to edit. */
+export type UpdateManyInput = z.infer<typeof UpdateManyInput>;
+
+/**
+ * One record's outcome in a bulk edit: the fresh `record` when it landed,
+ * with `written` (the version made) and `before` (the value read under its
+ * lock) only when this call changed it, so a retry after a lost answer
+ * carries neither (AC-540); or its `refusals`.
+ */
+export const UpdateOutcome = z.object({
+  recordId: z.uuid(),
+  record: RecordView.optional(),
+  written: z.record(z.uuid(), z.uuid()).optional(),
+  before: z.unknown().optional(),
+  refusals: z.array(ApiRefusal).optional(),
+});
+/** One record's outcome in a bulk edit. */
+export type UpdateOutcome = z.infer<typeof UpdateOutcome>;
+
+/** A bulk edit's outcomes, one per record asked, and how many change events carry its `mutationId`. */
+export const UpdateManyResults = z.object({
+  results: z.array(UpdateOutcome),
+  echoes: z.number().int().min(0),
+});
+/** A bulk edit's outcomes. */
+export type UpdateManyResults = z.infer<typeof UpdateManyResults>;
+
 /**
  * Bulk record actions, joined into the `records` namespace. `deleteMany`
  * answers 200 with each record's outcome; 403 `FORBIDDEN` when the member
  * may only read the object (nothing deleted), 422 `CONFIG_INVALID` over 500.
  * `restoreBatch` answers each record of the batch it restored or refused, 404
- * `NOT_FOUND` when none is left in the trash.
+ * `NOT_FOUND` when none is left in the trash. `updateMany` answers each
+ * record's outcome; 422 `CONFIG_INVALID` for an excluded attribute, an
+ * operation its type doesn't take, Set on a unique attribute for several
+ * records or Clear on a required one; 403 when the member may only read the
+ * object or the field.
  */
 export const bulkRecordsContract = {
   deleteMany: oc.input(DeleteManyInput).output(DeleteManyResults),
   restoreBatch: oc.input(RestoreBatchInput).output(RestoreBatchResults),
+  updateMany: oc.input(UpdateManyInput).output(UpdateManyResults),
 };

@@ -93,6 +93,7 @@ export {
 } from './relationships/relationships.ts';
 export {
   addRecord,
+  bulkEditRecords,
   editRecord,
   editRecords,
   queryRecords,

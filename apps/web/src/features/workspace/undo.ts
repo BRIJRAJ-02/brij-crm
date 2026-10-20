@@ -4,7 +4,7 @@
 // them; the frame and main.tsx do the listening and the raising.
 import type { EditOutcome, ReplacedValue, UndoKind, UndoResult } from '@crm/data';
 import type { KeyboardPlatform, ToastContent } from '@crm/ui';
-import { lifecycleUndoToast } from './bulk.ts';
+import { bulkStrings, lifecycleUndoToast } from './bulk.ts';
 import { strings } from './strings.ts';
 
 /** A key press as the shortcut reads it. */
@@ -79,6 +79,7 @@ const count = (value: number): string => new Intl.NumberFormat().format(value);
 function undidWords(result: Extract<UndoResult, { kind: 'undone' }>): string {
   if (result.action === 'paste') return strings.undidPaste(count(result.cells));
   if (result.action === 'clear') return strings.undidClear(count(result.cells));
+  if (result.action === 'bulk') return bulkStrings.undidBulk(count(result.cells));
   if (result.cells > 1) return strings.undidCells(count(result.cells));
   return strings.undidCell(result.attributeTitle, result.first.recordName);
 }

@@ -369,6 +369,20 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'records', object_id: m.people.id, record_ids: [id], mutation_id: mutationId },
     ];
   },
+  'records.updateMany': async (m, mutationId) => {
+    const id = await personFor(m);
+    await m.client.records.updateMany({
+      workspace: m.slug,
+      objectId: m.people.id,
+      recordIds: [id],
+      edit: { attributeId: m.attribute('job_title'), op: 'set', value: 'Analyst' },
+      mutationId,
+    });
+    return [
+      { kind: 'records', object_id: m.people.id, record_ids: [id] },
+      { kind: 'records', object_id: m.people.id, record_ids: [id], mutation_id: mutationId },
+    ];
+  },
   'trash.restore': async (m, mutationId) => {
     const id = await personFor(m);
     await m.client.records.deleteMany({
@@ -1110,6 +1124,7 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'records.setValuesBatch': 3,
   'records.deleteMany': 2,
   'records.restoreBatch': 3,
+  'records.updateMany': 2,
   'trash.restore': 3,
   'jobs.cancel': 2,
   'jobs.confirm': 2,
