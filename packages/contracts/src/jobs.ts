@@ -22,6 +22,12 @@ export const JOB_KINDS = {
   'maintenance.daily': { label: 'Daily cleanup', lane: 'heavy', cancellable: false },
   // A form submission turned into records (spec 0023, AC-554, AC-566): the system's, on the light lane.
   'forms.process': { label: 'Form submission', lane: 'light', cancellable: false },
+  // Submissions filed with the form's current mapping (Add to CRM), a member's, one item per submission.
+  'forms.file': { label: 'Add to CRM', lane: 'heavy', cancellable: true },
+  // The current mapping applied to earlier submissions (Sync old records), a member's, safe to run again.
+  'forms.sync': { label: 'Sync old records', lane: 'heavy', cancellable: true },
+  // A form's submissions written to a CSV file (Export), a member's.
+  'forms.export': { label: 'Export submissions', lane: 'heavy', cancellable: true },
   // Bulk changes (spec 0022, milestone 3): a member's, counted and confirmed first, in batches of 500.
   'records.bulk_edit': { label: 'Bulk edit', lane: 'heavy', cancellable: true },
   'records.bulk_delete': { label: 'Bulk delete', lane: 'heavy', cancellable: true },
