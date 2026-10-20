@@ -22,7 +22,9 @@ export interface PageColumnProps {
   /**
    * When the page is too narrow for both and they stack: `main-first` (the default) puts the side column
    * under the children, `aside-first` above them (Bookings › Availability: the time zone before the week on
-   * a phone). Side by side, the side column is always at the end.
+   * a phone). Side by side, the side column is always at the end. `aside-first` puts the side column first
+   * in the DOM too, so screen readers and Tab reach it before the children at every width: use it only when
+   * the side column is context the children read in.
    */
   readonly stack?: 'main-first' | 'aside-first';
   /**
@@ -55,9 +57,11 @@ export function PageColumn({
         <div className={styles.actions}>{actions}</div>
       )}
       {hasAside ? (
+        // Aside first is in the DOM too, so reading and Tab order follow what's on screen when stacked.
         <div className={styles.split} data-stack={stack === 'aside-first' ? stack : undefined}>
+          {stack === 'aside-first' && <div className={styles.aside}>{aside}</div>}
           <div className={styles.main}>{children}</div>
-          <div className={styles.aside}>{aside}</div>
+          {stack === 'main-first' && <div className={styles.aside}>{aside}</div>}
         </div>
       ) : (
         children

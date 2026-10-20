@@ -42,11 +42,10 @@
     min-inline-size: 0;
   }
 
-  /* Aside first when stacked: the wrapped lines run upward, so the side column's line sits above the main
-     one; side by side, flex-end is the top. */
+  /* Aside first: it comes first in the DOM, so stacked it sits on top; side by side the row runs from the
+     end, keeping it at the end with the tops level. */
   .split[data-stack='aside-first'] {
-    flex-wrap: wrap-reverse;
-    align-items: flex-end;
+    flex-direction: row-reverse;
   }
 
   .main {
@@ -63,7 +62,8 @@
     gap: var(--space-8);
   }
 
-  /* The wrapper lets the pointer through to the page under it; only the bar takes it. */
+  /* The wrapper lets the pointer through to the page under it; what it holds takes it back (a Callout
+     with Save). A FloatingBar (SaveBar) sets its own: none on its frame, back on its surface. */
   .footer {
     position: sticky;
     z-index: var(--z-sticky);

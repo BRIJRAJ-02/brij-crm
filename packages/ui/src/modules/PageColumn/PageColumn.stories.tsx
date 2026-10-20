@@ -141,6 +141,9 @@ export const AsideFirstNarrow: Story = {
     const main = canvas.getByText('Weekly hours').getBoundingClientRect();
     const side = canvas.getByText('Time zone').getBoundingClientRect();
     await expect(side.bottom).toBeLessThan(main.top);
+    // The DOM order matches, so reading and Tab order follow the screen.
+    const order = canvas.getByText('Time zone').compareDocumentPosition(canvas.getByText('Weekly hours'));
+    await expect(order & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   },
 };
 

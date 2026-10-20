@@ -29,7 +29,11 @@ export interface LinkToggle {
 export interface LinkRow {
   readonly id: string;
   readonly title: string;
-  /** Its address, inline after the title and muted ("/acme/intro-call", "/f/contact-us"). */
+  /**
+   * The muted text inline after the title: its address ("/acme/intro-call", "/f/contact-us"), or in a list
+   * that is about something else, that ("Mon to Fri, 9:00 AM to 5:00 PM", Availability's pages). The search
+   * matches it.
+   */
   readonly address: string;
   /** Up to two lines under the title (a page's description). Left out of `density="compact"`'s one line rows. */
   readonly description?: string;

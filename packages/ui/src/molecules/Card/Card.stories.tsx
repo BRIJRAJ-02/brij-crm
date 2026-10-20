@@ -5,6 +5,7 @@ import { Switch } from '../../atoms/Switch/Switch.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { DescriptionList } from '../DescriptionList/DescriptionList.tsx';
 import { Select } from '../Select/Select.tsx';
+import { Table } from '../Table/Table.tsx';
 import { Card } from './Card.tsx';
 
 const meta = {
@@ -96,5 +97,38 @@ export const SelectFirst: Story = {
     const text = canvas.getAllByText('Europe/London').find((element) => element.tagName === 'P');
     if (first === undefined || second === undefined || text === undefined) throw new Error('missing');
     await expect(Math.round(gap(first, select))).toBe(Math.round(gap(second, text)));
+  },
+};
+
+/** A Table first: its hidden markers don't count either, so the air under the header stays the same. */
+export const TableFirst: Story = {
+  args: { title: 'Days off', description: 'Days you are closed.' },
+  render: (args) => (
+    <Stage>
+      <Card {...args}>
+        <Table
+          label="Days off"
+          columns={[
+            { id: 'date', label: 'Date', isRowHeader: true },
+            { id: 'note', label: 'Note' },
+          ]}
+          rows={[{ date: 'Fri, Dec 25', note: 'Holiday' }]}
+          getRowId={(row) => row.date}
+          renderCell={(row, column) => (column === 'date' ? row.date : row.note)}
+        />
+      </Card>
+      <Card {...args}>
+        <p>Fri, Dec 25</p>
+      </Card>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const gap = (title: HTMLElement, below: Element) =>
+      below.getBoundingClientRect().top - (title.closest('header') ?? title).getBoundingClientRect().bottom;
+    const [first, second] = canvas.getAllByText('Days you are closed.');
+    const table = canvas.getByRole('grid', { name: 'Days off' });
+    const text = canvas.getAllByText('Fri, Dec 25').find((element) => element.tagName === 'P');
+    if (first === undefined || second === undefined || text === undefined) throw new Error('missing');
+    await expect(Math.round(gap(first, table))).toBe(Math.round(gap(second, text)));
   },
 };

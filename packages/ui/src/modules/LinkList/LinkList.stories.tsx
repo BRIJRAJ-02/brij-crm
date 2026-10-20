@@ -477,3 +477,31 @@ export const CompactLongFacts: Story = {
     await expect(title.width).toBeGreaterThan(40);
   },
 };
+
+/** Compact in a narrow Card: rows take more lines rather than hiding the address or the facts. */
+export const CompactInCardNarrow: Story = {
+  args: { density: 'compact', placement: 'card', isToolbarHidden: true },
+  render: (args) => (
+    <Stage width="narrow">
+      <Card title="Your pages">
+        <LinkList
+          {...args}
+          rows={[
+            {
+              id: 'visit',
+              title: 'Site visit with the project lead',
+              address: 'Mon to Fri, 9:00 AM to 5:00 PM',
+              chips: ['Your hours'],
+              badge: 'Off',
+              isOff: true,
+            },
+          ]}
+        />
+      </Card>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Mon to Fri, 9:00 AM to 5:00 PM')).toBeVisible();
+    await expect(canvas.getByText('Your hours')).toBeVisible();
+  },
+};
