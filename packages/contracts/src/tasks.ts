@@ -1,8 +1,8 @@
 // Tasks (spec 0019): the work next to the data. A task has a title, a due
 // date, a done state, at most one assignee and 0 to 20 linked records of any
 // objects. They live in their own tables, not as records, and are read and
-// written through `tasks.*`. Milestone 1 lists a record's tasks; milestone 2
-// adds My tasks (`scope: { mine }`).
+// written through `tasks.*`: a record's tasks (`scope: { recordId }`) and My
+// tasks (`scope: { mine }`).
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
 import { ActorReferenceValue, DateValue, Timestamp } from './values/attribute-values.ts';
@@ -114,8 +114,16 @@ export const TaskStatus = z.enum(['open', 'done']);
 /** Open tasks, or done ones. */
 export type TaskStatus = z.infer<typeof TaskStatus>;
 
-/** Which tasks a list reads: those linked to one record (milestone 2 adds `{ mine }`). */
-export const TaskListScope = z.strictObject({ recordId: z.uuid() });
+/**
+ * Which of my tasks My tasks lists (AC-436): assigned to me, created by me,
+ * or every task I may see.
+ */
+export const TaskMine = z.enum(['assigned', 'created', 'all']);
+/** Which of my tasks My tasks lists. */
+export type TaskMine = z.infer<typeof TaskMine>;
+
+/** Which tasks a list reads: those linked to one record, or My tasks' (`{ mine }`). */
+export const TaskListScope = z.union([z.strictObject({ recordId: z.uuid() }), z.strictObject({ mine: TaskMine })]);
 /** Which tasks a list reads. */
 export type TaskListScope = z.infer<typeof TaskListScope>;
 

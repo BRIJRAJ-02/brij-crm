@@ -8,6 +8,7 @@
 import type {
   AttributeDefinition,
   BookAsHostInput,
+  TaskMine,
   BookingAvailability,
   CreateTimeBlockInput,
   TimeBlockOccurrence,
@@ -170,6 +171,7 @@ export type {
   SubmissionState,
   SubmissionSummary,
   SubmissionView,
+  TaskMine,
   TaskTotal,
   TaskView,
   SystemStatus,
@@ -1655,7 +1657,7 @@ export function createDataLayer({
                 api.tasks.list(
                   {
                     workspace: input.workspace,
-                    scope: { recordId: input.recordId },
+                    scope: 'recordId' in input.scope ? { recordId: input.scope.recordId } : { mine: input.scope.mine },
                     status: input.status,
                     ...(input.cursor === undefined ? {} : { cursor: input.cursor }),
                     ...(input.limit === undefined ? {} : { limit: input.limit }),
@@ -2502,6 +2504,14 @@ export function createDataLayer({
        */
       forRecord: async (workspace: string, recordId: string, status: 'open' | 'done'): Promise<TaskList> =>
         (await tasksStore()).forRecord(workspace, recordId, status),
+      /**
+       * My tasks (spec 0019, AC-436): the open or done tasks assigned to me
+       * (`assigned`), created by me (`created`) or every task I may see
+       * (`all`), 50 at a time as it scrolls, live, settling 1.5 seconds after
+       * the last change to any task. Read it through `useTaskList`.
+       */
+      mine: async (workspace: string, filter: TaskMine, status: 'open' | 'done'): Promise<TaskList> =>
+        (await tasksStore()).mine(workspace, filter, status),
       /** One task (the task dialog), from the store's one copy. Read it through `useTask`. */
       one: async (workspace: string, taskId: string): Promise<TaskSubscription> =>
         (await tasksStore()).one(workspace, taskId),

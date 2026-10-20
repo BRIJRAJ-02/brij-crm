@@ -95,6 +95,37 @@ export function farVisibleSql(access: Access, objectIds: readonly string[], far:
 }
 
 /**
+ * The condition that keeps a record (aliased `record`, on any object) only
+ * when the principal may see it: its object isn't at `none` (an object with
+ * no entry takes the default level), and it is inside its object's record
+ * rule. Undefined under the open policy. My tasks' "All tasks" reads it for
+ * the task rule's linked record clause (spec 0019, AC-447).
+ */
+export function recordVisibleSql(access: Access, record: string): SQL | undefined {
+  if (isOpen(access)) return undefined;
+  const at = alias(record);
+  const listed = Object.keys(access.data.objects).filter(isUuid);
+  const seen = (objectId: string) => objectLevel(access, objectId) !== 'none';
+  // The level an object with no entry gets: the default, anything unknown read as none.
+  const byDefault = objectLevel({ data: { ...access.data, objects: {} } }, '') !== 'none';
+  const parts: SQL[] = [];
+  if (byDefault) {
+    const denied = listed.filter((objectId) => !seen(objectId));
+    if (denied.length > 0) parts.push(sql`${at}.object_id <> all(${uuidList(denied)})`);
+  } else {
+    const allowed = listed.filter(seen);
+    if (allowed.length === 0) return sql`false`;
+    parts.push(sql`${at}.object_id = any(${uuidList(allowed)})`);
+  }
+  for (const objectId of Object.keys(access.data.records)) {
+    if (!isUuid(objectId) || !seen(objectId)) continue;
+    const rule = recordRuleSql(access, objectId, record);
+    if (rule !== undefined) parts.push(sql`(${at}.object_id <> ${objectId}::uuid or ${rule})`);
+  }
+  return parts.length === 0 ? sql`true` : sql.join(parts, sql` and `);
+}
+
+/**
  * Whether a field rule hides who changed things from the principal (spec
  * 0017): among `attributes` (an object's), Created by or Updated by is
  * hidden. Then a history read names nobody, since the newest version's actor

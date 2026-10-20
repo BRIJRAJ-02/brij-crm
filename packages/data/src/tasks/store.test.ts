@@ -5,7 +5,7 @@
 import type { RecordRefDisplay, TaskPage, TaskView } from '@crm/contracts';
 import { describe, expect, it } from 'vitest';
 import { createMutationLog } from '../live/mutations.ts';
-import { createTasksStore, TASK_SETTLE_MS, type TasksApi } from './store.ts';
+import { createTasksStore, TASK_SETTLE_MS, type TaskListKey, type TasksApi } from './store.ts';
 
 const WS = 'acme';
 const ME = '0199a6f2-0000-7000-8000-000000000001';
@@ -91,17 +91,22 @@ function setup(
   const timelines: (readonly string[] | 'all')[] = [];
   const spreads: (() => void)[] = [];
   let refuse: Error | undefined;
-  const listOf = (recordId: string, status: 'open' | 'done'): TaskPage => {
+  const listOf = (scope: TaskListKey, status: 'open' | 'done'): TaskPage => {
     const items = [...server.values()].filter(
-      (each) => each.isDone === (status === 'done') && each.records.some((record) => record.recordId === recordId),
+      (each) =>
+        each.isDone === (status === 'done') &&
+        ('recordId' in scope
+          ? each.records.some((record) => record.recordId === scope.recordId)
+          : scope.mine === 'all' ||
+            (scope.mine === 'assigned' ? each.assigneeMemberId === ME : each.createdBy.id === ME)),
     );
     return { items, total: { count: items.length, atLeast: false } };
   };
   const api: TasksApi = {
-    list: ({ recordId, status, cursor }) => {
-      calls.push(`list ${status}`);
+    list: ({ scope, status, cursor }) => {
+      calls.push('mine' in scope ? `list ${scope.mine} ${status}` : `list ${status}`);
       try {
-        return Promise.resolve(hooks.list?.(cursor === undefined ? {} : { cursor }) ?? listOf(recordId, status));
+        return Promise.resolve(hooks.list?.(cursor === undefined ? {} : { cursor }) ?? listOf(scope, status));
       } catch (error) {
         return Promise.reject(error instanceof Error ? error : new Error(String(error)));
       }
@@ -118,6 +123,7 @@ function setup(
         id: input.id,
         title: input.title,
         records: input.recordIds?.includes(ACME) ? [acme] : [],
+        ...(input.assigneeMemberId === undefined ? {} : { assigneeMemberId: input.assigneeMemberId }),
       });
       server.set(made.id, made);
       return Promise.resolve(made);
@@ -535,5 +541,67 @@ describe('the tasks store (spec 0019)', () => {
     await elapse(2_000);
     expect(open.getSnapshot().loaded).toBe(52);
     expect(notices).toHaveLength(1);
+  });
+
+  describe('My tasks (AC-436)', () => {
+    const BEA = '0199a6f2-0000-7000-8000-000000000002';
+
+    it('lists my assigned, created and all tasks, the same list for every screen', async () => {
+      const server = new Map(
+        [
+          task(1, { assigneeMemberId: ME }),
+          task(2, { assigneeMemberId: BEA }),
+          task(3, { createdBy: { type: 'member', id: BEA }, assigneeMemberId: ME }),
+        ].map((each) => [each.id, each]),
+      );
+      const { store, calls } = setup(server);
+      const assigned = store.mine(WS, 'assigned', 'open');
+      const created = store.mine(WS, 'created', 'open');
+      const all = store.mine(WS, 'all', 'open');
+      for (const list of [assigned, created, all]) {
+        list.retain();
+        await list.ready();
+      }
+      expect(titles(assigned.getSnapshot())).toEqual(['Task 1', 'Task 3']);
+      expect(titles(created.getSnapshot())).toEqual(['Task 1', 'Task 2']);
+      expect(titles(all.getSnapshot())).toEqual(['Task 1', 'Task 2', 'Task 3']);
+      expect(store.mine(WS, 'assigned', 'open')).toBe(assigned);
+      expect(calls).toEqual(['list assigned open', 'list created open', 'list all open']);
+    });
+
+    it('puts a new task first in the lists it belongs to, assigned only when it is mine', async () => {
+      const server = new Map<string, TaskView>();
+      const { store } = setup(server);
+      const assigned = store.mine(WS, 'assigned', 'open');
+      const all = store.mine(WS, 'all', 'open');
+      for (const list of [assigned, all]) {
+        list.retain();
+        await list.ready();
+      }
+      await flush();
+      void store.create(WS, { id: store.newId(), title: 'For Bea', assigneeMemberId: BEA });
+      void store.create(WS, { id: store.newId(), title: 'For me', assigneeMemberId: ME });
+      expect(titles(assigned.getSnapshot())).toEqual(['For me']);
+      expect(titles(all.getSnapshot())).toEqual(['For me', 'For Bea']);
+    });
+
+    it('settles on a tick here and on any tasks event, a coarse one too', async () => {
+      const one = task(1, { assigneeMemberId: ME, records: [] });
+      const server = new Map([[one.id, one]]);
+      const { store, calls, elapse } = setup(server);
+      const assigned = store.mine(WS, 'assigned', 'open');
+      assigned.retain();
+      await assigned.ready();
+      await store.setDone(WS, one.id, true);
+      expect(titles(assigned.getSnapshot())).toEqual(['Task 1']);
+      await elapse(TASK_SETTLE_MS);
+      expect(titles(assigned.getSnapshot())).toEqual([]);
+      const other = task(2, { assigneeMemberId: ME, records: [] });
+      server.set(other.id, other);
+      store.changed(WS, { seq: 9, at: '2026-10-12T10:00:00.000Z', kind: 'tasks', recordIds: [], taskIds: [other.id] });
+      await flush();
+      expect(titles(assigned.getSnapshot())).toEqual(['Task 2']);
+      expect(calls.filter((call) => call === 'list assigned open')).toHaveLength(2);
+    });
   });
 });

@@ -1,7 +1,7 @@
 # 0019. Notes and tasks: the work next to the data
 
 **Date**: 2026-10-08
-**Status**: Proposed
+**Status**: In Progress
 
 ## Summary
 

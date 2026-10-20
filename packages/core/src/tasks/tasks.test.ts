@@ -495,6 +495,142 @@ describe('listTasks (AC-435)', () => {
   });
 });
 
+describe('listTasks for My tasks (AC-436, AC-447)', () => {
+  const ids = (page: { readonly items: readonly { readonly id: string }[] }) => page.items.map((item) => item.id);
+
+  it('lists the tasks assigned to me, created by me, or every task I may see, in due order', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const bea = w.as(w.bea);
+    const mineLate = await createTask(w.scope, {
+      id: newId(),
+      title: 'Mine late',
+      dueOn: '2026-11-01',
+      assigneeMemberId: w.ownerId,
+    });
+    const mineSoon = await createTask(w.scope, {
+      id: newId(),
+      title: 'Mine soon',
+      dueOn: '2026-10-01',
+      assigneeMemberId: w.ownerId,
+      recordIds: [acme],
+    });
+    const forBea = await createTask(w.scope, {
+      id: newId(),
+      title: 'For Bea',
+      assigneeMemberId: w.bea,
+      recordIds: [acme],
+    });
+    const beasOwn = await createTask(bea, { id: newId(), title: 'Bea’s own', assigneeMemberId: w.ownerId });
+    const unassigned = await createTask(bea, { id: newId(), title: 'Nobody’s' });
+
+    const assigned = await listTasks(w.scope, { scope: { mine: 'assigned' }, status: 'open' });
+    expect(ids(assigned)).toEqual([mineSoon.id, mineLate.id, beasOwn.id]);
+    expect(assigned.total).toEqual({ count: 3, atLeast: false });
+    expect(ids(await listTasks(w.scope, { scope: { mine: 'created' }, status: 'open' }))).toEqual([
+      mineSoon.id,
+      mineLate.id,
+      forBea.id,
+    ]);
+    expect(ids(await listTasks(w.scope, { scope: { mine: 'all' }, status: 'open' }))).toEqual([
+      mineSoon.id,
+      mineLate.id,
+      forBea.id,
+      beasOwn.id,
+      unassigned.id,
+    ]);
+    expect(ids(await listTasks(bea, { scope: { mine: 'assigned' }, status: 'open' }))).toEqual([forBea.id]);
+
+    await updateTask(w.scope, { taskId: mineLate.id, isDone: true });
+    await updateTask(w.scope, { taskId: beasOwn.id, isDone: true });
+    const done = await listTasks(w.scope, { scope: { mine: 'assigned' }, status: 'done' });
+    expect(ids(done)).toEqual([beasOwn.id, mineLate.id]);
+    expect(ids(await listTasks(w.scope, { scope: { mine: 'assigned' }, status: 'open' }))).toEqual([mineSoon.id]);
+  });
+
+  it('pages each filter with no repeat or gap, and refuses a cursor of the other status', async () => {
+    const w = await workspace();
+    const made: string[] = [];
+    for (const dueOn of ['2026-10-03', undefined, '2026-10-01', undefined, '2026-10-02']) {
+      made.push(
+        (
+          await createTask(w.scope, {
+            id: newId(),
+            title: 'Page',
+            assigneeMemberId: w.ownerId,
+            ...(dueOn === undefined ? {} : { dueOn }),
+          })
+        ).id,
+      );
+    }
+    for (const mine of ['assigned', 'created', 'all'] as const) {
+      const seen: string[] = [];
+      let cursor: string | undefined;
+      do {
+        const page = await listTasks(w.scope, {
+          scope: { mine },
+          status: 'open',
+          limit: 2,
+          ...(cursor === undefined ? {} : { cursor }),
+        });
+        seen.push(...ids(page));
+        cursor = page.nextCursor;
+      } while (cursor !== undefined);
+      expect(seen).toEqual([made[2], made[4], made[0], made[1], made[3]]);
+    }
+    const first = await listTasks(w.scope, { scope: { mine: 'all' }, status: 'open', limit: 1 });
+    expect(
+      await refusalOf(listTasks(w.scope, { scope: { mine: 'all' }, status: 'done', cursor: first.nextCursor ?? '' })),
+    ).toMatchObject({ code: 'INPUT_INVALID', field: 'cursor' });
+  });
+
+  it('leaves out of All tasks what the task rule hides, from lists and counts alike (denied actor)', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const ada = await w.person('Ada');
+    const hidden = await createTask(w.scope, { id: newId(), title: 'On a company', recordIds: [acme] });
+    const both = await createTask(w.scope, { id: newId(), title: 'On both', recordIds: [acme, ada] });
+    const free = await createTask(w.scope, { id: newId(), title: 'On nothing' });
+    const theirs = await createTask(w.scope, {
+      id: newId(),
+      title: 'Assigned to Cal',
+      recordIds: [acme],
+      assigneeMemberId: w.cal,
+    });
+    const trashedOnly = await createTask(w.scope, { id: newId(), title: 'Trashed link', recordIds: [ada] });
+    const bo = await w.person('Bo');
+    const boTask = await createTask(w.scope, { id: newId(), title: 'Bo', recordIds: [bo] });
+    await deleteRecord(w.scope, { recordId: bo });
+
+    // Bea can't see Companies: only tasks with no links, or a visible live link.
+    const bea = w.as(w.bea, w.level(w.companies, 'none'));
+    const page = await listTasks(bea, { scope: { mine: 'all' }, status: 'open' });
+    expect(ids(page)).toEqual([both.id, free.id, trashedOnly.id]);
+    expect(page.total).toEqual({ count: 3, atLeast: false });
+    expect(page.items.find((item) => item.id === both.id)?.records.map((record) => record.recordId)).toEqual([ada]);
+    expect(ids(page)).not.toContain(hidden.id);
+    // Cal is the assignee: his task shows whatever its links.
+    const cal = w.as(w.cal, w.level(w.companies, 'none'));
+    expect(ids(await listTasks(cal, { scope: { mine: 'all' }, status: 'open' }))).toContain(theirs.id);
+    expect(ids(await listTasks(cal, { scope: { mine: 'assigned' }, status: 'open' }))).toEqual([theirs.id]);
+    // Even under the open policy, a task whose only link is in the trash shows only to its assignee and creator.
+    expect(ids(await listTasks(w.as(w.bea), { scope: { mine: 'all' }, status: 'open' }))).not.toContain(boTask.id);
+    expect(ids(await listTasks(w.scope, { scope: { mine: 'all' }, status: 'open' }))).toContain(boTask.id);
+  });
+
+  it('gives an API key at none no task at all, and one at read only All tasks', async () => {
+    const w = await workspace();
+    await createTask(w.scope, { id: newId(), title: 'Free', assigneeMemberId: w.ownerId });
+    const key = (level: 'none' | 'read') =>
+      rescope(w.scope, { actor: { type: 'api_key', id: newId() }, scopes: level === 'read' ? ['data.read'] : [] });
+    expect(await listTasks(key('none'), { scope: { mine: 'all' }, status: 'open' })).toEqual({
+      items: [],
+      total: { count: 0, atLeast: false },
+    });
+    expect((await listTasks(key('read'), { scope: { mine: 'assigned' }, status: 'open' })).items).toEqual([]);
+  });
+});
+
 describe('the timeline’s task entries (AC-438)', () => {
   const taskEntries = async (scope: EngineScope, recordId: string) =>
     (await getActivity(scope, { recordId })).entries

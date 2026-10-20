@@ -18,6 +18,7 @@ import {
   TASK_RECORDS_MAX,
   TASK_TITLE_MAX,
   TaskCursor,
+  type TaskMine,
   type TaskPage,
   type TaskStatus,
   type TaskView,
@@ -32,7 +33,7 @@ import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts
 import { checkScope } from '../access/mint.ts';
 import { isOpen, objectLevel, type Access } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
-import { UNKNOWN_RECORD, visibleRecords } from '../access/visibility.ts';
+import { recordVisibleSql, UNKNOWN_RECORD, visibleRecords } from '../access/visibility.ts';
 
 /** What a task the reader can't see (or one that doesn't exist) answers. */
 export const UNKNOWN_TASK = 'That task does not exist.';
@@ -72,9 +73,9 @@ export interface UpdateTaskInput {
   readonly removeRecordIds?: readonly string[];
 }
 
-/** One page of a task list (`tasks.list`). Milestone 1 lists one record's tasks. */
+/** One page of a task list (`tasks.list`): one record's tasks, or My tasks' (assigned, created or all). */
 export interface ListTasksInput {
-  readonly scope: { readonly recordId: string };
+  readonly scope: { readonly recordId: string } | { readonly mine: TaskMine };
   readonly status: TaskStatus;
   readonly cursor?: string;
   readonly limit?: number;
@@ -580,13 +581,68 @@ async function checkListedRecord(tx: WorkspaceTx, access: Access, recordId: stri
 }
 
 /**
- * One page of a record's tasks (AC-435): open ones by due date (earliest
- * first, no date last, then oldest first, then id), or done ones newest done
- * first (then id), through `task_records_by_record` joined to `tasks`. The
- * record is visible, so every task linked to it is too. `total` (counted up
- * to 10,001) only on the first page. A hidden or trashed record is
- * `NOT_FOUND`; a cursor the server didn't make is 400 `INPUT_INVALID` on
- * `cursor`.
+ * The task rule as SQL over the task aliased `t` (spec 0019's visibility
+ * predicate, AC-447), for lists that don't start from one visible record (My
+ * tasks' "All tasks"): it links no records at all (a link to a trashed record
+ * still counts), the reader is its assignee or creator, or one of its links
+ * is to a live record, on a live object, that the reader may see.
+ */
+function taskVisibleSql(scope: Pick<EngineScope, 'access' | 'actor'>): SQL {
+  const me = memberOf(scope.access);
+  const { actor } = scope;
+  const narrowed = recordVisibleSql(scope.access, 'r');
+  const parts = [
+    sql`not exists (select 1 from task_records l where l.workspace_id = t.workspace_id and l.task_id = t.id)`,
+    ...(me === undefined ? [] : [sql`t.assignee_member_id = ${me}::uuid`]),
+    actor.id === null ? sql`false` : sql`(t.created_by_type = ${actor.type} and t.created_by_id = ${actor.id}::uuid)`,
+    sql`exists (select 1 from task_records l
+      join records r on r.workspace_id = l.workspace_id and r.id = l.record_id
+      join objects o on o.workspace_id = r.workspace_id and o.id = r.object_id
+      where l.workspace_id = t.workspace_id and l.task_id = t.id and r.deleted_at is null and o.archived_at is null
+        ${narrowed === undefined ? sql`` : sql`and ${narrowed}`})`,
+  ];
+  return sql`(${sql.join(parts, sql` or `)})`;
+}
+
+/**
+ * Where a list's rows come from, `from` to the end of its `where`: a record's
+ * links joined to their tasks, or My tasks' filter on its own index
+ * (`tasks_assigned_*`, `tasks_created_*`, `tasks_all_*`; the status written
+ * as the indexes' own predicate, so the planner proves them). Undefined when
+ * the reader can't match anything (a principal that isn't a member has no
+ * tasks assigned to or created by them as a member).
+ */
+function listFrom(scope: EngineScope, input: ListTasksInput, recordId: string | undefined): SQL | undefined {
+  const done = sql.raw(input.status === 'done' ? 't.is_done' : 'not t.is_done');
+  if (recordId !== undefined) {
+    return sql`from task_records l join tasks t on t.workspace_id = l.workspace_id and t.id = l.task_id
+      where l.record_id = ${recordId}::uuid and t.deleted_at is null and ${done}`;
+  }
+  const mine = 'mine' in input.scope ? input.scope.mine : 'all';
+  const me = memberOf(scope.access);
+  if (mine === 'assigned') {
+    return me === undefined
+      ? undefined
+      : sql`from tasks t where t.assignee_member_id = ${me}::uuid and t.deleted_at is null and ${done}`;
+  }
+  if (mine === 'created') {
+    return me === undefined
+      ? undefined
+      : sql`from tasks t where t.created_by_member_id = ${me}::uuid and t.deleted_at is null and ${done}`;
+  }
+  return sql`from tasks t where t.deleted_at is null and ${done} and ${taskVisibleSql(scope)}`;
+}
+
+/**
+ * One page of a task list: a record's tasks (AC-435), through
+ * `task_records_by_record` joined to `tasks`, or My tasks' (AC-436): those
+ * assigned to me, created by me, or every task I may see (the task rule as
+ * SQL), each on its own partial index. Open ones by due date (earliest first,
+ * no date last, then oldest first, then id), or done ones newest done first
+ * (then id). A record's list needs no task rule: the record is visible, so
+ * every task linked to it is. `total` (counted up to 10,001) only on the
+ * first page. A hidden or trashed record is `NOT_FOUND`; a cursor the server
+ * didn't make is 400 `INPUT_INVALID` on `cursor`.
  */
 export async function listTasks(scope: EngineScope, input: ListTasksInput): Promise<TaskPage> {
   checkScope(scope);
@@ -596,12 +652,20 @@ export async function listTasks(scope: EngineScope, input: ListTasksInput): Prom
   }
   const status = input.status;
   const after = input.cursor === undefined ? undefined : decodeTaskCursor(input.cursor, status);
-  const recordId = checkId(input.scope.recordId, UNKNOWN_RECORD);
-  if (!principalReaches(scope.access, 'read')) throw refuse('NOT_FOUND', UNKNOWN_RECORD);
+  const recordId = 'recordId' in input.scope ? checkId(input.scope.recordId, UNKNOWN_RECORD) : undefined;
+  if (recordId === undefined && !('mine' in input.scope && ['assigned', 'created', 'all'].includes(input.scope.mine))) {
+    throw inputInvalid('scope', 'Name a record, or which of your tasks to list.');
+  }
+  if (!principalReaches(scope.access, 'read')) {
+    if (recordId !== undefined) throw refuse('NOT_FOUND', UNKNOWN_RECORD);
+    return { items: [], ...(after === undefined ? { total: { count: 0, atLeast: false } } : {}) };
+  }
   return inWorkspace(scope, async (tx) => {
-    await checkListedRecord(tx, scope.access, recordId);
-    const from = sql`from task_records l join tasks t on t.workspace_id = l.workspace_id and t.id = l.task_id
-      where l.record_id = ${recordId}::uuid and t.deleted_at is null and t.is_done = ${status === 'done'}`;
+    if (recordId !== undefined) await checkListedRecord(tx, scope.access, recordId);
+    const from = listFrom(scope, input, recordId);
+    if (from === undefined) {
+      return { items: [], ...(after === undefined ? { total: { count: 0, atLeast: false } } : {}) };
+    }
     let bound = sql``;
     if (after?.status === 'open') {
       const tail = sql`(t.created_at, t.id) > (${after.createdAt}::timestamptz, ${after.id}::uuid)`;

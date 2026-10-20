@@ -5,6 +5,9 @@
 // - a record's lists (`forRecord`: open, by due date; done, newest done
 //   first) page through `tasks.list`, 50 at a time as they scroll, with the
 //   open count for the tab's label;
+// - My tasks' lists (`mine`: assigned to me, created by me, or all I may
+//   see; open or done) page the same way, and every task change or event
+//   settles them (a change anywhere may move a task in or out of them);
 // - `one` serves the task dialog from the same body.
 //
 // Writes are optimistic (spec 0005's layering rule, per task in order): each
@@ -27,7 +30,15 @@
 // record it names (a rename, a trash, a restore) and settles the lists of
 // records it names deleted or restored. Nothing polls.
 import { TASK_GET_MAX, TASK_PAGE, TASK_PAGE_MAX } from '@crm/contracts/task-limits';
-import type { ChangeEvent, RecordRefDisplay, TaskPage, TaskStatus, TaskTotal, TaskView } from '@crm/contracts';
+import type {
+  ChangeEvent,
+  RecordRefDisplay,
+  TaskMine,
+  TaskPage,
+  TaskStatus,
+  TaskTotal,
+  TaskView,
+} from '@crm/contracts';
 import { refusalSummary, toDataError, type DataError } from '../errors.ts';
 import type { MutationLog } from '../live/mutations.ts';
 import type { LiveEventOf } from '../live/router.ts';
@@ -50,7 +61,7 @@ export const TASK_WORDS = {
 export interface TasksApi {
   readonly list: (input: {
     readonly workspace: string;
-    readonly recordId: string;
+    readonly scope: TaskListKey;
     readonly status: TaskStatus;
     readonly cursor?: string;
     readonly limit?: number;
@@ -80,6 +91,9 @@ export interface TasksApi {
     readonly mutationId: string;
   }) => Promise<TaskView>;
 }
+
+/** Which tasks a list holds: one record's, or My tasks' (assigned to me, created by me, or all I may see). */
+export type TaskListKey = { readonly recordId: string } | { readonly mine: TaskMine };
 
 /** What the tasks store needs from the layer. */
 export interface TasksDeps {
@@ -412,7 +426,9 @@ export function createTasksStore(deps: TasksDeps) {
     }, 0);
   };
 
-  function makeList(workspace: string, recordId: string, status: TaskStatus) {
+  function makeList(workspace: string, scope: TaskListKey, status: TaskStatus) {
+    const recordId = 'recordId' in scope ? scope.recordId : undefined;
+    const mineOf = 'mine' in scope ? scope.mine : undefined;
     let ids: string[] = [];
     let cursor: string | undefined;
     let total: TaskTotal | undefined;
@@ -496,7 +512,7 @@ export function createTasksStore(deps: TasksDeps) {
           const limit = Math.min(TASK_PAGE_MAX, Math.max(TASK_PAGE, upTo - read.length));
           const page = await deps.api.list({
             workspace,
-            recordId,
+            scope,
             status,
             limit,
             ...(next === undefined ? {} : { cursor: next }),
@@ -528,7 +544,7 @@ export function createTasksStore(deps: TasksDeps) {
       return run().catch((failed: unknown) => {
         if (mineTurn !== turn) return;
         const failure = toDataError(failed);
-        // A record missing, trashed or hidden: its tasks are absent.
+        // A record missing, trashed or hidden: its tasks are absent (My tasks never answers it).
         if (failure.code === 'NOT_FOUND') {
           state = 'unavailable';
           ids = [];
@@ -550,7 +566,7 @@ export function createTasksStore(deps: TasksDeps) {
       const from = cursor;
       const mineTurn = turn;
       try {
-        const page = await deps.api.list({ workspace, recordId, status, cursor: from });
+        const page = await deps.api.list({ workspace, scope, status, cursor: from });
         loadingMore = false;
         if (mineTurn !== turn) {
           announce();
@@ -622,10 +638,22 @@ export function createTasksStore(deps: TasksDeps) {
       return task.id < other.id;
     };
 
+    /** Whether a task belongs in this list by what its body says (the server's rule decides at the settle). */
+    const belongs = (task: TaskView): boolean => {
+      if (task.isDone !== (status === 'done')) return false;
+      if (recordId !== undefined) return task.records.some((record) => record.recordId === recordId);
+      const me = mine.get(workspace);
+      if (mineOf === 'assigned') return me !== undefined && task.assigneeMemberId === me;
+      if (mineOf === 'created') return me !== undefined && task.createdBy.type === 'member' && task.createdBy.id === me;
+      return true;
+    };
+
     const list = {
       workspace,
       recordId,
+      mine: mineOf,
       status,
+      belongs,
       ids: () => ids,
       announce,
       holdsAny: (named: ReadonlySet<string>) => ids.some((id) => named.has(id)),
@@ -652,8 +680,7 @@ export function createTasksStore(deps: TasksDeps) {
        */
       place(task: TaskView) {
         if (state !== 'ready' || ids.includes(task.id)) return;
-        if (task.isDone !== (status === 'done')) return;
-        if (!task.records.some((record) => record.recordId === recordId)) return;
+        if (!belongs(task)) return;
         const held = bodiesOf(workspace);
         const at = ids.findIndex((id) => {
           const other = held.get(id);
@@ -832,10 +859,17 @@ export function createTasksStore(deps: TasksDeps) {
     return run;
   };
 
-  /** Every loaded list of these records (any status): a change in them settles them. */
+  /**
+   * Every loaded list of these records (any status), and every loaded My
+   * tasks list: a change in them settles them (any task change may move a
+   * task into or out of My tasks).
+   */
   const dirtyRecords = (workspace: string, recordIds: readonly string[], fromElsewhere = false) => {
     const named = new Set(recordIds);
-    for (const list of listsOf(workspace)) if (named.has(list.recordId)) list.dirty(fromElsewhere);
+    for (const list of listsOf(workspace)) {
+      if (list.mine !== undefined || (list.recordId !== undefined && named.has(list.recordId)))
+        list.dirty(fromElsewhere);
+    }
   };
 
   /** Sends one task change, layered over the task at once. Answers the refusal, if any. */
@@ -913,7 +947,7 @@ export function createTasksStore(deps: TasksDeps) {
     compose(workspace, task.id);
     const recordIds = records.map((record) => record.recordId);
     for (const list of listsOf(workspace)) {
-      if (list.status === 'open' && recordIds.includes(list.recordId)) list.prepend(task.id);
+      if (list.status === 'open' && list.belongs(body)) list.prepend(task.id);
     }
     const mutationId = deps.mintId();
     try {
@@ -969,16 +1003,29 @@ export function createTasksStore(deps: TasksDeps) {
     return false;
   };
 
+  const listFor = (workspace: string, scope: TaskListKey, status: TaskStatus): TaskList => {
+    learnMe(workspace);
+    const part = 'recordId' in scope ? scope.recordId : `mine:${scope.mine}`;
+    const key = `${workspace}\u0000${part}\u0000${status}`;
+    const found = lists.get(key);
+    if (found !== undefined) return found.api;
+    const made = makeList(workspace, scope, status);
+    lists.set(key, made);
+    return made.api;
+  };
+
   return {
     /** A record's open or done tasks, the same list for every screen that asks. */
     forRecord(workspace: string, recordId: string, status: TaskStatus): TaskList {
-      learnMe(workspace);
-      const key = `${workspace}\u0000${recordId}\u0000${status}`;
-      const found = lists.get(key);
-      if (found !== undefined) return found.api;
-      const made = makeList(workspace, recordId, status);
-      lists.set(key, made);
-      return made.api;
+      return listFor(workspace, { recordId }, status);
+    },
+    /**
+     * My tasks (AC-436): the open or done tasks assigned to me, created by
+     * me, or every task I may see, the same list for every screen that asks.
+     * Any change to a task, here or elsewhere, settles it.
+     */
+    mine(workspace: string, filter: TaskMine, status: TaskStatus): TaskList {
+      return listFor(workspace, { mine: filter }, status);
     },
     /** One task (the dialog), served from the store's body, read when the store doesn't hold it. */
     one(workspace: string, taskId: string): TaskSubscription {
@@ -1032,7 +1079,9 @@ export function createTasksStore(deps: TasksDeps) {
       // Bodies held are read again; one no screen holds yet is read at once too when a loaded list of a record the
       // event names could show it (someone else's new task shows within a second, AC-432).
       const named = new Set(event.recordIds);
-      const shows = listsOf(workspace).some((list) => named.has(list.recordId));
+      const shows = listsOf(workspace).some(
+        (list) => list.mine !== undefined || (list.recordId !== undefined && named.has(list.recordId)),
+      );
       refetch(
         workspace,
         event.taskIds.filter((id) => shows || held.has(id)),
@@ -1056,7 +1105,8 @@ export function createTasksStore(deps: TasksDeps) {
         return;
       }
       const lifecycle = [...(event.deletedIds ?? []), ...(event.restoredIds ?? [])];
-      dirtyRecords(workspace, lifecycle, true);
+      // A trash or a restore changes which tasks All tasks shows; any other records event leaves My tasks alone.
+      if (lifecycle.length > 0) dirtyRecords(workspace, lifecycle, true);
       const reread = (recordIds: readonly string[]) => {
         const named = new Set(recordIds);
         refetch(
