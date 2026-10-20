@@ -4,7 +4,7 @@
 import type { AttributeDefinition, ObjectSummary, RecordRef, RecordView } from '@crm/data';
 
 /** The record page's tabs, by their address (`tasks` joined with #19 milestone 1, `notes` joins with its milestone 3). */
-export const RECORD_TABS = ['overview', 'activity', 'tasks'] as const;
+export const RECORD_TABS = ['overview', 'activity', 'notes', 'tasks'] as const;
 /** One of the record page's tabs. */
 export type RecordTab = (typeof RECORD_TABS)[number];
 

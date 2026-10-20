@@ -1,6 +1,7 @@
 import { isDataError } from '@crm/data';
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { detailAttributes, isRecordId, isRecordTab } from '../features/records/details.ts';
+import { isNoteParam } from '../features/notes/entries.ts';
 import { isTaskParam } from '../features/tasks/entries.ts';
 import { RecordPage, RecordPendingPage } from '../features/records/RecordPage.tsx';
 import { failedPage, missingPage } from '../features/workspace/ObjectScreen.tsx';
@@ -17,14 +18,18 @@ import { useWorkspaceName, WorkspacePage } from '../features/workspace/Workspace
 // Tasks tab and `?task=<id>` (or `new`), the task dialog over any tab; the
 // loader starts the record's open tasks (the tab's count and Overview's block)
 // and reads the person's member id (a new task is theirs).
-/** `?task=<id>` or `?task=new`: the task dialog over the page. Anything else is dropped. */
+/** `?task=<id>` or `?task=new`: the task dialog; `?note=<id>` or `?note=new`: the note window. Anything else is dropped. */
 interface RecordSearch {
   readonly task?: string;
+  readonly note?: string;
 }
 
-/** Reads `?task=` when it names a task or a new one. */
+/** Reads `?task=` and `?note=` when they name one or a new one. */
 function recordSearch(search: Record<string, unknown>): RecordSearch {
-  return isTaskParam(search.task) ? { task: search.task } : {};
+  return {
+    ...(isTaskParam(search.task) ? { task: search.task } : {}),
+    ...(isNoteParam(search.note) ? { note: search.note } : {}),
+  };
 }
 
 /** How long the route waits for the record before showing the page loading in place. */
@@ -69,10 +74,11 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
           feed: undefined,
           recent: undefined,
           open: undefined,
+          notes: undefined,
         },
       };
     }
-    const [record, feed, recent, open] = await Promise.all([
+    const [record, feed, recent, open, notes] = await Promise.all([
       context.data.records.one(
         params.slug,
         params.recordId,
@@ -81,9 +87,12 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
       context.data.activity.forRecord(params.slug, params.recordId, object.id),
       context.data.activity.recent(params.slug, params.recordId, object.id),
       context.data.tasks.forRecord(params.slug, params.recordId, 'open'),
+      context.data.notes.forRecord(params.slug, params.recordId),
     ]);
     // The open tasks start loading now; the page draws them (and the tab's count) as they arrive.
     void open.ready();
+    // The notes too (spec 0019): the Notes tab's count arrives with the page.
+    void notes.ready();
     // A quick load arrives with its record; a slow one shows the page loading in place.
     let timer: ReturnType<typeof setTimeout> | undefined;
     await Promise.race([
@@ -93,7 +102,7 @@ export const Route = createFileRoute('/w/$slug/objects/$object_/$recordId/$tab')
       }),
     ]);
     clearTimeout(timer);
-    return { page: { object, objects, attributes: shown, members, meId, record, feed, recent, open } };
+    return { page: { object, objects, attributes: shown, members, meId, record, feed, recent, open, notes } };
   },
   pendingComponent: RecordPendingPage,
   errorComponent: RecordError,
@@ -113,6 +122,7 @@ function RecordRoute() {
       tab={params.tab}
       recordId={params.recordId}
       {...(search.task === undefined ? {} : { task: search.task })}
+      {...(search.note === undefined ? {} : { note: search.note })}
       {...page}
     />
   );

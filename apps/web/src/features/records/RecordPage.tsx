@@ -1,11 +1,12 @@
 // Brief
 // Purpose: everything about one record in one place: its details, and what happened to it.
 // Main task: read and edit its details in place, and see who changed what and when, live.
-// Leaves out: deleting and restoring it (#22), presence (#26), related records (milestone 3), notes (#19 milestone 3), comments (#29).
+// Leaves out: deleting and restoring it (#22), presence (#26), related records (milestone 3), comments (#29).
 import type {
   ActivityFeed as ActivityFeedSource,
   AttributeDefinition,
   MemberSummary,
+  NoteList as NoteListSource,
   ObjectSummary,
   RecordState,
   RecordSubscription,
@@ -13,10 +14,13 @@ import type {
   TaskList as TaskListSource,
   TrashedState,
 } from '@crm/data';
-import { useActivityStatus, useLiveStatus, useRecord, useTaskTotal, useTrashed } from '@crm/data/react';
+import { useActivityStatus, useLiveStatus, useNoteTotal, useRecord, useTaskTotal, useTrashed } from '@crm/data/react';
 import { ActivityFeed, Button, Callout, EmptyState, Link, RecordHeader, RecordLayout, TaskList, TopBar } from '@crm/ui';
 import { useNavigate, useParams, useRouteContext, useRouter } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, type ReactNode } from 'react';
+import { NotesTab } from '../notes/NotesTab.tsx';
+import { strings as noteStrings } from '../notes/strings.ts';
+import { NoteWindow } from '../notes/NoteWindow.tsx';
 import { tabCount } from '../tasks/entries.ts';
 import { OpenTasksCard } from '../tasks/OpenTasksCard.tsx';
 import { strings as taskStrings } from '../tasks/strings.ts';
@@ -53,12 +57,17 @@ export interface RecordPageProps {
   readonly meId: string | undefined;
   /** `?task=`: the task dialog's task, or `new`. */
   readonly task?: string;
+  /** The record's notes (spec 0019): the Notes tab and its count. */
+  readonly notes: NoteListSource | undefined;
+  /** `?note=`: the note window's note, or `new`. */
+  readonly note?: string;
 }
 
 /** The page's tabs, in order. */
 const TABS = [
   { id: 'overview', label: strings.overview, icon: 'layout-dashboard' as const },
   { id: 'activity', label: strings.activity, icon: 'activity' as const },
+  { id: 'notes', label: noteStrings.notes, icon: 'notebook' as const },
   { id: 'tasks', label: taskStrings.tasks, icon: 'list-checks' as const },
 ];
 
@@ -150,11 +159,11 @@ function LoadingLayout({
 
 /** The record page, or its unavailable state for an address that names no record. */
 export function RecordPage(props: RecordPageProps) {
-  const { record, feed, recent, open } = props;
-  if (record === undefined || feed === undefined || recent === undefined || open === undefined) {
+  const { record, feed, recent, open, notes } = props;
+  if (record === undefined || feed === undefined || recent === undefined || open === undefined || notes === undefined) {
     return <WorkspacePage currentObject={props.object.apiSlug} page={unavailablePage(props.slug, props.object)} />;
   }
-  return <SubscribedRecordPage {...props} record={record} feed={feed} recent={recent} open={open} />;
+  return <SubscribedRecordPage {...props} record={record} feed={feed} recent={recent} open={open} notes={notes} />;
 }
 
 /** The trash lookup's state once the record's first read found it missing; undefined otherwise. */
@@ -179,6 +188,7 @@ function SubscribedRecordPage(
     readonly feed: ActivityFeedSource;
     readonly recent: ActivityFeedSource;
     readonly open: TaskListSource;
+    readonly notes: NoteListSource;
   },
 ) {
   const state = useRecord(props.record);
@@ -207,8 +217,10 @@ function RecordScreen({
   feed,
   recent,
   open,
+  notes,
   meId,
   task,
+  note,
   state,
   timelineStatus,
   trashed,
@@ -217,6 +229,7 @@ function RecordScreen({
   readonly feed: ActivityFeedSource;
   readonly recent: ActivityFeedSource;
   readonly open: TaskListSource;
+  readonly notes: NoteListSource;
   readonly state: RecordState;
   readonly timelineStatus: ReturnType<typeof useActivityStatus>;
   readonly trashed?: TrashedState;
@@ -239,6 +252,7 @@ function RecordScreen({
   );
   const router = useRouter();
   const openTotal = useTaskTotal(open);
+  const notesTotal = useNoteTotal(notes);
   // Whether the task dialog was opened from this page, so closing it steps Back rather than adding a step.
   const openedHere = useRef(false);
   // A `?task=` that arrived while the page was open (a timeline entry's link, or `openTask`) was pushed: closing
@@ -272,14 +286,62 @@ function RecordScreen({
   };
   // Kept while the page's address stays, so the timeline's links and the task rows don't draw again with each render.
   const taskHref = useCallback(
-    (taskId: string) => `${recordHref(slug, object.apiSlug, recordId, tab)}?task=${taskId}`,
+    (itemId: string, kind: 'task' | 'note' = 'task') =>
+      `${recordHref(slug, object.apiSlug, recordId, tab)}?${kind}=${itemId}`,
     [slug, object.apiSlug, recordId, tab],
   );
+  // The note window (spec 0019), opened and closed as the task dialog is: pushed, so Back closes it.
+  const noteOpenedHere = useRef(false);
+  const openNote = (noteId: string) => {
+    noteOpenedHere.current = true;
+    void navigate({
+      to: '/w/$slug/objects/$object/$recordId/$tab',
+      params: { slug, object: object.apiSlug, recordId, tab },
+      search: { note: noteId },
+    });
+  };
+  const closeNote = () => {
+    if (noteOpenedHere.current) {
+      noteOpenedHere.current = false;
+      router.history.back();
+      return;
+    }
+    void navigate({
+      to: '/w/$slug/objects/$object/$recordId/$tab',
+      params: { slug, object: object.apiSlug, recordId, tab },
+      search: {},
+      replace: true,
+    });
+  };
+  // A new note's first save stored it: the address names it in place of `new`.
+  const noteStored = useCallback(
+    (noteId: string) => {
+      void navigate({
+        to: '/w/$slug/objects/$object/$recordId/$tab',
+        params: { slug, object: object.apiSlug, recordId, tab },
+        search: { note: noteId },
+        replace: true,
+      });
+    },
+    [navigate, slug, object.apiSlug, recordId, tab],
+  );
+  // The failed save's toast ("Open note") opens the window on that note again, from wherever the person is.
+  useEffect(() => {
+    void data.notes.setOpener((workspace, noteRecordId, noteId) => {
+      void navigate({ href: `${recordHref(workspace, object.apiSlug, noteRecordId, 'notes')}?note=${noteId}` });
+    });
+  }, [data, navigate, object.apiSlug]);
   const chipHref = useCallback(
     (display: { readonly objectId: string; readonly recordId: string }) => link(display.objectId, display.recordId),
     [link],
   );
-  const tabs = TABS.map((each) => (each.id === 'tasks' ? { ...each, ...tabCount(openTotal) } : each));
+  const tabs = TABS.map((each) =>
+    each.id === 'tasks'
+      ? { ...each, ...tabCount(openTotal) }
+      : each.id === 'notes'
+        ? { ...each, ...tabCount(notesTotal) }
+        : each,
+  );
 
   const openTab = (next: string) => {
     if (next === tab) return;
@@ -301,6 +363,8 @@ function RecordScreen({
   let tabContent: ReactNode;
   if (tab === 'activity') {
     tabContent = <ActivityTab feed={feed} link={link} taskHref={taskHref} onAddPerson={addPerson} />;
+  } else if (tab === 'notes') {
+    tabContent = <NotesTab list={notes} members={members} canAdd={canAddTasks} onOpenNote={openNote} />;
   } else if (tab === 'tasks' && pageRecord !== undefined) {
     tabContent = (
       <TasksTab
@@ -356,6 +420,21 @@ function RecordScreen({
         members={members}
         meId={meId}
         onClose={closeTask}
+      />
+    );
+
+  const pageHref = pageRecord === undefined ? undefined : chipHref(pageRecord);
+  const noteWindow =
+    note === undefined || pageRecord === undefined ? undefined : (
+      <NoteWindow
+        slug={slug}
+        note={note}
+        record={pageRecord}
+        {...(pageHref === undefined ? {} : { recordHref: pageHref })}
+        members={members}
+        canChange={canAddTasks}
+        onStored={noteStored}
+        onClose={closeNote}
       />
     );
 
@@ -490,6 +569,7 @@ function RecordScreen({
         }}
       />
       {dialog}
+      {noteWindow}
     </>
   );
 }
