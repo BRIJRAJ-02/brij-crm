@@ -193,6 +193,7 @@ export {
   type WrittenEvent,
 } from './booking/calendar.ts';
 export { connectedCalendar, type ConnectedCalendarDeps } from './booking/connected.ts';
+export { BEST_MAX, overlay, type Overlay, type OverlaySlot } from './booking/overlay.ts';
 export { getMyAccess, listMembers, removeMember, setMemberRole, type MemberWithRole } from './members/members.ts';
 export { outboxEvent, stubEvent, wireEvent } from './realtime/events.ts';
 export {
