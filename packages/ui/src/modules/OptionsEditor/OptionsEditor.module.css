@@ -80,6 +80,13 @@
     justify-items: start;
   }
 
+  /* A read only choice: its words, on the row's text line. */
+  .text {
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
   /* The spinner's place, held whether or not a write is out, so the fields never move. */
   .pending {
     display: inline-grid;

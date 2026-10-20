@@ -20,14 +20,16 @@ import {
   MenuItem,
   MenuSeparator,
   MenuTrigger,
+  OptionsEditor,
   QuestionList,
   Select,
   SubmenuTrigger,
   Tooltip,
+  type OptionsEditorOption,
   type QuestionListItem,
   type Toasts,
 } from '@crm/ui';
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   addPreset,
   addQuestion,
@@ -370,82 +372,69 @@ interface ChoicesEditorProps {
   readonly onChange: (next: readonly string[]) => void;
 }
 
+/** A row id the editor keys its rows by, for this session only: choices are plain words with no ids of their own. */
+function mintChoiceId(): string {
+  return crypto.randomUUID();
+}
+
 /**
- * One input per choice. Another choice appends one and focuses it; Enter in
- * the last adds the next; Backspace in an empty one removes it and focuses
- * the one before.
+ * The choices as the library's options list (its `choice` kind): reorder by
+ * the handle, rename in place, a quiet remove on each, and Add choice opens a
+ * blank row where Enter adds it and stays for the next.
  */
 function ChoicesEditor({ choices, isReadOnly, onChange }: ChoicesEditorProps) {
-  const listRef = useRef<HTMLDivElement>(null);
-  // The choice to focus once the list has drawn its change.
-  const focusAt = useRef<number | undefined>(undefined);
-
-  useEffect(() => {
-    if (focusAt.current === undefined) return;
-    listRef.current?.querySelectorAll('input')[focusAt.current]?.focus();
-    focusAt.current = undefined;
-  }, [choices]);
-  const setFocusAt = (index: number) => {
-    focusAt.current = index;
-  };
-
-  const append = () => {
-    if (choices.length >= FORM_CHOICES_MAX) return;
-    onChange([...choices, '']);
-    setFocusAt(choices.length);
-  };
-
-  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.key !== 'Backspace' || !(event.target instanceof HTMLInputElement) || event.target.value !== '') return;
-    const inputs = [...(listRef.current?.querySelectorAll('input') ?? [])];
-    const index = inputs.indexOf(event.target);
-    if (index < 0 || choices.length <= 1) return;
-    event.preventDefault();
-    onChange(choices.filter((_, at) => at !== index));
-    setFocusAt(Math.max(0, index - 1));
+  // Each choice's row id, by place. Kept in step with the choices: an outside
+  // change of length (Undo, a duplicate) mints fresh ids for the rows it adds.
+  const [ids, setIds] = useState<readonly string[]>(() => choices.map(mintChoiceId));
+  const rowIds =
+    ids.length === choices.length
+      ? ids
+      : [...ids.slice(0, choices.length), ...choices.slice(ids.length).map(mintChoiceId)];
+  if (rowIds !== ids) setIds(rowIds);
+  const options: readonly OptionsEditorOption[] = choices.map((label, index) => ({
+    id: rowIds[index] ?? String(index),
+    label,
+    hue: 'gray',
+    isArchived: false,
+  }));
+  const commit = (nextIds: readonly string[], next: readonly string[]) => {
+    setIds(nextIds);
+    onChange(next);
   };
 
   return (
-    // The group only hears Backspace from the choice fields inside it; they take every other key.
-    <div ref={listRef} role="group" aria-label={strings.choices} onKeyDownCapture={onKeyDown}>
-      {choices.length === 0 && <p>{strings.noChoices}</p>}
-      {choices.map((choice, index) => (
-        <Field
-          // Choices have no ids of their own: their place is their identity while editing.
-          key={index}
-          label={strings.choice(index + 1)}
-          isLabelHidden={index > 0}
-          size="sm"
-          value={choice}
-          maxLength={80}
-          isReadOnly={isReadOnly}
-          onChange={(text) => {
-            onChange(choices.map((each, at) => (at === index ? text : each)));
-          }}
-          onSubmit={() => {
-            if (index === choices.length - 1) append();
-          }}
-          {...(isReadOnly || choices.length <= 1
-            ? {}
-            : {
-                suffix: (
-                  <Button
-                    variant="ghost"
-                    icon="x"
-                    label={strings.removeChoice(index + 1)}
-                    onPress={() => {
-                      onChange(choices.filter((_, at) => at !== index));
-                    }}
-                  />
-                ),
-              })}
-        />
-      ))}
-      {!isReadOnly && (
-        <Button variant="ghost" icon="plus" onPress={append} isDisabled={choices.length >= FORM_CHOICES_MAX}>
-          {strings.anotherChoice}
-        </Button>
-      )}
-    </div>
+    <OptionsEditor
+      label={strings.choices}
+      kind="choice"
+      options={options}
+      limit={FORM_CHOICES_MAX}
+      newId={mintChoiceId}
+      isReadOnly={isReadOnly}
+      onAdd={(option) => {
+        commit([...rowIds, option.id], [...choices, option.label]);
+      }}
+      onChange={(id, change) => {
+        if (change.label === undefined) return;
+        const label = change.label;
+        onChange(choices.map((each, at) => (rowIds[at] === id ? label : each)));
+      }}
+      onRemove={(id) => {
+        const at = rowIds.indexOf(id);
+        commit(
+          rowIds.filter((_, place) => place !== at),
+          choices.filter((_, place) => place !== at),
+        );
+      }}
+      onMove={(id, position) => {
+        const from = rowIds.indexOf(id);
+        if (from < 0) return;
+        const moveOne = <T,>(list: readonly T[]): readonly T[] => {
+          const rest = list.filter((_, place) => place !== from);
+          const moving = list[from];
+          return moving === undefined ? list : [...rest.slice(0, position), moving, ...rest.slice(position)];
+        };
+        commit(moveOne(rowIds), moveOne(choices));
+      }}
+    />
   );
 }

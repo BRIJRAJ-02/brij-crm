@@ -11,6 +11,13 @@ const TIERS: readonly OptionsEditorOption[] = [
   { id: 'bronze', label: 'Bronze', hue: 'orange', isArchived: true },
 ];
 
+const SIZES: readonly OptionsEditorOption[] = ['Small', 'Medium', 'Large'].map((label) => ({
+  id: label.toLowerCase(),
+  label,
+  hue: 'gray',
+  isArchived: false,
+}));
+
 const STAGES: readonly OptionsEditorOption[] = [
   { id: 'not-started', label: 'Not started', hue: 'gray', isArchived: false, outcome: 'open' },
   { id: 'in-progress', label: 'In progress', hue: 'blue', isArchived: false, outcome: 'open', targetDays: 14 },
@@ -18,7 +25,7 @@ const STAGES: readonly OptionsEditorOption[] = [
 ];
 
 interface SampleProps {
-  readonly kind?: 'select' | 'status';
+  readonly kind?: 'select' | 'status' | 'choice';
   readonly initial?: readonly OptionsEditorOption[];
   readonly limit?: number;
   readonly isReadOnly?: boolean;
@@ -56,7 +63,7 @@ function SampleOptions({
   return (
     <Stage width="narrow">
       <OptionsEditor
-        label={kind === 'status' ? 'Stages' : 'Options'}
+        label={kind === 'status' ? 'Stages' : kind === 'choice' ? 'Choices' : 'Options'}
         kind={kind}
         options={options}
         limit={limit}
@@ -307,5 +314,46 @@ export const RestoreKeepsFocus: Story = {
     await userEvent.click(canvas.getByRole('button', { name: /Archived/ }));
     await userEvent.click(canvas.getByRole('button', { name: 'Restore' }));
     await waitFor(() => expect(canvas.getByRole('button', { name: 'Add option' })).toHaveFocus());
+  },
+};
+
+/** Choices (a form question's): no colour or menu, a quiet remove on each row, moved by the handle. */
+export const Choices: Story = {
+  args: { kind: 'choice', initial: SIZES, isDraft: true, limit: 40 },
+  play: async ({ canvas, userEvent }) => {
+    await expect(canvas.queryByRole('button', { name: /colour$/ })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: /^Actions for/ })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: 'Remove Medium' }));
+    await expect(canvas.getAllByRole('row')).toHaveLength(2);
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'Choice 2' })).toHaveFocus());
+  },
+};
+
+/** Typing choices: Enter adds one and the same blank row stays focused for the next; a repeat is refused on the row. */
+export const ChoicesByTyping: Story = {
+  args: { kind: 'choice', initial: [], isDraft: true, limit: 40, onAdd: fn() },
+  play: async ({ args, canvas, userEvent }) => {
+    await expect(canvas.getByText('No choices yet')).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: 'Add choice' }));
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'New choice' })).toHaveFocus());
+    await userEvent.keyboard('North{Enter}');
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'New choice' })).toHaveFocus());
+    await userEvent.keyboard('South{Enter}');
+    await expect(args.onAdd).toHaveBeenLastCalledWith(expect.objectContaining({ label: 'South' }));
+    await waitFor(() => expect(canvas.getByRole('textbox', { name: 'New choice' })).toHaveFocus());
+    await userEvent.keyboard('north{Enter}');
+    await expect(canvas.getByRole('textbox', { name: 'New choice' })).toHaveAccessibleDescription(
+      'That choice is already in the list. Type another.',
+    );
+  },
+};
+
+/** Read only choices: their words, with nothing to move, add or remove. */
+export const ChoicesReadOnly: Story = {
+  args: { kind: 'choice', initial: SIZES, isReadOnly: true },
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Medium')).toBeInTheDocument();
+    await expect(canvas.queryByRole('button', { name: 'Add choice' })).toBeNull();
+    await expect(canvas.queryByRole('button', { name: /^Remove/ })).toBeNull();
   },
 };

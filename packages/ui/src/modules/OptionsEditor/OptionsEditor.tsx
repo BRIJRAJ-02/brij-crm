@@ -52,8 +52,13 @@ export interface OptionsEditorChange {
 export interface OptionsEditorProps {
   /** The group's name ("Options", "Stages"). */
   readonly label: string;
-  /** `status` adds each stage's outcome and target days. */
-  readonly kind: 'select' | 'status';
+  /**
+   * `status` adds each stage's outcome and target days. `choice` is a list of
+   * plain words (a form question's choices): no colour (an option's `hue` is
+   * ignored), shown as text when read only, and a quiet remove button in
+   * place of the row's menu (it needs `onRemove`).
+   */
+  readonly kind: 'select' | 'status' | 'choice';
   /** Every option in the attribute's order, archived ones included. */
   readonly options: readonly OptionsEditorOption[];
   /** The live options an attribute may hold: shows "N of 500", and Add stops there. */
@@ -98,6 +103,9 @@ interface Draft {
   readonly isAsked: boolean;
 }
 
+/** The blank row's key in the list, whichever option it is about to become. */
+const DRAFT_ROW = 'options-editor-draft';
+
 const OUTCOMES: readonly { readonly id: OptionOutcome; readonly label: string }[] = [
   { id: 'open', label: strings.open },
   { id: 'won', label: strings.won },
@@ -141,6 +149,7 @@ export function OptionsEditor({
   onInvalidChange,
 }: OptionsEditorProps) {
   const isStatus = kind === 'status';
+  const isChoice = kind === 'choice';
   const rootRef = useRef<HTMLDivElement>(null);
   const live = options.filter((option) => !option.isArchived);
   const archived = options.filter((option) => option.isArchived);
@@ -212,7 +221,7 @@ export function OptionsEditor({
       return;
     }
     if (isTaken(text)) {
-      setOne('new', strings.labelTaken);
+      setOne('new', isChoice ? strings.choiceTaken : strings.labelTaken);
       return;
     }
     setOne('new', undefined);
@@ -239,7 +248,7 @@ export function OptionsEditor({
       return;
     }
     if (isTaken(text, option.id)) {
-      setOne(option.id, strings.labelTaken);
+      setOne(option.id, isChoice ? strings.choiceTaken : strings.labelTaken);
       return;
     }
     setOne(option.id, undefined);
@@ -288,11 +297,30 @@ export function OptionsEditor({
     if (event.key === 'Enter' && event.target instanceof HTMLInputElement) event.preventDefault();
   };
 
-  const placeName = (index: number) => (isStatus ? strings.stageLabel(index + 1) : strings.optionLabel(index + 1));
+  const placeName = (index: number) =>
+    isStatus
+      ? strings.stageLabel(index + 1)
+      : isChoice
+        ? strings.choiceLabel(index + 1)
+        : strings.optionLabel(index + 1);
+  const newName = isStatus ? strings.newStage : isChoice ? strings.newChoice : strings.newOption;
+
+  /** Removes a row and puts focus on the next row's field, or the one before, or Add when it was the last. */
+  const removeRow = (index: number, id: string) => {
+    const next = live[index + 1] ?? live[index - 1];
+    onRemove?.(id);
+    focusIn(
+      next === undefined
+        ? (root) => root.querySelector<HTMLElement>('[data-adder] button')
+        : rowControl(next.id, 'input'),
+    );
+  };
 
   const rows = [
     ...live.map((option, index) => ({ id: option.id, option, index })),
-    ...(draft === undefined ? [] : [{ id: draft.id, option: undefined, index: live.length }]),
+    // The blank row keeps one key whatever it holds, so after Enter adds what it held, the same row (and its
+    // focused field) stays to take the next: no remount, so the list never pulls focus back to the row just added.
+    ...(draft === undefined ? [] : [{ id: DRAFT_ROW, option: undefined, index: live.length }]),
   ];
 
   return (
@@ -306,7 +334,9 @@ export function OptionsEditor({
       </div>
       {hint !== undefined && !isReadOnly && <span className={styles.note}>{hint}</span>}
       {isStatus && !isReadOnly && <span className={styles.note}>{strings.daysNote}</span>}
-      {rows.length === 0 && <p className={styles.empty}>{isStatus ? strings.noStages : strings.noOptions}</p>}
+      {rows.length === 0 && (
+        <p className={styles.empty}>{isStatus ? strings.noStages : isChoice ? strings.noChoices : strings.noOptions}</p>
+      )}
       {rows.length > 0 && (
         <GridList
           aria-label={label}
@@ -319,11 +349,11 @@ export function OptionsEditor({
             if (option === undefined) {
               // The row being added: its label alone; colour and outcome follow once it exists.
               return (
-                <GridListItem id={id} textValue={strings.newOption} className={styles.row} data-draft="">
-                  <DragHandle label={strings.move(strings.newOption)} isDisabled />
+                <GridListItem id={id} textValue={newName} className={styles.row} data-draft="">
+                  <DragHandle label={strings.move(newName)} isDisabled />
                   <span className={styles.label}>
                     <Field
-                      label={isStatus ? strings.newStage : strings.newOption}
+                      label={newName}
                       isLabelHidden
                       size="sm"
                       maxLength={100}
@@ -361,17 +391,21 @@ export function OptionsEditor({
             return (
               <GridListItem id={id} textValue={name} className={styles.row}>
                 {!isReadOnly && <DragHandle label={strings.move(name)} />}
-                <HuePicker
-                  label={strings.colourOf(name)}
-                  value={option.hue}
-                  isCompact
-                  isReadOnly={isReadOnly}
-                  onChange={(hue) => {
-                    if (hue !== option.hue) onChange(option.id, { hue });
-                  }}
-                />
+                {!isChoice && (
+                  <HuePicker
+                    label={strings.colourOf(name)}
+                    value={option.hue}
+                    isCompact
+                    isReadOnly={isReadOnly}
+                    onChange={(hue) => {
+                      if (hue !== option.hue) onChange(option.id, { hue });
+                    }}
+                  />
+                )}
                 <span className={styles.label} data-static={isReadOnly || undefined}>
-                  {isReadOnly ? (
+                  {isReadOnly && isChoice ? (
+                    <span className={styles.text}>{name}</span>
+                  ) : isReadOnly ? (
                     <Tag hue={option.hue}>{name}</Tag>
                   ) : (
                     <Field
@@ -460,10 +494,21 @@ export function OptionsEditor({
                       </span>
                     </>
                   ))}
-                {!isReadOnly && (
+                {/* Choices are saved with their form, so no row waits on the server. */}
+                {!isReadOnly && !isChoice && (
                   <span className={styles.pending}>{isPending && <Spinner label={strings.saving} />}</span>
                 )}
-                {!isReadOnly && (
+                {!isReadOnly && isChoice && onRemove !== undefined && (
+                  <Button
+                    variant="ghost"
+                    icon="x"
+                    label={strings.removeOf(name)}
+                    onPress={() => {
+                      removeRow(index, option.id);
+                    }}
+                  />
+                )}
+                {!isReadOnly && !isChoice && (
                   <MenuTrigger>
                     <Button variant="ghost" icon="ellipsis" label={strings.actionsFor(name)} />
                     <Menu
@@ -473,10 +518,12 @@ export function OptionsEditor({
                         const after = live[index + 1];
                         if (key === 'up' && before !== undefined) moveTo(option.id, before.id, 'before');
                         else if (key === 'down' && after !== undefined) moveTo(option.id, after.id, 'after');
-                        else if (key === 'archive' || key === 'remove') {
+                        else if (key === 'remove') {
+                          removeRow(index, option.id);
+                          return;
+                        } else if (key === 'archive') {
                           const next = after ?? before;
-                          if (key === 'archive') onArchive?.(option.id);
-                          else onRemove?.(option.id);
+                          onArchive?.(option.id);
                           focusIn(
                             next === undefined
                               ? (root) => root.querySelector<HTMLElement>('[data-adder] button')
@@ -522,9 +569,9 @@ export function OptionsEditor({
               startDraft();
             }}
           >
-            {isStatus ? strings.addStage : strings.addOption}
+            {isStatus ? strings.addStage : isChoice ? strings.addChoice : strings.addOption}
           </Button>
-          {isFull && <span className={styles.note}>{strings.full(limit)}</span>}
+          {isFull && <span className={styles.note}>{isChoice ? strings.fullChoices(limit) : strings.full(limit)}</span>}
           {/* A refused add (its row gone with it) says why here, unless a blank row is open to show it. */}
           {draft === undefined && errors.new !== undefined && (
             <span className={styles.error} role="alert">
