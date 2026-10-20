@@ -1105,8 +1105,8 @@ export const EditInPopover: Story = {
     const dialog = await openDialog();
     // Written the international way once the phone library (loaded on demand) lands, as stored until then.
     await waitFor(() => expect(dialog).toHaveTextContent(/\+44 ?20 ?7123 ?4567/));
-    await expect(document.activeElement).toHaveAttribute('placeholder', 'Add another…');
-    // The add field has the country code picker before it (F38).
+    // The add field is the phone field itself, focused, with the country code picker before it (F38).
+    await expect(document.activeElement).toHaveAttribute('type', 'tel');
     await expect(within(dialog).getByRole('button', { name: /Country code/ })).toBeInTheDocument();
   },
 };

@@ -26,11 +26,26 @@ export interface ListEditorProps<T extends AttributeType, V> extends EditorProps
   readonly hint?: string;
   readonly prefix?: ReactNode;
   /**
-   * The add field's text as typed, before it is kept: a phone number typed
-   * with its "+" code moves the code to the country picker in `prefix` and
-   * keeps the rest, laid out for that country.
+   * Draws the add field itself, from the props the Field would take: a type
+   * whose one field is more than a Field (a phone number's PhoneField, with
+   * its country code) draws that, so adding one more reads like editing one.
    */
-  readonly transformDraft?: (typed: string) => string;
+  readonly renderAdd?: (field: AddFieldProps) => ReactNode;
+}
+
+/** What ListEditor's add field takes, handed to `renderAdd`. */
+export interface AddFieldProps {
+  readonly label: string;
+  readonly isLabelHidden: boolean;
+  readonly size: 'md' | 'sm';
+  readonly placeholder: string;
+  readonly value: string;
+  readonly onChange: (value: string) => void;
+  /** Adds what is typed: Enter, or focus leaving. */
+  readonly onAdd: () => void;
+  readonly onEscape?: () => void;
+  readonly error?: string;
+  readonly autoFocus: boolean;
 }
 
 /** Removable chips and an add Field; every change commits the whole list. */
@@ -48,7 +63,7 @@ export function ListEditor<T extends AttributeType, V>({
   type,
   hint,
   prefix,
-  transformDraft,
+  renderAdd,
   autoOpen = false,
   startText,
 }: ListEditorProps<T, V>) {
@@ -94,31 +109,49 @@ export function ListEditor<T extends AttributeType, V>({
           ))}
         </ul>
       )}
-      <Field
-        label={attribute.name}
-        isLabelHidden={isCompact}
-        size={isCompact ? 'sm' : 'md'}
-        // The copy style's empty value, then an invitation to add one more.
-        placeholder={values.length === 0 ? fieldStrings.setAttribute(attribute.name) : strings.addAnotherPlaceholder}
-        value={draft}
-        onChange={(next) => {
-          setDraft(transformDraft === undefined ? next : transformDraft(next));
-          setMessage(undefined);
-        }}
-        onSubmit={add}
-        // A record's value, never the viewer's own: no browser autofill, and no password manager taking it for a login.
-        autoComplete="off"
-        onBlur={add}
-        // Opened from a grid cell: keys go to the add field, never to a chip's link.
-        // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the editor was opened on purpose, from the cell
-        autoFocus={autoOpen}
-        {...(onCancel === undefined ? {} : { onEscape: onCancel })}
-        {...((message ?? error) === undefined ? {} : { error: message ?? error })}
-        {...(inputMode === undefined ? {} : { inputMode })}
-        {...(type === undefined ? {} : { type })}
-        {...(hint === undefined ? {} : { hint })}
-        {...(prefix === undefined ? {} : { prefix })}
-      />
+      {renderAdd === undefined ? (
+        <Field
+          label={attribute.name}
+          isLabelHidden={isCompact}
+          size={isCompact ? 'sm' : 'md'}
+          // The copy style's empty value, then an invitation to add one more.
+          placeholder={values.length === 0 ? fieldStrings.setAttribute(attribute.name) : strings.addAnotherPlaceholder}
+          value={draft}
+          onChange={(next) => {
+            setDraft(next);
+            setMessage(undefined);
+          }}
+          onSubmit={add}
+          // A record's value, never the viewer's own: no browser autofill, and no password manager taking it for a login.
+          autoComplete="off"
+          onBlur={add}
+          // Opened from a grid cell: keys go to the add field, never to a chip's link.
+          // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the editor was opened on purpose, from the cell
+          autoFocus={autoOpen}
+          {...(onCancel === undefined ? {} : { onEscape: onCancel })}
+          {...((message ?? error) === undefined ? {} : { error: message ?? error })}
+          {...(inputMode === undefined ? {} : { inputMode })}
+          {...(type === undefined ? {} : { type })}
+          {...(hint === undefined ? {} : { hint })}
+          {...(prefix === undefined ? {} : { prefix })}
+        />
+      ) : (
+        renderAdd({
+          label: attribute.name,
+          isLabelHidden: isCompact,
+          size: isCompact ? 'sm' : 'md',
+          placeholder: values.length === 0 ? fieldStrings.setAttribute(attribute.name) : strings.addAnotherPlaceholder,
+          value: draft,
+          onChange: (next) => {
+            setDraft(next);
+            setMessage(undefined);
+          },
+          onAdd: add,
+          autoFocus: autoOpen,
+          ...(onCancel === undefined ? {} : { onEscape: onCancel }),
+          ...((message ?? error) === undefined ? {} : { error: message ?? error }),
+        })
+      )}
     </div>
   );
 }

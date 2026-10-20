@@ -33,6 +33,8 @@ export interface CountryPickerProps {
   readonly variant?: 'default' | 'prefix';
   readonly autoFocus?: boolean;
   readonly defaultOpen?: boolean;
+  /** The list opened or closed: PhoneField keeps focus in its list from counting as leaving. */
+  readonly onOpenChange?: (isOpen: boolean) => void;
   readonly triggerRef?: Ref<HTMLButtonElement>;
   /** The search field's name, in the page's language. Defaults to "Search country or code". */
   readonly searchLabel?: string;
@@ -98,6 +100,7 @@ export function CountryPicker({
   variant = 'default',
   autoFocus = false,
   defaultOpen,
+  onOpenChange,
   triggerRef,
   searchLabel = strings.search,
   list = 'dialing',
@@ -140,6 +143,7 @@ export function CountryPicker({
       {...(error === undefined ? {} : { error })}
       {...(readOnlyReason === undefined ? {} : { readOnlyReason })}
       {...(defaultOpen === undefined ? {} : { defaultOpen })}
+      {...(onOpenChange === undefined ? {} : { onOpenChange })}
       {...(triggerRef === undefined ? {} : { triggerRef })}
     />
   );

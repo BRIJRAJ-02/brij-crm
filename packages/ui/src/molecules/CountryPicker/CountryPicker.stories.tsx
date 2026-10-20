@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, waitFor, within } from 'storybook/test';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { CountryPicker } from './CountryPicker.tsx';
 
@@ -85,4 +85,30 @@ export const Disabled: Story = {
 /** Read only, with why. */
 export const ReadOnly: Story = {
   args: { defaultValue: 'GB', isReadOnly: true, readOnlyReason: 'Set from the visitor’s address.' },
+};
+
+/**
+ * A place's country (`list="all"`): every country and territory, with no
+ * dial codes, small (`size="sm"`, a filter value or a panel row) and
+ * clearable, as the Location editor and a filter's "country is" use it.
+ */
+export const Place: Story = {
+  args: { list: 'all', size: 'sm', isClearable: true, defaultValue: 'GB', searchLabel: 'Search countries' },
+  play: async ({ canvas, args, userEvent }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Country/ }));
+    const field = await waitFor(() => {
+      const found = document.querySelector<HTMLInputElement>('input[aria-label="Search countries"]');
+      if (found === null) throw new Error('the list did not open');
+      return found;
+    });
+    await waitFor(() => expect(field).toHaveFocus());
+    await userEvent.keyboard('antarc');
+    // A territory with no dialling code is listed, and no option shows a code.
+    await waitFor(() => expect(document.querySelector('[role="option"]')).toHaveTextContent('Antarctica'));
+    await expect(document.querySelector('[role="listbox"]')).not.toHaveTextContent('+');
+    await userEvent.keyboard('{Escape}');
+    await userEvent.click(canvas.getByRole('button', { name: /Country/ }));
+    await userEvent.click(await within(document.body).findByRole('option', { name: 'Clear' }));
+    await expect(args.onChange).toHaveBeenCalledWith(null);
+  },
 };

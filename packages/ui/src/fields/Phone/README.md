@@ -11,17 +11,17 @@ The field set gives every attribute type exactly one display and one editor (spe
 Screens never import it; they render values through `AttributeDisplay` and `AttributeEditor` with a `FieldAttribute` of this type.
 
 - **Display**: a LinkChip to `tel:`, written the international way (+44 20 7123 4567); several are a row with "+N".
-- **Editor**: a Field read by libphonenumber-js (the full metadata, loaded on demand when a phone field shows, so it is never in the first load) in the language's region (`en-GB` gives GB), else the attribute's `defaultCountry`, and checked for that country: "a phone that isn't a number" or one that can't exist is refused with how to fix it. Several numbers are removable chips with a field to add one.
+- **Editor**: the hosted form's PhoneField (F38, the owner's call, 20 October 2026): the country code with its flag and a search by name, ISO code or dial code, joined to the number. It starts in the attribute's `defaultCountry`, else the viewer's (their language's region), else the US; a stored number opens in its own country, written the national way ("020 7123 4567"). The placeholder is the country's example number; a quiet check shows while the number is valid there, and too short, too long or not a number there is said once focus leaves the field or Enter is pressed. A number typed or pasted with its "+" code switches the country. libphonenumber-js (the full metadata and the examples) loads on demand when a phone field shows, so it is never in the first load, and parses and stores the number in E.164 as before. Several numbers are removable chips with the same PhoneField to add one (ListEditor's `renderAdd`).
 - **Text out / in**: E.164 / parsed with the attribute's or the viewer's country. Paste and imports load the library first and pass it as `TextContext.phone` (`createPhoneParser`).
 - **Filter operators**: is, contains, country is, then is empty and is not empty.
 
 ## States
 
-Empty, a value, loading (the number shows as stored until the library loads), and in the editor: typing, invalid, required.
+Empty, a value, loading (the number shows as stored until the library loads), and in the editor: the example placeholder, typing, valid (the check), too short, too long, not a number, required.
 
 ## Keyboard
 
-The editor is a Field: Enter commits in a cell, blur commits elsewhere, Esc cancels. In a grid cell one value is typed in the cell itself; several edit in a popover under the cell, the list with an add field ("Set <Attribute>…", then "Add another…").
+Tab reaches the country code, then the number. Enter commits, leaving the whole field commits (moving between the code and the number never does), Esc cancels. In a grid cell one value is typed in the cell itself, keyboard first: typing "+" and the code switches the country, and the code button is a click away; Enter and Tab commit and move on, and keys inside the code's list stay the list's. Several edit in a popover under the cell, the list over the same phone field to add one more.
 
 ## Differences from the artifact
 

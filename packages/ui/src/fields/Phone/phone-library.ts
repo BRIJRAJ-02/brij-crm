@@ -100,7 +100,7 @@ export function phoneProblemOf(
   const parsed = library.parsePhoneNumberFromString(text, supported);
   if (parsed?.isValid() === true) return undefined;
   const length = library.validatePhoneNumberLength(text, supported);
-  if (length === 'TOO_SHORT' || length === 'NOT_A_NUMBER') return 'too-short';
+  if (length === 'TOO_SHORT') return 'too-short';
   if (length === 'TOO_LONG') return 'too-long';
   return 'invalid';
 }

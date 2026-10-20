@@ -1,31 +1,20 @@
 import type { PhoneValue } from '@crm/contracts/values';
 import { useState } from 'react';
-import { useFocusWithin } from 'react-aria';
 import { countryOfNumber, withoutDialCode } from '../../lib/countries.ts';
-import { CountryPicker } from '../../molecules/CountryPicker/CountryPicker.tsx';
-import { PhoneField, type PhoneFieldValue } from '../../molecules/PhoneField/PhoneField.tsx';
+import { PHONE_PROBLEMS, PhoneField, type PhoneFieldValue } from '../../molecules/PhoneField/PhoneField.tsx';
 import { useFormatSettings } from '../../provider/context.ts';
 import { ListEditor, type CheckedOne } from '../ListEditor.tsx';
 import type { EditorProps } from '../types.ts';
 import { asList, isCompactSurface, toCommittable } from '../values.ts';
 import { formatPhone } from './PhoneDisplay.tsx';
-import { strings as phoneFieldStrings } from '../../molecules/PhoneField/strings.ts';
 import {
   createPhoneParser,
   defaultCountryFor,
   phoneProblemOf,
   usePhoneLibrary,
   type PhoneLibrary,
-  type PhoneProblem,
 } from './phone-library.ts';
 import { strings } from './strings.ts';
-
-/** The sentence for what is wrong with a number, as PhoneField's checker says it. */
-const PROBLEMS: Readonly<Record<PhoneProblem, string>> = {
-  'too-short': phoneFieldStrings.tooShort,
-  'too-long': phoneFieldStrings.tooLong,
-  invalid: phoneFieldStrings.invalid,
-};
 
 /** Typed text to a phone value: parsed and checked for that country by libphonenumber-js, or why not. */
 export function checkPhone(
@@ -38,13 +27,7 @@ export function checkPhone(
   if (parsed !== undefined) return { ok: true, value: parsed };
   // Said as plainly as the checker says it: too short, too long, or not a number there.
   const problem = country === undefined ? undefined : phoneProblemOf(library, draft, country);
-  return { ok: false, message: problem === undefined ? strings.invalid : PROBLEMS[problem] };
-}
-
-/** The national number laid out for its country as it is typed, once the library has loaded; as typed until then. */
-function laidOut(library: PhoneLibrary | undefined, country: string, national: string): string {
-  if (library === undefined || national.trim() === '' || !library.isSupportedCountry(country)) return national;
-  return new library.AsYouType(country).input(national);
+  return { ok: false, message: PHONE_PROBLEMS[problem ?? 'invalid'] };
 }
 
 /** A stored number as the editor shows it: its country in the picker, its national number in the field. */
@@ -120,55 +103,48 @@ function OnePhone({ attribute, value, surface, onCommit, onCancel, error, startT
   };
   const isCompact = isCompactSurface(surface);
   const shownError = message ?? (isDirty ? undefined : error);
-  // Leaving the whole field commits, not moving from the number to its country code (or the code's list).
-  const { focusWithinProps } = useFocusWithin({ onBlurWithin: commit });
   return (
-    <div {...focusWithinProps}>
-      <PhoneField
-        label={attribute.name}
-        isLabelHidden={isCompact}
-        size={isCompact ? 'sm' : 'md'}
-        variant={surface === 'cell' ? 'cell' : 'default'}
-        isErrorFloating={surface === 'cell'}
-        // A record's number, never the viewer's own: no browser autofill, and no password manager taking it for a login.
-        autoComplete="off"
-        // Opened from its value (a cell, a details row): the number takes focus, not the code before it.
-        autoFocus={surface === 'cell' || surface === 'panel'}
-        guess={start}
-        // The country's example number as the placeholder, and a quiet check while the number is valid there.
-        showsExample
-        checksNumber
-        isRequired={attribute.isRequired}
-        value={draft}
-        onChange={(next) => {
-          setDraft(next);
-          setDirty(true);
-          setMessage(undefined);
-        }}
-        onSubmit={commit}
-        onEscape={cancel}
-        codeLabel={strings.code}
-        {...(shownError === undefined ? {} : { error: shownError })}
-      />
-    </div>
+    <PhoneField
+      label={attribute.name}
+      isLabelHidden={isCompact}
+      size={isCompact ? 'sm' : 'md'}
+      variant={surface === 'cell' ? 'cell' : 'default'}
+      isErrorFloating={surface === 'cell'}
+      // A record's number, never the viewer's own: no browser autofill, and no password manager taking it for a login.
+      autoComplete="off"
+      // Opened from its value (a cell, a details row): the number takes focus, not the code before it.
+      autoFocus={surface === 'cell' || surface === 'panel'}
+      guess={start}
+      // The country's example number as the placeholder, and a quiet check while the number is valid there.
+      showsExample
+      checksNumber
+      isRequired={attribute.isRequired}
+      value={draft}
+      onChange={(next) => {
+        setDraft(next);
+        setDirty(true);
+        setMessage(undefined);
+      }}
+      onSubmit={commit}
+      // Leaving the whole field commits, not moving from the number to its country code (or the code's list).
+      onLeave={commit}
+      onEscape={cancel}
+      codeLabel={strings.code}
+      {...(shownError === undefined ? {} : { error: shownError })}
+    />
   );
 }
 
 /**
- * Several numbers: removable chips, and the add field with the same country
- * code picker before it; a number typed with its "+" code moves the code to
- * the picker.
+ * Several numbers: removable chips, and the same PhoneField to add one more
+ * (its country code, example number and check); a number typed with its "+"
+ * code moves the code to the picker.
  */
 function SeveralPhones(props: EditorProps<'phone'>) {
   const library = usePhoneLibrary();
   const start = useStartCountry(props.attribute.defaultCountry);
   const [country, setCountry] = useState(start);
   const phones = asList<PhoneValue>(props.value);
-  const transform = (typed: string) => {
-    const next = fromTyped(typed, country);
-    if (next.country !== country) setCountry(next.country);
-    return laidOut(library, next.country, next.national);
-  };
   return (
     <ListEditor<'phone', PhoneValue>
       {...props}
@@ -177,20 +153,30 @@ function SeveralPhones(props: EditorProps<'phone'>) {
       labelOf={(phone) => formatPhone(phone, library)}
       hrefOf={(phone) => `tel:${phone.number}`}
       checkOne={(draft) => checkPhone(draft, library, country)}
-      type="tel"
-      inputMode="tel"
-      transformDraft={transform}
-      prefix={
-        <CountryPicker
-          label={strings.code}
-          variant="prefix"
-          value={country}
-          guess={start}
-          onChange={(code) => {
-            if (code !== null) setCountry(code);
+      renderAdd={(field) => (
+        <PhoneField
+          label={field.label}
+          isLabelHidden={field.isLabelHidden}
+          size={field.size}
+          value={{ country, national: field.value }}
+          onChange={(next) => {
+            setCountry(next.country);
+            field.onChange(next.national);
           }}
+          onSubmit={field.onAdd}
+          onLeave={field.onAdd}
+          // A record's number, never the viewer's own: no browser autofill, and no password manager taking it for a login.
+          autoComplete="off"
+          // eslint-disable-next-line jsx-a11y-x/no-autofocus -- opened from a grid cell: keys go to the add field
+          autoFocus={field.autoFocus}
+          guess={start}
+          codeLabel={strings.code}
+          showsExample
+          checksNumber
+          {...(field.onEscape === undefined ? {} : { onEscape: field.onEscape })}
+          {...(field.error === undefined ? {} : { error: field.error })}
         />
-      }
+      )}
     />
   );
 }

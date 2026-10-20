@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
+import { useFocusWithin } from 'react-aria';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import {
+  createPhoneParser,
   examplePhone,
   phoneProblemOf,
   usePhoneExamples,
@@ -12,7 +14,6 @@ import { countryOfNumber, withoutDialCode } from '../../lib/countries.ts';
 import { focusLater } from '../../lib/focus-later.ts';
 import { CountryPicker } from '../CountryPicker/CountryPicker.tsx';
 import { Field, type FieldProps } from '../Field/Field.tsx';
-import styles from './PhoneField.module.css';
 import { strings } from './strings.ts';
 
 /** A phone number as PhoneField holds it: the country it is dialled from, and the number as typed there. */
@@ -56,6 +57,12 @@ export interface PhoneFieldProps {
   readonly size?: FieldProps['size'];
   readonly variant?: 'default' | 'cell';
   readonly onBlur?: () => void;
+  /**
+   * Focus left the whole field: the number, its code button and the code's
+   * list (open in a popover outside it) all count as inside, so moving
+   * between them never leaves. Where a record's number commits.
+   */
+  readonly onLeave?: () => void;
   readonly onSubmit?: () => void;
   readonly onEscape?: () => void;
   readonly autoFocus?: boolean;
@@ -75,8 +82,8 @@ export interface PhoneFieldProps {
   readonly checksNumber?: boolean;
 }
 
-/** The sentence for what is wrong with a number. */
-const PROBLEMS: Readonly<Record<PhoneProblem, string>> = {
+/** The sentence for what is wrong with a number, as the checker says it (the Phone editor says the same). */
+export const PHONE_PROBLEMS: Readonly<Record<PhoneProblem, string>> = {
   'too-short': strings.tooShort,
   'too-long': strings.tooLong,
   invalid: strings.invalid,
@@ -116,6 +123,7 @@ export function PhoneField({
   size = 'md',
   variant = 'default',
   onBlur,
+  onLeave,
   onSubmit,
   onEscape,
   autoFocus = false,
@@ -147,14 +155,24 @@ export function PhoneField({
   const check = () => {
     if (checksNumber) setProblem(phoneProblemOf(library, current.national, current.country));
   };
+  // While the code's list is open, focus is in its popover, outside the field, but the person hasn't left.
+  const isPicking = useRef(false);
+  const { focusWithinProps } = useFocusWithin({
+    onBlurWithin: () => {
+      if (isPicking.current) return;
+      check();
+      onLeave?.();
+    },
+  });
+  // Valid the way a commit reads it: a number that exists, and in a country.
   const isValid =
     checksNumber &&
     library !== undefined &&
     current.national.trim() !== '' &&
-    phoneProblemOf(library, current.national, current.country) === undefined;
+    createPhoneParser(library).parse(current.national, current.country) !== undefined;
   const shownPlaceholder = placeholder ?? (showsExample ? examplePhone(library, examples, current.country) : undefined);
-  const shownError = error ?? (problem === undefined ? undefined : PROBLEMS[problem]);
-  return (
+  const shownError = error ?? (problem === undefined ? undefined : PHONE_PROBLEMS[problem]);
+  const field = (
     <Field
       label={label}
       isLabelHidden={isLabelHidden}
@@ -166,14 +184,7 @@ export function PhoneField({
       isErrorFloating={isErrorFloating}
       // eslint-disable-next-line jsx-a11y-x/no-autofocus -- a record's editor opened on purpose, from its value
       autoFocus={autoFocus}
-      {...(onBlur === undefined && !checksNumber
-        ? {}
-        : {
-            onBlur: () => {
-              check();
-              onBlur?.();
-            },
-          })}
+      {...(onBlur === undefined ? {} : { onBlur })}
       {...(onSubmit === undefined && !checksNumber
         ? {}
         : {
@@ -184,11 +195,7 @@ export function PhoneField({
           })}
       {...(isValid
         ? {
-            suffix: (
-              <span className={styles.valid}>
-                <Icon name="circle-check" size="sm" label={strings.valid} />
-              </span>
-            ),
+            suffix: <Icon name="circle-check" size="sm" tone="success" label={strings.valid} />,
           }
         : {})}
       {...(onEscape === undefined ? {} : { onEscape })}
@@ -204,8 +211,13 @@ export function PhoneField({
           variant="prefix"
           {...(searchLabel === undefined ? {} : { searchLabel })}
           value={current.country}
+          onOpenChange={(isOpen) => {
+            isPicking.current = isOpen;
+          }}
           onChange={(code) => {
             if (code === null) return;
+            // A new country, a new check: what was said about the old one no longer holds.
+            setProblem(undefined);
             change({ country: code, national: formatted(library, code, current.national.replace(/\D/g, '')) });
             focusLater(() => input.current);
           }}
@@ -222,4 +234,6 @@ export function PhoneField({
       {...(name === undefined ? {} : { name })}
     />
   );
+  // Wrapped only where something listens for leaving: the hosted form's markup stays as it was.
+  return checksNumber || onLeave !== undefined ? <div {...focusWithinProps}>{field}</div> : field;
 }

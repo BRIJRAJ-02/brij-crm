@@ -33,6 +33,11 @@
     color: var(--ai);
   }
 
+  /* Something checked and found right: a phone number valid for its country. */
+  .icon[data-tone='success'] {
+    color: var(--success);
+  }
+
   /* An object's icon on its hue: Companies blue, People green, Deals orange. */
   .tile {
     --tile-bg: var(--tag-gray-bg);

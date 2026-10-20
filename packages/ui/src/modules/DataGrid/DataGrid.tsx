@@ -963,6 +963,9 @@ export function DataGrid<Row>({
 
   const onKeyDownCapture = (event: KeyboardEvent<HTMLDivElement>) => {
     if (editing === undefined) return;
+    // A key from an editor's own popover (a phone number's country list, portalled outside the grid) is that
+    // list's: its Enter chooses, its Tab moves inside it. Neither ends the cell's edit.
+    if (!(event.target instanceof Node) || !event.currentTarget.contains(event.target)) return;
     const mode = modeAt(editing.col);
     // Tab commits and moves on from a cell or a list; a popover's own fields take it.
     if (event.key === 'Tab' && (mode === 'cell' || mode === 'list')) {

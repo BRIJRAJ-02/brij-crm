@@ -53,13 +53,14 @@ export const Sizes: Story = {
   },
 };
 
-/** `inherit` (the default), `muted` for attribute and column header icons, `ai` for the sparkle only. */
+/** `inherit` (the default), `muted` for attribute and column header icons, `ai` for the sparkle only, `success` for a check found right. */
 export const Tones: Story = {
   render: () => (
     <Stage>
       <Icon name="tag" />
       <Icon name="tag" tone="muted" />
       <Icon name="sparkles" tone="ai" />
+      <Icon name="circle-check" tone="success" />
     </Stage>
   ),
 };

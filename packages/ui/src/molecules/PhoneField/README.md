@@ -6,7 +6,7 @@ A phone number with the country it is dialled from.
 
 The hosted form's phone question needs a country code and a number that read as one input. It is a Field (the same box, height, border, radius, focus ring, hint, error, read only and disabled states) with CountryPicker's compact `prefix` trigger joined to the start of its box, so it is not a second input design.
 
-It is not the field set's Phone editor, which edits a stored phone attribute and reads a whole number in the viewer's country. PhoneField asks a visitor for one number, with the country chosen in front of it.
+The field set's Phone editor draws it too, so a record's number and a form's answer are the same field (F38).
 
 ## Use
 
@@ -19,11 +19,14 @@ It is not the field set's Phone editor, which edits a stored phone attribute and
 - Choosing a country moves focus to the number.
 - The number is laid out for its country as it is typed (libphonenumber-js, loaded on demand the way the Phone field loads it), and only while the caret is at the end, so an edit in the middle keeps its place.
 - A number pasted or typed with its "+" code ("+44 7700 900123") switches the country to match and keeps the rest as the number.
-- The field set's Phone editor draws it too (F38, the owner's call, 20 October 2026: "the same dropdown of country code and country as forms"), so it takes a few more props, all left out by the hosted form, which keeps its look: `size` and `variant` (`cell` in a grid cell, where the field is the cell), `onBlur`, `onSubmit` and `onEscape` (commit and cancel), `autoFocus`, `isErrorFloating` and `autoComplete` (`off` for a record's number, `tel-national` by default).
+- The field set's Phone editor draws it too (F38, the owner's call, 20 October 2026: "the same dropdown of country code and country as forms"), so it takes a few more props, all left out by the hosted form, which keeps its look: `size` and `variant` (`cell` in a grid cell, where the field is the cell), `onBlur`, `onSubmit` and `onEscape`, `onLeave` (focus left the whole field: the number, the code button and the code's open list, which sits in a popover outside it, all count as inside, so a record commits only when the person really leaves), `autoFocus`, `isErrorFloating` and `autoComplete` (`off` for a record's number, `tel-national` by default).
+- `showsExample` puts the chosen country's example number in the placeholder when none is given, written the national way ("081234 56789" for +91, "(201) 555-0123" for +1), from libphonenumber-js's examples, loaded on demand with the library and never in the first load. The owner's call (20 October 2026): the placeholder follows the country chosen.
+- `checksNumber` checks the number for the chosen country: a quiet check (Icon's `success` tone, named "A valid number") at the end of the box while it is a number that exists there, and a plain sentence when it is too short, too long or not a number there, said only once focus leaves the whole field or Enter is pressed, never on each key; typing or choosing another country clears it. `error` wins over it.
+- Both are left out by the hosted form for now, so the public page keeps its look; the form designer can turn them on.
 
 ## States
 
-Empty, with a number, searching for a code, no matches, error, read only (with its reason) and disabled.
+Empty (the given placeholder, or the country's example number), with a number, valid (the check), too short, too long or not a number there (after leaving or Enter), searching for a code, no matches, error, read only (with its reason) and disabled.
 
 ## Keyboard
 

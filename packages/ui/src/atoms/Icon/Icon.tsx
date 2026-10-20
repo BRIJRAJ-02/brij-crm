@@ -6,7 +6,7 @@ import { icons, type IconName } from './icons.ts';
 export type IconSize = 'md' | 'sm' | 'xs';
 
 /** Icon colour: `inherit` takes the parent's, `muted` is `text-secondary`, `ai` is the AI sparkle only. */
-export type IconTone = 'inherit' | 'muted' | 'ai';
+export type IconTone = 'inherit' | 'muted' | 'ai' | 'success';
 
 interface IconBase {
   /** The icon, exactly as lucide.dev names it. Only names in the registry type check. */
