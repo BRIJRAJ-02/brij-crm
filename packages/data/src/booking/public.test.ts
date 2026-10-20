@@ -58,6 +58,13 @@ describe('createBookingClient', () => {
     expect(JSON.parse(typeof body === 'string' ? body : '{}')).toMatchObject({ name: 'Grace' });
   });
 
+  it('reads a form’s hand off for the page by its token, cookies left out (AC-1058)', async () => {
+    const { client, calls } = fake(() => Response.json({ name: 'Ada', email: 'ada@example.com' }));
+    expect(await client.prefill(KEY, 'fb1.a.b')).toEqual({ name: 'Ada', email: 'ada@example.com' });
+    expect(calls[0]?.url).toBe(`https://app.test/api/public/booking/${KEY}/prefill?p=fb1.a.b`);
+    expect(calls[0]?.init).toMatchObject({ credentials: 'omit' });
+  });
+
   it('sends cookies only to the viewer, the slots and forgetting, and builds the connect address', async () => {
     const { client, calls } = fake(() => Response.json({}));
     await client.slots(KEY, { from: 'a', to: 'b', duration: 30, tz: 'UTC' });
