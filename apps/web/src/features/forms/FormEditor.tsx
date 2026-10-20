@@ -43,7 +43,9 @@ import { PublishDialog } from './PublishDialog.tsx';
 import { QuestionsSection } from './QuestionsSection.tsx';
 import { firstRefusal } from './refusals.ts';
 import { SettingsTab, useFormSettings } from './SettingsTab.tsx';
+import { useJobFollower } from './followJobs.ts';
 import { strings } from './strings.ts';
+import { SyncDialog } from './SyncDialog.tsx';
 import { FormToolbarSlot } from './toolbarSlot.ts';
 import { SubmissionsTab } from './SubmissionsTab.tsx';
 
@@ -58,6 +60,15 @@ export interface FormEditorProps {
   readonly submissions: SubmissionPage | undefined;
   readonly state: SubmissionState | undefined;
   readonly openSubmission: SubmissionView | undefined;
+}
+
+/** A document's mapping, as one comparable string: the target, its match, and where each question files. */
+function filingOf(document: FormDocument | undefined): string {
+  if (document === undefined) return '';
+  return JSON.stringify([
+    document.targets.main,
+    document.questions.map((question) => [question.id, question.filedOn?.attributeId ?? null]),
+  ]);
 }
 
 /** How long after the last change the draft saves. */
@@ -83,6 +94,8 @@ export function FormEditor(props: FormEditorProps) {
   const [isDeleting, setDeleting] = useState(false);
   // Publish leaves once there is nothing more to publish; focus then moves to the menu beside it.
   const moreRef = useRef<HTMLButtonElement>(null);
+  const [isOfferingSync, setOfferingSync] = useState(false);
+  const jobs = useJobFollower(data.jobs.view(slug, 'mine'));
   // The end of the tab strip, where a tab draws its own tools (Submissions' filter and search).
   const [toolbarSlot, setToolbarSlot] = useState<HTMLElement | null>(null);
   // The name, address and owner, saved together from the SaveBar on the Settings tab.
@@ -207,9 +220,12 @@ export function FormEditor(props: FormEditorProps) {
       .then(
         (view) => {
           setPublishing(false);
+          const mappingChanged = filingOf(form.live) !== filingOf(view.live);
           apply(view);
           toasts.toast({ tone: 'success', message: strings.published(view.liveVersionNumber ?? 1) });
           focusLater(() => moreRef.current);
+          // A new mapping went live: offer to apply it to the enquiries that came before.
+          if (mappingChanged && view.submissionCount > 0) setOfferingSync(true);
         },
         (error: unknown) => {
           setPublishing(false);
@@ -474,6 +490,25 @@ export function FormEditor(props: FormEditorProps) {
   // The dialogs sit apart from the layout, so the body changing shape on the first publish never resets them.
   const dialogs = (
     <>
+      <SyncDialog
+        slug={slug}
+        formId={form.id}
+        isOpen={isOfferingSync}
+        onClose={() => {
+          setOfferingSync(false);
+        }}
+        onStarted={(jobId) => {
+          setOfferingSync(false);
+          toasts.toast({ tone: 'info', message: strings.syncStarted });
+          jobs.follow(jobId, (job) => {
+            toasts.toast({
+              tone: job.status === 'succeeded' ? 'success' : 'danger',
+              message:
+                job.status === 'succeeded' ? strings.syncDone(job.done, job.refused) : strings.jobFailed(job.label),
+            });
+          });
+        }}
+      />
       {isFirstPublish && (
         <PublishDialog
           slug={slug}
