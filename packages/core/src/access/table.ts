@@ -130,6 +130,8 @@ export const ACCESS_TABLE = {
   // Bulk jobs (spec 0022, milestone 3): the action's check at start (records.purge for a purge), then the runner's.
   startBulk: { data: 'write' },
   undoDelete: { data: 'write' },
+  // Delete forever (spec 0022, milestone 4): owners and admins.
+  deleteForever: { permission: 'records.purge' },
   // Links from the table (spec 0014, milestone 2): write on the near side, every far record visible.
   changeLinks: { data: 'write' },
   addRecordLinks: { data: 'write' },

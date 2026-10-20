@@ -24,7 +24,8 @@ import { checkId } from '../engine/ids.ts';
 import { checkMatching } from '../engine/query/page.ts';
 import { refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
-import { inBatch, MAX_INLINE_RECORDS, restoreBatch, type RestoreOutcome } from '../engine/trash.ts';
+import { purgeRecords, type PurgeOutcome } from '../engine/deletion.ts';
+import { inBatch, MAX_INLINE_RECORDS, restoreBatch, TOO_MANY_INLINE, type RestoreOutcome } from '../engine/trash.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import type { JobRegistry } from '../jobs/registry.ts';
 import { getJob, startJob } from '../jobs/service.ts';
@@ -207,4 +208,26 @@ export async function undoDelete(
     hooks,
   );
   return { mode: 'job', job: await getJob(scope, registry, jobId) };
+}
+
+/**
+ * Deletes up to 500 records in the trash forever (spec 0022, AC-535):
+ * `records.purge` only (403 `FORBIDDEN` "Only workspace owners and admins can
+ * delete records forever.", nothing removed); each record `purged` or
+ * `not-in-trash` (live, unknown or hidden). Every registered purge dependent
+ * goes first, in the same transaction; one outbox row per object names them
+ * purged. More than 500 is 422 `CONFIG_INVALID`: Empty trash and bigger
+ * selections start a `records.purge` job.
+ */
+export async function deleteForever(
+  scope: EngineScope,
+  input: { readonly recordIds: readonly string[] },
+  hooks: readonly AfterWrite[] = [],
+): Promise<readonly PurgeOutcome[]> {
+  checkScope(scope);
+  if (!can(scope.access, 'records.purge')) throw refuse('FORBIDDEN', PERMISSIONS['records.purge'].message);
+  if (input.recordIds.length === 0) throw refuse('CONFIG_INVALID', 'Choose at least one record.');
+  if (new Set(input.recordIds).size > MAX_INLINE_RECORDS) throw refuse('CONFIG_INVALID', TOO_MANY_INLINE);
+  const { result } = await runWrite(scope, (context) => purgeRecords(context, input), hooks);
+  return result.outcomes;
 }

@@ -103,7 +103,15 @@ export {
   type EditRecordInput,
   type RecordWindow,
 } from './records/records.ts';
-export { BULK_START_WORDS, startBulk, undoDelete, type StartBulkInput, type UndoDeleteAnswer } from './bulk/start.ts';
+export {
+  BULK_START_WORDS,
+  deleteForever,
+  startBulk,
+  undoDelete,
+  type StartBulkInput,
+  type UndoDeleteAnswer,
+} from './bulk/start.ts';
+export { PURGE_DEPENDENTS, type PurgeDependent } from './engine/purge-dependents.ts';
 export { BULK_KINDS, RECORD_LIVE } from './bulk/kinds.ts';
 export {
   addRecordLinks,

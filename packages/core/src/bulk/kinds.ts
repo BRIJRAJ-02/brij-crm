@@ -15,6 +15,7 @@ import { updateManyIn } from '../engine/bulk-edit.ts';
 import { uuidArray } from '../engine/ids.ts';
 import { matchingIdsIn } from '../engine/query/page.ts';
 import { isRefusal } from '../engine/refusals.ts';
+import { purgeRecords } from '../engine/deletion.ts';
 import { deleteIn, inBatch, restoreIn, trashScope } from '../engine/trash.ts';
 import type { WriteContext } from '../engine/write.ts';
 import { visibleRecords } from '../access/visibility.ts';
@@ -286,7 +287,33 @@ export function bulkRestoreKind(): KindDefinition<BulkJobParams> {
   );
 }
 
+/**
+ * `records.purge` (Delete forever and Empty trash, AC-535): `purgeRecords`
+ * over each batch, every registered dependent first; a record restored since
+ * the count is skipped `RECORD_LIVE`. The runner enters the starter again at
+ * every slice, so one who lost `records.purge` stops with `FORBIDDEN`.
+ */
+export function bulkPurgeKind(): KindDefinition<BulkJobParams> {
+  return bulkKind('purge', (context, { items = [] }) =>
+    orFailed(async () => {
+      const { outcomes } = await purgeRecords(context, { recordIds: items.map((item) => item.itemId) });
+      return {
+        finished: false,
+        items: statesOf(
+          items,
+          outcomes,
+          (outcome) => outcome.recordId,
+          (outcome) =>
+            outcome.state === 'purged'
+              ? { state: 'done' }
+              : { state: 'skipped', code: RECORD_LIVE, message: RECORD_LIVE_MESSAGE },
+        ),
+      };
+    }),
+  );
+}
+
 /** Every bulk kind a process runs. */
 export function bulkKinds(): readonly KindDefinition<BulkJobParams>[] {
-  return [bulkEditKind(), bulkDeleteKind(), bulkRestoreKind()];
+  return [bulkEditKind(), bulkDeleteKind(), bulkRestoreKind(), bulkPurgeKind()];
 }

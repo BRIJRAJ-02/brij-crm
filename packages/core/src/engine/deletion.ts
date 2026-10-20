@@ -17,6 +17,7 @@ import { schema, type WorkspaceTx } from '@crm/db';
 import { checkInstant } from './history.ts';
 import { checkId, newId, uuidArray } from './ids.ts';
 import { RESTORE_WINDOW, takeRecordSlots } from './limits.ts';
+import { PURGE_DEPENDENTS, removeDependents, type PurgeDependent } from './purge-dependents.ts';
 import { refuse } from './refusals.ts';
 import { actorRow, type EngineScope } from './scope.ts';
 import { deleteSortKeys, setRecordKeysLive } from './sort-keys.ts';
@@ -32,7 +33,7 @@ import {
 } from './write.ts';
 import { requirePermission } from '../access/check.ts';
 import type { Access } from '../access/policy.ts';
-import { checkObject, checkRecordVisible, UNKNOWN_RECORD } from '../access/visibility.ts';
+import { checkObject, checkRecordVisible, UNKNOWN_RECORD, visibleRecords } from '../access/visibility.ts';
 
 const { records } = schema;
 
@@ -296,16 +297,26 @@ export interface RemovedCounts {
   readonly entries: number;
   readonly values: number;
   readonly links: number;
+  /** Each registered purge dependent's rows, by name (spec 0022, `PURGE_DEPENDENTS`); absent when none ran. */
+  readonly dependents?: Readonly<Record<string, number>>;
 }
 
 const NONE: RemovedCounts = { records: 0, entries: 0, values: 0, links: 0 };
 
 function add(a: RemovedCounts, b: RemovedCounts): RemovedCounts {
+  const names = new Set([...Object.keys(a.dependents ?? {}), ...Object.keys(b.dependents ?? {})]);
   return {
     records: a.records + b.records,
     entries: a.entries + b.entries,
     values: a.values + b.values,
     links: a.links + b.links,
+    ...(names.size === 0
+      ? {}
+      : {
+          dependents: Object.fromEntries(
+            [...names].map((name) => [name, (a.dependents?.[name] ?? 0) + (b.dependents?.[name] ?? 0)]),
+          ),
+        }),
   };
 }
 
@@ -357,7 +368,11 @@ export function deleteEntryValues(entryIds: readonly string[]): SQL {
  * Every step finds its rows through an index that leads with the owner or
  * record.
  */
-async function removeRecords(tx: WorkspaceTx, recordIds: readonly string[]): Promise<Removed> {
+async function removeRecords(
+  tx: WorkspaceTx,
+  recordIds: readonly string[],
+  dependents: readonly PurgeDependent[] = PURGE_DEPENDENTS,
+): Promise<Removed> {
   if (recordIds.length === 0) return { counts: NONE, records: [], entries: [] };
   const ids = uuidArray(recordIds);
   await tx.execute(sql`
@@ -373,6 +388,8 @@ async function removeRecords(tx: WorkspaceTx, recordIds: readonly string[]): Pro
     ) gone
     where l.id = gone.list_id
   `);
+  // Every feature's rows that hang off the records go first, explicitly (spec 0022, `PURGE_DEPENDENTS`).
+  const dependentCounts = await removeDependents(tx, recordIds, dependents);
   await deleteSortKeys(tx, { recordIds });
   const values = await tx.execute(deleteRecordValues(recordIds));
   const links = await tx.execute(
@@ -383,19 +400,6 @@ async function removeRecords(tx: WorkspaceTx, recordIds: readonly string[]): Pro
     where e.record_id = any(${ids}) and r.workspace_id = e.workspace_id and r.id = e.record_id
     returning e.id::text, e.list_id::text, e.record_id::text, r.object_id::text
   `);
-  // Tasks keep living without the records removed for good; their links to them go first, and the records' notes
-  // (deleted ones too) go with them (spec 0019, AC-446), until spec 0022's purge registry takes this step over. Both
-  // foreign keys refuse a removal that skipped this.
-  await tx.execute(sql`delete from task_records where record_id = any(${ids})`);
-  await tx.execute(sql`delete from notes where record_id = any(${ids})`);
-  // Meetings keep living too (spec 0024): they leave the removed records' timelines, and an attendee who was one
-  // of them is unknown again.
-  await tx.execute(sql`delete from meeting_records where record_id = any(${ids})`);
-  await tx.execute(
-    sql`update meeting_attendees set person_record_id = null, match = 'unknown' where person_record_id = any(${ids})`,
-  );
-  // A form submission's note of the record goes too (spec 0023); the submission itself stays, its answers kept.
-  await tx.execute(sql`delete from form_submission_records where record_id = any(${ids})`);
   const removed = await tx.execute<{ id: string; object_id: string }>(
     sql`delete from records where id = any(${ids}) returning id::text, object_id::text`,
   );
@@ -405,6 +409,7 @@ async function removeRecords(tx: WorkspaceTx, recordIds: readonly string[]): Pro
       entries: entries.rows.length,
       values: values.rowCount ?? 0,
       links: links.rowCount ?? 0,
+      dependents: dependentCounts,
     },
     records: removed.rows.map((row) => ({ recordId: row.id, objectId: row.object_id })),
     entries: entryRefs(entries.rows),
@@ -421,6 +426,8 @@ export interface PurgeBatchResult {
 export interface PurgeInput {
   readonly cutoff?: string;
   readonly batchSize?: number;
+  /** The purge registry to run (`PURGE_DEPENDENTS`); a test passes its own fake dependent. */
+  readonly dependents?: readonly PurgeDependent[];
 }
 
 /** The checked batch size and the cutoff as SQL: the given one, or `RESTORE_WINDOW` ago, whichever is earlier. */
@@ -474,6 +481,13 @@ export async function purgeBatch(context: WriteContext, input: PurgeInput = {}):
   requirePermission(context.scope, 'records.purge');
   const { batchSize, cutoff } = purgeSettings(input);
   const { tx, scope } = context;
+  // One probe first (AC-537): a workspace with nothing past the window costs a single statement, its two index
+  // lookups on the partial indexes of trashed records and removed entries.
+  const probe = await tx.execute<{ due: boolean }>(sql`
+    select exists (select 1 from records where workspace_id = ${scope.workspaceId} and deleted_at < ${cutoff})
+      or exists (select 1 from list_entries where workspace_id = ${scope.workspaceId} and deleted_at < ${cutoff}) as due
+  `);
+  if (probe.rows[0]?.due !== true) return { full: false, counts: NONE };
   // Picked, not locked: a row lock taken here, before the lists, is the order that deadlocked with entry writes.
   // Read in order from `records_trashed_at` (workspace, deleted_at, id), never the whole trash sorted.
   const picked = await tx.execute<{ id: string }>(purgeRecordPick(scope.workspaceId, cutoff, batchSize));
@@ -498,7 +512,7 @@ export async function purgeBatch(context: WriteContext, input: PurgeInput = {}):
     `);
     doomedIds = locked.rows.map((row) => row.id);
   }
-  const gone = await removeRecords(tx, doomedIds);
+  const gone = await removeRecords(tx, doomedIds, input.dependents);
   const removedEntries = await tx.execute<{ id: string }>(purgeEntryPick(scope.workspaceId, cutoff, batchSize));
   const entryIds = removedEntries.rows.map((row) => row.id);
   await deleteSortKeys(tx, { entryIds });
@@ -523,6 +537,59 @@ export async function purgeBatch(context: WriteContext, input: PurgeInput = {}):
       values: entryValues.rowCount ?? 0,
       links: 0,
     }),
+  };
+}
+
+/** One record's outcome in Delete forever: removed for good, or not in the trash (live, gone, or hidden). */
+export interface PurgeOutcome {
+  readonly recordId: string;
+  readonly state: 'purged' | 'not-in-trash';
+}
+
+/**
+ * Deletes records in the trash forever (spec 0022, AC-535), inside the
+ * caller's write (`trash.deleteForever`, or one batch of a `records.purge`
+ * job): `records.purge` first (403 `FORBIDDEN`), then the lists their
+ * entries are in and the records, each in id order (the purge's order), only
+ * those still in the trash and visible to the principal; then
+ * `removeRecords`, every registered dependent first. A live, unknown or
+ * hidden record answers `not-in-trash` and is left alone.
+ */
+export async function purgeRecords(
+  context: WriteContext,
+  input: { readonly recordIds: readonly string[]; readonly dependents?: readonly PurgeDependent[] },
+): Promise<{ readonly outcomes: readonly PurgeOutcome[]; readonly counts: RemovedCounts }> {
+  requirePermission(context.scope, 'records.purge');
+  const { tx, scope } = context;
+  const asked = [...new Set(input.recordIds.map((id) => checkId(id, 'That record does not exist.')))];
+  if (asked.length === 0) return { outcomes: [], counts: NONE };
+  const ids = uuidArray(asked);
+  await tx.execute(sql`
+    select 1 from lists
+    where workspace_id = ${scope.workspaceId}
+      and id in (
+        select list_id from list_entries
+        where workspace_id = ${scope.workspaceId} and record_id = any(${ids}) and deleted_at is null
+      )
+    order by id for no key update
+  `);
+  const locked = await tx.execute<{ id: string; object_id: string }>(sql`
+    select id::text, object_id::text from records
+    where workspace_id = ${scope.workspaceId} and id = any(${ids}) and deleted_at is not null
+    order by id for update
+  `);
+  const seen = await visibleRecords(
+    tx,
+    scope.access,
+    locked.rows.map((row) => ({ objectId: row.object_id, recordId: row.id })),
+  );
+  const doomed = locked.rows.filter((row) => seen.has(row.id)).map((row) => row.id);
+  const gone = await removeRecords(tx, doomed, input.dependents);
+  context.record({ purgedRecords: gone.records, purgedEntries: gone.entries });
+  const removed = new Set(gone.records.map((record) => record.recordId));
+  return {
+    outcomes: asked.map((recordId) => ({ recordId, state: removed.has(recordId) ? 'purged' : 'not-in-trash' })),
+    counts: gone.counts,
   };
 }
 
