@@ -1,0 +1,27 @@
+/* LinkGrid: the cards in a grid that fills the view's width, as many columns as fit cards at least
+   size-column-wide wide (one on a phone), space-16 apart and space-16 from the view's edges (the page
+   gutter). A message (failed, no access, nothing matches) sits centred where the cards go. */
+@layer components {
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(100%, var(--size-column-wide)), 1fr));
+    gap: var(--space-16);
+    margin: 0;
+    padding: var(--space-16);
+    list-style: none;
+  }
+
+  .item {
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+  }
+
+  .message {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-block-size: 100%;
+    padding: var(--space-16);
+  }
+}

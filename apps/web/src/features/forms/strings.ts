@@ -23,6 +23,8 @@ export const strings = {
   moreFor: (name: string) => `More for ${name}`,
   publishFirst: 'Publish it first',
   turnedOff: 'Turned off: turn it on to open it',
+  /** Open's tooltip on a form's card. */
+  openInNewTab: 'Open in a new tab',
   manageOnly: 'Only members who manage forms can change it',
   createFailed: 'Couldn’t make the form.',
   turnOffFailed: (name: string) => `Couldn’t turn off ${name}. It’s back on.`,

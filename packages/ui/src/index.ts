@@ -176,6 +176,8 @@ export {
   type BookingListProps,
   type BookingListRow,
 } from './modules/BookingList/BookingList.tsx';
+export { LinkCard, LinkCardSkeleton, type LinkCardProps, type LinkCardToggle } from './modules/LinkCard/LinkCard.tsx';
+export { LinkGrid, type LinkGridCard, type LinkGridProps } from './modules/LinkGrid/LinkGrid.tsx';
 export {
   LinkList,
   LinkListToolbar,

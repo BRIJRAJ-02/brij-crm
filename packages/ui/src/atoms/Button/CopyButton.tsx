@@ -1,6 +1,6 @@
 import type { RefObject } from 'react';
 import { useToasts } from '../../provider/context.ts';
-import { Button, type ButtonVariant } from './Button.tsx';
+import { Button, type ButtonSize, type ButtonVariant } from './Button.tsx';
 import { strings } from './strings.ts';
 
 /** Props for CopyButton. */
@@ -12,6 +12,8 @@ export interface CopyButtonProps {
   /** Shows the copy icon alone, with `label` as its name. */
   readonly isIconOnly?: boolean;
   readonly variant?: ButtonVariant;
+  /** `lg` beside other large controls (a link card's footer); `md` by default. */
+  readonly size?: ButtonSize;
   /** The element showing the text. If the copy fails, its text is selected so it can be copied by hand. */
   readonly sourceRef?: RefObject<HTMLElement | null>;
   /** Nothing to copy yet (a form never published, a copy still on its way). */
@@ -37,6 +39,7 @@ export function CopyButton({
   label = strings.copy,
   isIconOnly = false,
   variant = 'secondary',
+  size = 'md',
   sourceRef,
   isDisabled = false,
 }: CopyButtonProps) {
@@ -54,9 +57,9 @@ export function CopyButton({
     void copy();
   };
   return isIconOnly ? (
-    <Button variant={variant} icon="copy" label={label} onPress={onPress} isDisabled={isDisabled} />
+    <Button variant={variant} size={size} icon="copy" label={label} onPress={onPress} isDisabled={isDisabled} />
   ) : (
-    <Button variant={variant} icon="copy" onPress={onPress} isDisabled={isDisabled}>
+    <Button variant={variant} size={size} icon="copy" onPress={onPress} isDisabled={isDisabled}>
       {label}
     </Button>
   );

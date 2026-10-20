@@ -1,6 +1,8 @@
 # LinkList
 
-Links as rows, not a table: Captures › Links' booking pages and Captures › Forms' forms, one design for both (spec 0025, section 2; spec 0023, the forms list), drawn compact like the records area's rows.
+Links as rows, not a table: a short list of links beside other work, such as Bookings › Availability's "Your pages" inside a Card (`density="compact" placement="card"`).
+
+Since 20 October 2026, Captures › Links and Forms draw LinkGrid's cards instead. The owner turned down the compact rows there: on a full width page the title and facts sat far apart, and the end controls were too close together to hit.
 
 ## Why it exists
 

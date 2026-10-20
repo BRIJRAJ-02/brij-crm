@@ -15,6 +15,10 @@ export const strings = {
   offTag: 'Off',
   isOn: (title: string) => `${title} is on`,
   openPage: (title: string) => `Open ${title} in a new tab`,
+  /** Open's tooltip on a link card. */
+  openInNewTab: 'Open in a new tab',
+  /** A page's kind, among its facts on its card. */
+  kindLabel: { personal: 'One on one', collective: 'Collective', round_robin: 'Round robin' },
   searchPages: 'Search booking pages',
   copying: 'Copying…',
   duplicated: (title: string) => `Made “${title}”.`,

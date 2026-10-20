@@ -1,10 +1,21 @@
 // Brief
-// Purpose: Captures › Links (spec 0025, 0025-experience.md, AC-645): the member's booking pages as rows (an admin sees everyone's), the same rows as Forms.
+// Purpose: Captures › Links (spec 0025, 0025-experience.md, AC-645): the member's booking pages as cards (an admin sees everyone's), the same cards as Forms.
 // Main task: open a page, copy its link, or make a new one in the dialog and land in its editor.
 // Leaves out: editing a page (its editor), forms (their own tab) and the bookings list (Bookings).
 import { isDataError, type BookingPageView, type DataLayer } from '@crm/data';
 import { useCaptureList } from '@crm/data/react';
-import { Button, CopyButton, Menu, MenuItem, MenuSeparator, MenuTrigger, Modal, Tooltip, type LinkRow } from '@crm/ui';
+import {
+  Button,
+  HUES,
+  Menu,
+  MenuItem,
+  MenuSeparator,
+  MenuTrigger,
+  Modal,
+  Tooltip,
+  type Hue,
+  type LinkGridCard,
+} from '@crm/ui';
 import { useNavigate, useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { CapturesList } from '../captures/CapturesList.tsx';
@@ -18,16 +29,30 @@ export interface LinksScreenProps {
   readonly slug: string;
 }
 
-/** A page's chips: its lengths, own hours, and a location that isn't video. */
-function chipsOf(page: BookingPageView): readonly string[] {
+/** A page's facts: its lengths, its kind, own hours, and a location that isn't video ("30 min · One on one"). */
+function factsOf(page: BookingPageView): readonly string[] {
   return [
     ...page.durations.map((minutes) => strings.minutesShort(minutes)),
+    strings.kindLabel[page.kind],
     ...(page.hoursMode === 'own' ? [strings.ownHours] : []),
     ...(page.location.type === 'video' ? [] : [strings.locationChip[page.location.type]]),
   ];
 }
 
-/** The rows, New booking page, and each row's Copy link and menu, read from the data layer's held list. */
+/** The hues a page's edge may take: every data hue but grey, which marks a form, or a page that's off. */
+const PAGE_HUES = HUES.filter((hue) => hue !== 'gray');
+
+/**
+ * A page's colour edge. Pages have no colour of their own yet, so each takes one from its id: the same page
+ * keeps the same colour everywhere, and neighbours mostly differ.
+ */
+function hueOf(pageId: string): Hue {
+  let sum = 0;
+  for (const char of pageId) sum = (sum * 31 + char.charCodeAt(0)) % 997;
+  return PAGE_HUES[sum % PAGE_HUES.length] ?? 'blue';
+}
+
+/** The cards, New booking page, and each card's switch, Copy link, Open and menu, read from the data layer's held list. */
 export function LinksScreen({ data, slug }: LinksScreenProps) {
   const { toasts } = useRouteContext({ from: '__root__' });
   const navigate = useNavigate();
@@ -64,16 +89,20 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
     );
   };
   const pages = list.status === 'ready' ? list.items : [];
-  const rows: readonly LinkRow[] = pages.map((page) => {
+  const cards: readonly LinkGridCard[] = pages.map((page) => {
     const isPending = list.status === 'ready' && list.pendingIds.has(page.id);
+    const isOff = page.status === 'paused';
     return {
       id: page.id,
       title: page.title,
+      href: pageEditorHref(slug, page.id),
+      hue: hueOf(page.id),
+      facts: factsOf(page),
       address: `/${slug}/${page.slug}`,
-      chips: chipsOf(page),
       // Off shows in the muted title and the switch; the badge is for what they can't say.
       ...(isPending ? { badge: strings.copying } : page.isPrivate ? { badge: strings.private } : {}),
-      isOff: page.status === 'paused',
+      isOff,
+      isPending,
       toggle: {
         label: strings.isOn(page.title),
         isSelected: page.status === 'live',
@@ -83,30 +112,30 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
         isDisabled: !page.canChange,
         disabledReason: strings.notYours,
       },
-      isPending,
+      copyValue: publicBookingUrl(page.publicKey),
       actions: (
         <>
-          <Tooltip content={strings.turnedOff} isDisabled={page.status !== 'paused' || isPending}>
+          <Tooltip content={isOff ? strings.turnedOff : strings.openInNewTab} isDisabled={isPending}>
             <Button
               variant="ghost"
+              size="lg"
               icon="external-link"
               label={strings.openPage(page.title)}
-              isDisabled={isPending || page.status === 'paused'}
+              isDisabled={isPending || isOff}
               onPress={() => {
                 globalThis.open(publicBookingUrl(page.publicKey), '_blank', 'noopener');
               }}
             />
           </Tooltip>
-          <CopyButton
-            variant="ghost"
-            value={publicBookingUrl(page.publicKey)}
-            label={strings.copyLinkTo(page.title)}
-            isIconOnly
-            isDisabled={isPending}
-          />
           {page.canChange && (
             <MenuTrigger>
-              <Button variant="ghost" icon="ellipsis" label={strings.more(page.title)} isDisabled={isPending} />
+              <Button
+                variant="ghost"
+                size="lg"
+                icon="ellipsis"
+                label={strings.more(page.title)}
+                isDisabled={isPending}
+              />
               <Menu
                 label={strings.more(page.title)}
                 onAction={(key) => {
@@ -137,10 +166,7 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       label={strings.listLabel}
       searchLabel={strings.searchPages}
       status={list.status}
-      rows={rows}
-      onOpen={(id) => {
-        open(id);
-      }}
+      cards={cards}
       newAction={
         <Button variant="primary" icon="plus" onPress={() => setCreating(true)}>
           {strings.newPage}
@@ -215,15 +241,14 @@ function DeletePageDialog({
   );
 }
 
-/** The list while its pages load, inside the Captures layout: skeleton rows in the rows' shape. */
+/** The list while its pages load, inside the Captures layout: skeleton cards in the cards' shape. */
 export function LinksPending() {
   return (
     <CapturesList
       label={strings.listLabel}
       searchLabel={strings.searchPages}
       status="loading"
-      rows={[]}
-      onOpen={() => undefined}
+      cards={[]}
       empty={{ title: strings.emptyTitle, text: strings.emptyText, icon: 'calendar-clock' }}
       errorTitle={strings.failedTitle}
       onRetry={() => undefined}

@@ -1,0 +1,220 @@
+/* LinkCard (the owner's card grid, 20 October 2026, after Calendly's event types): a raised card in Card's
+   own look (hairline border-subtle, radius-lg, surface-raised, shadow-xs) with a 4px colour edge on the
+   start side, dot-<hue>, or dot-gray for a form, an off card or a pending one.
+   The body: the title (text-title, two lines at most) with a state Badge beside it and the switch at the top
+   end; the facts in text-secondary; the public link muted in the label type.
+   The foot, on surface-subtle over a hairline like Card's: Copy link at the start, the actions at the end,
+   space-8 apart, every control at size-input (30px).
+   The title is the card's one link: its ::after covers the card, so a press anywhere opens it. The controls
+   sit above it. Hover (a fine pointer only) raises the border to border-strong; focus on the title rings the
+   whole card. An off card's title reads in text-secondary; a pending one in text-tertiary. Nothing moves on
+   press. */
+@layer components {
+  .root {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    /* In a grid's cell, as tall as the row's tallest card. */
+    block-size: 100%;
+    box-sizing: border-box;
+    min-inline-size: 0;
+    overflow: hidden;
+    border: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: var(--radius-lg);
+    background: var(--surface-raised);
+    box-shadow: var(--shadow-xs);
+    color: var(--text);
+    transition:
+      border-color var(--duration-hover) var(--ease-hover),
+      box-shadow var(--duration-hover) var(--ease-hover);
+  }
+
+  /* The colour edge. */
+  .root::before {
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    inline-size: var(--space-4);
+    background: var(--edge, var(--dot-gray));
+    content: '';
+  }
+
+  .root[data-hue='red'] {
+    --edge: var(--dot-red);
+  }
+
+  .root[data-hue='orange'] {
+    --edge: var(--dot-orange);
+  }
+
+  .root[data-hue='yellow'] {
+    --edge: var(--dot-yellow);
+  }
+
+  .root[data-hue='lime'] {
+    --edge: var(--dot-lime);
+  }
+
+  .root[data-hue='green'] {
+    --edge: var(--dot-green);
+  }
+
+  .root[data-hue='sky'] {
+    --edge: var(--dot-sky);
+  }
+
+  .root[data-hue='blue'] {
+    --edge: var(--dot-blue);
+  }
+
+  .root[data-hue='purple'] {
+    --edge: var(--dot-purple);
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .root:has(.title[data-hovered]) {
+      border-color: var(--border-strong);
+    }
+  }
+
+  .root:has(.title[data-focus-visible]) {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding-block: var(--space-16);
+    padding-inline: calc(var(--space-16) + var(--space-4)) var(--space-16);
+  }
+
+  .head {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-12);
+    margin-block-end: var(--space-2);
+  }
+
+  .titleRow {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-4) var(--space-8);
+    min-inline-size: 0;
+  }
+
+  .heading {
+    min-inline-size: 0;
+    margin: 0;
+    font: var(--text-title);
+    letter-spacing: var(--tracking-title);
+  }
+
+  .title {
+    display: -webkit-box;
+    overflow: hidden;
+    color: inherit;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+    outline: none;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+
+  /* The card's one link covers the card. */
+  .title[href]::after {
+    position: absolute;
+    inset: 0;
+    content: '';
+  }
+
+  .root[data-off] .title {
+    color: var(--text-secondary);
+  }
+
+  .root[data-pending] .title {
+    color: var(--text-tertiary);
+  }
+
+  .facts {
+    margin: 0;
+    color: var(--text-secondary);
+    font: var(--text-body);
+    font-variant-numeric: tabular-nums;
+    letter-spacing: var(--tracking-body);
+  }
+
+  .address {
+    margin: 0;
+    overflow: hidden;
+    color: var(--text-tertiary);
+    font: var(--text-label);
+    letter-spacing: var(--tracking-label);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Above the card's link, so each control does its own thing. */
+  .control {
+    position: relative;
+    z-index: var(--z-raised);
+    display: inline-flex;
+    flex: none;
+  }
+
+  /* The foot lets a press on its empty space through to the card's link; its controls take their own. */
+  .foot {
+    position: relative;
+    z-index: var(--z-raised);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-8);
+    padding-block: var(--space-8);
+    padding-inline: calc(var(--space-16) + var(--space-4)) var(--space-16);
+    border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+    background: var(--surface-subtle);
+    pointer-events: none;
+  }
+
+  .foot .control,
+  .actions {
+    pointer-events: auto;
+  }
+
+  .actions {
+    display: flex;
+    align-items: center;
+    gap: var(--space-8);
+    margin-inline-start: auto;
+  }
+
+  .skeletonTitle {
+    display: flex;
+    align-items: center;
+    block-size: var(--space-20);
+    margin-block-end: var(--space-2);
+  }
+
+  .skeletonButton {
+    display: flex;
+    align-items: center;
+    inline-size: var(--size-column-narrow);
+    block-size: var(--size-input);
+  }
+
+  @media (forced-colors: active) {
+    .root {
+      border-color: CanvasText;
+    }
+
+    .root::before {
+      background: CanvasText;
+    }
+  }
+}
