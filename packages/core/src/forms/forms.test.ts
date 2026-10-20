@@ -663,6 +663,18 @@ describe('book a meeting after sending (AC-1055 to AC-1057)', () => {
         saveFormDraft(w.scope, { formId: created.id, document: missing, expectedRevision: created.revision }),
       ),
     ).toMatchObject([{ code: 'CONFIG_INVALID', field: 'after' }]);
+    // Another workspace's page is as good as missing: row level security never shows it.
+    const elsewhere = await workspace();
+    const theirs = await createBookingPage(elsewhere.scope, { id: newId(), title: 'Theirs', timeZone: 'UTC' });
+    const foreign: FormDocument = {
+      ...created.draft,
+      after: { kind: 'booking', bookingPageId: theirs.id, countdownSeconds: 5, message: '' },
+    };
+    expect(
+      await refusalOf(
+        saveFormDraft(w.scope, { formId: created.id, document: foreign, expectedRevision: created.revision }),
+      ),
+    ).toMatchObject([{ code: 'CONFIG_INVALID', field: 'after' }]);
     const page = await createBookingPage(w.scope, { id: newId(), title: 'Intro call', timeZone: 'UTC' });
     const { formId, saved } = await pointAt(w, page.id);
     await updateBookingPage(w.scope, { pageId: page.id, settings: { status: 'paused' } });
@@ -696,12 +708,8 @@ describe('book a meeting after sending (AC-1055 to AC-1057)', () => {
       text: 'Thanks, Ada.',
     });
     const [stored] = await submissionIds(w, formId);
-    expect(signed[0]).toEqual({
-      submissionId: stored?.id,
-      bookingPageId: page.id,
-      name: 'Ada Lovelace',
-      email: 'ada@example.com',
-    });
+    // The token names the submission and the page only: nothing personal rides in the link.
+    expect(signed[0]).toEqual({ submissionId: stored?.id, bookingPageId: page.id });
     // A retry hands off the same submission.
     const again = await submitForm(scope, registry, {
       formId: publicId,

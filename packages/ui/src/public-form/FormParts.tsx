@@ -93,24 +93,50 @@ export function FormThanks({
   readonly mode: HostedFormMode;
   readonly heading: Ref<HTMLHeadingElement>;
 }) {
-  const Heading = mode === 'page' ? 'h1' : 'h2';
   const text = state.view.kind === 'thanks' ? state.view.text : '';
+  return (
+    <FormConfirmation
+      mode={mode}
+      heading={heading}
+      title={state.words.thanksTitle}
+      text={text !== '' ? text : asksForAddress(form) ? state.words.thanks : state.words.thanksNeutral}
+    >
+      <Button variant="ghost" onPress={state.sendAnother}>
+        {state.words.sendAnother}
+      </Button>
+    </FormConfirmation>
+  );
+}
+
+/**
+ * A sent form's confirmation, shared by the thank you and the countdown to
+ * book: the green check grown in once, the heading (focus lands there), a
+ * muted line when there is one, then what may follow.
+ */
+export function FormConfirmation({
+  mode,
+  heading,
+  title,
+  text,
+  children,
+}: {
+  readonly mode: HostedFormMode;
+  readonly heading: Ref<HTMLHeadingElement>;
+  readonly title: string;
+  readonly text?: string;
+  readonly children?: ReactNode;
+}) {
+  const Heading = mode === 'page' ? 'h1' : 'h2';
   return (
     <div className={styles.thanks}>
       <span className={styles.badge}>
         <Icon name="check" />
       </span>
       <Heading ref={heading} tabIndex={-1} className={styles.headline} data-mode={mode}>
-        {state.words.thanksTitle}
+        {title}
       </Heading>
-      <p className={styles.subheading}>
-        {text !== '' ? text : asksForAddress(form) ? state.words.thanks : state.words.thanksNeutral}
-      </p>
-      <span className={styles.again}>
-        <Button variant="ghost" onPress={state.sendAnother}>
-          {state.words.sendAnother}
-        </Button>
-      </span>
+      {text !== undefined && text !== '' && <p className={styles.subheading}>{text}</p>}
+      {children !== undefined && <div className={styles.again}>{children}</div>}
     </div>
   );
 }
@@ -296,32 +322,5 @@ export function FormMessage({
         </header>
       </div>
     </div>
-  );
-}
-
-/** The thank you's green check, grown in once: shared by every view that confirms a send. */
-export function FormBadge() {
-  return (
-    <span className={styles.badge}>
-      <Icon name="check" />
-    </span>
-  );
-}
-
-/** A view's heading: an h1 at the page's size alone on its page, an h2 at heading size elsewhere; focus lands here. */
-export function FormHeadline({
-  mode,
-  heading,
-  children,
-}: {
-  readonly mode: HostedFormMode;
-  readonly heading: Ref<HTMLHeadingElement>;
-  readonly children: string;
-}) {
-  const Heading = mode === 'page' ? 'h1' : 'h2';
-  return (
-    <Heading ref={heading} tabIndex={-1} className={styles.headline} data-mode={mode}>
-      {children}
-    </Heading>
   );
 }

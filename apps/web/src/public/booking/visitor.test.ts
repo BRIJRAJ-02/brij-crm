@@ -15,6 +15,8 @@ describe('the return address', () => {
       result: 'connected',
     });
     expect(returnPath(KEY, {})).toBe(`/b/${KEY}`);
+    // A form's hand off comes back with the visitor, so the prefill and the link survive a connect.
+    expect(returnPath(KEY, {}, 'fb1.abc.def')).toBe(`/b/${KEY}?p=fb1.abc.def`);
   });
 
   it('drops anything malformed, and an unknown result', () => {

@@ -267,7 +267,6 @@ export function mountPublicForms(app: Hono<{ Variables: Variables }>, deps: Publ
               emailOverLimit,
               answersKey: deps.answersKey,
               ...(ipHash === undefined ? {} : { ipHash }),
-              ...(ipHash === undefined ? {} : { ipHash }),
               ...(handoffKey === undefined ? {} : { signHandoff: (handoff) => signHandoff(handoffKey, handoff) }),
             },
             hooks,

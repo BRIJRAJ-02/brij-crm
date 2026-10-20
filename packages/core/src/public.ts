@@ -5,6 +5,7 @@
 export { enterBookingByToken, enterBookingPage, type BookingEntry } from './access/door.ts';
 export {
   bookPublicSlot,
+  readHandoffPrefill,
   getPublicBookingPage,
   isPageHost,
   managedBookingIcs,

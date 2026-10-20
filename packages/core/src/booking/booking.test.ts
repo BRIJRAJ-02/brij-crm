@@ -30,6 +30,7 @@ import {
 import {
   bookPublicSlot,
   getPublicBookingPage,
+  readHandoffPrefill,
   managedBookingIcs,
   readManagedBooking,
   readPublicSlots,
@@ -330,9 +331,39 @@ describe('booking (AC-632, AC-633, AC-634)', () => {
         tx.execute<{ id: string }>(sql`select id::text from form_submissions where form_id = ${form.id}`),
       )
     ).rows;
+    // Another workspace's real submission: row level security keeps it out of the link and the prefill.
+    const other = await workspace();
+    const theirForm = await createForm(other.owner, { id: newId(), name: 'Theirs' });
+    const theirSaved = await saveFormDraft(other.owner, {
+      formId: theirForm.id,
+      document: theirForm.draft,
+      expectedRevision: theirForm.revision,
+    });
+    const theirLive = await publishForm(other.owner, { formId: theirForm.id, expectedRevision: theirSaved.revision });
+    const theirDoor = await enterPublicForm({ db }, theirLive.publicKey);
+    await submitForm(theirDoor.scope, jobKinds({ environment: 'local' }), {
+      formId: theirDoor.formId,
+      body: {
+        idempotencyKey: newId(),
+        answers: { name: 'Mallory', email: 'mallory@example.com' },
+        hidden: {},
+        fillMs: 9_000,
+      },
+      captcha: { kind: 'off' },
+    });
+    const [foreign] = (
+      await db.withWorkspace(other.workspaceId, (tx) =>
+        tx.execute<{ id: string }>(sql`select id::text from form_submissions where form_id = ${theirForm.id}`),
+      )
+    ).rows;
+    expect(await readHandoffPrefill(entry, submission?.id ?? '')).toEqual({
+      name: 'Grace',
+      email: 'grace@navy.example',
+    });
+    expect(await readHandoffPrefill(entry, foreign?.id ?? '')).toEqual({});
     const linked = await bookPublicSlot(entry, deps(), bookInput(), [], { submissionId: submission?.id ?? '' });
     const stranger = await bookPublicSlot(entry, deps(), bookInput({ start: '2026-11-02T10:00:00.000Z' }), [], {
-      submissionId: newId(),
+      submissionId: foreign?.id ?? '',
     });
     const rows = (
       await db.withWorkspace(w.workspaceId, (tx) =>

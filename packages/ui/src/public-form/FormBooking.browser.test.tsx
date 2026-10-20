@@ -59,22 +59,33 @@ describe('the countdown to book (AC-1059)', () => {
     await expect.element(page.getByRole('heading', { name: 'Thank you. That is with us.' })).toHaveFocus();
     await expect.poll(said).toBe('Taking you to book a time in 2 seconds.');
     await expect.element(page.getByText('Thanks, we have it.')).toBeVisible();
-    await expect.poll(() => host.textContent).toContain('Taking you to book a time in 1…');
+    await expect.poll(() => host.textContent).toMatch(/Taking you to book a time in\s*1…/);
     // The sentence never changes as the number does.
     expect(said()).toBe('Taking you to book a time in 2 seconds.');
     await expect.poll(() => onRedirect.mock.calls.length, { timeout: 4000 }).toBe(1);
     expect(onRedirect).toHaveBeenCalledWith(URL_TO);
   });
 
-  it('goes at once with Book now', async () => {
-    const onRedirect = await sendWith(5);
+  it('goes at once with Book now, and only once', async () => {
+    const onRedirect = await sendWith(1);
     await userEvent.click(page.getByRole('button', { name: 'Book now' }));
     expect(onRedirect).toHaveBeenCalledWith(URL_TO);
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    expect(onRedirect).toHaveBeenCalledTimes(1);
+  });
+
+  it('holds while focus is on the buttons', async () => {
+    const onRedirect = await sendWith(1);
+    await userEvent.tab();
+    await expect.element(page.getByRole('button', { name: 'Book now' })).toHaveFocus();
+    await new Promise((resolve) => setTimeout(resolve, 1800));
+    expect(onRedirect).not.toHaveBeenCalled();
   });
 
   it('stops with Stay here, and keeps Book a time for later', async () => {
     const onRedirect = await sendWith(1);
     await userEvent.click(page.getByRole('button', { name: 'Stay here' }));
+    await expect.element(page.getByRole('button', { name: 'Book a time' })).toHaveFocus();
     await new Promise((resolve) => setTimeout(resolve, 1500));
     expect(onRedirect).not.toHaveBeenCalled();
     await userEvent.click(page.getByRole('button', { name: 'Book a time' }));

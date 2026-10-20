@@ -17,6 +17,7 @@
 //    their email, in a savepoint, so a record refusal never loses the booking.
 // 4. After the commit, the calendar event (three tries); a booking whose event
 //    failed stays confirmed and is marked for the host.
+import { handoffVisitor } from '../forms/public.ts';
 import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, sql } from 'drizzle-orm';
 import type {
@@ -448,6 +449,19 @@ function storedAnswers(answers: unknown): { readonly note?: string; readonly gue
       ? answers.guests.filter((guest): guest is string => typeof guest === 'string')
       : [];
   return { ...(note === undefined ? {} : { note }), guests };
+}
+
+/**
+ * The name and email a form's hand off names (spec 0023 AC-1058), for the
+ * booking page's prefill: read from the stored submission in this page's
+ * workspace, never from the link. Empty for a submission that isn't there.
+ */
+export async function readHandoffPrefill(
+  entry: BookingEntry,
+  submissionId: string,
+): Promise<{ readonly name?: string; readonly email?: string }> {
+  checkEntry(entry);
+  return inWorkspace(entry.scope, (tx) => handoffVisitor(tx, submissionId));
 }
 
 /**
