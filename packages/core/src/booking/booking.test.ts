@@ -6,7 +6,10 @@ import { sql } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import type { PublicBookInput } from '@crm/contracts';
 import { createDatabase, type Database } from '@crm/db';
-import { enterBookingByToken, enterBookingPage, type BookingEntry } from '../access/door.ts';
+import { enterBookingByToken, enterBookingPage, enterPublicForm, type BookingEntry } from '../access/door.ts';
+import { createForm, publishForm, saveFormDraft } from '../forms/forms.ts';
+import { submitForm } from '../forms/public.ts';
+import { jobKinds } from '../jobs/kinds/index.ts';
 import { newId } from '../engine/ids.ts';
 import { isRefusal } from '../engine/refusals.ts';
 import { createRecord } from '../engine/records.ts';
@@ -298,6 +301,47 @@ describe('booking (AC-632, AC-633, AC-634)', () => {
     );
     expect(stored.rows[0]?.meeting_id).toMatch(/^[0-9a-f-]{36}$/);
     expect(stored.rows[0]?.manage_token_hash).toMatch(/^[0-9a-f]{64}$/);
+  });
+
+  it('links the booking to the form submission a hand off names, only when it is this workspace’s (AC-1058)', async () => {
+    const w = await workspace();
+    const { entry } = await livePage(w);
+    const form = await createForm(w.owner, { id: newId(), name: 'Talk to us' });
+    const saved = await saveFormDraft(w.owner, {
+      formId: form.id,
+      document: form.draft,
+      expectedRevision: form.revision,
+    });
+    const live = await publishForm(w.owner, { formId: form.id, expectedRevision: saved.revision });
+    const door = await enterPublicForm({ db }, live.publicKey);
+    await submitForm(door.scope, jobKinds({ environment: 'local' }), {
+      formId: door.formId,
+      body: {
+        idempotencyKey: newId(),
+        answers: { name: 'Grace', email: 'grace@navy.example' },
+        hidden: {},
+        fillMs: 9_000,
+      },
+      captcha: { kind: 'off' },
+    });
+    const [submission] = (
+      await db.withWorkspace(w.workspaceId, (tx) =>
+        tx.execute<{ id: string }>(sql`select id::text from form_submissions where form_id = ${form.id}`),
+      )
+    ).rows;
+    const linked = await bookPublicSlot(entry, deps(), bookInput(), [], { submissionId: submission?.id ?? '' });
+    const stranger = await bookPublicSlot(entry, deps(), bookInput({ start: '2026-11-02T10:00:00.000Z' }), [], {
+      submissionId: newId(),
+    });
+    const rows = (
+      await db.withWorkspace(w.workspaceId, (tx) =>
+        tx.execute<{ id: string; submission: string | null }>(
+          sql`select id::text, submission_id::text as submission from bookings`,
+        ),
+      )
+    ).rows;
+    expect(rows.find((row) => row.id === linked.bookingId)?.submission).toBe(submission?.id);
+    expect(rows.find((row) => row.id === stranger.bookingId)?.submission).toBeNull();
   });
 
   it('matches the same person again, makes no company for a free email domain, and never overwrites a person', async () => {
