@@ -1,4 +1,4 @@
-/* Generated from tokens.json (artifact version 1792481155-987a) by packages/tokens/scripts/generate.ts. Do not edit. */
+/* Generated from tokens.json (artifact version 1792482524-75b0) by packages/tokens/scripts/generate.ts. Do not edit. */
 
 @layer tokens {
   :root,
@@ -16,7 +16,7 @@
     --border-subtle: #e5e7eb;
     --border: #d8dbe1;
     --border-strong: #c3c7cf;
-    --field-border: #80848c;
+    --field-border: #8c9098;
     --control-border: #757a84;
     --text: #18191d;
     --text-secondary: #575b62;
@@ -100,7 +100,7 @@
     --border-subtle: #2a2b2f;
     --border: #37393f;
     --border-strong: #4c5057;
-    --field-border: #7a7e87;
+    --field-border: #686c74;
     --control-border: #8a8f99;
     --text: #ebedef;
     --text-secondary: #a7abb3;
@@ -185,7 +185,7 @@
       --border-subtle: #2a2b2f;
       --border: #37393f;
       --border-strong: #4c5057;
-      --field-border: #7a7e87;
+      --field-border: #686c74;
       --control-border: #8a8f99;
       --text: #ebedef;
       --text-secondary: #a7abb3;

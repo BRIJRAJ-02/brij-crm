@@ -90,8 +90,8 @@
     min-inline-size: 0;
     min-block-size: calc(var(--size-row) + var(--space-8));
     padding: var(--space-6) var(--space-8);
-    /* A control's outline (3.5:1 in both themes) on the card's own colour, so a time never reads as a hole in it. */
-    border: var(--border-width-hairline) solid var(--control-border);
+    /* The fields' soft edge on the card's own colour, so a time never reads as a hole in it. */
+    border: var(--border-width-hairline) solid var(--field-border);
     border-radius: var(--radius-md);
     background: var(--surface-raised);
     color: var(--text);
