@@ -83,7 +83,7 @@ test('notes on a record: write, list, timeline, a second browser, delete and und
   // A second browser with the note open: it shows the version saved here, with the notice.
   const other = await browser.newContext({ viewport: page.viewportSize() ?? { width: 1280, height: 800 } });
   const reader = await other.newPage();
-  await signInAgain(reader, email, `${notesPath}`, [code]);
+  await signInAgain(reader, email, notesPath, [code]);
   await reader.goto(`${notesPath}?note=${noteId}`);
   await expect(reader.getByRole('dialog').getByRole('textbox', { name: 'Note' })).toContainText('40 seats');
   await rpc(page, 'notes/save', {

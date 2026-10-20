@@ -76,7 +76,6 @@ import {
 } from './views/store.ts';
 import type { NewTask, TaskChange, TaskList, TasksStore, TaskSubscription } from './tasks/store.ts';
 import type { NoteList, NoteSession, NotesStore } from './notes/store.ts';
-import type { RichTextDocBody } from '@crm/contracts/values';
 import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
 import { createLiveRouter } from './live/router.ts';
@@ -1760,10 +1759,7 @@ export function createDataLayer({
           get: (input) => call((options) => api.notes.get({ ...input }, options)),
           save: ({ content, ...input }) =>
             call((options) =>
-              api.notes.save(
-                { ...input, ...(content === undefined ? {} : { content: content }) },
-                options,
-              ),
+              api.notes.save({ ...input, ...(content === undefined ? {} : { content: content }) }, options),
             ),
           delete: (input) => call((options) => api.notes.delete({ ...input }, options)),
           restore: (input) => call((options) => api.notes.restore({ ...input }, options)),

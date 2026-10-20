@@ -22,7 +22,15 @@ import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useState, type ReactNode } from 'react';
 import { settingsNav, visibleSettingsNav, type SettingsPageId } from '../settings/nav.ts';
 import { strings as settingsStrings } from '../settings/strings.ts';
-import { bookingsHref, capturesHref, navObjects, objectHref, settingsHomeHref, tasksHref, trashHref } from './objects.ts';
+import {
+  bookingsHref,
+  capturesHref,
+  navObjects,
+  objectHref,
+  settingsHomeHref,
+  tasksHref,
+  trashHref,
+} from './objects.ts';
 import { strings } from './strings.ts';
 import { SETTINGS_KEYS, UNDO_KEYS } from './undo.ts';
 import { useUndoShortcut } from './useUndoShortcut.ts';

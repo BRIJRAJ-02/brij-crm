@@ -4,7 +4,7 @@
 // next, the offline retries then Retry, the size check before sending, the
 // two notices, a save finishing after its window closed, the list's live
 // reread, and delete with Undo.
-import type { Note, NoteSummary, SaveNoteResult } from '@crm/contracts';
+import type { Note, NoteSummary } from '@crm/contracts';
 import { describe, expect, it } from 'vitest';
 import { dataError } from '../errors.ts';
 import { createMutationLog } from '../live/mutations.ts';
