@@ -355,22 +355,25 @@ async function requeue(
   return outcome(next, at, totals, requeued);
 }
 
+/** How many expired export files one batch deletes: each cascades to its chunks, so a batch stays small. */
+const EXPORTS_BATCH = 20;
+
+/** Phase 6: export files past their expiry, `EXPORTS_BATCH` at a time, their chunks with them (the foreign key cascades). */
+async function expiredExports(context: WriteContext, at: Checkpoint): Promise<StepOutcome> {
+  const gone = await context.tx.execute(sql`
+    delete from exports where id in (
+      select id from exports where expires_at < now() order by expires_at limit ${EXPORTS_BATCH}
+    )`);
+  const removed = gone.rowCount ?? 0;
+  const totals = plus(at.totals, { exports: removed });
+  return outcome(removed === EXPORTS_BATCH ? { ...at, totals } : nextPhase(at, totals), at, totals, removed);
+}
+
 /**
  * The daily cleanup's kind. `queue` is the worker's (which jobs have a
  * queue row); the api registers the kind without one, to show and refuse to
  * cancel its jobs, and never runs a step.
  */
-/** Phase 6: export files past their expiry, `limit` at a time, their chunks with them (the foreign key cascades). */
-async function expiredExports(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
-  const gone = await context.tx.execute(sql`
-    delete from exports where id in (
-      select id from exports where expires_at < now() order by expires_at limit ${limit}
-    )`);
-  const removed = gone.rowCount ?? 0;
-  const totals = plus(at.totals, { exports: removed });
-  return outcome(removed === limit ? { ...at, totals } : nextPhase(at, totals), at, totals, removed);
-}
-
 export function maintenanceDaily(queue?: QueueRows): KindDefinition<MaintenanceParams> {
   return defineKind<MaintenanceParams>({
     kind: MAINTENANCE_DAILY,
@@ -398,7 +401,7 @@ export function maintenanceDaily(queue?: QueueRows): KindDefinition<MaintenanceP
         case 'requeue':
           return requeue(context, at, limit, queue);
         case 'exports':
-          return expiredExports(context, at, limit);
+          return expiredExports(context, at);
       }
     },
   });

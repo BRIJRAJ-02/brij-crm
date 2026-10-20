@@ -9,7 +9,7 @@
 // Every text cell is guarded against spreadsheet formulas (`csvCell`). Only
 // the member who started an export reads it, for 7 days; the daily cleanup
 // deletes it after.
-import { and, desc, eq, inArray, lt, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, inArray, lt, lte, or, sql, type SQL } from 'drizzle-orm';
 import * as z from 'zod';
 import {
   CSV_BOM,
@@ -21,7 +21,7 @@ import {
 } from '@crm/contracts';
 import { schema, type WorkspaceTx } from '@crm/db';
 import { checkId } from '../engine/ids.ts';
-import { refuse } from '../engine/refusals.ts';
+import { isRefusal, refuse } from '../engine/refusals.ts';
 import type { EngineScope } from '../engine/scope.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { fieldLevel } from '../access/policy.ts';
@@ -45,6 +45,12 @@ export const UNKNOWN_EXPORT = 'That export doesn’t exist, or it has expired. E
 
 /** What an export too big to write answers. */
 export const EXPORT_TOO_LARGE = `Export at most ${EXPORT_ROWS_MAX.toLocaleString('en')} submissions at a time; narrow the filter.`;
+
+/** The most exports one member keeps at once (each up to 100,000 rows, in Postgres until R2 arrives). */
+export const EXPORTS_KEPT_MAX = 5;
+
+/** What one more export past the cap answers. */
+export const TOO_MANY_EXPORTS = `Keep at most ${String(EXPORTS_KEPT_MAX)} exports at a time; each goes ${String(EXPORT_KEPT_DAYS)} days after it was made.`;
 
 /** How many submissions one batch reads, and the most text one chunk holds before a new one starts. */
 const PAGE = 200;
@@ -81,7 +87,11 @@ function memberIdOf(scope: EngineScope): string {
 
 /** A file name with nothing a file system or a header refuses. */
 function fileNameFor(formName: string, day: string): string {
-  const safe = formName.replace(/[\\/:*?"<>|\p{Cc}]+/gu, ' ').replace(/\s+/gu, ' ').trim() || 'Form';
+  const safe =
+    formName
+      .replace(/[\\/:*?"<>|\p{Cc}\p{Cf}]+/gu, ' ')
+      .replace(/\s+/gu, ' ')
+      .trim() || 'Form';
   return `${safe.slice(0, 80)} - submissions - ${day}.csv`;
 }
 
@@ -104,6 +114,7 @@ const EXPORT_COLUMNS = {
   rowCount: exports.rowCount,
   selection: exports.selection,
   createdByMemberId: exports.createdByMemberId,
+  policyKey: exports.policyKey,
   expiresAt: sql<string>`to_char(${exports.expiresAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')`,
 };
 
@@ -141,7 +152,17 @@ async function ownExport(tx: WorkspaceTx, scope: EngineScope, exportId: string) 
         sql`${exports.expiresAt} > now()`,
       ),
     );
-  if (row === undefined) throw refuse('NOT_FOUND', UNKNOWN_EXPORT);
+  // Hidden means absent: under a different access than it was written with (an object, a field or a record
+  // rule changed), or with its form out of sight, the file is gone for its starter too.
+  if (row === undefined || row.formId === null || row.policyKey !== scope.access.data.key) {
+    throw refuse('NOT_FOUND', UNKNOWN_EXPORT);
+  }
+  try {
+    await readableForm(tx, scope, row.formId);
+  } catch (error) {
+    if (isRefusal(error)) throw refuse('NOT_FOUND', UNKNOWN_EXPORT);
+    throw error;
+  }
   return row;
 }
 
@@ -169,6 +190,11 @@ export async function startSubmissionsExport(
         return viewOf(held);
       }
       const form = await readableForm(tx, scope, input.formId);
+      const [kept] = await tx
+        .select({ n: sql<number>`count(*)::int` })
+        .from(exports)
+        .where(and(eq(exports.createdByMemberId, me), sql`${exports.expiresAt} > now()`));
+      if ((kept?.n ?? 0) >= EXPORTS_KEPT_MAX) throw refuse('LIMIT_REACHED', TOO_MANY_EXPORTS);
       const counted = await tx.execute<{ n: number }>(sql`
         select count(*)::int as n from (
           select 1 from ${formSubmissions}
@@ -192,6 +218,7 @@ export async function startSubmissionsExport(
           fileName: fileNameFor(form.name, day.rows[0]?.day ?? 'today'),
           jobId,
           createdByMemberId: me,
+          policyKey: scope.access.data.key,
           expiresAt: sql`now() + make_interval(days => ${EXPORT_KEPT_DAYS})`,
         })
         .returning(EXPORT_COLUMNS);
@@ -256,6 +283,8 @@ const Checkpoint = z.object({
   columns: z.array(Column),
   after: z.object({ at: z.string(), id: z.uuid() }).optional(),
   part: z.number().int().min(0),
+  /** The bytes in the last data chunk (`part - 1`), which a page appends to while it stays small. */
+  tail: z.number().int().min(0),
   rows: z.number().int().min(0),
   bytes: z.number().int().min(0),
 });
@@ -332,6 +361,16 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
   if (held === undefined || held.formId === null) {
     return { finished: true, failed: { code: 'NOT_FOUND', message: 'The export was deleted before it finished.' } };
   }
+  const { principal } = scope.access;
+  if (principal.kind !== 'member' || principal.memberId !== held.createdByMemberId) {
+    return { finished: true, failed: { code: 'NOT_FOUND', message: 'The export was deleted before it finished.' } };
+  }
+  if (held.policyKey !== scope.access.data.key) {
+    return {
+      finished: true,
+      failed: { code: 'FORBIDDEN', message: 'Your access changed while this export was being written. Export again.' },
+    };
+  }
   const form = await readableForm(tx, scope, held.formId);
   const select = SubmissionSelection.parse(held.selection);
   const stored = Checkpoint.safeParse(checkpoint);
@@ -343,8 +382,11 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
     await tx
       .insert(exportChunks)
       .values({ workspaceId: scope.workspaceId, exportId, part: 0, body: header })
-      .onConflictDoUpdate({ target: [exportChunks.workspaceId, exportChunks.exportId, exportChunks.part], set: { body: header } });
-    at = { columns, part: 1, rows: 0, bytes: Buffer.byteLength(header) };
+      .onConflictDoUpdate({
+        target: [exportChunks.workspaceId, exportChunks.exportId, exportChunks.part],
+        set: { body: header },
+      });
+    at = { columns, part: 1, tail: 0, rows: 0, bytes: Buffer.byteLength(header) };
   }
 
   const rows: Row[] = await tx
@@ -356,9 +398,16 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
         selectionTest(select),
         at.after === undefined
           ? undefined
-          : or(
-              lt(formSubmissions.receivedAt, sql`${at.after.at}::timestamptz`),
-              and(eq(formSubmissions.receivedAt, sql`${at.after.at}::timestamptz`), lt(formSubmissions.id, at.after.id)),
+          : and(
+              // The redundant bound lets the index start at the cursor, so a late page costs what an early one does.
+              lte(formSubmissions.receivedAt, sql`${at.after.at}::timestamptz`),
+              or(
+                lt(formSubmissions.receivedAt, sql`${at.after.at}::timestamptz`),
+                and(
+                  eq(formSubmissions.receivedAt, sql`${at.after.at}::timestamptz`),
+                  lt(formSubmissions.id, at.after.id),
+                ),
+              ),
             ),
       ),
     )
@@ -380,8 +429,7 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
     );
     const main = row.mainRecordId === null ? undefined : names.get(row.mainRecordId);
     const crm = crmOf(row.state, main);
-    const hidden =
-      typeof row.hidden === 'object' && row.hidden !== null ? (row.hidden as Record<string, unknown>) : {};
+    const hidden = typeof row.hidden === 'object' && row.hidden !== null ? (row.hidden as Record<string, unknown>) : {};
     return csvLine([
       row.receivedMicros,
       row.id,
@@ -397,30 +445,38 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
     ]);
   });
 
+  // Appended to the last chunk while it stays under about 1 MB, so a file is few chunks, not one per page.
   let part = at.part;
+  let tail = at.tail;
   let bytes = at.bytes;
-  let buffer = '';
-  const flush = async () => {
-    if (buffer === '') return;
-    const body = buffer;
-    await tx
-      .insert(exportChunks)
-      .values({ workspaceId: scope.workspaceId, exportId, part, body })
-      .onConflictDoUpdate({ target: [exportChunks.workspaceId, exportChunks.exportId, exportChunks.part], set: { body } });
-    bytes += Buffer.byteLength(body);
-    part += 1;
-    buffer = '';
-  };
-  for (const line of lines) {
-    buffer += line;
-    if (buffer.length >= CHUNK_BYTES) await flush();
+  const text = lines.join('');
+  if (text !== '') {
+    const size = Buffer.byteLength(text);
+    if (part > 1 && tail + size <= CHUNK_BYTES) {
+      await tx
+        .update(exportChunks)
+        .set({ body: sql`${exportChunks.body} || ${text}` })
+        .where(and(eq(exportChunks.exportId, exportId), eq(exportChunks.part, part - 1)));
+      tail += size;
+    } else {
+      await tx
+        .insert(exportChunks)
+        .values({ workspaceId: scope.workspaceId, exportId, part, body: text })
+        .onConflictDoUpdate({
+          target: [exportChunks.workspaceId, exportChunks.exportId, exportChunks.part],
+          set: { body: text },
+        });
+      part += 1;
+      tail = size;
+    }
+    bytes += size;
   }
-  await flush();
 
   const last = rows.at(-1);
   const next: Checkpoint = {
     ...at,
     part,
+    tail,
     bytes,
     rows: at.rows + shown.length,
     ...(last === undefined ? {} : { after: { at: last.receivedMicros, id: last.id } }),
@@ -435,7 +491,8 @@ async function exportStep(context: WriteContext, exportId: string, checkpoint: u
   return {
     finished,
     checkpoint: next,
-    counts: { done: shown.length, skipped: rows.length - shown.length },
+    // Rows the member can't see are absent, not counted as skipped.
+    counts: { done: shown.length },
     result: { rows: next.rows },
   };
 }

@@ -18,7 +18,7 @@ import { createWorkspace } from '../engine/workspaces.ts';
 import { runWrite } from '../engine/write.ts';
 import { getJob } from '../jobs/service.ts';
 import { jobKinds } from '../jobs/kinds/index.ts';
-import { rescope, testScope } from '../testing.ts';
+import { rescope, startJobForTest, testScope } from '../testing.ts';
 import { jobTestKit } from '../../test/jobs-kit.ts';
 import { exportFile, exportPart, getExport, startSubmissionsExport } from './export.ts';
 import { addToCrm, previewSync, startSync } from './filing.ts';
@@ -68,7 +68,15 @@ async function workspace() {
   );
   const other = rescope(scope, { actor: { type: 'member', id: otherId }, role: 'member' });
   const system = testScope({ db, workspaceId: created.workspaceId, actor: SYSTEM_ACTOR });
-  return { workspaceId: created.workspaceId, scope, other, system, attribute, query };
+  return {
+    workspaceId: created.workspaceId,
+    scope,
+    other,
+    system,
+    attribute,
+    query,
+    people: created.objects.people ?? '',
+  };
 }
 type Workspace = Awaited<ReturnType<typeof workspace>>;
 
@@ -202,7 +210,7 @@ describe('Sync old records', () => {
     const title = w.attribute('people.job_title');
     const titleOf = async () =>
       (await getRecords(w.scope, { ids: [recordId], attributeIds: [title] }))[0]?.values[title];
-    expect(await titleOf() ?? null).toBeNull();
+    expect((await titleOf()) ?? null).toBeNull();
 
     // The mapping now files the job title.
     await live.republish(true);
@@ -220,6 +228,23 @@ describe('Sync old records', () => {
     });
     expect(await previewSync(w.scope, { formId: live.id, scope: 'unfiled' })).toMatchObject({ total: 0 });
 
+    expect(
+      await refusalOf(startSync(w.other, registry, { formId: live.id, scope: 'all', jobId: newId() })),
+    ).toMatchObject([{ code: 'FORBIDDEN' }]);
+    // People hidden from a manager: the form is absent to them.
+    const blind = rescope(w.scope, {
+      role: 'admin',
+      rules: {
+        levels: [
+          { subject: { type: 'role', role: 'admin' }, target: { type: 'object', objectId: w.people }, level: 'none' },
+        ],
+        records: [],
+      },
+    });
+    expect(await refusalOf(previewSync(blind, { formId: live.id, scope: 'all' }))).toMatchObject([
+      { code: 'NOT_FOUND' },
+    ]);
+
     const jobId = newId();
     const started = await startSync(w.scope, registry, { formId: live.id, scope: 'all', jobId });
     expect(started).toEqual({ jobId, total: 1 });
@@ -235,7 +260,31 @@ describe('Sync old records', () => {
     expect(await getJob(w.scope, registry, again.jobId)).toMatchObject({
       result: { filing: { created: 0, updated: 0, unchanged: 1 } },
     });
-    expect(await w.query(sql`select count(*)::int as n from records where id <> ${recordId} and object_id = (select object_id from records where id = ${recordId})`)).toEqual([{ n: 0 }]);
+    expect(
+      await w.query(
+        sql`select count(*)::int as n from records where id <> ${recordId} and object_id = (select object_id from records where id = ${recordId})`,
+      ),
+    ).toEqual([{ n: 0 }]);
+  });
+});
+
+describe('a filing job whose member can’t manage forms', () => {
+  it('stops at its first batch and files nothing', async () => {
+    const w = await workspace();
+    const live = await liveForm(w, true);
+    await submit(live.publicKey, body({ name: 'Ada', email: 'ada@example.com' }));
+    const [submission] = await submissionIds(w, live.id);
+    if (submission === undefined) throw new Error('A submission expected.');
+    await w.query(sql`update form_submissions set state = 'failed' where id = ${submission.id}`);
+    // Started past addToCrm's own check, as if the member lost forms.manage after starting it.
+    const { jobId } = await startJobForTest(w.other, registry, {
+      kind: 'forms.file',
+      params: { formId: live.id },
+      items: [submission.id],
+    });
+    expect(await runJob(w, jobId)).toBe('failed');
+    expect((await getJob(w.other, registry, jobId)).error).toMatchObject({ code: 'FORBIDDEN' });
+    expect((await submissionIds(w, live.id))[0]?.state).toBe('failed');
   });
 });
 
@@ -246,7 +295,10 @@ describe('the CSV export', () => {
     await submit(live.publicKey, body({ name: 'Ada Lovelace', email: 'ada@example.com', title: 'Engineer, Senior' }));
     await submit(
       live.publicKey,
-      body({ name: '=HYPERLINK("http://evil.example","x")', email: 'grace@example.com' }, { hidden: { utm_source: '+news' } }),
+      body(
+        { name: '=HYPERLINK("http://evil.example","x")', email: 'grace@example.com' },
+        { hidden: { utm_source: '+news' } },
+      ),
     );
     const exportId = newId();
     const started = await startSubmissionsExport(w.scope, registry, {
@@ -264,8 +316,13 @@ describe('the CSV export', () => {
       Array.from({ length: file.parts }, (_, part) => exportPart(w.scope, { exportId, part })),
     );
     const text = parts.join('');
-    expect(text.startsWith('﻿Received at (UTC),Submission ID,State,Your name,Work email,Phone or WhatsApp,Job title,In CRM')).toBe(true);
-    const lines = text.slice(1).split('\r\n').filter((line) => line !== '');
+    expect(
+      text.startsWith('﻿Received at (UTC),Submission ID,State,Your name,Work email,Phone or WhatsApp,Job title,In CRM'),
+    ).toBe(true);
+    const lines = text
+      .slice(1)
+      .split('\r\n')
+      .filter((line) => line !== '');
     expect(lines).toHaveLength(3);
     expect(lines[1]).toContain(`"'=HYPERLINK(""http://evil.example"",""x"")",grace@example.com`);
     expect(lines[1]).toContain(",'+news,");
@@ -276,9 +333,38 @@ describe('the CSV export', () => {
     expect(await refusalOf(getExport(w.other, { exportId }))).toMatchObject([{ code: 'NOT_FOUND' }]);
     expect(await refusalOf(exportFile(w.other, { exportId }))).toMatchObject([{ code: 'NOT_FOUND' }]);
     // The same id again answers the same export; another member's retry of it finds nothing.
-    expect((await startSubmissionsExport(w.scope, registry, { id: exportId, formId: live.id, select: { kind: 'filter' } })).jobId).toBe(started.jobId);
     expect(
-      await refusalOf(startSubmissionsExport(w.other, registry, { id: exportId, formId: live.id, select: { kind: 'filter' } })),
+      (await startSubmissionsExport(w.scope, registry, { id: exportId, formId: live.id, select: { kind: 'filter' } }))
+        .jobId,
+    ).toBe(started.jobId);
+    expect(
+      await refusalOf(
+        startSubmissionsExport(w.other, registry, { id: exportId, formId: live.id, select: { kind: 'filter' } }),
+      ),
     ).toMatchObject([{ code: 'NOT_FOUND' }]);
+    // Its starter under a narrower access than it was written with: gone for them too (hidden means absent).
+    const narrower = rescope(w.scope, {
+      role: 'admin',
+      rules: {
+        levels: [
+          {
+            subject: { type: 'role', role: 'admin' },
+            target: { type: 'attribute', objectId: w.people, attributeId: w.attribute('people.job_title') },
+            level: 'hidden',
+          },
+        ],
+        records: [],
+      },
+    });
+    expect(await refusalOf(exportFile(narrower, { exportId }))).toMatchObject([{ code: 'NOT_FOUND' }]);
+    // At most five kept at once.
+    for (let index = 0; index < 4; index += 1) {
+      await startSubmissionsExport(w.scope, registry, { id: newId(), formId: live.id, select: { kind: 'filter' } });
+    }
+    expect(
+      await refusalOf(
+        startSubmissionsExport(w.scope, registry, { id: newId(), formId: live.id, select: { kind: 'filter' } }),
+      ),
+    ).toMatchObject([{ code: 'LIMIT_REACHED' }]);
   });
 });

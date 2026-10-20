@@ -82,7 +82,9 @@ describe('GET /api/exports/:id/download', () => {
     expect(ok.headers.get('x-content-type-options')).toBe('nosniff');
     expect(ok.headers.get('content-disposition')).toMatch(/^attachment; filename="Contact us - submissions - /u);
     // Decoded keeping the byte order mark, which Excel needs to read UTF-8.
-    expect(new TextDecoder('utf-8', { ignoreBOM: true }).decode(await ok.arrayBuffer())).toBe("\uFEFFName\r\n'=1+1\r\n");
+    expect(new TextDecoder('utf-8', { ignoreBOM: true }).decode(await ok.arrayBuffer())).toBe(
+      "\uFEFFName\r\n'=1+1\r\n",
+    );
     expect((await m.client.submissions.getExport({ workspace: m.slug, exportId: id })).rowCount).toBe(1);
 
     // Signed out, another workspace's member, or with someone else's export id in their own workspace: 404.

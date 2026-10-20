@@ -29,7 +29,8 @@ import type { EngineScope } from '../engine/scope.ts';
 import { currentItems, loadAttributes, type AttributeDef } from '../engine/values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
-import { can } from '../access/policy.ts';
+import { can, objectLevel } from '../access/policy.ts';
+import { visibleRecords } from '../access/visibility.ts';
 import { inWorkspace } from '../access/run.ts';
 import { defineKind, MAX_ATTEMPTS, type ItemOutcome, type KindDefinition, type StepOutcome } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
@@ -41,6 +42,7 @@ import {
   chooseOwner,
   fileAnswers,
   heldValues,
+  indexHeld,
   matchKey,
   optionsFor,
   ownerAttribute,
@@ -89,14 +91,25 @@ async function mappingOf(
 }
 
 /** The form a member acts on: one they can see, or NOT_FOUND; published, or FORM_STATE. */
-async function managedForm(tx: WorkspaceTx, formId: string) {
+async function managedForm(tx: WorkspaceTx, scope: EngineScope, formId: string) {
   const id = checkId(formId, UNKNOWN_FORM);
-  const mapping = await mappingOf(tx, id);
-  if (mapping === undefined) {
-    if ((await loadForm(tx, id)) === undefined) throw refuse('NOT_FOUND', UNKNOWN_FORM);
-    throw refuse('FORM_STATE', NOT_PUBLISHED);
+  const form = await loadForm(tx, id);
+  // A form on an object the member can't see is absent to them, as everywhere.
+  if (form === undefined || objectLevel(scope.access, form.mainObjectId) === 'none') {
+    throw refuse('NOT_FOUND', UNKNOWN_FORM);
   }
+  const mapping = await mappingOf(tx, id);
+  if (mapping === undefined) throw refuse('FORM_STATE', NOT_PUBLISHED);
   return mapping;
+}
+
+/** The records of `ids` the member can see: filing never reads or links one they can't. */
+async function seenBy(tx: WorkspaceTx, scope: EngineScope, objectId: string, ids: readonly string[]) {
+  return visibleRecords(
+    tx,
+    scope.access,
+    ids.map((recordId) => ({ objectId, recordId })),
+  );
 }
 
 /**
@@ -161,7 +174,7 @@ async function fileBatch(
     };
   }
   const mapping = await mappingOf(tx, input.formId);
-  if (mapping === undefined) {
+  if (mapping === undefined || objectLevel(context.scope.access, mapping.form.mainObjectId) === 'none') {
     return {
       finished: true,
       failed: { code: 'FORM_STATE', message: 'The form is gone or no longer published, so nothing more was filed.' },
@@ -190,8 +203,10 @@ async function fileBatch(
       attributes: mapping.attributes,
       options: mapping.options,
       ...(row.live_record_id === null ? {} : { keepRecordId: row.live_record_id }),
-      // The member writes, through their own access: the mapping's answers only.
+      // The member writes, through their own access: the mapping's answers only, into records they can see.
       writer: () => context,
+      canUse: async (recordId) =>
+        (await seenBy(tx, context.scope, mapping.form.mainObjectId, [recordId])).has(recordId),
     });
     if (filed.kind === 'failed') {
       totals.failures += 1;
@@ -253,14 +268,15 @@ export async function addToCrm(
   const { result } = await runWrite(
     scope,
     async (context) => {
-      const { form } = await managedForm(context.tx, input.formId);
+      const { form } = await managedForm(context.tx, scope, input.formId);
       const found = await context.tx.execute<{ id: string }>(sql`
         select s.id::text from form_submissions s
         left join records r on r.workspace_id = s.workspace_id and r.id = s.main_record_id and r.deleted_at is null
         where s.form_id = ${form.id} and s.id = any(${uuidList(ids)}) and ${scopeTest('unfiled')}
       `);
       const eligible = new Set(found.rows.map((row) => row.id));
-      const queued = ids.filter((id) => eligible.has(id));
+      // In id order, as a sync takes them, so two jobs on one form lock submissions in the same order.
+      const queued = ids.filter((id) => eligible.has(id)).sort();
       if (queued.length === 0) return { queued: 0, skipped: ids.length };
       const { jobId } = await startJob(context, registry, {
         kind: FORMS_FILE,
@@ -274,12 +290,18 @@ export async function addToCrm(
   return result;
 }
 
-/** How many of a form's submissions a scope holds. */
+/** The most submissions a count reads: past it a preview or a start says this many. */
+export const SYNC_COUNT_MAX = 100_000;
+
+/** How many of a form's submissions a scope holds, counting at most `SYNC_COUNT_MAX` (bounded on a huge form). */
 async function countInScope(tx: WorkspaceTx, formId: string, scope: SyncScope): Promise<number> {
   const counted = await tx.execute<{ n: number }>(sql`
-    select count(*)::int as n from form_submissions s
-    left join records r on r.workspace_id = s.workspace_id and r.id = s.main_record_id and r.deleted_at is null
-    where s.form_id = ${formId} and ${scopeTest(scope)}
+    select count(*)::int as n from (
+      select 1 from form_submissions s
+      left join records r on r.workspace_id = s.workspace_id and r.id = s.main_record_id and r.deleted_at is null
+      where s.form_id = ${formId} and ${scopeTest(scope)}
+      limit ${SYNC_COUNT_MAX}
+    ) as counted
   `);
   return counted.rows[0]?.n ?? 0;
 }
@@ -299,7 +321,7 @@ export async function previewSync(
 ): Promise<SyncPreview> {
   requirePermission(scope, 'forms.manage');
   return inWorkspace(scope, async (tx) => {
-    const mapping = await managedForm(tx, input.formId);
+    const mapping = await managedForm(tx, scope, input.formId);
     const { form, document, attributes, options } = mapping;
     const total = await countInScope(tx, form.id, input.scope);
     const page = await tx.execute<ScopedRow>(sql`
@@ -340,9 +362,17 @@ export async function previewSync(
       const key = keys.get(each.row.id);
       return key === undefined ? undefined : matched.get(key);
     };
-    const recordIds = [...new Set(planned.flatMap((each) => targetOf(each) ?? []))];
-    const attributeIds = [...attributes.keys()];
-    const items = recordIds.length === 0 ? [] : await currentItems(tx, recordIds, attributeIds);
+    const candidates = [...new Set(planned.flatMap((each) => targetOf(each) ?? []))];
+    // Only records the member can see: one they can't is a failure here, as it is when the job runs.
+    const seen = candidates.length === 0 ? new Set<string>() : await seenBy(tx, scope, form.mainObjectId, candidates);
+    const mapped = [
+      ...new Set([
+        ...planned.flatMap((each) => each.planned.map((item) => item.attribute.id)),
+        ...(owner === undefined ? [] : [owner.id]),
+      ]),
+    ];
+    const visible = candidates.filter((id) => seen.has(id));
+    const held = indexHeld(visible.length === 0 || mapped.length === 0 ? [] : await currentItems(tx, visible, mapped));
 
     const counts: { -readonly [K in keyof SyncCounts]: number } = { creates: 0, updates: 0, unchanged: 0, failures: 0 };
     const createdKeys = new Set<string>();
@@ -358,7 +388,11 @@ export async function previewSync(
         }
         continue;
       }
-      const { changes } = await changesFor(tx, target, each.planned, owner, ownerValue, heldValues(items, target));
+      if (!seen.has(target)) {
+        counts.failures += 1;
+        continue;
+      }
+      const { changes } = await changesFor(tx, target, each.planned, owner, ownerValue, heldValues(held, target));
       if (changes.size === 0) counts.unchanged += 1;
       else counts.updates += 1;
     }
@@ -373,7 +407,11 @@ export async function previewSync(
 }
 
 /** The Sync old records job's params: the form, the scope, and the moment it started (later submissions are left). */
-export const FormsSyncParams = z.strictObject({ formId: z.uuid(), scope: z.enum(['all', 'unfiled']), asOf: z.iso.datetime() });
+export const FormsSyncParams = z.strictObject({
+  formId: z.uuid(),
+  scope: z.enum(['all', 'unfiled']),
+  asOf: z.iso.datetime(),
+});
 /** The Sync old records job's params. */
 export type FormsSyncParams = z.infer<typeof FormsSyncParams>;
 
@@ -430,7 +468,7 @@ export async function startSync(
   const { result } = await runWrite(
     scope,
     async (context) => {
-      const { form } = await managedForm(context.tx, input.formId);
+      const { form } = await managedForm(context.tx, scope, input.formId);
       const total = await countInScope(context.tx, form.id, input.scope);
       const asOf = await context.tx.execute<{ now: string }>(
         sql`select to_char(now() at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"') as now`,

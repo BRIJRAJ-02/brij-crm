@@ -27,6 +27,8 @@ export const exports = pgTable(
     rowCount: integer('row_count'),
     byteCount: integer('byte_count'),
     createdByMemberId: uuid('created_by_member_id').notNull(),
+    /** The starter's data policy key when it started: a download under a different policy finds nothing. */
+    policyKey: text('policy_key').notNull(),
     expiresAt: timestamptz('expires_at').notNull(),
     createdAt: timestamptz('created_at').notNull().defaultNow(),
     updatedAt: timestamptz('updated_at').notNull().defaultNow(),
@@ -45,6 +47,9 @@ export const exports = pgTable(
     }).onDelete('cascade'),
     // The daily cleanup's expired files.
     index('exports_by_expiry').on(t.workspaceId, t.expiresAt),
+    // A member's live exports (the cap), and the cascades from a form or a member.
+    index('exports_by_member').on(t.workspaceId, t.createdByMemberId, t.expiresAt),
+    index('exports_by_form').on(t.workspaceId, t.formId),
     check('exports_source', sql`${t.source} in ('form_submissions')`),
     check('exports_form_source', sql`(${t.source} = 'form_submissions') = (${t.formId} is not null)`),
   ],
