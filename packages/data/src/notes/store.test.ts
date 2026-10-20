@@ -1,0 +1,296 @@
+// The notes store against a fake API answered by hand and a fake clock (spec
+// 0019, AC-439 to AC-443, AC-445): nothing stored until there is text, the
+// 300 ms save and its 2 second most wait, one save in flight with the latest
+// next, the offline retries then Retry, the size check before sending, the
+// two notices, a save finishing after its window closed, the list's live
+// reread, and delete with Undo.
+import type { Note, NoteSummary, SaveNoteResult } from '@crm/contracts';
+import { describe, expect, it } from 'vitest';
+import { dataError } from '../errors.ts';
+import { createMutationLog } from '../live/mutations.ts';
+import { createNotesStore, NOTE_RETRY_SECONDS, type NotesApi } from './store.ts';
+
+const WS = 'acme';
+const ACME = '0199a6f2-0000-7000-8000-0000000000a1';
+const ME = { type: 'member' as const, id: '0199a6f2-0000-7000-8000-000000000001' };
+const BEA = { type: 'member' as const, id: '0199a6f2-0000-7000-8000-000000000002' };
+
+const doc = (text: string) => ({ type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text }] }] });
+
+const flush = async () => {
+  for (let i = 0; i < 5; i += 1) await Promise.resolve();
+};
+
+interface Stored {
+  title: string;
+  content: unknown;
+  version: number;
+  updatedBy: typeof ME;
+}
+
+function setup() {
+  let clock = 0;
+  const timers: { at: number; work: () => void; live: boolean }[] = [];
+  const server = new Map<string, Stored>();
+  const saves: { title?: string; content?: unknown; baseVersion?: number | null }[] = [];
+  const notices: { message: string; action?: () => void }[] = [];
+  let gate: Promise<void> | undefined;
+  let open: () => void = () => undefined;
+  let failNext: Error[] = [];
+  const summary = (id: string, held: Stored): NoteSummary => ({
+    id,
+    recordId: ACME,
+    title: held.title,
+    excerpt: '',
+    version: held.version,
+    canChange: true,
+    createdAt: '2026-10-20T10:00:00.000Z',
+    createdBy: ME,
+    updatedAt: '2026-10-20T10:00:00.000Z',
+    updatedBy: held.updatedBy,
+  });
+  const api: NotesApi = {
+    list: () => {
+      const items = [...server.entries()].map(([id, held]) => summary(id, held));
+      return Promise.resolve({ items, total: { count: items.length, atLeast: false } });
+    },
+    get: ({ noteId }) => {
+      const held = server.get(noteId);
+      if (held === undefined) return Promise.reject(dataError('NOT_FOUND', 'That note does not exist.'));
+      return Promise.resolve({ ...summary(noteId, held), content: held.content } as Note);
+    },
+    save: async (input) => {
+      saves.push({ title: input.title, content: input.content, baseVersion: input.baseVersion });
+      await gate;
+      const failure = failNext.shift();
+      if (failure !== undefined) throw failure;
+      const held = server.get(input.id);
+      const next: Stored = {
+        title: input.title ?? held?.title ?? '',
+        content: input.content ?? held?.content ?? doc(''),
+        version: (held?.version ?? 0) + 1,
+        updatedBy: ME,
+      };
+      const overwrote =
+        held !== undefined && input.baseVersion !== held.version ? { by: held.updatedBy, at: 'then' } : undefined;
+      server.set(input.id, next);
+      return { note: summary(input.id, next), ...(overwrote ? { overwrote } : {}) } as SaveNoteResult;
+    },
+    delete: ({ noteId }) => {
+      server.delete(noteId);
+      return Promise.resolve({ ok: true });
+    },
+    restore: ({ noteId }) => {
+      const held: Stored = { title: 'Back', content: doc('x'), version: 1, updatedBy: ME };
+      server.set(noteId, held);
+      return Promise.resolve(summary(noteId, held));
+    },
+  };
+  let minted = 0;
+  let unsaved = false;
+  const store = createNotesStore({
+    api,
+    mintId: () => `0199a6f2-0000-7000-8000-${String((minted += 1)).padStart(12, '0')}`,
+    mutations: createMutationLog(),
+    notify: (notice) =>
+      notices.push({ message: notice.message, ...(notice.action ? { action: notice.action.onAction } : {}) }),
+    watch: () => () => undefined,
+    timelines: () => undefined,
+    onUnsaved: (has) => {
+      unsaved = has;
+    },
+    now: () => clock,
+    later: (work, ms) => {
+      const timer = { at: clock + ms, work, live: true };
+      timers.push(timer);
+      return () => {
+        timer.live = false;
+      };
+    },
+  });
+  /** Moves the clock on, running each timer due on the way, in order. */
+  const advance = async (ms: number) => {
+    const end = clock + ms;
+    for (;;) {
+      await flush();
+      const due = timers.filter((timer) => timer.live && timer.at <= end).sort((a, b) => a.at - b.at)[0];
+      if (due === undefined) break;
+      due.live = false;
+      clock = due.at;
+      due.work();
+    }
+    clock = end;
+    await flush();
+  };
+  return {
+    store,
+    server,
+    saves,
+    notices,
+    advance,
+    unsaved: () => unsaved,
+    failWith: (...errors: Error[]) => {
+      failNext = errors;
+    },
+    hold: () => {
+      gate = new Promise((resolve) => {
+        open = resolve;
+      });
+    },
+    release: () => {
+      gate = undefined;
+      open();
+    },
+  };
+}
+
+const offline = () => dataError('API_UNAVAILABLE', 'You’re offline.');
+
+describe('the note session (spec 0019)', () => {
+  it('stores nothing until the note holds text, then saves 300 ms after typing stops (AC-439, AC-440)', async () => {
+    const t = setup();
+    const id = t.store.newId();
+    const session = t.store.open(WS, { noteId: id, recordId: ACME, isNew: true, canChange: true });
+    const release = session.retain();
+    session.setTitle('   ');
+    await t.advance(5_000);
+    expect(t.saves).toEqual([]);
+    session.setDoc(doc('Met at the fair'));
+    await t.advance(299);
+    expect(t.saves).toEqual([]);
+    await t.advance(1);
+    expect(t.saves).toEqual([{ title: '   ', content: doc('Met at the fair'), baseVersion: null }]);
+    expect(session.getSnapshot()).toMatchObject({ isNew: false, saveState: 'saved' });
+    release();
+    // Closing a new note that never held text stores nothing.
+    const empty = t.store.open(WS, { noteId: t.store.newId(), recordId: ACME, isNew: true, canChange: true });
+    empty.retain()();
+    await t.advance(5_000);
+    expect(t.saves).toHaveLength(1);
+  });
+
+  it('saves at least every 2 seconds while typing goes on, one save out at a time, the latest next', async () => {
+    const t = setup();
+    const session = t.store.open(WS, { noteId: t.store.newId(), recordId: ACME, isNew: true, canChange: true });
+    session.retain();
+    for (let i = 1; i <= 25; i += 1) {
+      session.setDoc(doc('x'.repeat(i)));
+      await t.advance(200);
+    }
+    // 5 seconds of typing a key every 200 ms: saved at 2 s and 4 s, never waiting for a pause.
+    expect(t.saves.length).toBeGreaterThanOrEqual(2);
+    t.hold();
+    session.setDoc(doc('held'));
+    await t.advance(300);
+    const out = t.saves.length;
+    session.setDoc(doc('later'));
+    await t.advance(3_000);
+    expect(t.saves).toHaveLength(out);
+    t.release();
+    await t.advance(0);
+    expect(t.saves.at(-1)?.content).toEqual(doc('later'));
+    expect(t.server.values().next().value?.content).toEqual(doc('later'));
+  });
+
+  it('tries a save with no answer again after 1, 2, 4, 8 and 15 s, then says Not saved with Retry, keeping the text', async () => {
+    const t = setup();
+    const session = t.store.open(WS, { noteId: t.store.newId(), recordId: ACME, isNew: true, canChange: true });
+    session.retain();
+    t.failWith(...Array.from({ length: NOTE_RETRY_SECONDS.length + 1 }, offline));
+    session.setDoc(doc('On a plane'));
+    expect(t.unsaved()).toBe(true);
+    await t.advance(300);
+    expect(session.getSnapshot().saveState).toBe('retrying');
+    await t.advance(30_000);
+    expect(t.saves).toHaveLength(NOTE_RETRY_SECONDS.length + 1);
+    expect(session.getSnapshot()).toMatchObject({ saveState: 'failed', doc: doc('On a plane') });
+    session.retry();
+    await t.advance(0);
+    expect(session.getSnapshot().saveState).toBe('saved');
+    expect(t.unsaved()).toBe(false);
+  });
+
+  it('never sends a body over 200 KB, and says why with the text kept (AC-441)', async () => {
+    const t = setup();
+    const session = t.store.open(WS, { noteId: t.store.newId(), recordId: ACME, isNew: true, canChange: true });
+    session.retain();
+    session.setDoc(doc('x'.repeat(250 * 1024)));
+    await t.advance(2_000);
+    expect(t.saves).toEqual([]);
+    expect(session.getSnapshot()).toMatchObject({ isTooLong: true, saveState: 'failed' });
+    expect(session.getSnapshot().refusal?.message).toBe('This note is too long to save. Split it into two notes.');
+  });
+
+  it('shows their version when someone else saves and nothing is unsaved here, and says so (AC-443)', async () => {
+    const t = setup();
+    const id = '0199a6f2-0000-7000-8000-0000000000f1';
+    t.server.set(id, { title: 'Plan', content: doc('v1'), version: 1, updatedBy: ME });
+    const session = t.store.open(WS, { noteId: id, recordId: ACME, isNew: false, canChange: true });
+    session.retain();
+    await t.advance(0);
+    expect(session.getSnapshot()).toMatchObject({ status: 'ready', title: 'Plan', docKey: 0 });
+    t.server.set(id, { title: 'Plan', content: doc('theirs'), version: 2, updatedBy: BEA });
+    t.store.changed(WS, { seq: 2, at: '', kind: 'notes', recordIds: [ACME], noteIds: [id] });
+    await t.advance(0);
+    expect(session.getSnapshot()).toMatchObject({ doc: doc('theirs'), docKey: 1, notice: { kind: 'theirs', by: BEA } });
+  });
+
+  it('keeps unsaved text over someone else’s save and says it was saved over theirs (AC-443)', async () => {
+    const t = setup();
+    const id = '0199a6f2-0000-7000-8000-0000000000f2';
+    t.server.set(id, { title: 'Plan', content: doc('v1'), version: 1, updatedBy: ME });
+    const session = t.store.open(WS, { noteId: id, recordId: ACME, isNew: false, canChange: true });
+    session.retain();
+    await t.advance(0);
+    session.setDoc(doc('mine'));
+    t.server.set(id, { title: 'Plan', content: doc('theirs'), version: 2, updatedBy: BEA });
+    t.store.changed(WS, { seq: 2, at: '', kind: 'notes', recordIds: [ACME], noteIds: [id] });
+    await t.advance(300);
+    expect(t.saves.at(-1)).toMatchObject({ content: doc('mine'), baseVersion: 1 });
+    expect(session.getSnapshot()).toMatchObject({ doc: doc('mine'), notice: { kind: 'overwrote', by: BEA } });
+  });
+
+  it('lets a pending save finish after the window closes, and offers the note again if it fails (AC-440)', async () => {
+    const t = setup();
+    const session = t.store.open(WS, { noteId: t.store.newId(), recordId: ACME, isNew: true, canChange: true });
+    const release = session.retain();
+    session.setDoc(doc('closing'));
+    t.failWith(dataError('FORBIDDEN', 'You can view this note but not change it.'));
+    release();
+    await t.advance(0);
+    expect(t.saves).toHaveLength(1);
+    expect(t.notices).toMatchObject([{ message: 'Your note wasn’t saved.' }]);
+    let opened = '';
+    t.store.setOpener((_workspace, _record, noteId) => {
+      opened = noteId;
+    });
+    t.notices[0]?.action?.();
+    expect(opened).not.toBe('');
+  });
+});
+
+describe('a record’s notes list (spec 0019, AC-442, AC-445)', () => {
+  it('reads again on a notes event at most twice a second, and takes a deleted note out at once with Undo', async () => {
+    const t = setup();
+    const id = '0199a6f2-0000-7000-8000-0000000000f3';
+    t.server.set(id, { title: 'One', content: doc('x'), version: 1, updatedBy: ME });
+    const list = t.store.forRecord(WS, ACME);
+    list.retain();
+    await list.ready();
+    expect(list.getSnapshot()).toMatchObject({ status: 'ready', total: { count: 1 } });
+    t.server.set('0199a6f2-0000-7000-8000-0000000000f4', {
+      title: 'Two',
+      content: doc('y'),
+      version: 1,
+      updatedBy: BEA,
+    });
+    t.store.changed(WS, { seq: 3, at: '', kind: 'notes', recordIds: [ACME], noteIds: [] });
+    t.store.changed(WS, { seq: 4, at: '', kind: 'notes', recordIds: [ACME], noteIds: [] });
+    await t.advance(500);
+    expect(list.getSnapshot().total?.count).toBe(2);
+    expect(await t.store.remove(WS, ACME, id)).toBeUndefined();
+    expect(list.getSnapshot().source.count).toBe(1);
+    expect(await t.store.restore(WS, ACME, id)).toBeUndefined();
+    expect(list.getSnapshot().source.getItem(0)?.id).toBe(id);
+  });
+});

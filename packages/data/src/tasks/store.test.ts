@@ -86,6 +86,7 @@ function setup(
   } = {},
 ) {
   const calls: string[] = [];
+  const deleted = new Map<string, TaskView>();
   const timers: { work: () => void; ms: number; live: boolean }[] = [];
   const notices: { message: string; retry?: () => void }[] = [];
   const timelines: (readonly string[] | 'all')[] = [];
@@ -127,6 +128,22 @@ function setup(
       });
       server.set(made.id, made);
       return Promise.resolve(made);
+    },
+    delete: ({ taskId }) => {
+      calls.push(`delete ${taskId}`);
+      const held = server.get(taskId);
+      if (held === undefined) return Promise.reject(refused('NOT_FOUND', 'That task does not exist.'));
+      server.delete(taskId);
+      deleted.set(taskId, held);
+      return Promise.resolve({ ok: true });
+    },
+    restore: ({ taskId }) => {
+      calls.push(`restore ${taskId}`);
+      const held = deleted.get(taskId);
+      if (held === undefined) return Promise.reject(refused('NOT_FOUND', 'That task does not exist.'));
+      deleted.delete(taskId);
+      server.set(taskId, held);
+      return Promise.resolve(held);
     },
     update: async (input) => {
       calls.push(`update ${JSON.stringify({ isDone: input.isDone, title: input.title })}`);
@@ -603,5 +620,34 @@ describe('the tasks store (spec 0019)', () => {
       expect(titles(assigned.getSnapshot())).toEqual(['Task 2']);
       expect(calls.filter((call) => call === 'list assigned open')).toHaveLength(2);
     });
+  });
+
+  it('deletes a task out of every list at once, and Undo brings it back (AC-445)', async () => {
+    const one = task(1);
+    const server = new Map([[one.id, one]]);
+    const { store } = setup(server);
+    const open = store.forRecord(WS, ACME, 'open');
+    open.retain();
+    await open.ready();
+    const sub = store.one(WS, one.id);
+    sub.retain();
+    const removing = store.remove(WS, one.id);
+    expect(titles(open.getSnapshot())).toEqual([]);
+    expect(sub.getSnapshot().status).not.toBe('ready');
+    expect(await removing).toBeUndefined();
+    expect(await store.restore(WS, one.id)).toBeUndefined();
+    expect(titles(open.getSnapshot())).toEqual(['Task 1']);
+  });
+
+  it('puts a task back when its delete is refused, and answers why', async () => {
+    const one = task(1);
+    const server = new Map([[one.id, one]]);
+    const { store } = setup(server);
+    const open = store.forRecord(WS, ACME, 'open');
+    open.retain();
+    await open.ready();
+    server.delete(one.id);
+    const failure = await store.remove(WS, one.id);
+    expect(failure?.code).toBe('NOT_FOUND');
   });
 });

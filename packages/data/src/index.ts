@@ -75,6 +75,8 @@ import {
   type ViewsListSource,
 } from './views/store.ts';
 import type { NewTask, TaskChange, TaskList, TasksStore, TaskSubscription } from './tasks/store.ts';
+import type { NoteList, NoteSession, NotesStore } from './notes/store.ts';
+import type { RichTextDocBody } from '@crm/contracts/values';
 import type { createLive, Granted, Live, LiveStatus } from './live/live.ts';
 import { createMutationLog } from './live/mutations.ts';
 import { createLiveRouter } from './live/router.ts';
@@ -174,6 +176,8 @@ export type {
   TaskMine,
   TaskTotal,
   TaskView,
+  Note,
+  NoteSummary,
   SystemStatus,
   TrashedRecord,
   Usage,
@@ -263,6 +267,15 @@ export type {
   TaskSubscriptionState,
 } from './tasks/store.ts';
 export { TASK_COUNT_CAP, TASK_RECORDS_MAX, TASK_TITLE_MAX } from '@crm/contracts/task-limits';
+export { NOTE_TITLE_MAX, NOTE_TOO_LONG } from '@crm/contracts/note-limits';
+export type {
+  NoteList,
+  NoteListState,
+  NoteNotice,
+  NoteSaveState,
+  NoteSession,
+  NoteSessionState,
+} from './notes/store.ts';
 export { isEditableHere, toActorDisplays, toFieldAttribute, type FieldAttributeShape } from './fields.ts';
 export { createIdMinter, type IdSources } from './ids.ts';
 export type { LiveStatus } from './live/live.ts';
@@ -609,6 +622,8 @@ export function createDataLayer({
   let trash: Promise<Trash> | undefined;
   // Tasks (spec 0019), loaded with the first screen that shows one.
   let tasks: Promise<TasksStore> | undefined;
+  // Notes (spec 0019), loaded with the first screen that shows one.
+  let notes: Promise<NotesStore> | undefined;
   // Records looked up in the trash (spec 0017): a missing record's page.
   const trashedLookups = createTrashedLookups((workspace, recordId) =>
     call((options) => api.records.getTrashed({ workspace, recordId }, options)),
@@ -660,6 +675,9 @@ export function createDataLayer({
       feeds.clear();
     });
     void tasks?.then((store) => {
+      store.clear();
+    });
+    void notes?.then((store) => {
       store.clear();
     });
     trashedLookups.clear();
@@ -982,6 +1000,10 @@ export function createDataLayer({
     void tasks?.then((store) => {
       store.recordsChanged(workspace, event);
     });
+    // A trashed record's notes go from every screen, and come back with it (spec 0019, AC-446).
+    void notes?.then((store) => {
+      store.recordsChanged(workspace, event);
+    });
     // Open timelines (spec 0017) read their first page again for a change naming their record; a coarse one,
     // for every record of the object, waits a random moment first so a whole team doesn't read in step.
     if (activity === undefined) return;
@@ -1064,6 +1086,11 @@ export function createDataLayer({
       store.changed(workspace, event);
     });
   });
+  router.on('notes', (workspace, event) => {
+    void notes?.then((store) => {
+      store.changed(workspace, event);
+    });
+  });
   // Meetings synced, moved, cancelled or made private (spec 0024, AC-610): the open timelines of the records they
   // showed on read their first page again; a coarse one (a whole calendar's sync) waits a random moment first, so a
   // whole team doesn't read in step, and then every open timeline of the workspace reads again.
@@ -1089,6 +1116,9 @@ export function createDataLayer({
       held.reload(workspace);
     });
     void tasks?.then((store) => {
+      store.resync(workspace);
+    });
+    void notes?.then((store) => {
       store.resync(workspace);
     });
     void records?.then((layer) => {
@@ -1675,6 +1705,8 @@ export function createDataLayer({
                 options,
               ),
             ),
+          delete: (input) => call((options) => api.tasks.delete({ ...input }, options)),
+          restore: (input) => call((options) => api.tasks.restore({ ...input }, options)),
           update: ({ addRecordIds, removeRecordIds, ...input }) =>
             call((options) =>
               api.tasks.update(
@@ -1713,6 +1745,47 @@ export function createDataLayer({
       }),
     );
     return tasks;
+  };
+
+  // While any note has changes not yet saved, leaving the page asks first (spec 0019, AC-440).
+  const leaveGuard = (event: BeforeUnloadEvent) => {
+    event.preventDefault();
+  };
+  const notesStore = (): Promise<NotesStore> => {
+    notes ??= import('./notes/store.ts').then(({ createNotesStore }) =>
+      createNotesStore({
+        api: {
+          list: (input) =>
+            beforeRead(input.workspace).then(() => call((options) => api.notes.list({ ...input }, options))),
+          get: (input) => call((options) => api.notes.get({ ...input }, options)),
+          save: ({ content, ...input }) =>
+            call((options) =>
+              api.notes.save(
+                { ...input, ...(content === undefined ? {} : { content: content as RichTextDocBody }) },
+                options,
+              ),
+            ),
+          delete: (input) => call((options) => api.notes.delete({ ...input }, options)),
+          restore: (input) => call((options) => api.notes.restore({ ...input }, options)),
+        },
+        mintId,
+        mutations,
+        notify,
+        watch,
+        timelines: (workspace, recordIds) => {
+          void activity?.then((feeds) => {
+            if (recordIds === 'all') feeds.ownWrite(workspace);
+            else feeds.changed(workspace, { objectId: '', recordIds });
+          });
+        },
+        onUnsaved: (hasUnsaved) => {
+          if (typeof window === 'undefined') return;
+          if (hasUnsaved) window.addEventListener('beforeunload', leaveGuard);
+          else window.removeEventListener('beforeunload', leaveGuard);
+        },
+      }),
+    );
+    return notes;
   };
 
   const recordsLayer = (): Promise<RecordsLayer> => {
@@ -2530,6 +2603,50 @@ export function createDataLayer({
       /** Ticks or unticks a task at once; a refusal rolls the checkbox back with a toast and Retry. */
       setDone: async (workspace: string, taskId: string, isDone: boolean): Promise<boolean> =>
         (await tasksStore()).setDone(workspace, taskId, isDone),
+      /**
+       * Deletes a task (AC-445): gone from every list and its dialog at once;
+       * a refusal puts it back, answered for the screen's toast.
+       */
+      remove: async (workspace: string, taskId: string): Promise<DataError | undefined> =>
+        (await tasksStore()).remove(workspace, taskId),
+      /** Brings a deleted task back exactly as it was (the toast's Undo). */
+      restore: async (workspace: string, taskId: string): Promise<DataError | undefined> =>
+        (await tasksStore()).restore(workspace, taskId),
+    },
+    notes: {
+      /**
+       * A record's notes, last edited first (spec 0019, AC-442): 20 at a time
+       * as it scrolls, with the count, live. Read it through `useNoteList`.
+       */
+      forRecord: async (workspace: string, recordId: string): Promise<NoteList> =>
+        (await notesStore()).forRecord(workspace, recordId),
+      /**
+       * The note window's session (AC-439 to AC-443): an existing note, or a
+       * new one with the id the window minted, which stores nothing until it
+       * holds text, then saves itself as it is typed. Read it through
+       * `useNoteSession`.
+       */
+      open: async (
+        workspace: string,
+        input: {
+          readonly noteId: string;
+          readonly recordId: string;
+          readonly isNew: boolean;
+          readonly canChange: boolean;
+        },
+      ): Promise<NoteSession> => (await notesStore()).open(workspace, input),
+      /** A new note's id: mint it once when the window opens on a new note. */
+      newId: (): string => mintId(),
+      /** The app's way to open a note window again, for a failed save's toast ("Open note"). */
+      setOpener: async (open: (workspace: string, recordId: string, noteId: string) => void): Promise<void> => {
+        (await notesStore()).setOpener(open);
+      },
+      /** Deletes a note at once on screen; a refusal puts it back, answered for the screen's toast. */
+      remove: async (workspace: string, recordId: string, noteId: string): Promise<DataError | undefined> =>
+        (await notesStore()).remove(workspace, recordId, noteId),
+      /** Brings a deleted note back exactly as it was (the toast's Undo). */
+      restore: async (workspace: string, recordId: string, noteId: string): Promise<DataError | undefined> =>
+        (await notesStore()).restore(workspace, recordId, noteId),
     },
     undo: {
       /**

@@ -403,6 +403,16 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
       update: os.tasks.update.handler(notServed),
       get: os.tasks.get.handler(notServed),
       list: os.tasks.list.handler(notServed),
+      delete: os.tasks.delete.handler(notServed),
+      restore: os.tasks.restore.handler(notServed),
+    },
+    // Notes (spec 0019) are driven against their own fake in `notes/store.test.ts`.
+    notes: {
+      save: os.notes.save.handler(notServed),
+      get: os.notes.get.handler(notServed),
+      list: os.notes.list.handler(notServed),
+      delete: os.notes.delete.handler(notServed),
+      restore: os.notes.restore.handler(notServed),
     },
     calendar: {
       connections: {

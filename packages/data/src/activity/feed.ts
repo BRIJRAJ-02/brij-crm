@@ -92,6 +92,16 @@ export type ActivityEntryShape =
       readonly href?: string;
     })
   | (EntryBase & {
+      /** A note on the record (spec 0019): "added a note", with its title ("" when it has none) and its start. */
+      readonly kind: 'note';
+      /** The note's id, for the screen to open it (`?note=<id>`). */
+      readonly itemId: string;
+      readonly title: string;
+      readonly excerpt: string;
+      /** Its window's address, which the screen adds. */
+      readonly href?: string;
+    })
+  | (EntryBase & {
       /**
        * A meeting the record is in (spec 0024), at its start, as the library's
        * meeting entry draws it: "Private meeting" with its time only when the
@@ -255,6 +265,10 @@ export function toActivityEntry(item: ActivityItem, context: EntryContext): Acti
   if (item.kind === 'task') {
     if (item.itemId === undefined) return undefined;
     return { ...base, kind: 'task', itemId: item.itemId, title: item.title ?? '', isDone: item.isDone === true };
+  }
+  if (item.kind === 'note') {
+    if (item.itemId === undefined) return undefined;
+    return { ...base, kind: 'note', itemId: item.itemId, title: item.title ?? '', excerpt: item.excerpt ?? '' };
   }
   if (item.kind === 'meeting') {
     const meeting = item.meeting;

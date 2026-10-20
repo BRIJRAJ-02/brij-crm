@@ -18,6 +18,7 @@ import type { TrashedSource, TrashedState } from './records/trashed.ts';
 import type { SavedViewSnapshot, SavedViewSource, ViewsListSnapshot, ViewsListSource } from './views/store.ts';
 import type { TrashState, TrashView } from './trash/store.ts';
 import type { TaskList, TaskListState, TaskSubscription, TaskSubscriptionState } from './tasks/store.ts';
+import type { NoteList, NoteListState, NoteSession, NoteSessionState } from './notes/store.ts';
 
 /**
  * A view's current state (its rows, count, status, cell refusals and row
@@ -292,4 +293,20 @@ export function useCalendarSettings(held: CalendarSettingsHeld): CalendarSetting
  */
 export function useCaptureList<Item>(view: CaptureListView<Item>): CaptureListState<Item> {
   return useRetained(view);
+}
+
+/** A record's notes (spec 0019), re-rendering when they change. Held while the screen is mounted. */
+export function useNoteList(list: NoteList): NoteListState {
+  return useRetained(list);
+}
+
+/** Only a note list's total (the Notes tab's count). Holds the list while the screen is mounted, so it stays live. */
+export function useNoteTotal(list: NoteList): NoteListState['total'] {
+  useEffect(() => list.retain(), [list]);
+  return useSyncExternalStore(list.subscribe, () => list.getSnapshot().total);
+}
+
+/** An open note (the note window), re-rendering as it saves. Held while the window is mounted. */
+export function useNoteSession(session: NoteSession): NoteSessionState {
+  return useRetained(session);
 }

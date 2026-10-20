@@ -79,6 +79,16 @@ export interface TasksApi {
     readonly recordIds?: readonly string[];
     readonly mutationId: string;
   }) => Promise<TaskView>;
+  readonly delete: (input: {
+    readonly workspace: string;
+    readonly taskId: string;
+    readonly mutationId: string;
+  }) => Promise<unknown>;
+  readonly restore: (input: {
+    readonly workspace: string;
+    readonly taskId: string;
+    readonly mutationId: string;
+  }) => Promise<TaskView>;
   readonly update: (input: {
     readonly workspace: string;
     readonly taskId: string;
@@ -1014,6 +1024,53 @@ export function createTasksStore(deps: TasksDeps) {
     return made.api;
   };
 
+  /**
+   * Deletes a task (AC-445): out of the store, every list and its dialog at
+   * once; a refusal puts its lists back by settling them. Answers the refusal.
+   */
+  const remove = async (workspace: string, taskId: string): Promise<DataError | undefined> => {
+    const body = bodiesOf(workspace).get(taskId);
+    const linked = body?.records.map((record) => record.recordId) ?? [];
+    drop(workspace, [taskId]);
+    const mutationId = deps.mintId();
+    try {
+      await queued(workspace, taskId, () => {
+        deps.mutations.sent(mutationId);
+        return deps.api.delete({ workspace, taskId, mutationId });
+      });
+      deps.mutations.answered(mutationId, 1);
+      dirtyRecords(workspace, linked);
+      deps.timelines(workspace, linked);
+      return undefined;
+    } catch (failed) {
+      deps.mutations.forget(mutationId);
+      if (body !== undefined) put(workspace, [body]);
+      dirtyRecords(workspace, linked);
+      return toDataError(failed);
+    }
+  };
+
+  /** Brings a deleted task back exactly as it was (Undo): into the store, and its lists settle. */
+  const restore = async (workspace: string, taskId: string): Promise<DataError | undefined> => {
+    const mutationId = deps.mintId();
+    try {
+      const task = await queued(workspace, taskId, () => {
+        deps.mutations.sent(mutationId);
+        return deps.api.restore({ workspace, taskId, mutationId });
+      });
+      deps.mutations.answered(mutationId, 1);
+      put(workspace, [task]);
+      for (const list of listsOf(workspace)) list.place(task);
+      const linked = task.records.map((record) => record.recordId);
+      dirtyRecords(workspace, linked);
+      deps.timelines(workspace, linked);
+      return undefined;
+    } catch (failed) {
+      deps.mutations.forget(mutationId);
+      return toDataError(failed);
+    }
+  };
+
   return {
     /** A record's open or done tasks, the same list for every screen that asks. */
     forRecord(workspace: string, recordId: string, status: TaskStatus): TaskList {
@@ -1060,6 +1117,8 @@ export function createTasksStore(deps: TasksDeps) {
      */
     setDone: (workspace: string, taskId: string, isDone: boolean): Promise<boolean> =>
       setDone(workspace, taskId, isDone),
+    remove,
+    restore,
     /**
      * A live `tasks` event: the named bodies held are read again (gathered,
      * one call per 100), and every loaded list of a record it names settles
