@@ -197,7 +197,7 @@ export type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, Bookin
 export type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 export type { CaptureListState, CaptureListView } from './captures/list.ts';
 export { connectUrl, needsReconnect } from './calendar/store.ts';
-export type { Hue, ObjectIcon } from '@crm/contracts/values';
+export type { Hue, ObjectIcon, RichTextDoc } from '@crm/contracts/values';
 // The API name rule and the new object's defaults (spec 0012): plain modules with no Zod, so the dialogs share
 // the server's own functions without loading the schema library.
 export { isReservedSlug, RESERVED_SLUGS, toApiSlug } from '@crm/contracts/slugs';

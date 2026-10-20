@@ -51,7 +51,7 @@ export const LIFECYCLE_CAP = MAX_LIFECYCLE_IDS;
 
 /** One outbox row before it gets its number. */
 export interface OutboxEvent {
-  readonly kind: 'records' | 'entries' | 'definitions' | 'members' | 'jobs' | 'views' | 'tasks' | 'meetings';
+  readonly kind: 'records' | 'entries' | 'definitions' | 'members' | 'jobs' | 'views' | 'tasks' | 'notes' | 'meetings';
   /** The object: a `records` row's, an `entries` row's list's parent, a `definitions` row's when it names one. */
   readonly objectId?: string;
   /** The list: an `entries` row's, a `definitions` row's when it names one. */
@@ -318,6 +318,18 @@ function kindRows(change: CappedChange): OutboxEvent[] {
     const taskIds = [...new Set(change.tasks.map((task) => task.taskId))].sort(byId);
     const recordIds = [...new Set(change.tasks.flatMap((task) => task.recordIds))].sort(byId);
     rows.push({ kind: 'tasks', ...NO_IDS, itemIds: taskIds, recordIds, coarse: false });
+  }
+  // One `notes` row per object (a save is one note on one record, so one row), naming the notes and their records.
+  for (const objectId of [...new Set(change.notes.map((note) => note.objectId))].sort(byId)) {
+    const ofObject = change.notes.filter((note) => note.objectId === objectId);
+    rows.push({
+      kind: 'notes',
+      objectId,
+      ...NO_IDS,
+      itemIds: [...new Set(ofObject.map((note) => note.noteId))].sort(byId),
+      recordIds: [...new Set(ofObject.map((note) => note.recordId))].sort(byId),
+      coarse: false,
+    });
   }
   if (change.meetings.length > 0) {
     const meetingIds = [...new Set(change.meetings.map((meeting) => meeting.meetingId))].sort(byId);

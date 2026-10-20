@@ -16,7 +16,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import { createWorkspace } from '../engine/workspaces.ts';
 import { rescope, testScope } from '../testing.ts';
 import { readTaskFacts } from './facts.ts';
-import { createTask, getTasks, listTasks, POSITION_RENUMBER, updateTask } from './tasks.ts';
+import { createTask, deleteTask, getTasks, listTasks, POSITION_RENUMBER, restoreTask, updateTask } from './tasks.ts';
 
 const { appUrl } = inject('testDatabase');
 let db: Database;
@@ -628,6 +628,41 @@ describe('listTasks for My tasks (AC-436, AC-447)', () => {
       total: { count: 0, atLeast: false },
     });
     expect((await listTasks(key('read'), { scope: { mine: 'assigned' }, status: 'open' })).items).toEqual([]);
+  });
+});
+
+describe('deleting and restoring a task (AC-445, AC-447, AC-448)', () => {
+  it('hides a deleted task from every read at once and brings it back exactly as it was', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const task = await createTask(w.scope, {
+      id: newId(),
+      title: 'Ship it',
+      recordIds: [acme],
+      assigneeMemberId: w.ownerId,
+    });
+    await deleteTask(w.scope, { taskId: task.id }, hooks());
+    expect(await getTasks(w.scope, { ids: [task.id] })).toEqual([]);
+    expect((await listTasks(w.scope, { scope: { recordId: acme }, status: 'open' })).total?.count).toBe(0);
+    expect((await listTasks(w.scope, { scope: { mine: 'assigned' }, status: 'open' })).items).toEqual([]);
+    expect(await refusalOf(updateTask(w.scope, { taskId: task.id, title: 'x' }))).toMatchObject({ code: 'NOT_FOUND' });
+    expect(await refusalOf(deleteTask(w.scope, { taskId: task.id }))).toMatchObject({ code: 'NOT_FOUND' });
+    const back = await restoreTask(w.scope, { taskId: task.id }, hooks());
+    expect({ ...back, updatedAt: task.updatedAt }).toEqual(task);
+    expect((await w.outbox()).slice(-2).map((row) => row.record_ids)).toEqual([[acme], [acme]]);
+  });
+
+  it('lets only someone inside the change rule delete or restore, and stores nothing refused', async () => {
+    const w = await workspace();
+    const acme = await w.company('Acme');
+    const task = await createTask(w.scope, { id: newId(), title: 'Mine', recordIds: [acme] });
+    const before = (await w.outbox()).length;
+    const reader = w.as(w.bea, w.level(w.companies, 'read'));
+    expect(await refusalOf(deleteTask(reader, { taskId: task.id }))).toMatchObject({ code: 'FORBIDDEN' });
+    expect(await refusalOf(deleteTask(w.as(w.bea, w.level(w.companies, 'none')), { taskId: task.id }))).toMatchObject({
+      code: 'NOT_FOUND',
+    });
+    expect(await w.outbox()).toHaveLength(before);
   });
 });
 

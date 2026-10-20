@@ -11,6 +11,9 @@ import { testQuery } from '@crm/db/testing';
 import { afterAll, beforeAll, describe, expect, inject, it } from 'vitest';
 import { systemScope } from '../access/door.ts';
 import { deleteRecord } from '../engine/deletion.ts';
+import { newId } from '../engine/ids.ts';
+import { deleteNote, saveNote } from '../notes/notes.ts';
+import { createTask, deleteTask } from '../tasks/tasks.ts';
 import { outboxHook } from '../engine/outbox.ts';
 import { createRecord } from '../engine/records.ts';
 import type { EngineScope } from '../engine/scope.ts';
@@ -250,6 +253,44 @@ describe('maintenance.daily (AC-112, AC-121)', () => {
     expect(job).toMatchObject({ status: 'succeeded', startedBy: { type: 'system' }, cancellable: false });
     expect(job.done).toBeGreaterThanOrEqual(1);
     expect(job.result).toMatchObject({ cleanup: { records: 1, expired: 0, jobs: 0, requeued: 0 } });
+  });
+
+  it('removes notes and tasks deleted more than 30 days ago, a task with its links, and keeps newer ones (spec 0019)', async () => {
+    const t = await team([]);
+    const acme = await person(t.owner, 'Acme');
+    const make = async (title: string) => {
+      const note = (await saveNote(t.owner, { id: newId(), recordId: acme, title })).note.id;
+      const task = (await createTask(t.owner, { id: newId(), title, recordIds: [acme] })).id;
+      await deleteNote(t.owner, { noteId: note });
+      await deleteTask(t.owner, { taskId: task });
+      return { note, task };
+    };
+    const old = await make('Old');
+    const recent = await make('Recent');
+    for (const [table, id] of [
+      ['notes', old.note],
+      ['tasks', old.task],
+    ] as const) {
+      await testQuery(ownerUrl, `update ${table} set deleted_at = now() - interval '31 days' where id = $1`, [id]);
+    }
+    const { jobId, outcomes } = await cleanUp(t.workspaceId, '2026-10-15');
+    expect(outcomes.at(-1)).toBe('succeeded');
+    const notesLeft = await testQuery<{ id: string }>(ownerUrl, 'select id from notes where id = any($1)', [
+      [old.note, recent.note],
+    ]);
+    expect(notesLeft.map((row) => row.id)).toEqual([recent.note]);
+    const tasksLeft = await testQuery<{ id: string }>(ownerUrl, 'select id from tasks where id = any($1)', [
+      [old.task, recent.task],
+    ]);
+    expect(tasksLeft.map((row) => row.id)).toEqual([recent.task]);
+    const links = await testQuery<{ task_id: string }>(
+      ownerUrl,
+      'select task_id from task_records where task_id = $1',
+      [old.task],
+    );
+    expect(links).toEqual([]);
+    const job = await getJob(systemScope(db, t.workspaceId), registry(), jobId);
+    expect(job.result).toMatchObject({ cleanup: { notes: 1, tasks: 1 } });
   });
 
   it('keeps refused items, deletes the rest of a finished job’s, and deletes jobs finished more than 30 days ago', async () => {

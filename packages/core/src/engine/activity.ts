@@ -31,6 +31,7 @@ import {
 import { linkSource, toMillis, valueSource } from './activity-sources.ts';
 import { isArchivedNow, loadAttributes, type AttributeDef } from './values.ts';
 import { meetingSource } from '../calendar/activity.ts';
+import { noteSource } from '../notes/activity.ts';
 import { taskSource } from '../tasks/activity.ts';
 import { submissionSource } from '../forms/activity.ts';
 
@@ -138,6 +139,7 @@ export const ACTIVITY_SOURCES: readonly ActivitySource[] = [
   creationSource,
   valueSource,
   linkSource,
+  noteSource,
   taskSource,
   meetingSource,
   submissionSource,

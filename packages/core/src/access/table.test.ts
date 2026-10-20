@@ -355,6 +355,14 @@ async function dataWorld() {
       assigneeMemberId: ownerId,
     })
   ).id;
+  const noteId = (
+    await core.saveNote(owner, {
+      id: core.newId(),
+      recordId,
+      title: 'Call notes',
+      content: { type: 'doc', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Hello' }] }] },
+    })
+  ).note.id;
   const member = memberScope.actor;
   const objectRule = (objectId: string, level: string) => ({
     subject: { type: 'role' as const, role: 'member' },
@@ -414,6 +422,7 @@ async function dataWorld() {
     entryId,
     peopleView,
     taskId,
+    noteId,
   };
 }
 type DataWorld = Awaited<ReturnType<typeof dataWorld>>;
@@ -579,6 +588,9 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   getSubmission: refused('NOT_FOUND', (scope, world) =>
     core.getSubmission(scope, { submissionId: world.submissionId }),
   ),
+  // Notes (spec 0019): a hidden record's notes are absent, its list NOT_FOUND as the record is.
+  getNote: refused('NOT_FOUND', (scope, world) => core.getNote(scope, { noteId: world.noteId })),
+  listNotes: refused('NOT_FOUND', (scope, world) => core.listNotes(scope, { recordId: world.recordId })),
   listTasks: refused('NOT_FOUND', (scope, world) =>
     core.listTasks(scope, { scope: { recordId: world.recordId }, status: 'open' }),
   ),
@@ -661,6 +673,14 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   updateTask: refused('FORBIDDEN', (scope, world) =>
     core.updateTask(scope, { taskId: world.taskId, title: 'Renamed' }),
   ),
+  deleteTask: refused('FORBIDDEN', (scope, world) => core.deleteTask(scope, { taskId: world.taskId })),
+  restoreTask: refused('FORBIDDEN', (scope, world) => core.restoreTask(scope, { taskId: world.taskId })),
+  // A note needs write on its record's object to be added, edited, deleted or restored.
+  saveNote: refused('FORBIDDEN', (scope, world) =>
+    core.saveNote(scope, { id: core.newId(), recordId: world.recordId, title: 'Mine' }),
+  ),
+  deleteNote: refused('FORBIDDEN', (scope, world) => core.deleteNote(scope, { noteId: world.noteId })),
+  restoreNote: refused('FORBIDDEN', (scope, world) => core.restoreNote(scope, { noteId: world.noteId })),
 };
 
 describe('schema writes (AC-135)', () => {

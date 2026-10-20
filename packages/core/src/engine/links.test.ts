@@ -1211,6 +1211,7 @@ describe('deletion', () => {
       jobs: [],
       views: [],
       tasks: [],
+      notes: [],
       meetings: [],
       values: ids.slice(half).map((ownerId) => ({
         ownerId,

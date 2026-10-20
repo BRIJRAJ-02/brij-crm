@@ -48,6 +48,8 @@ const READS: ReadonlySet<string> = new Set([
   'trash.count',
   'tasks.get',
   'tasks.list',
+  'notes.get',
+  'notes.list',
   'calendar.connections.list',
   'calendar.meetings.forRecord',
   'forms.list',
@@ -667,6 +669,91 @@ const WRITES: Record<string, (m: Member, mutationId: string) => Promise<readonly
       { kind: 'tasks', item_ids: [task.id], record_ids: [], mutation_id: mutationId },
     ];
   },
+  'tasks.delete': async (m, mutationId) => {
+    const task = await m.client.tasks.create({ workspace: m.slug, id: newId(), title: 'Gone', mutationId: newId() });
+    await m.client.tasks.delete({ workspace: m.slug, taskId: task.id, mutationId });
+    return [
+      { kind: 'tasks', item_ids: [task.id] },
+      { kind: 'tasks', item_ids: [task.id], record_ids: [], mutation_id: mutationId },
+    ];
+  },
+  'tasks.restore': async (m, mutationId) => {
+    const task = await m.client.tasks.create({ workspace: m.slug, id: newId(), title: 'Back', mutationId: newId() });
+    await m.client.tasks.delete({ workspace: m.slug, taskId: task.id, mutationId: newId() });
+    await m.client.tasks.restore({ workspace: m.slug, taskId: task.id, mutationId });
+    return [
+      { kind: 'tasks', item_ids: [task.id] },
+      { kind: 'tasks', item_ids: [task.id] },
+      { kind: 'tasks', item_ids: [task.id], record_ids: [], mutation_id: mutationId },
+    ];
+  },
+  // Notes (spec 0019, AC-448): one notes row per write, naming the note, its record and the record's object.
+  'notes.save': async (m, mutationId) => {
+    const record = await m.client.records.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      id: newId(),
+      values: { [m.attribute('name')]: { firstName: 'Ada' } },
+      mutationId: newId(),
+    });
+    const { note } = await m.client.notes.save({
+      workspace: m.slug,
+      id: newId(),
+      recordId: record.id,
+      title: 'Call notes',
+      mutationId,
+    });
+    return [
+      { kind: 'records', record_ids: [record.id] },
+      { kind: 'notes', object_id: m.people.id, item_ids: [note.id], record_ids: [record.id], mutation_id: mutationId },
+    ];
+  },
+  'notes.delete': async (m, mutationId) => {
+    const record = await m.client.records.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      id: newId(),
+      values: { [m.attribute('name')]: { firstName: 'Ada' } },
+      mutationId: newId(),
+    });
+    const { note } = await m.client.notes.save({
+      workspace: m.slug,
+      id: newId(),
+      recordId: record.id,
+      title: 'Gone',
+      mutationId: newId(),
+    });
+    await m.client.notes.delete({ workspace: m.slug, noteId: note.id, mutationId });
+    return [
+      { kind: 'records', record_ids: [record.id] },
+      { kind: 'notes', item_ids: [note.id] },
+      { kind: 'notes', object_id: m.people.id, item_ids: [note.id], record_ids: [record.id], mutation_id: mutationId },
+    ];
+  },
+  'notes.restore': async (m, mutationId) => {
+    const record = await m.client.records.create({
+      workspace: m.slug,
+      objectId: m.people.id,
+      id: newId(),
+      values: { [m.attribute('name')]: { firstName: 'Ada' } },
+      mutationId: newId(),
+    });
+    const { note } = await m.client.notes.save({
+      workspace: m.slug,
+      id: newId(),
+      recordId: record.id,
+      title: 'Back',
+      mutationId: newId(),
+    });
+    await m.client.notes.delete({ workspace: m.slug, noteId: note.id, mutationId: newId() });
+    await m.client.notes.restore({ workspace: m.slug, noteId: note.id, mutationId });
+    return [
+      { kind: 'records', record_ids: [record.id] },
+      { kind: 'notes', item_ids: [note.id] },
+      { kind: 'notes', item_ids: [note.id] },
+      { kind: 'notes', object_id: m.people.id, item_ids: [note.id], record_ids: [record.id], mutation_id: mutationId },
+    ];
+  },
   // Calendar sync (spec 0024): a sharing change names the connection's meetings and their records; so does a
   // disconnect, for the meetings it removed.
   'calendar.connections.update': async (m, mutationId) => {
@@ -944,6 +1031,11 @@ const WRITES_MADE: Readonly<Record<string, number>> = {
   'jobs.confirm': 2,
   'tasks.create': 2,
   'tasks.update': 2,
+  'tasks.delete': 2,
+  'tasks.restore': 3,
+  'notes.save': 2,
+  'notes.delete': 3,
+  'notes.restore': 4,
   'calendar.connections.update': 2,
   'calendar.connections.remove': 2,
   'bookingPages.update': 2,

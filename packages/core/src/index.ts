@@ -129,9 +129,21 @@ export {
   type UpdateViewInput,
 } from './views/manage.ts';
 export {
+  deleteNote,
+  getNote,
+  listNotes,
+  NOTE_READ_ONLY,
+  restoreNote,
+  saveNote,
+  UNKNOWN_NOTE,
+  type SaveNoteInput,
+} from './notes/notes.ts';
+export {
   createTask,
+  deleteTask,
   getTasks,
   listTasks,
+  restoreTask,
   updateTask,
   type CreateTaskInput,
   type ListTasksInput,

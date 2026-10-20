@@ -1,10 +1,12 @@
 // `maintenance.daily` (spec 0008, The kinds in this spec; milestone 3,
 // AC-112, AC-121): the daily cleanup in one workspace. The worker's cron
 // starts one a day per workspace (`daily.ts`), the system's, on the heavy
-// lane, never cancelled. A cursor job whose checkpoint walks five phases, one
+// lane, never cancelled. A cursor job whose checkpoint walks six phases, one
 // batch a step, each its own transaction under row level security:
 // 1. `purge`: records and list entries trashed more than 30 days ago, through
 //    the engine's `purgeBatch` (lists locked before records), 500 a batch.
+// 1b. `notes_tasks` (spec 0019, AC-445): notes, then tasks, deleted more
+//    than 30 days ago, removed for good, 500 a batch (a task takes its links).
 // 2. `expired`: jobs left `ready` past their hour end `cancelled` with
 //    `JOB_EXPIRED` (the queue row at the expiry normally does it first).
 // 3. `items`: the items of jobs that finished since the last cleanup, all
@@ -17,6 +19,7 @@
 import { sql } from 'drizzle-orm';
 import * as z from 'zod';
 import { purgeBatch, type RemovedCounts } from '../../engine/deletion.ts';
+import { RESTORE_WINDOW } from '../../engine/limits.ts';
 import type { WriteContext } from '../../engine/write.ts';
 import { defineKind, MAX_ATTEMPTS, type KindDefinition, type StepOutcome } from '../registry.ts';
 import { ENDINGS } from '../runner.ts';
@@ -36,7 +39,7 @@ export const MaintenanceParams = z.strictObject({ day: z.iso.date() });
 export type MaintenanceParams = z.infer<typeof MaintenanceParams>;
 
 /** The phases, in the order they run. */
-const PHASES = ['purge', 'expired', 'items', 'jobs', 'requeue'] as const;
+const PHASES = ['purge', 'notes_tasks', 'expired', 'items', 'jobs', 'requeue'] as const;
 
 /** How many items one `items` or `jobs` batch deletes at most, and how many finished jobs one `items` batch visits. */
 const ITEM_BATCH = 5_000;
@@ -53,6 +56,9 @@ const Totals = z.object({
   entries: Count,
   values: Count,
   links: Count,
+  // Added by spec 0019: a checkpoint stored before them reads as none removed yet.
+  notes: Count.default(0),
+  tasks: Count.default(0),
   expired: Count,
   items: Count,
   jobs: Count,
@@ -65,6 +71,8 @@ const NO_TOTALS: Totals = {
   entries: 0,
   values: 0,
   links: 0,
+  notes: 0,
+  tasks: 0,
   expired: 0,
   items: 0,
   jobs: 0,
@@ -115,6 +123,8 @@ const plus = (totals: Totals, more: Partial<Totals>): Totals => ({
   entries: totals.entries + (more.entries ?? 0),
   values: totals.values + (more.values ?? 0),
   links: totals.links + (more.links ?? 0),
+  notes: totals.notes + (more.notes ?? 0),
+  tasks: totals.tasks + (more.tasks ?? 0),
   expired: totals.expired + (more.expired ?? 0),
   items: totals.items + (more.items ?? 0),
   jobs: totals.jobs + (more.jobs ?? 0),
@@ -127,6 +137,34 @@ async function purge(context: WriteContext, at: Checkpoint, limit: number): Prom
   const totals = plus(at.totals, counts);
   const next = full ? { ...at, totals } : nextPhase(at, totals);
   return outcome(next, at, totals, counts.records + counts.entries);
+}
+
+/**
+ * Phase 1b (spec 0019, AC-445): deleted notes, then deleted tasks, past the
+ * restore window, `limit` a batch through their `*_trashed` indexes; a task
+ * takes its links with it. Nothing else names them, so no event is stored.
+ */
+async function notesAndTasks(context: WriteContext, at: Checkpoint, limit: number): Promise<StepOutcome> {
+  const { tx } = context;
+  const notes = await tx.execute(sql`
+    delete from notes where id in (
+      select id from notes where deleted_at < now() - ${RESTORE_WINDOW}::interval order by deleted_at limit ${limit}
+    )
+  `);
+  const noteCount = notes.rowCount ?? 0;
+  const tasks =
+    noteCount < limit
+      ? await tx.execute(sql`
+          delete from tasks where id in (
+            select id from tasks where deleted_at < now() - ${RESTORE_WINDOW}::interval order by deleted_at
+            limit ${limit - noteCount}
+          )
+        `)
+      : undefined;
+  const taskCount = tasks?.rowCount ?? 0;
+  const totals = plus(at.totals, { notes: noteCount, tasks: taskCount });
+  const full = noteCount + taskCount >= limit;
+  return outcome(full ? { ...at, totals } : nextPhase(at, totals), at, totals, noteCount + taskCount);
 }
 
 /** Phase 2: ends jobs left `ready` past their hour, as the queue row at their expiry would, with their events. */
@@ -333,6 +371,8 @@ export function maintenanceDaily(queue?: QueueRows): KindDefinition<MaintenanceP
       switch (at.phase) {
         case 'purge':
           return purge(context, at, limit);
+        case 'notes_tasks':
+          return notesAndTasks(context, at, limit);
         case 'expired':
           return expired(context, at, limit);
         case 'items':

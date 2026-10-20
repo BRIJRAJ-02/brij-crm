@@ -1,4 +1,4 @@
-import { createTask, getTasks, listTasks, updateTask } from '@crm/core';
+import { createTask, deleteTask, getTasks, listTasks, restoreTask, updateTask } from '@crm/core';
 import { withInputFields } from '../../errors.ts';
 import { commitWrite } from '../../hooks.ts';
 import { member } from '../../orpc.ts';
@@ -56,4 +56,15 @@ export const tasksRouter = member.tasks.router({
       throw withInputFields(error, { LIMIT_REACHED: 'addRecordIds' });
     }
   }),
+  delete: member.tasks.delete.handler(async ({ context, input }) => {
+    await commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      deleteTask(context.scope, { taskId: input.taskId }, hooks),
+    );
+    return { ok: true as const };
+  }),
+  restore: member.tasks.restore.handler(({ context, input }) =>
+    commitWrite(context, { mutationId: input.mutationId }, (hooks) =>
+      restoreTask(context.scope, { taskId: input.taskId }, hooks),
+    ),
+  ),
 });

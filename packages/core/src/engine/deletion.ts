@@ -383,9 +383,11 @@ async function removeRecords(tx: WorkspaceTx, recordIds: readonly string[]): Pro
     where e.record_id = any(${ids}) and r.workspace_id = e.workspace_id and r.id = e.record_id
     returning e.id::text, e.list_id::text, e.record_id::text, r.object_id::text
   `);
-  // Tasks keep living without the records removed for good; their links to them go first (spec 0019, AC-446),
-  // until spec 0022's purge registry takes this step over.
+  // Tasks keep living without the records removed for good; their links to them go first, and the records' notes
+  // (deleted ones too) go with them (spec 0019, AC-446), until spec 0022's purge registry takes this step over. Both
+  // foreign keys refuse a removal that skipped this.
   await tx.execute(sql`delete from task_records where record_id = any(${ids})`);
+  await tx.execute(sql`delete from notes where record_id = any(${ids})`);
   // Meetings keep living too (spec 0024): they leave the removed records' timelines, and an attendee who was one
   // of them is unknown again.
   await tx.execute(sql`delete from meeting_records where record_id = any(${ids})`);

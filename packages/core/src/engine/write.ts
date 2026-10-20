@@ -84,6 +84,17 @@ export interface TaskChange {
 }
 
 /**
+ * A note a write made or changed (spec 0019): the note and its record, so the
+ * outbox stores one `notes` row and that record's screens read its notes again.
+ */
+export interface NoteChange {
+  readonly noteId: string;
+  readonly recordId: string;
+  /** The record's object: the row names it, so the event reaches only those who may see the object. */
+  readonly objectId: string;
+}
+
+/**
  * A meeting a write synced, changed or removed (spec 0024): the meeting, and
  * every record it showed on before or after the write, so the outbox stores
  * one `meetings` row and each of those records' timelines reads again.
@@ -144,6 +155,8 @@ export interface Change {
   readonly views: readonly ViewChange[];
   /** Tasks the write made or changed (spec 0019), each with every record linked before or after. */
   readonly tasks: readonly TaskChange[];
+  /** Notes the write made or changed (spec 0019), each with its record. */
+  readonly notes: readonly NoteChange[];
   /** Meetings the write synced, changed or removed (spec 0024), each with every record shown on before or after. */
   readonly meetings: readonly MeetingChange[];
 }
@@ -288,6 +301,7 @@ const LIST_KEYS = [
   'jobs',
   'views',
   'tasks',
+  'notes',
   'meetings',
 ] as const satisfies readonly (keyof ChangeLists)[];
 
@@ -402,6 +416,7 @@ export async function runWrite<T>(
           jobs: [] as JobChange[],
           views: [] as ViewChange[],
           tasks: [] as TaskChange[],
+          notes: [] as NoteChange[],
           meetings: [] as MeetingChange[],
         };
         const context: WriteContext = {
@@ -431,6 +446,7 @@ export async function runWrite<T>(
             append(collected.jobs, part.jobs);
             append(collected.views, part.views);
             append(collected.tasks, part.tasks);
+            append(collected.notes, part.notes);
             append(collected.meetings, part.meetings);
           },
           async perRecord(step) {
@@ -474,6 +490,7 @@ export async function runWrite<T>(
           // One entry per view: a write that touches a view twice names it once.
           views: [...new Map(collected.views.map((view) => [view.viewId, view])).values()],
           tasks: [...collected.tasks],
+          notes: [...collected.notes],
           meetings: [...collected.meetings],
         };
         for (const hook of hooks) await hook(change, tx);

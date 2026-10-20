@@ -159,7 +159,15 @@ export const ACCESS_TABLE = {
   listTasks: { data: 'read' },
   createTask: { data: 'write' },
   updateTask: { data: 'write' },
+  deleteTask: { data: 'write' },
+  restoreTask: { data: 'write' },
   taskFacts: { system: true },
+  // Notes (spec 0019): a note follows its record: visible when the record is, changed with `write` on its object.
+  getNote: { data: 'read' },
+  listNotes: { data: 'read' },
+  saveNote: { data: 'write' },
+  deleteNote: { data: 'write' },
+  restoreNote: { data: 'write' },
   // Calendar sync (spec 0024): a member's own connections only; a record's meetings through the record's door.
   listCalendarConnections: { anyMember: true },
   connectCalendar: { ownConnection: true },

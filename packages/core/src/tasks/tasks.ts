@@ -507,6 +507,94 @@ export async function updateTask(
   return view;
 }
 
+/** A task's row for delete and restore: live or deleted, locked. */
+async function anyTaskRow(
+  tx: WorkspaceTx,
+  taskId: string,
+): Promise<(TaskRow & { readonly deleted: boolean }) | undefined> {
+  const result = await tx.execute<TaskRow & { deleted: boolean }>(sql`
+    select ${TASK_COLUMNS}, t.deleted_at is not null as deleted from tasks t
+    where t.id = ${taskId}::uuid
+    for update of t
+  `);
+  return result.rows[0];
+}
+
+/**
+ * Deletes a task (AC-445): hidden from every read at once, kept for 30 days
+ * for Undo and restore, then removed by the daily cleanup (with its links).
+ * Under the change rule (AC-447). One `tasks` outbox row naming its records.
+ */
+export async function deleteTask(
+  scope: EngineScope,
+  input: { readonly taskId: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<void> {
+  checkScope(scope);
+  if (!principalReaches(scope.access, 'read')) throw refuse('NOT_FOUND', UNKNOWN_TASK);
+  if (!principalReaches(scope.access, 'write')) throw refuse('FORBIDDEN', NOT_FOR_KEYS);
+  const taskId = checkId(input.taskId, UNKNOWN_TASK);
+  await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const row = await anyTaskRow(tx, taskId);
+      if (row === undefined || row.deleted) throw refuse('NOT_FOUND', UNKNOWN_TASK);
+      const seen = await linkedDisplays(tx, scope.access, row.record_ids);
+      if (!taskVisible(row, scope, seen)) throw refuse('NOT_FOUND', UNKNOWN_TASK);
+      if (!taskChangeable(row, scope, seen)) throw refuse('FORBIDDEN', TASK_READ_ONLY);
+      const { actor } = scope;
+      const memberId = actor.type === 'member' ? actor.id : null;
+      await tx.execute(sql`
+        update tasks set deleted_at = now(), deleted_by_type = ${actor.type}, deleted_by_id = ${actor.id}::uuid,
+          deleted_by_member_id = ${memberId}::uuid
+        where id = ${taskId}::uuid
+      `);
+      context.record({ tasks: [{ taskId, recordIds: row.record_ids }] });
+    },
+    hooks,
+  );
+}
+
+/**
+ * Brings a deleted task back exactly as it was (AC-445), its links with it;
+ * `NOT_FOUND` once the cleanup removed it. Under the change rule. A task that
+ * isn't deleted comes back as it is, with nothing written.
+ */
+export async function restoreTask(
+  scope: EngineScope,
+  input: { readonly taskId: string },
+  hooks: readonly AfterWrite[] = [],
+): Promise<TaskView> {
+  checkScope(scope);
+  if (!principalReaches(scope.access, 'read')) throw refuse('NOT_FOUND', UNKNOWN_TASK);
+  if (!principalReaches(scope.access, 'write')) throw refuse('FORBIDDEN', NOT_FOR_KEYS);
+  const taskId = checkId(input.taskId, UNKNOWN_TASK);
+  const { result } = await runWrite(
+    scope,
+    async (context) => {
+      const { tx } = context;
+      const row = await anyTaskRow(tx, taskId);
+      if (row === undefined) throw refuse('NOT_FOUND', UNKNOWN_TASK);
+      const seen = await linkedDisplays(tx, scope.access, row.record_ids);
+      if (!taskVisible(row, scope, seen)) throw refuse('NOT_FOUND', UNKNOWN_TASK);
+      if (!taskChangeable(row, scope, seen)) throw refuse('FORBIDDEN', TASK_READ_ONLY);
+      if (row.deleted) {
+        await tx.execute(sql`
+          update tasks set deleted_at = null, deleted_by_type = null, deleted_by_id = null, deleted_by_member_id = null
+          where id = ${taskId}::uuid
+        `);
+        context.record({ tasks: [{ taskId, recordIds: row.record_ids }] });
+      }
+      return readTaskViews(tx, scope, [taskId], true);
+    },
+    hooks,
+  );
+  const [view] = result;
+  if (view === undefined) throw new Error('A task just restored could not be read back.');
+  return view;
+}
+
 /**
  * Tasks by id (`tasks.get`, what a `tasks` event's ids are read back
  * through): up to 100, in the order asked, each live and visible to the
