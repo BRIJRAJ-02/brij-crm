@@ -1,0 +1,207 @@
+import { LONG_ANSWER_MAX, SHORT_ANSWER_MAX, toE164, type FormStrings, type PublicQuestion } from '@crm/contracts/forms';
+import { Checkbox } from '../atoms/Checkbox/Checkbox.tsx';
+import { Radio, RadioGroup } from '../atoms/Radio/Radio.tsx';
+import { Switch } from '../atoms/Switch/Switch.tsx';
+import { CountryPicker } from '../molecules/CountryPicker/CountryPicker.tsx';
+import { Field } from '../molecules/Field/Field.tsx';
+import { PhoneField, type PhoneFieldValue } from '../molecules/PhoneField/PhoneField.tsx';
+import { Select } from '../molecules/Select/Select.tsx';
+
+/** The control of a question to type in, or else its first control (a dropdown's trigger): a phone's number before its code. */
+export function focusQuestion(container: HTMLElement | null, key: string): void {
+  const question = container?.querySelector(`[data-question="${CSS.escape(key)}"]`);
+  const reachable = (selector: string) =>
+    [...(question?.querySelectorAll<HTMLElement>(selector) ?? [])].find(
+      (control) => control.closest('[aria-hidden="true"]') === null && control.tabIndex >= 0,
+    );
+  (reachable('input:not([type="hidden"]), textarea') ?? reachable('button'))?.focus();
+}
+
+/** A question's words: its label, or "Untitled question" while it has none. */
+export function labelOf(question: PublicQuestion, words: FormStrings): string {
+  return question.label.trim() === '' ? words.untitledQuestion : question.label;
+}
+
+/** "(optional)" after an optional question's label; a tick box or a yes or no is never marked, since blank is an answer. */
+export function asideOf(question: PublicQuestion, words: FormStrings): string | undefined {
+  const marked = question.required || question.answerType === 'checkbox' || question.answerType === 'yes_no';
+  return marked ? undefined : words.optional;
+}
+
+/** What a drawn answer sends: a phone as E.164 with its country, a file nothing yet, the rest as held. */
+export function answerOf(question: PublicQuestion, value: unknown): unknown {
+  if (question.answerType === 'file') return undefined;
+  if (question.answerType === 'phone') {
+    const phone = value as PhoneFieldValue | undefined;
+    if (phone === undefined || phone.national.trim() === '') return undefined;
+    return { number: toE164(phone.country, phone.national), country: phone.country };
+  }
+  if (question.answerType === 'checkbox' || question.answerType === 'yes_no') return value === true;
+  return value ?? '';
+}
+
+/** What the browser may fill a short text question with, guessed from its key: a name, a company, a job title. */
+function autoCompleteOf(key: string): string | undefined {
+  const name = key.toLowerCase();
+  if (name === 'name' || name === 'full_name' || name === 'your_name') return 'name';
+  if (name === 'first_name') return 'given-name';
+  if (name === 'last_name') return 'family-name';
+  if (name === 'company' || name === 'company_name' || name === 'organisation' || name === 'organization')
+    return 'organization';
+  if (name === 'job_title' || name === 'title' || name === 'role') return 'organization-title';
+  return undefined;
+}
+
+/** Props for Question. */
+export interface QuestionProps {
+  readonly question: PublicQuestion;
+  readonly words: FormStrings;
+  readonly value: unknown;
+  readonly error: string | undefined;
+  readonly countryGuess: string | undefined;
+  readonly countryNames: ReadonlyMap<string, string>;
+  readonly onChange: (value: unknown) => void;
+  /** Keeps the label for screen readers only, when a larger heading above already shows it (one at a time). */
+  readonly isLabelHidden?: boolean;
+}
+
+/** One question, drawn with the library's control for its answer type. */
+export function Question({
+  question,
+  words,
+  value,
+  error,
+  countryGuess,
+  countryNames,
+  onChange,
+  isLabelHidden = false,
+}: QuestionProps) {
+  const label = labelOf(question, words);
+  const aside = asideOf(question, words);
+  // Hidden behind a larger heading, the name still says it is optional.
+  const labelProps = isLabelHidden
+    ? { label: aside === undefined ? label : `${label} ${aside}`, isLabelHidden: true }
+    : { label, ...(aside === undefined ? {} : { labelAside: aside }) };
+  const placeholder = question.placeholder;
+  const errorProps = error === undefined ? {} : { error };
+  const text = typeof value === 'string' ? value : '';
+  switch (question.answerType) {
+    case 'long_text':
+      return (
+        <Field
+          {...labelProps}
+          name={question.key}
+          isMultiline
+          value={text}
+          onChange={onChange}
+          maxLength={LONG_ANSWER_MAX}
+          showCounter
+          {...(placeholder === undefined ? {} : { placeholder })}
+          {...errorProps}
+        />
+      );
+    case 'dropdown':
+      return (
+        <Select
+          {...labelProps}
+          items={(question.choices ?? []).map((choice) => ({ id: choice, label: choice }))}
+          placeholder={words.chooseOne}
+          value={text === '' ? null : text}
+          onChange={(id) => onChange(id ?? '')}
+          isClearable={!question.required}
+          isSearchable={(question.choices ?? []).length > 10}
+          {...errorProps}
+        />
+      );
+    case 'country': {
+      // The answer is the country's name, as people read it on a record; the picker holds its code.
+      const code = [...countryNames].find(([, name]) => name === text)?.[0] ?? null;
+      return (
+        <CountryPicker
+          {...labelProps}
+          value={code}
+          onChange={(next) => onChange(next === null ? '' : (countryNames.get(next) ?? ''))}
+          searchLabel={words.searchCountries}
+          placeholder={words.chooseOne}
+          {...(countryGuess === undefined ? {} : { guess: countryGuess })}
+          {...errorProps}
+        />
+      );
+    }
+    case 'choice':
+      return (
+        <RadioGroup
+          {...labelProps}
+          name={question.key}
+          value={text === '' ? null : text}
+          onChange={onChange}
+          {...errorProps}
+        >
+          {(question.choices ?? []).map((choice) => (
+            <Radio key={choice} value={choice}>
+              {choice}
+            </Radio>
+          ))}
+        </RadioGroup>
+      );
+    case 'checkbox':
+      return (
+        <Checkbox label={label} name={question.key} isSelected={value === true} onChange={onChange} {...errorProps} />
+      );
+    case 'yes_no':
+      return (
+        // The error is the switch's description, so a screen reader hears it with the switch.
+        <Switch
+          label={label}
+          name={question.key}
+          isSelected={value === true}
+          onChange={onChange}
+          {...(error === undefined ? {} : { description: error })}
+        />
+      );
+    case 'phone': {
+      const phone = (value as PhoneFieldValue | undefined) ?? { country: countryGuess ?? 'US', national: '' };
+      return (
+        <PhoneField
+          {...labelProps}
+          name={question.key}
+          value={phone}
+          onChange={onChange}
+          codeLabel={words.dialCode}
+          searchLabel={words.searchCountries}
+          {...(countryGuess === undefined ? {} : { guess: countryGuess })}
+          {...(placeholder === undefined ? {} : { placeholder })}
+          {...errorProps}
+        />
+      );
+    }
+    case 'file':
+      return <Field {...labelProps} name={question.key} placeholder={words.fileLater} isDisabled />;
+    default: {
+      const kind = question.answerType;
+      const autoComplete =
+        kind === 'email'
+          ? 'email'
+          : kind === 'website'
+            ? 'url'
+            : kind === 'short_text'
+              ? autoCompleteOf(question.key)
+              : undefined;
+      return (
+        <Field
+          {...labelProps}
+          name={question.key}
+          value={text}
+          onChange={onChange}
+          type={kind === 'email' ? 'email' : kind === 'website' ? 'url' : 'text'}
+          {...(kind === 'short_text' ? { maxLength: SHORT_ANSWER_MAX } : {})}
+          {...(kind === 'number' ? { inputMode: 'decimal' as const } : {})}
+          {...(kind === 'website' ? { inputMode: 'url' as const } : {})}
+          {...(autoComplete === undefined ? {} : { autoComplete })}
+          {...(placeholder === undefined ? {} : { placeholder })}
+          {...errorProps}
+        />
+      );
+    }
+  }
+}

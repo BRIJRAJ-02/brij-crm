@@ -1,0 +1,329 @@
+// The hosted form's state, shared by every layout (spec 0023,
+// 0023-form-design.md, The field checker): the answers, the field checker
+// (a question is checked when it loses focus with something in it, and every
+// question on submit; a shown error clears the moment it is fixed, but a new
+// one never appears while typing), the email typo hint, the send and what
+// follows it. No markup: Classic and the step layouts draw from it.
+import {
+  checkAnswers,
+  formStrings,
+  isBlank,
+  suggestEmail,
+  type FormStrings,
+  type PublicForm,
+  type PublicQuestion,
+  type SubmitNext,
+} from '@crm/contracts/forms';
+import { useEffect, useMemo, useRef, useState, type FocusEvent, type RefObject } from 'react';
+import { countriesIn } from '../lib/countries.ts';
+import { answerOf, focusQuestion } from './Question.tsx';
+
+/** Where the form is drawn: alone on its page, inside a site's iframe, or as the builder's inert preview. */
+export type HostedFormMode = 'page' | 'embed' | 'preview';
+
+/** What a visitor sent: answers by question key, the trap field, and how long they took. */
+export interface HostedSubmission {
+  readonly answers: Readonly<Record<string, unknown>>;
+  readonly trap: string;
+  readonly fillMs: number;
+  /** Counts up with each "Send another": one idempotency key per round, so a retry sends the same one. */
+  readonly round: number;
+}
+
+/** What sending answered, as the page's client words it. */
+export type HostedSubmitOutcome =
+  | { readonly kind: 'done'; readonly next: SubmitNext }
+  | { readonly kind: 'invalid'; readonly fields: Readonly<Record<string, string>> }
+  | { readonly kind: 'closed' }
+  | { readonly kind: 'limited' }
+  | { readonly kind: 'failed' }
+  | { readonly kind: 'offline' };
+
+/** What the state needs from the page. */
+export interface HostedFormSettings {
+  readonly form: PublicForm;
+  readonly mode: HostedFormMode;
+  readonly countryGuess?: string | undefined;
+  readonly onSubmit?: ((submission: HostedSubmission) => Promise<HostedSubmitOutcome>) | undefined;
+  readonly onRedirect?: ((url: string) => void) | undefined;
+  readonly now: () => number;
+  /** Told the keys a refusal named, before their errors show: a step layout goes to the first one's step. */
+  readonly onRefused?: (keys: readonly string[]) => void;
+}
+
+type Answers = Readonly<Record<string, unknown>>;
+type Messages = Readonly<Record<string, string>>;
+
+/** Which view the form shows. */
+export type HostedFormView =
+  { readonly kind: 'form' } | { readonly kind: 'thanks'; readonly text: string } | { readonly kind: 'closed' };
+
+/** The state and the handlers every layout draws with. */
+export interface HostedFormState {
+  readonly words: FormStrings;
+  readonly preview: boolean;
+  readonly countryNames: ReadonlyMap<string, string>;
+  readonly answers: Answers;
+  readonly errors: Messages;
+  /** The email typo hints shown, by key: the address the visitor probably meant. */
+  readonly hints: Messages;
+  /** The questions a submit found problems with, in order, while any remain: the error summary. */
+  readonly summary: readonly PublicQuestion[];
+  readonly alert: string;
+  readonly isSending: boolean;
+  readonly isClosed: boolean;
+  readonly view: HostedFormView;
+  readonly round: number;
+  readonly trap: string;
+  readonly setTrap: (value: string) => void;
+  readonly change: (question: PublicQuestion, value: unknown) => void;
+  /** The question's wrapper's blur: checks it once focus has left the whole question. */
+  readonly blur: (question: PublicQuestion, event: FocusEvent<HTMLElement>) => void;
+  /** Takes the suggested address and focuses the field again. */
+  readonly takeHint: (question: PublicQuestion) => void;
+  /** Checks `questions` (a step), shows their errors and focuses the first; true when they all pass. */
+  readonly checkStep: (questions: readonly PublicQuestion[]) => boolean;
+  /** Checks every question, then sends. */
+  readonly submit: () => void;
+  readonly sendAnother: () => void;
+  /** Moves focus to the first control of a question. */
+  readonly focus: (key: string) => void;
+}
+
+/** Where focus goes: the form's frame (its questions) and the view's heading. Kept apart from the state, which renders. */
+export interface HostedFormRefs {
+  readonly container: RefObject<HTMLDivElement | null>;
+  readonly heading: RefObject<HTMLHeadingElement | null>;
+}
+
+/** The answers a form starts with: the guessed country for a country question. */
+function firstAnswers(
+  form: PublicForm,
+  countryGuess: string | undefined,
+  countryNames: ReadonlyMap<string, string>,
+): Answers {
+  return Object.fromEntries(
+    form.questions.flatMap((question) =>
+      question.answerType === 'country' && countryGuess !== undefined && countryNames.has(countryGuess)
+        ? [[question.key, countryNames.get(countryGuess)]]
+        : [],
+    ),
+  );
+}
+
+/** One question's message for an answer, as the server would give it; undefined when it passes. */
+function messageOf(form: PublicForm, question: PublicQuestion, value: unknown): string | undefined {
+  const result = checkAnswers({ language: form.language, questions: [question] }, { [question.key]: value });
+  return result.ok ? undefined : result.fields[question.key];
+}
+
+/** Without `key`. */
+function without(messages: Messages, key: string): Messages {
+  if (messages[key] === undefined) return messages;
+  return Object.fromEntries(Object.entries(messages).filter(([each]) => each !== key));
+}
+
+/** True when focus moved into a list or dialog the question opened (a dropdown's options, the dial codes). */
+function intoItsPopover(next: EventTarget | null): boolean {
+  return next instanceof Element && next.closest('[role="listbox"], [role="dialog"]') !== null;
+}
+
+/**
+ * The hosted form's state (spec 0023, 0023-form-design.md): one hook, so
+ * every layout checks, hints, sends and thanks the same way, with every word
+ * from `formStrings` and every check from `checkAnswers`.
+ */
+export function useHostedForm({ form, mode, countryGuess, onSubmit, onRedirect, now, onRefused }: HostedFormSettings): {
+  readonly state: HostedFormState;
+  readonly refs: HostedFormRefs;
+} {
+  const words = formStrings(form.language);
+  const preview = mode === 'preview';
+  const countryNames = useMemo(
+    () => new Map(countriesIn(form.language).map((country) => [country.code, country.name])),
+    [form.language],
+  );
+  const [answers, setAnswers] = useState<Answers>(() => firstAnswers(form, countryGuess, countryNames));
+  const [errors, setErrors] = useState<Messages>({});
+  const [hints, setHints] = useState<Messages>({});
+  // Questions that have held an answer: a required one emptied again says so when it loses focus.
+  const [touched, setTouched] = useState<ReadonlySet<string>>(new Set());
+  const [isSubmitted, setSubmitted] = useState(false);
+  const [isSending, setSending] = useState(false);
+  const [alert, setAlert] = useState('');
+  const [trap, setTrap] = useState('');
+  const [view, setView] = useState<HostedFormView>({ kind: 'form' });
+  const [round, setRound] = useState(0);
+  const [startedAt, setStartedAt] = useState(now);
+  const [focusTarget, setFocusTarget] = useState<'heading' | undefined>(undefined);
+  const container = useRef<HTMLDivElement>(null);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const isClosed = form.status === 'paused' || view.kind === 'closed';
+
+  useEffect(() => {
+    if (focusTarget !== undefined && !preview) heading.current?.focus();
+  }, [focusTarget, view, preview]);
+
+  const focus = (key: string) => {
+    globalThis.requestAnimationFrame(() => focusQuestion(container.current, key));
+  };
+  const show = (fields: Messages, among: readonly PublicQuestion[]) => {
+    setErrors((current) => ({
+      ...Object.fromEntries(Object.entries(current).filter(([key]) => !among.some((each) => each.key === key))),
+      ...fields,
+    }));
+    const first = among.find((question) => fields[question.key] !== undefined);
+    if (first !== undefined) focus(first.key);
+  };
+  const checkAll = (questions: readonly PublicQuestion[]) =>
+    checkAnswers(
+      { language: form.language, questions },
+      Object.fromEntries(questions.map((question) => [question.key, answerOf(question, answers[question.key])])),
+    );
+
+  const change = (question: PublicQuestion, value: unknown) => {
+    setAnswers((current) => ({ ...current, [question.key]: value }));
+    setHints((current) => without(current, question.key));
+    if (!isBlank(answerOf(question, value)) && !touched.has(question.key)) {
+      setTouched((current) => new Set([...current, question.key]));
+    }
+    // A shown error clears the moment the answer passes; it never changes while typing.
+    if (errors[question.key] !== undefined && messageOf(form, question, answerOf(question, value)) === undefined) {
+      setErrors((current) => without(current, question.key));
+    }
+  };
+
+  const blur = (question: PublicQuestion, event: FocusEvent<HTMLElement>) => {
+    if (preview) return;
+    const next = event.relatedTarget;
+    if (next instanceof Node && event.currentTarget.contains(next)) return;
+    if (intoItsPopover(next)) return;
+    const value = answerOf(question, answers[question.key]);
+    if (isBlank(value) && !touched.has(question.key)) return;
+    const message = messageOf(form, question, value);
+    setErrors((current) =>
+      message === undefined ? without(current, question.key) : { ...current, [question.key]: message },
+    );
+    if (question.answerType === 'email' && message === undefined && typeof value === 'string') {
+      const suggestion = suggestEmail(value);
+      setHints((current) =>
+        suggestion === undefined ? without(current, question.key) : { ...current, [question.key]: suggestion },
+      );
+    }
+  };
+
+  const takeHint = (question: PublicQuestion) => {
+    const suggestion = hints[question.key];
+    if (suggestion === undefined) return;
+    setAnswers((current) => ({ ...current, [question.key]: suggestion }));
+    setHints((current) => without(current, question.key));
+    focus(question.key);
+  };
+
+  const thank = (text: string) => {
+    setView({ kind: 'thanks', text });
+    setFocusTarget('heading');
+  };
+
+  const checkStep = (questions: readonly PublicQuestion[]) => {
+    if (preview) return true;
+    const result = checkAll(questions);
+    if (result.ok) {
+      setErrors((current) =>
+        Object.fromEntries(Object.entries(current).filter(([key]) => !questions.some((each) => each.key === key))),
+      );
+      return true;
+    }
+    setSubmitted(true);
+    show(result.fields, questions);
+    return false;
+  };
+
+  const submit = () => {
+    if (preview || isSending) return;
+    setAlert('');
+    const result = checkAll(form.questions);
+    if (!result.ok) {
+      setSubmitted(true);
+      onRefused?.(Object.keys(result.fields));
+      show(result.fields, form.questions);
+      return;
+    }
+    // A page with nowhere to send (a draft opened to try) checks the answers, then thanks.
+    if (onSubmit === undefined) {
+      thank(form.thanks ?? '');
+      return;
+    }
+    const sending = Object.fromEntries(
+      form.questions.map((question) => [question.key, answerOf(question, answers[question.key])]),
+    );
+    setSending(true);
+    void onSubmit({ answers: sending, trap, fillMs: Math.max(0, now() - startedAt), round }).then((outcome) => {
+      setSending(false);
+      switch (outcome.kind) {
+        case 'done':
+          if (outcome.next.kind === 'redirect') onRedirect?.(outcome.next.url);
+          else thank(outcome.next.text);
+          return;
+        case 'invalid':
+          setSubmitted(true);
+          onRefused?.(Object.keys(outcome.fields));
+          show(outcome.fields, form.questions);
+          return;
+        case 'closed':
+          setView({ kind: 'closed' });
+          setFocusTarget('heading');
+          return;
+        case 'offline':
+          setAlert(words.offline);
+          return;
+        case 'limited':
+          setAlert(words.tooMany);
+          return;
+        case 'failed':
+          setAlert(words.failed);
+          return;
+      }
+    });
+  };
+
+  const sendAnother = () => {
+    setRound((count) => count + 1);
+    setAnswers(firstAnswers(form, countryGuess, countryNames));
+    setErrors({});
+    setHints({});
+    setTouched(new Set());
+    setSubmitted(false);
+    setTrap('');
+    setStartedAt(now());
+    setView({ kind: 'form' });
+    setFocusTarget('heading');
+  };
+
+  const summary = isSubmitted ? form.questions.filter((question) => errors[question.key] !== undefined) : [];
+
+  const state: HostedFormState = {
+    words,
+    preview,
+    countryNames,
+    answers,
+    errors,
+    hints,
+    summary,
+    alert,
+    isSending,
+    isClosed,
+    view,
+    round,
+    trap,
+    setTrap,
+    change,
+    blur,
+    takeHint,
+    checkStep,
+    submit,
+    sendAnother,
+    focus,
+  };
+  return { state, refs: { container, heading } };
+}
