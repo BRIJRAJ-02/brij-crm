@@ -6,7 +6,7 @@ import { GridList, GridListItem, useDragAndDrop } from 'react-aria-components';
 import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Switch } from '../../atoms/Switch/Switch.tsx';
-import { fieldTypeOf } from '../../fields/registry.ts';
+import { iconOf } from '../../fields/registry.ts';
 import type { FieldAttribute } from '../../fields/types.ts';
 import { memoIntl } from '../../lib/intl-memo.ts';
 import { reorder } from '../../lib/reorder.ts';
@@ -108,7 +108,7 @@ export function ViewSettings({ label, fields, onChange, isReadOnly = false }: Vi
               ) : (
                 <DragHandle label={strings.move(attribute.name)} />
               )}
-              <Icon name={fieldTypeOf(attribute.type).icon} size="sm" tone="muted" />
+              <Icon name={iconOf(attribute)} size="sm" tone="muted" />
               <span className={styles.name}>{attribute.name}</span>
               {field.isLocked === true ? (
                 <span className={styles.locked}>{strings.locked}</span>

@@ -167,6 +167,7 @@ describe('@crm/ui', () => {
       'fileIconName',
       'focusLater',
       'formatFileSize',
+      'iconOf',
       'isRefusal',
       'isSystemOnly',
       'loadPhoneLibrary',

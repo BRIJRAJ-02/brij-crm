@@ -8,7 +8,7 @@ import { Button } from '../../atoms/Button/Button.tsx';
 import { DragHandle } from '../../atoms/DragHandle/DragHandle.tsx';
 import { Icon } from '../../atoms/Icon/Icon.tsx';
 import { Path } from '../../atoms/Path/Path.tsx';
-import { fieldTypeOf } from '../../fields/registry.ts';
+import { iconOf } from '../../fields/registry.ts';
 import type { FieldAttribute } from '../../fields/types.ts';
 import { focusLater } from '../../lib/focus-later.ts';
 import { reorder } from '../../lib/reorder.ts';
@@ -140,7 +140,7 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
                 <>
                   <span className={styles.attribute}>
                     <Icon
-                      name={attribute === undefined ? 'circle-question-mark' : fieldTypeOf(attribute.type).icon}
+                      name={attribute === undefined ? 'circle-question-mark' : iconOf(attribute)}
                       size="sm"
                       tone="muted"
                     />
@@ -154,7 +154,7 @@ export function SortBuilder({ attributes, value, onChange, isReadOnly = false }:
                     <MenuTrigger>
                       <Button
                         variant="secondary"
-                        icon={attribute === undefined ? 'circle-question-mark' : fieldTypeOf(attribute.type).icon}
+                        icon={attribute === undefined ? 'circle-question-mark' : iconOf(attribute)}
                         iconRight="chevron-down"
                         isFullWidth
                         tooltipWhenCut
@@ -238,7 +238,7 @@ function AttributeMenu({
   return (
     <Menu label={strings.attributes} search={{ label: strings.searchAttributes }} onAction={onAction}>
       {attributes.map((attribute) => (
-        <MenuItem key={attribute.id} id={attribute.id} icon={fieldTypeOf(attribute.type).icon}>
+        <MenuItem key={attribute.id} id={attribute.id} icon={iconOf(attribute)}>
           {attribute.name}
         </MenuItem>
       ))}

@@ -20,6 +20,8 @@ export type Surface = 'cell' | 'panel' | 'card' | 'form' | 'filter' | 'preview';
 export interface FieldAttribute {
   readonly id: string;
   readonly name: string;
+  /** Its API name: a standard attribute whose type's icon says too little (a time zone is text) takes its own (`iconOf`). */
+  readonly apiSlug?: string;
   readonly type: AttributeType;
   readonly allowMultiple: boolean;
   /** A select's options or a status attribute's statuses, in order (a StatusOption has the same shape). */

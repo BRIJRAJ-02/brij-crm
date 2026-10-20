@@ -837,6 +837,8 @@ describe('members and attributes', () => {
     expect(toFieldAttribute(TITLE)).toEqual({
       id: TITLE.id,
       name: 'Job title',
+      // Its API name, from which a standard attribute takes its own icon.
+      apiSlug: TITLE.apiSlug,
       type: 'text',
       allowMultiple: false,
       isRequired: false,

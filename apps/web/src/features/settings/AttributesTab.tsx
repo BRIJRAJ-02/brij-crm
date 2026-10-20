@@ -10,7 +10,7 @@ import {
   Card,
   Disclosure,
   EmptyState,
-  fieldTypeOf,
+  iconOf,
   Icon,
   Menu,
   MenuItem,
@@ -76,11 +76,11 @@ const titlesOf = (ends: readonly AttributeDefinition[]) => {
   return second === undefined ? first.title : strings.both(first.title, second.title);
 };
 
-/** An attribute's type icon and title. */
+/** An attribute's icon (its type's, or a standard attribute's own) and title. */
 function AttributeName({ attribute }: { readonly attribute: AttributeDefinition }) {
   return (
     <>
-      <Icon name={fieldTypeOf(attribute.type).icon} size="sm" tone="muted" />
+      <Icon name={iconOf(attribute)} size="sm" tone="muted" />
       {attribute.title}
     </>
   );

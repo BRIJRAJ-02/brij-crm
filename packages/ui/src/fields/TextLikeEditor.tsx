@@ -69,6 +69,8 @@ export function TextLikeEditor<T extends AttributeType>({
       isMultiline={isMultiline}
       showCounter={isMultiline && maxLength !== undefined}
       isErrorFloating={surface === 'cell'}
+      // A record's value, never the viewer's own: no browser autofill, and no password manager taking it for a login.
+      autoComplete="off"
       onEscape={cancel}
       {...fieldProps}
       {...(inputMode === undefined ? {} : { inputMode })}

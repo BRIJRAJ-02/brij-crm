@@ -9,7 +9,7 @@ import { Icon } from '../../atoms/Icon/Icon.tsx';
 import type { IconName } from '../../atoms/Icon/icons.ts';
 import { Tooltip } from '../../atoms/Tooltip/Tooltip.tsx';
 import { TruncatedText } from '../../atoms/TruncatedText/TruncatedText.tsx';
-import { fieldTypeOf, readOnlyReasonOf } from '../../fields/registry.ts';
+import { fieldTypeOf, iconOf, readOnlyReasonOf } from '../../fields/registry.ts';
 import { Menu, MenuItem, MenuSeparator, MenuTrigger } from '../../molecules/Menu/Menu.tsx';
 import type { CellPlace } from './GridCell.tsx';
 import type { GridColumn } from './grid-columns.ts';
@@ -178,7 +178,7 @@ export function GridHeaderCell({
       style={{ '--col-width': `${String(place.width)}px`, '--col-offset': `${String(place.stickyOffset ?? 0)}px` }}
       {...mergeProps(pointerDrag, dropProps)}
     >
-      <Icon name={fieldTypeOf(attribute.type).icon} size="sm" tone="muted" />
+      <Icon name={iconOf(attribute)} size="sm" tone="muted" />
       <span className={styles.name}>
         {/* While resizing, the keys are on show, and the grid announces the width. */}
         <Tooltip content={strings.resizeHint} isTextTrigger isOpen={isResizing}>

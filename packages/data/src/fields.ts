@@ -26,6 +26,8 @@ const isUnlinkable = (definition: Pick<AttributeDefinition, 'type' | 'relationsh
 export interface FieldAttributeShape {
   readonly id: string;
   readonly name: string;
+  /** Its API name, from which a standard attribute takes its own icon (a time zone's globe). */
+  readonly apiSlug?: string;
   readonly type: AttributeType;
   readonly allowMultiple: boolean;
   readonly isRequired: boolean;
@@ -75,6 +77,7 @@ export function toFieldAttribute(definition: AttributeDefinition, readOnlyReason
   return {
     id: definition.id,
     name: definition.title,
+    apiSlug: definition.apiSlug,
     type: definition.type,
     allowMultiple: definition.isMulti,
     isRequired: definition.isRequired,

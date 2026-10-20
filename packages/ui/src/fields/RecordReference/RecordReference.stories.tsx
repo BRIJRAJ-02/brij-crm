@@ -6,7 +6,7 @@ import { FIELD_SAMPLES, SAMPLE_COMPANIES } from '../../workbench/field-samples.t
 import { SAMPLE_IDS } from '../../workbench/sample-ids.ts';
 import { AttributeEditor } from '../AttributeEditor.tsx';
 import { useState } from 'react';
-import { expect, fn, waitFor } from 'storybook/test';
+import { expect, fn, waitFor, within } from 'storybook/test';
 
 const sample = FIELD_SAMPLES.record_reference;
 
@@ -89,7 +89,8 @@ export const Editor: Story = {
     });
     await userEvent.click(globex);
     // Focus is back on the trigger at once, before the menu has faded (a key pressed meanwhile reaches the page).
-    await waitFor(() => expect(canvas.getByRole('button', { name: /Choose Company/ })).toHaveFocus(), { timeout: 100 });
+    // Holding one now, the field's button changes it.
+    await waitFor(() => expect(canvas.getByRole('button', { name: /Change Company/ })).toHaveFocus(), { timeout: 100 });
     // In a form the picker is named by its visible label.
     await expect(canvas.getByRole('group', { name: 'Company' })).toBeInTheDocument();
     await expect(args.onCommit).toHaveBeenCalledWith({
@@ -103,7 +104,8 @@ export const Editor: Story = {
 
 /**
  * A reference that may hold records of any object (a task's linked records,
- * spec 0019): a Select before the search picks which object it looks in.
+ * spec 0019): a Select in the picker's menu, above its search, picks which
+ * object it looks in, and focus goes back to the search.
  */
 export const ObjectSwitcher: Story = {
   args: { onCommit: fn() },
@@ -132,9 +134,31 @@ export const ObjectSwitcher: Story = {
       </Stage>
     );
   },
-  play: async ({ canvas }) => {
-    await expect(canvas.getByRole('button', { name: /Search in/ })).toHaveTextContent('Companies');
-    await expect(canvas.getByRole('button', { name: /Choose Records/ })).toBeInTheDocument();
+  play: async ({ canvas, userEvent }) => {
+    // One field: nothing beside it but its own box.
+    await expect(canvas.queryByRole('button', { name: /Search in/ })).toBeNull();
+    await userEvent.click(canvas.getByRole('button', { name: /Choose Records/ }));
+    const page = within(document.body);
+    const switcher = await page.findByRole('button', { name: /Search in/ });
+    await expect(switcher).toHaveTextContent('Companies');
+    await expect(document.activeElement).toHaveAttribute('type', 'search');
+    await userEvent.click(switcher);
+    await userEvent.click(await page.findByRole('option', { name: 'People' }));
+    await waitFor(() => expect(switcher).toHaveTextContent('People'));
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('type', 'search'));
+    await expect(document.activeElement).toHaveAttribute('placeholder', 'Search People…');
+    // By keyboard: Shift Tab from the search reaches the switcher; Esc in its list closes only the list.
+    await userEvent.keyboard('{Shift>}{Tab}{/Shift}');
+    await expect(switcher).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await page.findByRole('option', { name: 'Companies' });
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(page.queryByRole('option', { name: 'Companies' })).toBeNull());
+    await expect(document.querySelector('[role="menu"]')).not.toBeNull();
+    await userEvent.keyboard('{Enter}');
+    await userEvent.click(await page.findByRole('option', { name: 'Companies' }));
+    await waitFor(() => expect(document.activeElement).toHaveAttribute('placeholder', 'Search Companies…'));
+    await userEvent.keyboard('{Escape}');
   },
 };
 

@@ -22,6 +22,7 @@ import { selectType } from './Select/type.ts';
 import { statusType } from './Status/type.ts';
 import { textType } from './Text/type.ts';
 import { timestampType } from './Timestamp/type.ts';
+import type { IconName } from '../atoms/Icon/icons.ts';
 import { sizeToken } from '../lib/token-values.ts';
 import { strings } from './strings.ts';
 import type { AttributeTypeDef, ColumnWidth, FieldAttribute } from './types.ts';
@@ -50,6 +51,23 @@ export const FIELD_TYPES: { readonly [T in AttributeType]: AttributeTypeDef<T> }
   file: fileType,
   interaction: interactionType,
 };
+
+/**
+ * Standard attributes whose type's icon says too little: a time zone is
+ * text, an avatar or a logo a URL. Each keeps its type's display and editor;
+ * only the icon beside its name differs.
+ */
+const STANDARD_ICONS: Readonly<Partial<Record<string, IconName>>> = {
+  timezone: 'earth',
+  avatar: 'image',
+  logo: 'image',
+};
+
+/** The icon beside an attribute's name (a record's details, a column header, a picker): a standard attribute's own, else its type's. */
+export function iconOf(attribute: Pick<FieldAttribute, 'type' | 'apiSlug'>): IconName {
+  const own = attribute.apiSlug === undefined ? undefined : STANDARD_ICONS[attribute.apiSlug];
+  return own ?? fieldTypeOf(attribute.type).icon;
+}
 
 /** The registry entry for one type. */
 export function fieldTypeOf<T extends AttributeType>(type: T): AttributeTypeDef<T> {

@@ -1,9 +1,12 @@
-// The editor references share (members, records): the chosen ones as chips
-// you can remove, and a searchable menu that adds or replaces one. Results
-// come from the screen through a ListSource, so long lists stay outside.
+// The editor references share (members, records): one field, drawn like
+// Field's box, holding the chosen ones as chips you can remove, whose button
+// opens a searchable menu that adds or replaces one. Results come from the
+// screen through a ListSource, so long lists stay outside.
 import type { ActorDisplay, Hue, RecordRefDisplay } from '@crm/contracts/values';
 import { useEffect, useId, useRef, useState } from 'react';
+import { Button as AriaButton } from 'react-aria-components';
 import { Button } from '../atoms/Button/Button.tsx';
+import { Icon } from '../atoms/Icon/Icon.tsx';
 import { RecordChip } from '../atoms/RecordChip/RecordChip.tsx';
 import { arraySource, type ListSource } from '../lib/list-source.ts';
 import type { IconName } from '../atoms/Icon/icons.ts';
@@ -69,7 +72,7 @@ export interface ReferencePickerProps<D extends Reference> {
    * would be a panel on a panel.
    */
   readonly isInline?: boolean;
-  /** The objects the search can look in; a Select before the search picks one (spec 0019). Without it, nothing changes. */
+  /** The objects the search can look in; a Select in the menu, above its search, picks one (spec 0019). Without it, nothing changes. */
   readonly objects?: readonly SearchObject[];
   /** The object searched now, one of `objects`. */
   readonly objectId?: string;
@@ -87,7 +90,12 @@ export interface ReferencePickerProps<D extends Reference> {
   readonly describeResult?: (display: D) => ResultState | undefined;
 }
 
-/** Chosen references as removable chips, and a searchable menu to pick one. */
+/**
+ * One field: the chosen references as removable chips inside a box drawn
+ * like Field's, and a button filling the rest of it that opens a searchable
+ * menu to pick one (a click anywhere on the box opens it too). In a grid
+ * cell's popover, the chips over the search and its results, in place.
+ */
 export function ReferencePicker<D extends Reference>({
   name,
   chosen,
@@ -108,6 +116,7 @@ export function ReferencePicker<D extends Reference>({
   describeResult,
 }: ReferencePickerProps<D>) {
   const labelId = useId();
+  const errorId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState(startQuery ?? '');
@@ -162,12 +171,55 @@ export function ReferencePicker<D extends Reference>({
     if (!chosen.some((item) => keyOf(item) === keyOf(found))) onChange([...chosen, found]);
   };
   const isMe = (display: D) => pinned.some((item) => keyOf(item) === keyOf(display));
+  const boxRef = useRef<HTMLDivElement>(null);
+  const searchLabel = strings.search(name);
+  const hasObjects = objects !== undefined && objects.length > 0 && onObjectChange !== undefined;
+  const currentObject = hasObjects ? (objects.find((object) => object.id === objectId) ?? objects[0]) : undefined;
   const menu = (
     <Menu<D>
       label={name}
       isInline={isInline}
+      width="trigger"
+      {...(isInline ? {} : { anchorRef: boxRef })}
+      {...(hasObjects
+        ? {
+            // The object a record search looks in, inside the picker, above its search (spec 0019).
+            header: (
+              <>
+                <span>{strings.searchIn}</span>
+                <span className={styles.scope}>
+                  <Select
+                    label={strings.searchIn}
+                    isLabelHidden
+                    variant="inline"
+                    size="sm"
+                    items={objects.map((object) => ({
+                      id: object.id,
+                      label: object.label,
+                      ...(object.icon === undefined ? {} : { icon: object.icon }),
+                      ...(object.hue === undefined ? {} : { hue: object.hue }),
+                    }))}
+                    value={objectId ?? objects[0]?.id ?? null}
+                    onChange={(id) => {
+                      if (id === null) return;
+                      onObjectChange(id);
+                      // Back to the search, which now looks in the object chosen.
+                      focusLater(() =>
+                        [...document.querySelectorAll<HTMLInputElement>('input[type="search"]')].find(
+                          (input) => input.getAttribute('aria-label') === searchLabel,
+                        ),
+                      );
+                    }}
+                  />
+                </span>
+              </>
+            ),
+          }
+        : {})}
       search={{
-        label: strings.search(name),
+        label: searchLabel,
+        // The search says which object it looks in, as the header above it does.
+        ...(currentObject === undefined ? {} : { placeholder: strings.searchObject(currentObject.label) }),
         onSearch: setQuery,
         ...(startQuery === undefined ? {} : { defaultQuery: startQuery }),
       }}
@@ -181,81 +233,97 @@ export function ReferencePicker<D extends Reference>({
           children: display.name === '' ? strings.unknown : display.name,
           ...(isMe(display) ? { meta: strings.me } : {}),
           ...(description === undefined ? {} : { description }),
-          ...(state?.isLinked === true ? { isChecked: true } : {}),
+          // Linked already, or one of the chips: its check says picking it again changes nothing.
+          ...(state?.isLinked === true || chosen.some((item) => keyOf(item) === keyOf(display))
+            ? { isChecked: true }
+            : {}),
         };
       }}
       onAction={pick}
     />
   );
+  const chips =
+    chosen.length === 0 ? null : (
+      <ul className={styles.chosen} aria-label={name}>
+        {chosen.map((display) => (
+          <li key={keyOf(display)} className={styles.item}>
+            <RecordChip display={display} isFlat={!isInline} />
+            <Button
+              variant="ghost"
+              size={isInline ? 'md' : 'sm'}
+              icon="x"
+              label={strings.remove(display.name === '' ? name : display.name)}
+              onPress={() => {
+                const place = chosen.findIndex((item) => keyOf(item) === keyOf(display));
+                onChange(chosen.filter((item) => keyOf(item) !== keyOf(display)));
+                // The pressed button goes with its chip: focus moves to the next chip's, the one before, or the
+                // picker's button, never to the page or the dialog's Close.
+                focusLater(() => {
+                  const removes = rootRef.current?.querySelectorAll<HTMLButtonElement>('ul > li button');
+                  const list = removes === undefined ? [] : [...removes];
+                  return list[Math.min(place, list.length - 1)] ?? triggerRef.current;
+                });
+              }}
+            />
+          </li>
+        ))}
+      </ul>
+    );
+  const errorLine =
+    error === undefined ? null : (
+      <span id={errorId} className={styles.error} role="alert">
+        <Icon name="circle-alert" size="xs" />
+        {error}
+      </span>
+    );
+  if (isInline) {
+    return (
+      <div ref={rootRef} className={styles.root} data-inline="">
+        {chips}
+        {menu}
+        {errorLine}
+      </div>
+    );
+  }
+  const isEmpty = chosen.length === 0;
+  // The button's name: what pressing it does, since past the first pick it shows only its chevron.
+  const triggerLabel = isEmpty ? undefined : allowMultiple ? strings.addAnother : strings.change(name);
   return (
-    <div
-      ref={rootRef}
-      className={styles.root}
-      data-compact={(isCompact && !isInline) || undefined}
-      data-inline={isInline || undefined}
-      {...(showLabel ? { role: 'group', 'aria-labelledby': labelId } : {})}
-    >
+    <div ref={rootRef} className={styles.root} {...(showLabel ? { role: 'group', 'aria-labelledby': labelId } : {})}>
       {showLabel && (
         <span id={labelId} className={styles.label}>
           {name}
         </span>
       )}
-      {chosen.length > 0 && (
-        <ul className={styles.chosen} aria-label={name}>
-          {chosen.map((display) => (
-            <li key={keyOf(display)} className={styles.item}>
-              <RecordChip display={display} />
-              <Button
-                variant="ghost"
-                icon="x"
-                label={strings.remove(display.name === '' ? name : display.name)}
-                onPress={() => {
-                  const place = chosen.findIndex((item) => keyOf(item) === keyOf(display));
-                  onChange(chosen.filter((item) => keyOf(item) !== keyOf(display)));
-                  // The pressed button goes with its chip: focus moves to the next chip's, the one before, or the
-                  // picker's button, never to the page or the dialog's Close.
-                  focusLater(() => {
-                    const removes = rootRef.current?.querySelectorAll<HTMLButtonElement>('ul > li button');
-                    const list = removes === undefined ? [] : [...removes];
-                    return list[Math.min(place, list.length - 1)] ?? triggerRef.current;
-                  });
-                }}
-              />
-            </li>
-          ))}
-        </ul>
-      )}
-      {objects !== undefined && objects.length > 0 && onObjectChange !== undefined && (
-        <Select
-          label={strings.searchIn}
-          size="sm"
-          items={objects.map((object) => ({
-            id: object.id,
-            label: object.label,
-            ...(object.icon === undefined ? {} : { icon: object.icon }),
-            ...(object.hue === undefined ? {} : { hue: object.hue }),
-          }))}
-          value={objectId ?? objects[0]?.id ?? null}
-          onChange={(id) => {
-            if (id !== null) onObjectChange(id);
-          }}
-        />
-      )}
-      {isInline ? (
-        menu
-      ) : (
+      {/* The box is the field: a click on it (not on a chip's Remove) opens the search, as its button does by key. */}
+      {/* eslint-disable-next-line jsx-a11y-x/click-events-have-key-events, jsx-a11y-x/no-static-element-interactions -- the button inside is the keyboard path */}
+      <div
+        ref={boxRef}
+        className={styles.box}
+        data-size={isCompact ? 'sm' : 'md'}
+        data-invalid={error === undefined ? undefined : ''}
+        data-open={isOpen || undefined}
+        onClick={(event) => {
+          if (event.target instanceof Element && event.target.closest('button, a') !== null) return;
+          setOpen(true);
+        }}
+      >
+        {/* The field's own button comes first for Tab (a reflexive Enter never removes a chip); CSS draws it last. */}
         <MenuTrigger isOpen={isOpen} onOpenChange={setOpen}>
-          <Button variant={chosen.length === 0 ? 'secondary' : 'ghost'} icon="plus" ref={triggerRef}>
-            {chosen.length === 0 || !allowMultiple ? strings.choose(name) : strings.addAnother}
-          </Button>
+          <AriaButton
+            ref={triggerRef}
+            className={styles.trigger}
+            {...(triggerLabel === undefined ? {} : { 'aria-label': triggerLabel })}
+            {...(error === undefined ? {} : { 'aria-invalid': true, 'aria-describedby': errorId })}
+          >
+            {isEmpty && <span className={styles.placeholder}>{strings.choose(name)}</span>}
+            <Icon name="chevron-down" size="sm" tone="muted" />
+          </AriaButton>
           {menu}
         </MenuTrigger>
-      )}
-      {error !== undefined && (
-        <span className={styles.error} role="alert">
-          {error}
-        </span>
-      )}
+        {chips}
+      </div>
+      {errorLine}
     </div>
   );
 }

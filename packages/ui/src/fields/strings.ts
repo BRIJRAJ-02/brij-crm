@@ -17,8 +17,12 @@ export const strings = {
   choose: (name: string) => `Choose ${name}…`,
   search: (name: string) => `Search ${name}`,
   addAnother: 'Add another',
+  /** A picker's button once it holds one: picking replaces it. */
+  change: (name: string) => `Change ${name}`,
   /** The object switcher's label: which object a record search looks in. */
   searchIn: 'Search in',
+  /** The record search's placeholder once an object is chosen: "Search People…". */
+  searchObject: (label: string) => `Search ${label}…`,
   /** The add field of a list that already holds values. */
   addAnotherPlaceholder: 'Add another…',
   me: 'Me',

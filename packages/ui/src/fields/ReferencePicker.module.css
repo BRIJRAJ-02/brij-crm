@@ -1,25 +1,23 @@
-/* ReferencePicker: chosen chips with remove buttons, then the button that
-   opens the search menu. */
+/* ReferencePicker: one field. A box drawn like Field's (field-border at rest,
+   control-border under a pointer, accent-line and the focus halo while it
+   holds focus or its menu is open, danger when refused), size-input tall
+   (size-control on a compact surface), holding the chosen chips, each with
+   its small Remove, then the button that opens the search, filling the rest
+   of the box with the placeholder or only a chevron. In a grid cell's
+   popover: the chips over the search and its results, in place. */
 @layer components {
   .root {
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: var(--space-6);
+    gap: var(--space-4);
     min-inline-size: 0;
-  }
-
-  .root[data-compact] {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
   }
 
   /* In a grid cell's popover: the chips over the search and its results,
      which fill the panel. The panel takes its width from the cell, not from
      the chips in one line, so they wrap. */
   .root[data-inline] {
-    align-items: stretch;
+    gap: var(--space-6);
     contain: inline-size;
   }
 
@@ -30,24 +28,123 @@
     letter-spacing: var(--tracking-label);
   }
 
-  .chosen {
+  .box {
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-4);
+    align-items: center;
+    box-sizing: border-box;
+    min-block-size: var(--size-input);
+    padding-block: var(--space-2);
+    padding-inline: var(--space-4) var(--space-8);
+    border: var(--border-width-hairline) solid var(--field-border);
+    border-radius: var(--radius-md);
+    background: var(--surface-raised);
+    cursor: pointer;
+    transition: border-color var(--duration-hover) var(--ease-hover);
+  }
+
+  .box[data-size='sm'] {
+    min-block-size: var(--size-control);
+    padding-block: 0;
+  }
+
+  @media (hover: hover) and (pointer: fine) {
+    .box:hover:not(:has(.trigger[data-focus-visible]), [data-open]) {
+      border-color: var(--control-border);
+    }
+  }
+
+  /* The halo means the field itself has focus (its button, or its menu open), never a chip's Remove. */
+  .box:has(.trigger[data-focus-visible]),
+  .box[data-open] {
+    border-color: var(--accent-line);
+    box-shadow: var(--shadow-focus);
+  }
+
+  .box[data-invalid] {
+    border-color: var(--danger);
+  }
+
+  /* The object switcher in the menu's header, level with its "Search in". */
+  .scope {
+    display: flex;
+    align-items: center;
+    min-inline-size: 0;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+  }
+
+  .chosen {
+    display: contents;
     margin: 0;
     padding: 0;
     list-style: none;
   }
 
+  .root[data-inline] .chosen {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+  }
+
   .item {
     display: inline-flex;
     align-items: center;
+    gap: var(--space-2);
     min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+
+  /* The rest of the box: its placeholder at the start, its chevron at the end. */
+  .trigger {
+    display: flex;
+    flex: 1;
+    order: 1;
+    gap: var(--space-6);
+    align-items: center;
+    justify-content: flex-end;
+    align-self: stretch;
+    min-inline-size: var(--size-chip);
+    margin: 0;
+    padding: 0;
+    padding-inline-start: var(--space-4);
+    border: none;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text);
+    font: var(--text-body);
+    letter-spacing: var(--tracking-body);
+    text-align: start;
+    outline: none;
+  }
+
+  .placeholder {
+    flex: 1;
+    overflow: hidden;
+    color: var(--text-tertiary);
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 
   .error {
+    display: flex;
+    gap: var(--space-4);
+    align-items: center;
     color: var(--danger);
     font: var(--text-label);
     letter-spacing: var(--tracking-label);
+  }
+
+  @media (forced-colors: active) {
+    .box {
+      border-color: CanvasText;
+    }
+
+    .box:has(.trigger[data-focus-visible]),
+    .box[data-open] {
+      outline: var(--border-width-thick) solid Highlight;
+    }
   }
 }

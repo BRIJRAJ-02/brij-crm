@@ -99,6 +99,8 @@ export function ListEditor<T extends AttributeType, V>({
           setMessage(undefined);
         }}
         onSubmit={add}
+        // A record's value, never the viewer's own: no browser autofill, and no password manager taking it for a login.
+        autoComplete="off"
         onBlur={add}
         // Opened from a grid cell: keys go to the add field, never to a chip's link.
         // eslint-disable-next-line jsx-a11y-x/no-autofocus -- the editor was opened on purpose, from the cell

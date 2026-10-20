@@ -12,7 +12,7 @@ import { AttributeDisplay } from '../../fields/AttributeDisplay.tsx';
 import { AttributeEditor } from '../../fields/AttributeEditor.tsx';
 import { strings as interactionStrings } from '../../fields/Interaction/strings.ts';
 import { CountryPicker } from '../../fields/Location/CountryPicker.tsx';
-import { fieldTypeOf, isSystemOnly } from '../../fields/registry.ts';
+import { iconOf, isSystemOnly } from '../../fields/registry.ts';
 import { strings as fieldStrings } from '../../fields/strings.ts';
 import type { EditorProps, FieldAttribute } from '../../fields/types.ts';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
@@ -361,7 +361,7 @@ function ConditionRow({ builder, item, path, index }: ConditionRowProps) {
     onChange(updateItem(value, path, () => throughPath(relations, next)));
   };
   const operatorLabel = fieldStrings.operators[leaf.operator];
-  const icon: IconName = resolved === undefined ? 'circle-question-mark' : fieldTypeOf(resolved.attribute.type).icon;
+  const icon: IconName = resolved === undefined ? 'circle-question-mark' : iconOf(resolved.attribute);
   const names = resolved?.names ?? [leaf.attributeId];
   if (isReadOnly) {
     return (
@@ -726,7 +726,7 @@ function AttributeTrigger({ builder, current, label, onPick }: AttributeTriggerP
         {builder.attributes.map((attribute) => {
           const related = builder.relatedAttributes?.(attribute);
           const item = (
-            <MenuItem key={attribute.id} id={attribute.id} icon={fieldTypeOf(attribute.type).icon}>
+            <MenuItem key={attribute.id} id={attribute.id} icon={iconOf(attribute)}>
               {attribute.name}
             </MenuItem>
           );
@@ -737,11 +737,7 @@ function AttributeTrigger({ builder, current, label, onPick }: AttributeTriggerP
                 item,
                 <Menu key="related" label={attribute.name} onAction={pick}>
                   {related.map((each) => (
-                    <MenuItem
-                      key={each.id}
-                      id={`${attribute.id}${SEPARATOR}${each.id}`}
-                      icon={fieldTypeOf(each.type).icon}
-                    >
+                    <MenuItem key={each.id} id={`${attribute.id}${SEPARATOR}${each.id}`} icon={iconOf(each)}>
                       {each.name}
                     </MenuItem>
                   ))}
@@ -825,7 +821,7 @@ export function ConditionChip({
   const takesValue = operandOf(resolved.attribute, leaf.operator) !== 'none';
   return (
     <FilterChip
-      icon={fieldTypeOf(resolved.attribute.type).icon}
+      icon={iconOf(resolved.attribute)}
       attribute={resolved.names}
       operator={fieldStrings.operators[leaf.operator]}
       hasValue={takesValue}
