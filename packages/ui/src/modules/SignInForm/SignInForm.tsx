@@ -117,6 +117,7 @@ export function SignInForm({
                 <Button
                   size="lg"
                   isFullWidth="center"
+                  provider="google"
                   onPress={onGoogle}
                   isPending={status === 'google'}
                   isDisabled={isDisabled || status === 'sending'}
