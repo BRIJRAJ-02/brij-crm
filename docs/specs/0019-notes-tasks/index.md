@@ -338,6 +338,26 @@ Technical calls the spec left open, each the recommended default. The milestone'
 - **AC-450's numbers belong to milestone 2's seed script** (step 8); milestone 1 measured nothing at scale. The owner waived the million record seed.
 - **`tasks.flow.ts` joins CI's flows**; with `FLOW_NO_LIVE=1` it runs on a second stack whose origin the local Centrifugo doesn't admit, the second browser reloading where it would hear the change live.
 
+## Calls made building milestones 2 to 4 (pending owner confirmation)
+
+- **The notes migration is `0047_notes`** (renumbered at landing after calendar sync's 0044 and 0045).
+- **My tasks reads no count**: its screen shows none, and counting "All tasks" to 10,001 through the task rule cost more than the page. `tasks.list` answers `total` only on a record's first page.
+- **The task rule in SQL uses scalar subqueries per row**, never `exists` under an `or` (which became a hash of every link in the workspace); a link's record is found by its key.
+- **My tasks' two switches sit in SectionBar's new `bar` variant, not a Toolbar**: Toolbar's arrow key roving took the arrows from each SegmentedControl. A switch on the page draws the new list loading in place (the loader waits only on entering), so focus stays on the switch.
+- **"My tasks" sits in its own small sidebar group above Records**, kept minimal so the sidebar v2 lane's Tasks entry can replace it.
+- **Midnight**: a timer for the next local midnight (stepping over daylight saving changes), checked again when the tab is shown; TaskList's overdue marks follow the shared clock's 30 second tick.
+- **`NoteSummary` and `Note` carry `canChange`** (`write` on the record's object), as `TaskView` does.
+- **The note window's title is the note's title** ("New note" before any, "Untitled note" with none), with the record's chip as its context; the save state, Retry and the More menu (Copy link, Delete note) sit in its title bar.
+- **A notes outbox row names the record's object**, one row per object, so `filterEvent`'s object rule applies to it.
+- **The rich text document allowlists attributes per node and mark type** (what Tiptap 3.31.4 writes, link `title` included), refuses NUL, and a mention draws the member's name from the members store by id, never its stored label (security review).
+- **One link rule** (`safeLink`, `@crm/contracts/safe-link`): resolved against a fixed base, refusing control characters, read by `safeHref()` and the document schema alike (security review).
+- **A deleted task keeps its facts**, judged by the same rule, so its delete event names it with the writer's mutation id; a link to a record on an archived object counts as a link but shows nobody the task, like one in the trash (security review).
+- **A first save that loses the insert race to its own retry reads the note under its lock and carries on as a later save**; `overwrote` never names the writer's own earlier save (security review).
+- **Purging a record deletes its notes and task links in `removeRecords`, before the records**, until spec 0022's `PURGE_DEPENDENTS` exists; no `tasks` event is stored for the links it removes. A private task whose only link is purged becomes visible to everyone (no links at all): kept as built, an open owner decision.
+- **The daily cleanup's `notes_tasks` phase runs after the record purge**, notes then tasks, 500 a batch; a checkpoint stored before it reads its new totals as zero.
+- **Deleting a task or a note acts at once with "Undo" for 10 seconds**; the toast is dismissed by the screen after 10 seconds (library toasts with an action stay until dismissed).
+- **The side panel's Notes and Tasks tabs wait for spec 0017's milestone 4** (the panel), as milestone 1's did.
+
 ## Follow-up
 
 - [ ] **Spec 0009** (`/sync`): `eventFacts` gains `taskFacts(taskIds)` (each task's assignee, creator and linked record ids, loaded once per relay batch) for `tasks` rows, built in milestone 1 here; the task rule's open clause reads "no linked records at all (a link to a trashed record still counts)"; `removeMember`'s list of what it leaves to later features gains "tasks assigned to or created by the person stay, shown as Former member, until #23 reassigns them".

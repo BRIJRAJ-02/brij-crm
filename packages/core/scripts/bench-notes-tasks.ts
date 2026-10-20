@@ -179,7 +179,7 @@ const plans: { readonly name: string; readonly query: ReturnType<typeof sql> }[]
   },
   {
     name: 'My tasks, all, open (the task rule)',
-    query: sql`select t.id from tasks t where t.deleted_at is null and not t.is_done and (not exists (select 1 from task_records l where l.workspace_id = t.workspace_id and l.task_id = t.id) or t.assignee_member_id = ${me}::uuid or (t.created_by_type = 'member' and t.created_by_id = ${me}::uuid) or exists (select 1 from task_records l join records r on r.workspace_id = l.workspace_id and r.id = l.record_id join objects o on o.workspace_id = r.workspace_id and o.id = r.object_id where l.workspace_id = t.workspace_id and l.task_id = t.id and r.deleted_at is null and o.archived_at is null)) order by t.due_on asc nulls last, t.created_at, t.id limit 51`,
+    query: sql`select t.id from tasks t where t.deleted_at is null and not t.is_done and (t.assignee_member_id = ${me}::uuid or (t.created_by_type = 'member' and t.created_by_id = ${me}::uuid) or coalesce((select true from task_records l where l.workspace_id = t.workspace_id and l.task_id = t.id and coalesce((select r.deleted_at is null and o.archived_at is null from records r join objects o on o.workspace_id = r.workspace_id and o.id = r.object_id where r.workspace_id = l.workspace_id and r.id = l.record_id), false) limit 1), false) or (select count(*) from task_records l where l.workspace_id = t.workspace_id and l.task_id = t.id) = 0) order by t.due_on asc nulls last, t.created_at, t.id limit 51`,
   },
   {
     name: 'My tasks, created, done',
