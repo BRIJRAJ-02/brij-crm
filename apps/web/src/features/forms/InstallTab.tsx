@@ -3,7 +3,7 @@
 // Main task: copy the link, the embed snippet or a form of your own, and list the sites that may post.
 // Leaves out: analytics, and signing posts for a site (the site's server does that with the secret).
 import type { FormView } from '@crm/data';
-import { Button, Card, Code, CopyButton, Field, Switch } from '@crm/ui';
+import { Button, Card, Field, Switch } from '@crm/ui';
 import { useRouteContext } from '@tanstack/react-router';
 import { useState } from 'react';
 import { firstRefusal } from './refusals.ts';
@@ -52,34 +52,23 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
         title={strings.shareLink}
         description={strings.shareLinkText}
         actions={
-          <>
-            <CopyButton value={link} label={strings.copy} />
-            <Button
-              icon="external-link"
-              onPress={() => {
-                window.open(link, '_blank', 'noopener');
-              }}
-            >
-              {strings.openLink}
-            </Button>
-          </>
+          <Button
+            icon="external-link"
+            onPress={() => {
+              window.open(link, '_blank', 'noopener');
+            }}
+          >
+            {strings.openLink}
+          </Button>
         }
       >
-        <Code>{link}</Code>
+        <Field label={strings.link} variant="copy" copyLabel={strings.copyLink} value={link} />
       </Card>
-      <Card
-        title={strings.embed}
-        description={strings.embedText}
-        actions={<CopyButton value={embed} label={strings.copy} />}
-      >
-        <Field label={strings.embedSnippet} isMultiline isReadOnly value={embed} />
+      <Card title={strings.embed} description={strings.embedText}>
+        <Field label={strings.embedSnippet} variant="copy" isMultiline copyLabel={strings.copyEmbed} value={embed} />
       </Card>
-      <Card
-        title={strings.ownForm}
-        description={strings.ownFormText}
-        actions={<CopyButton value={own} label={strings.copy} />}
-      >
-        <Field label={strings.ownFormSnippet} isMultiline isReadOnly value={own} />
+      <Card title={strings.ownForm} description={strings.ownFormText}>
+        <Field label={strings.ownFormSnippet} variant="copy" isMultiline copyLabel={strings.copyFormHtml} value={own} />
         <Field
           label={strings.sites}
           hint={strings.sitesHint}
@@ -105,12 +94,7 @@ export function InstallTab({ slug, form, isReadOnly, onFormChange }: InstallTabP
           }}
         />
         {form.signingSecret !== undefined && (
-          <Field
-            label={strings.secret}
-            value={form.signingSecret}
-            isReadOnly
-            suffix={<CopyButton value={form.signingSecret} label={strings.copy} isIconOnly />}
-          />
+          <Field label={strings.secret} variant="copy" copyLabel={strings.copySecret} value={form.signingSecret} />
         )}
       </Card>
     </>

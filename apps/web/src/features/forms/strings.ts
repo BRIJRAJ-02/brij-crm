@@ -186,7 +186,11 @@ export const strings = {
   // Install tab
   shareLink: 'Share a link',
   shareLinkText: 'Send people a link. You do not need a website.',
-  copy: 'Copy',
+  link: 'Link',
+  copyLink: 'Copy link',
+  copyEmbed: 'Copy embed snippet',
+  copyFormHtml: 'Copy form HTML',
+  copySecret: 'Copy signing secret',
   copied: 'Copied.',
   openLink: 'Open',
   embed: 'Embed on your site',

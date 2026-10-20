@@ -169,15 +169,24 @@ export const Variants: Story = {
   ),
 };
 
-/** The copy variant: a public link to copy, read only but drawn live, with no lock. Focus selects the whole value. */
+/** The copy variant: a public link and an embed code to copy, read only but drawn live, with no lock. Focus selects the whole value. */
 export const Copy: Story = {
   render: () => (
     <Stage width="narrow">
       <Field label="Public link" variant="copy" value="https://timefix.app/b/intro-call" copyLabel="Copy link" />
+      <Field
+        label="Embed code"
+        variant="copy"
+        isMultiline
+        copyLabel="Copy embed code"
+        value={'<div data-crm-form="enquiry"></div>\n<script src="https://timefix.app/embed.js" async></script>'}
+      />
     </Stage>
   ),
   play: async ({ canvas, userEvent }) => {
     const input = canvas.getByRole<HTMLInputElement>('textbox', { name: 'Public link' });
+    await expect(canvas.getByRole('textbox', { name: 'Embed code' })).toHaveAttribute('readonly');
+    await expect(canvas.getByRole('button', { name: 'Copy embed code' })).toBeInTheDocument();
     await expect(input).toHaveAttribute('readonly');
     await expect(canvas.queryByRole('img', { name: 'Read only' })).toBeNull();
     await expect(canvas.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
