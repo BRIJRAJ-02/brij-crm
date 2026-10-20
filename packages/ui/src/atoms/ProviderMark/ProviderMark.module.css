@@ -17,6 +17,11 @@
     block-size: var(--size-icon-sm);
   }
 
+  .mark[data-size='lg'] {
+    inline-size: var(--size-chip);
+    block-size: var(--size-chip);
+  }
+
   .pair {
     display: inline-flex;
     flex: none;

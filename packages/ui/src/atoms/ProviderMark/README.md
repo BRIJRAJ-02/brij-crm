@@ -28,7 +28,7 @@ The files live in `src/assets/`, each the brand's published SVG unaltered: only 
 
 - Beside a label that names the brand (most uses, through Button's `provider`), the mark is decoration: `alt=""`.
 - Standing alone (a booking tagged by where it came from), pass `isLabelled`, and it reads as an image named for the brand ("Google Calendar").
-- `size`: `md` (`size-icon`, the default) in a 30px button or a row; `sm` (`size-icon-sm`) in a 26px button.
+- `size`: `md` (`size-icon`, the default) in a 30px button or a row; `sm` (`size-icon-sm`) in a 26px button; `lg` (`size-chip`, 20px) where a workspace's square avatar sits, for the Timefix mark at the top of the app's sidebar (F29: the product's logo heads the sidebar, as in timefix). Why a size: the sidebar's mark slot is the avatar's 20px, and a 16px mark beside a 20px row read as shrunken.
 - The same image shows in light and dark: the brands keep their colours on both, and the button or row around the mark follows our tokens. Only Timefix swaps its file by theme, by the rule the tokens follow (a saved choice on the root, else the OS).
 
 ## States

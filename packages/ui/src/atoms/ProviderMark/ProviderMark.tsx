@@ -10,8 +10,12 @@ import { strings } from './strings.ts';
 /** The brands a mark is drawn for: Google sign in, the calendars, and Timefix itself. */
 export type ProviderName = 'google' | 'google-calendar' | 'outlook' | 'apple-calendar' | 'timefix';
 
-/** `sm` (14px) beside a 26px button's label, `md` (16px, the default) beside a 30px one or in a row. */
-export type ProviderMarkSize = 'sm' | 'md';
+/**
+ * `sm` (14px) beside a 26px button's label, `md` (16px, the default) beside a
+ * 30px one or in a row, `lg` (20px, `size-chip`) where a workspace's square
+ * avatar would sit: the product's mark at the top of the sidebar.
+ */
+export type ProviderMarkSize = 'sm' | 'md' | 'lg';
 
 /** Props for ProviderMark. */
 export interface ProviderMarkProps {

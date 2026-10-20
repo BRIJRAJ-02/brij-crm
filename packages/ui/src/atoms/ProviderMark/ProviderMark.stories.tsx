@@ -66,3 +66,17 @@ export const InButtons: Story = {
     await expect(canvas.queryByRole('img')).toBeNull();
   },
 };
+
+/** `lg`, the 20px slot of a workspace's square avatar: the Timefix mark heading the app's sidebar. */
+export const Large: Story = {
+  render: () => (
+    <Stage>
+      <ProviderMark provider="timefix" size="lg" isLabelled />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const mark = canvas.getByRole('img', { name: 'Timefix' });
+    const shown = [...mark.querySelectorAll('img')].find((image) => image.getBoundingClientRect().width > 0);
+    await expect(shown?.getBoundingClientRect().width).toBe(20);
+  },
+};

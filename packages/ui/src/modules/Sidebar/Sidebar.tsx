@@ -64,6 +64,12 @@ interface WorkspaceHead {
   /** The workspace switcher: a `Menu` the name opens. Without it the name is plain. */
   readonly workspaceMenu?: ReactElement;
   /**
+   * In place of the workspace's letter avatar: the product's mark (Timefix's
+   * `ProviderMark` at `lg`), as timefix heads its sidebar. Decorative: the
+   * workspace's name stays the button's name.
+   */
+  readonly mark?: ReactNode;
+  /**
    * Something chosen from the workspace menu is under way (signing out): the
    * button shows a spinner in place of its chevron (of the mark, on the rail),
    * ignores presses and says it is busy. Name what is under way in `workspaceBusyLabel`.
@@ -84,6 +90,7 @@ interface HeadingHead {
   readonly workspace?: never;
   readonly isWorkspaceLoading?: never;
   readonly workspaceMenu?: never;
+  readonly mark?: never;
   readonly isWorkspaceBusy?: never;
   readonly workspaceBusyLabel?: never;
 }
@@ -229,16 +236,15 @@ function WorkspaceRow({
   workspaceMenu,
   isWorkspaceBusy = false,
   workspaceBusyLabel,
+  mark: brand,
   isCollapsed,
 }: WorkspaceHead & { readonly isCollapsed: boolean }) {
   const showWorkspaceSkeleton = useDelayedLoading(isWorkspaceLoading);
   const spinner = <Spinner {...(workspaceBusyLabel === undefined ? {} : { label: workspaceBusyLabel })} />;
   const mark =
-    isWorkspaceBusy && isCollapsed ? (
-      spinner
-    ) : (
-      <Avatar name={workspace} hue="ink" shape="square" size="sm" isDecorative />
-    );
+    isWorkspaceBusy && isCollapsed
+      ? spinner
+      : (brand ?? <Avatar name={workspace} hue="ink" shape="square" size="sm" isDecorative />);
   const name = isCollapsed ? (
     <VisuallyHidden>{workspace}</VisuallyHidden>
   ) : (

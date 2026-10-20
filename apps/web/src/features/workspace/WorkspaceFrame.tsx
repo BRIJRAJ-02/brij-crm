@@ -12,6 +12,7 @@ import {
   NavGroup,
   NavItem,
   NavSection,
+  ProviderMark,
   ShortcutHelp,
   Sidebar,
   type Toasts,
@@ -127,6 +128,8 @@ export function WorkspaceFrame({
         ) : (
           <Sidebar
             workspace={workspaceName ?? strings.product}
+            // Timefix's mark heads the sidebar, as in timefix (F29); the workspace's name stays the switcher's.
+            mark={<ProviderMark provider="timefix" size="lg" />}
             // Not known yet: skeletons, never the product's name as a stand in that then changes.
             isWorkspaceLoading={workspaceName === undefined && !isMissing}
             isWorkspaceBusy={isSigningOut}

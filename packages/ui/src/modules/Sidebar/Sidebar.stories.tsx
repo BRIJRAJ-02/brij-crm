@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 import { expect, fn, waitFor } from 'storybook/test';
 import { Menu, MenuItem } from '../../molecules/Menu/Menu.tsx';
+import { ProviderMark } from '../../atoms/ProviderMark/ProviderMark.tsx';
 import { ThemeSwitch } from '../../molecules/SegmentedControl/SegmentedControl.tsx';
 import { hoverFresh, shownTooltip } from '../../workbench/pointer.ts';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
@@ -318,12 +319,18 @@ export const SettingsCollapsed: Story = {
   },
 };
 
-/** A footer entry with its shortcut: Settings and ⌘, at the foot of the app's sidebar. */
+/** The app's sidebar as Timefix draws it: the Timefix mark heading the workspace switcher, and Settings with ⌘, at its foot. */
 export const FooterShortcut: Story = {
   render: () => (
     <Stage height="page">
       <Sidebar
         workspace="Brightline"
+        mark={<ProviderMark provider="timefix" size="lg" />}
+        workspaceMenu={
+          <Menu label="Workspaces">
+            <MenuItem id="brightline">Brightline</MenuItem>
+          </Menu>
+        }
         footer={
           <NavItem icon="settings" href="/settings" kbd="⌘,">
             Settings
@@ -341,5 +348,8 @@ export const FooterShortcut: Story = {
     const settings = canvas.getByRole('link', { name: 'Settings' });
     await expect(settings.querySelector('kbd')).not.toBeNull();
     await expect(settings.getAttribute('aria-keyshortcuts')).toMatch(/^(Meta|Control)\+,$/);
+    // The mark is decoration: the switcher keeps the workspace's name.
+    const switcher = canvas.getByRole('button', { name: 'Brightline, workspace menu' });
+    await expect(switcher.querySelector('img')).not.toBeNull();
   },
 };
