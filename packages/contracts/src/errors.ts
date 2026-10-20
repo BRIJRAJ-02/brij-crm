@@ -68,6 +68,7 @@ export const ERROR_MAP = {
   // Booking pages (spec 0025, AC-632): "That time was just taken", with fresh slots; a paused or deleted page.
   SLOT_TAKEN: CONFLICT,
   BOOKING_CLOSED: CONFLICT,
+  CALENDAR_NOT_CONNECTED: CONFLICT,
   PAYLOAD_TOO_LARGE: { status: 413 },
   ATTRIBUTE_VALUE_INVALID: UNPROCESSABLE,
   VALUE_REQUIRED: UNPROCESSABLE,

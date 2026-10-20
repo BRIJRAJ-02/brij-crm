@@ -200,10 +200,28 @@ export const CalendarEventItem = z.object({
 /** One of the reader's calendar events. */
 export type CalendarEventItem = z.infer<typeof CalendarEventItem>;
 
-/** A calendar read's answer: the bookings, the reader's other events and the time they closed in the range, each by start. */
+/**
+ * A span the reader's own calendar holds with nobody else invited (the
+ * owner's call, 20 October 2026): shown as Busy, by its time alone. Its
+ * title and everything else stay in the calendar.
+ */
+export const BusyTimeItem = z.object({
+  /** Which of the reader's connections holds it (the per connection filter). */
+  connectionId: z.uuid(),
+  startsAt: Timestamp,
+  endsAt: Timestamp,
+});
+/** A span the reader's own calendar holds with nobody else invited. */
+export type BusyTimeItem = z.infer<typeof BusyTimeItem>;
+
+/**
+ * A calendar read's answer: the bookings, the reader's other events, their
+ * busy times and the time they closed in the range, each by start.
+ */
 export const BookingsCalendarView = z.object({
   bookings: z.array(BookingListItem),
   events: z.array(CalendarEventItem),
+  busy: z.array(BusyTimeItem),
   blocks: z.array(TimeBlockOccurrence),
 });
 /** A calendar read's answer. */

@@ -35,6 +35,8 @@ export interface FakeCalendar {
   failNext(method: keyof CalendarProvider, code: CalendarErrorCode, times?: number): void;
   /** How often each method was called. */
   calls(method: keyof CalendarProvider): number;
+  /** Every channel `watch` opened, newest last: its address and the token it carries back on each notice. */
+  watched(): readonly { readonly channel: CalendarChannel; readonly address: string; readonly token: string }[];
   /** The tokens `exchangeCode` hands out for `account`, as the provider made them. */
   tokensFor(account: string, expiresAt?: string): CalendarTokens;
 }
@@ -53,6 +55,7 @@ export function createFakeCalendarProvider(options: { readonly now?: () => Date 
   const expiring = new Set<string>();
   const failures = new Map<string, { code: CalendarErrorCode; times: number }>();
   const counts = new Map<string, number>();
+  const channels: { readonly channel: CalendarChannel; readonly address: string; readonly token: string }[] = [];
   let version = 0;
   let round = 0;
 
@@ -188,13 +191,14 @@ export function createFakeCalendarProvider(options: { readonly now?: () => Date 
       fake.cancel(accountOf(tokens), eventId);
       return Promise.resolve();
     },
-    watch(_tokens, _calendarId, _address, token) {
+    watch(_tokens, _calendarId, address, token) {
       enter('watch');
       const channel: CalendarChannel = {
-        id: `fake-channel:${token.slice(0, 8)}`,
+        id: `fake-channel-${String(channels.length + 1)}`,
         resourceId: 'fake-resource',
         expiresAt: new Date(now().getTime() + 7 * 86_400_000).toISOString(),
       };
+      channels.push({ channel, address, token });
       return Promise.resolve(channel);
     },
     stopWatch() {
@@ -250,6 +254,7 @@ export function createFakeCalendarProvider(options: { readonly now?: () => Date 
       failures.set(method, { code, times });
     },
     calls: (method) => counts.get(method) ?? 0,
+    watched: () => [...channels],
     tokensFor,
   };
   return fake;

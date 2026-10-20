@@ -16,7 +16,9 @@ import { Hono, type Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { AUTH_BASE_PATH, AUTH_ROUTES, type Auth } from './auth/auth.ts';
 import { createCalendarRoutes } from './calendar/routes.ts';
-import { createCalendarServices, type CalendarServices } from './calendar/services.ts';
+import { createFreeDomains } from './calendar/free-domains.ts';
+import { createCalendarServices, GOOGLE_NOTIFY_PATH, type CalendarServices } from './calendar/services.ts';
+import { backgroundHooks } from './hooks.ts';
 import { createEdgeGuard } from './edge.ts';
 import { mountPublicForms } from './forms/public.ts';
 import { createRateLimiter, type RateLimiter } from './forms/limits.ts';
@@ -169,12 +171,21 @@ export function createApp({
   // Calendar sync (spec 0024): off unless switched on, so the app boots without its settings.
   const calendar =
     services.calendar ?? (env.calendar === undefined ? undefined : createCalendarServices(env.calendar, env.APP_URL));
+  // The free email domains, loaded once: calendar sync's own list when it is on.
+  const isFreeDomain = calendar?.isFreeDomain ?? createFreeDomains();
   // Where a booking's event goes: the host's connected calendar, or nowhere without sync (public and member routes).
   const booking =
     services.bookingCalendar ??
     (calendar === undefined
       ? NO_CALENDAR
-      : connectedCalendar({ db, providers: calendar.providers, tokenKey: calendar.tokenKey }));
+      : connectedCalendar({
+          db,
+          providers: calendar.providers,
+          tokenKey: calendar.tokenKey,
+          // The booking's meeting row stores its `meetings` event like any background write; the relay polls it.
+          hooks: backgroundHooks(),
+          isFreeDomain: calendar.isFreeDomain,
+        }));
   const calendarRoutes = createCalendarRoutes({
     // The same door the RPC's `member` base opens (orpc.ts), with the same rules.
     enter: (userId, slug) =>
@@ -183,6 +194,8 @@ export function createApp({
     wakeRelay,
     analytics,
     calendar,
+    db,
+    limiter: createMemoryLimiter(),
     appUrl: env.APP_URL,
     secure: env.APP_ENV !== 'local',
   });
@@ -230,6 +243,8 @@ export function createApp({
     if (SAFE_METHODS.has(c.req.method)) return next();
     // The forms' public writes check the hosted page's own origin; booking's stay on the app's (spec 0025).
     if (c.req.path.startsWith('/api/public/forms/')) return next();
+    // Google's change notices carry no Origin: the channel's own token is their key (spec 0024, milestone 2).
+    if (c.req.path === GOOGLE_NOTIFY_PATH && c.req.method === 'POST') return next();
     const origin = c.get('origin');
     if (!origin || !allowedOrigins.has(origin)) {
       return errorResponse('FORBIDDEN_ORIGIN', 'This request came from an origin the API does not accept.');
@@ -271,6 +286,7 @@ export function createApp({
         testFault,
         jobs,
         calendar,
+        isFreeDomain,
         bookingCalendar: booking,
         ...(rules === undefined ? {} : { rules }),
       },
@@ -281,6 +297,7 @@ export function createApp({
   // Connecting a calendar (spec 0024): the browser navigates both, so they are plain routes beside the RPC.
   app.get('/calendar/google/start', (c) => calendarRoutes.start(c));
   app.get('/calendar/google/callback', (c) => calendarRoutes.callback(c));
+  app.post('/calendar/google/notify', (c) => calendarRoutes.notify(c));
   mountPublicForms(app, {
     db,
     jobs,

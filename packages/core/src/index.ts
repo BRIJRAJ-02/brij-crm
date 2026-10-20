@@ -147,6 +147,25 @@ export {
 } from './calendar/connections.ts';
 export { listMeetingsForRecord, type ListMeetingsInput } from './calendar/meetings.ts';
 export {
+  addMeetingAttendee,
+  readCalendarSettings,
+  updateCalendarSettings,
+  type AddMeetingAttendeeInput,
+} from './calendar/people.ts';
+export { takeCalendarNotice, type CalendarNotice, type NoticeOutcome } from './calendar/push.ts';
+export {
+  calendarEventsScope,
+  createCalendarEvents,
+  FREE_BUSY_MAX_DAYS,
+  type CalendarEvents,
+  type CalendarEventsDeps,
+  type CreatedEvent,
+  type CreateEventInput,
+  type FreeBusyInput,
+  type MemberBusy,
+  type MoveEventInput,
+} from './calendar/events.ts';
+export {
   isProviderError,
   normaliseEmail,
   providerError,

@@ -3,6 +3,9 @@
 // that makes it single use and bound to the browser, the member check, every
 // result Settings › Calendar is told), the first sync queued, and the
 // `calendar.*` procedures behind the member door, with calendar sync off too.
+// Milestone 2: Google's change notice (no Origin, the channel's token its only
+// key), Add as person and the workspace's calendar settings.
+import { createHash } from 'node:crypto';
 import { newId } from '@crm/core';
 import { createFakeCalendarProvider } from '@crm/core/testing';
 import type { Database, IdentityStore } from '@crm/db';
@@ -243,5 +246,85 @@ describe('the calendar procedures (AC-599, AC-611)', () => {
     const m = await memberWithWorkspace(app);
     const error = await failure(() => rpcClient(app).calendar.connections.list({ workspace: m.slug }));
     expect(error.code).toBe('UNAUTHENTICATED');
+  });
+});
+
+describe('push notices and milestone 2 procedures (AC-602, AC-609)', () => {
+  /** Google's notice: a POST through the edge with no Origin and no session, its channel in the headers. */
+  const notice = (target: ReturnType<typeof signInApp>['app'], headers: Readonly<Record<string, string>>) =>
+    Promise.resolve(
+      target.fetch(
+        new Request(`${APP_URL}/api/calendar/google/notify`, {
+          method: 'POST',
+          headers: { [EDGE_HEADER]: TEST_EDGE_SECRET, ...headers },
+        }),
+      ),
+    );
+
+  it('queues a sync for a notice with the channel’s token, and answers every notice the same', async () => {
+    const m = await memberWithWorkspace(app);
+    const { state, browser } = await start(m.slug, m.cookie);
+    await navigate(
+      app,
+      `${GOOGLE_CALLBACK_PATH}?code=${encodeURIComponent('code:ada@acme.dev')}&state=${encodeURIComponent(state)}`,
+      `${m.cookie}; ${browser}`,
+    );
+    const [connection] = (await m.client.calendar.connections.list({ workspace: m.slug })).connections;
+    const id = connection?.id ?? '';
+    const secret = 'notice-secret';
+    await testQuery(
+      ownerUrl,
+      `update calendar_connections set status = 'connected', channel = jsonb_build_object('id', 'channel-1',
+        'resourceId', 'resource-1', 'expiresAt', (now() + interval '7 days')::text, 'tokenHash', $2::text)
+       where id = $1`,
+      [id, createHash('sha256').update(secret).digest('hex')],
+    );
+    const key = `crm-calendar:${m.workspace.id}:${id}`;
+    await testQuery(ownerUrl, `select graphile_worker.remove_job($1)`, [key]);
+    const queued = () => testQuery(ownerUrl, `select 1 from graphile_worker.jobs where key = $1`, [key]);
+
+    const before = pokes;
+    const forged = await notice(app, {
+      'x-goog-channel-id': 'channel-1',
+      'x-goog-channel-token': `${m.workspace.id}.${id}.wrong`,
+      'x-goog-resource-state': 'exists',
+    });
+    expect(forged.status).toBe(200);
+    expect(await forged.text()).toBe('');
+    expect(await queued()).toEqual([]);
+    expect(pokes).toBe(before);
+
+    const real = await notice(app, {
+      'x-goog-channel-id': 'channel-1',
+      'x-goog-channel-token': `${m.workspace.id}.${id}.${secret}`,
+      'x-goog-resource-state': 'exists',
+    });
+    expect(real.status).toBe(200);
+    expect(await queued()).toHaveLength(1);
+    expect(pokes).toBe(before + 1);
+    // With calendar sync off, a notice is answered and ignored.
+    expect((await notice(off, { 'x-goog-channel-id': 'channel-1' })).status).toBe(200);
+  });
+
+  it('reads and changes the workspace’s calendar settings, and adds only an attendee the member can see', async () => {
+    const m = await memberWithWorkspace(app);
+    expect(await m.client.calendar.settings.get({ workspace: m.slug })).toEqual({
+      createUnknownPeople: false,
+      canManage: true,
+    });
+    expect(
+      await m.client.calendar.settings.update({ workspace: m.slug, createUnknownPeople: true, mutationId: newId() }),
+    ).toEqual({ createUnknownPeople: true, canManage: true });
+    expect((await m.client.calendar.settings.get({ workspace: m.slug })).createUnknownPeople).toBe(true);
+    const missing = await failure(() =>
+      m.client.calendar.meetings.addAttendee({
+        workspace: m.slug,
+        recordId: newId(),
+        meetingId: newId(),
+        email: 'cy@northwind.com',
+        mutationId: newId(),
+      }),
+    );
+    expect(missing.code).toBe('NOT_FOUND');
   });
 });

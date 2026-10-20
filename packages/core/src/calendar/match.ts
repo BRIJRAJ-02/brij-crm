@@ -78,6 +78,23 @@ export function shouldSync(event: ProviderEvent): boolean {
   return event.attendees.some((attendee) => !attendee.isSelf && isAddress(normaliseEmail(attendee.email)));
 }
 
+/**
+ * Whether an event that is no meeting still makes the member busy (the
+ * owner's call, 20 October 2026: "yes blocked"): a timed event that holds
+ * nobody but the account, not cancelled, not declined, and not shown as
+ * free. Only its start and end are kept, as a Busy block on the Bookings
+ * week. An all day event with nobody else is left out, as AC-605 leaves it
+ * out of meetings: birthdays, holidays and out of office days are not
+ * blocks of time.
+ */
+export function isBusyOnly(event: ProviderEvent): boolean {
+  if (event.status === 'cancelled' || event.isFree === true) return false;
+  if (event.start === undefined || event.end === undefined || event.start.allDay) return false;
+  if (Date.parse(event.end.at) <= Date.parse(event.start.at)) return false;
+  if (event.attendees.some((attendee) => attendee.isSelf && attendee.response === 'declined')) return false;
+  return !event.attendees.some((attendee) => !attendee.isSelf && isAddress(normaliseEmail(attendee.email)));
+}
+
 /** An event's attendees, each once by email (the first listing wins), the organiser kept, at most `MAX_ATTENDEES`. */
 function uniqueAttendees(event: ProviderEvent): readonly ProviderAttendee[] {
   const seen = new Set<string>();
@@ -199,7 +216,7 @@ async function matchAttributes(
 }
 
 /** The live records holding each of `keys` in one of `attributeIds` (current values, through `values_text`). */
-async function holders(
+export async function holders(
   tx: WorkspaceTx,
   attributeIds: readonly string[],
   keys: readonly string[],
@@ -240,4 +257,19 @@ export async function readLookups(
     await holders(tx, attributes.domains, domains),
   ];
   return { members, people, companies, isFreeDomain };
+}
+
+/** The meetings among `ids` and the records each shows on now. */
+export async function recordsOf(
+  tx: WorkspaceTx,
+  ids: readonly string[],
+): Promise<ReadonlyMap<string, readonly string[]>> {
+  const found = new Map<string, string[]>();
+  if (ids.length === 0) return found;
+  const rows = await tx.execute<{ meeting_id: string; record_id: string }>(sql`
+    select meeting_id::text as meeting_id, record_id::text as record_id from meeting_records
+    where meeting_id = any(${uuidList(ids)})
+  `);
+  for (const row of rows.rows) found.set(row.meeting_id, [...(found.get(row.meeting_id) ?? []), row.record_id]);
+  return found;
 }

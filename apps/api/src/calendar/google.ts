@@ -50,7 +50,7 @@ const MAX_PAGES = 20;
 
 /** The event fields a sync reads: never the description or attachments (AC-613). */
 const EVENT_FIELDS =
-  'id,etag,status,iCalUID,summary,start,end,originalStartTime,location,hangoutLink,conferenceData(entryPoints(entryPointType,uri),conferenceSolution/key/type,createRequest/status),organizer(email,self),attendees(email,displayName,responseStatus,organizer,self),visibility';
+  'id,etag,status,iCalUID,summary,start,end,originalStartTime,location,hangoutLink,conferenceData(entryPoints(entryPointType,uri),conferenceSolution/key/type,createRequest/status),organizer(email,self),attendees(email,displayName,responseStatus,organizer,self),visibility,transparency';
 
 /** How long a call may take before it counts as Google not answering. */
 const CALL_TIMEOUT_MS = 20_000;
@@ -97,6 +97,7 @@ interface GoogleEvent {
     readonly self?: boolean;
   }[];
   readonly visibility?: string;
+  readonly transparency?: string;
 }
 
 interface GoogleTime {
@@ -161,6 +162,7 @@ export function eventOf(event: GoogleEvent): ProviderEvent | undefined {
     ...(event.organizer?.email === undefined ? {} : { organizerEmail: normaliseEmail(event.organizer.email) }),
     attendees,
     isPrivate: event.visibility === 'private' || event.visibility === 'confidential',
+    ...(event.transparency === 'transparent' ? { isFree: true } : {}),
     ...(event.etag === undefined ? {} : { etag: event.etag }),
   };
 }

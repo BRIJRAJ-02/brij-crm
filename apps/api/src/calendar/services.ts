@@ -6,10 +6,14 @@
 // answers `enabled: false`.
 import { deriveKey, type CalendarProvider, type TokenKey } from '@crm/core';
 import type { CalendarSettings } from '../env.ts';
+import { createFreeDomains } from './free-domains.ts';
 import { createGoogleCalendar, createGoogleGuest, type GuestCalendar } from './google.ts';
 
 /** The OAuth callback's path under the app's origin (the app and the API share one). */
 export const GOOGLE_CALLBACK_PATH = '/api/calendar/google/callback';
+
+/** Where Google posts push channels' change notices (milestone 2), under the same origin's API. */
+export const GOOGLE_NOTIFY_PATH = '/api/calendar/google/notify';
 
 /** Calendar sync's api services. */
 export interface CalendarServices {
@@ -24,6 +28,8 @@ export interface CalendarServices {
   readonly guest: GuestCalendar;
   /** Signs a guest connect's state: derived from the token key for that one purpose. */
   readonly guestStateKey: Buffer;
+  /** Whether an email domain is a free one (gmail.com), which names no company (AC-607, AC-609). */
+  readonly isFreeDomain: (domain: string) => boolean;
 }
 
 /** The api's calendar services from checked settings (the Google adapter on the real network unless given one). */
@@ -43,5 +49,6 @@ export function createCalendarServices(
     tokenKey: settings.tokenKey,
     stateKey: deriveKey(settings.tokenKey, 'calendar-oauth-state'),
     redirectUri: new URL(GOOGLE_CALLBACK_PATH, new URL(appUrl).origin).toString(),
+    isFreeDomain: createFreeDomains(),
   };
 }

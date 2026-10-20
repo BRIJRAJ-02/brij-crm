@@ -415,7 +415,14 @@ function fakeApi(overrides: Partial<Behaviour> = {}, auth: (path: string, body: 
         update: os.calendar.connections.update.handler(notServed),
         remove: os.calendar.connections.remove.handler(notServed),
       },
-      meetings: { forRecord: os.calendar.meetings.forRecord.handler(() => ({ items: [] })) },
+      meetings: {
+        forRecord: os.calendar.meetings.forRecord.handler(() => ({ items: [] })),
+        addAttendee: os.calendar.meetings.addAttendee.handler(notServed),
+      },
+      settings: {
+        get: os.calendar.settings.get.handler(() => ({ createUnknownPeople: false, canManage: false })),
+        update: os.calendar.settings.update.handler(notServed),
+      },
     },
     forms: {
       list: os.forms.list.handler(notServed),

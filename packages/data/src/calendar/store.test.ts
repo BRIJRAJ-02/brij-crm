@@ -6,7 +6,14 @@
 import type { CalendarConnections, CalendarConnectionView } from '@crm/contracts';
 import { describe, expect, it } from 'vitest';
 import type { Notice } from '../notice.ts';
-import { connectUrl, createCalendarStore, SYNC_POLL_FOR_MS, SYNC_POLL_MS, type CalendarApi } from './store.ts';
+import {
+  connectUrl,
+  createCalendarStore,
+  needsReconnect,
+  SYNC_POLL_FOR_MS,
+  SYNC_POLL_MS,
+  type CalendarApi,
+} from './store.ts';
 
 const WS = 'acme';
 const A = '0199a6f2-0000-7000-8000-0000000000a1';
@@ -54,6 +61,21 @@ function setup(lists: CalendarConnections[]) {
       return refuse
         ? Promise.reject(new Error('Refused.'))
         : Promise.resolve({ connectionId: input.connectionId, meetingsRemoved: 2 });
+    },
+    settings: () => Promise.resolve({ createUnknownPeople: false, canManage: true }),
+    updateSettings: (input) => {
+      sent.push(input);
+      return refuse
+        ? Promise.reject(Object.assign(new Error('Only workspace owners and admins can.'), { code: 'FORBIDDEN' }))
+        : Promise.resolve({ createUnknownPeople: input.createUnknownPeople, canManage: true });
+    },
+    addAttendee: (input) => {
+      sent.push(input);
+      return refuse
+        ? Promise.reject(
+            Object.assign(new Error('That attendee can’t be added as a person.'), { code: 'CONFIG_INVALID' }),
+          )
+        : Promise.resolve({ recordId: '0199a6f2-0000-7000-8000-0000000000c1' });
     },
   };
   const store = createCalendarStore({
@@ -161,5 +183,39 @@ describe('the calendar store (spec 0024)', () => {
     stuck.timers[0]?.run();
     await flush();
     expect(stuck.timers).toHaveLength(1);
+  });
+});
+
+describe('milestone 2: the workspace setting and Add as person', () => {
+  it('turns making people on at once, and puts it back with a toast when refused', async () => {
+    const { store, notices, refuse } = setup([]);
+    const held = store.settings(WS);
+    held.retain();
+    await flush();
+    expect(held.getSnapshot()).toEqual({ status: 'ready', createUnknownPeople: false, canManage: true });
+    const turning = store.setCreateUnknownPeople(WS, true);
+    expect(held.getSnapshot()).toMatchObject({ createUnknownPeople: true });
+    expect(await turning).toBe(true);
+    refuse(true);
+    const refused = store.setCreateUnknownPeople(WS, false);
+    expect(held.getSnapshot()).toMatchObject({ createUnknownPeople: false });
+    expect(await refused).toBe(false);
+    expect(held.getSnapshot()).toMatchObject({ createUnknownPeople: true });
+    expect(notices).toHaveLength(1);
+  });
+
+  it('adds an attendee and answers the person, or says why not', async () => {
+    const { store, notices, refuse, sent } = setup([]);
+    const input = { recordId: A, meetingId: B, email: 'cy@northwind.com' };
+    expect(await store.addAttendee(WS, input)).toBe('0199a6f2-0000-7000-8000-0000000000c1');
+    expect(sent.at(-1)).toMatchObject({ workspace: WS, ...input });
+    refuse(true);
+    expect(await store.addAttendee(WS, input)).toBeUndefined();
+    expect(notices.at(-1)).toMatchObject({ tone: 'danger' });
+  });
+
+  it('says which connections need their member', () => {
+    const statuses = ['syncing', 'connected', 'expired', 'failed', 'revoked'] as const;
+    expect(statuses.map((status) => needsReconnect({ status }))).toEqual([false, false, true, true, true]);
   });
 });

@@ -76,6 +76,8 @@ export interface ProviderEvent {
   readonly attendees: readonly ProviderAttendee[];
   /** Marked private in the calendar itself (AC-612). */
   readonly isPrivate: boolean;
+  /** Shown as free in the calendar (Google's `transparency: transparent`): it never makes the member busy. */
+  readonly isFree?: boolean;
   readonly etag?: string;
 }
 

@@ -25,7 +25,7 @@ const booking = (id: string): BookingListItem => ({
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 const noList = () => Promise.resolve([]);
-const noCalendar = () => Promise.resolve({ bookings: [], events: [], blocks: [] });
+const noCalendar = () => Promise.resolve({ bookings: [], events: [], busy: [], blocks: [] });
 
 describe('the bookings store', () => {
   it('reads when held, again on return, keeps the list on a later failure, and stops listening when let go', async () => {
@@ -82,7 +82,7 @@ describe('the bookings store', () => {
   });
 
   it('holds a range with its bookings and events, and reloadAll reads every held one of the workspace again', async () => {
-    const calendar = vi.fn(() => Promise.resolve({ bookings: [booking('a')], events: [], blocks: [] }));
+    const calendar = vi.fn(() => Promise.resolve({ bookings: [booking('a')], events: [], busy: [], blocks: [] }));
     const listAll = vi.fn(() => Promise.resolve([booking('a')]));
     const store = createBookingsStore({ api: { listAll, calendar }, onReturn: () => () => undefined });
     const week = store.calendar('acme', '2026-11-02T00:00:00.000Z', '2026-11-09T00:00:00.000Z');

@@ -28,6 +28,7 @@ import {
 import { backgroundHooks } from './hooks.ts';
 import { createFreeDomains } from './calendar/free-domains.ts';
 import { createGoogleCalendar } from './calendar/google.ts';
+import { GOOGLE_NOTIFY_PATH } from './calendar/services.ts';
 import { runnerTasks, startJobRunners } from './jobs/graphile.ts';
 import { createLifecycle, type AwakeWorker, type Lifecycle } from './jobs/lifecycle.ts';
 import { createJobRunner } from './jobs/runner.ts';
@@ -183,6 +184,10 @@ const calendarSync =
           systemScope: (workspaceId: string) => systemScope(db, workspaceId),
           hooks: backgroundHooks(),
           isFreeDomain: createFreeDomains(),
+          // Push (spec 0024, milestone 2): channels open only where Google can reach us; locally the poll alone runs.
+          ...(settings.webhookOrigin === undefined
+            ? {}
+            : { pushAddress: new URL(GOOGLE_NOTIFY_PATH, settings.webhookOrigin).toString() }),
         };
         return async (input: { readonly workspaceId: string; readonly connectionId: string }) => {
           const outcome = await syncConnection(deps, input);

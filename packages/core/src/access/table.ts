@@ -167,6 +167,11 @@ export const ACCESS_TABLE = {
   removeCalendarConnection: { ownConnection: true },
   listMeetingsForRecord: { data: 'read' },
   meetingFacts: { system: true },
+  // Milestone 2: Add as person creates a person through the door (write on People, the record's own read first);
+  // the workspace's calendar settings are read by any member and changed by owners and admins.
+  addMeetingAttendee: { data: 'write' },
+  readCalendarSettings: { anyMember: true },
+  updateCalendarSettings: { permission: 'workspace.manage' },
   // Forms (spec 0023): any member reads the forms on objects they can see; changing one, or acting on a
   // submission, needs forms.manage. A submission reads through its main record. The public form and submit take
   // only the scope the form's own public key made.

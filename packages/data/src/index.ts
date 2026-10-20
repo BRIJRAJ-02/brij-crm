@@ -55,7 +55,7 @@ import {
 import type { FetchLike } from './fetch.ts';
 import { createJobsStore, type JobsScope, type JobsView, type TestJobSettings } from './jobs/store.ts';
 import { createBookingsStore, type BookingsCalendarHeld, type BookingsView } from './bookings/store.ts';
-import { connectUrl, createCalendarStore, type CalendarView } from './calendar/store.ts';
+import { connectUrl, createCalendarStore, type CalendarSettingsHeld, type CalendarView } from './calendar/store.ts';
 import {
   createCaptureList,
   dropItem,
@@ -188,9 +188,9 @@ export type {
   MeetingAttendeeShape,
 } from './activity/feed.ts';
 export type { BookingsCalendarHeld, BookingsCalendarState, BookingsState, BookingsView } from './bookings/store.ts';
-export type { CalendarState, CalendarView } from './calendar/store.ts';
+export type { CalendarSettingsHeld, CalendarSettingsState, CalendarState, CalendarView } from './calendar/store.ts';
 export type { CaptureListState, CaptureListView } from './captures/list.ts';
-export { connectUrl } from './calendar/store.ts';
+export { connectUrl, needsReconnect } from './calendar/store.ts';
 export type { Hue, ObjectIcon } from '@crm/contracts/values';
 // The API name rule and the new object's defaults (spec 0012): plain modules with no Zod, so the dialogs share
 // the server's own functions without loading the schema library.
@@ -1191,6 +1191,10 @@ export function createDataLayer({
         beforeRead(input.workspace).then(() => call((options) => api.calendar.connections.list(input, options))),
       update: (input) => call((options) => api.calendar.connections.update(input, options)),
       remove: (input) => call((options) => api.calendar.connections.remove(input, options)),
+      settings: (input) =>
+        beforeRead(input.workspace).then(() => call((options) => api.calendar.settings.get(input, options))),
+      updateSettings: (input) => call((options) => api.calendar.settings.update(input, options)),
+      addAttendee: (input) => call((options) => api.calendar.meetings.addAttendee(input, options)),
     },
     mintId,
     notify,
@@ -2583,6 +2587,20 @@ export function createDataLayer({
       remove: (workspace: string, connectionId: string): Promise<boolean> => calendar.remove(workspace, connectionId),
       /** Where the browser goes to connect a Google calendar (the API sends it on to Google's consent). */
       connectUrl: (workspace: string): string => connectUrl(workspace),
+      /** The workspace's calendar settings (spec 0024, AC-609), read when a screen first holds them. */
+      settings: (workspace: string): CalendarSettingsHeld => calendar.settings(workspace),
+      /** Makes people for unknown attendees, or stops (owners and admins): at once, put back with a toast if refused. */
+      setCreateUnknownPeople: (workspace: string, on: boolean): Promise<boolean> =>
+        calendar.setCreateUnknownPeople(workspace, on),
+      /**
+       * Adds a meeting's unknown attendee as a person (AC-609): answers the
+       * new person's id, or undefined after a toast saying why not. Timelines
+       * update through the `meetings` event.
+       */
+      addAttendee: (
+        workspace: string,
+        input: { readonly recordId: string; readonly meetingId: string; readonly email: string },
+      ): Promise<string | undefined> => calendar.addAttendee(workspace, input),
     },
     forms: {
       /**

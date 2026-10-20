@@ -2,7 +2,9 @@
 // from milestone 4), and the meetings in it sync onto the timelines of the
 // people and companies they're with. `calendar.connections.*` lists and
 // changes the member's own connections (connecting is the OAuth redirect, not
-// a procedure); `calendar.meetings.forRecord` pages a record's meetings. A
+// a procedure); `calendar.meetings.forRecord` pages a record's meetings, and
+// `.addAttendee` adds an unknown attendee as a person; `calendar.settings`
+// reads and changes the workspace's calendar settings. A
 // connection's tokens never leave the server: no shape here carries them.
 import { oc } from '@orpc/contract';
 import * as z from 'zod';
@@ -207,6 +209,49 @@ export const MeetingCursor = z.strictObject({
 /** Where a page of meetings ends. */
 export type MeetingCursor = z.infer<typeof MeetingCursor>;
 
+/**
+ * Adding a meeting's attendee the CRM doesn't know as a person (AC-609): the
+ * meeting on a record the reader sees, and the attendee by their email.
+ */
+export const AddMeetingAttendeeInput = WorkspaceScoped.extend({
+  recordId: z.uuid(),
+  meetingId: z.uuid(),
+  email: z.string().trim().min(3).max(320),
+  mutationId: z.uuid(),
+});
+/** Adding a meeting's attendee as a person. */
+export type AddMeetingAttendeeInput = z.infer<typeof AddMeetingAttendeeInput>;
+
+/** The person an Add as person made. */
+export const AddedMeetingAttendee = z.object({ recordId: z.uuid() });
+/** The person an Add as person made. */
+export type AddedMeetingAttendee = z.infer<typeof AddedMeetingAttendee>;
+
+/**
+ * The workspace's calendar settings (AC-609): whether the sync makes people
+ * for unknown external attendees (off by default), and whether the reader
+ * may change it (owners and admins).
+ */
+export const CalendarSettingsView = z.object({
+  createUnknownPeople: z.boolean(),
+  canManage: z.boolean(),
+});
+/** The workspace's calendar settings. */
+export type CalendarSettingsView = z.infer<typeof CalendarSettingsView>;
+
+/** The workspace's calendar settings. */
+export const GetCalendarSettingsInput = WorkspaceScoped;
+/** The workspace's calendar settings. */
+export type GetCalendarSettingsInput = z.infer<typeof GetCalendarSettingsInput>;
+
+/** A change to the workspace's calendar settings (owners and admins). */
+export const UpdateCalendarSettingsInput = WorkspaceScoped.extend({
+  createUnknownPeople: z.boolean(),
+  mutationId: z.uuid(),
+});
+/** A change to the workspace's calendar settings. */
+export type UpdateCalendarSettingsInput = z.infer<typeof UpdateCalendarSettingsInput>;
+
 /** The calendar procedures (spec 0024). Every one takes `WorkspaceScoped` input and is served behind the member door. */
 export const calendarContract = {
   connections: {
@@ -216,5 +261,10 @@ export const calendarContract = {
   },
   meetings: {
     forRecord: oc.input(MeetingsForRecordInput).output(MeetingPage),
+    addAttendee: oc.input(AddMeetingAttendeeInput).output(AddedMeetingAttendee),
+  },
+  settings: {
+    get: oc.input(GetCalendarSettingsInput).output(CalendarSettingsView),
+    update: oc.input(UpdateCalendarSettingsInput).output(CalendarSettingsView),
   },
 };

@@ -16,19 +16,31 @@
 // sends the member back to Settings › Calendar with what happened in
 // `?calendar=`: `connected`, `denied`, `scope` (a permission was unticked),
 // `limit`, `off` or `failed`. Nothing the provider said is shown or logged.
+//
+// `POST /api/calendar/google/notify` (milestone 2, AC-602) is where Google
+// posts a change notice for a push channel: no session and no Origin, so the
+// origin check lets this one path by, and the channel's own token is the
+// only key (`takeCalendarNotice`). It answers 200 with no body whatever the
+// notice was, so a caller learns nothing, and a notice that queued a sync
+// pokes the worker. A caller sending more than 120 a minute is told to wait.
 import { randomBytes, timingSafeEqual } from 'node:crypto';
-import { connectCalendar, isProviderError, isRefusal, signValue, verifyValue } from '@crm/core';
+import { connectCalendar, isProviderError, isRefusal, signValue, takeCalendarNotice, verifyValue } from '@crm/core';
+import type { Database } from '@crm/db';
 import type { Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { Auth } from '../auth/auth.ts';
 import { commitWrite } from '../hooks.ts';
 import { errorFields, log } from '../log.ts';
 import type { Analytics } from '../monitoring/posthog.ts';
+import type { PublicLimiter } from '../public/limits.ts';
 import type { WakeRelay } from '../realtime/wake.ts';
 import type { CalendarServices } from './services.ts';
 
 /** The cookie holding the nonce of a connect under way. */
 export const STATE_COOKIE = 'crm_calendar_state';
+
+/** Notices one caller may post a minute. */
+export const NOTICE_LIMIT = { max: 120, windowMs: 60_000 } as const;
 
 /** The state's version: a later scheme reads its own. */
 const STATE_VERSION = 'cs1';
@@ -54,6 +66,10 @@ export interface CalendarRouteDeps {
   readonly wakeRelay: WakeRelay;
   readonly analytics: Analytics;
   readonly calendar: CalendarServices | undefined;
+  /** The app's database: a notice reads its channel as the system in the workspace its token names. */
+  readonly db: Database;
+  /** Counts notices per caller. */
+  readonly limiter: PublicLimiter;
   readonly appUrl: string;
   /** Outside local the cookie is Secure. */
   readonly secure: boolean;
@@ -118,6 +134,21 @@ export function createCalendarRoutes(deps: CalendarRouteDeps) {
         maxAge: STATE_SECONDS,
       });
       return c.redirect(deps.calendar.providers.google.authorizeUrl(state, deps.calendar.redirectUri));
+    },
+
+    /** `POST /api/calendar/google/notify`: Google's change notice, by its headers alone. */
+    async notify(c: RouteContext): Promise<Response> {
+      const caller = c.get('clientIp') ?? 'unknown';
+      if (!deps.limiter(`calendar-notice:${caller}`, NOTICE_LIMIT).allowed) return c.body(null, 429);
+      if (deps.calendar === undefined) return c.body(null, 200);
+      const outcome = await takeCalendarNotice(deps.db, {
+        channelId: c.req.header('x-goog-channel-id'),
+        token: c.req.header('x-goog-channel-token'),
+        state: c.req.header('x-goog-resource-state'),
+      });
+      if (outcome === 'queued') deps.wakeRelay();
+      else if (outcome === 'refused') log.warn('calendar.notice.refused', { requestId: c.get('requestId') });
+      return c.body(null, 200);
     },
 
     /** `GET /api/calendar/google/callback?code=…&state=…` (or `error=…`). */

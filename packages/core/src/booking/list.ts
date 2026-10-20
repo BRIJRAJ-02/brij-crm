@@ -149,7 +149,7 @@ export async function readBookingsCalendar(
   input: { readonly from: string; readonly to: string },
 ): Promise<BookingsCalendarView> {
   const reader = readerOf(scope);
-  if (reader === undefined) return { bookings: [], events: [], blocks: [] };
+  if (reader === undefined) return { bookings: [], events: [], busy: [], blocks: [] };
   const from = new Date(input.from);
   const to = new Date(input.to);
   return inWorkspace(scope, async (tx) => {
@@ -205,6 +205,25 @@ export async function readBookingsCalendar(
         ...(row.video_url === null ? {} : { videoUrl: row.video_url }),
       }))
       .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+    // The reader's own time with nobody else invited, as Busy (the owner's call, 20 October 2026): never anyone else's.
+    const busy =
+      member === undefined
+        ? []
+        : (
+            await tx.execute<{ connection_id: string; starts_at: string; ends_at: string }>(sql`
+              select distinct b.connection_id::text as connection_id, b.starts_at, b.ends_at
+              from calendar_connections c
+              join calendar_busy_times b on b.workspace_id = c.workspace_id and b.connection_id = c.id
+              where c.member_id = ${member}::uuid
+                and b.ends_at > ${from.toISOString()}::timestamptz and b.starts_at < ${to.toISOString()}::timestamptz
+              order by b.starts_at, b.ends_at, connection_id
+              limit ${CALENDAR_EVENTS_MAX}
+            `)
+          ).rows.map((row) => ({
+            connectionId: row.connection_id,
+            startsAt: iso(row.starts_at),
+            endsAt: iso(row.ends_at),
+          }));
     // The reader's own closed time only (AC-712): another member's blocks never show, whatever the reader may see.
     const blocks = member === undefined ? [] : await blockOccurrences(tx, member, from, to);
     const seen = await seenLinks(
@@ -212,6 +231,6 @@ export async function readBookingsCalendar(
       scope.access,
       rows.map(({ booking }) => booking),
     );
-    return { bookings: rows.map((row) => itemOf(row, seen)), events, blocks: [...blocks] };
+    return { bookings: rows.map((row) => itemOf(row, seen)), events, busy, blocks: [...blocks] };
   });
 }

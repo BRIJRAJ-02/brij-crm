@@ -11,7 +11,17 @@ import { sql } from 'drizzle-orm';
 import type { WorkspaceTx } from '@crm/db';
 import { uuidList } from '../engine/ids.ts';
 import type { MeetingChange, WriteContext } from '../engine/write.ts';
-import { matchEvent, readLookups, shouldSync, textList, type AttendeeRow, type MeetingLink } from './match.ts';
+import {
+  isBusyOnly,
+  matchEvent,
+  readLookups,
+  recordsOf,
+  shouldSync,
+  textList,
+  type AttendeeRow,
+  type MeetingLink,
+} from './match.ts';
+import { createsUnknownPeople, fileUnknownAttendees } from './people.ts';
 import type { ProviderEvent } from './provider.ts';
 
 /** The connection a batch syncs for: what the writes need of it. */
@@ -65,18 +75,6 @@ interface Planned {
   readonly links: readonly MeetingLink[];
 }
 
-/** The meetings among `ids` and the records each shows on now. */
-async function recordsOf(tx: WorkspaceTx, ids: readonly string[]): Promise<ReadonlyMap<string, readonly string[]>> {
-  const found = new Map<string, string[]>();
-  if (ids.length === 0) return found;
-  const rows = await tx.execute<{ meeting_id: string; record_id: string }>(sql`
-    select meeting_id::text as meeting_id, record_id::text as record_id from meeting_records
-    where meeting_id = any(${uuidList(ids)})
-  `);
-  for (const row of rows.rows) found.set(row.meeting_id, [...(found.get(row.meeting_id) ?? []), row.record_id]);
-  return found;
-}
-
 /**
  * Sets each meeting's `is_private` from its sources (AC-611, AC-612): true
  * when any holding connection is private, or any copy is marked private.
@@ -90,6 +88,60 @@ export async function recomputePrivacy(tx: WorkspaceTx, meetingIds: readonly str
       where s.workspace_id = m.workspace_id and s.meeting_id = m.id and (s.marked_private or c.sharing = 'private')
     )
     where m.id = any(${uuidList(meetingIds)})
+  `);
+}
+
+/** A busy time's event id worth keeping: the table's bound. */
+const EVENT_ID_MAX = 1024;
+
+/**
+ * Keeps the batch's busy only events (the owner's call, 20 October 2026) as
+ * this connection's busy times, start and end only, and drops the busy time
+ * of every other event in the batch (cancelled, declined, now with someone
+ * invited, or shown as free).
+ */
+async function writeBusyTimes(context: WriteContext, connectionId: string, events: readonly ProviderEvent[]) {
+  const { tx } = context;
+  const busy = new Map<string, { event_id: string; starts_at: string; ends_at: string }>();
+  for (const event of events) {
+    if (event.id.length > EVENT_ID_MAX) continue;
+    if (!isBusyOnly(event) || event.start === undefined || event.end === undefined) {
+      busy.delete(event.id);
+      continue;
+    }
+    busy.set(event.id, { event_id: event.id, starts_at: moment(event.start.at), ends_at: moment(event.end.at) });
+  }
+  const others = events.map((event) => event.id).filter((id) => !busy.has(id));
+  if (others.length > 0) {
+    await tx.execute(sql`
+      delete from calendar_busy_times
+      where connection_id = ${connectionId}::uuid and provider_event_id = any(${textList(others)})
+    `);
+  }
+  if (busy.size === 0) return;
+  await tx.execute(sql`
+    insert into calendar_busy_times (workspace_id, connection_id, provider_event_id, starts_at, ends_at)
+    select ${context.scope.workspaceId}::uuid, ${connectionId}::uuid, x.event_id, x.starts_at, x.ends_at
+    from jsonb_to_recordset(${JSON.stringify([...busy.values()])}::jsonb) as x(event_id text, starts_at timestamptz, ends_at timestamptz)
+    on conflict (workspace_id, connection_id, provider_event_id) do update set
+      starts_at = excluded.starts_at, ends_at = excluded.ends_at, updated_at = now()
+  `);
+}
+
+/**
+ * After a full sync: drops this connection's busy times in the window whose
+ * events the provider no longer listed.
+ */
+export async function dropBusyTimes(
+  tx: WorkspaceTx,
+  connectionId: string,
+  where: { readonly allBut: readonly string[]; readonly from: string; readonly to: string },
+): Promise<void> {
+  await tx.execute(sql`
+    delete from calendar_busy_times
+    where connection_id = ${connectionId}::uuid
+      and starts_at < ${where.to}::timestamptz and ends_at >= ${where.from}::timestamptz
+      and not (provider_event_id = any(${textList(where.allBut)}))
   `);
 }
 
@@ -194,9 +246,16 @@ export async function applyEvents(
     select status from calendar_connections where id = ${connection.id}::uuid for key share
   `);
   const status = held.rows[0]?.status;
-  if (status !== 'syncing' && status !== 'connected') return 'gone';
+  if (status !== 'syncing' && status !== 'connected' && status !== 'failed') return 'gone';
 
-  const lookups = await readLookups(tx, events.filter(shouldSync), isFreeDomain);
+  await writeBusyTimes(context, connection.id, events);
+  const syncing = events.filter(shouldSync);
+  let lookups = await readLookups(tx, syncing, isFreeDomain);
+  // The workspace makes people for unknown attendees (AC-609): made first, so the meetings link them.
+  if (syncing.length > 0 && (await createsUnknownPeople(tx))) {
+    const made = await fileUnknownAttendees(context, syncing, connection.memberId, lookups);
+    if (made > 0) lookups = await readLookups(tx, syncing, isFreeDomain);
+  }
   const planned = plan(events, connection, lookups);
   // Events that no longer sync here (cancelled, declined, alone): this connection's copies go.
   const keptIds = new Set([...planned.values()].map((each) => each.eventId));

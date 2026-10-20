@@ -7,9 +7,17 @@
 // read again every 5 seconds, for at most 5 minutes (a first sync takes at
 // most 2, AC-601). Connecting itself is the browser going to the API's start
 // address (`connectUrl`), never a call from here.
+//
+// Milestone 2 adds the workspace's calendar settings (one held value per
+// workspace: making people for unknown attendees, changed at once and put
+// back with a toast when refused) and Add as person, which waits for the
+// server (it makes a record whose id the server chooses) and lets the
+// `meetings` event bring the timelines up to date.
 import type {
+  AddedMeetingAttendee,
   CalendarConnections,
   CalendarConnectionView,
+  CalendarSettingsView,
   CalendarSharing,
   RemovedCalendarConnection,
 } from '@crm/contracts';
@@ -31,6 +39,19 @@ export interface CalendarApi {
     readonly connectionId: string;
     readonly mutationId: string;
   }) => Promise<RemovedCalendarConnection>;
+  readonly settings: (input: { readonly workspace: string }) => Promise<CalendarSettingsView>;
+  readonly updateSettings: (input: {
+    readonly workspace: string;
+    readonly createUnknownPeople: boolean;
+    readonly mutationId: string;
+  }) => Promise<CalendarSettingsView>;
+  readonly addAttendee: (input: {
+    readonly workspace: string;
+    readonly recordId: string;
+    readonly meetingId: string;
+    readonly email: string;
+    readonly mutationId: string;
+  }) => Promise<AddedMeetingAttendee>;
 }
 
 /** What the store needs. */
@@ -60,6 +81,24 @@ export interface CalendarView {
   readonly ready: () => Promise<void>;
   /** Reads it again (Try again, or a sync that just ended). */
   readonly reload: () => void;
+}
+
+/** The workspace's calendar settings as a screen holds them. */
+export type CalendarSettingsState =
+  | { readonly status: 'loading' }
+  | { readonly status: 'error'; readonly message: string }
+  | ({ readonly status: 'ready' } & CalendarSettingsView);
+
+/** One workspace's calendar settings, read when first held. */
+export interface CalendarSettingsHeld {
+  readonly subscribe: (listener: () => void) => () => void;
+  readonly getSnapshot: () => CalendarSettingsState;
+  readonly retain: () => () => void;
+}
+
+/** Whether a connection has stopped until its member acts (AC-619, AC-620): the disconnected banner's test. */
+export function needsReconnect(connection: Pick<CalendarConnectionView, 'status'>): boolean {
+  return connection.status === 'expired' || connection.status === 'failed' || connection.status === 'revoked';
 }
 
 /** How often a list with a syncing connection is read again, and for how long at most. */
@@ -183,6 +222,52 @@ export function createCalendarStore(deps: CalendarDeps) {
     };
   }
 
+  const settingsHeld = new Map<string, ReturnType<typeof makeSettings>>();
+
+  function makeSettings(workspace: string) {
+    let state: CalendarSettingsState = { status: 'loading' };
+    let reading: Promise<void> | undefined;
+    const listeners = new Set<() => void>();
+    const set = (next: CalendarSettingsState) => {
+      state = next;
+      for (const listener of listeners) listener();
+    };
+    const read = () => {
+      reading ??= deps.api
+        .settings({ workspace })
+        .then(
+          (answer) => set({ status: 'ready', ...answer }),
+          (error: unknown) => {
+            if (state.status !== 'ready') set({ status: 'error', message: toDataError(error).message });
+          },
+        )
+        .finally(() => {
+          reading = undefined;
+        });
+      return reading;
+    };
+    return {
+      subscribe(listener: () => void) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      getSnapshot: () => state,
+      retain() {
+        void read();
+        return () => undefined;
+      },
+      set,
+    };
+  }
+
+  const settingsOf = (workspace: string) => {
+    const found = settingsHeld.get(workspace);
+    if (found !== undefined) return found;
+    const made = makeSettings(workspace);
+    settingsHeld.set(workspace, made);
+    return made;
+  };
+
   const viewOf = (workspace: string) => {
     const found = views.get(workspace);
     if (found !== undefined) return found;
@@ -198,6 +283,41 @@ export function createCalendarStore(deps: CalendarDeps) {
 
   return {
     view: (workspace: string): CalendarView => viewOf(workspace),
+    /** The workspace's calendar settings, read when a screen first holds them. */
+    settings: (workspace: string): CalendarSettingsHeld => settingsOf(workspace),
+    /** Makes people for unknown attendees, or stops (owners and admins): at once, put back with a toast if refused. */
+    async setCreateUnknownPeople(workspace: string, createUnknownPeople: boolean): Promise<boolean> {
+      const held = settingsOf(workspace);
+      const before = held.getSnapshot();
+      if (before.status === 'ready') held.set({ ...before, createUnknownPeople });
+      try {
+        const answer = await deps.api.updateSettings({ workspace, createUnknownPeople, mutationId: deps.mintId() });
+        held.set({ status: 'ready', ...answer });
+        return true;
+      } catch (error) {
+        held.set(before);
+        refused(error);
+        return false;
+      }
+    },
+    /**
+     * Adds a meeting's unknown attendee as a person (AC-609). It waits for the
+     * server, which makes the record; the `meetings` event then brings every
+     * timeline showing the meeting up to date. A refusal is said in a toast.
+     * Answers the new person's id, or undefined when it didn't land.
+     */
+    async addAttendee(
+      workspace: string,
+      input: { readonly recordId: string; readonly meetingId: string; readonly email: string },
+    ): Promise<string | undefined> {
+      try {
+        const added = await deps.api.addAttendee({ workspace, ...input, mutationId: deps.mintId() });
+        return added.recordId;
+      } catch (error) {
+        refused(error);
+        return undefined;
+      }
+    },
     /** Sets who sees a connection's meetings (AC-611): at once, put back with a toast if refused. */
     async setSharing(workspace: string, connectionId: string, sharing: CalendarSharing): Promise<boolean> {
       const view = viewOf(workspace);

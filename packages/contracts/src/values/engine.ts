@@ -46,6 +46,8 @@ export const ENGINE_REFUSAL_CODES = [
   // or deleted, or the host can't be booked.
   'SLOT_TAKEN',
   'BOOKING_CLOSED',
+  // Calendar sync (spec 0024, AC-618): the member has no connected calendar to write an event to.
+  'CALENDAR_NOT_CONNECTED',
 ] as const;
 
 /** One of the engine's refusal codes. */

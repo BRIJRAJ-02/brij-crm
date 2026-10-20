@@ -236,6 +236,9 @@ describe('events in core’s shape', () => {
       attendees: [],
     });
     expect(eventOf({ status: 'cancelled' })).toBeUndefined();
+    // Shown as free in the calendar: never busy time.
+    expect(eventOf({ id: 'free', transparency: 'transparent' })).toMatchObject({ isFree: true });
+    expect(eventOf({ id: 'busy', transparency: 'opaque' })).not.toHaveProperty('isFree');
   });
 });
 

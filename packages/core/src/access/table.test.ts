@@ -98,6 +98,11 @@ const NO_SCOPE: ReadonlySet<string> = new Set([
   // calendar reads a host's connections as the system for the public page, which has no scope of its own.
   'createBusyCache',
   'connectedCalendar',
+  // Calendar sync milestones 2 and 3 (spec 0024): a push notice comes from outside any workspace and reads as the
+  // system in the one its channel token names; the events factory takes no scope (its services run as the system).
+  'takeCalendarNotice',
+  'createCalendarEvents',
+  'calendarEventsScope',
   // The visitor's calendar (spec 0028): the overlay is pure, and the token seal is the one calendar sync uses,
   // bound here to the guest's cookie rather than a workspace.
   'overlay',
@@ -457,6 +462,27 @@ const empty = (call: DataCase['call'], leaves: DataCase['leaves'] = none): DataC
 const refused = (code: 'NOT_FOUND' | 'FORBIDDEN', call: DataCase['call']): DataCase => ({ call, expect: code });
 const named = (world: DataWorld) => ({ [world.name]: { value: 'Renamed' } });
 
+/** A meeting on the world's record with one attendee the CRM doesn't know, made once per world. */
+async function meetingOn(world: DataWorld): Promise<string> {
+  const meetingId = `${world.recordId.slice(0, 24)}000000000001`;
+  await db.withWorkspace(world.owner.workspaceId, async (tx) => {
+    await tx.execute(sql`
+      insert into meetings (workspace_id, id, ical_uid, title, starts_at, ends_at, created_by_type, updated_by_type)
+      values (${world.owner.workspaceId}, ${meetingId}, ${`uid-${meetingId}`}, 'Intro', now(), now(), 'calendar', 'calendar')
+      on conflict do nothing
+    `);
+    await tx.execute(sql`
+      insert into meeting_records (workspace_id, meeting_id, record_id, via, starts_at)
+      values (${world.owner.workspaceId}, ${meetingId}, ${world.recordId}, 'attendee', now()) on conflict do nothing
+    `);
+    await tx.execute(sql`
+      insert into meeting_attendees (workspace_id, meeting_id, email, position, match)
+      values (${world.owner.workspaceId}, ${meetingId}, 'cy@northwind.com', 0, 'unknown') on conflict do nothing
+    `);
+  });
+  return meetingId;
+}
+
 /** A restore's outcomes, its first refusal thrown as the call's own (a batch of one). */
 function refusedOutcome(outcomes: readonly core.RestoreOutcome[]): readonly core.RestoreOutcome[] {
   const refusal = outcomes.find((outcome) => outcome.refusal !== undefined)?.refusal;
@@ -559,6 +585,14 @@ const DATA_CASES: Readonly<Record<string, DataCase>> = {
   // Meetings (spec 0024): a hidden record's meetings are NOT_FOUND, as the record is.
   listMeetingsForRecord: refused('NOT_FOUND', (scope, world) =>
     core.listMeetingsForRecord(scope, { recordId: world.recordId }),
+  ),
+  // Add as person: making the person needs write on People, so a reader of the record is refused.
+  addMeetingAttendee: refused('FORBIDDEN', async (scope, world) =>
+    core.addMeetingAttendee(
+      scope,
+      { recordId: world.recordId, meetingId: await meetingOn(world), email: 'cy@northwind.com' },
+      { isFreeDomain: () => false },
+    ),
   ),
   // Writes, by a principal who may only read People and its list: 403.
   createRecord: refused('FORBIDDEN', (scope, world) => core.createRecord(scope, { objectId: world.people })),

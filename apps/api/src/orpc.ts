@@ -69,6 +69,8 @@ export interface RequestContext extends ResponseHeadersPluginContext {
   jobs: JobRegistry;
   /** Calendar sync (spec 0024): its provider and keys where `CALENDAR_SYNC=on`, else undefined. */
   calendar: CalendarServices | undefined;
+  /** Whether an email domain is a free one (gmail.com), which names no company (spec 0024, AC-607). */
+  isFreeDomain: (domain: string) => boolean;
   /** Where a booking's event goes (the host's calendar, or nowhere without sync): Book someone in (spec 0027). */
   bookingCalendar: BookingCalendar;
 }

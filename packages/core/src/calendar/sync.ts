@@ -11,14 +11,18 @@
 //
 // What it answers tells the task when to run again: 15 minutes after a sync
 // (the poll fallback, AC-602), sooner and backing off after a failure it
-// records on the connection, never for a connection that stopped. Milestone 2
-// adds push channels (a notice brings the next run forward), the 6 hour
-// `failed` rule and the banner.
+// records on the connection, never for a connection that stopped. A refused
+// grant marks the connection `expired` and stops it (AC-619); any other
+// failure that has lasted 6 hours marks it `failed` (AC-620), and the sync
+// keeps trying at the poll's pace, so a long outage heals by itself. With a
+// push address, a successful sync also opens (or renews) the connection's
+// push channel (`push.ts`), whose notices bring the next run forward.
 import { sql } from 'drizzle-orm';
 import type { EngineScope } from '../access/mint.ts';
 import { inWorkspace } from '../access/run.ts';
 import { runWrite, type AfterWrite } from '../engine/write.ts';
-import { applyEvents, dropSources } from './apply.ts';
+import { applyEvents, dropBusyTimes, dropSources } from './apply.ts';
+import { isBusyOnly } from './match.ts';
 import {
   isProviderError,
   type CalendarErrorCode,
@@ -27,6 +31,7 @@ import {
   type ProviderEvent,
   type SyncWindow,
 } from './provider.ts';
+import { needsChannel, openChannel, storedChannel } from './push.ts';
 import { openTokens, sealTokens, type TokenBinding, type TokenKey } from './tokens.ts';
 
 /** How far back and ahead a full sync reads (spec 0024's call). */
@@ -44,6 +49,12 @@ export const APPLY_BATCH = 200;
 
 /** The first wait after a failure, doubled while failures last, never past the poll interval. */
 export const RETRY_FIRST_MS = 60_000;
+
+/** How long failures last before a connection is `failed` (AC-620). */
+export const FAILED_AFTER_MS = 6 * 3_600_000;
+
+/** The statuses a connection syncs in: a `failed` one keeps trying, and heals on its next success. */
+export const SYNCING_STATUSES = ['syncing', 'connected', 'failed'] as const;
 
 /** The only calendar milestone 1 syncs (a Follow-up adds more). */
 export const PRIMARY_CALENDAR = 'primary';
@@ -69,6 +80,11 @@ export interface CalendarSyncDeps {
   readonly hooks: readonly AfterWrite[];
   /** Whether an email domain is a free one (gmail.com), which names no company (AC-607). */
   readonly isFreeDomain: (domain: string) => boolean;
+  /**
+   * Where the provider posts change notices (`<CALENDAR_WEBHOOK_ORIGIN>/api/calendar/google/notify`).
+   * Absent (local development, no public origin), no channel opens and the poll alone keeps calendars current.
+   */
+  readonly pushAddress?: string;
   readonly now?: () => Date;
 }
 
@@ -94,6 +110,7 @@ interface ConnectionRow extends Record<string, unknown> {
   readonly tokens: Buffer;
   readonly sync_token: string | null;
   readonly failing_since: string | null;
+  readonly channel: unknown;
 }
 
 /** The failure messages a connection shows in Settings: plain, and never the provider's own words. */
@@ -105,16 +122,24 @@ const FAILURE_MESSAGES: Readonly<Record<CalendarErrorCode, string>> = {
   CALENDAR_SCOPE_DECLINED: 'The calendar was connected without the access Timefix needs. Reconnect it.',
 };
 
-/** Records a failure on the connection: its code and message, since when, and `expired` for a refused grant. */
+/**
+ * Records a failure on the connection: its code and message, and since when.
+ * A refused grant marks it `expired` (AC-619); any failure once failures
+ * have lasted 6 hours marks it `failed` (AC-620).
+ */
 async function recordFailure(scope: EngineScope, connectionId: string, code: CalendarErrorCode): Promise<string> {
   const rows = await inWorkspace(scope, (tx) =>
     tx.execute<{ failing_since: string }>(sql`
       update calendar_connections set
         last_error = ${JSON.stringify({ code, message: FAILURE_MESSAGES[code] })}::jsonb,
         failing_since = coalesce(failing_since, now()),
-        status = case when ${code === 'CALENDAR_AUTH_REVOKED'} then 'expired'::calendar_status else status end,
+        status = case
+          when ${code === 'CALENDAR_AUTH_REVOKED'} then 'expired'::calendar_status
+          when coalesce(failing_since, now()) <= now() - make_interval(secs => ${FAILED_AFTER_MS / 1000})
+            then 'failed'::calendar_status
+          else status end,
         updated_at = now(), updated_by_type = 'calendar', updated_by_id = null, updated_by_member_id = null
-      where id = ${connectionId}::uuid and status in ('syncing', 'connected')
+      where id = ${connectionId}::uuid and status in ('syncing', 'connected', 'failed')
       returning failing_since::text as failing_since
     `),
   );
@@ -161,13 +186,14 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
   const found = await inWorkspace(scope, (tx) =>
     tx.execute<ConnectionRow>(sql`
       select id::text as id, member_id::text as member_id, provider, account_email, status, tokens,
-        sync_state #>> ${`{${PRIMARY_CALENDAR},syncToken}`} as sync_token, failing_since::text as failing_since
+        sync_state #>> ${`{${PRIMARY_CALENDAR},syncToken}`} as sync_token, failing_since::text as failing_since,
+        channel
       from calendar_connections where id = ${input.connectionId}::uuid
     `),
   );
   const [row] = found.rows;
   if (row === undefined) return { kind: 'stopped', reason: 'gone' };
-  if (row.status !== 'syncing' && row.status !== 'connected') return { kind: 'stopped', reason: 'not-syncing' };
+  if (!(SYNCING_STATUSES as readonly string[]).includes(row.status)) return { kind: 'stopped', reason: 'not-syncing' };
   const provider = deps.providers[row.provider];
   if (provider === undefined) return { kind: 'stopped', reason: 'no-provider' };
   const binding: TokenBinding = {
@@ -179,9 +205,10 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
   const window = syncWindow(now);
 
   let changes: { readonly events: readonly ProviderEvent[]; readonly nextSyncToken: string };
+  let tokens: CalendarTokens;
   let full = row.sync_token === null;
   try {
-    const tokens = await liveTokens(deps, scope, provider, row, binding, now);
+    tokens = await liveTokens(deps, scope, provider, row, binding, now);
     try {
       changes = await provider.listChanges(tokens, PRIMARY_CALENDAR, row.sync_token ?? undefined, window);
     } catch (error) {
@@ -211,10 +238,12 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
   if (full) {
     // The provider listed every event in the window: this connection's copies of any other there are gone.
     const listed = events.filter((event) => event.status !== 'cancelled').map((event) => event.id);
+    const busy = events.filter(isBusyOnly).map((event) => event.id);
     await runWrite(
       scope,
       async (context) => {
         context.record({ meetings: await dropSources(context.tx, row.id, { allBut: listed, ...window }) });
+        await dropBusyTimes(context.tx, row.id, { allBut: busy, ...window });
       },
       deps.hooks,
     );
@@ -226,9 +255,20 @@ export async function syncConnection(deps: CalendarSyncDeps, input: CalendarSync
         sync_state = jsonb_set(sync_state, ${`{${PRIMARY_CALENDAR}}`}, ${JSON.stringify({ syncToken: changes.nextSyncToken })}::jsonb),
         status = 'connected', last_synced_at = now(), last_error = null, failing_since = null,
         updated_at = now(), updated_by_type = 'calendar', updated_by_id = null, updated_by_member_id = null
-      where id = ${row.id}::uuid and status in ('syncing', 'connected')
+      where id = ${row.id}::uuid and status in ('syncing', 'connected', 'failed')
     `),
   );
   if (stored.rowCount === 0) return { kind: 'stopped', reason: 'gone' };
+  // Push (AC-602, AC-622): a channel opened once the calendar is current, and renewed before it runs out.
+  const channel = storedChannel(row.channel);
+  if (deps.pushAddress !== undefined && needsChannel(channel, now)) {
+    await openChannel(scope, {
+      provider,
+      tokens,
+      connectionId: row.id,
+      address: deps.pushAddress,
+      previous: channel,
+    });
+  }
   return { kind: 'synced', full, events: events.length, nextInMs: POLL_INTERVAL_MS };
 }
