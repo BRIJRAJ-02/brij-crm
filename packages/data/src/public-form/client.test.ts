@@ -29,6 +29,17 @@ function endpoint(status: number, body: unknown) {
 const submission = { idempotencyKey: crypto.randomUUID(), versionNumber: 1, answers: {}, hidden: {} };
 
 describe('the hosted page’s client (spec 0023)', () => {
+  it('asks for a fill ticket, never cached, and gives up quietly when it can’t have one', async () => {
+    const ok = endpoint(200, { ticket: 't1.abc' });
+    expect(await createPublicFormClient({ fetch: ok.fetch }).ticket(form.key)).toBe('t1.abc');
+    expect(ok.sent[0]?.url).toBe(`/api/public/forms/${form.key}/ticket`);
+    expect(ok.sent[0]?.init).toMatchObject({ cache: 'no-store' });
+    expect(await createPublicFormClient({ fetch: endpoint(429, {}).fetch }).ticket(form.key)).toBeUndefined();
+    expect(await createPublicFormClient({ fetch: endpoint(200, { nope: 1 }).fetch }).ticket(form.key)).toBeUndefined();
+    const offline = () => Promise.reject(new TypeError('Failed to fetch'));
+    expect(await createPublicFormClient({ fetch: offline }).ticket(form.key)).toBeUndefined();
+  });
+
   it('reads a live form, and says missing for a 404 and a 410', async () => {
     const ok = endpoint(200, form);
     expect(await createPublicFormClient({ fetch: ok.fetch }).load(form.key)).toEqual({ kind: 'form', form });

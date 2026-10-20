@@ -10,6 +10,7 @@ export * from './presets.ts';
 export * from './publish.ts';
 export * from './strings.ts';
 export type {
+  FillTicket,
   FormLanguage,
   PublicForm,
   PublicQuestion,

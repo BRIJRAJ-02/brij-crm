@@ -76,6 +76,9 @@ async function start(): Promise<void> {
     document.documentElement.dataset.corners = form.look.corners;
     const captcha = form.recaptchaSiteKey === undefined ? undefined : loadCaptcha(form.recaptchaSiteKey);
     const keys = new Map<number, string>();
+    // A fill ticket per round (the spam checks): asked for as the page loads, and for the next round as one is
+    // sent, so the server's clock times the filling. Without one the submit still goes.
+    const tickets = new Map<number, Promise<string | undefined>>([[0, client.ticket(address)]]);
     mountHostedForm(root, form, {
       mode,
       countryGuess: guessCountry(),
@@ -87,7 +90,8 @@ async function start(): Promise<void> {
         const idempotencyKey = keys.get(submission.round) ?? crypto.randomUUID();
         keys.set(submission.round, idempotencyKey);
         const token = captcha === undefined ? undefined : await captcha();
-        return client.submit(address, {
+        const ticket = await (tickets.get(submission.round) ?? Promise.resolve(undefined));
+        const outcome = await client.submit(address, {
           idempotencyKey,
           versionNumber: form.versionNumber,
           answers: submission.answers,
@@ -95,7 +99,12 @@ async function start(): Promise<void> {
           fillMs: Math.round(submission.fillMs),
           ...(submission.trap === '' ? {} : { company_url: submission.trap }),
           ...(token === undefined ? {} : { captcha: token }),
+          ...(ticket === undefined ? {} : { ticket }),
         });
+        if (outcome.kind === 'done' && !tickets.has(submission.round + 1)) {
+          tickets.set(submission.round + 1, client.ticket(address));
+        }
+        return outcome;
       },
     });
   }
