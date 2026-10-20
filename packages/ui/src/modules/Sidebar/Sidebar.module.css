@@ -1,5 +1,6 @@
 /* Sidebar: a size-sidebar column on surface-sidebar with a hairline end
-   edge: the workspace row (size-bar tall), Quick actions, a scrolling body of
+   edge: the workspace row (size-bar tall, a hairline under it on the same
+   pixel row as the page's TopBar's), Quick actions, a scrolling body of
    28px items and folding sections, and a footer. Collapsed, it is a
    size-sidebar-collapsed rail of centred icons. The current item takes
    surface-selected, hover surface-hover. */
@@ -21,6 +22,7 @@
     align-items: center;
     block-size: var(--size-bar);
     padding-inline: var(--space-8) var(--space-12);
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
   }
 
   .workspace,
@@ -68,7 +70,7 @@
   .search {
     display: flex;
     flex: none;
-    padding: 0 var(--space-8) var(--space-8);
+    padding: var(--space-8);
   }
 
   .scroll {
@@ -105,6 +107,11 @@
     margin-block-start: var(--space-12);
     padding-block-start: var(--space-12);
     border-block-start: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  /* The first group sits under the head's hairline, so two rules never stack. */
+  .rail:first-child {
+    border-block-start: none;
   }
 
   .item {
