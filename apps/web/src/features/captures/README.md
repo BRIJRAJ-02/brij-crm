@@ -10,6 +10,6 @@ A sidebar destination after Bookings, as Timefix's rail has it: the booking link
 
 ## Notes
 
-- Routes: `routes/w.$slug.captures.tsx` (the layout: the frame, the TopBar and `CapturesTabs` around an `Outlet`), `routes/w.$slug.captures.index.tsx` (bare `/captures` redirects to `/links`), `routes/w.$slug.captures.links.tsx` and `routes/w.$slug.captures.forms.tsx` (the tabs).
+- Routes: `routes/w.$slug.captures.tsx` (the layout: the frame, the TopBar and `CapturesTabs` around an `Outlet`), `routes/w.$slug.captures.index.tsx` (bare `/captures` redirects to `/links`), `routes/w.$slug.captures.links.index.tsx` and `routes/w.$slug.captures.forms.index.tsx` (the tabs; each one's editor is a sibling route outside the layout, `w.$slug.captures_.…`).
 - `tabs.ts` holds the tab ids and their addresses (`linksHref`, `formsHref`, `captureTabOf`); link to a tab through it.
-- Each tab shows `CapturePlaceholder` until the booking and forms lanes move their screens into the tab's route file.
+- Each tab's route renders its screen (`booking/LinksScreen.tsx`, `forms/FormsScreen.tsx`), and both draw `CapturesList`: LinkList's compact rows (`density="compact"`) edge to edge under the strip, the records area's one line rows with the page gutter inside them, and the search and New in the strip's end (`toolbarSlot.ts`). With no rows, the empty state sits centred in a `PageColumn`.

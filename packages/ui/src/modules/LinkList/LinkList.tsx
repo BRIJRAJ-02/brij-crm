@@ -31,9 +31,12 @@ export interface LinkRow {
   readonly title: string;
   /** Its address, inline after the title and muted ("/acme/intro-call", "/f/contact-us"). */
   readonly address: string;
-  /** Up to two lines under the title (a page's description). */
+  /** Up to two lines under the title (a page's description). Left out of `density="compact"`'s one line rows. */
   readonly description?: string;
-  /** Short facts as chips under the title ("30 min", "60 min"; "4 questions", "12 responses"). */
+  /**
+   * Short facts as chips ("30 min", "60 min"; "4 questions", "12 responses"): under the title, or in
+   * `density="compact"` one inline cell after it, lined up down the list.
+   */
   readonly chips: readonly string[];
   /** A grey badge before the switch, only when it isn't taking people ("Off", "Not published", "Copying…"). */
   readonly badge?: string;
@@ -77,6 +80,18 @@ export interface LinkListProps {
   readonly onQueryChange?: (query: string) => void;
   /** The page draws the toolbar itself (LinkListToolbar), so the list leaves its own out. */
   readonly isToolbarHidden?: boolean;
+  /**
+   * `comfortable` (the default): rows about 60px tall, with a description and the chips under the title, in a
+   * raised, bordered box. `compact`: the records area's rows, one line at size-row, with no frame: the title and
+   * address, the facts lined up in a column, then the badge, the switch and the actions, parted by hairlines.
+   */
+  readonly density?: 'comfortable' | 'compact';
+  /**
+   * With `density="compact"`, where the list sits. `page` (the default) runs the rows edge to edge across the
+   * view with the page's gutter inside them (Captures). `card` keeps them inside a Card's padding, inset like a
+   * Table's cells (Bookings › Availability's pages).
+   */
+  readonly placement?: 'page' | 'card';
 }
 
 /** Props for LinkListToolbar. */
@@ -136,11 +151,11 @@ function matches(row: LinkRow, query: string): boolean {
 }
 
 /**
- * Links as rows, not a table (spec 0025's Cal.com alignment, the event types
- * list; spec 0023's forms list): a search field and the list's action above
- * rows about 60px tall. Each row opens its link, with the title and its
- * address inline, facts as chips under them, and at the end an Off badge when
- * it is off, its switch, and one joined group of icon actions. Arrows move
+ * Links as rows, not a table (spec 0025; spec 0023's forms list): a search
+ * field and the list's action above the rows. Each row opens its link, with
+ * the title and its address inline, its facts as chips, and at the end an Off
+ * badge when it is off, its switch, and its quiet icon actions. `compact`
+ * draws the records area's one line rows with no frame (Captures). Arrows move
  * between rows, Enter opens one, and left and right reach a row's controls.
  */
 export function LinkList({
@@ -156,7 +171,15 @@ export function LinkList({
   query: heldQuery,
   onQueryChange,
   isToolbarHidden = false,
+  density = 'comfortable',
+  placement = 'page',
 }: LinkListProps) {
+  const isCompact = density === 'compact';
+  const frameProps = {
+    className: styles.frame,
+    'data-density': density,
+    'data-placement': isCompact ? placement : undefined,
+  };
   const [ownQuery, setOwnQuery] = useState('');
   const query = heldQuery ?? ownQuery;
   const setQuery = onQueryChange ?? setOwnQuery;
@@ -184,7 +207,7 @@ export function LinkList({
   // A list that didn't load keeps its toolbar (New still works), the failure where the rows go.
   if (isFailed) {
     return (
-      <div className={styles.frame}>
+      <div {...frameProps}>
         {toolbar}
         <EmptyState tone="error" title={errorTitle ?? strings.failed} {...(onRetry === undefined ? {} : { onRetry })} />
       </div>
@@ -192,7 +215,7 @@ export function LinkList({
   }
   if (isLoading) {
     return (
-      <div className={styles.frame}>
+      <div {...frameProps}>
         {toolbar}
         <div className={styles.root} aria-busy="true">
           {showSkeleton &&
@@ -202,9 +225,11 @@ export function LinkList({
                   <span className={styles.skeletonTitle}>
                     <Skeleton width="medium" />
                   </span>
-                  <span className={styles.skeletonChips}>
-                    <Skeleton width="short" />
-                  </span>
+                  {!isCompact && (
+                    <span className={styles.skeletonChips}>
+                      <Skeleton width="short" />
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
@@ -214,7 +239,7 @@ export function LinkList({
     );
   }
   return (
-    <div className={styles.frame}>
+    <div {...frameProps}>
       {toolbar}
       {shown.length === 0 ? (
         <EmptyState
@@ -253,22 +278,21 @@ export function LinkList({
             >
               <div className={styles.main}>
                 <div className={styles.titleLine}>
-                  <span className={styles.title}>{row.title}</span>
+                  <span className={styles.title} title={isCompact ? row.title : undefined}>
+                    {row.title}
+                  </span>
                   <span className={styles.address}>{row.address}</span>
                 </div>
-                {row.description !== undefined && row.description !== '' && (
+                {!isCompact && row.description !== undefined && row.description !== '' && (
                   <p className={styles.description}>{row.description}</p>
                 )}
-                {row.chips.length > 0 && (
-                  <ul className={styles.chips}>
-                    {row.chips.map((chip) => (
-                      <li key={chip}>
-                        <Badge text={chip} />
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                {!isCompact && <Chips chips={row.chips} />}
               </div>
+              {isCompact && (
+                <div className={styles.facts}>
+                  <Chips chips={row.chips} />
+                </div>
+              )}
               <div className={styles.end}>
                 {row.badge !== undefined && <Badge text={row.badge} />}
                 {row.toggle !== undefined && <RowSwitch toggle={row.toggle} isPending={row.isPending === true} />}
@@ -283,6 +307,20 @@ export function LinkList({
         </GridList>
       )}
     </div>
+  );
+}
+
+/** A row's facts as neutral Badges, or nothing when it has none. */
+function Chips({ chips }: { readonly chips: readonly string[] }) {
+  if (chips.length === 0) return null;
+  return (
+    <ul className={styles.chips}>
+      {chips.map((chip) => (
+        <li key={chip}>
+          <Badge text={chip} />
+        </li>
+      ))}
+    </ul>
   );
 }
 

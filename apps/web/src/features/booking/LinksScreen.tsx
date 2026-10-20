@@ -70,7 +70,6 @@ export function LinksScreen({ data, slug }: LinksScreenProps) {
       id: page.id,
       title: page.title,
       address: `/${slug}/${page.slug}`,
-      description: page.description,
       chips: chipsOf(page),
       ...(isPending
         ? { badge: strings.copying }

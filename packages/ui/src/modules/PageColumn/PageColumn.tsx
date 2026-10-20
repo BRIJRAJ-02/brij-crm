@@ -7,8 +7,7 @@ export interface PageColumnProps {
   /**
    * `default` reads like a document (the wide dialog's width at most);
    * `narrow` like a form (the page card's width); `full` takes the view's
-   * whole width inside the padding, for a list of rows (Captures › Links and
-   * Forms).
+   * whole width inside the padding (Bookings' tabs).
    */
   readonly width?: 'default' | 'narrow' | 'full';
   /** `center` fills the view's height and centres its children in it: a list's empty state, alone on the page. */
@@ -25,8 +24,8 @@ export interface PageColumnProps {
 }
 
 /**
- * A page's body that isn't a grid or a settings page (Captures › Links,
- * Bookings › Availability): padded from the frame, at most a readable width
+ * A page's body that isn't a grid or a settings page (Bookings' tabs, the
+ * Captures empty states): padded from the frame by the app's 16px gutter, at most a readable width
  * (or the whole width),
  * its children stacked, an optional side column beside them, and an optional
  * footer bar that stays in view.

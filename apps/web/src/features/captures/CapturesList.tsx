@@ -1,6 +1,6 @@
 // Brief
 // Purpose: the one shape both Captures tabs draw (Links' booking pages, Forms' forms), so they read as one kind of thing.
-// Main task: rows across the view, with the search and New at the end of the tabs strip; or, with none, the empty state centred in the view.
+// Main task: one line rows edge to edge across the view, as the records area draws them, with the search and New at the end of the tabs strip; or, with none, the empty state centred in the view.
 // Leaves out: what a row says and does (each tab builds its rows), and the tabs header (the Captures layout).
 import { EmptyState, LinkList, LinkListToolbar, PageColumn, type IconName, type LinkRow } from '@crm/ui';
 import { useState, type ReactNode } from 'react';
@@ -27,7 +27,10 @@ export interface CapturesListProps {
   readonly dialogs?: ReactNode;
 }
 
-/** A Captures tab's list: full width rows, its search and New at the strip's end; or the empty state centred in the view. */
+/**
+ * A Captures tab's list: LinkList's compact rows edge to edge under the strip (no PageColumn, whose gutter the
+ * rows carry themselves), its search and New at the strip's end; or the empty state centred in the view.
+ */
 export function CapturesList({
   label,
   searchLabel,
@@ -53,8 +56,10 @@ export function CapturesList({
     );
   }
   const isBusy = status !== 'ready';
+  // A list that didn't load sits centred in the view, as the empty one does.
+  const Frame = status === 'error' ? CentredColumn : Bare;
   return (
-    <PageColumn width="full">
+    <Frame>
       {slot !== null &&
         createPortal(
           <LinkListToolbar
@@ -78,9 +83,24 @@ export function CapturesList({
         status={status}
         errorTitle={errorTitle}
         onRetry={onRetry}
+        density="compact"
         {...(newAction === undefined ? {} : { actions: newAction })}
       />
       {dialogs}
+    </Frame>
+  );
+}
+
+/** The list itself needs no frame: compact rows carry the page's gutter. */
+function Bare({ children }: { readonly children: ReactNode }) {
+  return <>{children}</>;
+}
+
+/** A failed list's message, centred in the view like the empty state. */
+function CentredColumn({ children }: { readonly children: ReactNode }) {
+  return (
+    <PageColumn width="full" align="center">
+      {children}
     </PageColumn>
   );
 }

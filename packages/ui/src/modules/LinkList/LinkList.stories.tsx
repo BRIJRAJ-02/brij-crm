@@ -1,6 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { expect, fn, userEvent, waitFor } from 'storybook/test';
 import { Button } from '../../atoms/Button/Button.tsx';
+import { Card } from '../../molecules/Card/Card.tsx';
 import { EmptyState } from '../../molecules/EmptyState/EmptyState.tsx';
 import { Stage } from '../../workbench/Stage/Stage.tsx';
 import { LinkList, type LinkRow } from './LinkList.tsx';
@@ -279,5 +280,200 @@ export const NoAccess: Story = {
   ),
   play: async ({ canvas }) => {
     await expect(canvas.getByText('You can’t see this list')).toBeInTheDocument();
+  },
+};
+
+/** Compact (Captures): one line rows at size-row with no frame, edge to edge with the page's gutter inside them. */
+export const Compact: Story = {
+  args: { density: 'compact', isToolbarHidden: true },
+  parameters: { crm: { preview: true } },
+  render: (args) => (
+    <Stage width="fill">
+      <LinkList {...args} rows={pages()} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    const rows = canvas.getAllByRole('row');
+    for (const row of rows) await expect(row.getBoundingClientRect().height).toBeLessThan(40);
+    await expect(
+      canvas.queryByText('A walk round the site with the project lead, then questions.'),
+    ).not.toBeInTheDocument();
+    await expect(canvas.getByText('60 min')).toBeVisible();
+    await userEvent.click(canvas.getByText('Site visit'));
+    await expect(args.onOpen).toHaveBeenCalledWith('visit');
+  },
+};
+
+/** Compact forms: the Not published badge, the facts lined up in one column down the list. */
+export const CompactForms: Story = {
+  args: { density: 'compact', isToolbarHidden: true, label: 'Forms', searchLabel: 'Search forms' },
+  render: (args) => (
+    <Stage width="fill">
+      <LinkList {...args} rows={forms()} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const first = canvas.getByText('12 responses').getBoundingClientRect();
+    const second = canvas.getAllByText('0 responses')[0]?.getBoundingClientRect();
+    await expect(second?.left).toBe(first.left);
+  },
+};
+
+/** Compact by keyboard: the GridList model stays, arrows between rows and right to a row's controls. */
+export const CompactKeyboard: Story = {
+  args: { density: 'compact', isToolbarHidden: true },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <LinkList {...args} rows={pages()} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    canvas.getAllByRole('row')[0]?.focus();
+    await userEvent.keyboard('{ArrowDown}');
+    await expect(canvas.getAllByRole('row')[1]).toHaveFocus();
+    await userEvent.keyboard('{Enter}');
+    await expect(args.onOpen).toHaveBeenCalledWith('visit');
+    await userEvent.keyboard('{ArrowRight}');
+    await waitFor(() => expect(canvas.getByRole('switch', { name: 'Site visit is on' })).toHaveFocus());
+  },
+};
+
+/** Compact on a phone: the facts and the address give way, so the title, switch and actions stay on one line. */
+export const CompactNarrow: Story = {
+  args: { density: 'compact', isToolbarHidden: true },
+  render: (args) => (
+    <Stage width="narrow">
+      <LinkList {...args} rows={pages()} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('60 min')).not.toBeVisible();
+    await expect(canvas.getByText('/acme/intro-call')).not.toBeVisible();
+    for (const row of canvas.getAllByRole('row')) await expect(row.getBoundingClientRect().height).toBeLessThan(40);
+  },
+};
+
+/** Compact inside a Card (Bookings › Availability's pages): rows keep to the card's padding, with no search. */
+export const CompactInCard: Story = {
+  args: { density: 'compact', placement: 'card', isToolbarHidden: true },
+  render: (args) => (
+    <Stage>
+      <Card title="Your pages" description="The hours each page books on. Open one to change it.">
+        <LinkList
+          {...args}
+          rows={pages().map((row) => ({
+            id: row.id,
+            title: row.title,
+            address: row.address,
+            chips: ['Your hours'],
+            ...(row.badge === undefined ? {} : { badge: row.badge }),
+            ...(row.isOff === undefined ? {} : { isOff: row.isOff }),
+          }))}
+        />
+      </Card>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getAllByRole('row')).toHaveLength(2);
+  },
+};
+
+/** Compact while loading: one line skeleton rows. */
+export const CompactLoading: Story = {
+  args: { density: 'compact', isToolbarHidden: true, status: 'loading' },
+  render: (args) => (
+    <Stage width="fill">
+      <LinkList {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await expect(canvas.getByText('Loading Booking pages')).toBeInTheDocument();
+  },
+};
+
+/** Compact and failed: the failure where the rows go, with Try again. */
+export const CompactFailed: Story = {
+  args: {
+    density: 'compact',
+    isToolbarHidden: true,
+    status: 'error',
+    onRetry: fn(),
+    errorTitle: 'Booking pages didn’t load',
+  },
+  render: (args) => (
+    <Stage width="fill">
+      <LinkList {...args} />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByRole('button', { name: /Try again/ }));
+    await expect(args.onRetry).toHaveBeenCalled();
+  },
+};
+
+/** Compact with its own search: nothing matches, with Clear search. */
+export const CompactNoMatches: Story = {
+  args: { density: 'compact' },
+  render: (args) => (
+    <Stage width="fill">
+      <LinkList {...args} rows={pages()} />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    await userEvent.type(canvas.getByRole('searchbox', { name: 'Search booking pages' }), 'xyz');
+    await expect(canvas.getByText('Nothing matches “xyz”')).toBeInTheDocument();
+    await userEvent.click(canvas.getByRole('button', { name: 'Clear search' }));
+    await expect(canvas.getByText('Intro call')).toBeInTheDocument();
+  },
+};
+
+/** Compact with a copy on its way: quieter, and it doesn't open until the server made it. */
+export const CompactPending: Story = {
+  args: { density: 'compact', isToolbarHidden: true },
+  render: (args) => (
+    <Stage width="fill">
+      <LinkList
+        {...args}
+        rows={[
+          {
+            id: 'copy',
+            title: 'Intro call (copy)',
+            address: '/acme/intro-call-copy',
+            chips: ['30 min'],
+            badge: 'Copying…',
+            toggle: { label: 'Intro call (copy) is on', isSelected: true, onChange: () => undefined },
+            actions: icons('Intro call (copy)', true),
+            isPending: true,
+          },
+          ...pages(),
+        ]}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas, args }) => {
+    await userEvent.click(canvas.getByText('Intro call (copy)'));
+    await expect(args.onOpen).not.toHaveBeenCalled();
+  },
+};
+
+/** Compact with long facts: the facts column stops at a wide column and clips, so the titles keep their room. */
+export const CompactLongFacts: Story = {
+  args: { density: 'compact', isToolbarHidden: true, label: 'Forms', searchLabel: 'Search forms' },
+  render: (args) => (
+    <Stage width="fill">
+      <LinkList
+        {...args}
+        rows={forms().map((row) =>
+          row.id === 'contact'
+            ? { ...row, chips: ['12 responses', '2 spam', 'Last enquiry Mon, Oct 19 · 3:42 PM', 'Shared with sales'] }
+            : row,
+        )}
+      />
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const title = canvas.getByText('Contact us').getBoundingClientRect();
+    await expect(title.width).toBeGreaterThan(40);
   },
 };

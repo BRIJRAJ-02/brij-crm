@@ -7,7 +7,12 @@
    description, and the chips. Right: the Off badge, the switch, and the
    actions as one ButtonGroup. An off row's title reads in text-secondary. A
    pending row (a copy on its way) reads in text-tertiary. On a narrow container the end moves under the
-   title. */
+   title.
+
+   density="compact" (Captures): the records area's rows instead. No box: one line rows at size-row, parted
+   by the grid's hairline (border-subtle), on a subgrid so the facts and the end line up down the list. On a
+   page they run edge to edge with the page's gutter (space-16) inside them; in a Card they keep to its
+   padding, inset space-8 like a Table's cells. Under 480px of list the facts and the address give way to the title. */
 @layer components {
   .frame {
     display: flex;
@@ -189,6 +194,99 @@
 
     .main {
       flex-basis: 100%;
+    }
+  }
+
+  /* Compact: the list is the container, so its rows can drop the facts when it is narrow. */
+  .frame[data-density='compact'] {
+    gap: 0;
+    container-type: inline-size;
+  }
+
+  .frame[data-density='compact'] .toolbar {
+    padding-block: var(--space-8);
+  }
+
+  .frame[data-placement='page'] .toolbar {
+    padding-inline: var(--space-16);
+  }
+
+  .frame[data-density='compact'] .root {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, max-content) auto;
+    column-gap: var(--space-16);
+    border: none;
+    border-radius: 0;
+    background: none;
+    container-type: normal;
+  }
+
+  .frame[data-density='compact'] .row {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: subgrid;
+    align-items: center;
+    min-block-size: var(--size-row);
+    padding-block: 0;
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+    border-radius: 0;
+  }
+
+  .frame[data-placement='page'] .row {
+    padding-inline: var(--space-16);
+  }
+
+  .frame[data-placement='card'] .row {
+    padding-inline: var(--space-8);
+  }
+
+  .frame[data-density='compact'] .row:last-child {
+    border-block-end: var(--border-width-hairline) solid var(--border-subtle);
+  }
+
+  /* In a Card the last hairline would double the card's own edge. */
+  .frame[data-placement='card'] .row:last-child {
+    border-block-end: none;
+  }
+
+  .frame[data-density='compact'] .row[data-loading] {
+    display: flex;
+  }
+
+  .frame[data-density='compact'] .title {
+    flex: 0 1 auto;
+    max-inline-size: none;
+  }
+
+  /* The address gives way first, so the title stays readable. */
+  .frame[data-density='compact'] .address {
+    flex: 0 1000 auto;
+  }
+
+  /* The facts never take more than a wide column; past that they clip, so a long one can't squeeze the titles. */
+  .facts {
+    display: flex;
+    min-inline-size: 0;
+    max-inline-size: var(--size-column-wide);
+    overflow: hidden;
+  }
+
+  .frame[data-density='compact'] .chips {
+    flex-wrap: nowrap;
+  }
+
+  .frame[data-density='compact'] .end {
+    justify-content: flex-end;
+  }
+
+  @container (inline-size < 480px) {
+    .frame[data-density='compact'] .root {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+
+    .frame[data-density='compact'] .facts,
+    .frame[data-density='compact'] .address {
+      display: none;
     }
   }
 }

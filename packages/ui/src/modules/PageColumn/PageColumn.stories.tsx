@@ -49,7 +49,7 @@ export const WithFooter: Story = {
   },
 };
 
-/** The whole width inside the padding, for a list of rows (Captures › Links and Forms). */
+/** The whole width inside the padding (Bookings' tabs). */
 export const FullWidth: Story = {
   args: { width: 'full' },
   render: (args) => (
