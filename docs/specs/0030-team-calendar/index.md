@@ -12,6 +12,9 @@ Reasoning and options: see [rationale.md](rationale.md).
 
 ## Owner decisions needed
 
+The owner accepted every recommendation below on 20 October 2026; each is now a decision.
+
+
 Each has my recommendation; answer only where you disagree.
 
 1. **Team view as a day with members across, or a week?** Recommend: a day, one column per member (timefix, Google Calendar), plus a member picker on the week to see one teammate's week. Runner up: week with sub columns.

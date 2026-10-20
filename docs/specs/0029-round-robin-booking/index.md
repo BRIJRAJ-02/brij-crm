@@ -12,6 +12,9 @@ Reasoning and options: see [rationale.md](rationale.md).
 
 ## Owner decisions needed
 
+The owner accepted every recommendation below on 20 October 2026; each is now a decision.
+
+
 Each has my recommendation; answer only where you disagree.
 
 1. **Is the pool its own thing (a rotation) shared by booking pages and forms, or a list on each page?** Recommend: its own thing, shared. Runner up: per page (simpler, but forms need a second pool and fairness splits per page).
