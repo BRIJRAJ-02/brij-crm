@@ -126,3 +126,64 @@ export const Centered: Story = {
     await expect(canvas.getByText('No forms yet')).toBeInTheDocument();
   },
 };
+
+/** Stacked with `stack="aside-first"`: on a narrow page the side column comes before the children. */
+export const AsideFirstNarrow: Story = {
+  args: { width: 'full', stack: 'aside-first' },
+  render: (args) => (
+    <Stage width="narrow">
+      <PageColumn {...args} aside={<Card title="Time zone">Europe/London</Card>}>
+        <Card title="Weekly hours">Monday to Friday, 09:00 to 17:00.</Card>
+      </PageColumn>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const main = canvas.getByText('Weekly hours').getBoundingClientRect();
+    const side = canvas.getByText('Time zone').getBoundingClientRect();
+    await expect(side.bottom).toBeLessThan(main.top);
+  },
+};
+
+/** `stack="aside-first"` changes nothing side by side: the side column stays at the end, tops level. */
+export const AsideFirstWide: Story = {
+  args: { width: 'full', stack: 'aside-first' },
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage width="fill">
+      <PageColumn {...args} aside={<Card title="Time zone">Europe/London</Card>}>
+        <Card title="Weekly hours">Monday to Friday, 09:00 to 17:00.</Card>
+        <Card title="Days off">None coming up.</Card>
+      </PageColumn>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const main = canvas.getByText('Weekly hours').getBoundingClientRect();
+    const side = canvas.getByText('Time zone').getBoundingClientRect();
+    await expect(side.left).toBeGreaterThan(main.right);
+    await expect(Math.round(side.top)).toBe(Math.round(main.top));
+  },
+};
+
+/** A footer that draws nothing (a SaveBar with nothing unsaved) takes no room under the last card. */
+export const EmptyFooter: Story = {
+  parameters: { crm: { screenshot: false } },
+  render: (args) => (
+    <Stage>
+      <div data-testid="column">
+        <PageColumn {...args} footer={<Nothing />}>
+          <Card title="Weekly hours">Monday to Friday, 09:00 to 17:00.</Card>
+        </PageColumn>
+      </div>
+    </Stage>
+  ),
+  play: async ({ canvas }) => {
+    const card = canvas.getByText('Weekly hours').closest('section')?.getBoundingClientRect();
+    const column = canvas.getByTestId('column').getBoundingClientRect();
+    // Only the column's own padding (space-16) under the card, no gap for an empty footer.
+    await expect(Math.round(column.bottom - (card?.bottom ?? 0))).toBe(16);
+  },
+};
+
+function Nothing() {
+  return null;
+}

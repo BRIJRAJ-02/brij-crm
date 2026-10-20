@@ -18,13 +18,13 @@ On 20 October 2026 the owner asked for the Captures screens, ported from timefix
 `placement` says where a compact list sits:
 
 - `placement="page"` (the default): edge to edge across the view, with the page's 16px gutter inside each row, so hover and the dividers run the full width (Captures, under its tab strip, with no PageColumn around it).
-- `placement="card"`: inside a Card's padding, rows inset 8px like a Table's cells, and no hairline under the last row (the card's edge closes it).
+- `placement="card"`: inside a Card's padding, rows inset 8px like a Table's cells, and no hairline under the last row (the card's edge closes it). Narrow, only the facts give way; the address stays and truncates.
 
 The references (Mobbin, 20 October 2026): Attio's record lists gave the edge to edge one line rows, the hairlines and the facts lined up in a column; Notion's settings rows and Klaviyo's list gave the switch and the quiet menu at the row's end on one line; Stripe's invoice rows gave the status badge inline before the actions. Cal.com's event types and Calendly's cards are the framed, two and three line rows `comfortable` keeps, which `compact` moves away from.
 
-### For Bookings › Availability (PagesHours)
+### In a Card: Bookings › Availability (PagesHours)
 
-Switch its list to the compact, card placed variant:
+PagesHours draws the compact, card placed variant:
 
 ```tsx
 <Card title={strings.yourPages} description={strings.yourPagesText}>
@@ -43,7 +43,7 @@ Switch its list to the compact, card placed variant:
 </Card>
 ```
 
-A compact row has no second line, so move what PagesHours puts in `description` (the hours, "Mon to Fri, 9:00 AM to 5:00 PM") into `chips`, or it won't show.
+A compact row has no second line, so PagesHours puts the hours ("Mon to Fri, 9:00 AM to 5:00 PM") in `address`, the muted text after the title, since the hours are what that list is for. In a card the address keeps its room on a phone (the rows have no switch or actions) and truncates; on a page it gives way under 480px.
 
 ## Use
 

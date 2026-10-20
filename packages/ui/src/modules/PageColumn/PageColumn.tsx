@@ -19,7 +19,16 @@ export interface PageColumnProps {
    * at the end when the page is wide enough, under them when it isn't. Use it with `width="full"`.
    */
   readonly aside?: ReactNode;
-  /** A bar that sticks to the foot of the view while it has something to say ("Unsaved changes", Save). */
+  /**
+   * When the page is too narrow for both and they stack: `main-first` (the default) puts the side column
+   * under the children, `aside-first` above them (Bookings › Availability: the time zone before the week on
+   * a phone). Side by side, the side column is always at the end.
+   */
+  readonly stack?: 'main-first' | 'aside-first';
+  /**
+   * A bar that sticks to the foot of the view while it has something to say ("Unsaved changes", Save). While
+   * it draws nothing (SaveBar with nothing unsaved), it takes no room, and only the bar itself takes the pointer.
+   */
   readonly footer?: ReactNode;
 }
 
@@ -30,7 +39,15 @@ export interface PageColumnProps {
  * its children stacked, an optional side column beside them, and an optional
  * footer bar that stays in view.
  */
-export function PageColumn({ children, width = 'default', align = 'start', actions, aside, footer }: PageColumnProps) {
+export function PageColumn({
+  children,
+  width = 'default',
+  align = 'start',
+  actions,
+  aside,
+  stack = 'main-first',
+  footer,
+}: PageColumnProps) {
   const hasAside = aside !== undefined && aside !== null && aside !== false;
   return (
     <div className={styles.root} data-width={width} data-align={align === 'start' ? undefined : align}>
@@ -38,7 +55,7 @@ export function PageColumn({ children, width = 'default', align = 'start', actio
         <div className={styles.actions}>{actions}</div>
       )}
       {hasAside ? (
-        <div className={styles.split}>
+        <div className={styles.split} data-stack={stack === 'aside-first' ? stack : undefined}>
           <div className={styles.main}>{children}</div>
           <div className={styles.aside}>{aside}</div>
         </div>

@@ -42,6 +42,13 @@
     min-inline-size: 0;
   }
 
+  /* Aside first when stacked: the wrapped lines run upward, so the side column's line sits above the main
+     one; side by side, flex-end is the top. */
+  .split[data-stack='aside-first'] {
+    flex-wrap: wrap-reverse;
+    align-items: flex-end;
+  }
+
   .main {
     flex: 999 1 var(--size-page-card);
   }
@@ -56,9 +63,20 @@
     gap: var(--space-8);
   }
 
+  /* The wrapper lets the pointer through to the page under it; only the bar takes it. */
   .footer {
     position: sticky;
     z-index: var(--z-sticky);
     inset-block-end: var(--space-16);
+    pointer-events: none;
+  }
+
+  .footer > * {
+    pointer-events: auto;
+  }
+
+  /* A bar with nothing to say draws nothing, so it leaves no gap under the last card. */
+  .footer:empty {
+    display: none;
   }
 }

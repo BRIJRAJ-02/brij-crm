@@ -41,8 +41,9 @@ export function PagesHours({ slug, pages, status, onRetry, mine, locale, onOpen 
     return {
       id: page.id,
       title: page.title,
-      address: `/${slug}/${page.slug}`,
-      description: weekSummary(hours, locale).join(' · '),
+      // The hours are what this list is for, so they take the muted line after the title (the address is the
+      // editor's business here).
+      address: weekSummary(hours, locale).join(' · '),
       // The zone only where it isn't the one beside the week (a page with hours of its own, kept in another zone).
       chips: [
         follows ? strings.followsYou : strings.ownHours,
@@ -57,6 +58,8 @@ export function PagesHours({ slug, pages, status, onRetry, mine, locale, onOpen 
   return (
     <Card title={strings.yourPages} description={strings.yourPagesText}>
       <LinkList
+        density="compact"
+        placement="card"
         label={strings.yourPages}
         rows={rows}
         onOpen={onOpen}

@@ -12,7 +12,8 @@
    density="compact" (Captures): the records area's rows instead. No box: one line rows at size-row, parted
    by the grid's hairline (border-subtle), on a subgrid so the facts and the end line up down the list. On a
    page they run edge to edge with the page's gutter (space-16) inside them; in a Card they keep to its
-   padding, inset space-8 like a Table's cells. Under 480px of list the facts and the address give way to the title. */
+   padding, inset space-8 like a Table's cells. Under 480px of list the facts give way to the title, and on a page the address too (a card's rows have
+   no switch or actions, so its address keeps the room and truncates). */
 @layer components {
   .frame {
     display: flex;
@@ -285,7 +286,7 @@
     }
 
     .frame[data-density='compact'] .facts,
-    .frame[data-density='compact'] .address {
+    .frame[data-placement='page'] .address {
       display: none;
     }
   }
