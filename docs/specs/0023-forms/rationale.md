@@ -90,3 +90,15 @@ The owner asked for forms to follow the model of their earlier scheduling produc
 - reCAPTCHA becomes optional (runner up: keep it required), since the honeypot, timing, rate limits and idempotency held up without it and it sends visitor data to Google.
 - The embed is an iframe sized by the script (runner up: shadow DOM), so the form looks the same on every site and the hosted page is the only renderer.
 - Steps, conditions and popups are deferred (runner up: keep them in milestone 2): one page converts and is simpler to build well.
+
+## Revision of 20 October 2026: types, logic and routing
+
+The owner's roadmap decisions of 20 October 2026 reopened what the 19 October revision had closed: the visitor page may have several layouts ("different types of forms if needed"), and steps and conditions come back as a simple "show when" with no flow canvas. The research pass (Typeform, Tally, Fillout, HubSpot, Chili Piper, Cal.com routing forms) found that most lead forms need four things beyond Classic: a few more answer types, prefill from the link, a company found from the work email, and routing to the right person's calendar. A lane (`wip/formdesign`) is redesigning Classic now and drew Steps and Conversational as stories.
+
+Options weighed:
+- **Show when rules on questions and steps, one rule shape reused by routing (chosen).** Small, testable, readable as a sentence on the closed card.
+- **A logic canvas (Typeform jumps).** Powerful, but the owner turned it down, and it is hard to check at publish.
+- **Routing as its own object shared by forms (Cal.com Routing forms, Chili Piper).** Deferred: one form per routing need is the common case, and the rule shape can move to a shared object later without changing the visitor's side.
+
+Calls made without a question: Classic stays default; Steps ships before One at a time (it reuses the Classic card); deal filing names deals "<company or person> from <form name>"; notices default to each submission with a digest opt in; retention defaults to forever with spam deleted after 30 days; anonymous counters before any visitor tracking. Details and the build order: [0023-types-and-logic.md](0023-types-and-logic.md).
+

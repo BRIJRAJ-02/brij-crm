@@ -1,6 +1,6 @@
 # 0023. Forms: public forms that feed the CRM
 
-**Date**: 2026-10-15 (revised 2026-10-19: the builder, the visitor page and the bot checks follow [0023-experience.md](0023-experience.md))
+**Date**: 2026-10-15 (revised 2026-10-19: the builder, the visitor page and the bot checks follow [0023-experience.md](0023-experience.md); revised 2026-10-20: layouts, show when, more question types, filing, notices and routing follow [0023-types-and-logic.md](0023-types-and-logic.md))
 **Status**: Proposed
 
 ## Summary
@@ -10,6 +10,8 @@ A member builds a form from an object's attributes, publishes it, and shares it 
 ## Structure
 
 - [0023-experience.md](0023-experience.md): the builder, the visitor page and after submit: screens, interactions, copy, answer types and the contract changes they need. **Where it and this file differ, it wins.**
+- [0023-types-and-logic.md](0023-types-and-logic.md): the 20 October revision: layouts (Classic, Steps, One at a time), show when rules, more question types and prefill, company by domain, deal and list filing, notices, routing to a booking page and an owner, anonymous analytics, consent and retention, each marked now, Release 1, Release 2 or later. AC-1031 to AC-1054. **Where it and the experience file differ on those subjects, it wins.**
+- 0023-form-design.md (branch `wip/formdesign`, landing with its lane): the visitor's page design, the field checker, and the three layouts drawn as stories.
 - [0023-public-surface.md](0023-public-surface.md): everything a visitor's browser touches: the hosted page, the embed script (inline, popup, slide in), capturing a site's own forms, the bot checks, the browser retry, the counters and consented tracking.
 
 Reasoning and options: see [rationale.md](rationale.md).
@@ -52,7 +54,7 @@ All of these come earlier in the build order (forms sit in Slice 15).
 *Building and publishing*
 - **AC-545**: A member with `forms.manage` creates a form on any object (People by default). Each question is either an attribute of a target record, using that attribute type's one editor and its validation rules, or a form only question kept on the submission. Layout blocks (heading, text, divider) and consent blocks can be added anywhere.
 - **AC-546**: A builder can only map questions to objects and attributes they can write; the publish is refused with the attribute named otherwise.
-- **AC-547**: A form can be split into steps, and any question, block or step can be shown or hidden by conditions on earlier answers, using the same condition shape as validation rules.
+- **AC-547**: A form can be split into steps, and any question, block or step can be shown or hidden by conditions on earlier answers, using the same condition shape as validation rules. (Revised 20 October 2026: replaced by AC-1031 to AC-1039 in [0023-types-and-logic.md](0023-types-and-logic.md), with the simpler Show when rule shape.)
 - **AC-548**: Edits stay in a draft. Publish freezes the draft as a new numbered version and makes it live everywhere the form appears; each submission records its version.
 - **AC-549**: A form is draft, live, paused or archived. Paused shows a "not taking responses" message at its link; archived refuses submissions and is hidden from the list until restored.
 - **AC-550**: A member previews the draft exactly as visitors will see it, at desktop and phone widths, without creating a submission.
@@ -375,7 +377,8 @@ Tracer Bullet: each milestone ends with something you can click in production. M
 - [ ] Measure the submit endpoint and the counters on the load harness (#12) with a busy site before milestone 4 ships.
 - [ ] Rate limits move to a shared store when the API runs more than one instance (#41).
 - [ ] Translations of a form into several languages (later).
-- [ ] Steps, layout blocks and show when conditions (AC-547), and the popup and slide in (AC-589): moved out by the 19 October revision, which keeps one calm page; bring back only when a customer asks.
+- [x] Steps and show when conditions (AC-547): brought back by the 20 October revision as AC-1031 to AC-1039 ([0023-types-and-logic.md](0023-types-and-logic.md)). Layout blocks stay out.
+- [ ] The popup and slide in (AC-589): still later (Release 3).
 - [ ] Decide whether site visitor tracking grows into its own feature (anonymous company identification, page scoring); it stays here, consented only, for now.
 - [ ] The free email domain list is the `free-email-domains` package (maintained, MIT), pinned in the catalog. Discovery found no credible Agent Skills or MCP servers for reCAPTCHA v3 or the domain list; record that as declined in `AGENTS.md` at the next `/sync`.
 </content>
