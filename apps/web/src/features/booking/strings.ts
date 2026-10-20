@@ -49,7 +49,7 @@ export const strings = {
   titlePlaceholder: 'Quick chat',
   titleRequired: 'Give the page a title.',
   address: 'Short name',
-  addressHint: 'Lowercase letters, numbers and hyphens, for finding it here. Its public link stays the same.',
+  addressHint: 'Lowercase letters, numbers and hyphens.',
   whereRequired: 'Say where the meeting happens.',
   pausedPreview: 'This page is off, so visitors see it closed. Turn it on to preview booking.',
   duration: 'Duration',
