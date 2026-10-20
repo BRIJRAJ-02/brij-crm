@@ -14,6 +14,7 @@ import { recordsContract } from './records.ts';
 import { linksContract, relationshipsContract } from './relations.ts';
 import { systemContract } from './system.ts';
 import { trashContract } from './trash.ts';
+import { notesContract } from './notes.ts';
 import { tasksContract } from './tasks.ts';
 import { usageContract } from './usage.ts';
 import { viewsContract } from './views.ts';
@@ -41,6 +42,7 @@ export * from './records.ts';
 export * from './relations.ts';
 export * from './system.ts';
 export * from './trash.ts';
+export * from './notes.ts';
 export * from './tasks.ts';
 export * from './usage.ts';
 export * from './view-model.ts';
@@ -73,6 +75,7 @@ export const contract = {
   views: viewsContract,
   trash: trashContract,
   tasks: tasksContract,
+  notes: notesContract,
   calendar: calendarContract,
   forms: formsContract,
   submissions: submissionsContract,

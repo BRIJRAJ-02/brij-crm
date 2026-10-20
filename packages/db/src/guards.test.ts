@@ -885,6 +885,42 @@ describe('isolation', () => {
       db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),
     ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'task_records_record' } });
   });
+  it("reads none of another workspace's notes, and refuses a note on its record (spec 0019)", async () => {
+    /** A note on one record, made inside the workspace. */
+    const noted = async (workspaceId: string) => {
+      const objectId = await objectIn(workspaceId);
+      const recordId = randomUUID();
+      const noteId = randomUUID();
+      await db.withWorkspace(workspaceId, async (tx) => {
+        await tx.execute(
+          sql`insert into records (workspace_id, id, object_id, created_by_type, updated_by_type) values (${workspaceId}, ${recordId}, ${objectId}, 'system', 'system')`,
+        );
+        await tx.execute(
+          sql`insert into notes (workspace_id, id, record_id, content, created_by_type, updated_by_type) values (${workspaceId}, ${noteId}, ${recordId}, '{"type":"doc"}', 'system', 'system')`,
+        );
+      });
+      return { recordId, noteId };
+    };
+    const a = await workspaceWithMember('notes-a');
+    const b = await workspaceWithMember('notes-b');
+    const inA = await noted(a.workspaceId);
+    const inB = await noted(b.workspaceId);
+    const fromA = await db.withWorkspace(a.workspaceId, (tx) => tx.execute<{ id: string }>(sql`select id from notes`));
+    expect(fromA.rows).toEqual([{ id: inA.noteId }]);
+    // A note in A on B's record: the composite key finds no such record in A.
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) =>
+        tx.execute(
+          sql`insert into notes (workspace_id, id, record_id, content, created_by_type, updated_by_type) values (${a.workspaceId}, ${randomUUID()}, ${inB.recordId}, '{"type":"doc"}', 'system', 'system')`,
+        ),
+      ),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'notes_record' } });
+    // A record removed for good while it still has a note fails: the key has no cascade (AC-446).
+    await expect(
+      db.withWorkspace(a.workspaceId, (tx) => tx.execute(sql`delete from records where id = ${inA.recordId}`)),
+    ).rejects.toMatchObject({ cause: { code: '23503', constraint: 'notes_record' } });
+  });
+
   it("reads none of another workspace's calendar rows, and refuses a link to its record (spec 0024)", async () => {
     /** A connection holding one meeting that shows on one record, made inside the workspace. */
     const synced = async (workspaceId: string, memberId: string) => {

@@ -180,10 +180,17 @@ export const TaskCursor = z.union([
 /** Where a page of tasks ends. */
 export type TaskCursor = z.infer<typeof TaskCursor>;
 
+/** Deleting or restoring one task (milestone 4): hidden at once, back exactly as it was within 30 days. */
+export const TaskLifecycleInput = WorkspaceScoped.extend({ taskId: z.uuid(), mutationId: z.uuid() });
+/** Deleting or restoring one task. */
+export type TaskLifecycleInput = z.infer<typeof TaskLifecycleInput>;
+
 /** The tasks procedures (spec 0019). Every one takes `WorkspaceScoped` input and is served behind the member door. */
 export const tasksContract = {
   create: oc.input(CreateTaskInput).output(TaskView),
   update: oc.input(UpdateTaskInput).output(TaskView),
   get: oc.input(GetTasksInput).output(z.array(TaskView)),
   list: oc.input(ListTasksInput).output(TaskPage),
+  delete: oc.input(TaskLifecycleInput).output(z.object({ ok: z.literal(true) })),
+  restore: oc.input(TaskLifecycleInput).output(TaskView),
 };

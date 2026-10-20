@@ -117,3 +117,16 @@ export {
   type RuleSettingsContext,
   type RuleSettingsProblem,
 } from './validation-rules.ts';
+export {
+  isSafeLink,
+  jsonDepth,
+  RICH_TEXT_MARKS,
+  RICH_TEXT_MAX_BYTES,
+  RICH_TEXT_MAX_DEPTH,
+  RICH_TEXT_NODES,
+  RichTextDoc,
+  RichTextDocBody,
+  RichTextMark,
+  RichTextNode,
+  richTextBytes,
+} from './rich-text.ts';

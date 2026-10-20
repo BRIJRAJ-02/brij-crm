@@ -12,6 +12,7 @@ export { jobItems, jobItemState, jobLane, jobs, jobStatus } from './jobs.ts';
 export { workspaceMilestones } from './milestones.ts';
 export { validationRuleKind, validationRules } from './validation.ts';
 export { memberViewState, viewKind, views, viewVisibility } from './views.ts';
+export { notes } from './notes.ts';
 export { taskRecords, tasks } from './tasks.ts';
 export {
   attendeeMatch,
