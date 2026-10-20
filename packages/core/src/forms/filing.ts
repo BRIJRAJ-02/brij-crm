@@ -29,6 +29,7 @@ import type { EngineScope } from '../engine/scope.ts';
 import { currentItems, loadAttributes, type AttributeDef } from '../engine/values.ts';
 import { runWrite, type AfterWrite, type WriteContext } from '../engine/write.ts';
 import { requirePermission } from '../access/check.ts';
+import { can } from '../access/policy.ts';
 import { inWorkspace } from '../access/run.ts';
 import { defineKind, MAX_ATTEMPTS, type ItemOutcome, type KindDefinition, type StepOutcome } from '../jobs/registry.ts';
 import { startJob } from '../jobs/service.ts';
@@ -152,6 +153,13 @@ async function fileBatch(
 ): Promise<StepOutcome> {
   const { tx } = context;
   const totals = { ...totalsOf(input.checkpoint) };
+  // The member as they are now: one who lost forms.manage since the start files nothing more.
+  if (!can(context.scope.access, 'forms.manage')) {
+    return {
+      finished: true,
+      failed: { code: 'FORBIDDEN', message: 'You can no longer manage forms, so nothing more was filed.' },
+    };
+  }
   const mapping = await mappingOf(tx, input.formId);
   if (mapping === undefined) {
     return {

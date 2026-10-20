@@ -73,7 +73,7 @@ describe('GET /api/exports/:id/download', () => {
       `insert into export_chunks (workspace_id, export_id, part, body)
        select workspace_id, id, 0, $2 from exports where id = $1
        union all select workspace_id, id, 1, $3 from exports where id = $1`,
-      [id, '﻿Name\r\n', "'=1+1\r\n"],
+      [id, '\uFEFFName\r\n', "'=1+1\r\n"],
     );
     const ok = await download(started.downloadPath, m.cookie);
     expect(ok.status).toBe(200);
@@ -81,7 +81,8 @@ describe('GET /api/exports/:id/download', () => {
     expect(ok.headers.get('cache-control')).toBe('private, no-store');
     expect(ok.headers.get('x-content-type-options')).toBe('nosniff');
     expect(ok.headers.get('content-disposition')).toMatch(/^attachment; filename="Contact us - submissions - /u);
-    expect(await ok.text()).toBe("﻿Name\r\n'=1+1\r\n");
+    // Decoded keeping the byte order mark, which Excel needs to read UTF-8.
+    expect(new TextDecoder('utf-8', { ignoreBOM: true }).decode(await ok.arrayBuffer())).toBe("\uFEFFName\r\n'=1+1\r\n");
     expect((await m.client.submissions.getExport({ workspace: m.slug, exportId: id })).rowCount).toBe(1);
 
     // Signed out, another workspace's member, or with someone else's export id in their own workspace: 404.
